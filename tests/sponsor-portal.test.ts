@@ -26,6 +26,15 @@ function getRequest(path: string, token?: string): Request {
   return new Request(`https://app.test${path}`, { headers });
 }
 
+// Logout reads the session token from the Cookie header only (mirrors
+// auth/member/logout.ts — a browser-only affordance, never a Bearer API
+// call), so it needs its own request builder rather than jsonRequest's
+// Authorization header.
+function cookiePostRequest(path: string, cookieToken: string): Request {
+  const headers = new Headers({ cookie: `pkic_sponsor_portal_session=${encodeURIComponent(cookieToken)}` });
+  return new Request(`https://app.test${path}`, { method: "POST", headers });
+}
+
 async function call(request: Request): Promise<Response> {
   return app.fetch(request, env as any, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
 }
@@ -206,5 +215,59 @@ describe("Sponsor portal (PRD §4.13, Phase 4E)", () => {
       "SELECT action FROM audit_log WHERE action = 'sponsor_portal_attendee_export'",
     );
     expect(auditRows).toHaveLength(1);
+  });
+
+  it("resolves eventId by public slug (not just internal id) and returns eventName in the session (§11 UI-7)", async () => {
+    await createActiveEventSponsorship("Leader", "slug-sponsor@sponsor.test");
+
+    const requestLinkResponse = await call(
+      jsonRequest("/api/v1/auth/sponsor-portal/request-link", {
+        email: "slug-sponsor@sponsor.test",
+        eventId: "pqc-2026",
+      }),
+    );
+    expect(requestLinkResponse.status).toBe(200);
+
+    const outboxRow = (
+      await queryAll<{ payload_json: string }>(
+        env.DB,
+        "SELECT payload_json FROM email_outbox WHERE template_key = 'sponsor-portal-access' ORDER BY created_at DESC LIMIT 1",
+      )
+    )[0];
+    const payload = JSON.parse(outboxRow.payload_json) as { portalUrl: string };
+    const magicToken = new URL(payload.portalUrl).searchParams.get("token");
+    expect(magicToken).toBeTruthy();
+
+    const verifyResponse = await call(jsonRequest("/api/v1/auth/sponsor-portal/verify-link", { token: magicToken }));
+    expect(verifyResponse.status).toBe(200);
+    const verified = (await verifyResponse.json()) as {
+      sponsorship: { eventId: string; eventName: string | null; tier: string };
+    };
+    expect(verified.sponsorship.eventId).toBe(eventId);
+    expect(verified.sponsorship.eventName).toBe("PQC Conference 2026");
+  });
+
+  it("logs out: revokes the session server-side and clears the cookie", async () => {
+    await createActiveEventSponsorship("Leader", "logout-sponsor@sponsor.test");
+    const outboxRow = (
+      await queryAll<{ payload_json: string }>(
+        env.DB,
+        "SELECT payload_json FROM email_outbox WHERE template_key = 'sponsor-portal-access' ORDER BY created_at DESC LIMIT 1",
+      )
+    )[0];
+    const payload = JSON.parse(outboxRow.payload_json) as { portalUrl: string };
+    const magicToken = new URL(payload.portalUrl).searchParams.get("token");
+    const verifyResponse = await call(jsonRequest("/api/v1/auth/sponsor-portal/verify-link", { token: magicToken }));
+    const setCookie = verifyResponse.headers.get("set-cookie") ?? "";
+    const sessionToken = decodeURIComponent(setCookie.split(";")[0].split("=")[1]);
+
+    const logoutResponse = await call(cookiePostRequest("/api/v1/sponsor-portal/logout", sessionToken));
+    expect(logoutResponse.status).toBe(200);
+    expect(logoutResponse.headers.get("set-cookie") ?? "").toContain("Max-Age=0");
+
+    const attendeesResponse = await call(
+      getRequest(`/api/v1/sponsor-portal/events/${eventId}/attendees`, sessionToken),
+    );
+    expect(attendeesResponse.status).toBe(401);
   });
 });
