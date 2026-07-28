@@ -369,7 +369,8 @@ async function processOutboxRow(db: DatabaseLike, env: Env, row: OutboxRow): Pro
     // (same 1200×630 as the OG image, JPEG q85 — ~80–90 % smaller than PNG).
     // In local dev (no IMAGES binding) it may fall back to PNG — we read the
     // content-type from the R2 object's httpMetadata to use the correct extension.
-    const badgeAttachments = parseQueuedEmailAttachments(payload);
+    const queuedAttachments = parseQueuedEmailAttachments(payload);
+    const badgeAttachments = queuedAttachments.filter((a) => a.kind === "r2-badge-image");
     if (badgeAttachments.length > 0 && env.ASSETS_BUCKET) {
       try {
         for (const badgeAttachment of badgeAttachments) {
@@ -391,6 +392,23 @@ async function processOutboxRow(db: DatabaseLike, env: Env, row: OutboxRow): Pro
         }
       } catch {
         // Badge not yet rendered — send email without attachment (non-fatal)
+      }
+    }
+
+    // Attach meeting calendar ICS files (§4.12) — static, staff-uploaded R2
+    // objects, unlike the generated per-recipient calendar.icsFiles above.
+    const icsAttachments = queuedAttachments.filter((a) => a.kind === "r2-ics-file");
+    if (icsAttachments.length > 0 && env.ASSETS_BUCKET) {
+      for (const icsAttachment of icsAttachments) {
+        const icsObj = await env.ASSETS_BUCKET.get(icsAttachment.r2Key);
+        if (!icsObj) {
+          continue;
+        }
+        const base64 = uint8ToBase64(new Uint8Array(await icsObj.arrayBuffer()));
+        attachments = [
+          ...(attachments ?? []),
+          { filename: icsAttachment.filename, contentType: "text/calendar", base64Content: base64 },
+        ];
       }
     }
 

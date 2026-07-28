@@ -31,6 +31,7 @@ import mailing_lists_Router from "./mailing-lists/router";
 import members_Router from "./members/router";
 import membership_settings_Router from "./membership-settings/router";
 import applications_Router from "./applications/router";
+import consortium_Router from "./consortium/router";
 import organizations_Router from "./organizations/router";
 import proposals_Router from "./proposals/router";
 import roles_Router from "./roles/router";
@@ -84,6 +85,7 @@ function isPhase2PermissionGatedAdminPath(path: string): boolean {
     path.startsWith("/api/v1/admin/applications") ||
     path.startsWith("/api/v1/admin/membership-settings") ||
     path.startsWith("/api/v1/admin/working-groups") ||
+    path.startsWith("/api/v1/admin/consortium") ||
     path.startsWith("/api/v1/admin/sponsorships") ||
     /^\/api\/v1\/admin\/users\/[^/]+\/(roles|membership|emails|merge)/.test(path)
   );
@@ -183,6 +185,7 @@ openapi.route("/mailing-lists", mailing_lists_Router);
 openapi.route("/members", members_Router);
 openapi.route("/membership-settings", membership_settings_Router);
 openapi.route("/applications", applications_Router);
+openapi.route("/consortium", consortium_Router);
 openapi.route("/organizations", organizations_Router);
 openapi.route("/proposals", proposals_Router);
 openapi.route("/roles", roles_Router);

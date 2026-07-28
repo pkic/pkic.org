@@ -11,9 +11,12 @@
  * the caller needs to queue member-account-claim, application-approved-
  * welcome, and org-contact-assigned.
  *
- * ICS calendar attachments (mentioned in §4.7's welcome email bullet 6) are
- * not attached — meeting series (§4.12) is Phase 4D scope, not built. See
- * prd.md Phase 4A status for this documented gap.
+ * ICS calendar attachments (§4.7's welcome email bullet 6) are resolved and
+ * attached by the caller (approve.ts, membership-scheduled-jobs.ts's
+ * runEcWindowAutoApprove), not here — see meeting-calendar.ts's
+ * resolveApprovalIcsAttachments, called with this function's own
+ * workingGroupSlugs result. Same DB-only/route-owns-email split as the rest
+ * of this file.
  */
 import { first } from "../db/queries";
 import { nowIso } from "../utils/time";

@@ -13,6 +13,7 @@ import { getConfig } from "../../../../../_lib/config";
 import { queueEmail, processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { approveApplication } from "../../../../../_lib/services/membership-onboarding";
+import { resolveApprovalIcsAttachments } from "../../../../../_lib/services/meeting-calendar";
 import { applicationApproveRouteSchema } from "../../../../../../assets/shared/schemas/admin-applications";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
@@ -36,12 +37,14 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   });
   c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, claimOutboxId));
 
+  const icsAttachments = await resolveApprovalIcsAttachments(db, result.workingGroupSlugs);
   const welcomeOutboxId = await queueEmail(db, {
     templateKey: "application-approved-welcome",
     recipientEmail: result.email,
     messageType: "transactional",
     subject: "Welcome to the PKI Consortium!",
     data: { applicantName: result.name, loginUrl, workingGroups: result.workingGroupNames.join(", ") },
+    attachments: icsAttachments,
   });
   c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, welcomeOutboxId));
 

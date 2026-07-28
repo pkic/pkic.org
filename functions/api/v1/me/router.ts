@@ -12,6 +12,7 @@ import { MeSecondaryContactPatch } from "./organization/secondary-contact";
 import { MeHeadshotPost } from "./headshot";
 import { MeVotesGet } from "./votes";
 import applications_Router from "./applications/router";
+import calendar_Router from "./calendar/router";
 import workingGroups_Router from "./working-groups/router";
 import type { RequestDbContext } from "../../../_lib/db/context";
 
@@ -32,6 +33,7 @@ openapi.patch("/organization/secondary-contact", MeSecondaryContactPatch);
 openapi.post("/headshot", MeHeadshotPost);
 openapi.get("/votes", MeVotesGet);
 openapi.route("/applications", applications_Router);
+openapi.route("/calendar", calendar_Router);
 openapi.route("/working-groups", workingGroups_Router);
 
 export default openapi;
