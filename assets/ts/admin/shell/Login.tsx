@@ -4,12 +4,19 @@ import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/brow
 import { saveAuth } from "../state";
 
 async function requestMagicLink(email: string): Promise<void> {
-  await fetch("/api/v1/admin/auth/request-link", {
+  const res = await fetch("/api/v1/admin/auth/request-link", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email }),
   });
-  // Always show success to prevent email enumeration.
+  // request-link.ts always responds 200 regardless of whether the email
+  // belongs to an admin, to prevent enumeration — so a non-ok response
+  // here is a genuine failure (rate limited, validation, 5xx), not a
+  // "does this admin exist" signal, and is safe to surface.
+  if (!res.ok) {
+    const body: { error?: { message?: string } } = await res.json().catch(() => ({}));
+    throw new Error(body.error?.message ?? "Could not send sign-in link. Please try again.");
+  }
 }
 
 async function verifyMagicLink(token: string): Promise<void> {
@@ -97,9 +104,16 @@ export function Login() {
     const form = e.currentTarget as HTMLFormElement;
     const email = (form.elements.namedItem("email") as HTMLInputElement).value.trim();
     if (!email) return;
+    setError(null);
     setSubmitting(true);
-    await requestMagicLink(email).finally(() => setSubmitting(false));
-    setSent(true);
+    try {
+      await requestMagicLink(email);
+      setSent(true);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (

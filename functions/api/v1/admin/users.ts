@@ -37,7 +37,13 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
 
   const url = new URL(c.req.raw.url);
   const role = url.searchParams.get("role") ?? "";
-  const search = (url.searchParams.get("q") ?? url.searchParams.get("search") ?? "").trim();
+  // D1's SQLite enforces SQLITE_LIMIT_LIKE_PATTERN_LENGTH=50 on the whole
+  // `%…%` pattern (found via §11 UI-8's browser-verification pass —
+  // searching a real, moderately long email 500'd with "LIKE or GLOB
+  // pattern too complex"), so anything over ~48 chars of raw input throws
+  // before any row is even considered. Truncate well under that; a prefix
+  // is still a valid (if less specific) substring match.
+  const search = (url.searchParams.get("q") ?? url.searchParams.get("search") ?? "").trim().slice(0, 40);
   const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50") || 50, 500);
   const offset = parseInt(url.searchParams.get("offset") ?? "0") || 0;
 
