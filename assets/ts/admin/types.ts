@@ -980,3 +980,32 @@ export interface AdminVoteProposalSummary {
   minEndorsersRequired: number;
   createdAt: string;
 }
+
+// ── Meeting Calendar (PRD §4.12, UI-5) ──────────────────────────────────────
+
+export interface AdminIcsFile {
+  id: string;
+  label: string;
+  year: number;
+  r2Key: string;
+  active: boolean;
+  uploadedByUserId: string | null;
+  createdAt: string;
+}
+
+export interface AdminMeetingSeries {
+  id: string;
+  name: string;
+  scopeType: "consortium" | "working_group";
+  workingGroupId: string | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  icsFiles: AdminIcsFile[];
+}
+
+export interface MeetingResendResult {
+  success: boolean;
+  seriesName: string;
+  queuedRecipients: number;
+}

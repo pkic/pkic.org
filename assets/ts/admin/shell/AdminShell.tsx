@@ -18,6 +18,7 @@ import { Organizations } from "../sections/Organizations";
 import { OrganizationContentReviews } from "../sections/OrganizationContentReviews";
 import { MailingLists } from "../sections/MailingLists";
 import { Sponsorships } from "../sections/Sponsorships";
+import { MeetingCalendar } from "../sections/MeetingCalendar";
 import { Votes } from "../sections/Votes";
 import { Applications } from "../sections/Applications";
 import { MembershipSettings } from "../sections/MembershipSettings";
@@ -234,6 +235,14 @@ export function AdminShell() {
               component={() => (
                 <SectionWrapper title="Sponsorships">
                   <Sponsorships />
+                </SectionWrapper>
+              )}
+            />
+            <Route
+              path="/meeting-calendar"
+              component={() => (
+                <SectionWrapper title="Meeting Calendar">
+                  <MeetingCalendar />
                 </SectionWrapper>
               )}
             />
