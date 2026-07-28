@@ -134,3 +134,32 @@ export interface MyOrganizationSponsorship {
   tier: string | null;
   startDate: string | null;
 }
+
+export interface WorkingGroupSummary {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  active: boolean;
+}
+
+export interface MyWorkingGroupMembership {
+  workingGroupId: string;
+  slug: string;
+  name: string;
+  joinedAt: string;
+}
+
+export interface MyMeetingSeriesIcsFile {
+  id: string;
+  label: string;
+  year: number;
+}
+
+export interface MyMeetingSeries {
+  id: string;
+  name: string;
+  scopeType: "consortium" | "working_group";
+  icsFiles: MyMeetingSeriesIcsFile[];
+  preferenceIcsFileId: string | null;
+}
