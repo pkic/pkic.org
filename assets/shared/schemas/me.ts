@@ -92,15 +92,25 @@ export const myApplicationsListRouteSchema = {
   },
 };
 
+export const myVoteHistoryEntrySchema = z.object({
+  voteId: z.uuid(),
+  slug: z.string(),
+  title: z.string(),
+  voteType: z.string(),
+  scopeType: z.string(),
+  status: z.string(),
+  choice: z.string(),
+  submittedAt: z.string(),
+});
+
 export const myVotesListRouteSchema = {
   tags: ["Me"],
   summary: "My vote history (PRD §4.10)",
-  description:
-    "Stub — the voting system is Phase 4B (§4.8), not yet built. Always returns an empty list; see prd.md Phase 4A status.",
+  description: "Every ballot the caller has cast, most recent first (PRD §4.8, Phase 4B).",
   responses: {
     "200": {
-      description: "My votes (always empty in this phase).",
-      content: { "application/json": { schema: z.object({ votes: z.array(z.unknown()) }) } },
+      description: "My votes.",
+      content: { "application/json": { schema: z.object({ votes: z.array(myVoteHistoryEntrySchema) }) } },
     },
   },
 };
@@ -329,6 +339,25 @@ export const mySecondaryContactNominateRouteSchema = {
     "422": {
       description: "Nominee is not an active member of the same organization, or is already the primary contact.",
     },
+  },
+};
+
+export const myVotingDelegateUpdateSchema = z.object({
+  userId: z.uuid().nullable(),
+});
+
+export const myVotingDelegateUpdateRouteSchema = {
+  tags: ["Me"],
+  summary: "Set my organization's standing forum-vote delegate (PRD §4.8)",
+  description:
+    "Only the org's primary or secondary contact may call this. Takes effect immediately (no staff confirmation). Pass userId: null to clear the override and fall back to the primary contact.",
+  request: {
+    body: { content: { "application/json": { schema: myVotingDelegateUpdateSchema } }, required: true },
+  },
+  responses: {
+    "200": { description: "Voting delegate updated." },
+    "403": { description: "Caller is not an org contact, or has no organization." },
+    "422": { description: "Nominee is not an active member of the same organization." },
   },
 };
 

@@ -924,3 +924,59 @@ export interface AdminMembershipSettings {
   forumVoteMinEndorsers: number;
   updatedAt: string;
 }
+
+// PRD §4.8 (Phase 4B) — voting system
+export interface VoteCandidateSummary {
+  id: string;
+  userId: string | null;
+  candidateName: string;
+  candidateBio: string | null;
+  sortOrder: number;
+  eliminatedRound: number | null;
+}
+
+export interface AdminVoteSummary {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  voteType: "election" | "motion" | "consultation";
+  scopeType: "forum" | "working_group";
+  scopeId: string | null;
+  thresholdType: "simple_majority" | "supermajority" | "successive_elimination";
+  eligibleCategories: string[] | null;
+  opensAt: string;
+  closesAt: string;
+  currentRound: number;
+  status: string;
+  visibility: "private" | "public";
+  publicDetailLevel: "outcome_only" | "aggregate" | "full_breakdown";
+  createdAt: string;
+  updatedAt: string;
+  candidates: VoteCandidateSummary[] | null;
+}
+
+export interface AdminVoteBallot {
+  id: string;
+  userId: string;
+  organizationId: string | null;
+  choice: string;
+  round: number;
+  submittedAt: string;
+}
+
+export interface AdminVoteProposalSummary {
+  id: string;
+  title: string;
+  description: string;
+  voteType: "election" | "motion" | "consultation";
+  scopeType: "forum" | "working_group";
+  scopeId: string | null;
+  proposedByUserId: string;
+  status: string;
+  voteId: string | null;
+  rejectionReason: string | null;
+  endorsementCount: number;
+  minEndorsersRequired: number;
+  createdAt: string;
+}

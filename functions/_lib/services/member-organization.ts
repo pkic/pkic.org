@@ -141,7 +141,11 @@ export async function nominateSecondaryContact(
     [member.organizationId],
   );
   if (!org || org.primary_contact_user_id !== member.userId) {
-    throw new AppError(403, "NOT_PRIMARY_CONTACT", "Only your organization's primary contact can nominate a secondary contact");
+    throw new AppError(
+      403,
+      "NOT_PRIMARY_CONTACT",
+      "Only your organization's primary contact can nominate a secondary contact",
+    );
   }
 
   if (nomineeUserId === null) {
@@ -150,7 +154,11 @@ export async function nominateSecondaryContact(
   }
 
   if (nomineeUserId === member.userId) {
-    throw new AppError(422, "SELF_NOMINATION", "You cannot nominate yourself as secondary contact — you are already the primary contact");
+    throw new AppError(
+      422,
+      "SELF_NOMINATION",
+      "You cannot nominate yourself as secondary contact — you are already the primary contact",
+    );
   }
 
   const nomineeMember = await first<{ id: string; status: string }>(
@@ -162,9 +170,59 @@ export async function nominateSecondaryContact(
     throw new AppError(422, "NOT_ELIGIBLE", "The nominee must be an active member of your organization");
   }
 
-  await run(db, "UPDATE organizations SET pending_secondary_contact_user_id = ? WHERE id = ?", [
-    nomineeUserId,
-    org.id,
-  ]);
+  await run(db, "UPDATE organizations SET pending_secondary_contact_user_id = ? WHERE id = ?", [nomineeUserId, org.id]);
   return { pendingSecondaryContactUserId: nomineeUserId };
+}
+
+/**
+ * Sets an organization's standing forum-vote delegate (PRD §4.8). Unlike
+ * the secondary-contact nomination above, this takes effect immediately —
+ * §4.8 describes no staff-confirmation step, only "the primary or secondary
+ * contact can change the voting delegate at any time." A NULL delegate
+ * falls back to the primary contact at ballot-cast time (resolved live by
+ * votes.ts's resolveVotingDelegateUserId, never snapshotted) — this is also
+ * what makes §4.8's "delegate change mid-vote" rule work for free: a
+ * ballot already cast by the outgoing delegate is keyed to the
+ * organization, not the user, so it stands regardless of a later change.
+ */
+export async function setVotingDelegate(
+  db: DatabaseLike,
+  member: AuthMember,
+  delegateUserId: string | null,
+): Promise<{ votingDelegateUserId: string | null }> {
+  if (!member.organizationId) {
+    throw new AppError(403, "NO_ORGANIZATION", "Your membership is not tied to an organization");
+  }
+
+  const org = await first<OrganizationContactRow>(
+    db,
+    "SELECT id, membership_category, primary_contact_user_id, secondary_contact_user_id FROM organizations WHERE id = ?",
+    [member.organizationId],
+  );
+  const isContact =
+    org && (org.primary_contact_user_id === member.userId || org.secondary_contact_user_id === member.userId);
+  if (!org || !isContact) {
+    throw new AppError(
+      403,
+      "NOT_ORG_CONTACT",
+      "Only your organization's primary or secondary contact can set the voting delegate",
+    );
+  }
+
+  if (delegateUserId === null) {
+    await run(db, "UPDATE organizations SET voting_delegate_user_id = NULL WHERE id = ?", [org.id]);
+    return { votingDelegateUserId: null };
+  }
+
+  const nomineeMember = await first<{ id: string; status: string }>(
+    db,
+    "SELECT id, status FROM members WHERE user_id = ? AND organization_id = ?",
+    [delegateUserId, org.id],
+  );
+  if (!nomineeMember || nomineeMember.status !== "active") {
+    throw new AppError(422, "NOT_ELIGIBLE", "The voting delegate must be an active member of your organization");
+  }
+
+  await run(db, "UPDATE organizations SET voting_delegate_user_id = ? WHERE id = ?", [delegateUserId, org.id]);
+  return { votingDelegateUserId: delegateUserId };
 }

@@ -1,0 +1,513 @@
+/**
+ * Voting system (PRD §4.8, Phase 4B). Backs the public `/api/v1/votes*`
+ * endpoints, the authenticated-member `/api/v1/portal/votes*` and
+ * `/api/v1/portal/vote-proposals*` endpoints, and the staff/WG-chair
+ * `/api/v1/admin/votes*` and `/api/v1/admin/vote-proposals*` endpoints.
+ */
+import { z } from "zod";
+
+export const VOTE_TYPES = ["election", "motion", "consultation"] as const;
+export const voteTypeSchema = z.enum(VOTE_TYPES);
+
+export const VOTE_SCOPE_TYPES = ["forum", "working_group"] as const;
+export const voteScopeTypeSchema = z.enum(VOTE_SCOPE_TYPES);
+
+export const THRESHOLD_TYPES = ["simple_majority", "supermajority", "successive_elimination"] as const;
+export const thresholdTypeSchema = z.enum(THRESHOLD_TYPES);
+
+export const VOTE_VISIBILITIES = ["private", "public"] as const;
+export const voteVisibilitySchema = z.enum(VOTE_VISIBILITIES);
+
+export const PUBLIC_DETAIL_LEVELS = ["outcome_only", "aggregate", "full_breakdown"] as const;
+export const publicDetailLevelSchema = z.enum(PUBLIC_DETAIL_LEVELS);
+
+export const BALLOT_CHOICES = ["in_favor", "opposed", "abstain"] as const;
+
+const MEMBERSHIP_CATEGORY_LETTERS = ["A", "B", "C", "D", "E", "F", "G"] as const;
+
+export const voteIdParamsSchema = z.object({ id: z.string() });
+export const voteSlugParamsSchema = z.object({ slug: z.string() });
+export const proposalIdParamsSchema = z.object({ id: z.uuid() });
+
+export const candidateSummarySchema = z.object({
+  id: z.uuid(),
+  userId: z.uuid().nullable(),
+  candidateName: z.string(),
+  candidateBio: z.string().nullable(),
+  sortOrder: z.number(),
+  eliminatedRound: z.number().nullable(),
+});
+
+export const voteSummaryFieldsSchema = {
+  id: z.uuid(),
+  slug: z.string(),
+  title: z.string(),
+  description: z.string().nullable(),
+  voteType: voteTypeSchema,
+  scopeType: voteScopeTypeSchema,
+  scopeId: z.uuid().nullable(),
+  thresholdType: thresholdTypeSchema,
+  eligibleCategories: z.array(z.string()).nullable(),
+  opensAt: z.string(),
+  closesAt: z.string(),
+  currentRound: z.number(),
+  status: z.string(),
+  visibility: voteVisibilitySchema,
+  publicDetailLevel: publicDetailLevelSchema,
+  createdAt: z.string(),
+  updatedAt: z.string(),
+};
+
+export const publicVoteSchema = z.object({
+  ...voteSummaryFieldsSchema,
+  candidates: z.array(candidateSummarySchema).nullable(),
+  result: z.unknown().nullable(),
+});
+
+export const portalVoteSchema = z.object({
+  ...voteSummaryFieldsSchema,
+  candidates: z.array(candidateSummarySchema).nullable(),
+  canCastBallot: z.boolean(),
+  hasCastBallot: z.boolean(),
+  result: z.unknown().nullable(),
+});
+
+// ── Public (no auth) — §7 "Votes (public — no auth required)" ────────────
+
+export const publicVotesListQuerySchema = z.object({
+  type: voteTypeSchema.optional(),
+  scope: voteScopeTypeSchema.optional(),
+  wg: z.string().optional(),
+  status: z.enum(["open", "closed"]).optional(),
+  from: z.iso.date().optional(),
+  to: z.iso.date().optional(),
+  page: z.coerce.number().int().min(1).optional(),
+  per_page: z.coerce.number().int().min(1).max(100).optional(),
+  sort: z.enum(["closes_at", "created_at"]).optional(),
+});
+
+export const publicVotesListRouteSchema = {
+  tags: ["Votes"],
+  summary: "List public votes (PRD §4.8)",
+  description: "Machine-consumable, filterable, paginated. Only visibility='public' votes are returned.",
+  request: { query: publicVotesListQuerySchema },
+  responses: {
+    "200": {
+      description: "Public votes.",
+      content: {
+        "application/json": {
+          schema: z.object({
+            votes: z.array(publicVoteSchema),
+            total: z.number(),
+            page: z.number(),
+            perPage: z.number(),
+          }),
+        },
+      },
+    },
+  },
+};
+
+export const publicVoteGetRouteSchema = {
+  tags: ["Votes"],
+  summary: "Public vote result at its configured detail level (PRD §4.8)",
+  request: { params: voteSlugParamsSchema },
+  responses: {
+    "200": {
+      description: "Vote detail.",
+      content: { "application/json": { schema: z.object({ vote: publicVoteSchema }) } },
+    },
+    "404": { description: "Vote not found or not public." },
+  },
+};
+
+export const publicVotesFeedRouteSchema = {
+  tags: ["Votes"],
+  summary: "RSS feed of public votes (PRD §4.8)",
+  responses: {
+    "200": { description: "RSS/Atom XML document." },
+  },
+};
+
+// ── Portal (authenticated members) — §7 ───────────────────────────────────
+
+export const portalVotesListRouteSchema = {
+  tags: ["Portal Votes"],
+  summary: "List all votes visible to the caller (PRD §4.8)",
+  description: "Every forum vote, every public vote, plus every vote scoped to a working group the caller belongs to.",
+  responses: {
+    "200": {
+      description: "Visible votes.",
+      content: { "application/json": { schema: z.object({ votes: z.array(portalVoteSchema) }) } },
+    },
+  },
+};
+
+export const portalVoteGetRouteSchema = {
+  tags: ["Portal Votes"],
+  summary: "Vote detail for the caller (PRD §4.8)",
+  request: { params: voteIdParamsSchema },
+  responses: {
+    "200": {
+      description: "Vote detail.",
+      content: { "application/json": { schema: z.object({ vote: portalVoteSchema }) } },
+    },
+    "404": { description: "Vote not found or not visible to the caller." },
+  },
+};
+
+export const submitBallotSchema = z.object({
+  choice: z.string().trim().min(1).max(100),
+});
+
+export const submitBallotRouteSchema = {
+  tags: ["Portal Votes"],
+  summary: "Cast a ballot (PRD §4.8, A–G only)",
+  description:
+    "Forum-level: only the organization's resolved voting delegate may call this, one ballot per organization per round. Working-group-level: one ballot per person per round, caller must be an active member of the vote's working group. H-category members may never cast a ballot.",
+  request: {
+    params: voteIdParamsSchema,
+    body: { content: { "application/json": { schema: submitBallotSchema } }, required: true },
+  },
+  responses: {
+    "200": { description: "Ballot recorded." },
+    "403": { description: "Not eligible to vote in this vote." },
+    "409": { description: "Vote is not open, or a ballot was already cast for this round." },
+    "422": { description: "Invalid choice." },
+  },
+};
+
+export const voteResultsRouteSchema = {
+  tags: ["Portal Votes"],
+  summary: "Results after close, full detail (PRD §4.8)",
+  request: { params: voteIdParamsSchema },
+  responses: {
+    "200": {
+      description: "Full result detail.",
+      content: { "application/json": { schema: z.object({ result: z.unknown() }) } },
+    },
+    "409": { description: "Results are hidden until the vote closes." },
+  },
+};
+
+// ── Vote proposals (authenticated A–G members) — §7 ───────────────────────
+
+export const proposalSummarySchema = z.object({
+  id: z.uuid(),
+  title: z.string(),
+  description: z.string(),
+  voteType: voteTypeSchema,
+  scopeType: voteScopeTypeSchema,
+  scopeId: z.uuid().nullable(),
+  proposedByUserId: z.uuid(),
+  status: z.string(),
+  voteId: z.uuid().nullable(),
+  rejectionReason: z.string().nullable(),
+  endorsementCount: z.number(),
+  minEndorsersRequired: z.number(),
+  createdAt: z.string(),
+});
+
+export const submitProposalSchema = z.object({
+  title: z.string().trim().min(1).max(300),
+  description: z.string().trim().min(1).max(10000),
+  voteType: voteTypeSchema,
+  scopeType: voteScopeTypeSchema,
+  scopeId: z.string().nullable().optional(),
+  eligibleCategories: z.array(z.enum(MEMBERSHIP_CATEGORY_LETTERS)).nullable().optional(),
+  proposedOpensAt: z.iso.datetime({ offset: true }).nullable().optional(),
+  proposedClosesAt: z.iso.datetime({ offset: true }).nullable().optional(),
+});
+
+export const submitProposalRouteSchema = {
+  tags: ["Vote Proposals"],
+  summary: "Submit a vote proposal (PRD §4.8 Path B, A–G members only)",
+  description:
+    "Available only when the target scope's min_endorsers_for_ballot (forum: the membership_settings default; WG: working_groups.min_endorsers_for_ballot) is greater than 0.",
+  request: {
+    body: { content: { "application/json": { schema: submitProposalSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Proposal submitted, open for endorsement.",
+      content: { "application/json": { schema: z.object({ proposal: proposalSummarySchema }) } },
+    },
+    "403": {
+      description:
+        "Not an A–G member, not a member of the target working group, or the endorsement path is disabled for this scope.",
+    },
+  },
+};
+
+export const listProposalsQuerySchema = z.object({
+  scopeType: voteScopeTypeSchema.optional(),
+  scopeId: z.string().optional(),
+});
+
+export const listProposalsRouteSchema = {
+  tags: ["Vote Proposals"],
+  summary: "List open proposals in scope (PRD §4.8)",
+  request: { query: listProposalsQuerySchema },
+  responses: {
+    "200": {
+      description: "Open proposals.",
+      content: { "application/json": { schema: z.object({ proposals: z.array(proposalSummarySchema) }) } },
+    },
+  },
+};
+
+export const proposalDetailRouteSchema = {
+  tags: ["Vote Proposals"],
+  summary: "Proposal detail + current endorser list (PRD §4.8)",
+  request: { params: proposalIdParamsSchema },
+  responses: {
+    "200": {
+      description: "Proposal detail.",
+      content: {
+        "application/json": {
+          schema: z.object({ proposal: proposalSummarySchema, endorserUserIds: z.array(z.uuid()) }),
+        },
+      },
+    },
+    "404": { description: "Proposal not found." },
+  },
+};
+
+export const endorseProposalRouteSchema = {
+  tags: ["Vote Proposals"],
+  summary: "Endorse a proposal (PRD §4.8, A–G members only)",
+  description: "Auto-converts the proposal into an active vote once its endorsement threshold is reached.",
+  request: { params: proposalIdParamsSchema },
+  responses: {
+    "200": {
+      description: "Endorsement recorded.",
+      content: {
+        "application/json": {
+          schema: z.object({
+            proposal: proposalSummarySchema,
+            convertedVote: z.object(voteSummaryFieldsSchema).nullable(),
+          }),
+        },
+      },
+    },
+    "403": { description: "Not an A–G member, or not a member of the target working group." },
+    "409": { description: "Proposal is not open for endorsement." },
+  },
+};
+
+export const withdrawEndorsementRouteSchema = {
+  tags: ["Vote Proposals"],
+  summary: "Withdraw my own endorsement (PRD §4.8)",
+  request: { params: proposalIdParamsSchema },
+  responses: { "200": { description: "Endorsement withdrawn." } },
+};
+
+export const withdrawProposalRouteSchema = {
+  tags: ["Vote Proposals"],
+  summary: "Withdraw my own proposal (PRD §4.8, proposer only)",
+  request: { params: proposalIdParamsSchema },
+  responses: {
+    "200": { description: "Proposal withdrawn." },
+    "403": { description: "Not the proposer." },
+    "409": { description: "Only an open proposal can be withdrawn." },
+  },
+};
+
+// ── Admin (staff admin / WG chair in context) — §7 ────────────────────────
+
+export const adminCandidateInputSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  bio: z.string().trim().max(5000).optional(),
+  userId: z.uuid().nullable().optional(),
+});
+
+export const adminVotesListQuerySchema = z.object({
+  status: z.enum(["scheduled", "open", "closed", "cancelled"]).optional(),
+});
+
+export const adminVoteSchema = z.object({
+  ...voteSummaryFieldsSchema,
+  candidates: z.array(candidateSummarySchema).nullable(),
+});
+
+export const adminVotesListRouteSchema = {
+  tags: ["Admin Votes"],
+  summary: "List all votes, optionally filtered by status (PRD §4.8)",
+  request: { query: adminVotesListQuerySchema },
+  responses: {
+    "200": {
+      description: "Votes.",
+      content: { "application/json": { schema: z.object({ votes: z.array(adminVoteSchema) }) } },
+    },
+  },
+};
+
+export const adminVoteCreateSchema = z.object({
+  title: z.string().trim().min(1).max(300),
+  description: z.string().trim().max(10000).optional(),
+  voteType: voteTypeSchema,
+  scopeType: voteScopeTypeSchema,
+  scopeId: z.string().nullable().optional(),
+  thresholdType: thresholdTypeSchema,
+  eligibleCategories: z.array(z.enum(MEMBERSHIP_CATEGORY_LETTERS)).nullable().optional(),
+  opensAt: z.iso.datetime({ offset: true }).optional(),
+  closesAt: z.iso.datetime({ offset: true }),
+  candidates: z.array(adminCandidateInputSchema).max(50).optional(),
+});
+
+export const adminVoteCreateRouteSchema = {
+  tags: ["Admin Votes"],
+  summary: "Create a vote directly (PRD §4.8 Path A — bypasses endorsement)",
+  description: "Staff admin (any scope) or WG chair/vice-chair (their own WG only, enforced via votes:create).",
+  request: {
+    body: { content: { "application/json": { schema: adminVoteCreateSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Vote created.",
+      content: { "application/json": { schema: z.object({ vote: z.object(voteSummaryFieldsSchema) }) } },
+    },
+    "403": { description: "Missing votes:create permission for this scope." },
+    "422": { description: "Invalid candidates/threshold combination for the vote type." },
+  },
+};
+
+export const adminVoteUpdateSchema = z.object({
+  title: z.string().trim().min(1).max(300).optional(),
+  description: z.string().trim().max(10000).nullable().optional(),
+  opensAt: z.iso.datetime({ offset: true }).optional(),
+  closesAt: z.iso.datetime({ offset: true }).optional(),
+});
+
+export const adminVoteUpdateRouteSchema = {
+  tags: ["Admin Votes"],
+  summary: "Update a vote's settings (PRD §4.8)",
+  request: {
+    params: voteIdParamsSchema,
+    body: { content: { "application/json": { schema: adminVoteUpdateSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Vote updated.",
+      content: { "application/json": { schema: z.object({ vote: z.object(voteSummaryFieldsSchema) }) } },
+    },
+    "404": { description: "Vote not found." },
+    "409": { description: "Vote is already closed." },
+  },
+};
+
+export const adminVoteVisibilityUpdateSchema = z.object({
+  visibility: voteVisibilitySchema.optional(),
+  publicDetailLevel: publicDetailLevelSchema.optional(),
+});
+
+export const adminVoteVisibilityUpdateRouteSchema = {
+  tags: ["Admin Votes"],
+  summary: "Set a vote's public visibility and detail level (PRD §4.8)",
+  description: "Reversible at any time. Every change is written to audit_log.",
+  request: {
+    params: voteIdParamsSchema,
+    body: { content: { "application/json": { schema: adminVoteVisibilityUpdateSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Visibility updated.",
+      content: { "application/json": { schema: z.object({ vote: z.object(voteSummaryFieldsSchema) }) } },
+    },
+    "404": { description: "Vote not found." },
+  },
+};
+
+export const adminBallotSchema = z.object({
+  id: z.uuid(),
+  userId: z.uuid(),
+  organizationId: z.uuid().nullable(),
+  choice: z.string(),
+  round: z.number(),
+  submittedAt: z.string(),
+});
+
+export const adminVoteBallotsRouteSchema = {
+  tags: ["Admin Votes"],
+  summary: "Full ballot breakdown (PRD §4.8, staff only)",
+  request: { params: voteIdParamsSchema },
+  responses: {
+    "200": {
+      description: "Raw ballots, including voter identity.",
+      content: { "application/json": { schema: z.object({ ballots: z.array(adminBallotSchema) }) } },
+    },
+    "404": { description: "Vote not found." },
+  },
+};
+
+// ── Admin proposal moderation — §7 ────────────────────────────────────────
+
+export const adminListProposalsQuerySchema = z.object({
+  status: z.string().optional(),
+});
+
+export const adminListProposalsRouteSchema = {
+  tags: ["Admin Vote Proposals"],
+  summary: "List all proposals, filterable by status/scope (PRD §4.8)",
+  request: { query: adminListProposalsQuerySchema },
+  responses: {
+    "200": {
+      description: "Proposals.",
+      content: { "application/json": { schema: z.object({ proposals: z.array(proposalSummarySchema) }) } },
+    },
+  },
+};
+
+export const adminProposalDetailRouteSchema = {
+  tags: ["Admin Vote Proposals"],
+  summary: "Proposal detail + endorsers (PRD §4.8)",
+  request: { params: proposalIdParamsSchema },
+  responses: {
+    "200": {
+      description: "Proposal detail.",
+      content: {
+        "application/json": {
+          schema: z.object({ proposal: proposalSummarySchema, endorserUserIds: z.array(z.uuid()) }),
+        },
+      },
+    },
+    "404": { description: "Proposal not found." },
+  },
+};
+
+export const adminApproveProposalRouteSchema = {
+  tags: ["Admin Vote Proposals"],
+  summary: "Convert a proposal to an active vote, bypassing the endorsement count (PRD §4.8)",
+  request: { params: proposalIdParamsSchema },
+  responses: {
+    "200": {
+      description: "Converted.",
+      content: {
+        "application/json": {
+          schema: z.object({ proposal: proposalSummarySchema, convertedVote: z.object(voteSummaryFieldsSchema) }),
+        },
+      },
+    },
+    "409": { description: "Proposal is not open for endorsement." },
+  },
+};
+
+export const adminRejectProposalSchema = z.object({
+  reason: z.string().trim().min(1).max(2000),
+});
+
+export const adminRejectProposalRouteSchema = {
+  tags: ["Admin Vote Proposals"],
+  summary: "Reject a proposal with a reason; notifies the proposer (PRD §4.8)",
+  request: {
+    params: proposalIdParamsSchema,
+    body: { content: { "application/json": { schema: adminRejectProposalSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Rejected.",
+      content: { "application/json": { schema: z.object({ proposal: proposalSummarySchema }) } },
+    },
+    "409": { description: "Proposal is not open for endorsement." },
+  },
+};
