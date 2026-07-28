@@ -163,3 +163,74 @@ export interface MyMeetingSeries {
   icsFiles: MyMeetingSeriesIcsFile[];
   preferenceIcsFileId: string | null;
 }
+
+export type VoteType = "election" | "motion" | "consultation";
+export type VoteScopeType = "forum" | "working_group";
+
+export interface VoteCandidate {
+  id: string;
+  userId: string | null;
+  candidateName: string;
+  candidateBio: string | null;
+  sortOrder: number;
+  eliminatedRound: number | null;
+}
+
+export interface MotionVoteResult {
+  thresholdType: string;
+  counts: { in_favor: number; opposed: number; abstain: number };
+  totalBallots: number;
+  outcome: "passed" | "failed";
+}
+
+export interface ElectionRoundTally {
+  round: number;
+  counts: Record<string, number>;
+  eliminatedCandidateIds: string[];
+  winnerCandidateId: string | null;
+}
+
+export interface ElectionVoteResult {
+  rounds: ElectionRoundTally[];
+  winnerCandidateId: string | null;
+}
+
+export interface PortalVote {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  voteType: VoteType;
+  scopeType: VoteScopeType;
+  scopeId: string | null;
+  thresholdType: string;
+  eligibleCategories: string[] | null;
+  opensAt: string;
+  closesAt: string;
+  currentRound: number;
+  status: string;
+  visibility: string;
+  publicDetailLevel: string;
+  createdAt: string;
+  updatedAt: string;
+  candidates: VoteCandidate[] | null;
+  canCastBallot: boolean;
+  hasCastBallot: boolean;
+  result: MotionVoteResult | ElectionVoteResult | null;
+}
+
+export interface VoteProposal {
+  id: string;
+  title: string;
+  description: string;
+  voteType: VoteType;
+  scopeType: VoteScopeType;
+  scopeId: string | null;
+  proposedByUserId: string;
+  status: string;
+  voteId: string | null;
+  rejectionReason: string | null;
+  endorsementCount: number;
+  minEndorsersRequired: number;
+  createdAt: string;
+}
