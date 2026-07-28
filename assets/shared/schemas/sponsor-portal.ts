@@ -10,7 +10,11 @@ import { normalizedEmailSchema, tokenSchema } from "./api";
 
 export const sponsorPortalAuthRequestSchema = z.object({
   email: normalizedEmailSchema,
-  eventId: z.uuid(),
+  // Accepts either the event's internal id or its public slug — resolved
+  // server-side against both events.id and events.slug (see
+  // _lib/auth/sponsor-portal.ts's requestSponsorPortalMagicLink), since a
+  // sponsor contact re-requesting a link only ever knows the public slug.
+  eventId: z.string().trim().min(1),
 });
 
 export const sponsorPortalAuthVerifySchema = z.object({
@@ -20,6 +24,7 @@ export const sponsorPortalAuthVerifySchema = z.object({
 export const sponsorPortalSessionSchema = z.object({
   sponsorshipId: z.uuid(),
   eventId: z.uuid(),
+  eventName: z.string().nullable(),
   tier: z.string(),
   contactEmail: z.string(),
 });

@@ -28,6 +28,7 @@ import type { DatabaseLike } from "../types";
 export interface SponsorPortalSession {
   sponsorshipId: string;
   eventId: string;
+  eventName: string | null;
   tier: string;
   contactEmail: string;
   sessionId?: string;
@@ -37,6 +38,7 @@ export interface SponsorPortalSession {
 interface SponsorshipEligibleRow {
   id: string;
   event_id: string | null;
+  event_name: string | null;
   tier: string | null;
   contact_email: string | null;
 }
@@ -106,6 +108,26 @@ export function serializeSponsorPortalSessionCookie(token: string, request: Requ
   return parts.join("; ");
 }
 
+export function serializeExpiredSponsorPortalSessionCookie(request: Request): string {
+  const parts = [
+    `${SPONSOR_PORTAL_SESSION_COOKIE_NAME}=`,
+    `Path=${SPONSOR_PORTAL_SESSION_COOKIE_PATH}`,
+    "HttpOnly",
+    "SameSite=Strict",
+    "Max-Age=0",
+    "Expires=Thu, 01 Jan 1970 00:00:00 GMT",
+  ];
+  if (isSecureRequest(request)) parts.push("Secure");
+  return parts.join("; ");
+}
+
+export async function revokeSponsorPortalSession(db: DatabaseLike, sessionId: string): Promise<void> {
+  await run(db, "UPDATE sponsor_portal_sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE id = ?", [
+    nowIso(),
+    sessionId,
+  ]);
+}
+
 function sessionExpiresAtToExp(expiresAt: string): number {
   const ms = new Date(expiresAt).getTime();
   if (!Number.isFinite(ms)) {
@@ -120,8 +142,10 @@ async function findActiveEventSponsorship(
 ): Promise<SponsorshipEligibleRow | null> {
   return first<SponsorshipEligibleRow>(
     db,
-    `SELECT id, event_id, tier, contact_email FROM sponsorships
-     WHERE id = ? AND sponsor_type = 'event' AND pipeline_stage = 'active' AND event_id IS NOT NULL`,
+    `SELECT s.id, s.event_id, e.name AS event_name, s.tier, s.contact_email
+     FROM sponsorships s
+     JOIN events e ON e.id = s.event_id
+     WHERE s.id = ? AND s.sponsor_type = 'event' AND s.pipeline_stage = 'active' AND s.event_id IS NOT NULL`,
     [sponsorshipId],
   );
 }
@@ -130,6 +154,7 @@ function toSponsorPortalSession(row: SponsorshipEligibleRow): SponsorPortalSessi
   return {
     sponsorshipId: row.id,
     eventId: row.event_id as string,
+    eventName: row.event_name,
     tier: row.tier ?? "",
     contactEmail: row.contact_email ?? "",
   };
@@ -243,6 +268,15 @@ export async function requireSponsorPortalFromRequest(
  * `{ token: null }` for no match, so the request-link route can return a
  * uniform "check your email" response without leaking sponsorship
  * existence.
+ *
+ * `payload.eventId` accepts either the event's internal id or its public
+ * slug (matched against `events.id`/`events.slug` in the same query) —
+ * a sponsor contact re-requesting an expired link only ever knows the
+ * event's public slug (e.g. from the event's own page or the original
+ * invitation email), never the internal id, so the self-service form this
+ * feeds (§11 UI-7) can only ever collect a slug. Mirrors the
+ * "resolved server-side to the internal events.id" convention
+ * POST /api/v1/sponsorship/checkout already established.
  */
 export async function requestSponsorPortalMagicLink(
   db: DatabaseLike,
@@ -257,10 +291,12 @@ export async function requestSponsorPortalMagicLink(
   const email = normalizeEmail(payload.email);
   const row = await first<SponsorshipEligibleRow>(
     db,
-    `SELECT id, event_id, tier, contact_email FROM sponsorships
-     WHERE sponsor_type = 'event' AND pipeline_stage = 'active' AND event_id = ?
-       AND contact_email IS NOT NULL AND lower(contact_email) = ?`,
-    [payload.eventId, email],
+    `SELECT s.id, s.event_id, e.name AS event_name, s.tier, s.contact_email
+     FROM sponsorships s
+     JOIN events e ON e.id = s.event_id
+     WHERE s.sponsor_type = 'event' AND s.pipeline_stage = 'active' AND (e.id = ? OR e.slug = ?)
+       AND s.contact_email IS NOT NULL AND lower(s.contact_email) = ?`,
+    [payload.eventId, payload.eventId, email],
   );
 
   if (!row) {
