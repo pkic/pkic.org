@@ -67,3 +67,7 @@ export function patchJson<T>(url: string, body: unknown, headers?: Record<string
     headers,
   });
 }
+
+export function deleteJson<T>(url: string, headers?: Record<string, string>): Promise<T> {
+  return request<T>(url, { method: "DELETE", headers });
+}

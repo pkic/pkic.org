@@ -19,6 +19,8 @@ import proposals_Router from "./proposals/router";
 import registrations_Router from "./registrations/router";
 import sponsorship_Router from "./sponsorship/router";
 import sponsorPortal_Router from "./sponsor-portal/router";
+import portal_Router from "./portal/router";
+import votes_Router from "./votes/router";
 import webhooks_Router from "./webhooks/router";
 import workingGroups_Router from "./working-groups/router";
 
@@ -50,6 +52,8 @@ openapi.route("/proposals", proposals_Router);
 openapi.route("/registrations", registrations_Router);
 openapi.route("/sponsorship", sponsorship_Router);
 openapi.route("/sponsor-portal", sponsorPortal_Router);
+openapi.route("/portal", portal_Router);
+openapi.route("/votes", votes_Router);
 openapi.route("/webhooks", webhooks_Router);
 openapi.route("/working-groups", workingGroups_Router);
 

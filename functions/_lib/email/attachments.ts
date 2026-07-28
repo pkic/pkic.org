@@ -1,8 +1,16 @@
-export interface QueuedEmailAttachment {
+export interface QueuedBadgeAttachment {
   kind: "r2-badge-image";
   r2Key: string;
   filenameBase: string;
 }
+
+export interface QueuedIcsFileAttachment {
+  kind: "r2-ics-file";
+  r2Key: string;
+  filename: string;
+}
+
+export type QueuedEmailAttachment = QueuedBadgeAttachment | QueuedIcsFileAttachment;
 
 function slugifyAttachmentPart(value: string): string {
   return value
@@ -26,7 +34,7 @@ export function buildBadgeAttachment(payload: {
   firstName?: string;
   lastName?: string;
   name?: string;
-}): QueuedEmailAttachment {
+}): QueuedBadgeAttachment {
   const filenamePrefix = payload.badgeType === "donation" ? "donation-badge" : "attendee-badge";
   const namePart = resolveAttachmentNamePart(payload.firstName, payload.lastName, payload.name);
 
@@ -34,6 +42,14 @@ export function buildBadgeAttachment(payload: {
     kind: "r2-badge-image",
     r2Key: `og-badges/${payload.badgeCode}`,
     filenameBase: namePart ? `${filenamePrefix}-${namePart}` : filenamePrefix,
+  };
+}
+
+export function buildIcsFileAttachment(payload: { r2Key: string; filename: string }): QueuedIcsFileAttachment {
+  return {
+    kind: "r2-ics-file",
+    r2Key: payload.r2Key,
+    filename: payload.filename,
   };
 }
 
@@ -49,12 +65,24 @@ export function parseQueuedEmailAttachments(payload: Record<string, unknown>): Q
     }
 
     const candidate = item as Record<string, unknown>;
-    return (
-      candidate.kind === "r2-badge-image" &&
-      typeof candidate.r2Key === "string" &&
-      candidate.r2Key.length > 0 &&
-      typeof candidate.filenameBase === "string" &&
-      candidate.filenameBase.length > 0
-    );
+    if (candidate.kind === "r2-badge-image") {
+      return (
+        typeof candidate.r2Key === "string" &&
+        candidate.r2Key.length > 0 &&
+        typeof candidate.filenameBase === "string" &&
+        candidate.filenameBase.length > 0
+      );
+    }
+
+    if (candidate.kind === "r2-ics-file") {
+      return (
+        typeof candidate.r2Key === "string" &&
+        candidate.r2Key.length > 0 &&
+        typeof candidate.filename === "string" &&
+        candidate.filename.length > 0
+      );
+    }
+
+    return false;
   });
 }

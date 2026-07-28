@@ -162,6 +162,104 @@ describe("Member self-service /api/v1/me/* (PRD §4.9/§4.10)", () => {
     expect(body.applications[0].status).toBe("approved");
   });
 
+  it("GET /api/v1/me/applications/:id returns the applicant-facing detail (timeline + communications), scoped to my own email", async () => {
+    const userId = await insertActiveMember("applicant-detail@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "applicant-detail-token");
+    const staffUserId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+       VALUES (?, 'staff-actor@example.test', 'staff-actor@example.test', 'admin', 1, datetime('now'), datetime('now'))`,
+    )
+      .bind(staffUserId)
+      .run();
+    const applicationId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO member_applications
+         (id, applicant_email, applicant_name, organization_name, organization_domain, membership_category,
+          status, stage, stage_entered_at, manage_token_hash, created_at, updated_at)
+       VALUES (?, 'applicant-detail@example.test', 'Applicant Detail', 'Org', 'example.test', 'F',
+               'in_review', 'in_review', datetime('now'), ?, datetime('now'), datetime('now'))`,
+    )
+      .bind(applicationId, crypto.randomUUID())
+      .run();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
+         VALUES (?, ?, NULL, 'pending', NULL, 'Application submitted', datetime('now'))`,
+      ).bind(crypto.randomUUID(), applicationId),
+      env.DB.prepare(
+        `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
+         VALUES (?, ?, 'pending', 'in_review', NULL, 'Moved to review', datetime('now'))`,
+      ).bind(crypto.randomUUID(), applicationId),
+      env.DB.prepare(
+        `INSERT INTO application_communications (id, application_id, kind, actor_user_id, subject, body, template_key, email_outbox_id, created_at)
+         VALUES (?, ?, 'communication', ?, 'Welcome', 'Thanks for applying', NULL, NULL, datetime('now'))`,
+      ).bind(crypto.randomUUID(), applicationId, staffUserId),
+      env.DB.prepare(
+        `INSERT INTO application_communications (id, application_id, kind, actor_user_id, subject, body, template_key, email_outbox_id, created_at)
+         VALUES (?, ?, 'note', ?, NULL, 'Internal staff note — do not leak', NULL, NULL, datetime('now'))`,
+      ).bind(crypto.randomUUID(), applicationId, staffUserId),
+    ]);
+
+    const response = await call(token, `/api/v1/me/applications/${applicationId}`);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      stage: string;
+      timeline: Array<{ toStage: string }>;
+      communications: Array<{ body: string }>;
+    };
+    expect(body.stage).toBe("in_review");
+    expect(body.timeline).toHaveLength(2);
+    expect(body.timeline[0].toStage).toBe("pending");
+    expect(body.timeline[1].toStage).toBe("in_review");
+    expect(body.communications).toHaveLength(1);
+    expect(body.communications[0].body).toBe("Thanks for applying");
+    expect(body.communications.some((c) => c.body.includes("Internal staff note"))).toBe(false);
+
+    const otherUserId = await insertActiveMember("not-the-applicant@example.test", "F");
+    const otherToken = await createMemberSession(env.DB, otherUserId, "not-the-applicant-token");
+    const deniedResponse = await call(otherToken, `/api/v1/me/applications/${applicationId}`);
+    expect(deniedResponse.status).toBe(404);
+  });
+
+  it("GET/PATCH /api/v1/me/notification-preferences defaults to all-true and persists partial updates", async () => {
+    const userId = await insertActiveMember("notif-prefs@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "notif-prefs-token");
+
+    const getResponse = await call(token, "/api/v1/me/notification-preferences");
+    expect(getResponse.status).toBe(200);
+    const defaults = await getResponse.json();
+    expect(defaults).toEqual({ workingGroupUpdates: true, voteReminders: true, generalAnnouncements: true });
+
+    const patchResponse = await call(token, "/api/v1/me/notification-preferences", {
+      method: "PATCH",
+      body: JSON.stringify({ voteReminders: false }),
+    });
+    expect(patchResponse.status).toBe(200);
+    const patched = await patchResponse.json();
+    expect(patched).toEqual({ workingGroupUpdates: true, voteReminders: false, generalAnnouncements: true });
+
+    // Persisted, not just returned — a second GET reflects the same state.
+    const getAfterResponse = await call(token, "/api/v1/me/notification-preferences");
+    expect(await getAfterResponse.json()).toEqual(patched);
+  });
+
+  it("GET /api/v1/me returns headshotUrl derived from headshot_r2_key", async () => {
+    const userId = await insertActiveMember("headshot-profile@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "headshot-profile-token");
+
+    const beforeResponse = await call(token, "/api/v1/me");
+    expect(((await beforeResponse.json()) as { headshotUrl: string | null }).headshotUrl).toBeNull();
+
+    await env.DB.prepare("UPDATE users SET headshot_r2_key = ? WHERE id = ?")
+      .bind(`headshots/${userId}/123.jpg`, userId)
+      .run();
+
+    const afterResponse = await call(token, "/api/v1/me");
+    const afterBody = (await afterResponse.json()) as { headshotUrl: string | null };
+    expect(afterBody.headshotUrl).toBe(`/api/v1/headshots/${userId}/123.jpg`);
+  });
+
   it("GET /api/v1/me/votes is a gated stub returning an empty list (voting is Phase 4B)", async () => {
     const userId = await insertActiveMember("votes-stub@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "votes-stub-token");

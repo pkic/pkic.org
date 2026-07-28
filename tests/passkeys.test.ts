@@ -10,7 +10,7 @@ import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
-import { createAdminSession } from "./helpers/auth";
+import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
 import {
   buildAuthenticationResponse,
@@ -53,6 +53,23 @@ async function insertStaffUser(email: string): Promise<string> {
     .bind(id, email, email)
     .run();
   return id;
+}
+
+/** Org-less (H5) active member — PRD §0.1's INDIVIDUAL_MEMBERSHIP_CATEGORIES, avoids an organizations row. */
+async function insertActiveMemberUser(email: string): Promise<string> {
+  const userId = crypto.randomUUID();
+  const memberId = crypto.randomUUID();
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, first_name, role, active, created_at, updated_at)
+       VALUES (?, ?, ?, 'Test', 'user', 1, datetime('now'), datetime('now'))`,
+    ).bind(userId, email, email),
+    env.DB.prepare(
+      `INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
+       VALUES (?, 'H5', ?, NULL, 'active', datetime('now'), datetime('now'))`,
+    ).bind(memberId, userId),
+  ]);
+  return userId;
 }
 
 interface BeginResponse {
@@ -276,5 +293,87 @@ describe("passkeys (Phase 3 WebAuthn)", () => {
       body: JSON.stringify({ challengeToken: begin.challengeToken, response: assertion }),
     });
     expect(response.status).toBe(400);
+  });
+});
+
+describe("member passkey login (PRD §11 UI-1 — generalizing passkeys beyond staff)", () => {
+  let memberUserId: string;
+  let memberToken: string;
+
+  beforeEach(async () => {
+    await resetDb();
+    memberUserId = await insertActiveMemberUser("member-passkey@example.test");
+    memberToken = await createMemberSession(env.DB, memberUserId, "member-passkey-token");
+  });
+
+  it("a member session can register a passkey via the same endpoints as staff", async () => {
+    const beginResponse = await call("/api/v1/auth/passkeys/register/begin", { method: "POST" }, memberToken);
+    expect(beginResponse.status).toBe(200);
+    const begin = (await beginResponse.json()) as BeginResponse;
+
+    const authenticator = await createMockAuthenticator();
+    const credentialResponse = await buildRegistrationResponse(authenticator, {
+      challenge: begin.options.challenge,
+      rpId: RP_ID,
+      origin: ORIGIN,
+    });
+
+    const completeResponse = await call(
+      "/api/v1/auth/passkeys/register/complete",
+      {
+        method: "POST",
+        body: JSON.stringify({ challengeToken: begin.challengeToken, response: credentialResponse }),
+      },
+      memberToken,
+    );
+    expect(completeResponse.status).toBe(201);
+
+    const rows = await queryAll<{ user_id: string }>(
+      env.DB,
+      "SELECT user_id FROM passkey_credentials WHERE user_id = ?",
+      memberUserId,
+    );
+    expect(rows).toHaveLength(1);
+
+    const listResponse = await call("/api/v1/auth/passkeys", {}, memberToken);
+    expect(listResponse.status).toBe(200);
+    const list = (await listResponse.json()) as { passkeys: Array<{ id: string }> };
+    expect(list.passkeys).toHaveLength(1);
+  });
+
+  it("authenticate/complete for a member-owned passkey issues a member session, not an admin one", async () => {
+    const beginResponse = await call("/api/v1/auth/passkeys/register/begin", { method: "POST" }, memberToken);
+    const begin = (await beginResponse.json()) as BeginResponse;
+    const authenticator = await createMockAuthenticator();
+    const credentialResponse = await buildRegistrationResponse(authenticator, {
+      challenge: begin.options.challenge,
+      rpId: RP_ID,
+      origin: ORIGIN,
+    });
+    await call(
+      "/api/v1/auth/passkeys/register/complete",
+      { method: "POST", body: JSON.stringify({ challengeToken: begin.challengeToken, response: credentialResponse }) },
+      memberToken,
+    );
+
+    const authBegin = await beginAuthentication();
+    const assertion = await buildAuthenticationResponse(authenticator, {
+      challenge: authBegin.options.challenge,
+      rpId: RP_ID,
+      origin: ORIGIN,
+      signCount: 1,
+    });
+
+    const completeResponse = await call("/api/v1/auth/passkeys/authenticate/complete", {
+      method: "POST",
+      body: JSON.stringify({ challengeToken: authBegin.challengeToken, response: assertion }),
+    });
+    expect(completeResponse.status).toBe(200);
+    const body = (await completeResponse.json()) as { success: boolean; member?: { userId: string }; admin?: unknown };
+    expect(body.success).toBe(true);
+    expect(body.member?.userId).toBe(memberUserId);
+    expect(body.admin).toBeUndefined();
+    expect(completeResponse.headers.get("set-cookie")).toContain("pkic_member_session=");
+    expect(completeResponse.headers.get("set-cookie")).not.toContain("pkic_admin_session=");
   });
 });

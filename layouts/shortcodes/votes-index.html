@@ -1,0 +1,10 @@
+{{/*
+  votes-index.html — mount point for the public votes index (PRD §4.8,
+  §11 UI-6). Fetches GET /api/v1/votes client-side.
+*/}}
+<div
+  data-votes-index
+  data-module="member-flows/votes-index-page"
+  data-api-base="/api/v1"
+  data-detail-base="{{ .Get "detailBase" | default "/votes/detail/" }}"
+></div>

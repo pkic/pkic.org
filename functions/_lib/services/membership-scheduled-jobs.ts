@@ -20,6 +20,7 @@ import {
 import { hasEcDecline } from "./ec-review";
 import { approveApplication } from "./membership-onboarding";
 import { processGoogleGroupsSyncQueue } from "./google-groups";
+import { resolveApprovalIcsAttachments, resolveWgJoinCalendarInviteByMailingListEmail } from "./meeting-calendar";
 import { logInfo } from "../logging";
 import type { DatabaseLike, Env } from "../types";
 
@@ -231,12 +232,14 @@ export async function runEcWindowAutoApprove(
     });
     await processOutboxByIdBackground(db, env, claimOutboxId);
 
+    const icsAttachments = await resolveApprovalIcsAttachments(db, result.workingGroupSlugs);
     const welcomeOutboxId = await queueEmail(db, {
       templateKey: "application-approved-welcome",
       recipientEmail: result.email,
       messageType: "transactional",
       subject: "Welcome to the PKI Consortium!",
       data: { applicantName: result.name, loginUrl, workingGroups: result.workingGroupNames.join(", ") },
+      attachments: icsAttachments,
     });
     await processOutboxByIdBackground(db, env, welcomeOutboxId);
 
@@ -263,17 +266,36 @@ export async function runGoogleGroupsSyncPass(
     const row = user[0];
     if (!row) continue;
 
+    const memberName = [row.first_name, row.last_name].filter(Boolean).join(" ") || row.email;
+
     const outboxId = await queueEmail(db, {
       templateKey: "mailing-list-enrolled",
       recipientEmail: row.email,
       messageType: "transactional",
       subject: "You have been added to PKI Consortium mailing lists",
-      data: {
-        memberName: [row.first_name, row.last_name].filter(Boolean).join(" ") || row.email,
-        lists: groupEmails,
-      },
+      data: { memberName, lists: groupEmails },
     });
     await processOutboxByIdBackground(db, env, outboxId);
+
+    // §4.12 "Member joins a WG" trigger: attach that WG's active ICS
+    // variants to a wg-calendar-invite email. groupEmails may include
+    // non-WG lists (e.g. pkic@/consultation@) alongside a WG's mailing
+    // list — resolveWgJoinCalendarInviteByMailingListEmail returns null
+    // for those, and for a WG with no active series/files yet.
+    for (const groupEmail of groupEmails) {
+      const invite = await resolveWgJoinCalendarInviteByMailingListEmail(db, groupEmail);
+      if (!invite) continue;
+
+      const calendarOutboxId = await queueEmail(db, {
+        templateKey: "wg-calendar-invite",
+        recipientEmail: row.email,
+        messageType: "transactional",
+        subject: `Calendar invite: ${invite.workingGroupName}`,
+        data: { memberName, workingGroupName: invite.workingGroupName },
+        attachments: invite.attachments,
+      });
+      await processOutboxByIdBackground(db, env, calendarOutboxId);
+    }
   }
 
   if (result.skippedUnconfigured) {

@@ -3,14 +3,14 @@
  */
 import { OpenAPIRoute } from "chanfana";
 import { jsonNoStore } from "../../../../_lib/http";
-import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
+import { requireAnyActorFromRequest } from "../../../../_lib/auth/actor";
 import { listPasskeysForUser } from "../../../../_lib/services/passkeys";
 import { passkeysListRouteSchema } from "../../../../../assets/shared/schemas/passkeys";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 
 export async function onRequestGet(c: AdminContext): Promise<Response> {
-  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const passkeys = await listPasskeysForUser(requestDb(c), admin.id);
+  const actor = await requireAnyActorFromRequest(requestDb(c), c.req.raw, c.env);
+  const passkeys = await listPasskeysForUser(requestDb(c), actor.id);
   return jsonNoStore({ passkeys });
 }
 
