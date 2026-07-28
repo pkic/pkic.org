@@ -127,7 +127,8 @@ export async function getMyOrganizationProfile(db: DatabaseLike, member: AuthMem
     `SELECT id, name, description, website, content_markdown, slogan, logo_r2_key,
             blog_url, blog_feed_url, press_url, press_feed_url, careers_url,
             social_x, social_linkedin, social_facebook, social_instagram, social_youtube,
-            primary_contact_user_id, secondary_contact_user_id, pending_secondary_contact_user_id
+            primary_contact_user_id, secondary_contact_user_id, pending_secondary_contact_user_id,
+            voting_delegate_user_id
      FROM organizations WHERE id = ?`,
     [member.organizationId],
   );
@@ -156,6 +157,7 @@ export async function getMyOrganizationProfile(db: DatabaseLike, member: AuthMem
     isOrgContact: member.userId === row.primary_contact_user_id || member.userId === row.secondary_contact_user_id,
     isPrimaryContact: member.userId === row.primary_contact_user_id,
     pendingSecondaryContactUserId: row.pending_secondary_contact_user_id,
+    votingDelegateUserId: row.voting_delegate_user_id,
     pendingReview: pendingReview ? toReviewSummary(pendingReview) : null,
   };
 }

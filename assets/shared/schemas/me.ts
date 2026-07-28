@@ -27,6 +27,7 @@ export const myProfileSchema = z.object({
   organizationName: z.string().nullable(),
   memberSince: z.string(),
   showOnOrgProfile: z.boolean(),
+  headshotUrl: z.string().nullable(),
   canEditOrganizationName: z.boolean(),
   // Member portal (self-service coworker enrollment): true when this member
   // is their organization's primary or secondary contact. Always false for
@@ -89,6 +90,43 @@ export const myApplicationsListRouteSchema = {
         },
       },
     },
+  },
+};
+
+export const myApplicationTimelineEntrySchema = z.object({
+  fromStage: z.string().nullable(),
+  toStage: z.string(),
+  note: z.string().nullable(),
+  createdAt: z.string(),
+});
+
+export const myApplicationCommunicationEntrySchema = z.object({
+  subject: z.string().nullable(),
+  body: z.string(),
+  createdAt: z.string(),
+});
+
+export const myApplicationDetailSchema = z.object({
+  id: z.string(),
+  applicantName: z.string(),
+  applicantEmail: z.string(),
+  organizationName: z.string().nullable(),
+  membershipCategory: z.string(),
+  status: z.string(),
+  stage: z.string(),
+  stageEnteredAt: z.string(),
+  createdAt: z.string(),
+  timeline: z.array(myApplicationTimelineEntrySchema),
+  communications: z.array(myApplicationCommunicationEntrySchema),
+});
+
+export const myApplicationDetailRouteSchema = {
+  tags: ["Me"],
+  summary: "My application detail: original application, status history, and timeline (PRD §4.10, §11 UI-1)",
+  request: { params: z.object({ id: z.string() }) },
+  responses: {
+    "200": { description: "My application.", content: { "application/json": { schema: myApplicationDetailSchema } } },
+    "404": { description: "Not found, or does not belong to the caller." },
   },
 };
 
@@ -224,6 +262,7 @@ export const myOrganizationProfileSchema = z.object({
   isOrgContact: z.boolean(),
   isPrimaryContact: z.boolean(),
   pendingSecondaryContactUserId: z.uuid().nullable(),
+  votingDelegateUserId: z.uuid().nullable(),
   pendingReview: z.record(z.string(), z.unknown()).nullable(),
 });
 
@@ -369,6 +408,41 @@ export const myHeadshotUploadRouteSchema = {
     "200": { description: "Uploaded." },
     "413": { description: "File too large." },
     "415": { description: "Unsupported file type." },
+  },
+};
+
+// ── Notification preferences (PRD §7 Account Settings, §11 UI-1) ─────────
+
+export const myNotificationPreferencesSchema = z.object({
+  workingGroupUpdates: z.boolean(),
+  voteReminders: z.boolean(),
+  generalAnnouncements: z.boolean(),
+});
+
+export const myNotificationPreferencesGetRouteSchema = {
+  tags: ["Me"],
+  summary: "Get my email notification preferences (PRD §7, §11 UI-1)",
+  responses: {
+    "200": {
+      description: "My notification preferences (all default to true/opted-in).",
+      content: { "application/json": { schema: myNotificationPreferencesSchema } },
+    },
+  },
+};
+
+export const myNotificationPreferencesUpdateSchema = myNotificationPreferencesSchema.partial();
+
+export const myNotificationPreferencesUpdateRouteSchema = {
+  tags: ["Me"],
+  summary: "Update my email notification preferences (PRD §7, §11 UI-1)",
+  request: {
+    body: { content: { "application/json": { schema: myNotificationPreferencesUpdateSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Updated preferences.",
+      content: { "application/json": { schema: myNotificationPreferencesSchema } },
+    },
   },
 };
 

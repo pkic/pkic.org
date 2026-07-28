@@ -1,0 +1,168 @@
+// Member portal (/portal/) nav shell — PRD §11 UI-1. A much smaller sibling
+// of admin.scss's shell styles (#admin-root/#admin-sidebar/.sidebar-link),
+// scoped under #portal-root/#portal-sidebar/.portal-sidebar-link so the two
+// never collide even though main.scss (loaded site-wide) carries both.
+
+$portal-bg: #f4f5f7;
+$portal-surface: #fff;
+$portal-border: #dee2e6;
+$portal-green: #198754;
+
+#portal-root {
+  display: flex;
+  min-height: calc(100vh - 56px);
+  background: $portal-bg;
+}
+
+#portal-topbar {
+  display: none;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: $portal-surface;
+  border-bottom: 1px solid $portal-border;
+
+  button {
+    background: none;
+    border: none;
+    color: #495057;
+    display: flex;
+    align-items: center;
+  }
+}
+
+#portal-sidebar {
+  width: 240px;
+  min-width: 240px;
+  background: $portal-surface;
+  border-right: 1px solid $portal-border;
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 56px;
+  height: calc(100vh - 56px);
+  overflow-y: auto;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.04);
+}
+
+#portal-main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.75rem 2rem;
+  min-width: 0;
+}
+
+#portal-sidebar-backdrop {
+  display: none;
+}
+
+.portal-brand {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: $portal-green;
+}
+
+#portal-sb-user {
+  font-size: 0.75rem;
+  color: #6c757d;
+  word-break: break-word;
+  margin-top: 0.2rem;
+}
+
+.portal-sidebar-link {
+  display: block;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #495057;
+  border-radius: 0.375rem;
+  text-decoration: none;
+  margin-bottom: 1px;
+  position: relative;
+  transition:
+    background 0.12s,
+    color 0.12s;
+
+  &:hover {
+    background: #f0f7f4;
+    color: $portal-green;
+    text-decoration: none;
+  }
+
+  &.active {
+    background: rgba($portal-green, 0.08);
+    color: $portal-green;
+    font-weight: 600;
+
+    &::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 15%;
+      height: 70%;
+      width: 3px;
+      border-radius: 0 3px 3px 0;
+      background: $portal-green;
+    }
+  }
+}
+
+.portal-sidebar-footer {
+  margin-top: auto;
+}
+
+.portal-section-title {
+  margin-bottom: 1.25rem;
+}
+
+#portal-toast-area {
+  position: fixed;
+  bottom: 1.25rem;
+  right: 1.25rem;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  pointer-events: none;
+
+  .my-toast {
+    pointer-events: auto;
+    padding: 0.6rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    max-width: 320px;
+  }
+}
+
+@media (max-width: 900px) {
+  #portal-topbar {
+    display: flex;
+  }
+
+  #portal-sidebar {
+    position: fixed;
+    left: -260px;
+    top: 0;
+    height: 100vh;
+    z-index: 210;
+    transition: left 0.2s ease;
+
+    &.open {
+      left: 0;
+    }
+  }
+
+  #portal-sidebar-backdrop.active {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    z-index: 205;
+  }
+
+  #portal-main {
+    padding: 1.25rem;
+  }
+}

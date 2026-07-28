@@ -3,7 +3,7 @@
  */
 import { OpenAPIRoute } from "chanfana";
 import { jsonNoStore } from "../../../../_lib/http";
-import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
+import { requireAnyActorFromRequest } from "../../../../_lib/auth/actor";
 import { parseJsonBody } from "../../../../_lib/validation";
 import { completePasskeyRegistration } from "../../../../_lib/services/passkeys";
 import { writeAuditLog } from "../../../../_lib/services/audit";
@@ -14,16 +14,16 @@ import {
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 
 export async function onRequestPost(c: AdminContext): Promise<Response> {
-  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  const actor = await requireAnyActorFromRequest(requestDb(c), c.req.raw, c.env);
   const body = await parseJsonBody(c.req, passkeyRegisterCompleteSchema);
 
-  const passkey = await completePasskeyRegistration(requestDb(c), c.env, admin, {
+  const passkey = await completePasskeyRegistration(requestDb(c), c.env, actor, {
     challengeToken: body.challengeToken,
     response: body.response,
     deviceName: body.deviceName,
   });
 
-  await writeAuditLog(requestDb(c), "admin", admin.id, "passkey_registered", "passkey_credential", passkey.id, {
+  await writeAuditLog(requestDb(c), actor.kind, actor.id, "passkey_registered", "passkey_credential", passkey.id, {
     deviceName: passkey.deviceName,
   });
 

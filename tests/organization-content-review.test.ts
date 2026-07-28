@@ -347,3 +347,99 @@ describe("Secondary contact nomination & confirmation (PRD §4.11, Phase 4C)", (
     expect(orgRows[0].pending_secondary_contact_user_id).toBeNull();
   });
 });
+
+describe("Voting delegate (PRD §4.8) + GET /api/v1/me/organization profile (§11 UI-2)", () => {
+  beforeEach(async () => {
+    await resetDb();
+    await seedEventAndAdmin(env.DB);
+  });
+
+  it("GET /api/v1/me/organization defaults votingDelegateUserId to null and reflects it after being set", async () => {
+    const { organizationId, userId } = await seedOrgWithContact("delegate-primary@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "delegate-get-token");
+
+    const before = await call(token, "/api/v1/me/organization");
+    expect(before.status).toBe(200);
+    const beforeBody = (await before.json()) as { votingDelegateUserId: string | null };
+    expect(beforeBody.votingDelegateUserId).toBeNull();
+
+    const delegateUserId = await addRepresentative(organizationId, "delegate-rep@example.test", "F");
+    const setResponse = await call(token, "/api/v1/me/organization/voting-delegate", {
+      method: "PATCH",
+      body: JSON.stringify({ userId: delegateUserId }),
+    });
+    expect(setResponse.status).toBe(200);
+
+    const after = await call(token, "/api/v1/me/organization");
+    const afterBody = (await after.json()) as { votingDelegateUserId: string | null };
+    expect(afterBody.votingDelegateUserId).toBe(delegateUserId);
+  });
+
+  it("lets the secondary contact set and clear the voting delegate, persisting to organizations.voting_delegate_user_id", async () => {
+    const { organizationId } = await seedOrgWithContact("delegate-primary2@example.test", "F");
+    const secondaryUserId = await addRepresentative(organizationId, "delegate-secondary@example.test", "F");
+    await env.DB.prepare("UPDATE organizations SET secondary_contact_user_id = ? WHERE id = ?")
+      .bind(secondaryUserId, organizationId)
+      .run();
+    const delegateUserId = await addRepresentative(organizationId, "delegate-target@example.test", "F");
+    const token = await createMemberSession(env.DB, secondaryUserId, "delegate-set-token");
+
+    const setResponse = await call(token, "/api/v1/me/organization/voting-delegate", {
+      method: "PATCH",
+      body: JSON.stringify({ userId: delegateUserId }),
+    });
+    expect(setResponse.status).toBe(200);
+
+    const setRows = await queryAll<{ voting_delegate_user_id: string | null }>(
+      env.DB,
+      "SELECT voting_delegate_user_id FROM organizations WHERE id = ?",
+      organizationId,
+    );
+    expect(setRows[0].voting_delegate_user_id).toBe(delegateUserId);
+
+    const clearResponse = await call(token, "/api/v1/me/organization/voting-delegate", {
+      method: "PATCH",
+      body: JSON.stringify({ userId: null }),
+    });
+    expect(clearResponse.status).toBe(200);
+
+    const clearedRows = await queryAll<{ voting_delegate_user_id: string | null }>(
+      env.DB,
+      "SELECT voting_delegate_user_id FROM organizations WHERE id = ?",
+      organizationId,
+    );
+    expect(clearedRows[0].voting_delegate_user_id).toBeNull();
+  });
+
+  it("rejects a non-contact representative's voting-delegate update with 403", async () => {
+    const { organizationId } = await seedOrgWithContact("delegate-primary3@example.test", "F");
+    const nonContactUserId = await addRepresentative(organizationId, "delegate-non-contact@example.test", "F");
+    const token = await createMemberSession(env.DB, nonContactUserId, "delegate-non-contact-token");
+
+    const response = await call(token, "/api/v1/me/organization/voting-delegate", {
+      method: "PATCH",
+      body: JSON.stringify({ userId: nonContactUserId }),
+    });
+    expect(response.status).toBe(403);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("NOT_ORG_CONTACT");
+  });
+
+  it("rejects a voting delegate who isn't an active member of the same org with 422", async () => {
+    const { userId: primaryUserId } = await seedOrgWithContact("delegate-primary4@example.test", "F");
+    const outsiderUserId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+       VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+    )
+      .bind(outsiderUserId, "delegate-outsider@example.test", "delegate-outsider@example.test")
+      .run();
+    const token = await createMemberSession(env.DB, primaryUserId, "delegate-outsider-token");
+
+    const response = await call(token, "/api/v1/me/organization/voting-delegate", {
+      method: "PATCH",
+      body: JSON.stringify({ userId: outsiderUserId }),
+    });
+    expect(response.status).toBe(422);
+  });
+});

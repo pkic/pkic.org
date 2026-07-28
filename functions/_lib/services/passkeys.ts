@@ -20,8 +20,9 @@ import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { signJwt, verifyJwt } from "../utils/jwt";
 import { findEligibleStaffUserById, issueAdminSession } from "../auth/admin";
+import { findEligibleMemberById, issueMemberSession } from "../auth/member";
 import type { authenticationResponseSchema, registrationResponseSchema } from "../../../assets/shared/schemas/passkeys";
-import type { AuthAdmin, DatabaseLike, Env } from "../types";
+import type { AuthAdmin, AuthMember, DatabaseLike, Env } from "../types";
 
 // The route layer validates the WebAuthn response shape with Zod
 // (assets/shared/schemas/passkeys.ts) before it reaches here; that schema is
@@ -33,6 +34,9 @@ type AuthenticationResponseInput = z.infer<typeof authenticationResponseSchema>;
 
 const CHALLENGE_TTL_SECONDS = 300;
 const PASSKEY_SESSION_TTL_HOURS = 8;
+// Matches functions/api/v1/auth/member/verify-link.ts's DEFAULT_MEMBER_SESSION_TTL_HOURS —
+// members aren't expected to re-authenticate as often as staff.
+const DEFAULT_MEMBER_PASSKEY_SESSION_TTL_HOURS = 720;
 const CHALLENGE_TOKEN_TYPE = "passkey-challenge";
 
 type ChallengePurpose = "registration" | "authentication";
@@ -247,11 +251,15 @@ export async function beginPasskeyAuthentication(
   return { options: options as unknown as Record<string, unknown>, challengeToken };
 }
 
+export type PasskeyAuthenticationResult =
+  | { kind: "admin"; admin: AuthAdmin; sessionId: string; expiresAt: string }
+  | { kind: "member"; member: AuthMember; sessionId: string; expiresAt: string };
+
 export async function completePasskeyAuthentication(
   db: DatabaseLike,
-  env: Pick<Env, "WEBAUTHN_RP_ID" | "WEBAUTHN_ORIGIN" | "INTERNAL_SIGNING_SECRET">,
+  env: Pick<Env, "WEBAUTHN_RP_ID" | "WEBAUTHN_ORIGIN" | "INTERNAL_SIGNING_SECRET" | "MEMBER_SESSION_TTL_HOURS">,
   payload: { challengeToken: string; response: AuthenticationResponseInput },
-): Promise<{ admin: AuthAdmin; sessionId: string; expiresAt: string }> {
+): Promise<PasskeyAuthenticationResult> {
   const rpId = requireEnvVar(env.WEBAUTHN_RP_ID, "WEBAUTHN_RP_ID");
   const origin = requireEnvVar(env.WEBAUTHN_ORIGIN, "WEBAUTHN_ORIGIN");
   const signingSecret = requireEnvVar(env.INTERNAL_SIGNING_SECRET, "INTERNAL_SIGNING_SECRET");
@@ -305,8 +313,13 @@ export async function completePasskeyAuthentication(
     );
   }
 
-  const user = await findEligibleStaffUserById(db, credentialRow.user_id);
-  if (!user) {
+  // A passkey's owner may be eligible via either the staff path or the
+  // member path (never both — see functions/_lib/auth/member.ts's header
+  // comment on the two being distinct populations) — try staff first since
+  // that was this feature's original, still-larger population.
+  const staffUser = await findEligibleStaffUserById(db, credentialRow.user_id);
+  const member = staffUser ? null : await findEligibleMemberById(db, credentialRow.user_id);
+  if (!staffUser && !member) {
     throw new AppError(403, "AUTH_FORBIDDEN", "This account is no longer eligible to sign in");
   }
 
@@ -316,7 +329,16 @@ export async function completePasskeyAuthentication(
     credentialRow.id,
   ]);
 
-  return issueAdminSession(db, user, PASSKEY_SESSION_TTL_HOURS);
+  if (staffUser) {
+    const issued = await issueAdminSession(db, staffUser, PASSKEY_SESSION_TTL_HOURS);
+    return { kind: "admin", ...issued };
+  }
+
+  const parsed = Number.parseInt(env.MEMBER_SESSION_TTL_HOURS ?? "", 10);
+  const memberSessionTtlHours =
+    Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MEMBER_PASSKEY_SESSION_TTL_HOURS;
+  const issued = await issueMemberSession(db, member!, memberSessionTtlHours);
+  return { kind: "member", ...issued };
 }
 
 export async function listPasskeysForUser(db: DatabaseLike, userId: string): Promise<PasskeySummary[]> {
