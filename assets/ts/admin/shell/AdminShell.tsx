@@ -11,7 +11,7 @@ import { DonationDetailPage } from "../sections/DonationDetailPage";
 import { Email } from "../sections/Email";
 import { DueWork } from "../sections/DueWork";
 import { Templates } from "../sections/Templates";
-import { Users } from "../sections/Users";
+import { Users, UserDetailView } from "../sections/Users";
 import { AccessControl } from "../sections/access-control";
 import { AccountSettings } from "../sections/AccountSettings";
 import { Organizations } from "../sections/Organizations";
@@ -197,6 +197,17 @@ export function AdminShell() {
                   <Donations />
                 </SectionWrapper>
               )}
+            />
+            <Route
+              path="/users/detail/:id"
+              component={({ params }: { params: { id: string } }) => {
+                const [, navigate] = useHashLocation();
+                return (
+                  <SectionWrapper title="Users">
+                    <UserDetailView userId={params.id} onBack={() => navigate("/users")} />
+                  </SectionWrapper>
+                );
+              }}
             />
             <Route
               path="/users"

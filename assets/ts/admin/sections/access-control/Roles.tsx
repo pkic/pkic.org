@@ -129,8 +129,14 @@ export function Roles() {
                 {r.isSystemRole && <span class="badge text-bg-secondary ms-1">System</span>}
               </>
             ),
+            sort: { asc: "name", desc: "-name" },
           },
-          { header: "Description", cell: (r) => r.description ?? "—", className: "small text-muted" },
+          {
+            header: "Description",
+            cell: (r) => r.description ?? "—",
+            className: "small text-muted",
+            sort: { asc: "description", desc: "-description" },
+          },
           {
             header: "Permissions",
             cell: (r) => (

@@ -325,6 +325,7 @@ export function Donations({ subTab }: { subTab?: string }) {
           {d.organization && <small class="text-muted"> — {d.organization}</small>}
         </>
       ),
+      sort: { asc: "name", desc: "-name" },
     },
     {
       header: { label: "Amount", className: "text-end" },
@@ -340,11 +341,13 @@ export function Donations({ subTab }: { subTab?: string }) {
         );
       },
       className: "text-end text-nowrap",
+      sort: { asc: "gross_amount", desc: "-gross_amount", defaultDirection: "desc" },
     },
     {
       header: "Status",
       cell: (d) => <Badge status={d.status} />,
       className: "small",
+      sort: { asc: "status", desc: "-status" },
     },
     {
       header: "Method",
@@ -355,6 +358,7 @@ export function Donations({ subTab }: { subTab?: string }) {
       header: "Date",
       cell: (d) => fmt(d.completed_at ?? d.created_at),
       className: "small text-muted text-nowrap",
+      sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
     },
   ];
 

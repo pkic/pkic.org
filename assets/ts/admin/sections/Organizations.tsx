@@ -8,6 +8,7 @@
  * them afterward.
  */
 import { useState, useEffect, useCallback, useRef } from "preact/hooks";
+import { useHashLocation } from "wouter/use-hash-location";
 import { Spinner } from "../../components/Spinner";
 import { ErrorAlert } from "../../components/ErrorAlert";
 import { ApiDataTable, type ApiTableActions } from "../../components/Table";
@@ -417,6 +418,7 @@ function AddRepresentativeForm({
 
 function RepresentativeRow({ rep, onChanged }: { rep: AdminOrganizationRepresentative; onChanged: () => void }) {
   const [busy, setBusy] = useState(false);
+  const [, navigate] = useHashLocation();
 
   async function patch(body: Record<string, unknown>) {
     setBusy(true);
@@ -450,7 +452,14 @@ function RepresentativeRow({ rep, onChanged }: { rep: AdminOrganizationRepresent
       <td>
         <strong class="adm-cell-name">{rep.name}</strong>
         <br />
-        <span class="mono text-muted small">{rep.email}</span>
+        <button
+          type="button"
+          class="btn btn-link p-0 mono text-muted small"
+          onClick={() => navigate(`/users/detail/${rep.userId}`)}
+          title="View user details"
+        >
+          {rep.email}
+        </button>
         {rep.jobTitle && <div class="small text-muted">{rep.jobTitle}</div>}
       </td>
       <td>
@@ -984,6 +993,17 @@ export function Organizations() {
                 )}
               </>
             ),
+            sort: { asc: "name", desc: "-name" },
+          },
+          {
+            header: "Category",
+            cell: (o) =>
+              o.membershipCategory ? (
+                <span class="badge text-bg-success mono">{o.membershipCategory}</span>
+              ) : (
+                <span class="text-danger fst-italic">Not set</span>
+              ),
+            sort: { asc: "membership_category", desc: "-membership_category" },
           },
           {
             header: "Primary contact",
@@ -998,7 +1018,12 @@ export function Organizations() {
                 <span class="text-muted fst-italic">None</span>
               ),
           },
-          { header: "Representatives", cell: (o) => o.memberCount, className: "text-center" },
+          {
+            header: "Representatives",
+            cell: (o) => o.memberCount,
+            className: "text-center",
+            sort: { asc: "member_count", desc: "-member_count" },
+          },
           {
             header: "Website",
             cell: (o) =>
@@ -1011,7 +1036,12 @@ export function Organizations() {
               ),
             className: "small",
           },
-          { header: "Created", cell: (o) => fmt(o.createdAt), className: "mono small text-nowrap" },
+          {
+            header: "Created",
+            cell: (o) => fmt(o.createdAt),
+            className: "mono small text-nowrap",
+            sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
+          },
         ]}
         empty="No organizations found"
         rowKey={(o) => o.id}

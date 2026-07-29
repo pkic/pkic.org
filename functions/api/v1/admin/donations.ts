@@ -11,7 +11,9 @@
 import { json } from "../../../_lib/http";
 import { requireAdminFromRequest } from "../../../_lib/auth/admin";
 import { all } from "../../../_lib/db/queries";
+import { resolveOrderBy } from "../../../_lib/db/sort";
 import { requestDb, type AdminContext } from "../../../_lib/db/context";
+import { ADMIN_DONATIONS_SORT_COLUMNS, donationsSortValueSchema } from "../../../../assets/shared/schemas/admin-donations";
 
 interface DonationRow {
   id: string;
@@ -45,6 +47,12 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const status = url.searchParams.get("status") ?? "";
   const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "100") || 100, 500);
   const offset = parseInt(url.searchParams.get("offset") ?? "0") || 0;
+  // An invalid sort value fails schema validation (unknown column), so we
+  // just fall back to the default order — same "quietly ignore" behavior
+  // admin-organizations.ts's route uses.
+  const sortParsed = donationsSortValueSchema.safeParse(url.searchParams.get("sort") ?? undefined);
+  const sort = sortParsed.success ? sortParsed.data : undefined;
+  const orderBy = resolveOrderBy(sort, ADMIN_DONATIONS_SORT_COLUMNS, "ORDER BY created_at DESC");
 
   const conditions: string[] = [];
   const params: unknown[] = [];
@@ -66,7 +74,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
               created_at, completed_at
        FROM donations
        ${where}
-       ORDER BY created_at DESC
+       ${orderBy}
        LIMIT ? OFFSET ?`,
       [...params, limit, offset],
     ),

@@ -3,10 +3,15 @@ import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { getActiveFormByPurpose } from "../../../../../_lib/services/forms";
 import { all, first } from "../../../../../_lib/db/queries";
+import { resolveOrderBy } from "../../../../../_lib/db/sort";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { parseJsonSafe } from "../../../../../_lib/utils/json";
 import { extractDietarySelections } from "../../../../../_lib/utils/registration-dietary";
 import { getAttendanceStatusByType } from "../../../../../_lib/services/registrations/admin-statistics";
+import {
+  EVENT_REGISTRATIONS_SORT_COLUMNS,
+  eventRegistrationsSortValueSchema,
+} from "../../../../../../assets/shared/schemas/api";
 
 interface RegistrationRow {
   id: string;
@@ -62,6 +67,10 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const consentFilter = url.searchParams.get("consent") ?? "";
   const requestedAttendanceChange = url.searchParams.get("attendance_change") ?? "";
   const attendanceChangeFilter = validAttendanceChanges.has(requestedAttendanceChange) ? requestedAttendanceChange : "";
+
+  const parsedSort = eventRegistrationsSortValueSchema.safeParse(url.searchParams.get("sort") ?? undefined);
+  const sort = parsedSort.success ? parsedSort.data : undefined;
+  const orderBy = resolveOrderBy(sort, EVENT_REGISTRATIONS_SORT_COLUMNS, "ORDER BY r.created_at DESC");
 
   const conditions: string[] = ["r.event_id = ?"];
   const bindings: unknown[] = [event.id];
@@ -159,7 +168,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
      LEFT JOIN users u ON u.id = r.user_id
      LEFT JOIN referral_codes rc ON rc.owner_type = 'registration' AND rc.owner_id = r.id
      WHERE ${whereClause}
-     ORDER BY ${orderBySql}
+     ${attendanceChangeFilter ? `ORDER BY ${orderBySql}` : orderBy}
      LIMIT ? OFFSET ?`,
     [...bindings, limit + 1, offset],
   );

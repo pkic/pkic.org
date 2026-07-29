@@ -1,6 +1,11 @@
 
 {{ define "main" }}
 {{ partial "hero.html" . }}
+<div class="container members text-nowrap overflow-hidden my-4 text-center">
+    <div class="banner">
+        {{ partialCached "members/wall.html" . }}
+    </div>
+</div>
 {{ partial "members/nav.html" . }}
 
 {{ with .Content }}<div class="py-4"><div id="content" class="container">{{ . }}</div></div>{{ end }}

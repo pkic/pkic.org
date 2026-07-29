@@ -4,6 +4,7 @@ import { z } from "zod";
 
 export const publicMemberSummarySchema = z.object({
   id: z.string(),
+  slug: z.string().nullable(),
   name: z.string(),
   memberType: z.string(),
   tier: z.string().nullable(),

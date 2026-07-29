@@ -14,10 +14,15 @@ import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { all, first, run } from "../../../../../_lib/db/queries";
+import { resolveOrderBy } from "../../../../../_lib/db/sort";
 import { nowIso } from "../../../../../_lib/utils/time";
 import { uuid } from "../../../../../_lib/utils/ids";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
-import { adminEventPermissionSchema } from "../../../../../../assets/shared/schemas/api";
+import {
+  adminEventPermissionSchema,
+  EVENT_TEAM_SORT_COLUMNS,
+  eventTeamSortValueSchema,
+} from "../../../../../../assets/shared/schemas/api";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 type EventPermissionValue = "organizer" | "program_committee" | "moderator" | "volunteer";
@@ -56,6 +61,11 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
   requirePermission(admin, "events:manage", { type: "event", id: event.id });
 
+  const url = new URL(c.req.raw.url);
+  const parsedSort = eventTeamSortValueSchema.safeParse(url.searchParams.get("sort") ?? undefined);
+  const sort = parsedSort.success ? parsedSort.data : undefined;
+  const orderBy = resolveOrderBy(sort, EVENT_TEAM_SORT_COLUMNS, "ORDER BY role_id ASC, user_email ASC");
+
   const rows = await all<PermissionRow>(
     requestDb(c),
     `SELECT ur.id, ur.user_email, ur.user_id, ur.role_id,
@@ -65,7 +75,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
      LEFT JOIN users u ON u.id = ur.granted_by_user_id
      WHERE ur.context_type = 'event' AND ur.context_id = ? AND ur.revoked_at IS NULL
        AND ur.role_id IN ('role-event_organizer', 'role-program_committee', 'role-event_moderator', 'role-event_volunteer')
-     ORDER BY ur.role_id ASC, ur.user_email ASC`,
+     ${orderBy}`,
     [event.id],
   );
 

@@ -42,6 +42,7 @@ export const adminOrganizationSummarySchema = z.object({
   description: z.string().nullable(),
   slogan: z.string().nullable(),
   logoUrl: z.string().nullable(),
+  membershipCategory: z.string().nullable(),
   memberSince: z.string(),
   memberCount: z.number(),
   primaryContactName: z.string().nullable(),
@@ -70,7 +71,6 @@ export const adminOrganizationRepresentativeSchema = z.object({
 });
 
 export const adminOrganizationDetailSchema = adminOrganizationSummarySchema.extend({
-  membershipCategory: z.string().nullable(),
   contentMarkdown: z.string().nullable(),
   blogUrl: z.string().nullable(),
   blogFeedUrl: z.string().nullable(),
@@ -87,10 +87,28 @@ export const adminOrganizationDetailSchema = adminOrganizationSummarySchema.exte
   representatives: z.array(adminOrganizationRepresentativeSchema),
 });
 
+/** Allowlisted sort columns for GET /api/v1/admin/organizations — see listAdminOrganizations. */
+export const ADMIN_ORGANIZATIONS_SORT_COLUMNS = ["name", "membership_category", "created_at", "member_count"] as const;
+
+const organizationsSortValueSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(41)
+  .refine(
+    (value) => {
+      const field = value.startsWith("-") ? value.slice(1) : value;
+      return (ADMIN_ORGANIZATIONS_SORT_COLUMNS as readonly string[]).includes(field);
+    },
+    { message: "Unknown sort column" },
+  )
+  .optional();
+
 export const organizationsListQuerySchema = z.object({
   q: trimmedString(1, 200).optional(),
   limit: z.coerce.number().int().min(1).max(200).optional(),
   offset: z.coerce.number().int().min(0).optional(),
+  sort: organizationsSortValueSchema,
 });
 
 export const organizationsListRouteSchema = {

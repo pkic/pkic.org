@@ -243,6 +243,7 @@ export interface AdminWorkingGroupMember {
   name: string;
   email: string;
   organizationName: string | null;
+  memberCategory: string | null;
   joinedAt: string;
 }
 
@@ -703,6 +704,7 @@ export interface AdminOrganizationSummary {
   description: string | null;
   slogan: string | null;
   logoUrl: string | null;
+  membershipCategory: string | null;
   memberSince: string;
   memberCount: number;
   primaryContactName: string | null;
@@ -725,7 +727,6 @@ export interface AdminOrganizationRepresentative {
 }
 
 export interface AdminOrganizationDetail extends AdminOrganizationSummary {
-  membershipCategory: string | null;
   contentMarkdown: string | null;
   blogUrl: string | null;
   blogFeedUrl: string | null;

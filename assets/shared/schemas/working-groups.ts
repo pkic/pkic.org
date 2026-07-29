@@ -60,6 +60,7 @@ export const adminWorkingGroupMemberSchema = z.object({
   name: z.string(),
   email: z.string(),
   organizationName: z.string().nullable(),
+  memberCategory: z.string().nullable(),
   joinedAt: z.string(),
 });
 

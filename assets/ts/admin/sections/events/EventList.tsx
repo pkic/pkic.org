@@ -239,13 +239,19 @@ export function EventList() {
                 <span class="mono text-muted small">{e.slug}</span>
               </>
             ),
+            sort: { asc: "name", desc: "-name" },
           },
           {
             header: "Dates",
             cell: (e) => (e.starts_at ? e.starts_at.substring(0, 10) : "—"),
             className: "mono small text-nowrap",
+            sort: { asc: "starts_at", desc: "-starts_at", defaultDirection: "desc" },
           },
-          { header: "Mode", cell: (e) => <Badge status={e.registration_mode} /> },
+          {
+            header: "Mode",
+            cell: (e) => <Badge status={e.registration_mode} />,
+            sort: { asc: "registration_mode", desc: "-registration_mode" },
+          },
           {
             header: { label: "Confirmed", className: "text-end" },
             cell: (e) => e.confirmed_registrations ?? 0,
@@ -255,6 +261,7 @@ export function EventList() {
             header: { label: "Total", className: "text-end" },
             cell: (e) => e.total_registrations ?? 0,
             className: "mono text-end",
+            sort: { asc: "total_registrations", desc: "-total_registrations" },
           },
           {
             header: { label: "Pending", className: "text-end" },

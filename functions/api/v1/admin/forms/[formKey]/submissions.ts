@@ -11,6 +11,7 @@ import { parseJsonSafe } from "../../../../../_lib/utils/json";
 import { AppError } from "../../../../../_lib/errors";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import { formSubmissionsSortValueSchema } from "../../../../../../assets/shared/schemas/api";
 
 interface FormRow {
   id: string;
@@ -187,6 +188,22 @@ function buildStats(fieldContexts: FieldStatContext[], submissions: AdminSubmiss
       return { fieldKey: field.key, totalAnswers, uniqueAnswers: entries.length, entries };
     })
     .filter((stat) => stat.entries.length > 0);
+}
+
+function submissionSubmitterSortKey(payload: AdminSubmissionPayload): string {
+  const name = [payload.submitter?.firstName, payload.submitter?.lastName].filter(Boolean).join(" ");
+  return (name || payload.submitter?.email || "").toLowerCase();
+}
+
+// Comparator for the ?sort= column ("submitter" | "status" | "submitted_at"),
+// always in ascending order — the caller flips the sign for descending. This
+// is an in-memory comparator rather than `resolveOrderBy` because `enriched`
+// is merged from three separate queries (form_submissions plus synthetic
+// registrations/proposals rows below), not one SQL statement.
+function compareSubmissions(column: string, a: AdminSubmissionPayload, b: AdminSubmissionPayload): number {
+  if (column === "status") return a.status.localeCompare(b.status);
+  if (column === "submitter") return submissionSubmitterSortKey(a).localeCompare(submissionSubmitterSortKey(b));
+  return a.submittedAt.localeCompare(b.submittedAt);
 }
 
 function submitterFromRow(row: {
@@ -373,7 +390,11 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     }
   }
 
-  const sorted = enriched.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
+  const parsedSort = formSubmissionsSortValueSchema.safeParse(url.searchParams.get("sort") ?? undefined);
+  const sortValue = parsedSort.success ? parsedSort.data : undefined;
+  const sortDesc = sortValue ? sortValue.startsWith("-") : true;
+  const sortColumn = sortValue ? (sortValue.startsWith("-") ? sortValue.slice(1) : sortValue) : "submitted_at";
+  const sorted = enriched.sort((a, b) => (sortDesc ? -1 : 1) * compareSubmissions(sortColumn, a, b));
   const paged = sorted.slice(offset, offset + limit);
 
   return json({

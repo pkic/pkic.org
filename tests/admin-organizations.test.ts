@@ -101,6 +101,29 @@ describe("Admin Organizations — org-level membership category (migration 0040,
     expect(body.organization.representatives[0]).not.toHaveProperty("membershipCategory");
   });
 
+  it("GET organizations list surfaces membershipCategory and supports ?sort=", async () => {
+    await createOrg({ organizationName: "Acme Corp", membershipCategory: "F" });
+    await createOrg({
+      organizationName: "Beta Inc",
+      membershipCategory: "A",
+      representatives: [{ name: "Bob Beta", email: "bob@beta.test" }],
+    });
+
+    const listResponse = await call(adminToken, "/api/v1/admin/organizations");
+    expect(listResponse.status).toBe(200);
+    const listBody = (await listResponse.json()) as {
+      organizations: Array<{ name: string; membershipCategory: string | null }>;
+    };
+    const byName = Object.fromEntries(listBody.organizations.map((o) => [o.name, o.membershipCategory]));
+    expect(byName["Acme Corp"]).toBe("F");
+    expect(byName["Beta Inc"]).toBe("A");
+
+    const sortedResponse = await call(adminToken, "/api/v1/admin/organizations?sort=membership_category");
+    const sortedBody = (await sortedResponse.json()) as { organizations: Array<{ membershipCategory: string | null }> };
+    const categories = sortedBody.organizations.map((o) => o.membershipCategory);
+    expect(categories).toEqual([...categories].sort());
+  });
+
   it("creating an organization via the Interim Admin Tool sets member_since (migration 0046, regression guard)", async () => {
     const { organizationId } = await createOrg();
 

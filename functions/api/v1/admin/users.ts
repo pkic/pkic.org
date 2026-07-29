@@ -13,6 +13,8 @@
 import { json } from "../../../_lib/http";
 import { requireAdminFromRequest } from "../../../_lib/auth/admin";
 import { all, first } from "../../../_lib/db/queries";
+import { resolveOrderBy } from "../../../_lib/db/sort";
+import { ADMIN_USERS_SORT_COLUMNS, usersSortValueSchema } from "../../../../assets/shared/schemas/admin-users";
 import { requestDb, type AdminContext } from "../../../_lib/db/context";
 
 interface UserRow {
@@ -46,6 +48,11 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const search = (url.searchParams.get("q") ?? url.searchParams.get("search") ?? "").trim().slice(0, 40);
   const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50") || 50, 500);
   const offset = parseInt(url.searchParams.get("offset") ?? "0") || 0;
+  // An invalid sort value fails the refine (unknown column), so parsed.success
+  // is false and we just fall back to the default order — same "quietly
+  // ignore" behavior admin-organizations.ts's route uses.
+  const sortParsed = usersSortValueSchema.safeParse(url.searchParams.get("sort") ?? undefined);
+  const sort = sortParsed.success ? sortParsed.data : undefined;
 
   const conditions: string[] = [];
   const params: unknown[] = [];
@@ -64,6 +71,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const orderBy = resolveOrderBy(sort, ADMIN_USERS_SORT_COLUMNS, "ORDER BY u.role ASC, u.email ASC");
 
   const users = await all<UserRow>(
     requestDb(c),
@@ -75,7 +83,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
      LEFT JOIN members m ON m.user_id = u.id
      LEFT JOIN organizations o ON o.id = m.organization_id
      ${where}
-     ORDER BY u.role ASC, u.email ASC
+     ${orderBy}
      LIMIT ? OFFSET ?`,
     [...params, limit + 1, offset],
   );

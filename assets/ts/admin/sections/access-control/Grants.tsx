@@ -114,19 +114,35 @@ export function Grants({ userLabels }: { userLabels: Map<string, AdminUser> }) {
         resolve={(d) => (d as { grants: AccessGrant[] }).grants}
         actionsRef={tableRef}
         columns={[
-          { header: "User", cell: (g) => userLabels.get(g.userId)?.email ?? g.userId, className: "small mono" },
-          { header: "Permission", cell: (g) => <span class="badge text-bg-secondary">{g.permission}</span> },
+          {
+            header: "User",
+            cell: (g) => userLabels.get(g.userId)?.email ?? g.userId,
+            className: "small mono",
+            sort: { asc: "user_id", desc: "-user_id" },
+          },
+          {
+            header: "Permission",
+            cell: (g) => <span class="badge text-bg-secondary">{g.permission}</span>,
+            sort: { asc: "permission", desc: "-permission" },
+          },
           {
             header: "Context",
             cell: (g) => (g.contextType ? `${g.contextType}:${g.contextId}` : <span class="text-muted">Global</span>),
             className: "small mono",
+            sort: { asc: "context_type", desc: "-context_type" },
           },
           {
             header: "Expires",
             cell: (g) => (g.expiresAt ? fmt(g.expiresAt) : <span class="text-muted">Never</span>),
             className: "small",
+            sort: { asc: "expires_at", desc: "-expires_at" },
           },
-          { header: "Granted", cell: (g) => fmt(g.createdAt), className: "small mono" },
+          {
+            header: "Granted",
+            cell: (g) => fmt(g.createdAt),
+            className: "small mono",
+            sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
+          },
           {
             header: "",
             cell: (g) => (

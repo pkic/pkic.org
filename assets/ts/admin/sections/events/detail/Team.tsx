@@ -112,16 +112,18 @@ export function Team({ slug }: { slug: string }) {
         actionsRef={tableRef}
         deps={[slug]}
         columns={[
-          { header: "Email", cell: (p) => p.user_email },
+          { header: "Email", cell: (p) => p.user_email, sort: { asc: "user_email", desc: "-user_email" } },
           {
             header: "Permission",
             cell: (p) => <span class="badge text-bg-secondary">{PERM_LABELS[p.permission] ?? p.permission}</span>,
+            sort: { asc: "role_id", desc: "-role_id" },
           },
           { header: "Added by", cell: (p) => p.granter_email ?? "—", className: "small text-muted" },
           {
             header: "Added",
             cell: (p) => (p.created_at ? p.created_at.substring(0, 10) : "—"),
             className: "mono small",
+            sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
           },
           {
             header: "Expires",
@@ -134,6 +136,7 @@ export function Team({ slug }: { slug: string }) {
                 <span class="text-muted">Never</span>
               ),
             className: "small",
+            sort: { asc: "expires_at", desc: "-expires_at" },
           },
           {
             header: "",

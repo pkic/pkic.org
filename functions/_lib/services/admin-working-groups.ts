@@ -57,6 +57,7 @@ export interface AdminWorkingGroupMember {
   name: string;
   email: string;
   organizationName: string | null;
+  memberCategory: string | null;
   joinedAt: string;
 }
 
@@ -193,10 +194,11 @@ export async function getAdminWorkingGroupDetail(
     last_name: string | null;
     email: string;
     org_name: string | null;
+    member_type: string | null;
     joined_at: string;
   }>(
     db,
-    `SELECT u.id AS user_id, u.first_name, u.last_name, u.email, o.name AS org_name, wgm.joined_at
+    `SELECT u.id AS user_id, u.first_name, u.last_name, u.email, o.name AS org_name, m.member_type, wgm.joined_at
      FROM working_group_members wgm
      JOIN users u ON u.id = wgm.user_id
      LEFT JOIN members m ON m.user_id = wgm.user_id AND m.status = 'active'
@@ -213,6 +215,7 @@ export async function getAdminWorkingGroupDetail(
       name: [m.first_name, m.last_name].filter(Boolean).join(" ") || "Unknown",
       email: m.email,
       organizationName: m.org_name,
+      memberCategory: m.member_type,
       joinedAt: m.joined_at,
     })),
   };

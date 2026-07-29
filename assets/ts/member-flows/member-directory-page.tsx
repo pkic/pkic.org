@@ -24,6 +24,7 @@ const DIGITS = new Set("0123456789".split(""));
 
 export interface DirectoryMember {
   id: string;
+  slug: string | null;
   name: string;
   memberType: string;
   tier: string | null;
@@ -57,7 +58,10 @@ function initialsFor(name: string): string {
 }
 
 function MemberCard({ member, detailBase }: { member: DirectoryMember; detailBase: string }) {
-  const href = `${detailBase}?id=${encodeURIComponent(member.id)}`;
+  // Org-tied members get a clean URL (functions/members/[slug].ts); org-less
+  // individuals have no organizations row to hold a slug on, so they keep
+  // the query-string form.
+  const href = member.slug ? `/members/${encodeURIComponent(member.slug)}/` : `${detailBase}?id=${encodeURIComponent(member.id)}`;
   const colorIdx = member.name.length % 6;
 
   return (

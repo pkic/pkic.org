@@ -82,9 +82,16 @@ function representativeDisplayName(row: OrganizationRepresentativeRow): string |
   return full || null;
 }
 
+// `links_json` has two legitimate shapes in the wild: a `string[]` (written
+// by this file's own updateMyProfile) and a `{linkedin, x}` object (written
+// by scripts/migrate-members-yaml-to-d1.mjs — the same shape
+// members-directory.ts's public directory already reads). Handle both
+// instead of assuming an array, which crashed every migrated user's first
+// `GET /api/v1/me` after magic-link login with `raw.map is not a function`.
 function normalizeLinks(linksJson: string | null): string[] {
-  const raw = parseJsonSafe<unknown[]>(linksJson, []);
-  return raw
+  const raw = parseJsonSafe<unknown>(linksJson, []);
+  const values = Array.isArray(raw) ? raw : raw && typeof raw === "object" ? Object.values(raw) : [];
+  return values
     .map((entry) => (typeof entry === "string" ? entry : ""))
     .map((url) => url.trim())
     .filter(Boolean);

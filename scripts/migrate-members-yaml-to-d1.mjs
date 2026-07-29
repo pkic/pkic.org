@@ -92,6 +92,38 @@ const WORKING_GROUP_CSVS = {
 
 const INDIVIDUAL_CATEGORIES = new Set(["H5", "H6", "H7"]);
 
+// Step 3e (sponsorship reconciliation): maps a YAML `sponsor.sponsoring.<key>`
+// event name to the `events` row it should attribute to. Only 3 distinct
+// event names exist across all of data/members/*.yaml (checked 2026-07-29),
+// small enough to hand-map from content/events/*/index.md front matter
+// rather than fuzzy-match against event names — the single generic
+// "Post-Quantum Cryptography Conference" row already seeded in D1 doesn't
+// distinguish by city/year, so each of these becomes (or reuses, if already
+// present by slug) its own `events` row.
+const EVENT_NAME_ALIASES = {
+  "Post-Quantum Cryptography Conference Amsterdam 2023": {
+    slug: "pqc-conference-amsterdam-nl-2023",
+    name: "Post-Quantum Cryptography Conference - Amsterdam 2023",
+    timezone: "Europe/Amsterdam",
+    startsAt: "2023-11-07",
+    endsAt: "2023-11-08",
+  },
+  "Post-Quantum Cryptography Conference Austin 2025": {
+    slug: "pqc-conference-austin-us-2025",
+    name: "Post-Quantum Cryptography Conference - Austin 2025",
+    timezone: "America/Chicago",
+    startsAt: "2025-01-15",
+    endsAt: "2025-01-16",
+  },
+  "Post-Quantum Cryptography Conference Kuala Lumpur 2025": {
+    slug: "pqc-conference-kuala-lumpur-my-2025",
+    name: "Post-Quantum Cryptography Conference - Kuala Lumpur 2025",
+    timezone: "Asia/Kuala_Lumpur",
+    startsAt: "2025-10-28",
+    endsAt: "2025-10-30",
+  },
+};
+
 // Matches scripts/seed.mjs's ENVS table — same three wrangler.jsonc
 // environments, same binding ("DB") in every one of them.
 const ENVS = {
@@ -102,6 +134,16 @@ const ENVS = {
 
 // ── CLI args ─────────────────────────────────────────────────────────────
 
+// Matches wrangler.jsonc's per-environment R2 bucket names (`preview`'s
+// `pkic-assets-preview` differs from `local`/`production`'s `pkic-assets`) —
+// used as parseArgs's default so `--preview` without an explicit
+// `--logo-bucket` doesn't silently upload photos into the production bucket.
+const LOGO_BUCKET_BY_ENV = {
+  local: "pkic-assets",
+  preview: "pkic-assets-preview",
+  production: "pkic-assets",
+};
+
 function parseArgs(argv) {
   const parsed = {
     env: null,
@@ -109,7 +151,7 @@ function parseArgs(argv) {
     persistTo: null,
     dryRun: false,
     uploadLogos: true,
-    logoBucket: "pkic-assets",
+    logoBucket: null,
     outDir: path.join(ROOT, "ignore"),
   };
 
@@ -145,6 +187,7 @@ function parseArgs(argv) {
     process.exit(1);
   }
   parsed.env = parsed.env ?? "local";
+  parsed.logoBucket = parsed.logoBucket ?? LOGO_BUCKET_BY_ENV[parsed.env];
 
   return parsed;
 }
@@ -464,12 +507,27 @@ function candidateEmailsForDomains(domains, emailsByDomain) {
 function buildMigration({ uploadLogos, logoBucket, cli }) {
   const yamlRecords = loadMemberYamlFiles();
   const pkicRoster = loadRosterCsv(path.join(CSV_DIR, "pkic.csv"));
-  const emailsByDomain = buildEmailsByDomain(pkicRoster);
 
   const wgRosters = {};
   for (const [slug, filename] of Object.entries(WORKING_GROUP_CSVS)) {
     wgRosters[slug] = loadRosterCsv(path.join(CSV_DIR, filename));
   }
+
+  // Domain-based org matching (Step 2 representative pairing, and the
+  // "leftover matched candidates become anonymous org members" fallback
+  // just below it) draws candidates from every roster we have, not just
+  // pkic.csv — a representative or subscriber can appear only on a
+  // working-group list (e.g. csv/ca.csv) and never on the main pkic@ list,
+  // but their email still domain-matches their organization's
+  // `organizationDomains` and should be attributed to it instead of
+  // silently ending up an org-less bare/WG-only user.
+  const combinedRoster = new Map(pkicRoster);
+  for (const roster of Object.values(wgRosters)) {
+    for (const [email, meta] of roster.entries()) {
+      if (!combinedRoster.has(email)) combinedRoster.set(email, meta);
+    }
+  }
+  const emailsByDomain = buildEmailsByDomain(combinedRoster);
 
   const statements = [];
   const logoUploads = []; // { slug, filePath, r2Key }
@@ -488,28 +546,33 @@ function buildMigration({ uploadLogos, logoBucket, cli }) {
     needsEmailIndividuals: [],
     bareRosterUsers: [],
     wgOnlyRosterUsers: [],
+    unmatchedEventSponsorships: [],
     workingGroupCounts: Object.fromEntries(Object.keys(WORKING_GROUP_CSVS).map((k) => [k, 0])),
   };
 
   statements.push("PRAGMA foreign_keys = ON;");
 
-  function upsertOrganization({ slug, name, doc, logoR2Key }) {
+  function upsertOrganization({ slug, name, doc, logoR2Key, membershipCategory }) {
     const normalizedName = normalizeOrgName(name);
     const social = doc.social ?? {};
     const blog = doc.blog ?? {};
     const press = doc.press ?? {};
     const careers = doc.careers ?? {};
     const contentMarkdown = convertHugoShortcodes(doc.content);
+    // YAML `id:` (e.g. `id: keyfactor`) backs the clean public URL slug
+    // (`/members/<slug>`) — falls back to the filename-derived slug for the
+    // (currently nonexistent) case of a file with no `id:` key at all.
+    const urlSlug = String(doc.id ?? slug).trim() || slug;
 
     statements.push(`
 INSERT INTO organizations (
-  id, name, normalized_name, data_json,
+  id, name, normalized_name, data_json, slug, membership_category,
   description, website, content_markdown, slogan, logo_r2_key, member_since,
   blog_url, blog_feed_url, press_url, press_feed_url, careers_url,
   social_x, social_linkedin, social_facebook, social_instagram, social_youtube,
   created_at, updated_at
 ) VALUES (
-  ${sqlString(randomUUID())}, ${sqlString(name)}, ${sqlString(normalizedName)}, NULL,
+  ${sqlString(randomUUID())}, ${sqlString(name)}, ${sqlString(normalizedName)}, NULL, ${toSqlNullableText(urlSlug)}, ${toSqlNullableText(membershipCategory)},
   ${toSqlNullableText(doc.description)}, ${toSqlNullableText(doc.website)}, ${toSqlNullableText(contentMarkdown)}, ${toSqlNullableText(doc.slogan)}, ${toSqlNullableText(logoR2Key)}, ${toSqlNullableText(doc.memberSince)},
   ${toSqlNullableText(blog.url)}, ${toSqlNullableText(blog.feed)}, ${toSqlNullableText(press.url)}, ${toSqlNullableText(press.feed)}, ${toSqlNullableText(careers.url)},
   ${toSqlNullableText(social.x)}, ${toSqlNullableText(social.linkedin)}, ${toSqlNullableText(social.facebook)}, ${toSqlNullableText(social.instagram)}, ${toSqlNullableText(social.youtube)},
@@ -523,6 +586,10 @@ ON CONFLICT(normalized_name) DO UPDATE SET
   slogan = excluded.slogan,
   logo_r2_key = COALESCE(excluded.logo_r2_key, organizations.logo_r2_key),
   member_since = COALESCE(organizations.member_since, excluded.member_since),
+  -- Never clobber a slug or category staff may have hand-set via the admin
+  -- UI after the initial migration — only fill when still unset.
+  slug = COALESCE(organizations.slug, excluded.slug),
+  membership_category = COALESCE(organizations.membership_category, excluded.membership_category),
   blog_url = excluded.blog_url,
   blog_feed_url = excluded.blog_feed_url,
   press_url = excluded.press_url,
@@ -585,6 +652,66 @@ INSERT OR IGNORE INTO members (
 UPDATE organizations SET ${column} = (SELECT id FROM users WHERE normalized_email = ${sqlString(normalizedEmail)}), updated_at = datetime('now')
 WHERE normalized_name = ${sqlString(normalizedOrgName)} AND ${column} IS NULL;
 `);
+  }
+
+  // ── Step 3e: sponsorship reconciliation (data/members/*.yaml `sponsor:`) ──
+  // Previously deliberately skipped by this script (see file header); now
+  // migrates both the consortium-wide tier and any per-event sponsorships.
+  // Guarded by NOT EXISTS instead of an ON CONFLICT target (sponsorships has
+  // no natural unique key for "this org's consortium sponsorship" / "this
+  // org's sponsorship of this event") so re-running the migration doesn't
+  // duplicate rows, but also doesn't clobber a tier staff later changed by
+  // hand via the admin Sponsorships screen.
+  function upsertSponsorships({ normalizedOrgName, doc, filename, name, report }) {
+    const sponsor = doc.sponsor;
+    if (!sponsor) return;
+
+    const level = String(sponsor.level ?? "").trim();
+    if (level) {
+      const startDate = sponsor.since ?? doc.memberSince ?? null;
+      statements.push(`
+INSERT INTO sponsorships (id, sponsor_type, organization_id, tier, pipeline_stage, start_date, created_at, updated_at)
+SELECT ${sqlString(randomUUID())}, 'consortium', o.id, ${sqlString(level)}, 'active', ${toSqlNullableText(startDate)}, datetime('now'), datetime('now')
+FROM organizations o
+WHERE o.normalized_name = ${sqlString(normalizedOrgName)}
+  AND NOT EXISTS (SELECT 1 FROM sponsorships s WHERE s.organization_id = o.id AND s.sponsor_type = 'consortium');
+`);
+      statements.push(`
+UPDATE organizations
+SET sponsor_tier = COALESCE(sponsor_tier, ${sqlString(level)}),
+    sponsor_start_date = COALESCE(sponsor_start_date, ${toSqlNullableText(startDate)}),
+    updated_at = datetime('now')
+WHERE normalized_name = ${sqlString(normalizedOrgName)};
+`);
+    }
+
+    const sponsoring = sponsor.sponsoring;
+    if (sponsoring && typeof sponsoring === "object") {
+      for (const [eventName, eventSponsor] of Object.entries(sponsoring)) {
+        const tier = String(eventSponsor?.level ?? "").trim();
+        if (!tier) continue;
+        const alias = EVENT_NAME_ALIASES[eventName];
+        if (!alias) {
+          report.unmatchedEventSponsorships.push({ file: filename, name, eventName, tier });
+          continue;
+        }
+        statements.push(`
+INSERT INTO events (id, slug, name, timezone, starts_at, ends_at, created_at, updated_at)
+VALUES (${sqlString(randomUUID())}, ${sqlString(alias.slug)}, ${sqlString(alias.name)}, ${sqlString(alias.timezone)}, ${toSqlNullableText(alias.startsAt)}, ${toSqlNullableText(alias.endsAt)}, datetime('now'), datetime('now'))
+ON CONFLICT(slug) DO NOTHING;
+`);
+        statements.push(`
+INSERT INTO sponsorships (id, sponsor_type, organization_id, event_id, tier, pipeline_stage, created_at, updated_at)
+SELECT ${sqlString(randomUUID())}, 'event', o.id, e.id, ${sqlString(tier)}, 'active', datetime('now'), datetime('now')
+FROM organizations o, events e
+WHERE o.normalized_name = ${sqlString(normalizedOrgName)}
+  AND e.slug = ${sqlString(alias.slug)}
+  AND NOT EXISTS (
+    SELECT 1 FROM sponsorships s WHERE s.organization_id = o.id AND s.sponsor_type = 'event' AND s.event_id = e.id
+  );
+`);
+      }
+    }
   }
 
   // ── Step 2: organizations + representatives ─────────────────────────────
@@ -675,7 +802,8 @@ WHERE normalized_name = ${sqlString(normalizedOrgName)} AND ${column} IS NULL;
         logoUploads.push({ slug, filePath: logoFile, r2Key: logoR2Key });
       }
     }
-    const normalizedOrgName = upsertOrganization({ slug, name, doc, logoR2Key });
+    const normalizedOrgName = upsertOrganization({ slug, name, doc, logoR2Key, membershipCategory: memberType });
+    upsertSponsorships({ normalizedOrgName, doc, filename, name, report });
 
     if (candidates.length === 0) {
       report.totals.unmatched.push({
@@ -881,6 +1009,9 @@ function renderMarkdownReport(report) {
   lines.push(
     `- Ambiguous representative/email pairing (needs staff confirmation): ${report.totals.ambiguousPairing.length}`,
   );
+  lines.push(
+    `- Event sponsorships with an unrecognized event name (needs an EVENT_NAME_ALIASES entry): ${report.unmatchedEventSponsorships.length}`,
+  );
   lines.push("");
   lines.push("## Working group roster membership counts");
   for (const [slug, count] of Object.entries(report.workingGroupCounts)) {
@@ -929,6 +1060,13 @@ function renderMarkdownReport(report) {
   lines.push("## WG-only roster users (not in pkic.csv at all)");
   for (const { email, workingGroups } of report.wgOnlyRosterUsers) {
     lines.push(`- ${email}${workingGroups.length ? ` — WGs: ${workingGroups.join(", ")}` : ""}`);
+  }
+  lines.push("");
+  lines.push(
+    "## Event sponsorships with an unrecognized event name — add an EVENT_NAME_ALIASES entry in the script",
+  );
+  for (const item of report.unmatchedEventSponsorships) {
+    lines.push(`- **${item.name}** (\`${item.file}\`) — \`${item.eventName}\` (tier ${item.tier})`);
   }
   return lines.join("\n");
 }

@@ -2,8 +2,33 @@ import { useEffect, useState } from "preact/hooks";
 import { Spinner } from "../../../components/Spinner";
 import { api } from "../../api";
 import { toast } from "../../ui";
-import type { AdminWorkingGroupDetail, AdminWorkingGroupSummary, Role } from "../../types";
+import type { AdminWorkingGroupDetail, AdminWorkingGroupMember, AdminWorkingGroupSummary, Role } from "../../types";
 import { UserPicker, type PickedUser } from "./UserPicker";
+
+type MemberSortKey = "name" | "organizationName" | "memberCategory";
+type SortDir = "asc" | "desc";
+
+function memberSortValue(m: AdminWorkingGroupMember, key: MemberSortKey): string | null {
+  switch (key) {
+    case "name":
+      return m.name;
+    case "organizationName":
+      return m.organizationName ?? null;
+    case "memberCategory":
+      return m.memberCategory ?? null;
+  }
+}
+
+// Nulls always sort last, regardless of direction.
+function compareMemberSort(a: AdminWorkingGroupMember, b: AdminWorkingGroupMember, key: MemberSortKey, dir: SortDir): number {
+  const av = memberSortValue(a, key);
+  const bv = memberSortValue(b, key);
+  if (av == null && bv == null) return 0;
+  if (av == null) return 1;
+  if (bv == null) return -1;
+  const cmp = av.localeCompare(bv);
+  return dir === "asc" ? cmp : -cmp;
+}
 
 /**
  * PRD §2.4 — "WG management: create/edit working groups, add/remove
@@ -118,6 +143,36 @@ export function WorkingGroups() {
   const [addMemberUser, setAddMemberUser] = useState<PickedUser | null>(null);
   const [addingMember, setAddingMember] = useState(false);
   const [togglingActive, setTogglingActive] = useState(false);
+  const [memberSortKey, setMemberSortKey] = useState<MemberSortKey | null>(null);
+  const [memberSortDir, setMemberSortDir] = useState<SortDir>("asc");
+
+  function toggleMemberSort(key: MemberSortKey) {
+    if (memberSortKey === key) {
+      setMemberSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setMemberSortKey(key);
+      setMemberSortDir("asc");
+    }
+  }
+
+  function memberSortTh(label: string, key: MemberSortKey) {
+    const active = memberSortKey === key;
+    return (
+      <th>
+        <button
+          type="button"
+          class={`tbl-sort-btn${active ? " is-active" : ""}`}
+          onClick={() => toggleMemberSort(key)}
+          aria-sort={active ? (memberSortDir === "asc" ? "ascending" : "descending") : "none"}
+        >
+          <span>{label}</span>
+          <span aria-hidden="true" class="tbl-sort-indicator">
+            {active ? (memberSortDir === "asc" ? "▲" : "▼") : "↕"}
+          </span>
+        </button>
+      </th>
+    );
+  }
 
   async function loadGroups(keepSelection = true) {
     try {
@@ -418,23 +473,28 @@ export function WorkingGroups() {
             <table class="table table-sm table-hover mb-0">
               <thead class="table-dark">
                 <tr>
-                  <th>Name</th>
-                  <th>Organisation</th>
+                  {memberSortTh("Name", "name")}
+                  {memberSortTh("Organisation", "organizationName")}
+                  {memberSortTh("Category", "memberCategory")}
                   <th></th>
                 </tr>
               </thead>
               <tbody>
                 {detail.members.length === 0 ? (
                   <tr>
-                    <td colspan={3} class="text-center text-muted fst-italic py-3">
+                    <td colspan={4} class="text-center text-muted fst-italic py-3">
                       No members
                     </td>
                   </tr>
                 ) : (
-                  detail.members.map((m) => (
+                  (memberSortKey
+                    ? detail.members.slice().sort((a, b) => compareMemberSort(a, b, memberSortKey, memberSortDir))
+                    : detail.members
+                  ).map((m) => (
                     <tr key={m.userId}>
                       <td>{m.name}</td>
                       <td class="text-muted small">{m.organizationName ?? "—"}</td>
+                      <td class="text-muted small mono">{m.memberCategory ?? "—"}</td>
                       <td class="text-end">
                         <button
                           class="btn btn-sm btn-outline-danger"
