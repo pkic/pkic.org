@@ -30,3 +30,5 @@ outputs:
   - og-card
   - members-data
 ---
+
+{{< members class="d-none d-lg-block" >}}
