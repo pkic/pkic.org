@@ -239,8 +239,7 @@ test.describe("§11 UI-8 — admin browser-verification pass", () => {
     page.on("dialog", (d) => d.accept());
     const wgName = `E2E Working Group ${Date.now()}`;
 
-    await page.goto("/admin/#/access-control");
-    await page.getByRole("tab", { name: "Working Groups" }).click();
+    await page.goto("/admin/#/working-groups");
 
     const panel = page
       .locator("div.card")

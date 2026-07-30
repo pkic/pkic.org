@@ -82,6 +82,17 @@ const icons = {
       <path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.46 1.46 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311c.446.82.023 1.841-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.46 1.46 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.46 1.46 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.46 1.46 0 0 1 2.105-.872l.31.17c1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.46 1.46 0 0 1 .872-2.105l.34-.1c1.4-.413 1.4-2.397 0-2.81l-.34-.1a1.46 1.46 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.46 1.46 0 0 1-2.105-.872zM8 10.93a2.929 2.929 0 1 1 0-5.86 2.929 2.929 0 0 1 0 5.858z" />
     </svg>
   ),
+  workinggroups: (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+      <path d="M7 14s-1 0-1-1 1-4 5-4 5 3 5 4-1 1-1 1zm4-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6m-5.784 6A2.24 2.24 0 0 1 5 13c0-1.01.377-2.042 1.09-2.904A5 5 0 0 0 5 10c-4 0-5 3-5 4s1 1 1 1zM4.5 7.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5" />
+    </svg>
+  ),
+  chairs: (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+      <path d="M12 4a1 1 0 1 1-2 0 1 1 0 0 1 2 0m-3.5 2.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3M3 4a1 1 0 1 1-2 0 1 1 0 0 1 2 0" />
+      <path d="M2 5a1.5 1.5 0 0 0-1.5 1.5v3A1.5 1.5 0 0 0 2 11h1v3.5a.5.5 0 0 0 1 0V11h1a1.5 1.5 0 0 0 1.5-1.5v-3A1.5 1.5 0 0 0 5 5zm6.5 1a1.5 1.5 0 0 0-1.5 1.5v3A1.5 1.5 0 0 0 8.5 12h.5v2.5a.5.5 0 0 0 1 0V12h.5v2.5a.5.5 0 0 0 1 0V12h.5a1.5 1.5 0 0 0 1.5-1.5v-3A1.5 1.5 0 0 0 12 6z" />
+    </svg>
+  ),
   chevron: (
     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16">
       <path
@@ -145,6 +156,8 @@ export const NAV_ITEMS: NavItem[] = [
   { path: "/sponsorships", sec: "sponsorships", label: "Sponsorships", icon: "donations" },
   { path: "/meeting-calendar", sec: "meeting-calendar", label: "Meeting Calendar", icon: "events" },
   { path: "/votes", sec: "votes", label: "Votes", icon: "accesscontrol" },
+  { path: "/working-groups", sec: "working-groups", label: "Working Groups", icon: "workinggroups" },
+  { path: "/chairs", sec: "chairs", label: "Chairs", icon: "chairs" },
   { path: "/access-control", sec: "access-control", label: "Access Control", icon: "accesscontrol" },
   { path: "/auditlog", sec: "auditlog", label: "Audit Log", icon: "auditlog" },
   { path: "/account", sec: "account", label: "Account Settings", icon: "account" },

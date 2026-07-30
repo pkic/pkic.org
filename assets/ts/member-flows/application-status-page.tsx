@@ -9,7 +9,6 @@
 import { render } from "preact";
 import { getJson } from "../shared/api-client";
 import { setStatus, formatStatusLabel, statusBadgeClass } from "../shared/form/helpers";
-import { renderDocumentUploader } from "./document-uploader";
 
 const API_BASE_FALLBACK = "/api/v1";
 
@@ -65,13 +64,10 @@ async function showStatus(root: HTMLElement, apiBase: string, { id, token }: Loo
     );
 
     const summaryHost = document.createElement("div");
-    const uploaderHost = document.createElement("div");
-    uploaderHost.className = "mt-4";
     resultContainer.textContent = "";
-    resultContainer.append(summaryHost, uploaderHost);
+    resultContainer.append(summaryHost);
 
     render(<StatusSummary data={data} />, summaryHost);
-    renderDocumentUploader(uploaderHost, { applicationId: id, token, apiBase });
   } catch {
     resultContainer.textContent = "";
     setStatus(

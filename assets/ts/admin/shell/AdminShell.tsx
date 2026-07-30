@@ -13,6 +13,8 @@ import { DueWork } from "../sections/DueWork";
 import { Templates } from "../sections/Templates";
 import { Users, UserDetailView } from "../sections/Users";
 import { AccessControl } from "../sections/access-control";
+import { WorkingGroups } from "../sections/access-control/WorkingGroups";
+import { Chairs } from "../sections/access-control/Chairs";
 import { AccountSettings } from "../sections/AccountSettings";
 import { Organizations } from "../sections/Organizations";
 import { OrganizationContentReviews } from "../sections/OrganizationContentReviews";
@@ -294,6 +296,22 @@ export function AdminShell() {
               component={() => (
                 <SectionWrapper title="Access Control">
                   <AccessControl />
+                </SectionWrapper>
+              )}
+            />
+            <Route
+              path="/working-groups"
+              component={() => (
+                <SectionWrapper title="Working Groups">
+                  <WorkingGroups />
+                </SectionWrapper>
+              )}
+            />
+            <Route
+              path="/chairs"
+              component={() => (
+                <SectionWrapper title="Chairs">
+                  <Chairs />
                 </SectionWrapper>
               )}
             />
