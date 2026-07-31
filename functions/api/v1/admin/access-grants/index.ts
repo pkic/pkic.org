@@ -92,6 +92,15 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     throw new AppError(400, "INVALID_PERMISSION", `Unknown permission: ${body.permission}`);
   }
 
+  const grantContext = body.contextType && body.contextId ? { type: body.contextType, id: body.contextId } : undefined;
+  if (!hasPermission(admin, body.permission, grantContext)) {
+    throw new AppError(
+      403,
+      "PERMISSION_REQUIRED",
+      `Cannot grant a permission you do not hold: ${body.permission}`,
+    );
+  }
+
   const userRow = await first<{ id: string }>(requestDb(c), "SELECT id FROM users WHERE id = ?", [body.userId]);
   if (!userRow) {
     throw new AppError(404, "USER_NOT_FOUND", "User not found");

@@ -14,7 +14,7 @@ import { OpenAPIRoute } from "chanfana";
 import { parseJsonBody } from "../../../../_lib/validation";
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
-import { requirePermission, isPermission } from "../../../../_lib/auth/permissions";
+import { hasPermission, requirePermission, isPermission } from "../../../../_lib/auth/permissions";
 import { all, first, run } from "../../../../_lib/db/queries";
 import { nowIso } from "../../../../_lib/utils/time";
 import { uuid } from "../../../../_lib/utils/ids";
@@ -90,6 +90,9 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   for (const permission of body.permissions) {
     if (!isPermission(permission)) {
       throw new AppError(400, "INVALID_PERMISSION", `Unknown permission: ${permission}`);
+    }
+    if (!hasPermission(admin, permission)) {
+      throw new AppError(403, "PERMISSION_REQUIRED", `Cannot bundle a permission you do not hold: ${permission}`);
     }
   }
 

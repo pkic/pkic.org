@@ -225,10 +225,25 @@ describe("permission_grants (Phase 2 access grants)", () => {
     });
     expect(deniedCreate.status).toBe(403);
 
-    // Give staff only access:grant — create should now succeed.
+    // Give staff only access:grant — they still can't grant a permission
+    // they don't themselves hold (containment check).
     await env.DB.prepare(
       `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
        VALUES (?, ?, 'access:grant', ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), staffUserId, adminId)
+      .run();
+
+    const deniedUncontained = await call(staffToken, "/api/v1/admin/access-grants", {
+      method: "POST",
+      body: JSON.stringify({ userId: staffUserId, permission: "donations:read" }),
+    });
+    expect(deniedUncontained.status).toBe(403);
+
+    // Give staff the permission they're trying to grant — create should now succeed.
+    await env.DB.prepare(
+      `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+       VALUES (?, ?, 'donations:read', ?, datetime('now'))`,
     )
       .bind(crypto.randomUUID(), staffUserId, adminId)
       .run();
