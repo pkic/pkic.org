@@ -35,6 +35,7 @@ const modules: Record<string, () => Promise<unknown>> = {
   "member-flows/sponsor-form": () => import("./member-flows/sponsor-form"),
   "member-flows/member-directory-page": () => import("./member-flows/member-directory-page"),
   "member-flows/member-detail-page": () => import("./member-flows/member-detail-page"),
+  "member-flows/wg-chairs-widget": () => import("./member-flows/wg-chairs-widget"),
   "member-flows/sponsors-wall": () => import("./member-flows/sponsors-wall"),
   "member-flows/votes-index-page": () => import("./member-flows/votes-index-page"),
   "member-flows/vote-detail-page": () => import("./member-flows/vote-detail-page"),

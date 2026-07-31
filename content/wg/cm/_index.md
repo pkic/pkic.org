@@ -26,10 +26,6 @@ cascade:
   params:
     sectionNav: true
 
-chair:
-  name: Zsolt Rózsahegyi
-  viceChair: Daniel Cervera
-
 card:
   icon: cm
   order: 3

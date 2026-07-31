@@ -1,0 +1,13 @@
+{{/*
+  wg/chairs-app.html — mount point for the client-fetched working-group
+  chair/vice-chair display (assigned in the admin portal, no git commit
+  needed). Params (dict): slug (required), label, color.
+*/}}
+<div
+  data-wg-chairs
+  data-module="member-flows/wg-chairs-widget"
+  data-api-base="/api/v1"
+  data-wg-slug="{{ .slug }}"
+  data-wg-label="{{ .label }}"
+  data-color="{{ .color | default "green" }}"
+></div>

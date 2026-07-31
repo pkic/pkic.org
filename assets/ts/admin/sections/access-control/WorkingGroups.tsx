@@ -1,4 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
+import { useHashLocation } from "wouter/use-hash-location";
 import { Spinner } from "../../../components/Spinner";
 import { api } from "../../api";
 import { toast } from "../../ui";
@@ -129,6 +130,7 @@ function CreateWorkingGroupForm({ onCreated }: { onCreated: () => void }) {
 }
 
 export function WorkingGroups() {
+  const [, navigate] = useHashLocation();
   const [groups, setGroups] = useState<AdminWorkingGroupSummary[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [detail, setDetail] = useState<AdminWorkingGroupDetail | null>(null);
@@ -531,7 +533,16 @@ export function WorkingGroups() {
                     : detail.members
                   ).map((m) => (
                     <tr key={m.userId}>
-                      <td>{m.name}</td>
+                      <td>
+                        <button
+                          type="button"
+                          class="btn btn-link p-0"
+                          onClick={() => navigate(`/users/detail/${m.userId}`)}
+                          title="View user details"
+                        >
+                          {m.name}
+                        </button>
+                      </td>
                       <td class="text-muted small">{m.organizationName ?? "—"}</td>
                       <td class="text-muted small mono">{m.memberCategory ?? "—"}</td>
                       <td class="text-end">

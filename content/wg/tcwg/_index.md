@@ -26,10 +26,6 @@ cascade:
   params:
     sectionNav: true
 
-chair:
-  name: Neal Fuerst
-  viceChair: Sandip Dholakia
-
 card:
   icon: tc
   order: 4

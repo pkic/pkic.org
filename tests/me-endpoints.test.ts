@@ -229,7 +229,12 @@ describe("Member self-service /api/v1/me/* (PRD §4.9/§4.10)", () => {
     const getResponse = await call(token, "/api/v1/me/notification-preferences");
     expect(getResponse.status).toBe(200);
     const defaults = await getResponse.json();
-    expect(defaults).toEqual({ workingGroupUpdates: true, voteReminders: true, generalAnnouncements: true });
+    expect(defaults).toEqual({
+      workingGroupUpdates: true,
+      voteReminders: true,
+      generalAnnouncements: true,
+      wgChairMembershipDigest: true,
+    });
 
     const patchResponse = await call(token, "/api/v1/me/notification-preferences", {
       method: "PATCH",
@@ -237,7 +242,12 @@ describe("Member self-service /api/v1/me/* (PRD §4.9/§4.10)", () => {
     });
     expect(patchResponse.status).toBe(200);
     const patched = await patchResponse.json();
-    expect(patched).toEqual({ workingGroupUpdates: true, voteReminders: false, generalAnnouncements: true });
+    expect(patched).toEqual({
+      workingGroupUpdates: true,
+      voteReminders: false,
+      generalAnnouncements: true,
+      wgChairMembershipDigest: true,
+    });
 
     // Persisted, not just returned — a second GET reflects the same state.
     const getAfterResponse = await call(token, "/api/v1/me/notification-preferences");

@@ -677,6 +677,11 @@ export const adminRunJobsSchema = z.object({
   // is ignored for both and they only ever run when explicitly requested.
   runConsultationBatch: z.boolean().default(false),
   runEcReviewBatch: z.boolean().default(false),
+  // Manual off-cycle trigger for the weekly WG chair membership-change
+  // digest (2026-07-31 manual-testing feedback) — normally cron-fired
+  // Mondays 08:00 UTC (functions/router.ts). Same no-dry-run-preview
+  // rationale as the two flags above.
+  runWgChairDigest: z.boolean().default(false),
 });
 
 export const internalCalendarRsvpIngestSchema = z

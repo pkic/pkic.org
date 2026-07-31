@@ -338,7 +338,9 @@ export function DueWork() {
   const [dueOutboxRows, setDueOutboxRows] = useState<AdminEmailOutboxResponse["outbox"]>([]);
 
   const [running, setRunning] = useState(false);
-  const [runningMembershipBatch, setRunningMembershipBatch] = useState<"consultation" | "ecReview" | null>(null);
+  const [runningMembershipBatch, setRunningMembershipBatch] = useState<
+    "consultation" | "ecReview" | "wgChairDigest" | null
+  >(null);
 
   const fetchPreview = useCallback(
     async (rl: number, ol: number, retention: boolean): Promise<AdminJobsRunResponse> => {
@@ -422,7 +424,7 @@ export function DueWork() {
    * (PRD §4.5/§4.6) — normally cron-fired Mon/Wed. No dry-run preview for
    * these (see adminRunJobsSchema); this always performs the real send.
    */
-  async function runMembershipBatch(kind: "consultation" | "ecReview") {
+  async function runMembershipBatch(kind: "consultation" | "ecReview" | "wgChairDigest") {
     setRunningMembershipBatch(kind);
     try {
       const result = await api<AdminJobsRunResponse>("/api/v1/internal/jobs/run", {
@@ -433,14 +435,20 @@ export function DueWork() {
           runOutbox: false,
           runConsultationBatch: kind === "consultation",
           runEcReviewBatch: kind === "ecReview",
+          runWgChairDigest: kind === "wgChairDigest",
           dryRun: false,
         }),
       });
       if (kind === "consultation") {
         toast(`Consultation batch sent: ${result.consultationBatch.applicationsNotified} application(s)`, "success");
-      } else {
+      } else if (kind === "ecReview") {
         toast(
           `EC review batch sent: ${result.ecReviewBatch.transitioned} application(s) moved to ec_review`,
+          "success",
+        );
+      } else {
+        toast(
+          `WG chair digest sent: ${result.wgChairDigest.emailsSent} email(s) across ${result.wgChairDigest.workingGroupsWithChanges} working group(s) with changes`,
           "success",
         );
       }
@@ -484,6 +492,14 @@ export function DueWork() {
               title="Normally runs automatically Mon/Wed 08:15 UTC (PRD §4.6)"
             >
               {runningMembershipBatch === "ecReview" ? "Sending…" : "Send EC review batch now"}
+            </button>
+            <button
+              class="btn btn-sm btn-outline-secondary"
+              onClick={() => void runMembershipBatch("wgChairDigest")}
+              disabled={runningMembershipBatch !== null}
+              title="Normally runs automatically Mondays 08:00 UTC"
+            >
+              {runningMembershipBatch === "wgChairDigest" ? "Sending…" : "Send WG chair digest now"}
             </button>
           </div>
         </div>

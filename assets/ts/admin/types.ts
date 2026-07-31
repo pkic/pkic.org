@@ -488,6 +488,7 @@ export interface AdminJobsRunResponse {
   };
   consultationBatch: { applicationsNotified: number };
   ecReviewBatch: { transitioned: number };
+  wgChairDigest: { workingGroupsWithChanges: number; emailsSent: number };
 }
 
 export type AdminReminderPreviewRow = {

@@ -167,6 +167,7 @@ const PREFERENCE_LABELS: Record<keyof NotificationPreferences, string> = {
   workingGroupUpdates: "Working group updates",
   voteReminders: "Vote reminders",
   generalAnnouncements: "General consortium announcements",
+  wgChairMembershipDigest: "Working group roster change digest (chairs & vice-chairs only, weekly)",
 };
 
 function NotificationPreferencesCard() {

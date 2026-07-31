@@ -121,9 +121,13 @@ export const workingGroupsListRouteSchema = {
   },
 };
 
+const workingGroupChairSchema = z.object({ name: z.string(), organizationName: z.string().nullable() });
+
 export const workingGroupDetailSchema = workingGroupSummarySchema.extend({
   mailingListEmail: z.string().nullable(),
   members: z.array(z.object({ name: z.string(), organizationName: z.string().nullable() })),
+  chair: workingGroupChairSchema.nullable(),
+  viceChair: workingGroupChairSchema.nullable(),
 });
 
 export const workingGroupDetailRouteSchema = {

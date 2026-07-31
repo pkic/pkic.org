@@ -417,6 +417,13 @@ export const myNotificationPreferencesSchema = z.object({
   workingGroupUpdates: z.boolean(),
   voteReminders: z.boolean(),
   generalAnnouncements: z.boolean(),
+  // Weekly digest of working-group join/leave activity, sent only to
+  // members currently assigned as a WG chair or vice-chair (2026-07-31
+  // manual-testing feedback — see wg-chair-digest.ts). Shown to every
+  // member in Account Settings regardless of chair status, matching this
+  // schema's existing precedent (voteReminders is shown to H-category
+  // members too, who cannot vote at all).
+  wgChairMembershipDigest: z.boolean(),
 });
 
 export const myNotificationPreferencesGetRouteSchema = {

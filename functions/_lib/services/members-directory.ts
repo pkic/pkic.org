@@ -315,9 +315,16 @@ export interface WorkingGroupMemberPublic {
   organizationName: string | null;
 }
 
+export interface WorkingGroupChairPublic {
+  name: string;
+  organizationName: string | null;
+}
+
 export interface WorkingGroupDetail extends WorkingGroupSummary {
   mailingListEmail: string | null;
   members: WorkingGroupMemberPublic[];
+  chair: WorkingGroupChairPublic | null;
+  viceChair: WorkingGroupChairPublic | null;
 }
 
 interface WorkingGroupRow {
@@ -343,6 +350,51 @@ export async function listWorkingGroups(db: DatabaseLike): Promise<WorkingGroupS
   }));
 }
 
+// Chairs are resolved from user_roles (role-wg_chair/role-wg_vice_chair,
+// context_type='working_group'), the same live source admin-working-groups.ts
+// reads — not the dead working_groups.chair_user_id column, and not the
+// static content/wg/*/_index.md `chair:`/`viceChair:` frontmatter this
+// replaces so staff no longer need a git commit to update a WG's public
+// chair listing. Name + organization only (no email) to match this
+// endpoint's existing "public subset" convention for the member roster.
+async function getWorkingGroupChairsPublic(
+  db: DatabaseLike,
+  wgId: string,
+): Promise<{ chair: WorkingGroupChairPublic | null; viceChair: WorkingGroupChairPublic | null }> {
+  const rows = await all<{
+    role_id: string;
+    first_name: string | null;
+    last_name: string | null;
+    org_name: string | null;
+  }>(
+    db,
+    `SELECT ur.role_id, u.first_name, u.last_name, o.name AS org_name
+     FROM user_roles ur
+     JOIN users u ON u.id = ur.user_id
+     LEFT JOIN members m ON m.user_id = u.id AND m.status = 'active'
+     LEFT JOIN organizations o ON o.id = m.organization_id
+     WHERE ur.context_type = 'working_group' AND ur.context_id = ?
+       AND ur.role_id IN ('role-wg_chair', 'role-wg_vice_chair')
+       AND ur.revoked_at IS NULL
+       AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+     ORDER BY ur.created_at DESC`,
+    [wgId],
+  );
+
+  const toPublic = (row: (typeof rows)[number] | undefined): WorkingGroupChairPublic | null =>
+    row
+      ? {
+          name: [row.first_name, row.last_name].filter(Boolean).join(" ") || "Unknown",
+          organizationName: row.org_name,
+        }
+      : null;
+
+  return {
+    chair: toPublic(rows.find((r) => r.role_id === "role-wg_chair")),
+    viceChair: toPublic(rows.find((r) => r.role_id === "role-wg_vice_chair")),
+  };
+}
+
 export async function getWorkingGroupByIdOrSlug(
   db: DatabaseLike,
   idOrSlug: string,
@@ -366,6 +418,8 @@ export async function getWorkingGroupByIdOrSlug(
     [wg.id],
   );
 
+  const { chair, viceChair } = await getWorkingGroupChairsPublic(db, wg.id);
+
   return {
     id: wg.id,
     name: wg.name,
@@ -373,6 +427,8 @@ export async function getWorkingGroupByIdOrSlug(
     description: wg.description,
     active: wg.active === 1,
     mailingListEmail: wg.mailing_list_email,
+    chair,
+    viceChair,
     members: members.map((m) => ({
       name: [m.first_name, m.last_name].filter(Boolean).join(" ") || "Unknown",
       organizationName: m.org_name,

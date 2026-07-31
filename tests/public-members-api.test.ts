@@ -542,6 +542,45 @@ describe("GET /api/v1/working-groups/:id", () => {
     expect(body.members[0].name).toBe("Wg Member");
   });
 
+  it("returns the chair and vice chair resolved from user_roles, not the static YAML frontmatter", async () => {
+    const wgId = crypto.randomUUID();
+    await seedWorkingGroup({ id: wgId, name: "PQC Working Group", slug: "pqc" });
+
+    const chairUserId = crypto.randomUUID();
+    const viceChairUserId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      ).bind(chairUserId, `${chairUserId}@example.test`, `${chairUserId}@example.test`, "Chair", "Person"),
+      env.DB.prepare(
+        `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      ).bind(viceChairUserId, `${viceChairUserId}@example.test`, `${viceChairUserId}@example.test`, "Vice", "Chair"),
+      env.DB.prepare(
+        `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, created_at)
+         VALUES (?, ?, 'role-wg_chair', 'working_group', ?, datetime('now'))`,
+      ).bind(crypto.randomUUID(), chairUserId, wgId),
+      env.DB.prepare(
+        `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, created_at)
+         VALUES (?, ?, 'role-wg_vice_chair', 'working_group', ?, datetime('now'))`,
+      ).bind(crypto.randomUUID(), viceChairUserId, wgId),
+    ]);
+
+    const response = await callEndpoint(
+      getWorkingGroup,
+      createContext(env, getRequest("https://pkic.org/api/v1/working-groups/pqc"), { id: "pqc" }),
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      chair: { name: string } | null;
+      viceChair: { name: string } | null;
+    };
+    expect(body.chair?.name).toBe("Chair Person");
+    expect(body.viceChair?.name).toBe("Vice Chair");
+  });
+
   it("returns 404 for an unknown working group", async () => {
     const response = await callEndpoint(
       getWorkingGroup,

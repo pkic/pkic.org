@@ -55,6 +55,7 @@ export interface NotificationPreferences {
   workingGroupUpdates: boolean;
   voteReminders: boolean;
   generalAnnouncements: boolean;
+  wgChairMembershipDigest: boolean;
 }
 
 export interface MyApplicationSummary {

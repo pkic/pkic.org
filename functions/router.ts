@@ -10,6 +10,7 @@ import {
 } from "./_lib/services/membership-scheduled-jobs";
 import { runSponsorshipDueWork } from "./_lib/services/sponsorship-scheduled-jobs";
 import { runVotesDueWork } from "./_lib/services/votes-scheduled-jobs";
+import { runWeeklyWgChairDigest } from "./_lib/services/wg-chair-digest";
 import api_Router from "./api/router";
 import donate_Router from "./donate/router";
 import r_Router from "./r/router";
@@ -72,6 +73,9 @@ const RETENTION_CRON = "0 3 * * *";
 // PRD §4.3 defaults: consultation batch Mon/Wed 07:15 UTC, EC review batch Mon/Wed 08:15 UTC.
 const CONSULTATION_BATCH_CRON = "15 7 * * 1,3";
 const EC_REVIEW_BATCH_CRON = "15 8 * * 1,3";
+// Weekly WG chair membership-change digest (2026-07-31 manual-testing
+// feedback) — Monday 08:00 UTC, ahead of the EC review batch's 08:15 slot.
+const WG_CHAIR_DIGEST_CRON = "0 8 * * 1";
 
 app.get("/og/*", OgCardGet);
 app.get(OPENAPI_JSON_PATH, openApiSpecResponse);
@@ -131,6 +135,12 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
     if (controller.cron === EC_REVIEW_BATCH_CRON) {
       const ecReviewBatch = await runEcReviewBatch(env.DB, env);
       logInfo("SCHEDULED_EC_REVIEW_BATCH_COMPLETED", { cron: controller.cron, ecReviewBatch });
+      return;
+    }
+
+    if (controller.cron === WG_CHAIR_DIGEST_CRON) {
+      const wgChairDigest = await runWeeklyWgChairDigest(env.DB, env);
+      logInfo("SCHEDULED_WG_CHAIR_DIGEST_COMPLETED", { cron: controller.cron, wgChairDigest });
       return;
     }
 

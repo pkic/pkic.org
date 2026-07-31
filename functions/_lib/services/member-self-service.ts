@@ -395,6 +395,9 @@ export interface MyNotificationPreferences {
   workingGroupUpdates: boolean;
   voteReminders: boolean;
   generalAnnouncements: boolean;
+  // Weekly WG chair digest opt-out (2026-07-31 manual-testing feedback) —
+  // see wg-chair-digest.ts, the only reader of this key outside this file.
+  wgChairMembershipDigest: boolean;
 }
 
 // Opt-out model: every category defaults to on, matching §4.10's
@@ -403,19 +406,32 @@ const DEFAULT_NOTIFICATION_PREFERENCES: MyNotificationPreferences = {
   workingGroupUpdates: true,
   voteReminders: true,
   generalAnnouncements: true,
+  wgChairMembershipDigest: true,
 };
+
+/**
+ * Keyed by an arbitrary userId rather than an AuthMember session — used by
+ * wg-chair-digest.ts's scheduled job, which resolves recipients (WG chairs)
+ * directly from user_roles rather than from an authenticated request.
+ */
+export async function getUserNotificationPreferences(
+  db: DatabaseLike,
+  userId: string,
+): Promise<MyNotificationPreferences> {
+  const row = await first<{ notification_preferences_json: string | null }>(
+    db,
+    "SELECT notification_preferences_json FROM users WHERE id = ?",
+    [userId],
+  );
+  const stored = parseJsonSafe<Partial<MyNotificationPreferences>>(row?.notification_preferences_json ?? null, {});
+  return { ...DEFAULT_NOTIFICATION_PREFERENCES, ...stored };
+}
 
 export async function getMyNotificationPreferences(
   db: DatabaseLike,
   member: AuthMember,
 ): Promise<MyNotificationPreferences> {
-  const row = await first<{ notification_preferences_json: string | null }>(
-    db,
-    "SELECT notification_preferences_json FROM users WHERE id = ?",
-    [member.userId],
-  );
-  const stored = parseJsonSafe<Partial<MyNotificationPreferences>>(row?.notification_preferences_json ?? null, {});
-  return { ...DEFAULT_NOTIFICATION_PREFERENCES, ...stored };
+  return getUserNotificationPreferences(db, member.userId);
 }
 
 export async function updateMyNotificationPreferences(

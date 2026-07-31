@@ -27,10 +27,6 @@ cascade:
   params:
     sectionNav: true
 
-chair:
-  name: Michael Osborne
-  viceChair: William (Bill) Turner
-
 card:
   icon: cbom
   order: 5
