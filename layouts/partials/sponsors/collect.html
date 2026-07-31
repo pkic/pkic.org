@@ -1,8 +1,13 @@
 {{/*
   sponsors/collect.html — returns a slice of sponsor data objects.
 
-  Used by partials/sponsors/grid.html, shortcodes/sponsors-level.html, and the OG
-  card template so that the filtering logic lives in exactly one place.
+  Build-time (hugo.Data) sponsor lookup, kept only for
+  layouts/events/single.event-session.html (via partials/sponsors/grid.html)
+  — a standalone kiosk page with no client JS bundle, so it can't use the
+  client-fetched sponsors-wall component every other sponsor surface now
+  uses (prd.md item 8 gap-closure plan). Every other former caller
+  (shortcodes/sponsors-level.html, the OG card template, sponsors/strip.html)
+  has been migrated off this and hugo.Data.members/hugo.Data.sponsors.
 
   Input (dict):
     .site       — site context, used for the .Params.name fallback (required)

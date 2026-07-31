@@ -45,7 +45,6 @@
  *     individual's own YAML file **is** their whole record, where an
  *     org-tied representative's record is meaningless without knowing which
  *     real person at the organization it belongs to.)
- *   - touch `sponsor.level` / `sponsor.sponsoring.*` (Step 3e, separate)
  *
  * Usage:
  *   node scripts/migrate-members-yaml-to-d1.mjs --local
@@ -78,6 +77,8 @@ const ROOT = process.cwd();
 const MEMBERS_DIR = path.join(ROOT, "data", "members");
 const CSV_DIR = path.join(ROOT, "csv");
 const LOGO_DIR = path.join(ROOT, "assets", "images", "members");
+const SPONSORS_YAML_PATH = path.join(ROOT, "data", "sponsors.yaml");
+const SPONSOR_LOGO_DIR = path.join(ROOT, "assets", "images", "sponsors");
 
 const WORKING_GROUP_CSVS = {
   ca: "ca.csv",
@@ -547,6 +548,7 @@ function buildMigration({ uploadLogos, logoBucket, cli }) {
     bareRosterUsers: [],
     wgOnlyRosterUsers: [],
     unmatchedEventSponsorships: [],
+    nonMemberSponsorships: { created: 0, unmatchedEvents: [] },
     workingGroupCounts: Object.fromEntries(Object.keys(WORKING_GROUP_CSVS).map((k) => [k, 0])),
   };
 
@@ -977,6 +979,76 @@ WHERE (SELECT id FROM users WHERE normalized_email = ${sqlString(email)}) IS NOT
     }
   }
 
+  // ── Step 3f: non-member sponsors (data/sponsors.yaml) ───────────────────
+  // The one-time 2026-07-29 backfill only covered data/members/*.yaml's
+  // `sponsor:` block (Step 3e above) — data/sponsors.yaml (companies that
+  // sponsor without being a PKIC member, e.g. an event venue partner) was
+  // never migrated, meaning those sponsors silently vanished the moment the
+  // public sponsor display cut over to reading D1 (prd.md item 8 gap-closure
+  // plan, step 5: "re-run/diff the backfill immediately before cutover").
+  // Same NOT EXISTS-guarded, re-run-safe shape as Step 3e, just without an
+  // organization_id (non_member_name identifies the sponsor instead).
+  if (fs.existsSync(SPONSORS_YAML_PATH)) {
+    const nonMemberSponsors = YAML.parse(fs.readFileSync(SPONSORS_YAML_PATH, "utf8")) ?? [];
+    for (const entry of nonMemberSponsors) {
+      const sponsorName = String(entry.name ?? "").trim();
+      if (!sponsorName) continue;
+      const website = entry.website ?? null;
+      const sponsorSlug = urlizeName(sponsorName);
+
+      let logoR2Key = null;
+      if (uploadLogos && entry.logo) {
+        const logoFile = path.join(SPONSOR_LOGO_DIR, entry.logo);
+        if (fs.existsSync(logoFile)) {
+          logoR2Key = `sponsor-logos/${sponsorSlug}/${path.basename(logoFile)}`;
+          logoUploads.push({ slug: sponsorSlug, filePath: logoFile, r2Key: logoR2Key });
+        }
+      }
+
+      const sponsor = entry.sponsor ?? {};
+      const level = String(sponsor.level ?? "").trim();
+      if (level) {
+        statements.push(`
+INSERT INTO sponsorships (id, sponsor_type, non_member_name, non_member_website, non_member_logo_r2_key, tier, pipeline_stage, created_at, updated_at)
+SELECT ${sqlString(randomUUID())}, 'consortium', ${sqlString(sponsorName)}, ${toSqlNullableText(website)}, ${toSqlNullableText(logoR2Key)}, ${sqlString(level)}, 'active', datetime('now'), datetime('now')
+WHERE NOT EXISTS (
+  SELECT 1 FROM sponsorships WHERE sponsor_type = 'consortium' AND organization_id IS NULL AND non_member_name = ${sqlString(sponsorName)}
+);
+`);
+        report.nonMemberSponsorships.created += 1;
+      }
+
+      const sponsoring = sponsor.sponsoring;
+      if (sponsoring && typeof sponsoring === "object") {
+        for (const [eventName, eventSponsor] of Object.entries(sponsoring)) {
+          const tier = String(eventSponsor?.level ?? "").trim();
+          if (!tier) continue;
+          const alias = EVENT_NAME_ALIASES[eventName];
+          if (!alias) {
+            report.nonMemberSponsorships.unmatchedEvents.push({ name: sponsorName, eventName, tier });
+            continue;
+          }
+          statements.push(`
+INSERT INTO events (id, slug, name, timezone, starts_at, ends_at, created_at, updated_at)
+VALUES (${sqlString(randomUUID())}, ${sqlString(alias.slug)}, ${sqlString(alias.name)}, ${sqlString(alias.timezone)}, ${toSqlNullableText(alias.startsAt)}, ${toSqlNullableText(alias.endsAt)}, datetime('now'), datetime('now'))
+ON CONFLICT(slug) DO NOTHING;
+`);
+          statements.push(`
+INSERT INTO sponsorships (id, sponsor_type, non_member_name, non_member_website, non_member_logo_r2_key, event_id, tier, pipeline_stage, created_at, updated_at)
+SELECT ${sqlString(randomUUID())}, 'event', ${sqlString(sponsorName)}, ${toSqlNullableText(website)}, ${toSqlNullableText(logoR2Key)}, e.id, ${sqlString(tier)}, 'active', datetime('now'), datetime('now')
+FROM events e
+WHERE e.slug = ${sqlString(alias.slug)}
+  AND NOT EXISTS (
+    SELECT 1 FROM sponsorships s
+    WHERE s.sponsor_type = 'event' AND s.organization_id IS NULL AND s.non_member_name = ${sqlString(sponsorName)} AND s.event_id = e.id
+  );
+`);
+          report.nonMemberSponsorships.created += 1;
+        }
+      }
+    }
+  }
+
   return { sql: statements.join("\n"), report, logoUploads };
 }
 
@@ -1011,6 +1083,9 @@ function renderMarkdownReport(report) {
   );
   lines.push(
     `- Event sponsorships with an unrecognized event name (needs an EVENT_NAME_ALIASES entry): ${report.unmatchedEventSponsorships.length}`,
+  );
+  lines.push(
+    `- Non-member sponsorships created from data/sponsors.yaml (consortium + event rows): ${report.nonMemberSponsorships.created}`,
   );
   lines.push("");
   lines.push("## Working group roster membership counts");
@@ -1067,6 +1142,13 @@ function renderMarkdownReport(report) {
   );
   for (const item of report.unmatchedEventSponsorships) {
     lines.push(`- **${item.name}** (\`${item.file}\`) — \`${item.eventName}\` (tier ${item.tier})`);
+  }
+  lines.push("");
+  lines.push(
+    "## Non-member event sponsorships with an unrecognized event name (data/sponsors.yaml) — add an EVENT_NAME_ALIASES entry",
+  );
+  for (const item of report.nonMemberSponsorships.unmatchedEvents) {
+    lines.push(`- **${item.name}** — \`${item.eventName}\` (tier ${item.tier})`);
   }
   return lines.join("\n");
 }

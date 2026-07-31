@@ -34,6 +34,7 @@ export const adminSponsorshipSchema = z.object({
   organizationName: z.string().nullable(),
   nonMemberName: z.string().nullable(),
   nonMemberWebsite: z.string().nullable(),
+  nonMemberLogoUrl: z.string().nullable(),
   contactName: z.string().nullable(),
   contactEmail: z.string().nullable(),
   eventId: z.uuid().nullable(),
@@ -138,6 +139,43 @@ export const sponsorshipGetRouteSchema = {
       content: { "application/json": { schema: z.object({ sponsorship: adminSponsorshipSchema }) } },
     },
     "404": { description: "Sponsorship not found." },
+  },
+};
+
+// ── Logo (non-member sponsors only) ─────────────────────────────────────
+
+export const sponsorshipLogoPutRouteSchema = {
+  tags: ["Sponsorships"],
+  summary: "Upload or replace a non-member sponsor's logo",
+  description:
+    "Only valid for non-member sponsorships (organization_id IS NULL). Served via GET /api/v1/sponsors/:id/logo.",
+  request: { params: sponsorshipIdParamsSchema },
+  responses: {
+    "200": {
+      description: "Logo uploaded.",
+      content: {
+        "application/json": { schema: z.object({ success: z.boolean(), r2Key: z.string(), logoUrl: z.string() }) },
+      },
+    },
+    "404": { description: "Sponsorship not found." },
+    "415": { description: "Unsupported image type." },
+    "413": { description: "File too large." },
+    "422": {
+      description: "Sponsorship is linked to a member organization — upload its logo via the organization instead.",
+    },
+  },
+};
+
+export const sponsorshipLogoDeleteRouteSchema = {
+  tags: ["Sponsorships"],
+  summary: "Remove a non-member sponsor's logo",
+  request: { params: sponsorshipIdParamsSchema },
+  responses: {
+    "200": { description: "Logo removed." },
+    "404": { description: "Sponsorship not found." },
+    "422": {
+      description: "Sponsorship is linked to a member organization — remove its logo via the organization instead.",
+    },
   },
 };
 

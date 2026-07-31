@@ -129,7 +129,12 @@
 
     {{ if $minSponsorLevel }}
       <div class="hero-sponsors-overlay position-absolute bottom-0 start-50 translate-middle-x w-100 d-none d-md-block pb-4 pt-5">
-        {{ partial "sponsors/strip.html" (dict "site" $.Site "sponsoring" ($.Params.sponsoring | default $.Site.Params.name) "minWeight" $minSponsorLevel "label" "Our Diamond & Titanium Sponsors") }}
+        {{ partial "sponsors/wall-app.html" (dict
+          "mode" "strip"
+          "eventName" $.Params.sponsoring
+          "minWeight" $minSponsorLevel
+          "label" "Our Diamond & Titanium Sponsors"
+        ) }}
       </div>
     {{ end }}
 

@@ -1,13 +1,16 @@
-{{ .Scratch.Set "level" (.Get "level") }}
-{{ .Scratch.Set "sponsoring" (.Get "sponsoring") }}
-{{ .Scratch.Set "height" (.Get "height") }}
-{{ .Scratch.Set "max-height" (.Get "max-height") }}
-{{ .Scratch.Set "max-width" (.Get "max-width") }}
-{{ .Scratch.Set "rows" (.Get "rows") }}
-{{ .Scratch.Set "class" (.Get "class") }}
-<div class="{{ if ne (.Get "fullwidth") "true" }}container{{end}}">
-    <div class="pb-4 justify-content-center text-center">
-    <!-- shuffle sponsors and sponsoring members  -->
-    {{ partial "sponsors/grid.html" . }}
-    </div>
+{{/* {{< sponsors sponsoring="<event name>" level="Leader" height="20" max-width="60" rows=true fullwidth=false >}} */}}
+{{ $fullwidth := eq (.Get "fullwidth") "true" }}
+<div class="{{ if not $fullwidth }}container{{ end }}">
+  <div class="pb-4 justify-content-center text-center">
+    {{ partial "sponsors/wall-app.html" (dict
+      "mode" "grid"
+      "eventName" (.Get "sponsoring")
+      "level" (.Get "level" | default "all")
+      "height" (.Get "height")
+      "maxHeight" (.Get "max-height")
+      "maxWidth" (.Get "max-width")
+      "rows" (ne (.Get "rows") "")
+      "class" (.Get "class")
+    ) }}
+  </div>
 </div>

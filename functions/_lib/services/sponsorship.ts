@@ -181,6 +181,7 @@ export interface AdminSponsorshipRow {
   organization_name: string | null;
   non_member_name: string | null;
   non_member_website: string | null;
+  non_member_logo_r2_key: string | null;
   contact_name: string | null;
   contact_email: string | null;
   event_id: string | null;
@@ -198,7 +199,7 @@ export interface AdminSponsorshipRow {
 
 const ADMIN_SPONSORSHIP_SELECT = `
   SELECT sp.id, sp.sponsor_type, sp.organization_id, o.name AS organization_name,
-         sp.non_member_name, sp.non_member_website, sp.contact_name, sp.contact_email,
+         sp.non_member_name, sp.non_member_website, sp.non_member_logo_r2_key, sp.contact_name, sp.contact_email,
          sp.event_id, e.name AS event_name, sp.tier, sp.pipeline_stage,
          sp.start_date, sp.renewal_date, sp.assigned_to_user_id,
          COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS assigned_to_name,
@@ -251,6 +252,7 @@ export function toApiSponsorship(row: AdminSponsorshipRow) {
     organizationName: row.organization_name,
     nonMemberName: row.non_member_name,
     nonMemberWebsite: row.non_member_website,
+    nonMemberLogoUrl: row.non_member_logo_r2_key ? `/api/v1/sponsors/${row.id}/logo` : null,
     contactName: row.contact_name,
     contactEmail: row.contact_email,
     eventId: row.event_id,

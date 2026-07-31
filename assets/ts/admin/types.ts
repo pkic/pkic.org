@@ -804,6 +804,7 @@ export interface Sponsorship {
   organizationName: string | null;
   nonMemberName: string | null;
   nonMemberWebsite: string | null;
+  nonMemberLogoUrl: string | null;
   contactName: string | null;
   contactEmail: string | null;
   eventId: string | null;
