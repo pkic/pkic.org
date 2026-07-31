@@ -255,6 +255,41 @@ describe("admin working groups", () => {
     expect(afterRemove.workingGroup.chair).toBeNull();
   });
 
+  it("PATCH user_roles/:userRoleId changes a chair's expiry, including assigning one that was never set", async () => {
+    const wgId = await insertWorkingGroup("Expiry Edit WG", "expiry-edit-wg");
+    const chairUserId = await insertUser("expiry-edit-chair@example.test");
+    const chairRoleId = await findRoleId("wg_chair");
+
+    const assignResponse = await call(adminToken, `/api/v1/admin/users/${chairUserId}/roles`, {
+      method: "POST",
+      body: JSON.stringify({ roleId: chairRoleId, contextType: "working_group", contextId: wgId }),
+    });
+    const assigned = (await assignResponse.json()) as { role: { id: string; expiresAt: string | null } };
+    expect(assigned.role.expiresAt).toBeNull();
+
+    const newExpiry = "2027-01-01T00:00:00.000Z";
+    const patchResponse = await call(adminToken, `/api/v1/admin/users/${chairUserId}/roles/${assigned.role.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ expiresAt: newExpiry }),
+    });
+    expect(patchResponse.status).toBe(200);
+    const patched = (await patchResponse.json()) as { role: { expiresAt: string | null } };
+    expect(patched.role.expiresAt).toBe(newExpiry);
+
+    const detail = (await (await call(adminToken, `/api/v1/admin/working-groups/${wgId}`)).json()) as {
+      workingGroup: { chair: { expiresAt: string | null } | null };
+    };
+    expect(detail.workingGroup.chair?.expiresAt).toBe(newExpiry);
+
+    const clearResponse = await call(adminToken, `/api/v1/admin/users/${chairUserId}/roles/${assigned.role.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ expiresAt: null }),
+    });
+    expect(clearResponse.status).toBe(200);
+    const cleared = (await clearResponse.json()) as { role: { expiresAt: string | null } };
+    expect(cleared.role.expiresAt).toBeNull();
+  });
+
   it("chair and vice chair are independent — assigning one doesn't affect the other", async () => {
     const wgId = await insertWorkingGroup("Independent Roles WG", "independent-roles-wg");
     const chairUserId = await insertUser("independent-chair@example.test");

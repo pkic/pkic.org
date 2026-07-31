@@ -1,20 +1,34 @@
 /**
  * DELETE /api/v1/admin/users/:userId/roles/:userRoleId — revoke a role assignment
+ * PATCH  /api/v1/admin/users/:userId/roles/:userRoleId — change an assignment's expiry date
  */
 import { OpenAPIRoute } from "chanfana";
+import { parseJsonBody } from "../../../../../../_lib/validation";
 import { json } from "../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../../_lib/auth/permissions";
 import { first, run } from "../../../../../../_lib/db/queries";
 import { nowIso } from "../../../../../../_lib/utils/time";
 import { writeAuditLog } from "../../../../../../_lib/services/audit";
-import { userRoleRevokeRouteSchema } from "../../../../../../../assets/shared/schemas/access-control";
+import {
+  userRoleRevokeRouteSchema,
+  userRoleUpdateExpirySchema,
+  userRoleUpdateExpiryRouteSchema,
+} from "../../../../../../../assets/shared/schemas/access-control";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
 
 interface UserRoleRow {
   id: string;
   user_id: string;
   role_id: string;
+}
+
+interface UserRoleWithRoleRow extends UserRoleRow {
+  role_name: string;
+  context_type: string | null;
+  context_id: string | null;
+  expires_at: string | null;
+  created_at: string;
 }
 
 export async function onRequestDelete(c: AdminContext): Promise<Response> {
@@ -41,9 +55,66 @@ export async function onRequestDelete(c: AdminContext): Promise<Response> {
   return json({ success: true });
 }
 
+export async function onRequestPatch(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  requirePermission(admin, "access:grant");
+
+  const body = await parseJsonBody(c.req, userRoleUpdateExpirySchema);
+
+  const row = await first<UserRoleRow>(
+    requestDb(c),
+    "SELECT id, user_id, role_id FROM user_roles WHERE id = ? AND user_id = ? AND revoked_at IS NULL",
+    [c.req.param("userRoleId"), c.req.param("userId")],
+  );
+
+  if (!row) {
+    return json({ error: { code: "NOT_FOUND", message: "Role assignment not found" } }, 404);
+  }
+
+  await run(requestDb(c), "UPDATE user_roles SET expires_at = ? WHERE id = ?", [body.expiresAt, row.id]);
+
+  await writeAuditLog(requestDb(c), "admin", admin.id, "user_role_expiry_updated", "user_roles", row.id, {
+    userId: row.user_id,
+    roleId: row.role_id,
+    expiresAt: body.expiresAt,
+  });
+
+  const updated = await first<UserRoleWithRoleRow>(
+    requestDb(c),
+    `SELECT ur.id, ur.user_id, ur.role_id, r.name AS role_name, ur.context_type, ur.context_id, ur.expires_at, ur.created_at
+     FROM user_roles ur
+     JOIN roles r ON r.id = ur.role_id
+     WHERE ur.id = ?`,
+    [row.id],
+  );
+  if (!updated) {
+    return json({ error: { code: "NOT_FOUND", message: "Role assignment not found" } }, 404);
+  }
+
+  return json({
+    role: {
+      id: updated.id,
+      userId: updated.user_id,
+      roleId: updated.role_id,
+      roleName: updated.role_name,
+      contextType: updated.context_type,
+      contextId: updated.context_id,
+      expiresAt: updated.expires_at,
+      createdAt: updated.created_at,
+    },
+  });
+}
+
 export class UserRolesRevoke extends OpenAPIRoute {
   schema = userRoleRevokeRouteSchema;
   async handle(c: AdminContext): Promise<Response> {
     return onRequestDelete(c);
+  }
+}
+
+export class UserRolesUpdateExpiry extends OpenAPIRoute {
+  schema = userRoleUpdateExpiryRouteSchema;
+  async handle(c: AdminContext): Promise<Response> {
+    return onRequestPatch(c);
   }
 }

@@ -9,12 +9,15 @@
  * getWorkingGroupByIdOrSlug, extended to include chair/viceChair with
  * photo/LinkedIn/org-logo enrichment).
  *
- * Two render modes, chosen via the mount's `data-mode` attribute:
+ * Two render modes, chosen via the mount's `data-mode` attribute — both use
+ * the same person-card.html-style ring card, differing only in avatar size
+ * and page wrapper:
  *   - "compact" (default) — layouts/partials/wg/chairs-app.html's sidebar
- *     mount on the public WG page, styled like person-card.html's compact mode.
+ *     mount on the public WG page, wrapped in the "Working Group Leadership"
+ *     label + .consortium-leaders grid, avatar size "md" (80px).
  *   - "card" — layouts/partials/wg/chairs-og-card.html's mount on the
- *     Puppeteer-rendered OG social-share card (all.og-card.html), styled
- *     like person-card.html's full card (size "sm"). That page is
+ *     Puppeteer-rendered OG social-share card (all.og-card.html), bare
+ *     (no wrapper), avatar size "sm" (72px). That page is
  *     screenshotted with `waitUntil: networkidle0`
  *     (functions/api/v1/og/card/[...path].ts), which waits for this fetch
  *     (and any resulting avatar/logo image loads) to settle before
@@ -119,41 +122,21 @@ function OrgBlock({ person, orgClass, logoWrapClass, logoClass, nameClass }: {
   );
 }
 
-function CompactChairCard({ person, role, color }: { person: WgChairPublic; role: string; color: string }) {
-  return (
-    <div class="person-card-compact">
-      <div class="person-card-compact-avatar-wrap">
-        {person.photoUrl ? (
-          <img class="person-card-compact-avatar" src={person.photoUrl} alt={person.name} loading="lazy" />
-        ) : (
-          <div class={`person-card-compact-avatar person-card-compact-avatar--initials wg-${color}`}>
-            {initialsFor(person.name)}
-          </div>
-        )}
-      </div>
-      <div class="person-card-compact-body">
-        <div class="person-card-compact-name-row">
-          <span class="person-card-compact-name">{person.name}</span>
-          <LinkedInBadge person={person} />
-        </div>
-        <div class="person-card-compact-role">{role}</div>
-        <OrgBlock
-          person={person}
-          orgClass="person-card-compact-org"
-          logoWrapClass="person-card-compact-org-logo-wrap"
-          logoClass="person-card-compact-org-logo"
-          nameClass="person-card-org-name"
-        />
-      </div>
-    </div>
-  );
-}
-
-function FullChairCard({ person, role, color }: { person: WgChairPublic; role: string; color: string }) {
+function ChairCard({
+  person,
+  role,
+  color,
+  avatarPx,
+}: {
+  person: WgChairPublic;
+  role: string;
+  color: string;
+  avatarPx: number;
+}) {
   return (
     <div class="person-card">
       <div class="person-card-main">
-        <div class="person-card-avatar-frame" style={{ "--avatar-px": "72px" }}>
+        <div class="person-card-avatar-frame" style={{ "--avatar-px": `${avatarPx}px` }}>
           {person.photoUrl ? (
             <img class="person-card-avatar" src={person.photoUrl} alt={person.name} loading="lazy" />
           ) : (
@@ -211,11 +194,15 @@ function WgChairsWidget({
 
   if (!hasData) return null;
 
-  const Card = mode === "card" ? FullChairCard : CompactChairCard;
+  const avatarPx = mode === "card" ? 72 : 80;
   const cards = (
     <>
-      {data!.chair && <Card person={data!.chair} role={`${wgLabel} Chair`} color={color} />}
-      {data!.viceChair && <Card person={data!.viceChair} role={`${wgLabel} Vice Chair`} color={color} />}
+      {data!.chair && (
+        <ChairCard person={data!.chair} role={`${wgLabel} Chair`} color={color} avatarPx={avatarPx} />
+      )}
+      {data!.viceChair && (
+        <ChairCard person={data!.viceChair} role={`${wgLabel} Vice Chair`} color={color} avatarPx={avatarPx} />
+      )}
     </>
   );
 

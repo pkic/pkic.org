@@ -25,6 +25,13 @@ interface HolderInfo {
   expiresAt: string | null;
 }
 
+/** ISO datetime -> the local "YYYY-MM-DDTHH:mm" value a datetime-local input expects. */
+function toDatetimeLocal(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function ChairSlot({
   label,
   roleId,
@@ -45,6 +52,34 @@ function ChairSlot({
   const [picked, setPicked] = useState<PickedUser | null>(null);
   const [expiresAt, setExpiresAt] = useState("");
   const [busy, setBusy] = useState(false);
+  const [editingExpiry, setEditingExpiry] = useState(false);
+  const [editExpiresAt, setEditExpiresAt] = useState("");
+
+  function startEditExpiry() {
+    setEditExpiresAt(current?.expiresAt ? toDatetimeLocal(current.expiresAt) : "");
+    setEditingExpiry(true);
+  }
+
+  async function saveExpiry(e: Event) {
+    e.preventDefault();
+    if (!current) return;
+    setBusy(true);
+    try {
+      await api(`/api/v1/admin/users/${current.userId}/roles/${current.userRoleId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          expiresAt: editExpiresAt ? new Date(editExpiresAt).toISOString() : null,
+        }),
+      });
+      toast(`${label} expiry updated`, "success");
+      setEditingExpiry(false);
+      onChanged();
+    } catch (err) {
+      toast((err as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function assign(e: Event) {
     e.preventDefault();
@@ -96,12 +131,43 @@ function ChairSlot({
           <span>
             {current.name} <span class="text-muted small">({current.email})</span>
           </span>
-          <span class="text-muted small">
-            {current.expiresAt ? `Expires ${fmt(current.expiresAt)}` : "No expiry set"}
-          </span>
-          <button class="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => void remove()}>
-            Remove
-          </button>
+          {editingExpiry ? (
+            <form onSubmit={saveExpiry} class="d-flex gap-2 align-items-center flex-wrap">
+              <input
+                class="form-control form-control-sm"
+                style={{ width: "200px" }}
+                type="datetime-local"
+                title="Term expires (leave blank for no expiry)"
+                placeholder="Term expires (optional)"
+                value={editExpiresAt}
+                onInput={(e) => setEditExpiresAt((e.target as HTMLInputElement).value)}
+                disabled={busy}
+              />
+              <button type="submit" class="btn btn-sm btn-success" disabled={busy}>
+                Save
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-secondary"
+                disabled={busy}
+                onClick={() => setEditingExpiry(false)}
+              >
+                Cancel
+              </button>
+            </form>
+          ) : (
+            <>
+              <span class="text-muted small">
+                {current.expiresAt ? `Expires ${fmt(current.expiresAt)}` : "No expiry set"}
+              </span>
+              <button class="btn btn-sm btn-outline-secondary" disabled={busy} onClick={startEditExpiry}>
+                Edit expiry
+              </button>
+              <button class="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => void remove()}>
+                Remove
+              </button>
+            </>
+          )}
         </>
       ) : !roleId ? (
         <span class="small text-danger">{roleMissingLabel}</span>

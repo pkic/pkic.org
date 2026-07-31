@@ -628,7 +628,14 @@ ON CONFLICT(normalized_email) DO UPDATE SET
   job_title = COALESCE(users.job_title, excluded.job_title),
   biography = COALESCE(users.biography, excluded.biography),
   links_json = COALESCE(users.links_json, excluded.links_json),
-  headshot_r2_key = COALESCE(users.headshot_r2_key, excluded.headshot_r2_key),
+  -- 'headshots/...' keys are hand-uploaded via the admin self-service headshot
+  -- endpoint (SPEAKER_UPLOADS_BUCKET) and must never be clobbered by a rerun.
+  -- Anything else (NULL, or a previous 'member-photos/...' migration key) is
+  -- fair game so a corrected/updated YAML photo actually takes effect on rerun.
+  headshot_r2_key = CASE
+    WHEN users.headshot_r2_key LIKE 'headshots/%' THEN users.headshot_r2_key
+    ELSE COALESCE(excluded.headshot_r2_key, users.headshot_r2_key)
+  END,
   updated_at = datetime('now');
 `);
     return normalized;

@@ -272,3 +272,25 @@ export const userRoleRevokeRouteSchema = {
     "404": { description: "Assignment not found." },
   },
 };
+
+export const userRoleUpdateExpirySchema = z.object({
+  // Explicit null clears the expiry (no term end); omitting the field is
+  // not allowed — PATCH always states the intended value.
+  expiresAt: z.iso.datetime().nullable(),
+});
+
+export const userRoleUpdateExpiryRouteSchema = {
+  tags: ["Access Control"],
+  summary: "Change a role assignment's expiry date",
+  description:
+    "Updates user_roles.expires_at on an existing (non-revoked) assignment — e.g. a chair or vice-chair term " +
+    "that had no expiry set, or one whose term end is being changed. Does not affect revoked_at.",
+  request: {
+    params: userRoleIdParamsSchema,
+    body: { content: { "application/json": { schema: userRoleUpdateExpirySchema } }, required: true },
+  },
+  responses: {
+    "200": { description: "Expiry updated.", content: { "application/json": { schema: userRoleResponseSchema } } },
+    "404": { description: "Assignment not found." },
+  },
+};
