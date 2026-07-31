@@ -219,6 +219,7 @@ export interface ChairInfo {
   userId: string;
   name: string;
   email: string;
+  expiresAt: string | null;
 }
 
 export interface AdminWorkingGroupSummary {

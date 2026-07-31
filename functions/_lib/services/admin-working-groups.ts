@@ -33,6 +33,7 @@ export interface ChairInfo {
   userId: string;
   name: string;
   email: string;
+  expiresAt: string | null;
 }
 
 export interface AdminWorkingGroupSummary {
@@ -82,11 +83,13 @@ interface WorkingGroupSummaryRow {
   chair_first_name: string | null;
   chair_last_name: string | null;
   chair_email: string | null;
+  chair_expires_at: string | null;
   vice_chair_user_role_id: string | null;
   vice_chair_user_id: string | null;
   vice_chair_first_name: string | null;
   vice_chair_last_name: string | null;
   vice_chair_email: string | null;
+  vice_chair_expires_at: string | null;
 }
 
 function toChairInfo(
@@ -95,6 +98,7 @@ function toChairInfo(
   firstName: string | null,
   lastName: string | null,
   email: string | null,
+  expiresAt: string | null,
 ): ChairInfo | null {
   if (!userRoleId || !userId) return null;
   return {
@@ -102,6 +106,7 @@ function toChairInfo(
     userId,
     name: [firstName, lastName].filter(Boolean).join(" ") || email || "Unknown",
     email: email ?? "",
+    expiresAt,
   };
 }
 
@@ -121,6 +126,7 @@ function toSummary(row: WorkingGroupSummaryRow): AdminWorkingGroupSummary {
       row.chair_first_name,
       row.chair_last_name,
       row.chair_email,
+      row.chair_expires_at,
     ),
     viceChair: toChairInfo(
       row.vice_chair_user_role_id,
@@ -128,6 +134,7 @@ function toSummary(row: WorkingGroupSummaryRow): AdminWorkingGroupSummary {
       row.vice_chair_first_name,
       row.vice_chair_last_name,
       row.vice_chair_email,
+      row.vice_chair_expires_at,
     ),
     memberCount: row.member_count,
     createdAt: row.created_at,
@@ -148,8 +155,9 @@ const ACTIVE_USER_ROLE_FILTER = `
 
 function chairSubquery(roleId: string): string {
   return `
-    SELECT wg_id, user_role_id, user_id, first_name, last_name, email FROM (
+    SELECT wg_id, user_role_id, user_id, first_name, last_name, email, expires_at FROM (
       SELECT ur.context_id AS wg_id, ur.id AS user_role_id, u.id AS user_id, u.first_name, u.last_name, u.email,
+             ur.expires_at,
              ROW_NUMBER() OVER (PARTITION BY ur.context_id ORDER BY ur.created_at DESC) AS rn
       FROM user_roles ur
       JOIN users u ON u.id = ur.user_id
@@ -165,9 +173,10 @@ const SUMMARY_SELECT = `
            WHERE wgm.working_group_id = wg.id AND wgm.left_at IS NULL) AS member_count,
          chair.user_role_id AS chair_user_role_id, chair.user_id AS chair_user_id_resolved,
          chair.first_name AS chair_first_name, chair.last_name AS chair_last_name, chair.email AS chair_email,
+         chair.expires_at AS chair_expires_at,
          vice_chair.user_role_id AS vice_chair_user_role_id, vice_chair.user_id AS vice_chair_user_id,
          vice_chair.first_name AS vice_chair_first_name, vice_chair.last_name AS vice_chair_last_name,
-         vice_chair.email AS vice_chair_email
+         vice_chair.email AS vice_chair_email, vice_chair.expires_at AS vice_chair_expires_at
   FROM working_groups wg
   LEFT JOIN (${chairSubquery("role-wg_chair")}) chair ON chair.wg_id = wg.id
   LEFT JOIN (${chairSubquery("role-wg_vice_chair")}) vice_chair ON vice_chair.wg_id = wg.id

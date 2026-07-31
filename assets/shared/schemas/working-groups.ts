@@ -36,6 +36,7 @@ export const chairInfoSchema = z.object({
   userId: z.uuid(),
   name: z.string(),
   email: z.string(),
+  expiresAt: z.string().nullable(),
 });
 
 export const adminWorkingGroupSummarySchema = z.object({

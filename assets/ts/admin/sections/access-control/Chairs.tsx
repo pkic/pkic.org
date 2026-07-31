@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { Spinner } from "../../../components/Spinner";
 import { api } from "../../api";
-import { toast } from "../../ui";
+import { fmt, toast } from "../../ui";
 import type { AdminWorkingGroupSummary, Role, RoleAssignment } from "../../types";
 import { UserPicker, type PickedUser } from "./UserPicker";
 
@@ -22,6 +22,7 @@ interface HolderInfo {
   userId: string;
   name: string;
   email: string;
+  expiresAt: string | null;
 }
 
 function ChairSlot({
@@ -42,6 +43,7 @@ function ChairSlot({
   onChanged: () => void;
 }) {
   const [picked, setPicked] = useState<PickedUser | null>(null);
+  const [expiresAt, setExpiresAt] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function assign(e: Event) {
@@ -51,10 +53,16 @@ function ChairSlot({
     try {
       await api(`/api/v1/admin/users/${picked.id}/roles`, {
         method: "POST",
-        body: JSON.stringify({ roleId, contextType, contextId }),
+        body: JSON.stringify({
+          roleId,
+          contextType,
+          contextId,
+          expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
+        }),
       });
       toast(`${label} assigned`, "success");
       setPicked(null);
+      setExpiresAt("");
       onChanged();
     } catch (err) {
       toast((err as Error).message, "error");
@@ -88,6 +96,9 @@ function ChairSlot({
           <span>
             {current.name} <span class="text-muted small">({current.email})</span>
           </span>
+          <span class="text-muted small">
+            {current.expiresAt ? `Expires ${fmt(current.expiresAt)}` : "No expiry set"}
+          </span>
           <button class="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => void remove()}>
             Remove
           </button>
@@ -95,10 +106,20 @@ function ChairSlot({
       ) : !roleId ? (
         <span class="small text-danger">{roleMissingLabel}</span>
       ) : (
-        <form onSubmit={assign} class="d-flex gap-2 align-items-center">
+        <form onSubmit={assign} class="d-flex gap-2 align-items-center flex-wrap">
           <div style={{ minWidth: "220px" }}>
             <UserPicker value={picked} onChange={setPicked} disabled={busy} />
           </div>
+          <input
+            class="form-control form-control-sm"
+            style={{ width: "200px" }}
+            type="datetime-local"
+            title="Term expires (optional)"
+            placeholder="Term expires (optional)"
+            value={expiresAt}
+            onInput={(e) => setExpiresAt((e.target as HTMLInputElement).value)}
+            disabled={busy}
+          />
           <button type="submit" class="btn btn-sm btn-success" disabled={busy || !picked}>
             Assign
           </button>
