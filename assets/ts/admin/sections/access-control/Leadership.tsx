@@ -4,6 +4,7 @@ import { api } from "../../api";
 import { fmt, toast } from "../../ui";
 import type { AdminWorkingGroupSummary, Role, RoleAssignment } from "../../types";
 import { UserPicker, type PickedUser } from "./UserPicker";
+import { LeadershipPositions } from "./LeadershipPositions";
 
 /**
  * "Create a new tab under the Access Control for chairs to set the chairs
@@ -15,6 +16,11 @@ import { UserPicker, type PickedUser } from "./UserPicker";
  * assign/revoke mechanism the "Staff" and "Working Groups" tabs already use
  * — this tab just composes it per-role-per-context in one place instead of
  * requiring staff to already know which user to look up.
+ *
+ * Renamed from "Chairs" to "Leadership" when Board of Directors and
+ * Executive Council roster management (migration 0049) were added here —
+ * "Chairs" no longer described the page once it covered the full
+ * leadership picture, not just chair/vice-chair designations.
  */
 
 interface HolderInfo {
@@ -195,7 +201,7 @@ function ChairSlot({
   );
 }
 
-export function Chairs() {
+export function Leadership() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [groups, setGroups] = useState<AdminWorkingGroupSummary[]>([]);
   const [forumChair, setForumChair] = useState<RoleAssignment | null>(null);
@@ -266,6 +272,9 @@ export function Chairs() {
           />
         </div>
       </div>
+
+      <LeadershipPositions body="board" label="Board of Directors" />
+      <LeadershipPositions body="executive_council" label="Executive Council" />
 
       <div class="card border-0 shadow-sm">
         <div class="card-header bg-white fw-semibold">Working groups</div>

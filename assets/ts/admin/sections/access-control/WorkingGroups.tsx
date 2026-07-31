@@ -369,7 +369,7 @@ export function WorkingGroups() {
               </div>
               <div class="col-12">
                 <span class="small text-muted fst-italic">
-                  Chair and vice chair are assigned from the "Chairs" section.
+                  Chair and vice chair are assigned from the "Leadership" section.
                 </span>
               </div>
             </div>

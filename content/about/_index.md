@@ -37,10 +37,7 @@ The Public Key Infrastructure Consortium is comprised of leading organizations t
 
 ### Chair and Vice Chair
 
-{{< leadership-grid >}}
-{{< person-card name="Paul van Brouwershaven" role="Chair" affiliation="digitorus" from="2021-01-01" >}}
-{{< person-card name="Albert de Ruiter" role="Vice Chair" affiliation="logius" from="2022-06-01" >}}
-{{< /leadership-grid >}}
+{{< leadership source="forum" >}}
 
 ### Board of Directors and Executive Council
 

@@ -199,6 +199,20 @@ export interface RoleAssignment {
   createdAt: string;
 }
 
+/** GET/POST/PATCH /api/v1/admin/leadership-positions — Board / Executive Council roster (migration 0049). */
+export interface LeadershipPosition {
+  id: string;
+  body: "board" | "executive_council";
+  userId: string;
+  name: string;
+  email: string;
+  title: string;
+  startsAt: string;
+  endsAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface WorkingGroupSummary {
   id: string;
   name: string;
