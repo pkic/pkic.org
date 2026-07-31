@@ -581,6 +581,99 @@ describe("GET /api/v1/working-groups/:id", () => {
     expect(body.viceChair?.name).toBe("Vice Chair");
   });
 
+  it("enriches the chair with photo, LinkedIn, and organization logo/website", async () => {
+    const wgId = crypto.randomUUID();
+    await seedWorkingGroup({ id: wgId, name: "PQC Working Group", slug: "pqc" });
+
+    const chairUserId = crypto.randomUUID();
+    const orgId = crypto.randomUUID();
+    const memberRowId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO organizations (id, name, normalized_name, website, logo_r2_key, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      ).bind(orgId, "Chair Org", "chair org", "https://chairorg.example", "members/chair-org/logo.png"),
+      env.DB.prepare(
+        `INSERT INTO users (id, email, normalized_email, first_name, last_name, headshot_r2_key, links_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      ).bind(
+        chairUserId,
+        `${chairUserId}@example.test`,
+        `${chairUserId}@example.test`,
+        "Chair",
+        "Person",
+        "headshots/chair.jpg",
+        JSON.stringify({ linkedin: "https://linkedin.com/in/chairperson" }),
+      ),
+      env.DB.prepare(
+        `INSERT INTO members (id, member_type, user_id, organization_id, status, tier, created_at, updated_at)
+         VALUES (?, 'organization', ?, ?, 'active', 'A', datetime('now'), datetime('now'))`,
+      ).bind(memberRowId, chairUserId, orgId),
+      env.DB.prepare(
+        `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, created_at)
+         VALUES (?, ?, 'role-wg_chair', 'working_group', ?, datetime('now'))`,
+      ).bind(crypto.randomUUID(), chairUserId, wgId),
+    ]);
+
+    const response = await callEndpoint(
+      getWorkingGroup,
+      createContext(env, getRequest("https://pkic.org/api/v1/working-groups/pqc"), { id: "pqc" }),
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      chair: {
+        name: string;
+        organizationName: string | null;
+        organizationLogoUrl: string | null;
+        organizationWebsite: string | null;
+        photoUrl: string | null;
+        linkedin: string | null;
+      } | null;
+    };
+    expect(body.chair?.organizationName).toBe("Chair Org");
+    expect(body.chair?.organizationWebsite).toBe("https://chairorg.example");
+    expect(body.chair?.organizationLogoUrl).toBe(`/api/v1/members/${orgId}/logo`);
+    expect(body.chair?.photoUrl).toBe(`/api/v1/members/${memberRowId}/logo`);
+    expect(body.chair?.linkedin).toBe("https://linkedin.com/in/chairperson");
+  });
+
+  it("returns null enrichment fields for a chair with no photo, LinkedIn, or org logo on file", async () => {
+    const wgId = crypto.randomUUID();
+    await seedWorkingGroup({ id: wgId, name: "PQC Working Group", slug: "pqc" });
+
+    const chairUserId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      ).bind(chairUserId, `${chairUserId}@example.test`, `${chairUserId}@example.test`, "Bare", "Chair"),
+      env.DB.prepare(
+        `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, created_at)
+         VALUES (?, ?, 'role-wg_chair', 'working_group', ?, datetime('now'))`,
+      ).bind(crypto.randomUUID(), chairUserId, wgId),
+    ]);
+
+    const response = await callEndpoint(
+      getWorkingGroup,
+      createContext(env, getRequest("https://pkic.org/api/v1/working-groups/pqc"), { id: "pqc" }),
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      chair: {
+        organizationLogoUrl: string | null;
+        organizationWebsite: string | null;
+        photoUrl: string | null;
+        linkedin: string | null;
+      } | null;
+    };
+    expect(body.chair?.organizationLogoUrl).toBeNull();
+    expect(body.chair?.organizationWebsite).toBeNull();
+    expect(body.chair?.photoUrl).toBeNull();
+    expect(body.chair?.linkedin).toBeNull();
+  });
+
   it("returns 404 for an unknown working group", async () => {
     const response = await callEndpoint(
       getWorkingGroup,

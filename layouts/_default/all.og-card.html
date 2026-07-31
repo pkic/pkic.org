@@ -113,23 +113,18 @@
 {{- end -}}
 
 {{/*
-  WG leader card — rendered in the right panel for any page that has chair data.
-  Takes priority over the image-based visual panel so WG pages always show the
-  chair card even if a logo is also present.
+  WG leader card — rendered in the right panel for individual WG pages.
+  Chairs/vice-chairs are assigned in the admin portal (user_roles), not page
+  frontmatter, so this page can't resolve them at Hugo build time — the
+  aside is a client-fetched mount instead (layouts/partials/wg/chairs-og-card.html),
+  the same pattern the footer sponsor strip below already uses, since this
+  page is screenshotted with `waitUntil: networkidle0`
+  (functions/api/v1/og/card/[...path].ts), which waits for that fetch (and any
+  resulting image loads) to settle before capturing. See prd.md's decision
+  log for why this replaced the old `.Params.chair` frontmatter read, which
+  always evaluated false once that frontmatter was removed.
 */}}
-{{- $chairName := "" -}}
-{{- $chairRole := "" -}}
-{{- $viceChairName := "" -}}
-{{- $viceChairRole := "" -}}
-{{- with $page.Params.chair -}}
-  {{- $chairName = .name -}}
-  {{- $chairRole = printf "%s Chair" ($page.Params.wgID | default "WG") -}}
-  {{- with .viceChair -}}
-    {{- $viceChairName = . -}}
-    {{- $viceChairRole = printf "%s Vice Chair" ($page.Params.wgID | default "WG") -}}
-  {{- end -}}
-{{- end -}}
-{{- $hasLeaderCard := ne $chairName "" -}}
+{{- $isWgPage := and (eq $page.Section "wg") ($page.Params.wgID) -}}
 
 {{/* Member logo wall — collected for the /members/ section list page and the home page */}}
 {{- $memberLogos := slice -}}
@@ -216,19 +211,14 @@
       {{ range $memberLogos }}<div class="og-member-logo"><img src="{{ . }}" alt=""></div>{{ end }}
     </div>
     {{ end }}
-    <div class="og-hero-inner{{ if or $hasLeaderCard $visualImage }} og-hero-inner--with-visual{{ end }}">
+    <div class="og-hero-inner{{ if $visualImage }} og-hero-inner--with-visual{{ end }}">
       <section>
         {{ with $eyebrow }}<p class="pkic-page-hero-kicker">{{ . }}</p>{{ end }}
         <h1 class="og-title">{{ $title }}</h1>
         {{ with $subtitle }}<p class="og-subtitle">{{ . }}</p>{{ end }}
       </section>
-      {{ if $hasLeaderCard }}
-      <aside class="og-visual-aside--card">
-        {{ partial "person-card.html" (dict "name" $chairName "role" $chairRole "color" ($page.Params.color | default "green") "size" "sm") }}
-        {{ with $viceChairName }}
-        {{ partial "person-card.html" (dict "name" . "role" $viceChairRole "color" ($page.Params.color | default "green") "size" "sm") }}
-        {{ end }}
-      </aside>
+      {{ if $isWgPage }}
+      {{ partial "wg/chairs-og-card.html" (dict "slug" ($page.Params.wgID | lower) "label" $page.Params.wgID "color" ($page.Params.color | default "green")) }}
       {{ else if $visualImage }}
       <aside class="og-visual-aside">
         <div class="og-visual{{ if $visualIsRound }} og-visual--round{{ else if $visualOnWhite }} og-visual--on-white{{ end }}">

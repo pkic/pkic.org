@@ -318,6 +318,10 @@ export interface WorkingGroupMemberPublic {
 export interface WorkingGroupChairPublic {
   name: string;
   organizationName: string | null;
+  organizationLogoUrl: string | null;
+  organizationWebsite: string | null;
+  photoUrl: string | null;
+  linkedin: string | null;
 }
 
 export interface WorkingGroupDetail extends WorkingGroupSummary {
@@ -355,8 +359,12 @@ export async function listWorkingGroups(db: DatabaseLike): Promise<WorkingGroupS
 // reads — not the dead working_groups.chair_user_id column, and not the
 // static content/wg/*/_index.md `chair:`/`viceChair:` frontmatter this
 // replaces so staff no longer need a git commit to update a WG's public
-// chair listing. Name + organization only (no email) to match this
-// endpoint's existing "public subset" convention for the member roster.
+// chair listing. No email (matching this endpoint's existing "public subset"
+// convention for the member roster), but photo/LinkedIn/org-logo are public
+// by nature (same assets the member directory already serves publicly via
+// GET /api/v1/members/:id/logo — getMemberLogoR2Key resolves both an
+// organization id and a members.id, so the URLs below reuse that endpoint
+// as-is) — see prd.md's WG chair enrichment follow-up.
 async function getWorkingGroupChairsPublic(
   db: DatabaseLike,
   wgId: string,
@@ -365,10 +373,18 @@ async function getWorkingGroupChairsPublic(
     role_id: string;
     first_name: string | null;
     last_name: string | null;
+    org_id: string | null;
     org_name: string | null;
+    org_logo_r2_key: string | null;
+    org_website: string | null;
+    member_id: string | null;
+    headshot_r2_key: string | null;
+    links_json: string | null;
   }>(
     db,
-    `SELECT ur.role_id, u.first_name, u.last_name, o.name AS org_name
+    `SELECT ur.role_id, u.first_name, u.last_name, o.id AS org_id, o.name AS org_name,
+            o.logo_r2_key AS org_logo_r2_key, o.website AS org_website,
+            m.id AS member_id, u.headshot_r2_key, u.links_json
      FROM user_roles ur
      JOIN users u ON u.id = ur.user_id
      LEFT JOIN members m ON m.user_id = u.id AND m.status = 'active'
@@ -381,13 +397,18 @@ async function getWorkingGroupChairsPublic(
     [wgId],
   );
 
-  const toPublic = (row: (typeof rows)[number] | undefined): WorkingGroupChairPublic | null =>
-    row
-      ? {
-          name: [row.first_name, row.last_name].filter(Boolean).join(" ") || "Unknown",
-          organizationName: row.org_name,
-        }
-      : null;
+  const toPublic = (row: (typeof rows)[number] | undefined): WorkingGroupChairPublic | null => {
+    if (!row) return null;
+    const links = parseJsonSafe<UserLinksJson>(row.links_json, {});
+    return {
+      name: [row.first_name, row.last_name].filter(Boolean).join(" ") || "Unknown",
+      organizationName: row.org_name,
+      organizationLogoUrl: row.org_logo_r2_key && row.org_id ? `/api/v1/members/${row.org_id}/logo` : null,
+      organizationWebsite: row.org_website,
+      photoUrl: row.headshot_r2_key && row.member_id ? `/api/v1/members/${row.member_id}/logo` : null,
+      linkedin: links.linkedin ?? null,
+    };
+  };
 
   return {
     chair: toPublic(rows.find((r) => r.role_id === "role-wg_chair")),
