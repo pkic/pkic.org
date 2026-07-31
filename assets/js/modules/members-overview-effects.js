@@ -4,40 +4,50 @@
 
   var WALL_NS_LIMIT = 84;
 
-  document.querySelectorAll('.members-overview .members').forEach(function (grid) {
-    var links = Array.from(grid.querySelectorAll('a[data-sponsor-level]'));
-    if (links.length < 2) return;
+  // The grid's logos are fetched and rendered async by sponsors-wall.tsx, so
+  // the anchors may not exist yet on first run — retry once they've been
+  // mounted (see member:wall-rendered in that module).
+  function setup() {
+    document.querySelectorAll('.members-overview .members').forEach(function (grid) {
+      if (grid.querySelector('.logo-wall-track')) return;
 
-    var b = utils.logoBuckets(links);
-    var nonSponsors = b.nonSponsors.slice(0, Math.max(WALL_NS_LIMIT, b.sponsors.length * 2));
-    var sequence = utils.logoBuildSequence(b.sponsors, nonSponsors);
+      var links = Array.from(grid.querySelectorAll('a[data-sponsor-level]'));
+      if (links.length < 2) return;
 
-    function makeCopy(items, hidden) {
-      var div = document.createElement('div');
-      div.className = 'logo-wall-copy';
-      if (hidden) div.setAttribute('aria-hidden', 'true');
-      items.forEach(function (item) { div.appendChild(item.el.cloneNode(true)); });
-      return div;
-    }
+      var b = utils.logoBuckets(links);
+      var nonSponsors = b.nonSponsors.slice(0, Math.max(WALL_NS_LIMIT, b.sponsors.length * 2));
+      var sequence = utils.logoBuildSequence(b.sponsors, nonSponsors);
 
-    var track = document.createElement('div');
-    track.className = 'logo-wall-track';
-    var copy1 = makeCopy(sequence, false);
-    var copy2 = makeCopy(sequence, true);
-    track.appendChild(copy1);
-    track.appendChild(copy2);
+      function makeCopy(items, hidden) {
+        var div = document.createElement('div');
+        div.className = 'logo-wall-copy';
+        if (hidden) div.setAttribute('aria-hidden', 'true');
+        items.forEach(function (item) { div.appendChild(item.el.cloneNode(true)); });
+        return div;
+      }
 
-    grid.innerHTML = '';
-    grid.appendChild(track);
+      var track = document.createElement('div');
+      track.className = 'logo-wall-track';
+      var copy1 = makeCopy(sequence, false);
+      var copy2 = makeCopy(sequence, true);
+      track.appendChild(copy1);
+      track.appendChild(copy2);
 
-    requestAnimationFrame(function () {
-      var h = copy1.scrollHeight;
-      if (h > 0) track.style.animationDuration = Math.max(30, Math.round(h / 8)) + 's';
+      grid.innerHTML = '';
+      grid.appendChild(track);
+
+      requestAnimationFrame(function () {
+        var h = copy1.scrollHeight;
+        if (h > 0) track.style.animationDuration = Math.max(30, Math.round(h / 8)) + 's';
+      });
+
+      grid.addEventListener('mouseenter', function () { track.style.animationPlayState = 'paused'; });
+      grid.addEventListener('mouseleave', function () { track.style.animationPlayState = 'running'; });
     });
+  }
 
-    grid.addEventListener('mouseenter', function () { track.style.animationPlayState = 'paused'; });
-    grid.addEventListener('mouseleave', function () { track.style.animationPlayState = 'running'; });
-  });
+  setup();
+  document.addEventListener('member:wall-rendered', setup);
 })();
 
 (function () {
@@ -129,12 +139,18 @@
         + '<span class="member-zoom-slogan"></span>'
       + '</div>'
       + '<div class="member-zoom-badge"></div>';
-    grid.appendChild(overlay);
 
     var ovLogo = overlay.querySelector('.member-zoom-logo');
     var ovName = overlay.querySelector('.member-zoom-name');
     var ovSlogan = overlay.querySelector('.member-zoom-slogan');
     var ovBadge = overlay.querySelector('.member-zoom-badge');
+
+    // The logo-wall setup() above rebuilds `grid`'s contents via innerHTML
+    // once the async-fetched logos render, which would detach this overlay
+    // if it were appended up front — so (re)attach it lazily on first use.
+    function ensureOverlayMounted() {
+      if (overlay.parentNode !== grid) grid.appendChild(overlay);
+    }
 
     var track = null;
     var timer = null;
@@ -242,6 +258,7 @@
       pick.classList.add('member-logo--spotlight');
 
       if (level >= ZOOM_MIN_TIER) {
+        ensureOverlayMounted();
         var img = pick.querySelector('img');
         var name = pick.getAttribute('data-member-name') || '';
         var slogan = pick.getAttribute('data-member-slogan') || '';

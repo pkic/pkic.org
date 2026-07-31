@@ -436,6 +436,13 @@ function WallMode({ apiBase, memberLimit }: { apiBase: string; memberLimit: numb
     return shuffled([...sponsorMembers, ...nonMemberSponsors, ...selectedNonSponsors]);
   }, [members, sponsors, memberLimit]);
 
+  // The marquee/scroll effects (sponsor-banner-marquee.js, members-overview-effects.js)
+  // build their tracks by scanning the DOM once — they need to run after these anchors
+  // actually exist, not at page load, since this data arrives async.
+  useEffect(() => {
+    if (entries) document.dispatchEvent(new CustomEvent("member:wall-rendered"));
+  }, [entries]);
+
   if (!entries) return null;
 
   return (
