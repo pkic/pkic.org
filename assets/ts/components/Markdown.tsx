@@ -6,7 +6,31 @@ type Block =
   | { type: "heading"; level: 2 | 3 | 4; text: string }
   | { type: "blockquote"; text: string }
   | { type: "code"; text: string }
+  | { type: "video"; embedUrl: string }
   | ListBlock;
+
+// scripts/migrate-members-yaml-to-d1.mjs rewrites legacy Hugo shortcodes
+// (`{{< youtube ID >}}` etc.) into bare URLs before they land in
+// organizations.content_markdown — this renderer never saw an embed until
+// now, it just linkified (or, before that, left inert) the plain URL. A
+// paragraph consisting of nothing but one of these three URL shapes (bare,
+// or a `[text](url)` link — both forms show up in migrated content) renders
+// as a responsive iframe embed instead.
+function extractVideoEmbedUrl(paragraphText: string): string | null {
+  const linkMatch = /^\[[^\]]*\]\((\S+)\)$/.exec(paragraphText.trim());
+  const url = linkMatch ? linkMatch[1] : paragraphText.trim();
+
+  const youtubeWatch = /^https?:\/\/(?:www\.)?youtube\.com\/watch\?(?:.*&)?v=([\w-]+)/i.exec(url);
+  if (youtubeWatch) return `https://www.youtube.com/embed/${youtubeWatch[1]}`;
+
+  const youtubeShort = /^https?:\/\/youtu\.be\/([\w-]+)/i.exec(url);
+  if (youtubeShort) return `https://www.youtube.com/embed/${youtubeShort[1]}`;
+
+  const vimeo = /^https?:\/\/(?:www\.)?vimeo\.com\/(\d+)/i.exec(url);
+  if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}`;
+
+  return null;
+}
 
 function isSafeHref(href: string): boolean {
   if (/^[a-z0-9+.-]+:/i.test(href)) {
@@ -120,7 +144,9 @@ function parseMarkdown(markdown: string): Block[] {
       paragraph.push(lines[i].trim());
       i++;
     }
-    blocks.push({ type: "paragraph", text: paragraph.join(" ") });
+    const paragraphText = paragraph.join(" ");
+    const embedUrl = extractVideoEmbedUrl(paragraphText);
+    blocks.push(embedUrl ? { type: "video", embedUrl } : { type: "paragraph", text: paragraphText });
   }
 
   return blocks;
@@ -144,6 +170,19 @@ export function Markdown({ markdown = "", className }: { markdown?: string | nul
               <pre key={index}>
                 <code>{block.text}</code>
               </pre>
+            );
+          case "video":
+            return (
+              <div class="ratio ratio-16x9" key={index}>
+                <iframe
+                  src={block.embedUrl}
+                  title="Embedded video"
+                  loading="lazy"
+                  allow="autoplay; picture-in-picture; fullscreen"
+                  allowFullScreen
+                  frameborder="0"
+                ></iframe>
+              </div>
             );
           case "ul":
             return (

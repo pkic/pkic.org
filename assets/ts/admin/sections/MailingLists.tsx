@@ -14,6 +14,35 @@ import type { MailingList } from "../types";
 
 const LIST_TYPES = ["all_members", "consultation", "ec", "working_group", "custom"] as const;
 
+type SortKey = "email" | "label" | "listType" | "autoSyncCategories" | "active";
+type SortDir = "asc" | "desc";
+
+function sortValue(list: MailingList, key: SortKey): string | number | null {
+  switch (key) {
+    case "email":
+      return list.email;
+    case "label":
+      return list.label;
+    case "listType":
+      return list.listType;
+    case "autoSyncCategories":
+      return list.autoSyncCategories?.join(", ") ?? null;
+    case "active":
+      return list.active ? 1 : 0;
+  }
+}
+
+// Nulls always sort last, regardless of direction.
+function compareSort(a: MailingList, b: MailingList, key: SortKey, dir: SortDir): number {
+  const av = sortValue(a, key);
+  const bv = sortValue(b, key);
+  if (av == null && bv == null) return 0;
+  if (av == null) return 1;
+  if (bv == null) return -1;
+  const cmp = typeof av === "number" && typeof bv === "number" ? av - bv : String(av).localeCompare(String(bv));
+  return dir === "asc" ? cmp : -cmp;
+}
+
 interface Draft {
   email: string;
   label: string;
@@ -126,6 +155,37 @@ export function MailingLists() {
   const [newDraft, setNewDraft] = useState<Draft>(emptyDraft());
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  }
+
+  function sortTh(label: string, key: SortKey) {
+    const active = sortKey === key;
+    return (
+      <th>
+        <button
+          type="button"
+          class={`tbl-sort-btn${active ? " is-active" : ""}`}
+          onClick={() => toggleSort(key)}
+          aria-sort={active ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+        >
+          <span>{label}</span>
+          <span aria-hidden="true" class="tbl-sort-indicator">
+            {active ? (sortDir === "asc" ? "▲" : "▼") : "↕"}
+          </span>
+        </button>
+      </th>
+    );
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -187,15 +247,38 @@ export function MailingLists() {
     }
   }
 
+  async function handleSyncNow() {
+    setSyncing(true);
+    try {
+      const res = await api<{ processed: number; succeeded: number; failed: number; skippedUnconfigured: boolean }>(
+        "/api/v1/admin/mailing-lists/sync",
+        { method: "POST" },
+      );
+      if (res.skippedUnconfigured) {
+        toast("Google Groups sync isn't configured in this environment", "error");
+      } else if (res.processed === 0) {
+        toast("Nothing pending to sync", "success");
+      } else {
+        toast(`Synced ${res.processed}: ${res.succeeded} succeeded${res.failed ? `, ${res.failed} failed` : ""}`, res.failed > 0 ? "error" : "success");
+      }
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   if (loading) return <Spinner />;
   if (error) return <ErrorAlert error={error} />;
 
   return (
     <div>
       <div class="d-flex justify-content-between align-items-center mb-3">
-        <p class="text-muted small mb-0">
-          The Google Groups sync engine reads this configuration at runtime — see PRD §4.14.
-        </p>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-outline-success btn-sm" disabled={syncing} onClick={handleSyncNow}>
+            {syncing ? "Syncing…" : "↺ Sync now"}
+          </button>
+        </div>
         <button type="button" class="btn btn-primary btn-sm" onClick={() => setShowAdd((v) => !v)}>
           {showAdd ? "Cancel" : "Add mailing list"}
         </button>
@@ -214,18 +297,18 @@ export function MailingLists() {
 
       <div class="table-responsive">
         <table class="table table-sm align-middle">
-          <thead>
+          <thead class="table-dark">
             <tr>
-              <th>Email</th>
-              <th>Label</th>
-              <th>Type</th>
-              <th>Auto-sync categories</th>
-              <th>Active</th>
+              {sortTh("Email", "email")}
+              {sortTh("Label", "label")}
+              {sortTh("Type", "listType")}
+              {sortTh("Auto-sync categories", "autoSyncCategories")}
+              {sortTh("Active", "active")}
               <th></th>
             </tr>
           </thead>
           <tbody>
-            {lists.map((list) =>
+            {(sortKey ? lists.slice().sort((a, b) => compareSort(a, b, sortKey, sortDir)) : lists).map((list) =>
               editingId === list.id ? (
                 <tr key={list.id}>
                   <td colSpan={6}>

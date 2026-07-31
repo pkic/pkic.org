@@ -15,8 +15,10 @@
 import { json } from "../../../_lib/http";
 import { requireAdminFromRequest } from "../../../_lib/auth/admin";
 import { all, first } from "../../../_lib/db/queries";
+import { resolveOrderBy } from "../../../_lib/db/sort";
 import type { DatabaseLike } from "../../../_lib/types";
 import { requestDb, type AdminContext } from "../../../_lib/db/context";
+import { ADMIN_AUDIT_LOG_SORT_COLUMNS, auditLogSortValueSchema } from "../../../../assets/shared/schemas/admin-audit-log";
 
 interface AuditLogRow {
   id: string;
@@ -83,9 +85,15 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const actorType = (url.searchParams.get("actorType") ?? "").trim();
   const action = (url.searchParams.get("action") ?? "").trim();
   const entityId = (url.searchParams.get("entityId") ?? "").trim();
+  // An invalid sort value fails schema validation (unknown column), so we
+  // just fall back to the default order — same "quietly ignore" behavior
+  // admin-organizations.ts's route uses.
+  const sortParsed = auditLogSortValueSchema.safeParse(url.searchParams.get("sort") ?? undefined);
+  const sort = sortParsed.success ? sortParsed.data : undefined;
 
   const db: DatabaseLike = requestDb(c);
   const { where, params } = buildQuery(q, entityType, actorType, action, entityId);
+  const orderBy = resolveOrderBy(sort, ADMIN_AUDIT_LOG_SORT_COLUMNS, "ORDER BY al.created_at DESC");
 
   const baseJoin = `FROM audit_log al LEFT JOIN users u ON al.actor_type = 'admin' AND u.id = al.actor_id`;
 
@@ -105,7 +113,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
          al.created_at
        ${baseJoin}
        ${where}
-       ORDER BY al.created_at DESC
+       ${orderBy}
        LIMIT ? OFFSET ?`,
       [...params, limit, offset],
     ),

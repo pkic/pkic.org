@@ -60,8 +60,10 @@ interface MyProfileRow {
   organization_id: string | null;
   show_on_org_profile: number;
   headshot_r2_key: string | null;
+  member_since: string | null;
   member_created_at: string;
   org_name: string | null;
+  org_member_since: string | null;
   primary_contact_user_id: string | null;
   secondary_contact_user_id: string | null;
 }
@@ -80,9 +82,16 @@ function representativeDisplayName(row: OrganizationRepresentativeRow): string |
   return full || null;
 }
 
+// `links_json` has two legitimate shapes in the wild: a `string[]` (written
+// by this file's own updateMyProfile) and a `{linkedin, x}` object (written
+// by scripts/migrate-members-yaml-to-d1.mjs — the same shape
+// members-directory.ts's public directory already reads). Handle both
+// instead of assuming an array, which crashed every migrated user's first
+// `GET /api/v1/me` after magic-link login with `raw.map is not a function`.
 function normalizeLinks(linksJson: string | null): string[] {
-  const raw = parseJsonSafe<unknown[]>(linksJson, []);
-  return raw
+  const raw = parseJsonSafe<unknown>(linksJson, []);
+  const values = Array.isArray(raw) ? raw : raw && typeof raw === "object" ? Object.values(raw) : [];
+  return values
     .map((entry) => (typeof entry === "string" ? entry : ""))
     .map((url) => url.trim())
     .filter(Boolean);
@@ -108,7 +117,7 @@ function toProfile(
     membershipCategory: row.member_type,
     organizationId: row.organization_id,
     organizationName: row.org_name ?? row.organization_name,
-    memberSince: row.member_created_at,
+    memberSince: (isIndividual ? row.member_since : row.org_member_since) ?? row.member_created_at,
     showOnOrgProfile: row.show_on_org_profile === 1,
     // Public capability-URL path (functions/api/v1/headshots/:userId/:file) —
     // matches admin/users/[userId]/index.ts's identical construction.
@@ -126,7 +135,8 @@ export async function getMyProfile(db: DatabaseLike, member: AuthMember): Promis
     db,
     `SELECT u.email, u.first_name, u.last_name, u.preferred_name, u.job_title, u.biography, u.links_json,
             u.organization_name, u.headshot_r2_key, m.member_type, m.organization_id, m.show_on_org_profile,
-            m.created_at AS member_created_at, o.name AS org_name, o.primary_contact_user_id, o.secondary_contact_user_id
+            m.member_since, m.created_at AS member_created_at, o.name AS org_name, o.member_since AS org_member_since,
+            o.primary_contact_user_id, o.secondary_contact_user_id
      FROM users u
      JOIN members m ON m.user_id = u.id
      LEFT JOIN organizations o ON o.id = m.organization_id

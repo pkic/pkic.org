@@ -5,18 +5,21 @@ import type { AdminUser } from "../../types";
 import { Grants } from "./Grants";
 import { Roles } from "./Roles";
 import { UserRoles } from "./UserRoles";
-import { WorkingGroups } from "./WorkingGroups";
-import { Chairs } from "./Chairs";
 
 const TABS = [
   { key: "grants", label: "Access Grants" },
   { key: "roles", label: "Roles" },
   { key: "staff", label: "Staff" },
-  { key: "working-groups", label: "Working Groups" },
-  { key: "chairs", label: "Chairs" },
 ];
 
-/** PRD §2.4 — admin portal UI for Phase 2's access-control backend. */
+/**
+ * PRD §2.4 — admin portal UI for Phase 2's access-control backend.
+ *
+ * "Working Groups" and "Chairs" used to live here as tabs but were promoted
+ * to their own top-level sidebar sections (see Sidebar.tsx / AdminShell.tsx)
+ * per 2026-07-30 testing feedback — they're day-to-day membership-management
+ * tasks, not access-control configuration, and didn't belong buried in a tab.
+ */
 export function AccessControl() {
   const [tab, setTab] = useState("grants");
   const [userLabels, setUserLabels] = useState<Map<string, AdminUser>>(new Map());
@@ -33,8 +36,6 @@ export function AccessControl() {
       {tab === "grants" && <Grants userLabels={userLabels} />}
       {tab === "roles" && <Roles />}
       {tab === "staff" && <UserRoles />}
-      {tab === "working-groups" && <WorkingGroups />}
-      {tab === "chairs" && <Chairs />}
     </div>
   );
 }

@@ -94,3 +94,25 @@ export const mailingListDeleteRouteSchema = {
     "404": { description: "Mailing list not found." },
   },
 };
+
+export const mailingListSyncRouteSchema = {
+  tags: ["Mailing Lists"],
+  summary: "Process pending Google Group sync queue entries on demand",
+  description:
+    "Normally runs off the 15-minute due-work cron; this lets staff trigger a pass immediately instead of waiting.",
+  responses: {
+    "200": {
+      description: "Sync pass result.",
+      content: {
+        "application/json": {
+          schema: z.object({
+            processed: z.number(),
+            succeeded: z.number(),
+            failed: z.number(),
+            skippedUnconfigured: z.boolean(),
+          }),
+        },
+      },
+    },
+  },
+};

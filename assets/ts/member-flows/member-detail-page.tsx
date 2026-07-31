@@ -18,6 +18,17 @@ import { Markdown } from "../components/Markdown";
 
 const API_BASE_FALLBACK = "/api/v1";
 
+/** `/members/<slug>` (functions/members/[slug].ts) serves this exact shell
+ * page with no `?id=` query string — the org's slug is the last path
+ * segment instead. Returns null for the shell's own canonical path
+ * (`/members/profile/`) so a direct, id-less visit still falls through to
+ * "not found" rather than trying to fetch `/api/v1/members/profile`. */
+function slugFromPathname(pathname: string): string | null {
+  const match = /^\/members\/([^/]+)\/?$/.exec(pathname);
+  if (!match) return null;
+  return match[1] === "profile" ? null : match[1];
+}
+
 interface Representative {
   name: string;
   jobTitle: string | null;
@@ -215,7 +226,7 @@ function MemberDetailPage({ apiBase, directoryHref }: { apiBase: string; directo
   const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get("id");
+    const id = new URLSearchParams(window.location.search).get("id") ?? slugFromPathname(window.location.pathname);
     if (!id) {
       setNotFound(true);
       return;

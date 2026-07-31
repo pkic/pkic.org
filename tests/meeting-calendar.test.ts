@@ -225,6 +225,114 @@ describe("Meeting calendar management (PRD §4.12)", () => {
     expect(prefRows[0].ics_file_id).toBeNull();
   });
 
+  it("deletes an ICS file outright — removes the DB row, the R2 object, and clears any member preference", async () => {
+    const wgId = await insertWorkingGroup("PQC Delete", "pqc-delete");
+    const seriesId = await insertMeetingSeries("working_group", "PQC WG Meeting", wgId);
+    const fileId = await insertIcsFile(seriesId, "09:00 CET", 2026, "meeting-ics/del1.ics");
+    await env.ASSETS_BUCKET!.put("meeting-ics/del1.ics", "BEGIN:VCALENDAR\nEND:VCALENDAR");
+    const memberUserId = await insertUser("wg-del-pref@example.test");
+    await insertMember(memberUserId, "F");
+    await insertWgMembership(wgId, memberUserId);
+    await insertPreference(memberUserId, seriesId, fileId);
+
+    const deleteResponse = await call(
+      adminToken,
+      `/api/v1/admin/working-groups/${wgId}/meetings/${seriesId}/ics-files/${fileId}`,
+      { method: "DELETE" },
+    );
+    expect(deleteResponse.status).toBe(200);
+
+    const remaining = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM meeting_ics_files WHERE id = ?",
+      fileId,
+    );
+    expect(remaining).toHaveLength(0);
+    expect(await env.ASSETS_BUCKET!.get("meeting-ics/del1.ics")).toBeNull();
+
+    const prefRows = await queryAll<{ ics_file_id: string | null }>(
+      env.DB,
+      "SELECT ics_file_id FROM member_meeting_preferences WHERE user_id = ? AND series_id = ?",
+      memberUserId,
+      seriesId,
+    );
+    expect(prefRows[0].ics_file_id).toBeNull();
+  });
+
+  it("deletes a whole meeting series — cascades to its ICS files, their R2 objects, and member preferences", async () => {
+    const wgId = await insertWorkingGroup("CBOM Delete", "cbom-delete");
+    const seriesId = await insertMeetingSeries("working_group", "CBOM WG Meeting", wgId);
+    const fileId = await insertIcsFile(seriesId, "09:00 CET", 2026, "meeting-ics/series-del.ics");
+    await env.ASSETS_BUCKET!.put("meeting-ics/series-del.ics", "BEGIN:VCALENDAR\nEND:VCALENDAR");
+    const memberUserId = await insertUser("wg-series-del-pref@example.test");
+    await insertMember(memberUserId, "F");
+    await insertWgMembership(wgId, memberUserId);
+    await insertPreference(memberUserId, seriesId, fileId);
+
+    const deleteResponse = await call(adminToken, `/api/v1/admin/working-groups/${wgId}/meetings/${seriesId}`, {
+      method: "DELETE",
+    });
+    expect(deleteResponse.status).toBe(200);
+
+    expect(await queryAll(env.DB, "SELECT id FROM meeting_series WHERE id = ?", seriesId)).toHaveLength(0);
+    expect(await queryAll(env.DB, "SELECT id FROM meeting_ics_files WHERE series_id = ?", seriesId)).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM member_meeting_preferences WHERE series_id = ?", seriesId),
+    ).toHaveLength(0);
+    expect(await env.ASSETS_BUCKET!.get("meeting-ics/series-del.ics")).toBeNull();
+
+    const listResponse = await call(adminToken, `/api/v1/admin/working-groups/${wgId}/meetings`);
+    const list = (await listResponse.json()) as { meetingSeries: Array<{ id: string }> };
+    expect(list.meetingSeries.some((s) => s.id === seriesId)).toBe(false);
+  });
+
+  it("deletes a consortium meeting series and a consortium ICS file", async () => {
+    const seriesId = await insertMeetingSeries("consortium", "Main Consortium Meeting To Delete");
+    const fileId = await insertIcsFile(seriesId, "09:00 CET", 2026, "meeting-ics/consortium-del.ics");
+    await env.ASSETS_BUCKET!.put("meeting-ics/consortium-del.ics", "BEGIN:VCALENDAR\nEND:VCALENDAR");
+
+    const otherFileId = await insertIcsFile(seriesId, "17:00 CET", 2026, "meeting-ics/consortium-del-2.ics");
+    const fileDeleteResponse = await call(
+      adminToken,
+      `/api/v1/admin/consortium/meetings/${seriesId}/ics-files/${otherFileId}`,
+      { method: "DELETE" },
+    );
+    expect(fileDeleteResponse.status).toBe(200);
+    expect(await queryAll(env.DB, "SELECT id FROM meeting_ics_files WHERE id = ?", otherFileId)).toHaveLength(0);
+
+    const seriesDeleteResponse = await call(adminToken, `/api/v1/admin/consortium/meetings/${seriesId}`, {
+      method: "DELETE",
+    });
+    expect(seriesDeleteResponse.status).toBe(200);
+    expect(await queryAll(env.DB, "SELECT id FROM meeting_series WHERE id = ?", seriesId)).toHaveLength(0);
+    expect(await queryAll(env.DB, "SELECT id FROM meeting_ics_files WHERE id = ?", fileId)).toHaveLength(0);
+    expect(await env.ASSETS_BUCKET!.get("meeting-ics/consortium-del.ics")).toBeNull();
+  });
+
+  it("a WG chair can delete their own WG's meeting series but not another WG's", async () => {
+    const ownWgId = await insertWorkingGroup("Own Delete WG", "own-delete-wg");
+    const otherWgId = await insertWorkingGroup("Other Delete WG", "other-delete-wg");
+    const ownSeriesId = await insertMeetingSeries("working_group", "Own Series", ownWgId);
+    const otherSeriesId = await insertMeetingSeries("working_group", "Other Series", otherWgId);
+
+    const chairUserId = await insertUser("wg-chair-delete@example.test");
+    await assignContextualRole(chairUserId, "role-wg_chair", "working_group", ownWgId, adminId);
+    const chairToken = await createAdminSession(env.DB, chairUserId, "wg-chair-delete-token");
+
+    const otherResponse = await call(
+      chairToken,
+      `/api/v1/admin/working-groups/${otherWgId}/meetings/${otherSeriesId}`,
+      { method: "DELETE" },
+    );
+    expect(otherResponse.status).toBe(403);
+
+    const ownResponse = await call(chairToken, `/api/v1/admin/working-groups/${ownWgId}/meetings/${ownSeriesId}`, {
+      method: "DELETE",
+    });
+    expect(ownResponse.status).toBe(200);
+    expect(await queryAll(env.DB, "SELECT id FROM meeting_series WHERE id = ?", ownSeriesId)).toHaveLength(0);
+  });
+
   it("resend smart-routes: a member with a still-active preference gets only that file, everyone else gets all active variants", async () => {
     const wgId = await insertWorkingGroup("CBOM", "cbom");
     const seriesId = await insertMeetingSeries("working_group", "CBOM WG Meeting", wgId);

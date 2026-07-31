@@ -104,6 +104,7 @@ export function AuditLog() {
           cell: (entry) =>
             new Date(entry.created_at).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "medium" }),
           className: "text-nowrap small text-muted",
+          sort: { asc: "al.created_at", desc: "-al.created_at", defaultDirection: "desc" },
         },
         {
           header: "Actor",
@@ -122,12 +123,18 @@ export function AuditLog() {
             </>
           ),
           className: "small",
+          sort: { asc: "actor_display", desc: "-actor_display" },
         },
-        { header: "Action", cell: (entry) => <code class="small">{entry.action}</code> },
+        {
+          header: "Action",
+          cell: (entry) => <code class="small">{entry.action}</code>,
+          sort: { asc: "al.action", desc: "-al.action" },
+        },
         {
           header: "Entity",
           cell: (entry) => <Badge status={entry.entity_type} label={entry.entity_type} />,
           className: "small text-muted",
+          sort: { asc: "al.entity_type", desc: "-al.entity_type" },
         },
         { header: "Entity ID", cell: (entry) => entry.entity_id ?? "—", className: "mono small text-muted" },
         {

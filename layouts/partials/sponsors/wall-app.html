@@ -1,0 +1,40 @@
+{{/*
+  sponsors/wall-app.html — mount point for the client-fetched public sponsor
+  display (prd.md item 8 gap-closure plan). Replaces the old
+  sponsors/{collect,grid,strip}.html build-time hugo.Data reads.
+
+  Params (dict):
+    .mode          — "grid" | "level" | "strip" (default "grid")
+    .eventName     — event name string (matches the old `sponsoring` shortcode
+                      param exactly, e.g. "Post-Quantum Cryptography Conference
+                      Austin 2025"); omit for the general/consortium-only context
+    .level         — exact tier filter, or "all" (default "all")
+    .height / .maxHeight / .maxWidth — grid mode logo sizing (px, scaled by tier weight)
+    .rows          — grid mode: wrap each tier band in its own row (bool)
+    .class         — grid mode: extra class on each logo <img>
+    .minWeight     — strip mode minimum tier weight (default 5 = Titanium/Leader)
+    .containerClass / .linkClass / .logoClass / .logoStyle / .label — strip mode styling
+    .memberLimit   — wall mode: cap on random non-sponsor member logos shown (sponsors always all show)
+*/}}
+<div
+  data-sponsors-wall
+  data-module="member-flows/sponsors-wall"
+  data-api-base="/api/v1"
+  data-mode="{{ .mode | default "grid" }}"
+  {{ with .eventName }}data-event-name="{{ . }}"{{ end }}
+  data-level="{{ .level | default "all" }}"
+  {{ with .height }}data-height="{{ . }}"{{ end }}
+  {{ with .maxHeight }}data-max-height="{{ . }}"{{ end }}
+  {{ with .maxWidth }}data-max-width="{{ . }}"{{ end }}
+  {{ if .rows }}data-rows="true"{{ end }}
+  {{ with .class }}data-class="{{ . }}"{{ end }}
+  {{ with .minWeight }}data-min-weight="{{ . }}"{{ end }}
+  {{ with .containerClass }}data-container-class="{{ . }}"{{ end }}
+  {{ with .linkClass }}data-link-class="{{ . }}"{{ end }}
+  {{ with .logoClass }}data-logo-class="{{ . }}"{{ end }}
+  {{ with .logoStyle }}data-logo-style="{{ . }}"{{ end }}
+  {{ with .label }}data-label="{{ . }}"{{ end }}
+  {{ with .labelClass }}data-label-class="{{ . }}"{{ end }}
+  {{ with .maxItems }}data-max-items="{{ . }}"{{ end }}
+  {{ with .memberLimit }}data-member-limit="{{ . }}"{{ end }}
+></div>

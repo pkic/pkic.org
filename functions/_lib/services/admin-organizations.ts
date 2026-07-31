@@ -14,6 +14,7 @@ import { uuid } from "../utils/ids";
 import { findOrCreateUser } from "./users";
 import { normalizeOrgName } from "./sponsorship";
 import { AppError } from "../errors";
+import { resolveOrderBy } from "../db/sort";
 import type { DatabaseLike, StatementLike } from "../types";
 
 function splitName(fullName: string): { firstName: string | null; lastName: string | null } {
@@ -36,6 +37,8 @@ interface OrgSummaryRow {
   description: string | null;
   slogan: string | null;
   logo_r2_key: string | null;
+  member_since: string | null;
+  membership_category: string | null;
   created_at: string;
   updated_at: string;
   member_count: number;
@@ -45,7 +48,7 @@ interface OrgSummaryRow {
 }
 
 const ORG_SUMMARY_SELECT = `
-  SELECT o.id, o.name, o.website, o.description, o.slogan, o.logo_r2_key, o.created_at, o.updated_at,
+  SELECT o.id, o.name, o.website, o.description, o.slogan, o.logo_r2_key, o.member_since, o.membership_category, o.created_at, o.updated_at,
          (SELECT COUNT(*) FROM members m WHERE m.organization_id = o.id) AS member_count,
          pu.first_name AS primary_contact_first_name, pu.last_name AS primary_contact_last_name,
          pu.email AS primary_contact_email
@@ -62,6 +65,11 @@ function toOrgSummary(row: OrgSummaryRow) {
     description: row.description,
     slogan: row.slogan,
     logoUrl: logoUrlFor(row.id, row.logo_r2_key),
+    membershipCategory: row.membership_category,
+    // Falls back to the row's own creation time for organizations created
+    // before migration 0046 added this column (or via a path that never set
+    // it) — matches the same fallback members-directory.ts/member-self-service.ts use.
+    memberSince: row.member_since ?? row.created_at,
     memberCount: row.member_count,
     primaryContactName: primaryContactName || null,
     primaryContactEmail: row.primary_contact_email,
@@ -70,15 +78,22 @@ function toOrgSummary(row: OrgSummaryRow) {
   };
 }
 
+// Unqualified column/alias names, matching what ORG_SUMMARY_SELECT's result
+// set actually labels them as (SQLite allows ORDER BY on a SELECT-list
+// alias) — unambiguous here since none of these names collide with a
+// joined `users` column.
+const ORG_SORT_COLUMNS = ["name", "membership_category", "created_at", "member_count"] as const;
+
 export async function listAdminOrganizations(
   db: DatabaseLike,
-  params: { limit: number; offset: number; q?: string },
+  params: { limit: number; offset: number; q?: string; sort?: string },
 ): Promise<{ organizations: ReturnType<typeof toOrgSummary>[]; total: number }> {
   const where = params.q ? "WHERE o.name LIKE ?" : "";
   const whereArgs = params.q ? [`%${params.q}%`] : [];
+  const orderBy = resolveOrderBy(params.sort, ORG_SORT_COLUMNS, "ORDER BY o.name ASC");
 
   const [rows, totalRow] = await Promise.all([
-    all<OrgSummaryRow>(db, `${ORG_SUMMARY_SELECT} ${where} ORDER BY o.name ASC LIMIT ? OFFSET ?`, [
+    all<OrgSummaryRow>(db, `${ORG_SUMMARY_SELECT} ${where} ${orderBy} LIMIT ? OFFSET ?`, [
       ...whereArgs,
       params.limit,
       params.offset,
@@ -123,7 +138,7 @@ interface RepresentativeRow {
 async function fetchOrgDetailRow(db: DatabaseLike, id: string): Promise<OrgDetailRow | null> {
   return first<OrgDetailRow>(
     db,
-    `SELECT o.id, o.name, o.website, o.description, o.slogan, o.logo_r2_key, o.created_at, o.updated_at,
+    `SELECT o.id, o.name, o.website, o.description, o.slogan, o.logo_r2_key, o.member_since, o.created_at, o.updated_at,
             o.membership_category,
             o.content_markdown, o.blog_url, o.blog_feed_url, o.press_url, o.press_feed_url, o.careers_url,
             o.social_x, o.social_linkedin, o.social_facebook, o.social_instagram, o.social_youtube,
@@ -195,6 +210,7 @@ export async function getAdminOrganization(db: DatabaseLike, id: string) {
 const UPDATABLE_COLUMNS: Record<string, string> = {
   name: "name",
   membershipCategory: "membership_category",
+  memberSince: "member_since",
   description: "description",
   website: "website",
   contentMarkdown: "content_markdown",
@@ -220,6 +236,7 @@ export interface OrganizationUpdateInput {
    * the org's actual category.
    */
   membershipCategory?: string;
+  memberSince?: string | null;
   description?: string | null;
   website?: string | null;
   contentMarkdown?: string | null;

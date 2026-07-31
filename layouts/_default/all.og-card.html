@@ -177,46 +177,21 @@
 {{- if $hasMemberWall -}}{{- $memberLogos = shuffle $memberLogos -}}{{- end -}}
 
 {{/*
-  Event sponsor strip — only Diamond (weight 6) and Titanium (weight 5) sponsors.
-  Sorted highest-to-lowest then placed center-outward via CSS order, so Diamonds
-  land in the middle and Titaniums fan out to the sides.
-  Uses the same sponsors/collect.html partial as the sponsors shortcode.
+  Event sponsor strip — only Diamond/Titanium (consortium) and Leader (event)
+  tier sponsors, i.e. weight >= 5. Sorted highest-to-lowest then placed
+  center-outward via CSS order (handled client-side, see below), so the top
+  tier lands in the middle and the rest fan out to the sides. Always the
+  general/consortium sponsor list — $page.Params.sponsoring is never actually
+  set by any content page (the sponsoring="<event name>" param is a
+  shortcode-call-site argument, not page front matter), so this was already
+  effectively context-free before this migration too.
+
+  Fetched client-side (prd.md item 8 gap-closure plan) via the same
+  sponsors-wall Preact component every other public sponsor surface uses —
+  possible here because this page is screenshotted by Cloudflare Browser
+  Rendering with `waitUntil: networkidle0` (functions/api/v1/og/card/[...path].ts),
+  which waits for the fetch to complete before capturing.
 */}}
-{{/*
-  Collect sponsors with their effective weight so we can sort highest-to-lowest
-  and arrange them center-outward (most important in the middle) via CSS order.
-  Cap at 8 logos to prevent overflow on the 1200px canvas.
-*/}}
-{{- $sponsorItems := slice -}}
-{{- $sponsoring := $page.Params.sponsoring | default $page.Site.Params.name -}}
-{{- $eventSponsors := partial "sponsors/collect.html" (dict "site" $page.Site "sponsoring" $sponsoring "level" "all" "minWeight" 5) -}}
-  {{- range $eventSponsors -}}
-    {{- $s := . -}}
-    {{- $logo := "" -}}
-    {{- if $s.logo -}}
-      {{- with resources.GetMatch (printf "images/sponsors/**/%s" $s.logo) -}}
-        {{- $logo = .RelPermalink -}}
-      {{- end -}}
-    {{- else -}}
-      {{- with resources.Get (printf "images/members/%s/%s.svg" $s.id $s.id) -}}
-        {{- $logo = .RelPermalink -}}
-      {{- else -}}
-        {{- with resources.Get (printf "images/members/%s/%s.png" $s.id $s.id) -}}
-          {{- $logo = .RelPermalink -}}
-        {{- end -}}
-      {{- end -}}
-    {{- end -}}
-    {{- if $logo -}}
-      {{/* Effective weight = max of general level and event-specific level */}}
-      {{- $weight := index hugo.Data.sponsorlevels ($s.sponsor.level | default "") | default 0 -}}
-      {{- with index $s.sponsor.sponsoring $sponsoring -}}
-        {{- $evtWeight := index hugo.Data.sponsorlevels (.level | default "") | default 0 -}}
-        {{- if gt $evtWeight $weight -}}{{- $weight = $evtWeight -}}{{- end -}}
-      {{- end -}}
-      {{- $sponsorItems = $sponsorItems | append (dict "logo" $logo "weight" $weight) -}}
-    {{- end -}}
-  {{- end -}}
-{{- $hasSponsorStrip := gt (len $sponsorItems) 0 -}}
 
 <!doctype html>
 <html lang="en">
@@ -273,20 +248,28 @@
     <div class="og-footer-logo">
       <img src="/img/logo.svg" alt="{{ $page.Site.Params.shortName }}">
     </div>
-    {{ if $hasSponsorStrip }}
     <div class="og-footer-sponsors" aria-hidden="true">
-      <span class="og-footer-sponsors-label">Our Diamond &amp; Titanium Sponsors</span>
-      <div class="og-footer-sponsors-logos">
-        {{- $sorted := sort $sponsorItems "weight" "desc" -}}
-        {{- $capped := first 8 $sorted -}}
-        {{ range $i, $item := $capped -}}
-          {{- $order := 0 -}}
-          {{- if eq (mod $i 2) 0 -}}{{- $order = sub 0 (div $i 2) -}}{{- else -}}{{- $order = div (add $i 1) 2 -}}{{- end -}}
-          <div class="og-sponsor-logo" style="order: {{ $order }}"><img src="{{ $item.logo }}" alt=""></div>
-        {{- end }}
-      </div>
+      {{ partial "sponsors/wall-app.html" (dict
+        "mode" "strip"
+        "minWeight" 5
+        "maxItems" 8
+        "containerClass" "og-footer-sponsors-logos"
+        "linkClass" "og-sponsor-logo"
+        "label" "Our Diamond & Titanium Sponsors"
+        "labelClass" "og-footer-sponsors-label"
+      ) }}
     </div>
-    {{ end }}
   </footer>
+
+  {{/* Module loader — this standalone document doesn't extend baseof.html/footer.html, so it needs its own copy of the [data-module] bootstrap. See footer.html for the non-og-card version. */}}
+  {{- $manifest := index hugo.Data "asset-manifest" -}}
+  {{- with $manifest -}}
+    {{- $loader := index . "loader" -}}
+    {{- with $loader -}}
+      {{- $url := index . "url" -}}
+      {{- $sri := index . "integrity" -}}
+      {{- with $url }}<script src="{{ . }}" type="module"{{ with $sri }} integrity="{{ . }}" crossorigin="anonymous"{{ end }}></script>{{ end -}}
+    {{- end -}}
+  {{- end -}}
 </body>
 </html>

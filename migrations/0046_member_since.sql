@@ -1,0 +1,23 @@
+-- Migration 0046: `member_since` columns for organizations and members
+--
+-- data/members/*.yaml's `memberSince` key (how long an organization or
+-- individual has been a PKIC member) had nowhere real to land: the §6
+-- Step 2 migration script never read it, and the Interim Admin Tool's
+-- "Add organization" form already collects a `memberSince` date from staff
+-- (assets/ts/admin/sections/Organizations.tsx, AdminMemberCreateInput in
+-- admin-members.ts) but silently drops it — there is no column to write it
+-- to, so every org/individual's public/self-service "member since" value
+-- has actually just been `members.created_at` (the D1 row's insert time,
+-- not the real historical join date).
+--
+-- Two columns, not one, because org-tied representatives share one
+-- membership start date that belongs to the organization (all reps of the
+-- same org report the same `memberSince` in their YAML file), while
+-- org-less individuals (H5/H6/H7) have no `organizations` row to hold it
+-- on at all — their `members` row is the only place it can live. Read paths
+-- prefer `organizations.member_since` for org-tied members and
+-- `members.member_since` for org-less ones, both falling back to
+-- `members.created_at` when unset (pre-existing rows, or a caller that
+-- doesn't supply one).
+ALTER TABLE organizations ADD COLUMN member_since TEXT;
+ALTER TABLE members ADD COLUMN member_since TEXT;

@@ -32,6 +32,7 @@ interface UserLinksJson {
 
 export interface PublicMemberSummary {
   id: string;
+  slug: string | null;
   name: string;
   memberType: string;
   tier: string | null;
@@ -72,12 +73,14 @@ export interface PublicMemberDetail extends PublicMemberSummary {
 interface DirectoryRow {
   member_id: string;
   organization_id: string | null;
+  org_slug: string | null;
   org_name: string | null;
   org_data_json: string | null;
   org_description: string | null;
   org_website: string | null;
   org_slogan: string | null;
   org_logo_r2_key: string | null;
+  org_member_since: string | null;
   first_name: string | null;
   last_name: string | null;
   job_title: string | null;
@@ -86,6 +89,7 @@ interface DirectoryRow {
   headshot_r2_key: string | null;
   member_type: string;
   tier: string | null;
+  member_since: string | null;
   created_at: string;
 }
 
@@ -106,6 +110,9 @@ function toSummary(row: DirectoryRow): PublicMemberSummary {
 
   return {
     id: row.organization_id ?? row.member_id,
+    // Org-less individuals have no organizations row to hold a slug on —
+    // they keep UUID-keyed profile URLs (see functions/members/[slug].ts).
+    slug: row.organization_id ? row.org_slug : null,
     name,
     memberType: row.member_type,
     tier: row.tier,
@@ -113,16 +120,20 @@ function toSummary(row: DirectoryRow): PublicMemberSummary {
     description: row.org_description ?? orgData.description ?? (isIndividual ? row.biography : null) ?? null,
     slogan: row.org_slogan ?? orgData.slogan ?? null,
     logoUrl,
-    memberSince: row.created_at,
+    // Org-tied members share the organization's own join date; org-less
+    // individuals carry their own on the members row. Both fall back to the
+    // row's creation time for records that predate migration 0046 (or a
+    // creation path that didn't supply a real one).
+    memberSince: (row.organization_id ? row.org_member_since : row.member_since) ?? row.created_at,
   };
 }
 
 const DIRECTORY_SELECT = `
-  SELECT m.id AS member_id, m.organization_id, o.name AS org_name, o.data_json AS org_data_json,
+  SELECT m.id AS member_id, m.organization_id, o.slug AS org_slug, o.name AS org_name, o.data_json AS org_data_json,
          o.description AS org_description, o.website AS org_website, o.slogan AS org_slogan,
-         o.logo_r2_key AS org_logo_r2_key,
+         o.logo_r2_key AS org_logo_r2_key, o.member_since AS org_member_since,
          u.first_name, u.last_name, u.job_title, u.biography, u.links_json, u.headshot_r2_key,
-         m.member_type, m.tier, m.created_at
+         m.member_type, m.tier, m.member_since, m.created_at
   FROM members m
   LEFT JOIN organizations o ON o.id = m.organization_id
   LEFT JOIN users u ON u.id = m.user_id
@@ -203,11 +214,14 @@ async function loadRepresentatives(db: DatabaseLike, organizationId: string): Pr
   });
 }
 
-export async function getPublicMemberById(db: DatabaseLike, id: string): Promise<PublicMemberDetail | null> {
+/** `idOrSlug` resolves against an organization's UUID primary key, its clean
+ * URL slug (organizations.slug, migration 0047), or — for org-less
+ * individuals, which have no organizations row — the member's own id. */
+export async function getPublicMemberById(db: DatabaseLike, idOrSlug: string): Promise<PublicMemberDetail | null> {
   const row = await first<DirectoryRow>(
     db,
-    `${DIRECTORY_SELECT} AND (m.organization_id = ? OR (m.organization_id IS NULL AND m.id = ?)) LIMIT 1`,
-    [id, id],
+    `${DIRECTORY_SELECT} AND (m.organization_id = ? OR o.slug = ? OR (m.organization_id IS NULL AND m.id = ?)) LIMIT 1`,
+    [idOrSlug, idOrSlug, idOrSlug],
   );
   if (!row) return null;
 

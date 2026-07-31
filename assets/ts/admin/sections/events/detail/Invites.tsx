@@ -371,19 +371,37 @@ function InviteList({ slug, inviteType }: { slug: string; inviteType: InviteType
         </select>
       )}
       columns={[
-        { header: "Email", cell: (inv) => inv.invitee_email },
+        {
+          header: "Email",
+          cell: (inv) => inv.invitee_email,
+          sort: { asc: "invitee_email", desc: "-invitee_email" },
+        },
         {
           header: "Name",
           cell: (inv) => [inv.invitee_first_name, inv.invitee_last_name].filter(Boolean).join(" ") || "—",
         },
-        { header: "Status", cell: (inv) => <Badge status={inv.status} /> },
+        {
+          header: "Status",
+          cell: (inv) => <Badge status={inv.status} />,
+          sort: { asc: "status", desc: "-status" },
+        },
         {
           header: "Sent by",
           cell: (inv) => inv.inviter_email ?? inv.inviter_user_id ?? "—",
           className: "small text-muted",
         },
-        { header: "Sent", cell: (inv) => fmt(inv.created_at), className: "mono small" },
-        { header: "Accepted", cell: (inv) => (inv.accepted_at ? fmt(inv.accepted_at) : "—"), className: "mono small" },
+        {
+          header: "Sent",
+          cell: (inv) => fmt(inv.created_at),
+          className: "mono small",
+          sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
+        },
+        {
+          header: "Accepted",
+          cell: (inv) => (inv.accepted_at ? fmt(inv.accepted_at) : "—"),
+          className: "mono small",
+          sort: { asc: "accepted_at", desc: "-accepted_at", defaultDirection: "desc" },
+        },
         {
           header: "",
           cell: (inv) =>

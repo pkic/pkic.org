@@ -65,9 +65,31 @@ export const accessGrantsCreateRouteSchema = {
   },
 };
 
+/** Allowlisted sort columns for GET /api/v1/admin/access-grants — see permission_grants' access-grants/index.ts. */
+export const ADMIN_ACCESS_GRANTS_SORT_COLUMNS = ["user_id", "permission", "context_type", "expires_at", "created_at"] as const;
+
+const accessGrantsSortValueSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(41)
+  .refine(
+    (value) => {
+      const field = value.startsWith("-") ? value.slice(1) : value;
+      return (ADMIN_ACCESS_GRANTS_SORT_COLUMNS as readonly string[]).includes(field);
+    },
+    { message: "Unknown sort column" },
+  )
+  .optional();
+
+export const accessGrantsListQuerySchema = z.object({
+  sort: accessGrantsSortValueSchema,
+});
+
 export const accessGrantsListRouteSchema = {
   tags: ["Access Control"],
   summary: "List permission grants",
+  request: { query: accessGrantsListQuerySchema },
   responses: {
     "200": {
       description: "Active grants.",
@@ -114,9 +136,31 @@ export const rolesCreateRouteSchema = {
   },
 };
 
+/** Allowlisted sort columns for GET /api/v1/admin/roles — see roles/index.ts. */
+export const ADMIN_ROLES_SORT_COLUMNS = ["name", "description"] as const;
+
+const rolesSortValueSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(41)
+  .refine(
+    (value) => {
+      const field = value.startsWith("-") ? value.slice(1) : value;
+      return (ADMIN_ROLES_SORT_COLUMNS as readonly string[]).includes(field);
+    },
+    { message: "Unknown sort column" },
+  )
+  .optional();
+
+export const rolesListQuerySchema = z.object({
+  sort: rolesSortValueSchema,
+});
+
 export const rolesListRouteSchema = {
   tags: ["Access Control"],
   summary: "List roles",
+  request: { query: rolesListQuerySchema },
   responses: {
     "200": {
       description: "All roles with their permission bundles.",

@@ -26,12 +26,17 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     q: url.searchParams.get("q") ?? undefined,
     limit: url.searchParams.get("limit") ?? undefined,
     offset: url.searchParams.get("offset") ?? undefined,
+    sort: url.searchParams.get("sort") ?? undefined,
   });
   const q = parsed.success ? parsed.data.q : undefined;
   const limit = parsed.success ? (parsed.data.limit ?? 50) : 50;
   const offset = parsed.success ? (parsed.data.offset ?? 0) : 0;
+  // An invalid sort value fails schema validation (unknown column), so
+  // `parsed.success` is false and we just fall back to the default order —
+  // same "quietly ignore" behavior admin-applications.ts's route uses.
+  const sort = parsed.success ? parsed.data.sort : undefined;
 
-  const { organizations, total } = await listAdminOrganizations(requestDb(c), { limit, offset, q });
+  const { organizations, total } = await listAdminOrganizations(requestDb(c), { limit, offset, q, sort });
   return json({ organizations, page: { limit, offset, total, hasMore: offset + organizations.length < total } });
 }
 

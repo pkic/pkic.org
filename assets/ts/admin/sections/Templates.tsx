@@ -766,11 +766,17 @@ export function Templates() {
         </button>
       )}
       columns={[
-        { header: "Template Key", cell: (t) => t.template_key, className: "mono adm-template-key" },
+        {
+          header: "Template Key",
+          cell: (t) => t.template_key,
+          className: "mono adm-template-key",
+          sort: { asc: "template_key", desc: "-template_key" },
+        },
         {
           header: "Active",
           cell: (t) => (t.active_version != null ? `v${t.active_version}` : "—"),
           className: "mono",
+          sort: { asc: "active_version", desc: "-active_version" },
         },
         {
           header: "Status",
@@ -785,7 +791,12 @@ export function Templates() {
             );
           },
         },
-        { header: "Versions", cell: (t) => t.version_count, className: "mono" },
+        {
+          header: "Versions",
+          cell: (t) => t.version_count,
+          className: "mono",
+          sort: { asc: "version_count", desc: "-version_count", defaultDirection: "desc" },
+        },
         {
           header: "",
           cell: (t) => (

@@ -1,16 +1,27 @@
 /**
  * Working Groups — self-service join/leave (PRD §4.9, §11 UI-3). Backend
  * enforces the CA working group's category-A-only constraint (§4.9's "CA WG
- * constraint enforced at the API level") — this component doesn't
- * duplicate that check client-side, it just surfaces the 403's message via
- * toast when a non-category-A member tries to join.
+ * constraint enforced at the API level", `assertCaConstraint` in
+ * working-groups.ts) — that stays the real guard. This component only
+ * additionally hides the CA group from the list entirely for non-category-A
+ * members, so they never see a "Join" button they can't use; the toast-on-403
+ * fallback below stays as defense in depth in case that filter and the
+ * backend rule ever drift.
  */
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { getJson, postJson, deleteJson, ApiClientError } from "../../../shared/api-client";
 import { Spinner } from "../../../components/Spinner";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { toast, fmt } from "../ui";
+import { profile } from "../state";
 import type { WorkingGroupSummary, MyWorkingGroupMembership } from "../types";
+
+// Matches CA_WORKING_GROUP_SLUG / CA_ONLY_CATEGORY in
+// functions/_lib/services/working-groups.ts — the backend still enforces
+// this at join time (403), this is just so category-A-only members never
+// see a "Join" button they can't use.
+const CA_WORKING_GROUP_SLUG = "ca";
+const CA_ONLY_CATEGORY = "A";
 
 function WorkingGroupCard({
   wg,
@@ -97,7 +108,11 @@ export function WorkingGroups() {
         getJson<{ workingGroups: WorkingGroupSummary[] }>("/api/v1/working-groups"),
         getJson<{ workingGroups: MyWorkingGroupMembership[] }>("/api/v1/me/working-groups"),
       ]);
-      setGroups(groupsData.workingGroups);
+      const visibleGroups =
+        profile.value?.membershipCategory === CA_ONLY_CATEGORY
+          ? groupsData.workingGroups
+          : groupsData.workingGroups.filter((wg) => wg.slug !== CA_WORKING_GROUP_SLUG);
+      setGroups(visibleGroups);
       setMemberships(membershipsData.workingGroups);
       setError(null);
     } catch (e) {

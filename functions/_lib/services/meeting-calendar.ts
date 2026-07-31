@@ -319,6 +319,51 @@ export async function updateIcsFile(
   });
 }
 
+/**
+ * Deletes a meeting series and everything under it — the ICS file rows and
+ * any member time-slot preferences pointing at either the series or one of
+ * its files. FK constraints on meeting_ics_files/member_meeting_preferences
+ * are enforced in this codebase's D1 (see migrations 0035/0036 PRAGMA
+ * foreign_keys = ON), so children must go first. Returns the R2 keys of the
+ * deleted ICS files so the route handler can also delete those objects —
+ * this service stays R2-agnostic like the rest of this file (no env here).
+ */
+export async function deleteMeetingSeries(
+  db: DatabaseLike,
+  seriesId: string,
+  expected: { scopeType: MeetingSeriesScopeType; workingGroupId?: string },
+): Promise<{ deletedIcsFileR2Keys: string[] }> {
+  await getSeriesForAdminOrThrow(db, seriesId, expected);
+  const icsRows = await all<IcsFileRow>(db, `SELECT * FROM meeting_ics_files WHERE series_id = ?`, [seriesId]);
+  await run(db, `DELETE FROM member_meeting_preferences WHERE series_id = ?`, [seriesId]);
+  await run(db, `DELETE FROM meeting_ics_files WHERE series_id = ?`, [seriesId]);
+  await run(db, `DELETE FROM meeting_series WHERE id = ?`, [seriesId]);
+  return { deletedIcsFileR2Keys: icsRows.map((r) => r.r2_key) };
+}
+
+/**
+ * Deletes a single ICS file variant outright — unlike deactivation (which
+ * is non-destructive, see updateIcsFile above), this removes the DB row
+ * entirely so the route handler can also delete the R2 object. Any member
+ * preference pointing at it is cleared first, same fallback-to-"all active
+ * variants" behavior deactivation already gives.
+ */
+export async function deleteIcsFile(
+  db: DatabaseLike,
+  seriesId: string,
+  fileId: string,
+  expected: { scopeType: MeetingSeriesScopeType; workingGroupId?: string },
+): Promise<{ r2Key: string }> {
+  const existing = await getIcsFileForAdmin(db, seriesId, fileId, expected);
+  const now = nowIso();
+  await run(db, `UPDATE member_meeting_preferences SET ics_file_id = NULL, updated_at = ? WHERE ics_file_id = ?`, [
+    now,
+    fileId,
+  ]);
+  await run(db, `DELETE FROM meeting_ics_files WHERE id = ?`, [fileId]);
+  return { r2Key: existing.r2_key };
+}
+
 // ── Admin: annual bulk resend (§4.12 "Trigger annual bulk resend") ───────
 
 export interface ResendRecipient {

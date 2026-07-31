@@ -2,7 +2,9 @@ import { json } from "../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../../_lib/services/events";
 import { all, first } from "../../../../../../_lib/db/queries";
+import { resolveOrderBy } from "../../../../../../_lib/db/sort";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
+import { EVENT_INVITES_SORT_COLUMNS, eventInvitesSortValueSchema } from "../../../../../../../assets/shared/schemas/api";
 
 /**
  * GET /api/v1/admin/events/:eventSlug/invites
@@ -48,6 +50,10 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     bindings.push(pattern, pattern);
   }
 
+  const parsedSort = eventInvitesSortValueSchema.safeParse(url.searchParams.get("sort") ?? undefined);
+  const sort = parsedSort.success ? parsedSort.data : undefined;
+  const orderBy = resolveOrderBy(sort, EVENT_INVITES_SORT_COLUMNS, "ORDER BY i.created_at DESC");
+
   const rows = await all(
     requestDb(c),
     `SELECT
@@ -73,7 +79,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
      FROM invites i
      LEFT JOIN users u ON u.id = i.inviter_user_id
      WHERE ${conditions.join(" AND ")}
-     ORDER BY i.created_at DESC
+     ${orderBy}
      LIMIT ? OFFSET ?`,
     [...bindings, limit + 1, offset],
   );

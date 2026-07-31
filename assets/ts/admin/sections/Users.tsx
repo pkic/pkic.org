@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "preact/hooks";
+import { useHashLocation } from "wouter/use-hash-location";
 import { Spinner } from "../../components/Spinner";
 import { ErrorAlert } from "../../components/ErrorAlert";
 import { ApiDataTable, type ApiTableActions } from "../../components/Table";
@@ -550,7 +551,7 @@ function MergeAccountPanel({ userId, onMerged }: { userId: string; onMerged: () 
 // User detail component
 // ────────────────────────────────────────────────────────
 
-function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void }) {
+export function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [user, setUser] = useState<UserDetail | null>(null);
@@ -1009,13 +1010,20 @@ function UserList({ onViewUser }: { onViewUser: (id: string) => void }) {
           header: "Email",
           cell: (user) => <span>{user.email}</span>,
           className: "mono adm-user-email",
+          sort: { asc: "email", desc: "-email" },
         },
         {
           header: "Name",
           cell: (user) => [user.first_name, user.last_name].filter(Boolean).join(" ") || "—",
           className: "fw-semibold",
+          sort: { asc: "last_name", desc: "-last_name" },
         },
-        { header: "Organisation", cell: (user) => user.organization_name ?? "—", className: "small text-muted" },
+        {
+          header: "Organisation",
+          cell: (user) => user.organization_name ?? "—",
+          className: "small text-muted",
+          sort: { asc: "organization_name", desc: "-organization_name" },
+        },
         {
           header: "Membership",
           cell: (user) =>
@@ -1050,8 +1058,14 @@ function UserList({ onViewUser }: { onViewUser: (id: string) => void }) {
         {
           header: "Role",
           cell: (user) => <span class={`badge text-bg-${ROLE_COLOR[user.role] ?? "secondary"}`}>{user.role}</span>,
+          sort: { asc: "role", desc: "-role" },
         },
-        { header: "Since", cell: (user) => fmt(user.created_at), className: "mono" },
+        {
+          header: "Since",
+          cell: (user) => fmt(user.created_at),
+          className: "mono",
+          sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
+        },
         {
           header: "",
           cell: (user) => (
@@ -1086,10 +1100,10 @@ function UserList({ onViewUser }: { onViewUser: (id: string) => void }) {
 // ────────────────────────────────────────────────────────
 
 export function Users() {
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-
-  if (selectedUserId) {
-    return <UserDetailView userId={selectedUserId} onBack={() => setSelectedUserId(null)} />;
-  }
-  return <UserList onViewUser={(id) => setSelectedUserId(id)} />;
+  const [, navigate] = useHashLocation();
+  // Row clicks navigate to a real /users/detail/:id route (AdminShell.tsx),
+  // matching Donations' /donations/detail/:id pattern, so a user's detail
+  // page is linkable/shareable instead of only reachable via in-page state
+  // (also what Organizations.tsx's representative rows link to — see B3).
+  return <UserList onViewUser={(id) => navigate(`/users/detail/${id}`)} />;
 }

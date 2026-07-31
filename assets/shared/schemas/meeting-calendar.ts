@@ -139,6 +139,28 @@ export const wgMeetingIcsUpdateRouteSchema = {
   },
 };
 
+export const wgMeetingDeleteRouteSchema = {
+  tags: ["Meeting Calendar"],
+  summary: "Delete a working group's meeting series",
+  description: "Deletes the series, all of its ICS file variants (R2 objects included), and any member preferences.",
+  request: { params: meetingSeriesWithMeetingIdParamsSchema },
+  responses: {
+    "200": { description: "Deleted." },
+    "404": { description: "Meeting series not found." },
+  },
+};
+
+export const wgMeetingIcsDeleteRouteSchema = {
+  tags: ["Meeting Calendar"],
+  summary: "Delete a working group meeting series' ICS file",
+  description: "Unlike deactivation, this removes the file and its R2 object outright.",
+  request: { params: meetingIcsFileParamsSchema },
+  responses: {
+    "200": { description: "Deleted." },
+    "404": { description: "ICS file not found." },
+  },
+};
+
 export const wgMeetingResendRouteSchema = {
   tags: ["Meeting Calendar"],
   summary: "Trigger the annual bulk resend for a working group meeting series",
@@ -222,6 +244,28 @@ export const consortiumMeetingIcsUpdateRouteSchema = {
       description: "ICS file updated.",
       content: { "application/json": { schema: z.object({ icsFile: adminIcsFileSummarySchema }) } },
     },
+    "404": { description: "ICS file not found." },
+  },
+};
+
+export const consortiumMeetingDeleteRouteSchema = {
+  tags: ["Meeting Calendar"],
+  summary: "Delete a consortium meeting series",
+  description: "Deletes the series, all of its ICS file variants (R2 objects included), and any member preferences.",
+  request: { params: consortiumMeetingIdParamsSchema },
+  responses: {
+    "200": { description: "Deleted." },
+    "404": { description: "Meeting series not found." },
+  },
+};
+
+export const consortiumMeetingIcsDeleteRouteSchema = {
+  tags: ["Meeting Calendar"],
+  summary: "Delete a consortium meeting series' ICS file",
+  description: "Unlike deactivation, this removes the file and its R2 object outright.",
+  request: { params: consortiumIcsFileParamsSchema },
+  responses: {
+    "200": { description: "Deleted." },
     "404": { description: "ICS file not found." },
   },
 };

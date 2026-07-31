@@ -94,6 +94,19 @@ describe("Managed mailing list configuration (PRD §4.14, Phase 4C)", () => {
     expect(rows).toHaveLength(0);
   });
 
+  it("POST /api/v1/admin/mailing-lists/sync processes the queue on demand", async () => {
+    // No GOOGLE_SERVICE_ACCOUNT_* secrets in the test env (see
+    // google-groups-sync.test.ts) — processGoogleGroupsSyncQueue degrades to
+    // skippedUnconfigured rather than failing, same behavior the cron path
+    // gets. This just confirms the on-demand endpoint reaches that same
+    // service function instead of asserting a live sync outcome.
+    const response = await call(adminToken, "/api/v1/admin/mailing-lists/sync", { method: "POST" });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { processed: number; skippedUnconfigured: boolean };
+    expect(body.skippedUnconfigured).toBe(true);
+    expect(body.processed).toBe(0);
+  });
+
   it("rejects a non-admin-role staff user with 403", async () => {
     // createAdminSession (tests/helpers/auth.ts) always signs the full
     // AUTH_SCOPES set as a test-harness convenience, regardless of the

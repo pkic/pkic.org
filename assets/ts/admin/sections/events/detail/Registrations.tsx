@@ -97,6 +97,7 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
           )}
         </>
       ),
+      sort: { asc: "display_name", desc: "-display_name" },
     },
     {
       header: "Status",
@@ -106,8 +107,13 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
           {r.has_bounced && <Badge status="bounced" />}
         </>
       ),
+      sort: { asc: "status", desc: "-status" },
     },
-    { header: "Attendance", cell: (r) => (r.attendance_type ? attendanceTypeLabel(r.attendance_type) : "—") },
+    {
+      header: "Attendance",
+      cell: (r) => (r.attendance_type ? attendanceTypeLabel(r.attendance_type) : "—"),
+      sort: { asc: "attendance_type", desc: "-attendance_type" },
+    },
     ...(attendanceChangeFilter
       ? [
           {
@@ -171,7 +177,12 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
             className: "text-center",
           },
           { header: "Source", cell: (r: Registration) => r.source_type ?? "—", className: "small text-muted" },
-          { header: "Registered", cell: (r: Registration) => fmt(r.created_at), className: "mono small" },
+          {
+            header: "Registered",
+            cell: (r: Registration) => fmt(r.created_at),
+            className: "mono small",
+            sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
+          },
         ]
       : []),
     { header: "", cell: () => <span class="btn btn-sm btn-outline-secondary">View →</span> },

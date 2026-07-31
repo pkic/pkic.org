@@ -237,6 +237,28 @@ describe("GET /api/v1/members/:id", () => {
     expect(response.status).toBe(404);
   });
 
+  it("resolves by organizations.slug (migration 0047) as well as by id", async () => {
+    const organizationId = crypto.randomUUID();
+    await seedOrgMember({
+      userId: crypto.randomUUID(),
+      organizationId,
+      organizationName: "Slug Org",
+      status: "active",
+    });
+    await env.DB.prepare("UPDATE organizations SET slug = ? WHERE id = ?").bind("slug-org", organizationId).run();
+
+    const response = await callEndpoint(
+      getMember,
+      createContext(env, getRequest("https://pkic.org/api/v1/members/slug-org"), { id: "slug-org" }),
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { id: string; slug: string | null; name: string };
+    expect(body.id).toBe(organizationId);
+    expect(body.slug).toBe("slug-org");
+    expect(body.name).toBe("Slug Org");
+  });
+
   it("includes org content fields and only show_on_org_profile=1 representatives", async () => {
     const organizationId = crypto.randomUUID();
     const shownUserId = crypto.randomUUID();

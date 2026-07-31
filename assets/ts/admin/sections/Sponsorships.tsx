@@ -5,7 +5,7 @@
  * (sponsorship_events). Staff-only — members never see pipeline stage,
  * only their org's active tier (My Organization, not built here).
  */
-import { useState, useEffect, useCallback } from "preact/hooks";
+import { useState, useEffect, useCallback, useRef } from "preact/hooks";
 import { Spinner } from "../../components/Spinner";
 import { ErrorAlert } from "../../components/ErrorAlert";
 import { api } from "../api";
@@ -169,6 +169,90 @@ function CreateSponsorshipForm({ onCreated, onCancel }: { onCreated: () => void;
   );
 }
 
+/**
+ * Logo manager for non-member sponsors only (organizationId null) — mirrors
+ * Organizations.tsx's OrganizationLogo. Org-tied sponsors show/manage their
+ * logo via the organization itself, since that's what the public sponsor
+ * list actually reads (organizations.logo_r2_key, GET /api/v1/members/:id/logo).
+ */
+function SponsorshipLogo({ sponsorship, onChanged }: { sponsorship: Sponsorship; onChanged: () => void }) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function upload(file: File) {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/v1/admin/sponsorships/${sponsorship.id}/logo`, {
+        method: "PUT",
+        credentials: "same-origin",
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+        body: file,
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+      if (!res.ok) throw new Error(data.error?.message ?? `HTTP ${res.status}`);
+      toast("Logo uploaded", "success");
+      onChanged();
+    } catch (err) {
+      toast((err as Error).message, "error");
+    } finally {
+      setBusy(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function remove() {
+    if (!confirm("Remove this sponsor's logo?")) return;
+    setBusy(true);
+    try {
+      await api(`/api/v1/admin/sponsorships/${sponsorship.id}/logo`, { method: "DELETE" });
+      toast("Logo removed", "success");
+      onChanged();
+    } catch (err) {
+      toast((err as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div class="d-flex align-items-center gap-3 mb-3">
+      {sponsorship.nonMemberLogoUrl ? (
+        <img
+          src={sponsorship.nonMemberLogoUrl}
+          alt={`${sponsorship.nonMemberName ?? "Sponsor"} logo`}
+          class="border rounded p-1 bg-white"
+          style="max-height: 60px; max-width: 120px;"
+        />
+      ) : (
+        <div
+          class="d-flex align-items-center justify-content-center border rounded bg-light text-muted small"
+          style="height: 60px; width: 120px;"
+        >
+          No logo
+        </div>
+      )}
+      <div class="d-flex flex-column gap-1">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          class="form-control form-control-sm"
+          disabled={busy}
+          onChange={(e) => {
+            const file = (e.target as HTMLInputElement).files?.[0];
+            if (file) void upload(file);
+          }}
+        />
+        {sponsorship.nonMemberLogoUrl && (
+          <button class="btn btn-sm btn-outline-danger" disabled={busy} onClick={remove}>
+            Remove logo
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function SponsorshipDetail({ id, onChanged }: { id: string; onChanged: () => void }) {
   const [sponsorship, setSponsorship] = useState<Sponsorship | null>(null);
   const [events, setEvents] = useState<SponsorshipEvent[]>([]);
@@ -272,6 +356,8 @@ function SponsorshipDetail({ id, onChanged }: { id: string; onChanged: () => voi
           </p>
         )}
 
+        {!sponsorship.organizationId && <SponsorshipLogo sponsorship={sponsorship} onChanged={load} />}
+
         <div class="row g-2 mb-3">
           <div class="col-sm-4">
             <label class="form-label small">Assigned staff user ID</label>
@@ -353,10 +439,57 @@ function SponsorshipDetail({ id, onChanged }: { id: string; onChanged: () => voi
   );
 }
 
+interface CompanyGroup {
+  key: string;
+  label: string;
+  website: string | null;
+  sponsorships: Sponsorship[];
+}
+
+/**
+ * Groups the flat sponsorship list by "company" — the member organization
+ * when one is attached, otherwise the non-member sponsor's name (event
+ * sponsors are frequently not PKIC members). Sponsorships with neither
+ * (shouldn't normally happen, but the schema allows it) fall back to the
+ * contact name, then a per-row "Unspecified sponsor" bucket so nothing is
+ * silently dropped from the list.
+ */
+function companyKey(s: Sponsorship): string {
+  if (s.organizationId) return `org:${s.organizationId}`;
+  if (s.nonMemberName) return `nonmember:${s.nonMemberName}`;
+  if (s.contactName) return `contact:${s.contactName}`;
+  return `sponsorship:${s.id}`;
+}
+
+function companyLabel(s: Sponsorship): string {
+  return s.organizationName ?? s.nonMemberName ?? s.contactName ?? "Unspecified sponsor";
+}
+
+function groupByCompany(sponsorships: Sponsorship[]): CompanyGroup[] {
+  const groups = new Map<string, CompanyGroup>();
+  for (const s of sponsorships) {
+    const key = companyKey(s);
+    const existing = groups.get(key);
+    if (existing) {
+      existing.sponsorships.push(s);
+    } else {
+      groups.set(key, { key, label: companyLabel(s), website: s.nonMemberWebsite, sponsorships: [s] });
+    }
+  }
+  return Array.from(groups.values()).sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/**
+ * 2026-07-30 testing feedback: the flat list mixed every sponsor of every
+ * type/stage in one scroll, so finding "what does company X sponsor" meant
+ * scanning the whole list for name matches. This drills down instead:
+ * companies → that company's sponsorships → sponsorship detail.
+ */
 export function Sponsorships() {
   const [type, setType] = useState<"" | (typeof SPONSOR_TYPES)[number]>("");
   const [stage, setStage] = useState<"" | SponsorshipPipelineStage>("");
   const [sponsorships, setSponsorships] = useState<Sponsorship[]>([]);
+  const [selectedCompanyKey, setSelectedCompanyKey] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -369,6 +502,7 @@ export function Sponsorships() {
       const params = new URLSearchParams();
       if (type) params.set("type", type);
       if (stage) params.set("stage", stage);
+      params.set("limit", "200");
       const data = await api<{ sponsorships: Sponsorship[] }>(`/api/v1/admin/sponsorships?${params.toString()}`);
       setSponsorships(data.sponsorships);
     } catch (e) {
@@ -381,6 +515,25 @@ export function Sponsorships() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const companies = groupByCompany(sponsorships);
+  const selectedCompany = companies.find((c) => c.key === selectedCompanyKey) ?? null;
+
+  // If filters change out from under the current selection (or the company
+  // has no sponsorships left matching the filter), fall back a level rather
+  // than showing a stale/empty panel.
+  useEffect(() => {
+    if (selectedCompanyKey && !selectedCompany) {
+      setSelectedCompanyKey(null);
+      setSelectedId(null);
+    }
+  }, [selectedCompanyKey, selectedCompany]);
+
+  useEffect(() => {
+    if (selectedId && selectedCompany && !selectedCompany.sponsorships.some((s) => s.id === selectedId)) {
+      setSelectedId(null);
+    }
+  }, [selectedId, selectedCompany]);
 
   return (
     <div>
@@ -428,37 +581,80 @@ export function Sponsorships() {
 
       {loading && <Spinner />}
       {error && <ErrorAlert error={error} />}
-      {!loading && !error && sponsorships.length === 0 && (
-        <p class="text-muted">No sponsorships match these filters.</p>
+      {!loading && !error && companies.length === 0 && <p class="text-muted">No sponsorships match these filters.</p>}
+
+      {!loading && !error && companies.length > 0 && !selectedCompany && (
+        <div class="list-group">
+          {companies.map((c) => {
+            const stages = new Set(c.sponsorships.map((s) => s.pipelineStage));
+            return (
+              <button
+                type="button"
+                key={c.key}
+                class="list-group-item list-group-item-action"
+                onClick={() => {
+                  setSelectedCompanyKey(c.key);
+                  setSelectedId(c.sponsorships.length === 1 ? c.sponsorships[0].id : null);
+                }}
+              >
+                <div class="d-flex justify-content-between align-items-center">
+                  <span class="fw-semibold">{c.label}</span>
+                  <span class="d-flex gap-1">
+                    {Array.from(stages).map((s) => (
+                      <span key={s} class={`badge text-capitalize ${stageBadgeClass(s)}`}>
+                        {stageLabel(s)}
+                      </span>
+                    ))}
+                  </span>
+                </div>
+                <div class="small text-muted">
+                  {c.sponsorships.length} sponsorship{c.sponsorships.length === 1 ? "" : "s"}
+                </div>
+              </button>
+            );
+          })}
+        </div>
       )}
 
-      {!loading && !error && sponsorships.length > 0 && (
-        <div class="row g-3">
-          <div class="col-md-5">
-            <div class="list-group">
-              {sponsorships.map((s) => (
-                <button
-                  type="button"
-                  key={s.id}
-                  class={`list-group-item list-group-item-action${selectedId === s.id ? " active" : ""}`}
-                  onClick={() => setSelectedId(s.id)}
-                >
-                  <div class="d-flex justify-content-between">
-                    <span class="fw-semibold">
-                      {s.organizationName ?? s.nonMemberName ?? s.contactName ?? "Sponsor"}
-                    </span>
-                    <span class={`badge text-capitalize ${stageBadgeClass(s.pipelineStage)}`}>
-                      {stageLabel(s.pipelineStage)}
-                    </span>
-                  </div>
-                  <div class="small text-muted">
-                    {s.sponsorType} · {s.tier ?? "no tier"}
-                  </div>
-                </button>
-              ))}
+      {!loading && !error && selectedCompany && (
+        <div>
+          <button
+            type="button"
+            class="btn btn-link btn-sm ps-0 mb-2"
+            onClick={() => {
+              setSelectedCompanyKey(null);
+              setSelectedId(null);
+            }}
+          >
+            ← Back to companies
+          </button>
+          <h6 class="mb-3">{selectedCompany.label}</h6>
+          <div class="row g-3">
+            <div class="col-md-5">
+              <div class="list-group">
+                {selectedCompany.sponsorships.map((s) => (
+                  <button
+                    type="button"
+                    key={s.id}
+                    class={`list-group-item list-group-item-action${selectedId === s.id ? " active" : ""}`}
+                    onClick={() => setSelectedId(s.id)}
+                  >
+                    <div class="d-flex justify-content-between">
+                      <span class="fw-semibold">
+                        {s.tier ?? "no tier"}
+                        {s.eventName && <> — {s.eventName}</>}
+                      </span>
+                      <span class={`badge text-capitalize ${stageBadgeClass(s.pipelineStage)}`}>
+                        {stageLabel(s.pipelineStage)}
+                      </span>
+                    </div>
+                    <div class="small text-muted">{s.sponsorType}</div>
+                  </button>
+                ))}
+              </div>
             </div>
+            <div class="col-md-7">{selectedId && <SponsorshipDetail id={selectedId} onChanged={load} />}</div>
           </div>
-          <div class="col-md-7">{selectedId && <SponsorshipDetail id={selectedId} onChanged={load} />}</div>
         </div>
       )}
     </div>

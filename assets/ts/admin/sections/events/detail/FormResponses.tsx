@@ -505,12 +505,19 @@ export function FormSubmissionsTable({
             );
           },
           className: "adm-form-submitter-col",
+          sort: { asc: "submitter", desc: "-submitter" },
         },
         ...answerColumns,
-        { header: "Submitted", cell: (submission) => fmt(submission.submittedAt), className: "mono small" },
+        {
+          header: "Submitted",
+          cell: (submission) => fmt(submission.submittedAt),
+          className: "mono small",
+          sort: { asc: "submitted_at", desc: "-submitted_at", defaultDirection: "desc" },
+        },
         {
           header: "Status",
           cell: (submission) => <span class="badge text-bg-secondary">{submission.status}</span>,
+          sort: { asc: "status", desc: "-status" },
         },
         {
           header: "",

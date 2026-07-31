@@ -79,11 +79,20 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     throw new AppError(404, "NOT_FOUND", "User not found");
   }
 
-  // Build a public headshot URL from the R2 key (unguessable capability URL)
+  // Served via the admin-auth-gated endpoint rather than reconstructing a
+  // public capability URL from the raw R2 key — that assumes the
+  // "headshots/{userId}/{file}" key scheme, which doesn't hold for users
+  // created by the YAML migration script ("member-photos/{slug}/{file}").
+  // The endpoint URL is stable per user, so `headshot_updated_at` is appended
+  // as a cache-busting query param — otherwise the browser's HTTP cache
+  // (max-age=3600 on that endpoint) would keep serving the old image for up
+  // to an hour after a re-upload.
   let headshotUrl: string | null = null;
   if (user.headshot_r2_key) {
-    // R2 key is "headshots/{userId}/{timestamp}.{ext}" → public URL
-    headshotUrl = `/api/v1/${user.headshot_r2_key}`;
+    headshotUrl = `/api/v1/admin/users/${user.id}/headshot`;
+    if (user.headshot_updated_at) {
+      headshotUrl += `?v=${encodeURIComponent(user.headshot_updated_at)}`;
+    }
   }
 
   const memberRow = await first<MembershipRow>(

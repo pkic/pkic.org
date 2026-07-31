@@ -75,6 +75,26 @@ function IcsFileRow({
     }
   }
 
+  async function remove() {
+    if (
+      !confirm(
+        `Delete "${file.label}" outright? This removes the file (unlike Deactivate, which just hides it) and can't be undone.`,
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await api(`${baseUrl}/${seriesId}/ics-files/${file.id}`, { method: "DELETE" });
+      toast("ICS file deleted", "success");
+      await onChanged();
+    } catch (err) {
+      toast((err as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <tr>
       <td>
@@ -115,13 +135,18 @@ function IcsFileRow({
         )}
       </td>
       <td class="text-end">
-        <button
-          class={`btn btn-sm ${file.active ? "btn-outline-danger" : "btn-outline-success"}`}
-          disabled={busy}
-          onClick={toggleActive}
-        >
-          {file.active ? "Deactivate" : "Reactivate"}
-        </button>
+        <div class="d-flex gap-1 justify-content-end">
+          <button
+            class={`btn btn-sm ${file.active ? "btn-outline-danger" : "btn-outline-success"}`}
+            disabled={busy}
+            onClick={toggleActive}
+          >
+            {file.active ? "Deactivate" : "Reactivate"}
+          </button>
+          <button class="btn btn-sm btn-outline-danger" disabled={busy} onClick={remove}>
+            Delete
+          </button>
+        </div>
       </td>
     </tr>
   );
@@ -224,6 +249,7 @@ function MeetingSeriesCard({
   const [name, setName] = useState(series.name);
   const [busy, setBusy] = useState(false);
   const [resending, setResending] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   async function saveName() {
     if (!name.trim() || name.trim() === series.name) {
@@ -275,6 +301,24 @@ function MeetingSeriesCard({
     }
   }
 
+  async function remove() {
+    const fileCount = series.icsFiles.length;
+    const warning =
+      fileCount > 0
+        ? ` It has ${fileCount} ICS file variant${fileCount === 1 ? "" : "s"}, which will be deleted too.`
+        : "";
+    if (!confirm(`Delete the meeting series "${series.name}"?${warning} This can't be undone.`)) return;
+    setDeleting(true);
+    try {
+      await api(`${baseUrl}/${series.id}`, { method: "DELETE" });
+      toast("Meeting series deleted", "success");
+      await onChanged();
+    } catch (err) {
+      toast((err as Error).message, "error");
+      setDeleting(false);
+    }
+  }
+
   return (
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-header bg-white d-flex align-items-center gap-2">
@@ -319,6 +363,9 @@ function MeetingSeriesCard({
             </button>
             <button class="btn btn-sm btn-outline-primary" disabled={resending} onClick={resend}>
               {resending ? "Sending…" : "Trigger annual resend"}
+            </button>
+            <button class="btn btn-sm btn-outline-danger" disabled={deleting} onClick={remove}>
+              {deleting ? "Deleting…" : "Delete series"}
             </button>
           </>
         )}

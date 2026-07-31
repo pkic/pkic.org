@@ -2,10 +2,11 @@ import { parseJsonBody } from "../../../_lib/validation";
 import { json } from "../../../_lib/http";
 import { requireAdminFromRequest } from "../../../_lib/auth/admin";
 import { all, first } from "../../../_lib/db/queries";
+import { resolveOrderBy } from "../../../_lib/db/sort";
 import { upsertEventFromHugo } from "../../../_lib/services/events";
 import { writeAuditLog } from "../../../_lib/services/audit";
 import { parseJsonSafe } from "../../../_lib/utils/json";
-import { adminCreateEventSchema } from "../../../../assets/shared/schemas/api";
+import { adminCreateEventSchema, EVENTS_LIST_SORT_COLUMNS, eventsListSortValueSchema } from "../../../../assets/shared/schemas/api";
 import { requestDb, type AdminContext } from "../../../_lib/db/context";
 
 interface EventWithStats {
@@ -35,6 +36,11 @@ interface EventWithStats {
  */
 export async function onRequestGet(c: AdminContext): Promise<Response> {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+
+  const url = new URL(c.req.raw.url);
+  const parsedSort = eventsListSortValueSchema.safeParse(url.searchParams.get("sort") ?? undefined);
+  const sort = parsedSort.success ? parsedSort.data : undefined;
+  const orderBy = resolveOrderBy(sort, EVENTS_LIST_SORT_COLUMNS, "ORDER BY COALESCE(e.starts_at, '9999') DESC");
 
   const events = await all<EventWithStats>(
     requestDb(c),
@@ -71,7 +77,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
      FROM events e
      LEFT JOIN registration_counts ON registration_counts.event_id = e.id
      LEFT JOIN invite_counts ON invite_counts.event_id = e.id
-     ORDER BY COALESCE(e.starts_at, '9999') DESC`,
+     ${orderBy}`,
     [],
   );
 
