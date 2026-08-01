@@ -22,3 +22,12 @@ export const usersSortValueSchema = z
     { message: "Unknown sort column" },
   )
   .optional();
+
+/**
+ * GET /api/v1/admin/users `type` filter — computed from the existing
+ * `members`/`event_participants` tables (see prd.md's "Users Page — Member
+ * vs. Event-Attendee Type Filter"), not a stored column.
+ */
+export const ADMIN_USERS_TYPE_VALUES = ["member", "event_attendee", "contact_only"] as const;
+
+export const usersTypeValueSchema = z.enum(ADMIN_USERS_TYPE_VALUES).optional();

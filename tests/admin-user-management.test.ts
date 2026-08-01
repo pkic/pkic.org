@@ -11,12 +11,12 @@ import app from "../functions/router";
 let adminToken: string;
 
 async function setup() {
-  await seedEventAndAdmin(env.DB);
+  const { eventId } = await seedEventAndAdmin(env.DB);
   const adminId = (
     await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
   )[0].id;
   adminToken = await createAdminSession(env.DB, adminId, "admin-session-token");
-  return { adminId, env };
+  return { adminId, eventId, env };
 }
 
 function adminRequest(path: string, method: string, body?: unknown): Request {
@@ -340,5 +340,133 @@ describe("admin user anonymization", () => {
       previousEmail: { from: string | null; to: string };
     };
     expect(details.previousEmail).toEqual({ from: null, to: "audit-anon@example.test" });
+  });
+});
+
+// ── Type filter (member vs. event-attendee vs. contact-only) ───────────────
+// Computed from the existing `members`/`event_participants` tables — see
+// prd.md's "Users Page — Member vs. Event-Attendee Type Filter".
+
+describe("admin users list — type filter", () => {
+  beforeEach(async () => {
+    await resetDb();
+  });
+
+  async function seedMember(email: string): Promise<string> {
+    const userId = await seedUser(env.DB, email);
+    await env.DB.prepare(
+      `INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
+       VALUES (?, 'H5', ?, NULL, 'active', datetime('now'), datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), userId)
+      .run();
+    return userId;
+  }
+
+  async function seedEventParticipant(eventId: string, email: string, eventCount = 1): Promise<string> {
+    const userId = await seedUser(env.DB, email);
+    const roles = ["attendee", "speaker", "moderator"];
+    for (let i = 0; i < eventCount; i++) {
+      await env.DB.prepare(
+        `INSERT INTO event_participants (id, event_id, user_id, role, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`,
+      )
+        .bind(crypto.randomUUID(), eventId, userId, roles[i])
+        .run();
+    }
+    return userId;
+  }
+
+  interface ListedUser {
+    email: string;
+    type: "member" | "event_attendee" | "contact_only";
+    eventParticipationCount: number;
+  }
+
+  async function listUsers(query: string): Promise<{ users: ListedUser[] }> {
+    const response = await app.fetch(
+      adminRequest(`/api/v1/admin/users?${query}`, "GET"),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(response.status).toBe(200);
+    return response.json();
+  }
+
+  it("classifies a user with a members row as 'member'", async () => {
+    await setup();
+    await seedMember("type-member@example.test");
+    await seedUser(env.DB, "type-member-decoy@example.test");
+
+    const data = await listUsers("type=member&q=type-member@example.test");
+    expect(data.users.map((u) => u.email)).toEqual(["type-member@example.test"]);
+    expect(data.users[0].type).toBe("member");
+  });
+
+  it("classifies a user with only an event_participants row as 'event_attendee', with the participation count", async () => {
+    const { eventId } = await setup();
+    await seedEventParticipant(eventId, "type-attendee@example.test", 2);
+
+    const data = await listUsers("type=event_attendee&q=type-attendee@example.test");
+    expect(data.users.map((u) => u.email)).toEqual(["type-attendee@example.test"]);
+    expect(data.users[0].type).toBe("event_attendee");
+    expect(data.users[0].eventParticipationCount).toBe(2);
+  });
+
+  it("classifies a bare user (no membership, no event participation) as 'contact_only'", async () => {
+    await setup();
+    await seedUser(env.DB, "type-contact@example.test");
+
+    const data = await listUsers("type=contact_only&q=type-contact@example.test");
+    expect(data.users.map((u) => u.email)).toEqual(["type-contact@example.test"]);
+    expect(data.users[0].type).toBe("contact_only");
+    expect(data.users[0].eventParticipationCount).toBe(0);
+  });
+
+  it("a member who also has event_participants rows is still classified as 'member', not 'event_attendee'", async () => {
+    const { eventId } = await setup();
+    const userId = await seedMember("type-member-and-attendee@example.test");
+    await env.DB.prepare(
+      `INSERT INTO event_participants (id, event_id, user_id, role, status, created_at, updated_at)
+       VALUES (?, ?, ?, 'attendee', 'active', datetime('now'), datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), eventId, userId)
+      .run();
+
+    const memberFiltered = await listUsers("type=member&q=type-member-and-attendee@example.test");
+    expect(memberFiltered.users.map((u) => u.email)).toEqual(["type-member-and-attendee@example.test"]);
+
+    const attendeeFiltered = await listUsers("type=event_attendee&q=type-member-and-attendee@example.test");
+    expect(attendeeFiltered.users).toEqual([]);
+
+    const unfiltered = await listUsers("q=type-member-and-attendee@example.test");
+    expect(unfiltered.users[0].type).toBe("member");
+  });
+
+  it("returns 400 for an unrecognized type value", async () => {
+    await setup();
+
+    const response = await app.fetch(
+      adminRequest("/api/v1/admin/users?type=bogus", "GET"),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(400);
+    const data = (await response.json()) as { error: { code: string } };
+    expect(data.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("with no type filter, returns users of every type", async () => {
+    const { eventId } = await setup();
+    await seedMember("type-all-member@example.test");
+    await seedEventParticipant(eventId, "type-all-attendee@example.test");
+    await seedUser(env.DB, "type-all-contact@example.test");
+
+    const data = await listUsers("q=type-all-&limit=10");
+    const byEmail = Object.fromEntries(data.users.map((u) => [u.email, u.type]));
+    expect(byEmail["type-all-member@example.test"]).toBe("member");
+    expect(byEmail["type-all-attendee@example.test"]).toBe("event_attendee");
+    expect(byEmail["type-all-contact@example.test"]).toBe("contact_only");
   });
 });

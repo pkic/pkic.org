@@ -559,6 +559,8 @@ export interface AdminUser {
   created_at: string;
   links: Array<string | { label?: string | null; url?: string | null }>;
   membership: AdminUserMembership | null;
+  type: "member" | "event_attendee" | "contact_only";
+  eventParticipationCount: number;
 }
 
 // ── Email templates ───────────────────────────────────────────────────────────

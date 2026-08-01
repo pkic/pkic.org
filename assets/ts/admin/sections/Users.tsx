@@ -966,6 +966,7 @@ export function UserDetailView({ userId, onBack }: { userId: string; onBack: () 
 
 function UserList({ onViewUser }: { onViewUser: (id: string) => void }) {
   const [roleFilter, setRoleFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
   const tableRef = useRef<ApiTableActions | null>(null);
 
   async function updateRole(userId: string, newRole: string, select: HTMLSelectElement) {
@@ -988,22 +989,37 @@ function UserList({ onViewUser }: { onViewUser: (id: string) => void }) {
       paginate
       actionsRef={tableRef}
       searchPlaceholder="email or name"
-      params={roleFilter ? { role: roleFilter } : {}}
-      deps={[roleFilter]}
+      params={{ ...(roleFilter ? { role: roleFilter } : {}), ...(typeFilter ? { type: typeFilter } : {}) }}
+      deps={[roleFilter, typeFilter]}
       toolbar={({ resetPage }) => (
-        <select
-          class="form-select form-select-sm w-auto"
-          value={roleFilter}
-          onChange={(e) => {
-            setRoleFilter((e.target as HTMLSelectElement).value);
-            resetPage();
-          }}
-        >
-          <option value="">All roles</option>
-          <option value="admin">Admin</option>
-          <option value="user">User</option>
-          <option value="guest">Guest</option>
-        </select>
+        <>
+          <select
+            class="form-select form-select-sm w-auto"
+            value={roleFilter}
+            onChange={(e) => {
+              setRoleFilter((e.target as HTMLSelectElement).value);
+              resetPage();
+            }}
+          >
+            <option value="">All roles</option>
+            <option value="admin">Admin</option>
+            <option value="user">User</option>
+            <option value="guest">Guest</option>
+          </select>
+          <select
+            class="form-select form-select-sm w-auto"
+            value={typeFilter}
+            onChange={(e) => {
+              setTypeFilter((e.target as HTMLSelectElement).value);
+              resetPage();
+            }}
+          >
+            <option value="">All types</option>
+            <option value="member">Members</option>
+            <option value="event_attendee">Event attendees</option>
+            <option value="contact_only">Contacts only</option>
+          </select>
+        </>
       )}
       columns={[
         {
@@ -1025,21 +1041,30 @@ function UserList({ onViewUser }: { onViewUser: (id: string) => void }) {
           sort: { asc: "organization_name", desc: "-organization_name" },
         },
         {
-          header: "Membership",
-          cell: (user) =>
-            user.membership ? (
-              <>
-                <span class="badge text-bg-success mono">{user.membership.membershipCategory}</span>
-                {user.membership.organizationName && (
-                  <>
-                    {" "}
-                    <span class="small text-muted">{user.membership.organizationName}</span>
-                  </>
-                )}
-              </>
-            ) : (
-              <span class="text-muted">—</span>
-            ),
+          header: "Type",
+          cell: (user) => {
+            if (user.membership) {
+              return (
+                <>
+                  <span class="badge text-bg-success mono">{user.membership.membershipCategory}</span>
+                  {user.membership.organizationName && (
+                    <>
+                      {" "}
+                      <span class="small text-muted">{user.membership.organizationName}</span>
+                    </>
+                  )}
+                </>
+              );
+            }
+            if (user.type === "event_attendee") {
+              return (
+                <span class="badge text-bg-info">
+                  Event attendee · {user.eventParticipationCount} event{user.eventParticipationCount === 1 ? "" : "s"}
+                </span>
+              );
+            }
+            return <span class="text-muted small fst-italic">Contact</span>;
+          },
         },
         {
           header: "Links",
