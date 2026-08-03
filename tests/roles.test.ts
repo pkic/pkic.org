@@ -309,4 +309,52 @@ describe("roles (Phase 2 built-in and custom roles)", () => {
     const response = await call(adminToken, `/api/v1/admin/roles/${crypto.randomUUID()}/assignments`);
     expect(response.status).toBe(404);
   });
+
+  it("POST /api/v1/admin/users/:userId/roles rejects assigning a role that bundles a permission the caller doesn't hold (privilege escalation containment)", async () => {
+    // Staff holds only access:grant — enough to call the endpoint, but not
+    // enough to hand out role-admin, which bundles access:grant plus nearly
+    // every other permission. Mirrors the containment check the
+    // role-creation and access-grants endpoints already enforce.
+    await env.DB.prepare(
+      `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+       VALUES (?, ?, 'access:grant', ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), staffUserId, adminId)
+      .run();
+    const staffToken = await createAdminSession(env.DB, staffUserId, "staff-escalation-token");
+
+    const escalate = await call(staffToken, `/api/v1/admin/users/${staffUserId}/roles`, {
+      method: "POST",
+      body: JSON.stringify({ roleId: "role-admin" }),
+    });
+    expect(escalate.status).toBe(403);
+
+    const rows = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM user_roles WHERE user_id = ? AND role_id = 'role-admin'",
+      staffUserId,
+    );
+    expect(rows).toHaveLength(0);
+
+    // Once staff is granted every permission role-admin bundles, the same
+    // assignment succeeds.
+    const bundled = await queryAll<{ permission: string }>(
+      env.DB,
+      "SELECT permission FROM role_permissions WHERE role_id = 'role-admin'",
+    );
+    for (const { permission } of bundled) {
+      await env.DB.prepare(
+        `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+         VALUES (?, ?, ?, ?, datetime('now'))`,
+      )
+        .bind(crypto.randomUUID(), staffUserId, permission, adminId)
+        .run();
+    }
+
+    const allowed = await call(staffToken, `/api/v1/admin/users/${staffUserId}/roles`, {
+      method: "POST",
+      body: JSON.stringify({ roleId: "role-admin" }),
+    });
+    expect(allowed.status).toBe(201);
+  });
 });

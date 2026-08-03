@@ -9,7 +9,7 @@ import { OpenAPIRoute } from "chanfana";
 import { parseJsonBody } from "../../../../../../_lib/validation";
 import { json } from "../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
-import { requirePermission } from "../../../../../../_lib/auth/permissions";
+import { hasPermission, requirePermission } from "../../../../../../_lib/auth/permissions";
 import { all, first, run } from "../../../../../../_lib/db/queries";
 import { nowIso } from "../../../../../../_lib/utils/time";
 import { uuid } from "../../../../../../_lib/utils/ids";
@@ -82,10 +82,27 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     throw new AppError(404, "ROLE_NOT_FOUND", "Role not found");
   }
 
-  const id = uuid();
-  const now = nowIso();
   const contextType = body.contextType ?? null;
   const contextId = body.contextId ?? null;
+  const grantContext = contextType && contextId ? { type: contextType, id: contextId } : undefined;
+
+  const bundledPermissions = await all<{ permission: string }>(
+    requestDb(c),
+    "SELECT permission FROM role_permissions WHERE role_id = ?",
+    [role.id],
+  );
+  for (const { permission } of bundledPermissions) {
+    if (!hasPermission(admin, permission, grantContext)) {
+      throw new AppError(
+        403,
+        "PERMISSION_REQUIRED",
+        `Cannot grant a role bundling a permission you do not hold: ${permission}`,
+      );
+    }
+  }
+
+  const id = uuid();
+  const now = nowIso();
   const expiresAt = body.expiresAt ?? null;
 
   await run(
