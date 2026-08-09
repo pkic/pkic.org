@@ -1,0 +1,61 @@
+id: netrascale
+name: NetraScale
+slogan:
+website: https://www.netrascale.com/
+# Business domains for email
+organizationDomains:
+  - netrascale.com
+# Short description, longer content can be placed in `content/members/`
+description: AI-powered cyber risk intelligence for financial services SMBs, MSPs, and cyber insurers. Real-time risk scoring, compliance automation, and quantum threat assessment. Book a demo.
+
+# membership
+memberSince: 2026-08-09
+memberType: H3
+workingGroups:
+  - CBOM
+  - PQC
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: https://www.netrascale.com/resources/blog
+  feed: 
+  language: en_US
+
+# Press Releases
+press:
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: https://www.netrascale.com/enterprise/careers
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: 
+  facebook: https://www.facebook.com/profile.php?id=61573909137715
+  instagram: 
+  linkedin: https://www.linkedin.com/company/netrascale
+  youtube: https://www.youtube.com/embed
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Denis Nwanshi
+    role: CEO & Principal Architect
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/denis-nwanshi/
+    description: Denis is the CEO & Principal Architect at NetraScale and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
