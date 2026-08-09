@@ -13,6 +13,8 @@ memberSince: 2023-05-17
 memberType: A
 workingGroups:
   - CA
+  - PKIMM
+  - PQC
 
 # sponsor
 sponsor:
