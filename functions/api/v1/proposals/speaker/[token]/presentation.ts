@@ -17,6 +17,7 @@ import { recordPresentationUpload } from "../../../../../_lib/services/proposals
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { AppError } from "../../../../../_lib/errors";
 import { first } from "../../../../../_lib/db/queries";
+import { requireInternalSecret } from "../../../../../_lib/request";
 
 const ALLOWED_MIME_TYPES = new Set([
   "application/pdf",
@@ -28,7 +29,11 @@ const ALLOWED_MIME_TYPES = new Set([
 const MAX_PRESENTATION_BYTES = 200 * 1024 * 1024; // 200 MB
 
 export async function onRequestPut(c: any): Promise<Response> {
-  const { speaker, proposal } = await getSpeakerByManageToken(c.env.DB, c.req.param("token"));
+  const { speaker, proposal } = await getSpeakerByManageToken(
+    c.env.DB,
+    c.req.param("token"),
+    requireInternalSecret(c.env),
+  );
 
   if (speaker.status === "declined") {
     return json({ error: { code: "SPEAKER_DECLINED", message: "You have declined participation." } }, 403);

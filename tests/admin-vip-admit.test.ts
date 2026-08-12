@@ -23,7 +23,7 @@ async function seedInvite(
     `),
     env.DB.prepare(`
       INSERT INTO invites (
-        id, event_id, invitee_email, invite_type, token_hash, status, source_type, created_at
+        id, event_id, invitee_email, invite_type, link_secret, status, source_type, created_at
       ) VALUES (
         '${inviteId}', '${eventId}', '${email}', 'attendee', '${crypto.randomUUID().replaceAll("-", "")}', 'sent', 'direct', datetime('now')
       )
@@ -64,6 +64,7 @@ describe("admin VIP admit", () => {
       sourceType: "invite",
       inviteId: holderSeed.inviteId,
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     const vipRegistration = await createRegistration(env.DB, {
@@ -74,6 +75,7 @@ describe("admin VIP admit", () => {
       sourceType: "invite",
       inviteId: vipSeed.inviteId,
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     const before = (

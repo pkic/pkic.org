@@ -34,7 +34,7 @@ async function seedProposal(
     env.DB.prepare(`
       INSERT INTO session_proposals (
         id, event_id, proposer_user_id, status, proposal_type, title, abstract,
-        details_json, referral_code, manage_token_hash, submitted_at, updated_at, withdrawn_at
+        details_json, referral_code, manage_link_secret, submitted_at, updated_at, withdrawn_at
       ) VALUES (
         '${proposalId}', '${eventId}', '${proposerId}', 'submitted', 'talk', 'Test Proposal',
         'Abstract', '{}', NULL, 'hash', datetime('now'), datetime('now'), NULL

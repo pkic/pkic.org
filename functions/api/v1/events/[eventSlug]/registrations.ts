@@ -29,6 +29,7 @@ import { registrationConfirmPageUrl, registrationManagePageUrl } from "../../../
 import { checkEmailDomainMx } from "../../../../_lib/email/mx-check";
 import { first } from "../../../../_lib/db/queries";
 import { registrationCreateSchema } from "../../../../../assets/shared/schemas/api";
+import { queuedCapabilityToken } from "../../../../_lib/services/capability-links";
 
 export async function onRequestPost(c: any): Promise<Response> {
   const config = getConfig(c.env, c.req.raw);
@@ -54,7 +55,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   let inviteId: string | null = null;
   if (body.inviteToken) {
-    const invite = await findInviteByToken(c.env.DB, body.inviteToken, body.inviteId);
+    const invite = await findInviteByToken(c.env.DB, body.inviteToken, signingSecret, body.inviteId);
     if (invite.event_id !== event.id || invite.invite_type !== "attendee") {
       throw new AppError(400, "INVITE_INVALID", "Invite token is not valid for attendee registration for this event");
     }
@@ -113,6 +114,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     referredByCode: body.referralCode,
     pendingConfirmationDeadlineHours:
       (config.maxPendingConfirmationReminders + 1) * config.pendingConfirmationReminderIntervalDays * 24,
+    signingSecret,
   });
 
   await persistConsents(c.env.DB, {
@@ -153,6 +155,11 @@ export async function onRequestPost(c: any): Promise<Response> {
   c.executionCtx.waitUntil(trySeedGravatarThenPrerender(user.id, user.email, referralCode, c.env, appBaseUrl));
 
   const manageUrl = registrationManagePageUrl(appBaseUrl, event, created.manageToken);
+  const queuedManageUrl = registrationManagePageUrl(
+    appBaseUrl,
+    event,
+    queuedCapabilityToken("registration_manage", created.registration.id),
+  );
   const shareUrl = `${appBaseUrl}/r/${referralCode}`;
 
   const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, created.registration.id);
@@ -166,7 +173,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     const confirmationUrl = registrationConfirmPageUrl(
       appBaseUrl,
       event,
-      created.confirmationToken as string,
+      queuedCapabilityToken("registration_confirm", created.registration.id),
       created.registration.id,
     );
     const outboxId = await queueEmail(c.env.DB, {
@@ -195,7 +202,7 @@ export async function onRequestPost(c: any): Promise<Response> {
         registrationId: created.registration.id,
         // URLs
         confirmationUrl,
-        manageUrl,
+        manageUrl: queuedManageUrl,
         shareUrl,
         linkedinShareUrl: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`,
         twitterShareUrl: `https://twitter.com/intent/tweet?text=${encodeURIComponent(`I just registered for ${event.name} — join me! ${shareUrl}`)}`,
@@ -213,7 +220,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     const calendar = await buildRegistrationIcs(
       event,
       created.registration.id,
-      manageUrl,
+      queuedManageUrl,
       dayAttendanceRaw,
       appBaseUrl,
       rsvpEmail,
@@ -257,7 +264,7 @@ export async function onRequestPost(c: any): Promise<Response> {
         ...statusData,
         registrationId: created.registration.id,
         // URLs
-        manageUrl,
+        manageUrl: queuedManageUrl,
         shareUrl,
         linkedinShareUrl: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`,
         twitterShareUrl: `https://twitter.com/intent/tweet?text=${encodeURIComponent(`I just registered for ${event.name} — join me! ${shareUrl}`)}`,

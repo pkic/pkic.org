@@ -7,7 +7,7 @@ const namePattern = /^[\p{L}\p{N} .,'’\-()&/]+$/u;
 const slugPattern = /^[a-z0-9]+(?:[a-z0-9-]*[a-z0-9])?$/;
 const termKeyPattern = /^[a-z0-9][a-z0-9._-]{1,127}$/;
 const versionPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
-const tokenPattern = /^[A-Za-z0-9_-]{16,256}$/;
+const tokenPattern = /^[A-Za-z0-9_.-]{16,512}$/;
 const frontendPathPattern = /^\/[A-Za-z0-9\-._~!$&'()*+,;=:@/%]*$/;
 
 function trimmedString(min: number, max: number): z.ZodString {
@@ -498,7 +498,13 @@ export const proposalCreateResponseSchema = z.object({
   shareUrl: z.string().url(),
 });
 
-export const proposalResendSpeakerManageLinkSchema = z.object({
+export const proposalResendManageLinkSchema = z.object({
+  email: normalizedEmailSchema,
+});
+
+export const proposalResendSpeakerManageLinkSchema = proposalResendManageLinkSchema;
+
+export const inviteResendLinkSchema = z.object({
   email: normalizedEmailSchema,
 });
 

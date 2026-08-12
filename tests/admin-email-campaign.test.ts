@@ -82,7 +82,7 @@ describe("admin email campaign recipients", () => {
         env.DB.prepare(
           `INSERT INTO registrations (
                id, event_id, user_id, status, attendance_type, source_type,
-               manage_token_hash, created_at, updated_at
+               manage_link_secret, created_at, updated_at
              ) VALUES (?, ?, ?, 'registered', ?, 'direct', ?, datetime('now'), datetime('now'))`,
         ).bind(user.registrationId, eventId, user.id, user.attendanceType, user.manageTokenHash),
       ),
@@ -178,7 +178,7 @@ describe("admin email campaign recipients", () => {
           env.DB.prepare(
             `INSERT INTO registrations (
                  id, event_id, user_id, status, attendance_type, source_type,
-                 manage_token_hash, created_at, updated_at
+                 manage_link_secret, created_at, updated_at
                ) VALUES (?, ?, ?, 'registered', 'virtual', 'direct', ?, datetime('now'), datetime('now'))`,
           ).bind(user.registrationId, eventId, user.id, `original-manage-token-${user.id}`),
         ),
@@ -238,9 +238,9 @@ describe("admin email campaign recipients", () => {
       (
         await queryAll<{ count: number }>(
           env.DB,
-          "SELECT COUNT(*) AS count FROM registrations WHERE manage_token_hash LIKE 'original-manage-token-%'",
+          "SELECT COUNT(*) AS count FROM registrations WHERE manage_link_secret LIKE 'original-manage-token-%'",
         )
       )[0]?.count,
-    ).toBe(0);
+    ).toBe(users.length);
   });
 });

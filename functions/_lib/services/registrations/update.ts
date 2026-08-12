@@ -176,9 +176,9 @@ async function applyRegistrationUpdate(
 
 export async function updateRegistrationByManageToken(
   db: DatabaseLike,
-  payload: { manageToken: string } & UpdatePayload,
+  payload: { manageToken: string; signingSecret: string } & UpdatePayload,
 ): Promise<RegistrationRecord> {
-  const registration = await getRegistrationByManageToken(db, payload.manageToken);
+  const registration = await getRegistrationByManageToken(db, payload.manageToken, payload.signingSecret);
   return applyRegistrationUpdate(db, registration, payload);
 }
 

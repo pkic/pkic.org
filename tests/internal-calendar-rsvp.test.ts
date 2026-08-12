@@ -45,7 +45,7 @@ async function seedRegistration(): Promise<{ registrationId: string }> {
     env.DB.prepare(
       `INSERT INTO registrations (
          id, event_id, user_id, status, attendance_type, source_type,
-         manage_token_hash, created_at, updated_at
+         manage_link_secret, created_at, updated_at
        ) VALUES (?, ?, ?, 'registered', 'in_person', 'direct', ?, ?, ?)`,
     ).bind(registrationId, eventId, userId, await sha256Hex("manage-token"), nowIso(), nowIso()),
   ]);

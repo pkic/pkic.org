@@ -56,7 +56,7 @@ export function getConfig(env: Env, request?: Request) {
     inviteLimitSpeakerNomination: parseIntOrDefault(env.DEFAULT_INVITE_LIMIT_SPEAKER_NOMINATION, 10),
     waitlistClaimWindowHours: parseIntOrDefault(env.WAITLIST_CLAIM_WINDOW_HOURS, 24),
     magicLinkTtlMinutes: parseIntOrDefault(env.MAGIC_LINK_TTL_MINUTES, 15),
-    manageTokenTtlHours: parseIntOrDefault(env.MANAGE_TOKEN_TTL_HOURS, 48),
+    confirmationLinkTtlHours: parseIntOrDefault(env.CONFIRMATION_LINK_TTL_HOURS, 48),
     reminderIntervalDays: parseIntOrDefault(env.REMINDER_INTERVAL_DAYS, 7),
     pendingConfirmationReminderIntervalDays: parseIntOrDefault(env.PENDING_CONFIRMATION_REMINDER_INTERVAL_DAYS, 1),
     maxInviteReminders: parseIntOrDefault(env.MAX_INVITE_REMINDERS, 12),

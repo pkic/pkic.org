@@ -44,10 +44,12 @@ describe("scheduled due work waitlist promotions", () => {
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
     const confirmedHolder = await confirmRegistrationByToken(baseEnv.DB, {
       token: holder.confirmationToken as string,
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     const waiting = await createRegistration(baseEnv.DB, {
@@ -57,16 +59,19 @@ describe("scheduled due work waitlist promotions", () => {
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
     await confirmRegistrationByToken(baseEnv.DB, {
       token: waiting.confirmationToken as string,
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     await updateRegistrationByManageToken(baseEnv.DB, {
       manageToken: confirmedHolder.manageToken,
       action: "cancel",
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     const dueWorkEnv: Env = {
@@ -123,6 +128,7 @@ describe("scheduled due work waitlist promotions", () => {
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     await baseEnv.DB.prepare(

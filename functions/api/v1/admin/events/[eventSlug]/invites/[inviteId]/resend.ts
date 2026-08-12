@@ -10,7 +10,7 @@ import {
   registrationPageUrl,
   inviteDeclineUrl,
 } from "../../../../../../../_lib/services/frontend-links";
-import { refreshInviteToken } from "../../../../../../../_lib/services/invites";
+import { queuedCapabilityToken } from "../../../../../../../_lib/services/capability-links";
 import { nowIso } from "../../../../../../../_lib/utils/time";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 
@@ -59,7 +59,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   }
 
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-  const token = await refreshInviteToken(requestDb(c), invite.id);
+  const token = queuedCapabilityToken("invite", invite.id);
   const declineUrl = inviteDeclineUrl(appBaseUrl, event, token, invite.id);
 
   const now = nowIso();

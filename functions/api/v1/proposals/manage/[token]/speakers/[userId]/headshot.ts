@@ -7,12 +7,13 @@ import { writeAuditLog } from "../../../../../../../_lib/services/audit";
 import { AppError } from "../../../../../../../_lib/errors";
 import { first, run } from "../../../../../../../_lib/db/queries";
 import { nowIso } from "../../../../../../../_lib/utils/time";
+import { requireInternalSecret } from "../../../../../../../_lib/request";
 
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_HEADSHOT_BYTES = 20 * 1024 * 1024;
 
 async function loadSpeakerContext(c: any) {
-  const proposal = await getProposalByManageToken(c.env.DB, c.req.param("token"));
+  const proposal = await getProposalByManageToken(c.env.DB, c.req.param("token"), requireInternalSecret(c.env));
   const speaker = await first<{
     id: string;
     user_id: string;

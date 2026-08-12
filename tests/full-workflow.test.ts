@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { env } from "cloudflare:workers";
-import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
+import { createContext, deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { createTemplateVersion, activateTemplateVersion } from "../functions/_lib/email/templates";
 import { onRequestPost as requestAdminLink } from "../functions/api/v1/admin/auth/request-link";
@@ -16,6 +16,7 @@ import { onRequestPost as inviteAttendeesFromRegistration } from "../functions/a
 import { onRequestGet as referralRedirect } from "../functions/r/[code]";
 import { onRequestPost as retryPendingEmail } from "../functions/api/v1/internal/email/retry";
 import { queueEmail } from "../functions/_lib/email/outbox";
+import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
 
 interface VerifyAdminPayload {
   token: string;
@@ -92,8 +93,8 @@ async function seedRequiredEmailTemplates(adminId: string): Promise<void> {
   );
 }
 
-function extractTokenFromOutboxUrl(payloadJson: string, fieldName: string): string {
-  const payload = JSON.parse(payloadJson) as Record<string, string>;
+async function extractTokenFromOutboxUrl(payloadJson: string, fieldName: string): Promise<string> {
+  const payload = await deliveredEmailPayload<Record<string, string>>(env.DB, env, payloadJson);
   const url = new URL(payload[fieldName]);
   const token = url.searchParams.get("token");
   if (!token) {
@@ -138,7 +139,7 @@ describe("full workflow", () => {
           "SELECT payload_json FROM email_outbox WHERE template_key = 'admin_magic_link' ORDER BY created_at DESC LIMIT 1",
         )
       )[0];
-      const magicToken = extractTokenFromOutboxUrl(magicLinkOutbox.payload_json, "magicLinkUrl");
+      const magicToken = await extractTokenFromOutboxUrl(magicLinkOutbox.payload_json, "magicLinkUrl");
 
       const verifyResponse = await verifyAdminLink(
         createContext(
@@ -182,8 +183,21 @@ describe("full workflow", () => {
         ),
       );
       expect(speakerInviteResponse.status).toBe(200);
-      const speakerInvitePayload = (await speakerInviteResponse.json()) as { created: Array<{ inviteToken: string }> };
-      const speakerInviteToken = speakerInvitePayload.created[0].inviteToken;
+      await speakerInviteResponse.json();
+      const speakerInvite = (
+        await queryAll<{ id: string }>(
+          env.DB,
+          "SELECT id FROM invites WHERE event_id = ? AND invitee_email = ? AND invite_type = 'speaker' LIMIT 1",
+          eventId,
+          "speaker@example.test",
+        )
+      )[0];
+      const speakerInviteToken = await issueDatabaseCapability({
+        db: env.DB,
+        signingSecret: env.INTERNAL_SIGNING_SECRET!,
+        purpose: "invite",
+        resourceId: speakerInvite.id,
+      });
 
       const proposalResponse = await submitProposal(
         createContext(
@@ -306,7 +320,7 @@ describe("full workflow", () => {
           "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' AND recipient_email = 'attendee1@pkic.org' ORDER BY created_at DESC LIMIT 1",
         )
       )[0];
-      const firstConfirmationToken = extractTokenFromOutboxUrl(
+      const firstConfirmationToken = await extractTokenFromOutboxUrl(
         firstConfirmationPayload.payload_json,
         "confirmationUrl",
       );
@@ -375,7 +389,7 @@ describe("full workflow", () => {
           "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' AND recipient_email = 'attendee2@pkic.org' ORDER BY created_at DESC LIMIT 1",
         )
       )[0];
-      const secondConfirmationToken = extractTokenFromOutboxUrl(
+      const secondConfirmationToken = await extractTokenFromOutboxUrl(
         secondConfirmationPayload.payload_json,
         "confirmationUrl",
       );

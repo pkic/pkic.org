@@ -15,8 +15,7 @@ import {
   registrationManagePageUrl,
   registrationPageUrl,
 } from "../../../../../../../_lib/services/frontend-links";
-import { randomToken, sha256Hex } from "../../../../../../../_lib/utils/crypto";
-import { nowIso } from "../../../../../../../_lib/utils/time";
+import { queuedCapabilityToken } from "../../../../../../../_lib/services/capability-links";
 import {
   chunkRecipients,
   computeCampaignDigest,
@@ -141,49 +140,51 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     subject: string;
     data: Record<string, unknown>;
   }> = [];
-  const registrationUpdates: Array<StatementLike | null> = [];
+  const usesManageUrl =
+    body.filter.audience === "attendees" &&
+    findBroadcastOnlyTemplateRefs(uniqueRecipients, [
+      body.subjectOverride,
+      body.bodyContent,
+      body.customText,
+      template?.subjectTemplate,
+      template?.content,
+    ]).includes("manageUrl");
 
   if (body.sendMode === "personal") {
-    const personalRows = await Promise.all(
-      uniqueRecipients.map(async (recipient) => {
-        let recipientManageUrl: string | undefined;
-        let registrationUpdate: StatementLike | null = null;
-        if (body.filter.audience === "attendees" && recipient.registrationId) {
-          const manageToken = randomToken(24);
-          const manageTokenHash = await sha256Hex(manageToken);
-          registrationUpdate = db
-            .prepare("UPDATE registrations SET manage_token_hash = ?, updated_at = ? WHERE id = ?")
-            .bind(manageTokenHash, nowIso(), recipient.registrationId);
-          recipientManageUrl = registrationManagePageUrl(appBaseUrl, event, manageToken);
-        }
+    const personalRows = uniqueRecipients.map((recipient) => {
+      let recipientManageUrl: string | undefined;
+      if (usesManageUrl && recipient.registrationId) {
+        recipientManageUrl = registrationManagePageUrl(
+          appBaseUrl,
+          event,
+          queuedCapabilityToken("registration_manage", recipient.registrationId),
+        );
+      }
 
-        return {
-          registrationUpdate,
-          queueRow: {
-            eventId: event.id,
-            templateKey,
-            recipientEmail: recipient.email,
-            recipientUserId: recipient.userId ?? null,
-            messageType,
-            subject: body.subjectOverride ?? `Update: ${event.name}`,
-            data: {
-              ...sharedEventVars,
-              firstName: recipient.firstName,
-              lastName: recipient.lastName,
-              ...routeVars,
-              ...recipient.templateData,
-              ...(recipientManageUrl ? { manageUrl: recipientManageUrl } : {}),
-              __adminCampaignCustomText: body.customText ?? null,
-              __adminCampaignBodyContent: body.bodyContent ?? null,
-              __campaignAudience: body.filter.audience,
-            },
+      return {
+        queueRow: {
+          eventId: event.id,
+          templateKey,
+          recipientEmail: recipient.email,
+          recipientUserId: recipient.userId ?? null,
+          messageType,
+          subject: body.subjectOverride ?? `Update: ${event.name}`,
+          data: {
+            ...sharedEventVars,
+            firstName: recipient.firstName,
+            lastName: recipient.lastName,
+            ...routeVars,
+            ...recipient.templateData,
+            ...(recipientManageUrl ? { manageUrl: recipientManageUrl } : {}),
+            __adminCampaignCustomText: body.customText ?? null,
+            __adminCampaignBodyContent: body.bodyContent ?? null,
+            __campaignAudience: body.filter.audience,
           },
-        };
-      }),
-    );
+        },
+      };
+    });
     for (const row of personalRows) {
       queueRows.push(row.queueRow);
-      registrationUpdates.push(row.registrationUpdate);
     }
     batches = uniqueRecipients.length;
   } else {
@@ -209,7 +210,6 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
           __bccRecipients: bcc,
         },
       });
-      registrationUpdates.push(null);
       queued += chunk.length;
       batches += 1;
     }
@@ -220,8 +220,6 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     const preparedSlice = preparedRows.slice(offset, offset + CAMPAIGN_QUEUE_BATCH_SIZE);
     const statements: StatementLike[] = [];
     for (let index = 0; index < preparedSlice.length; index += 1) {
-      const registrationUpdate = registrationUpdates[offset + index];
-      if (registrationUpdate) statements.push(registrationUpdate);
       statements.push(preparedSlice[index].statement);
     }
     await db.batch(statements);

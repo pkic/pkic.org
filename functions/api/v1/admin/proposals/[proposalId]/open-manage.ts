@@ -13,6 +13,7 @@ import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { proposalManagePageUrl } from "../../../../../_lib/services/frontend-links";
 import { refreshProposalManageToken } from "../../../../../_lib/services/proposals";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import { requireInternalSecret } from "../../../../../_lib/request";
 
 export async function onRequestPost(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
@@ -49,7 +50,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     return json({ error: { code: "FORBIDDEN", message: "Missing permission to manage proposals" } }, 403);
   }
 
-  const token = await refreshProposalManageToken(requestDb(c), proposalId);
+  const token = await refreshProposalManageToken(requestDb(c), proposalId, requireInternalSecret(c.env));
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const manageUrl = proposalManagePageUrl(appBaseUrl, proposal, token);
 

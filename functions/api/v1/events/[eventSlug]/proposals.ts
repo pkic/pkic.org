@@ -24,6 +24,8 @@ import { proposalManagePageUrl, speakerManagePageUrl } from "../../../../_lib/se
 import { proposalCreateSchema } from "../../../../../assets/shared/schemas/api";
 import { eventProposalCreateRouteSchema } from "../../../../../assets/shared/schemas/route-contracts";
 import { requireInternalSecret } from "../../../../_lib/request";
+import { queuedCapabilityToken } from "../../../../_lib/services/capability-links";
+import { first } from "../../../../_lib/db/queries";
 
 export async function onRequestPost(c: any): Promise<Response> {
   const config = getConfig(c.env, c.req.raw);
@@ -38,7 +40,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   let inviteId: string | null = null;
   if (body.inviteToken) {
-    const invite = await findInviteByToken(c.env.DB, body.inviteToken, body.inviteId);
+    const invite = await findInviteByToken(c.env.DB, body.inviteToken, signingSecret, body.inviteId);
     if (invite.event_id !== event.id || invite.invite_type !== "speaker") {
       return json({ error: { code: "INVITE_INVALID", message: "Invalid speaker invite" } }, 400);
     }
@@ -74,12 +76,14 @@ export async function onRequestPost(c: any): Promise<Response> {
     abstract: body.proposal.abstract,
     detailsJson: Object.keys(proposalDetails).length > 0 ? JSON.stringify(proposalDetails) : null,
     referredByCode: body.referralCode,
+    signingSecret,
   });
 
   await addProposalSpeaker(c.env.DB, {
     proposalId: created.proposal.id,
     userId: proposer.id,
     role: body.proposer.role,
+    signingSecret,
   });
 
   // Add co-speakers and email each one to confirm participation.
@@ -99,10 +103,20 @@ export async function onRequestPost(c: any): Promise<Response> {
       proposalId: created.proposal.id,
       userId: speakerUser.id,
       role: speaker.role,
+      signingSecret,
     });
 
     if (speakerToken) {
-      const speakerManageUrl = speakerManagePageUrl(appBaseUrl, event, speakerToken);
+      const speakerRow = await first<{ id: string }>(
+        c.env.DB,
+        "SELECT id FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+        [created.proposal.id, speakerUser.id],
+      );
+      const speakerManageUrl = speakerManagePageUrl(
+        appBaseUrl,
+        event,
+        queuedCapabilityToken("speaker_manage", speakerRow!.id),
+      );
       const inviteContext = await buildProposalInviteEmailContext(c.env.DB, {
         proposalId: created.proposal.id,
         inviterUserId: proposer.id,
@@ -156,6 +170,11 @@ export async function onRequestPost(c: any): Promise<Response> {
   c.executionCtx.waitUntil(trySeedGravatarThenPrerender(proposer.id, proposer.email, referralCode, c.env, appBaseUrl));
 
   const manageUrl = proposalManagePageUrl(appBaseUrl, event, created.manageToken);
+  const queuedManageUrl = proposalManagePageUrl(
+    appBaseUrl,
+    event,
+    queuedCapabilityToken("proposal_manage", created.proposal.id),
+  );
 
   const inviteContext = await buildProposalInviteEmailContext(c.env.DB, {
     proposalId: created.proposal.id,
@@ -177,8 +196,7 @@ export async function onRequestPost(c: any): Promise<Response> {
       proposalAbstract: created.proposal.abstract,
       proposalType: created.proposal.proposal_type,
       speakerLineupText: inviteContext.speakerLineupText,
-      manageToken: created.manageToken,
-      manageUrl,
+      manageUrl: queuedManageUrl,
       shareUrl: `${appBaseUrl}/r/${referralCode}`,
     },
   });

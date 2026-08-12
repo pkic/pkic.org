@@ -51,7 +51,6 @@ interface AttendeeCampaignRow {
   status: string;
   attendance_type: string | null;
   custom_answers_json: string | null;
-  manage_token_hash: string | null;
 }
 
 interface AttendeeDayAttendanceRow {
@@ -128,7 +127,7 @@ export async function listCampaignRecipients(
         db,
         `SELECT DISTINCT r.id AS registration_id, u.id AS user_id,
                 u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
-                r.status, r.attendance_type, r.custom_answers_json, r.manage_token_hash
+                r.status, r.attendance_type, r.custom_answers_json
          FROM registrations r
          JOIN users u ON u.id = r.user_id
          JOIN registration_day_attendance rda ON rda.registration_id = r.id
@@ -157,7 +156,7 @@ export async function listCampaignRecipients(
       db,
       `SELECT DISTINCT r.id AS registration_id, u.id AS user_id,
             u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
-            r.status, r.attendance_type, r.custom_answers_json, r.manage_token_hash
+            r.status, r.attendance_type, r.custom_answers_json
        FROM registrations r
        JOIN users u ON u.id = r.user_id
        WHERE r.event_id = ?

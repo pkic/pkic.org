@@ -11,6 +11,7 @@ import { loadEmailLayout, loadEmailPartials } from "./partials";
 import { sendViaSendgrid } from "./sendgrid";
 import { applyCampaignCustomText } from "./campaign-custom";
 import { parseQueuedEmailAttachments, type QueuedEmailAttachment } from "./attachments";
+import { materializeQueuedCapabilityLinks } from "../services/capability-links";
 import type { DatabaseLike, Env, StatementLike } from "../types";
 
 function uint8ToBase64(bytes: Uint8Array): string {
@@ -304,7 +305,8 @@ async function processOutboxRow(db: DatabaseLike, env: Env, row: OutboxRow): Pro
   await markOutboxSending(db, row.id);
 
   try {
-    const payload = parseJsonSafe<Record<string, unknown>>(row.payload_json, {});
+    const storedPayload = parseJsonSafe<Record<string, unknown>>(row.payload_json, {});
+    const payload = await materializeQueuedCapabilityLinks(db, env, storedPayload);
     const emailBaseUrl = resolveEmailBaseUrl(payload, env);
     const partials = await loadEmailPartials(db);
     const layoutHtml = await loadEmailLayout(db);

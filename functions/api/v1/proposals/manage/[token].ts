@@ -6,10 +6,12 @@ import { validateCustomAnswersByPurpose } from "../../../../_lib/services/forms"
 import { proposalManageSchema } from "../../../../../assets/shared/schemas/api";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
 import { writeAuditLog } from "../../../../_lib/services/audit";
+import { requireInternalSecret } from "../../../../_lib/request";
+import { omitCapabilitySecrets } from "../../../../_lib/services/capability-links";
 
 export async function onRequestPatch(c: any): Promise<Response> {
   const body = await parseJsonBody(c.req, proposalManageSchema);
-  const existing = await getProposalByManageToken(c.env.DB, c.req.param("token"));
+  const existing = await getProposalByManageToken(c.env.DB, c.req.param("token"), requireInternalSecret(c.env));
   const proposalDetails = body.details
     ? await validateCustomAnswersByPurpose(c.env.DB, {
         eventId: existing.event_id,
@@ -25,6 +27,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
     title: body.title,
     abstract: body.abstract,
     detailsJson: Object.keys(proposalDetails).length > 0 ? JSON.stringify(proposalDetails) : null,
+    signingSecret: requireInternalSecret(c.env),
   });
 
   if (body.action === "withdraw") {
@@ -58,11 +61,11 @@ export async function onRequestPatch(c: any): Promise<Response> {
     }
   }
 
-  return json({ success: true, proposal });
+  return json({ success: true, proposal: omitCapabilitySecrets(proposal) });
 }
 
 export async function onRequestGet(c: any): Promise<Response> {
-  const proposal = await getProposalByManageToken(c.env.DB, c.req.param("token"));
+  const proposal = await getProposalByManageToken(c.env.DB, c.req.param("token"), requireInternalSecret(c.env));
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const speakers = await all<{
     user_id: string;
@@ -94,7 +97,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   return json({
     success: true,
     proposal: {
-      ...proposal,
+      ...omitCapabilitySecrets(proposal),
       details: proposal.details_json ? JSON.parse(proposal.details_json) : null,
     },
     speakers: speakers.map((entry) => ({

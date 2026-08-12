@@ -50,6 +50,9 @@ export async function resolveManageToken(
     const registration = await getRegistrationById(env.DB, result.claims.sub);
     return { registration, isJwt: true };
   }
-  const registration = await getRegistrationByManageToken(env.DB, token);
+  if (!secret) {
+    return json({ error: { code: "SERVER_ERROR", message: "Signing secret not configured." } }, 500);
+  }
+  const registration = await getRegistrationByManageToken(env.DB, token, secret);
   return { registration, isJwt: false };
 }

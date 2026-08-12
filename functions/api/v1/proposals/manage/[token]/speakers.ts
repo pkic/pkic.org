@@ -24,6 +24,8 @@ import { first } from "../../../../../_lib/db/queries";
 import type { EventRecord } from "../../../../../_lib/services/events";
 import { z } from "zod";
 import { normalizedEmailSchema, firstNameSchema, lastNameSchema } from "../../../../../../assets/shared/schemas/api";
+import { requireInternalSecret } from "../../../../../_lib/request";
+import { queuedCapabilityToken } from "../../../../../_lib/services/capability-links";
 
 const coSpeakerInviteSchema = z.object({
   email: normalizedEmailSchema,
@@ -34,7 +36,7 @@ const coSpeakerInviteSchema = z.object({
 
 export async function onRequestPost(c: any): Promise<Response> {
   const body = await parseJsonBody(c.req, coSpeakerInviteSchema);
-  const proposal = await getProposalByManageToken(c.env.DB, c.req.param("token"));
+  const proposal = await getProposalByManageToken(c.env.DB, c.req.param("token"), requireInternalSecret(c.env));
 
   if (proposal.status === "withdrawn" || proposal.status === "rejected") {
     return json({ error: { code: "PROPOSAL_CLOSED", message: "Cannot invite speakers to a closed proposal" } }, 400);
@@ -52,13 +54,25 @@ export async function onRequestPost(c: any): Promise<Response> {
     lastName: body.lastName,
   });
 
-  const { manageToken: speakerToken } = await addProposalSpeaker(c.env.DB, {
+  await addProposalSpeaker(c.env.DB, {
     proposalId: proposal.id,
     userId: speakerUser.id,
     role: body.role,
   });
 
-  const speakerManageUrl = speakerManagePageUrl(appBaseUrl, event, speakerToken);
+  const speakerRow = await first<{ id: string }>(
+    c.env.DB,
+    "SELECT id FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+    [proposal.id, speakerUser.id],
+  );
+  if (!speakerRow) {
+    return json({ error: { code: "SPEAKER_NOT_FOUND", message: "Speaker could not be added" } }, 500);
+  }
+  const speakerManageUrl = speakerManagePageUrl(
+    appBaseUrl,
+    event,
+    queuedCapabilityToken("speaker_manage", speakerRow.id),
+  );
 
   const proposer = await first<{ first_name: string | null }>(c.env.DB, "SELECT first_name FROM users WHERE id = ?", [
     proposal.proposer_user_id,

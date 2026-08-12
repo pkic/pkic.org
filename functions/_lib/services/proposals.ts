@@ -1,10 +1,16 @@
 import { AppError } from "../errors";
 import { all, first, run } from "../db/queries";
-import { randomToken, sha256Hex } from "../utils/crypto";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { recordReferralConversion } from "./referrals";
 import { recordEngagement } from "./engagement";
+import {
+  issueDatabaseCapability,
+  newCapabilityLinkSecret,
+  queuedCapabilityToken,
+  signCapabilityToken,
+  verifyDatabaseCapability,
+} from "./capability-links";
 import type { DatabaseLike } from "../types";
 
 export interface ProposalRecord {
@@ -17,7 +23,7 @@ export interface ProposalRecord {
   abstract: string;
   details_json: string | null;
   referral_code: string | null;
-  manage_token_hash: string;
+  manage_link_secret: string;
   submitted_at: string;
   updated_at: string;
   withdrawn_at: string | null;
@@ -126,11 +132,11 @@ export async function createProposal(
     abstract: string;
     detailsJson?: string | null;
     referredByCode?: string | null;
+    signingSecret?: string;
   },
 ): Promise<{ proposal: ProposalRecord; manageToken: string }> {
   const now = nowIso();
-  const manageToken = randomToken(24);
-  const manageHash = await sha256Hex(manageToken);
+  const manageLinkSecret = newCapabilityLinkSecret();
 
   const proposal: ProposalRecord = {
     id: uuid(),
@@ -142,7 +148,7 @@ export async function createProposal(
     abstract: payload.abstract,
     details_json: payload.detailsJson ?? null,
     referral_code: payload.referredByCode ?? null,
-    manage_token_hash: manageHash,
+    manage_link_secret: manageLinkSecret,
     submitted_at: now,
     updated_at: now,
     withdrawn_at: null,
@@ -152,7 +158,7 @@ export async function createProposal(
     db,
     `INSERT INTO session_proposals (
       id, event_id, proposer_user_id, status, proposal_type, title, abstract,
-      details_json, referral_code, manage_token_hash, submitted_at, updated_at, withdrawn_at
+      details_json, referral_code, manage_link_secret, submitted_at, updated_at, withdrawn_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       proposal.id,
@@ -164,7 +170,7 @@ export async function createProposal(
       proposal.abstract,
       proposal.details_json,
       proposal.referral_code,
-      proposal.manage_token_hash,
+      proposal.manage_link_secret,
       proposal.submitted_at,
       proposal.updated_at,
       proposal.withdrawn_at,
@@ -194,6 +200,14 @@ export async function createProposal(
     await recordReferralConversion(db, payload.referredByCode);
   }
 
+  const manageToken = payload.signingSecret
+    ? await signCapabilityToken({
+        signingSecret: payload.signingSecret,
+        linkSecret: proposal.manage_link_secret,
+        purpose: "proposal_manage",
+        resourceId: proposal.id,
+      })
+    : queuedCapabilityToken("proposal_manage", proposal.id);
   return { proposal, manageToken };
 }
 
@@ -203,7 +217,7 @@ export interface ProposalSpeakerRecord {
   user_id: string;
   role: string;
   status: string;
-  manage_token_hash: string | null;
+  manage_link_secret: string | null;
   terms_accepted_at: string | null;
   confirmed_at: string | null;
   declined_at: string | null;
@@ -213,14 +227,14 @@ export interface ProposalSpeakerRecord {
 
 export async function addProposalSpeaker(
   db: DatabaseLike,
-  payload: { proposalId: string; userId: string; role: string },
+  payload: { proposalId: string; userId: string; role: string; signingSecret?: string },
 ): Promise<{ manageToken: string }> {
   // Proposers are auto-confirmed — they submitted the proposal and accepted terms.
   // Everyone still receives a manage token so they can update their profile and
   // upload their headshot / presentation after acceptance.
   const isProposer = payload.role === "proposer";
-  const manageToken = randomToken(24);
-  const manageTokenHash = await sha256Hex(manageToken);
+  const speakerId = uuid();
+  const manageLinkSecret = newCapabilityLinkSecret();
 
   const status = isProposer ? "confirmed" : "invited";
   const confirmedAt = isProposer ? nowIso() : null;
@@ -234,12 +248,12 @@ export async function addProposalSpeaker(
   await run(
     db,
     `INSERT INTO proposal_speakers
-       (id, proposal_id, user_id, role, status, manage_token_hash, confirmed_at, created_at)
+       (id, proposal_id, user_id, role, status, manage_link_secret, confirmed_at, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(proposal_id, user_id) DO UPDATE SET
        role             = excluded.role,
        status           = CASE WHEN proposal_speakers.status = 'declined' THEN 'invited' ELSE proposal_speakers.status END,
-       manage_token_hash = COALESCE(proposal_speakers.manage_token_hash, excluded.manage_token_hash),
+       manage_link_secret = COALESCE(proposal_speakers.manage_link_secret, excluded.manage_link_secret),
        confirmed_at     = COALESCE(proposal_speakers.confirmed_at, excluded.confirmed_at),
        speaker_invite_reminder_count = CASE
          WHEN proposal_speakers.status = 'declined' THEN 0
@@ -253,7 +267,7 @@ export async function addProposalSpeaker(
          WHEN proposal_speakers.status = 'declined' THEN NULL
          ELSE proposal_speakers.speaker_invite_reminders_paused_until
        END`,
-    [uuid(), payload.proposalId, payload.userId, payload.role, status, manageTokenHash, confirmedAt, now],
+    [speakerId, payload.proposalId, payload.userId, payload.role, status, manageLinkSecret, confirmedAt, now],
   );
 
   if (proposal) {
@@ -271,6 +285,22 @@ export async function addProposalSpeaker(
     });
   }
 
+  const speaker = await first<{ id: string; manage_link_secret: string | null }>(
+    db,
+    "SELECT id, manage_link_secret FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+    [payload.proposalId, payload.userId],
+  );
+  if (!speaker?.manage_link_secret) {
+    throw new AppError(500, "SPEAKER_TOKEN_CREATE_FAILED", "Unable to create speaker manage link");
+  }
+  const manageToken = payload.signingSecret
+    ? await signCapabilityToken({
+        signingSecret: payload.signingSecret,
+        linkSecret: speaker.manage_link_secret,
+        purpose: "speaker_manage",
+        resourceId: speaker.id,
+      })
+    : queuedCapabilityToken("speaker_manage", speaker.id);
   return { manageToken };
 }
 
@@ -310,202 +340,38 @@ export async function updateProposalSpeakerRole(
   });
 }
 
-export interface SpeakerWithContext {
-  speaker: ProposalSpeakerRecord;
-  proposal: ProposalRecord;
-  user: {
-    id: string;
-    email: string;
-    first_name: string | null;
-    last_name: string | null;
-    organization_name: string | null;
-    job_title: string | null;
-    biography: string | null;
-    links_json: string | null;
-    headshot_r2_key: string | null;
-    headshot_updated_at: string | null;
-  };
-}
-
-export async function getSpeakerByManageToken(db: DatabaseLike, manageToken: string): Promise<SpeakerWithContext> {
-  const hashedToken = await sha256Hex(manageToken);
-  const directToken = /^[a-f0-9]{64}$/i.test(manageToken) ? manageToken.toLowerCase() : null;
-  const row = await first<{
-    // proposal_speakers
-    ps_id: string;
-    ps_proposal_id: string;
-    ps_user_id: string;
-    ps_role: string;
-    ps_status: string;
-    ps_manage_token_hash: string | null;
-    ps_terms_accepted_at: string | null;
-    ps_confirmed_at: string | null;
-    ps_declined_at: string | null;
-    ps_decline_reason: string | null;
-    ps_created_at: string;
-    // session_proposals
-    sp_id: string;
-    sp_event_id: string;
-    sp_proposer_user_id: string;
-    sp_status: string;
-    sp_proposal_type: string;
-    sp_title: string;
-    sp_abstract: string;
-    sp_details_json: string | null;
-    sp_referral_code: string | null;
-    sp_manage_token_hash: string;
-    sp_submitted_at: string;
-    sp_updated_at: string;
-    sp_withdrawn_at: string | null;
-    sp_presentation_r2_key: string | null;
-    sp_presentation_deadline: string | null;
-    sp_presentation_uploaded_at: string | null;
-    // users
-    u_id: string;
-    u_email: string;
-    u_first_name: string | null;
-    u_last_name: string | null;
-    u_organization_name: string | null;
-    u_job_title: string | null;
-    u_biography: string | null;
-    u_links_json: string | null;
-    u_headshot_r2_key: string | null;
-    u_headshot_updated_at: string | null;
-  }>(
-    db,
-    `SELECT
-       ps.id              AS ps_id,
-       ps.proposal_id     AS ps_proposal_id,
-       ps.user_id         AS ps_user_id,
-       ps.role            AS ps_role,
-       ps.status          AS ps_status,
-       ps.manage_token_hash AS ps_manage_token_hash,
-       ps.terms_accepted_at AS ps_terms_accepted_at,
-       ps.confirmed_at    AS ps_confirmed_at,
-       ps.declined_at     AS ps_declined_at,
-       ps.decline_reason  AS ps_decline_reason,
-       ps.created_at      AS ps_created_at,
-       sp.id              AS sp_id,
-       sp.event_id        AS sp_event_id,
-       sp.proposer_user_id AS sp_proposer_user_id,
-       sp.status          AS sp_status,
-       sp.proposal_type   AS sp_proposal_type,
-       sp.title           AS sp_title,
-       sp.abstract        AS sp_abstract,
-       sp.details_json    AS sp_details_json,
-       sp.referral_code   AS sp_referral_code,
-       sp.manage_token_hash AS sp_manage_token_hash,
-       sp.submitted_at    AS sp_submitted_at,
-       sp.updated_at      AS sp_updated_at,
-       sp.withdrawn_at    AS sp_withdrawn_at,
-       sp.presentation_r2_key        AS sp_presentation_r2_key,
-       sp.presentation_deadline      AS sp_presentation_deadline,
-       sp.presentation_uploaded_at   AS sp_presentation_uploaded_at,
-       u.id               AS u_id,
-       u.email            AS u_email,
-       u.first_name       AS u_first_name,
-       u.last_name        AS u_last_name,
-       u.organization_name AS u_organization_name,
-       u.job_title        AS u_job_title,
-       u.biography        AS u_biography,
-       u.links_json       AS u_links_json,
-       u.headshot_r2_key  AS u_headshot_r2_key,
-       u.headshot_updated_at AS u_headshot_updated_at
-     FROM proposal_speakers ps
-     JOIN session_proposals sp ON sp.id = ps.proposal_id AND sp.deleted_at IS NULL
-     JOIN users u              ON u.id  = ps.user_id
-     WHERE ps.manage_token_hash = ? OR ps.manage_token_hash = ?`,
-    [hashedToken, directToken ?? hashedToken],
-  );
-
-  if (!row) {
-    throw new AppError(404, "SPEAKER_TOKEN_NOT_FOUND", "Invalid or expired speaker token");
-  }
-
-  return {
-    speaker: {
-      id: row.ps_id,
-      proposal_id: row.ps_proposal_id,
-      user_id: row.ps_user_id,
-      role: row.ps_role,
-      status: row.ps_status,
-      manage_token_hash: row.ps_manage_token_hash,
-      terms_accepted_at: row.ps_terms_accepted_at,
-      confirmed_at: row.ps_confirmed_at,
-      declined_at: row.ps_declined_at,
-      decline_reason: row.ps_decline_reason,
-      created_at: row.ps_created_at,
-    },
-    proposal: {
-      id: row.sp_id,
-      event_id: row.sp_event_id,
-      proposer_user_id: row.sp_proposer_user_id,
-      status: row.sp_status,
-      proposal_type: row.sp_proposal_type,
-      title: row.sp_title,
-      abstract: row.sp_abstract,
-      details_json: row.sp_details_json,
-      referral_code: row.sp_referral_code,
-      manage_token_hash: row.sp_manage_token_hash,
-      submitted_at: row.sp_submitted_at,
-      updated_at: row.sp_updated_at,
-      withdrawn_at: row.sp_withdrawn_at,
-      presentation_r2_key: row.sp_presentation_r2_key,
-      presentation_deadline: row.sp_presentation_deadline,
-      presentation_uploaded_at: row.sp_presentation_uploaded_at,
-    },
-    user: {
-      id: row.u_id,
-      email: row.u_email,
-      first_name: row.u_first_name,
-      last_name: row.u_last_name,
-      organization_name: row.u_organization_name,
-      job_title: row.u_job_title,
-      biography: row.u_biography,
-      links_json: row.u_links_json,
-      headshot_r2_key: row.u_headshot_r2_key,
-      headshot_updated_at: row.u_headshot_updated_at,
-    },
-  };
-}
-
 /**
- * Returns co-speakers for a proposal, excluding a given user, along with
- * the name of whoever uploaded the presentation (if any).
- */
-/**
- * Generates a fresh manage token for a specific speaker on a proposal.
- * Useful when sending follow-up emails (e.g., profile request, presentation
- * reminder) where the original raw token is no longer available.
- * The old token is invalidated — existing links will stop working.
+ * Returns a queue-safe speaker capability placeholder without rotating the
+ * speaker's revocation secret, so links from earlier messages remain valid.
  */
 export async function refreshSpeakerManageToken(db: DatabaseLike, proposalId: string, userId: string): Promise<string> {
-  const token = randomToken(24);
-  const hash = await sha256Hex(token);
-  const result = await run(
+  const speaker = await first<{ id: string }>(
     db,
-    `UPDATE proposal_speakers SET manage_token_hash = ? WHERE proposal_id = ? AND user_id = ?`,
-    [hash, proposalId, userId],
+    "SELECT id FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+    [proposalId, userId],
   );
-  if (result.changes === 0) {
+  if (!speaker) {
     throw new AppError(404, "SPEAKER_NOT_FOUND", "Speaker not found on this proposal");
   }
-  return token;
+  return queuedCapabilityToken("speaker_manage", speaker.id);
 }
 
 /**
- * Generates a fresh manage token for a proposal submitter workflow.
- * The old token is invalidated when the hash is replaced.
+ * Issues a fresh expiring capability without rotating the proposal secret.
  */
-export async function refreshProposalManageToken(db: DatabaseLike, proposalId: string): Promise<string> {
-  const token = randomToken(24);
-  const hash = await sha256Hex(token);
-  await run(db, `UPDATE session_proposals SET manage_token_hash = ?, updated_at = ? WHERE id = ?`, [
-    hash,
-    nowIso(),
-    proposalId,
-  ]);
-  return token;
+export async function refreshProposalManageToken(
+  db: DatabaseLike,
+  proposalId: string,
+  signingSecret: string,
+  ttlSeconds?: number,
+): Promise<string> {
+  return issueDatabaseCapability({
+    db,
+    signingSecret,
+    purpose: "proposal_manage",
+    resourceId: proposalId,
+    ttlSeconds,
+  });
 }
 
 export interface ProposalSpeakerWithUser {
@@ -513,7 +379,7 @@ export interface ProposalSpeakerWithUser {
   user_id: string;
   role: string;
   status: string;
-  manage_token_hash: string | null;
+  manage_link_secret: string | null;
   confirmed_at: string | null;
   declined_at: string | null;
   terms_accepted_at: string | null;
@@ -619,7 +485,7 @@ export async function listProposalSpeakersWithStatus(
        ps.user_id,
        ps.role,
        ps.status,
-      ps.manage_token_hash,
+      ps.manage_link_secret,
        ps.confirmed_at,
        ps.declined_at,
        ps.terms_accepted_at,
@@ -642,13 +508,28 @@ export async function listProposalSpeakersWithStatus(
   );
 }
 
-export async function getProposalByManageToken(db: DatabaseLike, manageToken: string): Promise<ProposalRecord> {
-  const hashedToken = await sha256Hex(manageToken);
-  const directToken = /^[a-f0-9]{64}$/i.test(manageToken) ? manageToken.toLowerCase() : null;
+export async function getProposalByManageToken(
+  db: DatabaseLike,
+  manageToken: string,
+  signingSecret: string,
+): Promise<ProposalRecord> {
+  const verified = await verifyDatabaseCapability({
+    db,
+    signingSecret,
+    purpose: "proposal_manage",
+    token: manageToken,
+  });
+  if (!verified.ok) {
+    throw new AppError(
+      verified.reason === "expired" ? 410 : 404,
+      verified.reason === "expired" ? "PROPOSAL_TOKEN_EXPIRED" : "PROPOSAL_NOT_FOUND",
+      verified.reason === "expired" ? "Proposal manage link has expired" : "Invalid proposal manage token",
+    );
+  }
   const proposal = await first<ProposalRecord>(
     db,
-    "SELECT * FROM session_proposals WHERE (manage_token_hash = ? OR manage_token_hash = ?) AND deleted_at IS NULL",
-    [hashedToken, directToken ?? hashedToken],
+    "SELECT * FROM session_proposals WHERE id = ? AND deleted_at IS NULL",
+    [verified.resourceId],
   );
 
   if (!proposal) {
@@ -667,9 +548,10 @@ export async function updateProposalByManageToken(
     title?: string;
     abstract?: string;
     detailsJson?: string | null;
+    signingSecret: string;
   },
 ): Promise<ProposalRecord> {
-  const proposal = await getProposalByManageToken(db, payload.manageToken);
+  const proposal = await getProposalByManageToken(db, payload.manageToken, payload.signingSecret);
 
   if (proposal.status === "accepted" || proposal.status === "rejected") {
     throw new AppError(409, "PROPOSAL_FINALIZED", "Finalized proposals cannot be changed");
@@ -971,4 +853,5 @@ export async function finalizeProposalDecision(
   return { reviewCount };
 }
 
+export { getSpeakerByManageToken, type SpeakerWithContext } from "./proposals-speaker-capability";
 export { markProposalStatus, softDeleteProposal } from "./proposals-admin";

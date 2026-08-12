@@ -15,11 +15,11 @@
 import { AppError } from "../../errors";
 import { first, run } from "../../db/queries";
 import { normalizeEmail } from "../../validation";
-import { randomToken, sha256Hex } from "../../utils/crypto";
 import { nowIso, addHours } from "../../utils/time";
 import { checkEmailDomainMx } from "../../email/mx-check";
 import type { DatabaseLike, StatementLike } from "../../types";
 import type { RegistrationRecord } from "./types";
+import { newCapabilityLinkSecret, queuedCapabilityToken, signCapabilityToken } from "../capability-links";
 
 const PENDING_CONFIRMATION_DEADLINE_HOURS = 14 * 24;
 
@@ -41,6 +41,7 @@ export async function changeRegistrationEmail(
     registrationId: string;
     newEmail: string;
     confirmationTtlHours: number;
+    signingSecret?: string;
     /**
      * When true, allows changing the email on a cancelled registration and
      * resets its status to pending_email_confirmation. Intended for admin use
@@ -127,8 +128,7 @@ export async function changeRegistrationEmail(
   }
 
   const now = nowIso();
-  const confirmationToken = randomToken(24);
-  const confirmationTokenHash = await sha256Hex(confirmationToken);
+  const confirmationLinkSecret = newCapabilityLinkSecret();
   const confirmationDeadlineAt = addHours(now, PENDING_CONFIRMATION_DEADLINE_HOURS);
   const pendingEmailExpiresAt = addHours(now, params.confirmationTtlHours);
 
@@ -152,14 +152,13 @@ export async function changeRegistrationEmail(
     db,
     `UPDATE registrations
      SET status = 'pending_email_confirmation',
-         confirmation_token_hash = ?,
-         confirmation_token_expires_at = ?,
+         confirmation_link_secret = ?,
          pending_confirmation_deadline_at = ?,
          confirmation_reminder_sent_at = NULL,
          confirmed_at = NULL,
          updated_at = ?
      WHERE id = ?`,
-    [confirmationTokenHash, null, confirmationDeadlineAt, now, registration.id],
+    [confirmationLinkSecret, confirmationDeadlineAt, now, registration.id],
   );
 
   const updated = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE id = ?", [registration.id]);
@@ -167,6 +166,14 @@ export async function changeRegistrationEmail(
     throw new AppError(500, "EMAIL_CHANGE_FAILED", "Failed to update registration");
   }
 
+  const confirmationToken = params.signingSecret
+    ? await signCapabilityToken({
+        signingSecret: params.signingSecret,
+        linkSecret: confirmationLinkSecret,
+        purpose: "registration_confirm",
+        resourceId: registration.id,
+      })
+    : queuedCapabilityToken("registration_confirm", registration.id);
   return {
     registration: updated,
     userId: currentUser.id,

@@ -1,6 +1,5 @@
 import { AppError } from "../../errors";
 import { first, run } from "../../db/queries";
-import { randomToken, sha256Hex } from "../../utils/crypto";
 import { uuid } from "../../utils/ids";
 import { nowIso, addHours } from "../../utils/time";
 import { recordReferralConversion } from "../referrals";
@@ -12,6 +11,7 @@ import {
 } from "../event-days";
 import { roleBasedCapacityExemptReason, syncRegistrationDayWaitlist } from "./day-waitlist";
 import { upsertAttendeeParticipant } from "./participant-registration";
+import { newCapabilityLinkSecret, queuedCapabilityToken, signCapabilityToken } from "../capability-links";
 import type { DatabaseLike } from "../../types";
 import type { RegistrationRecord } from "./types";
 
@@ -40,6 +40,7 @@ export async function createRegistration(
     referredByCode?: string | null;
     pendingConfirmationDeadlineHours?: number;
     confirmationTtlHours?: number;
+    signingSecret?: string;
   },
 ): Promise<{
   registration: RegistrationRecord;
@@ -58,20 +59,17 @@ export async function createRegistration(
     }
   }
   const now = nowIso();
-  const manageToken = randomToken(24);
-  const manageHash = await sha256Hex(manageToken);
+  const registrationId = existing?.id ?? uuid();
+  const manageLinkSecret = newCapabilityLinkSecret();
   const attendanceType = deriveEventAttendanceType(payload.dayAttendance) ?? payload.attendanceType;
   const roleExemptReason = await roleBasedCapacityExemptReason(db, payload.event.id, payload.userId);
   const capacityExemptReason = roleExemptReason;
   const capacityExempt = Boolean(capacityExemptReason);
   const status = await initialRegistrationStatus(payload.inviteId ?? null);
-  let confirmationToken: string | null = null;
-  let confirmationHash: string | null = null;
-  const confirmationExpiresAt: string | null = null;
+  let confirmationLinkSecret: string | null = null;
   let pendingConfirmationDeadlineAt: string | null = null;
   if (status === "pending_email_confirmation") {
-    confirmationToken = randomToken(24);
-    confirmationHash = await sha256Hex(confirmationToken);
+    confirmationLinkSecret = newCapabilityLinkSecret();
     pendingConfirmationDeadlineAt = addHours(
       now,
       payload.pendingConfirmationDeadlineHours ??
@@ -80,7 +78,7 @@ export async function createRegistration(
     );
   }
   const registration: RegistrationRecord = {
-    id: existing?.id ?? uuid(),
+    id: registrationId,
     event_id: payload.event.id,
     user_id: payload.userId,
     invite_id: payload.inviteId ?? null,
@@ -90,10 +88,9 @@ export async function createRegistration(
     source_ref: payload.sourceRef ?? null,
     custom_answers_json: payload.customAnswersJson ?? null,
     referred_by_code: payload.referredByCode ?? null,
-    confirmation_token_hash: confirmationHash,
-    confirmation_token_expires_at: confirmationExpiresAt,
+    confirmation_link_secret: confirmationLinkSecret,
     pending_confirmation_deadline_at: pendingConfirmationDeadlineAt,
-    manage_token_hash: manageHash,
+    manage_link_secret: manageLinkSecret,
     capacity_exempt_in_person: capacityExempt ? 1 : 0,
     capacity_exempt_reason: capacityExemptReason,
     confirmed_at: status === "registered" ? now : null,
@@ -106,9 +103,9 @@ export async function createRegistration(
       db,
       `UPDATE registrations
        SET invite_id = ?, status = ?, attendance_type = ?, source_type = ?, source_ref = ?,
-           custom_answers_json = ?, referred_by_code = ?, confirmation_token_hash = ?,
-           confirmation_token_expires_at = ?, pending_confirmation_deadline_at = ?,
-           manage_token_hash = ?, capacity_exempt_in_person = ?, capacity_exempt_reason = ?,
+           custom_answers_json = ?, referred_by_code = ?, confirmation_link_secret = ?,
+           pending_confirmation_deadline_at = ?,
+           manage_link_secret = ?, capacity_exempt_in_person = ?, capacity_exempt_reason = ?,
            confirmed_at = ?, cancelled_at = NULL, updated_at = ?
        WHERE id = ?`,
       [
@@ -119,10 +116,9 @@ export async function createRegistration(
         registration.source_ref,
         registration.custom_answers_json,
         registration.referred_by_code,
-        registration.confirmation_token_hash,
-        registration.confirmation_token_expires_at,
+        registration.confirmation_link_secret,
         registration.pending_confirmation_deadline_at,
-        registration.manage_token_hash,
+        registration.manage_link_secret,
         registration.capacity_exempt_in_person,
         registration.capacity_exempt_reason,
         registration.confirmed_at,
@@ -135,11 +131,10 @@ export async function createRegistration(
       db,
       `INSERT INTO registrations (
       id, event_id, user_id, invite_id, status, attendance_type, source_type, source_ref,
-      custom_answers_json, referred_by_code, confirmation_token_hash, confirmation_token_expires_at,
-      pending_confirmation_deadline_at,
-      manage_token_hash, capacity_exempt_in_person, capacity_exempt_reason,
+      custom_answers_json, referred_by_code, confirmation_link_secret, pending_confirmation_deadline_at,
+      manage_link_secret, capacity_exempt_in_person, capacity_exempt_reason,
       confirmed_at, cancelled_at, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         registration.id,
         registration.event_id,
@@ -151,10 +146,9 @@ export async function createRegistration(
         registration.source_ref,
         registration.custom_answers_json,
         registration.referred_by_code,
-        registration.confirmation_token_hash,
-        registration.confirmation_token_expires_at,
+        registration.confirmation_link_secret,
         registration.pending_confirmation_deadline_at,
-        registration.manage_token_hash,
+        registration.manage_link_secret,
         registration.capacity_exempt_in_person,
         registration.capacity_exempt_reason,
         registration.confirmed_at,
@@ -192,5 +186,23 @@ export async function createRegistration(
   if (payload.referredByCode) {
     await recordReferralConversion(db, payload.referredByCode);
   }
+  const manageToken = payload.signingSecret
+    ? await signCapabilityToken({
+        signingSecret: payload.signingSecret,
+        linkSecret: registration.manage_link_secret,
+        purpose: "registration_manage",
+        resourceId: registration.id,
+      })
+    : queuedCapabilityToken("registration_manage", registration.id);
+  const confirmationToken = registration.confirmation_link_secret
+    ? payload.signingSecret
+      ? await signCapabilityToken({
+          signingSecret: payload.signingSecret,
+          linkSecret: registration.confirmation_link_secret,
+          purpose: "registration_confirm",
+          resourceId: registration.id,
+        })
+      : queuedCapabilityToken("registration_confirm", registration.id)
+    : null;
   return { registration, manageToken, confirmationToken, reactivated: Boolean(existing) };
 }

@@ -10,10 +10,12 @@ import {
   eventSlugParamsSchema,
   finalizeProposalSchema,
   formKeyParamsSchema,
+  inviteResendLinkSchema,
   okResponseSchema,
   proposalIdParamsSchema,
   proposalCreateResponseSchema,
   proposalCreateSchema,
+  proposalResendManageLinkSchema,
   proposalResendSpeakerManageLinkSchema,
   registrationConfirmQuerySchema,
   registrationConfirmResponseSchema,
@@ -375,6 +377,63 @@ export const proposalResendSpeakerManageLinkRouteSchema = {
       content: {
         "application/json": {
           schema: proposalResendSpeakerManageLinkSchema,
+        },
+      },
+      required: true,
+    },
+  },
+  responses: {
+    "200": {
+      description: "Request accepted. The response is intentionally generic to prevent account enumeration.",
+      content: {
+        "application/json": {
+          schema: successResponseSchema,
+        },
+      },
+    },
+    "400": { description: "Invalid email payload." },
+    "429": { description: "Rate limit exceeded." },
+  },
+};
+
+export const proposalResendManageLinkRouteSchema = {
+  tags: ["Proposals"],
+  summary: "Resend proposer management link",
+  description: "Sends fresh management links when the email matches one or more active proposals for this event.",
+  request: {
+    params: eventSlugParamsSchema,
+    body: {
+      content: {
+        "application/json": {
+          schema: proposalResendManageLinkSchema,
+        },
+      },
+      required: true,
+    },
+  },
+  responses: {
+    "200": {
+      description: "Request accepted. The response is intentionally generic to prevent account enumeration.",
+      content: {
+        "application/json": {
+          schema: successResponseSchema,
+        },
+      },
+    },
+    "400": { description: "Invalid email payload." },
+    "429": { description: "Rate limit exceeded." },
+  },
+};
+
+export const inviteResendLinkRouteSchema = {
+  tags: ["Invites"],
+  summary: "Resend pending invitation links",
+  description: "Sends fresh links for pending or expired invitations matching the supplied email address.",
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: inviteResendLinkSchema,
         },
       },
       required: true,

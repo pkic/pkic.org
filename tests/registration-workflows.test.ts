@@ -5,7 +5,7 @@ import { onRequestPost as createRegistration } from "../functions/api/v1/events/
 import { onRequestPost as confirmEmail } from "../functions/api/v1/events/[eventSlug]/registrations/confirm-email";
 import { onRequestPatch as manageRegistration } from "../functions/api/v1/registrations/manage/[token]";
 import { onRequestPost as createInvites } from "../functions/api/v1/events/[eventSlug]/invites";
-import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
+import { createContext, deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { createInvite } from "../functions/_lib/services/invites";
@@ -16,9 +16,10 @@ import {
 } from "../functions/_lib/services/registrations";
 import { promoteEventWaitlistWithNotifications } from "../functions/_lib/services/registrations/waitlist-promotions";
 import { listCampaignRecipients } from "../functions/_lib/services/admin-email-campaign";
+import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
 
-function extractConfirmationToken(payloadJson: string): string {
-  const payload = JSON.parse(payloadJson) as { confirmationUrl: string };
+async function extractConfirmationToken(payloadJson: string): Promise<string> {
+  const payload = await deliveredEmailPayload<{ confirmationUrl: string }>(env.DB, env, payloadJson);
   const url = new URL(payload.confirmationUrl);
   return url.searchParams.get("token") as string;
 }
@@ -81,7 +82,7 @@ describe("registration workflows", () => {
       env.DB,
       "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' ORDER BY created_at DESC LIMIT 1",
     );
-    const token = extractConfirmationToken(outbox[0].payload_json);
+    const token = await extractConfirmationToken(outbox[0].payload_json);
 
     const confirmResponse = await confirmEmail(
       createContext(
@@ -108,6 +109,7 @@ describe("registration workflows", () => {
       inviteeEmail: "matching-invite@pkic.org",
       inviteeFirstName: "Match",
       inviteType: "attendee",
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
     });
 
     const createResponse = await createRegistration(
@@ -138,7 +140,7 @@ describe("registration workflows", () => {
       env.DB,
       "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' ORDER BY created_at DESC LIMIT 1",
     );
-    const token = extractConfirmationToken(outbox[0].payload_json);
+    const token = await extractConfirmationToken(outbox[0].payload_json);
 
     const confirmResponse = await confirmEmail(
       createContext(
@@ -181,11 +183,13 @@ describe("registration workflows", () => {
       eventId,
       inviteeEmail: "token-user@example.test",
       inviteType: "attendee",
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
     });
     const emailInvite = await createInvite(env.DB, {
       eventId,
       inviteeEmail: "email-user@example.test",
       inviteType: "attendee",
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
     });
 
     const createResponse = await createRegistration(
@@ -242,8 +246,7 @@ describe("registration workflows", () => {
 
     const userId = crypto.randomUUID();
     const registrationId = crypto.randomUUID();
-    const manageToken = "manage-token-123";
-    const manageHash = await sha256Hex(manageToken);
+    const manageLinkSecret = await sha256Hex("manage-token-123");
 
     await env.DB.batch([
       env.DB.prepare(`
@@ -253,14 +256,20 @@ describe("registration workflows", () => {
       env.DB.prepare(`
         INSERT INTO registrations (
           id, event_id, user_id, invite_id, status, attendance_type, source_type, source_ref,
-          custom_answers_json, referred_by_code, confirmation_token_hash, confirmation_token_expires_at,
-          manage_token_hash, confirmed_at, cancelled_at, created_at, updated_at
+          custom_answers_json, referred_by_code, confirmation_link_secret,
+          manage_link_secret, confirmed_at, cancelled_at, created_at, updated_at
         ) VALUES (
           '${registrationId}', '${eventId}', '${userId}', NULL, 'registered', 'virtual',
-          'direct', NULL, NULL, NULL, NULL, NULL, '${manageHash}', datetime('now'), NULL, datetime('now'), datetime('now')
+          'direct', NULL, NULL, NULL, NULL, '${manageLinkSecret}', datetime('now'), NULL, datetime('now'), datetime('now')
         )
       `),
     ]);
+    const manageToken = await issueDatabaseCapability({
+      db: env.DB,
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+      purpose: "registration_manage",
+      resourceId: registrationId,
+    });
 
     const invites = Array.from({ length: 6 }).map((_, index) => ({
       email: `target${index}@example.test`,
@@ -311,10 +320,12 @@ describe("registration workflows", () => {
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
     await confirmRegistrationByToken(env.DB, {
       token: first.confirmationToken as string,
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     const second = await createRegistrationService(env.DB, {
@@ -324,6 +335,7 @@ describe("registration workflows", () => {
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     const confirmResponse = await confirmEmail(
@@ -429,10 +441,12 @@ describe("registration workflows", () => {
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
     await confirmRegistrationByToken(env.DB, {
       token: holder1.confirmationToken as string,
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     const holder2 = await createRegistrationService(env.DB, {
@@ -442,10 +456,12 @@ describe("registration workflows", () => {
       dayAttendance: [{ dayDate: "2026-12-02", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
     await confirmRegistrationByToken(env.DB, {
       token: holder2.confirmationToken as string,
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     const waiting = await createRegistrationService(env.DB, {
@@ -458,6 +474,7 @@ describe("registration workflows", () => {
       ],
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     const confirmResponse = await confirmEmail(
@@ -525,10 +542,12 @@ describe("registration workflows", () => {
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
     await confirmRegistrationByToken(env.DB, {
       token: holder.confirmationToken as string,
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     const acceptCandidate = await createRegistrationService(env.DB, {
@@ -538,10 +557,12 @@ describe("registration workflows", () => {
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
     await confirmRegistrationByToken(env.DB, {
       token: acceptCandidate.confirmationToken as string,
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     const expiredCandidate = await createRegistrationService(env.DB, {
@@ -551,10 +572,12 @@ describe("registration workflows", () => {
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
     const expiredConfirmed = await confirmRegistrationByToken(env.DB, {
       token: expiredCandidate.confirmationToken as string,
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     await updateRegistrationById(
@@ -583,11 +606,11 @@ describe("registration workflows", () => {
       env.DB,
       "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_waitlist_offer' AND recipient_email = 'accept-user@example.test' ORDER BY created_at DESC LIMIT 1",
     );
-    const offerPayload = JSON.parse(offerPayloadRows[0].payload_json) as {
+    const offerPayload = await deliveredEmailPayload<{
       waitlistOfferNotice: boolean;
       manageUrl: string;
       dayAttendance: Array<{ statusLabel: string; waitlistStatus: string; isWaitlistOffer: boolean }>;
-    };
+    }>(env.DB, env, offerPayloadRows[0].payload_json);
     const offeredManageToken = new URL(offerPayload.manageUrl).searchParams.get("token") as string;
     expect(offerPayload.waitlistOfferNotice).toBe(true);
     expect(offerPayload.dayAttendance[0].statusLabel).toBe("Waitlist offer sent");

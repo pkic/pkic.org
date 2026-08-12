@@ -40,12 +40,14 @@ describe("Registration Email Change", () => {
         attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
 
       const result = await changeRegistrationEmail(env.DB, {
         registrationId: reg.id,
         newEmail: "newemail@example.com",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
 
       expect(result.userId).toBe(user.id);
@@ -74,6 +76,7 @@ describe("Registration Email Change", () => {
         attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
 
       await expect(
@@ -81,6 +84,7 @@ describe("Registration Email Change", () => {
           registrationId: reg.id,
           newEmail: "original@example.com",
           confirmationTtlHours: 24,
+          signingSecret: "test-signing-secret",
         }),
       ).rejects.toThrow("The new email address is the same as the current one");
     });
@@ -96,16 +100,18 @@ describe("Registration Email Change", () => {
         attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
 
       const result = await changeRegistrationEmail(env.DB, {
         registrationId: reg.id,
         newEmail: "another@example.com",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
 
       expect(result.registration.status).toBe("pending_email_confirmation");
-      expect(result.registration.confirmation_token_hash).toBeTruthy();
+      expect(result.registration.confirmation_link_secret).toBeTruthy();
       expect(result.registration.confirmed_at).toBeNull();
     });
 
@@ -120,6 +126,7 @@ describe("Registration Email Change", () => {
         attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
       await run(env.DB, "UPDATE registrations SET status = 'cancelled' WHERE id = ?", [reg.id]);
 
@@ -127,6 +134,7 @@ describe("Registration Email Change", () => {
         registrationId: reg.id,
         newEmail: "cancelled-recovery@example.com",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
         allowCancelled: true,
       });
 
@@ -144,6 +152,7 @@ describe("Registration Email Change", () => {
         attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
       await run(env.DB, "UPDATE registrations SET status = 'cancelled' WHERE id = ?", [reg.id]);
 
@@ -152,6 +161,7 @@ describe("Registration Email Change", () => {
           registrationId: reg.id,
           newEmail: "test@example.com",
           confirmationTtlHours: 24,
+          signingSecret: "test-signing-secret",
         }),
       ).rejects.toThrow("Cannot change email on a cancelled registration");
     });
@@ -169,6 +179,7 @@ describe("Registration Email Change", () => {
         attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
 
       // Set pending email
@@ -208,6 +219,7 @@ describe("Registration Email Change", () => {
         attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
 
       const now = nowIso();
@@ -249,6 +261,7 @@ describe("Registration Email Change", () => {
         attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
       const { registration: reg2 } = await createRegistration(env.DB, {
         event: { id: eventId },
@@ -256,6 +269,7 @@ describe("Registration Email Change", () => {
         attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
 
       // Set user1's pending email to user2's email
@@ -300,6 +314,7 @@ describe("Registration Email Change", () => {
         attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
 
       const now = nowIso();
@@ -338,6 +353,7 @@ describe("Registration Email Change", () => {
         attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
       const { registration: dupeReg } = await createRegistration(env.DB, {
         event: { id: eventId },
@@ -345,6 +361,7 @@ describe("Registration Email Change", () => {
         attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
 
       // Original user initiates email change to duplicate user's email
@@ -352,6 +369,7 @@ describe("Registration Email Change", () => {
         registrationId: origReg.id,
         newEmail: "workflow-dupe@example.com",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
 
       expect(changeResult.pendingEmail).toBe("workflow-dupe@example.com");
@@ -391,6 +409,7 @@ describe("Registration Email Change", () => {
         attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
 
       const user = await findOrCreateUser(env.DB, { email: "victim@example.com" });
@@ -400,6 +419,7 @@ describe("Registration Email Change", () => {
         attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
 
       await expect(
@@ -407,6 +427,7 @@ describe("Registration Email Change", () => {
           registrationId: reg.id,
           newEmail: "squatter@example.com",
           confirmationTtlHours: 24,
+          signingSecret: "test-signing-secret",
         }),
       ).rejects.toThrow("This email address is already in use by another account");
 
@@ -436,6 +457,7 @@ describe("Registration Email Change", () => {
         attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
 
       await expect(
@@ -443,6 +465,7 @@ describe("Registration Email Change", () => {
           registrationId: reg.id,
           newEmail: "contested@example.com",
           confirmationTtlHours: 24,
+          signingSecret: "test-signing-secret",
         }),
       ).rejects.toThrow("currently being claimed by another account");
     });
@@ -456,6 +479,7 @@ describe("Registration Email Change", () => {
         attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
 
       const user = await findOrCreateUser(env.DB, { email: "primary@example.com" });
@@ -465,12 +489,14 @@ describe("Registration Email Change", () => {
         attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
 
       const result = await changeRegistrationEmail(env.DB, {
         registrationId: reg.id,
         newEmail: "dupe@example.com",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
       expect(result.pendingEmail).toBe("dupe@example.com");
     });
@@ -491,6 +517,7 @@ describe("Registration Email Change", () => {
         attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
       await createRegistration(env.DB, {
         event: { id: sharedEventId },
@@ -498,6 +525,7 @@ describe("Registration Email Change", () => {
         attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
 
       // Loser also has an exclusive registration on another event.
@@ -507,6 +535,7 @@ describe("Registration Email Change", () => {
         attendanceType: "virtual",
         sourceType: "web",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
 
       // Initiate + finalize the merge.
@@ -514,6 +543,7 @@ describe("Registration Email Change", () => {
         registrationId: survivorReg.id,
         newEmail: "loser@example.com",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
       const result = await finalizeEmailChange(env.DB, {
         userId: survivor.id,
@@ -552,6 +582,7 @@ describe("Registration Email Change", () => {
         attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
       await createRegistration(env.DB, {
         event: { id: sharedEventId },
@@ -559,6 +590,7 @@ describe("Registration Email Change", () => {
         attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
 
       // Both have a registration on a SECOND shared event -- repointing the
@@ -569,6 +601,7 @@ describe("Registration Email Change", () => {
         attendanceType: "virtual",
         sourceType: "web",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
       const { registration: loserOtherShared } = await createRegistration(env.DB, {
         event: { id: otherSharedEventId },
@@ -576,12 +609,14 @@ describe("Registration Email Change", () => {
         attendanceType: "virtual",
         sourceType: "web",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
 
       await changeRegistrationEmail(env.DB, {
         registrationId: survivorReg.id,
         newEmail: "loser2@example.com",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
       await finalizeEmailChange(env.DB, {
         userId: survivor.id,
@@ -607,6 +642,7 @@ describe("Registration Email Change", () => {
         attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
       const now = nowIso();
       await run(env.DB, "UPDATE users SET pending_email = ?, pending_email_expires_at = ? WHERE id = ?", [
@@ -633,12 +669,14 @@ describe("Registration Email Change", () => {
         attendanceType: "in_person",
         sourceType: "web",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
 
       const result = await changeRegistrationEmail(env.DB, {
         registrationId: reg.id,
         newEmail: "  MIXED.Case@Example.COM  ",
         confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
       });
 
       expect(result.pendingEmail).toBe("mixed.case@example.com");

@@ -44,9 +44,10 @@ export async function getPresentationUploader(
 export async function confirmSpeakerParticipation(
   db: DatabaseLike,
   manageToken: string,
+  signingSecret: string,
   payload: { termsAccepted: boolean },
 ): Promise<void> {
-  const { speaker } = await getSpeakerByManageToken(db, manageToken);
+  const { speaker } = await getSpeakerByManageToken(db, manageToken, signingSecret);
 
   if (speaker.status === "confirmed") {
     return;
@@ -78,9 +79,10 @@ export async function confirmSpeakerParticipation(
 export async function declineSpeakerParticipation(
   db: DatabaseLike,
   manageToken: string,
+  signingSecret: string,
   payload: { reason?: string | null },
 ): Promise<void> {
-  const { speaker, proposal } = await getSpeakerByManageToken(db, manageToken);
+  const { speaker, proposal } = await getSpeakerByManageToken(db, manageToken, signingSecret);
 
   if (speaker.status === "declined") {
     return;

@@ -11,6 +11,7 @@ import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { finalizeProposalSchema } from "../../../../../../assets/shared/schemas/api";
 import { buildProposalDecisionEmailPlan } from "./decision-emails";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import { queuedCapabilityToken } from "../../../../../_lib/services/capability-links";
 
 export async function onRequestPost(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
@@ -73,9 +74,9 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     {
       appBaseUrl,
       resolveSpeakerManageUrl: async (speaker, event) =>
-        speakerManagePageUrl(appBaseUrl, event, speaker.manage_token_hash ?? ""),
-      resolveProposalManageUrl: async (event, proposalManageToken) =>
-        proposalManagePageUrl(appBaseUrl, event, proposalManageToken),
+        speakerManagePageUrl(appBaseUrl, event, queuedCapabilityToken("speaker_manage", speaker.speaker_id)),
+      resolveProposalManageUrl: async (event, resourceId) =>
+        proposalManagePageUrl(appBaseUrl, event, queuedCapabilityToken("proposal_manage", resourceId)),
     },
   );
 
@@ -113,7 +114,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     finalStatus: { from: previousDecision?.final_status ?? null, to: body.finalStatus },
     decisionNote: { from: previousDecision?.decision_note ?? null, to: body.decisionNote ?? null },
     queuedEmailCount: { from: 0, to: plan.messages.length },
-    manageLinkPolicy: { from: "rotated", to: "reused_existing" },
+    manageLinkPolicy: { from: null, to: "expiring_capability" },
   });
 
   return json({ success: true, ...finalized, minReviewsRequired });

@@ -1,7 +1,6 @@
 import { all } from "../../db/queries";
 import { registrationConfirmPageUrl } from "../frontend-links";
 import { buildEventEmailVariables } from "../events";
-import { randomToken, sha256Hex } from "../../utils/crypto";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
 import { queueRegistrationStatusEmail, type RegistrationStatusEmailEvent } from "../registrations/status-notifications";
@@ -16,6 +15,7 @@ import {
 import { prepareBulkQueueInviteEmailStatements } from "../../email/outbox";
 import { batchStatements } from "./shared";
 import type { DatabaseLike } from "../../types";
+import { queuedCapabilityToken } from "../capability-links";
 
 export async function runConfirmationReminders(
   db: DatabaseLike,
@@ -52,7 +52,7 @@ export async function runConfirmationReminders(
           `SELECT
            r.id, r.event_id, u.id AS user_id, u.first_name, u.last_name,
            COALESCE(u.pending_email, u.email) AS email,
-           r.confirmation_token_hash, r.confirmation_token_expires_at,
+           r.confirmation_link_secret,
            r.confirmation_reminder_sent_at, r.pending_confirmation_deadline_at, r.created_at,
            e.name AS event_name, e.slug AS event_slug, e.base_path AS event_base_path,
            e.timezone AS event_timezone, e.starts_at AS event_starts_at,
@@ -87,7 +87,7 @@ export async function runConfirmationReminders(
           .prepare(
             `UPDATE registrations
              SET status = 'cancelled', cancelled_at = ?,
-                 confirmation_token_hash = NULL, confirmation_token_expires_at = NULL,
+                 confirmation_link_secret = NULL,
                  pending_confirmation_deadline_at = NULL, confirmation_reminder_sent_at = NULL,
                  updated_at = ?
              WHERE id = ?`,
@@ -141,7 +141,7 @@ export async function runConfirmationReminders(
           `SELECT
            r.id, r.event_id, u.id AS user_id, u.first_name, u.last_name,
            COALESCE(u.pending_email, u.email) AS email,
-           r.confirmation_token_hash, r.confirmation_token_expires_at,
+           r.confirmation_link_secret,
            r.confirmation_reminder_sent_at, r.pending_confirmation_deadline_at, r.created_at,
            e.name AS event_name, e.slug AS event_slug, e.base_path AS event_base_path,
            e.timezone AS event_timezone, e.ends_at AS event_ends_at,
@@ -151,7 +151,7 @@ export async function runConfirmationReminders(
          JOIN events e ON e.id = r.event_id
          JOIN users u ON u.id = r.user_id
          WHERE r.status = 'pending_email_confirmation'
-           AND r.confirmation_token_hash IS NOT NULL
+           AND r.confirmation_link_secret IS NOT NULL
            AND datetime(COALESCE(r.confirmation_reminder_sent_at, r.created_at)) <= datetime(?)
            AND julianday(
              CASE WHEN r.pending_confirmation_deadline_at IS NOT NULL
@@ -205,27 +205,20 @@ export async function runConfirmationReminders(
   }
 
   if (!dryRun && dueConfirmations.length > 0) {
-    const reminderRows = await Promise.all(
-      dueConfirmations.map(async (row) => {
-        const freshToken = randomToken(24);
-        const freshHash = await sha256Hex(freshToken);
-        return {
-          row,
-          freshHash,
-          confirmationUrl: registrationConfirmPageUrl(
-            appBaseUrl,
-            {
-              slug: row.event_slug,
-              base_path: row.event_base_path,
-              starts_at: row.event_starts_at,
-              settings_json: row.event_settings_json,
-            },
-            freshToken,
-            row.id,
-          ),
-        };
-      }),
-    );
+    const reminderRows = dueConfirmations.map((row) => ({
+      row,
+      confirmationUrl: registrationConfirmPageUrl(
+        appBaseUrl,
+        {
+          slug: row.event_slug,
+          base_path: row.event_base_path,
+          starts_at: row.event_starts_at,
+          settings_json: row.event_settings_json,
+        },
+        queuedCapabilityToken("registration_confirm", row.id),
+        row.id,
+      ),
+    }));
 
     const emailRows = reminderRows.map(({ row, confirmationUrl }) => {
       const event: EventRouteRow = {
@@ -263,14 +256,10 @@ export async function runConfirmationReminders(
       };
     });
 
-    const registrationUpdateStatements = reminderRows.flatMap(({ row, freshHash }) => {
+    const registrationUpdateStatements = reminderRows.flatMap(({ row }) => {
       const deadline = pendingConfirmationDeadline(row);
       return [
-        db
-          .prepare(
-            `UPDATE registrations SET confirmation_reminder_sent_at = ?, confirmation_token_hash = ?, confirmation_token_expires_at = NULL WHERE id = ?`,
-          )
-          .bind(now, freshHash, row.id),
+        db.prepare(`UPDATE registrations SET confirmation_reminder_sent_at = ? WHERE id = ?`).bind(now, row.id),
         // Extend (never shorten) pending_email_expires_at to the deadline so reminder
         // links stay clickable and a shorter-deadline registration can't clobber a longer one.
         db

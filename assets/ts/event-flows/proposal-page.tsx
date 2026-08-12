@@ -14,6 +14,7 @@ import { readField, findSubmitButton } from "../shared/form/helpers";
 import { SpeakerFormCard } from "../components/SpeakerFormCard";
 import { SuccessPanel } from "../components/SuccessPanel";
 import type { ProfileLinksHandle } from "../components/ProfileLinksInput";
+import { tryRecoverInvalidInvite } from "../shared/widgets/invite-recovery";
 
 // ── Session type labels ───────────────────────────────────────────────────────
 
@@ -409,6 +410,17 @@ async function main(): Promise<void> {
         clearReferralSession();
         showSuccessPanel(boot.root, form, result, firstName, eventName, eventSlug);
       } catch (error) {
+        if (
+          await tryRecoverInvalidInvite({
+            error,
+            email: readField(form, "email"),
+            apiBase,
+            statusEl,
+            hasInviteToken: Boolean(query.inviteToken),
+          })
+        ) {
+          return;
+        }
         handleSubmitError(error, form, statusEl);
       }
     });

@@ -47,10 +47,8 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     },
     {
       appBaseUrl,
-      resolveSpeakerManageUrl: async (speaker, event) =>
-        speakerManagePageUrl(appBaseUrl, event, speaker.manage_token_hash ?? ""),
-      resolveProposalManageUrl: async (event, proposalManageToken) =>
-        proposalManagePageUrl(appBaseUrl, event, proposalManageToken),
+      resolveSpeakerManageUrl: async (_speaker, event) => speakerManagePageUrl(appBaseUrl, event, "preview-token"),
+      resolveProposalManageUrl: async (event) => proposalManagePageUrl(appBaseUrl, event, "preview-token"),
     },
   );
 

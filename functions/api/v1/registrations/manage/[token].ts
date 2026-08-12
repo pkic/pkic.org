@@ -25,6 +25,9 @@ import { buildEventEmailVariables } from "../../../../_lib/services/events";
 import { writeAuditLog } from "../../../../_lib/services/audit";
 import { parseJsonSafe } from "../../../../_lib/utils/json";
 import { registrationManageSchema } from "../../../../../assets/shared/schemas/api";
+import { requireInternalSecret } from "../../../../_lib/request";
+import { omitCapabilitySecrets, queuedCapabilityToken } from "../../../../_lib/services/capability-links";
+import type { RegistrationRecord } from "../../../../_lib/services/registrations/types";
 
 export async function onRequestPatch(c: any): Promise<Response> {
   try {
@@ -77,6 +80,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
         )
       : await updateRegistrationByManageToken(c.env.DB, {
           manageToken: token,
+          signingSecret: requireInternalSecret(c.env),
           action: body.action,
           attendanceType: body.attendanceType ?? deriveEventAttendanceType(body.dayAttendance) ?? undefined,
           dayAttendance: body.dayAttendance,
@@ -144,7 +148,8 @@ export async function onRequestPatch(c: any): Promise<Response> {
         const emailResult = await changeRegistrationEmail(c.env.DB, {
           registrationId: updated.id,
           newEmail: body.email,
-          confirmationTtlHours: config.manageTokenTtlHours,
+          confirmationTtlHours: config.confirmationLinkTtlHours,
+          signingSecret: requireInternalSecret(c.env),
           allowCancelled: true,
         });
 
@@ -191,7 +196,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
         const confirmationUrl = registrationConfirmPageUrl(
           appBaseUrl,
           event,
-          emailResult.confirmationToken,
+          queuedCapabilityToken("registration_confirm", updated.id),
           updated.id,
         );
         const userRecord = await first<{
@@ -255,7 +260,11 @@ export async function onRequestPatch(c: any): Promise<Response> {
       ]);
       if (event && user) {
         const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-        const manageUrl = registrationManagePageUrl(appBaseUrl, event, token);
+        const manageUrl = registrationManagePageUrl(
+          appBaseUrl,
+          event,
+          queuedCapabilityToken("registration_manage", updated.id),
+        );
         const templateKey =
           body.action === "report_unauthorized" ? "registration_unauthorized" : "registration_updated";
         const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, updated.id);
@@ -301,10 +310,14 @@ export async function onRequestPatch(c: any): Promise<Response> {
     }
 
     const finalRegistration = emailChanged
-      ? await first(c.env.DB, "SELECT * FROM registrations WHERE id = ?", [updated.id])
+      ? await first<RegistrationRecord>(c.env.DB, "SELECT * FROM registrations WHERE id = ?", [updated.id])
       : updated;
 
-    return json({ success: true, registration: finalRegistration, emailChanged });
+    return json({
+      success: true,
+      registration: finalRegistration ? omitCapabilitySecrets(finalRegistration) : null,
+      emailChanged,
+    });
   } catch (error) {
     return handleError(error);
   }
@@ -360,7 +373,7 @@ export async function onRequestGet(c: any): Promise<Response> {
     return json({
       success: true,
       registration: {
-        ...registration,
+        ...omitCapabilitySecrets(registration),
         custom_answers: registration.custom_answers_json ? JSON.parse(registration.custom_answers_json) : null,
         isEmailVerified: registration.confirmed_at !== null,
       },

@@ -1,8 +1,9 @@
 import { json } from "../../../../_lib/http";
-import { sha256Hex } from "../../../../_lib/utils/crypto";
 import { first } from "../../../../_lib/db/queries";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
 import { proposalPageUrl, registrationPageUrl } from "../../../../_lib/services/frontend-links";
+import { verifyDatabaseCapability } from "../../../../_lib/services/capability-links";
+import { requireInternalSecret } from "../../../../_lib/request";
 
 interface InviteRow {
   id: string;
@@ -31,12 +32,20 @@ interface EventRow {
 export async function onRequestGet(c: any): Promise<Response> {
   c.set("sensitive", true);
 
-  const tokenHash = await sha256Hex(c.req.param("token"));
   const inviteId = new URL(c.req.raw.url).searchParams.get("id");
+  const verified = await verifyDatabaseCapability({
+    db: c.env.DB,
+    signingSecret: requireInternalSecret(c.env),
+    purpose: "invite",
+    token: c.req.param("token"),
+  });
+  if (!verified.ok) {
+    return json({ status: verified.reason === "expired" ? "expired" : "invalid" });
+  }
   const invite = await first<InviteRow>(
     c.env.DB,
-    "SELECT id, event_id, invitee_first_name, invite_type, status, expires_at FROM invites WHERE token_hash = ? AND (? IS NULL OR id = ?)",
-    [tokenHash, inviteId, inviteId],
+    "SELECT id, event_id, invitee_first_name, invite_type, status, expires_at FROM invites WHERE id = ? AND (? IS NULL OR id = ?)",
+    [verified.resourceId, inviteId, inviteId],
   );
 
   if (!invite) {

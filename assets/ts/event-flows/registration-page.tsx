@@ -20,6 +20,7 @@ import { registrationCreateSchema } from "../../shared/schemas/api";
 import { readField, deriveEventAttendanceType, findSubmitButton } from "../shared/form/helpers";
 import { SuccessPanel } from "../components/SuccessPanel";
 import { optionsFor } from "../shared/form/custom-field-rules";
+import { tryRecoverInvalidInvite } from "../shared/widgets/invite-recovery";
 
 interface RegistrationSubmitResponse {
   success: boolean;
@@ -564,6 +565,17 @@ async function main(): Promise<void> {
           eventDayCount || undefined,
         );
       } catch (error) {
+        if (
+          await tryRecoverInvalidInvite({
+            error,
+            email: readField(form, "email"),
+            apiBase,
+            statusEl,
+            hasInviteToken: Boolean(query.inviteToken),
+          })
+        ) {
+          return;
+        }
         handleSubmitError(error, form, statusEl);
       }
     });

@@ -17,6 +17,7 @@ describe("invite decline", () => {
       inviteeEmail: "form-get@example.test",
       inviteType: "attendee",
       ttlHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     const response = await declineGet(
@@ -37,6 +38,7 @@ describe("invite decline", () => {
       inviteeEmail: "already-done@example.test",
       inviteType: "attendee",
       ttlHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     // Decline via POST first
@@ -69,6 +71,7 @@ describe("invite decline", () => {
       inviteeEmail: "other-no-note@example.test",
       inviteType: "attendee",
       ttlHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     await expect(
@@ -94,6 +97,7 @@ describe("invite decline", () => {
       inviteeEmail: "reason-store@example.test",
       inviteType: "attendee",
       ttlHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     const response = await declinePost(
@@ -140,6 +144,7 @@ describe("invite decline", () => {
       inviteeEmail: "decliner@example.test",
       inviteType: "attendee",
       ttlHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     const response = await declinePost(
@@ -195,6 +200,7 @@ describe("invite decline", () => {
       inviteeEmail: "decliner-unsub@example.test",
       inviteType: "attendee",
       ttlHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     const response = await declinePost(
