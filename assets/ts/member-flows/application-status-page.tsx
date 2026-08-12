@@ -1,5 +1,5 @@
 /**
- * Membership application status-check page (PRD §1.2).
+ * Membership application status-check page.
  *
  * Reached via the token-gated link emailed on submission (see
  * functions/api/v1/members/applications/index.ts statusUrl). Falls back to a

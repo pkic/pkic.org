@@ -1,6 +1,6 @@
 /**
  * PATCH  /api/v1/admin/consortium/meetings/:meetingId/ics-files/:fileId —
- *        update label or activate/deactivate an ICS file (PRD §4.12).
+ *        update label or activate/deactivate an ICS file.
  * DELETE /api/v1/admin/consortium/meetings/:meetingId/ics-files/:fileId —
  *        delete an ICS file outright (R2 object included).
  */

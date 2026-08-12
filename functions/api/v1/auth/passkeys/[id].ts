@@ -1,5 +1,5 @@
 /**
- * DELETE /api/v1/auth/passkeys/:id — PRD §3.4, remove a passkey.
+ * DELETE /api/v1/auth/passkeys/:id, remove a passkey.
  */
 import { OpenAPIRoute } from "chanfana";
 import { jsonNoStore } from "../../../../_lib/http";

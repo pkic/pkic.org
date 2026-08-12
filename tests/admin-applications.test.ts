@@ -1,7 +1,7 @@
 /**
  * admin-applications.test.ts
  *
- * PRD §4.2 — admin membership application endpoints:
+ * admin membership application endpoints:
  *  - PATCH /api/v1/admin/applications/:id (Fix 3: correct applicant-submitted
  *    fields without transitioning stage)
  *  - GET /api/v1/admin/applications?sort=... (Fix 4: sortable columns)
@@ -18,6 +18,7 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { createApplicationFormSubmission } from "./helpers/member-applications";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -58,7 +59,7 @@ async function createApplication(overrides: Record<string, unknown> = {}): Promi
   await env.DB.prepare(
     `INSERT INTO member_applications
        (id, applicant_email, applicant_name, organization_name, organization_domain, membership_category,
-        answers_json, status, stage, stage_entered_at, manage_token_hash, created_at, updated_at)
+        form_submission_id, status, stage, stage_entered_at, manage_token_hash, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, datetime('now'))`,
   )
     .bind(
@@ -68,7 +69,7 @@ async function createApplication(overrides: Record<string, unknown> = {}): Promi
       (overrides.organization_name as string) ?? "Example Org",
       (overrides.organization_domain as string) ?? "example.test",
       (overrides.membership_category as string) ?? "F",
-      (overrides.answers_json as string | null) ?? null,
+      (overrides.form_submission_id as string | null) ?? null,
       (overrides.status as string) ?? "pending",
       (overrides.stage as string) ?? "pending",
       crypto.randomUUID(),
@@ -91,9 +92,11 @@ describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application field
   });
 
   it("edits top-level fields and answers, without transitioning stage", async () => {
-    const { id } = await createApplication({
-      answers_json: JSON.stringify({ job_title: "Engineer", reason: "Original reason" }),
+    const formSubmissionId = await createApplicationFormSubmission({
+      job_title: "Engineer",
+      reason: "Original reason",
     });
+    const { id } = await createApplication({ form_submission_id: formSubmissionId });
 
     const response = await call(adminToken, `/api/v1/admin/applications/${id}`, {
       method: "PATCH",
@@ -296,15 +299,14 @@ describe("GET /api/v1/admin/applications?sort=... (Fix 4 — sortable columns)",
     expect(body.applications.map((a) => a.applicantName)).toEqual(["Zed Applicant", "Amy Applicant"]);
   });
 
-  it("falls back to the default order for an unknown/unsafe sort column, without erroring", async () => {
+  it("rejects an unknown/unsafe sort column with a 400 instead of silently ignoring it", async () => {
     const response = await call(
       adminToken,
       `/api/v1/admin/applications?sort=${encodeURIComponent("id; DROP TABLE member_applications; --")}`,
     );
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as { applications: Array<{ applicantName: string }> };
-    // Falls back to created_at DESC — same as the no-sort-param default.
-    expect(body.applications.map((a) => a.applicantName)).toEqual(["Amy Applicant", "Zed Applicant"]);
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("VALIDATION_ERROR");
 
     const stillExists = await queryAll(env.DB, "SELECT id FROM member_applications");
     expect(stillExists.length).toBe(2);

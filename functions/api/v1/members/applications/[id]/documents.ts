@@ -1,12 +1,12 @@
 /**
  * POST/GET /api/v1/members/applications/:id/documents?token=...
  *
- * Token-gated document upload/list for a membership applicant (PRD §1.2,
- * §2.3 application_documents). Reuses ASSETS_BUCKET (env.ASSETS_BUCKET) —
+ * Token-gated document upload/list for a membership applicant,
+ * application_documents). Reuses ASSETS_BUCKET (env.ASSETS_BUCKET) —
  * the codebase's general-purpose R2 bucket — rather than provisioning a
  * dedicated bucket, since that requires an out-of-band Cloudflare dashboard
- * change outside the scope of this migration. r2Key convention per PRD
- * §2.3: application-docs/{application_id}/{uuid}-{filename}.
+ * change outside the scope of this migration. r2Key convention:
+ * application-docs/{application_id}/{uuid}-{filename}.
  */
 import { OpenAPIRoute } from "chanfana";
 import { AppError } from "../../../../../_lib/errors";

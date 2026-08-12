@@ -1,5 +1,5 @@
 /**
- * Phase 3 (PRD §3) passkey (WebAuthn) registration and authentication.
+ * Passkey (WebAuthn) registration and authentication.
  *
  * The WebAuthn ceremony's server-held challenge is carried statelessly in a
  * short-lived signed JWT rather than a new DB table — see migration 0036's
@@ -235,8 +235,8 @@ export async function beginPasskeyAuthentication(
   const rpId = requireEnvVar(env.WEBAUTHN_RP_ID, "WEBAUTHN_RP_ID");
   const signingSecret = requireEnvVar(env.INTERNAL_SIGNING_SECRET, "INTERNAL_SIGNING_SECRET");
 
-  // No `allowCredentials` — a usernameless/discoverable-credential flow per
-  // §3.4's "no auth required" begin endpoint. The browser lets the user pick
+  // No `allowCredentials` — a usernameless/discoverable-credential flow
+  // "no auth required" begin endpoint. The browser lets the user pick
   // from any resident credential; completePasskeyAuthentication resolves
   // which user it was from the assertion's own credential ID (`response.id`,
   // stored in the clear in passkey_credentials.credential_id — see migration
@@ -302,7 +302,7 @@ export async function completePasskeyAuthentication(
 
   const { newCounter } = verification.authenticationInfo;
 
-  // Clone-attack detection (§3.4/§10.4): a resident/synced authenticator may
+  // Clone-attack detection: a resident/synced authenticator may
   // legitimately report 0 on every assertion (no counter support), so only a
   // *non-increasing* nonzero counter indicates a replayed/cloned credential.
   if (newCounter !== 0 && newCounter <= credentialRow.sign_count) {

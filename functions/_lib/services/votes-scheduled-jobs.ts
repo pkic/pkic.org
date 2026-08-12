@@ -1,5 +1,5 @@
 /**
- * Voting due-work (PRD §4.8, Phase 4B): opens scheduled votes, closes/
+ * Voting due-work: opens scheduled votes, closes/
  * advances open votes past closes_at, and emails each forum vote's
  * eligible delegates (`forum-vote-delegate-notify`) on initial open and on
  * every round advance. Folded into the existing 15-minute due-work cron

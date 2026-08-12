@@ -1,6 +1,6 @@
 /**
  * GET /api/v1/me/organization/reviews — status of my organization's
- * pending/past content submissions (PRD §4.11).
+ * pending/past content submissions.
  */
 import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../../_lib/http";

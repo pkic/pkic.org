@@ -1,5 +1,5 @@
 /**
- * POST /api/v1/auth/passkeys/authenticate/complete — PRD §3.4.
+ * POST /api/v1/auth/passkeys/authenticate/complete.
  *
  * Mirrors admin/auth/verify-link.ts's / member/auth/verify-link.ts's
  * session-issuance response shape exactly (Set-Cookie + {success,
@@ -7,7 +7,7 @@
  * saveAuth()-style handling for both login methods. Which shape comes back
  * depends on which population (staff vs member) the authenticating
  * passkey's owner turned out to be eligible for — see
- * completePasskeyAuthentication's kind-discriminated result (PRD §11 UI-1).
+ * completePasskeyAuthentication's kind-discriminated result.
  */
 import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../_lib/http";

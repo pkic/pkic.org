@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** Schemas for the public member directory & working groups endpoints (PRD §1.5). */
+/** Schemas for the public member directory & working groups endpoints. */
 
 export const publicMemberSummarySchema = z.object({
   id: z.string(),
@@ -33,7 +33,7 @@ export const membersListResponseSchema = z.object({
 export const membersListRouteSchema = {
   tags: ["Members"],
   summary: "Public member directory",
-  description: "Paginated, publicly readable member directory. D1 is the source of truth (PRD §1.6).",
+  description: "Paginated, publicly readable member directory. D1 is the source of truth.",
   request: { query: membersListQuerySchema },
   responses: {
     "200": {

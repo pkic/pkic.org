@@ -1,7 +1,7 @@
 /**
  * member-auth.test.ts
  *
- * PRD §4.9/§4.10 member-facing magic-link authentication
+ * member-facing magic-link authentication
  * (functions/_lib/auth/member.ts) — a parallel path to admin auth, gated on
  * holding an active `members` row rather than staff role/grants.
  */
@@ -43,7 +43,7 @@ async function insertActiveMember(email: string, category = "F"): Promise<string
   return userId;
 }
 
-describe("Member auth (PRD §4.9/§4.10)", () => {
+describe("Member auth", () => {
   beforeEach(async () => {
     await resetDb();
   });

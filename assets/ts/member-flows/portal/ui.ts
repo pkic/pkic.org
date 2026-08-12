@@ -2,8 +2,7 @@
  * Small portal-local UI helpers. Deliberately duplicates admin/ui.ts's
  * toast()/fmt() rather than sharing a module — matches this codebase's
  * existing precedent of small duplicated client-side helpers across the
- * admin/portal SPA boundary (see prd.md "§2.4 / §3.5 Admin Portal UI"
- * decision 5).
+ * admin/portal SPA boundary.
  */
 
 export type ToastType = "success" | "error" | "info";

@@ -1,6 +1,6 @@
 /**
  * GET /api/v1/votes — public, machine-consumable, filterable, paginated
- * list of votes with visibility='public' (PRD §4.8).
+ * list of votes with visibility='public'.
  */
 import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../_lib/http";

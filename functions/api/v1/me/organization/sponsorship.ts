@@ -1,6 +1,6 @@
 /**
  * GET /api/v1/me/organization/sponsorship — view my organization's active
- * consortium sponsorship tier + start date (PRD §4.13).
+ * consortium sponsorship tier + start date.
  */
 import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../_lib/http";

@@ -1,6 +1,6 @@
 /**
- * GET /api/v1/sponsor-portal/events/:eventId/attendees/export — CSV export
- * (PRD §4.13). Same eligibility gate as ./index.ts.
+ * GET /api/v1/sponsor-portal/events/:eventId/attendees/export — CSV export.
+ * Same eligibility gate as ./index.ts.
  */
 import { listSponsorPortalAttendees } from "../../../../../../_lib/services/sponsorship";
 import { writeAuditLog } from "../../../../../../_lib/services/audit";

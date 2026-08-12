@@ -1,6 +1,6 @@
 /**
  * POST /api/v1/admin/applications/:id/ec-decisions — staff override fallback
- * for recording an EC member's decision (PRD §4.6).
+ * for recording an EC member's decision.
  */
 import { OpenAPIRoute } from "chanfana";
 import { parseJsonBody } from "../../../../../_lib/validation";

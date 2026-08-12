@@ -2,7 +2,7 @@
  * GET   /api/v1/me/organization — view my organization's current live profile
  * PATCH /api/v1/me/organization — submit a content change for staff review
  *
- * PRD §4.11. GET is available to any org-tied member (read-only for
+ * GET is available to any org-tied member (read-only for
  * non-contacts); PATCH is restricted to the primary/secondary contact by
  * submitOrgContentChange itself.
  */
@@ -13,7 +13,10 @@ import { requireMemberFromRequest } from "../../../../_lib/auth/member";
 import { findUsersWithPermission } from "../../../../_lib/auth/permissions";
 import { queueEmail, processOutboxByIdBackground } from "../../../../_lib/email/outbox";
 import { getConfig } from "../../../../_lib/config";
-import { getMyOrganizationProfile, submitOrgContentChange } from "../../../../_lib/services/organization-content-reviews";
+import {
+  getMyOrganizationProfile,
+  submitOrgContentChange,
+} from "../../../../_lib/services/organization-content-reviews";
 import {
   myOrganizationContentChangeRouteSchema,
   myOrganizationContentChangeSchema,

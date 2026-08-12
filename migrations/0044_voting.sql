@@ -1,19 +1,19 @@
--- Migration 0044: Phase 4B — Voting System (PRD §4.8)
+-- Migration 0044: Voting System
 --
--- Adds the five tables §4.8's Database Schema Additions calls for (votes,
+-- Adds the five tables Database Schema Additions calls for (votes,
 -- vote_proposals, vote_proposal_endorsements, vote_candidates,
--- vote_ballots), matching the PRD's column lists with a small number of
--- necessary additions, flagged here the same way Phase 1's sponsorships
+-- vote_ballots), matching the column lists with a small number of
+-- necessary additions, flagged here the same way as sponsorships
 -- pull-forward flagged its own two extra columns (see migration 0034's
 -- header):
 --
---   * votes.threshold_type — the PRD's prose describes three threshold
+--   * votes.threshold_type — there are three threshold
 --     types (simple_majority / supermajority / successive_elimination) but
 --     the schema block never gives `votes` a column to record which one
 --     applies to a given vote. Added here; validated in the application
 --     layer like every other enum-shaped column in this schema.
 --   * votes.current_round / vote_ballots.round — successive-elimination
---     elections (§4.8: "Round 1: all candidates... after each round the
+--     elections ("Round 1: all candidates... after each round the
 --     candidate with fewest votes is eliminated... continues until one
 --     candidate holds >50%") are described as a live, multi-round process,
 --     but nothing in the schema block gives a ballot a round number or a
@@ -138,7 +138,7 @@ CREATE TABLE vote_proposal_endorsements (
 
 CREATE INDEX idx_vote_proposal_endorsements_proposal ON vote_proposal_endorsements(proposal_id);
 
--- ── New email templates (§4.8) ────────────────────────────────────────────
+-- ── New email templates ────────────────────────────────────────────
 
 INSERT OR IGNORE INTO email_template_versions
   (id, template_key, version, subject_template, body, content_type, r2_object_key, checksum_sha256, status, created_by_user_id, created_at, message_type)

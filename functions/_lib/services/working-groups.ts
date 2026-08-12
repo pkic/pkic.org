@@ -12,7 +12,7 @@ import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { AppError } from "../errors";
 import { enqueueGoogleGroupsSync } from "./google-groups";
-import type { DatabaseLike } from "../types";
+import type { DatabaseLike, StatementLike } from "../types";
 
 export const CA_WORKING_GROUP_SLUG = "ca";
 export const CA_ONLY_CATEGORY = "A";
@@ -39,30 +39,64 @@ export function assertCaConstraint(wg: WorkingGroupRow, membershipCategory: stri
   }
 }
 
-export async function addWorkingGroupMember(
+/**
+ * Builds the statements to add `targetUserId` to `wg`, without executing
+ * them — lets a caller that's already assembling a larger atomic
+ * `db.batch()` (e.g. admin-members.ts's createAdminMember) fold working-
+ * group membership into that same transition instead of writing it
+ * separately. `addWorkingGroupMember` below is the immediate-execution
+ * wrapper most callers want.
+ *
+ * `INSERT OR IGNORE` (not a plain INSERT) against the partial unique index
+ * on (working_group_id, user_id) WHERE left_at IS NULL — this is a real
+ * concurrency safeguard, not defense-in-depth theater: the membership-check
+ * read above happens before the statements are actually executed (by
+ * `db.batch()`, possibly bundled with several other writes), so a
+ * concurrent request could still win the race in between. OR IGNORE makes
+ * that race resolve to "no-op", not a broken batch or a duplicate row.
+ */
+export async function buildAddWorkingGroupMemberStatements(
   db: DatabaseLike,
   wg: WorkingGroupRow,
   targetUserId: string,
-): Promise<void> {
+): Promise<StatementLike[]> {
   const existing = await first<{ id: string }>(
     db,
     `SELECT id FROM working_group_members WHERE working_group_id = ? AND user_id = ? AND left_at IS NULL`,
     [wg.id, targetUserId],
   );
-  if (existing) return;
+  if (existing) return [];
 
-  await run(
-    db,
-    `INSERT INTO working_group_members (id, working_group_id, user_id, joined_at, left_at) VALUES (?, ?, ?, ?, NULL)`,
-    [uuid(), wg.id, targetUserId, nowIso()],
-  );
+  const statements: StatementLike[] = [
+    db
+      .prepare(
+        `INSERT OR IGNORE INTO working_group_members (id, working_group_id, user_id, joined_at, left_at) VALUES (?, ?, ?, ?, NULL)`,
+      )
+      .bind(uuid(), wg.id, targetUserId, nowIso()),
+  ];
 
   if (wg.mailing_list_email) {
-    await enqueueGoogleGroupsSync(db, {
-      userId: targetUserId,
-      googleGroupEmail: wg.mailing_list_email,
-      action: "add_to_list",
-    });
+    statements.push(
+      db
+        .prepare(
+          `INSERT INTO google_groups_sync_queue (id, user_id, action, google_group_email, status, attempts, last_error, created_at, processed_at)
+           VALUES (?, ?, 'add_to_list', ?, 'pending', 0, NULL, ?, NULL)`,
+        )
+        .bind(uuid(), targetUserId, wg.mailing_list_email, nowIso()),
+    );
+  }
+
+  return statements;
+}
+
+export async function addWorkingGroupMember(
+  db: DatabaseLike,
+  wg: WorkingGroupRow,
+  targetUserId: string,
+): Promise<void> {
+  const statements = await buildAddWorkingGroupMemberStatements(db, wg, targetUserId);
+  if (statements.length > 0) {
+    await db.batch(statements);
   }
 }
 

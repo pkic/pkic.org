@@ -1,5 +1,5 @@
 /**
- * GET /api/v1/me/applications — my application history (PRD §4.10).
+ * GET /api/v1/me/applications — my application history.
  */
 import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../_lib/http";

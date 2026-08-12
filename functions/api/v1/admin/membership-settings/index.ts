@@ -1,5 +1,5 @@
 /**
- * GET/PATCH /api/v1/admin/membership-settings — PRD §4.3.
+ * GET/PATCH /api/v1/admin/membership-settings.
  */
 import { OpenAPIRoute } from "chanfana";
 import { parseJsonBody } from "../../../../_lib/validation";

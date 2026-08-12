@@ -1,6 +1,6 @@
 /**
- * sponsor-portal.test.ts — PRD §4.13 "Sponsor Portal — Attendee Data
- * Access", Phase 4E.
+ * sponsor-portal.test.ts — "Sponsor Portal — Attendee Data
+ * Access".
  *
  * A sponsor contact (no `users` row) signs in via magic link scoped to a
  * single active event sponsorship, and can view/export attendee data for
@@ -65,7 +65,7 @@ async function seedConsentingRegistration(eventId: string, email: string, term: 
   ]);
 }
 
-describe("Sponsor portal (PRD §4.13, Phase 4E)", () => {
+describe("Sponsor portal", () => {
   let adminToken: string;
   let eventId: string;
 
@@ -217,7 +217,7 @@ describe("Sponsor portal (PRD §4.13, Phase 4E)", () => {
     expect(auditRows).toHaveLength(1);
   });
 
-  it("resolves eventId by public slug (not just internal id) and returns eventName in the session (§11 UI-7)", async () => {
+  it("resolves eventId by public slug (not just internal id) and returns eventName in the session", async () => {
     await createActiveEventSponsorship("Leader", "slug-sponsor@sponsor.test");
 
     const requestLinkResponse = await call(

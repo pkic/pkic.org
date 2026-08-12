@@ -1,14 +1,13 @@
 /**
- * Phase 2 (PRD §2) context-aware permission checking.
+ * Context-aware permission checking.
  *
  * This is additive to, and independent from, the existing global
  * `AUTH_SCOPES` system in ./scopes.ts, which continues to gate the existing
  * admin/* routes unchanged (every `role='admin'` user still gets the full
  * legacy scopes array exactly as before). This module powers the *new*
- * Phase 2 surface: the access-grants/roles admin endpoints, event-scoped
+ * surface: the access-grants/roles admin endpoints, event-scoped
  * organizer/program-committee access, and any future working-group/
- * membership/organization-scoped checks. See "Phase 2 — Implementation
- * Status" in prd.md for the full rationale.
+ * membership/organization-scoped checks.
  */
 import { all } from "../db/queries";
 import { normalizeEmail } from "../validation";
@@ -16,9 +15,9 @@ import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike, PermissionGrant } from "../types";
 
 /**
- * Every permission string in the system (PRD §2.1's table, plus the
+ * Every permission string in the system (table, plus the
  * `organizations`/`sponsorships`/`sponsor-portal` additions pulled forward
- * from §4.11/§4.13, plus the `admin:read`/`admin:write` fallback pair for
+ *, plus the `admin:read`/`admin:write` fallback pair for
  * admin routes not yet mapped to a named module — see migration 0035's
  * header comment).
  */
@@ -83,7 +82,7 @@ interface GrantRow {
  * pattern `event_permissions` used (see migration 0035).
  *
  * Called on every authenticated admin request — see requireAdminFromRequest
- * in ./admin.ts. This is a deliberate deviation from §2.1's "no DB query on
+ * in ./admin.ts. This is a deliberate deviation from "no DB query on
  * the request path" design: the existing session model already performs a
  * DB lookup on every request for revocation, so recomputing grants on that
  * same lookup gives real-time (not eventually-consistent, ≤15-minute)
@@ -157,7 +156,7 @@ interface EmailRow {
  * Every user who can act on `permission` — role='admin' (always, matching
  * hasPermission's bypass) plus every user_roles/permission_grants holder,
  * global grants only (no context filtering — used for email fanout, e.g.
- * "Staff admins with organizations:content-review permission" per §4.11).
+ * "Staff admins with organizations:content-review permission").
  */
 export async function findUsersWithPermission(db: DatabaseLike, permission: string): Promise<string[]> {
   const rows = await all<EmailRow>(

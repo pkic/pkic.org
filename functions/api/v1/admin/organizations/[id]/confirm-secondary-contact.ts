@@ -1,6 +1,6 @@
 /**
- * POST /api/v1/admin/organizations/:id/confirm-secondary-contact — PRD
- * §4.11. Confirms a nomination the primary contact submitted via
+ * POST /api/v1/admin/organizations/:id/confirm-secondary-contact.
+ * Confirms a nomination the primary contact submitted via
  * PATCH /api/v1/me/organization/secondary-contact.
  */
 import { OpenAPIRoute } from "chanfana";

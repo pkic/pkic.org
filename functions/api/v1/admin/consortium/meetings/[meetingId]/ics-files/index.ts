@@ -1,6 +1,6 @@
 /**
  * POST /api/v1/admin/consortium/meetings/:meetingId/ics-files — upload a
- * new ICS file variant to the consortium meeting series (PRD §4.12).
+ * new ICS file variant to the consortium meeting series.
  * multipart/form-data with 'file', 'label', 'year'.
  */
 import { OpenAPIRoute } from "chanfana";

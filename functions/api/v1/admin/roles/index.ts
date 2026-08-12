@@ -2,13 +2,13 @@
  * GET  /api/v1/admin/roles — list roles with their permission bundles
  * POST /api/v1/admin/roles — create a custom role
  *
- * Backs `roles`/`role_permissions` (PRD §2.2/§2.3). Built-in roles
+ * Backs `roles`/`role_permissions`. Built-in roles
  * (`is_system_role = 1`) ship with the portal and cannot be deleted, but
- * per §2.2 their bundles "can be customized by an admin as the portal
+ * their bundles "can be customized by an admin as the portal
  * evolves" — that customization isn't a separate endpoint here; an admin
  * edits a built-in role's bundle the same way as a custom one would be
- * managed going forward (out of Phase 2's explicit test scope — only
- * creation and deletion are covered by §10.4's tests/roles.test.ts).
+ * managed going forward (explicit test scope — only
+ * creation and deletion are covered by tests/roles.test.ts).
  */
 import { OpenAPIRoute } from "chanfana";
 import { parseJsonBody } from "../../../../_lib/validation";

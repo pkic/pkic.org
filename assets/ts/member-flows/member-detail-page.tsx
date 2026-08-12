@@ -1,5 +1,5 @@
 /**
- * Member profile detail page (PRD §1.6 Part B). Replaces
+ * Member profile detail page. Replaces
  * layouts/members/single.html (and independent.html), which rendered one
  * static page per YAML file via content/members/_content.gotmpl. Organization
  * ids are UUIDs now, not slugs, and D1 (not a build-time YAML scan) is the
@@ -15,6 +15,7 @@ import { getJson } from "../shared/api-client";
 import { Spinner } from "../components/Spinner";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { Markdown } from "../components/Markdown";
+import { findLinkedinUrl } from "../../shared/schemas/api";
 
 const API_BASE_FALLBACK = "/api/v1";
 
@@ -53,13 +54,7 @@ interface MemberDetail {
   pressUrl: string | null;
   pressFeedUrl: string | null;
   careersUrl: string | null;
-  social: {
-    x: string | null;
-    linkedin: string | null;
-    facebook: string | null;
-    instagram: string | null;
-    youtube: string | null;
-  };
+  links: string[];
   representatives: Representative[];
   jobTitle: string | null;
   linkedin: string | null;
@@ -73,13 +68,48 @@ function LinkedInIcon() {
   );
 }
 
-function SocialLinks({ social, linkedin }: { social?: MemberDetail["social"]; linkedin?: string | null }) {
-  const links = linkedin ?? social?.linkedin;
-  if (!links) return null;
+function SocialLinks({ linkedin }: { linkedin?: string | null }) {
+  if (!linkedin) return null;
   return (
-    <a href={links} target="_blank" rel="noopener" class="px-1" title="LinkedIn">
+    <a href={linkedin} target="_blank" rel="noopener" class="px-1" title="LinkedIn">
       <LinkedInIcon />
     </a>
+  );
+}
+
+const LINK_DOMAIN_LABELS: Record<string, string> = {
+  "x.com": "X",
+  "twitter.com": "X",
+  "facebook.com": "Facebook",
+  "instagram.com": "Instagram",
+  "youtube.com": "YouTube",
+};
+
+function detectLinkLabel(url: string): string {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+    return LINK_DOMAIN_LABELS[hostname] ?? hostname;
+  } catch {
+    return url;
+  }
+}
+
+/** Renders every org link that isn't the LinkedIn one already shown as the heading icon. */
+function OtherLinks({ links, linkedin }: { links: string[]; linkedin: string | null }) {
+  const others = links.filter((url) => url !== linkedin);
+  if (others.length === 0) return null;
+  return (
+    <>
+      {others.map((url) => (
+        <span key={url}>
+          <strong>{detectLinkLabel(url)}:</strong>{" "}
+          <a href={url} target="_blank" rel="noopener">
+            {url}
+          </a>
+          <br />
+        </span>
+      ))}
+    </>
   );
 }
 
@@ -121,6 +151,9 @@ function RepresentativeCard({ rep }: { rep: Representative }) {
 
 function MemberDetailView({ member, directoryHref }: { member: MemberDetail; directoryHref: string }) {
   const colorIdx = member.name.length % 6;
+  // member.linkedin is already resolved server-side for org-less individuals;
+  // for organizations it's derived from the generic links list here.
+  const linkedin = member.linkedin ?? findLinkedinUrl(member.links);
 
   return (
     <div>
@@ -155,7 +188,7 @@ function MemberDetailView({ member, directoryHref }: { member: MemberDetail; dir
             <div class="col-lg-8 order-lg-1">{member.content && <Markdown markdown={member.content} />}</div>
             <div id="sidebar" class="col-lg-4 order-lg-2">
               <div class="text-end">
-                <SocialLinks social={member.social} linkedin={member.linkedin} />
+                <SocialLinks linkedin={linkedin} />
               </div>
               <small>
                 <strong>Member since:</strong>{" "}
@@ -197,6 +230,7 @@ function MemberDetailView({ member, directoryHref }: { member: MemberDetail; dir
                     <br />
                   </>
                 )}
+                <OtherLinks links={member.links} linkedin={linkedin} />
               </small>
             </div>
           </div>

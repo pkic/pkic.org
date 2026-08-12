@@ -1,11 +1,9 @@
 /**
  * roles.test.ts
  *
- * PRD §2.2/§2.3 built-in and custom roles (`roles`/`role_permissions`/
- * `user_roles`) — Phase 2 (§10.4's tests/roles.test.ts). Listed under §10.4's
- * Phase 4 test section in the PRD, but every case here exercises Phase 2
- * tables/endpoints exclusively — see "Phase 2 — Implementation Status" in
- * prd.md for that reclassification.
+ * built-in and custom roles (`roles`/`role_permissions`/
+ * `user_roles`) — (tests/roles.test.ts).
+ * tables/endpoints exclusively. .
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
@@ -67,7 +65,7 @@ async function assignRole(
     .run();
 }
 
-describe("roles (Phase 2 built-in and custom roles)", () => {
+describe("roles (Built-in and custom roles)", () => {
   let adminToken: string;
   let adminId: string;
   let eventAId: string;

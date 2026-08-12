@@ -1,16 +1,15 @@
 /**
- * "Sponsor Now" self-service Stripe Checkout — Path B of PRD §1.3, built for
- * §11 UI-6 (the "event-scoped sponsor page" §1.3's own Hugo Frontend
- * Follow-Up decision 3 flagged as not built: sponsorshipCheckoutSchema
+ * "Sponsor Now" self-service Stripe Checkout — built for
+ * the "event-scoped sponsor page" Hugo Frontend
  * requires an eventId and no event-scoped page existed to host it).
  *
  * On submit, POSTs to /api/v1/sponsorship/checkout and follows the
  * returned Stripe Checkout URL. No `sponsorships` row exists yet at this
- * point — per §1.3 it's created idempotently by the webhook once payment
+ * point — it's created idempotently by the webhook once payment
  * completes (functions/api/v1/sponsorship/checkout/webhook.ts) — so there
  * is nothing to poll for locally; the post-redirect page is a static
  * thank-you (see content/events/2026/pqc-conference-amsterdam-nl/sponsors/complete/),
- * matching §1.3's own "staff always confirm before any access is granted"
+ * matching own "staff always confirm before any access is granted"
  * rule (a live status badge, like the donation flow's, isn't meaningful
  * here since payment alone never grants anything).
  */

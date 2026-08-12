@@ -1,7 +1,7 @@
 /**
  * GET /api/v1/working-groups/:id
  *
- * Working group detail plus a public subset of the member list (PRD §1.5).
+ * Working group detail plus a public subset of the member list.
  * :id accepts either the working group UUID or its slug (e.g. 'pqc') for
  * convenience, since the working group slugs are already public via the
  * Hugo content tree at content/wg/.

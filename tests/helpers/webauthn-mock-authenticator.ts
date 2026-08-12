@@ -1,5 +1,5 @@
 /**
- * Mock WebAuthn authenticator for tests/passkeys.test.ts (PRD §10.4).
+ * Mock WebAuthn authenticator for tests/passkeys.test.ts.
  *
  * Real registration/authentication ceremonies can't be reproduced in a unit
  * test without a real authenticator, so this hand-builds the same byte

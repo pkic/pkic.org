@@ -155,7 +155,7 @@ export interface EventPermission {
   granter_email: string | null;
 }
 
-// ── Access control (PRD §2.4) ─────────────────────────────────────────────────
+// ── Access control ─────────────────────────────────────────────────
 
 export interface Role {
   id: string;
@@ -244,8 +244,6 @@ export interface AdminWorkingGroupSummary {
   mailingListEmail: string | null;
   minEndorsersForBallot: number;
   active: boolean;
-  /** @deprecated Never written after row creation — see chair/viceChair. */
-  chairUserId: string | null;
   chair: ChairInfo | null;
   viceChair: ChairInfo | null;
   memberCount: number;
@@ -266,7 +264,7 @@ export interface AdminWorkingGroupDetail extends AdminWorkingGroupSummary {
   members: AdminWorkingGroupMember[];
 }
 
-// ── Passkeys (PRD §3.5) ────────────────────────────────────────────────────────
+// ── Passkeys ────────────────────────────────────────────────────────
 
 export interface Passkey {
   id: string;
@@ -751,17 +749,13 @@ export interface AdminOrganizationDetail extends AdminOrganizationSummary {
   pressUrl: string | null;
   pressFeedUrl: string | null;
   careersUrl: string | null;
-  socialX: string | null;
-  socialLinkedin: string | null;
-  socialFacebook: string | null;
-  socialInstagram: string | null;
-  socialYoutube: string | null;
+  links: string[];
   primaryContactUserId: string | null;
   secondaryContactUserId: string | null;
   representatives: AdminOrganizationRepresentative[];
 }
 
-// PRD §4.11 (Phase 4C) — organization content moderation queue
+// Organization content moderation queue
 export interface OrganizationContentReviewSummary {
   id: string;
   organizationId: string;
@@ -790,7 +784,7 @@ export interface OrganizationContentReviewDetail extends OrganizationContentRevi
   currentLogoR2Key: string | null;
 }
 
-// PRD §4.14 (Phase 4C) — managed mailing list configuration
+// Managed mailing list configuration
 export interface MailingList {
   id: string;
   email: string;
@@ -803,7 +797,7 @@ export interface MailingList {
   updatedAt: string;
 }
 
-// PRD §4.13 (Phase 4E) — sponsorship sales pipeline
+// Sponsorship sales pipeline
 export const SPONSORSHIP_PIPELINE_STAGES = [
   "new_inquiry",
   "contacted",
@@ -848,7 +842,7 @@ export interface SponsorshipEvent {
   createdAt: string;
 }
 
-// PRD §6 Interim Admin Tool — GET/POST /api/v1/admin/members
+// Interim Admin Tool — GET/POST /api/v1/admin/members
 export interface AdminMemberSummary {
   id: string;
   userId: string;
@@ -862,7 +856,7 @@ export interface AdminMemberSummary {
   createdAt: string;
 }
 
-// PRD §4.2 — GET /api/v1/admin/applications
+// GET /api/v1/admin/applications
 export interface AdminApplicationSummary {
   id: string;
   applicantEmail: string;
@@ -933,7 +927,7 @@ export interface AdminApplicationDetail extends AdminApplicationSummary {
   documents: AdminApplicationDocument[];
 }
 
-// PRD §4.3 — GET/PATCH /api/v1/admin/membership-settings
+// GET/PATCH /api/v1/admin/membership-settings
 export interface AdminMembershipSettings {
   consultationWindowDays: number;
   ecReviewWindowDays: number;
@@ -946,7 +940,7 @@ export interface AdminMembershipSettings {
   updatedAt: string;
 }
 
-// PRD §4.8 (Phase 4B) — voting system
+// Voting system
 export interface VoteCandidateSummary {
   id: string;
   userId: string | null;
@@ -1002,7 +996,7 @@ export interface AdminVoteProposalSummary {
   createdAt: string;
 }
 
-// ── Meeting Calendar (PRD §4.12, UI-5) ──────────────────────────────────────
+// ── Meeting Calendar ──────────────────────────────────────
 
 export interface AdminIcsFile {
   id: string;

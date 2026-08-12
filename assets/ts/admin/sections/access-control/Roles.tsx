@@ -5,7 +5,7 @@ import { toast } from "../../ui";
 import type { Role } from "../../types";
 import { PERMISSIONS } from "../../permissions";
 
-/** PRD §2.2/§2.3 — built-in roles ship system-locked; custom roles are admin-creatable. */
+/** Built-in roles ship system-locked; custom roles are admin-creatable. */
 export function Roles() {
   const tableRef = useRef<ApiTableActions | null>(null);
   const [name, setName] = useState("");

@@ -1,5 +1,5 @@
 /**
- * POST /api/v1/admin/applications/:id/notes — PRD §4.2. Never emailed;
+ * POST /api/v1/admin/applications/:id/notes. Never emailed;
  * staff/processor-only.
  */
 import { OpenAPIRoute } from "chanfana";

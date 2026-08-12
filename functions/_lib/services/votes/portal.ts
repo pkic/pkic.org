@@ -1,0 +1,166 @@
+/**
+ * Portal (authenticated member) vote queries and /api/v1/me/votes history —
+ * Split out of votes.ts.
+ */
+import { all, first } from "../../db/queries";
+import { parseJsonSafe } from "../../utils/json";
+import { AppError } from "../../errors";
+import { VOTING_CATEGORIES } from "../member-applications";
+import { resolveVotingDelegateUserId } from "./ballots";
+import {
+  toVoteSummary,
+  getCandidates,
+  getVoteRowOrThrow,
+  eligibleCategoriesOf,
+  type VoteRow,
+  type VoteType,
+  type VoteScopeType,
+  type VoteStatus,
+  type VoteSummary,
+  type CandidateSummary,
+} from "./shared";
+import type { AuthMember, DatabaseLike } from "../../types";
+
+export interface PortalVoteSummary extends VoteSummary {
+  candidates: CandidateSummary[] | null;
+  canCastBallot: boolean;
+  hasCastBallot: boolean;
+  result: unknown | null;
+}
+
+async function memberCanCastBallot(db: DatabaseLike, vote: VoteRow, member: AuthMember): Promise<boolean> {
+  if (vote.status !== "open") return false;
+  if (!VOTING_CATEGORIES.has(member.membershipCategory)) return false;
+  const restriction = eligibleCategoriesOf(vote);
+  if (restriction && !restriction.includes(member.membershipCategory)) return false;
+
+  if (vote.scope_type === "forum") {
+    if (!member.organizationId) return false;
+    const delegateId = await resolveVotingDelegateUserId(db, member.organizationId);
+    return delegateId === member.userId;
+  }
+  const membership = await first<{ id: string }>(
+    db,
+    `SELECT id FROM working_group_members WHERE working_group_id = ? AND user_id = ? AND left_at IS NULL`,
+    [vote.scope_id, member.userId],
+  );
+  return Boolean(membership);
+}
+
+async function memberHasCastBallot(db: DatabaseLike, vote: VoteRow, member: AuthMember): Promise<boolean> {
+  if (vote.scope_type === "forum") {
+    if (!member.organizationId) return false;
+    const row = await first<{ id: string }>(
+      db,
+      `SELECT id FROM vote_ballots WHERE vote_id = ? AND organization_id = ? AND round = ?`,
+      [vote.id, member.organizationId, vote.current_round],
+    );
+    return Boolean(row);
+  }
+  const row = await first<{ id: string }>(
+    db,
+    `SELECT id FROM vote_ballots WHERE vote_id = ? AND user_id = ? AND round = ? AND organization_id IS NULL`,
+    [vote.id, member.userId, vote.current_round],
+  );
+  return Boolean(row);
+}
+
+async function toPortalVoteSummary(db: DatabaseLike, row: VoteRow, member: AuthMember): Promise<PortalVoteSummary> {
+  const summary = toVoteSummary(row);
+  const candidates = row.vote_type === "election" ? await getCandidates(db, row.id) : null;
+  const canCastBallot = await memberCanCastBallot(db, row, member);
+  const hasCastBallot = await memberHasCastBallot(db, row, member);
+  const result = row.status === "closed" ? parseJsonSafe<Record<string, unknown>>(row.result_json, {}) : null;
+  return { ...summary, candidates, canCastBallot, hasCastBallot, result };
+}
+
+/** Votes visible to a member: public ones, plus every WG they belong to, plus every forum vote. */
+export async function listVisibleVotesForMember(db: DatabaseLike, member: AuthMember): Promise<PortalVoteSummary[]> {
+  const wgRows = await all<{ working_group_id: string }>(
+    db,
+    `SELECT working_group_id FROM working_group_members WHERE user_id = ? AND left_at IS NULL`,
+    [member.userId],
+  );
+  const wgIds = wgRows.map((r) => r.working_group_id);
+
+  const conditions = ["(scope_type = 'forum' OR visibility = 'public')"];
+  const args: unknown[] = [];
+  if (wgIds.length > 0) {
+    conditions.push(`OR (scope_type = 'working_group' AND scope_id IN (${wgIds.map(() => "?").join(", ")}))`);
+    args.push(...wgIds);
+  }
+
+  const rows = await all<VoteRow>(
+    db,
+    `SELECT * FROM votes WHERE ${conditions.join(" ")} ORDER BY closes_at DESC`,
+    args,
+  );
+  return Promise.all(rows.map((r) => toPortalVoteSummary(db, r, member)));
+}
+
+export async function getVoteDetailForMember(
+  db: DatabaseLike,
+  member: AuthMember,
+  voteIdOrSlug: string,
+): Promise<PortalVoteSummary> {
+  const row = await getVoteRowOrThrow(db, voteIdOrSlug);
+  if (row.scope_type === "working_group" && row.visibility !== "public") {
+    const membership = await first<{ id: string }>(
+      db,
+      `SELECT id FROM working_group_members WHERE working_group_id = ? AND user_id = ? AND left_at IS NULL`,
+      [row.scope_id, member.userId],
+    );
+    if (!membership) throw new AppError(404, "VOTE_NOT_FOUND", "Vote not found");
+  }
+  return toPortalVoteSummary(db, row, member);
+}
+
+export async function getVoteResultsForMember(db: DatabaseLike, voteIdOrSlug: string): Promise<unknown> {
+  const row = await getVoteRowOrThrow(db, voteIdOrSlug);
+  if (row.status !== "closed") {
+    throw new AppError(409, "VOTE_NOT_CLOSED", "Results are hidden until the vote closes");
+  }
+  return parseJsonSafe<Record<string, unknown>>(row.result_json, {});
+}
+
+// ── /api/v1/me/votes, replaces the old stub ─────────────
+
+export interface MyVoteHistoryEntry {
+  voteId: string;
+  slug: string;
+  title: string;
+  voteType: VoteType;
+  scopeType: VoteScopeType;
+  status: VoteStatus;
+  choice: string;
+  submittedAt: string;
+}
+
+export async function listMyVoteHistory(db: DatabaseLike, member: AuthMember): Promise<MyVoteHistoryEntry[]> {
+  const rows = await all<{
+    vote_id: string;
+    slug: string;
+    title: string;
+    vote_type: VoteType;
+    scope_type: VoteScopeType;
+    status: VoteStatus;
+    choice: string;
+    submitted_at: string;
+  }>(
+    db,
+    `SELECT b.vote_id, v.slug, v.title, v.vote_type, v.scope_type, v.status, b.choice, b.submitted_at
+     FROM vote_ballots b JOIN votes v ON v.id = b.vote_id
+     WHERE b.user_id = ? ORDER BY b.submitted_at DESC`,
+    [member.userId],
+  );
+  return rows.map((r) => ({
+    voteId: r.vote_id,
+    slug: r.slug,
+    title: r.title,
+    voteType: r.vote_type,
+    scopeType: r.scope_type,
+    status: r.status,
+    choice: r.choice,
+    submittedAt: r.submitted_at,
+  }));
+}

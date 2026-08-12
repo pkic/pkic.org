@@ -1,5 +1,5 @@
 /**
- * Admin → Votes (PRD §4.8, Phase 4B). Two tabs: direct vote creation +
+ * Admin → Votes. Two tabs: direct vote creation +
  * management (visibility, ballot audit), and member-proposal moderation
  * (approve bypasses the endorsement count, reject requires a reason and
  * emails the proposer). Mirrors OrganizationContentReviews.tsx's
@@ -443,7 +443,10 @@ function VotesTab() {
     setError(null);
     try {
       const [votesData, wgData] = await Promise.all([
-        api<{ votes: AdminVoteSummary[] }>("/api/v1/admin/votes"),
+        // limit=200 (the list contract's max) — this admin view shows the
+        // complete vote history unfiltered, not a paginated table; 200
+        // comfortably covers realistic vote volume for a consortium.
+        api<{ votes: AdminVoteSummary[] }>("/api/v1/admin/votes?limit=200"),
         api<{ workingGroups: AdminWorkingGroupSummary[] }>("/api/v1/admin/working-groups"),
       ]);
       setWorkingGroups(wgData.workingGroups);
@@ -468,7 +471,7 @@ function VotesTab() {
     <div>
       <div class="d-flex justify-content-between align-items-center mb-3">
         <p class="text-muted small mb-0">
-          Create and manage votes (PRD §4.8). Member proposals live under the Proposals tab.
+          Create and manage votes. Member proposals live under the Proposals tab.
         </p>
         <button type="button" class="btn btn-primary btn-sm" onClick={() => setShowCreate((v) => !v)}>
           {showCreate ? "Cancel" : "Create vote"}

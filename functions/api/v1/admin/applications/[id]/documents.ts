@@ -1,6 +1,6 @@
 /**
  * GET /api/v1/admin/applications/:id/documents — staff view of all
- * documents uploaded for an application (PRD §4.2).
+ * documents uploaded for an application.
  */
 import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../../_lib/http";

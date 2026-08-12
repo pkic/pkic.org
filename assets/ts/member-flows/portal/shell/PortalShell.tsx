@@ -1,10 +1,10 @@
 /**
- * Member portal nav shell (PRD §7 "Member Portal Navigation Structure", §11
- * UI-1). Mirrors the admin SPA's shell shape (Topbar + Sidebar + hash
+ * Member portal nav shell (Member Portal Navigation Structure).
+ * Mirrors the admin SPA's shell shape (Topbar + Sidebar + hash
  * router) at a much smaller scale — seven top-level sections, three of
  * which are functional in this phase (My Profile, My Application, Account
  * Settings); the rest render a "coming soon" placeholder naming the future
- * UI phase that builds them (§11.2's UI-2/UI-3/UI-4).
+ * UI phase that builds them.
  */
 import { type ComponentChildren } from "preact";
 import { useEffect } from "preact/hooks";

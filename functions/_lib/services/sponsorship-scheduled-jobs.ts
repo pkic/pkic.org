@@ -1,6 +1,6 @@
 /**
- * Sponsorship renewal reminders & auto-lapse (PRD §4.13 "Renewal
- * Reminders"), folded into the existing 15-minute due-work cron
+ * Sponsorship renewal reminders & auto-lapse (Renewal
+ * Reminders), folded into the existing 15-minute due-work cron
  * (functions/router.ts) as a sibling call, same as
  * membership-scheduled-jobs.ts's runMembershipDueWork — not woven into
  * scheduled-due-work.ts's own multi-pass budgeted loop, for the same

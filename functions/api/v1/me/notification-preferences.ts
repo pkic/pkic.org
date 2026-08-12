@@ -1,5 +1,5 @@
 /**
- * GET/PATCH /api/v1/me/notification-preferences — PRD §7 Account Settings, §11 UI-1.
+ * GET/PATCH /api/v1/me/notification-preferences Account Settings.
  */
 import { OpenAPIRoute } from "chanfana";
 import { parseJsonBody } from "../../../_lib/validation";

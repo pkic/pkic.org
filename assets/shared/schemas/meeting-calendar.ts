@@ -1,5 +1,5 @@
 /**
- * Meeting calendar management (PRD §4.12, Phase 4D). Backs the WG-nested
+ * Meeting calendar management. Backs the WG-nested
  * admin surface (`/admin/working-groups/:id/meetings[/...]`), the
  * consortium admin surface (`/admin/consortium/meetings[/...]`), the public
  * `GET /working-groups/:wgId/meetings`, and member self-service
@@ -314,7 +314,7 @@ export const myMeetingSeriesSchema = z.object({
 
 export const myCalendarListRouteSchema = {
   tags: ["Me"],
-  summary: "List meeting series I'm subscribed to, with my preferences (PRD §4.12)",
+  summary: "List meeting series I'm subscribed to, with my preferences",
   responses: {
     "200": {
       description: "My meeting series.",
@@ -327,7 +327,7 @@ export const myCalendarPreferenceSetSchema = z.object({ icsFileId: z.uuid().null
 
 export const myCalendarPreferenceRouteSchema = {
   tags: ["Me"],
-  summary: "Set or clear my time-slot preference for a meeting series (PRD §4.12)",
+  summary: "Set or clear my time-slot preference for a meeting series",
   request: {
     params: z.object({ seriesId: z.string().trim().min(1) }),
     body: { content: { "application/json": { schema: myCalendarPreferenceSetSchema } }, required: true },
@@ -341,7 +341,7 @@ export const myCalendarPreferenceRouteSchema = {
 
 export const myCalendarDownloadRouteSchema = {
   tags: ["Me"],
-  summary: "Download a specific ICS file (PRD §4.12)",
+  summary: "Download a specific ICS file",
   request: { params: z.object({ seriesId: z.string().trim().min(1), icsFileId: z.string().trim().min(1) }) },
   responses: {
     "200": { description: "The ICS file." },

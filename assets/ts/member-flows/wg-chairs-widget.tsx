@@ -99,7 +99,13 @@ function OrgLink({
   );
 }
 
-function OrgBlock({ person, orgClass, logoWrapClass, logoClass, nameClass }: {
+function OrgBlock({
+  person,
+  orgClass,
+  logoWrapClass,
+  logoClass,
+  nameClass,
+}: {
   person: WgChairPublic;
   orgClass: string;
   logoWrapClass: string;
@@ -197,9 +203,7 @@ function WgChairsWidget({
   const avatarPx = mode === "card" ? 72 : 80;
   const cards = (
     <>
-      {data!.chair && (
-        <ChairCard person={data!.chair} role={`${wgLabel} Chair`} color={color} avatarPx={avatarPx} />
-      )}
+      {data!.chair && <ChairCard person={data!.chair} role={`${wgLabel} Chair`} color={color} avatarPx={avatarPx} />}
       {data!.viceChair && (
         <ChairCard person={data!.viceChair} role={`${wgLabel} Vice Chair`} color={color} avatarPx={avatarPx} />
       )}

@@ -1,5 +1,5 @@
 /**
- * GET /api/v1/portal/votes — every vote visible to the caller (PRD §4.8):
+ * GET /api/v1/portal/votes — every vote visible to the caller:
  * every forum vote, every public vote, plus every vote scoped to a working
  * group the caller belongs to.
  */

@@ -1,5 +1,5 @@
 /**
- * POST /api/v1/me/headshot — upload my headshot (PRD §4.10). Mirrors
+ * POST /api/v1/me/headshot — upload my headshot. Mirrors
  * admin/users/[userId]/headshot.ts's PUT handler (same upload/resize
  * pipeline, R2 bucket, and old-key cleanup) but scoped to the caller's own
  * identity — no target user id, member-session gated instead of admin.

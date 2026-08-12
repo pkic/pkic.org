@@ -1,7 +1,7 @@
 /**
  * POST /api/v1/admin/working-groups/:id/meetings/:meetingId/resend —
- * trigger the annual bulk resend for a working group meeting series
- * (PRD §4.12). Smart-routed: members with a saved, still-active preference
+ * trigger the annual bulk resend for a working group meeting series.
+ * Smart-routed: members with a saved, still-active preference
  * get only that variant; everyone else gets all active variants.
  */
 import { OpenAPIRoute } from "chanfana";

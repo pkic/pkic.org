@@ -1,7 +1,7 @@
 /**
  * GET /api/v1/working-groups
  *
- * Public list of active working groups (PRD §1.5).
+ * Public list of active working groups.
  */
 import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../_lib/http";

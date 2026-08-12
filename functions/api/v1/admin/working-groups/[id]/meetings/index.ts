@@ -1,6 +1,6 @@
 /**
  * GET/POST /api/v1/admin/working-groups/:id/meetings — list/create meeting
- * series for a working group (PRD §4.12). Access is gated by this router's
+ * series for a working group. Access is gated by this router's
  * own middleware (see ./router.ts), not by a per-handler requirePermission
  * call — matches events/[eventSlug]/router.ts's requireEventManagementAccess
  * precedent.

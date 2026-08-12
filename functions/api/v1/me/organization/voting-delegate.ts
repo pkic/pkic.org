@@ -1,7 +1,7 @@
 /**
  * PATCH /api/v1/me/organization/voting-delegate — primary/secondary
- * contact sets (or clears) the organization's standing forum-vote delegate
- * (PRD §4.8). Takes effect immediately.
+ * contact sets (or clears) the organization's standing forum-vote delegate.
+ * Takes effect immediately.
  */
 import { OpenAPIRoute } from "chanfana";
 import { parseJsonBody } from "../../../../_lib/validation";

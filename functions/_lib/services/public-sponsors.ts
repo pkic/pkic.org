@@ -2,12 +2,12 @@ import { all, first } from "../db/queries";
 import type { DatabaseLike } from "../types";
 
 /**
- * Public sponsor display (prd.md item 8 gap-closure plan). D1 is the source
+ * Public sponsor display. D1 is the source
  * of truth — `organizations.sponsor_tier` (consortium sponsors, written by
  * `advanceSponsorshipStage` in sponsorship.ts) and active `sponsorships` rows
  * (non-member consortium sponsors, and all event sponsors). Mirrors the
  * "static shell + client-fetch" architecture members-directory.ts already
- * uses for the member directory (§1.6 Part B).
+ * uses for the member directory.
  *
  * A single flat item shape merges general/consortium standing (`tier`) with
  * an optional event-specific standing (`eventTier`) on the same record —

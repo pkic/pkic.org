@@ -2,8 +2,8 @@
  * GET  /api/v1/admin/events/:eventSlug/permissions  — list event-level roles
  * POST /api/v1/admin/events/:eventSlug/permissions  — grant an event-level role
  *
- * Backed by `user_roles` (context_type='event') since Phase 2 (PRD §2,
- * migration 0035 §0.2) — the old `event_permissions` table is dropped. The
+ * Backed by `user_roles` (context_type='event'),
+ * migration 0035) — the old `event_permissions` table is dropped. The
  * request/response shape (`permission: organizer|program_committee|
  * moderator|volunteer`) is kept unchanged for API compatibility; it now maps
  * to one of the event-scoped built-in roles.

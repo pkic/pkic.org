@@ -1,7 +1,7 @@
 /**
  * PATCH /api/v1/me/organization/secondary-contact — primary contact
- * nominates (or withdraws a nomination for) a secondary contact (PRD
- * §4.11). Held as `pending` until a staff admin confirms via
+ * nominates (or withdraws a nomination for) a secondary contact.
+ * Held as `pending` until a staff admin confirms via
  * POST /api/v1/admin/organizations/:id/confirm-secondary-contact.
  */
 import { OpenAPIRoute } from "chanfana";

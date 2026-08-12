@@ -1,7 +1,7 @@
 /**
  * application-stage-machine.test.ts
  *
- * PRD §4.2 — application stage transitions, communications, and internal
+ * application stage transitions, communications, and internal
  * notes via the admin endpoints (functions/api/v1/admin/applications/).
  */
 import { describe, expect, it, beforeEach } from "vitest";
@@ -49,7 +49,7 @@ async function createApplication(overrides: Record<string, unknown> = {}): Promi
   return { id };
 }
 
-describe("Application stage machine, communications, notes (PRD §4.2)", () => {
+describe("Application stage machine, communications, notes", () => {
   let adminToken: string;
 
   beforeEach(async () => {

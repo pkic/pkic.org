@@ -1,5 +1,5 @@
 /**
- * POST /api/v1/auth/passkeys/register/complete — PRD §3.4.
+ * POST /api/v1/auth/passkeys/register/complete.
  */
 import { OpenAPIRoute } from "chanfana";
 import { jsonNoStore } from "../../../../_lib/http";

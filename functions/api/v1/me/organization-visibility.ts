@@ -1,5 +1,5 @@
 /**
- * PATCH /api/v1/me/organization-visibility — PRD §4.10.
+ * PATCH /api/v1/me/organization-visibility.
  */
 import { OpenAPIRoute } from "chanfana";
 import { parseJsonBody } from "../../../_lib/validation";

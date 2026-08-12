@@ -6,7 +6,7 @@ import type { Role, UserRoleAssignment } from "../../types";
 import { UserPicker, type PickedUser } from "./UserPicker";
 import { ContextPicker, type PickedContext } from "./ContextPicker";
 
-/** PRD §2.4 — "Staff management: assign built-in roles, override individual permissions". */
+/** Staff management: assign built-in roles, override individual permissions. */
 export function UserRoles() {
   const [user, setUser] = useState<PickedUser | null>(null);
   const [assignments, setAssignments] = useState<UserRoleAssignment[]>([]);

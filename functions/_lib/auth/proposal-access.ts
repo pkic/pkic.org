@@ -10,9 +10,9 @@ export interface ProposalAccess {
 /**
  * Resolve proposal moderation capabilities for a user on a specific event.
  *
- * Backed by Phase 2 (PRD §2) `user_roles`/`permission_grants` via
+ * Backed by `user_roles`/`permission_grants` via
  * `hasPermission`, not the dropped `event_permissions` table (see migration
- * 0035 §0.2). `proposals:score` (program_committee, event_moderator)
+ * 0035). `proposals:score` (program_committee, event_moderator)
  * grants review; `proposals:manage` (event_organizer, program_committee)
  * grants finalize — matching the old REVIEW_PERMISSIONS/FINALIZE_PERMISSIONS
  * sets those roles were backfilled from. Global admins keep full access via

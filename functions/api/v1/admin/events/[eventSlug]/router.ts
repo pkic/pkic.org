@@ -43,13 +43,13 @@ function isSelfGatedEventPath(path: string, eventSlug: string): boolean {
 }
 
 /**
- * Phase 2 (PRD §2) context-aware gate for the /admin/events/:eventSlug/**
+ * Context-aware gate for the /admin/events/:eventSlug/**
  * management surface (registrations, invites, waitlist, settings, emails,
  * days, forms, terms, promoters, stats) — requires events:read (GET) or
  * events:write (writes), globally or scoped to this event. Global admins
  * pass unconditionally via requirePermission's role='admin' bypass, so
  * existing behavior under the single-tier admin model is unchanged; this
- * is what actually gives a Phase 2 event_organizer grant "full management
+ * is what actually gives a event_organizer grant "full management
  * of a specific event" (P7) instead of just admin-only access.
  *
  * `/proposals` and `/permissions` are excluded here — they self-gate with

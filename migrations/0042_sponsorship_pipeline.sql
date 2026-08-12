@@ -1,7 +1,7 @@
--- Migration 0042: Phase 4E — Sponsorship Management (PRD §4.13)
+-- Migration 0042: Sponsorship Management
 --
 -- `sponsorships`/`sponsorship_events` already exist (migration 0034, pulled
--- forward for §1.3's inquiry/checkout endpoints) with every column §4.13's
+-- forward for inquiry/checkout endpoints) with every column
 -- schema calls for. What's still missing for the full sales-pipeline/
 -- sponsor-portal feature:
 --
@@ -10,15 +10,15 @@
 -- 2. `event_sponsor_attendee_tiers` — per-event config of which sponsor
 --    tiers get attendee-data access.
 -- 3. `sponsor_portal_magic_links`/`sponsor_portal_sessions` — a sponsor
---    contact has no `users` row (see §4.13's "no separate account
+--    contact has no `users` row ("no separate account
 --    required"), so the existing `auth_magic_links`/`sessions` tables
 --    (both `user_id NOT NULL`) can't be reused the way member/admin auth
 --    does. These are the same shape, scoped to `sponsorship_id` instead.
--- 4. §6 Step 3e: migrate the live `sponsors`/`sponsor_events` rows into
+-- 4. Migrate the live `sponsors`/`sponsor_events` rows into
 --    `sponsorships`/`sponsorship_events` (reconciled by `organization_id`
---    against anything already there), then drop the legacy tables — per
---    §0.3, that drop only happens "after Phase 4E ships and the migration
---    is verified", which is this migration.
+--    against anything already there), then drop the legacy tables,
+--    that drop only happens "after the migration
+--    is verified".
 -- 5. New email templates (`sponsorship-renewal-reminder-60`/`-30`,
 --    `sponsorship-lapsed-staff`, `sponsorship-active-confirmation`,
 --    `sponsor-portal-access`) — `sponsorship-brochure`/`sponsorship-new-inquiry`
@@ -28,13 +28,13 @@
 -- values are documented in `-- allowed:` comments and validated at the
 -- application layer (Zod) instead.
 
--- ── organizations: active consortium sponsorship (§4.13 "On active") ─────
+-- ── organizations: active consortium sponsorship ("On active") ─────
 
 ALTER TABLE organizations ADD COLUMN sponsor_tier TEXT;
 -- Titanium/Diamond/Platinum/Gold/Silver, or NULL if not currently sponsoring.
 ALTER TABLE organizations ADD COLUMN sponsor_start_date TEXT;
 
--- ── Per-event sponsor-tier attendee-data-access config (§4.13) ───────────
+-- ── Per-event sponsor-tier attendee-data-access config ───────────
 
 CREATE TABLE event_sponsor_attendee_tiers (
   id                       TEXT NOT NULL PRIMARY KEY,
@@ -70,9 +70,9 @@ CREATE TABLE sponsor_portal_sessions (
 
 CREATE INDEX idx_sponsor_portal_sessions_sponsorship ON sponsor_portal_sessions(sponsorship_id);
 
--- ── §6 Step 3e: migrate live `sponsors`/`sponsor_events` rows first ───────
+-- ── Migrate live `sponsors`/`sponsor_events` rows first ───────
 -- (must run before any future YAML-scan pass — see scripts/migrate-sponsors-yaml-to-d1.mjs
--- and prd.md §0.3/§6 Step 3e). Reconciled by organization_id so re-running
+-- ). Reconciled by organization_id so re-running
 -- this migration's logic (it isn't re-run — migrations apply once — but the
 -- guard mirrors the YAML script's own idempotency) never double-inserts.
 
@@ -122,7 +122,7 @@ WHERE NOT EXISTS (
 DROP TABLE sponsor_events;
 DROP TABLE sponsors;
 
--- ── New email templates (§4.13) ───────────────────────────────────────────
+-- ── New email templates ───────────────────────────────────────────
 
 INSERT OR IGNORE INTO email_template_versions
   (id, template_key, version, subject_template, body, content_type, r2_object_key, checksum_sha256, status, created_by_user_id, created_at, message_type)

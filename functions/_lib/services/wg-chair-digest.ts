@@ -1,6 +1,6 @@
 /**
  * Weekly working-group membership-change digest for WG chairs/vice-chairs
- * (2026-07-31 manual-testing feedback, prd.md's post-Phase-4 fixes section).
+ * (2026-07-31 manual-testing feedback).
  * "Notify the chairs when someone joins or leaves... not a spam email every
  * time there is a change" — this runs on its own weekly cron (see
  * functions/router.ts's WG_CHAIR_DIGEST_CRON) and batches every join/leave

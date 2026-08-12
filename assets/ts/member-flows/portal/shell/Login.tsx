@@ -1,5 +1,5 @@
 /**
- * Member portal login screen — magic link + passkey (PRD §11 UI-1).
+ * Member portal login screen — magic link + passkey.
  * Mirrors admin/shell/Login.tsx's structure; the passkey ceremony code is
  * near-identical (a small duplicated helper, same precedent as ui.ts's
  * header comment) but posts to the member magic-link endpoints and expects

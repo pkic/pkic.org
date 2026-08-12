@@ -954,7 +954,7 @@ function TermsTab({ slug }: { slug: string }) {
   );
 }
 
-// ─── Sponsor tiers tab (PRD §4.13, Phase 4E) ──────────────────────────────────
+// ─── Sponsor tiers tab ──────────────────────────────────
 
 interface SponsorTierState {
   tierName: string;
@@ -1012,7 +1012,7 @@ function SponsorTiersTab({ slug }: { slug: string }) {
     <div>
       <div class="d-flex gap-2 align-items-center mb-3 flex-wrap">
         <span class="small text-muted">
-          Which sponsor tiers at this event get attendee-data access via the sponsor portal (PRD §4.13). Defaults to no
+          Which sponsor tiers at this event get attendee-data access via the sponsor portal. Defaults to no
           tiers having access.
         </span>
         <button class="btn btn-sm btn-primary ms-auto" onClick={() => void handleSave()} disabled={saving}>

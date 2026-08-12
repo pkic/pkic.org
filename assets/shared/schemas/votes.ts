@@ -1,10 +1,11 @@
 /**
- * Voting system (PRD §4.8, Phase 4B). Backs the public `/api/v1/votes*`
+ * Voting system. Backs the public `/api/v1/votes*`
  * endpoints, the authenticated-member `/api/v1/portal/votes*` and
  * `/api/v1/portal/vote-proposals*` endpoints, and the staff/WG-chair
  * `/api/v1/admin/votes*` and `/api/v1/admin/vote-proposals*` endpoints.
  */
 import { z } from "zod";
+import { paginationQuerySchema, paginatedResponseSchema, sortColumnSchema } from "./pagination";
 
 export const VOTE_TYPES = ["election", "motion", "consultation"] as const;
 export const voteTypeSchema = z.enum(VOTE_TYPES);
@@ -72,7 +73,7 @@ export const portalVoteSchema = z.object({
   result: z.unknown().nullable(),
 });
 
-// ── Public (no auth) — §7 "Votes (public — no auth required)" ────────────
+// ── Public (no auth) — "Votes (public — no auth required)" ────────────
 
 export const publicVotesListQuerySchema = z.object({
   type: voteTypeSchema.optional(),
@@ -88,7 +89,7 @@ export const publicVotesListQuerySchema = z.object({
 
 export const publicVotesListRouteSchema = {
   tags: ["Votes"],
-  summary: "List public votes (PRD §4.8)",
+  summary: "List public votes",
   description: "Machine-consumable, filterable, paginated. Only visibility='public' votes are returned.",
   request: { query: publicVotesListQuerySchema },
   responses: {
@@ -110,7 +111,7 @@ export const publicVotesListRouteSchema = {
 
 export const publicVoteGetRouteSchema = {
   tags: ["Votes"],
-  summary: "Public vote result at its configured detail level (PRD §4.8)",
+  summary: "Public vote result at its configured detail level",
   request: { params: voteSlugParamsSchema },
   responses: {
     "200": {
@@ -123,17 +124,17 @@ export const publicVoteGetRouteSchema = {
 
 export const publicVotesFeedRouteSchema = {
   tags: ["Votes"],
-  summary: "RSS feed of public votes (PRD §4.8)",
+  summary: "RSS feed of public votes",
   responses: {
     "200": { description: "RSS/Atom XML document." },
   },
 };
 
-// ── Portal (authenticated members) — §7 ───────────────────────────────────
+// ── Portal (authenticated members) ───────────────────────────────────
 
 export const portalVotesListRouteSchema = {
   tags: ["Portal Votes"],
-  summary: "List all votes visible to the caller (PRD §4.8)",
+  summary: "List all votes visible to the caller",
   description: "Every forum vote, every public vote, plus every vote scoped to a working group the caller belongs to.",
   responses: {
     "200": {
@@ -145,7 +146,7 @@ export const portalVotesListRouteSchema = {
 
 export const portalVoteGetRouteSchema = {
   tags: ["Portal Votes"],
-  summary: "Vote detail for the caller (PRD §4.8)",
+  summary: "Vote detail for the caller",
   request: { params: voteIdParamsSchema },
   responses: {
     "200": {
@@ -162,7 +163,7 @@ export const submitBallotSchema = z.object({
 
 export const submitBallotRouteSchema = {
   tags: ["Portal Votes"],
-  summary: "Cast a ballot (PRD §4.8, A–G only)",
+  summary: "Cast a ballot A–G only)",
   description:
     "Forum-level: only the organization's resolved voting delegate may call this, one ballot per organization per round. Working-group-level: one ballot per person per round, caller must be an active member of the vote's working group. H-category members may never cast a ballot.",
   request: {
@@ -179,7 +180,7 @@ export const submitBallotRouteSchema = {
 
 export const voteResultsRouteSchema = {
   tags: ["Portal Votes"],
-  summary: "Results after close, full detail (PRD §4.8)",
+  summary: "Results after close, full detail",
   request: { params: voteIdParamsSchema },
   responses: {
     "200": {
@@ -190,7 +191,7 @@ export const voteResultsRouteSchema = {
   },
 };
 
-// ── Vote proposals (authenticated A–G members) — §7 ───────────────────────
+// ── Vote proposals (authenticated A–G members) ───────────────────────
 
 export const proposalSummarySchema = z.object({
   id: z.uuid(),
@@ -221,7 +222,7 @@ export const submitProposalSchema = z.object({
 
 export const submitProposalRouteSchema = {
   tags: ["Vote Proposals"],
-  summary: "Submit a vote proposal (PRD §4.8 Path B, A–G members only)",
+  summary: "Submit a vote proposal (A–G members only)",
   description:
     "Available only when the target scope's min_endorsers_for_ballot (forum: the membership_settings default; WG: working_groups.min_endorsers_for_ballot) is greater than 0.",
   request: {
@@ -246,7 +247,7 @@ export const listProposalsQuerySchema = z.object({
 
 export const listProposalsRouteSchema = {
   tags: ["Vote Proposals"],
-  summary: "List open proposals in scope (PRD §4.8)",
+  summary: "List open proposals in scope",
   request: { query: listProposalsQuerySchema },
   responses: {
     "200": {
@@ -258,7 +259,7 @@ export const listProposalsRouteSchema = {
 
 export const proposalDetailRouteSchema = {
   tags: ["Vote Proposals"],
-  summary: "Proposal detail + current endorser list (PRD §4.8)",
+  summary: "Proposal detail + current endorser list",
   request: { params: proposalIdParamsSchema },
   responses: {
     "200": {
@@ -275,7 +276,7 @@ export const proposalDetailRouteSchema = {
 
 export const endorseProposalRouteSchema = {
   tags: ["Vote Proposals"],
-  summary: "Endorse a proposal (PRD §4.8, A–G members only)",
+  summary: "Endorse a proposal (A–G members only)",
   description: "Auto-converts the proposal into an active vote once its endorsement threshold is reached.",
   request: { params: proposalIdParamsSchema },
   responses: {
@@ -297,14 +298,14 @@ export const endorseProposalRouteSchema = {
 
 export const withdrawEndorsementRouteSchema = {
   tags: ["Vote Proposals"],
-  summary: "Withdraw my own endorsement (PRD §4.8)",
+  summary: "Withdraw my own endorsement",
   request: { params: proposalIdParamsSchema },
   responses: { "200": { description: "Endorsement withdrawn." } },
 };
 
 export const withdrawProposalRouteSchema = {
   tags: ["Vote Proposals"],
-  summary: "Withdraw my own proposal (PRD §4.8, proposer only)",
+  summary: "Withdraw my own proposal (proposer only)",
   request: { params: proposalIdParamsSchema },
   responses: {
     "200": { description: "Proposal withdrawn." },
@@ -313,7 +314,7 @@ export const withdrawProposalRouteSchema = {
   },
 };
 
-// ── Admin (staff admin / WG chair in context) — §7 ────────────────────────
+// ── Admin (staff admin / WG chair in context) ────────────────────────
 
 export const adminCandidateInputSchema = z.object({
   name: z.string().trim().min(1).max(200),
@@ -321,8 +322,19 @@ export const adminCandidateInputSchema = z.object({
   userId: z.uuid().nullable().optional(),
 });
 
-export const adminVotesListQuerySchema = z.object({
+/** Allowlisted sort columns for GET /api/v1/admin/votes — see listVotesForAdmin. */
+export const ADMIN_VOTES_SORT_COLUMNS = [
+  "title",
+  "vote_type",
+  "status",
+  "opens_at",
+  "closes_at",
+  "created_at",
+] as const;
+
+export const adminVotesListQuerySchema = paginationQuerySchema.extend({
   status: z.enum(["scheduled", "open", "closed", "cancelled"]).optional(),
+  sort: sortColumnSchema(ADMIN_VOTES_SORT_COLUMNS),
 });
 
 export const adminVoteSchema = z.object({
@@ -332,12 +344,12 @@ export const adminVoteSchema = z.object({
 
 export const adminVotesListRouteSchema = {
   tags: ["Admin Votes"],
-  summary: "List all votes, optionally filtered by status (PRD §4.8)",
+  summary: "List all votes, optionally filtered by status",
   request: { query: adminVotesListQuerySchema },
   responses: {
     "200": {
       description: "Votes.",
-      content: { "application/json": { schema: z.object({ votes: z.array(adminVoteSchema) }) } },
+      content: { "application/json": { schema: paginatedResponseSchema("votes", adminVoteSchema) } },
     },
   },
 };
@@ -357,7 +369,7 @@ export const adminVoteCreateSchema = z.object({
 
 export const adminVoteCreateRouteSchema = {
   tags: ["Admin Votes"],
-  summary: "Create a vote directly (PRD §4.8 Path A — bypasses endorsement)",
+  summary: "Create a vote directly (bypasses endorsement)",
   description: "Staff admin (any scope) or WG chair/vice-chair (their own WG only, enforced via votes:create).",
   request: {
     body: { content: { "application/json": { schema: adminVoteCreateSchema } }, required: true },
@@ -381,7 +393,7 @@ export const adminVoteUpdateSchema = z.object({
 
 export const adminVoteUpdateRouteSchema = {
   tags: ["Admin Votes"],
-  summary: "Update a vote's settings (PRD §4.8)",
+  summary: "Update a vote's settings",
   request: {
     params: voteIdParamsSchema,
     body: { content: { "application/json": { schema: adminVoteUpdateSchema } }, required: true },
@@ -403,7 +415,7 @@ export const adminVoteVisibilityUpdateSchema = z.object({
 
 export const adminVoteVisibilityUpdateRouteSchema = {
   tags: ["Admin Votes"],
-  summary: "Set a vote's public visibility and detail level (PRD §4.8)",
+  summary: "Set a vote's public visibility and detail level",
   description: "Reversible at any time. Every change is written to audit_log.",
   request: {
     params: voteIdParamsSchema,
@@ -429,7 +441,7 @@ export const adminBallotSchema = z.object({
 
 export const adminVoteBallotsRouteSchema = {
   tags: ["Admin Votes"],
-  summary: "Full ballot breakdown (PRD §4.8, staff only)",
+  summary: "Full ballot breakdown (staff only)",
   request: { params: voteIdParamsSchema },
   responses: {
     "200": {
@@ -440,7 +452,7 @@ export const adminVoteBallotsRouteSchema = {
   },
 };
 
-// ── Admin proposal moderation — §7 ────────────────────────────────────────
+// ── Admin proposal moderation ────────────────────────────────────────
 
 export const adminListProposalsQuerySchema = z.object({
   status: z.string().optional(),
@@ -448,7 +460,7 @@ export const adminListProposalsQuerySchema = z.object({
 
 export const adminListProposalsRouteSchema = {
   tags: ["Admin Vote Proposals"],
-  summary: "List all proposals, filterable by status/scope (PRD §4.8)",
+  summary: "List all proposals, filterable by status/scope",
   request: { query: adminListProposalsQuerySchema },
   responses: {
     "200": {
@@ -460,7 +472,7 @@ export const adminListProposalsRouteSchema = {
 
 export const adminProposalDetailRouteSchema = {
   tags: ["Admin Vote Proposals"],
-  summary: "Proposal detail + endorsers (PRD §4.8)",
+  summary: "Proposal detail + endorsers",
   request: { params: proposalIdParamsSchema },
   responses: {
     "200": {
@@ -477,7 +489,7 @@ export const adminProposalDetailRouteSchema = {
 
 export const adminApproveProposalRouteSchema = {
   tags: ["Admin Vote Proposals"],
-  summary: "Convert a proposal to an active vote, bypassing the endorsement count (PRD §4.8)",
+  summary: "Convert a proposal to an active vote, bypassing the endorsement count",
   request: { params: proposalIdParamsSchema },
   responses: {
     "200": {
@@ -498,7 +510,7 @@ export const adminRejectProposalSchema = z.object({
 
 export const adminRejectProposalRouteSchema = {
   tags: ["Admin Vote Proposals"],
-  summary: "Reject a proposal with a reason; notifies the proposer (PRD §4.8)",
+  summary: "Reject a proposal with a reason; notifies the proposer",
   request: {
     params: proposalIdParamsSchema,
     body: { content: { "application/json": { schema: adminRejectProposalSchema } }, required: true },

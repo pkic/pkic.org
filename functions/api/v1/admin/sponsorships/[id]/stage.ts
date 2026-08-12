@@ -1,6 +1,6 @@
 /**
  * PATCH /api/v1/admin/sponsorships/:id/stage — advance the sales pipeline
- * stage (PRD §4.13). Handles the "On active"/"On lapsed" email side
+ * stage. Handles the "On active"/"On lapsed" email side
  * effects here (not in the service layer — see sponsorship.ts's
  * advanceSponsorshipStage doc comment and organization-content-reviews.ts's
  * header note on why routes, not services, own email/R2 side effects).

@@ -1,6 +1,6 @@
 /**
  * GET/DELETE /api/v1/portal/vote-proposals/:id — proposal detail (+
- * endorsers), or withdraw my own proposal (PRD §4.8).
+ * endorsers), or withdraw my own proposal.
  */
 import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../../_lib/http";

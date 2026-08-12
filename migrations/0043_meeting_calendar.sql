@@ -1,4 +1,4 @@
--- Migration 0043: Phase 4D — Meeting Calendar Management (PRD §4.12)
+-- Migration 0043: Meeting Calendar Management
 --
 -- Replaces the static ICS files committed to the pkic/members Git repo with
 -- a portal-managed system: meeting_series (one per recurring meeting, e.g.
@@ -52,11 +52,11 @@ CREATE TABLE member_meeting_preferences (
 
 CREATE INDEX idx_member_meeting_preferences_user ON member_meeting_preferences(user_id);
 
--- ── Seed the initial meeting series (§4.12 "Seeded on Migration") ─────────
+-- ── Seed the initial meeting series ("Seeded on Migration") ─────────
 -- Only meeting_series rows are seeded here — the actual ICS file content
 -- (currently 9 files committed to pkic/members/meetings/) is not migrated
 -- automatically; staff upload each variant via the new admin endpoints
--- after this migration runs, per §4.12's own "staff to verify exact file
+-- after this migration runs, own "staff to verify exact file
 -- count at migration time" note. Seeding fake meeting_ics_files rows with
 -- placeholder r2_key values was considered and rejected — it would let a
 -- staff admin flip one active before the real R2 upload happens, producing
@@ -70,7 +70,7 @@ SELECT lower(hex(randomblob(16))), wg.name || ' Meeting', 'working_group', wg.id
 FROM working_groups wg
 WHERE wg.slug IN ('pqc', 'cbom', 'cm', 'tcwg', 'ca', 'pkimm');
 
--- ── New email templates (§4.12) ───────────────────────────────────────────
+-- ── New email templates ───────────────────────────────────────────
 
 INSERT OR IGNORE INTO email_template_versions
   (id, template_key, version, subject_template, body, content_type, r2_object_key, checksum_sha256, status, created_by_user_id, created_at, message_type)

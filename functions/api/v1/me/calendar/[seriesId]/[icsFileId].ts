@@ -1,6 +1,6 @@
 /**
  * GET /api/v1/me/calendar/:seriesId/:icsFileId — download a specific ICS
- * file (PRD §4.12). Lets a member re-download any active variant for a
+ * file. Lets a member re-download any active variant for a
  * series they're subscribed to at any time, not just at onboarding.
  */
 import { OpenAPIRoute } from "chanfana";

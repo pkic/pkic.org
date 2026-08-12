@@ -1,10 +1,10 @@
 /**
  * GET /api/v1/members/applications/form
  *
- * Returns the active, staff-editable membership application form definition
- * (PRD §1.4/§1.5), the same forms/form_fields tables event registration
+ * Returns the active, staff-editable membership application form definition,
+ * the same forms/form_fields tables event registration
  * forms already use, resolved by the well-known key 'membership-application'
- * (seeded in migrations/0034_phase1_applications_sponsorships_working_groups.sql).
+ * (seeded in migrations/0034_applications_sponsorships_working_groups.sql).
  */
 import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../_lib/http";

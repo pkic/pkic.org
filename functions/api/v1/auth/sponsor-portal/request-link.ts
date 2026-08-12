@@ -1,5 +1,5 @@
 /**
- * POST /api/v1/auth/sponsor-portal/request-link — PRD §4.13.
+ * POST /api/v1/auth/sponsor-portal/request-link.
  * Mirrors auth/member/request-link.ts, targeting an active event
  * sponsorship's contact email instead of a member (see
  * _lib/auth/sponsor-portal.ts). Used for re-requesting a link after the

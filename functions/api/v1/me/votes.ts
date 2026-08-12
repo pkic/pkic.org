@@ -1,6 +1,6 @@
 /**
- * GET /api/v1/me/votes — my vote history (PRD §4.10). Replaces the Phase
- * 4A stub now that the voting system (§4.8, Phase 4B) is built — see
+ * GET /api/v1/me/votes — my vote history. Replaces the
+ * stub now that the voting system is built — see
  * votes.ts's listMyVoteHistory.
  */
 import { OpenAPIRoute } from "chanfana";

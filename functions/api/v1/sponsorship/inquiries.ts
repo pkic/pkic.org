@@ -1,7 +1,7 @@
 /**
  * POST /api/v1/sponsorship/inquiries
  *
- * Path A of PRD §1.3 — express interest, no payment. Replaces POST
+ * express interest, no payment. Replaces POST
  * /api/v1/forms (form_type=sponsor-interest).
  */
 import { OpenAPIRoute } from "chanfana";

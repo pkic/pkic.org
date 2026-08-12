@@ -2,33 +2,20 @@ import { all, first, run } from "../db/queries";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { randomToken, sha256Hex } from "../utils/crypto";
-import { stringifyJson, parseJsonSafe } from "../utils/json";
+import { parseJsonSafe } from "../utils/json";
 import { AppError } from "../errors";
+import { getGlobalFormByKey } from "./forms";
+import {
+  MEMBERSHIP_CATEGORIES,
+  INDIVIDUAL_MEMBERSHIP_CATEGORIES,
+  VOTING_CATEGORIES,
+} from "../../../assets/shared/schemas/membership-categories";
 import type { DatabaseLike } from "../types";
 
-/** Individual (org-less) membership categories — PRD §0.1. */
-export const INDIVIDUAL_MEMBERSHIP_CATEGORIES = new Set(["H5", "H6", "H7"]);
+/** `forms.key` for the portal-managed membership application form (seeded in migrations/0034). */
+export const MEMBERSHIP_APPLICATION_FORM_KEY = "membership-application";
 
-/** Categories with voting rights (forum + WG) — PRD §3/§4.8. H categories never vote. */
-export const VOTING_CATEGORIES = new Set(["A", "B", "C", "D", "E", "F", "G"]);
-
-export const MEMBERSHIP_CATEGORIES = [
-  "A",
-  "B",
-  "C",
-  "D",
-  "E",
-  "F",
-  "G",
-  "H1",
-  "H2",
-  "H3",
-  "H4",
-  "H5",
-  "H6",
-  "H7",
-  "H8",
-] as const;
+export { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES, VOTING_CATEGORIES };
 
 /** Non-terminal application stages — an application in one of these still "counts" for duplicate-domain detection. */
 const ACTIVE_APPLICATION_STATUSES = ["pending", "in_review", "on_hold", "in_consultation", "ec_review", "approved"];
@@ -40,7 +27,7 @@ export interface MemberApplicationRow {
   organization_name: string | null;
   organization_domain: string | null;
   membership_category: string;
-  answers_json: string | null;
+  form_submission_id: string | null;
   status: string;
   stage: string;
   stage_entered_at: string;
@@ -60,8 +47,8 @@ export function emailDomain(email: string): string {
  * Returns true when an active (non-terminal) application already exists for
  * the given organization domain. Only checks member_applications, not
  * already-approved organizations — see hasConflictingOrganizationDomain for
- * that half, added in Phase 4A (§4.1) once organizations gained a domain
- * column. See prd.md Phase 1 notes decision 5.
+ * that half, added once organizations gained a domain
+ * column.
  */
 export async function hasActiveApplicationForDomain(db: DatabaseLike, domain: string): Promise<boolean> {
   if (!domain) return false;
@@ -76,11 +63,10 @@ export async function hasActiveApplicationForDomain(db: DatabaseLike, domain: st
 
 /**
  * Returns true when an already-approved organization's `organization_domains_json`
- * (populated at §4.7 approval time) already lists this domain. Closes the gap
- * flagged in Phase 1 Implementation Status decision 5 — but only for
- * organizations approved through the §4.7 flow going forward; the 375
- * organizations migrated by §6 Step 2 have no domain data to backfill and
- * remain uncovered (documented in prd.md Phase 4A status).
+ * (populated at approval time) already lists this domain. Only for
+ * organizations approved through the flow going forward; the X
+ * organizations migrated have no domain data to backfill and
+ * remain uncovered.
  */
 export async function hasConflictingOrganizationDomain(db: DatabaseLike, domain: string): Promise<boolean> {
   if (!domain) return false;
@@ -118,12 +104,41 @@ export async function createMemberApplication(
   const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(input.membershipCategory);
   const organizationDomain = isIndividual ? null : emailDomain(input.applicantEmail);
 
-  await db.batch([
+  const hasAnswers = input.answers && Object.keys(input.answers).length > 0;
+  let formSubmissionId: string | null = null;
+  const statements = [];
+
+  if (hasAnswers) {
+    const form = await getGlobalFormByKey(db, MEMBERSHIP_APPLICATION_FORM_KEY);
+    if (form) {
+      formSubmissionId = uuid();
+      statements.push(
+        db
+          .prepare(
+            `INSERT INTO form_submissions (id, form_id, submitted_by_user_id, context_type, context_ref, status, submitted_at)
+             VALUES (?, ?, NULL, 'membership', ?, 'submitted', ?)`,
+          )
+          .bind(formSubmissionId, form.id, id, now),
+      );
+      for (const [key, value] of Object.entries(input.answers as Record<string, unknown>)) {
+        statements.push(
+          db
+            .prepare(
+              `INSERT INTO form_submission_answers (id, submission_id, field_key, data_json, created_at)
+               VALUES (?, ?, ?, ?, ?)`,
+            )
+            .bind(uuid(), formSubmissionId, key, JSON.stringify(value ?? null), now),
+        );
+      }
+    }
+  }
+
+  statements.push(
     db
       .prepare(
         `INSERT INTO member_applications
            (id, applicant_email, applicant_name, organization_name, organization_domain,
-            membership_category, answers_json, status, stage, stage_entered_at,
+            membership_category, form_submission_id, status, stage, stage_entered_at,
             manage_token_hash, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', ?, ?, ?, ?)`,
       )
@@ -134,7 +149,7 @@ export async function createMemberApplication(
         isIndividual ? null : (input.organizationName ?? null),
         organizationDomain,
         input.membershipCategory,
-        input.answers ? stringifyJson(input.answers) : null,
+        formSubmissionId,
         now,
         manageTokenHash,
         now,
@@ -146,7 +161,9 @@ export async function createMemberApplication(
          VALUES (?, ?, NULL, 'pending', NULL, 'Application submitted', ?)`,
       )
       .bind(uuid(), id, now),
-  ]);
+  );
+
+  await db.batch(statements);
 
   return { id, manageToken, status: "pending", stage: "pending" };
 }
@@ -236,11 +253,30 @@ export async function recordApplicationDocument(
   };
 }
 
-export function parseApplicationAnswers(answersJson: string | null): Record<string, unknown> {
-  return parseJsonSafe<Record<string, unknown>>(answersJson, {});
+/**
+ * Reads an application's free-form answers back out of form_submission_answers
+ * (PR review fix — member_applications no longer carries its own answers_json
+ * blob; answers live in the same forms/form_submissions system event
+ * registration forms use, joined via member_applications.form_submission_id).
+ */
+export async function getApplicationAnswers(
+  db: DatabaseLike,
+  formSubmissionId: string | null,
+): Promise<Record<string, unknown>> {
+  if (!formSubmissionId) return {};
+  const rows = await all<{ field_key: string; data_json: string | null }>(
+    db,
+    `SELECT field_key, data_json FROM form_submission_answers WHERE submission_id = ?`,
+    [formSubmissionId],
+  );
+  const answers: Record<string, unknown> = {};
+  for (const row of rows) {
+    answers[row.field_key] = parseJsonSafe<unknown>(row.data_json, null);
+  }
+  return answers;
 }
 
-// ── Stage machine (§4.2) ─────────────────────────────────────────────────
+// ── Stage machine ─────────────────────────────────────────────────
 //
 // Replicates the GitHub label state machine as explicit transitions.
 // `approved` is deliberately not a destination here — reaching it requires
@@ -295,7 +331,7 @@ export interface StageTransitionResult {
 }
 
 /**
- * Applies a §4.2 stage transition: validates it against the state machine,
+ * Applies a stage transition: validates it against the state machine,
  * updates `status`/`stage`/`stage_entered_at` (kept in sync, matching
  * createMemberApplication's convention), writes a member_application_events
  * row, and returns the applicant-facing email template the caller should
@@ -369,9 +405,9 @@ export async function transitionApplicationStage(
   };
 }
 
-// ── Communications & notes (§4.2) ────────────────────────────────────────
+// ── Communications & notes ────────────────────────────────────────
 //
-// Two distinct write operations, per the PRD's own table: a templated or
+// Two distinct write operations, a templated or
 // free-form email to the applicant (recorded here for the staff-only audit
 // trail; the actual send goes through the existing email_outbox — this
 // function only records that it happened) and an internal note (never
@@ -469,7 +505,7 @@ export async function listApplicationCommunications(
   );
 }
 
-// ── Member consultation concerns (§4.5) ──────────────────────────────────
+// ── Member consultation concerns ──────────────────────────────────
 //
 // Visible only to staff/processors, never to the applicant — enforced by
 // omission: no public/token-gated endpoint reads this table.

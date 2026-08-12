@@ -421,7 +421,7 @@ export function DueWork() {
 
   /**
    * Manual off-cycle trigger for the twice-weekly membership batches
-   * (PRD §4.5/§4.6) — normally cron-fired Mon/Wed. No dry-run preview for
+   *  — normally cron-fired Mon/Wed. No dry-run preview for
    * these (see adminRunJobsSchema); this always performs the real send.
    */
   async function runMembershipBatch(kind: "consultation" | "ecReview" | "wgChairDigest") {
@@ -481,7 +481,7 @@ export function DueWork() {
               class="btn btn-sm btn-outline-secondary"
               onClick={() => void runMembershipBatch("consultation")}
               disabled={runningMembershipBatch !== null}
-              title="Normally runs automatically Mon/Wed 07:15 UTC (PRD §4.5)"
+              title="Normally runs automatically Mon/Wed 07:15 UTC"
             >
               {runningMembershipBatch === "consultation" ? "Sending…" : "Send consultation batch now"}
             </button>
@@ -489,7 +489,7 @@ export function DueWork() {
               class="btn btn-sm btn-outline-secondary"
               onClick={() => void runMembershipBatch("ecReview")}
               disabled={runningMembershipBatch !== null}
-              title="Normally runs automatically Mon/Wed 08:15 UTC (PRD §4.6)"
+              title="Normally runs automatically Mon/Wed 08:15 UTC"
             >
               {runningMembershipBatch === "ecReview" ? "Sending…" : "Send EC review batch now"}
             </button>

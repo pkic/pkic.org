@@ -1,9 +1,9 @@
 /**
  * DELETE /api/v1/admin/events/:eventSlug/permissions/:permId
  *
- * Revokes a specific event-level role grant (Phase 2: sets `revoked_at` on
+ * Revokes a specific event-level role grant (Sets `revoked_at` on
  * the backing `user_roles` row rather than deleting it — see migration
- * 0035 §0.2 and functions/api/v1/admin/events/[eventSlug]/permissions.ts).
+ * 0035 and functions/api/v1/admin/events/[eventSlug]/permissions.ts).
  */
 import { json } from "../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";

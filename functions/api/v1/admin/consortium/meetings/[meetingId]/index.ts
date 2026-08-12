@@ -1,6 +1,6 @@
 /**
  * PATCH  /api/v1/admin/consortium/meetings/:meetingId — update a consortium
- *        meeting series (name, active status) (PRD §4.12).
+ *        meeting series (name, active status).
  * DELETE /api/v1/admin/consortium/meetings/:meetingId — delete a consortium
  *        meeting series, its ICS files, and any member preferences.
  */

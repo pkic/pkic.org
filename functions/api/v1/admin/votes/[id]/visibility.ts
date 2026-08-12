@@ -1,6 +1,6 @@
 /**
  * PATCH /api/v1/admin/votes/:id/visibility — set a vote's public
- * visibility and detail level (PRD §4.8). Reversible at any time; every
+ * visibility and detail level. Reversible at any time; every
  * change is written to audit_log.
  */
 import { OpenAPIRoute } from "chanfana";

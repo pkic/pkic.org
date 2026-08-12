@@ -120,9 +120,7 @@
   the same pattern the footer sponsor strip below already uses, since this
   page is screenshotted with `waitUntil: networkidle0`
   (functions/api/v1/og/card/[...path].ts), which waits for that fetch (and any
-  resulting image loads) to settle before capturing. See prd.md's decision
-  log for why this replaced the old `.Params.chair` frontmatter read, which
-  always evaluated false once that frontmatter was removed.
+  resulting image loads) to settle before capturing.
 */}}
 {{- $isWgPage := and (eq $page.Section "wg") ($page.Params.wgID) -}}
 
@@ -181,7 +179,7 @@
   shortcode-call-site argument, not page front matter), so this was already
   effectively context-free before this migration too.
 
-  Fetched client-side (prd.md item 8 gap-closure plan) via the same
+  Fetched client-side via the same
   sponsors-wall Preact component every other public sponsor surface uses —
   possible here because this page is screenshotted by Cloudflare Browser
   Rendering with `waitUntil: networkidle0` (functions/api/v1/og/card/[...path].ts),

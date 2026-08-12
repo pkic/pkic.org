@@ -37,8 +37,8 @@ function compareMemberSort(
 }
 
 /**
- * PRD §2.4 — "WG management: create/edit working groups, add/remove
- * members directly, view WG rosters". Chair/vice-chair assignment (with
+ * WG management: create/edit working groups, add/remove
+ * members directly, view WG rosters. Chair/vice-chair assignment (with
  * term expiry) moved to the dedicated "Chairs" section — this tab only
  * displays the current holders and their term expiry read-only, to avoid
  * two places editing the same user_roles rows. Create/edit/deactivate and

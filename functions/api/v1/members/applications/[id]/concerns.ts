@@ -1,7 +1,7 @@
 /**
- * POST /api/v1/members/applications/:id/concerns — PRD §4.5.
+ * POST /api/v1/members/applications/:id/concerns.
  *
- * Member-session gated (not token-gated like status/documents — the PRD
+ * Member-session gated (not token-gated like status/documents —
  * requires the submitter to be an authenticated A-G member, not the
  * applicant). Visible only to staff/processors afterward; never surfaced to
  * the applicant.

@@ -1,10 +1,10 @@
 /**
  * POST /api/v1/sponsorship/checkout
  *
- * Path B of PRD §1.3 — self-service Stripe Checkout for event sponsorship
+ * self-service Stripe Checkout for event sponsorship
  * tiers. Mirrors functions/api/v1/donations/checkout.ts (raw Stripe REST
  * API, no SDK). Unlike donations, no `sponsorships` row is created here —
- * per §1.3 the record is created on successful payment (see
+ * the record is created on successful payment (see
  * functions/api/v1/sponsorship/checkout/webhook.ts), keyed by the Stripe
  * checkout session id carried in the session metadata.
  */
@@ -14,7 +14,7 @@ import { AppError } from "../../../../_lib/errors";
 import { json } from "../../../../_lib/http";
 import { parseJsonBody } from "../../../../_lib/validation";
 import { getEventBySlug } from "../../../../_lib/services/events";
-import { EVENT_SPONSOR_TIER_PRICES_USD_CENTS } from "../../../../_lib/services/sponsorship";
+import { getActiveTierConfig, listTierConfig } from "../../../../_lib/services/sponsorship";
 import {
   sponsorshipCheckoutRouteSchema,
   sponsorshipCheckoutSchema,
@@ -34,12 +34,14 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   const body = await parseJsonBody(c.req, sponsorshipCheckoutSchema);
 
-  const unitAmount = EVENT_SPONSOR_TIER_PRICES_USD_CENTS[body.tier];
-  if (!unitAmount) {
+  const tierConfig = await getActiveTierConfig(env.DB, "event", body.tier);
+  if (!tierConfig) {
+    const supportedTiers = (await listTierConfig(env.DB, "event")).filter((t) => t.active).map((t) => t.tier);
     throw new AppError(422, "UNKNOWN_TIER", `Unknown or unsupported sponsorship tier: ${body.tier}`, {
-      supportedTiers: Object.keys(EVENT_SPONSOR_TIER_PRICES_USD_CENTS),
+      supportedTiers,
     });
   }
+  const unitAmount = tierConfig.amountCents;
 
   // body.eventId is the public event slug — resolved to the internal
   // events.id for storage in Stripe metadata, mirroring the inquiries
@@ -51,7 +53,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   const params = new URLSearchParams();
   params.set("mode", "payment");
-  params.set("line_items[0][price_data][currency]", "usd");
+  params.set("line_items[0][price_data][currency]", tierConfig.currency);
   params.set("line_items[0][price_data][unit_amount]", String(unitAmount));
   params.set("line_items[0][price_data][product_data][name]", `PKI Consortium Event Sponsorship — ${body.tier}`);
   params.set("line_items[0][quantity]", "1");

@@ -1,7 +1,7 @@
 /**
  * GET /api/v1/members/:id
  *
- * Public member profile (PRD §1.5). `id` is an organization id for
+ * Public member profile. `id` is an organization id for
  * org-tied members, or the individual member's own id for org-less
  * categories (H5/H6/H7) — matching the `id` field returned by GET /members.
  */

@@ -11,7 +11,7 @@ export interface UploadedIcsFile {
 
 /**
  * Reads a staff-uploaded ICS file plus its 'label'/'year' metadata from a
- * multipart/form-data request (PRD §4.12 "label e.g. '09:00 CET', R2
+ * multipart/form-data request ("label e.g. '09:00 CET', R2
  * upload, year"). Mirrors readUploadedImage (headshot-upload.ts)'s
  * eager-arrayBuffer-first pattern to avoid the same Wrangler dev stream-drop
  * issue, but requires multipart (unlike image uploads there's no bare-binary

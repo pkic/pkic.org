@@ -1,6 +1,6 @@
 /**
  * GET /api/v1/me/calendar — meeting series I'm subscribed to, with my
- * time-slot preferences (PRD §4.12).
+ * time-slot preferences.
  */
 import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../_lib/http";

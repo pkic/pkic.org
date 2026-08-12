@@ -268,7 +268,7 @@ export async function initDonationThankYou(): Promise<void> {
 
   renderTo(container, <Loading />);
 
-  // ── Phase 1: fast polling (card / wallet) ─────────────────────────────
+  // ── fast polling (card / wallet) ─────────────────────────────
   let session: DonationSession | null = null;
   let isAsyncPayment = false;
   let asyncMethodType: string | null | undefined;
@@ -319,7 +319,7 @@ export async function initDonationThankYou(): Promise<void> {
     return;
   }
 
-  // ── Phase 2: async payment (bank transfer / ACH / SEPA) ───────────────
+  // ── async payment (bank transfer / ACH / SEPA) ───────────────
   renderTo(container, <AsyncPending methodType={asyncMethodType} expiresAt={asyncExpiresAt} />);
 
   const msUntilExpiry = asyncExpiresAt ? Math.max(0, asyncExpiresAt * 1000 - Date.now()) : null;

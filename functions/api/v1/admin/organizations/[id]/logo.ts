@@ -4,7 +4,7 @@
  *
  * Stored raw (no forced JPEG re-encode, unlike user headshots) since logos
  * are frequently transparent PNGs/SVGs at non-square aspect ratios. Served
- * publicly via the existing `GET /api/v1/members/:id/logo` (§1.6 decision 4)
+ * publicly via the existing `GET /api/v1/members/:id/logo`
  * — `id` there is the organization id for org-tied members, so no separate
  * admin GET is needed.
  */

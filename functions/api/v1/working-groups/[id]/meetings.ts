@@ -1,6 +1,6 @@
 /**
  * GET /api/v1/working-groups/:wgId/meetings — active meeting series for a
- * working group (PRD §4.12). Public, no auth required. :wgId accepts
+ * working group. Public, no auth required. :wgId accepts
  * either the WG UUID or its slug, same convention as GET /working-groups/:id.
  */
 import { OpenAPIRoute } from "chanfana";

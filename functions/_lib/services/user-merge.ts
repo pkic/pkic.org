@@ -1,8 +1,8 @@
 /**
  * Merges a duplicate user account into a survivor account. Built to
  * consolidate the duplicate `users` rows the YAML->D1 migration created for
- * the same real person under different Google-Groups-roster emails (§6
- * Step 2/3b in the PRD) -- and to give staff a way to fix any future
+ * the same real person under different Google-Groups-roster emails
+ * -- and to give staff a way to fix any future
  * duplicate the same way.
  *
  * Reuses the `users.merged_into_user_id` column and the

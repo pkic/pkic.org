@@ -1,8 +1,6 @@
 /**
- * Admin → Meeting Calendar (PRD §4.12, §11 UI-5). Closes Phase 4D's own
- * status note: the backend/API (schema, staff CRUD, ICS upload/download via
- * R2, smart-routed bulk resend) shipped in Phase 4D with no admin UI calling
- * it. Two tabs mirror the two admin surfaces §4.12 names — "Consortium"
+ * Admin → Meeting Calendar.
+ * it. Two tabs mirror the two admin surfaces names — "Consortium"
  * (`/api/v1/admin/consortium/meetings`) and "Working Groups" (a WG picker
  * over `/api/v1/admin/working-groups/:id/meetings`) — both rendered by the
  * same MeetingSeriesManager, which is the only part that actually talks to
@@ -536,7 +534,7 @@ export function MeetingCalendar() {
   return (
     <div>
       <p class="text-muted small">
-        Manage meeting series and their ICS file variants (PRD §4.12). Deactivating a file automatically switches any
+        Manage meeting series and their ICS file variants. Deactivating a file automatically switches any
         member whose saved preference pointed at it to receiving all active variants on the next resend.
       </p>
       <Tabs items={TABS} active={tab} onChange={setTab} />

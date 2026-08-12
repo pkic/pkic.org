@@ -348,7 +348,7 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
       "GET /api/v1/admin/proposals/:proposalId/speakers",
       () => callApp(anonGet(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers`)),
     ],
-    // ── Phase 2 (PRD §2) access control endpoints ────────────────────────────
+    // ── access control endpoints ────────────────────────────
     ["GET /api/v1/admin/access-grants", () => callApp(anonGet("https://app.test/api/v1/admin/access-grants"))],
     ["POST /api/v1/admin/access-grants", () => callApp(anonPost("https://app.test/api/v1/admin/access-grants"))],
     [
@@ -370,7 +370,7 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
       "DELETE /api/v1/admin/users/:userId/roles/:userRoleId",
       () => callApp(anonDelete(`https://app.test/api/v1/admin/users/${userId}/roles/${userRoleId}`)),
     ],
-    // ── Phase 3 (PRD §3) passkey endpoints ───────────────────────────────────
+    // ── passkey endpoints ───────────────────────────────────
     // authenticate/begin and authenticate/complete are deliberately excluded
     // here — they're the no-auth-required discovery/login flow, covered
     // instead under "public endpoints — accessible without credentials".
@@ -643,7 +643,7 @@ describe("public endpoints — accessible without credentials", () => {
     expect(response.status).toBe(200);
   });
 
-  // ── Phase 3 (PRD §3) passkey discovery/login flow ──────────────────────────
+  // ── passkey discovery/login flow ──────────────────────────
   it("GET /api/v1/auth/passkeys/authenticate/begin returns 200 without Authorization header", async () => {
     const response = await callApp(anonGet("https://app.test/api/v1/auth/passkeys/authenticate/begin"));
     expect(response.status).toBe(200);

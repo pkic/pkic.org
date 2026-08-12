@@ -2,12 +2,12 @@
  * GET  /api/v1/admin/access-grants — list permission grants
  * POST /api/v1/admin/access-grants — create a permission grant
  *
- * Backs `permission_grants` (PRD §2.3) — individual, ad-hoc permission
+ * Backs `permission_grants` — individual, ad-hoc permission
  * overrides, distinct from role-bundle assignment (see
  * functions/api/v1/admin/users/[userId]/roles.ts, which backs `user_roles`).
- * Gated by `access:grant`/`access:revoke` via the Phase 2 permission system
+ * Gated by `access:grant`/`access:revoke` via the permission system
  * (functions/_lib/auth/permissions.ts), not the legacy AUTH_SCOPES system —
- * see the isPhase2PermissionGatedAdminPath bypass in admin/router.ts.
+ * see the isPermissionGatedAdminPath bypass in admin/router.ts.
  */
 import { OpenAPIRoute } from "chanfana";
 import { parseJsonBody } from "../../../../_lib/validation";
@@ -94,11 +94,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 
   const grantContext = body.contextType && body.contextId ? { type: body.contextType, id: body.contextId } : undefined;
   if (!hasPermission(admin, body.permission, grantContext)) {
-    throw new AppError(
-      403,
-      "PERMISSION_REQUIRED",
-      `Cannot grant a permission you do not hold: ${body.permission}`,
-    );
+    throw new AppError(403, "PERMISSION_REQUIRED", `Cannot grant a permission you do not hold: ${body.permission}`);
   }
 
   const userRow = await first<{ id: string }>(requestDb(c), "SELECT id FROM users WHERE id = ?", [body.userId]);

@@ -1,5 +1,5 @@
 /**
- * GET /api/v1/me/working-groups — my working group memberships (PRD §4.9).
+ * GET /api/v1/me/working-groups — my working group memberships.
  */
 import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../_lib/http";

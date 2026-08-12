@@ -1,8 +1,8 @@
 /**
- * Admin → Mailing Lists (PRD §4.14). CRUD over the mailing_lists config
+ * Admin → Mailing Lists. CRUD over the mailing_lists config
  * table the Google Groups sync engine reads at runtime — see
  * resolveAutoSyncListEmails (functions/_lib/services/mailing-lists.ts).
- * Admin role required (no Phase 2 permission — see
+ * Admin role required (
  * assets/shared/schemas/admin-mailing-lists.ts's header note).
  */
 import { useState, useEffect, useCallback } from "preact/hooks";
@@ -83,13 +83,7 @@ function draftToPayload(draft: Draft) {
   };
 }
 
-function MailingListForm({
-  draft,
-  onChange,
-}: {
-  draft: Draft;
-  onChange: (patch: Partial<Draft>) => void;
-}) {
+function MailingListForm({ draft, onChange }: { draft: Draft; onChange: (patch: Partial<Draft>) => void }) {
   return (
     <div class="row g-2">
       <div class="col-sm-4">
@@ -223,7 +217,10 @@ export function MailingLists() {
   async function saveEdit(id: string) {
     setSaving(true);
     try {
-      await api(`/api/v1/admin/mailing-lists/${id}`, { method: "PATCH", body: JSON.stringify(draftToPayload(editDraft)) });
+      await api(`/api/v1/admin/mailing-lists/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(draftToPayload(editDraft)),
+      });
       toast("Saved", "success");
       setEditingId(null);
       await load();
@@ -235,7 +232,9 @@ export function MailingLists() {
   }
 
   async function remove(id: string, label: string) {
-    if (!confirm(`Delete mailing list "${label}"? The portal stops managing it; the Google Group itself is not deleted.`)) {
+    if (
+      !confirm(`Delete mailing list "${label}"? The portal stops managing it; the Google Group itself is not deleted.`)
+    ) {
       return;
     }
     try {
@@ -259,7 +258,10 @@ export function MailingLists() {
       } else if (res.processed === 0) {
         toast("Nothing pending to sync", "success");
       } else {
-        toast(`Synced ${res.processed}: ${res.succeeded} succeeded${res.failed ? `, ${res.failed} failed` : ""}`, res.failed > 0 ? "error" : "success");
+        toast(
+          `Synced ${res.processed}: ${res.succeeded} succeeded${res.failed ? `, ${res.failed} failed` : ""}`,
+          res.failed > 0 ? "error" : "success",
+        );
       }
     } catch (e) {
       toast((e as Error).message, "error");
@@ -312,9 +314,17 @@ export function MailingLists() {
               editingId === list.id ? (
                 <tr key={list.id}>
                   <td colSpan={6}>
-                    <MailingListForm draft={editDraft} onChange={(patch) => setEditDraft((d) => ({ ...d, ...patch }))} />
+                    <MailingListForm
+                      draft={editDraft}
+                      onChange={(patch) => setEditDraft((d) => ({ ...d, ...patch }))}
+                    />
                     <div class="mt-2 d-flex gap-2">
-                      <button type="button" class="btn btn-success btn-sm" disabled={saving} onClick={() => saveEdit(list.id)}>
+                      <button
+                        type="button"
+                        class="btn btn-success btn-sm"
+                        disabled={saving}
+                        onClick={() => saveEdit(list.id)}
+                      >
                         Save
                       </button>
                       <button type="button" class="btn btn-outline-secondary btn-sm" onClick={() => setEditingId(null)}>
@@ -349,7 +359,11 @@ export function MailingLists() {
                     >
                       Edit
                     </button>
-                    <button type="button" class="btn btn-outline-danger btn-sm" onClick={() => remove(list.id, list.label)}>
+                    <button
+                      type="button"
+                      class="btn btn-outline-danger btn-sm"
+                      onClick={() => remove(list.id, list.label)}
+                    >
                       Delete
                     </button>
                   </td>

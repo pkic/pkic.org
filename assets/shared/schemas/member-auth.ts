@@ -1,5 +1,5 @@
 /**
- * Member-facing (non-staff) magic-link authentication — PRD §4.9/§4.10.
+ * Member-facing (non-staff) magic-link authentication.
  * Mirrors adminAuthRequestSchema/adminAuthVerifySchema (assets/shared/schemas/api.ts)
  * exactly; kept separate because the response shape carries an AuthMember, not
  * an AuthAdmin.
@@ -28,7 +28,7 @@ export const memberAuthRequestRouteSchema = {
   tags: ["Member Auth"],
   summary: "Request a member sign-in magic link",
   description:
-    "PRD §4.9/§4.10 — sends a magic-link sign-in email to an active member. Always returns success regardless of whether the email matches an active member, to avoid leaking membership status.",
+    "Sends a magic-link sign-in email to an active member. Always returns success regardless of whether the email matches an active member, to avoid leaking membership status.",
   request: {
     body: { content: { "application/json": { schema: memberAuthRequestSchema } }, required: true },
   },

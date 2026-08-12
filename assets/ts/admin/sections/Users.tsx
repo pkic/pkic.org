@@ -381,7 +381,7 @@ function MembershipPanel({ user, onChanged }: { user: UserDetail; onChanged: () 
 
 // ────────────────────────────────────────────────────────
 // Email addresses panel — secondary emails are admin/display/search only
-// and do not affect login (see prd.md's user_emails / merge-tool section).
+// and do not affect login.
 // ────────────────────────────────────────────────────────
 
 interface UserEmailRecord {

@@ -1,5 +1,5 @@
 /**
- * Managed mailing list configuration (PRD §4.14). Staff manage the full
+ * Managed mailing list configuration. Staff manage the full
  * list of Google Groups here instead of them being hardcoded — see
  * resolveAutoSyncListEmails, which membership-onboarding.ts now calls
  * instead of the PKIC_ALL_MEMBERS_LIST/CONSULTATION_LIST constants it used
@@ -11,7 +11,7 @@
  * so not the "hardcoded" gap this migration closes. The working_group-type
  * rows seeded here exist for inventory/visibility in the unified Admin ->
  * Mailing Lists screen only; editing one's `email` field does not change the
- * WG's actual sync target. See prd.md Phase 4C status for this decision.
+ * WG's actual sync target.
  */
 import { all, first, run } from "../db/queries";
 import { nowIso } from "../utils/time";
@@ -151,13 +151,13 @@ export async function updateMailingList(db: DatabaseLike, id: string, input: Mai
 export async function deleteMailingList(db: DatabaseLike, id: string): Promise<void> {
   const existing = await first<{ id: string }>(db, "SELECT id FROM mailing_lists WHERE id = ?", [id]);
   if (!existing) throw new AppError(404, "NOT_FOUND", "Mailing list not found");
-  // §4.14: "the portal stops managing it; the Google Group itself is not
+  // "the portal stops managing it; the Google Group itself is not
   // deleted" — a plain row delete, no Google-side call.
   await run(db, "DELETE FROM mailing_lists WHERE id = ?", [id]);
 }
 
 /**
- * The Google Groups sync engine's runtime read of `mailing_lists` (§4.14) —
+ * The Google Groups sync engine's runtime read of `mailing_lists` —
  * every active all_members/consultation list whose auto_sync_categories
  * either includes `membershipCategory` or is unset (meaning "every
  * category"). Called from membership-onboarding.ts's approveApplication in

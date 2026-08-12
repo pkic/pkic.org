@@ -395,7 +395,7 @@ async function processOutboxRow(db: DatabaseLike, env: Env, row: OutboxRow): Pro
       }
     }
 
-    // Attach meeting calendar ICS files (§4.12) — static, staff-uploaded R2
+    // Attach meeting calendar ICS files — static, staff-uploaded R2
     // objects, unlike the generated per-recipient calendar.icsFiles above.
     const icsAttachments = queuedAttachments.filter((a) => a.kind === "r2-ics-file");
     if (icsAttachments.length > 0 && env.ASSETS_BUCKET) {

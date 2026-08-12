@@ -1,5 +1,5 @@
 /**
- * POST /api/v1/sponsor-portal/logout — PRD §4.13, §11 UI-7.
+ * POST /api/v1/sponsor-portal/logout.
  *
  * Lives under /api/v1/sponsor-portal (not alongside request-link/verify-link
  * in /api/v1/auth/sponsor-portal) because the session cookie's own `Path`

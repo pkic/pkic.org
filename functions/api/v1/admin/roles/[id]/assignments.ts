@@ -4,7 +4,7 @@
  *
  * Every other role-assignment screen in the admin portal starts from a user
  * ("what roles does this person hold?" — GET /api/v1/admin/users/:userId/roles).
- * The Chairs tab (PRD issue "create a chairs tab for the forum + each WG")
+ * The Chairs tab
  * needs the reverse: "who currently holds role-forum_chair?" — with no user
  * already picked. This is that lookup, generic over any role id so it also
  * backs the WG chair/vice-chair display without a second endpoint.

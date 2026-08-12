@@ -1,28 +1,8 @@
 import { z } from "zod";
 import { normalizedEmailSchema } from "./api";
+import { membershipCategorySchema, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "./membership-categories";
 
-/**
- * Schemas for POST /api/v1/members/applications and its supporting
- * endpoints (PRD §1.2). Membership categories mirror
- * functions/_lib/services/member-applications.ts MEMBERSHIP_CATEGORIES.
- */
-export const membershipCategorySchema = z.enum([
-  "A",
-  "B",
-  "C",
-  "D",
-  "E",
-  "F",
-  "G",
-  "H1",
-  "H2",
-  "H3",
-  "H4",
-  "H5",
-  "H6",
-  "H7",
-  "H8",
-]);
+export { membershipCategorySchema };
 
 export const memberApplicationCreateSchema = z
   .object({
@@ -34,8 +14,7 @@ export const memberApplicationCreateSchema = z
     answers: z.record(z.string(), z.unknown()).optional(),
   })
   .superRefine((value, ctx) => {
-    const isIndividual =
-      value.membershipCategory === "H5" || value.membershipCategory === "H6" || value.membershipCategory === "H7";
+    const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(value.membershipCategory);
     if (!isIndividual && !value.organizationName) {
       ctx.addIssue({
         code: "custom",
@@ -124,7 +103,7 @@ export const memberApplicationFormResponseSchema = z.object({
 export const memberApplicationFormRouteSchema = {
   tags: ["Members"],
   summary: "Get the current membership application form definition",
-  description: "Portal-managed form fields (PRD §1.4) — staff-editable via the existing /api/v1/admin/forms endpoints.",
+  description: "Portal-managed form fields — staff-editable via the existing /api/v1/admin/forms endpoints.",
   responses: {
     "200": {
       description: "Active membership application form, or null if none configured.",
@@ -182,7 +161,7 @@ export const applicationConcernCreateRouteSchema = {
   tags: ["Members"],
   summary: "Submit a consultation concern (A-G members only)",
   description:
-    "PRD §4.5 — visible only to staff/processors, never to the applicant. Member-session gated; only A-G category members may submit.",
+    "Visible only to staff/processors, never to the applicant. Member-session gated; only A-G category members may submit.",
   request: {
     params: z.object({ id: z.string() }),
     body: { content: { "application/json": { schema: applicationConcernCreateSchema } }, required: true },

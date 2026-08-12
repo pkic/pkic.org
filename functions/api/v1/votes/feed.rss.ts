@@ -1,15 +1,15 @@
 /**
- * GET /api/v1/votes/feed.rss — RSS 2.0 feed of public votes (PRD §4.8:
+ * GET /api/v1/votes/feed.rss — RSS 2.0 feed of public votes (
  * "Public vote results available as structured JSON API and RSS feed; no
  * scraping required"). One entry per visibility='public' vote, linking to
  * its public URL.
  *
- * Links use `/votes/detail/?slug=`, not a real `/votes/:slug` path (PRD
- * §11 UI-6 implementation note): this site has no dynamic server-side
+ * Links use `/votes/detail/?slug=`, not a real `/votes/:slug` path:
+ * this site has no dynamic server-side
  * routing for arbitrary vote slugs — Hugo generates static pages at build
  * time and D1 (not a build-time scan) is the source of truth for votes —
  * so a real per-slug path would 404. Same query-string-URL trade-off
- * §1.6 Part B's member profile pages already made for the same reason
+ * member profile pages already made for the same reason
  * (`/members/profile/?id=`).
  */
 import { OpenAPIRoute } from "chanfana";

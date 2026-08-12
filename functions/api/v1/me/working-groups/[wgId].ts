@@ -1,6 +1,6 @@
 /**
- * POST/DELETE /api/v1/me/working-groups/:wgId — join/leave a working group
- * (PRD §4.9). :wgId accepts either the WG UUID or its slug.
+ * POST/DELETE /api/v1/me/working-groups/:wgId — join/leave a working group.
+ * :wgId accepts either the WG UUID or its slug.
  */
 import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../_lib/http";

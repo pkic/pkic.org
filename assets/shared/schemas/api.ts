@@ -326,6 +326,48 @@ export const linksSchema = z
     }
   });
 
+/**
+ * Canonical `links_json` codec — every writer/reader of a persisted links
+ * column (users.links_json; formerly organizations' per-provider social_*
+ * columns) goes through this instead of re-parsing raw JSON. `parseLinksJson`
+ * also tolerates two legacy shapes so it degrades gracefully on any row a
+ * migration missed, rather than silently dropping the link: the
+ * `{linkedin, x}` object written by the original YAML migration and older
+ * service code, and the older `[{label, url}]` array-of-link-objects shape
+ * that predates the plain-string-array convention.
+ */
+export function parseLinksJson(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  const values = Array.isArray(parsed) ? parsed : parsed && typeof parsed === "object" ? Object.values(parsed) : [];
+  return values
+    .map((entry) => {
+      if (typeof entry === "string") return entry;
+      if (entry && typeof entry === "object") {
+        const { url, label } = entry as { url?: unknown; label?: unknown };
+        if (typeof url === "string") return url;
+        if (typeof label === "string") return label;
+      }
+      return "";
+    })
+    .map((url) => url.trim())
+    .filter(Boolean);
+}
+
+export function serializeLinks(links: string[]): string {
+  return JSON.stringify(links);
+}
+
+/** Picks the LinkedIn URL out of a canonical links list, for display surfaces that show LinkedIn specifically. */
+export function findLinkedinUrl(links: string[]): string | null {
+  return links.find((url) => /linkedin\.com/i.test(url)) ?? null;
+}
+
 export const userProfileSchema = z.object({
   firstName: firstNameSchema,
   lastName: lastNameSchema,
@@ -669,8 +711,8 @@ export const adminRunJobsSchema = z.object({
   runRetentionMode: z.enum(["always", "daily_window"]).default("always"),
   retentionHourUtc: z.number().int().min(0).max(23).default(3),
   dryRun: z.boolean().default(false),
-  // Manual off-cycle triggers for the twice-weekly membership batches (PRD
-  // §4.5/§4.6) — normally cron-fired (functions/router.ts), these flags let
+  // Manual off-cycle triggers for the twice-weekly membership batches
+  // normally cron-fired (functions/router.ts), these flags let
   // staff run them on demand from the Due Work screen. Unlike the flags
   // above, these have no meaningful dry-run preview (they queue a real
   // outbox email to a mailing list / transition applications), so `dryRun`
@@ -907,7 +949,7 @@ export const adminCreateEventSchema = z.object({
 export const adminEventPermissionSchema = z.object({
   userEmail: normalizedEmailSchema,
   permission: z.enum(["organizer", "program_committee", "moderator", "volunteer"]),
-  // PRD §2.4 — "grant time-bounded event reviewer access from the event detail screen".
+  //Grant time-bounded event reviewer access from the event detail screen.
   expiresAt: z.iso.datetime().nullable().optional(),
 });
 

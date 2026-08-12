@@ -1,6 +1,6 @@
 /**
  * DELETE /api/v1/me/organization/reviews/:id — withdraw a pending
- * organization content submission (PRD §4.11). Withdrawal sets
+ * organization content submission. Withdrawal sets
  * status='withdrawn'; the submission is not deleted.
  */
 import { OpenAPIRoute } from "chanfana";

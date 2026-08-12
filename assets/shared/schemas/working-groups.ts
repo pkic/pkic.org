@@ -47,8 +47,6 @@ export const adminWorkingGroupSummarySchema = z.object({
   mailingListEmail: z.string().nullable(),
   minEndorsersForBallot: z.number(),
   active: z.boolean(),
-  /** @deprecated Never written after row creation — see chair/viceChair. */
-  chairUserId: z.string().nullable(),
   chair: chairInfoSchema.nullable(),
   viceChair: chairInfoSchema.nullable(),
   memberCount: z.number(),

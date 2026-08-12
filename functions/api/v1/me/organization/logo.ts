@@ -1,6 +1,6 @@
 /**
- * POST /api/v1/me/organization/logo — propose a new organization logo
- * (PRD §4.11). Held in R2 under a staging key until a staff admin approves
+ * POST /api/v1/me/organization/logo — propose a new organization logo.
+ * Held in R2 under a staging key until a staff admin approves
  * the content review it's attached to — mirrors admin/organizations/[id]/
  * logo.ts's upload pipeline but writes to a staging key instead of the live
  * one, and folds into the org's moderation queue instead of applying
@@ -27,7 +27,10 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 
   const { buffer, contentType } = await readUploadedImage(c.req.raw);
   if (!ALLOWED_MIME_TYPES.has(contentType)) {
-    return json({ error: { code: "INVALID_FILE_TYPE", message: "Only JPEG, PNG, and WebP images are accepted." } }, 415);
+    return json(
+      { error: { code: "INVALID_FILE_TYPE", message: "Only JPEG, PNG, and WebP images are accepted." } },
+      415,
+    );
   }
   if (buffer.byteLength > MAX_HEADSHOT_BYTES) {
     return json(

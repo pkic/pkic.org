@@ -1,62 +1,26 @@
 /**
- * Member portal client-side types — mirror assets/shared/schemas/me.ts and
- * assets/shared/schemas/passkeys.ts. Small duplication of the server's
- * shapes rather than importing the zod schemas directly, matching this
- * codebase's existing precedent (see admin/types.ts's own Passkey type).
+ * Member portal client-side types. Five of these (OrganizationRepresentative,
+ * MyProfile, MyProfileUpdateInput, Passkey, NotificationPreferences) are
+ * z.infer<> types from the shared Zod schemas — the isomorphic API
+ * contract — instead of hand-mirrored interfaces, so a schema change can't
+ * silently drift from what the portal actually sends/expects (PR #1
+ * review). The rest of this file has no corresponding request/response
+ * schema (yet) and stays hand-written.
  */
+import type { z } from "zod";
+import type {
+  myOrganizationRepresentativeSchema,
+  myProfileSchema,
+  myProfileUpdateSchema,
+  myNotificationPreferencesSchema,
+} from "../../../shared/schemas/me";
+import type { passkeySummarySchema } from "../../../shared/schemas/passkeys";
 
-export interface OrganizationRepresentative {
-  userId: string;
-  name: string | null;
-  email: string;
-  isPrimaryContact: boolean;
-  isSecondaryContact: boolean;
-}
-
-export interface MyProfile {
-  userId: string;
-  email: string;
-  firstName: string | null;
-  lastName: string | null;
-  preferredName: string | null;
-  jobTitle: string | null;
-  biography: string | null;
-  links: string[];
-  membershipCategory: string;
-  organizationId: string | null;
-  organizationName: string | null;
-  memberSince: string;
-  showOnOrgProfile: boolean;
-  headshotUrl: string | null;
-  canEditOrganizationName: boolean;
-  isOrgContact: boolean;
-  organizationRepresentatives: OrganizationRepresentative[] | null;
-}
-
-export interface MyProfileUpdateInput {
-  firstName?: string;
-  lastName?: string;
-  preferredName?: string;
-  jobTitle?: string;
-  biography?: string;
-  links?: string[];
-  organizationName?: string;
-}
-
-export interface Passkey {
-  id: string;
-  deviceName: string | null;
-  aaguid: string | null;
-  lastUsedAt: string | null;
-  createdAt: string;
-}
-
-export interface NotificationPreferences {
-  workingGroupUpdates: boolean;
-  voteReminders: boolean;
-  generalAnnouncements: boolean;
-  wgChairMembershipDigest: boolean;
-}
+export type OrganizationRepresentative = z.infer<typeof myOrganizationRepresentativeSchema>;
+export type MyProfile = z.infer<typeof myProfileSchema>;
+export type MyProfileUpdateInput = z.infer<typeof myProfileUpdateSchema>;
+export type Passkey = z.infer<typeof passkeySummarySchema>;
+export type NotificationPreferences = z.infer<typeof myNotificationPreferencesSchema>;
 
 export interface MyApplicationSummary {
   id: string;
@@ -119,11 +83,7 @@ export interface MyOrganizationProfile {
   pressUrl: string | null;
   pressFeedUrl: string | null;
   careersUrl: string | null;
-  socialX: string | null;
-  socialLinkedin: string | null;
-  socialFacebook: string | null;
-  socialInstagram: string | null;
-  socialYoutube: string | null;
+  links: string[];
   isOrgContact: boolean;
   isPrimaryContact: boolean;
   pendingSecondaryContactUserId: string | null;

@@ -1,14 +1,14 @@
 /**
  * Shared organization/user/member/working-group-membership creation logic
- * (PRD §4.7 approval onboarding). Mirrors the shape `admin-members.ts`'s
- * `createAdminMember` (§6 Interim Admin Tool) already established — kept as
+ * (approval onboarding). Mirrors the shape `admin-members.ts`'s
+ * `createAdminMember` (Interim Admin Tool) already established — kept as
  * a separate function rather than a refactor of that already-shipped,
  * tested path, to avoid regression risk on working code; both call the same
  * underlying primitives (`findOrCreateUser`, `normalizeOrgName`).
  *
  * Adds one thing the Interim Admin Tool didn't need: writing
  * `organizations.organization_domains_json` at creation time, closing the
- * Phase 1 duplicate-check gap for organizations approved through this flow
+ * duplicate-check gap for organizations approved through this flow
  * going forward (see hasConflictingOrganizationDomain in
  * member-applications.ts).
  */
@@ -18,6 +18,7 @@ import { uuid } from "../utils/ids";
 import { findOrCreateUser } from "./users";
 import { normalizeOrgName } from "./sponsorship";
 import { stringifyJson } from "../utils/json";
+import { serializeLinks } from "../../../assets/shared/schemas/api";
 import type { DatabaseLike } from "../types";
 
 export interface ProvisionRepresentative {
@@ -106,7 +107,7 @@ export async function provisionOrganizationAndMembers(
       firstName: firstName ?? undefined,
       lastName: lastName ?? undefined,
       jobTitle: rep.jobTitle ?? undefined,
-      linksJson: rep.linkedin ? JSON.stringify({ linkedin: rep.linkedin }) : null,
+      linksJson: rep.linkedin ? serializeLinks([rep.linkedin]) : null,
       allowProfileUpdate: true,
     });
 

@@ -1,5 +1,5 @@
 /**
- * Sponsor portal login screen (PRD §4.13, §11 UI-7) — a self-service
+ * Sponsor portal login screen — a self-service
  * "request a new link" form for POST /api/v1/auth/sponsor-portal/request-link.
  * Sponsors normally never see this screen at all: the first-ever visit
  * comes from clicking the `sponsor-portal-access` email's link, which

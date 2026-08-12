@@ -1,6 +1,6 @@
 /**
- * E2E coverage for §11 UI-7: the sponsor portal frontend (magic-link login,
- * attendee list, CSV export) at /sponsor-portal/ — PRD §4.13 "Sponsor
+ * E2E coverage for: the sponsor portal frontend (magic-link login,
+ * attendee list, CSV export) at /sponsor-portal/ — "Sponsor
  * Portal — Attendee Data Access".
  *
  * All setup (event sponsor-tier config, sponsorship creation + activation,
@@ -66,7 +66,7 @@ async function signInAsAdmin(page: Page): Promise<void> {
   await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
 }
 
-test.describe("sponsor portal (PRD §4.13, §11 UI-7)", () => {
+test.describe("sponsor portal", () => {
   test("magic-link access, attendee list + CSV export, sign out, and slug-based link re-request", async ({ page }) => {
     const stamp = Date.now();
     const contactEmail = `sponsor-e2e-${stamp}@example.test`;
@@ -203,7 +203,7 @@ test.describe("sponsor portal (PRD §4.13, §11 UI-7)", () => {
     await expect(page.getByRole("heading", { name: "Sponsor Portal" })).toBeVisible();
 
     // ── Self-service "request a new link" flow, keyed by the event's public
-    // slug rather than its internal id (§11 UI-7 decision: a sponsor
+    // slug rather than its internal id (a sponsor
     // contact only ever knows the slug) ────────────────────────────────────
     await page.locator("#sp-inp-email").fill(contactEmail);
     await page.locator("#sp-inp-event").fill(EVENT_SLUG);

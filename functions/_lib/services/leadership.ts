@@ -14,16 +14,11 @@
 import { all, first, run } from "../db/queries";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
-import { parseJsonSafe } from "../utils/json";
+import { parseLinksJson, findLinkedinUrl } from "../../../assets/shared/schemas/api";
 import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
 
 export type LeadershipBody = "board" | "executive_council";
-
-interface UserLinksJson {
-  linkedin?: string;
-  x?: string;
-}
 
 export interface LeadershipPositionAdmin {
   id: string;
@@ -201,20 +196,17 @@ export async function getLeadershipPublic(
     [body],
   );
 
-  const toPublic = (row: PublicPositionRow): LeadershipPublicPerson => {
-    const links = parseJsonSafe<UserLinksJson>(row.links_json, {});
-    return {
-      name: [row.first_name, row.last_name].filter(Boolean).join(" ") || "Unknown",
-      title: row.title,
-      organizationName: row.org_name,
-      organizationLogoUrl: row.org_logo_r2_key && row.org_id ? `/api/v1/members/${row.org_id}/logo` : null,
-      organizationWebsite: row.org_website,
-      photoUrl: row.headshot_r2_key && row.member_id ? `/api/v1/members/${row.member_id}/logo` : null,
-      linkedin: links.linkedin ?? null,
-      startsAt: row.starts_at,
-      endsAt: row.ends_at,
-    };
-  };
+  const toPublic = (row: PublicPositionRow): LeadershipPublicPerson => ({
+    name: [row.first_name, row.last_name].filter(Boolean).join(" ") || "Unknown",
+    title: row.title,
+    organizationName: row.org_name,
+    organizationLogoUrl: row.org_logo_r2_key && row.org_id ? `/api/v1/members/${row.org_id}/logo` : null,
+    organizationWebsite: row.org_website,
+    photoUrl: row.headshot_r2_key && row.member_id ? `/api/v1/members/${row.member_id}/logo` : null,
+    linkedin: findLinkedinUrl(parseLinksJson(row.links_json)),
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+  });
 
   const current = rows.filter((r) => !r.ends_at).map(toPublic);
   const past = rows
@@ -266,14 +258,13 @@ export async function getForumChairsPublic(
 
   const toPublic = (row: ForumChairRow | undefined): ForumChairPublic | null => {
     if (!row) return null;
-    const links = parseJsonSafe<UserLinksJson>(row.links_json, {});
     return {
       name: [row.first_name, row.last_name].filter(Boolean).join(" ") || "Unknown",
       organizationName: row.org_name,
       organizationLogoUrl: row.org_logo_r2_key && row.org_id ? `/api/v1/members/${row.org_id}/logo` : null,
       organizationWebsite: row.org_website,
       photoUrl: row.headshot_r2_key && row.member_id ? `/api/v1/members/${row.member_id}/logo` : null,
-      linkedin: links.linkedin ?? null,
+      linkedin: findLinkedinUrl(parseLinksJson(row.links_json)),
       startsAt: row.created_at,
     };
   };

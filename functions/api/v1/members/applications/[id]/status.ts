@@ -1,7 +1,7 @@
 /**
  * GET /api/v1/members/applications/:id/status?token=...
  *
- * Token-gated applicant status check (PRD §1.2). The token is the plaintext
+ * Token-gated applicant status check. The token is the plaintext
  * manageToken returned once from POST /api/v1/members/applications and
  * emailed in the application-received confirmation.
  */

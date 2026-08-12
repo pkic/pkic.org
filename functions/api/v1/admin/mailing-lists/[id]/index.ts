@@ -1,6 +1,6 @@
 /**
  * PATCH  /api/v1/admin/mailing-lists/:id — edit label/type/category rules/associated WG/active state
- * DELETE /api/v1/admin/mailing-lists/:id — delete a mailing list entry (§4.14)
+ * DELETE /api/v1/admin/mailing-lists/:id — delete a mailing list entry
  */
 import { OpenAPIRoute } from "chanfana";
 import { parseJsonBody } from "../../../../../_lib/validation";

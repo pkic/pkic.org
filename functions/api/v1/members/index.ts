@@ -1,8 +1,8 @@
 /**
  * GET /api/v1/members
  *
- * Public, paginated member directory (PRD §1.5/§1.6). Strong cache headers
- * per the PRD's success metric: "public read only API endpoint with strong
+ * Public, paginated member directory. Strong cache headers
+ * per the success metric: "public read only API endpoint with strong
  * http cache instructions (CDN + client) to avoid a spike in expensive db
  * calls for mostly static data."
  */

@@ -1,6 +1,6 @@
 /**
- * sponsorship-scheduled-jobs.test.ts — PRD §4.13 "Renewal Reminders",
- * Phase 4E. Direct unit tests of runSponsorshipDueWork against env.DB,
+ * sponsorship-scheduled-jobs.test.ts — "Renewal Reminders",
+ * Direct unit tests of runSponsorshipDueWork against env.DB,
  * mirroring membership-scheduled-jobs.test.ts's style for the sibling
  * on-hold-reminders job.
  */
@@ -31,7 +31,7 @@ async function seedActiveConsortiumSponsorship(params: {
   return id;
 }
 
-describe("Sponsorship renewal reminders & auto-lapse (PRD §4.13, Phase 4E)", () => {
+describe("Sponsorship renewal reminders & auto-lapse", () => {
   let staffUserId: string;
   let organizationId: string;
 

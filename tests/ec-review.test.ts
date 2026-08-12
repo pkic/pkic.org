@@ -1,7 +1,7 @@
 /**
  * ec-review.test.ts
  *
- * PRD §4.6 Executive Council review — the real member-session EC decision
+ * Executive Council review — the real member-session EC decision
  * path (POST /api/v1/me/applications/:id/ec-decision) and the staff-admin
  * override fallback (POST /api/v1/admin/applications/:id/ec-decisions).
  */
@@ -57,7 +57,7 @@ async function insertActiveMember(email: string, isEcMember: boolean): Promise<s
   return userId;
 }
 
-describe("Executive Council review (PRD §4.6)", () => {
+describe("Executive Council review", () => {
   beforeEach(async () => {
     await resetDb();
   });

@@ -1,7 +1,7 @@
 /**
  * GET /api/v1/sponsors
  *
- * Public, unauthenticated sponsor list (prd.md item 8 gap-closure plan) —
+ * Public, unauthenticated sponsor list —
  * mirrors GET /api/v1/members's cache-control convention so the public
  * sponsor wall/strip/level pages can be cheap to hit repeatedly.
  */

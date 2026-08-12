@@ -1,21 +1,22 @@
 /**
- * Interim Admin Tool (PRD §6 "Interim Admin Tool — Manual Member
- * Management (pre-Phase 4A)"). Creates an organization (or org-less
+ * Interim Admin Tool Interim Admin Tool — Manual Member
+ * Management). Creates an organization (or org-less
  * individual) plus representative(s) plus member row(s) directly, and
  * lists every `members` row for the admin UI (unfiltered by status,
  * unlike the public directory in members-directory.ts which only
  * surfaces one "primary" row per organization).
  */
-import { all, first, run } from "../db/queries";
+import { all, first } from "../db/queries";
 import { normalizeEmail } from "../validation";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
-import { findOrCreateUser } from "./users";
+import { findOrCreateUser, type UserRecord } from "./users";
 import { normalizeOrgName } from "./sponsorship";
+import { getWorkingGroupBySlugOrId, buildAddWorkingGroupMemberStatements } from "./working-groups";
 import { AppError } from "../errors";
-import type { DatabaseLike } from "../types";
-
-const INDIVIDUAL_MEMBERSHIP_CATEGORIES = new Set(["H5", "H6", "H7"]);
+import { serializeLinks } from "../../../assets/shared/schemas/api";
+import { INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../../assets/shared/schemas/membership-categories";
+import type { DatabaseLike, StatementLike } from "../types";
 
 export interface AdminMemberCreateRepresentative {
   name: string;
@@ -55,20 +56,32 @@ function splitName(fullName: string): { firstName: string | null; lastName: stri
 }
 
 /**
- * Creates active organizations/users/members(/working_group_members) rows
- * immediately. Idempotent on the organization (an existing org with the
- * same normalized name is reused, matching the migration script's upsert
- * convention), but NOT on membership: `members.user_id` is UNIQUE, so a
- * representative who already holds a membership causes the whole request
- * to fail with 409 before anything is written — this is an interactive
- * admin tool, not a bulk import, so a silent no-op (the migration script's
- * behavior) would be a confusing UX here.
+ * Creates active organizations/users/members(/working_group_members) rows.
+ * Idempotent on the organization (an existing org with the same normalized
+ * name is reused, matching the migration script's upsert convention), but
+ * NOT on membership: `members.user_id` is UNIQUE, so a representative who
+ * already holds a membership causes the whole request to fail with 409
+ * before anything is written — this is an interactive admin tool, not a
+ * bulk import, so a silent no-op (the migration script's behavior) would be
+ * a confusing UX here.
+ *
+ * Every write past the pre-flight checks and user resolution lands in one
+ * atomic `db.batch()` — organization create/update, member rows,
+ * primary/secondary contact assignment, and working-group membership (via
+ * working-groups.ts's canonical `buildAddWorkingGroupMemberStatements`,
+ * not a reimplementation) — so a later failure can't leave a partially
+ * provisioned membership. The one exception is `findOrCreateUser` (used
+ * broadly elsewhere in the codebase with its own immediate-write contract,
+ * not worth changing here): if it fails partway through multiple
+ * representatives, the worst case is an orphaned `users` row with no
+ * membership, not a broken membership.
  */
 export async function createAdminMember(
   db: DatabaseLike,
   input: AdminMemberCreateInput,
 ): Promise<{ organizationId: string | null; members: AdminMemberSummary[] }> {
   const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(input.membershipCategory);
+  const now = nowIso();
 
   for (const rep of input.representatives) {
     const existingUser = await first<{ id: string }>(db, "SELECT id FROM users WHERE normalized_email = ?", [
@@ -85,6 +98,7 @@ export async function createAdminMember(
   }
 
   let organizationId: string | null = null;
+  let isNewOrganization = false;
 
   if (!isIndividual && input.organizationName) {
     const normalizedOrgName = normalizeOrgName(input.organizationName);
@@ -96,102 +110,104 @@ export async function createAdminMember(
       organizationId = existingOrg.id;
     } else {
       organizationId = uuid();
-      const now = nowIso();
-      await run(
-        db,
-        `INSERT INTO organizations (id, name, normalized_name, data_json, description, website, membership_category, member_since, created_at, updated_at)
-         VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
-        [
+      isNewOrganization = true;
+    }
+  }
+
+  const users: UserRecord[] = [];
+  for (const rep of input.representatives) {
+    const { firstName, lastName } = splitName(rep.name);
+    users.push(
+      await findOrCreateUser(db, {
+        email: rep.email,
+        firstName: firstName ?? undefined,
+        lastName: lastName ?? undefined,
+        jobTitle: rep.role,
+        linksJson: rep.linkedin ? serializeLinks([rep.linkedin]) : null,
+        allowProfileUpdate: true,
+      }),
+    );
+  }
+
+  const statements: StatementLike[] = [];
+
+  if (organizationId && isNewOrganization) {
+    statements.push(
+      db
+        .prepare(
+          `INSERT INTO organizations (id, name, normalized_name, data_json, description, website, membership_category, member_since, created_at, updated_at)
+           VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(
           organizationId,
           input.organizationName,
-          normalizedOrgName,
+          normalizeOrgName(input.organizationName as string),
           input.description ?? null,
           input.website ?? null,
           input.membershipCategory,
           input.memberSince,
           now,
           now,
-        ],
-      );
-    }
-  }
-
-  if (!isIndividual && organizationId) {
+        ),
+    );
+  } else if (organizationId) {
     // Category is an organization-level fact (migration 0040). Keep it (and
     // every existing org-tied representative's member_type mirror) in sync
     // with what was just submitted — matters when this call reuses an
     // existing organization rather than creating a new one.
-    const now = nowIso();
-    await run(db, "UPDATE organizations SET membership_category = ?, updated_at = ? WHERE id = ?", [
-      input.membershipCategory,
-      now,
-      organizationId,
-    ]);
-    // Don't clobber an already-set member_since (e.g. from the §6 migration
-    // script) just because this submission reuses an existing organization.
-    await run(db, "UPDATE organizations SET member_since = ?, updated_at = ? WHERE id = ? AND member_since IS NULL", [
-      input.memberSince,
-      now,
-      organizationId,
-    ]);
-    await run(db, "UPDATE members SET member_type = ?, updated_at = ? WHERE organization_id = ?", [
-      input.membershipCategory,
-      now,
-      organizationId,
-    ]);
+    statements.push(
+      db
+        .prepare("UPDATE organizations SET membership_category = ?, updated_at = ? WHERE id = ?")
+        .bind(input.membershipCategory, now, organizationId),
+      // Don't clobber an already-set member_since (e.g. from the
+      // migration script) just because this submission reuses an existing
+      // organization.
+      db
+        .prepare("UPDATE organizations SET member_since = ?, updated_at = ? WHERE id = ? AND member_since IS NULL")
+        .bind(input.memberSince, now, organizationId),
+      db
+        .prepare("UPDATE members SET member_type = ?, updated_at = ? WHERE organization_id = ?")
+        .bind(input.membershipCategory, now, organizationId),
+    );
   }
 
   const members: AdminMemberSummary[] = [];
 
   for (const [index, rep] of input.representatives.entries()) {
-    const { firstName, lastName } = splitName(rep.name);
-    const user = await findOrCreateUser(db, {
-      email: rep.email,
-      firstName: firstName ?? undefined,
-      lastName: lastName ?? undefined,
-      jobTitle: rep.role,
-      linksJson: rep.linkedin ? JSON.stringify({ linkedin: rep.linkedin }) : null,
-      allowProfileUpdate: true,
-    });
-
-    const now = nowIso();
+    const user = users[index];
     const memberId = uuid();
-    await run(
-      db,
-      `INSERT INTO members (id, member_type, user_id, organization_id, status, tier, data_json, created_at, updated_at, show_on_org_profile, member_since)
-       VALUES (?, ?, ?, ?, 'active', NULL, NULL, ?, ?, 1, ?)`,
-      [memberId, input.membershipCategory, user.id, organizationId, now, now, input.memberSince],
+    statements.push(
+      db
+        .prepare(
+          `INSERT INTO members (id, member_type, user_id, organization_id, status, tier, data_json, created_at, updated_at, show_on_org_profile, member_since)
+           VALUES (?, ?, ?, ?, 'active', NULL, NULL, ?, ?, 1, ?)`,
+        )
+        .bind(memberId, input.membershipCategory, user.id, organizationId, now, now, input.memberSince),
     );
 
     if (organizationId && index === 0) {
-      await run(
-        db,
-        `UPDATE organizations SET primary_contact_user_id = ?, updated_at = ? WHERE id = ? AND primary_contact_user_id IS NULL`,
-        [user.id, now, organizationId],
+      statements.push(
+        db
+          .prepare(
+            `UPDATE organizations SET primary_contact_user_id = ?, updated_at = ? WHERE id = ? AND primary_contact_user_id IS NULL`,
+          )
+          .bind(user.id, now, organizationId),
       );
     }
     if (organizationId && index === 1) {
-      await run(
-        db,
-        `UPDATE organizations SET secondary_contact_user_id = ?, updated_at = ? WHERE id = ? AND secondary_contact_user_id IS NULL`,
-        [user.id, now, organizationId],
+      statements.push(
+        db
+          .prepare(
+            `UPDATE organizations SET secondary_contact_user_id = ?, updated_at = ? WHERE id = ? AND secondary_contact_user_id IS NULL`,
+          )
+          .bind(user.id, now, organizationId),
       );
     }
 
     for (const slug of input.workingGroupSlugs) {
-      const wg = await first<{ id: string }>(db, "SELECT id FROM working_groups WHERE slug = ?", [slug]);
+      const wg = await getWorkingGroupBySlugOrId(db, slug);
       if (!wg) continue;
-      const existingMembership = await first<{ id: string }>(
-        db,
-        "SELECT id FROM working_group_members WHERE working_group_id = ? AND user_id = ? AND left_at IS NULL",
-        [wg.id, user.id],
-      );
-      if (existingMembership) continue;
-      await run(
-        db,
-        `INSERT INTO working_group_members (id, working_group_id, user_id, joined_at, left_at) VALUES (?, ?, ?, ?, NULL)`,
-        [uuid(), wg.id, user.id, now],
-      );
+      statements.push(...(await buildAddWorkingGroupMemberStatements(db, wg, user.id)));
     }
 
     members.push({
@@ -206,6 +222,10 @@ export async function createAdminMember(
       showOnOrgProfile: true,
       createdAt: now,
     });
+  }
+
+  if (statements.length > 0) {
+    await db.batch(statements);
   }
 
   return { organizationId, members };

@@ -131,21 +131,21 @@ export interface Env {
    * Defaults to sponsorships@pkic.org when unset.
    */
   SPONSORSHIP_NOTIFICATION_EMAIL?: string;
-  /** Configurable brochure PDF link attached to the sponsorship-brochure email (PRD §1.3). */
+  /** Configurable brochure PDF link attached to the sponsorship-brochure email. */
   SPONSORSHIP_BROCHURE_URL?: string;
-  /** WebAuthn Relying Party ID (bare domain, e.g. "pkic.org") — PRD §3. */
+  /** WebAuthn Relying Party ID (bare domain, e.g. "pkic.org"). */
   WEBAUTHN_RP_ID?: string;
-  /** WebAuthn Relying Party display name shown in browser passkey prompts — PRD §3. */
+  /** WebAuthn Relying Party display name shown in browser passkey prompts. */
   WEBAUTHN_RP_NAME?: string;
-  /** WebAuthn expected origin (scheme + host, e.g. "https://pkic.org") — PRD §3. */
+  /** WebAuthn expected origin (scheme + host, e.g. "https://pkic.org"). */
   WEBAUTHN_ORIGIN?: string;
-  /** Member (non-admin) magic-link session TTL, hours — PRD §4.9/§4.10. Defaults to 720 (30 days). */
+  /** Member (non-admin) magic-link session TTL, hours. Defaults to 720 (30 days). */
   MEMBER_SESSION_TTL_HOURS?: string;
-  /** Google Workspace service account email used to sign Directory API JWTs — PRD §4.7/§4.9. */
+  /** Google Workspace service account email used to sign Directory API JWTs. */
   GOOGLE_SERVICE_ACCOUNT_EMAIL?: string;
-  /** Google Workspace service account PEM private key — PRD §4.7/§4.9. */
+  /** Google Workspace service account PEM private key. */
   GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?: string;
-  /** Google Workspace admin user to impersonate via domain-wide delegation (Directory API requires this) — PRD §4.7/§4.9. */
+  /** Google Workspace admin user to impersonate via domain-wide delegation (Directory API requires this). */
   GOOGLE_WORKSPACE_ADMIN_EMAIL?: string;
 }
 
@@ -178,7 +178,7 @@ export interface JsonObject {
 export type JsonArray = JsonValue[];
 
 /**
- * A single contextual permission (PRD §2.1) — e.g. "events:manage" scoped to
+ * A single contextual permission — e.g. "events:manage" scoped to
  * one event's UUID, or "working-groups:write" scoped to one WG's UUID.
  * `contextType`/`contextId` are both null for a global (unscoped) grant.
  */
@@ -189,7 +189,7 @@ export interface PermissionGrant {
 }
 
 /**
- * Resolved identity for the Phase 4A (PRD §4.9/§4.10) member-facing session
+ * Resolved identity for the member-facing session
  * — a parallel, non-staff auth path to AuthAdmin. Self-service `/api/v1/me/*`
  * endpoints are identity-gated (a valid session backed by an active
  * `members` row), not `resource:action` permission-gated — the `member`/
@@ -213,7 +213,7 @@ export interface AuthAdmin {
   role: string;
   scopes?: string[];
   /**
-   * Phase 2 (PRD §2.1) contextual permissions, resolved from `user_roles` +
+   * Contextual permissions, resolved from `user_roles` +
    * `permission_grants` on every authenticated request (see
    * functions/_lib/auth/permissions.ts). Populated only for requests that
    * went through requireAdminFromRequest's session/API-key path.

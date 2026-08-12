@@ -6,7 +6,11 @@ import { resolveOrderBy } from "../../../_lib/db/sort";
 import { upsertEventFromHugo } from "../../../_lib/services/events";
 import { writeAuditLog } from "../../../_lib/services/audit";
 import { parseJsonSafe } from "../../../_lib/utils/json";
-import { adminCreateEventSchema, EVENTS_LIST_SORT_COLUMNS, eventsListSortValueSchema } from "../../../../assets/shared/schemas/api";
+import {
+  adminCreateEventSchema,
+  EVENTS_LIST_SORT_COLUMNS,
+  eventsListSortValueSchema,
+} from "../../../../assets/shared/schemas/api";
 import { requestDb, type AdminContext } from "../../../_lib/db/context";
 
 interface EventWithStats {

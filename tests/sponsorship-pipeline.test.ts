@@ -1,5 +1,5 @@
 /**
- * sponsorship-pipeline.test.ts — PRD §4.13, Phase 4E.
+ * sponsorship-pipeline.test.ts.
  *
  * Admin sales pipeline: CRUD, stage transitions (and their "on active"/"on
  * lapsed" side effects on organizations.sponsor_tier/sponsor_start_date),
@@ -54,7 +54,7 @@ async function seedOrganization(name: string): Promise<{ organizationId: string;
   return { organizationId, userId };
 }
 
-describe("Sponsorship sales pipeline (PRD §4.13, Phase 4E)", () => {
+describe("Sponsorship sales pipeline", () => {
   let adminToken: string;
   let adminId: string;
   let eventId: string;

@@ -1,7 +1,7 @@
 /**
  * mailing-lists.test.ts
  *
- * PRD §4.14 (Phase 4C): managed mailing list configuration, admin CRUD, and
+ * managed mailing list configuration, admin CRUD, and
  * the Google Groups sync engine reading auto-sync rules from `mailing_lists`
  * at runtime instead of the PKIC_ALL_MEMBERS_LIST/CONSULTATION_LIST
  * constants membership-onboarding.ts used to hardcode.
@@ -25,16 +25,22 @@ function request(token: string, path: string, init: RequestInit = {}): Request {
 }
 
 async function call(token: string, path: string, init: RequestInit = {}): Promise<Response> {
-  return app.fetch(request(token, path, init), env as any, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
+  return app.fetch(
+    request(token, path, init),
+    env as any,
+    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+  );
 }
 
-describe("Managed mailing list configuration (PRD §4.14, Phase 4C)", () => {
+describe("Managed mailing list configuration", () => {
   let adminToken: string;
 
   beforeEach(async () => {
     await resetDb();
     await seedEventAndAdmin(env.DB);
-    const adminRow = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1"))[0];
+    const adminRow = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
+    )[0];
     adminToken = await createAdminSession(env.DB, adminRow.id, "admin-mailing-lists-token");
     // migration 0041 seeds 9 lists once at migration time; mailing_lists is
     // excluded from resetDb()'s per-test wipe (tests/helpers/reset-db.ts —
@@ -60,7 +66,11 @@ describe("Managed mailing list configuration (PRD §4.14, Phase 4C)", () => {
     const body = (await response.json()) as { mailingList: { id: string; email: string } };
     expect(body.mailingList.email).toBe("custom@lists.pkic.org");
 
-    const rows = await queryAll<{ email: string }>(env.DB, "SELECT email FROM mailing_lists WHERE id = ?", body.mailingList.id);
+    const rows = await queryAll<{ email: string }>(
+      env.DB,
+      "SELECT email FROM mailing_lists WHERE id = ?",
+      body.mailingList.id,
+    );
     expect(rows).toHaveLength(1);
   });
 
@@ -88,7 +98,9 @@ describe("Managed mailing list configuration (PRD §4.14, Phase 4C)", () => {
     expect(patchBody.mailingList.label).toBe("Renamed");
     expect(patchBody.mailingList.active).toBe(false);
 
-    const deleteResponse = await call(adminToken, `/api/v1/admin/mailing-lists/${mailingList.id}`, { method: "DELETE" });
+    const deleteResponse = await call(adminToken, `/api/v1/admin/mailing-lists/${mailingList.id}`, {
+      method: "DELETE",
+    });
     expect(deleteResponse.status).toBe(200);
     const rows = await queryAll<{ id: string }>(env.DB, "SELECT id FROM mailing_lists WHERE id = ?", mailingList.id);
     expect(rows).toHaveLength(0);
@@ -113,7 +125,7 @@ describe("Managed mailing list configuration (PRD §4.14, Phase 4C)", () => {
     // user's actual DB role — unlike the real magic-link flow
     // (verifyAdminMagicLink), which sets scopes: [] for any non-admin role.
     // Mailing Lists is gated by that legacy scope system (admin role
-    // required, no Phase 2 permission — see admin-mailing-lists.ts's header
+    // required, no permission — see admin-mailing-lists.ts's header
     // note), so this test builds the token directly with scopes: [] to
     // exercise the real production behavior for a non-admin role.
     const staffUserId = crypto.randomUUID();

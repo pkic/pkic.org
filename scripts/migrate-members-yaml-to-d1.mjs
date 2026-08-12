@@ -1,5 +1,5 @@
 /**
- * PRD §6 Step 2/3/3b — Import member organizations & representatives to D1.
+ * Step 2/3/3b — Import member organizations & representatives to D1.
  *
  * Reads `data/members/*.yaml` (the Hugo-era member directory) and the
  * Google Groups roster exports under `csv/` (`pkic.csv` plus the six
@@ -7,7 +7,7 @@
  * generates idempotent SQL that:
  *
  *   - upserts one `organizations` row per org-tied YAML file (categories
- *     A-G, H1-H4, H8), populating the §0.6 content columns plus
+ *     A-G, H1-H4, H8), populating the content columns plus
  *     `member_since` (migration 0046) from the YAML `memberSince` key
  *   - upserts one `users` + `members` row per representative whose email
  *     could be matched against the `pkic.csv` roster by organization
@@ -35,7 +35,7 @@
  *     URLs before writing `organizations.content_markdown`, so they render
  *     as links instead of literal, unresolved shortcode text
  *
- * What this script deliberately does NOT do (see prd.md §6 for why):
+ * What this script deliberately does NOT do:
  *   - create `organizations`/`users`/`members` rows for org-tied
  *     representatives with no domain-matched email at all — see the
  *     "unmatched" report section; these are finished one at a time via the
@@ -89,11 +89,11 @@ const WORKING_GROUP_CSVS = {
   tcwg: "tcwg.csv",
 };
 // csv/ec.csv (Executive Council roster) is intentionally excluded — EC
-// membership is Phase 4A scope (users.is_ec_member, §4.6), not this migration.
+// membership is scope (users.is_ec_member), not this migration.
 
 const INDIVIDUAL_CATEGORIES = new Set(["H5", "H6", "H7"]);
 
-// Step 3e (sponsorship reconciliation): maps a YAML `sponsor.sponsoring.<key>`
+// (sponsorship reconciliation): maps a YAML `sponsor.sponsoring.<key>`
 // event name to the `events` row it should attribute to. Only 3 distinct
 // event names exist across all of data/members/*.yaml (checked 2026-07-29),
 // small enough to hand-map from content/events/*/index.md front matter
@@ -334,7 +334,7 @@ function loadMemberYamlFiles() {
 
 function activeRepresentatives(doc) {
   const reps = Array.isArray(doc.representatives) ? doc.representatives : [];
-  // A rep with `till` set no longer represents the org (§4.10's
+  // A rep with `till` set no longer represents the org
   // from/till convention) — excluded from user/member creation, but still
   // real historical content (attribution on blog posts etc.), so we leave
   // the YAML untouched; we just don't mint a portal account for them here.
@@ -405,7 +405,7 @@ function emailLocalAlnum(email) {
  * by name, instead of blindly zipping listed order against join-date order
  * (which silently attaches one representative's bio/role to a different
  * person's email whenever the YAML list order and the roster join order
- * don't happen to match — see prd.md's yaml-to-d1 migration bug writeup).
+ * don't happen to match.
  *
  * Each representative's name tokens are checked as substrings of each
  * candidate email's local part; confident matches (score > 0) are assigned
@@ -503,7 +503,7 @@ function candidateEmailsForDomains(domains, emailsByDomain) {
 
 /**
  * Builds the full set of SQL statements plus a structured report, per the
- * reconciliation algorithm in prd.md §6 Step 2/3/3b.
+ * reconciliation algorithm.
  */
 function buildMigration({ uploadLogos, logoBucket, cli }) {
   const yamlRecords = loadMemberYamlFiles();
@@ -738,7 +738,7 @@ WHERE o.normalized_name = ${sqlString(normalizedOrgName)}
     }
 
     if (isIndividual) {
-      // §0.1: individuals have no organization row at all.
+      // Individuals have no organization row at all.
       //
       // Unlike org-tied representatives (where an unmatched email means "we
       // don't know which real person this is" and the row is left for the
@@ -778,14 +778,18 @@ WHERE o.normalized_name = ${sqlString(normalizedOrgName)}
 
       const rep = reps[0] ?? { name, role: null, social: {}, description: null };
       const { firstName, lastName } = splitName(rep.name ?? name);
-      const links = { linkedin: rep.social?.linkedin || undefined, x: rep.social?.x || undefined };
+      // Canonical persisted shape is a plain URL array (matches
+      // assets/shared/schemas/api.ts's linksSchema and everything
+      // users.links_json is written/read as elsewhere) — not the legacy
+      // {linkedin, x} object this script used to write.
+      const links = [rep.social?.linkedin, rep.social?.x].filter(Boolean);
       const normalizedEmail = upsertUser({
         email,
         firstName,
         lastName,
         jobTitle: rep.role ?? null,
         biography: rep.description ?? null,
-        linksJson: Object.values(links).some(Boolean) ? JSON.stringify(links) : null,
+        linksJson: links.length > 0 ? JSON.stringify(links) : null,
         headshotR2Key,
       });
       claimedEmails.add(normalizedEmail);
@@ -802,7 +806,7 @@ WHERE o.normalized_name = ${sqlString(normalizedOrgName)}
     }
 
     // Org-tied (A-G, H1-H4, H8): organization row is always created,
-    // matched or not (§6 Step 2 item 3).
+    // matched or not.
     let logoR2Key = null;
     if (uploadLogos) {
       const logoFile = findLogoFile(slug);
@@ -858,7 +862,11 @@ WHERE o.normalized_name = ${sqlString(normalizedOrgName)}
       const { email } = candidates[assignment[i]];
       matchedCandidateIndices.add(assignment[i]);
       const { firstName, lastName } = splitName(rep.name);
-      const links = { linkedin: rep.social?.linkedin || undefined, x: rep.social?.x || undefined };
+      // Canonical persisted shape is a plain URL array (matches
+      // assets/shared/schemas/api.ts's linksSchema and everything
+      // users.links_json is written/read as elsewhere) — not the legacy
+      // {linkedin, x} object this script used to write.
+      const links = [rep.social?.linkedin, rep.social?.x].filter(Boolean);
 
       // Representative photos live in the same `assets/images/members/<orgSlug>/`
       // directory as the org logo, one file per person (see findRepPhotoFile) —
@@ -878,7 +886,7 @@ WHERE o.normalized_name = ${sqlString(normalizedOrgName)}
         lastName,
         jobTitle: rep.role ?? null,
         biography: rep.description ?? null,
-        linksJson: Object.values(links).some(Boolean) ? JSON.stringify(links) : null,
+        linksJson: links.length > 0 ? JSON.stringify(links) : null,
         headshotR2Key: repHeadshotR2Key,
       });
       claimedEmails.add(normalizedEmail);
@@ -894,7 +902,7 @@ WHERE o.normalized_name = ${sqlString(normalizedOrgName)}
 
     // Domain-matched emails not paired to any named representative (or,
     // for orgs with no `representatives` field at all, every matched
-    // email) become anonymous, opted-out member rows per §6 Step 2 item 4.
+    // email) become anonymous, opted-out member rows..
     for (let i = 0; i < candidates.length; i += 1) {
       if (matchedCandidateIndices.has(i)) continue;
       const { email } = candidates[i];
@@ -942,16 +950,16 @@ WHERE o.normalized_name = ${sqlString(normalizedOrgName)}
     report.bareRosterUsers.push({ email, workingGroups: wgSlugsForEmail(email) });
   }
 
-  // Finding (this migration, not in the original §6 text): a meaningful
+  // Finding (this migration, not in the original): a meaningful
   // number of WG-roster subscribers never appear in csv/pkic.csv at all
   // (288 across the six WG CSVs in a 2026-07-26 dry run) — e.g. someone
   // unsubscribed from the main pkic@ list but stayed on a WG list, or the
-  // exports were taken at slightly different times. §6 Step 3 as written
+  // exports were taken at slightly different times. This
   // only covers "CSV roster emails not attributable to any YAML
   // organization" sourced from pkic.csv, which would silently drop these
-  // people's WG membership entirely (Step 3b can only attach
+  // people's WG membership entirely (can only attach
   // working_group_members to a user row that already exists). We create a
-  // bare user for them too, flagged separately in the report, so Step 3b
+  // bare user for them too, flagged separately in the report,
   // below has a user row to attach their WG membership to.
   for (const roster of Object.values(wgRosters)) {
     for (const [email] of roster.entries()) {
@@ -986,14 +994,14 @@ WHERE (SELECT id FROM users WHERE normalized_email = ${sqlString(email)}) IS NOT
     }
   }
 
-  // ── Step 3f: non-member sponsors (data/sponsors.yaml) ───────────────────
+  // ── non-member sponsors (data/sponsors.yaml) ───────────────────
   // The one-time 2026-07-29 backfill only covered data/members/*.yaml's
   // `sponsor:` block (Step 3e above) — data/sponsors.yaml (companies that
   // sponsor without being a PKIC member, e.g. an event venue partner) was
   // never migrated, meaning those sponsors silently vanished the moment the
-  // public sponsor display cut over to reading D1 (prd.md item 8 gap-closure
-  // plan, step 5: "re-run/diff the backfill immediately before cutover").
-  // Same NOT EXISTS-guarded, re-run-safe shape as Step 3e, just without an
+  // public sponsor display cut over to reading D1 (
+  // "re-run/diff the backfill immediately before cutover").
+  // Same NOT EXISTS-guarded, re-run-safe shape, just without an
   // organization_id (non_member_name identifies the sponsor instead).
   if (fs.existsSync(SPONSORS_YAML_PATH)) {
     const nonMemberSponsors = YAML.parse(fs.readFileSync(SPONSORS_YAML_PATH, "utf8")) ?? [];

@@ -1,6 +1,6 @@
 /**
  * POST /api/v1/admin/consortium/meetings/:meetingId/resend — trigger the
- * annual bulk resend for the consortium meeting series (PRD §4.12). Smart-
+ * annual bulk resend for the consortium meeting series. Smart-
  * routed: active members with a saved, still-active preference get only
  * that variant; everyone else gets all active variants.
  */

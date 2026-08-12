@@ -1,7 +1,7 @@
--- Migration 0038: Phase 4A — Membership Workflow Migration
+-- Migration 0038: Membership Workflow Migration
 --
--- PRD §4.1-4.7, 4.9, 4.10. Phase 1 built application submission and the
--- public read API; Phase 2 built access control; Phase 3 built passkeys.
+-- Built application submission and the
+-- public read API; built access control; built passkeys.
 -- Nothing yet takes an application through review -> consultation ->
 -- EC review -> approval -> onboarding, and nothing lets an approved member
 -- log in and self-manage. This migration adds the schema those flows need.
@@ -9,7 +9,7 @@
 -- values are documented in `-- allowed:` comments and validated at the
 -- application layer (Zod) instead.
 
--- ── On-hold sub-type (§4.2) ──────────────────────────────────────────────
+-- ── On-hold sub-type ──────────────────────────────────────────────
 -- Distinguishes *why* an application is on_hold, replacing the GitHub
 -- label scheme (hold:authority, hold:org-email, etc.). NULL when the
 -- application isn't currently on_hold.
@@ -17,23 +17,22 @@ ALTER TABLE member_applications ADD COLUMN on_hold_subtype TEXT;
 -- allowed: request_authority | request_org_email | request_pki_experience
 --        | request_org_application | request_information
 
--- ── EC member designation (§4.6) ─────────────────────────────────────────
+-- ── EC member designation ─────────────────────────────────────────
 -- A distinct designation from `membership:approve` — controls who receives
 -- ec-review-batch emails and who sees the EC decision screen, independent
 -- of staff/processor role.
 ALTER TABLE users ADD COLUMN is_ec_member INTEGER NOT NULL DEFAULT 0;
 
--- ── Organization domain(s) (§4.1 duplicate-check gap) ────────────────────
--- Phase 1's duplicate-domain check only covered member_applications, not
--- approved members, because organizations had no domain column (flagged
--- explicitly in Phase 1 Implementation Status decision 5). Populated at
--- §4.7 approval time from the applicant's email domain; existing
--- (pre-Phase-4A) organizations are not backfilled — see prd.md Phase 4A
+-- ── Organization domain(s) (duplicate-check gap) ────────────────────
+-- Duplicate-domain check only covered member_applications, not
+-- approved members, because organizations had no domain column.
+-- Populated at approval time from the applicant's email domain; existing
+-- organizations are not backfilled -
 -- status for the documented limitation. JSON array to allow more than one
--- domain per organization over time (e.g. after a rebrand, §4.15).
+-- domain per organization over time (e.g. after a rebrand).
 ALTER TABLE organizations ADD COLUMN organization_domains_json TEXT;
 
--- ── EC decisions (§4.6, exact schema from the PRD) ───────────────────────
+-- ── EC decisions ───────────────────────
 CREATE TABLE ec_decisions (
   id                TEXT NOT NULL PRIMARY KEY,
   application_id    TEXT NOT NULL,
@@ -50,7 +49,7 @@ CREATE TABLE ec_decisions (
 
 CREATE INDEX idx_ec_decisions_application ON ec_decisions(application_id);
 
--- ── Application concerns (§4.5, §2.3) ────────────────────────────────────
+-- ── Application concerns ────────────────────────────────────
 -- Visible only to staff/processors, never to the applicant — enforced at
 -- the application layer (no public read endpoint returns this table).
 CREATE TABLE application_concerns (
@@ -65,8 +64,8 @@ CREATE TABLE application_concerns (
 
 CREATE INDEX idx_application_concerns_application ON application_concerns(application_id);
 
--- ── Application communications & notes (§4.2) ────────────────────────────
--- The PRD's table distinguishes two write operations: a templated/free-form
+-- ── Application communications & notes ────────────────────────────
+-- The table distinguishes two write operations: a templated/free-form
 -- email to the applicant (recorded here for the staff-only audit trail —
 -- the email itself is queued via the existing email_outbox) and an internal
 -- note (never emailed). Reusing member_application_events for either would
@@ -92,7 +91,7 @@ CREATE TABLE application_communications (
 
 CREATE INDEX idx_application_communications_application ON application_communications(application_id, created_at);
 
--- ── Google Groups sync queue (§4.7, §4.9) ────────────────────────────────
+-- ── Google Groups sync queue ────────────────────────────────
 -- Zero existing code for Google Groups sync prior to this migration. Every
 -- trigger point (approval onboarding, WG join/leave, deactivation) writes a
 -- row here; a processor (folded into the existing 15-minute due-work cron)
@@ -115,9 +114,9 @@ CREATE TABLE google_groups_sync_queue (
 
 CREATE INDEX idx_google_groups_sync_queue_status ON google_groups_sync_queue(status, created_at);
 
--- ── Membership workflow settings (§4.3) ───────────────────────────────────
+-- ── Membership workflow settings ───────────────────────────────────
 -- Single configurable row (id is always 'default') rather than a generic
--- key-value table — every §4.3 setting is a distinct, typed field the
+-- key-value table — every setting is a distinct, typed field the
 -- consultation/EC batch jobs and the admin settings screen both read
 -- directly, and there is exactly one workflow-wide configuration, not a
 -- per-entity one.
@@ -138,11 +137,11 @@ CREATE TABLE membership_settings (
 
 INSERT INTO membership_settings (id, updated_at) VALUES ('default', datetime('now'));
 
--- ── Email templates (§4.4) ────────────────────────────────────────────────
--- 14 net-new templates wired to a trigger in this phase, plus
--- existing-member-claim (seeded for §4.4 schema completeness but not wired
--- to any trigger this phase actually calls — the Interim Admin Tool
--- deliberately sends no email; see prd.md Phase 4A status).
+-- ── Email templates ────────────────────────────────────────────────
+-- 14 net-new templates wired to a trigger in this stage, plus
+-- existing-member-claim (seeded for schema completeness but not wired
+-- to any trigger this stage actually calls — the Interim Admin Tool
+-- deliberately sends no email).
 
 INSERT OR IGNORE INTO email_template_versions
   (id, template_key, version, subject_template, body, content_type, r2_object_key, checksum_sha256, status, created_by_user_id, created_at, message_type)

@@ -2,7 +2,7 @@
  * GET /api/v1/members/:id/logo
  *
  * Public member logo/photo, uploaded to R2 by scripts/migrate-members-yaml-to-d1.mjs
- * (--upload-logos) or a future org-profile logo upload flow (§4.11). `id`
+ * (--upload-logos) or a future org-profile logo upload flow. `id`
  * matches the `id` field on GET /members and /:id — an organization id for
  * org-tied members, or the member row id for org-less individuals
  * (H5/H6/H7), whose photo is their own `users.headshot_r2_key`.

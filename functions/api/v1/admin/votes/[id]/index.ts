@@ -1,5 +1,5 @@
 /**
- * PATCH /api/v1/admin/votes/:id — update a vote's settings (PRD §4.8).
+ * PATCH /api/v1/admin/votes/:id — update a vote's settings.
  */
 import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../../_lib/http";

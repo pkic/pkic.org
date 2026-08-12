@@ -70,7 +70,7 @@ function mcpOpenApiSpecResponse(): Response {
 
 const REMINDER_CRON = "*/15 * * * *";
 const RETENTION_CRON = "0 3 * * *";
-// PRD §4.3 defaults: consultation batch Mon/Wed 07:15 UTC, EC review batch Mon/Wed 08:15 UTC.
+// defaults: consultation batch Mon/Wed 07:15 UTC, EC review batch Mon/Wed 08:15 UTC.
 const CONSULTATION_BATCH_CRON = "15 7 * * 1,3";
 const EC_REVIEW_BATCH_CRON = "15 8 * * 1,3";
 // Weekly WG chair membership-change digest (2026-07-31 manual-testing
@@ -96,15 +96,15 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
   try {
     if (controller.cron === REMINDER_CRON) {
       const dueWork = await runScheduledDueWork(env);
-      // Membership due-work (PRD §4.6/§4.7/§4.9 on-hold reminders/auto-close,
+      // Membership due-work (on-hold reminders/auto-close,
       // EC-window auto-approve, Google Groups sync) runs as a sibling call on
       // the same 15-minute trigger — see membership-scheduled-jobs.ts's own
       // note on why this isn't woven into runScheduledDueWork's pass loop.
       const membershipDueWork = await runMembershipDueWork(env.DB, env);
-      // Sponsorship renewal reminders/auto-lapse (PRD §4.13) — same "sibling
+      // Sponsorship renewal reminders/auto-lapse — same "sibling
       // call on the 15-minute trigger" pattern as membershipDueWork above.
       const sponsorshipDueWork = await runSponsorshipDueWork(env.DB, env);
-      // Voting open/close/round-advance (PRD §4.8) — same sibling pattern.
+      // Voting open/close/round-advance — same sibling pattern.
       const votesDueWork = await runVotesDueWork(env.DB, env);
 
       logInfo("SCHEDULED_REMINDERS_COMPLETED", {

@@ -3,7 +3,7 @@
  *
  * System roles (`is_system_role = 1`) cannot be deleted; a role still
  * assigned to any user (active `user_roles` row) cannot be deleted either —
- * both per PRD §2.2 and §10.4's tests/roles.test.ts.
+ * both per tests/roles.test.ts.
  */
 import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../_lib/http";

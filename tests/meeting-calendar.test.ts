@@ -1,7 +1,7 @@
 /**
  * meeting-calendar.test.ts
  *
- * PRD §4.12 (Phase 4D) — meeting_series/meeting_ics_files/
+ * meeting_series/meeting_ics_files/
  * member_meeting_preferences, the WG-nested and consortium admin CRUD
  * surfaces, the public working-group meetings list, member self-service
  * (/me/calendar), and the two auto-trigger hooks (application-approved-
@@ -14,6 +14,7 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { createApplicationFormSubmission } from "./helpers/member-applications";
 import { resolveWgJoinCalendarInviteByMailingListEmail } from "../functions/_lib/services/meeting-calendar";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
@@ -139,7 +140,7 @@ async function assignContextualRole(
     .run();
 }
 
-describe("Meeting calendar management (PRD §4.12)", () => {
+describe("Meeting calendar management", () => {
   let adminToken: string;
   let adminId: string;
 
@@ -242,11 +243,7 @@ describe("Meeting calendar management (PRD §4.12)", () => {
     );
     expect(deleteResponse.status).toBe(200);
 
-    const remaining = await queryAll<{ id: string }>(
-      env.DB,
-      "SELECT id FROM meeting_ics_files WHERE id = ?",
-      fileId,
-    );
+    const remaining = await queryAll<{ id: string }>(env.DB, "SELECT id FROM meeting_ics_files WHERE id = ?", fileId);
     expect(remaining).toHaveLength(0);
     expect(await env.ASSETS_BUCKET!.get("meeting-ics/del1.ics")).toBeNull();
 
@@ -578,10 +575,11 @@ describe("Meeting calendar management (PRD §4.12)", () => {
     await insertIcsFile(wgSeriesId, "17:00 CET", 2026, "meeting-ics/approve-w.ics");
 
     const applicationId = crypto.randomUUID();
+    const formSubmissionId = await createApplicationFormSubmission({ working_groups: ["pqc"] });
     await env.DB.prepare(
       `INSERT INTO member_applications
          (id, applicant_email, applicant_name, organization_name, organization_domain, membership_category,
-          answers_json, status, stage, stage_entered_at, manage_token_hash, created_at, updated_at)
+          form_submission_id, status, stage, stage_entered_at, manage_token_hash, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, 'F', ?, 'ec_review', 'ec_review', datetime('now'), ?, datetime('now'), datetime('now'))`,
     )
       .bind(
@@ -590,7 +588,7 @@ describe("Meeting calendar management (PRD §4.12)", () => {
         "ICS Approve",
         "Acme ICS Corp",
         "acme-ics.test",
-        JSON.stringify({ working_groups: ["pqc"] }),
+        formSubmissionId,
         crypto.randomUUID(),
       )
       .run();

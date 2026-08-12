@@ -1,5 +1,5 @@
 /**
- * Post-approval onboarding orchestration (PRD §4.7). The sole path to
+ * Post-approval onboarding orchestration. The sole path to
  * `member_applications.status = 'approved'` — transitionApplicationStage
  * (member-applications.ts) deliberately excludes 'approved' as a
  * destination so this full orchestration can't be bypassed by a bare
@@ -11,7 +11,7 @@
  * the caller needs to queue member-account-claim, application-approved-
  * welcome, and org-contact-assigned.
  *
- * ICS calendar attachments (§4.7's welcome email bullet 6) are resolved and
+ * ICS calendar attachments (welcome email) are resolved and
  * attached by the caller (approve.ts, membership-scheduled-jobs.ts's
  * runEcWindowAutoApprove), not here — see meeting-calendar.ts's
  * resolveApprovalIcsAttachments, called with this function's own
@@ -21,11 +21,10 @@
 import { first } from "../db/queries";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
-import { parseJsonSafe } from "../utils/json";
 import { AppError } from "../errors";
 import {
+  getApplicationAnswers,
   getMemberApplicationById,
-  parseApplicationAnswers,
   INDIVIDUAL_MEMBERSHIP_CATEGORIES,
 } from "./member-applications";
 import { provisionOrganizationAndMembers } from "./member-provisioning";
@@ -50,8 +49,7 @@ export interface ApproveApplicationResult {
   assignedContactRole: "primary" | "secondary" | null;
 }
 
-function applicationWorkingGroupSlugs(answersJson: string | null): string[] {
-  const answers = parseJsonSafe<Record<string, unknown>>(answersJson, {});
+function applicationWorkingGroupSlugs(answers: Record<string, unknown>): string[] {
   const raw = answers.working_groups ?? answers.workingGroups;
   if (!Array.isArray(raw)) return [];
   return raw.filter((value): value is string => typeof value === "string");
@@ -70,20 +68,22 @@ export async function approveApplication(
   }
 
   const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(application.membership_category);
-  const requestedWorkingGroupSlugs = applicationWorkingGroupSlugs(application.answers_json);
-  // CA WG constraint (§4.7/§4.9): only category A may be added to ca@.
-  const workingGroupSlugs = requestedWorkingGroupSlugs.filter(
-    (slug) => slug !== CA_WORKING_GROUP_SLUG || application.membership_category === CA_ONLY_CATEGORY,
-  );
 
-  // The apply form collects job_title/linkedin as free-form answers (form_fields
-  // seeded in migration 0034) but this call site previously only forwarded
+  // The apply form collects job_title/linkedin/working_groups as free-form
+  // answers (form_fields seeded in migration 0034, now stored as real
+  // form_submission_answers rows — see member-applications.ts's
+  // getApplicationAnswers) but this call site previously only forwarded
   // name/email into provisionOrganizationAndMembers — even though that
   // function (and findOrCreateUser under it) already know how to persist
   // both. That silently dropped every approved applicant's job title and
-  // LinkedIn URL. Read them back out of answers_json here so they land on
-  // the newly provisioned user.
-  const answers = parseApplicationAnswers(application.answers_json);
+  // LinkedIn URL. Read them back out here so they land on the newly
+  // provisioned user.
+  const answers = await getApplicationAnswers(db, application.form_submission_id);
+  const requestedWorkingGroupSlugs = applicationWorkingGroupSlugs(answers);
+  // CA WG constraint: only category A may be added to ca@.
+  const workingGroupSlugs = requestedWorkingGroupSlugs.filter(
+    (slug) => slug !== CA_WORKING_GROUP_SLUG || application.membership_category === CA_ONLY_CATEGORY,
+  );
   const jobTitle = typeof answers.job_title === "string" && answers.job_title.trim() ? answers.job_title.trim() : null;
   const linkedin = typeof answers.linkedin === "string" && answers.linkedin.trim() ? answers.linkedin.trim() : null;
 
@@ -118,9 +118,9 @@ export async function approveApplication(
       ),
   ]);
 
-  // Google Groups enqueue (§4.7, §0 — real API client is in google-groups.ts;
+  // Google Groups enqueue (real API client is in google-groups.ts;
   // this only writes queue rows, safe to call regardless of whether the live
-  // integration is configured). §4.14: which lists to add depends on the
+  // integration is configured). which lists to add depends on the
   // staff-managed mailing_lists config, not a hardcoded constant/category
   // check — resolveAutoSyncListEmails reads it at runtime. (This happens to
   // still resolve to "pkic@ always, consultation@ only for A-G" out of the

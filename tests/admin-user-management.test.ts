@@ -344,8 +344,7 @@ describe("admin user anonymization", () => {
 });
 
 // ── Type filter (member vs. event-attendee vs. contact-only) ───────────────
-// Computed from the existing `members`/`event_participants` tables — see
-// prd.md's "Users Page — Member vs. Event-Attendee Type Filter".
+// Computed from the existing `members`/`event_participants` tables.
 
 describe("admin users list — type filter", () => {
   beforeEach(async () => {

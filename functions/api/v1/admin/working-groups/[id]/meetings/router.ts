@@ -15,17 +15,17 @@ export const openapi = fromHono(app);
 const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 /**
- * Phase 2 (PRD §2) context-aware gate for /admin/working-groups/:id/meetings/**
+ * context-aware gate for /admin/working-groups/:id/meetings/**
  * — requires working-groups:read (GET) or working-groups:write (writes),
  * globally or scoped to this working group. This is what actually gives a
  * WG chair (role-wg_chair, context-scoped working-groups:write per
- * migration 0035) management of their own WG's meeting series, per §4.12's
+ * migration 0035) management of their own WG's meeting series,
  * "staff admin / WG chair in context" — the model is
  * events/[eventSlug]/router.ts's requireEventManagementAccess. Note this is
  * NOT the pattern the sibling /members endpoints under this same
  * working-groups/:id/ resource use today (they call requirePermission with
- * no context at all, a pre-existing gap noted during this phase's planning
- * — see prd.md's Phase 4D status); fixing that gap repo-wide is out of
+ * no context at all, a pre-existing gap noted during this planning
+ * fixing that gap repo-wide is out of
  * scope here, but the new meetings surface is built correctly from the
  * start rather than copying the gap forward.
  */

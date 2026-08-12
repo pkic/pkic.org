@@ -1,5 +1,5 @@
 /**
- * GET   /api/v1/admin/applications/:id — application detail (PRD §4.2).
+ * GET   /api/v1/admin/applications/:id — application detail.
  * PATCH /api/v1/admin/applications/:id — correct applicant-submitted fields
  * (does not transition stage; see updateAdminApplication).
  */

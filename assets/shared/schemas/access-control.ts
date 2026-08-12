@@ -1,5 +1,5 @@
 /**
- * Phase 2 (PRD §2) access-control admin API schemas: permission_grants
+ * Access-control admin API schemas: permission_grants
  * ("access grants"), roles, and user_roles (role assignment).
  */
 import { z } from "zod";
@@ -52,10 +52,11 @@ export const accessGrantResponseSchema = z.object({
   createdAt: z.string(),
 });
 
+// Implements permission_grants.
 export const accessGrantsCreateRouteSchema = {
   tags: ["Access Control"],
   summary: "Create a permission grant",
-  description: "PRD §2.3 permission_grants — grants a single permission to a user, optionally scoped and time-bounded.",
+  description: "Grants a single permission to a user, optionally scoped and time-bounded.",
   request: {
     body: { content: { "application/json": { schema: accessGrantCreateSchema } }, required: true },
   },
@@ -66,7 +67,13 @@ export const accessGrantsCreateRouteSchema = {
 };
 
 /** Allowlisted sort columns for GET /api/v1/admin/access-grants — see permission_grants' access-grants/index.ts. */
-export const ADMIN_ACCESS_GRANTS_SORT_COLUMNS = ["user_id", "permission", "context_type", "expires_at", "created_at"] as const;
+export const ADMIN_ACCESS_GRANTS_SORT_COLUMNS = [
+  "user_id",
+  "permission",
+  "context_type",
+  "expires_at",
+  "created_at",
+] as const;
 
 const accessGrantsSortValueSchema = z
   .string()
@@ -126,7 +133,7 @@ export const roleResponseSchema = z.object({
 export const rolesCreateRouteSchema = {
   tags: ["Access Control"],
   summary: "Create a custom role",
-  description: "PRD §2.2/§2.3 — custom roles bundle permissions that can be assigned via user_roles.",
+  description: "Custom roles bundle permissions that can be assigned via user_roles.",
   request: {
     body: { content: { "application/json": { schema: roleCreateSchema } }, required: true },
   },
@@ -241,7 +248,7 @@ export const userRoleResponseSchema = z.object({
 export const userRolesAssignRouteSchema = {
   tags: ["Access Control"],
   summary: "Assign a role to a user",
-  description: "PRD §2.3 user_roles — a user may hold multiple roles simultaneously, optionally context-scoped.",
+  description: "user_roles — a user may hold multiple roles simultaneously, optionally context-scoped.",
   request: {
     params: userIdRolesParamsSchema,
     body: { content: { "application/json": { schema: userRoleAssignSchema } }, required: true },

@@ -2,7 +2,7 @@
  * GET  /api/v1/admin/users/:userId/roles — list a user's role assignments
  * POST /api/v1/admin/users/:userId/roles — assign a role to a user
  *
- * Backs `user_roles` (PRD §2.3) — a user may hold multiple roles
+ * Backs `user_roles` — a user may hold multiple roles
  * simultaneously (each independently context-scoped and time-bounded).
  */
 import { OpenAPIRoute } from "chanfana";

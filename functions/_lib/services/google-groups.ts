@@ -1,5 +1,5 @@
 /**
- * Google Groups sync (PRD §4.7, §4.9). Zero existing code prior to this —
+ * Google Groups sync. Zero existing code prior to this —
  * confirmed by grep across the repo before writing this file.
  *
  * Every trigger point (approval onboarding, WG join/leave, deactivation)
@@ -175,7 +175,7 @@ export interface ProcessGoogleGroupsSyncResult {
   /**
    * userId -> group emails successfully added in this pass. The caller
    * (membership-scheduled-jobs.ts) uses this to queue the
-   * `mailing-list-enrolled` confirmation email (§4.7 item 7: "sent after
+   * `mailing-list-enrolled` confirmation email ("sent after
    * Google Groups sync completes") — kept out of this file so the sync
    * client stays free of email/env-outbox concerns.
    */

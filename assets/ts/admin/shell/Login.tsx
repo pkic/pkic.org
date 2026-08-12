@@ -35,7 +35,7 @@ async function verifyMagicLink(token: string): Promise<void> {
 }
 
 /**
- * PRD §3.4 — usernameless passkey login. Mirrors verifyMagicLink's
+ * usernameless passkey login. Mirrors verifyMagicLink's
  * saveAuth()/redirect handling so both login methods land in the same place.
  */
 async function signInWithPasskey(): Promise<void> {

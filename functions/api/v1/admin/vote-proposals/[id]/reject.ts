@@ -1,6 +1,6 @@
 /**
  * POST /api/v1/admin/vote-proposals/:id/reject — reject a proposal with a
- * reason; notifies the proposer via `vote-proposal-rejected` (PRD §4.8/§7).
+ * reason; notifies the proposer via `vote-proposal-rejected`.
  */
 import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../../_lib/http";

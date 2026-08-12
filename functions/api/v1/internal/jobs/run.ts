@@ -66,8 +66,8 @@ export async function onRequestPost(c: any): Promise<Response> {
       ? await processPendingOutbox(c.env.DB, c.env, body.outboxLimit)
       : { processed: 0, failed: 0 };
 
-  // Manual off-cycle triggers for the twice-weekly membership batches
-  // (PRD §4.5/§4.6, normally fired by the cron in functions/router.ts).
+  // Manual off-cycle triggers for the twice-weekly membership batches,
+  // normally fired by the cron in functions/router.ts).
   // No dry-run preview — see adminRunJobsSchema's note on why.
   const consultationBatch =
     body.runConsultationBatch && !body.dryRun

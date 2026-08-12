@@ -1,6 +1,6 @@
 /**
  * GET/POST /api/v1/admin/consortium/meetings — list/create consortium
- * meeting series (PRD §4.12). Staff admin only — see ./router.ts.
+ * meeting series. Staff admin only — see ./router.ts.
  */
 import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../../_lib/http";

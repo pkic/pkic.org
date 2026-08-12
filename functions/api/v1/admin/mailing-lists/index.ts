@@ -1,8 +1,8 @@
 /**
- * GET  /api/v1/admin/mailing-lists — list all managed mailing lists (§4.14)
+ * GET  /api/v1/admin/mailing-lists — list all managed mailing lists
  * POST /api/v1/admin/mailing-lists — add a new one
  *
- * Admin role required — not a Phase 2 named permission (see
+ * Admin role required — not a named permission (see
  * assets/shared/schemas/admin-mailing-lists.ts's header note).
  */
 import { OpenAPIRoute } from "chanfana";

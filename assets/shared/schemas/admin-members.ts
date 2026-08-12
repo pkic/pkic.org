@@ -1,40 +1,25 @@
 /**
- * Interim Admin Tool (PRD §6 "Interim Admin Tool — Manual Member
- * Management (pre-Phase 4A)"). `POST/GET /api/v1/admin/members` lets staff
- * add a member (or finish one of the §6 Step 2 migration gaps) without
+ * Interim Admin Tool (Interim Admin Tool — Manual Member
+ * Management). `POST/GET /api/v1/admin/members` lets staff
+ * add a member (or finish one of the Step 2 migration gaps) without
  * touching D1 by hand, mirroring the same organization/representative
  * shape the YAML migration script (scripts/migrate-members-yaml-to-d1.mjs)
  * already produces.
  */
 import { z } from "zod";
 import { normalizedEmailSchema } from "./api";
+import { paginationQuerySchema, paginatedResponseSchema } from "./pagination";
+import {
+  MEMBERSHIP_CATEGORIES,
+  membershipCategorySchema,
+  INDIVIDUAL_MEMBERSHIP_CATEGORIES,
+} from "./membership-categories";
+
+export { MEMBERSHIP_CATEGORIES, membershipCategorySchema, INDIVIDUAL_MEMBERSHIP_CATEGORIES };
 
 function trimmedString(min: number, max: number): z.ZodString {
   return z.string().trim().min(min).max(max);
 }
-
-export const MEMBERSHIP_CATEGORIES = [
-  "A",
-  "B",
-  "C",
-  "D",
-  "E",
-  "F",
-  "G",
-  "H1",
-  "H2",
-  "H3",
-  "H4",
-  "H5",
-  "H6",
-  "H7",
-  "H8",
-] as const;
-export const membershipCategorySchema = z.enum(MEMBERSHIP_CATEGORIES);
-
-// Individual categories have no organization — §0.1's "NULL for individual
-// categories H5/H6/H7" rule, same one the migration script applies.
-export const INDIVIDUAL_MEMBERSHIP_CATEGORIES = new Set<string>(["H5", "H6", "H7"]);
 
 export const WORKING_GROUP_SLUGS = ["ca", "cbom", "cm", "pkimm", "pqc", "tcwg"] as const;
 export const workingGroupSlugSchema = z.enum(WORKING_GROUP_SLUGS);
@@ -101,16 +86,13 @@ export const memberCreateResponseSchema = z.object({
   members: z.array(adminMemberSummarySchema),
 });
 
-export const adminMembersListQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(200).optional(),
-  offset: z.coerce.number().int().min(0).optional(),
-});
+export const adminMembersListQuerySchema = paginationQuerySchema;
 
 export const membersListRouteSchema = {
   tags: ["Membership"],
   summary: "List members (Interim Admin Tool)",
   description:
-    "PRD §6 Interim Admin Tool — unfiltered-by-status admin listing of every members row, one row per representative.",
+    "Interim Admin Tool — unfiltered-by-status admin listing of every members row, one row per representative.",
   request: {
     query: adminMembersListQuerySchema,
   },
@@ -118,12 +100,7 @@ export const membersListRouteSchema = {
     "200": {
       description: "Members list.",
       content: {
-        "application/json": {
-          schema: z.object({
-            members: z.array(adminMemberSummarySchema),
-            page: z.object({ limit: z.number(), offset: z.number(), total: z.number(), hasMore: z.boolean() }),
-          }),
-        },
+        "application/json": { schema: paginatedResponseSchema("members", adminMemberSummarySchema) },
       },
     },
   },
@@ -133,7 +110,7 @@ export const membersCreateRouteSchema = {
   tags: ["Membership"],
   summary: "Create a member (or finish a migration gap) — Interim Admin Tool",
   description:
-    "PRD §6 Interim Admin Tool — creates active organizations/users/members(/working_group_members) rows immediately. No email is sent.",
+    "Interim Admin Tool — creates active organizations/users/members(/working_group_members) rows immediately. No email is sent.",
   request: {
     body: { content: { "application/json": { schema: memberCreateSchema } }, required: true },
   },

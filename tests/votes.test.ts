@@ -1,7 +1,7 @@
 /**
  * votes.test.ts
  *
- * PRD §4.8 (Phase 4B) — direct vote creation (staff/WG chair), forum vs
+ * direct vote creation (staff/WG chair), forum vs
  * working-group ballot eligibility, threshold tallying (simple majority,
  * successive elimination across rounds), the member-proposal + endorsement
  * conversion path, admin proposal moderation, visibility, and /me/votes.
@@ -124,7 +124,7 @@ async function assignContextualRole(
     .run();
 }
 
-describe("Voting system (PRD §4.8)", () => {
+describe("Voting system", () => {
   let adminToken: string;
   let adminId: string;
 

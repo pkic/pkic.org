@@ -1,12 +1,12 @@
 /**
- * Organization content moderation workflow (PRD §4.11's *workflow* half —
+ * Organization content moderation workflow (*workflow* half —
  * the data-bearing columns this reads/writes were pulled forward by
  * migration 0037; see admin-organizations.ts's own header for that split).
  *
  * Only the organization's primary or secondary contact (organizations.
  * primary_contact_user_id / secondary_contact_user_id) may submit a content
  * change; all other representatives see the org profile as read-only, per
- * §4.11. A submission never touches the live `organizations` row directly —
+ * A submission never touches the live `organizations` row directly —
  * it's held in `organization_content_reviews` until a staff admin with
  * `organizations:content-review` approves or rejects it. Logo changes ride
  * the same queue via `logo_staging_r2_key`.
@@ -21,11 +21,12 @@ import { all, first, run } from "../db/queries";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { parseJsonSafe } from "../utils/json";
+import { parseLinksJson, serializeLinks } from "../../../assets/shared/schemas/api";
 import { AppError } from "../errors";
 import type { AuthAdmin, AuthMember, DatabaseLike } from "../types";
 
 /** camelCase field -> organizations column. Deliberately excludes `name`,
- * `organizationDomains`, `memberType`/`memberSince`/`sponsor.level` — §4.11
+ * `organizationDomains`, `memberType`/`memberSince`/`sponsor.level` —
  * lists those as admin-only, not submittable through this workflow. */
 export const CONTENT_REVIEW_FIELDS: Record<string, string> = {
   slogan: "slogan",
@@ -37,14 +38,24 @@ export const CONTENT_REVIEW_FIELDS: Record<string, string> = {
   pressUrl: "press_url",
   pressFeedUrl: "press_feed_url",
   careersUrl: "careers_url",
-  socialX: "social_x",
-  socialLinkedin: "social_linkedin",
-  socialFacebook: "social_facebook",
-  socialInstagram: "social_instagram",
-  socialYoutube: "social_youtube",
+  links: "links_json",
 };
 
-export type ContentReviewFieldInput = Partial<Record<keyof typeof CONTENT_REVIEW_FIELDS, string | null>>;
+/** proposed_changes_json stores `links` as a plain string[] (not the
+ * serialized links_json string) — matching the shape myOrganizationContentChangeSchema
+ * accepts and what the admin diff viewer compares against parsed current links. */
+export interface ContentReviewFieldInput {
+  slogan?: string | null;
+  description?: string | null;
+  contentMarkdown?: string | null;
+  website?: string | null;
+  blogUrl?: string | null;
+  blogFeedUrl?: string | null;
+  pressUrl?: string | null;
+  pressFeedUrl?: string | null;
+  careersUrl?: string | null;
+  links?: string[];
+}
 
 interface OrgContactRow {
   id: string;
@@ -125,8 +136,7 @@ export async function getMyOrganizationProfile(db: DatabaseLike, member: AuthMem
   const row = await first<Record<string, unknown>>(
     db,
     `SELECT id, name, description, website, content_markdown, slogan, logo_r2_key,
-            blog_url, blog_feed_url, press_url, press_feed_url, careers_url,
-            social_x, social_linkedin, social_facebook, social_instagram, social_youtube,
+            blog_url, blog_feed_url, press_url, press_feed_url, careers_url, links_json,
             primary_contact_user_id, secondary_contact_user_id, pending_secondary_contact_user_id,
             voting_delegate_user_id
      FROM organizations WHERE id = ?`,
@@ -149,11 +159,7 @@ export async function getMyOrganizationProfile(db: DatabaseLike, member: AuthMem
     pressUrl: row.press_url,
     pressFeedUrl: row.press_feed_url,
     careersUrl: row.careers_url,
-    socialX: row.social_x,
-    socialLinkedin: row.social_linkedin,
-    socialFacebook: row.social_facebook,
-    socialInstagram: row.social_instagram,
-    socialYoutube: row.social_youtube,
+    links: parseLinksJson(row.links_json as string | null),
     isOrgContact: member.userId === row.primary_contact_user_id || member.userId === row.secondary_contact_user_id,
     isPrimaryContact: member.userId === row.primary_contact_user_id,
     pendingSecondaryContactUserId: row.pending_secondary_contact_user_id,
@@ -183,9 +189,7 @@ export async function submitOrgContentChange(
     );
   }
 
-  const changedFields = Object.fromEntries(
-    Object.entries(input).filter(([key]) => key in CONTENT_REVIEW_FIELDS),
-  );
+  const changedFields = Object.fromEntries(Object.entries(input).filter(([key]) => key in CONTENT_REVIEW_FIELDS));
   if (Object.keys(changedFields).length === 0) {
     throw new AppError(422, "NO_CHANGES", "No editable fields were submitted");
   }
@@ -238,7 +242,7 @@ export async function withdrawMyOrganizationReview(db: DatabaseLike, member: Aut
 
 /**
  * Stages a proposed logo, folding it into the org's single pending review
- * (creating one with no other field changes if none exists yet) — §4.11:
+ * (creating one with no other field changes if none exists yet):
  * "Logo changes follow the same moderation queue." Returns the previous
  * staged key (if any) so the route can clean it up in R2.
  */
@@ -264,11 +268,7 @@ export async function stageOrganizationLogo(db: DatabaseLike, member: AuthMember
     );
   }
 
-  await run(db, "UPDATE organizations SET logo_staging_r2_key = ?, updated_at = ? WHERE id = ?", [
-    r2Key,
-    now,
-    org.id,
-  ]);
+  await run(db, "UPDATE organizations SET logo_staging_r2_key = ?, updated_at = ? WHERE id = ?", [r2Key, now, org.id]);
 
   return { previousStagingKey };
 }
@@ -321,8 +321,7 @@ export async function getContentReviewDetail(db: DatabaseLike, reviewId: string)
   const orgRow = await first<Record<string, unknown>>(
     db,
     `SELECT description, website, content_markdown, slogan, logo_r2_key,
-            blog_url, blog_feed_url, press_url, press_feed_url, careers_url,
-            social_x, social_linkedin, social_facebook, social_instagram, social_youtube
+            blog_url, blog_feed_url, press_url, press_feed_url, careers_url, links_json
      FROM organizations WHERE id = ?`,
     [row.organization_id],
   );
@@ -332,7 +331,10 @@ export async function getContentReviewDetail(db: DatabaseLike, reviewId: string)
     .filter((field) => field in proposed)
     .map((field) => ({
       field,
-      current: orgRow?.[CONTENT_REVIEW_FIELDS[field]] ?? null,
+      current:
+        field === "links"
+          ? parseLinksJson(orgRow?.links_json as string | null)
+          : (orgRow?.[CONTENT_REVIEW_FIELDS[field]] ?? null),
       proposed: proposed[field],
     }));
 
@@ -377,7 +379,7 @@ export async function approveContentReview(
     const column = CONTENT_REVIEW_FIELDS[field];
     if (!column) continue;
     setClauses.push(`${column} = ?`);
-    values.push(value);
+    values.push(field === "links" ? serializeLinks(value as string[]) : value);
   }
 
   const now = nowIso();
@@ -404,7 +406,7 @@ export async function approveContentReview(
     submitterEmail: row.submitter_email,
     submitterName: [row.submitter_first_name, row.submitter_last_name].filter(Boolean).join(" ") || row.submitter_email,
     promotedLogoR2Key: row.logo_staging_r2_key,
-    previousLiveLogoR2Key: row.logo_staging_r2_key ? orgRow?.logo_r2_key ?? null : null,
+    previousLiveLogoR2Key: row.logo_staging_r2_key ? (orgRow?.logo_r2_key ?? null) : null,
   };
 }
 
@@ -440,7 +442,13 @@ export async function rejectContentReview(
   ]);
 
   return {
-    review: toReviewSummary({ ...row, status: "rejected", reviewer_user_id: admin.id, reviewer_note: reviewerNote, reviewed_at: now }),
+    review: toReviewSummary({
+      ...row,
+      status: "rejected",
+      reviewer_user_id: admin.id,
+      reviewer_note: reviewerNote,
+      reviewed_at: now,
+    }),
     organizationName: row.organization_name,
     submitterEmail: row.submitter_email,
     submitterName: [row.submitter_first_name, row.submitter_last_name].filter(Boolean).join(" ") || row.submitter_email,

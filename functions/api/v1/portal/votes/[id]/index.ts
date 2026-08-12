@@ -1,5 +1,5 @@
 /**
- * GET /api/v1/portal/votes/:id — vote detail for the caller (PRD §4.8):
+ * GET /api/v1/portal/votes/:id — vote detail for the caller:
  * full aggregate/breakdown once closed, candidate list for elections, and
  * whether the caller can/already did cast a ballot.
  */

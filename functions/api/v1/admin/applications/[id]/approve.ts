@@ -1,5 +1,5 @@
 /**
- * POST /api/v1/admin/applications/:id/approve — PRD §4.7. Runs the full
+ * POST /api/v1/admin/applications/:id/approve. Runs the full
  * onboarding orchestration (membership-onboarding.ts) and queues the three
  * applicant-facing emails: member-account-claim, application-approved-
  * welcome, and (only when a new organization contact was just designated)

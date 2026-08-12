@@ -63,11 +63,11 @@ export async function processIncomingEmail(message: any, env: Env): Promise<void
       const dedupeKey = `${rsvpRegistrationId}#${sourceMessageId}`;
 
       await env.DB.prepare(
-        `INSERT INTO calendar_rsvp_events 
-         (id, registration_id, ics_uid, attendee_email, response_status, provider, 
+        `INSERT INTO calendar_rsvp_events
+         (id, registration_id, ics_uid, attendee_email, response_status, provider,
           source_message_id, dedupe_key, raw_payload_json, received_at, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'))
-         ON CONFLICT(dedupe_key) DO UPDATE SET 
+         ON CONFLICT(dedupe_key) DO UPDATE SET
          response_status = excluded.response_status, raw_payload_json = excluded.raw_payload_json, updated_at = datetime('now')`,
       )
         .bind(
@@ -137,11 +137,11 @@ export async function processIncomingEmail(message: any, env: Env): Promise<void
         const dedupeKey = `${rsvpRegistrationId}#${sourceMessageId}`;
 
         await env.DB.prepare(
-          `INSERT INTO calendar_rsvp_events 
-           (id, registration_id, ics_uid, attendee_email, response_status, provider, 
+          `INSERT INTO calendar_rsvp_events
+           (id, registration_id, ics_uid, attendee_email, response_status, provider,
             source_message_id, dedupe_key, raw_payload_json, received_at, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'))
-           ON CONFLICT(dedupe_key) DO UPDATE SET 
+           ON CONFLICT(dedupe_key) DO UPDATE SET
            response_status = excluded.response_status, raw_payload_json = excluded.raw_payload_json, updated_at = datetime('now')`,
         )
           .bind(
@@ -170,7 +170,7 @@ export async function processIncomingEmail(message: any, env: Env): Promise<void
       return;
     }
 
-    // Unfold ICS continuation lines (RFC 5545 §3.1: CRLF followed by a single
+    // Unfold ICS continuation lines (RFC 5545: CRLF followed by a single
     // space or tab is a line fold) so property values aren't truncated.
     const unfoldedIcs = icsContent.replace(/\r?\n[ \t]/g, "");
     const icsLines = unfoldedIcs.split(/\r?\n/).map((line) => line.trim());
@@ -222,11 +222,11 @@ export async function processIncomingEmail(message: any, env: Env): Promise<void
     const dedupeKey = `${rsvpRegistrationId}#${icsUid}#${sourceMessageId}`;
 
     await env.DB.prepare(
-      `INSERT INTO calendar_rsvp_events 
-       (id, registration_id, ics_uid, attendee_email, response_status, provider, 
+      `INSERT INTO calendar_rsvp_events
+       (id, registration_id, ics_uid, attendee_email, response_status, provider,
         source_message_id, dedupe_key, received_at, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'))
-       ON CONFLICT(dedupe_key) DO UPDATE SET 
+       ON CONFLICT(dedupe_key) DO UPDATE SET
        response_status = excluded.response_status, updated_at = datetime('now')`,
     )
       .bind(

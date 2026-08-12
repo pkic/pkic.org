@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { normalizedEmailSchema } from "./api";
 
-/** Schemas for /api/v1/sponsorship/* (PRD §1.3). */
+/** Schemas for /api/v1/sponsorship/*. */
 
 export const sponsorshipInquirySchema = z.object({
   contactName: z.string().trim().min(1).max(160),

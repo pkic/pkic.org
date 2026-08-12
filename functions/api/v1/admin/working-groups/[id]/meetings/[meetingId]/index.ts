@@ -1,6 +1,6 @@
 /**
  * PATCH  /api/v1/admin/working-groups/:id/meetings/:meetingId — update a
- *        working group meeting series (name, active status) (PRD §4.12).
+ *        working group meeting series (name, active status).
  * DELETE /api/v1/admin/working-groups/:id/meetings/:meetingId — delete a
  *        working group meeting series, its ICS files, and any member
  *        preferences.

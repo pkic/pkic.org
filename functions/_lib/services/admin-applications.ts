@@ -1,5 +1,5 @@
 /**
- * Admin listing/detail queries for member_applications (PRD §4.2). Parallel
+ * Admin listing/detail queries for member_applications. Parallel
  * to admin-members.ts's split between the public directory query and a
  * dedicated, unfiltered admin query — the admin view needs every stage/
  * status (not just active ones) plus the staff-only communications/notes/
@@ -10,20 +10,21 @@ import { all, first } from "../db/queries";
 import { AppError } from "../errors";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
-import { stringifyJson } from "../utils/json";
 import {
   emailDomain,
+  getApplicationAnswers,
   getMemberApplicationById,
   INDIVIDUAL_MEMBERSHIP_CATEGORIES,
   listApplicationCommunications,
   listApplicationConcerns,
   listApplicationDocuments,
-  parseApplicationAnswers,
+  MEMBERSHIP_APPLICATION_FORM_KEY,
   type MemberApplicationRow,
 } from "./member-applications";
+import { getGlobalFormByKey } from "./forms";
 import { listEcDecisions } from "./ec-review";
 import { ADMIN_APPLICATIONS_SORT_COLUMNS } from "../../../assets/shared/schemas/admin-applications";
-import type { DatabaseLike } from "../types";
+import type { DatabaseLike, StatementLike } from "../types";
 
 export interface AdminApplicationSummary {
   id: string;
@@ -150,7 +151,7 @@ export async function getAdminApplicationDetail(
   return {
     ...toSummary(application),
     stageEnteredAt: application.stage_entered_at,
-    answers: parseApplicationAnswers(application.answers_json),
+    answers: await getApplicationAnswers(db, application.form_submission_id),
     events: eventRows.map((row) => ({
       fromStage: row.from_stage,
       toStage: row.to_stage,
@@ -168,7 +169,7 @@ export async function getAdminApplicationDetail(
 // ── Edit application fields ─────────────────────────────────────────────
 //
 // Corrects applicant-submitted data (e.g. a mistyped email domain) without
-// moving the application through the §4.2 stage machine — a distinct
+// moving the application through the stage machine — a distinct
 // operation from transitionApplicationStage. Route layer
 // (functions/api/v1/admin/applications/[id]/index.ts) writes the audit_log
 // entry; this function only touches member_applications and records a
@@ -208,9 +209,11 @@ export async function updateAdminApplication(
     throw new AppError(404, "APPLICATION_NOT_FOUND", "Application not found");
   }
 
+  const now = nowIso();
   const changedFields: string[] = [];
   const setClauses: string[] = [];
   const values: unknown[] = [];
+  const preStatements: StatementLike[] = [];
 
   if (input.applicantName !== undefined && input.applicantName !== application.applicant_name) {
     setClauses.push("applicant_name = ?");
@@ -263,19 +266,51 @@ export async function updateAdminApplication(
   }
 
   if (input.answers) {
-    const currentAnswers = parseApplicationAnswers(application.answers_json);
-    const mergedAnswers = { ...currentAnswers };
+    const currentAnswers = await getApplicationAnswers(db, application.form_submission_id);
+    const editedEntries: Array<[string, string | null]> = [];
     for (const key of EDITABLE_ANSWER_KEYS) {
       if (input.answers[key] === undefined) continue;
-      if (input.answers[key] !== (currentAnswers[key] ?? null)) {
+      const nextValue = input.answers[key] ?? null;
+      if (nextValue !== (currentAnswers[key] ?? null)) {
         changedFields.push(`answers.${key}`);
+        editedEntries.push([key, nextValue]);
       }
-      mergedAnswers[key] = input.answers[key];
     }
-    const nextAnswersJson = stringifyJson(mergedAnswers);
-    if (nextAnswersJson !== application.answers_json) {
-      setClauses.push("answers_json = ?");
-      values.push(nextAnswersJson);
+
+    if (editedEntries.length > 0) {
+      let formSubmissionId = application.form_submission_id;
+      if (!formSubmissionId) {
+        // No prior submission (e.g. an application created with no answers
+        // at all) — create one on the fly so the edit has somewhere to land,
+        // mirroring createMemberApplication's own write path.
+        const form = await getGlobalFormByKey(db, MEMBERSHIP_APPLICATION_FORM_KEY);
+        if (!form) {
+          throw new AppError(500, "APPLICATION_FORM_MISSING", "No active membership application form is configured");
+        }
+        formSubmissionId = uuid();
+        preStatements.push(
+          db
+            .prepare(
+              `INSERT INTO form_submissions (id, form_id, submitted_by_user_id, context_type, context_ref, status, submitted_at)
+               VALUES (?, ?, NULL, 'membership', ?, 'submitted', ?)`,
+            )
+            .bind(formSubmissionId, form.id, applicationId, now),
+        );
+        setClauses.push("form_submission_id = ?");
+        values.push(formSubmissionId);
+      }
+
+      for (const [key, value] of editedEntries) {
+        preStatements.push(
+          db
+            .prepare(
+              `INSERT INTO form_submission_answers (id, submission_id, field_key, data_json, created_at)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(submission_id, field_key) DO UPDATE SET data_json = excluded.data_json`,
+            )
+            .bind(uuid(), formSubmissionId, key, JSON.stringify(value), now),
+        );
+      }
     }
   }
 
@@ -285,12 +320,12 @@ export async function updateAdminApplication(
     return getAdminApplicationDetail(db, applicationId);
   }
 
-  const now = nowIso();
   setClauses.push("updated_at = ?");
   values.push(now);
   values.push(applicationId);
 
   await db.batch([
+    ...preStatements,
     db.prepare(`UPDATE member_applications SET ${setClauses.join(", ")} WHERE id = ?`).bind(...values),
     db
       .prepare(

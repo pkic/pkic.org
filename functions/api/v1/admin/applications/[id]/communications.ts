@@ -1,5 +1,5 @@
 /**
- * POST /api/v1/admin/applications/:id/communications — PRD §4.2.
+ * POST /api/v1/admin/applications/:id/communications.
  */
 import { OpenAPIRoute } from "chanfana";
 import { parseJsonBody } from "../../../../../_lib/validation";

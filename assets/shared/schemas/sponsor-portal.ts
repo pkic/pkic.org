@@ -1,6 +1,6 @@
 /**
  * Sponsor portal — magic-link auth + attendee data access for event
- * sponsors at a qualifying tier (PRD §4.13 "Sponsor Portal — Attendee Data
+ * sponsors at a qualifying tier ("Sponsor Portal — Attendee Data
  * Access"). Mirrors member-auth.ts's shape; kept separate because the
  * identity here is a sponsorships.id, not a users.id (see
  * _lib/auth/sponsor-portal.ts's header comment).

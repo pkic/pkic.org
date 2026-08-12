@@ -1,5 +1,5 @@
 /**
- * Scheduled membership-workflow jobs (PRD §4.3, §4.5, §4.6). Two run on
+ * Scheduled membership-workflow jobs. Two run on
  * dedicated Mon/Wed cron triggers (see functions/router.ts); the rest
  * (on-hold reminders/auto-close, EC-window auto-approve, Google Groups
  * queue processing) are folded into the existing 15-minute due-work cron
@@ -33,7 +33,7 @@ function daysSince(iso: string): number {
   return (Date.now() - new Date(iso).getTime()) / 86_400_000;
 }
 
-// ── Consultation batch (Mon/Wed 07:15 UTC, PRD §4.5) ─────────────────────
+// ── Consultation batch (Mon/Wed 07:15 UTC) ─────────────────────
 
 export async function runConsultationBatch(db: DatabaseLike, env: Env): Promise<{ applicationsNotified: number }> {
   const settings = await getMembershipSettings(db);
@@ -64,7 +64,7 @@ export async function runConsultationBatch(db: DatabaseLike, env: Env): Promise<
   return { applicationsNotified: applications.length };
 }
 
-// ── EC review batch (Mon/Wed 08:15 UTC, PRD §4.6) ────────────────────────
+// ── EC review batch (Mon/Wed 08:15 UTC) ────────────────────────
 // Collects applications that have been in_consultation for 7+ days
 // (configurable), transitions them to ec_review, and notifies the EC.
 
@@ -185,7 +185,7 @@ export async function runOnHoldReminders(
   return { remindersSent, autoClosed };
 }
 
-// ── EC window auto-approve (folded into the 15-min due-work cron, §4.6) ──
+// ── EC window auto-approve (folded into the 15-min due-work cron) ──
 // "If the EC window expires with no portal action from any EC member, the
 // system auto-approves and logs the reason as auto_approved_no_ec_objection."
 // A decline from any EC member halts this — the application stays in
@@ -249,7 +249,7 @@ export async function runEcWindowAutoApprove(
   return { autoApproved, heldForDecline };
 }
 
-// ── Google Groups queue processing + mailing-list-enrolled (§4.7 item 7) ─
+// ── Google Groups queue processing + mailing-list-enrolled ─
 
 export async function runGoogleGroupsSyncPass(
   db: DatabaseLike,
@@ -277,7 +277,7 @@ export async function runGoogleGroupsSyncPass(
     });
     await processOutboxByIdBackground(db, env, outboxId);
 
-    // §4.12 "Member joins a WG" trigger: attach that WG's active ICS
+    // "Member joins a WG" trigger: attach that WG's active ICS
     // variants to a wg-calendar-invite email. groupEmails may include
     // non-WG lists (e.g. pkic@/consultation@) alongside a WG's mailing
     // list — resolveWgJoinCalendarInviteByMailingListEmail returns null

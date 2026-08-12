@@ -268,10 +268,13 @@ describe("GET /api/v1/members/:id", () => {
       organizationName: "Content Org",
       status: "active",
     });
-    await env.DB.prepare(
-      `UPDATE organizations SET content_markdown = ?, blog_url = ?, social_linkedin = ? WHERE id = ?`,
-    )
-      .bind("## About us", "https://content-org.test/blog", "https://linkedin.com/company/content-org", organizationId)
+    await env.DB.prepare(`UPDATE organizations SET content_markdown = ?, blog_url = ?, links_json = ? WHERE id = ?`)
+      .bind(
+        "## About us",
+        "https://content-org.test/blog",
+        JSON.stringify(["https://linkedin.com/company/content-org"]),
+        organizationId,
+      )
       .run();
     await env.DB.prepare(`UPDATE users SET job_title = ?, biography = ? WHERE id = ?`)
       .bind("CTO", "Leads engineering.", shownUserId)
@@ -297,12 +300,12 @@ describe("GET /api/v1/members/:id", () => {
     const body = (await response.json()) as {
       content: string | null;
       blogUrl: string | null;
-      social: { linkedin: string | null };
+      links: string[];
       representatives: Array<{ name: string; jobTitle: string | null; bio: string | null }>;
     };
     expect(body.content).toBe("## About us");
     expect(body.blogUrl).toBe("https://content-org.test/blog");
-    expect(body.social.linkedin).toBe("https://linkedin.com/company/content-org");
+    expect(body.links).toEqual(["https://linkedin.com/company/content-org"]);
     expect(body.representatives).toHaveLength(1);
     expect(body.representatives[0]).toMatchObject({ name: "Rep Person", jobTitle: "CTO", bio: "Leads engineering." });
   });

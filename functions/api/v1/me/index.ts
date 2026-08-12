@@ -1,5 +1,5 @@
 /**
- * GET/PATCH /api/v1/me — my profile (PRD §4.10).
+ * GET/PATCH /api/v1/me — my profile.
  */
 import { OpenAPIRoute } from "chanfana";
 import { parseJsonBody } from "../../../_lib/validation";

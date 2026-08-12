@@ -1,5 +1,5 @@
 /**
- * POST /api/v1/auth/member/request-link — PRD §4.9/§4.10.
+ * POST /api/v1/auth/member/request-link.
  * Mirrors admin/auth/request-link.ts exactly, targeting active members
  * instead of staff (see functions/_lib/auth/member.ts).
  */

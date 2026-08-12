@@ -1,15 +1,15 @@
 /**
- * Votes — ballot casting, results viewing, proposal submission/endorsement
- * (PRD §4.8, §11 UI-4). Two tabs: "Votes" (every vote visible to the
+ * Votes — ballot casting, results viewing, proposal submission/endorsement.
+ * Two tabs: "Votes" (every vote visible to the
  * caller, per `listVisibleVotesForMember` — public + every forum vote +
  * every WG vote for a WG the member belongs to) and "Proposals" (the
- * CA/Browser-Forum-style endorsement path, §4.8 Path B). No shell or
+ * CA/Browser-Forum-style endorsement path). No shell or
  * backend changes needed — both endpoint groups were already fully live
- * and tested (Phase 4B), so like UI-3 this is a pure frontend build.
+ * and tested, this is a pure frontend build.
  *
  * H-category members can see everything here but the backend rejects
- * every ballot/proposal/endorsement path for them with no exceptions
- * (§4.8) — this component mirrors that client-side only to avoid a
+ * every ballot/proposal/endorsement path for them with no exceptions,
+ * this component mirrors that client-side only to avoid a
  * pointless round trip, never as the actual gate.
  */
 import { useCallback, useEffect, useState } from "preact/hooks";

@@ -1,5 +1,5 @@
 /**
- * GET /api/v1/auth/passkeys/authenticate/begin — PRD §3.4.
+ * GET /api/v1/auth/passkeys/authenticate/begin.
  *
  * No authentication required — this is the usernameless discovery flow the
  * login screen calls before the user has a session.

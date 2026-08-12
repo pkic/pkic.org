@@ -1,7 +1,7 @@
 /**
  * permission-grants.test.ts
  *
- * PRD §2.3 `permission_grants` — Phase 2 (§2, §10.4's tests/permission-grants.test.ts).
+ * `permission_grants` — (tests/permission-grants.test.ts).
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
@@ -51,7 +51,7 @@ async function insertEvent(slug: string): Promise<string> {
   return id;
 }
 
-describe("permission_grants (Phase 2 access grants)", () => {
+describe("permission_grants (Access grants)", () => {
   let adminToken: string;
   let adminId: string;
   let eventAId: string;
@@ -167,7 +167,7 @@ describe("permission_grants (Phase 2 access grants)", () => {
 
   it("a WG chair grant scoped to one working group does not grant write access to another", () => {
     // No working-group-scoped admin endpoint exists yet (working group
-    // self-service/management is Phase 4A, not yet built), so this
+    // self-service/management not yet built), so this
     // exercises the same hasPermission() function real endpoints call,
     // directly — see functions/_lib/auth/permissions.ts.
     const actor: AuthAdmin = {

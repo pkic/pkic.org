@@ -1,6 +1,6 @@
 /**
  * POST /api/v1/admin/mailing-lists/sync — process pending Google Group sync
- * queue entries on demand (§4.14). The queue is normally drained by the
+ * queue entries on demand. The queue is normally drained by the
  * 15-minute due-work cron (membership-scheduled-jobs.ts's
  * runGoogleGroupsSyncPass); this gives staff an on-demand "Sync now" button
  * instead of waiting on the next cron tick.

@@ -1,5 +1,5 @@
 /**
- * GET /api/v1/sponsor-portal/events/:eventId/attendees — PRD §4.13 "Sponsor
+ * GET /api/v1/sponsor-portal/events/:eventId/attendees — "Sponsor
  * Portal — Attendee Data Access". Magic-link session scoped to a single
  * sponsorships.id; eligibility is re-checked live on every request (see
  * _lib/auth/sponsor-portal.ts's requireSponsorPortalFromRequest — it

@@ -1,8 +1,8 @@
 /**
  * DELETE /api/v1/admin/access-grants/:id — revoke a permission grant
  *
- * Sets `revoked_at` (soft delete) and writes an audit_log entry, per PRD
- * §10.4's tests/permission-grants.test.ts.
+ * Sets `revoked_at` (soft delete) and writes an audit_log entry,
+ * tests/permission-grants.test.ts.
  */
 import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../_lib/http";

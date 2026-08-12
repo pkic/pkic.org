@@ -1,8 +1,8 @@
 /**
  * Account Settings — email (read-only), passkeys, notification preferences
- * (PRD §7, §11 UI-1). The passkey enrollment/list/remove UI mirrors
+ * . The passkey enrollment/list/remove UI mirrors
  * admin/sections/AccountSettings.tsx's startRegistration() pattern exactly;
- * it now works for members too since PRD §11 UI-1 generalized
+ * it now works for members too since generalized
  * /api/v1/auth/passkeys/* to accept either an admin or a member session
  * (see functions/_lib/auth/actor.ts).
  */
@@ -16,7 +16,7 @@ import { profile } from "../state";
 import { fmt, toast } from "../ui";
 import type { NotificationPreferences, Passkey } from "../types";
 
-// getJson uses GET; register/begin is a POST per §3.4, so call fetch directly
+// getJson uses GET; register/begin is a POST, so call fetch directly
 // here to avoid a GET/POST mismatch with the shared client helper.
 async function beginRegistration(): Promise<{ options: unknown; challengeToken: string }> {
   const res = await fetch("/api/v1/auth/passkeys/register/begin", { method: "POST", credentials: "same-origin" });

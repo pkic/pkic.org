@@ -1,25 +1,22 @@
--- Migration 0035: Phase 2 — Fine-Grained Access Control (PRD §2)
+-- Migration 0035: Fine-Grained Access Control
 --
--- Adds the roles/user_roles/permission_grants/refresh_tokens model from
--- §2.3, seeds the built-in roles from §2.2, and executes the §0.2 and §0.4
+-- Adds the roles/user_roles/permission_grants/refresh_tokens model from,
+-- seeds the built-in roles from, and executes the
 -- backfills (event_permissions → user_roles, users.role='admin' →
--- user_roles), then drops event_permissions per §0.2's resolution.
+-- user_roles), then drops event_permissions resolution.
 --
--- Two deviations from the PRD's literal schema, both documented in full in
--- "Phase 2 — Implementation Status" below the Phase 2 section of this
--- document:
+-- Two deviations from the original literal schema:
 --
--- 1. `role_permissions` is a new table, not present anywhere in §2.3. §2.2
+-- 1. `role_permissions` is a new table, not present anywhere in
 --    describes each built-in role's default permission bundle in prose only
 --    and says bundles must be admin-customizable ("their permission bundles
 --    can be customized by an admin as the portal evolves") — that requires
 --    somewhere to actually store and edit the bundle. This is the same
---    class of gap as Phase 0 findings #16/#17 (a workflow described in
---    prose with no backing table).
+--    class of gap.
 --
 -- 2. `user_roles.user_id` is nullable here (with a parallel `user_email`
---    column), not NOT NULL as shown in §2.3's SQL sketch. §0.2's own
---    resolution text requires the opposite of what §2.3's SQL says: it
+--    column), not NOT NULL as shown in SQL sketch.
+--    Resolution text requires the opposite of what SQL says: it
 --    requires the new model to "preserve this pre-provisioning behavior,
 --    since event organizers/PC members are often granted access before
 --    their first login" — exactly the nullable-user_id + user_email pattern
@@ -27,8 +24,7 @@
 --    impossible, so the nullable form (matching event_permissions, which
 --    this migration backfills from) is what's implemented.
 --
--- `permission_grants` and `refresh_tokens` are created exactly as specified
--- in §2.3.
+-- `permission_grants` and `refresh_tokens` are created exactly as specified.
 
 CREATE TABLE roles (
   id             TEXT    NOT NULL PRIMARY KEY,
@@ -98,17 +94,17 @@ CREATE TABLE refresh_tokens (
   FOREIGN KEY(user_id) REFERENCES users(id)
 );
 
--- ── Built-in system roles (§2.2) ────────────────────────────────────────────
+-- ── Built-in system roles ────────────────────────────────────────────
 --
 -- Fixed, human-readable primary keys (not randomblob) so this migration can
 -- reference them across statements — plain SQL has no scripting/variables.
 --
--- Two roles beyond §2.2's table are seeded here: `event_moderator` and
+-- Two roles beyond table are seeded here: `event_moderator` and
 -- `event_volunteer`. They exist solely so the event_permissions backfill
 -- below is lossless — the old `moderator` and `volunteer` event_permissions
--- values have no equivalent in §2.2's built-in role list, and silently
+-- values have no equivalent in built-in role list, and silently
 -- dropping them during migration would be a data-loss regression the same
--- way Phase 0 finding #13 (sponsors/sponsor_events) called out. `moderator`
+-- way (sponsors/sponsor_events) called out. `moderator`
 -- functionally granted proposal review (not finalize) under the old
 -- REVIEW_PERMISSIONS set in proposal-access.ts; `volunteer` granted no
 -- functional capability in the old code at all, so it is preserved as a
@@ -129,12 +125,12 @@ INSERT INTO roles (id, name, description, is_system_role, created_at, updated_at
 --
 -- `admin` gets every permission string in the system, including the
 -- `admin:read` / `admin:write` fallback pair used for admin routes that
--- don't yet belong to one of §2.1's named modules (stats, portal-managed
--- forms config, bulk email campaigns) — see Phase 2 Implementation Status.
+-- don't yet belong to one of named modules (stats, portal-managed
+-- forms config, bulk email campaigns).
 --
--- `event_organizer`'s bundle extends beyond §2.2's literal
+-- `event_organizer`'s bundle extends beyond literal
 -- events:write/events:manage to also include proposals:read,
--- proposals:manage, agenda:read, agenda:write — justified by P7's own
+-- proposals:manage, agenda:read, agenda:write — justified by
 -- persona description ("manage capacity, send communications, manage
 -- registrations, and view all attendee and proposal data for that event"),
 -- and needed so an organizer's event access isn't missing proposal/agenda
@@ -202,14 +198,14 @@ INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES
   (lower(hex(randomblob(16))), 'role-event_moderator', 'proposals:score', datetime('now')),
   (lower(hex(randomblob(16))), 'role-event_moderator', 'agenda:read', datetime('now'));
 
--- ── Backfill (§0.4): users.role='admin' → user_roles ────────────────────────
+-- ── Backfill: users.role='admin' → user_roles ────────────────────────
 
 INSERT INTO user_roles (id, user_id, user_email, role_id, context_type, context_id, granted_by_user_id, expires_at, revoked_at, created_at)
 SELECT lower(hex(randomblob(16))), u.id, NULL, 'role-admin', NULL, NULL, NULL, NULL, NULL, datetime('now')
 FROM users u
 WHERE u.role = 'admin';
 
--- ── Backfill (§0.2): event_permissions → user_roles ─────────────────────────
+-- ── Backfill: event_permissions → user_roles ─────────────────────────
 
 INSERT INTO user_roles (id, user_id, user_email, role_id, context_type, context_id, granted_by_user_id, expires_at, revoked_at, created_at)
 SELECT

@@ -1,6 +1,6 @@
 /**
- * GET /api/v1/admin/votes/:id/ballots — full ballot breakdown, staff only
- * (PRD §4.8/§7). Separate from the "results are hidden until closes_at"
+ * GET /api/v1/admin/votes/:id/ballots — full ballot breakdown, staff only.
+ * Separate from the "results are hidden until closes_at"
  * rule, which governs the member/public result endpoints — this is a
  * staff audit surface, viewable at any time.
  */

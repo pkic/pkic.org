@@ -1,5 +1,5 @@
 /**
- * POST /api/v1/admin/organizations/content-reviews/:id/reject — PRD §4.11.
+ * POST /api/v1/admin/organizations/content-reviews/:id/reject.
  * Leaves the live organization row untouched; emails the submitter
  * (org-content-rejected) with the reviewer's reason.
  */
@@ -39,13 +39,25 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     recipientEmail: result.submitterEmail,
     messageType: "transactional",
     subject: "Your organization profile update was not approved",
-    data: { contactName: result.submitterName, organizationName: result.organizationName, reviewerNote: body.reviewerNote },
+    data: {
+      contactName: result.submitterName,
+      organizationName: result.organizationName,
+      reviewerNote: body.reviewerNote,
+    },
   });
   c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, outboxId));
 
-  await writeAuditLog(db, "admin", admin.id, "organization_content_review_rejected", "organization_content_review", id, {
-    reviewerNote: body.reviewerNote,
-  });
+  await writeAuditLog(
+    db,
+    "admin",
+    admin.id,
+    "organization_content_review_rejected",
+    "organization_content_review",
+    id,
+    {
+      reviewerNote: body.reviewerNote,
+    },
+  );
 
   return json({ review: result.review });
 }

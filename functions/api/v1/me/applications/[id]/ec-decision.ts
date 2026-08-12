@@ -1,5 +1,5 @@
 /**
- * POST /api/v1/me/applications/:id/ec-decision — PRD §4.6. The real EC
+ * POST /api/v1/me/applications/:id/ec-decision. The real EC
  * member portal voting path (as opposed to the staff-admin override at
  * POST /api/v1/admin/applications/:id/ec-decisions). Requires a member
  * session and `is_ec_member`.

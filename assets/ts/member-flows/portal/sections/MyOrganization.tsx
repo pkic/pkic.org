@@ -1,7 +1,7 @@
 /**
  * My Organization — content editor + moderation status + logo upload +
- * voting delegate + secondary-contact nomination + sponsorship view (PRD
- * §4.11, §4.13, §11 UI-2). GET /api/v1/me/organization is available to any
+ * voting delegate + secondary-contact nomination + sponsorship view.
+ * GET /api/v1/me/organization is available to any
  * org-tied member (read-only for non-contacts); submitting a content
  * change or logo is restricted to the primary/secondary contact
  * (org.isOrgContact), secondary-contact nomination to the primary contact
@@ -16,6 +16,7 @@ import { ErrorAlert } from "../../../components/ErrorAlert";
 import { profile as profileSignal } from "../state";
 import { toast, fmt } from "../ui";
 import type { MyOrganizationProfile, MyOrganizationReview, MyOrganizationSponsorship } from "../types";
+import { linksToText, textToLinks } from "../../../shared/links-text";
 
 const FIELD_LABELS: Record<string, string> = {
   slogan: "Slogan",
@@ -27,26 +28,10 @@ const FIELD_LABELS: Record<string, string> = {
   pressUrl: "Press URL",
   pressFeedUrl: "Press feed URL",
   careersUrl: "Careers URL",
-  socialX: "X / Twitter",
-  socialLinkedin: "LinkedIn",
-  socialFacebook: "Facebook",
-  socialInstagram: "Instagram",
-  socialYoutube: "YouTube",
+  links: "Links",
 };
 
-const URL_FIELD_ORDER = [
-  "website",
-  "blogUrl",
-  "blogFeedUrl",
-  "pressUrl",
-  "pressFeedUrl",
-  "careersUrl",
-  "socialX",
-  "socialLinkedin",
-  "socialFacebook",
-  "socialInstagram",
-  "socialYoutube",
-] as const;
+const URL_FIELD_ORDER = ["website", "blogUrl", "blogFeedUrl", "pressUrl", "pressFeedUrl", "careersUrl"] as const;
 
 function reviewStatusBadgeClass(status: string): string {
   switch (status) {
@@ -192,7 +177,13 @@ function PendingReviewBanner({
           {fields.map(([field, value]) => (
             <li key={field}>
               <strong>{FIELD_LABELS[field] ?? field}:</strong>{" "}
-              {value === null || value === "" ? <em>(cleared)</em> : String(value)}
+              {value === null || value === "" || (Array.isArray(value) && value.length === 0) ? (
+                <em>(cleared)</em>
+              ) : Array.isArray(value) ? (
+                value.join(", ")
+              ) : (
+                String(value)
+              )}
             </li>
           ))}
         </ul>
@@ -218,19 +209,17 @@ function ContentEditForm({ org, reload }: { org: MyOrganizationProfile; reload: 
       pressUrl: org.pressUrl ?? "",
       pressFeedUrl: org.pressFeedUrl ?? "",
       careersUrl: org.careersUrl ?? "",
-      socialX: org.socialX ?? "",
-      socialLinkedin: org.socialLinkedin ?? "",
-      socialFacebook: org.socialFacebook ?? "",
-      socialInstagram: org.socialInstagram ?? "",
-      socialYoutube: org.socialYoutube ?? "",
     }),
     [org],
   );
+  const initialLinksText = useMemo(() => linksToText(org.links), [org]);
   const [form, setForm] = useState(initial);
+  const [linksText, setLinksText] = useState(initialLinksText);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => setForm(initial), [initial]);
+  useEffect(() => setLinksText(initialLinksText), [initialLinksText]);
 
   function setField(key: EditableField, value: string): void {
     setForm((f) => ({ ...f, [key]: value }));
@@ -240,11 +229,14 @@ function ContentEditForm({ org, reload }: { org: MyOrganizationProfile; reload: 
     e.preventDefault();
     setError(null);
 
-    const changes: Record<string, string | null> = {};
+    const changes: Record<string, string | string[] | null> = {};
     for (const key of Object.keys(initial) as EditableField[]) {
       const next = form[key].trim();
       const prev = initial[key].trim();
       if (next !== prev) changes[key] = next === "" ? null : next;
+    }
+    if (linksText.trim() !== initialLinksText.trim()) {
+      changes.links = textToLinks(linksText);
     }
     if (Object.keys(changes).length === 0) {
       setError("No changes to submit.");
@@ -311,6 +303,17 @@ function ContentEditForm({ org, reload }: { org: MyOrganizationProfile; reload: 
             />
           </div>
         ))}
+        <div class="col-12">
+          <label class="form-label fw-semibold small">Links (X, LinkedIn, Facebook, etc — one URL per line)</label>
+          <textarea
+            class="form-control"
+            rows={4}
+            placeholder="https://…"
+            value={linksText}
+            onInput={(e) => setLinksText((e.target as HTMLTextAreaElement).value)}
+            disabled={saving}
+          />
+        </div>
       </div>
 
       {error && <ErrorAlert error={error} />}

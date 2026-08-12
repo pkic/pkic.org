@@ -1,5 +1,5 @@
 /**
- * POST /api/v1/admin/organizations/content-reviews/:id/approve — PRD §4.11.
+ * POST /api/v1/admin/organizations/content-reviews/:id/approve.
  * Applies the proposed changes to the live organization row, promotes any
  * staged logo, and emails the submitter (org-content-approved).
  */
@@ -38,9 +38,17 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   });
   c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, outboxId));
 
-  await writeAuditLog(db, "admin", admin.id, "organization_content_review_approved", "organization", result.organizationId, {
-    reviewId: id,
-  });
+  await writeAuditLog(
+    db,
+    "admin",
+    admin.id,
+    "organization_content_review_approved",
+    "organization",
+    result.organizationId,
+    {
+      reviewId: id,
+    },
+  );
 
   return json({ review: result.review });
 }

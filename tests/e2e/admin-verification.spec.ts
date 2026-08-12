@@ -1,13 +1,13 @@
 /**
- * E2E coverage for §11 UI-8: a real-browser verification pass on §11.1(F)'s
+ * E2E coverage for: a real-browser verification pass on
  * "built but never browser-verified" admin screens — these all shipped with
  * API/test-level verification only (per their own phase status notes), and
  * this phase's job is only to confirm they actually work end-to-end in a
  * real browser, not to build anything new.
  *
- * Screens covered, one test each: Organizations → Content Review (Phase
- * 4C), Mailing Lists (Phase 4C), Sponsorships + Events → Settings → Sponsor
- * Tiers (Phase 4E), Admin → Votes + → Proposals (Phase 4B), Working Groups
+ * Screens covered, one test each: Organizations → Content Review,
+ * Mailing Lists, Sponsorships + Events → Settings → Sponsor
+ * Tiers, Admin → Votes + → Proposals, Working Groups
  * CRUD (2026-07-27 follow-up), and the Users multi-email/merge panel
  * (2026-07-27 follow-up).
  *
@@ -184,7 +184,7 @@ async function memberLogin(page: Page, email: string): Promise<void> {
   await expect(page.getByRole("heading", { name: "My Profile" })).toBeVisible({ timeout: 15_000 });
 }
 
-test.describe("§11 UI-8 — admin browser-verification pass", () => {
+test.describe("Admin browser-verification pass", () => {
   test.beforeAll(async ({ browser }) => {
     // `browser.newContext()` inside a test file inherits this describe's
     // `test.use({ storageState: ADMIN_AUTH_FILE })` below (applied even

@@ -1,6 +1,6 @@
 /**
  * GET /api/v1/votes/:slug — public vote result at its configured detail
- * level (PRD §4.8). 404s for a vote that exists but isn't public, same as
+ * level. 404s for a vote that exists but isn't public, same as
  * "not found" — never leaks existence of a private vote.
  */
 import { OpenAPIRoute } from "chanfana";

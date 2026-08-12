@@ -1,5 +1,5 @@
 /**
- * GET /api/v1/me/applications/:id — my application detail (PRD §4.10, §11 UI-1).
+ * GET /api/v1/me/applications/:id — my application detail.
  */
 import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../../_lib/http";

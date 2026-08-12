@@ -1,6 +1,6 @@
 /**
  * GET /api/v1/admin/vote-proposals — list all proposals, filterable by
- * status (PRD §4.8/§7).
+ * status.
  */
 import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../_lib/http";

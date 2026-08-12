@@ -1,7 +1,7 @@
 -- Migration 0039: Secondary email addresses + user merge support
 --
--- Follow-up to a real, visible problem from the YAML->D1 migration (§6 Step
--- 2/3b): Google Groups roster CSVs used different email addresses than
+-- Follow-up to a real, visible problem from the YAML->D1 migration:
+-- Google Groups roster CSVs used different email addresses than
 -- people's canonical one, so a meaningful number of WG-roster-only emails
 -- got their own bare `users` rows created rather than being recognized as
 -- the same person -- real staff/members show up more than once in the

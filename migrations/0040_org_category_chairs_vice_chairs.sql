@@ -1,10 +1,10 @@
 -- Migration 0040: Organization-level membership category + WG/forum vice chairs
 --
 -- Resolves three gaps found during hands-on testing (issues-to-resolve.md)
--- and reconciled against the PRD:
+-- and reconciled against the:
 --
 -- 1. Membership category was only ever a per-representative attribute
---    (`members.member_type`, PRD §0.1/migration 0033) — nothing enforced
+--    (`members.member_type`, migration 0033) — nothing enforced
 --    that every representative of the same organization shared a category,
 --    even though category is fundamentally an organization-level fact.
 --    `organizations.membership_category` is added here as the new source

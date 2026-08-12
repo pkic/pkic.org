@@ -1,38 +1,36 @@
--- Migration 0034: Phase 1 — RESTful API & Portal-Managed Forms
+-- Migration 0034: RESTful API & Portal-Managed Forms
 --
--- PRD §1.2 (Membership Application Endpoint), §1.3 (Sponsor Interest
--- Endpoint), and §1.5 (public members / working-groups endpoints) all need
--- tables that don't exist yet. Per this document's no-CHECK-constraint
--- convention (§2.3), status/stage/type columns below carry `-- allowed:`
+-- (Membership Application Endpoint), (Sponsor Interest
+-- Endpoint), and (public members / working-groups endpoints) all need
+-- tables that don't exist yet. Per the no-CHECK-constraint
+-- convention, status/stage/type columns below carry `-- allowed:`
 -- comments only; validation lives in the application layer (Zod).
 --
--- Three groups of tables, each pulled forward from a later-numbered PRD
--- section because a Phase 1 endpoint needs them now:
+-- Three groups of tables, each pulled forward from an endpoint that needs them now:
 --
 -- 1. member_applications / member_application_events / application_documents
---    — defined in §2.3 (Phase 2 text) and §2.3's application_documents, but
---    required immediately by §1.2's POST /api/v1/members/applications.
+--    — defined in application_documents, but
+--    required immediately by POST /api/v1/members/applications.
 --
--- 2. sponsorships / sponsorship_events — defined in §4.13 (Phase 4E), but
---    required immediately by §1.3's POST /api/v1/sponsorship/inquiries and
+-- 2. sponsorships / sponsorship_events —
+--    required immediately by POST /api/v1/sponsorship/inquiries and
 --    /checkout. Only the columns needed to record an inquiry/checkout are
---    exercised in Phase 1; the full sales-pipeline admin UI is Phase 4E.
---    Two columns beyond the §4.13 schema are added here because Phase 1
+--    exercised in the beginning; the full sales-pipeline admin UI is later.
+--    Two columns beyond the schema are added here because of initial changes
 --    inquiries commonly come from people with no existing member/org
---    record: `contact_name` / `contact_email` (submitter identity — §4.13's
+--    record: `contact_name` / `contact_email` (submitter identity —
 --    schema had no way to reach the submitter at all, a gap in the same
---    spirit as the Phase 0 findings in §9) and `checkout_session_id`
+--    spirit as the findings in code review) and `checkout_session_id`
 --    (idempotency key for the Stripe webhook, mirroring `donations.
 --    checkout_session_id`).
 --
--- 3. working_groups / working_group_members — defined in §2.3 (Phase 2
---    text), but required immediately by §1.5's GET /api/v1/working-groups
+-- 3. working_groups / working_group_members — required immediately by GET /api/v1/working-groups
 --    (list) and GET /api/v1/working-groups/:id (detail + member list).
 --    Seeded here with the six working groups already published under
---    content/wg/ so the public endpoints return real data before Phase 2
---    or Phase 4A touch this table again (e.g. adding chair assignment UI).
+--    content/wg/ so the public endpoints return real data before
+--    or touch this table again (e.g. adding chair assignment UI).
 
--- ── Membership applications (§1.2, §2.3, §4.2) ──────────────────────────────
+-- ── Membership applications ──────────────────────────────
 
 CREATE TABLE member_applications (
   id                   TEXT NOT NULL PRIMARY KEY,
@@ -96,7 +94,7 @@ CREATE TABLE application_documents (
 
 CREATE INDEX idx_application_documents_app ON application_documents(application_id);
 
--- ── Sponsorships (§1.3, §4.13) ──────────────────────────────────────────────
+-- ── Sponsorships ──────────────────────────────────────────────
 
 CREATE TABLE sponsorships (
   id                     TEXT NOT NULL PRIMARY KEY,
@@ -149,7 +147,7 @@ CREATE TABLE sponsorship_events (
 
 CREATE INDEX idx_sponsorship_events_sponsorship ON sponsorship_events(sponsorship_id, created_at);
 
--- ── Working groups (§1.5, §2.3) ─────────────────────────────────────────────
+-- ── Working groups ─────────────────────────────────────────────
 
 CREATE TABLE working_groups (
   id                       TEXT NOT NULL PRIMARY KEY,
@@ -200,9 +198,9 @@ VALUES
    'Developing a neutral, open methodology for defining Cryptographic Bill of Materials (CBOM) profiles that map onto industry BOM standards such as SPDX and CycloneDX.',
    NULL, NULL, 0, 1, datetime('now'), datetime('now'));
 
--- ── Portal-managed membership application form (§1.4) ───────────────────────
+-- ── Portal-managed membership application form ───────────────────────
 -- forms.purpose already allows 'application' (migration 0000) — no rebuild
--- needed per §0.5. This seeds the default field set mirroring the existing
+-- needed. This seeds the default field set mirroring the existing
 -- layouts/shortcodes/joinform.html so GET /api/v1/members/applications/form
 -- returns a real, staff-editable form from day one.
 
@@ -233,7 +231,7 @@ VALUES
    '[{"value":"pqc","label":"Post-Quantum Cryptography Working Group"},{"value":"cm","label":"Cryptographic Module Working Group"},{"value":"pkimm","label":"PKI Maturity Model Working Group"},{"value":"tcwg","label":"Training and Certification Working Group"},{"value":"ca","label":"CA Working Group"},{"value":"cbom","label":"CBOM Profiles Working Group"}]',
    '{"uiWidget":"checkboxes"}', 70, datetime('now'));
 
--- ── Email templates (§1.2, §1.3, §4.4) ──────────────────────────────────────
+-- ── Email templates ──────────────────────────────────────
 
 INSERT OR IGNORE INTO email_template_versions
   (id, template_key, version, subject_template, body, content_type, r2_object_key, checksum_sha256, status, created_by_user_id, created_at, message_type)

@@ -91,7 +91,7 @@ top after importing:
 npm run migrate:local
 ```
 
-As of Phase 0 (PRD §0.1), this step is currently required even for a
+This step is currently required even for a
 same-day backup: `migrations/0033_rebuild_members_multi_representative.sql`
 rebuilds the `members` table and hasn't been applied to production yet, so
 every existing backup in `backups/d1/` predates it.

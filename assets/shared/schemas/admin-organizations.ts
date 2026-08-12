@@ -1,6 +1,6 @@
 /**
  * Admin Organizations management (post-approval org profile + roster
- * management, folding the PRD §6 Interim Admin Tool's org-tied `members`
+ * management, folding the Interim Admin Tool's org-tied `members`
  * rows into a per-organization view). Backs `GET/PATCH /api/v1/admin/
  * organizations[/:id]`, its logo endpoint, `POST .../:id/members`
  * (add a representative to an existing org), and `PATCH/DELETE
@@ -10,8 +10,9 @@
  * admin-members.ts rather than redefining it.
  */
 import { z } from "zod";
-import { normalizedEmailSchema } from "./api";
+import { normalizedEmailSchema, linksSchema } from "./api";
 import { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "./admin-members";
+import { paginationQuerySchema, paginatedResponseSchema, sortColumnSchema } from "./pagination";
 
 function trimmedString(min: number, max: number): z.ZodString {
   return z.string().trim().min(min).max(max);
@@ -77,11 +78,7 @@ export const adminOrganizationDetailSchema = adminOrganizationSummarySchema.exte
   pressUrl: z.string().nullable(),
   pressFeedUrl: z.string().nullable(),
   careersUrl: z.string().nullable(),
-  socialX: z.string().nullable(),
-  socialLinkedin: z.string().nullable(),
-  socialFacebook: z.string().nullable(),
-  socialInstagram: z.string().nullable(),
-  socialYoutube: z.string().nullable(),
+  links: z.array(z.string()),
   primaryContactUserId: z.uuid().nullable(),
   secondaryContactUserId: z.uuid().nullable(),
   representatives: z.array(adminOrganizationRepresentativeSchema),
@@ -90,25 +87,9 @@ export const adminOrganizationDetailSchema = adminOrganizationSummarySchema.exte
 /** Allowlisted sort columns for GET /api/v1/admin/organizations — see listAdminOrganizations. */
 export const ADMIN_ORGANIZATIONS_SORT_COLUMNS = ["name", "membership_category", "created_at", "member_count"] as const;
 
-const organizationsSortValueSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(41)
-  .refine(
-    (value) => {
-      const field = value.startsWith("-") ? value.slice(1) : value;
-      return (ADMIN_ORGANIZATIONS_SORT_COLUMNS as readonly string[]).includes(field);
-    },
-    { message: "Unknown sort column" },
-  )
-  .optional();
-
-export const organizationsListQuerySchema = z.object({
+export const organizationsListQuerySchema = paginationQuerySchema.extend({
   q: trimmedString(1, 200).optional(),
-  limit: z.coerce.number().int().min(1).max(200).optional(),
-  offset: z.coerce.number().int().min(0).optional(),
-  sort: organizationsSortValueSchema,
+  sort: sortColumnSchema(ADMIN_ORGANIZATIONS_SORT_COLUMNS),
 });
 
 export const organizationsListRouteSchema = {
@@ -120,12 +101,7 @@ export const organizationsListRouteSchema = {
     "200": {
       description: "Organizations list.",
       content: {
-        "application/json": {
-          schema: z.object({
-            organizations: z.array(adminOrganizationSummarySchema),
-            page: z.object({ limit: z.number(), offset: z.number(), total: z.number(), hasMore: z.boolean() }),
-          }),
-        },
+        "application/json": { schema: paginatedResponseSchema("organizations", adminOrganizationSummarySchema) },
       },
     },
   },
@@ -164,11 +140,7 @@ export const organizationUpdateSchema = z.object({
   pressUrl: z.url().nullable().optional(),
   pressFeedUrl: z.url().nullable().optional(),
   careersUrl: z.url().nullable().optional(),
-  socialX: z.url().nullable().optional(),
-  socialLinkedin: z.url().nullable().optional(),
-  socialFacebook: z.url().nullable().optional(),
-  socialInstagram: z.url().nullable().optional(),
-  socialYoutube: z.url().nullable().optional(),
+  links: linksSchema.optional(),
   primaryContactUserId: z.uuid().nullable().optional(),
   secondaryContactUserId: z.uuid().nullable().optional(),
 });
@@ -177,7 +149,7 @@ export const organizationUpdateRouteSchema = {
   tags: ["Organizations"],
   summary: "Update an organization's profile",
   description:
-    "PRD §4.11 data-bearing fields (pulled forward by migration 0037). primaryContactUserId/secondaryContactUserId must reference an existing representative (members row) of this organization, or null.",
+    "data-bearing fields (pulled forward by migration 0037). primaryContactUserId/secondaryContactUserId must reference an existing representative (members row) of this organization, or null.",
   request: {
     params: organizationIdParamsSchema,
     body: { content: { "application/json": { schema: organizationUpdateSchema } }, required: true },
@@ -301,7 +273,7 @@ export const memberDeleteRouteSchema = {
   },
 };
 
-// ── Secondary contact nomination confirmation (§4.11) ──────────────────────
+// ── Secondary contact nomination confirmation ──────────────────────
 
 export const confirmSecondaryContactRouteSchema = {
   tags: ["Organizations"],
@@ -323,7 +295,7 @@ export const confirmSecondaryContactRouteSchema = {
   },
 };
 
-// ── Organization content moderation queue (§4.11) ──────────────────────────
+// ── Organization content moderation queue ──────────────────────────
 
 export const contentReviewSummarySchema = z.object({
   id: z.uuid(),
@@ -341,10 +313,8 @@ export const contentReviewSummarySchema = z.object({
   submitterEmail: z.string(),
 });
 
-export const contentReviewsListQuerySchema = z.object({
+export const contentReviewsListQuerySchema = paginationQuerySchema.extend({
   status: z.enum(["pending", "approved", "rejected", "withdrawn"]).optional(),
-  limit: z.coerce.number().int().min(1).max(200).optional(),
-  offset: z.coerce.number().int().min(0).optional(),
 });
 
 export const contentReviewsListRouteSchema = {
@@ -356,12 +326,7 @@ export const contentReviewsListRouteSchema = {
     "200": {
       description: "Reviews list.",
       content: {
-        "application/json": {
-          schema: z.object({
-            reviews: z.array(contentReviewSummarySchema),
-            page: z.object({ limit: z.number(), offset: z.number(), total: z.number(), hasMore: z.boolean() }),
-          }),
-        },
+        "application/json": { schema: paginatedResponseSchema("reviews", contentReviewSummarySchema) },
       },
     },
   },

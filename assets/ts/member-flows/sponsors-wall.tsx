@@ -1,5 +1,5 @@
 /**
- * Public sponsor display (prd.md item 8 gap-closure plan). Replaces the
+ * Public sponsor display. Replaces the
  * build-time `layouts/partials/sponsors/{collect,grid,strip}.html` +
  * `layouts/shortcodes/sponsors{,-level,-strip}.html` — which read
  * `hugo.Data.members`/`hugo.Data.sponsors` (`data/members/*.yaml`,
@@ -21,8 +21,7 @@
  *               center-out via CSS `order` (used by the sitewide hero banner
  *               and the compact event-hero sponsor row).
  *   - "wall"  — members/wall.html: the combined homepage/footer member +
- *               sponsor logo wall (§1.6 Part B deferred this half — see that
- *               partial's own header comment). Fetches both GET /api/v1/members
+ *               sponsor logo wall Fetches both GET /api/v1/members
  *               and GET /api/v1/sponsors and merges them client-side, same as
  *               the old build-time version did across hugo.Data.members +
  *               hugo.Data.sponsors. Unlike the old version, there's no
@@ -34,7 +33,7 @@
  * `sponsorlevels.yaml`'s tier-ordinal table is kept as a static import here
  * (TIER_WEIGHTS below) rather than fetched — it's a stable ranking, not
  * sponsor data, the same reasoning that already kept it out of the member
- * directory migration (§1.6 Part B).
+ * directory migration.
  */
 import { render } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";

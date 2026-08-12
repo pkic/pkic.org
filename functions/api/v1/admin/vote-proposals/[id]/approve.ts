@@ -1,6 +1,6 @@
 /**
  * POST /api/v1/admin/vote-proposals/:id/approve — convert a proposal to an
- * active vote, bypassing the endorsement count (PRD §4.8/§7).
+ * active vote, bypassing the endorsement count.
  */
 import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../../_lib/http";

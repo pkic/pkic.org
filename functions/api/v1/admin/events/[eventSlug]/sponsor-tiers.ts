@@ -3,7 +3,7 @@
  *   Returns which sponsor tiers get attendee-data-access for this event.
  *
  * PUT /api/v1/admin/events/:eventSlug/sponsor-tiers
- *   Replaces the full tier config (PRD §4.13). Defaults to no tiers having
+ *   Replaces the full tier config. Defaults to no tiers having
  *   access — an empty PUT clears all configured tiers.
  */
 import { json } from "../../../../../_lib/http";

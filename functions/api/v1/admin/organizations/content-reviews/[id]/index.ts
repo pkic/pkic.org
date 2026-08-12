@@ -1,7 +1,6 @@
 /**
  * GET /api/v1/admin/organizations/content-reviews/:id — review detail with
- * a side-by-side diff of current live content vs. proposed changes (PRD
- * §4.11).
+ * a side-by-side diff of current live content vs. proposed changes.
  */
 import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../../../_lib/http";

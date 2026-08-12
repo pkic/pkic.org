@@ -72,7 +72,7 @@ describe("donation thank-you page", () => {
     await import("../../assets/ts/shared/donation/thank-you");
     await vi.runAllTimersAsync();
 
-    // Should have polled more than once (phase 1 + at least one phase 2 poll)
+    // Should have polled more than once
     expect(callCount).toBeGreaterThan(1);
     // Promoter endpoint must not be called (no confirmed payment)
     expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/api/v1/donations/promoter"))).toBe(false);
@@ -91,7 +91,7 @@ describe("donation thank-you page", () => {
       if (url.includes("/api/v1/donations/session?session_id=")) {
         callCount++;
         if (callCount <= 2) {
-          // First two calls: asyncPayment pending (phase 1 + first phase 2 poll)
+          // First two calls: asyncPayment pending
           return new Response(JSON.stringify({ pending: true, asyncPayment: true }), {
             status: 202,
             headers: { "content-type": "application/json" },

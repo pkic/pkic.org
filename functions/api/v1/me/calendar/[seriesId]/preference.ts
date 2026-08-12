@@ -1,6 +1,6 @@
 /**
  * PATCH /api/v1/me/calendar/:seriesId/preference — set or clear my
- * time-slot preference for a meeting series (PRD §4.12). `icsFileId: null`
+ * time-slot preference for a meeting series. `icsFileId: null`
  * clears the preference (receive all active variants on the next resend).
  */
 import { OpenAPIRoute } from "chanfana";

@@ -1,6 +1,6 @@
 /**
- * GET /api/v1/portal/votes/:id/results — full result detail after close
- * (PRD §4.8). Results are hidden from all users until closes_at.
+ * GET /api/v1/portal/votes/:id/results — full result detail after close.
+ * Results are hidden from all users until closes_at.
  */
 import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../../_lib/http";

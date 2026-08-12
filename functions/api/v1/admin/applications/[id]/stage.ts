@@ -1,7 +1,7 @@
 /**
- * PATCH /api/v1/admin/applications/:id/stage — stage transition (PRD §4.2).
+ * PATCH /api/v1/admin/applications/:id/stage — stage transition.
  *
- * Queues the matching applicant-facing email per §4.4 when
+ * Queues the matching applicant-facing email when
  * transitionApplicationStage reports one; the service layer only does the
  * DB write (see member-applications.ts's own note on this split).
  */
@@ -42,7 +42,7 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
     const settings = await getMembershipSettings(db);
     // No token here (only its hash is stored) — links to the manual ID/token
     // entry fallback the application-status page already supports (see
-    // "Phase 1 — Hugo Frontend Follow-Up" §A decision 1 in prd.md).
+    // "Hugo Frontend Follow-Up").
     const statusUrl = `${config.appBaseUrl}/application-status/?id=${result.application.id}`;
     const outboxId = await queueEmail(db, {
       templateKey: result.suggestedEmailTemplateKey,

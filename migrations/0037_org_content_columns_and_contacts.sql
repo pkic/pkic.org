@@ -1,19 +1,19 @@
--- Migration 0037: Organization content & contact columns (PRD §0.6)
+-- Migration 0037: Organization content & contact columns
 --
--- §6 Step 2 (YAML → D1 import) needs somewhere real to write the
+-- Step 2 (YAML → D1 import) needs somewhere real to write the
 -- organization/member fields that data/members/*.yaml carries today
 -- (description, long-form content, slogan, logo, blog/press/careers,
 -- social links, primary/secondary contact, per-representative visibility
--- preference). Those columns are formally defined in §4.11 (Phase 4C —
+-- preference). Those columns are formally defined in (
 -- Organization Profile Management), which hasn't shipped and isn't on the
--- critical path. Per §0.6's resolution, only the *data-bearing* columns
--- from §4.11's list are pulled forward now; §4.11's workflow-only additions
+-- critical path. Resolution, only the *data-bearing* columns
+-- from list are pulled forward now; workflow-only additions
 -- (voting_delegate_user_id, pending_secondary_contact_user_id,
--- logo_staging_r2_key, organization_content_reviews) stay Phase 4C scope —
+-- logo_staging_r2_key, organization_content_reviews) stay —
 -- nothing in the YAML import needs them.
 --
 -- No CHECK constraints, per this repo's standing convention (see migration
--- 0033's header and §2.3's note) — every column here is free text or a
+-- 0033's header) — every column here is free text or a
 -- nullable FK.
 
 ALTER TABLE organizations ADD COLUMN description TEXT;
@@ -34,7 +34,7 @@ ALTER TABLE organizations ADD COLUMN social_youtube TEXT;
 ALTER TABLE organizations ADD COLUMN primary_contact_user_id TEXT REFERENCES users(id);
 ALTER TABLE organizations ADD COLUMN secondary_contact_user_id TEXT REFERENCES users(id);
 
--- Per-representative visibility preference (PRD §4.10 / §0.6). Defaults to
--- opted-in, matching §4.11's schema default; the migration script overrides
--- this to 0 for domain-matched-but-unnamed representatives per §6 Step 2.
+-- Per-representative visibility preference. Defaults to
+-- opted-in, matching schema default; the migration script overrides
+-- this to 0 for domain-matched-but-unnamed representatives.
 ALTER TABLE members ADD COLUMN show_on_org_profile INTEGER NOT NULL DEFAULT 1;

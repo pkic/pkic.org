@@ -144,7 +144,7 @@ export async function getActiveFormByPurpose(
 
 /**
  * Resolves the active global (non-event-scoped) form for a given `forms.key`
- * — used by forms like the membership application (§1.4) that aren't tied
+ * — used by forms like the membership application that aren't tied
  * to an event, so the `findActiveForm` event-scoping logic above doesn't apply.
  */
 export async function getGlobalFormByKey(db: DatabaseLike, key: string): Promise<ActiveFormDefinition | null> {

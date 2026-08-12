@@ -1,7 +1,7 @@
 /**
  * POST /api/v1/admin/working-groups/:id/meetings/:meetingId/ics-files —
- * upload a new ICS file variant to a working group meeting series
- * (PRD §4.12). multipart/form-data with 'file', 'label', 'year'.
+ * upload a new ICS file variant to a working group meeting series.
+ * multipart/form-data with 'file', 'label', 'year'.
  */
 import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../../../../../_lib/http";

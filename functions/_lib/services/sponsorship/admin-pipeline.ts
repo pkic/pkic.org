@@ -1,167 +1,12 @@
-import { first, all, run } from "../db/queries";
-import { uuid } from "../utils/ids";
-import { nowIso } from "../utils/time";
-import { AppError } from "../errors";
-import type { DatabaseLike } from "../types";
-import type { AuthMember } from "../types";
-
 /**
- * Fixed price list (USD, smallest currency unit) for self-service Stripe
- * checkout (PRD §1.3 Path B). The PRD does not define tier pricing —
- * consortium tiers (Titanium/Diamond/Platinum/Gold/Silver) are typically
- * negotiated annual contracts, so Path B checkout is scoped to event
- * sponsorship tiers only, where a fixed one-time price is a reasonable
- * placeholder. These figures should be confirmed with finance before
- * launch; see prd.md Phase 1 notes.
+ * Admin sales pipeline. Split out of sponsorship.ts.
  */
-export const EVENT_SPONSOR_TIER_PRICES_USD_CENTS: Record<string, number> = {
-  Ambassador: 500_000,
-  Innovator: 1_000_000,
-  Inspirator: 2_000_000,
-  Leader: 3_500_000,
-};
-
-export function normalizeOrgName(name: string): string {
-  return name.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-export async function findOrganizationIdByName(db: DatabaseLike, organizationName: string): Promise<string | null> {
-  const row = await first<{ id: string }>(db, `SELECT id FROM organizations WHERE normalized_name = ? LIMIT 1`, [
-    normalizeOrgName(organizationName),
-  ]);
-  return row?.id ?? null;
-}
-
-export interface CreateSponsorshipInquiryInput {
-  sponsorType: "consortium" | "event";
-  organizationId: string | null;
-  nonMemberName: string | null;
-  nonMemberWebsite: string | null;
-  contactName: string;
-  contactEmail: string;
-  eventId: string | null;
-  tier: string;
-  notes: string | null;
-}
-
-export async function createSponsorshipInquiry(
-  db: DatabaseLike,
-  input: CreateSponsorshipInquiryInput,
-): Promise<{ id: string }> {
-  const id = uuid();
-  const now = nowIso();
-
-  await db.batch([
-    db
-      .prepare(
-        `INSERT INTO sponsorships
-           (id, sponsor_type, organization_id, non_member_name, non_member_website,
-            contact_name, contact_email, event_id, tier, notes, pipeline_stage, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new_inquiry', ?, ?)`,
-      )
-      .bind(
-        id,
-        input.sponsorType,
-        input.organizationId,
-        input.nonMemberName,
-        input.nonMemberWebsite,
-        input.contactName,
-        input.contactEmail,
-        input.eventId,
-        input.tier,
-        input.notes,
-        now,
-        now,
-      ),
-    db
-      .prepare(
-        `INSERT INTO sponsorship_events (id, sponsorship_id, from_stage, to_stage, actor_user_id, note, created_at)
-         VALUES (?, ?, NULL, 'new_inquiry', NULL, 'Submitted via public inquiry form', ?)`,
-      )
-      .bind(uuid(), id, now),
-  ]);
-
-  return { id };
-}
-
-export interface SponsorshipRow {
-  id: string;
-  sponsor_type: string;
-  organization_id: string | null;
-  non_member_name: string | null;
-  contact_name: string | null;
-  contact_email: string | null;
-  event_id: string | null;
-  tier: string | null;
-  pipeline_stage: string;
-  checkout_session_id: string | null;
-}
-
-export async function getSponsorshipByCheckoutSessionId(
-  db: DatabaseLike,
-  sessionId: string,
-): Promise<SponsorshipRow | null> {
-  return first<SponsorshipRow>(db, `SELECT * FROM sponsorships WHERE checkout_session_id = ?`, [sessionId]);
-}
-
-/**
- * Idempotently creates the sponsorships record for a completed Path B
- * checkout (webhook-driven — see prd.md §1.3: the record is created on
- * successful payment, not at checkout-session-creation time). Safe to call
- * more than once for the same session id (Stripe may retry webhooks).
- */
-export async function recordPaidSponsorshipCheckout(
-  db: DatabaseLike,
-  params: {
-    checkoutSessionId: string;
-    tier: string;
-    contactName: string;
-    contactEmail: string;
-    organizationName: string | null;
-    eventId: string | null;
-  },
-): Promise<SponsorshipRow> {
-  const existing = await getSponsorshipByCheckoutSessionId(db, params.checkoutSessionId);
-  if (existing) {
-    return existing;
-  }
-
-  const organizationId = params.organizationName ? await findOrganizationIdByName(db, params.organizationName) : null;
-  const id = uuid();
-  const now = nowIso();
-
-  await db.batch([
-    db
-      .prepare(
-        `INSERT INTO sponsorships
-           (id, sponsor_type, organization_id, non_member_name, contact_name, contact_email,
-            event_id, tier, pipeline_stage, checkout_session_id, created_at, updated_at)
-         VALUES (?, 'event', ?, ?, ?, ?, ?, ?, 'payment_pending', ?, ?, ?)`,
-      )
-      .bind(
-        id,
-        organizationId,
-        organizationId ? null : params.organizationName,
-        params.contactName,
-        params.contactEmail,
-        params.eventId,
-        params.tier,
-        params.checkoutSessionId,
-        now,
-        now,
-      ),
-    db
-      .prepare(
-        `INSERT INTO sponsorship_events (id, sponsorship_id, from_stage, to_stage, actor_user_id, note, created_at)
-         VALUES (?, ?, 'new_inquiry', 'payment_pending', NULL, 'Stripe checkout completed', ?)`,
-      )
-      .bind(uuid(), id, now),
-  ]);
-
-  return (await getSponsorshipByCheckoutSessionId(db, params.checkoutSessionId)) as SponsorshipRow;
-}
-
-// ── Admin sales pipeline (PRD §4.13, Phase 4E) ────────────────────────────
+import { first, all, run } from "../../db/queries";
+import { uuid } from "../../utils/ids";
+import { nowIso } from "../../utils/time";
+import { AppError } from "../../errors";
+import { eventSponsorTierHasAttendeeAccess } from "./event-tiers";
+import type { DatabaseLike } from "../../types";
 
 export const SPONSORSHIP_PIPELINE_STAGES = [
   "new_inquiry",
@@ -193,6 +38,8 @@ export interface AdminSponsorshipRow {
   assigned_to_user_id: string | null;
   assigned_to_name: string | null;
   notes: string | null;
+  price_amount_cents: number | null;
+  price_currency: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -203,7 +50,7 @@ const ADMIN_SPONSORSHIP_SELECT = `
          sp.event_id, e.name AS event_name, sp.tier, sp.pipeline_stage,
          sp.start_date, sp.renewal_date, sp.assigned_to_user_id,
          COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS assigned_to_name,
-         sp.notes, sp.created_at, sp.updated_at
+         sp.notes, sp.price_amount_cents, sp.price_currency, sp.created_at, sp.updated_at
   FROM sponsorships sp
   LEFT JOIN organizations o ON o.id = sp.organization_id
   LEFT JOIN events e ON e.id = sp.event_id
@@ -264,6 +111,8 @@ export function toApiSponsorship(row: AdminSponsorshipRow) {
     assignedToUserId: row.assigned_to_user_id,
     assignedToName: row.assigned_to_name,
     notes: row.notes,
+    priceAmountCents: row.price_amount_cents,
+    priceCurrency: row.price_currency,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -404,7 +253,7 @@ export interface AdvanceSponsorshipStageResult {
 /**
  * Advances (or otherwise changes) a sponsorship's pipeline stage, recording
  * the transition in sponsorship_events and applying the "On active"/"On
- * lapsed" side effects from §4.13:
+ * lapsed" side effects from:
  *  - consortium: writes/clears organizations.sponsor_tier + sponsor_start_date
  *  - event: no D1 side effect beyond the stage itself — attendee-data
  *    eligibility (event_sponsor_attendee_tiers) is checked live on every
@@ -475,117 +324,4 @@ export async function advanceSponsorshipStage(
     becameLapsed,
     qualifiesForAttendeeDataAccess,
   };
-}
-
-// ── Per-event sponsor attendee-data tier config (§4.13) ───────────────────
-
-export interface EventSponsorTierRow {
-  tierName: string;
-  hasAttendeeDataAccess: boolean;
-}
-
-export async function listEventSponsorTiers(db: DatabaseLike, eventId: string): Promise<EventSponsorTierRow[]> {
-  const rows = await all<{ tier_name: string; has_attendee_data_access: number }>(
-    db,
-    `SELECT tier_name, has_attendee_data_access FROM event_sponsor_attendee_tiers WHERE event_id = ? ORDER BY tier_name ASC`,
-    [eventId],
-  );
-  return rows.map((r) => ({ tierName: r.tier_name, hasAttendeeDataAccess: r.has_attendee_data_access === 1 }));
-}
-
-export async function replaceEventSponsorTiers(
-  db: DatabaseLike,
-  eventId: string,
-  tiers: EventSponsorTierRow[],
-): Promise<void> {
-  const now = nowIso();
-  const statements = [db.prepare(`DELETE FROM event_sponsor_attendee_tiers WHERE event_id = ?`).bind(eventId)];
-  for (const tier of tiers) {
-    statements.push(
-      db
-        .prepare(
-          `INSERT INTO event_sponsor_attendee_tiers (id, event_id, tier_name, has_attendee_data_access, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-        )
-        .bind(uuid(), eventId, tier.tierName, tier.hasAttendeeDataAccess ? 1 : 0, now, now),
-    );
-  }
-  await db.batch(statements);
-}
-
-export async function eventSponsorTierHasAttendeeAccess(
-  db: DatabaseLike,
-  eventId: string,
-  tier: string,
-): Promise<boolean> {
-  const row = await first<{ has_attendee_data_access: number }>(
-    db,
-    `SELECT has_attendee_data_access FROM event_sponsor_attendee_tiers WHERE event_id = ? AND tier_name = ?`,
-    [eventId, tier],
-  );
-  return row?.has_attendee_data_access === 1;
-}
-
-// ── Member self-service (§4.13 "GET /api/v1/me/organization/sponsorship") ─
-
-export async function getMyOrganizationSponsorship(
-  db: DatabaseLike,
-  member: AuthMember,
-): Promise<{ tier: string | null; startDate: string | null }> {
-  if (!member.organizationId) {
-    return { tier: null, startDate: null };
-  }
-  const row = await first<{ sponsor_tier: string | null; sponsor_start_date: string | null }>(
-    db,
-    `SELECT sponsor_tier, sponsor_start_date FROM organizations WHERE id = ?`,
-    [member.organizationId],
-  );
-  return { tier: row?.sponsor_tier ?? null, startDate: row?.sponsor_start_date ?? null };
-}
-
-// ── Sponsor portal attendee data (§4.13) ───────────────────────────────────
-
-export interface SponsorPortalAttendeeRow {
-  registrationId: string;
-  firstName: string | null;
-  lastName: string | null;
-  email: string | null;
-  organizationName: string | null;
-  jobTitle: string | null;
-  attendanceType: string | null;
-}
-
-export async function listSponsorPortalAttendees(
-  db: DatabaseLike,
-  eventId: string,
-): Promise<SponsorPortalAttendeeRow[]> {
-  const rows = await all<{
-    registration_id: string;
-    first_name: string | null;
-    last_name: string | null;
-    email: string | null;
-    organization_name: string | null;
-    job_title: string | null;
-    attendance_type: string | null;
-  }>(
-    db,
-    `SELECT r.id AS registration_id, u.first_name, u.last_name, u.email,
-            u.organization_name, u.job_title, r.attendance_type
-     FROM registrations r
-     JOIN users u ON u.id = r.user_id
-     JOIN consent_acceptances ca ON ca.registration_id = r.id AND ca.term_key = 'sponsor-data-sharing'
-     WHERE r.event_id = ? AND r.status = 'registered'
-     ORDER BY u.last_name ASC, u.first_name ASC`,
-    [eventId],
-  );
-
-  return rows.map((r) => ({
-    registrationId: r.registration_id,
-    firstName: r.first_name,
-    lastName: r.last_name,
-    email: r.email,
-    organizationName: r.organization_name,
-    jobTitle: r.job_title,
-    attendanceType: r.attendance_type,
-  }));
 }

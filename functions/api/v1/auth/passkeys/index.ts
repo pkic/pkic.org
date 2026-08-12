@@ -1,5 +1,5 @@
 /**
- * GET /api/v1/auth/passkeys — PRD §3.4, list the authenticated user's passkeys.
+ * GET /api/v1/auth/passkeys, list the authenticated user's passkeys.
  */
 import { OpenAPIRoute } from "chanfana";
 import { jsonNoStore } from "../../../../_lib/http";

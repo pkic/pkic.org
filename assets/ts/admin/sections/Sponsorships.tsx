@@ -1,5 +1,5 @@
 /**
- * Admin → Sponsorships (PRD §4.13, Phase 4E). Sales pipeline: filterable
+ * Admin → Sponsorships. Sales pipeline: filterable
  * list, detail panel with stage-advance control + editable
  * tier/assigned-staff/renewal-date/notes, and the full audit trail
  * (sponsorship_events). Staff-only — members never see pipeline stage,
@@ -499,12 +499,27 @@ export function Sponsorships() {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams();
-      if (type) params.set("type", type);
-      if (stage) params.set("stage", stage);
-      params.set("limit", "200");
-      const data = await api<{ sponsorships: Sponsorship[] }>(`/api/v1/admin/sponsorships?${params.toString()}`);
-      setSponsorships(data.sponsorships);
+      // The company-grouped master/detail view (groupByCompany below) needs
+      // the complete matching set in memory to group correctly — a single
+      // capped page previously silently hid every sponsorship past the
+      // 200th. Page through the full result set instead of capping it.
+      const all: Sponsorship[] = [];
+      let offset = 0;
+      const pageSize = 200;
+      for (;;) {
+        const params = new URLSearchParams();
+        if (type) params.set("type", type);
+        if (stage) params.set("stage", stage);
+        params.set("limit", String(pageSize));
+        params.set("offset", String(offset));
+        const data = await api<{ sponsorships: Sponsorship[]; page: { hasMore: boolean } }>(
+          `/api/v1/admin/sponsorships?${params.toString()}`,
+        );
+        all.push(...data.sponsorships);
+        if (!data.page.hasMore) break;
+        offset += pageSize;
+      }
+      setSponsorships(all);
     } catch (e) {
       setError((e as Error).message);
     } finally {

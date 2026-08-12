@@ -1,5 +1,5 @@
 /**
- * Account Settings → Security → Passkeys (PRD §3.5, bullets 2-3). Mirrors
+ * Account Settings → Security → Passkeys. Mirrors
  * shell/Login.tsx's startAuthentication() pattern using startRegistration()
  * for the enrollment ceremony.
  */

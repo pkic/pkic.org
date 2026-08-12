@@ -1,11 +1,11 @@
 -- Migration 0033: Rebuild `members` to allow multiple representatives per organization
 --
--- Phase 0 (PRD §0.1) — Schema Reconciliation & Foundations.
+-- Schema Reconciliation & Foundations.
 --
 -- The original members table enforced UNIQUE(organization_id) plus a CHECK
 -- tying member_type to exactly one of user_id/organization_id, modeling
 -- "the organization is the member" rather than "N people represent this
--- member organization". Phase 4 features (primary/secondary contacts,
+-- member organization". Features (primary/secondary contacts,
 -- WG-level voting by individual representative, per-person visibility
 -- toggles, acquisition transfers moving representatives one by one) all
 -- require multiple members rows per organization_id.

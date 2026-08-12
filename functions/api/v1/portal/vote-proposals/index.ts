@@ -1,6 +1,6 @@
 /**
  * POST/GET /api/v1/portal/vote-proposals — submit or list vote proposals
- * (PRD §4.8 Path B, A–G members only).
+ * (A–G members only).
  */
 import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../_lib/http";

@@ -64,20 +64,20 @@ function isAdminAuthPath(path: string): boolean {
 }
 
 /**
- * `/admin/events/**` and `/admin/proposals/**` are gated by the Phase 2
- * (PRD §2) context-aware permission system instead of this legacy global
+ * `/admin/events/**` and `/admin/proposals/**` are gated by the
+ * context-aware permission system instead of this legacy global
  * scope system — see requireEventManagementAccess
  * (events/[eventSlug]/router.ts), getProposalAccessForEvent
  * (_lib/auth/proposal-access.ts), and the per-handler requirePermission
  * calls (e.g. events/[eventSlug]/permissions.ts). Applying the legacy
- * `events:read` inference here as well would 403 every Phase 2 non-admin
+ * `events:read` inference here as well would 403 every non-admin
  * role (event_organizer, program_committee) before they ever reach that
  * check, since only role='admin' actors carry a non-empty legacy `scopes`
- * array under the Phase 2 model (see functions/_lib/auth/admin.ts). This is
+ * array under the model (see functions/_lib/auth/admin.ts). This is
  * a no-op for role='admin' actors either way — their full legacy scopes
  * array always satisfied this check trivially.
  */
-function isPhase2PermissionGatedAdminPath(path: string): boolean {
+function isPermissionGatedAdminPath(path: string): boolean {
   return (
     path.startsWith("/api/v1/admin/events") ||
     path.startsWith("/api/v1/admin/proposals") ||
@@ -103,7 +103,7 @@ function enforceAdminScopes(c: Context<RequestDbContext>): void {
   }
 
   const path = normalizedAdminPath(c.req.path);
-  if (isPhase2PermissionGatedAdminPath(path)) {
+  if (isPermissionGatedAdminPath(path)) {
     return;
   }
 

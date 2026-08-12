@@ -1,6 +1,5 @@
 /**
- * GET /api/v1/admin/vote-proposals/:id — proposal detail + endorsers
- * (PRD §4.8/§7).
+ * GET /api/v1/admin/vote-proposals/:id — proposal detail + endorsers.
  */
 import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../../_lib/http";
