@@ -25,6 +25,7 @@ const BASE_PAYLOAD = {
   appBaseUrl: BASE_URL,
   reminderIntervalDays: 0, // cutoff = now → any past communication is eligible
   pendingConfirmationReminderIntervalDays: 1,
+  confirmationLinkTtlHours: 48,
   maxInviteReminders: 3,
   maxPendingConfirmationReminders: 3,
   maxPresentationReminders: 3,

@@ -10,7 +10,7 @@ import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
 import { buildEventEmailVariables, getEventBySlug } from "../../../../../../../_lib/services/events";
 import { first, run } from "../../../../../../../_lib/db/queries";
 import { nowIso } from "../../../../../../../_lib/utils/time";
-import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
+import { getConfig, resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { buildBadgeAttachment } from "../../../../../../../_lib/email/attachments";
 import { processOutboxByIdBackground, queueEmail } from "../../../../../../../_lib/email/outbox";
 import { getRegistrationDayAttendance } from "../../../../../../../_lib/services/event-days";
@@ -35,6 +35,7 @@ import { queuedCapabilityToken } from "../../../../../../../_lib/services/capabi
 export async function onRequestPost(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
+  const config = getConfig(c.env, c.req.raw);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const registrationId = c.req.param("registrationId");
 
@@ -89,7 +90,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     const confirmationUrl = registrationConfirmPageUrl(
       appBaseUrl,
       event,
-      queuedCapabilityToken("registration_confirm", registration.id),
+      queuedCapabilityToken("registration_confirm", registration.id, config.confirmationLinkTtlHours * 60 * 60),
       registration.id,
     );
 
@@ -101,6 +102,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
       recipientUserId: user.id,
       messageType: "transactional",
       subject: `Confirm your registration for ${event.name}`,
+      capabilityLinkValues: [confirmationUrl],
       data: {
         ...buildEventEmailVariables(event, appBaseUrl),
         firstName: user.first_name ?? "",
@@ -148,6 +150,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
       recipientUserId: user.id,
       messageType: "transactional",
       subject: `Registration confirmed for ${event.name}`,
+      capabilityLinkValues: [manageUrl],
       attachments: referralRow
         ? [
             buildBadgeAttachment({

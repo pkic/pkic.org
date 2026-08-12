@@ -129,6 +129,7 @@ export async function onRequestPost(c: any): Promise<Response> {
           recipientEmail: invite.invitee_email,
           messageType: "transactional",
           subject: `Invitation: ${event.name}`,
+          capabilityLinkValues: [registrationUrl, declineUrl],
           data: {
             ...buildEventEmailVariables(event, appBaseUrl),
             firstName: invite.invitee_first_name ?? "",

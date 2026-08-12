@@ -5,15 +5,15 @@
  * Accepts either the current confirmation link or an email address for link
  * recovery. Resending does not invalidate other unexpired links.
  *
- * Rate limiting / abuse prevention is handled at the edge (Cloudflare WAF) —
- * the endpoint itself enforces only that the registration is unconfirmed.
+ * The endpoint applies the same per-email and per-IP recovery limits as the
+ * other public link-recovery routes.
  */
 
 import { OpenAPIRoute } from "chanfana";
 import { parseJsonBody } from "../../../../../_lib/validation";
 import { json } from "../../../../../_lib/http";
 import { AppError } from "../../../../../_lib/errors";
-import { resolveAppBaseUrl } from "../../../../../_lib/config";
+import { getConfig, resolveAppBaseUrl } from "../../../../../_lib/config";
 import { buildEventEmailVariables, getEventBySlug } from "../../../../../_lib/services/events";
 import { first, run } from "../../../../../_lib/db/queries";
 import { nowIso } from "../../../../../_lib/utils/time";
@@ -28,14 +28,28 @@ import type { RegistrationRecord } from "../../../../../_lib/services/registrati
 import { registrationResendConfirmationSchema } from "../../../../../../assets/shared/schemas/api";
 import { registrationResendConfirmationRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts";
 import { queuedCapabilityToken, verifyDatabaseCapability } from "../../../../../_lib/services/capability-links";
-import { requireInternalSecret } from "../../../../../_lib/request";
+import { getClientIp, requireInternalSecret } from "../../../../../_lib/request";
+import { enforceRateLimit } from "../../../../../_lib/rate-limit";
 
 export async function onRequestPost(c: any): Promise<Response> {
   c.set("sensitive", true);
 
   const body = await parseJsonBody(c.req, registrationResendConfirmationSchema);
+  if (body.email) {
+    await enforceRateLimit({
+      binding: c.env.EMAIL_RATE_LIMITER,
+      namespace: "registration-resend-confirmation:email",
+      key: body.email,
+    });
+  }
+  await enforceRateLimit({
+    binding: c.env.IP_RATE_LIMITER,
+    namespace: "registration-resend-confirmation:ip",
+    key: getClientIp(c.req.raw),
+  });
 
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const config = getConfig(c.env, c.req.raw);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
   let registration: RegistrationRecord | null = null;
@@ -54,19 +68,6 @@ export async function onRequestPost(c: any): Promise<Response> {
         [verified.resourceId, event.id],
       );
     }
-  }
-
-  if (!registration && body.id && body.token) {
-    registration = await first<RegistrationRecord>(
-      c.env.DB,
-      `SELECT r.*
-       FROM   registrations r
-       WHERE  r.id = ?
-         AND  r.event_id = ?
-         AND  r.status = 'pending_email_confirmation'
-       LIMIT 1`,
-      [body.id, event.id],
-    );
   }
 
   if (!registration && body.email) {
@@ -119,7 +120,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   const confirmationUrl = registrationConfirmPageUrl(
     appBaseUrl,
     event,
-    queuedCapabilityToken("registration_confirm", registration.id),
+    queuedCapabilityToken("registration_confirm", registration.id, config.confirmationLinkTtlHours * 60 * 60),
     registration.id,
   );
   const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, registration.id);
@@ -137,6 +138,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     recipientUserId: user.id,
     messageType: "transactional",
     subject: `Confirm your registration for ${event.name}`,
+    capabilityLinkValues: [confirmationUrl],
     data: {
       ...buildEventEmailVariables(event, appBaseUrl),
       // User

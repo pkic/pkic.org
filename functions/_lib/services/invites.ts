@@ -8,7 +8,7 @@ import {
   issueDatabaseCapability,
   newCapabilityLinkSecret,
   queuedCapabilityToken,
-  signCapabilityToken,
+  signedOrQueuedCapability,
   verifyDatabaseCapability,
 } from "./capability-links";
 import type { DatabaseLike } from "../types";
@@ -299,14 +299,12 @@ export async function createInvite(
     });
   }
 
-  const token = payload.signingSecret
-    ? await signCapabilityToken({
-        signingSecret: payload.signingSecret,
-        linkSecret,
-        purpose: "invite",
-        resourceId: invite.id,
-      })
-    : queuedCapabilityToken("invite", invite.id);
+  const token = await signedOrQueuedCapability({
+    signingSecret: payload.signingSecret,
+    linkSecret,
+    purpose: "invite",
+    resourceId: invite.id,
+  });
   return { invite, token, isNew: true };
 }
 

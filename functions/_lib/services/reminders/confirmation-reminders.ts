@@ -25,6 +25,7 @@ export async function runConfirmationReminders(
     maxPendingConfirmationReminders: number;
     pendingConfirmationIntervalDays: number;
     pendingConfirmationFallbackDeadlineDays: number;
+    confirmationLinkTtlHours: number;
     confirmationCutoff: string;
     now: string;
     dryRun?: boolean;
@@ -40,6 +41,7 @@ export async function runConfirmationReminders(
     maxPendingConfirmationReminders,
     pendingConfirmationIntervalDays,
     pendingConfirmationFallbackDeadlineDays,
+    confirmationLinkTtlHours,
     confirmationCutoff,
     now,
     dryRun,
@@ -215,7 +217,7 @@ export async function runConfirmationReminders(
           starts_at: row.event_starts_at,
           settings_json: row.event_settings_json,
         },
-        queuedCapabilityToken("registration_confirm", row.id),
+        queuedCapabilityToken("registration_confirm", row.id, confirmationLinkTtlHours * 60 * 60),
         row.id,
       ),
     }));
@@ -243,6 +245,7 @@ export async function runConfirmationReminders(
         recipientUserId: row.user_id,
         templateKey: "registration_confirmation_reminder",
         subject,
+        capabilityLinkValues: [confirmationUrl],
         data: {
           ...buildEventEmailVariables(event, appBaseUrl),
           firstName: row.first_name ?? "",

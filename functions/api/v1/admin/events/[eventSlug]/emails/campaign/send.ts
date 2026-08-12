@@ -138,6 +138,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     recipientUserId?: string | null;
     messageType: "transactional" | "promotional";
     subject: string;
+    capabilityLinkValues?: unknown[];
     data: Record<string, unknown>;
   }> = [];
   const usesManageUrl =
@@ -169,6 +170,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
           recipientUserId: recipient.userId ?? null,
           messageType,
           subject: body.subjectOverride ?? `Update: ${event.name}`,
+          capabilityLinkValues: recipientManageUrl ? [recipientManageUrl] : [],
           data: {
             ...sharedEventVars,
             firstName: recipient.firstName,

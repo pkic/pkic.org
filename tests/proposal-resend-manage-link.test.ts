@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:test";
 import { onRequestPost as resendProposalManageLink } from "../functions/api/v1/events/[eventSlug]/proposals/resend-manage-link";
-import { issueDatabaseCapability, materializeQueuedCapabilityLinks } from "../functions/_lib/services/capability-links";
+import { onRequestGet as getProposalManage } from "../functions/api/v1/proposals/manage/[token]";
+import {
+  issueDatabaseCapability,
+  materializeQueuedCapabilityLinks,
+  signCapabilityToken,
+} from "../functions/_lib/services/capability-links";
 import { run } from "../functions/_lib/db/queries";
 import { getProposalByManageToken } from "../functions/_lib/services/proposals";
 import { nowIso } from "../functions/_lib/utils/time";
@@ -112,5 +117,46 @@ describe("proposal resend-manage-link endpoint", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ success: true });
+  });
+
+  it("rejects an expired proposal management capability", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const now = nowIso();
+    const proposerId = crypto.randomUUID();
+    const proposalId = crypto.randomUUID();
+    const linkSecret = "expired-proposal-link-secret";
+    await run(
+      env.DB,
+      `INSERT INTO users (
+        id, email, normalized_email, role, active, created_at, updated_at
+      ) VALUES (?, ?, ?, 'user', 1, ?, ?)`,
+      [proposerId, "expired-proposal@example.test", "expired-proposal@example.test", now, now],
+    );
+    await run(
+      env.DB,
+      `INSERT INTO session_proposals (
+        id, event_id, proposer_user_id, status, proposal_type, title, abstract,
+        manage_link_secret, submitted_at, updated_at
+      ) VALUES (?, ?, ?, 'submitted', 'talk', 'Expired proposal', 'Abstract', ?, ?, ?)`,
+      [proposalId, eventId, proposerId, linkSecret, now, now],
+    );
+    const token = await signCapabilityToken({
+      signingSecret,
+      linkSecret,
+      purpose: "proposal_manage",
+      resourceId: proposalId,
+      ttlSeconds: 1,
+      nowSeconds: Math.floor(Date.now() / 1000) - 2,
+    });
+
+    await expect(
+      getProposalManage(
+        createContext(
+          { ...env, INTERNAL_SIGNING_SECRET: signingSecret },
+          new Request(`https://app.test/api/v1/proposals/manage/${encodeURIComponent(token)}`),
+          { token },
+        ),
+      ),
+    ).rejects.toMatchObject({ status: 410, code: "PROPOSAL_TOKEN_EXPIRED" });
   });
 });

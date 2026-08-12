@@ -131,6 +131,7 @@ export async function runInviteReminders(
         recipientEmail: invite.invitee_email,
         templateKey: isAttendee ? "attendee_invite" : "speaker_invite",
         subject,
+        capabilityLinkValues: [actionUrl, declineUrl],
         data: {
           ...buildEventEmailVariables(event, appBaseUrl),
           firstName: invite.invitee_first_name ?? "",

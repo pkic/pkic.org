@@ -5,8 +5,8 @@
  * provided email. The generic response prevents account enumeration.
  */
 import { OpenAPIRoute } from "chanfana";
-import { all, first } from "../../../../../_lib/db/queries";
-import { queueEmail, processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
+import { all } from "../../../../../_lib/db/queries";
+import { prepareBulkQueueEmailStatements, processSelectedOutboxBackground } from "../../../../../_lib/email/outbox";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { json } from "../../../../../_lib/http";
 import { getClientIp } from "../../../../../_lib/request";
@@ -14,7 +14,7 @@ import { enforceRateLimit } from "../../../../../_lib/rate-limit";
 import { queuedCapabilityToken } from "../../../../../_lib/services/capability-links";
 import { buildEventEmailVariables, getEventBySlug } from "../../../../../_lib/services/events";
 import { proposalManagePageUrl } from "../../../../../_lib/services/frontend-links";
-import { buildProposalInviteEmailContext } from "../../../../../_lib/services/proposals";
+import { bulkBuildProposalInviteEmailContexts } from "../../../../../_lib/services/reminders/shared";
 import { parseJsonBody } from "../../../../../_lib/validation";
 import { proposalResendManageLinkSchema } from "../../../../../../assets/shared/schemas/api";
 import { proposalResendManageLinkRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts";
@@ -68,43 +68,64 @@ export async function onRequestPost(c: any): Promise<Response> {
     [event.id, body.email],
   );
 
-  for (const proposal of proposals) {
-    const [inviteContext, referral] = await Promise.all([
-      buildProposalInviteEmailContext(c.env.DB, {
-        proposalId: proposal.proposal_id,
-        inviterUserId: proposal.proposer_user_id,
-      }),
-      first<{ code: string }>(
+  if (proposals.length > 0) {
+    const proposalIds = proposals.map((proposal) => proposal.proposal_id);
+    const [inviteContexts, referralRows] = await Promise.all([
+      bulkBuildProposalInviteEmailContexts(c.env.DB, proposalIds),
+      all<{ owner_id: string; code: string }>(
         c.env.DB,
-        "SELECT code FROM referral_codes WHERE event_id = ? AND owner_type = 'proposal' AND owner_id = ? LIMIT 1",
-        [event.id, proposal.proposal_id],
+        `SELECT owner_id, code
+         FROM referral_codes
+         WHERE event_id = ?
+           AND owner_type = 'proposal'
+           AND owner_id IN (SELECT value FROM json_each(?))
+         ORDER BY created_at ASC`,
+        [event.id, JSON.stringify(proposalIds)],
       ),
     ]);
-    const manageUrl = proposalManagePageUrl(
-      appBaseUrl,
-      event,
-      queuedCapabilityToken("proposal_manage", proposal.proposal_id),
-    );
-    const outboxId = await queueEmail(c.env.DB, {
-      eventId: event.id,
-      templateKey: "proposal_submitted",
-      recipientEmail: proposal.email,
-      recipientUserId: proposal.proposer_user_id,
-      messageType: "transactional",
-      subject: `Your proposal management link for ${event.name}: ${proposal.title}`,
-      data: {
-        ...buildEventEmailVariables(event, appBaseUrl),
-        firstName: proposal.first_name ?? "",
-        lastName: proposal.last_name ?? "",
-        proposalTitle: proposal.title,
-        proposalAbstract: proposal.abstract,
-        proposalType: proposal.proposal_type,
-        speakerLineupText: inviteContext.speakerLineupText,
-        manageUrl,
-        shareUrl: referral ? `${appBaseUrl}/r/${referral.code}` : "",
-      },
+    const referralByProposal = new Map<string, string>();
+    for (const referral of referralRows) {
+      if (!referralByProposal.has(referral.owner_id)) referralByProposal.set(referral.owner_id, referral.code);
+    }
+
+    const queueRows = proposals.map((proposal) => {
+      const inviteContext = inviteContexts.get(proposal.proposal_id);
+      const manageUrl = proposalManagePageUrl(
+        appBaseUrl,
+        event,
+        queuedCapabilityToken("proposal_manage", proposal.proposal_id),
+      );
+      const referralCode = referralByProposal.get(proposal.proposal_id);
+      return {
+        eventId: event.id,
+        templateKey: "proposal_submitted",
+        recipientEmail: proposal.email,
+        recipientUserId: proposal.proposer_user_id,
+        messageType: "transactional" as const,
+        subject: `Your proposal management link for ${event.name}: ${proposal.title}`,
+        capabilityLinkValues: [manageUrl],
+        data: {
+          ...buildEventEmailVariables(event, appBaseUrl),
+          firstName: proposal.first_name ?? "",
+          lastName: proposal.last_name ?? "",
+          proposalTitle: proposal.title,
+          proposalAbstract: proposal.abstract,
+          proposalType: proposal.proposal_type,
+          speakerLineupText: inviteContext?.speakerLineupText ?? "",
+          manageUrl,
+          shareUrl: referralCode ? `${appBaseUrl}/r/${referralCode}` : "",
+        },
+      };
     });
-    c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
+    const preparedRows = prepareBulkQueueEmailStatements(c.env.DB, queueRows);
+    await c.env.DB.batch(preparedRows.map((row) => row.statement));
+    c.executionCtx.waitUntil(
+      processSelectedOutboxBackground(
+        c.env.DB,
+        c.env,
+        preparedRows.map((row) => row.id),
+      ),
+    );
   }
 
   return json({ success: true });

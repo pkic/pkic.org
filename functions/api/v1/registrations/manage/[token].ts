@@ -196,7 +196,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
         const confirmationUrl = registrationConfirmPageUrl(
           appBaseUrl,
           event,
-          queuedCapabilityToken("registration_confirm", updated.id),
+          queuedCapabilityToken("registration_confirm", updated.id, config.confirmationLinkTtlHours * 60 * 60),
           updated.id,
         );
         const userRecord = await first<{
@@ -222,6 +222,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
             recipientUserId: emailResult.userId,
             messageType: "transactional",
             subject: `Confirm your email address for ${event.name}`,
+            capabilityLinkValues: [confirmationUrl],
             data: {
               ...buildEventEmailVariables(event, appBaseUrl),
               firstName: userRecord.first_name ?? "",
@@ -287,6 +288,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
             body.action === "report_unauthorized"
               ? `Your registration for ${event.name} has been cancelled and your data removed`
               : `Registration updated for ${event.name}`,
+          capabilityLinkValues: [manageUrl],
           data: {
             ...buildEventEmailVariables(event, appBaseUrl),
             firstName: user.first_name ?? "",

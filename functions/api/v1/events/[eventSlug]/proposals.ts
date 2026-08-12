@@ -25,7 +25,6 @@ import { proposalCreateSchema } from "../../../../../assets/shared/schemas/api";
 import { eventProposalCreateRouteSchema } from "../../../../../assets/shared/schemas/route-contracts";
 import { requireInternalSecret } from "../../../../_lib/request";
 import { queuedCapabilityToken } from "../../../../_lib/services/capability-links";
-import { first } from "../../../../_lib/db/queries";
 
 export async function onRequestPost(c: any): Promise<Response> {
   const config = getConfig(c.env, c.req.raw);
@@ -103,20 +102,10 @@ export async function onRequestPost(c: any): Promise<Response> {
       proposalId: created.proposal.id,
       userId: speakerUser.id,
       role: speaker.role,
-      signingSecret,
     });
 
     if (speakerToken) {
-      const speakerRow = await first<{ id: string }>(
-        c.env.DB,
-        "SELECT id FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
-        [created.proposal.id, speakerUser.id],
-      );
-      const speakerManageUrl = speakerManagePageUrl(
-        appBaseUrl,
-        event,
-        queuedCapabilityToken("speaker_manage", speakerRow!.id),
-      );
+      const speakerManageUrl = speakerManagePageUrl(appBaseUrl, event, speakerToken);
       const inviteContext = await buildProposalInviteEmailContext(c.env.DB, {
         proposalId: created.proposal.id,
         inviterUserId: proposer.id,
@@ -128,6 +117,7 @@ export async function onRequestPost(c: any): Promise<Response> {
         recipientUserId: speakerUser.id,
         messageType: "transactional",
         subject: `You have been added as a speaker — ${event.name}`,
+        capabilityLinkValues: [speakerManageUrl],
         data: {
           ...buildEventEmailVariables(event, appBaseUrl),
           firstName: speakerUser.first_name ?? "",
@@ -188,6 +178,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     recipientUserId: proposer.id,
     messageType: "transactional",
     subject: `Proposal submitted: ${created.proposal.title}`,
+    capabilityLinkValues: [queuedManageUrl],
     data: {
       ...buildEventEmailVariables(event, appBaseUrl),
       firstName: proposer.first_name ?? "",

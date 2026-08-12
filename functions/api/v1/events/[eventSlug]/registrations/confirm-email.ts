@@ -81,6 +81,7 @@ async function confirmRegistration(c: any, token: string, registrationId?: strin
         recipientUserId: registration.user_id,
         messageType: "transactional",
         subject: `Registration confirmed for ${event.name}`,
+        capabilityLinkValues: [queuedManageUrl],
         attachments: referralRow
           ? [
               buildBadgeAttachment({

@@ -33,6 +33,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     recipientEmail: string;
     templateKey: string;
     subject: string;
+    capabilityLinkValues: unknown[];
     data: Record<string, unknown>;
   }> = [];
 
@@ -56,6 +57,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
         recipientEmail: o.email,
         templateKey: "speaker_invite",
         subject,
+        capabilityLinkValues: [proposalUrl, declineUrl],
         data: {
           ...sharedEmailVars,
           firstName: item.firstName ?? "",

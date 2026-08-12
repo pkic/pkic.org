@@ -61,7 +61,6 @@ export async function onRequestPost(c: any): Promise<Response> {
             inviteeLastName: contact.lastName ?? null,
             inviteType: invite.invite_type,
             sourceType: "declined-forward",
-            signingSecret,
           });
 
           // Do not send a new email if the contact already has an active invite.
@@ -92,6 +91,7 @@ export async function onRequestPost(c: any): Promise<Response> {
             messageType: "transactional",
             subject:
               invite.invite_type === "speaker" ? `Speaker invitation: ${event.name}` : `Invitation: ${event.name}`,
+            capabilityLinkValues: [registrationUrl, proposalUrl, declineUrl],
             data: {
               ...buildEventEmailVariables(event, appBaseUrl),
               firstName: newInvite.invitee_first_name ?? "",

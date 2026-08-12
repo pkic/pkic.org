@@ -11,7 +11,7 @@ import {
 } from "../event-days";
 import { roleBasedCapacityExemptReason, syncRegistrationDayWaitlist } from "./day-waitlist";
 import { upsertAttendeeParticipant } from "./participant-registration";
-import { newCapabilityLinkSecret, queuedCapabilityToken, signCapabilityToken } from "../capability-links";
+import { newCapabilityLinkSecret, signedOrQueuedCapability } from "../capability-links";
 import type { DatabaseLike } from "../../types";
 import type { RegistrationRecord } from "./types";
 
@@ -186,23 +186,20 @@ export async function createRegistration(
   if (payload.referredByCode) {
     await recordReferralConversion(db, payload.referredByCode);
   }
-  const manageToken = payload.signingSecret
-    ? await signCapabilityToken({
-        signingSecret: payload.signingSecret,
-        linkSecret: registration.manage_link_secret,
-        purpose: "registration_manage",
-        resourceId: registration.id,
-      })
-    : queuedCapabilityToken("registration_manage", registration.id);
+  const manageToken = await signedOrQueuedCapability({
+    signingSecret: payload.signingSecret,
+    linkSecret: registration.manage_link_secret,
+    purpose: "registration_manage",
+    resourceId: registration.id,
+  });
   const confirmationToken = registration.confirmation_link_secret
-    ? payload.signingSecret
-      ? await signCapabilityToken({
-          signingSecret: payload.signingSecret,
-          linkSecret: registration.confirmation_link_secret,
-          purpose: "registration_confirm",
-          resourceId: registration.id,
-        })
-      : queuedCapabilityToken("registration_confirm", registration.id)
+    ? await signedOrQueuedCapability({
+        signingSecret: payload.signingSecret,
+        linkSecret: registration.confirmation_link_secret,
+        purpose: "registration_confirm",
+        resourceId: registration.id,
+        ttlSeconds: payload.confirmationTtlHours != null ? payload.confirmationTtlHours * 3600 : undefined,
+      })
     : null;
   return { registration, manageToken, confirmationToken, reactivated: Boolean(existing) };
 }

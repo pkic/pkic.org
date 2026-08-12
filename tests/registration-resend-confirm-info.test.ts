@@ -301,10 +301,14 @@ describe("resend-confirmation endpoint", () => {
     expect(audit[0].action).toBe("registration_reactivated");
   });
 
-  it("rejects with an invalid token", async () => {
+  it("does not authorize a resend by registration ID after token verification fails", async () => {
     await seedEventAndAdmin(env.DB);
     const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
     await seedWorkflowEmailTemplates(env.DB, admin.id);
+
+    const { registrationId } = await registerAttendee();
+    const queuedBefore = (await queryAll<{ count: number }>(env.DB, "SELECT COUNT(*) AS count FROM email_outbox"))[0]
+      .count;
 
     await expect(
       resendConfirmation(
@@ -313,12 +317,15 @@ describe("resend-confirmation endpoint", () => {
           new Request("https://app.test/api/v1/events/pqc-2026/registrations/resend-confirmation", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ token: "bogus-nonexistent-token" }),
+            body: JSON.stringify({ id: registrationId, token: "bogus-nonexistent-token" }),
           }),
           { eventSlug: "pqc-2026" },
         ),
       ),
     ).rejects.toMatchObject({ code: "RESEND_TOKEN_INVALID" });
+    const queuedAfter = (await queryAll<{ count: number }>(env.DB, "SELECT COUNT(*) AS count FROM email_outbox"))[0]
+      .count;
+    expect(queuedAfter).toBe(queuedBefore);
   });
 });
 

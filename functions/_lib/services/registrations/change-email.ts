@@ -19,7 +19,7 @@ import { nowIso, addHours } from "../../utils/time";
 import { checkEmailDomainMx } from "../../email/mx-check";
 import type { DatabaseLike, StatementLike } from "../../types";
 import type { RegistrationRecord } from "./types";
-import { newCapabilityLinkSecret, queuedCapabilityToken, signCapabilityToken } from "../capability-links";
+import { newCapabilityLinkSecret, signedOrQueuedCapability } from "../capability-links";
 
 const PENDING_CONFIRMATION_DEADLINE_HOURS = 14 * 24;
 
@@ -166,14 +166,13 @@ export async function changeRegistrationEmail(
     throw new AppError(500, "EMAIL_CHANGE_FAILED", "Failed to update registration");
   }
 
-  const confirmationToken = params.signingSecret
-    ? await signCapabilityToken({
-        signingSecret: params.signingSecret,
-        linkSecret: confirmationLinkSecret,
-        purpose: "registration_confirm",
-        resourceId: registration.id,
-      })
-    : queuedCapabilityToken("registration_confirm", registration.id);
+  const confirmationToken = await signedOrQueuedCapability({
+    signingSecret: params.signingSecret,
+    linkSecret: confirmationLinkSecret,
+    purpose: "registration_confirm",
+    resourceId: registration.id,
+    ttlSeconds: params.confirmationTtlHours * 60 * 60,
+  });
   return {
     registration: updated,
     userId: currentUser.id,

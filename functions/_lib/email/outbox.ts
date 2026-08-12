@@ -11,7 +11,7 @@ import { loadEmailLayout, loadEmailPartials } from "./partials";
 import { sendViaSendgrid } from "./sendgrid";
 import { applyCampaignCustomText } from "./campaign-custom";
 import { parseQueuedEmailAttachments, type QueuedEmailAttachment } from "./attachments";
-import { materializeQueuedCapabilityLinks } from "../services/capability-links";
+import { authorizeQueuedCapabilityLinks, materializeQueuedCapabilityLinks } from "../services/capability-links";
 import type { DatabaseLike, Env, StatementLike } from "../types";
 
 function uint8ToBase64(bytes: Uint8Array): string {
@@ -122,6 +122,7 @@ export async function queueEmail(
     recipientEmail: string;
     subject?: string | null;
     data: Record<string, unknown>;
+    capabilityLinkValues?: unknown[];
     messageType: "transactional" | "promotional";
     calendar?: CalendarPayload;
     attachments?: QueuedEmailAttachment[];
@@ -154,6 +155,8 @@ export async function queueEmail(
     data.__bounceAddress = payload.bounceAddress;
   }
 
+  const storedData = authorizeQueuedCapabilityLinks(data, payload.capabilityLinkValues ?? []);
+
   const sendAfter =
     payload.sendAfterSeconds && payload.sendAfterSeconds > 0
       ? new Date(Date.now() + payload.sendAfterSeconds * 1000).toISOString()
@@ -173,7 +176,7 @@ export async function queueEmail(
       payload.recipientUserId ?? null,
       payload.recipientEmail,
       payload.subject ?? null,
-      stringifyJson(data),
+      stringifyJson(storedData),
       payload.messageType,
       sendAfter,
       nowIso(),
@@ -192,6 +195,7 @@ export interface BulkEmailQueueRow {
   templateKey: string;
   subject: string;
   data: Record<string, unknown>;
+  capabilityLinkValues?: unknown[];
   messageType: "transactional" | "promotional";
 }
 
@@ -225,7 +229,7 @@ export function prepareBulkQueueEmailStatements(
             row.recipientUserId ?? null,
             row.recipientEmail,
             row.subject,
-            stringifyJson(row.data),
+            stringifyJson(authorizeQueuedCapabilityLinks(row.data, row.capabilityLinkValues ?? [])),
             row.messageType,
             queuedAt,
             queuedAt,
@@ -282,8 +286,16 @@ async function markOutboxSent(
 
 async function markOutboxFailed(db: DatabaseLike, row: OutboxRow, error: unknown): Promise<void> {
   const attempts = row.attempts + 1;
-  const status = getOutboxStatusForRetry(attempts);
-  const message = error instanceof Error ? error.message : "Unknown email send error";
+  const nonRetryable =
+    error instanceof AppError &&
+    (error.code === "CAPABILITY_RESOURCE_STALE" || error.code === "CAPABILITY_DESCRIPTOR_INVALID");
+  const status = nonRetryable ? "failed" : getOutboxStatusForRetry(attempts);
+  const message =
+    error instanceof AppError
+      ? `${error.code}: ${error.message}`
+      : error instanceof Error
+        ? error.message
+        : "Unknown email send error";
   const details = error instanceof AppError && error.details ? ` | details: ${stringifyJson(error.details)}` : "";
 
   await run(
@@ -511,6 +523,15 @@ export async function processSelectedOutbox(
     ...results,
     skipped: Math.max(0, ids.length - rows.length),
   };
+}
+
+export async function processSelectedOutboxBackground(db: DatabaseLike, env: Env, ids: string[]): Promise<void> {
+  try {
+    await processSelectedOutbox(db, env, ids);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown background outbox selection error";
+    logError("EMAIL_OUTBOX_SELECTION_FAILED", { count: ids.length, error: message });
+  }
 }
 
 export async function processPendingOutboxBackground(db: DatabaseLike, env: Env, limit = 20): Promise<void> {

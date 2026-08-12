@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:test";
 import {
+  authorizeQueuedCapabilityLinks,
   materializeQueuedCapabilityLinks,
   newCapabilityLinkSecret,
   issueDatabaseCapability,
@@ -12,9 +13,35 @@ import {
 import { resetDb } from "./helpers/reset-db";
 import { run } from "../functions/_lib/db/queries";
 import { nowIso } from "../functions/_lib/utils/time";
+import { processSelectedOutbox, queueEmail } from "../functions/_lib/email/outbox";
 
 const signingSecret = "capability-test-signing-secret";
 const textEncoder = new TextEncoder();
+
+async function seedRegistrationCapability(): Promise<void> {
+  const now = nowIso();
+  await run(env.DB, "INSERT INTO events (id, slug, name, timezone, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)", [
+    "event-capability",
+    "event-capability",
+    "Capability Event",
+    "UTC",
+    now,
+    now,
+  ]);
+  await run(
+    env.DB,
+    "INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    ["user-capability", "user@example.test", "user@example.test", "user", 1, now, now],
+  );
+  await run(
+    env.DB,
+    `INSERT INTO registrations (
+      id, event_id, user_id, status, attendance_type, source_type,
+      manage_link_secret, capacity_exempt_in_person, created_at, updated_at
+    ) VALUES (?, ?, ?, 'registered', 'virtual', 'test', ?, 0, ?, ?)`,
+    ["registration-capability", "event-capability", "user-capability", newCapabilityLinkSecret(), now, now],
+  );
+}
 
 describe("public capability links", () => {
   beforeEach(async () => resetDb());
@@ -69,28 +96,12 @@ describe("public capability links", () => {
   });
 
   it("materializes queued placeholders without persisting a signed token", async () => {
-    const now = nowIso();
-    await run(
-      env.DB,
-      "INSERT INTO events (id, slug, name, timezone, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-      ["event-capability", "event-capability", "Capability Event", "UTC", now, now],
-    );
-    await run(
-      env.DB,
-      "INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      ["user-capability", "user@example.test", "user@example.test", "user", 1, now, now],
-    );
-    const linkSecret = newCapabilityLinkSecret();
-    await run(
-      env.DB,
-      `INSERT INTO registrations (
-        id, event_id, user_id, status, attendance_type, source_type,
-        manage_link_secret, capacity_exempt_in_person, created_at, updated_at
-      ) VALUES (?, ?, ?, 'registered', 'virtual', 'test', ?, 0, ?, ?)`,
-      ["registration-capability", "event-capability", "user-capability", linkSecret, now, now],
-    );
+    await seedRegistrationCapability();
     const marker = queuedCapabilityToken("registration_manage", "registration-capability");
-    const storedPayload = { manageUrl: `https://example.test/manage?token=${marker}`, nested: [marker] };
+    const storedPayload = authorizeQueuedCapabilityLinks(
+      { manageUrl: `https://example.test/manage?token=${marker}`, nested: [marker] },
+      [marker],
+    );
 
     const materialized = await materializeQueuedCapabilityLinks(
       env.DB,
@@ -115,12 +126,85 @@ describe("public capability links", () => {
     const calendarPayload = await materializeQueuedCapabilityLinks(
       env.DB,
       { INTERNAL_SIGNING_SECRET: signingSecret },
-      { ics: `BEGIN:VCALENDAR\r\nURL:https://example.test/manage?token=${foldedMarker}\r\nEND:VCALENDAR\r\n` },
+      authorizeQueuedCapabilityLinks(
+        { ics: `BEGIN:VCALENDAR\r\nURL:https://example.test/manage?token=${foldedMarker}\r\nEND:VCALENDAR\r\n` },
+        [foldedMarker],
+      ),
     );
     const materializedIcs = calendarPayload.ics as string;
     expect(materializedIcs).not.toContain("pkcq1_");
-    expect(materializedIcs.replace(/\r\n /g, "")).toContain(`token=${token}`);
+    const calendarToken = materializedIcs.replace(/\r\n /g, "").match(/token=(pkc1_[A-Za-z0-9._-]+)/)?.[1];
+    expect(calendarToken).toBeDefined();
+    await expect(
+      verifyDatabaseCapability({
+        db: env.DB,
+        signingSecret,
+        purpose: "registration_manage",
+        token: calendarToken!,
+      }),
+    ).resolves.toMatchObject({ ok: true, resourceId: "registration-capability" });
     expect(materializedIcs.split("\r\n").every((line) => textEncoder.encode(line).length <= 75)).toBe(true);
+  });
+
+  it("materializes only explicitly authorized queued markers", async () => {
+    await seedRegistrationCapability();
+    const authorizedMarker = queuedCapabilityToken("registration_manage", "registration-capability");
+    const injectedMarker = queuedCapabilityToken("registration_manage", "attacker-selected-resource");
+    const payload = authorizeQueuedCapabilityLinks(
+      {
+        manageUrl: `https://example.test/manage?token=${authorizedMarker}`,
+        firstName: injectedMarker,
+      },
+      [authorizedMarker],
+    );
+
+    const materialized = await materializeQueuedCapabilityLinks(
+      env.DB,
+      { INTERNAL_SIGNING_SECRET: signingSecret },
+      payload,
+    );
+
+    expect(materialized.manageUrl).toMatch(/token=pkc1_/);
+    expect(materialized.firstName).toBe(injectedMarker);
+    expect(materialized).not.toHaveProperty("__authorizedCapabilityMarkers");
+  });
+
+  it("reports an authorized marker whose resource is no longer available as stale", async () => {
+    const marker = queuedCapabilityToken("registration_manage", "missing-registration");
+    const payload = authorizeQueuedCapabilityLinks({ manageUrl: marker }, [marker]);
+
+    await expect(
+      materializeQueuedCapabilityLinks(env.DB, { INTERNAL_SIGNING_SECRET: signingSecret }, payload),
+    ).rejects.toMatchObject({
+      status: 410,
+      code: "CAPABILITY_RESOURCE_STALE",
+      details: { purpose: "registration_manage", resourceId: "missing-registration" },
+    });
+  });
+
+  it("permanently skips a queued email and records the stale capability resource", async () => {
+    await seedRegistrationCapability();
+    const marker = queuedCapabilityToken("registration_manage", "registration-capability");
+    const manageUrl = `https://example.test/manage?token=${marker}`;
+    const outboxId = await queueEmail(env.DB, {
+      eventId: "event-capability",
+      templateKey: "unused-for-stale-capability",
+      recipientEmail: "user@example.test",
+      messageType: "transactional",
+      capabilityLinkValues: [manageUrl],
+      data: { manageUrl },
+    });
+    await run(env.DB, "DELETE FROM registrations WHERE id = ?", ["registration-capability"]);
+
+    await expect(
+      processSelectedOutbox(env.DB, { ...env, INTERNAL_SIGNING_SECRET: signingSecret }, [outboxId]),
+    ).resolves.toMatchObject({ processed: 1, failed: 1, skipped: 0 });
+    const outbox = await env.DB.prepare("SELECT status, attempts, last_error FROM email_outbox WHERE id = ?")
+      .bind(outboxId)
+      .first<{ status: string; attempts: number; last_error: string }>();
+    expect(outbox).toMatchObject({ status: "failed", attempts: 1 });
+    expect(outbox?.last_error).toContain("CAPABILITY_RESOURCE_STALE");
+    expect(outbox?.last_error).toContain("registration-capability");
   });
 
   it("initializes a legacy speaker secret with Web Crypto when first issuing a link", async () => {

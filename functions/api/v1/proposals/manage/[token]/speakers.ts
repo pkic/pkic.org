@@ -25,7 +25,6 @@ import type { EventRecord } from "../../../../../_lib/services/events";
 import { z } from "zod";
 import { normalizedEmailSchema, firstNameSchema, lastNameSchema } from "../../../../../../assets/shared/schemas/api";
 import { requireInternalSecret } from "../../../../../_lib/request";
-import { queuedCapabilityToken } from "../../../../../_lib/services/capability-links";
 
 const coSpeakerInviteSchema = z.object({
   email: normalizedEmailSchema,
@@ -54,25 +53,12 @@ export async function onRequestPost(c: any): Promise<Response> {
     lastName: body.lastName,
   });
 
-  await addProposalSpeaker(c.env.DB, {
+  const { manageToken } = await addProposalSpeaker(c.env.DB, {
     proposalId: proposal.id,
     userId: speakerUser.id,
     role: body.role,
   });
-
-  const speakerRow = await first<{ id: string }>(
-    c.env.DB,
-    "SELECT id FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
-    [proposal.id, speakerUser.id],
-  );
-  if (!speakerRow) {
-    return json({ error: { code: "SPEAKER_NOT_FOUND", message: "Speaker could not be added" } }, 500);
-  }
-  const speakerManageUrl = speakerManagePageUrl(
-    appBaseUrl,
-    event,
-    queuedCapabilityToken("speaker_manage", speakerRow.id),
-  );
+  const speakerManageUrl = speakerManagePageUrl(appBaseUrl, event, manageToken);
 
   const proposer = await first<{ first_name: string | null }>(c.env.DB, "SELECT first_name FROM users WHERE id = ?", [
     proposal.proposer_user_id,
@@ -90,6 +76,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     recipientUserId: speakerUser.id,
     messageType: "transactional",
     subject: `You have been added as a speaker — ${event.name}`,
+    capabilityLinkValues: [speakerManageUrl],
     data: {
       ...buildEventEmailVariables(event, appBaseUrl),
       firstName: speakerUser.first_name ?? "",

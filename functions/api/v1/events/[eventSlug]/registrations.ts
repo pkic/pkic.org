@@ -173,7 +173,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     const confirmationUrl = registrationConfirmPageUrl(
       appBaseUrl,
       event,
-      queuedCapabilityToken("registration_confirm", created.registration.id),
+      queuedCapabilityToken("registration_confirm", created.registration.id, config.confirmationLinkTtlHours * 60 * 60),
       created.registration.id,
     );
     const outboxId = await queueEmail(c.env.DB, {
@@ -184,6 +184,7 @@ export async function onRequestPost(c: any): Promise<Response> {
       recipientUserId: user.id,
       messageType: "transactional",
       subject: `Confirm your registration for ${event.name}`,
+      capabilityLinkValues: [confirmationUrl, queuedManageUrl],
       data: {
         ...buildEventEmailVariables(event, appBaseUrl),
         // User
@@ -235,6 +236,7 @@ export async function onRequestPost(c: any): Promise<Response> {
       recipientUserId: user.id,
       messageType: "transactional",
       subject: `Registration confirmed for ${event.name}`,
+      capabilityLinkValues: [queuedManageUrl],
       // Delay so the OG badge has time to render before we try to attach it.
       // EMAIL_BADGE_DELAY_SECONDS=0 in .dev.vars skips the delay for local/e2e.
       sendAfterSeconds: c.env.ASSETS_BUCKET ? Number(c.env.EMAIL_BADGE_DELAY_SECONDS ?? 90) : 0,

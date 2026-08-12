@@ -14,6 +14,7 @@ export async function runReminderCycle(
     appBaseUrl: string;
     reminderIntervalDays: number;
     pendingConfirmationReminderIntervalDays: number;
+    confirmationLinkTtlHours: number;
     maxInviteReminders: number;
     maxPendingConfirmationReminders: number;
     maxPresentationReminders: number;
@@ -76,6 +77,7 @@ export async function runReminderCycle(
     maxPendingConfirmationReminders: payload.maxPendingConfirmationReminders,
     pendingConfirmationIntervalDays,
     pendingConfirmationFallbackDeadlineDays,
+    confirmationLinkTtlHours: payload.confirmationLinkTtlHours,
     confirmationCutoff,
   });
 

@@ -91,6 +91,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     recipientEmail: invite.invitee_email,
     messageType: "transactional",
     subject,
+    capabilityLinkValues: [actionUrl, declineUrl],
     data: {
       ...buildEventEmailVariables(event, appBaseUrl),
       firstName: invite.invitee_first_name ?? "",

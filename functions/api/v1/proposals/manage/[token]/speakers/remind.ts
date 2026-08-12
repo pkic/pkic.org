@@ -91,6 +91,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     recipientUserId: speakerRow.user_id,
     messageType: "transactional",
     subject,
+    capabilityLinkValues: [speakerManageUrl],
     data: isProfileReviewRequest
       ? {
           ...buildEventEmailVariables(event, appBaseUrl),

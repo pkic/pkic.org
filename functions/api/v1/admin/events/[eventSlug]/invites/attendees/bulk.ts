@@ -73,21 +73,26 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   // Queue invite emails for new invites in a single batch INSERT.
   const emailRows = outcomes
     .filter((o) => o.status === "created" && o.token)
-    .map((o) => ({
-      eventId: event.id,
-      recipientEmail: o.email,
-      templateKey: "attendee_invite",
-      subject: `Invitation: ${event.name}`,
-      data: {
-        ...sharedEmailVars,
-        registrationUrl: registrationPageUrl(appBaseUrl, event, {
-          invite: o.token!,
-          inviteId: o.inviteId,
-          source: "invite",
-        }),
-        declineUrl: inviteDeclineUrl(appBaseUrl, event, o.token!, o.inviteId),
-      },
-    }));
+    .map((o) => {
+      const registrationUrl = registrationPageUrl(appBaseUrl, event, {
+        invite: o.token!,
+        inviteId: o.inviteId,
+        source: "invite",
+      });
+      const declineUrl = inviteDeclineUrl(appBaseUrl, event, o.token!, o.inviteId);
+      return {
+        eventId: event.id,
+        recipientEmail: o.email,
+        templateKey: "attendee_invite",
+        subject: `Invitation: ${event.name}`,
+        capabilityLinkValues: [registrationUrl, declineUrl],
+        data: {
+          ...sharedEmailVars,
+          registrationUrl,
+          declineUrl,
+        },
+      };
+    });
   await bulkQueueInviteEmails(requestDb(c), emailRows);
 
   const created: BulkItemResult[] = outcomes.filter((o) => o.status === "created").map((o) => ({ email: o.email }));

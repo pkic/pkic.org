@@ -230,6 +230,7 @@ export async function runScheduledDueWork(env: Env): Promise<ScheduledDueWorkRes
       appBaseUrl: config.appBaseUrl,
       reminderIntervalDays: config.reminderIntervalDays,
       pendingConfirmationReminderIntervalDays: config.pendingConfirmationReminderIntervalDays,
+      confirmationLinkTtlHours: config.confirmationLinkTtlHours,
       maxInviteReminders: config.maxInviteReminders,
       maxPendingConfirmationReminders: config.maxPendingConfirmationReminders,
       maxPresentationReminders: config.maxPresentationReminders,

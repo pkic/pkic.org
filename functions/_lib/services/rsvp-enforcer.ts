@@ -135,6 +135,7 @@ export async function runRsvpEnforcer(
         eventId: w.event_id,
         recipientUserId: w.user_id,
         recipientEmail: w.attendee_email,
+        capabilityLinkValues: [manageUrl],
         data: {
           firstName: w.first_name ?? "",
           event_name: w.event_name,

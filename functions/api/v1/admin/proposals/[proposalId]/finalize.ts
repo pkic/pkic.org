@@ -88,6 +88,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
       recipientUserId: message.recipientUserId,
       subject: message.fallbackSubject,
       messageType: "transactional",
+      capabilityLinkValues: [message.data.manageUrl, message.data.profileUrl, message.data.uploadUrl],
       data: message.data,
     });
 

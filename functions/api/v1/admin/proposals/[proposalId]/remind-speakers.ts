@@ -54,6 +54,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
       recipientUserId: speaker.user_id,
       subject: `Action required: complete your speaker profile — ${event.name}`,
       messageType: "transactional",
+      capabilityLinkValues: [profileUrl],
       data: {
         ...buildEventEmailVariables(event, appBaseUrl),
         firstName: speaker.first_name ?? "",

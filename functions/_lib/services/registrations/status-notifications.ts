@@ -84,6 +84,7 @@ export async function queueRegistrationStatusEmail(
     recipientUserId: user.id,
     messageType: "transactional",
     subject: params.subject,
+    capabilityLinkValues: [manageUrl],
     data: {
       ...buildEventEmailVariables(params.event, params.appBaseUrl),
       firstName: user.first_name ?? "",

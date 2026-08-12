@@ -91,30 +91,32 @@ export async function runPresentationReminders(
   );
 
   if (!dryRun && duePresentation.length > 0) {
-    const emailRows = preparedRows.map(
-      ({ row, event, effectiveDeadline, daysToDeadline, reminderNumber, subject }) => ({
+    const emailRows = preparedRows.map(({ row, event, effectiveDeadline, daysToDeadline, reminderNumber, subject }) => {
+      const uploadUrl = speakerPresentationPageUrl(
+        appBaseUrl,
+        event,
+        queuedCapabilityToken("speaker_manage", row.speaker_id),
+      );
+      return {
         eventId: row.event_id,
         recipientEmail: row.email,
         recipientUserId: row.user_id,
         templateKey: "presentation_upload_request",
         subject,
+        capabilityLinkValues: [uploadUrl],
         data: {
           ...buildEventEmailVariables(event, appBaseUrl),
           firstName: row.first_name ?? "",
           proposalTitle: row.proposal_title,
-          uploadUrl: speakerPresentationPageUrl(
-            appBaseUrl,
-            event,
-            queuedCapabilityToken("speaker_manage", row.speaker_id),
-          ),
+          uploadUrl,
           deadline: effectiveDeadline ?? "",
           isReminder: true,
           reminderCount: String(reminderNumber),
           daysUntilDeadline: daysToDeadline !== null ? String(daysToDeadline) : "",
           __subjectOverride: subject,
         },
-      }),
-    );
+      };
+    });
 
     await batchQueueEmailsAndUpdateState(
       db,

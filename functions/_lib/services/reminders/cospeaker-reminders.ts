@@ -94,6 +94,7 @@ export async function runCoSpeakerInviteReminders(
       const reminderNumber = Number(row.reminder_count ?? 0) + 1;
       const subject = `Reminder: please confirm speaker participation — ${event.name}`;
       const manageToken = queuedCapabilityToken("speaker_manage", row.speaker_id);
+      const manageUrl = speakerManagePageUrl(appBaseUrl, event, manageToken);
       const ctx = proposalContexts.get(row.proposal_id);
       return {
         eventId: row.event_id,
@@ -101,6 +102,7 @@ export async function runCoSpeakerInviteReminders(
         recipientUserId: row.user_id,
         templateKey: "co_speaker_invite",
         subject,
+        capabilityLinkValues: [manageUrl],
         data: {
           ...buildEventEmailVariables(event, appBaseUrl),
           firstName: row.first_name ?? "",
@@ -110,7 +112,7 @@ export async function runCoSpeakerInviteReminders(
           proposalTitle: ctx?.proposalTitle ?? "",
           proposalAbstract: ctx?.proposalAbstract ?? "",
           speakerLineupText: ctx?.speakerLineupText ?? "",
-          manageUrl: speakerManagePageUrl(appBaseUrl, event, manageToken),
+          manageUrl,
           isReminder: true,
           reminderCount: String(reminderNumber),
         },

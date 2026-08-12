@@ -76,6 +76,7 @@ export async function onRequestPost(c: any): Promise<Response> {
       recipientEmail: body.email,
       recipientUserId: row.user_id,
       messageType: "transactional",
+      capabilityLinkValues: [manageUrl],
       data: {
         ...buildEventEmailVariables(event, appBaseUrl),
         firstName: row.first_name ?? "",

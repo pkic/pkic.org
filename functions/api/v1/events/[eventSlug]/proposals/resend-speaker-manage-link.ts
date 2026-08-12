@@ -83,6 +83,7 @@ export async function onRequestPost(c: any): Promise<Response> {
       recipientUserId: row.user_id,
       messageType: "transactional",
       subject: `Your speaker management link for ${event.name}`,
+      capabilityLinkValues: [manageUrl],
       data: {
         ...buildEventEmailVariables(event, appBaseUrl),
         firstName: row.first_name ?? "",

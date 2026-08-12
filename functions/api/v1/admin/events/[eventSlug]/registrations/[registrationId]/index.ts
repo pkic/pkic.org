@@ -287,7 +287,7 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
       const confirmationUrl = registrationConfirmPageUrl(
         appBaseUrl,
         event,
-        queuedCapabilityToken("registration_confirm", updated.id),
+        queuedCapabilityToken("registration_confirm", updated.id, config.confirmationLinkTtlHours * 60 * 60),
         updated.id,
       );
       const userRecord = await first<{
@@ -313,6 +313,7 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
           recipientUserId: emailResult.userId,
           messageType: "transactional",
           subject: `Confirm your email address for ${event.name}`,
+          capabilityLinkValues: [confirmationUrl],
           data: {
             ...buildEventEmailVariables(event, appBaseUrl),
             firstName: userRecord.first_name ?? "",
