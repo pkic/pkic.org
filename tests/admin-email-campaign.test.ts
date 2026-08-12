@@ -4,6 +4,49 @@ import { getEventBySlug } from "../functions/_lib/services/events";
 import { listCampaignRecipients } from "../functions/_lib/services/admin-email-campaign";
 import { resetDb } from "./helpers/reset-db";
 import { seedEventAndAdmin } from "./helpers/context";
+import type { DatabaseLike, StatementLike } from "../functions/_lib/types";
+
+function countingDatabase(db: DatabaseLike, counts: { dayAttendance: number; dayWaitlist: number }): DatabaseLike {
+  function wrapStatement(statement: StatementLike, query: string): StatementLike {
+    const normalizedQuery = query.toLowerCase();
+    const queryType = normalizedQuery.includes("select rda.registration_id")
+      ? "dayAttendance"
+      : normalizedQuery.includes("select w.registration_id")
+        ? "dayWaitlist"
+        : null;
+
+    function countExecution(): void {
+      if (queryType) counts[queryType] += 1;
+    }
+
+    return {
+      bind(...values: unknown[]) {
+        return wrapStatement(statement.bind(...values), query);
+      },
+      async all<T>() {
+        countExecution();
+        return statement.all<T>();
+      },
+      async first<T>(columnName?: string) {
+        countExecution();
+        return statement.first<T>(columnName);
+      },
+      async run<T>() {
+        countExecution();
+        return statement.run<T>();
+      },
+    };
+  }
+
+  return {
+    prepare(query: string) {
+      return wrapStatement(db.prepare(query), query);
+    },
+    batch(statements) {
+      return db.batch(statements);
+    },
+  };
+}
 
 describe("admin email campaign recipients", () => {
   beforeEach(async () => {
@@ -39,13 +82,21 @@ describe("admin email campaign recipients", () => {
     );
 
     const event = await getEventBySlug(env.DB, "pqc-2026");
-    const recipients = await listCampaignRecipients(env.DB, event, "https://app.test", {
-      audience: "attendees",
-      attendeeStatus: "registered",
-      dayWaitlistStatus: "all",
-    });
+    const enrichmentQueryCounts = { dayAttendance: 0, dayWaitlist: 0 };
+    const recipients = await listCampaignRecipients(
+      countingDatabase(env.DB, enrichmentQueryCounts),
+      event,
+      "https://app.test",
+      {
+        audience: "attendees",
+        attendeeStatus: "registered",
+        dayWaitlistStatus: "all",
+      },
+    );
 
     expect(recipients).toHaveLength(users.length);
     expect(recipients[0].templateData.dayWaitlist).toEqual([]);
+    expect(enrichmentQueryCounts.dayAttendance).toBe(1);
+    expect(enrichmentQueryCounts.dayWaitlist).toBe(1);
   });
 });
