@@ -60,6 +60,7 @@ describe("admin email campaign recipients", () => {
       email: `campaign-user-${index}@example.test`,
       manageTokenHash: `campaign-manage-token-${index}`,
       registrationId: `campaign-registration-${index}`,
+      attendanceType: index === 100 ? "in_person" : "virtual",
     }));
 
     await env.DB.batch(
@@ -76,10 +77,30 @@ describe("admin email campaign recipients", () => {
           `INSERT INTO registrations (
                id, event_id, user_id, status, attendance_type, source_type,
                manage_token_hash, created_at, updated_at
-             ) VALUES (?, ?, ?, 'registered', 'virtual', 'direct', ?, datetime('now'), datetime('now'))`,
-        ).bind(user.registrationId, eventId, user.id, user.manageTokenHash),
+             ) VALUES (?, ?, ?, 'registered', ?, 'direct', ?, datetime('now'), datetime('now'))`,
+        ).bind(user.registrationId, eventId, user.id, user.attendanceType, user.manageTokenHash),
       ),
     );
+
+    const enrichedUser = users[100];
+    if (!enrichedUser) throw new Error("Expected the 101st campaign user to exist");
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO event_days (id, event_id, day_date, label, sort_order, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      ).bind("campaign-day-101", eventId, "2026-12-02", "Day 2", 10),
+      env.DB.prepare(
+        `INSERT INTO registration_day_attendance (
+             id, registration_id, event_day_id, attendance_type, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      ).bind("campaign-attendance-101", enrichedUser.registrationId, "campaign-day-101", "in_person"),
+      env.DB.prepare(
+        `INSERT INTO event_day_waitlist_entries (
+             id, event_id, event_day_id, registration_id, user_id, priority_lane,
+             status, position, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, 'general', 'waiting', ?, datetime('now'), datetime('now'))`,
+      ).bind("campaign-waitlist-101", eventId, "campaign-day-101", enrichedUser.registrationId, enrichedUser.id, 1),
+    ]);
 
     const event = await getEventBySlug(env.DB, "pqc-2026");
     const enrichmentQueryCounts = { dayAttendance: 0, dayWaitlist: 0 };
@@ -96,6 +117,18 @@ describe("admin email campaign recipients", () => {
 
     expect(recipients).toHaveLength(users.length);
     expect(recipients[0].templateData.dayWaitlist).toEqual([]);
+    const enrichedRecipient = recipients.find((recipient) => recipient.email === enrichedUser.email);
+    expect(enrichedRecipient?.templateData.dayAttendance).toEqual([
+      {
+        dayLabel: "Day 2",
+        attendanceLabel: "In person",
+        statusLabel: "Waitlisted for in-person attendance",
+        waitlistStatus: "waiting",
+        isWaitlisted: true,
+        isWaitlistOffer: false,
+      },
+    ]);
+    expect(enrichedRecipient?.templateData.dayWaitlist).toEqual([{ dayDate: "2026-12-02", status: "waiting" }]);
     expect(enrichmentQueryCounts.dayAttendance).toBe(1);
     expect(enrichmentQueryCounts.dayWaitlist).toBe(1);
   });
