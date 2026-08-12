@@ -1,0 +1,60 @@
+id: paloaltonetworks
+name: Palo Alto Networks
+slogan:
+website: https://www.paloaltonetworks.com/
+# Business domains for email
+organizationDomains:
+  - paloaltonetworks.com
+# Short description, longer content can be placed in `content/members/`
+description: 
+
+# membership
+memberSince: 2026-08-12
+memberType: F
+workingGroups:
+
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press:
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: George Parsons
+    role: Head of PKI Strategy
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/georgehparsons
+    description: George is the Head of PKI Strategy at Palo Alto Networks and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
