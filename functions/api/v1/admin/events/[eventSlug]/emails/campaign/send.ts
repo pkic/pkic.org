@@ -3,8 +3,11 @@ import { json } from "../../../../../../../_lib/http";
 import { AppError } from "../../../../../../../_lib/errors";
 import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
 import { buildEventEmailVariables, getEventBySlug } from "../../../../../../../_lib/services/events";
-import { queueEmail, processOutboxByIdBackground } from "../../../../../../../_lib/email/outbox";
-import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
+import {
+  prepareBulkQueueEmailStatements,
+  processPendingOutboxBackground,
+} from "../../../../../../../_lib/email/outbox";
+import { getConfig, resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { requireInternalSecret } from "../../../../../../../_lib/request";
 import { resolveTemplate } from "../../../../../../../_lib/email/templates";
 import {
@@ -12,7 +15,6 @@ import {
   registrationManagePageUrl,
   registrationPageUrl,
 } from "../../../../../../../_lib/services/frontend-links";
-import { run } from "../../../../../../../_lib/db/queries";
 import { randomToken, sha256Hex } from "../../../../../../../_lib/utils/crypto";
 import { nowIso } from "../../../../../../../_lib/utils/time";
 import {
@@ -24,6 +26,10 @@ import {
 } from "../../../../../../../_lib/services/admin-email-campaign";
 import { adminEventCampaignSendSchema } from "../../../../../../../../assets/shared/schemas/api";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
+import type { StatementLike } from "../../../../../../../_lib/types";
+
+const CAMPAIGN_QUEUE_BATCH_SIZE = 250;
+const CAMPAIGN_IMMEDIATE_OUTBOX_LIMIT = 100;
 
 export async function onRequestPost(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
@@ -119,46 +125,65 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 
   let queued = 0;
   let batches = 0;
+  const db = requestDb(c);
   const routeVars =
     body.filter.audience === "attendees"
       ? { registrationUrl: registrationPageUrl(appBaseUrl, event, { source: "admin_email" }) }
       : { proposalUrl: proposalPageUrl(appBaseUrl, event, { source: "admin_email" }) };
+  const sharedEventVars = buildEventEmailVariables(event, appBaseUrl);
+
+  const queueRows: Array<{
+    eventId: string;
+    templateKey: string;
+    recipientEmail: string;
+    recipientUserId?: string | null;
+    messageType: "transactional" | "promotional";
+    subject: string;
+    data: Record<string, unknown>;
+  }> = [];
+  const registrationUpdates: Array<StatementLike | null> = [];
 
   if (body.sendMode === "personal") {
-    for (const recipient of uniqueRecipients) {
-      let recipientManageUrl: string | undefined;
-      if (body.filter.audience === "attendees" && recipient.registrationId) {
-        const manageToken = randomToken(24);
-        const manageTokenHash = await sha256Hex(manageToken);
-        await run(requestDb(c), "UPDATE registrations SET manage_token_hash = ?, updated_at = ? WHERE id = ?", [
-          manageTokenHash,
-          nowIso(),
-          recipient.registrationId,
-        ]);
-        recipientManageUrl = registrationManagePageUrl(appBaseUrl, event, manageToken);
-      }
+    const personalRows = await Promise.all(
+      uniqueRecipients.map(async (recipient) => {
+        let recipientManageUrl: string | undefined;
+        let registrationUpdate: StatementLike | null = null;
+        if (body.filter.audience === "attendees" && recipient.registrationId) {
+          const manageToken = randomToken(24);
+          const manageTokenHash = await sha256Hex(manageToken);
+          registrationUpdate = db
+            .prepare("UPDATE registrations SET manage_token_hash = ?, updated_at = ? WHERE id = ?")
+            .bind(manageTokenHash, nowIso(), recipient.registrationId);
+          recipientManageUrl = registrationManagePageUrl(appBaseUrl, event, manageToken);
+        }
 
-      const outboxId = await queueEmail(requestDb(c), {
-        eventId: event.id,
-        templateKey,
-        recipientEmail: recipient.email,
-        recipientUserId: recipient.userId ?? null,
-        messageType,
-        subject: body.subjectOverride ?? `Update: ${event.name}`,
-        data: {
-          ...buildEventEmailVariables(event, appBaseUrl),
-          firstName: recipient.firstName,
-          lastName: recipient.lastName,
-          ...routeVars,
-          ...recipient.templateData,
-          ...(recipientManageUrl ? { manageUrl: recipientManageUrl } : {}),
-          __adminCampaignCustomText: body.customText ?? null,
-          __adminCampaignBodyContent: body.bodyContent ?? null,
-          __campaignAudience: body.filter.audience,
-        },
-      });
-      queued += 1;
-      c.executionCtx.waitUntil(processOutboxByIdBackground(requestDb(c), c.env, outboxId));
+        return {
+          registrationUpdate,
+          queueRow: {
+            eventId: event.id,
+            templateKey,
+            recipientEmail: recipient.email,
+            recipientUserId: recipient.userId ?? null,
+            messageType,
+            subject: body.subjectOverride ?? `Update: ${event.name}`,
+            data: {
+              ...sharedEventVars,
+              firstName: recipient.firstName,
+              lastName: recipient.lastName,
+              ...routeVars,
+              ...recipient.templateData,
+              ...(recipientManageUrl ? { manageUrl: recipientManageUrl } : {}),
+              __adminCampaignCustomText: body.customText ?? null,
+              __adminCampaignBodyContent: body.bodyContent ?? null,
+              __campaignAudience: body.filter.audience,
+            },
+          },
+        };
+      }),
+    );
+    for (const row of personalRows) {
+      queueRows.push(row.queueRow);
+      registrationUpdates.push(row.registrationUpdate);
     }
     batches = uniqueRecipients.length;
   } else {
@@ -167,14 +192,14 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
       const to = chunk[0];
       if (!to) continue;
       const bcc = chunk.slice(1).map((recipient) => recipient.email);
-      const outboxId = await queueEmail(requestDb(c), {
+      queueRows.push({
         eventId: event.id,
         templateKey,
         recipientEmail: to.email,
         messageType,
         subject: body.subjectOverride ?? `Update: ${event.name}`,
         data: {
-          ...buildEventEmailVariables(event, appBaseUrl),
+          ...sharedEventVars,
           firstName: "Member",
           lastName: "",
           ...routeVars,
@@ -184,11 +209,34 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
           __bccRecipients: bcc,
         },
       });
+      registrationUpdates.push(null);
       queued += chunk.length;
       batches += 1;
-      c.executionCtx.waitUntil(processOutboxByIdBackground(requestDb(c), c.env, outboxId));
     }
   }
+
+  const preparedRows = prepareBulkQueueEmailStatements(db, queueRows);
+  for (let offset = 0; offset < preparedRows.length; offset += CAMPAIGN_QUEUE_BATCH_SIZE) {
+    const preparedSlice = preparedRows.slice(offset, offset + CAMPAIGN_QUEUE_BATCH_SIZE);
+    const statements: StatementLike[] = [];
+    for (let index = 0; index < preparedSlice.length; index += 1) {
+      const registrationUpdate = registrationUpdates[offset + index];
+      if (registrationUpdate) statements.push(registrationUpdate);
+      statements.push(preparedSlice[index].statement);
+    }
+    await db.batch(statements);
+  }
+
+  queued += body.sendMode === "personal" ? queueRows.length : 0;
+  // Queue construction is now a small number of D1 batches. Start only a bounded
+  // processing pass here; the scheduled outbox worker drains the remainder.
+  c.executionCtx.waitUntil(
+    processPendingOutboxBackground(
+      db,
+      c.env,
+      Math.min(getConfig(c.env).scheduledOutboxLimit, CAMPAIGN_IMMEDIATE_OUTBOX_LIMIT),
+    ),
+  );
 
   return json({
     success: true,

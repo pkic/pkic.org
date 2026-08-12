@@ -11,7 +11,7 @@ import { loadEmailLayout, loadEmailPartials } from "./partials";
 import { sendViaSendgrid } from "./sendgrid";
 import { applyCampaignCustomText } from "./campaign-custom";
 import { parseQueuedEmailAttachments, type QueuedEmailAttachment } from "./attachments";
-import type { DatabaseLike, Env } from "../types";
+import type { DatabaseLike, Env, StatementLike } from "../types";
 
 function uint8ToBase64(bytes: Uint8Array): string {
   const chunkSize = 12288; // 12kb chunks to avoid stack overflow
@@ -183,47 +183,70 @@ export async function queueEmail(
   return id;
 }
 
-/**
- * Queues invite emails for multiple recipients in a single db.batch() call.
- * All rows share the same templateKey, eventId, subject, and base data; only
- * the recipient-specific fields (email, registrationUrl, declineUrl) differ.
- */
-export interface InviteEmailQueueRow {
+/** Builds prepared outbox inserts so callers can combine them with related D1 writes. */
+export interface BulkEmailQueueRow {
   eventId: string;
   recipientEmail: string;
   recipientUserId?: string | null;
   templateKey: string;
   subject: string;
   data: Record<string, unknown>;
+  messageType: "transactional" | "promotional";
 }
+
+export interface PreparedBulkEmailQueueRow {
+  id: string;
+  statement: StatementLike;
+}
+
+export function prepareBulkQueueEmailStatements(
+  db: DatabaseLike,
+  rows: BulkEmailQueueRow[],
+  queuedAt = nowIso(),
+): PreparedBulkEmailQueueRow[] {
+  return rows.map((row) =>
+    (() => {
+      const id = uuid();
+      return {
+        id,
+        statement: db
+          .prepare(
+            `INSERT INTO email_outbox (
+              id, event_id, template_key, template_version, recipient_user_id, recipient_email,
+              subject, payload_json, message_type, provider, provider_message_id, status, attempts,
+              send_after, last_error, created_at, updated_at, sent_at
+            ) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, 'sendgrid', NULL, 'queued', 0, ?, NULL, ?, ?, NULL)`,
+          )
+          .bind(
+            id,
+            row.eventId,
+            row.templateKey,
+            row.recipientUserId ?? null,
+            row.recipientEmail,
+            row.subject,
+            stringifyJson(row.data),
+            row.messageType,
+            queuedAt,
+            queuedAt,
+            queuedAt,
+          ),
+      };
+    })(),
+  );
+}
+
+export type InviteEmailQueueRow = Omit<BulkEmailQueueRow, "messageType">;
 
 export function prepareBulkQueueInviteEmailStatements(
   db: DatabaseLike,
   rows: InviteEmailQueueRow[],
   queuedAt = nowIso(),
-): ReturnType<DatabaseLike["prepare"]>[] {
-  return rows.map((row) =>
-    db
-      .prepare(
-        `INSERT INTO email_outbox (
-              id, event_id, template_key, template_version, recipient_user_id, recipient_email,
-              subject, payload_json, message_type, provider, provider_message_id, status, attempts,
-              send_after, last_error, created_at, updated_at, sent_at
-            ) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, 'transactional', 'sendgrid', NULL, 'queued', 0, ?, NULL, ?, ?, NULL)`,
-      )
-      .bind(
-        uuid(),
-        row.eventId,
-        row.templateKey,
-        row.recipientUserId ?? null,
-        row.recipientEmail,
-        row.subject,
-        stringifyJson(row.data),
-        queuedAt,
-        queuedAt,
-        queuedAt,
-      ),
-  );
+): StatementLike[] {
+  return prepareBulkQueueEmailStatements(
+    db,
+    rows.map((row) => ({ ...row, messageType: "transactional" as const })),
+    queuedAt,
+  ).map((row) => row.statement);
 }
 
 export async function bulkQueueInviteEmails(db: DatabaseLike, rows: InviteEmailQueueRow[]): Promise<void> {
