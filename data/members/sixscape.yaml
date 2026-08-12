@@ -12,6 +12,10 @@ description: Sixscape is dedicated to making Cryptographic Authentication and Se
 memberSince: 2021-07-20
 memberType: F
 workingGroups:
+ - PQC
+ - CM
+ - PKIMM
+ - CBOM
 
 # sponsor
 sponsor:
