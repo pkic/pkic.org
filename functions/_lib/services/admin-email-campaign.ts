@@ -150,7 +150,7 @@ export async function listCampaignRecipients(
           ...dayWaitlistFilterParams(dayWaitlistStatus),
         ],
       );
-      return buildAttendeeCampaignRecipients(db, rows, form?.fields);
+      return buildAttendeeCampaignRecipients(db, event.id, rows, form?.fields);
     }
 
     const rows = await all<AttendeeCampaignRow>(
@@ -176,7 +176,7 @@ export async function listCampaignRecipients(
       ],
     );
 
-    return buildAttendeeCampaignRecipients(db, rows, form?.fields);
+    return buildAttendeeCampaignRecipients(db, event.id, rows, form?.fields);
   }
 
   if (filter.dayDate) {
@@ -241,44 +241,32 @@ function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function chunkIds(ids: string[], size = 400): string[][] {
-  const chunks: string[][] = [];
-  for (let i = 0; i < ids.length; i += size) {
-    chunks.push(ids.slice(i, i + size));
-  }
-  return chunks;
-}
-
 async function listAttendeeDayAttendanceByRegistration(
   db: DatabaseLike,
-  registrationIds: string[],
+  eventId: string,
 ): Promise<Map<string, Array<{ dayDate: string; attendanceType: string; label: string | null }>>> {
   const byRegistration = new Map<string, Array<{ dayDate: string; attendanceType: string; label: string | null }>>();
-  if (registrationIds.length === 0) return byRegistration;
-
-  for (const chunk of chunkIds(registrationIds)) {
-    const placeholders = chunk.map(() => "?").join(", ");
-    const rows = await all<AttendeeDayAttendanceRow>(
-      db,
-      `SELECT rda.registration_id,
-              ed.day_date AS dayDate,
-              rda.attendance_type AS attendanceType,
-              ed.label AS label
-       FROM registration_day_attendance rda
-       JOIN event_days ed ON ed.id = rda.event_day_id
-       WHERE rda.registration_id IN (${placeholders})
-       ORDER BY rda.registration_id ASC, ed.sort_order ASC, ed.day_date ASC`,
-      chunk,
-    );
-    for (const row of rows) {
-      const entries = byRegistration.get(row.registration_id) ?? [];
-      entries.push({
-        dayDate: row.dayDate,
-        attendanceType: row.attendanceType,
-        label: row.label,
-      });
-      byRegistration.set(row.registration_id, entries);
-    }
+  const rows = await all<AttendeeDayAttendanceRow>(
+    db,
+    `SELECT rda.registration_id,
+            ed.day_date AS dayDate,
+            rda.attendance_type AS attendanceType,
+            ed.label AS label
+     FROM registration_day_attendance rda
+     JOIN registrations r ON r.id = rda.registration_id
+     JOIN event_days ed ON ed.id = rda.event_day_id
+     WHERE r.event_id = ?
+     ORDER BY rda.registration_id ASC, ed.sort_order ASC, ed.day_date ASC`,
+    [eventId],
+  );
+  for (const row of rows) {
+    const entries = byRegistration.get(row.registration_id) ?? [];
+    entries.push({
+      dayDate: row.dayDate,
+      attendanceType: row.attendanceType,
+      label: row.label,
+    });
+    byRegistration.set(row.registration_id, entries);
   }
 
   return byRegistration;
@@ -286,33 +274,28 @@ async function listAttendeeDayAttendanceByRegistration(
 
 async function listAttendeeDayWaitlistByRegistration(
   db: DatabaseLike,
-  registrationIds: string[],
+  eventId: string,
 ): Promise<Map<string, Array<{ dayDate: string; status: string }>>> {
   const byRegistration = new Map<string, Array<{ dayDate: string; status: string }>>();
-  if (registrationIds.length === 0) return byRegistration;
-
-  for (const chunk of chunkIds(registrationIds)) {
-    const placeholders = chunk.map(() => "?").join(", ");
-    const rows = await all<AttendeeDayWaitlistRow>(
-      db,
-      `SELECT w.registration_id,
-              ed.day_date AS dayDate,
-              w.status AS status
-       FROM event_day_waitlist_entries w
-       JOIN event_days ed ON ed.id = w.event_day_id
-       WHERE w.registration_id IN (${placeholders})
-         AND w.status IN ('waiting', 'offered', 'accepted')
-       ORDER BY w.registration_id ASC, ed.sort_order ASC, ed.day_date ASC`,
-      chunk,
-    );
-    for (const row of rows) {
-      const entries = byRegistration.get(row.registration_id) ?? [];
-      entries.push({
-        dayDate: row.dayDate,
-        status: row.status,
-      });
-      byRegistration.set(row.registration_id, entries);
-    }
+  const rows = await all<AttendeeDayWaitlistRow>(
+    db,
+    `SELECT w.registration_id,
+            ed.day_date AS dayDate,
+            w.status AS status
+     FROM event_day_waitlist_entries w
+     JOIN event_days ed ON ed.id = w.event_day_id
+     WHERE w.event_id = ?
+       AND w.status IN ('waiting', 'offered', 'accepted')
+     ORDER BY w.registration_id ASC, ed.sort_order ASC, ed.day_date ASC`,
+    [eventId],
+  );
+  for (const row of rows) {
+    const entries = byRegistration.get(row.registration_id) ?? [];
+    entries.push({
+      dayDate: row.dayDate,
+      status: row.status,
+    });
+    byRegistration.set(row.registration_id, entries);
   }
 
   return byRegistration;
@@ -320,13 +303,13 @@ async function listAttendeeDayWaitlistByRegistration(
 
 async function buildAttendeeCampaignRecipients(
   db: DatabaseLike,
+  eventId: string,
   rows: AttendeeCampaignRow[],
   formFields: FormFieldDefinition[] | undefined,
 ): Promise<CampaignRecipient[]> {
-  const registrationIds = Array.from(new Set(rows.map((row) => row.registration_id)));
   const [dayAttendanceByRegistration, dayWaitlistByRegistration] = await Promise.all([
-    listAttendeeDayAttendanceByRegistration(db, registrationIds),
-    listAttendeeDayWaitlistByRegistration(db, registrationIds),
+    listAttendeeDayAttendanceByRegistration(db, eventId),
+    listAttendeeDayWaitlistByRegistration(db, eventId),
   ]);
 
   return rows.map((row) => ({
