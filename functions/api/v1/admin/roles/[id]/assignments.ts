@@ -9,7 +9,6 @@
  * already picked. This is that lookup, generic over any role id so it also
  * backs the WG chair/vice-chair display without a second endpoint.
  */
-import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
@@ -17,6 +16,7 @@ import { all, first } from "../../../../../_lib/db/queries";
 import { AppError } from "../../../../../_lib/errors";
 import { roleAssignmentsListRouteSchema } from "../../../../../../assets/shared/schemas/access-control";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 
 interface RoleAssignmentRow {
   user_role_id: string;
@@ -30,11 +30,11 @@ interface RoleAssignmentRow {
   created_at: string;
 }
 
-export async function onRequestGet(c: AdminContext): Promise<Response> {
+export const RoleAssignmentsList = openApiRoute(roleAssignmentsListRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "access:grant");
 
-  const roleId = c.req.param("id");
+  const roleId = data.params.id;
   const role = await first<{ id: string }>(requestDb(c), "SELECT id FROM roles WHERE id = ?", [roleId]);
   if (!role) {
     throw new AppError(404, "NOT_FOUND", "Role not found");
@@ -65,11 +65,4 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
       createdAt: r.created_at,
     })),
   });
-}
-
-export class RoleAssignmentsList extends OpenAPIRoute {
-  schema = roleAssignmentsListRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestGet(c);
-  }
-}
+});

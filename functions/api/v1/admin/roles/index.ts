@@ -10,8 +10,6 @@
  * managed going forward (explicit test scope — only
  * creation and deletion are covered by tests/roles.test.ts).
  */
-import { OpenAPIRoute } from "chanfana";
-import { parseJsonBody } from "../../../../_lib/validation";
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { hasPermission, requirePermission, isPermission } from "../../../../_lib/auth/permissions";
@@ -22,13 +20,13 @@ import { writeAuditLog } from "../../../../_lib/services/audit";
 import { AppError } from "../../../../_lib/errors";
 import { resolveOrderBy } from "../../../../_lib/db/sort";
 import {
-  roleCreateSchema,
   rolesCreateRouteSchema,
   rolesListQuerySchema,
   rolesListRouteSchema,
   ADMIN_ROLES_SORT_COLUMNS,
 } from "../../../../../assets/shared/schemas/access-control";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
+import { openApiRoute } from "../../../../_lib/openapi/route";
 
 interface RoleRow {
   id: string;
@@ -54,10 +52,13 @@ async function serializeRoles(dbRoles: RoleRow[], permissionsByRole: Map<string,
   }));
 }
 
-export async function onRequestGet(c: AdminContext): Promise<Response> {
+export const RolesList = openApiRoute(rolesListRouteSchema, async (c: AdminContext, _data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "access:grant");
 
+  // The invalid-sort fallback below intentionally differs from strict
+  // schema rejection — same "quietly ignore" behavior admin-organizations.ts's
+  // route uses — so this stays a manual parse rather than `data.query`.
   const url = new URL(c.req.raw.url);
   // An invalid sort value fails schema validation (unknown column), so
   // `parsed.success` is false and we just fall back to the default order —
@@ -79,13 +80,13 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   }
 
   return json({ roles: await serializeRoles(roles, permissionsByRole) });
-}
+});
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+export const RolesCreate = openApiRoute(rolesCreateRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "access:grant");
 
-  const body = await parseJsonBody(c.req, roleCreateSchema);
+  const body = data.body;
 
   for (const permission of body.permissions) {
     if (!isPermission(permission)) {
@@ -137,18 +138,4 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     },
     201,
   );
-}
-
-export class RolesList extends OpenAPIRoute {
-  schema = rolesListRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestGet(c);
-  }
-}
-
-export class RolesCreate extends OpenAPIRoute {
-  schema = rolesCreateRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestPost(c);
-  }
-}
+});

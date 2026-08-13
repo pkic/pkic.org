@@ -4,7 +4,6 @@
  * Smart-routed: members with a saved, still-active preference
  * get only that variant; everyone else gets all active variants.
  */
-import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../../../../_lib/http";
 import { AppError } from "../../../../../../../_lib/errors";
 import { getWorkingGroupBySlugOrId } from "../../../../../../../_lib/services/working-groups";
@@ -12,13 +11,14 @@ import { planAnnualResend } from "../../../../../../../_lib/services/meeting-cal
 import { queueEmail, processOutboxByIdBackground } from "../../../../../../../_lib/email/outbox";
 import { wgMeetingResendRouteSchema } from "../../../../../../../../assets/shared/schemas/meeting-calendar";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
+import { openApiRoute } from "../../../../../../../_lib/openapi/route";
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+export const WgMeetingResendPost = openApiRoute(wgMeetingResendRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
-  const wg = await getWorkingGroupBySlugOrId(db, c.req.param("id"));
+  const wg = await getWorkingGroupBySlugOrId(db, data.params.id);
   if (!wg) throw new AppError(404, "WORKING_GROUP_NOT_FOUND", "Working group not found");
 
-  const plan = await planAnnualResend(db, c.req.param("meetingId"), {
+  const plan = await planAnnualResend(db, data.params.meetingId, {
     scopeType: "working_group",
     workingGroupId: wg.id,
   });
@@ -37,11 +37,4 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   }
 
   return json({ success: true, seriesName: plan.seriesName, queuedRecipients: plan.recipients.length });
-}
-
-export class WgMeetingResendPost extends OpenAPIRoute {
-  schema = wgMeetingResendRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestPost(c);
-  }
-}
+});

@@ -1,8 +1,6 @@
 /**
  * GET/PATCH /api/v1/admin/membership-settings.
  */
-import { OpenAPIRoute } from "chanfana";
-import { parseJsonBody } from "../../../../_lib/validation";
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../_lib/auth/permissions";
@@ -11,9 +9,9 @@ import { getMembershipSettings, updateMembershipSettings } from "../../../../_li
 import {
   membershipSettingsGetRouteSchema,
   membershipSettingsUpdateRouteSchema,
-  membershipSettingsUpdateSchema,
 } from "../../../../../assets/shared/schemas/membership-settings";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
+import { openApiRoute } from "../../../../_lib/openapi/route";
 
 function toResponse(row: Awaited<ReturnType<typeof getMembershipSettings>>) {
   return {
@@ -29,40 +27,29 @@ function toResponse(row: Awaited<ReturnType<typeof getMembershipSettings>>) {
   };
 }
 
-export async function onRequestGet(c: AdminContext): Promise<Response> {
+export const MembershipSettingsGet = openApiRoute(membershipSettingsGetRouteSchema, async (c: AdminContext, _data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "membership:read");
   const settings = await getMembershipSettings(requestDb(c));
   return json(toResponse(settings));
-}
+});
 
-export async function onRequestPatch(c: AdminContext): Promise<Response> {
-  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  requirePermission(admin, "membership:write");
-  const body = await parseJsonBody(c.req, membershipSettingsUpdateSchema);
-  const settings = await updateMembershipSettings(requestDb(c), body, admin.id);
-  await writeAuditLog(
-    requestDb(c),
-    "admin",
-    admin.id,
-    "membership_settings_updated",
-    "membership_settings",
-    "default",
-    body,
-  );
-  return json(toResponse(settings));
-}
-
-export class MembershipSettingsGet extends OpenAPIRoute {
-  schema = membershipSettingsGetRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestGet(c);
-  }
-}
-
-export class MembershipSettingsUpdate extends OpenAPIRoute {
-  schema = membershipSettingsUpdateRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestPatch(c);
-  }
-}
+export const MembershipSettingsUpdate = openApiRoute(
+  membershipSettingsUpdateRouteSchema,
+  async (c: AdminContext, data) => {
+    const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+    requirePermission(admin, "membership:write");
+    const body = data.body;
+    const settings = await updateMembershipSettings(requestDb(c), body, admin.id);
+    await writeAuditLog(
+      requestDb(c),
+      "admin",
+      admin.id,
+      "membership_settings_updated",
+      "membership_settings",
+      "default",
+      body,
+    );
+    return json(toResponse(settings));
+  },
+);

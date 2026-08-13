@@ -1012,8 +1012,8 @@ function SponsorTiersTab({ slug }: { slug: string }) {
     <div>
       <div class="d-flex gap-2 align-items-center mb-3 flex-wrap">
         <span class="small text-muted">
-          Which sponsor tiers at this event get attendee-data access via the sponsor portal. Defaults to no
-          tiers having access.
+          Which sponsor tiers at this event get attendee-data access via the sponsor portal. Defaults to no tiers having
+          access.
         </span>
         <button class="btn btn-sm btn-primary ms-auto" onClick={() => void handleSave()} disabled={saving}>
           Save

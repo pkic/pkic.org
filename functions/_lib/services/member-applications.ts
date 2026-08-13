@@ -62,7 +62,7 @@ export async function hasActiveApplicationForDomain(db: DatabaseLike, domain: st
 }
 
 /**
- * Returns true when an already-approved organization's `organization_domains_json`
+ * Returns true when an already-approved organization's `organization_domains`
  * (populated at approval time) already lists this domain. Only for
  * organizations approved through the flow going forward; the X
  * organizations migrated have no domain data to backfill and
@@ -70,11 +70,9 @@ export async function hasActiveApplicationForDomain(db: DatabaseLike, domain: st
  */
 export async function hasConflictingOrganizationDomain(db: DatabaseLike, domain: string): Promise<boolean> {
   if (!domain) return false;
-  const existing = await first<{ id: string }>(
-    db,
-    `SELECT o.id FROM organizations o, json_each(o.organization_domains_json) je WHERE je.value = ? LIMIT 1`,
-    [domain],
-  );
+  const existing = await first<{ id: string }>(db, `SELECT id FROM organization_domains WHERE domain = ? LIMIT 1`, [
+    domain,
+  ]);
   return existing !== null;
 }
 

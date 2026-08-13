@@ -3,17 +3,17 @@
  * file. Lets a member re-download any active variant for a
  * series they're subscribed to at any time, not just at onboarding.
  */
-import { OpenAPIRoute } from "chanfana";
 import { AppError } from "../../../../../_lib/errors";
 import { requireMemberFromRequest } from "../../../../../_lib/auth/member";
 import { getMyIcsFileForDownload } from "../../../../../_lib/services/meeting-calendar";
 import { myCalendarDownloadRouteSchema } from "../../../../../../assets/shared/schemas/meeting-calendar";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 
-export async function onRequestGet(c: AdminContext): Promise<Response> {
+export const MeCalendarDownloadGet = openApiRoute(myCalendarDownloadRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
   const member = await requireMemberFromRequest(db, c.req.raw, c.env);
-  const file = await getMyIcsFileForDownload(db, member, c.req.param("seriesId"), c.req.param("icsFileId"));
+  const file = await getMyIcsFileForDownload(db, member, data.params.seriesId, data.params.icsFileId);
 
   const bucket = c.env.ASSETS_BUCKET;
   if (!bucket) throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "Asset storage is not configured");
@@ -32,11 +32,4 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
       "Cache-Control": "private, no-store",
     },
   });
-}
-
-export class MeCalendarDownloadGet extends OpenAPIRoute {
-  schema = myCalendarDownloadRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestGet(c);
-  }
-}
+});

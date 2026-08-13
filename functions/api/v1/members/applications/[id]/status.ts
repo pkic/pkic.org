@@ -5,7 +5,7 @@
  * manageToken returned once from POST /api/v1/members/applications and
  * emailed in the application-received confirmation.
  */
-import { OpenAPIRoute } from "chanfana";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { AppError } from "../../../../../_lib/errors";
 import { json } from "../../../../../_lib/http";
 import { verifyApplicationManageToken } from "../../../../../_lib/services/member-applications";
@@ -35,10 +35,4 @@ export async function onRequestGet(c: any): Promise<Response> {
   });
 }
 
-export class MembersApplicationsStatusGet extends OpenAPIRoute {
-  schema = memberApplicationStatusRouteSchema;
-
-  async handle(c: any) {
-    return onRequestGet(c);
-  }
-}
+export const MembersApplicationsStatusGet = openApiRoute(memberApplicationStatusRouteSchema, onRequestGet);

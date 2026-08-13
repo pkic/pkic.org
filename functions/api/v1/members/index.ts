@@ -6,10 +6,10 @@
  * http cache instructions (CDN + client) to avoid a spike in expensive db
  * calls for mostly static data."
  */
-import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../_lib/http";
 import { listPublicMembers } from "../../../_lib/services/members-directory";
 import { membersListQuerySchema, membersListRouteSchema } from "../../../../assets/shared/schemas/members-directory";
+import { openApiRoute } from "../../../_lib/openapi/route";
 
 const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=60";
 
@@ -33,10 +33,4 @@ export async function onRequestGet(c: any): Promise<Response> {
   return response;
 }
 
-export class MembersGet extends OpenAPIRoute {
-  schema = membersListRouteSchema;
-
-  async handle(c: any) {
-    return onRequestGet(c);
-  }
-}
+export const MembersGet = openApiRoute(membersListRouteSchema, onRequestGet);

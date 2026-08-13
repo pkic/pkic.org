@@ -7,7 +7,6 @@
  *
  * All methods require admin authentication.
  */
-import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { first, run } from "../../../../../_lib/db/queries";
@@ -23,6 +22,7 @@ import {
   adminUserHeadshotGetRouteSchema,
   adminUserHeadshotPutRouteSchema,
 } from "../../../../../../assets/shared/schemas/route-contracts";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_HEADSHOT_BYTES = 5 * 1024 * 1024; // 5 MB (raw input before admin crop UI; result will be a small JPEG)
 
@@ -176,26 +176,14 @@ export async function onRequest(c: AdminContext): Promise<Response> {
   }
 }
 
-export class AdminUsersUserIdHeadshotGet extends OpenAPIRoute {
-  schema = adminUserHeadshotGetRouteSchema;
+export const AdminUsersUserIdHeadshotGet = openApiRoute(adminUserHeadshotGetRouteSchema, onGet);
 
-  async handle(c: AdminContext) {
-    return onGet(c);
-  }
-}
+// Unused by ./router.ts today — PUT /headshot is wired directly to the
+// manual `onRequest` dispatcher below (raw Hono `app.put`, bypassing
+// chanfana schema validation, since onGet/onPut/onDelete are also called
+// directly with a single `c` argument by that dispatcher and by
+// tests/admin-user-headshot.test.ts). Kept in sync with onPut's signature
+// so it stays usable if the routing is ever switched over.
+export const AdminUsersUserIdHeadshotPut = openApiRoute(adminUserHeadshotPutRouteSchema, onPut);
 
-export class AdminUsersUserIdHeadshotPut extends OpenAPIRoute {
-  schema = adminUserHeadshotPutRouteSchema;
-
-  async handle(c: AdminContext) {
-    return onPut(c);
-  }
-}
-
-export class AdminUsersUserIdHeadshotDelete extends OpenAPIRoute {
-  schema = adminUserHeadshotDeleteRouteSchema;
-
-  async handle(c: AdminContext) {
-    return onDelete(c);
-  }
-}
+export const AdminUsersUserIdHeadshotDelete = openApiRoute(adminUserHeadshotDeleteRouteSchema, onDelete);

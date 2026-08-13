@@ -7,7 +7,6 @@
  * event-in-URL-matches-session-event and tier-qualifies-for-attendee-access
  * checks below.
  */
-import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../../../_lib/http";
 import { AppError } from "../../../../../../_lib/errors";
 import { requireSponsorPortalFromRequest } from "../../../../../../_lib/auth/sponsor-portal";
@@ -18,7 +17,11 @@ import {
 import { writeAuditLog } from "../../../../../../_lib/services/audit";
 import { sponsorPortalAttendeesListRouteSchema } from "../../../../../../../assets/shared/schemas/sponsor-portal";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
+import { openApiRoute } from "../../../../../../_lib/openapi/route";
 
+// Exported for reuse by the sibling CSV export endpoint (./export.ts) —
+// keeps re-deriving eventId from the request itself (not from this route's
+// validated data) since it's shared across two independently-schema'd routes.
 export async function requireEligibleSponsorPortalSession(c: AdminContext) {
   const db = requestDb(c);
   const session = await requireSponsorPortalFromRequest(db, c.req.raw, c.env);
@@ -37,28 +40,24 @@ export async function requireEligibleSponsorPortalSession(c: AdminContext) {
   return { db, session };
 }
 
-export async function onRequestGet(c: AdminContext): Promise<Response> {
-  const { db, session } = await requireEligibleSponsorPortalSession(c);
-  const attendees = await listSponsorPortalAttendees(db, session.eventId);
+export const SponsorPortalAttendeesList = openApiRoute(
+  sponsorPortalAttendeesListRouteSchema,
+  async (c: AdminContext) => {
+    const { db, session } = await requireEligibleSponsorPortalSession(c);
+    const attendees = await listSponsorPortalAttendees(db, session.eventId);
 
-  await writeAuditLog(
-    db,
-    "sponsor",
-    session.sponsorshipId,
-    "sponsor_portal_attendee_list_viewed",
-    "sponsorship",
-    session.sponsorshipId,
-    {
-      recordCount: attendees.length,
-    },
-  );
+    await writeAuditLog(
+      db,
+      "sponsor",
+      session.sponsorshipId,
+      "sponsor_portal_attendee_list_viewed",
+      "sponsorship",
+      session.sponsorshipId,
+      {
+        recordCount: attendees.length,
+      },
+    );
 
-  return json({ attendees });
-}
-
-export class SponsorPortalAttendeesList extends OpenAPIRoute {
-  schema = sponsorPortalAttendeesListRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestGet(c);
-  }
-}
+    return json({ attendees });
+  },
+);

@@ -18,6 +18,7 @@ import { Spinner } from "../../../components/Spinner";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { profile as profileSignal } from "../state";
 import { toast, fmt, formatStageLabel } from "../ui";
+import { VOTING_CATEGORIES } from "../../../../shared/schemas/membership-categories";
 import type {
   PortalVote,
   VoteCandidate,
@@ -35,10 +36,6 @@ const MOTION_CHOICES: { value: "in_favor" | "opposed" | "abstain"; label: string
   { value: "opposed", label: "Opposed" },
   { value: "abstain", label: "Abstain" },
 ];
-
-// Mirrors VOTING_CATEGORIES in _lib/services/member-applications.ts — A–G
-// vote, every H-subcategory (H1–H7) does not.
-const VOTING_CATEGORIES = new Set(["A", "B", "C", "D", "E", "F", "G"]);
 
 function isVotingCategory(): boolean {
   const category = profileSignal.value?.membershipCategory;

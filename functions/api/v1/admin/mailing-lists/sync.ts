@@ -5,14 +5,14 @@
  * runGoogleGroupsSyncPass); this gives staff an on-demand "Sync now" button
  * instead of waiting on the next cron tick.
  */
-import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { processGoogleGroupsSyncQueue } from "../../../../_lib/services/google-groups";
 import { mailingListSyncRouteSchema } from "../../../../../assets/shared/schemas/admin-mailing-lists";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
+import { openApiRoute } from "../../../../_lib/openapi/route";
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+export const MailingListsSync = openApiRoute(mailingListSyncRouteSchema, async (c: AdminContext, _data) => {
   const db = requestDb(c);
   await requireAdminFromRequest(db, c.req.raw, c.env);
   const result = await processGoogleGroupsSyncQueue(db, c.env);
@@ -22,11 +22,4 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     failed: result.failed,
     skippedUnconfigured: result.skippedUnconfigured,
   });
-}
-
-export class MailingListsSync extends OpenAPIRoute {
-  schema = mailingListSyncRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestPost(c);
-  }
-}
+});

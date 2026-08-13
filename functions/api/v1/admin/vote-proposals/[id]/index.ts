@@ -1,7 +1,7 @@
 /**
  * GET /api/v1/admin/vote-proposals/:id — proposal detail + endorsers.
  */
-import { OpenAPIRoute } from "chanfana";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
@@ -9,10 +9,10 @@ import { getProposalScopeForPermissionCheck, getVoteProposalDetail } from "../..
 import { adminProposalDetailRouteSchema } from "../../../../../../assets/shared/schemas/votes";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
-export async function onRequestGet(c: AdminContext): Promise<Response> {
+export const AdminVoteProposalGet = openApiRoute(adminProposalDetailRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
-  const id = c.req.param("id");
+  const id = data.params.id;
 
   const scope = await getProposalScopeForPermissionCheck(db, id);
   requirePermission(
@@ -23,11 +23,4 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
 
   const result = await getVoteProposalDetail(db, id);
   return json(result);
-}
-
-export class AdminVoteProposalGet extends OpenAPIRoute {
-  schema = adminProposalDetailRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestGet(c);
-  }
-}
+});

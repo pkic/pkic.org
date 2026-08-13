@@ -5,38 +5,22 @@
  * call — matches events/[eventSlug]/router.ts's requireEventManagementAccess
  * precedent.
  */
-import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../../../_lib/http";
-import { parseJsonBody } from "../../../../../../_lib/validation";
 import { listAdminMeetingSeriesForWg, createWgMeetingSeries } from "../../../../../../_lib/services/meeting-calendar";
-import { meetingSeriesCreateSchema } from "../../../../../../../assets/shared/schemas/meeting-calendar";
 import {
   wgMeetingsListRouteSchema,
   wgMeetingsCreateRouteSchema,
 } from "../../../../../../../assets/shared/schemas/meeting-calendar";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
+import { openApiRoute } from "../../../../../../_lib/openapi/route";
 
-export async function onRequestGet(c: AdminContext): Promise<Response> {
-  const meetingSeries = await listAdminMeetingSeriesForWg(requestDb(c), c.req.param("id"));
+export const WgMeetingsGet = openApiRoute(wgMeetingsListRouteSchema, async (c: AdminContext, data) => {
+  const meetingSeries = await listAdminMeetingSeriesForWg(requestDb(c), data.params.id);
   return json({ meetingSeries });
-}
+});
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
-  const body = await parseJsonBody(c.req, meetingSeriesCreateSchema);
-  const meetingSeries = await createWgMeetingSeries(requestDb(c), c.req.param("id"), body);
+export const WgMeetingsCreate = openApiRoute(wgMeetingsCreateRouteSchema, async (c: AdminContext, data) => {
+  const body = data.body;
+  const meetingSeries = await createWgMeetingSeries(requestDb(c), data.params.id, body);
   return json({ meetingSeries }, 201);
-}
-
-export class WgMeetingsGet extends OpenAPIRoute {
-  schema = wgMeetingsListRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestGet(c);
-  }
-}
-
-export class WgMeetingsCreate extends OpenAPIRoute {
-  schema = wgMeetingsCreateRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestPost(c);
-  }
-}
+});

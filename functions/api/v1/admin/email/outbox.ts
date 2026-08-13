@@ -13,7 +13,7 @@
  *   offset       - pagination offset (default 0)
  */
 
-import { OpenAPIRoute } from "chanfana";
+import { openApiRoute } from "../../../../_lib/openapi/route";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { all, first } from "../../../../_lib/db/queries";
 import { parseQueuedEmailAttachments } from "../../../../_lib/email/attachments";
@@ -169,7 +169,7 @@ async function buildPreviewSubject(
   return renderSubject(subjectTemplate, fallbackSubject, payload);
 }
 
-export async function onRequestGet(c: AdminContext): Promise<Response> {
+export const AdminEmailOutboxGet = openApiRoute(adminEmailOutboxGetRouteSchema, async (c: AdminContext) => {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
   const url = new URL(c.req.raw.url);
@@ -336,12 +336,4 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
       hasMore: offset + outbox.length < Number(totalRow?.total ?? 0),
     },
   });
-}
-
-export class AdminEmailOutboxGet extends OpenAPIRoute {
-  schema = adminEmailOutboxGetRouteSchema;
-
-  async handle(c: AdminContext) {
-    return onRequestGet(c);
-  }
-}
+});

@@ -33,16 +33,16 @@ describe("members model", () => {
       // rebuild enables (previously blocked by UNIQUE(organization_id)).
       env.DB.prepare(`
         INSERT INTO members (id, member_type, user_id, organization_id, status, tier, data_json, created_at, updated_at)
-        VALUES ('${primaryMemberId}', 'organization', '${primaryUserId}', '${organizationId}', 'active', 'A', NULL, datetime('now'), datetime('now'))
+        VALUES ('${primaryMemberId}', 'A', '${primaryUserId}', '${organizationId}', 'active', 'A', NULL, datetime('now'), datetime('now'))
       `),
       env.DB.prepare(`
         INSERT INTO members (id, member_type, user_id, organization_id, status, tier, data_json, created_at, updated_at)
-        VALUES ('${secondaryMemberId}', 'organization', '${secondaryUserId}', '${organizationId}', 'active', 'A', NULL, datetime('now'), datetime('now'))
+        VALUES ('${secondaryMemberId}', 'A', '${secondaryUserId}', '${organizationId}', 'active', 'A', NULL, datetime('now'), datetime('now'))
       `),
       // Individual category (e.g. H5/H6/H7): user_id set, no organization_id.
       env.DB.prepare(`
         INSERT INTO members (id, member_type, user_id, organization_id, status, tier, data_json, created_at, updated_at)
-        VALUES ('${individualMemberId}', 'individual', '${individualUserId}', NULL, 'active', 'H6', NULL, datetime('now'), datetime('now'))
+        VALUES ('${individualMemberId}', 'H6', '${individualUserId}', NULL, 'active', 'H6', NULL, datetime('now'), datetime('now'))
       `),
     ]);
 
@@ -59,7 +59,7 @@ describe("members model", () => {
       env.DB.prepare(
         `
         INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
-        VALUES ('${crypto.randomUUID()}', 'organization', NULL, '${organizationId}', 'active', datetime('now'), datetime('now'));
+        VALUES ('${crypto.randomUUID()}', 'A', NULL, '${organizationId}', 'active', datetime('now'), datetime('now'));
       `,
       ).run(),
     ).rejects.toThrow();
@@ -69,7 +69,7 @@ describe("members model", () => {
       env.DB.prepare(
         `
         INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
-        VALUES ('${crypto.randomUUID()}', 'organization', '${primaryUserId}', '${organizationId}', 'active', datetime('now'), datetime('now'));
+        VALUES ('${crypto.randomUUID()}', 'A', '${primaryUserId}', '${organizationId}', 'active', datetime('now'), datetime('now'));
       `,
       ).run(),
     ).rejects.toThrow();

@@ -9,70 +9,52 @@
  * assignment endpoints use, since this is the same kind of designation
  * management.
  */
-import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../_lib/auth/permissions";
-import { parseJsonBody } from "../../../../_lib/validation";
 import { listLeadershipPositionsAdmin, createLeadershipPosition } from "../../../../_lib/services/leadership";
 import { writeAuditLog } from "../../../../_lib/services/audit";
-import { AppError } from "../../../../_lib/errors";
 import {
-  leadershipPositionCreateSchema,
-  leadershipPositionsListQuerySchema,
   leadershipPositionsListRouteSchema,
   leadershipPositionsCreateRouteSchema,
 } from "../../../../../assets/shared/schemas/leadership";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
+import { openApiRoute } from "../../../../_lib/openapi/route";
 
-export async function onRequestGet(c: AdminContext): Promise<Response> {
-  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  requirePermission(admin, "access:grant");
+export const LeadershipPositionsList = openApiRoute(
+  leadershipPositionsListRouteSchema,
+  async (c: AdminContext, data) => {
+    const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+    requirePermission(admin, "access:grant");
 
-  const url = new URL(c.req.raw.url);
-  const parsed = leadershipPositionsListQuerySchema.safeParse({ body: url.searchParams.get("body") ?? undefined });
-  if (!parsed.success) {
-    throw new AppError(400, "INVALID_BODY", "body must be 'board' or 'executive_council'");
-  }
+    const positions = await listLeadershipPositionsAdmin(requestDb(c), data.query.body);
+    return json({ positions });
+  },
+);
 
-  const positions = await listLeadershipPositionsAdmin(requestDb(c), parsed.data.body);
-  return json({ positions });
-}
+export const LeadershipPositionsCreate = openApiRoute(
+  leadershipPositionsCreateRouteSchema,
+  async (c: AdminContext, data) => {
+    const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+    requirePermission(admin, "access:grant");
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
-  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  requirePermission(admin, "access:grant");
+    const body = data.body;
+    const position = await createLeadershipPosition(requestDb(c), body);
 
-  const body = await parseJsonBody(c.req, leadershipPositionCreateSchema);
-  const position = await createLeadershipPosition(requestDb(c), body);
+    await writeAuditLog(
+      requestDb(c),
+      "admin",
+      admin.id,
+      "leadership_position_created",
+      "leadership_position",
+      position.id,
+      {
+        body: position.body,
+        userId: position.userId,
+        title: position.title,
+      },
+    );
 
-  await writeAuditLog(
-    requestDb(c),
-    "admin",
-    admin.id,
-    "leadership_position_created",
-    "leadership_position",
-    position.id,
-    {
-      body: position.body,
-      userId: position.userId,
-      title: position.title,
-    },
-  );
-
-  return json(position, 201);
-}
-
-export class LeadershipPositionsList extends OpenAPIRoute {
-  schema = leadershipPositionsListRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestGet(c);
-  }
-}
-
-export class LeadershipPositionsCreate extends OpenAPIRoute {
-  schema = leadershipPositionsCreateRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestPost(c);
-  }
-}
+    return json(position, 201);
+  },
+);

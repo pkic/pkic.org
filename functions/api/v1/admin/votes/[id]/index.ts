@@ -1,20 +1,19 @@
 /**
  * PATCH /api/v1/admin/votes/:id — update a vote's settings.
  */
-import { OpenAPIRoute } from "chanfana";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { json } from "../../../../../_lib/http";
-import { parseJsonBody } from "../../../../../_lib/validation";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { getVoteScopeForPermissionCheck, updateVoteSettings } from "../../../../../_lib/services/votes";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
-import { adminVoteUpdateSchema, adminVoteUpdateRouteSchema } from "../../../../../../assets/shared/schemas/votes";
+import { adminVoteUpdateRouteSchema } from "../../../../../../assets/shared/schemas/votes";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
-export async function onRequestPatch(c: AdminContext): Promise<Response> {
+export const AdminVotePatch = openApiRoute(adminVoteUpdateRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
-  const id = c.req.param("id");
+  const id = data.params.id;
 
   const scope = await getVoteScopeForPermissionCheck(db, id);
   requirePermission(
@@ -23,17 +22,10 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
     scope.scopeType === "working_group" && scope.scopeId ? { type: "working_group", id: scope.scopeId } : undefined,
   );
 
-  const body = await parseJsonBody(c.req, adminVoteUpdateSchema);
+  const body = data.body;
   const vote = await updateVoteSettings(db, id, body);
 
   await writeAuditLog(db, "admin", admin.id, "vote_updated", "vote", vote.id, { changes: body });
 
   return json({ vote });
-}
-
-export class AdminVotePatch extends OpenAPIRoute {
-  schema = adminVoteUpdateRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestPatch(c);
-  }
-}
+});

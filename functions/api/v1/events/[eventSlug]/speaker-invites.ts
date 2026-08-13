@@ -1,4 +1,5 @@
-import { OpenAPIRoute } from "chanfana";
+import type { z } from "zod";
+import { openApiRoute } from "../../../../_lib/openapi/route";
 import { parseJsonBody } from "../../../../_lib/validation";
 import { json } from "../../../../_lib/http";
 import { buildEventEmailVariables, getEventBySlug } from "../../../../_lib/services/events";
@@ -32,13 +33,16 @@ function getManageTokenFromRequest(request: Request): string | null {
  * is sent.  If the nominee is already registered or has an active proposal the
  * invite is silently skipped.
  */
-export async function onRequestPost(c: any): Promise<Response> {
+export async function onRequestPost(
+  c: any,
+  data?: { body: z.infer<typeof registrationInviteCreateSchema> },
+): Promise<Response> {
   const token = getManageTokenFromRequest(c.req.raw);
   if (!token) {
     return json({ error: { code: "AUTH_REQUIRED", message: "Registration manage token required" } }, 401);
   }
 
-  const body = await parseJsonBody(c.req, registrationInviteCreateSchema);
+  const body = data?.body ?? (await parseJsonBody(c.req, registrationInviteCreateSchema));
   const signingSecret = requireInternalSecret(c.env);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
   const registration = await getRegistrationByManageToken(c.env.DB, token, signingSecret);
@@ -139,8 +143,8 @@ export async function onRequestPost(c: any): Promise<Response> {
   return json({ success: true, created, endorsed, skipped });
 }
 
-export class EventsEventSlugSpeakerInvitesPost extends OpenAPIRoute {
-  schema = {
+export const EventsEventSlugSpeakerInvitesPost = openApiRoute(
+  {
     tags: ["Events", "Invites"],
     summary: "Create speaker peer nominations",
     request: {
@@ -161,9 +165,6 @@ export class EventsEventSlugSpeakerInvitesPost extends OpenAPIRoute {
       "403": { description: "The manage token is not valid for this event." },
       "429": { description: "Nomination limit exceeded." },
     },
-  };
-
-  async handle(c: any) {
-    return onRequestPost(c);
-  }
-}
+  },
+  onRequestPost,
+);

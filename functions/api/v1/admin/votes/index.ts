@@ -9,43 +9,31 @@
  * a necessary addition.
  */
 import { json } from "../../../../_lib/http";
-import { parseJsonBody } from "../../../../_lib/validation";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../_lib/auth/permissions";
 import { getWorkingGroupBySlugOrId } from "../../../../_lib/services/working-groups";
 import { createVoteDirect, listVotesForAdmin } from "../../../../_lib/services/votes";
 import { writeAuditLog } from "../../../../_lib/services/audit";
-import {
-  adminVoteCreateSchema,
-  adminVoteCreateRouteSchema,
-  adminVotesListQuerySchema,
-  adminVotesListRouteSchema,
-} from "../../../../../assets/shared/schemas/votes";
+import { adminVoteCreateRouteSchema, adminVotesListRouteSchema } from "../../../../../assets/shared/schemas/votes";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
-import { parseListQuery } from "../../../../_lib/openapi/list-query";
 import { buildPageInfo } from "../../../../../assets/shared/schemas/pagination";
 
-export async function onRequestGet(c: AdminContext): Promise<Response> {
+export const AdminVotesGet = openApiRoute(adminVotesListRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
   requirePermission(admin, "votes:manage");
 
-  const {
-    status,
-    sort,
-    limit = 50,
-    offset = 0,
-  } = parseListQuery(adminVotesListQuerySchema, new URL(c.req.raw.url), ["status", "limit", "offset", "sort"]);
+  const { status, sort, limit = 50, offset = 0 } = data.query;
 
   const { votes, total } = await listVotesForAdmin(db, { status, sort, limit, offset });
   return json({ votes, page: buildPageInfo(limit, offset, total, votes.length) });
-}
+});
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+export const AdminVotesPost = openApiRoute(adminVoteCreateRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
-  const body = await parseJsonBody(c.req, adminVoteCreateSchema);
+  const body = data.body;
 
   if (body.scopeType === "working_group") {
     const wg = body.scopeId ? await getWorkingGroupBySlugOrId(db, body.scopeId) : null;
@@ -63,7 +51,4 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   });
 
   return json({ vote });
-}
-
-export const AdminVotesPost = openApiRoute(adminVoteCreateRouteSchema, onRequestPost);
-export const AdminVotesGet = openApiRoute(adminVotesListRouteSchema, onRequestGet);
+});

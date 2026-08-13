@@ -4,25 +4,24 @@
  * POST /api/v1/admin/applications/:id/ec-decisions). Requires a member
  * session and `is_ec_member`.
  */
-import { OpenAPIRoute } from "chanfana";
-import { parseJsonBody } from "../../../../../_lib/validation";
 import { json } from "../../../../../_lib/http";
 import { AppError } from "../../../../../_lib/errors";
 import { requireMemberFromRequest } from "../../../../../_lib/auth/member";
 import { recordEcDecision } from "../../../../../_lib/services/ec-review";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
-import { ecDecisionCreateRouteSchema, ecDecisionCreateSchema } from "../../../../../../assets/shared/schemas/ec-review";
+import { ecDecisionCreateRouteSchema } from "../../../../../../assets/shared/schemas/ec-review";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+export const MeApplicationEcDecisionPost = openApiRoute(ecDecisionCreateRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
   const member = await requireMemberFromRequest(db, c.req.raw, c.env);
   if (!member.isEcMember) {
     throw new AppError(403, "PERMISSION_REQUIRED", "Only Executive Council members may record an EC decision");
   }
 
-  const applicationId = c.req.param("id");
-  const body = await parseJsonBody(c.req, ecDecisionCreateSchema);
+  const applicationId = data.params.id;
+  const body = data.body;
 
   const decision = await recordEcDecision(db, {
     applicationId,
@@ -45,11 +44,4 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     },
     201,
   );
-}
-
-export class MeApplicationEcDecisionPost extends OpenAPIRoute {
-  schema = ecDecisionCreateRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestPost(c);
-  }
-}
+});

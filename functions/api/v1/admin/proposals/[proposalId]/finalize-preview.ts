@@ -11,8 +11,19 @@ import { proposalManagePageUrl, speakerManagePageUrl } from "../../../../../_lib
 import { finalizeProposalSchema } from "../../../../../../assets/shared/schemas/api";
 import { buildProposalDecisionEmailPlan } from "./decision-emails";
 import type { AdminContext } from "../../../../../_lib/db/context";
+import type { z } from "zod";
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+/**
+ * `data` is supplied when called through the `openApiRoute` factory (the
+ * real HTTP path — the body is already validated there, and re-reading it
+ * here would throw since chanfana already consumed the request stream).
+ * Falls back to parsing the body itself when called directly, as tests do,
+ * bypassing the factory entirely.
+ */
+export async function onRequestPost(
+  c: AdminContext,
+  data?: { body: z.infer<typeof finalizeProposalSchema> },
+): Promise<Response> {
   // Use the raw DB binding for this read-only endpoint. The session-wrapped
   // requestDb(c) uses primaryFirstDb which creates a D1 session that does not
   // support the parallel queries this handler fires (layout + partials +
@@ -35,7 +46,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     return json({ error: { code: "FORBIDDEN", message: "Missing permission to finalize proposals" } }, 403);
   }
 
-  const body = await parseJsonBody(c.req, finalizeProposalSchema);
+  const body = data?.body ?? (await parseJsonBody(c.req, finalizeProposalSchema));
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const plan = await buildProposalDecisionEmailPlan(
     db,

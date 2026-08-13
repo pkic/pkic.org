@@ -5,7 +5,6 @@
  * assigned to any user (active `user_roles` row) cannot be deleted either —
  * both per tests/roles.test.ts.
  */
-import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../_lib/auth/permissions";
@@ -13,6 +12,7 @@ import { first, run } from "../../../../_lib/db/queries";
 import { writeAuditLog } from "../../../../_lib/services/audit";
 import { roleDeleteRouteSchema } from "../../../../../assets/shared/schemas/access-control";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
+import { openApiRoute } from "../../../../_lib/openapi/route";
 
 interface RoleRow {
   id: string;
@@ -20,12 +20,12 @@ interface RoleRow {
   is_system_role: number;
 }
 
-export async function onRequestDelete(c: AdminContext): Promise<Response> {
+export const RolesDelete = openApiRoute(roleDeleteRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "access:revoke");
 
   const role = await first<RoleRow>(requestDb(c), "SELECT id, name, is_system_role FROM roles WHERE id = ?", [
-    c.req.param("id"),
+    data.params.id,
   ]);
 
   if (!role) {
@@ -52,11 +52,4 @@ export async function onRequestDelete(c: AdminContext): Promise<Response> {
   await writeAuditLog(requestDb(c), "admin", admin.id, "role_deleted", "role", role.id, { name: role.name });
 
   return json({ success: true });
-}
-
-export class RolesDelete extends OpenAPIRoute {
-  schema = roleDeleteRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestDelete(c);
-  }
-}
+});

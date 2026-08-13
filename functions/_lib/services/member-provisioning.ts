@@ -4,22 +4,24 @@
  * `createAdminMember` (Interim Admin Tool) already established — kept as
  * a separate function rather than a refactor of that already-shipped,
  * tested path, to avoid regression risk on working code; both call the same
- * underlying primitives (`findOrCreateUser`, `normalizeOrgName`).
+ * underlying primitives (`buildFindOrCreateUserStatement`, `normalizeOrgName`,
+ * `buildAddWorkingGroupMemberStatements`) and land every write in one
+ * atomic `db.batch()`, so a later failure can't leave a partially
+ * provisioned membership or an orphaned `users` row.
  *
- * Adds one thing the Interim Admin Tool didn't need: writing
- * `organizations.organization_domains_json` at creation time, closing the
- * duplicate-check gap for organizations approved through this flow
- * going forward (see hasConflictingOrganizationDomain in
- * member-applications.ts).
+ * Adds one thing the Interim Admin Tool didn't need: recording an
+ * `organization_domains` row at creation time, closing the duplicate-check
+ * gap for organizations approved through this flow going forward (see
+ * hasConflictingOrganizationDomain in member-applications.ts).
  */
-import { first, run } from "../db/queries";
+import { first } from "../db/queries";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
-import { findOrCreateUser } from "./users";
+import { buildFindOrCreateUserStatement, type UserRecord } from "./users";
 import { normalizeOrgName } from "./sponsorship";
-import { stringifyJson } from "../utils/json";
+import { getWorkingGroupBySlugOrId, buildAddWorkingGroupMemberStatements } from "./working-groups";
 import { serializeLinks } from "../../../assets/shared/schemas/api";
-import type { DatabaseLike } from "../types";
+import type { DatabaseLike, StatementLike } from "../types";
 
 export interface ProvisionRepresentative {
   name: string;
@@ -61,10 +63,22 @@ function splitName(fullName: string): { firstName: string | null; lastName: stri
   return { firstName: tokens.slice(0, -1).join(" "), lastName: tokens[tokens.length - 1] };
 }
 
+interface PendingMember {
+  rep: ProvisionRepresentative;
+  user: UserRecord;
+  memberId: string;
+  /** Index into `statements` of this rep's contact-assignment UPDATE, or null if none was queued. */
+  contactStatementIndex: number | null;
+  contactRole: "primary" | "secondary" | null;
+}
+
 export async function provisionOrganizationAndMembers(
   db: DatabaseLike,
   input: ProvisionOrganizationAndMembersInput,
 ): Promise<ProvisionOrganizationAndMembersResult> {
+  const now = nowIso();
+  const statements: StatementLike[] = [];
+
   let organizationId: string | null = null;
   let organizationWasCreated = false;
 
@@ -79,30 +93,37 @@ export async function provisionOrganizationAndMembers(
     } else {
       organizationId = uuid();
       organizationWasCreated = true;
-      const now = nowIso();
-      await run(
-        db,
-        `INSERT INTO organizations (id, name, normalized_name, data_json, description, website, organization_domains_json, created_at, updated_at)
-         VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
-        [
-          organizationId,
-          input.organizationName,
-          normalizedOrgName,
-          input.description ?? null,
-          input.website ?? null,
-          input.organizationDomain ? stringifyJson([input.organizationDomain]) : null,
-          now,
-          now,
-        ],
+      statements.push(
+        db
+          .prepare(
+            `INSERT INTO organizations (id, name, normalized_name, data_json, description, website, created_at, updated_at)
+             VALUES (?, ?, ?, NULL, ?, ?, ?, ?)`,
+          )
+          .bind(
+            organizationId,
+            input.organizationName,
+            normalizedOrgName,
+            input.description ?? null,
+            input.website ?? null,
+            now,
+            now,
+          ),
       );
+      if (input.organizationDomain) {
+        statements.push(
+          db
+            .prepare(`INSERT INTO organization_domains (id, organization_id, domain, created_at) VALUES (?, ?, ?, ?)`)
+            .bind(uuid(), organizationId, input.organizationDomain, now),
+        );
+      }
     }
   }
 
-  const members: ProvisionedMember[] = [];
+  const pending: PendingMember[] = [];
 
   for (const [index, rep] of input.representatives.entries()) {
     const { firstName, lastName } = splitName(rep.name);
-    const user = await findOrCreateUser(db, {
+    const { user, statement: userStatement } = await buildFindOrCreateUserStatement(db, {
       email: rep.email,
       firstName: firstName ?? undefined,
       lastName: lastName ?? undefined,
@@ -110,59 +131,70 @@ export async function provisionOrganizationAndMembers(
       linksJson: rep.linkedin ? serializeLinks([rep.linkedin]) : null,
       allowProfileUpdate: true,
     });
+    if (userStatement) statements.push(userStatement);
 
-    const now = nowIso();
     const memberId = uuid();
-    await run(
-      db,
-      `INSERT INTO members (id, member_type, user_id, organization_id, status, tier, data_json, created_at, updated_at, show_on_org_profile)
-       VALUES (?, ?, ?, ?, 'active', NULL, NULL, ?, ?, 1)`,
-      [memberId, input.membershipCategory, user.id, organizationId, now, now],
+    statements.push(
+      db
+        .prepare(
+          `INSERT INTO members (id, member_type, user_id, organization_id, status, tier, data_json, created_at, updated_at, show_on_org_profile)
+           VALUES (?, ?, ?, ?, 'active', NULL, NULL, ?, ?, 1)`,
+        )
+        .bind(memberId, input.membershipCategory, user.id, organizationId, now, now),
     );
 
-    let assignedContactRole: "primary" | "secondary" | null = null;
+    let contactStatementIndex: number | null = null;
+    let contactRole: "primary" | "secondary" | null = null;
     if (organizationId && index === 0) {
-      const result = await run(
-        db,
-        `UPDATE organizations SET primary_contact_user_id = ?, updated_at = ? WHERE id = ? AND primary_contact_user_id IS NULL`,
-        [user.id, now, organizationId],
+      contactRole = "primary";
+      contactStatementIndex = statements.length;
+      statements.push(
+        db
+          .prepare(
+            `UPDATE organizations SET primary_contact_user_id = ?, updated_at = ? WHERE id = ? AND primary_contact_user_id IS NULL`,
+          )
+          .bind(user.id, now, organizationId),
       );
-      if (result.changes > 0) assignedContactRole = "primary";
     }
     if (organizationId && index === 1) {
-      const result = await run(
-        db,
-        `UPDATE organizations SET secondary_contact_user_id = ?, updated_at = ? WHERE id = ? AND secondary_contact_user_id IS NULL`,
-        [user.id, now, organizationId],
+      contactRole = "secondary";
+      contactStatementIndex = statements.length;
+      statements.push(
+        db
+          .prepare(
+            `UPDATE organizations SET secondary_contact_user_id = ?, updated_at = ? WHERE id = ? AND secondary_contact_user_id IS NULL`,
+          )
+          .bind(user.id, now, organizationId),
       );
-      if (result.changes > 0) assignedContactRole = "secondary";
     }
 
     for (const slug of input.workingGroupSlugs) {
-      const wg = await first<{ id: string }>(db, "SELECT id FROM working_groups WHERE slug = ?", [slug]);
+      const wg = await getWorkingGroupBySlugOrId(db, slug);
       if (!wg) continue;
-      const existingMembership = await first<{ id: string }>(
-        db,
-        "SELECT id FROM working_group_members WHERE working_group_id = ? AND user_id = ? AND left_at IS NULL",
-        [wg.id, user.id],
-      );
-      if (existingMembership) continue;
-      await run(
-        db,
-        `INSERT INTO working_group_members (id, working_group_id, user_id, joined_at, left_at) VALUES (?, ?, ?, ?, NULL)`,
-        [uuid(), wg.id, user.id, now],
-      );
+      statements.push(...(await buildAddWorkingGroupMemberStatements(db, wg, user.id)));
     }
 
-    members.push({
+    pending.push({ rep, user, memberId, contactStatementIndex, contactRole });
+  }
+
+  const results = statements.length > 0 ? await db.batch(statements) : [];
+
+  const members: ProvisionedMember[] = pending.map(({ rep, user, memberId, contactStatementIndex, contactRole }) => {
+    let assignedContactRole: "primary" | "secondary" | null = null;
+    if (contactStatementIndex !== null) {
+      const changes =
+        (results[contactStatementIndex] as { meta?: { changes?: number } } | undefined)?.meta?.changes ?? 0;
+      if (changes > 0) assignedContactRole = contactRole;
+    }
+    return {
       memberId,
       userId: user.id,
       email: user.email,
       name: rep.name,
       organizationId,
       assignedContactRole,
-    });
-  }
+    };
+  });
 
   return { organizationId, organizationWasCreated, members };
 }

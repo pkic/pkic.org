@@ -534,8 +534,8 @@ export function MeetingCalendar() {
   return (
     <div>
       <p class="text-muted small">
-        Manage meeting series and their ICS file variants. Deactivating a file automatically switches any
-        member whose saved preference pointed at it to receiving all active variants on the next resend.
+        Manage meeting series and their ICS file variants. Deactivating a file automatically switches any member whose
+        saved preference pointed at it to receiving all active variants on the next resend.
       </p>
       <Tabs items={TABS} active={tab} onChange={setTab} />
       {tab === "consortium" && <MeetingSeriesManager baseUrl="/api/v1/admin/consortium/meetings" />}

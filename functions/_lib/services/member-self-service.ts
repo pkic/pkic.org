@@ -6,7 +6,7 @@
 import { all, first, run } from "../db/queries";
 import { nowIso } from "../utils/time";
 import { stringifyJson, parseJsonSafe } from "../utils/json";
-import { parseLinksJson } from "../../../assets/shared/schemas/api";
+import { parseLinksJson, serializeLinks } from "../../../assets/shared/schemas/api";
 import { AppError } from "../errors";
 import { normalizeEmail } from "../validation";
 import { VOTING_CATEGORIES, getMemberApplicationById } from "./member-applications";
@@ -191,7 +191,7 @@ export async function updateMyProfile(
       input.preferredName ?? null,
       input.jobTitle ?? null,
       input.biography ?? null,
-      input.links ? stringifyJson(input.links) : null,
+      input.links ? serializeLinks(input.links) : null,
       now,
       member.userId,
     ],

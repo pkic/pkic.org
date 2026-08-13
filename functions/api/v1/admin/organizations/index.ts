@@ -10,28 +10,17 @@ import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../_lib/auth/permissions";
 import { listAdminOrganizations } from "../../../../_lib/services/admin-organizations";
-import {
-  organizationsListQuerySchema,
-  organizationsListRouteSchema,
-} from "../../../../../assets/shared/schemas/admin-organizations";
+import { organizationsListRouteSchema } from "../../../../../assets/shared/schemas/admin-organizations";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
-import { parseListQuery } from "../../../../_lib/openapi/list-query";
 import { buildPageInfo } from "../../../../../assets/shared/schemas/pagination";
 
-export async function onRequestGet(c: AdminContext): Promise<Response> {
+export const OrganizationsList = openApiRoute(organizationsListRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "organizations:read");
 
-  const {
-    q,
-    sort,
-    limit = 50,
-    offset = 0,
-  } = parseListQuery(organizationsListQuerySchema, new URL(c.req.raw.url), ["q", "limit", "offset", "sort"]);
+  const { q, sort, limit = 50, offset = 0 } = data.query;
 
   const { organizations, total } = await listAdminOrganizations(requestDb(c), { limit, offset, q, sort });
   return json({ organizations, page: buildPageInfo(limit, offset, total, organizations.length) });
-}
-
-export const OrganizationsList = openApiRoute(organizationsListRouteSchema, onRequestGet);
+});

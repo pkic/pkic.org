@@ -7,7 +7,7 @@
  * org-tied members, or the member row id for org-less individuals
  * (H5/H6/H7), whose photo is their own `users.headshot_r2_key`.
  */
-import { OpenAPIRoute } from "chanfana";
+import { openApiRoute } from "../../../../_lib/openapi/route";
 import { AppError } from "../../../../_lib/errors";
 import { getMemberLogoR2Key } from "../../../../_lib/services/members-directory";
 import { memberLogoRouteSchema } from "../../../../../assets/shared/schemas/members-directory";
@@ -58,10 +58,4 @@ export async function onRequestGet(c: any): Promise<Response> {
   });
 }
 
-export class MembersIdLogoGet extends OpenAPIRoute {
-  schema = memberLogoRouteSchema;
-
-  async handle(c: any) {
-    return onRequestGet(c);
-  }
-}
+export const MembersIdLogoGet = openApiRoute(memberLogoRouteSchema, onRequestGet);

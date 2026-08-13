@@ -22,7 +22,7 @@ export const myProfileSchema = z.object({
   preferredName: z.string().nullable(),
   jobTitle: z.string().nullable(),
   biography: z.string().nullable(),
-  links: z.array(z.string()),
+  links: linksSchema,
   membershipCategory: z.string(),
   organizationId: z.uuid().nullable(),
   organizationName: z.string().nullable(),
@@ -69,6 +69,14 @@ export const myProfileUpdateRouteSchema = {
   },
 };
 
+export const myApplicationSummarySchema = z.object({
+  id: z.string(),
+  status: z.string(),
+  stage: z.string(),
+  membershipCategory: z.string(),
+  createdAt: z.string(),
+});
+
 export const myApplicationsListRouteSchema = {
   tags: ["Me"],
   summary: "My application history",
@@ -78,15 +86,7 @@ export const myApplicationsListRouteSchema = {
       content: {
         "application/json": {
           schema: z.object({
-            applications: z.array(
-              z.object({
-                id: z.string(),
-                status: z.string(),
-                stage: z.string(),
-                membershipCategory: z.string(),
-                createdAt: z.string(),
-              }),
-            ),
+            applications: z.array(myApplicationSummarySchema),
           }),
         },
       },
@@ -242,6 +242,19 @@ export const addCoworkerRouteSchema = {
 
 // ── Organization profile & content moderation ────────────────
 
+export const myOrganizationReviewSchema = z.object({
+  id: z.uuid(),
+  organizationId: z.uuid(),
+  submittedByUserId: z.uuid(),
+  proposedChanges: z.record(z.string(), z.unknown()),
+  hasLogoChange: z.boolean(),
+  status: z.string(),
+  reviewerUserId: z.uuid().nullable(),
+  reviewerNote: z.string().nullable(),
+  submittedAt: z.string(),
+  reviewedAt: z.string().nullable(),
+});
+
 export const myOrganizationProfileSchema = z.object({
   id: z.uuid(),
   name: z.string(),
@@ -255,12 +268,12 @@ export const myOrganizationProfileSchema = z.object({
   pressUrl: z.string().nullable(),
   pressFeedUrl: z.string().nullable(),
   careersUrl: z.string().nullable(),
-  links: z.array(z.string()),
+  links: linksSchema,
   isOrgContact: z.boolean(),
   isPrimaryContact: z.boolean(),
   pendingSecondaryContactUserId: z.uuid().nullable(),
   votingDelegateUserId: z.uuid().nullable(),
-  pendingReview: z.record(z.string(), z.unknown()).nullable(),
+  pendingReview: myOrganizationReviewSchema.nullable(),
 });
 
 export const myOrganizationProfileGetRouteSchema = {
@@ -303,19 +316,6 @@ export const myOrganizationContentChangeRouteSchema = {
     "422": { description: "No editable fields were submitted." },
   },
 };
-
-export const myOrganizationReviewSchema = z.object({
-  id: z.uuid(),
-  organizationId: z.uuid(),
-  submittedByUserId: z.uuid(),
-  proposedChanges: z.record(z.string(), z.unknown()),
-  hasLogoChange: z.boolean(),
-  status: z.string(),
-  reviewerUserId: z.uuid().nullable(),
-  reviewerNote: z.string().nullable(),
-  submittedAt: z.string(),
-  reviewedAt: z.string().nullable(),
-});
 
 export const myOrganizationReviewsListRouteSchema = {
   tags: ["Me"],

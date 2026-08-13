@@ -9,9 +9,8 @@
  *   Archives the form (sets status = 'archived'). Hard delete is not allowed
  *   when submissions exist.
  */
-import { OpenAPIRoute } from "chanfana";
-import { parseJsonBody } from "../../../../../_lib/validation";
-import { handleError, json } from "../../../../../_lib/http";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
+import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { all, first, run } from "../../../../../_lib/db/queries";
 import { parseJsonSafe, stringifyJson } from "../../../../../_lib/utils/json";
@@ -20,7 +19,6 @@ import { uuid } from "../../../../../_lib/utils/ids";
 import { AppError } from "../../../../../_lib/errors";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import type { DatabaseLike } from "../../../../../_lib/types";
-import { adminFormUpdateSchema } from "../../../../../../assets/shared/schemas/api";
 import {
   adminFormDeleteRouteSchema,
   adminFormGetRouteSchema,
@@ -77,16 +75,16 @@ function mapFields(fields: FieldRow[]) {
   }));
 }
 
-export async function onRequestGet(c: AdminContext): Promise<Response> {
+export const AdminFormsFormKeyGet = openApiRoute(adminFormGetRouteSchema, async (c: AdminContext, data) => {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const { form, fields } = await getFormWithFields(requestDb(c), c.req.param("formKey"));
+  const { form, fields } = await getFormWithFields(requestDb(c), data.params.formKey);
   return json({ form, fields: mapFields(fields) });
-}
+});
 
-export async function onRequestPatch(c: AdminContext): Promise<Response> {
+export const AdminFormsFormKeyPatch = openApiRoute(adminFormPatchRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const body = await parseJsonBody(c.req, adminFormUpdateSchema);
-  const { form } = await getFormWithFields(requestDb(c), c.req.param("formKey"));
+  const body = data.body;
+  const { form } = await getFormWithFields(requestDb(c), data.params.formKey);
   const now = nowIso();
 
   if (body.title !== undefined || body.description !== undefined || body.status !== undefined) {
@@ -138,13 +136,13 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
     fieldsReplaced: body.fields !== undefined,
   });
 
-  const updated = await getFormWithFields(requestDb(c), c.req.param("formKey"));
+  const updated = await getFormWithFields(requestDb(c), data.params.formKey);
   return json({ success: true, form: updated.form, fields: mapFields(updated.fields) });
-}
+});
 
-export async function onRequestDelete(c: AdminContext): Promise<Response> {
+export const AdminFormsFormKeyDelete = openApiRoute(adminFormDeleteRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const { form } = await getFormWithFields(requestDb(c), c.req.param("formKey"));
+  const { form } = await getFormWithFields(requestDb(c), data.params.formKey);
 
   const subCount = await first<{ n: number }>(
     requestDb(c),
@@ -162,40 +160,4 @@ export async function onRequestDelete(c: AdminContext): Promise<Response> {
   await run(requestDb(c), "DELETE FROM forms WHERE id = ?", [form.id]);
   await writeAuditLog(requestDb(c), "admin", admin.id, "form_deleted", "form", form.id, { key: form.key });
   return json({ success: true, action: "deleted" });
-}
-
-export class AdminFormsFormKeyGet extends OpenAPIRoute {
-  schema = adminFormGetRouteSchema;
-
-  async handle(c: AdminContext) {
-    try {
-      return await onRequestGet(c);
-    } catch (error) {
-      return handleError(error);
-    }
-  }
-}
-
-export class AdminFormsFormKeyPatch extends OpenAPIRoute {
-  schema = adminFormPatchRouteSchema;
-
-  async handle(c: AdminContext) {
-    try {
-      return await onRequestPatch(c);
-    } catch (error) {
-      return handleError(error);
-    }
-  }
-}
-
-export class AdminFormsFormKeyDelete extends OpenAPIRoute {
-  schema = adminFormDeleteRouteSchema;
-
-  async handle(c: AdminContext) {
-    try {
-      return await onRequestDelete(c);
-    } catch (error) {
-      return handleError(error);
-    }
-  }
-}
+});

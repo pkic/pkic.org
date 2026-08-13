@@ -7,24 +7,16 @@
  * content/about/_index.md, which previously hardcoded names/dates that had
  * no connection to those admin-managed role assignments.
  */
-import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../_lib/http";
 import { getForumChairsPublic } from "../../../_lib/services/leadership";
 import { forumChairsPublicRouteSchema } from "../../../../assets/shared/schemas/leadership";
+import { openApiRoute } from "../../../_lib/openapi/route";
 
 const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=60";
 
-export async function onRequestGet(c: any): Promise<Response> {
+export const ForumChairsPublicGet = openApiRoute(forumChairsPublicRouteSchema, async (c: any) => {
   const chairs = await getForumChairsPublic(c.env.DB);
   const response = json(chairs);
   response.headers.set("cache-control", PUBLIC_CACHE_CONTROL);
   return response;
-}
-
-export class ForumChairsPublicGet extends OpenAPIRoute {
-  schema = forumChairsPublicRouteSchema;
-
-  async handle(c: any) {
-    return onRequestGet(c);
-  }
-}
+});

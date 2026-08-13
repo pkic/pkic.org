@@ -9,8 +9,6 @@
  * (functions/_lib/auth/permissions.ts), not the legacy AUTH_SCOPES system —
  * see the isPermissionGatedAdminPath bypass in admin/router.ts.
  */
-import { OpenAPIRoute } from "chanfana";
-import { parseJsonBody } from "../../../../_lib/validation";
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { hasPermission, requirePermission, isPermission } from "../../../../_lib/auth/permissions";
@@ -21,13 +19,13 @@ import { writeAuditLog } from "../../../../_lib/services/audit";
 import { AppError } from "../../../../_lib/errors";
 import { resolveOrderBy } from "../../../../_lib/db/sort";
 import {
-  accessGrantCreateSchema,
   accessGrantsCreateRouteSchema,
   accessGrantsListQuerySchema,
   accessGrantsListRouteSchema,
   ADMIN_ACCESS_GRANTS_SORT_COLUMNS,
 } from "../../../../../assets/shared/schemas/access-control";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
+import { openApiRoute } from "../../../../_lib/openapi/route";
 
 interface GrantRow {
   id: string;
@@ -51,12 +49,17 @@ function serializeGrant(row: GrantRow) {
   };
 }
 
-export async function onRequestGet(c: AdminContext): Promise<Response> {
+export const AccessGrantsList = openApiRoute(accessGrantsListRouteSchema, async (c: AdminContext, _data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   if (!hasPermission(admin, "access:grant") && !hasPermission(admin, "access:revoke")) {
     requirePermission(admin, "access:grant");
   }
 
+  // userId isn't part of the declared query schema (it's a free-form
+  // filter, not a sort/shape concern), and the invalid-sort fallback below
+  // intentionally differs from strict schema rejection — same "quietly
+  // ignore" behavior admin-organizations.ts's route uses — so this query
+  // parsing stays manual rather than switching to `data.query`.
   const url = new URL(c.req.raw.url);
   const userId = url.searchParams.get("userId");
   // An invalid sort value fails schema validation (unknown column), so
@@ -80,13 +83,13 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
       );
 
   return json({ grants: rows.map(serializeGrant) });
-}
+});
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+export const AccessGrantsCreate = openApiRoute(accessGrantsCreateRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "access:grant");
 
-  const body = await parseJsonBody(c.req, accessGrantCreateSchema);
+  const body = data.body;
 
   if (!isPermission(body.permission)) {
     throw new AppError(400, "INVALID_PERMISSION", `Unknown permission: ${body.permission}`);
@@ -137,18 +140,4 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     },
     201,
   );
-}
-
-export class AccessGrantsList extends OpenAPIRoute {
-  schema = accessGrantsListRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestGet(c);
-  }
-}
-
-export class AccessGrantsCreate extends OpenAPIRoute {
-  schema = accessGrantsCreateRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestPost(c);
-  }
-}
+});

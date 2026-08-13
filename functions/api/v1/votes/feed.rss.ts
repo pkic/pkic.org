@@ -12,10 +12,10 @@
  * member profile pages already made for the same reason
  * (`/members/profile/?id=`).
  */
-import { OpenAPIRoute } from "chanfana";
 import { resolveAppBaseUrl } from "../../../_lib/config";
 import { listPublicVotesForFeed } from "../../../_lib/services/votes";
 import { publicVotesFeedRouteSchema } from "../../../../assets/shared/schemas/votes";
+import { openApiRoute } from "../../../_lib/openapi/route";
 
 function xmlEscape(value: string): string {
   return value
@@ -26,7 +26,7 @@ function xmlEscape(value: string): string {
     .replace(/'/g, "&apos;");
 }
 
-export async function onRequestGet(c: any): Promise<Response> {
+export const VotesFeedRssGet = openApiRoute(publicVotesFeedRouteSchema, async (c: any) => {
   const baseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const votes = await listPublicVotesForFeed(c.env.DB);
 
@@ -62,11 +62,4 @@ ${items}
       "cache-control": "public, max-age=300, s-maxage=900, stale-while-revalidate=60",
     },
   });
-}
-
-export class VotesFeedRssGet extends OpenAPIRoute {
-  schema = publicVotesFeedRouteSchema;
-  async handle(c: any): Promise<Response> {
-    return onRequestGet(c);
-  }
-}
+});

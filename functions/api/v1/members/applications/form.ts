@@ -6,7 +6,7 @@
  * forms already use, resolved by the well-known key 'membership-application'
  * (seeded in migrations/0034_applications_sponsorships_working_groups.sql).
  */
-import { OpenAPIRoute } from "chanfana";
+import { openApiRoute } from "../../../../_lib/openapi/route";
 import { json } from "../../../../_lib/http";
 import { getGlobalFormByKey } from "../../../../_lib/services/forms";
 import { memberApplicationFormRouteSchema } from "../../../../../assets/shared/schemas/member-applications";
@@ -21,10 +21,4 @@ export async function onRequestGet(c: any): Promise<Response> {
   return response;
 }
 
-export class MembersApplicationsFormGet extends OpenAPIRoute {
-  schema = memberApplicationFormRouteSchema;
-
-  async handle(c: any) {
-    return onRequestGet(c);
-  }
-}
+export const MembersApplicationsFormGet = openApiRoute(memberApplicationFormRouteSchema, onRequestGet);

@@ -8,10 +8,11 @@
 import { useState, useEffect, useCallback, useRef } from "preact/hooks";
 import { Spinner } from "../../components/Spinner";
 import { ErrorAlert } from "../../components/ErrorAlert";
+import { ApiDataTable, type ApiTableActions, type Column } from "../../components/Table";
 import { api } from "../api";
 import { toast, fmt } from "../ui";
 import { SPONSORSHIP_PIPELINE_STAGES } from "../types";
-import type { Sponsorship, SponsorshipEvent, SponsorshipPipelineStage } from "../types";
+import type { Sponsorship, SponsorshipCompany, SponsorshipEvent, SponsorshipPipelineStage } from "../types";
 
 const SPONSOR_TYPES = ["consortium", "event"] as const;
 
@@ -439,116 +440,113 @@ function SponsorshipDetail({ id, onChanged }: { id: string; onChanged: () => voi
   );
 }
 
-interface CompanyGroup {
-  key: string;
-  label: string;
-  website: string | null;
-  sponsorships: Sponsorship[];
-}
-
 /**
- * Groups the flat sponsorship list by "company" — the member organization
- * when one is attached, otherwise the non-member sponsor's name (event
- * sponsors are frequently not PKIC members). Sponsorships with neither
- * (shouldn't normally happen, but the schema allows it) fall back to the
- * contact name, then a per-row "Unspecified sponsor" bucket so nothing is
- * silently dropped from the list.
+ * Decomposes a company list row's `key` (built server-side in
+ * `listSponsorshipCompanies`) back into the filter the detail panel needs
+ * to fetch that company's sponsorships — organization/non-member-name/
+ * contact-name, matching the same fallback order the grouping query uses.
  */
-function companyKey(s: Sponsorship): string {
-  if (s.organizationId) return `org:${s.organizationId}`;
-  if (s.nonMemberName) return `nonmember:${s.nonMemberName}`;
-  if (s.contactName) return `contact:${s.contactName}`;
-  return `sponsorship:${s.id}`;
-}
-
-function companyLabel(s: Sponsorship): string {
-  return s.organizationName ?? s.nonMemberName ?? s.contactName ?? "Unspecified sponsor";
-}
-
-function groupByCompany(sponsorships: Sponsorship[]): CompanyGroup[] {
-  const groups = new Map<string, CompanyGroup>();
-  for (const s of sponsorships) {
-    const key = companyKey(s);
-    const existing = groups.get(key);
-    if (existing) {
-      existing.sponsorships.push(s);
-    } else {
-      groups.set(key, { key, label: companyLabel(s), website: s.nonMemberWebsite, sponsorships: [s] });
-    }
-  }
-  return Array.from(groups.values()).sort((a, b) => a.label.localeCompare(b.label));
+function companyDetailParams(key: string): Record<string, string> {
+  if (key.startsWith("org:")) return { organizationId: key.slice("org:".length) };
+  if (key.startsWith("nonmember:")) return { nonMemberName: key.slice("nonmember:".length) };
+  if (key.startsWith("contact:")) return { contactName: key.slice("contact:".length) };
+  return {};
 }
 
 /**
  * 2026-07-30 testing feedback: the flat list mixed every sponsor of every
  * type/stage in one scroll, so finding "what does company X sponsor" meant
  * scanning the whole list for name matches. This drills down instead:
- * companies → that company's sponsorships → sponsorship detail.
+ * companies → that company's sponsorships → sponsorship detail. Company
+ * grouping/sorting/pagination happens in D1 via `/companies`
+ * (`listSponsorshipCompanies`), not by fetching every matching sponsorship
+ * into the browser to group client-side (PR #1 review) — the detail panel
+ * then fetches only the selected company's (naturally bounded) rows.
  */
 export function Sponsorships() {
   const [type, setType] = useState<"" | (typeof SPONSOR_TYPES)[number]>("");
   const [stage, setStage] = useState<"" | SponsorshipPipelineStage>("");
-  const [sponsorships, setSponsorships] = useState<Sponsorship[]>([]);
-  const [selectedCompanyKey, setSelectedCompanyKey] = useState<string | null>(null);
+  const [selectedCompany, setSelectedCompany] = useState<SponsorshipCompany | null>(null);
+  const [companySponsorships, setCompanySponsorships] = useState<Sponsorship[]>([]);
+  const [companyLoading, setCompanyLoading] = useState(false);
+  const [companyError, setCompanyError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const tableRef = useRef<ApiTableActions | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      // The company-grouped master/detail view (groupByCompany below) needs
-      // the complete matching set in memory to group correctly — a single
-      // capped page previously silently hid every sponsorship past the
-      // 200th. Page through the full result set instead of capping it.
-      const all: Sponsorship[] = [];
-      let offset = 0;
-      const pageSize = 200;
-      for (;;) {
-        const params = new URLSearchParams();
+  const loadCompanySponsorships = useCallback(
+    async (company: SponsorshipCompany) => {
+      setCompanyLoading(true);
+      setCompanyError(null);
+      try {
+        if (company.key.startsWith("sponsorship:")) {
+          const id = company.key.slice("sponsorship:".length);
+          const data = await api<{ sponsorship: Sponsorship }>(`/api/v1/admin/sponsorships/${id}`);
+          setCompanySponsorships([data.sponsorship]);
+          setSelectedId(data.sponsorship.id);
+          return;
+        }
+        const params = new URLSearchParams({ ...companyDetailParams(company.key), limit: "200", offset: "0" });
         if (type) params.set("type", type);
         if (stage) params.set("stage", stage);
-        params.set("limit", String(pageSize));
-        params.set("offset", String(offset));
-        const data = await api<{ sponsorships: Sponsorship[]; page: { hasMore: boolean } }>(
-          `/api/v1/admin/sponsorships?${params.toString()}`,
-        );
-        all.push(...data.sponsorships);
-        if (!data.page.hasMore) break;
-        offset += pageSize;
+        const data = await api<{ sponsorships: Sponsorship[] }>(`/api/v1/admin/sponsorships?${params.toString()}`);
+        setCompanySponsorships(data.sponsorships);
+        setSelectedId((prev) => {
+          if (prev && data.sponsorships.some((s) => s.id === prev)) return prev;
+          return data.sponsorships.length === 1 ? data.sponsorships[0].id : null;
+        });
+      } catch (e) {
+        setCompanyError((e as Error).message);
+      } finally {
+        setCompanyLoading(false);
       }
-      setSponsorships(all);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
+    },
+    [type, stage],
+  );
+
+  function selectCompany(company: SponsorshipCompany) {
+    setSelectedCompany(company);
+    void loadCompanySponsorships(company);
+  }
+
+  function backToCompanies() {
+    setSelectedCompany(null);
+    setCompanySponsorships([]);
+    setSelectedId(null);
+  }
+
+  // Filters apply to the currently-open company too, not just the list.
+  // Deliberately keyed on [type, stage] only, not selectedCompany — this
+  // should refetch when filters change, not every time a new company is
+  // selected (selectCompany already triggers that fetch itself).
+  useEffect(() => {
+    if (selectedCompany) void loadCompanySponsorships(selectedCompany);
   }, [type, stage]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  function reloadAll() {
+    tableRef.current?.reload();
+    if (selectedCompany) void loadCompanySponsorships(selectedCompany);
+  }
 
-  const companies = groupByCompany(sponsorships);
-  const selectedCompany = companies.find((c) => c.key === selectedCompanyKey) ?? null;
-
-  // If filters change out from under the current selection (or the company
-  // has no sponsorships left matching the filter), fall back a level rather
-  // than showing a stale/empty panel.
-  useEffect(() => {
-    if (selectedCompanyKey && !selectedCompany) {
-      setSelectedCompanyKey(null);
-      setSelectedId(null);
-    }
-  }, [selectedCompanyKey, selectedCompany]);
-
-  useEffect(() => {
-    if (selectedId && selectedCompany && !selectedCompany.sponsorships.some((s) => s.id === selectedId)) {
-      setSelectedId(null);
-    }
-  }, [selectedId, selectedCompany]);
+  const companyColumns: Column<SponsorshipCompany>[] = [
+    { header: "Company", cell: (c) => <span class="fw-semibold">{c.label}</span> },
+    {
+      header: "Stages",
+      cell: (c) => (
+        <span class="d-flex gap-1 flex-wrap">
+          {c.stages.split(",").map((s) => (
+            <span key={s} class={`badge text-capitalize ${stageBadgeClass(s as SponsorshipPipelineStage)}`}>
+              {stageLabel(s)}
+            </span>
+          ))}
+        </span>
+      ),
+    },
+    {
+      header: "Sponsorships",
+      cell: (c) => `${c.sponsorshipCount} sponsorship${c.sponsorshipCount === 1 ? "" : "s"}`,
+    },
+  ];
 
   return (
     <div>
@@ -588,88 +586,64 @@ export function Sponsorships() {
         <CreateSponsorshipForm
           onCreated={() => {
             setShowCreate(false);
-            void load();
+            reloadAll();
           }}
           onCancel={() => setShowCreate(false)}
         />
       )}
 
-      {loading && <Spinner />}
-      {error && <ErrorAlert error={error} />}
-      {!loading && !error && companies.length === 0 && <p class="text-muted">No sponsorships match these filters.</p>}
-
-      {!loading && !error && companies.length > 0 && !selectedCompany && (
-        <div class="list-group">
-          {companies.map((c) => {
-            const stages = new Set(c.sponsorships.map((s) => s.pipelineStage));
-            return (
-              <button
-                type="button"
-                key={c.key}
-                class="list-group-item list-group-item-action"
-                onClick={() => {
-                  setSelectedCompanyKey(c.key);
-                  setSelectedId(c.sponsorships.length === 1 ? c.sponsorships[0].id : null);
-                }}
-              >
-                <div class="d-flex justify-content-between align-items-center">
-                  <span class="fw-semibold">{c.label}</span>
-                  <span class="d-flex gap-1">
-                    {Array.from(stages).map((s) => (
-                      <span key={s} class={`badge text-capitalize ${stageBadgeClass(s)}`}>
-                        {stageLabel(s)}
-                      </span>
-                    ))}
-                  </span>
-                </div>
-                <div class="small text-muted">
-                  {c.sponsorships.length} sponsorship{c.sponsorships.length === 1 ? "" : "s"}
-                </div>
-              </button>
-            );
-          })}
-        </div>
+      {!selectedCompany && (
+        <ApiDataTable<SponsorshipCompany>
+          endpoint="/api/v1/admin/sponsorships/companies"
+          resolve={(d) => (d as { companies: SponsorshipCompany[] }).companies}
+          resolvePage={(d) => (d as { page: { total: number; hasMore: boolean } }).page}
+          paginate
+          actionsRef={tableRef}
+          columns={companyColumns}
+          params={{ ...(type ? { type } : {}), ...(stage ? { stage } : {}) }}
+          deps={[type, stage]}
+          rowKey={(c) => c.key}
+          onRowClick={selectCompany}
+          empty="No sponsorships match these filters."
+        />
       )}
 
-      {!loading && !error && selectedCompany && (
+      {selectedCompany && (
         <div>
-          <button
-            type="button"
-            class="btn btn-link btn-sm ps-0 mb-2"
-            onClick={() => {
-              setSelectedCompanyKey(null);
-              setSelectedId(null);
-            }}
-          >
+          <button type="button" class="btn btn-link btn-sm ps-0 mb-2" onClick={backToCompanies}>
             ← Back to companies
           </button>
           <h6 class="mb-3">{selectedCompany.label}</h6>
-          <div class="row g-3">
-            <div class="col-md-5">
-              <div class="list-group">
-                {selectedCompany.sponsorships.map((s) => (
-                  <button
-                    type="button"
-                    key={s.id}
-                    class={`list-group-item list-group-item-action${selectedId === s.id ? " active" : ""}`}
-                    onClick={() => setSelectedId(s.id)}
-                  >
-                    <div class="d-flex justify-content-between">
-                      <span class="fw-semibold">
-                        {s.tier ?? "no tier"}
-                        {s.eventName && <> — {s.eventName}</>}
-                      </span>
-                      <span class={`badge text-capitalize ${stageBadgeClass(s.pipelineStage)}`}>
-                        {stageLabel(s.pipelineStage)}
-                      </span>
-                    </div>
-                    <div class="small text-muted">{s.sponsorType}</div>
-                  </button>
-                ))}
+          {companyLoading && <Spinner />}
+          {companyError && <ErrorAlert error={companyError} />}
+          {!companyLoading && !companyError && (
+            <div class="row g-3">
+              <div class="col-md-5">
+                <div class="list-group">
+                  {companySponsorships.map((s) => (
+                    <button
+                      type="button"
+                      key={s.id}
+                      class={`list-group-item list-group-item-action${selectedId === s.id ? " active" : ""}`}
+                      onClick={() => setSelectedId(s.id)}
+                    >
+                      <div class="d-flex justify-content-between">
+                        <span class="fw-semibold">
+                          {s.tier ?? "no tier"}
+                          {s.eventName && <> — {s.eventName}</>}
+                        </span>
+                        <span class={`badge text-capitalize ${stageBadgeClass(s.pipelineStage)}`}>
+                          {stageLabel(s.pipelineStage)}
+                        </span>
+                      </div>
+                      <div class="small text-muted">{s.sponsorType}</div>
+                    </button>
+                  ))}
+                </div>
               </div>
+              <div class="col-md-7">{selectedId && <SponsorshipDetail id={selectedId} onChanged={reloadAll} />}</div>
             </div>
-            <div class="col-md-7">{selectedId && <SponsorshipDetail id={selectedId} onChanged={load} />}</div>
-          </div>
+          )}
         </div>
       )}
     </div>

@@ -8,21 +8,17 @@
  * functions/api/v1/sponsorship/checkout/webhook.ts), keyed by the Stripe
  * checkout session id carried in the session metadata.
  */
-import { OpenAPIRoute } from "chanfana";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
 import { AppError } from "../../../../_lib/errors";
 import { json } from "../../../../_lib/http";
-import { parseJsonBody } from "../../../../_lib/validation";
 import { getEventBySlug } from "../../../../_lib/services/events";
 import { getActiveTierConfig, listTierConfig } from "../../../../_lib/services/sponsorship";
-import {
-  sponsorshipCheckoutRouteSchema,
-  sponsorshipCheckoutSchema,
-} from "../../../../../assets/shared/schemas/sponsorship";
+import { sponsorshipCheckoutRouteSchema } from "../../../../../assets/shared/schemas/sponsorship";
+import { openApiRoute } from "../../../../_lib/openapi/route";
 
 const STRIPE_API = "https://api.stripe.com/v1/checkout/sessions";
 
-export async function onRequestPost(c: any): Promise<Response> {
+export const SponsorshipCheckoutPost = openApiRoute(sponsorshipCheckoutRouteSchema, async (c: any, data) => {
   c.set("sensitive", true);
   const env = c.env;
   const request = c.req.raw;
@@ -32,7 +28,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     throw new AppError(503, "SERVICE_UNAVAILABLE", "Sponsorship checkout is not configured");
   }
 
-  const body = await parseJsonBody(c.req, sponsorshipCheckoutSchema);
+  const body = data.body;
 
   const tierConfig = await getActiveTierConfig(env.DB, "event", body.tier);
   if (!tierConfig) {
@@ -87,12 +83,4 @@ export async function onRequestPost(c: any): Promise<Response> {
   }
 
   return json({ url: session.url });
-}
-
-export class SponsorshipCheckoutPost extends OpenAPIRoute {
-  schema = sponsorshipCheckoutRouteSchema;
-
-  async handle(c: any) {
-    return onRequestPost(c);
-  }
-}
+});

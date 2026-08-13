@@ -5,7 +5,7 @@
  * org-tied members, or the individual member's own id for org-less
  * categories (H5/H6/H7) — matching the `id` field returned by GET /members.
  */
-import { OpenAPIRoute } from "chanfana";
+import { openApiRoute } from "../../../_lib/openapi/route";
 import { AppError } from "../../../_lib/errors";
 import { json } from "../../../_lib/http";
 import { getPublicMemberById } from "../../../_lib/services/members-directory";
@@ -24,10 +24,4 @@ export async function onRequestGet(c: any): Promise<Response> {
   return response;
 }
 
-export class MembersIdGet extends OpenAPIRoute {
-  schema = memberDetailRouteSchema;
-
-  async handle(c: any) {
-    return onRequestGet(c);
-  }
-}
+export const MembersIdGet = openApiRoute(memberDetailRouteSchema, onRequestGet);

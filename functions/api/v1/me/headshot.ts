@@ -4,7 +4,6 @@
  * pipeline, R2 bucket, and old-key cleanup) but scoped to the caller's own
  * identity — no target user id, member-session gated instead of admin.
  */
-import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../_lib/http";
 import { requireMemberFromRequest } from "../../../_lib/auth/member";
 import { run } from "../../../_lib/db/queries";
@@ -18,8 +17,9 @@ import {
 } from "../../../_lib/utils/headshot-upload";
 import { myHeadshotUploadRouteSchema } from "../../../../assets/shared/schemas/me";
 import { requestDb, type AdminContext } from "../../../_lib/db/context";
+import { openApiRoute } from "../../../_lib/openapi/route";
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+export const MeHeadshotPost = openApiRoute(myHeadshotUploadRouteSchema, async (c: AdminContext) => {
   const db = requestDb(c);
   const member = await requireMemberFromRequest(db, c.req.raw, c.env);
 
@@ -59,11 +59,4 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   ]);
 
   return json({ success: true, r2Key });
-}
-
-export class MeHeadshotPost extends OpenAPIRoute {
-  schema = myHeadshotUploadRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestPost(c);
-  }
-}
+});

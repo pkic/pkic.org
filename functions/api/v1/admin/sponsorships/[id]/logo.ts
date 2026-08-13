@@ -9,7 +9,7 @@
  * GET /api/v1/sponsors/:id/logo instead, since a non-member sponsor has no
  * organizations row to key that route off of.
  */
-import { OpenAPIRoute } from "chanfana";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
@@ -131,16 +131,6 @@ export async function onRequest(c: AdminContext): Promise<Response> {
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
 }
 
-export class SponsorshipLogoPut extends OpenAPIRoute {
-  schema = sponsorshipLogoPutRouteSchema;
-  async handle(c: AdminContext) {
-    return onPut(c);
-  }
-}
+export const SponsorshipLogoPut = openApiRoute(sponsorshipLogoPutRouteSchema, (c: AdminContext) => onPut(c));
 
-export class SponsorshipLogoDelete extends OpenAPIRoute {
-  schema = sponsorshipLogoDeleteRouteSchema;
-  async handle(c: AdminContext) {
-    return onDelete(c);
-  }
-}
+export const SponsorshipLogoDelete = openApiRoute(sponsorshipLogoDeleteRouteSchema, (c: AdminContext) => onDelete(c));

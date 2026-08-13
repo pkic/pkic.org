@@ -832,6 +832,16 @@ export interface Sponsorship {
   updatedAt: string;
 }
 
+// GET /api/v1/admin/sponsorships/companies — grouped/paginated in D1.
+export interface SponsorshipCompany {
+  key: string;
+  label: string;
+  website: string | null;
+  sponsorshipCount: number;
+  /** Comma-separated distinct pipeline stages across this company's sponsorships. */
+  stages: string;
+}
+
 export interface SponsorshipEvent {
   id: string;
   fromStage: string | null;

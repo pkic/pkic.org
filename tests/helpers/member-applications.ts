@@ -15,11 +15,7 @@ import { queryAll } from "./context";
 const APPLICATION_FORM_KEY = "membership-application";
 
 export async function seedMembershipApplicationForm(): Promise<string> {
-  const existing = await queryAll<{ id: string }>(
-    env.DB,
-    "SELECT id FROM forms WHERE key = ?",
-    APPLICATION_FORM_KEY,
-  );
+  const existing = await queryAll<{ id: string }>(env.DB, "SELECT id FROM forms WHERE key = ?", APPLICATION_FORM_KEY);
   if (existing.length > 0) return existing[0].id;
 
   const formId = crypto.randomUUID();

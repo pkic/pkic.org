@@ -69,18 +69,57 @@ export const sponsorshipsListQuerySchema = paginationQuerySchema.extend({
   type: sponsorTypeSchema.optional(),
   stage: sponsorshipPipelineStageSchema.optional(),
   tier: trimmedString(1, 100).optional(),
+  // Company-scoped filters — decomposed from a company list row's `key`,
+  // used to fetch one company's sponsorships for the detail panel instead
+  // of the full list.
+  organizationId: z.uuid().optional(),
+  nonMemberName: trimmedString(1, 200).optional(),
+  contactName: trimmedString(1, 200).optional(),
 });
 
 export const sponsorshipsListRouteSchema = {
   tags: ["Sponsorships"],
   summary: "List sponsorships (admin sales pipeline)",
-  description: "Paginated, optionally filtered by sponsor type / pipeline stage / tier.",
+  description: "Paginated, optionally filtered by sponsor type / pipeline stage / tier / company.",
   request: { query: sponsorshipsListQuerySchema },
   responses: {
     "200": {
       description: "Sponsorships list.",
       content: {
         "application/json": { schema: paginatedResponseSchema("sponsorships", adminSponsorshipSchema) },
+      },
+    },
+  },
+};
+
+// ── Companies (grouped list) ────────────────────────────────────────────
+
+export const sponsorshipCompanySchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  website: z.string().nullable(),
+  sponsorshipCount: z.number(),
+  /** Comma-separated distinct pipeline stages across this company's sponsorships. */
+  stages: z.string(),
+});
+
+export const sponsorshipCompaniesListQuerySchema = paginationQuerySchema.extend({
+  type: sponsorTypeSchema.optional(),
+  stage: sponsorshipPipelineStageSchema.optional(),
+  tier: trimmedString(1, 100).optional(),
+});
+
+export const sponsorshipCompaniesListRouteSchema = {
+  tags: ["Sponsorships"],
+  summary: "List sponsorship companies (admin sales pipeline, grouped)",
+  description:
+    "Paginated companies (member organization, or non-member sponsor/contact name) matching sponsorships, grouped and sorted in D1 — not the full sponsorship list.",
+  request: { query: sponsorshipCompaniesListQuerySchema },
+  responses: {
+    "200": {
+      description: "Sponsorship companies list.",
+      content: {
+        "application/json": { schema: paginatedResponseSchema("companies", sponsorshipCompanySchema) },
       },
     },
   },

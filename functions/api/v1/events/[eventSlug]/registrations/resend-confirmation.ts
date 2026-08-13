@@ -9,7 +9,8 @@
  * other public link-recovery routes.
  */
 
-import { OpenAPIRoute } from "chanfana";
+import type { z } from "zod";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { parseJsonBody } from "../../../../../_lib/validation";
 import { json } from "../../../../../_lib/http";
 import { AppError } from "../../../../../_lib/errors";
@@ -31,10 +32,13 @@ import { queuedCapabilityToken, verifyDatabaseCapability } from "../../../../../
 import { getClientIp, requireInternalSecret } from "../../../../../_lib/request";
 import { enforceRateLimit } from "../../../../../_lib/rate-limit";
 
-export async function onRequestPost(c: any): Promise<Response> {
+export async function onRequestPost(
+  c: any,
+  data?: { body: z.infer<typeof registrationResendConfirmationSchema> },
+): Promise<Response> {
   c.set("sensitive", true);
 
-  const body = await parseJsonBody(c.req, registrationResendConfirmationSchema);
+  const body = data?.body ?? (await parseJsonBody(c.req, registrationResendConfirmationSchema));
   if (body.email) {
     await enforceRateLimit({
       binding: c.env.EMAIL_RATE_LIMITER,
@@ -167,10 +171,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   return json({ ok: true });
 }
 
-export class EventsEventSlugRegistrationsResendConfirmationPost extends OpenAPIRoute {
-  schema = registrationResendConfirmationRouteSchema;
-
-  async handle(c: any) {
-    return onRequestPost(c);
-  }
-}
+export const EventsEventSlugRegistrationsResendConfirmationPost = openApiRoute(
+  registrationResendConfirmationRouteSchema,
+  onRequestPost,
+);

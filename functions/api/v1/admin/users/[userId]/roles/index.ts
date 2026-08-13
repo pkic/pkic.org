@@ -5,8 +5,6 @@
  * Backs `user_roles` — a user may hold multiple roles
  * simultaneously (each independently context-scoped and time-bounded).
  */
-import { OpenAPIRoute } from "chanfana";
-import { parseJsonBody } from "../../../../../../_lib/validation";
 import { json } from "../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
 import { hasPermission, requirePermission } from "../../../../../../_lib/auth/permissions";
@@ -16,11 +14,11 @@ import { uuid } from "../../../../../../_lib/utils/ids";
 import { writeAuditLog } from "../../../../../../_lib/services/audit";
 import { AppError } from "../../../../../../_lib/errors";
 import {
-  userRoleAssignSchema,
   userRolesAssignRouteSchema,
   userRolesListRouteSchema,
 } from "../../../../../../../assets/shared/schemas/access-control";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
+import { openApiRoute } from "../../../../../../_lib/openapi/route";
 
 interface UserRoleRow {
   id: string;
@@ -46,7 +44,7 @@ function serialize(row: UserRoleRow) {
   };
 }
 
-export async function onRequestGet(c: AdminContext): Promise<Response> {
+export const UserRolesList = openApiRoute(userRolesListRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "access:grant");
 
@@ -57,18 +55,18 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
      JOIN roles r ON r.id = ur.role_id
      WHERE ur.user_id = ? AND ur.revoked_at IS NULL
      ORDER BY ur.created_at DESC`,
-    [c.req.param("userId")],
+    [data.params.userId],
   );
 
   return json({ roles: rows.map(serialize) });
-}
+});
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+export const UserRolesAssign = openApiRoute(userRolesAssignRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "access:grant");
 
-  const userId = c.req.param("userId");
-  const body = await parseJsonBody(c.req, userRoleAssignSchema);
+  const userId = data.params.userId;
+  const body = data.body;
 
   const userRow = await first<{ id: string }>(requestDb(c), "SELECT id FROM users WHERE id = ?", [userId]);
   if (!userRow) {
@@ -136,18 +134,4 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     },
     201,
   );
-}
-
-export class UserRolesList extends OpenAPIRoute {
-  schema = userRolesListRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestGet(c);
-  }
-}
-
-export class UserRolesAssign extends OpenAPIRoute {
-  schema = userRolesAssignRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestPost(c);
-  }
-}
+});

@@ -10,7 +10,7 @@ import { all, first } from "../db/queries";
 import { normalizeEmail } from "../validation";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
-import { findOrCreateUser, type UserRecord } from "./users";
+import { buildFindOrCreateUserStatement, type UserRecord } from "./users";
 import { normalizeOrgName } from "./sponsorship";
 import { getWorkingGroupBySlugOrId, buildAddWorkingGroupMemberStatements } from "./working-groups";
 import { AppError } from "../errors";
@@ -65,16 +65,13 @@ function splitName(fullName: string): { firstName: string | null; lastName: stri
  * bulk import, so a silent no-op (the migration script's behavior) would be
  * a confusing UX here.
  *
- * Every write past the pre-flight checks and user resolution lands in one
- * atomic `db.batch()` — organization create/update, member rows,
+ * Every write past the pre-flight checks lands in one atomic `db.batch()`
+ * — user resolution (via `buildFindOrCreateUserStatement`, unexecuted
+ * until the batch runs), organization create/update, member rows,
  * primary/secondary contact assignment, and working-group membership (via
  * working-groups.ts's canonical `buildAddWorkingGroupMemberStatements`,
  * not a reimplementation) — so a later failure can't leave a partially
- * provisioned membership. The one exception is `findOrCreateUser` (used
- * broadly elsewhere in the codebase with its own immediate-write contract,
- * not worth changing here): if it fails partway through multiple
- * representatives, the worst case is an orphaned `users` row with no
- * membership, not a broken membership.
+ * provisioned membership or an orphaned `users` row.
  */
 export async function createAdminMember(
   db: DatabaseLike,
@@ -114,22 +111,21 @@ export async function createAdminMember(
     }
   }
 
+  const statements: StatementLike[] = [];
   const users: UserRecord[] = [];
   for (const rep of input.representatives) {
     const { firstName, lastName } = splitName(rep.name);
-    users.push(
-      await findOrCreateUser(db, {
-        email: rep.email,
-        firstName: firstName ?? undefined,
-        lastName: lastName ?? undefined,
-        jobTitle: rep.role,
-        linksJson: rep.linkedin ? serializeLinks([rep.linkedin]) : null,
-        allowProfileUpdate: true,
-      }),
-    );
+    const { user, statement } = await buildFindOrCreateUserStatement(db, {
+      email: rep.email,
+      firstName: firstName ?? undefined,
+      lastName: lastName ?? undefined,
+      jobTitle: rep.role,
+      linksJson: rep.linkedin ? serializeLinks([rep.linkedin]) : null,
+      allowProfileUpdate: true,
+    });
+    users.push(user);
+    if (statement) statements.push(statement);
   }
-
-  const statements: StatementLike[] = [];
 
   if (organizationId && isNewOrganization) {
     statements.push(

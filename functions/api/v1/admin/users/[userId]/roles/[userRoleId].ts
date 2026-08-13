@@ -2,8 +2,6 @@
  * DELETE /api/v1/admin/users/:userId/roles/:userRoleId — revoke a role assignment
  * PATCH  /api/v1/admin/users/:userId/roles/:userRoleId — change an assignment's expiry date
  */
-import { OpenAPIRoute } from "chanfana";
-import { parseJsonBody } from "../../../../../../_lib/validation";
 import { json } from "../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../../_lib/auth/permissions";
@@ -12,10 +10,10 @@ import { nowIso } from "../../../../../../_lib/utils/time";
 import { writeAuditLog } from "../../../../../../_lib/services/audit";
 import {
   userRoleRevokeRouteSchema,
-  userRoleUpdateExpirySchema,
   userRoleUpdateExpiryRouteSchema,
 } from "../../../../../../../assets/shared/schemas/access-control";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
+import { openApiRoute } from "../../../../../../_lib/openapi/route";
 
 interface UserRoleRow {
   id: string;
@@ -31,14 +29,14 @@ interface UserRoleWithRoleRow extends UserRoleRow {
   created_at: string;
 }
 
-export async function onRequestDelete(c: AdminContext): Promise<Response> {
+export const UserRolesRevoke = openApiRoute(userRoleRevokeRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "access:revoke");
 
   const row = await first<UserRoleRow>(
     requestDb(c),
     "SELECT id, user_id, role_id FROM user_roles WHERE id = ? AND user_id = ? AND revoked_at IS NULL",
-    [c.req.param("userRoleId"), c.req.param("userId")],
+    [data.params.userRoleId, data.params.userId],
   );
 
   if (!row) {
@@ -53,18 +51,18 @@ export async function onRequestDelete(c: AdminContext): Promise<Response> {
   });
 
   return json({ success: true });
-}
+});
 
-export async function onRequestPatch(c: AdminContext): Promise<Response> {
+export const UserRolesUpdateExpiry = openApiRoute(userRoleUpdateExpiryRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "access:grant");
 
-  const body = await parseJsonBody(c.req, userRoleUpdateExpirySchema);
+  const body = data.body;
 
   const row = await first<UserRoleRow>(
     requestDb(c),
     "SELECT id, user_id, role_id FROM user_roles WHERE id = ? AND user_id = ? AND revoked_at IS NULL",
-    [c.req.param("userRoleId"), c.req.param("userId")],
+    [data.params.userRoleId, data.params.userId],
   );
 
   if (!row) {
@@ -103,18 +101,4 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
       createdAt: updated.created_at,
     },
   });
-}
-
-export class UserRolesRevoke extends OpenAPIRoute {
-  schema = userRoleRevokeRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestDelete(c);
-  }
-}
-
-export class UserRolesUpdateExpiry extends OpenAPIRoute {
-  schema = userRoleUpdateExpiryRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestPatch(c);
-  }
-}
+});

@@ -101,7 +101,7 @@ describe("POST /api/v1/members/applications", () => {
     // the request body on every call, hasActiveApplicationForDomain only
     // matches an *exact* domain already present in member_applications, and
     // hasConflictingOrganizationDomain only matches organizations that
-    // actually have that domain in organization_domains_json. Two
+    // actually have that domain in organization_domains. Two
     // submissions for two different, never-before-seen domains — even from
     // the same applicant/organization name — must both succeed.
     const testEnv = makeEnv();

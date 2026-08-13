@@ -8,7 +8,6 @@
  * — `id` there is the organization id for org-tied members, so no separate
  * admin GET is needed.
  */
-import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
@@ -22,6 +21,7 @@ import {
   adminOrganizationLogoDeleteRouteSchema,
   adminOrganizationLogoPutRouteSchema,
 } from "../../../../../../assets/shared/schemas/admin-organizations";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 
 interface OrgLogoRow {
   id: string;
@@ -108,16 +108,11 @@ export async function onRequest(c: AdminContext): Promise<Response> {
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
 }
 
-export class OrganizationLogoPut extends OpenAPIRoute {
-  schema = adminOrganizationLogoPutRouteSchema;
-  async handle(c: AdminContext) {
-    return onPut(c);
-  }
-}
+// Note: these `openApiRoute`-wrapped exports are currently unused by
+// ./router.ts, which wires PUT/DELETE /logo directly to the manual
+// `onRequest` dispatcher above (raw Hono `app.put`/`app.delete`, bypassing
+// chanfana schema validation entirely) — kept in sync with that dispatcher's
+// signature so they stay usable if the routing is ever switched over.
+export const OrganizationLogoPut = openApiRoute(adminOrganizationLogoPutRouteSchema, onPut);
 
-export class OrganizationLogoDelete extends OpenAPIRoute {
-  schema = adminOrganizationLogoDeleteRouteSchema;
-  async handle(c: AdminContext) {
-    return onDelete(c);
-  }
-}
+export const OrganizationLogoDelete = openApiRoute(adminOrganizationLogoDeleteRouteSchema, onDelete);

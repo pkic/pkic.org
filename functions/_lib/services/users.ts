@@ -2,7 +2,7 @@ import { first, run } from "../db/queries";
 import { normalizeEmail } from "../validation";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
-import type { DatabaseLike } from "../types";
+import type { DatabaseLike, StatementLike } from "../types";
 
 export interface UserRecord {
   id: string;
@@ -42,32 +42,32 @@ export async function findUserByEmail(db: DatabaseLike, email: string): Promise<
   return findExistingUserByAnyEmail(db, normalizeEmail(email));
 }
 
+export interface FindOrCreateUserPayload {
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  organizationName?: string;
+  jobTitle?: string;
+  biography?: string | null;
+  linksJson?: string | null;
+  preferredName?: string | null;
+  dataJson?: string | null;
+  /** Whether to merge submitted profile fields into an existing record.
+   *  Default: false — public submissions do not update existing profiles. */
+  allowProfileUpdate?: boolean;
+}
+
 /**
- * Finds an existing user by email or creates a new one.
- *
- * SECURITY: `allowProfileUpdate` defaults to false. Public registration flows
- * (unauthenticated) must never overwrite an existing user's profile — an
- * attacker could otherwise hijack someone else's name/org by submitting a
- * registration with their email address. Set allowProfileUpdate only in
- * authenticated or admin-controlled contexts.
+ * Resolves what `findOrCreateUser` would do for `payload` — the resulting
+ * `UserRecord` and, if a write is needed, its query + bound values — without
+ * executing anything. Shared by `findOrCreateUser` (executes immediately)
+ * and `buildFindOrCreateUserStatement` (returns an unexecuted statement for
+ * a caller-assembled atomic `db.batch()`).
  */
-export async function findOrCreateUser(
+async function resolveUserWrite(
   db: DatabaseLike,
-  payload: {
-    email: string;
-    firstName?: string;
-    lastName?: string;
-    organizationName?: string;
-    jobTitle?: string;
-    biography?: string | null;
-    linksJson?: string | null;
-    preferredName?: string | null;
-    dataJson?: string | null;
-    /** Whether to merge submitted profile fields into an existing record.
-     *  Default: false — public submissions do not update existing profiles. */
-    allowProfileUpdate?: boolean;
-  },
-): Promise<UserRecord> {
+  payload: FindOrCreateUserPayload,
+): Promise<{ user: UserRecord; query: string; values: unknown[] } | { user: UserRecord; query: null }> {
   const normalized = normalizeEmail(payload.email);
   const existing = await findExistingUserByAnyEmail(db, normalized);
 
@@ -87,14 +87,14 @@ export async function findOrCreateUser(
     };
 
     const now = nowIso();
-    await run(
-      db,
-      `INSERT INTO users (
+    return {
+      user,
+      query: `INSERT INTO users (
         id, email, normalized_email, first_name, last_name, preferred_name,
         organization_name, job_title, biography, links_json,
         data_json, role, active, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'user', 1, ?, ?)`,
-      [
+      values: [
         user.id,
         user.email,
         user.normalized_email,
@@ -109,14 +109,12 @@ export async function findOrCreateUser(
         now,
         now,
       ],
-    );
-
-    return user;
+    };
   }
 
   // Public submissions must not overwrite existing profile data.
   if (!payload.allowProfileUpdate) {
-    return existing;
+    return { user: existing, query: null };
   }
 
   const updatedFirstName = payload.firstName ?? existing.first_name;
@@ -128,9 +126,21 @@ export async function findOrCreateUser(
   const updatedLinksJson = payload.linksJson ?? existing.links_json;
   const updatedDataJson = payload.dataJson ?? existing.data_json;
 
-  await run(
-    db,
-    `UPDATE users
+  const user: UserRecord = {
+    ...existing,
+    first_name: updatedFirstName,
+    last_name: updatedLastName,
+    preferred_name: updatedPreferredName,
+    organization_name: updatedOrganizationName,
+    job_title: updatedJobTitle,
+    biography: updatedBiography,
+    links_json: updatedLinksJson,
+    data_json: updatedDataJson,
+  };
+
+  return {
+    user,
+    query: `UPDATE users
      SET first_name = ?,
          last_name = ?,
          preferred_name = ?,
@@ -141,7 +151,7 @@ export async function findOrCreateUser(
          data_json = ?,
          updated_at = ?
      WHERE id = ?`,
-    [
+    values: [
       updatedFirstName,
       updatedLastName,
       updatedPreferredName,
@@ -153,17 +163,41 @@ export async function findOrCreateUser(
       nowIso(),
       existing.id,
     ],
-  );
-
-  return {
-    ...existing,
-    first_name: updatedFirstName,
-    last_name: updatedLastName,
-    preferred_name: updatedPreferredName,
-    organization_name: updatedOrganizationName,
-    job_title: updatedJobTitle,
-    biography: updatedBiography,
-    links_json: updatedLinksJson,
-    data_json: updatedDataJson,
   };
+}
+
+/**
+ * Finds an existing user by email or creates a new one.
+ *
+ * SECURITY: `allowProfileUpdate` defaults to false. Public registration flows
+ * (unauthenticated) must never overwrite an existing user's profile — an
+ * attacker could otherwise hijack someone else's name/org by submitting a
+ * registration with their email address. Set allowProfileUpdate only in
+ * authenticated or admin-controlled contexts.
+ */
+export async function findOrCreateUser(db: DatabaseLike, payload: FindOrCreateUserPayload): Promise<UserRecord> {
+  const resolved = await resolveUserWrite(db, payload);
+  if (resolved.query) {
+    await run(db, resolved.query, resolved.values);
+  }
+  return resolved.user;
+}
+
+/**
+ * Same resolution as `findOrCreateUser`, but returns an unexecuted
+ * statement instead of writing immediately — lets a caller that's already
+ * assembling a larger atomic `db.batch()` (e.g. admin-members.ts's
+ * createAdminMember, member-provisioning.ts's provisionOrganizationAndMembers)
+ * fold the user write into that same transition instead of committing it
+ * ahead of a batch that might still fail.
+ */
+export async function buildFindOrCreateUserStatement(
+  db: DatabaseLike,
+  payload: FindOrCreateUserPayload,
+): Promise<{ user: UserRecord; statement: StatementLike | null }> {
+  const resolved = await resolveUserWrite(db, payload);
+  if (!resolved.query) {
+    return { user: resolved.user, statement: null };
+  }
+  return { user: resolved.user, statement: db.prepare(resolved.query).bind(...resolved.values) };
 }

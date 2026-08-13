@@ -5,10 +5,10 @@
  * mirrors GET /api/v1/members's cache-control convention so the public
  * sponsor wall/strip/level pages can be cheap to hit repeatedly.
  */
-import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../_lib/http";
 import { listPublicSponsors } from "../../../_lib/services/public-sponsors";
 import { sponsorsListQuerySchema, sponsorsListRouteSchema } from "../../../../assets/shared/schemas/public-sponsors";
+import { openApiRoute } from "../../../_lib/openapi/route";
 
 const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=60";
 
@@ -26,10 +26,8 @@ export async function onRequestGet(c: any): Promise<Response> {
   return response;
 }
 
-export class SponsorsGet extends OpenAPIRoute {
-  schema = sponsorsListRouteSchema;
-
-  async handle(c: any) {
-    return onRequestGet(c);
-  }
-}
+// Thin openApiRoute wrap — onRequestGet is imported directly by
+// tests/public-sponsors-api.test.ts, so its lenient
+// safeParse-then-ignore-on-failure query handling stays untouched. GET has
+// no request body, so wrapping is safe (no double-body-read risk).
+export const SponsorsGet = openApiRoute(sponsorsListRouteSchema, (c: any) => onRequestGet(c));

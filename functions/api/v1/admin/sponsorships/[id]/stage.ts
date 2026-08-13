@@ -5,8 +5,7 @@
  * advanceSponsorshipStage doc comment and organization-content-reviews.ts's
  * header note on why routes, not services, own email/R2 side effects).
  */
-import { OpenAPIRoute } from "chanfana";
-import { parseJsonBody } from "../../../../../_lib/validation";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
@@ -15,19 +14,16 @@ import { getConfig } from "../../../../../_lib/config";
 import { queueEmail, processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
 import { advanceSponsorshipStage, toApiSponsorship } from "../../../../../_lib/services/sponsorship";
 import { issueSponsorPortalMagicLinkForSponsorship } from "../../../../../_lib/auth/sponsor-portal";
-import {
-  sponsorshipStageUpdateSchema,
-  sponsorshipStageUpdateRouteSchema,
-} from "../../../../../../assets/shared/schemas/admin-sponsorships";
+import { sponsorshipStageUpdateRouteSchema } from "../../../../../../assets/shared/schemas/admin-sponsorships";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
-export async function onRequestPatch(c: AdminContext): Promise<Response> {
+export const SponsorshipStageUpdate = openApiRoute(sponsorshipStageUpdateRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
   requirePermission(admin, "sponsorships:write");
 
-  const body = await parseJsonBody(c.req, sponsorshipStageUpdateSchema);
-  const id = c.req.param("id");
+  const body = data.body;
+  const id = data.params.id;
   const result = await advanceSponsorshipStage(db, {
     id,
     toStage: body.toStage,
@@ -78,11 +74,4 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
   }
 
   return json({ sponsorship: toApiSponsorship(sponsorship) });
-}
-
-export class SponsorshipStageUpdate extends OpenAPIRoute {
-  schema = sponsorshipStageUpdateRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestPatch(c);
-  }
-}
+});

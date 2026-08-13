@@ -8,22 +8,15 @@
  * from admin-only to also cover members, closing the "member passkey login
  * was never built" gap flagged in notes.
  */
-import { OpenAPIRoute } from "chanfana";
 import { jsonNoStore } from "../../../../_lib/http";
 import { requireAnyActorFromRequest } from "../../../../_lib/auth/actor";
 import { beginPasskeyRegistration } from "../../../../_lib/services/passkeys";
 import { passkeyRegisterBeginRouteSchema } from "../../../../../assets/shared/schemas/passkeys";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
+import { openApiRoute } from "../../../../_lib/openapi/route";
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+export const PasskeyRegisterBegin = openApiRoute(passkeyRegisterBeginRouteSchema, async (c: AdminContext) => {
   const actor = await requireAnyActorFromRequest(requestDb(c), c.req.raw, c.env);
   const result = await beginPasskeyRegistration(requestDb(c), c.env, actor);
   return jsonNoStore(result);
-}
-
-export class PasskeyRegisterBegin extends OpenAPIRoute {
-  schema = passkeyRegisterBeginRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestPost(c);
-  }
-}
+});

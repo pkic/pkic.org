@@ -4,7 +4,6 @@
  * Sets `revoked_at` (soft delete) and writes an audit_log entry,
  * tests/permission-grants.test.ts.
  */
-import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../_lib/auth/permissions";
@@ -13,6 +12,7 @@ import { nowIso } from "../../../../_lib/utils/time";
 import { writeAuditLog } from "../../../../_lib/services/audit";
 import { accessGrantRevokeRouteSchema } from "../../../../../assets/shared/schemas/access-control";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
+import { openApiRoute } from "../../../../_lib/openapi/route";
 
 interface GrantRow {
   id: string;
@@ -20,14 +20,14 @@ interface GrantRow {
   permission: string;
 }
 
-export async function onRequestDelete(c: AdminContext): Promise<Response> {
+export const AccessGrantsRevoke = openApiRoute(accessGrantRevokeRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "access:revoke");
 
   const grant = await first<GrantRow>(
     requestDb(c),
     "SELECT id, user_id, permission FROM permission_grants WHERE id = ? AND revoked_at IS NULL",
-    [c.req.param("id")],
+    [data.params.id],
   );
 
   if (!grant) {
@@ -42,11 +42,4 @@ export async function onRequestDelete(c: AdminContext): Promise<Response> {
   });
 
   return json({ success: true });
-}
-
-export class AccessGrantsRevoke extends OpenAPIRoute {
-  schema = accessGrantRevokeRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestDelete(c);
-  }
-}
+});

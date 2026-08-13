@@ -3,7 +3,7 @@
  *
  * post-approval onboarding — POST /api/v1/admin/applications/:id/approve.
  * Covers org-tied vs. individual branches, primary contact assignment,
- * organization_domains_json write, Google Groups enqueue, CA WG constraint,
+ * organization_domains write, Google Groups enqueue, CA WG constraint,
  * and the three onboarding emails.
  */
 import { describe, expect, it, beforeEach } from "vitest";
@@ -86,15 +86,16 @@ describe("Post-approval onboarding", () => {
     const orgRows = await queryAll<{
       name: string;
       primary_contact_user_id: string;
-      organization_domains_json: string;
-    }>(
-      env.DB,
-      "SELECT name, primary_contact_user_id, organization_domains_json FROM organizations WHERE id = ?",
-      body.organizationId,
-    );
+    }>(env.DB, "SELECT name, primary_contact_user_id FROM organizations WHERE id = ?", body.organizationId);
     expect(orgRows[0].name).toBe("Acme Corp");
     expect(orgRows[0].primary_contact_user_id).toBe(body.userId);
-    expect(JSON.parse(orgRows[0].organization_domains_json)).toEqual(["acme.test"]);
+
+    const domainRows = await queryAll<{ domain: string }>(
+      env.DB,
+      "SELECT domain FROM organization_domains WHERE organization_id = ?",
+      body.organizationId,
+    );
+    expect(domainRows.map((r) => r.domain)).toEqual(["acme.test"]);
 
     const memberRows = await queryAll<{ member_type: string; status: string; organization_id: string }>(
       env.DB,
@@ -176,10 +177,7 @@ describe("Post-approval onboarding", () => {
   });
 
   it("enforces the CA working group constraint even if requested by a non-A category", async () => {
-    const { id } = await createEcReviewApplication(
-      { membership_category: "B" },
-      { working_groups: ["ca", "pqc"] },
-    );
+    const { id } = await createEcReviewApplication({ membership_category: "B" }, { working_groups: ["ca", "pqc"] });
     const response = await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
     const body = (await response.json()) as { userId: string; workingGroupSlugs: string[] };
     expect(body.workingGroupSlugs).not.toContain("ca");
@@ -194,10 +192,7 @@ describe("Post-approval onboarding", () => {
   });
 
   it("allows category A into the CA working group", async () => {
-    const { id } = await createEcReviewApplication(
-      { membership_category: "A" },
-      { working_groups: ["ca"] },
-    );
+    const { id } = await createEcReviewApplication({ membership_category: "A" }, { working_groups: ["ca"] });
     const response = await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
     const body = (await response.json()) as { workingGroupSlugs: string[] };
     expect(body.workingGroupSlugs).toContain("ca");

@@ -26,7 +26,20 @@ interface TableNameRow {
 // silently stop every pre-existing approval-flow test from enqueueing
 // Google Groups sync for pkic@/consultation@, the same failure mode
 // membership_settings' exclusion already guards against.
-const EXCLUDED_TABLES = new Set(["d1_migrations", "roles", "role_permissions", "membership_settings", "mailing_lists"]);
+// `membership_categories` (migration 0055) is the same class of system
+// reference data too — its 15 rows (A-G/H1-H8) are seeded once by the
+// migration, and members.member_type/organizations.membership_category/
+// member_applications.membership_category all carry a FOREIGN KEY into it.
+// Wiping it on every resetDb() would fail every test's first insert of a
+// categorized member/organization/application with a FK constraint error.
+const EXCLUDED_TABLES = new Set([
+  "d1_migrations",
+  "roles",
+  "role_permissions",
+  "membership_settings",
+  "mailing_lists",
+  "membership_categories",
+]);
 
 async function listResettableTables(): Promise<string[]> {
   const { results } = await env.DB.prepare(

@@ -45,7 +45,7 @@ async function seedOrgMember(params: {
     ),
     env.DB.prepare(
       `INSERT INTO members (id, member_type, user_id, organization_id, status, tier, created_at, updated_at)
-       VALUES (?, 'organization', ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+       VALUES (?, 'A', ?, ?, ?, ?, datetime('now'), datetime('now'))`,
     ).bind(crypto.randomUUID(), params.userId, params.organizationId, params.status, params.tier ?? "A"),
   ]);
 }
@@ -58,7 +58,7 @@ async function seedIndividualMember(params: { userId: string; status: string; ti
     ).bind(params.userId, `${params.userId}@example.test`, `${params.userId}@example.test`, "Solo", "Member"),
     env.DB.prepare(
       `INSERT INTO members (id, member_type, user_id, organization_id, status, tier, created_at, updated_at)
-       VALUES (?, 'individual', ?, NULL, ?, ?, datetime('now'), datetime('now'))`,
+       VALUES (?, 'H6', ?, NULL, ?, ?, datetime('now'), datetime('now'))`,
     ).bind(crypto.randomUUID(), params.userId, params.status, params.tier ?? "H6"),
   ]);
 }
@@ -117,7 +117,7 @@ describe("GET /api/v1/members (public directory)", () => {
       ).bind(secondUserId, `${secondUserId}@example.test`, `${secondUserId}@example.test`, "Second", "Rep"),
       env.DB.prepare(
         `INSERT INTO members (id, member_type, user_id, organization_id, status, tier, created_at, updated_at)
-         VALUES (?, 'organization', ?, ?, 'active', 'A', datetime('now'), datetime('now'))`,
+         VALUES (?, 'A', ?, ?, 'active', 'A', datetime('now'), datetime('now'))`,
       ).bind(crypto.randomUUID(), secondUserId, organizationId),
     ]);
 
@@ -288,7 +288,7 @@ describe("GET /api/v1/members/:id", () => {
       ).bind(hiddenUserId, `${hiddenUserId}@example.test`, `${hiddenUserId}@example.test`, "Hidden", "Rep"),
       env.DB.prepare(
         `INSERT INTO members (id, member_type, user_id, organization_id, status, tier, created_at, updated_at, show_on_org_profile)
-         VALUES (?, 'organization', ?, ?, 'active', 'A', datetime('now'), datetime('now'), 0)`,
+         VALUES (?, 'A', ?, ?, 'active', 'A', datetime('now'), datetime('now'), 0)`,
       ).bind(crypto.randomUUID(), hiddenUserId, organizationId),
     ]);
 
@@ -610,7 +610,7 @@ describe("GET /api/v1/working-groups/:id", () => {
       ),
       env.DB.prepare(
         `INSERT INTO members (id, member_type, user_id, organization_id, status, tier, created_at, updated_at)
-         VALUES (?, 'organization', ?, ?, 'active', 'A', datetime('now'), datetime('now'))`,
+         VALUES (?, 'A', ?, ?, 'active', 'A', datetime('now'), datetime('now'))`,
       ).bind(memberRowId, chairUserId, orgId),
       env.DB.prepare(
         `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, created_at)

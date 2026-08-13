@@ -4,7 +4,7 @@
  * Endorsing auto-converts the proposal to an active vote once the
  * endorsement threshold is reached.
  */
-import { OpenAPIRoute } from "chanfana";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { json } from "../../../../../_lib/http";
 import { requireMemberFromRequest } from "../../../../../_lib/auth/member";
 import { endorseVoteProposal, withdrawEndorsement } from "../../../../../_lib/services/votes";
@@ -14,32 +14,21 @@ import {
 } from "../../../../../../assets/shared/schemas/votes";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+export const PortalVoteProposalEndorsePost = openApiRoute(endorseProposalRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
   const member = await requireMemberFromRequest(db, c.req.raw, c.env);
-  const id = c.req.param("id");
+  const id = data.params.id;
   const result = await endorseVoteProposal(db, member, id);
   return json(result);
-}
+});
 
-export async function onRequestDelete(c: AdminContext): Promise<Response> {
-  const db = requestDb(c);
-  const member = await requireMemberFromRequest(db, c.req.raw, c.env);
-  const id = c.req.param("id");
-  await withdrawEndorsement(db, member, id);
-  return json({ success: true });
-}
-
-export class PortalVoteProposalEndorsePost extends OpenAPIRoute {
-  schema = endorseProposalRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestPost(c);
-  }
-}
-
-export class PortalVoteProposalEndorseDelete extends OpenAPIRoute {
-  schema = withdrawEndorsementRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestDelete(c);
-  }
-}
+export const PortalVoteProposalEndorseDelete = openApiRoute(
+  withdrawEndorsementRouteSchema,
+  async (c: AdminContext, data) => {
+    const db = requestDb(c);
+    const member = await requireMemberFromRequest(db, c.req.raw, c.env);
+    const id = data.params.id;
+    await withdrawEndorsement(db, member, id);
+    return json({ success: true });
+  },
+);

@@ -5,7 +5,7 @@
  * welcome, and (only when a new organization contact was just designated)
  * org-contact-assigned.
  */
-import { OpenAPIRoute } from "chanfana";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
@@ -17,12 +17,12 @@ import { resolveApprovalIcsAttachments } from "../../../../../_lib/services/meet
 import { applicationApproveRouteSchema } from "../../../../../../assets/shared/schemas/admin-applications";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+export const ApplicationApprovePost = openApiRoute(applicationApproveRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
   requirePermission(admin, "membership:approve");
 
-  const applicationId = c.req.param("id");
+  const applicationId = data.params.id;
   const result = await approveApplication(db, { applicationId, actorUserId: admin.id });
 
   const config = getConfig(c.env, c.req.raw);
@@ -71,11 +71,4 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     organizationId: result.organizationId,
     workingGroupSlugs: result.workingGroupSlugs,
   });
-}
-
-export class ApplicationApprovePost extends OpenAPIRoute {
-  schema = applicationApproveRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestPost(c);
-  }
-}
+});

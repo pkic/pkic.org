@@ -12,8 +12,19 @@ import { finalizeProposalSchema } from "../../../../../../assets/shared/schemas/
 import { buildProposalDecisionEmailPlan } from "./decision-emails";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { queuedCapabilityToken } from "../../../../../_lib/services/capability-links";
+import type { z } from "zod";
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+/**
+ * `data` is supplied when called through the `openApiRoute` factory (the
+ * real HTTP path — the body is already validated there, and re-reading it
+ * here would throw since chanfana already consumed the request stream).
+ * Falls back to parsing the body itself when called directly, as several
+ * tests do, bypassing the factory entirely.
+ */
+export async function onRequestPost(
+  c: AdminContext,
+  data?: { body: z.infer<typeof finalizeProposalSchema> },
+): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const proposalId = c.req.param("proposalId");
 
@@ -31,7 +42,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     return json({ error: { code: "FORBIDDEN", message: "Missing permission to finalize proposals" } }, 403);
   }
 
-  const body = await parseJsonBody(c.req, finalizeProposalSchema);
+  const body = data?.body ?? (await parseJsonBody(c.req, finalizeProposalSchema));
   const config = getConfig(c.env, c.req.raw);
   const previousDecision = await first<{ final_status: string | null; decision_note: string | null }>(
     requestDb(c),

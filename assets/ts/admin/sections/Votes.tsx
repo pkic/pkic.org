@@ -470,9 +470,7 @@ function VotesTab() {
   return (
     <div>
       <div class="d-flex justify-content-between align-items-center mb-3">
-        <p class="text-muted small mb-0">
-          Create and manage votes. Member proposals live under the Proposals tab.
-        </p>
+        <p class="text-muted small mb-0">Create and manage votes. Member proposals live under the Proposals tab.</p>
         <button type="button" class="btn btn-primary btn-sm" onClick={() => setShowCreate((v) => !v)}>
           {showCreate ? "Cancel" : "Create vote"}
         </button>

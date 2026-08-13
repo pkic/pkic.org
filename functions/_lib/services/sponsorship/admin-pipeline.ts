@@ -57,10 +57,20 @@ const ADMIN_SPONSORSHIP_SELECT = `
   LEFT JOIN users u ON u.id = sp.assigned_to_user_id
 `;
 
-export async function listAdminSponsorships(
-  db: DatabaseLike,
-  filters: { type?: string; stage?: string; tier?: string; limit: number; offset: number },
-): Promise<{ sponsorships: AdminSponsorshipRow[]; total: number }> {
+export interface AdminSponsorshipsFilters {
+  type?: string;
+  stage?: string;
+  tier?: string;
+  /** Company-scoped filters (companyKey decomposed) — used by the detail
+   *  panel to fetch one company's sponsorships instead of the full list. */
+  organizationId?: string;
+  nonMemberName?: string;
+  contactName?: string;
+  limit: number;
+  offset: number;
+}
+
+function buildAdminSponsorshipsWhere(filters: AdminSponsorshipsFilters): { where: string; values: unknown[] } {
   const conditions: string[] = [];
   const values: unknown[] = [];
   if (filters.type) {
@@ -75,7 +85,26 @@ export async function listAdminSponsorships(
     conditions.push("sp.tier = ?");
     values.push(filters.tier);
   }
-  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  if (filters.organizationId) {
+    conditions.push("sp.organization_id = ?");
+    values.push(filters.organizationId);
+  }
+  if (filters.nonMemberName) {
+    conditions.push("sp.organization_id IS NULL AND sp.non_member_name = ?");
+    values.push(filters.nonMemberName);
+  }
+  if (filters.contactName) {
+    conditions.push("sp.organization_id IS NULL AND sp.non_member_name IS NULL AND sp.contact_name = ?");
+    values.push(filters.contactName);
+  }
+  return { where: conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "", values };
+}
+
+export async function listAdminSponsorships(
+  db: DatabaseLike,
+  filters: AdminSponsorshipsFilters,
+): Promise<{ sponsorships: AdminSponsorshipRow[]; total: number }> {
+  const { where, values } = buildAdminSponsorshipsWhere(filters);
 
   const sponsorships = await all<AdminSponsorshipRow>(
     db,
@@ -85,6 +114,68 @@ export async function listAdminSponsorships(
   const totalRow = await first<{ n: number }>(db, `SELECT COUNT(*) AS n FROM sponsorships sp ${where}`, values);
 
   return { sponsorships, total: totalRow?.n ?? 0 };
+}
+
+export interface AdminSponsorshipCompanyRow {
+  key: string;
+  label: string;
+  website: string | null;
+  sponsorshipCount: number;
+  /** Comma-separated distinct pipeline stages across this company's sponsorships. */
+  stages: string;
+}
+
+/**
+ * Groups sponsorships into "companies" — the member organization when one
+ * is attached, otherwise the non-member sponsor's name, then the contact
+ * name, then a per-row fallback — in D1 instead of fetching every matching
+ * sponsorship into the browser to group client-side (PR #1 review). Backs
+ * the admin Sponsorships master list; `listAdminSponsorships` above (with
+ * `organizationId`/`nonMemberName`/`contactName`) fetches one selected
+ * company's sponsorships for the detail panel.
+ */
+export async function listSponsorshipCompanies(
+  db: DatabaseLike,
+  filters: { type?: string; stage?: string; tier?: string; limit: number; offset: number },
+): Promise<{ companies: AdminSponsorshipCompanyRow[]; total: number }> {
+  const { where, values } = buildAdminSponsorshipsWhere(filters);
+
+  const groupedCte = `
+    WITH grouped AS (
+      SELECT
+        CASE
+          WHEN sp.organization_id IS NOT NULL THEN 'org:' || sp.organization_id
+          WHEN sp.non_member_name IS NOT NULL THEN 'nonmember:' || sp.non_member_name
+          WHEN sp.contact_name IS NOT NULL THEN 'contact:' || sp.contact_name
+          ELSE 'sponsorship:' || sp.id
+        END AS key,
+        COALESCE(o.name, sp.non_member_name, sp.contact_name, 'Unspecified sponsor') AS label,
+        sp.non_member_website AS website,
+        sp.pipeline_stage AS stage
+      FROM sponsorships sp
+      LEFT JOIN organizations o ON o.id = sp.organization_id
+      ${where}
+    )
+  `;
+
+  const companies = await all<AdminSponsorshipCompanyRow>(
+    db,
+    `${groupedCte}
+     SELECT key, label, MAX(website) AS website, COUNT(*) AS sponsorshipCount,
+            GROUP_CONCAT(DISTINCT stage) AS stages
+     FROM grouped
+     GROUP BY key
+     ORDER BY label
+     LIMIT ? OFFSET ?`,
+    [...values, filters.limit, filters.offset],
+  );
+  const totalRow = await first<{ n: number }>(
+    db,
+    `${groupedCte} SELECT COUNT(*) AS n FROM (SELECT key FROM grouped GROUP BY key)`,
+    values,
+  );
+
+  return { companies, total: totalRow?.n ?? 0 };
 }
 
 export async function getAdminSponsorship(db: DatabaseLike, id: string): Promise<AdminSponsorshipRow | null> {

@@ -6,7 +6,6 @@
  * one, and folds into the org's moderation queue instead of applying
  * immediately.
  */
-import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../_lib/http";
 import { requireMemberFromRequest } from "../../../../_lib/auth/member";
 import { AppError } from "../../../../_lib/errors";
@@ -14,8 +13,9 @@ import { ALLOWED_MIME_TYPES, MAX_HEADSHOT_BYTES, readUploadedImage } from "../..
 import { requireOrgContact, stageOrganizationLogo } from "../../../../_lib/services/organization-content-reviews";
 import { myOrganizationLogoUploadRouteSchema } from "../../../../../assets/shared/schemas/me";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
+import { openApiRoute } from "../../../../_lib/openapi/route";
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+export const MeOrganizationLogoPost = openApiRoute(myOrganizationLogoUploadRouteSchema, async (c: AdminContext) => {
   const db = requestDb(c);
   const member = await requireMemberFromRequest(db, c.req.raw, c.env);
   // Validate eligibility before touching R2 — avoids uploading an orphaned
@@ -52,11 +52,4 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   }
 
   return json({ success: true, r2Key });
-}
-
-export class MeOrganizationLogoPost extends OpenAPIRoute {
-  schema = myOrganizationLogoUploadRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestPost(c);
-  }
-}
+});
