@@ -106,13 +106,11 @@ function validateNativeFields(form: HTMLFormElement): boolean {
 export function installLiveValidation(form: HTMLFormElement, _statusEl: HTMLElement): void {
   const handler = (event: Event) => {
     const target = event.target;
-    if (
-      !(
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLSelectElement ||
-        target instanceof HTMLTextAreaElement
-      )
-    ) {
+    if (!(
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLSelectElement ||
+      target instanceof HTMLTextAreaElement
+    )) {
       return;
     }
     if (!target.name) {

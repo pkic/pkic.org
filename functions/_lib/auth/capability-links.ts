@@ -14,11 +14,7 @@ const DEFAULT_TTL_SECONDS = 30 * 24 * 60 * 60;
 const MAX_TOKEN_LENGTH = 512;
 
 export type CapabilityPurpose =
-  | "registration_manage"
-  | "registration_confirm"
-  | "invite"
-  | "proposal_manage"
-  | "speaker_manage";
+  "registration_manage" | "registration_confirm" | "invite" | "proposal_manage" | "speaker_manage";
 
 const purposeCodes: Record<CapabilityPurpose, string> = {
   registration_manage: "rm",
@@ -47,8 +43,7 @@ interface QueuedCapabilityDescriptor {
 }
 
 export type CapabilityVerifyResult =
-  | { ok: true; resourceId: string; expiresAt: number }
-  | { ok: false; reason: "invalid" | "expired" };
+  { ok: true; resourceId: string; expiresAt: number } | { ok: false; reason: "invalid" | "expired" };
 
 export function omitCapabilitySecrets<T extends object>(
   record: T,

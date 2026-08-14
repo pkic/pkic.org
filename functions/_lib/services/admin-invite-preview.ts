@@ -72,8 +72,7 @@ export async function signAttendeeInvitePreviewToken(payload: {
 }
 
 export type AttendeeInvitePreviewTokenValidation =
-  | { ok: true; claims: AttendeeInvitePreviewClaims }
-  | { ok: false; reason: "invalid" | "expired" | "mismatch" };
+  { ok: true; claims: AttendeeInvitePreviewClaims } | { ok: false; reason: "invalid" | "expired" | "mismatch" };
 
 export async function verifyAttendeeInvitePreviewToken(payload: {
   secret: string;

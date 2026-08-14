@@ -205,10 +205,6 @@ function toSqlNullableText(value) {
   return str.length === 0 ? "NULL" : sqlString(str);
 }
 
-function toSqlInt(value) {
-  return String(Number.parseInt(String(value), 10));
-}
-
 // ── Small domain helpers ────────────────────────────────────────────────
 
 function normalizeEmail(email) {
@@ -505,7 +501,7 @@ function candidateEmailsForDomains(domains, emailsByDomain) {
  * Builds the full set of SQL statements plus a structured report, per the
  * reconciliation algorithm.
  */
-function buildMigration({ uploadLogos, logoBucket, cli }) {
+function buildMigration({ uploadLogos }) {
   const yamlRecords = loadMemberYamlFiles();
   const pkicRoster = loadRosterCsv(path.join(CSV_DIR, "pkic.csv"));
 
@@ -1214,8 +1210,6 @@ function main() {
   const cli = parseArgs(process.argv.slice(2));
   const { sql, report, logoUploads } = buildMigration({
     uploadLogos: cli.uploadLogos,
-    logoBucket: cli.logoBucket,
-    cli,
   });
 
   fs.mkdirSync(cli.outDir, { recursive: true });

@@ -20,14 +20,7 @@
 
 /** Role displayed on the badge for a referral code owner. */
 export type BadgeRole =
-  | "attendee"
-  | "speaker"
-  | "co_speaker"
-  | "moderator"
-  | "panelist"
-  | "organizer"
-  | "staff"
-  | "proposer";
+  "attendee" | "speaker" | "co_speaker" | "moderator" | "panelist" | "organizer" | "staff" | "proposer";
 
 /** Data required to render a badge. */
 export interface BadgeData {

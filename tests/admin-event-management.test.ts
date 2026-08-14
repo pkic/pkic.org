@@ -138,8 +138,7 @@ describe("admin event management endpoints", () => {
     expect(
       (
         patchPayload.event.settings.proposal as
-          | { sessionTypes?: { label: string; requiresPresentation: boolean }[] }
-          | undefined
+          { sessionTypes?: { label: string; requiresPresentation: boolean }[] } | undefined
       )?.sessionTypes,
     ).toEqual([
       { label: "talk", requiresPresentation: true },
@@ -147,8 +146,7 @@ describe("admin event management endpoints", () => {
     ]);
     expect(
       patchPayload.event.settings.forms as
-        | { event_registration?: string | null; proposal_submission?: string | null }
-        | undefined,
+        { event_registration?: string | null; proposal_submission?: string | null } | undefined,
     ).toEqual({
       event_registration: "pqc-reg-form",
       proposal_submission: null,

@@ -103,9 +103,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     event,
     userId: user.id,
     attendanceType: (body.attendanceType ?? deriveEventAttendanceType(body.dayAttendance)) as
-      | "in_person"
-      | "virtual"
-      | "on_demand",
+      "in_person" | "virtual" | "on_demand",
     dayAttendance: body.dayAttendance,
     sourceType: inviteId ? "invite" : body.sourceType,
     sourceRef: body.sourceRef,
