@@ -1,5 +1,8 @@
 import { defineConfig } from "@playwright/test";
 
+const e2ePort = Number(process.env.E2E_PORT ?? 8788);
+const e2eBaseUrl = `http://127.0.0.1:${e2ePort}`;
+
 export default defineConfig({
   testDir: "./tests/e2e",
   testMatch: "**/*.spec.ts",
@@ -11,13 +14,13 @@ export default defineConfig({
   globalSetup: "./tests/e2e/global-setup.ts",
   webServer: {
     command: "sh scripts/e2e-start.sh",
-    url: "http://127.0.0.1:8788",
+    url: e2eBaseUrl,
     // Always start fresh so Wrangler uses the seeded state dir.
     reuseExistingServer: Boolean(process.env.REUSE_SERVER),
     timeout: 300_000,
   },
   use: {
-    baseURL: "http://127.0.0.1:8788",
+    baseURL: e2eBaseUrl,
     video: "on",
     screenshot: "only-on-failure",
     trace: "retain-on-failure",

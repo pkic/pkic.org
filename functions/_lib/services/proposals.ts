@@ -27,10 +27,7 @@ export interface ProposalRecord {
   submitted_at: string;
   updated_at: string;
   withdrawn_at: string | null;
-  /** Added by migration 0010. */
-  presentation_r2_key?: string | null;
   presentation_deadline?: string | null;
-  presentation_uploaded_at?: string | null;
 }
 
 export interface ProposalReviewRecord {

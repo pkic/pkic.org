@@ -4,7 +4,7 @@ import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getProposalAccessForEvent } from "../../../../../_lib/auth/proposal-access";
 import { finalizeProposalDecision } from "../../../../../_lib/services/proposals";
 import { getConfig, resolveAppBaseUrl } from "../../../../../_lib/config";
-import { queueEmail } from "../../../../../_lib/email/outbox";
+import { processOutboxByIdBackground, queueEmail } from "../../../../../_lib/email/outbox";
 import { first, run } from "../../../../../_lib/db/queries";
 import { proposalManagePageUrl, speakerManagePageUrl } from "../../../../../_lib/services/frontend-links";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
@@ -81,7 +81,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   );
 
   for (const message of plan.messages) {
-    await queueEmail(requestDb(c), {
+    const outboxId = await queueEmail(requestDb(c), {
       eventId: plan.proposal.event_id,
       templateKey: message.templateKey,
       recipientEmail: message.recipientEmail,
@@ -91,6 +91,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
       capabilityLinkValues: [message.data.manageUrl, message.data.profileUrl, message.data.uploadUrl],
       data: message.data,
     });
+    c.executionCtx.waitUntil(processOutboxByIdBackground(requestDb(c), c.env, outboxId));
 
     await writeAuditLog(requestDb(c), "admin", admin.id, "proposal_decision_email_queued", "proposal", proposalId, {
       templateKey: { from: null, to: message.templateKey },

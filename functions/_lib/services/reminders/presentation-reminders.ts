@@ -47,7 +47,13 @@ export async function runPresentationReminders(
        JOIN events e ON e.id = sp.event_id
        WHERE sp.status = 'accepted'
          AND ps.status IN ('invited', 'confirmed')
-         AND sp.presentation_uploaded_at IS NULL
+         AND NOT EXISTS (
+           SELECT 1
+           FROM presentation_versions pv
+           WHERE pv.proposal_id = sp.id
+             AND pv.is_current = 1
+             AND pv.deleted_at IS NULL
+         )
          AND COALESCE(sp.presentation_deadline, e.starts_at) > ?
          AND COALESCE(sp.presentation_deadline, e.starts_at) <= ?
          AND ps.presentation_reminder_count < ?
