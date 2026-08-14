@@ -108,19 +108,19 @@ export async function getAttendanceChangeStatistics(
       `SELECT COUNT(*) AS day_changes,
               COUNT(DISTINCT h.registration_id) AS changed_attendees,
               COUNT(DISTINCT CASE
-                WHEN h.from_type = 'in_person' AND h.to_type <> 'in_person'
+                WHEN h.from_type = 'in_person' AND COALESCE(h.to_type, 'not_attending') <> 'in_person'
                   AND COALESCE(r.attendance_type, '') <> 'in_person' THEN h.registration_id
               END) AS left_in_person_attendees,
               SUM(CASE
-                WHEN h.from_type = 'in_person' AND h.to_type <> 'in_person'
+                WHEN h.from_type = 'in_person' AND COALESCE(h.to_type, 'not_attending') <> 'in_person'
                   AND COALESCE(r.attendance_type, '') <> 'in_person' THEN 1 ELSE 0
               END) AS left_in_person_day_changes,
               COUNT(DISTINCT CASE
-                WHEN h.from_type <> 'in_person' AND h.to_type = 'in_person'
+                WHEN COALESCE(h.from_type, 'not_attending') <> 'in_person' AND h.to_type = 'in_person'
                   AND r.attendance_type = 'in_person' THEN h.registration_id
               END) AS joined_in_person_attendees,
               SUM(CASE
-                WHEN h.from_type <> 'in_person' AND h.to_type = 'in_person'
+                WHEN COALESCE(h.from_type, 'not_attending') <> 'in_person' AND h.to_type = 'in_person'
                   AND r.attendance_type = 'in_person' THEN 1 ELSE 0
               END) AS joined_in_person_day_changes
        FROM registration_attendance_history h
@@ -155,11 +155,11 @@ export async function getAttendanceChangeStatistics(
               COUNT(DISTINCT h.registration_id) AS changed_attendees,
               COUNT(*) AS day_changes,
               COUNT(DISTINCT CASE
-                WHEN h.from_type = 'in_person' AND h.to_type <> 'in_person'
+                WHEN h.from_type = 'in_person' AND COALESCE(h.to_type, 'not_attending') <> 'in_person'
                   AND COALESCE(r.attendance_type, '') <> 'in_person' THEN h.registration_id
               END) AS left_in_person_attendees,
               COUNT(DISTINCT CASE
-                WHEN h.from_type <> 'in_person' AND h.to_type = 'in_person'
+                WHEN COALESCE(h.from_type, 'not_attending') <> 'in_person' AND h.to_type = 'in_person'
                   AND r.attendance_type = 'in_person' THEN h.registration_id
               END) AS joined_in_person_attendees
        FROM registration_attendance_history h

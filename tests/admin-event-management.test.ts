@@ -445,6 +445,70 @@ describe("admin event management endpoints", () => {
     expect(stats.attendanceChanges).toMatchObject({ changedAttendees: 0, dayChanges: 0 });
   });
 
+  it("counts nullable legacy history as a move into in-person attendance", async () => {
+    const { baseEventId } = await setupAdmin();
+
+    await env.DB.batch([
+      env.DB.prepare(`
+        INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
+        VALUES ('legacy-movement-day', '${baseEventId}', '2026-12-01', 'Day 1', 10, 0, datetime('now'), datetime('now'))
+      `),
+      env.DB.prepare(`
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+        VALUES ('legacy-movement-attendee', 'legacy-movement@example.test', 'legacy-movement@example.test',
+                'Legacy', 'Movement', datetime('now'), datetime('now'))
+      `),
+    ]);
+
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const created = await createRegistration(env.DB, {
+      event,
+      userId: "legacy-movement-attendee",
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    await env.DB.prepare(
+      `INSERT INTO registration_attendance_history (
+         id, registration_id, event_day_id, from_type, to_type, changed_by, changed_at
+       ) VALUES ('legacy-null-transition', ?, 'legacy-movement-day', NULL, 'in_person', 'admin:test', datetime('now'))`,
+    )
+      .bind(created.registration.id)
+      .run();
+
+    const statsResponse = await callAdmin("/api/v1/admin/events/pqc-2026/stats");
+    expect(statsResponse.status).toBe(200);
+    const stats = (await statsResponse.json()) as {
+      attendanceChanges: {
+        changedAttendees: number;
+        joinedInPersonAttendees: number;
+        joinedInPersonDayChanges: number;
+        byTransition: Array<{ from_type: string; to_type: string; attendees: number }>;
+      };
+    };
+    expect(stats.attendanceChanges).toMatchObject({
+      changedAttendees: 1,
+      joinedInPersonAttendees: 1,
+      joinedInPersonDayChanges: 1,
+    });
+    expect(stats.attendanceChanges.byTransition).toContainEqual({
+      from_type: "not_attending",
+      to_type: "in_person",
+      attendees: 1,
+      day_changes: 1,
+    });
+
+    const joinedResponse = await callAdmin(
+      "/api/v1/admin/events/pqc-2026/registrations?attendance_change=joined_in_person",
+    );
+    expect(joinedResponse.status).toBe(200);
+    const joined = (await joinedResponse.json()) as { registrations: Array<{ id: string }>; page: { total: number } };
+    expect(joined.page.total).toBe(1);
+    expect(joined.registrations[0]?.id).toBe(created.registration.id);
+  });
+
   it("counts multi-day attendance movement once per attendee and separately per day", async () => {
     const { baseEventId } = await setupAdmin();
 

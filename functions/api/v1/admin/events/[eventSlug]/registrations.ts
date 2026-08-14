@@ -100,10 +100,14 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     conditions.push(hasAttendanceChange());
   } else if (attendanceChangeFilter === "left_in_person") {
     conditions.push("COALESCE(r.attendance_type, '') <> 'in_person'");
-    conditions.push(hasAttendanceChange("AND h.from_type = 'in_person' AND h.to_type <> 'in_person'"));
+    conditions.push(
+      hasAttendanceChange("AND h.from_type = 'in_person' AND COALESCE(h.to_type, 'not_attending') <> 'in_person'"),
+    );
   } else if (attendanceChangeFilter === "joined_in_person") {
     conditions.push("r.attendance_type = 'in_person'");
-    conditions.push(hasAttendanceChange("AND h.from_type <> 'in_person' AND h.to_type = 'in_person'"));
+    conditions.push(
+      hasAttendanceChange("AND COALESCE(h.from_type, 'not_attending') <> 'in_person' AND h.to_type = 'in_person'"),
+    );
   }
 
   if (search) {

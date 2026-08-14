@@ -59,10 +59,11 @@ export function EventStats({ slug }: { slug: string }) {
     recent: [],
   };
   const registrationsByEventDay = s.registrationsByEventDay ?? [];
-  const attendanceTypes = new Set([
-    ...Object.keys(ATTENDANCE_TYPE_LABELS).filter((type) => type !== "not_attending"),
-    ...Object.keys(s.registrations?.attendanceStatusByType ?? {}),
-  ]);
+  const attendanceTypes = new Set(
+    [...Object.keys(ATTENDANCE_TYPE_LABELS), ...Object.keys(s.registrations?.attendanceStatusByType ?? {})].filter(
+      (type) => type !== "not_attending",
+    ),
+  );
   const attendanceStatuses = [...attendanceTypes].map((type) => ({
     type,
     label: attendanceTypeLabel(type),
