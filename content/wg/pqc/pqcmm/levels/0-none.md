@@ -24,12 +24,7 @@ This level is not a failure — it is an honest, useful data point. Knowing a pr
 
 ## Criteria
 
-{{< criteria >}}
-A product is at Level 0 when the following are true:
-
-- The quantum readiness journey has not yet started or is still in a very early phase.
-- No quantum-safe algorithm is available in any release channel available to customers, including beta, preview, or experimental.
-{{< /criteria >}}
+{{< pqcmm-criteria level="0" >}}
 
 Note: Possessing an SBOM, CBOM, or an internal PQC risk assessment does not elevate a product beyond Level 0 on its own. While these artifacts are highly valuable for planning, a vendor can have all of them and still be in the very early stages of their quantum readiness journey with no actual quantum-safe implementation. Their presence or absence is recorded as separate risk indicators in the [Supplier Intake Questions](#supplier-intake-questions) below.
 
@@ -42,14 +37,8 @@ A formal assessment only begins when a vendor claims to have reached Level 1 or 
 
 ## Supplier Intake Questions
 
-When onboarding a supplier or reviewing an existing product, the following questions help establish a baseline and set expectations for progression. These are not assessment questions — they do not require evidence collection or verification. They are planning and risk-register inputs.
+{{< pqcmm-assessment-questions level="0" >}}
 
-| # | Question | Expected Input | Purpose |
-|---|---|---|---|
-| 1 | By what date do you expect to reach Level 1 — with at least one quantum-safe algorithm available for evaluation? | Date (YYYY-MM-DD). | Helps both the organization and the vendor set a concrete milestone for the supplier roadmap and ensures clear communication of the post-quantum cryptography (PQC) timeline. |
-| 2 | Is a Software Bill of Materials (SBOM) or Cryptographic Bill of Materials (CBOM) available for this product in SPDX or CycloneDX format? | File upload or URL to the document. | Knowing the software and cryptographic components makes the eventual transition to higher PQC maturity levels faster and more secure. It helps both parties assess the current visibility into cryptographic assets. |
-| 3 | Have you assigned a role or team responsible for the PQC migration of this product? | Role title or department name. | Ensures there is clear accountability and a point of contact for future PQC-related discussions. This reduces continuity risk during the quantum-safe transition. |
-| 4 | Have you published a statement of direction or roadmap for PQC for this product? | URL to the roadmap or a document upload. | Confirms that PQC is actively being planned. A roadmap referencing specific standards (like NIST FIPS 203, 204, 205) provides confidence in the vendor's preparation and helps align planning. |
 
 ## Suggested Procurement Actions
 
@@ -57,4 +46,3 @@ When onboarding a supplier or reviewing an existing product, the following quest
 - Evaluate whether compensating controls (network-layer PQC, hybrid protocols) can bridge the gap.
 - Consider product lifespan against harvest-now-decrypt-later timelines.
 - Flag in your cryptographic risk register; assign a review cadence.
-
