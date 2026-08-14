@@ -402,7 +402,7 @@ function runWranglerSql(args, sql) {
   fs.writeFileSync(tmpPath, sql, "utf8");
 
   try {
-    execFileSync("npx", args.concat(["--file", tmpPath]), {
+    execFileSync("pnpm", ["exec", ...args, "--file", tmpPath], {
       cwd: process.cwd(),
       stdio: "inherit",
     });

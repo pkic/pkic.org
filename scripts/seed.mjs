@@ -97,7 +97,16 @@ function script(file) {
 // ── Steps ───────────────────────────────────────────────────────────────────
 
 function applyMigrations(cfg) {
-  run("npx", ["wrangler", "d1", "migrations", "apply", cfg.database, ...envFlag(cfg), cfg.wranglerFlag]);
+  run("pnpm", [
+    "exec",
+    "wrangler",
+    "d1",
+    "migrations",
+    "apply",
+    cfg.database,
+    ...envFlag(cfg),
+    cfg.wranglerFlag,
+  ]);
 }
 
 function seedAdmin(cfg) {

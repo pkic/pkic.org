@@ -91,4 +91,4 @@ while IFS= read -r entry; do
 done < <(git config -f .gitmodules --name-only --get-regexp '^submodule\..*\.branch$')
 
 "${HUGO_BIN}" -e development --minify --cacheDir "$(pwd)/.cache"
-npx -y pagefind --site "public"
+pnpm exec pagefind --site "public"

@@ -59,11 +59,15 @@ document.querySelectorAll('time[datetime]').forEach(function ($e) {
     wrap.classList.toggle('is-collapsed', collapsed);
     btn.setAttribute('aria-expanded', String(!collapsed));
     btn.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
-    try { localStorage.setItem(STORAGE_KEY, collapsed ? '1' : '0'); } catch (_) {}
+    try { localStorage.setItem(STORAGE_KEY, collapsed ? '1' : '0'); } catch {
+      // Storage can be unavailable in privacy modes; the UI state still applies.
+    }
   };
 
   var stored = false;
-  try { stored = localStorage.getItem(STORAGE_KEY) === '1'; } catch (_) {}
+  try { stored = localStorage.getItem(STORAGE_KEY) === '1'; } catch {
+    // Treat unavailable storage as the default expanded state.
+  }
   if (stored) applyState(true);
 
   btn.addEventListener('click', function () {

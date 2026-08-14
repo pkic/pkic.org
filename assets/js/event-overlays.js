@@ -107,7 +107,7 @@ function updateDebugOverlay() {
     
     createDebugOverlay();
     
-    const { day, time } = resolveDayTime(params);
+    const { time } = resolveDayTime(params);
     const startOffsetSeconds = parseOffsetToSeconds(params.startOffset);
     const currentTimeSeconds = time ? parseTime(time) : null;
     const adjustedTimeSeconds = currentTimeSeconds !== null ? currentTimeSeconds + startOffsetSeconds : null;
@@ -200,7 +200,7 @@ function scheduleSearchReset() {
     }, SEARCH_RESET_DELAY);
 }
 
-function buildAllSessionSlots(startDay, startTime) {
+function buildAllSessionSlots() {
     // Build a list of all session time slots in chronological order
     const params = getHashParams();
     const { day } = resolveDayTime(params);
@@ -322,7 +322,6 @@ function announceViewMode() {
             endOffsetSeconds: parseOffsetToSeconds(params.endOffset)
         });
         if (groups.length > 0) {
-            const currentSeconds = time ? parseTime(time) : null;
             const bestGroup = groups[0]; // selectBestGroup would pick this
             message += ` – Session: "${bestGroup.session?.title}" at ${day} ${time}`;
         }
@@ -472,7 +471,7 @@ function updateNameAndTitle() {
     });
 
     // Build list of all session slots for navigation
-    allSessionSlots = buildAllSessionSlots(day, adjustedTime);
+    allSessionSlots = buildAllSessionSlots();
     console.log(`[updateNameAndTitle] Built ${allSessionSlots.length} session slots for navigation`);
 
     // Get next session speakers using getNextAgendaSlot

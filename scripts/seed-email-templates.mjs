@@ -996,7 +996,7 @@ function runWrangler(args, options = {}) {
       ? ["pipe", "inherit", "inherit"]
       : "inherit";
 
-  return execFileSync("npx", args, {
+  return execFileSync("pnpm", ["exec", ...args], {
     cwd: process.cwd(),
     stdio,
     encoding: options.captureOutput ? "utf8" : undefined,
@@ -1095,7 +1095,7 @@ function ensureAdminExists(cli) {
   const resultRows = parsed?.[0]?.results ?? [];
   if (!Array.isArray(resultRows) || resultRows.length === 0) {
     throw new Error(
-      `Admin user '${cli.adminEmail}' not found. Run seed admin first (npm run seed:admin:${cli.mode}).`,
+      `Admin user '${cli.adminEmail}' not found. Run seed admin first (pnpm run seed:admin:${cli.mode}).`,
     );
   }
 }

@@ -415,8 +415,8 @@
       updateFilterCounts();
       renderSubfilters();
       renderResults();
-    } catch (err) {
-      setResults('<p class="pkic-search-hint">Search unavailable. <a href="/blog/" style="color:#7cf0be">Browse the blog \u2192</a></p>');
+    } catch {
+      setResults('<p class="pkic-search-hint">Search unavailable. <a href="/blog/">Browse the blog \u2192</a></p>');
     }
   }
 

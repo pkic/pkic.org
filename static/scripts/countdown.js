@@ -1,16 +1,20 @@
-let countdownElement = document.getElementById('countdown');
+const countdownElement = document.getElementById('countdown');
+const logoElement = document.getElementById('logoElement');
+
 let countdownValue = 60;
 let intervalId;
 let isPaused = false;
 
 function startCountdown() {
+  if (!countdownElement || !logoElement) return;
+
   clearInterval(intervalId);
   intervalId = setInterval(() => {
     if (!isPaused && countdownValue > 0) {
       countdownValue--;
       countdownElement.textContent = countdownValue;
     } else if (countdownValue === 0) {
-      let elements = logoElement.querySelectorAll('*');
+      const elements = logoElement.querySelectorAll('*');
       elements.forEach(element => {
         element.classList.add('blink');
       });
@@ -19,8 +23,10 @@ function startCountdown() {
 }
 
 document.addEventListener('keydown', (event) => {
+  if (!countdownElement || !logoElement) return;
+
   if (event.key === 'r') {
-    let elements = logoElement.querySelectorAll('*');
+    const elements = logoElement.querySelectorAll('*');
     elements.forEach(element => {
       element.classList.remove('blink');
     });
