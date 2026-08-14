@@ -55,7 +55,7 @@ async function seedConsentingRegistration(eventId: string, email: string, term: 
        VALUES (?, ?, ?, 'Ada', 'Attendee', 'Attendee Org', 'Engineer', 'user', 1, datetime('now'), datetime('now'))`,
     ).bind(userId, email, email),
     env.DB.prepare(
-      `INSERT INTO registrations (id, event_id, user_id, status, attendance_type, source_type, manage_token_hash, created_at, updated_at)
+      `INSERT INTO registrations (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
        VALUES (?, ?, ?, 'registered', 'in_person', 'self', ?, datetime('now'), datetime('now'))`,
     ).bind(registrationId, eventId, userId, `manage-token-hash-${registrationId}`),
     env.DB.prepare(

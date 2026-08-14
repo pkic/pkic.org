@@ -181,7 +181,7 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
             header: "Registered",
             cell: (r: Registration) => fmt(r.created_at),
             className: "mono small",
-            sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
+            sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" as const },
           },
         ]
       : []),
