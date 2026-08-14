@@ -3,12 +3,13 @@
  *
  * Covers:
  *  1. Speaker uploads a presentation — presentation_versions row created with is_current = 1
- *  2. Speaker uploads a second presentation — previous version becomes is_current = 0, new one is is_current = 1
- *  3. Admin lists versions, downloads a version, and submits a review
- *  4. Admin attempts to delete the only approved version — expects 409
- *  5. Speaker GET endpoint returns a presentationUrl with the correct token
- *  6. Speaker download endpoint retrieves the current uploaded file
- *  7. Migration backfill: proposal with existing presentation data gets version 1 row
+ *  2. Admin uploads a presentation on behalf of a speaker
+ *  3. Speaker uploads a second presentation — previous version becomes is_current = 0, new one is is_current = 1
+ *  4. Admin lists versions, downloads a version, and submits a review
+ *  5. Admin attempts to delete the only approved version — expects 409
+ *  6. Speaker GET endpoint returns a presentationUrl with the correct token
+ *  7. Speaker download endpoint retrieves the current uploaded file
+ *  8. Migration backfill: proposal with existing presentation data gets version 1 row
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -19,6 +20,12 @@ import { createAdminSession } from "./helpers/auth";
 import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 import { createProposal, addProposalSpeaker, finalizeProposalDecision } from "../functions/_lib/services/proposals";
 import app from "../functions/router";
+import {
+  MAX_PRESENTATION_BYTES,
+  PRESENTATION_FILE_NAME_HEADER,
+  PRESENTATION_FILE_SIZE_HEADER,
+  presentationUploadRequest,
+} from "../assets/shared/presentation-upload";
 
 interface StoredObject {
   body: ReadableStream | null;
@@ -28,19 +35,34 @@ interface StoredObject {
 
 class FakePresentationBucket {
   private readonly objects = new Map<string, { buf: ArrayBuffer; contentType: string }>();
+  putCalls = 0;
+  lastPutWasStream = false;
 
-  async put(key: string, value: string | ArrayBuffer | ReadableStream, options?: Record<string, unknown>) {
+  async put(
+    key: string,
+    value: string | ArrayBuffer | ArrayBufferView | ReadableStream | Blob | null,
+    options?: Record<string, unknown>,
+  ) {
+    this.putCalls += 1;
+    this.lastPutWasStream = value instanceof ReadableStream;
     let buf: ArrayBuffer;
     if (value instanceof ArrayBuffer) {
       buf = value;
+    } else if (ArrayBuffer.isView(value)) {
+      buf = value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer;
     } else if (typeof value === "string") {
       buf = new TextEncoder().encode(value).buffer;
+    } else if (value instanceof Blob) {
+      buf = await value.arrayBuffer();
+    } else if (value === null) {
+      buf = new ArrayBuffer(0);
     } else {
       buf = await new Response(value).arrayBuffer();
     }
     const contentType =
       (options?.httpMetadata as { contentType?: string } | undefined)?.contentType ?? "application/octet-stream";
     this.objects.set(key, { buf, contentType });
+    return { size: buf.byteLength };
   }
 
   async get(key: string): Promise<StoredObject | null> {
@@ -64,16 +86,32 @@ class FakePresentationBucket {
   }
 }
 
+class CountingPresentationBucket {
+  bytesWritten = 0;
+  lastPutWasStream = false;
+
+  async put(_key: string, value: ReadableStream) {
+    this.lastPutWasStream = value instanceof ReadableStream;
+    const reader = value.getReader();
+    while (true) {
+      const { done, value: chunk } = await reader.read();
+      if (done) break;
+      this.bytesWritten += chunk.byteLength;
+    }
+    return { size: this.bytesWritten };
+  }
+
+  async delete() {}
+}
+
 const FAKE_PDF = new Uint8Array([0x25, 0x50, 0x44, 0x46]); // %PDF magic bytes
 
 function makePdf(name = "slides.pdf") {
   return new File([FAKE_PDF], name, { type: "application/pdf" });
 }
 
-function presentationFormData(name = "slides.pdf") {
-  const fd = new FormData();
-  fd.append("file", makePdf(name));
-  return fd;
+function presentationRequest(name = "slides.pdf") {
+  return presentationUploadRequest(makePdf(name));
 }
 
 async function seed() {
@@ -96,11 +134,13 @@ async function seed() {
     proposalType: "talk",
     title: "Post-Quantum Key Exchange",
     abstract: "A deep dive into lattice-based algorithms for TLS 1.3.",
+    signingSecret: env.INTERNAL_SIGNING_SECRET!,
   });
   const { manageToken: speakerToken } = await addProposalSpeaker(env.DB, {
     proposalId: proposal.id,
     userId: speakerUserId,
     role: "proposer",
+    signingSecret: env.INTERNAL_SIGNING_SECRET!,
   });
 
   // Accept the proposal so uploads are allowed.
@@ -137,7 +177,7 @@ describe("presentation versioning", () => {
     const res = await app.fetch(
       new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
         method: "PUT",
-        body: presentationFormData(),
+        ...presentationRequest(),
       }),
       { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
@@ -146,6 +186,7 @@ describe("presentation versioning", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { success: boolean };
     expect(body.success).toBe(true);
+    expect(bucket.lastPutWasStream).toBe(true);
 
     const versions = await queryAll<{ version_number: number; is_current: number; deleted_at: string | null }>(
       env.DB,
@@ -158,6 +199,100 @@ describe("presentation versioning", () => {
     expect(versions[0].deleted_at).toBeNull();
   });
 
+  it("admin can upload a presentation on behalf of a speaker", async () => {
+    const { proposalId, adminUserId, adminToken } = await seed();
+    const bucket = new FakePresentationBucket();
+    const upload = presentationRequest("admin-upload.pdf");
+
+    const res = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions`, {
+        method: "POST",
+        ...upload,
+        headers: { authorization: `Bearer ${adminToken}`, ...upload.headers },
+      }),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ success: true });
+
+    const versions = await queryAll<{
+      file_name: string | null;
+      uploaded_by_user_id: string | null;
+      is_current: number;
+    }>(
+      env.DB,
+      "SELECT file_name, uploaded_by_user_id, is_current FROM presentation_versions WHERE proposal_id = ?",
+      proposalId,
+    );
+    expect(versions).toEqual([{ file_name: "admin-upload.pdf", uploaded_by_user_id: adminUserId, is_current: 1 }]);
+
+    const auditRows = await queryAll<{ actor_type: string; actor_id: string | null }>(
+      env.DB,
+      "SELECT actor_type, actor_id FROM audit_log WHERE action = 'presentation_uploaded' AND entity_id = ?",
+      proposalId,
+    );
+    expect(auditRows).toEqual([{ actor_type: "admin", actor_id: adminUserId }]);
+  });
+
+  it("rejects an oversized presentation before sending its body to R2", async () => {
+    const { speakerToken } = await seed();
+    const bucket = new FakePresentationBucket();
+    const upload = presentationRequest();
+
+    const res = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+        method: "PUT",
+        ...upload,
+        headers: { ...upload.headers, [PRESENTATION_FILE_SIZE_HEADER]: String(MAX_PRESENTATION_BYTES + 1) },
+      }),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(res.status).toBe(413);
+    await expect(res.json()).resolves.toMatchObject({ error: { code: "FILE_TOO_LARGE" } });
+    expect(bucket.putCalls).toBe(0);
+  });
+
+  it("streams a presentation larger than the Worker memory limit without buffering it", async () => {
+    const { speakerToken } = await seed();
+    const bucket = new CountingPresentationBucket();
+    const uploadSize = 130 * 1024 * 1024;
+    const chunk = new Uint8Array(1024 * 1024);
+    let remaining = uploadSize;
+    const body = new ReadableStream({
+      pull(controller) {
+        if (remaining === 0) {
+          controller.close();
+          return;
+        }
+        const next = Math.min(chunk.byteLength, remaining);
+        controller.enqueue(chunk.subarray(0, next));
+        remaining -= next;
+      },
+    });
+
+    const res = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+        method: "PUT",
+        headers: {
+          "content-type": "application/pdf",
+          [PRESENTATION_FILE_NAME_HEADER]: encodeURIComponent("large-deck.pdf"),
+          [PRESENTATION_FILE_SIZE_HEADER]: String(uploadSize),
+        },
+        body,
+      }),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(res.status).toBe(200);
+    expect(bucket.lastPutWasStream).toBe(true);
+    expect(bucket.bytesWritten).toBe(uploadSize);
+  });
+
   it("second upload creates version 2 with is_current = 1 and demotes version 1 to is_current = 0", async () => {
     const { proposalId, speakerToken } = await seed();
     const bucket = new FakePresentationBucket();
@@ -168,7 +303,7 @@ describe("presentation versioning", () => {
     await app.fetch(
       new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
         method: "PUT",
-        body: presentationFormData("v1.pdf"),
+        ...presentationRequest("v1.pdf"),
       }),
       envWithBucket,
       execCtx,
@@ -177,7 +312,7 @@ describe("presentation versioning", () => {
     const res2 = await app.fetch(
       new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
         method: "PUT",
-        body: presentationFormData("v2.pdf"),
+        ...presentationRequest("v2.pdf"),
       }),
       envWithBucket,
       execCtx,
@@ -203,7 +338,7 @@ describe("presentation versioning", () => {
     await app.fetch(
       new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
         method: "PUT",
-        body: presentationFormData(),
+        ...presentationRequest(),
       }),
       envWithBucket,
       execCtx,
@@ -261,7 +396,7 @@ describe("presentation versioning", () => {
     await app.fetch(
       new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
         method: "PUT",
-        body: presentationFormData(),
+        ...presentationRequest(),
       }),
       envWithBucket,
       execCtx,
@@ -333,7 +468,7 @@ describe("presentation versioning", () => {
     await app.fetch(
       new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
         method: "PUT",
-        body: presentationFormData("quantum-talk.pdf"),
+        ...presentationRequest("quantum-talk.pdf"),
       }),
       envWithBucket,
       execCtx,
@@ -372,7 +507,7 @@ describe("presentation versioning", () => {
     await app.fetch(
       new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
         method: "PUT",
-        body: presentationFormData("legacy.pdf"),
+        ...presentationRequest("legacy.pdf"),
       }),
       envWithBucket,
       execCtx,

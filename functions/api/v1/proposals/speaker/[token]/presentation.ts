@@ -64,7 +64,7 @@ export async function onRequestPut(c: any): Promise<Response> {
   if (!bucket) throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "File uploads are not configured on this instance.");
 
   const parsed = await parsePresentationUpload(c.req.raw);
-  if ("error" in parsed) return json(parsed.error, parsed.status);
+  if ("error" in parsed) return json({ error: parsed.error }, parsed.status);
 
   const r2Key = await storePresentationFile(bucket, proposal.id, parsed);
 

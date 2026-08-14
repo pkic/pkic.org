@@ -2,6 +2,7 @@ import { showHeadshotDisclaimer } from "../shared/headshot/upload";
 import { showManageLinkRecoveryForm } from "../shared/widgets/link-recovery";
 import { normalizeValidation } from "../shared/form/validation-map";
 import { bootstrap, setStatus } from "./boot";
+import { presentationUploadRequest } from "../../shared/presentation-upload";
 
 /** Matches the DB record shape returned directly by the GET endpoint. */
 interface PresentationTerm {
@@ -175,12 +176,11 @@ async function main(): Promise<void> {
     presentationInput.value = "";
     void (async () => {
       if (presentationUploadStatus) presentationUploadStatus.textContent = "Uploading…";
-      const formData = new FormData();
-      formData.append("file", file);
       try {
+        const upload = presentationUploadRequest(file);
         const response = await fetch(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}/presentation`, {
           method: "PUT",
-          body: formData,
+          ...upload,
         });
         const json = (await response.json()) as { success?: boolean; error?: { message?: string } };
         if (!response.ok) throw new Error(json.error?.message ?? `HTTP ${response.status}`);

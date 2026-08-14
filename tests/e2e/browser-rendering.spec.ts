@@ -837,12 +837,15 @@ test.describe("browser workflows", () => {
     const presentationResult = await page.evaluate(async (token) => {
       const pdfContent =
         "%PDF-1.0\n1 0 obj<</Type /Catalog /Pages 2 0 R>>endobj 2 0 obj<</Type /Pages /Kids [3 0 R] /Count 1>>endobj 3 0 obj<</Type /Page /MediaBox [0 0 3 3]>>endobj\nxref\n0 4\ntrailer<</Size 4/Root 1 0 R>>\n%%EOF";
-      const pdfBlob = new Blob([pdfContent], { type: "application/pdf" });
-      const fd = new FormData();
-      fd.append("file", new File([pdfBlob], "presentation.pdf", { type: "application/pdf" }));
+      const file = new File([pdfContent], "presentation.pdf", { type: "application/pdf" });
       const res = await fetch(`/api/v1/proposals/speaker/${encodeURIComponent(token)}/presentation`, {
         method: "PUT",
-        body: fd,
+        headers: {
+          "content-type": file.type,
+          "x-presentation-file-name": encodeURIComponent(file.name),
+          "x-presentation-file-size": String(file.size),
+        },
+        body: file,
       });
       if (res.status === 403 || res.status === 404 || res.status === 409)
         return { success: false as const, skipped: true as const };
@@ -1371,18 +1374,22 @@ test.describe("browser workflows", () => {
 
     // ── 5. Speaker uploads a presentation ─────────────────────────────────────
 
-    const uploadResult = await page.evaluate(async (token) => {
-      const pdfContent =
-        "%PDF-1.0\n1 0 obj<</Type /Catalog /Pages 2 0 R>>endobj 2 0 obj<</Type /Pages /Kids [3 0 R] /Count 1>>endobj 3 0 obj<</Type /Page /MediaBox [0 0 3 3]>>endobj\nxref\n0 4\ntrailer<</Size 4/Root 1 0 R>>\n%%EOF";
-      const fd = new FormData();
-      fd.append("file", new File([pdfContent], "pqc-migration-talk.pdf", { type: "application/pdf" }));
-      const res = await fetch(`/api/v1/proposals/speaker/${encodeURIComponent(token)}/presentation`, {
-        method: "PUT",
-        body: fd,
-      });
-      return (await res.json()) as { success?: boolean; error?: { code: string } };
-    }, speakerToken);
-    expect(uploadResult.success).toBe(true);
+    await page.goto(
+      `/events/2026/pqc-conference-amsterdam-nl/propose/presentation/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(speakerToken)}`,
+    );
+    await expect(page.locator("[data-event-speaker-presentation] [data-speaker-content]")).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.locator("[data-presentation-file]").setInputFiles({
+      name: "pqc-migration-talk.pdf",
+      mimeType: "application/pdf",
+      buffer: Buffer.from(
+        "%PDF-1.0\n1 0 obj<</Type /Catalog /Pages 2 0 R>>endobj 2 0 obj<</Type /Pages /Kids [3 0 R] /Count 1>>endobj 3 0 obj<</Type /Page /MediaBox [0 0 3 3]>>endobj\nxref\n0 4\ntrailer<</Size 4/Root 1 0 R>>\n%%EOF",
+      ),
+    });
+    await expect(page.locator("[data-presentation-upload-status]")).toHaveText(/uploaded successfully/i, {
+      timeout: 15_000,
+    });
     await screenshot("05-presentation-uploaded");
 
     // ── 6. Admin views the Presentation tab and submits a review ──────────────

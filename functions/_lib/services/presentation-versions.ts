@@ -3,49 +3,81 @@ import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
+import {
+  ALLOWED_PRESENTATION_MIME_TYPES,
+  MAX_PRESENTATION_BYTES,
+  PRESENTATION_FILE_NAME_HEADER,
+  PRESENTATION_FILE_SIZE_HEADER,
+} from "../../../assets/shared/presentation-upload";
 
-export const ALLOWED_PRESENTATION_MIME_TYPES = new Set([
-  "application/pdf",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation", // .pptx
-  "application/vnd.ms-powerpoint", // .ppt
-  "application/vnd.oasis.opendocument.presentation", // .odp
-  "application/vnd.ms-powerpoint.presentation.macroEnabled.12", // .pptm
-]);
-export const MAX_PRESENTATION_BYTES = 200 * 1024 * 1024; // 200 MB
+const ALLOWED_PRESENTATION_TYPES = new Set<string>(ALLOWED_PRESENTATION_MIME_TYPES);
+
+export interface PresentationUpload {
+  body: ReadableStream;
+  name: string;
+  size: number;
+  type: string;
+}
+
+type PresentationUploadError = { error: { code: string; message: string }; status: number };
 
 /**
- * Parse and validate a multipart/form-data "file" field from a Request.
- * Returns the validated File blob, or a { error, status } tuple to return directly.
+ * Validate the metadata for a raw streaming upload without consuming its body.
  */
-export async function parsePresentationUpload(
-  request: Request,
-): Promise<File | { error: { code: string; message: string }; status: number }> {
-  const formData = await request.formData().catch(() => null);
-  if (!formData)
-    return { error: { code: "INVALID_CONTENT_TYPE", message: "Request must be multipart/form-data" }, status: 400 };
-
-  const file = formData.get("file");
-  if (!file || typeof file === "string")
-    return { error: { code: "MISSING_FILE", message: 'A "file" field is required.' }, status: 400 };
-
-  const blob = file as File;
-  const blobType = blob.type || "application/octet-stream";
-  if (!ALLOWED_PRESENTATION_MIME_TYPES.has(blobType))
+export function parsePresentationUpload(request: Request): PresentationUpload | PresentationUploadError {
+  const type = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() ?? "";
+  if (!ALLOWED_PRESENTATION_TYPES.has(type))
     return {
       error: { code: "INVALID_FILE_TYPE", message: "Only PDF and PowerPoint (PPTX/PPT/PPTM/ODP) files are accepted." },
       status: 415,
     };
-  if (blob.size > MAX_PRESENTATION_BYTES)
-    return { error: { code: "FILE_TOO_LARGE", message: "Presentation must be under 200 MB." }, status: 413 };
 
-  return blob;
+  const encodedName = request.headers.get(PRESENTATION_FILE_NAME_HEADER);
+  let name: string;
+  try {
+    name = encodedName ? decodeURIComponent(encodedName) : "";
+  } catch {
+    return { error: { code: "INVALID_FILE_NAME", message: "Presentation file name is invalid." }, status: 400 };
+  }
+  if (!name || name.length > 255) {
+    return { error: { code: "INVALID_FILE_NAME", message: "Presentation file name is invalid." }, status: 400 };
+  }
+
+  const declaredSize = Number(request.headers.get(PRESENTATION_FILE_SIZE_HEADER));
+  if (!Number.isSafeInteger(declaredSize) || declaredSize <= 0) {
+    return { error: { code: "INVALID_FILE_SIZE", message: "Presentation file size is invalid." }, status: 400 };
+  }
+  if (declaredSize > MAX_PRESENTATION_BYTES) {
+    return { error: { code: "FILE_TOO_LARGE", message: "Presentation must be 200 MB or smaller." }, status: 413 };
+  }
+
+  const contentLength = request.headers.get("content-length");
+  if (contentLength !== null && Number(contentLength) !== declaredSize) {
+    return {
+      error: { code: "FILE_SIZE_MISMATCH", message: "Presentation file size does not match the request." },
+      status: 400,
+    };
+  }
+  if (!request.body) {
+    return { error: { code: "MISSING_FILE", message: "A presentation file is required." }, status: 400 };
+  }
+
+  return { body: request.body, name, size: declaredSize, type };
 }
 
-/** Upload a validated File to R2 and return the r2Key. */
-export async function storePresentationFile(bucket: R2Bucket, proposalId: string, blob: File): Promise<string> {
-  const safeName = (blob.name ?? "presentation").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100);
+/** Stream a validated upload to R2 and return the r2Key. */
+export async function storePresentationFile(
+  bucket: R2Bucket,
+  proposalId: string,
+  upload: PresentationUpload,
+): Promise<string> {
+  const safeName = upload.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100);
   const r2Key = `presentations/${proposalId}/${Date.now()}-${safeName}`;
-  await bucket.put(r2Key, await blob.arrayBuffer(), { httpMetadata: { contentType: blob.type } });
+  const stored = await bucket.put(r2Key, upload.body, { httpMetadata: { contentType: upload.type } });
+  if (stored.size !== upload.size) {
+    await bucket.delete(r2Key);
+    throw new AppError(400, "FILE_SIZE_MISMATCH", "Presentation file size does not match the request.");
+  }
   return r2Key;
 }
 

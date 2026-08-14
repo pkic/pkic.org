@@ -21,6 +21,7 @@ import type {
 } from "../../../types";
 import { FormAnswerTable } from "./FormResponses";
 import { normalizeProfileLinks } from "../../profile-links";
+import { presentationUploadRequest } from "../../../../../shared/presentation-upload";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -661,9 +662,8 @@ function PresentationVersionsTab({
     input.value = "";
     setUploading(true);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      await api(`/api/v1/admin/proposals/${proposalId}/presentation/versions`, { method: "POST", body: fd });
+      const upload = presentationUploadRequest(file);
+      await api(`/api/v1/admin/proposals/${proposalId}/presentation/versions`, { method: "POST", ...upload });
       toast("Presentation uploaded", "success");
       onReload();
     } catch (err) {
