@@ -1,23 +1,46 @@
 import { useState, useRef } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Badge } from "../../../../components/Badge";
-import { ApiDataTable, type ApiTableActions } from "../../../../components/Table";
+import { ApiDataTable, type ApiTableActions, type Column } from "../../../../components/Table";
 import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
 import { fmt, toast } from "../../../ui";
-import type { Registration } from "../../../types";
+import type { Registration, RegistrationAttendanceChange } from "../../../types";
 import { Invites } from "./Invites";
 import { EventEmail } from "./EventEmail";
 import { EventFormResponses } from "./Forms";
 
 const ATT_LABELS: Record<string, string> = { in_person: "In-person", virtual: "Virtual", on_demand: "On-demand" };
+const ATTENDANCE_CHANGE_PRESETS: Record<string, string> = {
+  "attendance-changed": "any",
+  "left-in-person": "left_in_person",
+  "joined-in-person": "joined_in_person",
+};
 
 function attendanceTypeLabel(t: string): string {
   return ATT_LABELS[t] ?? t;
 }
 
+function attendanceJourneyLabel(history: RegistrationAttendanceChange[]): string {
+  const transitions = history.flatMap((change) => change.transitions);
+  if (transitions.length === 0) return "No recorded journey";
+  if (history.some((change) => change.transitions.length !== 1)) {
+    return `${history.length} attendance updates`;
+  }
+
+  const path = [transitions[0].fromType, transitions[0].toType];
+  for (const transition of transitions.slice(1)) {
+    if (path.at(-1) !== transition.fromType) {
+      return `${history.length} attendance updates`;
+    }
+    path.push(transition.toType);
+  }
+  return path.map(attendanceTypeLabel).join(" → ");
+}
+
 interface RegistrationStats {
   byAttendanceType: Record<string, number>;
+  attendanceStatusByType: Record<string, { accepted: number; waitlisted: number }>;
   byStatus: Record<string, number>;
   bouncedCount?: number;
   consentCount?: number;
@@ -26,10 +49,11 @@ interface RegistrationStats {
 
 // ─── Registration list ────────────────────────────────────────────────────────
 
-function RegistrationsList({ slug }: { slug: string }) {
+function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: string; initialAttendanceChange?: string }) {
   const [statusFilter, setStatusFilter] = useState("");
   const [bouncedFilter, setBouncedFilter] = useState("");
   const [consentFilter, setConsentFilter] = useState("");
+  const [attendanceChangeFilter, setAttendanceChangeFilter] = useState(initialAttendanceChange);
   const [stats, setStats] = useState<RegistrationStats | null>(null);
   const [, navigate] = useHashLocation();
   const tableRef = useRef<ApiTableActions | null>(null);
@@ -48,21 +72,117 @@ function RegistrationsList({ slug }: { slug: string }) {
     window.location.href = `/api/v1/admin/events/${slug}/registrations/export`;
   }
 
-  const confirmed = stats?.byStatus?.registered ?? 0;
-  const waitlisted = stats?.byStatus?.waitlisted ?? 0;
   const pendingConfirmation = stats?.byStatus?.pending_email_confirmation ?? 0;
   const total = stats ? Object.values(stats.byStatus).reduce((s, v) => s + v, 0) : 0;
-  const inPerson = stats?.byAttendanceType?.in_person ?? 0;
-  const virtual = stats?.byAttendanceType?.virtual ?? 0;
-  const onDemand = stats?.byAttendanceType?.on_demand ?? 0;
+  const attendanceStatuses = Object.entries(ATT_LABELS).map(([type, label]) => ({
+    type,
+    label: label.toLowerCase(),
+    accepted: stats?.attendanceStatusByType?.[type]?.accepted ?? 0,
+    waitlisted: stats?.attendanceStatusByType?.[type]?.waitlisted ?? 0,
+  }));
+  const accepted = attendanceStatuses.reduce((sum, item) => sum + item.accepted, 0);
+  const waitlisted = attendanceStatuses.reduce((sum, item) => sum + item.waitlisted, 0);
   const bouncedCount = stats?.bouncedCount ?? 0;
+  const columns: Array<Column<Registration>> = [
+    {
+      header: "Name / Email",
+      cell: (r) => (
+        <>
+          <strong class="adm-cell-name">{r.display_name ?? r.user_email ?? "—"}</strong>
+          {r.display_name && r.user_email && (
+            <>
+              <br />
+              <span class="text-muted small">{r.user_email}</span>
+            </>
+          )}
+        </>
+      ),
+    },
+    {
+      header: "Status",
+      cell: (r) => (
+        <>
+          <Badge status={r.status} />
+          {r.has_bounced && <Badge status="bounced" />}
+        </>
+      ),
+    },
+    { header: "Attendance", cell: (r) => (r.attendance_type ? attendanceTypeLabel(r.attendance_type) : "—") },
+    ...(attendanceChangeFilter
+      ? [
+          {
+            header: "Attendance journey · latest ↓",
+            cell: (r: Registration) => {
+              const history = r.attendanceChangeHistory ?? [];
+              const latest = r.lastAttendanceChange;
+              return latest ? (
+                <div class="small">
+                  <div class="fw-semibold">{attendanceJourneyLabel(history)}</div>
+                  <div class="text-muted mono">Last changed {fmt(latest.changedAt)}</div>
+                  {history.length > 1 && (
+                    <details class="mt-1" onClick={(event) => event.stopPropagation()}>
+                      <summary class="text-primary">View {history.length} updates</summary>
+                      <div class="mt-1 border-start ps-2">
+                        {history.map((change) => (
+                          <div key={change.changedAt} class="mb-1">
+                            {change.transitions.map((transition) => (
+                              <div key={`${transition.fromType}->${transition.toType}`}>
+                                {attendanceTypeLabel(transition.fromType)} → {attendanceTypeLabel(transition.toType)}
+                                <span class="text-muted">
+                                  {" "}
+                                  · {transition.days.map((day) => day.label ?? day.dayDate).join(", ")}
+                                </span>
+                              </div>
+                            ))}
+                            <div class="text-muted mono">{fmt(change.changedAt)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </div>
+              ) : (
+                "—"
+              );
+            },
+          },
+        ]
+      : []),
+    {
+      header: "Day waitlist",
+      cell: (r) =>
+        r.dayWaitlistSummary ??
+        (r.dayWaitlistCount ? `${r.dayWaitlistCount} day${r.dayWaitlistCount !== 1 ? "s" : ""}` : "—"),
+    },
+    ...(!attendanceChangeFilter
+      ? [
+          {
+            header: "Consent",
+            cell: (r: Registration) =>
+              r.sponsor_consent === true ? (
+                <span class="text-success" title="Consented to share with sponsors">
+                  ✓
+                </span>
+              ) : r.sponsor_consent === false ? (
+                <span class="text-muted">—</span>
+              ) : (
+                "—"
+              ),
+            className: "text-center",
+          },
+          { header: "Source", cell: (r: Registration) => r.source_type ?? "—", className: "small text-muted" },
+          { header: "Registered", cell: (r: Registration) => fmt(r.created_at), className: "mono small" },
+        ]
+      : []),
+    { header: "", cell: () => <span class="btn btn-sm btn-outline-secondary">View →</span> },
+  ];
 
   return (
     <div>
       {stats && (
         <div class="adm-mini-stats mb-3">
           <span class="adm-mini-stat">
-            <strong class="text-success">{confirmed}</strong> confirmed
+            <strong class="text-success">{accepted}</strong> accepted
           </span>
           {waitlisted > 0 && (
             <span class="adm-mini-stat">
@@ -78,21 +198,14 @@ function RegistrationsList({ slug }: { slug: string }) {
             <strong>{total}</strong> total
           </span>
           <span class="adm-mini-stat-sep" />
-          {inPerson > 0 && (
-            <span class="adm-mini-stat">
-              <strong>{inPerson}</strong> in-person
-            </span>
-          )}
-          {virtual > 0 && (
-            <span class="adm-mini-stat">
-              <strong>{virtual}</strong> virtual
-            </span>
-          )}
-          {onDemand > 0 && (
-            <span class="adm-mini-stat">
-              <strong>{onDemand}</strong> on-demand
-            </span>
-          )}
+          {attendanceStatuses
+            .filter(({ accepted, waitlisted }) => accepted + waitlisted > 0)
+            .map(({ type, label, accepted, waitlisted }) => (
+              <span key={type} class="adm-mini-stat">
+                <strong>{accepted}</strong> {label}
+                {waitlisted > 0 && <span class="text-info"> (+{waitlisted} waitlisted)</span>}
+              </span>
+            ))}
           {bouncedCount > 0 && (
             <>
               <span class="adm-mini-stat-sep" />
@@ -117,9 +230,10 @@ function RegistrationsList({ slug }: { slug: string }) {
           ...(statusFilter && { status: statusFilter }),
           ...(bouncedFilter && { bounced: bouncedFilter }),
           ...(consentFilter && { consent: consentFilter }),
+          ...(attendanceChangeFilter && { attendance_change: attendanceChangeFilter }),
         }}
         actionsRef={tableRef}
-        deps={[slug, statusFilter, bouncedFilter, consentFilter]}
+        deps={[slug, statusFilter, bouncedFilter, consentFilter, attendanceChangeFilter]}
         toolbar={({ resetPage }) => (
           <>
             <select
@@ -135,6 +249,20 @@ function RegistrationsList({ slug }: { slug: string }) {
               <option value="pending_email_confirmation">Pending confirmation</option>
               <option value="waitlisted">Waitlisted</option>
               <option value="cancelled">Cancelled</option>
+            </select>
+            <select
+              aria-label="Attendance changes"
+              class="form-select form-select-sm adm-filter-select"
+              value={attendanceChangeFilter}
+              onChange={(e) => {
+                setAttendanceChangeFilter((e.target as HTMLSelectElement).value);
+                resetPage();
+              }}
+            >
+              <option value="">All attendance activity</option>
+              <option value="any">Changed attendance</option>
+              <option value="left_in_person">Left in-person and is no longer in-person</option>
+              <option value="joined_in_person">Joined in-person and is currently in-person</option>
             </select>
             <select
               class="form-select form-select-sm adm-filter-select"
@@ -168,56 +296,8 @@ function RegistrationsList({ slug }: { slug: string }) {
             </button>
           </>
         )}
-        columns={[
-          {
-            header: "Name / Email",
-            cell: (r) => (
-              <>
-                <strong class="adm-cell-name">{r.display_name ?? r.user_email ?? "—"}</strong>
-                {r.display_name && r.user_email && (
-                  <>
-                    <br />
-                    <span class="text-muted small">{r.user_email}</span>
-                  </>
-                )}
-              </>
-            ),
-          },
-          {
-            header: "Status",
-            cell: (r) => (
-              <>
-                <Badge status={r.status} />
-                {r.has_bounced && <Badge status="bounced" />}
-              </>
-            ),
-          },
-          { header: "Attendance", cell: (r) => (r.attendance_type ? attendanceTypeLabel(r.attendance_type) : "—") },
-          {
-            header: "Day waitlist",
-            cell: (r) =>
-              r.dayWaitlistSummary ??
-              (r.dayWaitlistCount ? `${r.dayWaitlistCount} day${r.dayWaitlistCount !== 1 ? "s" : ""}` : "—"),
-          },
-          {
-            header: "Consent",
-            cell: (r) =>
-              r.sponsor_consent === true ? (
-                <span class="text-success" title="Consented to share with sponsors">
-                  ✓
-                </span>
-              ) : r.sponsor_consent === false ? (
-                <span class="text-muted">—</span>
-              ) : (
-                "—"
-              ),
-            className: "text-center",
-          },
-          { header: "Source", cell: (r) => r.source_type ?? "—", className: "small text-muted" },
-          { header: "Registered", cell: (r) => fmt(r.created_at), className: "mono small" },
-          { header: "", cell: () => <span class="btn btn-sm btn-outline-secondary">View →</span> },
-        ]}
-        empty="No registrations yet"
+        columns={columns}
+        empty={attendanceChangeFilter ? "No attendees match this attendance change" : "No registrations yet"}
         rowKey={(r) => r.id}
         rowClass={() => "adm-reg-row"}
         onRowClick={(r) => navigate(`/events/${slug}/registration/${r.id}`)}
@@ -245,7 +325,9 @@ export function Registrations({ slug, subTab }: { slug: string; subTab?: string 
         onChange={(key) => navigate(`/events/${slug}/registrations/${key === "overview" ? "" : key}`)}
       />
 
-      {tab === "overview" && <RegistrationsList slug={slug} />}
+      {tab === "overview" && (
+        <RegistrationsList slug={slug} initialAttendanceChange={ATTENDANCE_CHANGE_PRESETS[subTab ?? ""] ?? ""} />
+      )}
       {tab === "responses" && <EventFormResponses slug={slug} purpose="event_registration" />}
       {tab === "invites" && <Invites slug={slug} inviteType="attendee" />}
       {tab === "email" && <EventEmail slug={slug} audience="attendees" />}

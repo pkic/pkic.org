@@ -6,6 +6,7 @@ import { all, first } from "../../../../../_lib/db/queries";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { parseJsonSafe } from "../../../../../_lib/utils/json";
 import { extractDietarySelections } from "../../../../../_lib/utils/registration-dietary";
+import { getAttendanceStatusByType } from "../../../../../_lib/services/registrations/admin-statistics";
 
 interface RegistrationRow {
   id: string;
@@ -30,6 +31,15 @@ interface WaitlistSummaryRow {
   count: number;
 }
 
+interface AttendanceChangeRow {
+  registration_id: string;
+  changed_at: string;
+  from_type: string;
+  to_type: string;
+  day_date: string;
+  day_label: string | null;
+}
+
 const latestOutboxStatusForRegistrationSql = `(SELECT eo.status
        FROM email_outbox eo
        WHERE eo.recipient_user_id = r.user_id AND eo.event_id = r.event_id
@@ -49,6 +59,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const validStatuses = new Set(["registered", "pending_email_confirmation", "cancelled"]);
   const bouncedFilter = url.searchParams.get("bounced") ?? "";
   const consentFilter = url.searchParams.get("consent") ?? "";
+  const attendanceChangeFilter = url.searchParams.get("attendance_change") ?? "";
 
   const conditions: string[] = ["r.event_id = ?"];
   const bindings: unknown[] = [event.id];
@@ -74,6 +85,25 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     );
   }
 
+  const hasAttendanceChange = (transition = "") => `EXISTS (
+    SELECT 1
+    FROM registration_attendance_history h
+    WHERE h.registration_id = r.id
+      AND h.event_day_id IS NOT NULL
+      AND h.changed_by <> 'system'
+      AND COALESCE(h.from_type, '') <> COALESCE(h.to_type, '')
+      ${transition}
+  )`;
+  if (attendanceChangeFilter === "any") {
+    conditions.push(hasAttendanceChange());
+  } else if (attendanceChangeFilter === "left_in_person") {
+    conditions.push("COALESCE(r.attendance_type, '') <> 'in_person'");
+    conditions.push(hasAttendanceChange("AND h.from_type = 'in_person' AND h.to_type <> 'in_person'"));
+  } else if (attendanceChangeFilter === "joined_in_person") {
+    conditions.push("r.attendance_type = 'in_person'");
+    conditions.push(hasAttendanceChange("AND h.from_type <> 'in_person' AND h.to_type = 'in_person'"));
+  }
+
   if (search) {
     conditions.push("(u.email LIKE ? OR COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) LIKE ?)");
     const pattern = `%${search}%`;
@@ -81,6 +111,16 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   }
 
   const whereClause = conditions.join(" AND ");
+  const orderBySql = attendanceChangeFilter
+    ? `(SELECT MAX(h.changed_at)
+        FROM registration_attendance_history h
+        WHERE h.registration_id = r.id
+          AND h.event_day_id IS NOT NULL
+          AND h.changed_by <> 'system'
+          AND COALESCE(h.from_type, '') <> COALESCE(h.to_type, '')) DESC,
+       r.created_at DESC,
+       r.id DESC`
+    : "r.created_at DESC, r.id DESC";
   const registrationForm = await getActiveFormByPurpose(requestDb(c), event.id, "event_registration");
 
   const registrationRows = await all<RegistrationRow>(
@@ -113,7 +153,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
      LEFT JOIN users u ON u.id = r.user_id
      LEFT JOIN referral_codes rc ON rc.owner_type = 'registration' AND rc.owner_id = r.id
      WHERE ${whereClause}
-     ORDER BY r.created_at DESC
+     ORDER BY ${orderBySql}
      LIMIT ? OFFSET ?`,
     [...bindings, limit + 1, offset],
   );
@@ -122,11 +162,12 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const rows = hasMore ? registrationRows.slice(0, limit) : registrationRows;
 
   const registrationIds = rows.map((row) => row.id);
-  const waitlistSummaries =
+  const [waitlistSummaries, attendanceChangeRows] =
     registrationIds.length > 0
-      ? await all<WaitlistSummaryRow>(
-          requestDb(c),
-          `SELECT
+      ? await Promise.all([
+          all<WaitlistSummaryRow>(
+            requestDb(c),
+            `SELECT
          w.registration_id,
          GROUP_CONCAT(CASE
            WHEN ed.label IS NOT NULL AND ed.label <> '' THEN ed.label || ' (' || w.status || ')'
@@ -138,14 +179,57 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
        WHERE w.registration_id IN (${registrationIds.map(() => "?").join(",")})
          AND w.status IN ('waiting', 'offered')
        GROUP BY w.registration_id`,
-          registrationIds,
-        )
-      : [];
+            registrationIds,
+          ),
+          all<AttendanceChangeRow>(
+            requestDb(c),
+            `SELECT h.registration_id,
+                    h.changed_at,
+                    COALESCE(h.from_type, 'not_attending') AS from_type,
+                    COALESCE(h.to_type, 'not_attending') AS to_type,
+                    ed.day_date,
+                    COALESCE(ed.label, ed.day_date) AS day_label
+             FROM registration_attendance_history h
+             JOIN event_days ed ON ed.id = h.event_day_id
+             WHERE h.registration_id IN (${registrationIds.map(() => "?").join(",")})
+               AND h.changed_by <> 'system'
+               AND COALESCE(h.from_type, '') <> COALESCE(h.to_type, '')
+             ORDER BY h.registration_id ASC, h.changed_at ASC, ed.sort_order ASC, ed.day_date ASC`,
+            registrationIds,
+          ),
+        ])
+      : [[], []];
 
   const waitlistByRegistrationId = new Map(waitlistSummaries.map((row) => [row.registration_id, row]));
+  const attendanceChangesByRegistrationId = new Map<
+    string,
+    Array<{
+      changedAt: string;
+      transitions: Array<{ fromType: string; toType: string; days: Array<{ dayDate: string; label: string | null }> }>;
+    }>
+  >();
+  for (const row of attendanceChangeRows) {
+    let history = attendanceChangesByRegistrationId.get(row.registration_id);
+    if (!history) {
+      history = [];
+      attendanceChangesByRegistrationId.set(row.registration_id, history);
+    }
+    let change = history.find((item) => item.changedAt === row.changed_at);
+    if (!change) {
+      change = { changedAt: row.changed_at, transitions: [] };
+      history.push(change);
+    }
+    let transition = change.transitions.find((item) => item.fromType === row.from_type && item.toType === row.to_type);
+    if (!transition) {
+      transition = { fromType: row.from_type, toType: row.to_type, days: [] };
+      change.transitions.push(transition);
+    }
+    transition.days.push({ dayDate: row.day_date, label: row.day_label });
+  }
 
   const registrationsWithSummary = rows.map((row) => {
     const summary = waitlistByRegistrationId.get(row.id);
+    const attendanceChangeHistory = attendanceChangesByRegistrationId.get(row.id) ?? [];
     const dietarySelections = extractDietarySelections(
       parseJsonSafe<Record<string, unknown> | null>(row.custom_answers_json, null),
       registrationForm?.fields,
@@ -157,46 +241,51 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
       dietary_restrictions: dietarySelections.length > 0 ? dietarySelections : null,
       dayWaitlistSummary: summary?.summary ?? null,
       dayWaitlistCount: summary?.count ?? 0,
+      attendanceChangeHistory,
+      lastAttendanceChange: attendanceChangeHistory.at(-1) ?? null,
     };
   });
 
-  const [totalRow, statRows, bouncedCountRow, consentCountRow, dietaryRows] = await Promise.all([
-    first<{ total: number }>(
-      requestDb(c),
-      `SELECT COUNT(*) AS total FROM registrations r LEFT JOIN users u ON u.id = r.user_id WHERE ${whereClause}`,
-      bindings,
-    ),
-    // Aggregate stats always cover all registrations for the event (unfiltered)
-    all<{ attendance_type: string; status: string; count: number }>(
-      requestDb(c),
-      `SELECT attendance_type, status, COUNT(*) AS count
+  const [totalRow, statRows, bouncedCountRow, consentCountRow, dietaryRows, attendanceStatusByType] = await Promise.all(
+    [
+      first<{ total: number }>(
+        requestDb(c),
+        `SELECT COUNT(*) AS total FROM registrations r LEFT JOIN users u ON u.id = r.user_id WHERE ${whereClause}`,
+        bindings,
+      ),
+      // Aggregate stats always cover all registrations for the event (unfiltered)
+      all<{ attendance_type: string; status: string; count: number }>(
+        requestDb(c),
+        `SELECT attendance_type, status, COUNT(*) AS count
        FROM registrations WHERE event_id = ?
        GROUP BY attendance_type, status`,
-      [event.id],
-    ),
-    first<{ bounced_count: number }>(
-      requestDb(c),
-      `SELECT COUNT(DISTINCT r.id) AS bounced_count
+        [event.id],
+      ),
+      first<{ bounced_count: number }>(
+        requestDb(c),
+        `SELECT COUNT(DISTINCT r.id) AS bounced_count
        FROM registrations r
        WHERE r.event_id = ? AND ${latestOutboxStatusForRegistrationSql} = 'bounced'`,
-      [event.id],
-    ),
-    first<{ consent_count: number }>(
-      requestDb(c),
-      `SELECT COUNT(DISTINCT registration_id) AS consent_count
+        [event.id],
+      ),
+      first<{ consent_count: number }>(
+        requestDb(c),
+        `SELECT COUNT(DISTINCT registration_id) AS consent_count
        FROM consent_acceptances
        WHERE event_id = ? AND term_key = 'sponsor-data-sharing'`,
-      [event.id],
-    ),
-    all<{ custom_answers_json: string | null }>(
-      requestDb(c),
-      `SELECT r.custom_answers_json
+        [event.id],
+      ),
+      all<{ custom_answers_json: string | null }>(
+        requestDb(c),
+        `SELECT r.custom_answers_json
        FROM registrations r
        WHERE r.event_id = ? AND r.status IN ('registered')
          AND r.custom_answers_json IS NOT NULL`,
-      [event.id],
-    ),
-  ]);
+        [event.id],
+      ),
+      getAttendanceStatusByType(requestDb(c), event.id),
+    ],
+  );
   const total = Number(totalRow?.total ?? 0);
 
   const byAttendanceType: Record<string, number> = {};
@@ -226,6 +315,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     registrations: registrationsWithSummary,
     stats: {
       byAttendanceType,
+      attendanceStatusByType,
       byStatus,
       bouncedCount: Number(bouncedCountRow?.bounced_count ?? 0),
       consentCount: Number(consentCountRow?.consent_count ?? 0),

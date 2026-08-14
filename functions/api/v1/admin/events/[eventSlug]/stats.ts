@@ -3,6 +3,10 @@ import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { all } from "../../../../../_lib/db/queries";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import {
+  getAttendanceChangeStatistics,
+  getAttendanceStatusByType,
+} from "../../../../../_lib/services/registrations/admin-statistics";
 
 /**
  * GET /api/v1/admin/events/:eventSlug/stats
@@ -30,9 +34,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     waitlistByDayRows,
     waitlistStatusRows,
     waitlistLaneRows,
-    attendanceChangeRows,
-    attendanceChangeTotalsRows,
-    recentAttendanceChangesRows,
+    attendanceChanges,
     dayAttendanceRows,
     inviteAttendeeRows,
     inviteSpeakerRows,
@@ -42,6 +44,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     rsvpByStatusRows,
     rsvpByProviderRows,
     rsvpActionsTakenRows,
+    attendanceStatusByType,
   ] = await Promise.all([
     // Registration counts by status
     all<{ status: string; count: number }>(
@@ -122,69 +125,14 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
        GROUP BY priority_lane`,
       [event.id],
     ),
-    // Day-level attendance changes (event attendance is measured per day)
-    all<{ from_type: string; to_type: string; count: number }>(
-      db,
-      `SELECT COALESCE(h.from_type, 'not_attending') AS from_type,
-              COALESCE(h.to_type, 'not_attending') AS to_type,
-              COUNT(*) AS count
-       FROM registration_attendance_history h
-       JOIN registrations r ON r.id = h.registration_id
-       WHERE r.event_id = ?
-         AND h.event_day_id IS NOT NULL
-         AND COALESCE(h.from_type, '') <> COALESCE(h.to_type, '')
-       GROUP BY COALESCE(h.from_type, 'not_attending'), COALESCE(h.to_type, 'not_attending')
-       ORDER BY count DESC`,
-      [event.id],
-    ),
-    all<{ total_changes: number; changed_registrations: number }>(
-      db,
-      `SELECT COUNT(*) AS total_changes,
-              COUNT(DISTINCT h.registration_id) AS changed_registrations
-       FROM registration_attendance_history h
-       JOIN registrations r ON r.id = h.registration_id
-       WHERE r.event_id = ?
-         AND h.event_day_id IS NOT NULL
-         AND COALESCE(h.from_type, '') <> COALESCE(h.to_type, '')`,
-      [event.id],
-    ),
-    all<{
-      registration_id: string;
-      changed_at: string;
-      day_date: string;
-      day_label: string | null;
-      from_type: string;
-      to_type: string;
-      user_email: string | null;
-      display_name: string | null;
-    }>(
-      db,
-      `SELECT h.registration_id,
-              h.changed_at,
-              ed.day_date,
-              COALESCE(ed.label, ed.day_date) AS day_label,
-              COALESCE(h.from_type, 'not_attending') AS from_type,
-              COALESCE(h.to_type, 'not_attending') AS to_type,
-              u.email AS user_email,
-              COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name
-       FROM registration_attendance_history h
-       JOIN registrations r ON r.id = h.registration_id
-       JOIN event_days ed ON ed.id = h.event_day_id
-       LEFT JOIN users u ON u.id = r.user_id
-       WHERE r.event_id = ?
-         AND h.event_day_id IS NOT NULL
-         AND COALESCE(h.from_type, '') <> COALESCE(h.to_type, '')
-       ORDER BY h.changed_at DESC
-       LIMIT 25`,
-      [event.id],
-    ),
-    // Per-event-day attendance (all non-cancelled statuses, split by status)
+    getAttendanceChangeStatistics(db, event.id),
+    // Per-event-day attendance split by accepted, waitlisted and pending state
     all<{
       day_date: string;
       label: string | null;
       sort_order: number;
       attendance_type: string;
-      status: string;
+      attendance_status: string;
       count: number;
     }>(
       db,
@@ -192,13 +140,21 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
               COALESCE(ed.label, ed.day_date) AS label,
               ed.sort_order,
               rda.attendance_type,
-              r.status,
-              COUNT(r.id) AS count
+              CASE
+                WHEN w.id IS NOT NULL THEN 'waitlisted'
+                WHEN r.status = 'registered' THEN 'accepted'
+                ELSE 'pending'
+              END AS attendance_status,
+              COUNT(DISTINCT r.id) AS count
        FROM event_days ed
        JOIN registration_day_attendance rda ON rda.event_day_id = ed.id
        JOIN registrations r ON r.id = rda.registration_id AND r.status != 'cancelled'
+       LEFT JOIN event_day_waitlist_entries w
+         ON w.event_day_id = ed.id
+        AND w.registration_id = r.id
+        AND w.status IN ('waiting', 'offered')
        WHERE ed.event_id = ?
-       GROUP BY ed.id, rda.attendance_type, r.status
+       GROUP BY ed.id, rda.attendance_type, attendance_status
        ORDER BY ed.sort_order ASC, ed.day_date ASC`,
       [event.id],
     ),
@@ -277,6 +233,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
        ORDER BY count DESC`,
       [event.id],
     ),
+    getAttendanceStatusByType(db, event.id),
   ]);
 
   const toMap = (rows: Array<{ status: string; count: number }>) =>
@@ -292,13 +249,13 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const proposalTotal = proposalStatusRows.reduce((s, r) => s + r.count, 0);
   const rsvpTotal = rsvpByStatusRows.reduce((s, r) => s + r.count, 0);
   const waitlistTotal = waitlistStatusRows.reduce((s, r) => s + r.count, 0);
-  const attendanceChangeTotals = attendanceChangeTotalsRows[0] ?? { total_changes: 0, changed_registrations: 0 };
 
   return json({
     event: { id: event.id, slug: event.slug, name: event.name },
     registrations: {
       byStatus: toMap(regStatusRows),
       byAttendanceType: Object.fromEntries(regAttendanceRows.map((r) => [r.attendance_type, r.count])),
+      attendanceStatusByType,
       byStatusAndType: regStatusAndTypeRows,
       sponsorConsent: { granted: sponsorConsentGranted, notGranted: sponsorConsentNotGranted },
       total: regTotal,
@@ -311,10 +268,9 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
       byPriorityLane: Object.fromEntries(waitlistLaneRows.map((r) => [r.priority_lane, r.count])),
     },
     attendanceChanges: {
-      totalChanges: Number(attendanceChangeTotals.total_changes ?? 0),
-      changedRegistrations: Number(attendanceChangeTotals.changed_registrations ?? 0),
-      byTransition: attendanceChangeRows,
-      recent: recentAttendanceChangesRows,
+      totalChanges: attendanceChanges.dayChanges,
+      changedRegistrations: attendanceChanges.changedAttendees,
+      ...attendanceChanges,
     },
     registrationsByEventDay: dayAttendanceRows,
     invites: {
