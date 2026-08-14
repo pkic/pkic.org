@@ -556,6 +556,7 @@ describe("presentation versioning", () => {
     expect(disposition).not.toMatch(/[^\x20-\x7e]/);
     expect(disposition).not.toContain("\\");
     expect(disposition).not.toContain("é");
+    expect(disposition).toContain(`filename="a_b ___('*)__.pdf"`);
     expect(disposition).toContain("filename*=UTF-8''a%5Cb%20%22%C3%A9%22%28%27%2A%29%0D%0A.pdf");
   });
 
