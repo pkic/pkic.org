@@ -32,8 +32,7 @@ export default defineConfig(async () => {
       include: ["tests/**/*.test.ts"],
       exclude: ["tests/frontend/**", "tests/e2e/**"],
       setupFiles: ["./tests/helpers/apply-migrations.ts"],
-      fileParallelism: false,
-      maxWorkers: 1,
+      maxWorkers: 2,
     },
   };
 });
