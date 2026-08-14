@@ -1,0 +1,573 @@
+schemaVersion: 1.0.0
+model:
+  id: pqcmm
+  name: PQC Maturity Model
+  abbreviation: PQCMM
+  version: 1.0.1
+  scope: product-or-service
+  subjectLabel: Product or service
+  description: A product- and service-centric model for evaluating post-quantum cryptography readiness.
+  canonicalUrl: https://pkic.org/wg/pqc/pqcmm/
+scoring:
+  method: cumulative-all-criteria
+  minimumLevel: 0
+  maximumLevel: 5
+  criterionStatuses:
+    - not-assessed
+    - met
+    - not-met
+    - partial
+  rule: Level 0 is established when all Level 0 criteria are met. Levels 1 through 5 are cumulative; the achieved level is the highest positive level for which every criterion at that level and every lower positive level is met. Partial progress does not establish a level.
+levels:
+  - number: 0
+    name: None
+    title: Level 0 (None) - PQC Maturity Model (PQCMM)
+    description: A product at Level 0 has no post-quantum cryptography integrated into the product. The organization might be in the preparation phase, but nothing has matured to the actual product.
+    summary: Level 0 means no quantum-safe capabilities are available yet. Discovery and preparation may be underway, but this is the baseline entry point for supply-chain questionnaires.
+    sourcePage: /wg/pqc/pqcmm/levels/0-none/
+    criteria:
+      introduction: "A product is at Level 0 when the following are true:"
+      items:
+        - id: 0.1.1
+          text: The quantum readiness journey has not yet started or is still in a very early phase.
+        - id: 0.1.2
+          text: No quantum-safe algorithm is available in any release channel available to customers, including beta, preview, or experimental.
+    assessment:
+      methodology: ""
+      groups:
+        - id: "0.2"
+          name: Supplier Intake Questions
+          kind: intake
+          introduction: When onboarding a supplier or reviewing an existing product, the following questions help establish a baseline and set expectations for progression. These are not assessment questions — they do not require evidence collection or verification. They are planning and risk-register inputs.
+          questions:
+            - id: 0.2.1
+              question: By what date do you expect to reach Level 1 — with at least one quantum-safe algorithm available for evaluation?
+              expectedInput: Date (YYYY-MM-DD).
+              purpose: Helps both the organization and the vendor set a concrete milestone for the supplier roadmap and ensures clear communication of the post-quantum cryptography (PQC) timeline.
+            - id: 0.2.2
+              question: Is a Software Bill of Materials (SBOM) or Cryptographic Bill of Materials (CBOM) available for this product in SPDX or CycloneDX format?
+              expectedInput: File upload or URL to the document.
+              purpose: Knowing the software and cryptographic components makes the eventual transition to higher PQC maturity levels faster and more secure. It helps both parties assess the current visibility into cryptographic assets.
+            - id: 0.2.3
+              question: Have you assigned a role or team responsible for the PQC migration of this product?
+              expectedInput: Role title or department name.
+              purpose: Ensures there is clear accountability and a point of contact for future PQC-related discussions. This reduces continuity risk during the quantum-safe transition.
+            - id: 0.2.4
+              question: Have you published a statement of direction or roadmap for PQC for this product?
+              expectedInput: URL to the roadmap or a document upload.
+              purpose: Confirms that PQC is actively being planned. A roadmap referencing specific standards (like NIST FIPS 203, 204, 205) provides confidence in the vendor's preparation and helps align planning.
+    evidenceChecklist:
+      introduction: ""
+      items: []
+  - number: 1
+    name: Initial
+    title: Level 1 (Initial) - PQC Maturity Model (PQCMM)
+    description: A product at Level 1 has quantum-safe algorithms available for testing and evaluation, typically via manual configuration or beta features.
+    summary: Level 1 means PQC is available for testing and evaluation. The vendor has started the journey — integration teams can begin compatibility assessments.
+    sourcePage: /wg/pqc/pqcmm/levels/1-initial/
+    criteria:
+      introduction: "A product meets Level 1 when **all** of the following are true:"
+      items:
+        - id: 1.1.1
+          text: At least one quantum-safe algorithm is available in a released build (stable, beta, preview, or experimental).
+        - id: 1.1.2
+          text: The feature can be enabled — typically manually, via a configuration flag, or through a dedicated beta/preview channel.
+        - id: 1.1.3
+          text: The vendor has documented how to enable and use the quantum-safe feature for evaluation purposes.
+    assessment:
+      methodology: |-
+        The assessment report must record:
+
+        - **Evidence method** — documentation review, functional reproduction, or both.
+        - **Cryptographic library** — library name and exact version; whether the library version's PQC support was independently confirmed from a public source; whether the library is currently maintained.
+        - **Reproduction attempts** — for each: product version, environment type (vendor sandbox / trial licence / own installation), date, and outcome (succeeded / failed / partially reproduced).
+        - **Documents reviewed** — for each: URL or reference, the product version it covers, and the date accessed.
+        - **Unverified claims** — flag each explicitly as *"vendor-stated, not independently verified"*.
+
+        > Every claim at Level 1 must be backed by a URL or document reference accessible to the assessor. Vendor-only demonstrations that the assessor cannot independently reproduce must be flagged.
+        {.callout-info}
+      groups:
+        - id: "1.2"
+          name: Algorithm Availability
+          kind: assessment
+          questions:
+            - id: 1.2.1
+              question: Which quantum-safe algorithms are available for testing and evaluation?
+              guidance: "Record exact algorithm names and parameter sets (e.g., ML-KEM-768, ML-DSA-65 — not just \"ML-KEM\" or \"PQC\"). Request two URLs: (a) the product documentation page describing the feature; (b) the release notes for the version that introduced it. Both must be accessible to the assessor and must cover the assessed product version — not a future or generic version. Record the product version, both URLs, and the date accessed."
+            - id: 1.2.2
+              question: Which release channel provides access — stable, beta, preview, or experimental?
+              guidance: Record the channel name, the release identifier (version number or build tag), and whether access is public or requires programme enrolment. Request the public announcement URL or enrolment page URL. Record the URL and date accessed.
+            - id: 1.2.3
+              question: Is the feature available to all customers or only to a subset?
+              guidance: Record the access model as stated in the vendor's written documentation or announcement — quote the relevant text with the source URL. Any restriction must be sourced from a written document, not paraphrased from a verbal claim.
+            - id: 1.2.4
+              question: Is the quantum-safe feature accessible without custom builds or source-code modification?
+              guidance: "The assessor should attempt to reproduce the access path using the standard product release, following the documented steps. Record: the steps followed, the product version, the environment, and whether the reproduction succeeded. A feature that cannot be accessed by following its published documentation fails this check."
+        - id: "1.3"
+          name: Component Coverage
+          kind: assessment
+          questions:
+            - id: 1.3.1
+              question: In which product components or functional areas is the quantum-safe feature implemented — e.g., TLS, firmware update signing, certificate issuance, key generation, key exchange?
+              guidance: "Request a written component map or architecture document. Record each named component with the algorithm and parameter set it uses. A general claim (\"PQC is used in TLS\") without component-level attribution does not meet this criterion. Ask specifically about high-risk areas: firmware signing, certificate issuance, root key operations."
+            - id: 1.3.2
+              question: What cryptography is used in each identified component, and where — including low-level components such as firmware or bootloader?
+              guidance: Record each component with algorithm name, parameter set, and usage context (e.g., "ML-DSA-65 — firmware update package signing — applied at build time"). A product with firmware that has no firmware entry in this list requires an explanation — record the gap and the vendor's justification.
+            - id: 1.3.3
+              question: Are there product components where quantum-safe support is explicitly not planned at this stage?
+              guidance: Record each out-of-scope component, the classical algorithm currently in use, and the vendor's stated reason — with a document reference if available. "Not yet planned" as a general disclaimer without naming specific components is not sufficient.
+        - id: "1.4"
+          name: Configuration & Enablement
+          kind: assessment
+          questions:
+            - id: 1.4.1
+              question: How is the quantum-safe feature enabled? Provide the specific configuration step, flag name, or API parameter.
+              guidance: Record the exact mechanism — configuration key, flag name, or API parameter name — and the documentation URL. Where possible, reproduce the enablement step in a test environment and record the outcome. A feature that cannot be enabled by following its published documentation is a finding.
+            - id: 1.4.2
+              question: Is the enablement process documented in official product documentation? Provide the URL and section reference.
+              guidance: Record the documentation URL and confirm it is accessible for the assessed product version (not a newer release or generic page). Documentation that exists only in an internal wiki or internal knowledge base does not satisfy this criterion — it must be accessible to customers.
+        - id: "1.5"
+          name: Evidence & Testing
+          kind: assessment
+          questions:
+            - id: 1.5.1
+              question: Does the product implement quantum-safe algorithms via a third-party cryptographic library, or through a custom in-house implementation? If a library is used, which library and exact version?
+              guidance: "Most products rely on a well-known cryptographic library rather than writing cryptographic primitives from scratch — implementing cryptography in-house is strongly discouraged and rare in commercial products. Common libraries include OpenSSL (with or without oqs-provider), wolfSSL, Bouncy Castle, AWS-LC, Microsoft CNG / BCryptPrimitives, NSS, mbedTLS, LibreSSL, Botan, and Crypto++. Record: **(a)** library name and exact version string as reported by the vendor; **(b)** the URL from the library's own official release notes, changelog, or PQC documentation page confirming that the identified version supports the specific claimed quantum-safe algorithm — the assessor must verify this independently, not accept the vendor's assertion alone; **(c)** whether the library version is currently maintained and eligible for security patches (record the library's support policy URL). If the vendor claims a custom implementation, record the justification and apply heightened scrutiny to question 1.5.2."
+            - id: 1.5.2
+              question: Can the vendor provide an artefact confirming the implementation — such as test vectors, NIST Known Answer Test (KAT) results, an interoperability report, or a lab result?
+              guidance: "**If the product uses a third-party cryptographic library (see question 1.5.1):** the library's own validation records are the primary artefact — record the library name, version, and any NIST CAVP/CMVP validation certificate for that library. Verify independently that the assessed library version is within the validated module boundary. **If the product uses a custom implementation:** require stronger artefacts. Artefacts in descending order of evidential weight: **(a)** NIST CAVP/ACVTS validation results (https://csrc.nist.gov/projects/cryptographic-algorithm-validation-program) — record the algorithm, validation URL, and result identifier; **(b)** KAT result file against NIST reference vectors — record the file URL or repository URL with commit hash; **(c)** interoperability test report naming the tested implementation, version, protocol, and outcome; **(d)** publicly accessible open-source repository — record the URL and commit hash, and note whether the assessor reviewed or tested the code. A vendor white paper without underlying test data is weaker evidence — record it and flag its limitations."
+            - id: 1.5.3
+              question: Can the quantum-safe feature be exercised in a test or sandbox environment accessible to the assessor?
+              guidance: "The assessor must attempt to exercise the feature independently. Record: environment type (vendor-hosted sandbox / trial licence / own installation), product version, the specific algorithm exercised, the test procedure, and the outcome. A feature that could only be observed in a vendor-controlled demonstration must be flagged as \"vendor-demonstrated, not independently reproduced\"."
+            - id: 1.5.4
+              question: Has the vendor documented known interoperability limitations or incompatibilities with this quantum-safe implementation?
+              guidance: Record the URL or document reference for any known limitations list. If no such document exists, record the date and source of the vendor's written confirmation that no known limitations exist. Any incompatibility discovered by the assessor during independent testing that is not in the vendor's documentation is a finding — record it explicitly.
+        - id: "1.6"
+          name: Roadmap
+          kind: assessment
+          questions:
+            - id: 1.6.1
+              question: Does the vendor have a roadmap for progression to production readiness (Level 2)? What is the target release or date?
+              guidance: "Record the target version/date and the source of the commitment: (a) public roadmap URL — record URL and date accessed; (b) written statement under NDA — record document reference and date; (c) verbal only — record as \"vendor-stated, no written artefact confirmed\". Verbal-only commitments must be flagged as unconfirmed."
+    evidenceChecklist:
+      introduction: The items below are a level-specific summary of the artefacts a vendor should be able to produce. They can serve as a concise request list for an assessor, or as a self-assessment reference for a vendor preparing evidence before a formal assessment. The detailed requirements and acceptance criteria for each item are in the assessment questions above.
+      items:
+        - id: 1.e.1
+          text: Release notes or changelog entry confirming availability of the quantum-safe feature.
+        - id: 1.e.2
+          text: Documentation describing how to enable the feature for evaluation.
+        - id: 1.e.3
+          text: A statement of the supported algorithm(s) and their specification reference (e.g., FIPS 203).
+  - number: 2
+    name: Foundational
+    title: Level 2 (Foundational) - PQC Maturity Model (PQCMM)
+    description: A product at Level 2 has quantum-safe algorithms supported in core functionality and is production-ready, with demonstrated compatibility with relevant standards.
+    summary: Level 2 means PQC is production-ready and standards-compliant. This is the minimum threshold for new production deployments.
+    sourcePage: /wg/pqc/pqcmm/levels/2-foundational/
+    criteria:
+      introduction: "A product meets Level 2 when all Level 1 criteria are met, plus:"
+      items:
+        - id: 2.1.1
+          text: Quantum-safe algorithms are supported in the product's **core production functionality** — not only in a beta or preview channel.
+        - id: 2.1.2
+          text: The implementation demonstrates **compatibility with at least one post-quantum cryptography standard** published or recognised by a national or international standards body (such as NIST, ETSI, ISO/IEC, IETF, or an equivalent national authority), as applicable to the product's target markets. The PQCMM does not prescribe a specific algorithm; see the [model's design principle on algorithm-neutral criteria](/wg/pqc/pqcmm/#design-principles).
+        - id: 2.1.3
+          text: "The vendor or its assessor has performed, and can produce evidence of, hands-on validation of the quantum-safe implementation covering at least: **standards-conformance testing** (e.g., NIST CAVP/ACVTS results or equivalent), **interoperability testing** against at least one independent conformant implementation, **functional security testing** of the feature as configured for production, and a **smoke performance test** sufficient to confirm the feature operates under representative production load. Deeper performance characterisation is required at [Level 5](/wg/pqc/pqcmm/levels/5-optimized/)."
+        - id: 2.1.4
+          text: The quantum-safe feature is **documented for production use**, including any known limitations or configuration requirements.
+    assessment:
+      methodology: |-
+        The assessment report must record:
+
+        - **Evidence method** — documentation review, CMVP/CAVP database verification, interoperability testing, hands-on configuration, or a combination.
+        - **Cryptographic library** — library name and exact version; whether the library version's PQC support was independently confirmed from a public source; whether the library is currently maintained.
+        - **Public database checks** — for each (NIST CMVP, NIST CAVP): URL accessed and date.
+        - **Hands-on tests** — for each: product version, environment (vendor sandbox / own installation / lab), test performed, and outcome.
+        - **Documents reviewed** — for each: URL, product version covered, and date accessed.
+        - **Unverified claims** — flag each explicitly as *"vendor-stated, not independently verified"*.
+
+        > Standards conformance claims must not be accepted on the vendor's word alone — use public databases wherever available.
+        {.callout-info}
+      groups:
+        - id: "2.2"
+          name: Production Availability
+          kind: assessment
+          questions:
+            - id: 2.2.1
+              question: Which quantum-safe algorithms are available in the stable/production release? Name the specific algorithms and parameter sets.
+              guidance: Record exact names (e.g., ML-KEM-768, ML-DSA-65 — not "ML-KEM" or "full PQC support"). Request the release notes URL for the production release that introduced or confirmed GA status. Confirm the URL covers the assessed product version. Record the product version, release notes URL, and date accessed.
+            - id: 2.2.2
+              question: In which product components or functional areas is each quantum-safe algorithm used in production?
+              guidance: "Request a per-component breakdown and record each entry with: component name, algorithm, parameter set, and usage context — e.g., \"ML-KEM-768 — TLS 1.3 key exchange — server-side\". Blanket claims (\"we use ML-KEM everywhere\") must be decomposed into specific component entries before recording."
+            - id: 2.2.3
+              question: Does the product implement quantum-safe algorithms via a third-party cryptographic library, or through a custom in-house implementation? If a library is used, which library and exact version?
+              guidance: "Most products rely on a well-known cryptographic library rather than writing cryptographic primitives from scratch. Common libraries include OpenSSL (with or without oqs-provider), wolfSSL, Bouncy Castle, AWS-LC, Microsoft CNG / BCryptPrimitives, NSS, mbedTLS, LibreSSL, Botan, and Crypto++. Record: **(a)** library name and exact version string as reported by the vendor; **(b)** the URL from the library's own official release notes or PQC documentation page confirming that the identified version supports the claimed quantum-safe algorithm in production (not only in a beta or preview build) — the assessor must verify this independently against the library's official sources; **(c)** whether the library version is currently maintained and eligible for security patches (record the library's support policy URL). If the vendor claims a custom in-house implementation, record the justification and apply heightened scrutiny to standards conformance questions."
+            - id: 2.2.4
+              question: Is the feature supported under the vendor's standard support and maintenance terms, including security patch coverage?
+              guidance: Request the support policy document or URL. Record the specific policy clause or page that confirms the quantum-safe feature is included in standard support. A verbal assurance without a written policy reference is recorded as "vendor-stated, not contractually confirmed".
+            - id: 2.2.5
+              question: Has the vendor declared this feature generally available (GA) in the product's stable release channel?
+              guidance: "Record the release notes URL or changelog entry, the GA date, the product version, and the stable release channel identifier. The distinction between Level 1 and Level 2 is the **release channel**, not adoption: the feature must be present in a stable, generally available release available to all customers — not in a beta, preview, or experimental channel. A GA declaration without a dated, versioned written document reference is not independently verifiable."
+        - id: "2.3"
+          name: Standards Compliance
+          kind: assessment
+          questions:
+            - id: 2.3.1
+              question: Which standards does the quantum-safe implementation conform to? Provide the specific standard document reference and edition.
+              guidance: Record the exact standard designation and publication date — e.g., NIST FIPS 203 (ML-KEM, August 2024, https://csrc.nist.gov/publications/detail/fips/203/final). Conformance to a pre-standardisation draft (e.g., Kyber round 3 / CRYSTALS-Kyber) that predates the final FIPS publication does not count — check whether the implementation names are FIPS names (ML-KEM, ML-DSA, SLH-DSA) or draft names (Kyber, Dilithium, SPHINCS+). Record which is used.
+            - id: 2.3.2
+              question: Can the vendor provide proof of standards conformance — such as a NIST CMVP listing, conformance test results, or an interoperability test report?
+              guidance: "Verify independently: search the NIST CMVP database (https://csrc.nist.gov/projects/cryptographic-module-validation-program) by product or library name. If the product uses a third-party cryptographic library (see question 2.2.3), search by that library name and version — the library's own certificate may cover the module boundary. Record: certificate number, module name, vendor, module version, validation date, approved algorithm list, and the certificate page URL. Confirm that (a) the module version matches the assessed product version or the library version in use, and (b) the quantum-safe algorithms appear in the approved algorithm list. A FIPS 140-2 certificate predating PQC standardisation does not cover quantum-safe algorithms — check the validation date against the FIPS 203/204/205 publication dates (August 2024)."
+            - id: 2.3.3
+              question: Has the implementation been tested for interoperability with at least one other conformant implementation? Which implementation, which version, which protocol?
+              guidance: "Record: the implementation tested against (name and version), the protocol (e.g., TLS 1.3 with ML-KEM-768 key exchange), the test suite used — e.g., NIST ACVTS (https://csrc.nist.gov/projects/cryptographic-algorithm-validation-program) or OQS interop test harness (https://github.com/open-quantum-safe/oqs-interop-test) — and the test result (pass/fail). A self-reported interop claim without a named test suite and result is weaker evidence — flag it accordingly."
+            - id: 2.3.4
+              question: Are there known deviations from the referenced standard, and are these documented?
+              guidance: Record any documented deviation with the document reference (title, version, URL). If the vendor states there are none, record the date and source of that written statement. Deviations found by the assessor during independent testing that are not disclosed by the vendor are a disqualifying finding.
+        - id: "2.4"
+          name: Documentation & Migration
+          kind: assessment
+          questions:
+            - id: 2.4.1
+              question: Where is the production deployment documentation? Provide a URL or document reference covering configuration, key management, and upgrade paths.
+              guidance: "Record the documentation URL and confirm it is accessible for the assessed product version. Check that it covers at minimum: (a) configuration steps with specific parameter names; (b) key management lifecycle (generation, storage, rotation); (c) upgrade / migration path for existing deployments. Record which of these three areas are and are not covered — partial documentation is itself a finding."
+            - id: 2.4.2
+              question: Are there documented migration paths from classical to quantum-safe configurations for existing deployments? Is the migration in-place or does it require re-key or re-enrolment?
+              guidance: "Record the migration guide URL or document reference. Note explicitly: whether migration is in-place or requires re-key / re-enrolment, whether service continuity is maintained, and whether rollback is possible. A migration guide that requires full re-deployment without continuity guidance is a risk for production environments."
+            - id: 2.4.3
+              question: How does the vendor respond to a cryptographic vulnerability in a deployed quantum-safe algorithm? Has a security advisory process been published?
+              guidance: Record the security advisory page URL (e.g., vendor security page, CVE disclosure policy URL). If a prior advisory covering a cryptographic component exists (for any algorithm, not just PQC), note it — it is evidence the process is active. Absence of any defined disclosure process is a finding.
+    evidenceChecklist:
+      introduction: The items below are a level-specific summary of the artefacts a vendor should be able to produce. They can serve as a concise request list for an assessor, or as a self-assessment reference for a vendor preparing evidence before a formal assessment. The detailed requirements and acceptance criteria for each item are in the assessment questions above. All artefacts from [Level 1](/wg/pqc/pqcmm/levels/1-initial/#evidence-checklist) remain required.
+      items:
+        - id: 2.e.1
+          text: GA release announcement or product changelog confirming production availability.
+        - id: 2.e.2
+          text: Reference to the standard(s) the implementation conforms to.
+        - id: 2.e.3
+          text: Configuration guide for enabling quantum-safe mode in a production environment.
+        - id: 2.e.4
+          text: Interoperability test results or certificates, if available.
+  - number: 3
+    name: Advanced
+    title: Level 3 (Advanced) - PQC Maturity Model (PQCMM)
+    description: A product at Level 3 maintains a full cryptographic inventory, documents non-quantum-safe features as risks, produces an SBOM, and has crypto-agility mechanisms for key features.
+    summary: Level 3 adds full cryptographic visibility and agility. Vendors can account for all cryptographic use cases and update algorithms without major redesign.
+    sourcePage: /wg/pqc/pqcmm/levels/3-advanced/
+    criteria:
+      introduction: "A product meets Level 3 when all Level 2 criteria are met, plus:"
+      items:
+        - id: 3.1.1
+          text: A **full cryptographic inventory** is maintained, covering all use cases within the product where cryptography is applied. The inventory must address every applicable category in the **Cryptographic Inventory Taxonomy** below; categories that do not apply to the product must be marked *not applicable* with a written justification — categories may not be omitted.
+        - id: 3.1.2
+          text: Non-quantum-safe features are **formally documented and flagged** — either for planned remediation, risk acceptance, or compensating controls.
+        - id: 3.1.3
+          text: A **Software Bill of Materials (SBOM)** or equivalent component inventory is available, enabling consumers to identify cryptographic dependencies.
+        - id: 3.1.4
+          text: "**Crypto-agility mechanisms** exist for key product features: at least two algorithms can be selected for the same cryptographic role through configuration (for example two different signature algorithms, or a pure-PQC vs. hybrid option in the same role) without major architectural redesign or a hardware refresh. Selecting only between parameter sets of the same algorithm (for example ML-KEM-768 and ML-KEM-1024) does not by itself satisfy this criterion."
+        - id: 3.1.5
+          text: A documented **HNDL exposure register** identifies which data flows handled by the product carry a Harvest-Now-Decrypt-Later risk (long-lived confidentiality requirement), and which algorithm protects each.
+    assessment:
+      methodology: |-
+        The assessment report must record:
+
+        - **SBOM analysis** — tool name and version (e.g., Syft, cdxgen, Dependency-Track, Microsoft sbom-tool), and date run.
+        - **Quantum-safety check** — tool or script used to identify quantum-unsafe libraries or algorithm identifiers in the SBOM/CBOM, findings summary, and date.
+        - **Inventory cross-check** — whether inventory claims were verified against SBOM tool output, and whether any code-level check was performed.
+        - **Code review** (if performed) — manual or automated; tool(s) used (e.g., Semgrep, CodeQL, grep-based algorithm identifier search); scope (full codebase / cryptographic modules only / dependency list only); and findings.
+        - **Tool-vs-disclosure gaps** — each discrepancy between tool output and vendor disclosure recorded individually.
+        - **Unverified claims** — flag each explicitly as *"vendor-stated, not independently verified"*.
+
+        > Discrepancies between tool findings and vendor disclosure are the most significant findings at Level 3 — each must be individually recorded.
+        {.callout-info}
+      groups:
+        - id: "3.2"
+          name: Cryptographic Inventory
+          kind: assessment
+          questions:
+            - id: 3.2.1
+              question: Can the vendor provide the cryptographic inventory for the assessed product version?
+              guidance: "Request the inventory document. Record: title, version number (must correspond to the assessed product release — not a generic or latest-version document), date of last update, and format. A complete inventory entry must include: algorithm name, parameter set, key size, usage context, and component name — e.g., \"ML-KEM-768 — TLS 1.3 key exchange — server-side — component: tls-engine v2.3\". Entries listing only the algorithm name without parameter set and component attribution are incomplete — record which fields are missing."
+            - id: 3.2.2
+              question: Does each inventory entry include algorithm, parameter set, key size, usage context, and component?
+              guidance: Sample at least five entries across different components. For each sampled entry, record whether all five fields are present. An entry showing "ML-KEM" without a parameter set (512 / 768 / 1024) cannot be independently verified against a standard — flag each such entry.
+            - id: 3.2.3
+              question: How frequently is the inventory reviewed and updated?
+              guidance: Request the inventory for the current and one previous product release. Compare entries. Record the version and last-updated date for each document. An inventory with no changes between major releases that included PQC updates is not actively maintained — record this as a process gap.
+        - id: "3.3"
+          name: Non-Quantum-Safe Feature Disclosure
+          kind: assessment
+          questions:
+            - id: 3.3.1
+              question: Does the product contain any features that still use non-quantum-safe algorithms? If yes, list them by component and algorithm.
+              guidance: "Cross-reference the vendor's disclosure against SBOM analysis: run the SBOM through a quantum-safety checking tool (e.g., a CycloneDX crypto analyser or a script that checks library versions against a known PQC-capable threshold). Record: tool name and version, date run, and any gap between tool findings and vendor disclosure. Each gap is a finding and must be individually recorded with the component name, algorithm, and the vendor's explanation (or its absence). Ask explicitly: \"What features in this product cannot currently operate with quantum-safe algorithms only?\""
+            - id: 3.3.2
+              question: "For each non-quantum-safe feature: is the risk formally documented with a target remediation date?"
+              guidance: "Record each non-quantum-safe feature with: algorithm name and parameter set, component, risk acceptance statement reference (document title, version, date), and target remediation version/date. \"Some legacy features remain\" without a feature-by-feature breakdown is not acceptable. Each non-quantum-safe feature must have its own entry."
+            - id: 3.3.3
+              question: Can the vendor provide a redacted or anonymised SBOM or CBOM that preserves algorithm-level detail?
+              guidance: Record the format (SPDX / CycloneDX), schema version, and the scope of redaction (e.g., "proprietary component names removed, algorithm entries preserved"). A redacted artefact that removes all algorithm data is not useful — record this as a limitation of the evidence. If the vendor refuses to provide any inventory artefact in any form, record this explicitly and flag it as a risk signal that limits the evidential basis of the assessment.
+        - id: "3.4"
+          name: SBOM
+          kind: assessment
+          questions:
+            - id: 3.4.1
+              question: Does the vendor provide an SBOM in SPDX or CycloneDX format?
+              guidance: "Request the SBOM for the assessed product version. Record: format and schema version (e.g., CycloneDX 1.6), generation tool and version (e.g., Syft 1.4.0, cdxgen 10.7, Microsoft sbom-tool 2.x), generation method (automated CI pipeline / manual export / hybrid), generation date, and the product version covered. Validate the SBOM using a validator (e.g., CycloneDX CLI at https://github.com/CycloneDX/cyclonedx-cli, or NTIA minimum elements checker). Record the validation result. Run a quantum-safety check and compare against the vendor's own disclosure — record any gaps."
+            - id: 3.4.2
+              question: Does the SBOM include cryptographic library dependencies with version numbers?
+              guidance: Check that all cryptographic libraries appear in the SBOM with explicit version numbers — a library entry without a version cannot be assessed. Common libraries to look for include OpenSSL (with or without oqs-provider), wolfSSL, Bouncy Castle, AWS-LC, Microsoft CNG / BCryptPrimitives, NSS, mbedTLS, LibreSSL, Botan, and Crypto++. For each library, the assessor must independently verify — from the library's own official release notes or PQC documentation page — whether the listed version supports the vendor's claimed quantum-safe algorithms. A library version that does not support the claimed algorithm is a finding; record the library name, listed version, and the vendor's explanation. Record any library whose version number is absent.
+            - id: 3.4.3
+              question: Is the SBOM updated with each product release?
+              guidance: Request SBOMs for the current and one previous release. Compare the library entries and version numbers. If two SBOMs are identical for releases that should have included dependency updates, the SBOM process is likely not integrated with the build pipeline — record this as a process gap. Record the version and date of each SBOM compared.
+            - id: 3.4.4
+              question: Does the SBOM identify the assessed product itself, and its third-party components, with standardised product identifiers — Common Platform Enumeration (CPE), Package URL (purl), or SPDX `externalRef` of type `cpe23Type` / `purl`?
+              guidance: "Record, for the top-level product component: the CPE identifier and any Package URL (purl) present in the SBOM, and the SBOM field in which each is declared. If neither is present for the top-level product, this is a finding — without a standardised identifier the product cannot be correlated with CVE feeds (e.g., the NIST National Vulnerability Database) or with the [Certified Products & Services](/wg/pqc/pqcmm/products/) registry. Sample at least five third-party components from the SBOM and record whether each carries a CPE or purl. Components with neither identifier should be noted; widespread absence indicates an inventory that cannot be machine-correlated with vulnerability data."
+        - id: "3.5"
+          name: Crypto Agility
+          kind: assessment
+          questions:
+            - id: 3.5.1
+              question: How does the product support algorithm updates without major architectural redesign? Demonstrate that at least two distinct algorithms can be selected for the same cryptographic role through configuration.
+              guidance: "Request a design document or written architectural description of the crypto agility mechanism. Record: document title, version, date. Ask the vendor to identify, for at least one role (e.g., signing, key exchange), the two algorithms that can be selected and the configuration step to switch between them. The two options must be different algorithms or different constructions (e.g., pure-PQC vs. hybrid) — selecting between parameter sets of the same algorithm (e.g., ML-KEM-768 vs. ML-KEM-1024) does not satisfy this question on its own. Ask the vendor: \"If ML-KEM-768 were deprecated tomorrow, walk me through exactly what would change in this product and what the customer impact would be.\" Record the answer with its source (document reference or \"verbal, unconfirmed\"). A credible answer names a specific mechanism — configurable cipher suite list, algorithm policy file, algorithm registry — not \"we would release a patch\"."
+            - id: 3.5.2
+              question: Are cryptographic algorithm identifiers and parameters externalised from hard-coded values?
+              guidance: "Ask to see the specific configuration file, policy document, or API that controls algorithm selection. Record the file name, format, and a sample of relevant content (which algorithm identifiers appear). Confirm by asking: \"Can you change the algorithm for TLS key exchange without rebuilding the product?\" Record the answer and whether the assessor was able to verify it in a test environment. Hard-coded algorithm names requiring a full rebuild are a finding."
+            - id: 3.5.3
+              question: Has the vendor executed or simulated a controlled algorithm transition for at least one feature?
+              guidance: "Request written documentation: what was changed, the test environment, the test procedure, and the outcome. Record document title, version, and date. A verbal claim that a transition was tested without any written record is flagged as \"vendor-stated, not documented\". A documented proof-of-concept with a test procedure and result is strong evidence — note whether the procedure is reproducible by an independent assessor."
+        - id: "3.6"
+          name: Key Lifecycle and Deprecation
+          kind: assessment
+          questions:
+            - id: 3.6.1
+              question: Which algorithms protect the keys (KEKs, key-wrapping keys, root keys) used by the product itself — not only the keys exchanged with peers?
+              guidance: "Cryptographic agility for traffic algorithms is undermined if the keys protecting them are wrapped with classical algorithms vulnerable to a future quantum attacker. Record each KEK / key-wrapping role with: algorithm, parameter set, key size, and whether it is classical or quantum-safe. A product that exchanges traffic with ML-KEM but wraps long-lived keys with RSA-2048 must document this explicitly — it is a finding for any data with long confidentiality requirements."
+            - id: 3.6.2
+              question: Does the product use random number generation appropriate for cryptographic key material?
+              guidance: Record the DRBG / PRNG used (name, source, e.g., NIST SP 800-90A AES-CTR-DRBG, OS-provided `getrandom`/`/dev/urandom`, hardware RNG), the seed length, and the source of entropy. Modern DRBGs with 256-bit seeds are considered quantum-resistant for symmetric key generation; record the configured seed strength. A product that derives PQ key material from a DRBG seeded with fewer than 256 bits is a finding.
+            - id: 3.6.3
+              question: Has the vendor published an algorithm deprecation policy describing how it responds to a vulnerability or parameter-set deprecation in an algorithm the product depends on?
+              guidance: "Record the policy document URL, version, and date. The policy should state: how the vendor monitors algorithm developments; the maximum time between a credible deprecation event and a vendor advisory; and the mechanism used to remove or disable the affected algorithm. Absence of any published policy is a finding. The detail need not match a security-incident response process but must be a written commitment."
+        - id: "3.7"
+          name: Harvest-Now-Decrypt-Later (HNDL) Exposure Register
+          kind: assessment
+          questions:
+            - id: 3.7.1
+              question: Does the vendor maintain a written HNDL exposure register identifying data flows handled by the product that carry long-lived confidentiality requirements?
+              guidance: "Request the register. Record document title, version, and date. Each entry should identify: the data class (e.g., \"customer-uploaded documents\", \"signed audit logs\"), the expected confidentiality lifetime (years), the algorithm currently protecting it, and whether it is quantum-safe. A register that lists no HNDL-exposed data despite the product handling long-lived data is a finding — record the gap and the vendor's justification."
+        - id: "3.8"
+          name: Production-Scale Validation
+          kind: assessment
+          questions:
+            - id: 3.8.1
+              question: Has the quantum-safe implementation been exercised at a scale and in an environment representative of real production use — not only in a developer or lab setting?
+              guidance: "Request the test report. Record: test environment (cloud region, instance class, network topology, peer implementations), workload profile (request rate, concurrent sessions, key-operation rate, payload sizes), duration, and the algorithm/parameter sets exercised. The test must simulate conditions the product is expected to encounter in production — a single-instance lab measurement, a unit test, or a notebook-scale benchmark is **not sufficient evidence** for this question. Record any production deployment where the configuration has been run in earnest. Absence of any representative test is a finding; deeper benchmarking and SLA correlation is required at [Level 5](/wg/pqc/pqcmm/levels/5-optimized/)."
+    evidenceChecklist:
+      introduction: The items below are a level-specific summary of the artefacts a vendor should be able to produce. They can serve as a concise request list for an assessor, or as a self-assessment reference for a vendor preparing evidence before a formal assessment. The detailed requirements and acceptance criteria for each item are in the assessment questions above. All artefacts from [Level 1](/wg/pqc/pqcmm/levels/1-initial/#evidence-checklist) and [Level 2](/wg/pqc/pqcmm/levels/2-foundational/#evidence-checklist) remain required.
+      items:
+        - id: 3.e.1
+          text: Cryptographic inventory document or summary (publicly available or under NDA), covering every category in the Cryptographic Inventory Taxonomy.
+        - id: 3.e.2
+          text: SBOM in SPDX or CycloneDX format for the current release, with Common Platform Enumeration (CPE) and/or Package URL (purl) identifiers recorded for the top-level product (and for third-party components where available).
+        - id: 3.e.3
+          text: Documentation describing crypto-agility mechanisms and how to use them, naming at least two algorithms selectable for the same role.
+        - id: 3.e.4
+          text: A list of non-quantum-safe features with their documented risk status.
+        - id: 3.e.5
+          text: Algorithm deprecation policy.
+        - id: 3.e.6
+          text: HNDL exposure register.
+        - id: 3.e.7
+          text: Identification of the DRBG / RNG used for cryptographic key material and its seed strength.
+        - id: 3.e.8
+          text: A production-representative test or deployment record demonstrating the quantum-safe configuration operating under realistic load.
+  - number: 4
+    name: Managed
+    title: Level 4 (Managed) - PQC Maturity Model (PQCMM)
+    description: A product at Level 4 maintains a Cryptographic Bill of Materials (CBOM), supports a zero-legacy configuration, and clearly documents hybrid and composite algorithm support.
+    summary: Level 4 adds a CBOM, zero-legacy capability, and explicit hybrid/composite support. Suitable for high-assurance and regulated environments.
+    sourcePage: /wg/pqc/pqcmm/levels/4-managed/
+    criteria:
+      introduction: "A product meets Level 4 when all Level 3 criteria are met, plus:"
+      items:
+        - id: 4.1.1
+          text: A **Cryptographic Bill of Materials (CBOM)** is maintained, detailing each algorithm in use, key sizes, protocol contexts, and usage purposes.
+        - id: 4.1.2
+          text: "**Zero-Legacy Capability:** the product can be configured to disable **all** non-quantum-safe algorithms throughout the product — including in low-level components such as boot, firmware update signing, hardware-bound operations, and internal diagnostics — while remaining fully functional. *Zero legacy means zero legacy.* If a non-quantum-safe algorithm cannot be disabled in any in-scope component, the product does not meet Level 4 for that component, and an assessment must record this as a finding that caps the product's level."
+        - id: 4.1.3
+          text: Symmetric and hash algorithms used to protect data with long-lived confidentiality or integrity requirements meet the parameter strengths recommended by NIST (or an equivalent national authority) for use beyond the anticipated availability of cryptographically relevant quantum computers.
+        - id: 4.1.4
+          text: The vendor clearly documents whether **hybrid** (classical + quantum-safe combined) and/or **composite** (algorithm-fused) modes are supported, and in which contexts.
+    assessment:
+      methodology: |-
+        The assessment report must record:
+
+        - **CBOM analysis** — whether vendor-provided or assessor-generated; tool name and version; generation method (automated CI pipeline / manual export / hybrid); date generated; product version covered.
+        - **SBOM-to-CBOM cross-check** — method used to verify every cryptographic library in the SBOM maps to at least one CBOM entry, and any gaps found.
+        - **Zero-legacy testing** — product version; configuration applied; test tool name and version; exact test command or procedure; outcome (classical connection rejected / accepted / untested).
+        - **Hybrid/composite verification** — whether the assessor tested interoperability with a reference implementation; if so: implementation name and version, and result.
+        - **Unverified claims** — flag each explicitly as *"vendor-stated, not independently verified"*.
+
+        > Any claim at Level 4 that was not independently tested must be explicitly flagged in the report.
+        {.callout-info}
+      groups:
+        - id: "4.2"
+          name: Cryptographic Bill of Materials (CBOM)
+          kind: assessment
+          questions:
+            - id: 4.2.1
+              question: Does the vendor produce a CBOM for this product? Request it in machine-readable format (CycloneDX with `cryptoProperties` extension, or equivalent).
+              guidance: "Record: format and schema version (CycloneDX 1.6+ supports full `cryptoProperties`), generation tool name and version (e.g., IBM Sonar crypto-analyzer, cdxgen with crypto extension, CycloneDX Maven/Gradle plugin), generation method (automated CI pipeline / manual export / hybrid), date generated, and product version covered. Perform an SBOM-to-CBOM cross-check: for each cryptographic library listed in the SBOM, verify that at least one algorithm entry appears in the CBOM. Record any library that is present in the SBOM but has no corresponding CBOM entry — each is a coverage gap."
+            - id: 4.2.2
+              question: Does the CBOM record algorithm, parameter set, key size, protocol context, and usage purpose per entry?
+              guidance: "Validate a sample of at least five entries across different components. For each: record whether all fields are present — algorithm, parameter set (e.g., ML-KEM-768 not just \"ML-KEM\"), key size, protocol context, and usage purpose. Record the sampling method (which entries were checked and why). An entry reading \"AES-256-GCM — TLS 1.3 record encryption — post-handshake\" is complete. An entry reading \"AES\" or \"ML-KEM\" without parameter set and context is not — record it as a gap."
+            - id: 4.2.3
+              question: Does the CBOM cover third-party cryptographic libraries, listing which algorithms each library contributes?
+              guidance: "A CBOM that lists \"OpenSSL 3.3\" without listing which OpenSSL algorithms are in active use is incomplete at Level 4. Check: does each third-party cryptographic library entry have child entries for specific algorithms? Record which libraries have algorithm-level entries and which have library-name entries only. Libraries with no algorithm-level entries must be flagged."
+            - id: 4.2.4
+              question: What tools and processes are used to generate and validate the CBOM? What are the known coverage gaps?
+              guidance: "Request the vendor's CBOM generation process document. Record: tool(s) name and version, automation level (fully automated / manual / hybrid), whether the CBOM is generated per build or periodically, and the documented coverage gaps. Common gaps include: native code (C/C++) with statically compiled libraries, dynamically loaded plugins, hardware-bound cryptography, and firmware blobs. A vendor who cannot state how the CBOM was generated cannot have its accuracy independently assessed — record this as a fundamental evidence limitation."
+            - id: 4.2.5
+              question: Does the CBOM bind each cryptographic-asset entry to the component that contains it via a standardised product identifier — Common Platform Enumeration (CPE) or Package URL (purl) — so that algorithm-level findings can be correlated with CVE feeds and asset inventories?
+              guidance: In CycloneDX (cryptography extension), this is typically a `cpe` or `purl` field on the component referenced by each `cryptographic-asset`. Sample at least five cryptographic-asset entries and record, for each, the referenced component identifier and whether a CPE or purl is present. Library-level entries that are not linked to a component identifier cannot be matched against the NIST National Vulnerability Database — record each gap individually. The top-level product component must carry the same CPE identifier as the one recorded for the [certification application](/wg/pqc/pqcmm/assessment/certification/#product-identifiers).
+        - id: "4.3"
+          name: Zero-Legacy Capability
+          kind: assessment
+          questions:
+            - id: 4.3.1
+              question: Can the product be configured to disable all non-quantum-safe algorithms? Provide the exact configuration steps.
+              guidance: "Record the exact configuration mechanism (configuration file key, API call, CLI flag, UI setting) and the documentation URL. Where possible, reproduce in a test environment: apply the zero-legacy configuration, then test using a client that supports only classical algorithms — e.g., `openssl s_client -cipher \"AES256-SHA\" -tls1_2 -connect host:port`. Record: test tool name and version, exact command used, product version, configuration applied, and outcome (connection rejected / accepted). A connection that succeeds under this test is a finding."
+            - id: 4.3.2
+              question: When configured in zero-legacy mode, does the product remain fully functional with a quantum-safe client?
+              guidance: "Test with a representative quantum-safe workload. Record: test environment details, product version, zero-legacy configuration applied, quantum-safe client tool and version (e.g., OQS-OpenSSL, a TLS client with ML-KEM support), test procedure, and outcome. Document any feature that fails or degrades in zero-legacy mode — each exception must be named, scoped, and risk-assessed."
+            - id: 4.3.3
+              question: Are there components in which non-quantum-safe algorithms cannot be disabled — e.g., internal diagnostics, boot sequences, hardware-enforced algorithms, firmware update signing, or root-of-trust operations?
+              guidance: "Zero legacy means zero legacy: any in-scope component in which a non-quantum-safe algorithm cannot be disabled is a finding that caps the product's PQCMM level below Level 4 for the affected component. Record each such component by: name, algorithm in use, reason it cannot be disabled, the vendor's planned remediation timeline, and the resulting effective maturity level for that component. The assessment report must clearly state where the product does and does not achieve zero-legacy operation."
+        - id: "4.4"
+          name: Symmetric and Hash Strengths for Long-Lived Data
+          kind: assessment
+          questions:
+            - id: 4.4.1
+              question: For data with long-lived confidentiality or integrity requirements (as identified in the HNDL exposure register at Level 3), do the symmetric and hash algorithms used meet the strengths recommended by NIST or an equivalent national authority for use beyond the anticipated availability of cryptographically relevant quantum computers?
+              guidance: "Record, for each long-lived data class identified in the HNDL register: the symmetric algorithm and key length, the hash algorithm and output length, and the NIST or national-authority guidance referenced (e.g., NIST SP 800-131A, BSI TR-02102, ANSSI cryptographic recommendations). A long-lived data class protected with symmetric or hash strengths below the referenced guidance is a finding."
+        - id: "4.5"
+          name: Hybrid and Composite Support
+          kind: assessment
+          questions:
+            - id: 4.5.1
+              question: Does the product support hybrid key exchange or hybrid authentication? If yes, which specific hybrid schemes, and which standard or draft?
+              guidance: "Record scheme-level specifics: e.g., X25519+ML-KEM-768 per draft-ietf-tls-hybrid-design (record the draft version number — implementations based on superseded drafts may not interoperate with current versions). \"We support hybrid\" without naming the scheme and draft version is not assessable. Where possible, test interoperability with a reference implementation (e.g., OQS-OpenSSL configured for the same scheme) and record: tool name and version, test command, and outcome."
+            - id: 4.5.2
+              question: Does the product support composite algorithms? If yes, which schemes and which standard or draft?
+              guidance: "Record: scheme name (e.g., id-MLDSA65-RSA2048-PKCS15-SHA256), reference standard or draft (e.g., draft-ounsworth-pq-composite-sigs with specific draft version, or ETSI TS 119 312 with section reference). Proprietary composite schemes that deviate from published drafts must be flagged as an interoperability risk and recorded with the vendor's explanation of the deviation."
+            - id: 4.5.3
+              question: In which protocols, features, or configurations is hybrid/composite mode available?
+              guidance: Record each feature area with the specific hybrid/composite scheme implemented and a configuration example or documentation URL. "Full hybrid support" without a feature-level breakdown requires decomposition before recording. Request the specific configuration parameter or API call for each named feature.
+    evidenceChecklist:
+      introduction: The items below are a level-specific summary of the artefacts a vendor should be able to produce. They can serve as a concise request list for an assessor, or as a self-assessment reference for a vendor preparing evidence before a formal assessment. The detailed requirements and acceptance criteria for each item are in the assessment questions above. All artefacts from [Level 1](/wg/pqc/pqcmm/levels/1-initial/#evidence-checklist), [Level 2](/wg/pqc/pqcmm/levels/2-foundational/#evidence-checklist), and [Level 3](/wg/pqc/pqcmm/levels/3-advanced/#evidence-checklist) remain required.
+      items:
+        - id: 4.e.1
+          text: CBOM in CycloneDX format (with cryptography extension) or equivalent structured format.
+        - id: 4.e.2
+          text: Configuration guide for enabling zero-legacy mode, including a list of any caveats.
+        - id: 4.e.3
+          text: Technical documentation of hybrid and composite support with protocol/standard references.
+        - id: 4.e.4
+          text: Test results or validation reports confirming zero-legacy operation.
+  - number: 5
+    name: Optimized
+    title: Level 5 (Optimized) - PQC Maturity Model (PQCMM)
+    description: A product at Level 5 defaults to quantum-safe algorithms, meets performance benchmarks, follows NIST-approved standards, and uses independently verified cryptographic implementations.
+    summary: Level 5 is the gold standard — PQC is the default, performance is benchmarked, implementations are independently verified. The product is fully optimised for a post-quantum world.
+    sourcePage: /wg/pqc/pqcmm/levels/5-optimized/
+    criteria:
+      introduction: "A product meets Level 5 when all Level 4 criteria are met, plus:"
+      items:
+        - id: 5.1.1
+          text: Quantum-safe algorithms are the **default and preferred setting** for all relevant features; any legacy algorithm requires explicit enablement by the operator.
+        - id: 5.1.2
+          text: "Algorithms are **benchmarked and tuned**: the vendor has measured and documented that quantum-safe configurations meet or exceed operational performance requirements for the product's target environments."
+        - id: 5.1.3
+          text: The product primarily follows post-quantum cryptography standards approved by a recognised national or international standards body (such as NIST, ETSI, or ISO/IEC), as applicable to the product's target markets. The PQCMM does not prescribe a specific algorithm or parameter set; see the [model's design principle on algorithm-neutral criteria](/wg/pqc/pqcmm/#design-principles).
+        - id: 5.1.4
+          text: The cryptographic implementation is **independently verified or certified** — through FIPS 140 validation covering the PQC algorithms, an applicable Common Criteria evaluation whose Security Target includes the cryptographic implementation, or a widely scrutinised cryptographic library with a published, third-party formal security analysis specifically covering the implemented PQC algorithms. Where a library-based claim is made, the audit report submitted with the assessment must identify the library, version, the analysing organisation, and the analysis publication.
+    assessment:
+      methodology: |-
+        The assessment report must record:
+
+        - **Default configuration** — whether the assessor performed a fresh installation test (product version, installation method, environment, and configuration captured) or relied on documentation only (flag as *"documentation review only, not independently reproduced"*).
+        - **Performance evidence** — benchmark report reference (title, date, hardware specification, test tool name and version, load profile); whether the assessor reviewed the methodology section or accepted results at face value.
+        - **FIPS/standards verification** — CMVP certificate URL and date checked; CAVP algorithm validation URL and date checked.
+        - **CBOM cross-check** — tool name and version; date run; number of entries sampled; findings.
+        - **Third-party audit** — report reference, audit firm name, and stated scope; whether the methodology section was reviewed, specifically: was the assessment CBOM-based, code-review-based, or both? Which tools were named?
+        - **Unverified claims** — flag each explicitly as *"vendor-stated, not independently verified"*.
+
+        > Any claim at Level 5 that is not independently verifiable via a public database or reproducible test must be explicitly flagged in the report.
+        {.callout-info}
+      groups:
+        - id: "5.2"
+          name: Default Configuration
+          kind: assessment
+          questions:
+            - id: 5.2.1
+              question: What is the default algorithm configuration for each feature area in a fresh installation?
+              guidance: "The assessor should perform or observe a fresh installation. Record: product version, installation method (binary installer / container image / cloud deployment), environment (OS version, cloud provider, hardware type), and the configuration captured (exported configuration file, screenshot of settings UI, or API response for the default configuration endpoint — record which method was used). Verify that quantum-safe algorithms appear as the default without any manual modification. A finding based on documentation review only — without a fresh installation test — must be flagged as \"not independently reproduced\"."
+            - id: 5.2.2
+              question: How does an operator explicitly enable classical (non-quantum-safe) algorithms? Show the exact configuration step.
+              guidance: "Record the exact configuration step required (configuration key, flag, UI setting, API call). Test it: apply the enablement step, verify it works, and verify the product emits a warning or audit log entry indicating a downgrade. Record: test environment, product version, steps performed, and outcome. **A default that silently falls back to classical when a quantum-safe peer is unavailable — without an explicit operator action and an audit log entry — is a disqualifying finding for Level 5.**"
+            - id: 5.2.3
+              question: Is the default quantum-safe configuration consistent across all supported deployment modes — cloud, on-premises, container, embedded?
+              guidance: "Record each supported deployment mode and the evidence type for each: (a) assessor-tested — record installation method, environment, and result; (b) vendor-provided configuration export — record document title, version, and date; (c) documentation only — flag as \"not independently reproduced\". Inconsistency between modes is a finding — record which mode fails and note that the effective maturity level for that mode is lower."
+        - id: "5.3"
+          name: Performance
+          kind: assessment
+          questions:
+            - id: 5.3.1
+              question: Has the vendor benchmarked the product in its default quantum-safe configuration? Request the benchmark report.
+              guidance: "Record all of the following methodology fields from the report: hardware (CPU model, core count, RAM, whether results are from cloud instances or bare metal), operating system and version, runtime/JVM version if applicable, test tool name and version (e.g., wrk 4.x, JMeter 5.x, vendor-specific harness — record tool and version), algorithm and parameter set tested, load profile (requests/second or key operations/second), test duration, warm-up period, and classical comparison baseline (algorithm and parameter set). A benchmark that does not specify hardware and test tool cannot be reproduced by an independent party — flag it as non-reproducible."
+            - id: 5.3.2
+              question: Do quantum-safe configurations meet performance requirements for the product's stated use cases?
+              guidance: Record the vendor's SLA or performance specification (document title, version, URL) and compare it against the benchmark results field by field. *Note the hardware on which the benchmarks were run versus the customer's expected deployment hardware — a result on premium hardware may not translate to the customer's environment.* Performance shortfalls relative to the SLA must be documented and risk-assessed.
+            - id: 5.3.3
+              question: Have algorithm implementations been optimised for the product's target hardware?
+              guidance: "Ask which optimisation paths are enabled: AVX2, AVX-512, ARMv8 crypto extensions, hardware accelerator offload. Record each optimisation with: whether it is enabled by default (yes/no), the documentation URL confirming it, and whether the assessor verified it is active (e.g., by checking CPU feature flag usage in a running process, reviewing build flags in the binary, or consulting the documentation). An unoptimised software reference implementation in a performance-sensitive production deployment is a risk signal — record the optimisation status explicitly."
+        - id: "5.4"
+          name: Standards Alignment
+          kind: assessment
+          questions:
+            - id: 5.4.1
+              question: Which NIST-approved PQC standards are implemented as the primary algorithm suite? Provide the specific FIPS publication reference and date.
+              guidance: "Verify each claimed algorithm name against the FIPS publication. Record the exact FIPS designation with publication URL: NIST FIPS 203 (ML-KEM, August 2024, https://csrc.nist.gov/publications/detail/fips/203/final), FIPS 204 (ML-DSA, https://csrc.nist.gov/publications/detail/fips/204/final), FIPS 205 (SLH-DSA, https://csrc.nist.gov/publications/detail/fips/205/final). Implementations based on pre-standardisation round 3 submissions that have not been updated to the final FIPS name are a finding — record whether the product uses FIPS names or draft names."
+            - id: 5.4.2
+              question: Does the CBOM confirm that algorithm usage matches the declared FIPS standards? Cross-reference the CBOM against the declared algorithms.
+              guidance: "Run a CBOM analysis. Record: tool name and version, date run, and for each algorithm entry checked — the name found in the CBOM and whether it matches the FIPS name. A CBOM entry showing \"Kyber-768\" instead of \"ML-KEM-768\", or \"Dilithium-3\" instead of \"ML-DSA-65\", indicates the implementation was not updated to the final standard — this is a disqualifying finding for Level 5. Sample at least three entries per algorithm type and record the results individually."
+        - id: "5.5"
+          name: Independent Verification
+          kind: assessment
+          questions:
+            - id: 5.5.1
+              question: Has the cryptographic module been validated under FIPS 140-3 or an equivalent national scheme? Provide the certificate number or CMVP listing URL.
+              guidance: "Verify independently: search the NIST CMVP database (https://csrc.nist.gov/projects/cryptographic-module-validation-program) by product or library name. Record: certificate number, module name, vendor name, module version, validation date, approved algorithm list, and the certificate page URL. Verify that (a) the validated module version matches the product version under assessment, and (b) the PQC algorithms (ML-KEM, ML-DSA, SLH-DSA) explicitly appear in the approved algorithm list. A FIPS 140-2 validation or a validation predating FIPS 203/204/205 does not cover quantum-safe algorithms — record this distinction explicitly."
+            - id: 5.5.2
+              question: Has a Common Criteria evaluation been conducted? If so, provide the certificate reference and EAL level.
+              guidance: "Verify via the Common Criteria portal (https://www.commoncriteriaportal.org). Record: certificate reference number, product name and version evaluated, EAL level, evaluation laboratory, certification date, and URL. Check the Security Target document to determine whether the cryptographic implementation was within the evaluation scope — an EAL evaluation that did not include cryptographic algorithm testing is noted as not covering this criterion."
+            - id: 5.5.3
+              question: Which cryptographic library implements the quantum-safe algorithms?
+              guidance: "Common libraries include OpenSSL (with or without oqs-provider), wolfSSL, Bouncy Castle, AWS-LC, Microsoft CNG / BCryptPrimitives, NSS, mbedTLS, LibreSSL, Botan, and Crypto++. Record: **(a)** library name and exact version string as reported by the vendor; **(b)** for open-source libraries: the repository URL and the specific commit hash or release tag; **(c)** verify independently — from the library's own official release notes or PQC documentation page — that the identified version supports the claimed quantum-safe algorithms; **(d)** check for NIST CAVP validation for the library (https://csrc.nist.gov/projects/cryptographic-algorithm-validation-program) — record the validation URL and certificate scope if available; **(e)** for proprietary implementations: whether a published security analysis exists, the analysis firm name, and the analysis URL or reference."
+            - id: 5.5.4
+              question: Are the results of any third-party cryptographic audit of the quantum-safe implementation available?
+              guidance: "Record: audit firm name, report title, date, and URL if publicly available (or document reference if under NDA). Review the report's methodology section and record explicitly: **(a)** scope — which components and which algorithms were audited; **(b)** assessment method — CBOM-based analysis, static code review, dynamic analysis, functional testing, or a combination; **(c)** tools used — e.g., CodeQL, Semgrep, manual code review, NIST KAT test vectors, specific version of each; **(d)** whether the PQC algorithms and parameter sets implemented in the assessed product were within the audit scope. An audit whose scope excluded the quantum-safe implementation does not satisfy this criterion — record the gap."
+    evidenceChecklist:
+      introduction: The items below are a level-specific summary of the artefacts a vendor should be able to produce. They can serve as a concise request list for an assessor, or as a self-assessment reference for a vendor preparing evidence before a formal assessment. The detailed requirements and acceptance criteria for each item are in the assessment questions above. All artefacts from [Level 1](/wg/pqc/pqcmm/levels/1-initial/#evidence-checklist), [Level 2](/wg/pqc/pqcmm/levels/2-foundational/#evidence-checklist), [Level 3](/wg/pqc/pqcmm/levels/3-advanced/#evidence-checklist), and [Level 4](/wg/pqc/pqcmm/levels/4-managed/#evidence-checklist) remain required.
+      items:
+        - id: 5.e.1
+          text: Product documentation confirming quantum-safe defaults with change instructions for legacy opt-in.
+        - id: 5.e.2
+          text: Published or shareable performance benchmark results for the quantum-safe configuration.
+        - id: 5.e.3
+          text: FIPS 140-3 (or equivalent) certificate or validation listing for the cryptographic module.
+        - id: 5.e.4
+          text: References to the standard specifications implemented (with version/edition).
+        - id: 5.e.5
+          text: Third-party audit reports or publicly available security analyses for cryptographic components.

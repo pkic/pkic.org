@@ -5,6 +5,7 @@ title: "Self-Assessment - PQC Maturity Model (PQCMM)"
 description: A self-assessment lets vendors and procuring organizations quickly determine the PQCMM maturity level of a product using the criteria and assessment questions defined for each level.
 summary: Use the per-level criteria and assessment questions to determine the PQCMM maturity level of a product without external involvement.
 weight: 10
+fullwidth: true
 ---
 
 ## What Is a Self-Assessment?
@@ -16,11 +17,23 @@ Self-assessments are fast, low-cost, and suitable as a starting point — for ex
 > A self-assessment is **indicative**, not authoritative. It reflects the vendor's own view of their product and is not independently verified. Relying parties should treat self-assessed PQCMM levels as a useful signal, not a guarantee.
 {.callout-info}
 
+## Web-Based Assessment
+
+Use the offline-capable assessment below to evaluate one product or service against PQCMM Version {{< param version >}}. Assessment data and uploaded evidence stay in your browser. You can export a portable JSON assessment or generate a PDF report that embeds the machine-readable assessment and its evidence files.
+
+{{< pqcmm-assessment >}}
+
+### Model Data and GRC Integration
+
+The website, assessment, and downstream imports use the same versioned model data. GRC tools can consume the YAML directly and validate it against the published JSON Schema.
+
+{{< pqcmm-data-downloads >}}
+
 ## How to Perform a Self-Assessment
 
 1. **Select the product or service in scope.** A PQCMM assessment applies to a single product or service. Assess each separately.
 
-2. **Start at [Level 0](/wg/pqc/pqcmm/levels/0-none/).** Work upward through the levels. A product achieves a level only if it meets **all criteria** for that level and all levels below it.
+2. **Establish the baseline, then work upward.** [Level 0](/wg/pqc/pqcmm/levels/0-none/) is the mutually exclusive baseline for a product with no PQC capability. For Levels 1 through 5, a product achieves a level only if it meets **all criteria** for that level and every lower positive level.
 
 3. **Gather evidence (The exact same guidance as a Third-Party).** A credible self-assessment is not just a checklist of "yes" answers; it requires collecting the exact same evidence that a third-party assessor would demand. When answering the assessment questions, you must follow the **Assessment guidance** provided in the [level detail pages](/wg/pqc/pqcmm/levels/). This guidance explicitly states what constitutes acceptable evidence (e.g., specific release notes, public FIPS certificates, specific configuration settings). Vague marketing claims or undocumented future plans do not satisfy PQCMM criteria. Document your answers — "Yes", "No", or "Partial" with a brief explanation and links to the evidence.
 
@@ -52,4 +65,3 @@ Recipients should treat any self-assessed PQCMM level claim that is not accompan
 | No independent verification | Engage a [third-party assessor](/wg/pqc/pqcmm/assessment/third-party/) for independent validation |
 | Potential for overstatement | Be conservative: if a criterion is partially met, do not claim the level |
 | Point-in-time snapshot | Re-assess after each significant product release |
-
