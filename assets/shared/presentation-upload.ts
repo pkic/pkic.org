@@ -1,4 +1,4 @@
-export const MAX_PRESENTATION_BYTES = 200 * 1024 * 1024;
+export const MAX_PRESENTATION_BYTES = 100 * 1024 * 1024;
 export const PRESENTATION_FILE_NAME_HEADER = "x-presentation-file-name";
 export const PRESENTATION_FILE_SIZE_HEADER = "x-presentation-file-size";
 
@@ -28,7 +28,7 @@ export function presentationUploadRequest(file: File): { body: File; headers: Re
     throw new Error("Presentation file is empty.");
   }
   if (file.size > MAX_PRESENTATION_BYTES) {
-    throw new Error("Presentation must be 200 MB or smaller.");
+    throw new Error("Presentation must be 100 MB or smaller.");
   }
 
   const mimeType = presentationMimeType(file);

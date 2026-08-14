@@ -256,10 +256,10 @@ describe("presentation versioning", () => {
     expect(bucket.putCalls).toBe(0);
   });
 
-  it("streams a presentation larger than the Worker memory limit without buffering it", async () => {
+  it("streams a large presentation without buffering it", async () => {
     const { speakerToken } = await seed();
     const bucket = new CountingPresentationBucket();
-    const uploadSize = 130 * 1024 * 1024;
+    const uploadSize = 95 * 1024 * 1024;
     const chunk = new Uint8Array(1024 * 1024);
     let remaining = uploadSize;
     const body = new ReadableStream({

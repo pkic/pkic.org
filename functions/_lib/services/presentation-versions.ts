@@ -48,7 +48,7 @@ export function parsePresentationUpload(request: Request): PresentationUpload | 
     return { error: { code: "INVALID_FILE_SIZE", message: "Presentation file size is invalid." }, status: 400 };
   }
   if (declaredSize > MAX_PRESENTATION_BYTES) {
-    return { error: { code: "FILE_TOO_LARGE", message: "Presentation must be 200 MB or smaller." }, status: 413 };
+    return { error: { code: "FILE_TOO_LARGE", message: "Presentation must be 100 MB or smaller." }, status: 413 };
   }
 
   const contentLength = request.headers.get("content-length");
