@@ -1,0 +1,6 @@
+{{/* Publish and link the canonical PQCMM model and schema for GRC/tool consumers. */}}
+{{- $model := partial "pqcmm/model-data.html" (dict "page" .Page "version" (.Get "version")) -}}
+<ul>
+  <li><a href="{{ $model.resource.RelPermalink }}" download>Download PQCMM {{ $model.data.model.version }} model data (YAML)</a></li>
+  <li><a href="{{ $model.schemaResource.RelPermalink }}" download>Download PQCMM model schema {{ $model.data.schemaVersion }} (JSON Schema)</a></li>
+</ul>

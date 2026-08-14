@@ -1,0 +1,48 @@
+{{/* Render the approved assessment or intake questions for one PQCMM level. */}}
+{{- $levelNumber := int (.Get "level") -}}
+{{- $model := partial "pqcmm/model-data.html" (dict "page" .Page "version" (.Get "version")) -}}
+{{- $matches := where $model.data.levels "number" $levelNumber -}}
+{{- if ne (len $matches) 1 -}}
+  {{- errorf "PQCMM level %d is missing or duplicated in %s" $levelNumber $model.resource.Name -}}
+{{- end -}}
+{{- $level := index $matches 0 -}}
+{{- with $level.assessment.methodology }}
+<h3 id="assessment-methodology-record">Assessment methodology record{{ partial "anchor.html" "assessment-methodology-record" }}</h3>
+{{ . | $.Page.RenderString }}
+{{- end }}
+{{- range $group := $level.assessment.groups }}
+{{- if ne $group.kind "intake" }}
+<h3 id="{{ $group.name | anchorize }}">{{ $group.name }}{{ partial "anchor.html" ($group.name | anchorize) }}</h3>
+{{- end }}
+{{- with $group.introduction }}{{ . | $.Page.RenderString }}{{ end }}
+<div class="table-responsive">
+  <table>
+    <thead>
+      <tr>
+        <th scope="col">#</th>
+        <th scope="col">Question</th>
+        {{- if eq $group.kind "intake" }}
+        <th scope="col">Expected Input</th>
+        <th scope="col">Purpose</th>
+        {{- else }}
+        <th scope="col">Assessment guidance</th>
+        {{- end }}
+      </tr>
+    </thead>
+    <tbody>
+      {{- range $question := $group.questions }}
+      <tr id="question-{{ $question.id | anchorize }}">
+        <td>{{ $question.id }}</td>
+        <td>{{ $question.question | $.Page.RenderString }}</td>
+        {{- if eq $group.kind "intake" }}
+        <td>{{ $question.expectedInput | $.Page.RenderString }}</td>
+        <td>{{ $question.purpose | $.Page.RenderString }}</td>
+        {{- else }}
+        <td>{{ $question.guidance | $.Page.RenderString }}</td>
+        {{- end }}
+      </tr>
+      {{- end }}
+    </tbody>
+  </table>
+</div>
+{{- end }}
