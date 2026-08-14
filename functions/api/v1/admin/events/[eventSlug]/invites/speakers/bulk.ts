@@ -25,7 +25,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     })),
   });
 
-  const created: Array<{ email: string; inviteToken: string }> = [];
+  const created: Array<{ email: string }> = [];
   const endorsed: Array<{ email: string }> = [];
   const skipped: Array<{ email: string }> = [];
   const emailRows: Array<{
@@ -33,6 +33,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     recipientEmail: string;
     templateKey: string;
     subject: string;
+    capabilityLinkValues: unknown[];
     data: Record<string, unknown>;
   }> = [];
 
@@ -44,7 +45,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     const item = body.invites[i];
 
     if (o.status === "created") {
-      created.push({ email: o.email, inviteToken: o.token! });
+      created.push({ email: o.email });
       const proposalUrl = proposalPageUrl(appBaseUrl, event, {
         invite: o.token!,
         inviteId: o.inviteId,
@@ -56,6 +57,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
         recipientEmail: o.email,
         templateKey: "speaker_invite",
         subject,
+        capabilityLinkValues: [proposalUrl, declineUrl],
         data: {
           ...sharedEmailVars,
           firstName: item.firstName ?? "",

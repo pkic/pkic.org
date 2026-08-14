@@ -653,7 +653,20 @@ test.describe("browser workflows", () => {
     const declineInviteEmail = await waitForEmail("friend-decline@example.test", "invited");
     const declineUrl = extractUrlFromEmail(declineInviteEmail, "/invite/");
 
-    await page.goto(declineUrl);
+    const invalidDeclineUrl = new URL(declineUrl);
+    invalidDeclineUrl.searchParams.set("token", "d".repeat(64));
+    await page.goto(invalidDeclineUrl.toString());
+    await expect(page.getByRole("heading", { name: /Invalid invitation link/i })).toBeVisible();
+    await expect(page.locator("[data-resend-invite-section]")).toBeVisible();
+    await clearOutbox();
+    await page.locator("[data-resend-invite-email]").fill("friend-decline@example.test");
+    await page.locator("[data-resend-invite-btn]").click();
+    await expect(page.getByText(/a fresh link is on its way/i)).toBeVisible({ timeout: 10_000 });
+
+    const recoveredDeclineEmail = await waitForEmail("friend-decline@example.test", "Still considering");
+    const recoveredDeclineUrl = extractUrlFromEmail(recoveredDeclineEmail, "/invite/");
+    expect(new URL(recoveredDeclineUrl).searchParams.get("token")).toMatch(/^pkc1_/);
+    await page.goto(recoveredDeclineUrl);
     await expect(page.getByRole("heading", { name: /Not able to make it\?/i })).toBeVisible();
     const scheduleConflictRadio = page.getByRole("radio", { name: /Schedule conflict/i });
     await scheduleConflictRadio.scrollIntoViewIfNeeded();
@@ -664,7 +677,7 @@ test.describe("browser workflows", () => {
     await screenshot("05-invite-declined");
 
     // Attempting to use the same decline URL again must show "already processed"
-    await page.goto(declineUrl);
+    await page.goto(recoveredDeclineUrl);
     await expect(page.getByText(/Invitation already processed/i)).toBeVisible();
     await screenshot("06-decline-link-already-processed");
 
@@ -686,8 +699,27 @@ test.describe("browser workflows", () => {
 
     const proposalSubmittedEmail = await waitForEmail("proposal-speaker@example.test", "proposal");
     const proposalManageUrl = extractUrlFromEmail(proposalSubmittedEmail, "/propose/manage/");
+    const originalProposalManageToken = new URL(proposalManageUrl).searchParams.get("token") ?? "";
+    expect(originalProposalManageToken).toMatch(/^pkc1_/);
 
-    const proposalManageRoute = `/events/2026/pqc-conference-amsterdam-nl/propose/manage/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(new URL(proposalManageUrl).searchParams.get("token") ?? "")}`;
+    // A pre-migration or otherwise invalid link must offer a self-service path
+    // to a fresh proposal management link.
+    await page.goto(
+      `/events/2026/pqc-conference-amsterdam-nl/propose/manage/?event=pqc-conference-amsterdam-nl&token=${"a".repeat(64)}`,
+    );
+    await expect(page.locator("[data-resend-proposal-manage-section]")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/request a fresh link below/i)).toBeVisible();
+    await clearOutbox();
+    await page.locator("[data-resend-proposal-manage-email]").fill("proposal-speaker@example.test");
+    await page.locator("[data-resend-proposal-manage-btn]").click();
+    await expect(page.getByText(/you will receive an email shortly/i)).toBeVisible({ timeout: 10_000 });
+
+    const recoveredProposalEmail = await waitForEmail("proposal-speaker@example.test", "Proposal received");
+    const recoveredProposalManageUrl = extractUrlFromEmail(recoveredProposalEmail, "/propose/manage/");
+    const recoveredProposalManageToken = new URL(recoveredProposalManageUrl).searchParams.get("token") ?? "";
+    expect(recoveredProposalManageToken).toMatch(/^pkc1_/);
+
+    const proposalManageRoute = `/events/2026/pqc-conference-amsterdam-nl/propose/manage/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(recoveredProposalManageToken)}`;
     await page.goto(proposalManageRoute);
     await expect(page.getByText(/Open this page from your proposal management link/i)).toBeVisible();
     await expect(page.locator("#manage-proposal-type")).toHaveValue("panel");
@@ -1023,9 +1055,17 @@ test.describe("browser workflows", () => {
     await page.getByRole("button", { name: /Confirm my registration/i }).click();
     await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible({ timeout: 15_000 });
 
-    // Navigate to the manage page WITHOUT a token — the resend form must appear
-    await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/manage/?event=pqc-conference-amsterdam-nl");
+    const originalManageEmail = await waitForEmail("resend-tester@example.test", "confirmed");
+    const originalManageUrl = extractUrlFromEmail(originalManageEmail, "/register/manage/");
+    const originalManageToken = new URL(originalManageUrl).searchParams.get("token") ?? "";
+    expect(originalManageToken).toMatch(/^pkc1_/);
+
+    // A pre-migration or otherwise invalid token must reveal the resend form.
+    await page.goto(
+      `/events/2026/pqc-conference-amsterdam-nl/register/manage/?event=pqc-conference-amsterdam-nl&token=${"b".repeat(64)}`,
+    );
     await expect(page.locator("[data-resend-manage-section]")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/request a fresh management link below/i)).toBeVisible();
     await screenshot("01-resend-manage-form-visible");
 
     // Fill the email address and request a fresh link
@@ -1038,6 +1078,7 @@ test.describe("browser workflows", () => {
     const newManageEmail = await waitForEmail("resend-tester@example.test", "Your management link");
     const newManageUrl = extractUrlFromEmail(newManageEmail, "/register/manage/");
     const newManageToken = new URL(newManageUrl).searchParams.get("token") ?? "";
+    expect(newManageToken).toMatch(/^pkc1_/);
 
     // The refreshed token must load the full management page
     await page.goto(
@@ -1045,6 +1086,13 @@ test.describe("browser workflows", () => {
     );
     await expect(page.getByText(/Hi Resend, we're looking forward to seeing you/i)).toBeVisible({ timeout: 10_000 });
     await screenshot("03-refreshed-manage-link-works");
+
+    // Requesting another message must not invalidate an earlier unexpired link.
+    await page.goto(
+      `/events/2026/pqc-conference-amsterdam-nl/register/manage/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(originalManageToken)}`,
+    );
+    await expect(page.getByText(/Hi Resend, we're looking forward to seeing you/i)).toBeVisible({ timeout: 10_000 });
+    await screenshot("04-original-manage-link-still-works");
 
     errorMonitor.assertClean();
   });
@@ -1219,9 +1267,12 @@ test.describe("browser workflows", () => {
     await screenshot("05-co-speaker-invited");
 
     // ── Resend the co-speaker manage link via the browser ────────────────────
-    // Navigate to speaker manage page WITHOUT a token — the resend form must appear
-    await page.goto("/events/2026/pqc-conference-amsterdam-nl/propose/speaker/?event=pqc-conference-amsterdam-nl");
+    // A pre-migration or otherwise invalid speaker token must reveal the resend form.
+    await page.goto(
+      `/events/2026/pqc-conference-amsterdam-nl/propose/speaker/?event=pqc-conference-amsterdam-nl&token=${"c".repeat(64)}`,
+    );
     await expect(page.locator("[data-resend-speaker-manage-section]")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/request a fresh link below/i)).toBeVisible();
     await screenshot("06-resend-speaker-manage-form-visible");
 
     // Fill the co-speaker email and request a fresh link

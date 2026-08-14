@@ -11,7 +11,8 @@ import { loadEmailLayout, loadEmailPartials } from "./partials";
 import { sendViaSendgrid } from "./sendgrid";
 import { applyCampaignCustomText } from "./campaign-custom";
 import { parseQueuedEmailAttachments, type QueuedEmailAttachment } from "./attachments";
-import type { DatabaseLike, Env } from "../types";
+import { authorizeQueuedCapabilityLinks, materializeQueuedCapabilityLinks } from "../services/capability-links";
+import type { DatabaseLike, Env, StatementLike } from "../types";
 
 function uint8ToBase64(bytes: Uint8Array): string {
   const chunkSize = 12288; // 12kb chunks to avoid stack overflow
@@ -121,6 +122,7 @@ export async function queueEmail(
     recipientEmail: string;
     subject?: string | null;
     data: Record<string, unknown>;
+    capabilityLinkValues?: unknown[];
     messageType: "transactional" | "promotional";
     calendar?: CalendarPayload;
     attachments?: QueuedEmailAttachment[];
@@ -153,6 +155,8 @@ export async function queueEmail(
     data.__bounceAddress = payload.bounceAddress;
   }
 
+  const storedData = authorizeQueuedCapabilityLinks(data, payload.capabilityLinkValues ?? []);
+
   const sendAfter =
     payload.sendAfterSeconds && payload.sendAfterSeconds > 0
       ? new Date(Date.now() + payload.sendAfterSeconds * 1000).toISOString()
@@ -172,7 +176,7 @@ export async function queueEmail(
       payload.recipientUserId ?? null,
       payload.recipientEmail,
       payload.subject ?? null,
-      stringifyJson(data),
+      stringifyJson(storedData),
       payload.messageType,
       sendAfter,
       nowIso(),
@@ -183,47 +187,71 @@ export async function queueEmail(
   return id;
 }
 
-/**
- * Queues invite emails for multiple recipients in a single db.batch() call.
- * All rows share the same templateKey, eventId, subject, and base data; only
- * the recipient-specific fields (email, registrationUrl, declineUrl) differ.
- */
-export interface InviteEmailQueueRow {
+/** Builds prepared outbox inserts so callers can combine them with related D1 writes. */
+export interface BulkEmailQueueRow {
   eventId: string;
   recipientEmail: string;
   recipientUserId?: string | null;
   templateKey: string;
   subject: string;
   data: Record<string, unknown>;
+  capabilityLinkValues?: unknown[];
+  messageType: "transactional" | "promotional";
 }
+
+export interface PreparedBulkEmailQueueRow {
+  id: string;
+  statement: StatementLike;
+}
+
+export function prepareBulkQueueEmailStatements(
+  db: DatabaseLike,
+  rows: BulkEmailQueueRow[],
+  queuedAt = nowIso(),
+): PreparedBulkEmailQueueRow[] {
+  return rows.map((row) =>
+    (() => {
+      const id = uuid();
+      return {
+        id,
+        statement: db
+          .prepare(
+            `INSERT INTO email_outbox (
+              id, event_id, template_key, template_version, recipient_user_id, recipient_email,
+              subject, payload_json, message_type, provider, provider_message_id, status, attempts,
+              send_after, last_error, created_at, updated_at, sent_at
+            ) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, 'sendgrid', NULL, 'queued', 0, ?, NULL, ?, ?, NULL)`,
+          )
+          .bind(
+            id,
+            row.eventId,
+            row.templateKey,
+            row.recipientUserId ?? null,
+            row.recipientEmail,
+            row.subject,
+            stringifyJson(authorizeQueuedCapabilityLinks(row.data, row.capabilityLinkValues ?? [])),
+            row.messageType,
+            queuedAt,
+            queuedAt,
+            queuedAt,
+          ),
+      };
+    })(),
+  );
+}
+
+export type InviteEmailQueueRow = Omit<BulkEmailQueueRow, "messageType">;
 
 export function prepareBulkQueueInviteEmailStatements(
   db: DatabaseLike,
   rows: InviteEmailQueueRow[],
   queuedAt = nowIso(),
-): ReturnType<DatabaseLike["prepare"]>[] {
-  return rows.map((row) =>
-    db
-      .prepare(
-        `INSERT INTO email_outbox (
-              id, event_id, template_key, template_version, recipient_user_id, recipient_email,
-              subject, payload_json, message_type, provider, provider_message_id, status, attempts,
-              send_after, last_error, created_at, updated_at, sent_at
-            ) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, 'transactional', 'sendgrid', NULL, 'queued', 0, ?, NULL, ?, ?, NULL)`,
-      )
-      .bind(
-        uuid(),
-        row.eventId,
-        row.templateKey,
-        row.recipientUserId ?? null,
-        row.recipientEmail,
-        row.subject,
-        stringifyJson(row.data),
-        queuedAt,
-        queuedAt,
-        queuedAt,
-      ),
-  );
+): StatementLike[] {
+  return prepareBulkQueueEmailStatements(
+    db,
+    rows.map((row) => ({ ...row, messageType: "transactional" as const })),
+    queuedAt,
+  ).map((row) => row.statement);
 }
 
 export async function bulkQueueInviteEmails(db: DatabaseLike, rows: InviteEmailQueueRow[]): Promise<void> {
@@ -258,8 +286,16 @@ async function markOutboxSent(
 
 async function markOutboxFailed(db: DatabaseLike, row: OutboxRow, error: unknown): Promise<void> {
   const attempts = row.attempts + 1;
-  const status = getOutboxStatusForRetry(attempts);
-  const message = error instanceof Error ? error.message : "Unknown email send error";
+  const nonRetryable =
+    error instanceof AppError &&
+    (error.code === "CAPABILITY_RESOURCE_STALE" || error.code === "CAPABILITY_DESCRIPTOR_INVALID");
+  const status = nonRetryable ? "failed" : getOutboxStatusForRetry(attempts);
+  const message =
+    error instanceof AppError
+      ? `${error.code}: ${error.message}`
+      : error instanceof Error
+        ? error.message
+        : "Unknown email send error";
   const details = error instanceof AppError && error.details ? ` | details: ${stringifyJson(error.details)}` : "";
 
   await run(
@@ -281,7 +317,8 @@ async function processOutboxRow(db: DatabaseLike, env: Env, row: OutboxRow): Pro
   await markOutboxSending(db, row.id);
 
   try {
-    const payload = parseJsonSafe<Record<string, unknown>>(row.payload_json, {});
+    const storedPayload = parseJsonSafe<Record<string, unknown>>(row.payload_json, {});
+    const payload = await materializeQueuedCapabilityLinks(db, env, storedPayload);
     const emailBaseUrl = resolveEmailBaseUrl(payload, env);
     const partials = await loadEmailPartials(db);
     const layoutHtml = await loadEmailLayout(db);
@@ -486,6 +523,15 @@ export async function processSelectedOutbox(
     ...results,
     skipped: Math.max(0, ids.length - rows.length),
   };
+}
+
+export async function processSelectedOutboxBackground(db: DatabaseLike, env: Env, ids: string[]): Promise<void> {
+  try {
+    await processSelectedOutbox(db, env, ids);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown background outbox selection error";
+    logError("EMAIL_OUTBOX_SELECTION_FAILED", { count: ids.length, error: message });
+  }
 }
 
 export async function processPendingOutboxBackground(db: DatabaseLike, env: Env, limit = 20): Promise<void> {

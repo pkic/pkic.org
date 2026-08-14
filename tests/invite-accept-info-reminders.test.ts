@@ -32,6 +32,7 @@ describe("invite info endpoint", () => {
       inviteeFirstName: "Alice",
       inviteType: "attendee",
       ttlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     const response = await inviteInfo(
@@ -62,6 +63,7 @@ describe("invite info endpoint", () => {
       inviteeFirstName: "Bob",
       inviteType: "speaker",
       ttlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     const response = await inviteInfo(
@@ -99,6 +101,7 @@ describe("invite info endpoint", () => {
       inviteeEmail: "done@example.test",
       inviteType: "attendee",
       ttlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     await acceptInvite(env.DB, invite.id);
@@ -120,6 +123,7 @@ describe("invite info endpoint", () => {
       inviteeEmail: "declined@example.test",
       inviteType: "attendee",
       ttlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     await declineInvite(env.DB, { inviteId: invite.id, reasonCode: "not_interested" });
@@ -152,6 +156,7 @@ describe("invite info endpoint", () => {
       inviteeFirstName: "Invitee",
       inviteType: "attendee",
       ttlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     const response = await inviteInfo(
@@ -177,6 +182,7 @@ describe("invite info endpoint", () => {
       inviteeFirstName: "Still",
       inviteType: "attendee",
       ttlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     await run(env.DB, "UPDATE invites SET expires_at = datetime('now', '-1 day') WHERE id = ?", [invite.id]);
@@ -228,6 +234,7 @@ describe("invite accept endpoint", () => {
       inviteeEmail: "speaker@example.test",
       inviteType: "speaker",
       ttlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     const response = await inviteAccept(
@@ -260,6 +267,7 @@ describe("invite accept endpoint", () => {
       inviteeFirstName: "Alice",
       inviteType: "attendee",
       ttlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     const response = await inviteAccept(
@@ -303,6 +311,7 @@ describe("invite accept endpoint", () => {
       inviteeEmail: "real@example.test",
       inviteType: "attendee",
       ttlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     const response = await inviteAccept(
@@ -363,6 +372,7 @@ describe("invite reminders endpoint", () => {
       inviteeEmail: "remind@example.test",
       inviteType: "attendee",
       ttlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     const response = await inviteReminders(
@@ -392,6 +402,7 @@ describe("invite reminders endpoint", () => {
       inviteeEmail: "remind30@example.test",
       inviteType: "attendee",
       ttlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     const response = await inviteReminders(
@@ -420,6 +431,7 @@ describe("invite reminders endpoint", () => {
       inviteeEmail: "resume@example.test",
       inviteType: "attendee",
       ttlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     // Pause first
@@ -462,6 +474,7 @@ describe("invite reminders endpoint", () => {
       inviteeEmail: "unsub@example.test",
       inviteType: "attendee",
       ttlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     const response = await inviteReminders(

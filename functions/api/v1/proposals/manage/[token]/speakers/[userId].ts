@@ -12,6 +12,7 @@ import {
   organizationNameSchema,
   jobTitleSchema,
 } from "../../../../../../../assets/shared/schemas/api";
+import { requireInternalSecret } from "../../../../../../_lib/request";
 
 const speakerRoleSchema = z.enum(["proposer", "speaker", "co_speaker", "moderator", "panelist"]);
 
@@ -33,8 +34,8 @@ const speakerProfileSchema = z.object({
     .optional(),
 });
 
-async function loadSpeakerContext(db: D1Database, manageToken: string, userId: string) {
-  const proposal = await getProposalByManageToken(db, manageToken);
+async function loadSpeakerContext(db: D1Database, manageToken: string, userId: string, signingSecret: string) {
+  const proposal = await getProposalByManageToken(db, manageToken, signingSecret);
   const speaker = await first<{
     id: string;
     user_id: string;
@@ -69,7 +70,12 @@ async function loadSpeakerContext(db: D1Database, manageToken: string, userId: s
 
 export async function onRequestPatch(c: any): Promise<Response> {
   const body = await parseJsonBody(c.req, speakerProfileSchema);
-  const { proposal, speaker } = await loadSpeakerContext(c.env.DB, c.req.param("token"), c.req.param("userId"));
+  const { proposal, speaker } = await loadSpeakerContext(
+    c.env.DB,
+    c.req.param("token"),
+    c.req.param("userId"),
+    requireInternalSecret(c.env),
+  );
 
   const previousLinks = speaker.links_json ? JSON.parse(speaker.links_json) : [];
   const nextValues = {

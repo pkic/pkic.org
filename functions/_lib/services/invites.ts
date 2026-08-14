@@ -1,10 +1,16 @@
 import { AppError } from "../errors";
 import { all, first, run } from "../db/queries";
 import { normalizeEmail } from "../validation";
-import { randomToken, sha256Hex } from "../utils/crypto";
 import { nowIso, addHours } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { recordEngagement } from "./engagement";
+import {
+  issueDatabaseCapability,
+  newCapabilityLinkSecret,
+  queuedCapabilityToken,
+  signedOrQueuedCapability,
+  verifyDatabaseCapability,
+} from "./capability-links";
 import type { DatabaseLike } from "../types";
 
 export interface InviteRecord {
@@ -16,7 +22,7 @@ export interface InviteRecord {
   invitee_first_name: string | null;
   invitee_last_name: string | null;
   invite_type: "attendee" | "speaker";
-  token_hash: string;
+  link_secret: string;
   status: "sent" | "accepted" | "declined" | "expired" | "revoked";
   decline_reason_code: string | null;
   decline_reason_note: string | null;
@@ -117,6 +123,7 @@ export async function createInvite(
     inviteType: "attendee" | "speaker";
     sourceType?: string;
     ttlHours?: number | null;
+    signingSecret?: string;
   },
   // isNew: true  → fresh invite row created, caller must send the invite email.
   // isNew: false → invitee already has an active invite; this inviter was recorded
@@ -208,8 +215,7 @@ export async function createInvite(
     return { invite: existingInvite, token: "", isNew: false };
   }
 
-  const token = randomToken(24);
-  const tokenHash = await sha256Hex(token);
+  const linkSecret = newCapabilityLinkSecret();
 
   const invite: InviteRecord = {
     id: uuid(),
@@ -220,7 +226,7 @@ export async function createInvite(
     invitee_first_name: payload.inviteeFirstName ?? null,
     invitee_last_name: payload.inviteeLastName ?? null,
     invite_type: payload.inviteType,
-    token_hash: tokenHash,
+    link_secret: linkSecret,
     status: "sent",
     decline_reason_code: null,
     decline_reason_note: null,
@@ -241,7 +247,7 @@ export async function createInvite(
     db,
     `INSERT INTO invites (
       id, event_id, inviter_user_id, inviter_registration_id, invitee_email, invitee_first_name, invitee_last_name, invite_type,
-      token_hash, status, decline_reason_code, decline_reason_note, unsubscribe_future, reminder_count,
+      link_secret, status, decline_reason_code, decline_reason_note, unsubscribe_future, reminder_count,
       last_communication_at, reminders_paused_until,
       max_uses, used_count, source_type, expires_at, accepted_at, declined_at, created_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -254,7 +260,7 @@ export async function createInvite(
       invite.invitee_first_name,
       invite.invitee_last_name,
       invite.invite_type,
-      invite.token_hash,
+      invite.link_secret,
       invite.status,
       invite.decline_reason_code,
       invite.decline_reason_note,
@@ -293,6 +299,12 @@ export async function createInvite(
     });
   }
 
+  const token = await signedOrQueuedCapability({
+    signingSecret: payload.signingSecret,
+    linkSecret,
+    purpose: "invite",
+    resourceId: invite.id,
+  });
   return { invite, token, isNew: true };
 }
 
@@ -320,11 +332,19 @@ export async function getInviteInviters(db: DatabaseLike, inviteId: string): Pro
 export async function findInviteByToken(
   db: DatabaseLike,
   token: string,
+  signingSecret: string,
   inviteId?: string | null,
 ): Promise<InviteRecord> {
-  const tokenHash = await sha256Hex(token);
-  const invite = await first<InviteRecord>(db, "SELECT * FROM invites WHERE token_hash = ? AND (? IS NULL OR id = ?)", [
-    tokenHash,
+  const verified = await verifyDatabaseCapability({ db, signingSecret, purpose: "invite", token });
+  if (!verified.ok) {
+    throw new AppError(
+      verified.reason === "expired" ? 410 : 404,
+      verified.reason === "expired" ? "INVITE_EXPIRED" : "INVITE_NOT_FOUND",
+      verified.reason === "expired" ? "Invite link has expired" : "Invite token is invalid",
+    );
+  }
+  const invite = await first<InviteRecord>(db, "SELECT * FROM invites WHERE id = ? AND (? IS NULL OR id = ?)", [
+    verified.resourceId,
     inviteId ?? null,
     inviteId ?? null,
   ]);
@@ -452,11 +472,8 @@ export async function listPendingInviteReminders(db: DatabaseLike): Promise<Invi
   );
 }
 
-export async function refreshInviteToken(db: DatabaseLike, inviteId: string): Promise<string> {
-  const token = randomToken(24);
-  const tokenHash = await sha256Hex(token);
-  await run(db, "UPDATE invites SET token_hash = ? WHERE id = ?", [tokenHash, inviteId]);
-  return token;
+export async function refreshInviteToken(db: DatabaseLike, inviteId: string, signingSecret: string): Promise<string> {
+  return issueDatabaseCapability({ db, signingSecret, purpose: "invite", resourceId: inviteId });
 }
 
 export async function markInviteReminderSent(db: DatabaseLike, inviteId: string): Promise<void> {
@@ -598,9 +615,8 @@ export async function bulkCreateAttendeesAdmin(
 
   if (toCreate.length === 0) return outcomes;
 
-  // --- Round-trip 2: generate tokens in parallel (in-process crypto, no DB) ---
-  const tokens = await Promise.all(toCreate.map(() => randomToken(24)));
-  const tokenHashes = await Promise.all(tokens.map((t) => sha256Hex(t)));
+  // --- Round-trip 2: generate stable per-invite revocation secrets in-process ---
+  const linkSecrets = toCreate.map(() => newCapabilityLinkSecret());
   const expiresAt = computeExpiry();
 
   // --- Round-trip(s) 3: INSERT new invites, chunked at 500 per db.batch() ---
@@ -616,7 +632,7 @@ export async function bulkCreateAttendeesAdmin(
           .prepare(
             `INSERT INTO invites (
               id, event_id, inviter_user_id, inviter_registration_id, invitee_email,
-              invitee_first_name, invitee_last_name, invite_type, token_hash, status,
+              invitee_first_name, invitee_last_name, invite_type, link_secret, status,
               decline_reason_code, decline_reason_note, unsubscribe_future, reminder_count,
               last_communication_at, reminders_paused_until, max_uses, used_count,
               source_type, expires_at, accepted_at, declined_at, created_at
@@ -629,7 +645,7 @@ export async function bulkCreateAttendeesAdmin(
             tc.email,
             item.inviteeFirstName ?? null,
             item.inviteeLastName ?? null,
-            tokenHashes[j],
+            linkSecrets[j],
             now, // last_communication_at
             item.sourceType ?? "direct",
             expiresAt,
@@ -639,11 +655,11 @@ export async function bulkCreateAttendeesAdmin(
     );
   }
 
-  // Populate the outcome objects with the generated ids and tokens.
+  // Queue-safe placeholders are materialized into signed links only when sent.
   for (let j = 0; j < toCreate.length; j++) {
     const outcome = outcomes[toCreate[j].idx];
     outcome.inviteId = inviteIds[j];
-    outcome.token = tokens[j];
+    outcome.token = queuedCapabilityToken("invite", inviteIds[j]);
   }
 
   return outcomes;
@@ -753,9 +769,8 @@ export async function bulkCreateSpeakersAdmin(
 
   if (toCreate.length === 0) return outcomes;
 
-  // --- Round-trip 2: generate tokens in parallel ---
-  const tokens = await Promise.all(toCreate.map(() => randomToken(24)));
-  const tokenHashes = await Promise.all(tokens.map((t) => sha256Hex(t)));
+  // --- Round-trip 2: generate stable per-invite revocation secrets ---
+  const linkSecrets = toCreate.map(() => newCapabilityLinkSecret());
   const expiresAt = computeExpiry();
 
   // --- Round-trip(s) 3: INSERT new invites, chunked at 500 per db.batch() ---
@@ -771,7 +786,7 @@ export async function bulkCreateSpeakersAdmin(
           .prepare(
             `INSERT INTO invites (
               id, event_id, inviter_user_id, inviter_registration_id, invitee_email,
-              invitee_first_name, invitee_last_name, invite_type, token_hash, status,
+              invitee_first_name, invitee_last_name, invite_type, link_secret, status,
               decline_reason_code, decline_reason_note, unsubscribe_future, reminder_count,
               last_communication_at, reminders_paused_until, max_uses, used_count,
               source_type, expires_at, accepted_at, declined_at, created_at
@@ -784,7 +799,7 @@ export async function bulkCreateSpeakersAdmin(
             tc.email,
             item.inviteeFirstName ?? null,
             item.inviteeLastName ?? null,
-            tokenHashes[j],
+            linkSecrets[j],
             now,
             item.sourceType ?? "direct",
             expiresAt,
@@ -797,7 +812,7 @@ export async function bulkCreateSpeakersAdmin(
   for (let j = 0; j < toCreate.length; j++) {
     const outcome = outcomes[toCreate[j].idx];
     outcome.inviteId = inviteIds[j];
-    outcome.token = tokens[j];
+    outcome.token = queuedCapabilityToken("invite", inviteIds[j]);
   }
 
   return outcomes;

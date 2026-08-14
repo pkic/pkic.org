@@ -1,6 +1,7 @@
 import type { DatabaseLike, Env, PagesContext } from "../../functions/_lib/types";
 import type { AdminContext } from "../../functions/_lib/db/context";
 import type { RateLimitBinding } from "../../functions/_lib/rate-limit";
+import { materializeQueuedCapabilityLinks } from "../../functions/_lib/services/capability-links";
 
 /**
  * Query helper replacing the old `D1DatabaseShim.raw()` method.
@@ -15,6 +16,18 @@ export async function queryAll<T = Record<string, unknown>>(
   const stmt = boundValues.length > 0 ? db.prepare(sql).bind(...boundValues) : db.prepare(sql);
   const { results } = await stmt.all<T>();
   return results;
+}
+
+export async function deliveredEmailPayload<T extends Record<string, unknown>>(
+  db: DatabaseLike,
+  environment: Pick<Env, "INTERNAL_SIGNING_SECRET">,
+  payloadJson: string,
+): Promise<T> {
+  return (await materializeQueuedCapabilityLinks(
+    db,
+    environment,
+    JSON.parse(payloadJson) as Record<string, unknown>,
+  )) as T;
 }
 
 export function createContext<P extends Record<string, string>>(

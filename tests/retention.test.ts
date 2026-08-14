@@ -35,11 +35,11 @@ describe("retention job", () => {
       env.DB.prepare(`
         INSERT INTO registrations (
           id, event_id, user_id, invite_id, status, attendance_type, source_type, source_ref,
-          custom_answers_json, referred_by_code, confirmation_token_hash, confirmation_token_expires_at,
-          manage_token_hash, confirmed_at, cancelled_at, created_at, updated_at
+          custom_answers_json, referred_by_code, confirmation_link_secret,
+          manage_link_secret, confirmed_at, cancelled_at, created_at, updated_at
         ) VALUES (
           '${registrationId}', '${eventId}', '${userId}', NULL, 'registered', 'virtual', 'direct',
-          'sensitive-source', '{"diet":"vegan"}', NULL, NULL, NULL, 'hash', datetime('now'), NULL, datetime('now'), datetime('now')
+          'sensitive-source', '{"diet":"vegan"}', NULL, NULL, 'hash', datetime('now'), NULL, datetime('now'), datetime('now')
         )
       `),
       env.DB.prepare(`

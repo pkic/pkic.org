@@ -2,7 +2,7 @@ import { all } from "../../db/queries";
 import { inviteDeclineUrl, registrationPageUrl, proposalPageUrl } from "../frontend-links";
 import { formatInviterList, type InviteInviterInfo } from "../invites";
 import { buildEventEmailVariables } from "../events";
-import { randomToken, sha256Hex } from "../../utils/crypto";
+import { queuedCapabilityToken } from "../capability-links";
 import {
   daysUntil,
   inviteReminderSubject,
@@ -10,12 +10,7 @@ import {
   type EventRouteRow,
   type ReminderCandidatePreview,
 } from "../reminders-support";
-import {
-  batchStatements,
-  batchQueueEmailsAndUpdateState,
-  isAttendeeInviteReminderAllowed,
-  attendeeEffectiveDeadline,
-} from "./shared";
+import { batchQueueEmailsAndUpdateState, isAttendeeInviteReminderAllowed, attendeeEffectiveDeadline } from "./shared";
 import type { DatabaseLike } from "../../types";
 
 export async function runInviteReminders(
@@ -89,20 +84,6 @@ export async function runInviteReminders(
   }
 
   if (!dryRun && filteredInvites.length > 0) {
-    const tokenData = await Promise.all(
-      filteredInvites.map(async (invite) => {
-        const token = randomToken(24);
-        const hash = await sha256Hex(token);
-        return { id: invite.id, token, hash };
-      }),
-    );
-    const tokenByInviteId = new Map(tokenData.map((t) => [t.id, t.token]));
-
-    await batchStatements(
-      db,
-      tokenData.map((t) => db.prepare("UPDATE invites SET token_hash = ? WHERE id = ?").bind(t.hash, t.id)),
-    );
-
     const inviteIds = filteredInvites.map((i) => i.id);
     const inviterRows = await all<InviteInviterInfo & { invite_id: string }>(
       db,
@@ -136,7 +117,7 @@ export async function runInviteReminders(
         settings_json: invite.event_settings_json,
       };
       const isAttendee = invite.invite_type === "attendee";
-      const token = tokenByInviteId.get(invite.id)!;
+      const token = queuedCapabilityToken("invite", invite.id);
       const actionUrl = isAttendee
         ? registrationPageUrl(appBaseUrl, event, { invite: token, inviteId: invite.id, source: "invite_reminder" })
         : proposalPageUrl(appBaseUrl, event, { invite: token, inviteId: invite.id, source: "speaker_invite_reminder" });
@@ -150,6 +131,7 @@ export async function runInviteReminders(
         recipientEmail: invite.invitee_email,
         templateKey: isAttendee ? "attendee_invite" : "speaker_invite",
         subject,
+        capabilityLinkValues: [actionUrl, declineUrl],
         data: {
           ...buildEventEmailVariables(event, appBaseUrl),
           firstName: invite.invitee_first_name ?? "",

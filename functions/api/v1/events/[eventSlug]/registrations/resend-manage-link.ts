@@ -1,8 +1,8 @@
 /**
  * POST /api/v1/events/:eventSlug/registrations/resend-manage-link
  *
- * Rotates the registration's manage token and queues an email with a fresh
- * management link, sent to the address provided by the caller.
+ * Queues a fresh, expiring management link without invalidating other
+ * unexpired links sent to the attendee.
  *
  * The response is always { success: true } regardless of whether the email
  * matched a registration — this prevents enumeration of registered attendees.
@@ -11,15 +11,14 @@ import { z } from "zod";
 import { parseJsonBody } from "../../../../../_lib/validation";
 import { json } from "../../../../../_lib/http";
 import { getEventBySlug, buildEventEmailVariables } from "../../../../../_lib/services/events";
-import { first, run } from "../../../../../_lib/db/queries";
-import { randomToken, sha256Hex } from "../../../../../_lib/utils/crypto";
-import { nowIso } from "../../../../../_lib/utils/time";
+import { first } from "../../../../../_lib/db/queries";
 import { getClientIp } from "../../../../../_lib/request";
 import { enforceRateLimit } from "../../../../../_lib/rate-limit";
 import { processOutboxByIdBackground, queueEmail } from "../../../../../_lib/email/outbox";
 import { registrationManagePageUrl } from "../../../../../_lib/services/frontend-links";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { normalizedEmailSchema } from "../../../../../../assets/shared/schemas/api";
+import { queuedCapabilityToken } from "../../../../../_lib/services/capability-links";
 
 const schema = z.object({
   email: normalizedEmailSchema,
@@ -65,17 +64,11 @@ export async function onRequestPost(c: any): Promise<Response> {
   );
 
   if (row) {
-    const now = nowIso();
-    const newToken = randomToken(24);
-    const newHash = await sha256Hex(newToken);
-
-    await run(c.env.DB, `UPDATE registrations SET manage_token_hash = ?, updated_at = ? WHERE id = ?`, [
-      newHash,
-      now,
-      row.reg_id,
-    ]);
-
-    const manageUrl = registrationManagePageUrl(appBaseUrl, event, newToken);
+    const manageUrl = registrationManagePageUrl(
+      appBaseUrl,
+      event,
+      queuedCapabilityToken("registration_manage", row.reg_id),
+    );
 
     const outboxId = await queueEmail(c.env.DB, {
       eventId: event.id,
@@ -83,6 +76,7 @@ export async function onRequestPost(c: any): Promise<Response> {
       recipientEmail: body.email,
       recipientUserId: row.user_id,
       messageType: "transactional",
+      capabilityLinkValues: [manageUrl],
       data: {
         ...buildEventEmailVariables(event, appBaseUrl),
         firstName: row.first_name ?? "",

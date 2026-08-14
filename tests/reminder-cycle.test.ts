@@ -25,6 +25,7 @@ const BASE_PAYLOAD = {
   appBaseUrl: BASE_URL,
   reminderIntervalDays: 0, // cutoff = now → any past communication is eligible
   pendingConfirmationReminderIntervalDays: 1,
+  confirmationLinkTtlHours: 48,
   maxInviteReminders: 3,
   maxPendingConfirmationReminders: 3,
   maxPresentationReminders: 3,
@@ -59,7 +60,7 @@ async function insertAttendeeInvite(
   await db
     .prepare(
       `INSERT INTO invites
-         (id, event_id, invitee_email, invitee_first_name, invitee_last_name, invite_type, token_hash,
+         (id, event_id, invitee_email, invitee_first_name, invitee_last_name, invite_type, link_secret,
           status, reminder_count, last_communication_at, expires_at, source_type, max_uses, used_count, created_at)
        VALUES (?, ?, ?, 'Alice', 'Attendee', 'attendee', ?, 'sent', ?, datetime('now', '-2 days'), ?, 'direct', 1, 0, datetime('now', '-2 days'))`,
     )
@@ -85,7 +86,7 @@ async function insertProposalAndSpeaker(opts: {
     .prepare(
       `INSERT INTO session_proposals
          (id, event_id, proposer_user_id, status, proposal_type, title, abstract,
-          manage_token_hash, submitted_at, updated_at)
+          manage_link_secret, submitted_at, updated_at)
        VALUES (?, ?, ?, ?, 'talk', 'Test Proposal', 'Abstract text.',
                ?, datetime('now', '-3 days'), datetime('now', '-3 days'))`,
     )
@@ -95,9 +96,9 @@ async function insertProposalAndSpeaker(opts: {
   await db
     .prepare(
       `INSERT INTO proposal_speakers
-         (id, proposal_id, user_id, role, status, manage_token_hash,
+         (id, proposal_id, user_id, role, status, manage_link_secret,
           speaker_invite_reminder_count, presentation_reminder_count, created_at)
-       VALUES (?, ?, ?, ?, ?, NULL, ?, ?, datetime('now', '-2 days'))`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '-2 days'))`,
     )
     .bind(
       opts.speakerId,
@@ -105,6 +106,7 @@ async function insertProposalAndSpeaker(opts: {
       opts.userId,
       opts.speakerRole ?? "co_speaker",
       opts.speakerStatus ?? "invited",
+      `speaker-manage-secret-${opts.speakerId}`,
       opts.reminderCount ?? 0,
       opts.reminderCount ?? 0,
     )
@@ -122,34 +124,23 @@ async function insertPendingRegistration(opts: {
   regId: string;
   eventId: string;
   userId: string;
-  confirmationExpiresAt?: string;
   deadlineAt?: string;
   reminderSentAt?: string | null;
 }): Promise<void> {
   const hash = `conf-hash-${opts.regId}`;
   const manageHash = `manage-hash-${opts.regId}`;
-  const confirmationExpiresAt = opts.confirmationExpiresAt ?? new Date(Date.now() + 12 * 3_600_000).toISOString();
   const deadlineAt = opts.deadlineAt ?? new Date(Date.now() + 12 * 24 * 3_600_000).toISOString();
   await db
     .prepare(
       `INSERT INTO registrations
          (id, event_id, user_id, status, attendance_type, source_type,
-          confirmation_token_hash, confirmation_token_expires_at, pending_confirmation_deadline_at,
-          confirmation_reminder_sent_at, manage_token_hash,
+          confirmation_link_secret, pending_confirmation_deadline_at,
+          confirmation_reminder_sent_at, manage_link_secret,
           created_at, updated_at)
        VALUES (?, ?, ?, 'pending_email_confirmation', 'virtual', 'open',
-               ?, ?, ?, ?, ?, datetime('now', '-2 days'), datetime('now'))`,
+               ?, ?, ?, ?, datetime('now', '-2 days'), datetime('now'))`,
     )
-    .bind(
-      opts.regId,
-      opts.eventId,
-      opts.userId,
-      hash,
-      confirmationExpiresAt,
-      deadlineAt,
-      opts.reminderSentAt ?? null,
-      manageHash,
-    )
+    .bind(opts.regId, opts.eventId, opts.userId, hash, deadlineAt, opts.reminderSentAt ?? null, manageHash)
     .run();
 }
 
@@ -215,15 +206,15 @@ describe("runReminderCycle", () => {
     expect(result.preview.attendeeInvites).toHaveLength(1);
     expect(result.preview.attendeeInvites[0].recipientEmail).toBe("alice@example.test");
 
-    // Token must have been refreshed (hash changed)
+    // The stable revocation secret must not rotate when a reminder is sent.
     const invite = (
-      await queryAll<{ token_hash: string; reminder_count: number; last_communication_at: string }>(
+      await queryAll<{ link_secret: string; reminder_count: number; last_communication_at: string }>(
         db,
-        "SELECT token_hash, reminder_count, last_communication_at FROM invites WHERE id = ?",
+        "SELECT link_secret, reminder_count, last_communication_at FROM invites WHERE id = ?",
         inviteId,
       )
     )[0];
-    expect(invite.token_hash).not.toBe(`initial-hash-${inviteId}`);
+    expect(invite.link_secret).toBe(`initial-hash-${inviteId}`);
     expect(invite.reminder_count).toBe(1);
     expect(invite.last_communication_at).not.toBeNull();
 
@@ -320,15 +311,15 @@ describe("runReminderCycle", () => {
     expect(result.preview.coSpeakerInvites).toHaveLength(1);
     expect(result.preview.coSpeakerInvites[0].recipientEmail).toBe("cospeaker@example.test");
 
-    // Manage token must have been set
+    // The stable revocation secret must not rotate when a reminder is sent.
     const speaker = (
-      await queryAll<{ manage_token_hash: string | null; speaker_invite_reminder_count: number }>(
+      await queryAll<{ manage_link_secret: string | null; speaker_invite_reminder_count: number }>(
         db,
-        "SELECT manage_token_hash, speaker_invite_reminder_count FROM proposal_speakers WHERE id = ?",
+        "SELECT manage_link_secret, speaker_invite_reminder_count FROM proposal_speakers WHERE id = ?",
         speakerRowId,
       )
     )[0];
-    expect(speaker.manage_token_hash).not.toBeNull();
+    expect(speaker.manage_link_secret).toBe(`speaker-manage-secret-${speakerRowId}`);
     expect(speaker.speaker_invite_reminder_count).toBe(1);
 
     // Email queued
@@ -385,14 +376,14 @@ describe("runReminderCycle", () => {
     expect(result.preview.presentationUploads[0].recipientEmail).toBe("speaker@example.test");
 
     const speaker = (
-      await queryAll<{ presentation_reminder_count: number; manage_token_hash: string | null }>(
+      await queryAll<{ presentation_reminder_count: number; manage_link_secret: string | null }>(
         db,
-        "SELECT presentation_reminder_count, manage_token_hash FROM proposal_speakers WHERE id = ?",
+        "SELECT presentation_reminder_count, manage_link_secret FROM proposal_speakers WHERE id = ?",
         speakerRowId,
       )
     )[0];
     expect(speaker.presentation_reminder_count).toBe(1);
-    expect(speaker.manage_token_hash).not.toBeNull();
+    expect(speaker.manage_link_secret).toBe(`speaker-manage-secret-${speakerRowId}`);
 
     const outbox = await queryAll<{ template_key: string }>(db, "SELECT template_key FROM email_outbox");
     expect(outbox).toHaveLength(1);
@@ -464,18 +455,12 @@ describe("runReminderCycle", () => {
 
     const reg = (
       await queryAll<{
-        confirmation_token_hash: string;
+        confirmation_link_secret: string;
         confirmation_reminder_sent_at: string | null;
-        confirmation_token_expires_at: string | null;
-      }>(
-        db,
-        "SELECT confirmation_token_hash, confirmation_reminder_sent_at, confirmation_token_expires_at FROM registrations WHERE id = ?",
-        regId,
-      )
+      }>(db, "SELECT confirmation_link_secret, confirmation_reminder_sent_at FROM registrations WHERE id = ?", regId)
     )[0];
-    expect(reg.confirmation_token_hash).not.toBe(`conf-hash-${regId}`);
+    expect(reg.confirmation_link_secret).toBe(`conf-hash-${regId}`);
     expect(reg.confirmation_reminder_sent_at).not.toBeNull();
-    expect(reg.confirmation_token_expires_at).toBeNull();
 
     const outbox = await queryAll<{ template_key: string; payload_json: string }>(
       db,
@@ -801,8 +786,8 @@ describe("runReminderCycle", () => {
     await insertAttendeeInvite(inviteId, eventId, "dryrun@example.test");
 
     const initialHash = (
-      await queryAll<{ token_hash: string }>(db, "SELECT token_hash FROM invites WHERE id = ?", inviteId)
-    )[0].token_hash;
+      await queryAll<{ link_secret: string }>(db, "SELECT link_secret FROM invites WHERE id = ?", inviteId)
+    )[0].link_secret;
 
     const result = await runReminderCycle(db, { ...BASE_PAYLOAD, dryRun: true });
 
@@ -811,13 +796,13 @@ describe("runReminderCycle", () => {
 
     // No DB writes: token unchanged, count unchanged, no outbox rows
     const invite = (
-      await queryAll<{ token_hash: string; reminder_count: number }>(
+      await queryAll<{ link_secret: string; reminder_count: number }>(
         db,
-        "SELECT token_hash, reminder_count FROM invites WHERE id = ?",
+        "SELECT link_secret, reminder_count FROM invites WHERE id = ?",
         inviteId,
       )
     )[0];
-    expect(invite.token_hash).toBe(initialHash);
+    expect(invite.link_secret).toBe(initialHash);
     expect(invite.reminder_count).toBe(0);
 
     const outbox = await queryAll(db, "SELECT id FROM email_outbox");
@@ -886,7 +871,6 @@ describe("runReminderCycle", () => {
       regId: confRegId,
       eventId,
       userId: confUserId,
-      confirmationExpiresAt: new Date(Date.now() + 6 * 3_600_000).toISOString(),
     });
 
     const result = await runReminderCycle(db, BASE_PAYLOAD);

@@ -11,7 +11,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
-import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
+import { createContext, deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 import { onRequestPost as inviteSpeakersBulk } from "../functions/api/v1/admin/events/[eventSlug]/invites/speakers/bulk";
@@ -26,6 +26,7 @@ import { onRequestGet as confirmRegistrationEmail } from "../functions/api/v1/ev
 import { onRequestPost as speakerInvites } from "../functions/api/v1/events/[eventSlug]/speaker-invites";
 import { findOrCreateUser } from "../functions/_lib/services/users";
 import app from "../functions/router";
+import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
 
 interface StoredObject {
   body: ArrayBuffer;
@@ -106,8 +107,20 @@ async function inviteSpeakerAndSubmitProposal(): Promise<{
     ),
   );
   expect(inviteResponse.status).toBe(200);
-  const { created } = (await inviteResponse.json()) as { created: Array<{ inviteToken: string }> };
-  const inviteToken = created[0].inviteToken;
+  await inviteResponse.json();
+  const invite = (
+    await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM invites WHERE invitee_email = ? AND invite_type = 'speaker' ORDER BY created_at DESC LIMIT 1",
+      "speaker@example.test",
+    )
+  )[0];
+  const inviteToken = await issueDatabaseCapability({
+    db: env.DB,
+    signingSecret: env.INTERNAL_SIGNING_SECRET!,
+    purpose: "invite",
+    resourceId: invite.id,
+  });
 
   // Submit a proposal with the invite
   const proposalResponse = await submitProposal(
@@ -163,6 +176,7 @@ async function inviteSpeakerAndSubmitProposal(): Promise<{
     proposalId,
     userId: coSpeakerUser.id,
     role: "co_speaker",
+    signingSecret: env.INTERNAL_SIGNING_SECRET!,
   });
 
   return { speakerManageToken, proposalId, coSpeakerUserId: coSpeakerUser.id, proposalManageToken: manageToken };
@@ -514,7 +528,7 @@ describe("speaker self-management endpoints", () => {
       env.DB,
       "SELECT payload_json FROM email_outbox ORDER BY created_at DESC LIMIT 1",
     );
-    const payload = JSON.parse(outboxRows[0].payload_json) as { profileUrl?: string };
+    const payload = await deliveredEmailPayload<{ profileUrl?: string }>(env.DB, env, outboxRows[0].payload_json);
     expect(payload.profileUrl).toBeDefined();
     const profileUrl = new URL(payload.profileUrl!);
     const token = profileUrl.searchParams.get("token");
@@ -573,7 +587,7 @@ describe("speaker nomination by attendees", () => {
       env.DB,
       "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' ORDER BY created_at DESC LIMIT 1",
     );
-    const emailPayload = JSON.parse(outbox[0].payload_json) as { confirmationUrl: string };
+    const emailPayload = await deliveredEmailPayload<{ confirmationUrl: string }>(env.DB, env, outbox[0].payload_json);
     const confirmUrl = new URL(emailPayload.confirmationUrl);
     const confirmToken = confirmUrl.searchParams.get("token") as string;
 

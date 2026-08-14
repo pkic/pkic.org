@@ -1,12 +1,11 @@
-import { first, run } from "../../db/queries";
+import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import { queueEmail } from "../../email/outbox";
 import { buildEventEmailVariables } from "../events";
 import { registrationManagePageUrl } from "../frontend-links";
 import { getAcceptedTermsTextForRegistration, getCustomAnswerRows } from "../../utils/registration-email";
 import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../../utils/attendance";
-import { randomToken, sha256Hex } from "../../utils/crypto";
-import { nowIso } from "../../utils/time";
+import { queuedCapabilityToken } from "../capability-links";
 import { getRegistrationDayAttendance } from "../event-days";
 import { listDayWaitlistForRegistration } from "./day-waitlist";
 import type { DatabaseLike } from "../../types";
@@ -74,14 +73,7 @@ export async function queueRegistrationStatusEmail(
   const customAnswerRows = await getCustomAnswerRows(db, params.event.id, registration.custom_answers_json);
   const acceptedTermsText = await getAcceptedTermsTextForRegistration(db, registration.id);
 
-  const manageToken = randomToken(24);
-  const manageTokenHash = await sha256Hex(manageToken);
-  await run(db, "UPDATE registrations SET manage_token_hash = ?, updated_at = ? WHERE id = ?", [
-    manageTokenHash,
-    nowIso(),
-    registration.id,
-  ]);
-
+  const manageToken = queuedCapabilityToken("registration_manage", registration.id);
   const manageUrl = registrationManagePageUrl(params.appBaseUrl, params.event, manageToken);
   const recipientEmail = params.recipientEmailOverride ?? user.email;
   const outboxId = await queueEmail(db, {
@@ -92,6 +84,7 @@ export async function queueRegistrationStatusEmail(
     recipientUserId: user.id,
     messageType: "transactional",
     subject: params.subject,
+    capabilityLinkValues: [manageUrl],
     data: {
       ...buildEventEmailVariables(params.event, params.appBaseUrl),
       firstName: user.first_name ?? "",

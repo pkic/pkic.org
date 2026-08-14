@@ -1,22 +1,21 @@
 /**
  * POST /api/v1/events/:eventSlug/registrations/resend-confirmation
  *
- * Rotates the confirmation token and resends the confirm-email for a
- * `pending_email_confirmation` registration. Accepts either the current
- * confirmation token or an email address for stale-token recovery.
+ * Resends the confirm-email for a `pending_email_confirmation` registration.
+ * Accepts either the current confirmation link or an email address for link
+ * recovery. Resending does not invalidate other unexpired links.
  *
- * Rate limiting / abuse prevention is handled at the edge (Cloudflare WAF) —
- * the endpoint itself enforces only that the registration is unconfirmed.
+ * The endpoint applies the same per-email and per-IP recovery limits as the
+ * other public link-recovery routes.
  */
 
 import { OpenAPIRoute } from "chanfana";
 import { parseJsonBody } from "../../../../../_lib/validation";
 import { json } from "../../../../../_lib/http";
 import { AppError } from "../../../../../_lib/errors";
-import { resolveAppBaseUrl } from "../../../../../_lib/config";
+import { getConfig, resolveAppBaseUrl } from "../../../../../_lib/config";
 import { buildEventEmailVariables, getEventBySlug } from "../../../../../_lib/services/events";
 import { first, run } from "../../../../../_lib/db/queries";
-import { randomToken, sha256Hex } from "../../../../../_lib/utils/crypto";
 import { nowIso } from "../../../../../_lib/utils/time";
 import { processOutboxByIdBackground, queueEmail } from "../../../../../_lib/email/outbox";
 import { getRegistrationDayAttendance } from "../../../../../_lib/services/event-days";
@@ -28,42 +27,47 @@ import type { UserRecord } from "../../../../../_lib/services/users";
 import type { RegistrationRecord } from "../../../../../_lib/services/registrations/types";
 import { registrationResendConfirmationSchema } from "../../../../../../assets/shared/schemas/api";
 import { registrationResendConfirmationRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts";
+import { queuedCapabilityToken, verifyDatabaseCapability } from "../../../../../_lib/services/capability-links";
+import { getClientIp, requireInternalSecret } from "../../../../../_lib/request";
+import { enforceRateLimit } from "../../../../../_lib/rate-limit";
 
 export async function onRequestPost(c: any): Promise<Response> {
   c.set("sensitive", true);
 
   const body = await parseJsonBody(c.req, registrationResendConfirmationSchema);
+  if (body.email) {
+    await enforceRateLimit({
+      binding: c.env.EMAIL_RATE_LIMITER,
+      namespace: "registration-resend-confirmation:email",
+      key: body.email,
+    });
+  }
+  await enforceRateLimit({
+    binding: c.env.IP_RATE_LIMITER,
+    namespace: "registration-resend-confirmation:ip",
+    key: getClientIp(c.req.raw),
+  });
 
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const config = getConfig(c.env, c.req.raw);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
-  // Look up the registration by the current confirmation token first. When a
-  // stale rotated token is used, the non-secret id from the link identifies
-  // the pending registration so we can send a fresh token to the stored email
-  // without accepting the stale token or using outbox/token history.
-  const tokenHash = body.token ? await sha256Hex(body.token) : null;
-  let registration = await first<RegistrationRecord>(
-    c.env.DB,
-    `SELECT r.*
-     FROM   registrations r
-     WHERE  r.confirmation_token_hash = ?
-       AND  r.status = 'pending_email_confirmation'
-       AND  r.event_id = ?
-       AND  (? IS NULL OR r.id = ?)`,
-    [tokenHash, event.id, body.id ?? null, body.id ?? null],
-  );
-
-  if (!registration && body.id && body.token) {
-    registration = await first<RegistrationRecord>(
-      c.env.DB,
-      `SELECT r.*
-       FROM   registrations r
-       WHERE  r.id = ?
-         AND  r.event_id = ?
-         AND  r.status = 'pending_email_confirmation'
-       LIMIT 1`,
-      [body.id, event.id],
-    );
+  let registration: RegistrationRecord | null = null;
+  if (body.token) {
+    const verified = await verifyDatabaseCapability({
+      db: c.env.DB,
+      signingSecret: requireInternalSecret(c.env),
+      purpose: "registration_confirm",
+      token: body.token,
+    });
+    if (verified.ok && (!body.id || body.id === verified.resourceId)) {
+      registration = await first<RegistrationRecord>(
+        c.env.DB,
+        `SELECT * FROM registrations
+         WHERE id = ? AND event_id = ? AND status = 'pending_email_confirmation'`,
+        [verified.resourceId, event.id],
+      );
+    }
   }
 
   if (!registration && body.email) {
@@ -94,18 +98,13 @@ export async function onRequestPost(c: any): Promise<Response> {
   }
 
   const now = nowIso();
-  const newToken = randomToken(24);
-  const newTokenHash = await sha256Hex(newToken);
-
   await run(
     c.env.DB,
     `UPDATE registrations
-     SET    confirmation_token_hash = ?,
-            confirmation_token_expires_at = ?,
-            confirmation_reminder_sent_at = ?,
+     SET    confirmation_reminder_sent_at = ?,
             updated_at = ?
      WHERE  id = ?`,
-    [newTokenHash, null, now, now, registration.id],
+    [now, now, registration.id],
   );
 
   // Retrieve the attendee so we can personalise the email.
@@ -114,12 +113,16 @@ export async function onRequestPost(c: any): Promise<Response> {
     throw new AppError(500, "USER_NOT_FOUND", "Associated user record is missing");
   }
 
-  // manage_token_hash is a one-way hash so we cannot reconstruct the URL here.
-  // Fall back to the generic event manage page — the attendee can look up their
-  // registration by email there.
+  // This confirmation email does not need a direct management capability.
+  // The generic event page lets the attendee request one by email if needed.
   const manageUrl = `${appBaseUrl}/events/${event.slug}/manage`;
 
-  const confirmationUrl = registrationConfirmPageUrl(appBaseUrl, event, newToken, registration.id);
+  const confirmationUrl = registrationConfirmPageUrl(
+    appBaseUrl,
+    event,
+    queuedCapabilityToken("registration_confirm", registration.id, config.confirmationLinkTtlHours * 60 * 60),
+    registration.id,
+  );
   const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, registration.id);
   const dayWaitlist = await listDayWaitlistForRegistration(c.env.DB, registration.id);
   const attendanceData = buildAttendanceEmailData(registration.attendance_type, dayAttendanceRaw, dayWaitlist);
@@ -135,6 +138,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     recipientUserId: user.id,
     messageType: "transactional",
     subject: `Confirm your registration for ${event.name}`,
+    capabilityLinkValues: [confirmationUrl],
     data: {
       ...buildEventEmailVariables(event, appBaseUrl),
       // User

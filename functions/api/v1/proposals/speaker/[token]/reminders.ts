@@ -4,11 +4,12 @@ import { addHours, nowIso } from "../../../../../_lib/utils/time";
 import { getSpeakerByManageToken } from "../../../../../_lib/services/proposals";
 import { run } from "../../../../../_lib/db/queries";
 import { speakerReminderPreferenceSchema } from "../../../../../../assets/shared/schemas/api";
+import { requireInternalSecret } from "../../../../../_lib/request";
 
 export async function onRequestPost(c: any): Promise<Response> {
   c.set("sensitive", true);
   const body = await parseJsonBody(c.req, speakerReminderPreferenceSchema);
-  const resolved = await getSpeakerByManageToken(c.env.DB, c.req.param("token"));
+  const resolved = await getSpeakerByManageToken(c.env.DB, c.req.param("token"), requireInternalSecret(c.env));
 
   if (body.action === "resume") {
     await run(c.env.DB, "UPDATE proposal_speakers SET presentation_reminders_paused_until = NULL WHERE id = ?", [

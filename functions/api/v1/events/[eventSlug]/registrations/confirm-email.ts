@@ -20,16 +20,20 @@ import {
   registrationConfirmEmailGetRouteSchema,
   registrationConfirmEmailPostRouteSchema,
 } from "../../../../../../assets/shared/schemas/route-contracts";
+import { requireInternalSecret } from "../../../../../_lib/request";
+import { queuedCapabilityToken } from "../../../../../_lib/services/capability-links";
 
 async function confirmRegistration(c: any, token: string, registrationId?: string | null): Promise<Response> {
   const config = getConfig(c.env, c.req.raw);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
+  const signingSecret = requireInternalSecret(c.env);
 
   const { registration, manageToken } = await confirmRegistrationByToken(c.env.DB, {
     token,
     registrationId,
     waitlistClaimWindowHours: config.waitlistClaimWindowHours,
+    signingSecret,
   });
 
   // Look up the attendee's referral (share) code so the confirmation page can
@@ -41,6 +45,11 @@ async function confirmRegistration(c: any, token: string, registrationId?: strin
   );
   const shareUrl = referralRow ? `${appBaseUrl}/r/${referralRow.code}` : null;
   const manageUrl = registrationManagePageUrl(appBaseUrl, event, manageToken);
+  const queuedManageUrl = registrationManagePageUrl(
+    appBaseUrl,
+    event,
+    queuedCapabilityToken("registration_manage", registration.id),
+  );
   const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, registration.id);
   const dayWaitlist = await listDayWaitlistForRegistration(c.env.DB, registration.id);
 
@@ -57,7 +66,7 @@ async function confirmRegistration(c: any, token: string, registrationId?: strin
       const calendar = await buildRegistrationIcs(
         event,
         registration.id,
-        manageUrl,
+        queuedManageUrl,
         dayAttendanceRaw,
         appBaseUrl,
         rsvpEmail,
@@ -72,6 +81,7 @@ async function confirmRegistration(c: any, token: string, registrationId?: strin
         recipientUserId: registration.user_id,
         messageType: "transactional",
         subject: `Registration confirmed for ${event.name}`,
+        capabilityLinkValues: [queuedManageUrl],
         attachments: referralRow
           ? [
               buildBadgeAttachment({
@@ -100,7 +110,7 @@ async function confirmRegistration(c: any, token: string, registrationId?: strin
           ...statusData,
           registrationId: registration.id,
           // URLs
-          manageUrl,
+          manageUrl: queuedManageUrl,
           shareUrl,
           ...(referralRow
             ? {

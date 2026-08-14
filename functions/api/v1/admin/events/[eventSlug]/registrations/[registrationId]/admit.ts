@@ -16,6 +16,7 @@ import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { processOutboxByIdBackground } from "../../../../../../../_lib/email/outbox";
 import { queueRegistrationStatusEmail } from "../../../../../../../_lib/services/registrations/status-notifications";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
+import { omitCapabilitySecrets } from "../../../../../../../_lib/services/capability-links";
 
 interface RegistrationRow {
   id: string;
@@ -141,7 +142,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 
   return json({
     success: true,
-    registration: updated,
+    registration: updated ? omitCapabilitySecrets(updated) : null,
     admittedDayDates,
   });
 }

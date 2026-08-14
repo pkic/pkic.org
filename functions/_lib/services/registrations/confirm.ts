@@ -1,6 +1,5 @@
 import { AppError } from "../../errors";
 import { first, run } from "../../db/queries";
-import { randomToken, sha256Hex } from "../../utils/crypto";
 import { nowIso } from "../../utils/time";
 import { recordEngagement } from "../engagement";
 import { resolveCapacityExemptReason } from "./day-waitlist";
@@ -8,27 +7,42 @@ import { upsertAttendeeParticipant } from "./participant-registration";
 import { writeAuditLog } from "../audit";
 import { finalizeEmailChange } from "./change-email";
 import { revokeDuplicateInvitesForEmail } from "../invites";
+import { signCapabilityToken, verifyDatabaseCapability } from "../capability-links";
 import type { DatabaseLike } from "../../types";
 import type { RegistrationRecord } from "./types";
 
 export async function confirmRegistrationByToken(
   db: DatabaseLike,
-  payload: { token: string; registrationId?: string | null; waitlistClaimWindowHours: number },
+  payload: { token: string; registrationId?: string | null; waitlistClaimWindowHours: number; signingSecret: string },
 ): Promise<{ registration: RegistrationRecord; manageToken: string }> {
-  const tokenHash = await sha256Hex(payload.token);
+  const verified = await verifyDatabaseCapability({
+    db,
+    signingSecret: payload.signingSecret,
+    purpose: "registration_confirm",
+    token: payload.token,
+  });
+  if (!verified.ok) {
+    throw new AppError(
+      verified.reason === "expired" ? 410 : 404,
+      verified.reason === "expired" ? "CONFIRM_TOKEN_EXPIRED" : "CONFIRM_TOKEN_INVALID",
+      verified.reason === "expired"
+        ? "Confirmation link has expired — please request a new one"
+        : "Invalid or already-used confirmation token",
+    );
+  }
   const registration = await first<RegistrationRecord>(
     db,
     `SELECT * FROM registrations
-     WHERE confirmation_token_hash = ?
+     WHERE id = ?
        AND status = 'pending_email_confirmation'
        AND (? IS NULL OR id = ?)`,
-    [tokenHash, payload.registrationId ?? null, payload.registrationId ?? null],
+    [verified.resourceId, payload.registrationId ?? null, payload.registrationId ?? null],
   );
   if (!registration) {
     throw new AppError(404, "CONFIRM_TOKEN_INVALID", "Invalid or already-used confirmation token");
   }
   const now = nowIso();
-  if (registration.confirmation_token_expires_at && registration.confirmation_token_expires_at < now) {
+  if (registration.pending_confirmation_deadline_at && registration.pending_confirmation_deadline_at < now) {
     throw new AppError(410, "CONFIRM_TOKEN_EXPIRED", "Confirmation link has expired — please request a new one");
   }
 
@@ -98,10 +112,10 @@ export async function confirmRegistrationByToken(
     db
       .prepare(
         `UPDATE registrations
-         SET status = ?, confirmed_at = ?, confirmation_token_hash = NULL,
-           confirmation_token_expires_at = NULL, pending_confirmation_deadline_at = NULL,
-             confirmation_reminder_sent_at = NULL, invite_id = COALESCE(invite_id, ?),
-             capacity_exempt_in_person = ?, capacity_exempt_reason = ?, updated_at = ?
+         SET status = ?, confirmed_at = ?, confirmation_link_secret = NULL,
+             pending_confirmation_deadline_at = NULL, confirmation_reminder_sent_at = NULL,
+             invite_id = COALESCE(invite_id, ?), capacity_exempt_in_person = ?,
+             capacity_exempt_reason = ?, updated_at = ?
          WHERE id = ?`,
       )
       .bind(
@@ -184,14 +198,11 @@ export async function confirmRegistrationByToken(
     });
   }
 
-  // Rotate the manage token so the confirmed email always contains a valid, active link.
-  const freshManageToken = randomToken(24);
-  const freshManageHash = await sha256Hex(freshManageToken);
-  await run(db, "UPDATE registrations SET manage_token_hash = ?, updated_at = ? WHERE id = ?", [
-    freshManageHash,
-    nowIso(),
-    updated.id,
-  ]);
-
-  return { registration: { ...updated, manage_token_hash: freshManageHash }, manageToken: freshManageToken };
+  const manageToken = await signCapabilityToken({
+    signingSecret: payload.signingSecret,
+    linkSecret: updated.manage_link_secret,
+    purpose: "registration_manage",
+    resourceId: updated.id,
+  });
+  return { registration: updated, manageToken };
 }

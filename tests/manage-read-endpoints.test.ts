@@ -13,6 +13,9 @@ import { onRequestPatch as updateProposalSpeaker } from "../functions/api/v1/pro
 import { onRequestPost as openRegistrationManage } from "../functions/api/v1/admin/events/[eventSlug]/registrations/[registrationId]/open-manage";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { createRegistration, confirmRegistrationByToken } from "../functions/_lib/services/registrations";
+import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
+
+const signingSecret = "test-signing-secret";
 
 describe("manage read endpoints", () => {
   beforeEach(async () => {
@@ -23,8 +26,7 @@ describe("manage read endpoints", () => {
 
     const userId = crypto.randomUUID();
     const registrationId = crypto.randomUUID();
-    const token = "registration-token";
-    const tokenHash = await sha256Hex(token);
+    const linkSecret = "registration-link-secret";
 
     await env.DB.batch([
       env.DB.prepare(`
@@ -34,21 +36,28 @@ describe("manage read endpoints", () => {
       env.DB.prepare(`
         INSERT INTO registrations (
           id, event_id, user_id, status, attendance_type, source_type,
-          manage_token_hash, created_at, updated_at
+          manage_link_secret, created_at, updated_at
         ) VALUES (
           '${registrationId}', '${eventId}', '${userId}', 'registered', 'virtual', 'direct',
-          '${tokenHash}', datetime('now'), datetime('now')
+          '${linkSecret}', datetime('now'), datetime('now')
         )
       `),
     ]);
+    const token = await issueDatabaseCapability({
+      db: env.DB,
+      signingSecret,
+      purpose: "registration_manage",
+      resourceId: registrationId,
+    });
 
     const response = await getRegistration(
       createContext(env, new Request(`https://app.test/api/v1/registrations/manage/${token}`), { token }),
     );
 
     expect(response.status).toBe(200);
-    const payload = (await response.json()) as { registration: { id: string } };
+    const payload = (await response.json()) as { registration: { id: string; manage_link_secret?: string } };
     expect(payload.registration.id).toBe(registrationId);
+    expect(payload.registration.manage_link_secret).toBeUndefined();
   });
 
   it("rejects the stored token hash when it is used as a manage token", async () => {
@@ -67,7 +76,7 @@ describe("manage read endpoints", () => {
       env.DB.prepare(`
         INSERT INTO registrations (
           id, event_id, user_id, status, attendance_type, source_type,
-          manage_token_hash, created_at, updated_at
+          manage_link_secret, created_at, updated_at
         ) VALUES (
           '${registrationId}', '${eventId}', '${userId}', 'registered', 'in_person', 'direct',
           '${tokenHash}', datetime('now'), datetime('now')
@@ -103,6 +112,7 @@ describe("manage read endpoints", () => {
       attendanceType: "virtual",
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     const response = await getRegistration(
@@ -119,13 +129,13 @@ describe("manage read endpoints", () => {
     expect(payload.registration.status).toBe("pending_email_confirmation");
     expect(payload.registration.isEmailVerified).toBe(false);
 
-    const [registration] = await queryAll<{ confirmed_at: string | null; confirmation_token_hash: string | null }>(
+    const [registration] = await queryAll<{ confirmed_at: string | null; confirmation_link_secret: string | null }>(
       env.DB,
-      "SELECT confirmed_at, confirmation_token_hash FROM registrations WHERE id = ?",
+      "SELECT confirmed_at, confirmation_link_secret FROM registrations WHERE id = ?",
       [created.registration.id],
     );
     expect(registration.confirmed_at).toBeNull();
-    expect(registration.confirmation_token_hash).toBeTruthy();
+    expect(registration.confirmation_link_secret).toBeTruthy();
   });
 
   it("returns confirmed registrations with day-specific waitlist state", async () => {
@@ -153,10 +163,12 @@ describe("manage read endpoints", () => {
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
     await confirmRegistrationByToken(env.DB, {
       token: first.confirmationToken as string,
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     const second = await createRegistration(env.DB, {
@@ -166,10 +178,12 @@ describe("manage read endpoints", () => {
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
     const confirmedSecond = await confirmRegistrationByToken(env.DB, {
       token: second.confirmationToken as string,
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     const response = await getRegistration(
@@ -219,6 +233,7 @@ describe("manage read endpoints", () => {
       attendanceType: "virtual",
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     const openResponse = await openRegistrationManage(
@@ -277,8 +292,7 @@ describe("manage read endpoints", () => {
 
     const userId = crypto.randomUUID();
     const proposalId = crypto.randomUUID();
-    const token = "proposal-token";
-    const tokenHash = await sha256Hex(token);
+    const linkSecret = "proposal-link-secret";
 
     await env.DB.batch([
       env.DB.prepare(`
@@ -288,11 +302,11 @@ describe("manage read endpoints", () => {
       env.DB.prepare(`
         INSERT INTO session_proposals (
           id, event_id, proposer_user_id, status, proposal_type, title, abstract,
-          manage_token_hash, submitted_at, updated_at
+          manage_link_secret, submitted_at, updated_at
         ) VALUES (
           '${proposalId}', '${eventId}', '${userId}', 'submitted', 'talk', 'Proposal title',
           'Proposal abstract text that is sufficiently long for test payload validation.',
-          '${tokenHash}', datetime('now'), datetime('now')
+          '${linkSecret}', datetime('now'), datetime('now')
         )
       `),
       env.DB.prepare(`
@@ -300,14 +314,24 @@ describe("manage read endpoints", () => {
         VALUES ('${crypto.randomUUID()}', '${proposalId}', '${userId}', 'proposer', datetime('now'))
       `),
     ]);
+    const token = await issueDatabaseCapability({
+      db: env.DB,
+      signingSecret,
+      purpose: "proposal_manage",
+      resourceId: proposalId,
+    });
 
     const response = await getProposal(
       createContext(env, new Request(`https://app.test/api/v1/proposals/manage/${token}`), { token }),
     );
 
     expect(response.status).toBe(200);
-    const payload = (await response.json()) as { proposal: { id: string }; speakers: Array<{ email: string }> };
+    const payload = (await response.json()) as {
+      proposal: { id: string; manage_link_secret?: string };
+      speakers: Array<{ email: string }>;
+    };
     expect(payload.proposal.id).toBe(proposalId);
+    expect(payload.proposal.manage_link_secret).toBeUndefined();
     expect(payload.speakers[0].email).toBe("speaker@example.test");
   });
 
@@ -316,8 +340,7 @@ describe("manage read endpoints", () => {
 
     const userId = crypto.randomUUID();
     const proposalId = crypto.randomUUID();
-    const token = "proposal-update-token";
-    const tokenHash = await sha256Hex(token);
+    const linkSecret = "proposal-update-link-secret";
 
     await env.DB.batch([
       env.DB.prepare(`
@@ -327,11 +350,11 @@ describe("manage read endpoints", () => {
       env.DB.prepare(`
         INSERT INTO session_proposals (
           id, event_id, proposer_user_id, status, proposal_type, title, abstract,
-          manage_token_hash, submitted_at, updated_at
+          manage_link_secret, submitted_at, updated_at
         ) VALUES (
           '${proposalId}', '${eventId}', '${userId}', 'submitted', 'talk', 'Proposal title',
           'Proposal abstract text that is sufficiently long for test payload validation.',
-          '${tokenHash}', datetime('now'), datetime('now')
+          '${linkSecret}', datetime('now'), datetime('now')
         )
       `),
       env.DB.prepare(`
@@ -339,6 +362,12 @@ describe("manage read endpoints", () => {
         VALUES ('${crypto.randomUUID()}', '${proposalId}', '${userId}', 'proposer', 'confirmed', datetime('now'))
       `),
     ]);
+    const token = await issueDatabaseCapability({
+      db: env.DB,
+      signingSecret,
+      purpose: "proposal_manage",
+      resourceId: proposalId,
+    });
 
     const updateResponse = await updateProposal(
       createContext(

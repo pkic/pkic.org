@@ -7,6 +7,8 @@ import { first } from "../../../../_lib/db/queries";
 import { processOutboxByIdBackground, queueEmail } from "../../../../_lib/email/outbox";
 import { proposalPageUrl, registrationPageUrl, inviteDeclineUrl } from "../../../../_lib/services/frontend-links";
 import { inviteDeclineSchema } from "../../../../../assets/shared/schemas/api";
+import { requireInternalSecret } from "../../../../_lib/request";
+import { queuedCapabilityToken } from "../../../../_lib/services/capability-links";
 
 // ── GET: Redirect to the Hugo-managed decline page ───────────────────────────
 // The form UI lives at the event-specific /invite/decline/ Hugo page driven by
@@ -29,8 +31,9 @@ export async function onRequestGet(c: any): Promise<Response> {
 
 export async function onRequestPost(c: any): Promise<Response> {
   const body = await parseJsonBody(c.req, inviteDeclineSchema);
+  const signingSecret = requireInternalSecret(c.env);
   const inviteId = new URL(c.req.raw.url).searchParams.get("id");
-  const invite = await findInviteByToken(c.env.DB, c.req.param("token"), inviteId);
+  const invite = await findInviteByToken(c.env.DB, c.req.param("token"), signingSecret, inviteId);
 
   // Forward the invite to nominated contacts before declining
   const forwardedEmails: string[] = [];
@@ -51,11 +54,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     if (event) {
       for (const contact of body.forwards) {
         try {
-          const {
-            invite: newInvite,
-            token: inviteToken,
-            isNew,
-          } = await createInvite(c.env.DB, {
+          const { invite: newInvite, isNew } = await createInvite(c.env.DB, {
             eventId: invite.event_id,
             inviteeEmail: contact.email,
             inviteeFirstName: contact.firstName ?? null,
@@ -66,10 +65,11 @@ export async function onRequestPost(c: any): Promise<Response> {
 
           // Do not send a new email if the contact already has an active invite.
           if (!isNew) continue;
+          const queuedInviteToken = queuedCapabilityToken("invite", newInvite.id);
           const registrationUrl =
             invite.invite_type === "attendee"
               ? registrationPageUrl(appBaseUrl, event, {
-                  invite: inviteToken,
+                  invite: queuedInviteToken,
                   inviteId: newInvite.id,
                   source: "invite",
                 })
@@ -77,12 +77,12 @@ export async function onRequestPost(c: any): Promise<Response> {
           const proposalUrl =
             invite.invite_type === "speaker"
               ? proposalPageUrl(appBaseUrl, event, {
-                  invite: inviteToken,
+                  invite: queuedInviteToken,
                   inviteId: newInvite.id,
                   source: "speaker_invite_forward",
                 })
               : undefined;
-          const declineUrl = inviteDeclineUrl(appBaseUrl, event, inviteToken, newInvite.id);
+          const declineUrl = inviteDeclineUrl(appBaseUrl, event, queuedInviteToken, newInvite.id);
 
           const outboxId = await queueEmail(c.env.DB, {
             eventId: event.id,
@@ -91,6 +91,7 @@ export async function onRequestPost(c: any): Promise<Response> {
             messageType: "transactional",
             subject:
               invite.invite_type === "speaker" ? `Speaker invitation: ${event.name}` : `Invitation: ${event.name}`,
+            capabilityLinkValues: [registrationUrl, proposalUrl, declineUrl],
             data: {
               ...buildEventEmailVariables(event, appBaseUrl),
               firstName: newInvite.invitee_first_name ?? "",

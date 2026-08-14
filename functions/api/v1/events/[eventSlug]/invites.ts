@@ -11,6 +11,7 @@ import { processOutboxByIdBackground, queueEmail } from "../../../../_lib/email/
 import { registrationPageUrl, inviteDeclineUrl } from "../../../../_lib/services/frontend-links";
 import { AppError } from "../../../../_lib/errors";
 import { eventSlugParamsSchema, registrationInviteCreateSchema } from "../../../../../assets/shared/schemas/api";
+import { requireInternalSecret } from "../../../../_lib/request";
 
 function getManageTokenFromRequest(request: Request): string | null {
   const auth = request.headers.get("authorization") ?? "";
@@ -25,8 +26,9 @@ export async function onRequestPost(c: any): Promise<Response> {
   }
 
   const body = await parseJsonBody(c.req, registrationInviteCreateSchema);
+  const signingSecret = requireInternalSecret(c.env);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
-  const registration = await getRegistrationByManageToken(c.env.DB, token);
+  const registration = await getRegistrationByManageToken(c.env.DB, token, signingSecret);
 
   if (registration.event_id !== event.id) {
     return json({ error: { code: "EVENT_MISMATCH", message: "Token is not valid for this event" } }, 403);
@@ -127,6 +129,7 @@ export async function onRequestPost(c: any): Promise<Response> {
           recipientEmail: invite.invitee_email,
           messageType: "transactional",
           subject: `Invitation: ${event.name}`,
+          capabilityLinkValues: [registrationUrl, declineUrl],
           data: {
             ...buildEventEmailVariables(event, appBaseUrl),
             firstName: invite.invitee_first_name ?? "",

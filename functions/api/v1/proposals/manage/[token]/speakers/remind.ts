@@ -24,12 +24,13 @@ import { AppError } from "../../../../../../_lib/errors";
 import { first, run } from "../../../../../../_lib/db/queries";
 import type { EventRecord } from "../../../../../../_lib/services/events";
 import { nowIso } from "../../../../../../_lib/utils/time";
+import { requireInternalSecret } from "../../../../../../_lib/request";
 
 const schema = z.object({ userId: z.string().min(1) });
 
 export async function onRequestPost(c: any): Promise<Response> {
   const body = await parseJsonBody(c.req, schema);
-  const proposal = await getProposalByManageToken(c.env.DB, c.req.param("token"));
+  const proposal = await getProposalByManageToken(c.env.DB, c.req.param("token"), requireInternalSecret(c.env));
 
   if (proposal.status === "withdrawn" || proposal.status === "rejected") {
     return json({ error: { code: "PROPOSAL_CLOSED", message: "Cannot send reminders for a closed proposal" } }, 400);
@@ -90,6 +91,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     recipientUserId: speakerRow.user_id,
     messageType: "transactional",
     subject,
+    capabilityLinkValues: [speakerManageUrl],
     data: isProfileReviewRequest
       ? {
           ...buildEventEmailVariables(event, appBaseUrl),

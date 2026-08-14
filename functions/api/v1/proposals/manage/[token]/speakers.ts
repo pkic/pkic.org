@@ -24,6 +24,7 @@ import { first } from "../../../../../_lib/db/queries";
 import type { EventRecord } from "../../../../../_lib/services/events";
 import { z } from "zod";
 import { normalizedEmailSchema, firstNameSchema, lastNameSchema } from "../../../../../../assets/shared/schemas/api";
+import { requireInternalSecret } from "../../../../../_lib/request";
 
 const coSpeakerInviteSchema = z.object({
   email: normalizedEmailSchema,
@@ -34,7 +35,7 @@ const coSpeakerInviteSchema = z.object({
 
 export async function onRequestPost(c: any): Promise<Response> {
   const body = await parseJsonBody(c.req, coSpeakerInviteSchema);
-  const proposal = await getProposalByManageToken(c.env.DB, c.req.param("token"));
+  const proposal = await getProposalByManageToken(c.env.DB, c.req.param("token"), requireInternalSecret(c.env));
 
   if (proposal.status === "withdrawn" || proposal.status === "rejected") {
     return json({ error: { code: "PROPOSAL_CLOSED", message: "Cannot invite speakers to a closed proposal" } }, 400);
@@ -52,13 +53,12 @@ export async function onRequestPost(c: any): Promise<Response> {
     lastName: body.lastName,
   });
 
-  const { manageToken: speakerToken } = await addProposalSpeaker(c.env.DB, {
+  const { manageToken } = await addProposalSpeaker(c.env.DB, {
     proposalId: proposal.id,
     userId: speakerUser.id,
     role: body.role,
   });
-
-  const speakerManageUrl = speakerManagePageUrl(appBaseUrl, event, speakerToken);
+  const speakerManageUrl = speakerManagePageUrl(appBaseUrl, event, manageToken);
 
   const proposer = await first<{ first_name: string | null }>(c.env.DB, "SELECT first_name FROM users WHERE id = ?", [
     proposal.proposer_user_id,
@@ -76,6 +76,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     recipientUserId: speakerUser.id,
     messageType: "transactional",
     subject: `You have been added as a speaker — ${event.name}`,
+    capabilityLinkValues: [speakerManageUrl],
     data: {
       ...buildEventEmailVariables(event, appBaseUrl),
       firstName: speakerUser.first_name ?? "",

@@ -45,7 +45,7 @@ async function seedProposalWithReviews(
     env.DB.prepare(`
       INSERT INTO session_proposals (
         id, event_id, proposer_user_id, status, proposal_type, title, abstract,
-        details_json, referral_code, manage_token_hash, submitted_at, updated_at, withdrawn_at
+        details_json, referral_code, manage_link_secret, submitted_at, updated_at, withdrawn_at
       ) VALUES (
         '${proposalId}', '${eventId}', '${proposerId}', 'submitted', 'talk', 'Endpoint Proposal',
         'Proposal abstract that is long enough to represent realistic content for testing.',
@@ -221,7 +221,7 @@ describe("admin proposal endpoints", () => {
       env.DB.prepare(`
         INSERT INTO session_proposals (
           id, event_id, proposer_user_id, status, proposal_type, title, abstract,
-          details_json, referral_code, manage_token_hash, submitted_at, updated_at, withdrawn_at
+          details_json, referral_code, manage_link_secret, submitted_at, updated_at, withdrawn_at
         ) VALUES (
           '${secondProposalId}', '${eventId}', '${secondProposerId}', 'submitted', 'talk', 'Lower Score Proposal',
           'Another proposal abstract that is long enough to represent realistic content for testing.',
@@ -286,7 +286,7 @@ describe("admin proposal endpoints", () => {
         VALUES ('${speakerId}', 'profile-speaker@example.test', 'profile-speaker@example.test', 'Profile', 'Speaker', 'Old Org', 'Old Role', NULL, NULL, datetime('now'), datetime('now'))
       `),
       env.DB.prepare(`
-        INSERT INTO proposal_speakers (id, proposal_id, user_id, role, status, manage_token_hash, created_at)
+        INSERT INTO proposal_speakers (id, proposal_id, user_id, role, status, manage_link_secret, created_at)
         VALUES ('${crypto.randomUUID()}', '${proposalId}', '${speakerId}', 'speaker', 'pending', NULL, datetime('now'))
       `),
     ]);
@@ -482,7 +482,7 @@ describe("admin proposal endpoints", () => {
     expect(url.pathname).toContain("/propose/manage/");
     expect(token).toBeTruthy();
 
-    const proposal = await getProposalByManageToken(env.DB, token!);
+    const proposal = await getProposalByManageToken(env.DB, token!, "test-signing-secret");
     expect(proposal.id).toBe(proposalId);
   });
 });

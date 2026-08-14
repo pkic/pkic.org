@@ -35,6 +35,7 @@ import {
   getAcceptedTermsTextForRegistration,
   getCustomAnswerRows,
 } from "../../../../../../../_lib/utils/registration-email";
+import { omitCapabilitySecrets, queuedCapabilityToken } from "../../../../../../../_lib/services/capability-links";
 
 // ── Shared query ──────────────────────────────────────────────────────────────
 
@@ -94,7 +95,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
 
   return json({
     registration: {
-      ...registration,
+      ...omitCapabilitySecrets(registration),
       customAnswers: parseJsonSafe<Record<string, unknown> | null>(registration.custom_answers_json, null),
     },
     form:
@@ -170,7 +171,7 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
     }
 
     const updated = await fetchRegistrationWithDetails(requestDb(c), event.id, registrationId);
-    return json({ success: true, registration: updated });
+    return json({ success: true, registration: updated ? omitCapabilitySecrets(updated) : null });
   }
 
   // ── update / cancel / report_unauthorized — full shared service logic ──────
@@ -243,7 +244,7 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
       const emailResult = await changeRegistrationEmail(requestDb(c), {
         registrationId: updated.id,
         newEmail: body.email,
-        confirmationTtlHours: config.manageTokenTtlHours,
+        confirmationTtlHours: config.confirmationLinkTtlHours,
         allowCancelled: true,
       });
 
@@ -283,7 +284,12 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
       });
 
       // Send confirmation email to the pending email address
-      const confirmationUrl = registrationConfirmPageUrl(appBaseUrl, event, emailResult.confirmationToken, updated.id);
+      const confirmationUrl = registrationConfirmPageUrl(
+        appBaseUrl,
+        event,
+        queuedCapabilityToken("registration_confirm", updated.id, config.confirmationLinkTtlHours * 60 * 60),
+        updated.id,
+      );
       const userRecord = await first<{
         email: string;
         first_name: string | null;
@@ -307,6 +313,7 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
           recipientUserId: emailResult.userId,
           messageType: "transactional",
           subject: `Confirm your email address for ${event.name}`,
+          capabilityLinkValues: [confirmationUrl],
           data: {
             ...buildEventEmailVariables(event, appBaseUrl),
             firstName: userRecord.first_name ?? "",

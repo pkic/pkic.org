@@ -15,6 +15,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
     reminderIntervalDays: config.reminderIntervalDays,
     pendingConfirmationReminderIntervalDays: config.pendingConfirmationReminderIntervalDays,
+    confirmationLinkTtlHours: config.confirmationLinkTtlHours,
     maxInviteReminders: config.maxInviteReminders,
     maxPendingConfirmationReminders: config.maxPendingConfirmationReminders,
     maxPresentationReminders: config.maxPresentationReminders,

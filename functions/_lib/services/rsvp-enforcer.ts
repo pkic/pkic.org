@@ -2,6 +2,8 @@ import type { DatabaseLike, Env } from "../types";
 import { logError, logInfo } from "../logging";
 import { queueEmail } from "../email/outbox";
 import { prepareAuditLog } from "./audit";
+import { queuedCapabilityToken } from "./capability-links";
+import { registrationManagePageUrl } from "./frontend-links";
 
 interface PendingRsvpEvent {
   id: string;
@@ -66,7 +68,8 @@ export async function runRsvpEnforcer(
     const warnings = await db
       .prepare(
         `SELECT rsvp.id, rsvp.registration_id, r.event_id, r.user_id, rsvp.attendee_email,
-              e.name as event_name, e.slug as event_slug, r.manage_token_hash, u.first_name
+              e.name as event_name, e.slug as event_slug, e.base_path as event_base_path,
+              e.starts_at as event_starts_at, e.settings_json as event_settings_json, u.first_name
        FROM calendar_rsvp_events rsvp
        JOIN registrations r ON rsvp.registration_id = r.id
        JOIN events e ON r.event_id = e.id
@@ -86,7 +89,9 @@ export async function runRsvpEnforcer(
         attendee_email: string;
         event_name: string;
         event_slug: string;
-        manage_token_hash: string;
+        event_base_path: string | null;
+        event_starts_at: string | null;
+        event_settings_json: string;
         first_name: string | null;
       }>();
 
@@ -111,10 +116,18 @@ export async function runRsvpEnforcer(
         continue;
       }
 
-      // Generate a dynamic management link directly from env or app baseUrl if passed in config
       let manageUrl = "";
       if (env.APP_BASE_URL) {
-        manageUrl = `${env.APP_BASE_URL}/manage/${w.event_slug}?t=${w.manage_token_hash}`; // Typically needs real token generation logic
+        manageUrl = registrationManagePageUrl(
+          env.APP_BASE_URL,
+          {
+            slug: w.event_slug,
+            base_path: w.event_base_path,
+            starts_at: w.event_starts_at,
+            settings_json: w.event_settings_json,
+          },
+          queuedCapabilityToken("registration_manage", w.registration_id),
+        );
       }
 
       await queueEmail(db, {
@@ -122,6 +135,7 @@ export async function runRsvpEnforcer(
         eventId: w.event_id,
         recipientUserId: w.user_id,
         recipientEmail: w.attendee_email,
+        capabilityLinkValues: [manageUrl],
         data: {
           firstName: w.first_name ?? "",
           event_name: w.event_name,

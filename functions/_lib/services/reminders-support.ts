@@ -83,8 +83,7 @@ export interface ConfirmationReminderRow {
   first_name: string | null;
   last_name: string | null;
   email: string;
-  confirmation_token_hash: string;
-  confirmation_token_expires_at: string;
+  confirmation_link_secret: string;
   confirmation_reminder_sent_at: string | null;
   pending_confirmation_deadline_at: string | null;
   reminder_count: number;

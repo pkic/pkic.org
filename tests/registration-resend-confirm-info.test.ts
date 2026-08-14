@@ -16,7 +16,10 @@ import { onRequestPost as createRegistration } from "../functions/api/v1/events/
 import { onRequestGet as confirmInfo } from "../functions/api/v1/events/[eventSlug]/registrations/confirm-info";
 import { onRequestPost as resendConfirmation } from "../functions/api/v1/events/[eventSlug]/registrations/resend-confirmation";
 import { onRequestPost as resendManageLink } from "../functions/api/v1/events/[eventSlug]/registrations/resend-manage-link";
-import { sha256Hex } from "../functions/_lib/utils/crypto";
+import { issueDatabaseCapability, materializeQueuedCapabilityLinks } from "../functions/_lib/services/capability-links";
+import { getRegistrationByManageToken } from "../functions/_lib/services/registrations";
+
+const signingSecret = "test-signing-secret";
 
 async function registerAttendee(): Promise<{
   confirmationToken: string;
@@ -49,15 +52,16 @@ async function registerAttendee(): Promise<{
   expect(response.status).toBe(200);
   const payload = (await response.json()) as { manageToken: string };
 
-  // Get the confirmation token from the outbox
-  const outbox = await queryAll<{ payload_json: string }>(
-    env.DB,
-    "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' ORDER BY created_at DESC LIMIT 1",
-  );
-  const emailPayload = JSON.parse(outbox[0].payload_json) as { confirmationUrl: string };
-  const confirmUrl = new URL(emailPayload.confirmationUrl);
-  const registrationId = confirmUrl.searchParams.get("id") as string;
-  const confirmationToken = confirmUrl.searchParams.get("token") as string;
+  const registration = (
+    await queryAll<{ id: string }>(env.DB, "SELECT id FROM registrations ORDER BY created_at DESC LIMIT 1")
+  )[0];
+  const registrationId = registration.id;
+  const confirmationToken = await issueDatabaseCapability({
+    db: env.DB,
+    signingSecret,
+    purpose: "registration_confirm",
+    resourceId: registrationId,
+  });
 
   return { confirmationToken, registrationId, email: "resendtest@pkic.org", manageToken: payload.manageToken };
 }
@@ -158,7 +162,7 @@ describe("resend-confirmation endpoint", () => {
     vi.unstubAllGlobals();
   });
 
-  it("queues a fresh non-expiring confirmation email", async () => {
+  it("queues a fresh expiring confirmation link without invalidating the earlier link", async () => {
     await seedEventAndAdmin(env.DB);
     const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
     await seedWorkflowEmailTemplates(env.DB, admin.id);
@@ -194,21 +198,14 @@ describe("resend-confirmation endpoint", () => {
         "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' ORDER BY created_at DESC LIMIT 1",
       )
     )[0];
-    const confirmationUrl = new URL(
-      (JSON.parse(latestPayload.payload_json) as { confirmationUrl: string }).confirmationUrl,
-    );
+    const storedPayload = JSON.parse(latestPayload.payload_json) as Record<string, unknown>;
+    expect(JSON.stringify(storedPayload)).toContain("pkcq1_");
+    const deliveredPayload = await materializeQueuedCapabilityLinks(env.DB, env, storedPayload);
+    const confirmationUrl = new URL(deliveredPayload.confirmationUrl as string);
     const freshToken = confirmationUrl.searchParams.get("token") as string;
-    const freshHash = await sha256Hex(freshToken);
-    const registration = (
-      await queryAll<{ confirmation_token_expires_at: string | null }>(
-        env.DB,
-        "SELECT confirmation_token_expires_at FROM registrations WHERE confirmation_token_hash = ? LIMIT 1",
-        [freshHash],
-      )
-    )[0];
-    expect(registration.confirmation_token_expires_at).toBeNull();
+    expect(freshToken).toMatch(/^pkc1_/);
 
-    const staleInfoResponse = await confirmInfo(
+    const originalInfoResponse = await confirmInfo(
       createContext(
         env,
         new Request(
@@ -217,14 +214,27 @@ describe("resend-confirmation endpoint", () => {
         { eventSlug: "pqc-2026" },
       ),
     );
-    const staleInfo = (await staleInfoResponse.json()) as {
+    const originalInfo = (await originalInfoResponse.json()) as {
       email: string | null;
       expired: boolean;
       recoverable: boolean;
     };
-    expect(staleInfo.email).toBeNull();
-    expect(staleInfo.expired).toBe(true);
-    expect(staleInfo.recoverable).toBe(true);
+    expect(originalInfo.email).toBe("resendtest@pkic.org");
+    expect(originalInfo.expired).toBe(false);
+    expect(originalInfo.recoverable).toBe(false);
+
+    const freshInfoResponse = await confirmInfo(
+      createContext(
+        env,
+        new Request(
+          `https://app.test/api/v1/events/pqc-2026/registrations/confirm-info?token=${encodeURIComponent(freshToken)}&id=${encodeURIComponent(registrationId)}`,
+        ),
+        { eventSlug: "pqc-2026" },
+      ),
+    );
+    expect((await freshInfoResponse.json()) as { email: string | null }).toMatchObject({
+      email: "resendtest@pkic.org",
+    });
 
     const staleResponse = await resendConfirmation(
       createContext(
@@ -291,10 +301,14 @@ describe("resend-confirmation endpoint", () => {
     expect(audit[0].action).toBe("registration_reactivated");
   });
 
-  it("rejects with an invalid token", async () => {
+  it("does not authorize a resend by registration ID after token verification fails", async () => {
     await seedEventAndAdmin(env.DB);
     const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
     await seedWorkflowEmailTemplates(env.DB, admin.id);
+
+    const { registrationId } = await registerAttendee();
+    const queuedBefore = (await queryAll<{ count: number }>(env.DB, "SELECT COUNT(*) AS count FROM email_outbox"))[0]
+      .count;
 
     await expect(
       resendConfirmation(
@@ -303,12 +317,15 @@ describe("resend-confirmation endpoint", () => {
           new Request("https://app.test/api/v1/events/pqc-2026/registrations/resend-confirmation", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ token: "bogus-nonexistent-token" }),
+            body: JSON.stringify({ id: registrationId, token: "bogus-nonexistent-token" }),
           }),
           { eventSlug: "pqc-2026" },
         ),
       ),
     ).rejects.toMatchObject({ code: "RESEND_TOKEN_INVALID" });
+    const queuedAfter = (await queryAll<{ count: number }>(env.DB, "SELECT COUNT(*) AS count FROM email_outbox"))[0]
+      .count;
+    expect(queuedAfter).toBe(queuedBefore);
   });
 });
 
@@ -325,24 +342,25 @@ describe("resend-manage-link endpoint", () => {
     vi.unstubAllGlobals();
   });
 
-  it("succeeds and rotates the manage token for a known registered email", async () => {
+  it("sends a fresh manage link without invalidating the earlier link", async () => {
     await seedEventAndAdmin(env.DB);
     const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
     await seedWorkflowEmailTemplates(env.DB, admin.id);
 
     // Register + confirm
-    const { confirmationToken, email } = await registerAttendee();
+    const { registrationId, email, manageToken } = await registerAttendee();
 
     // Confirm the registration to make it "registered"
-    const tokenHash = await sha256Hex(confirmationToken);
-    const reg = await queryAll<{ id: string }>(
-      env.DB,
-      "SELECT id FROM registrations WHERE confirmation_token_hash = ? LIMIT 1",
-      [tokenHash],
-    );
-    await env.DB.prepare("UPDATE registrations SET status = 'registered', confirmation_token_hash = NULL WHERE id = ?")
-      .bind(reg[0].id)
+    await env.DB.prepare("UPDATE registrations SET status = 'registered', confirmation_link_secret = NULL WHERE id = ?")
+      .bind(registrationId)
       .run();
+    const secretBefore = (
+      await queryAll<{ manage_link_secret: string }>(
+        env.DB,
+        "SELECT manage_link_secret FROM registrations WHERE id = ?",
+        registrationId,
+      )
+    )[0].manage_link_secret;
 
     const response = await resendManageLink(
       createContext(
@@ -359,6 +377,33 @@ describe("resend-manage-link endpoint", () => {
     expect(response.status).toBe(200);
     const body = (await response.json()) as { success: boolean };
     expect(body.success).toBe(true);
+
+    const queued = (
+      await queryAll<{ payload_json: string }>(
+        env.DB,
+        "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_manage_link' ORDER BY created_at DESC LIMIT 1",
+      )
+    )[0];
+    const delivered = await materializeQueuedCapabilityLinks(
+      env.DB,
+      env,
+      JSON.parse(queued.payload_json) as Record<string, unknown>,
+    );
+    const freshToken = new URL(delivered.manageUrl as string).searchParams.get("token") as string;
+    const [earlierRegistration, freshRegistration] = await Promise.all([
+      getRegistrationByManageToken(env.DB, manageToken, signingSecret),
+      getRegistrationByManageToken(env.DB, freshToken, signingSecret),
+    ]);
+    expect(earlierRegistration.id).toBe(registrationId);
+    expect(freshRegistration.id).toBe(registrationId);
+    const secretAfter = (
+      await queryAll<{ manage_link_secret: string }>(
+        env.DB,
+        "SELECT manage_link_secret FROM registrations WHERE id = ?",
+        registrationId,
+      )
+    )[0].manage_link_secret;
+    expect(secretAfter).toBe(secretBefore);
   });
 
   it("returns success even for non-existent email (prevents enumeration)", async () => {

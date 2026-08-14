@@ -1,6 +1,8 @@
 {{- $eventSlug := partial "events/flow/slug.html" . -}}
 {{- $eventPagePath := partial "events/flow/page-path.html" . -}}
 <div class="event-flow" data-event-proposal-manage data-event-slug="{{ $eventSlug }}" data-event-page-path="{{ $eventPagePath }}" data-api-base="/api/v1" data-module="event-flows/proposal-manage-page">
+  <p class="text-muted" data-proposal-manage-loading>Loading proposal…</p>
+  <div class="d-none" data-proposal-manage-content>
   <p class="form-text mb-3">Open this page from your proposal management link.</p>
   <form class="row g-3 my-2 needs-validation" novalidate>
     <div class="col-12">
@@ -79,6 +81,21 @@
       <button type="button" data-cospeaker-invite-btn class="btn btn-sm btn-outline-primary">Send invite</button>
       <p data-cospeaker-status class="mt-2 small"></p>
     </div>
+  </div>
+  </div>
+
+  <div class="d-none" data-resend-proposal-manage-section>
+    <p>Enter the email address used to submit your proposal and we will send fresh management links.</p>
+    <div class="row g-2 align-items-end">
+      <div class="col-12 col-md-8">
+        <label class="form-label" for="resend-proposal-manage-email">Your email address</label>
+        <input id="resend-proposal-manage-email" type="email" class="form-control" autocomplete="email" placeholder="you@example.com" data-resend-proposal-manage-email>
+      </div>
+      <div class="col-12 col-md-4">
+        <button type="button" class="btn btn-primary" data-resend-proposal-manage-btn>Send my proposal links</button>
+      </div>
+    </div>
+    <p data-resend-proposal-manage-status class="mt-2 small" role="status"></p>
   </div>
 </div>
 {{ partial "headshot-modals.html" . }}

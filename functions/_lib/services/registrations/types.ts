@@ -9,10 +9,9 @@ export interface RegistrationRecord {
   source_ref: string | null;
   custom_answers_json: string | null;
   referred_by_code: string | null;
-  confirmation_token_hash: string | null;
-  confirmation_token_expires_at: string | null;
+  confirmation_link_secret: string | null;
   pending_confirmation_deadline_at: string | null;
-  manage_token_hash: string;
+  manage_link_secret: string;
   capacity_exempt_in_person: number;
   capacity_exempt_reason: string | null;
   confirmed_at: string | null;

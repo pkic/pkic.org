@@ -198,7 +198,7 @@ describe("admin forms endpoints", () => {
     await env.DB.prepare(
       `INSERT INTO registrations (
          id, event_id, user_id, status, attendance_type, source_type, custom_answers_json,
-         manage_token_hash, created_at, updated_at
+         manage_link_secret, created_at, updated_at
        ) VALUES (?, ?, ?, 'registered', 'virtual', 'admin', ?, ?, ?, ?)`,
     )
       .bind(
@@ -229,7 +229,7 @@ describe("admin forms endpoints", () => {
     await env.DB.prepare(
       `INSERT INTO session_proposals (
          id, event_id, proposer_user_id, status, proposal_type, title, abstract, details_json,
-         manage_token_hash, submitted_at, updated_at
+         manage_link_secret, submitted_at, updated_at
        ) VALUES (?, ?, ?, 'submitted', 'talk', 'Talk title', 'Talk abstract', ?, ?, ?, ?)`,
     )
       .bind(
@@ -478,7 +478,7 @@ describe("admin forms endpoints", () => {
     await env.DB.prepare(
       `INSERT INTO registrations (
          id, event_id, user_id, status, attendance_type, source_type, custom_answers_json,
-         manage_token_hash, created_at, updated_at
+         manage_link_secret, created_at, updated_at
        ) VALUES (?, ?, ?, 'registered', 'virtual', 'admin', ?, ?, ?, ?),
                 (?, ?, ?, 'registered', 'in_person', 'admin', ?, ?, ?, ?)`,
     )
@@ -504,7 +504,7 @@ describe("admin forms endpoints", () => {
     await env.DB.prepare(
       `INSERT INTO session_proposals (
          id, event_id, proposer_user_id, status, proposal_type, title, abstract, details_json,
-         manage_token_hash, submitted_at, updated_at
+         manage_link_secret, submitted_at, updated_at
        ) VALUES (?, ?, ?, 'submitted', 'talk', 'Test proposal', 'Abstract', ?, ?, ?, ?)`,
     )
       .bind(

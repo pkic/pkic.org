@@ -2,16 +2,15 @@
  * POST /api/v1/admin/events/:eventSlug/registrations/:registrationId/resend-confirmation
  *
  * Resends the registration email to the registrant.
- *  - pending_email_confirmation → rotates confirmation token, sends confirm-email
- *  - registered                 → rotates manage token, resends registration-confirmed email
+ *  - pending_email_confirmation → sends a fresh expiring confirmation link
+ *  - registered                 → sends a fresh expiring management link
  */
 import { json } from "../../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
 import { buildEventEmailVariables, getEventBySlug } from "../../../../../../../_lib/services/events";
 import { first, run } from "../../../../../../../_lib/db/queries";
-import { randomToken, sha256Hex } from "../../../../../../../_lib/utils/crypto";
 import { nowIso } from "../../../../../../../_lib/utils/time";
-import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
+import { getConfig, resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { buildBadgeAttachment } from "../../../../../../../_lib/email/attachments";
 import { processOutboxByIdBackground, queueEmail } from "../../../../../../../_lib/email/outbox";
 import { getRegistrationDayAttendance } from "../../../../../../../_lib/services/event-days";
@@ -31,10 +30,12 @@ import { writeAuditLog } from "../../../../../../../_lib/services/audit";
 import type { RegistrationRecord } from "../../../../../../../_lib/services/registrations/types";
 import type { UserRecord } from "../../../../../../../_lib/services/users";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
+import { queuedCapabilityToken } from "../../../../../../../_lib/services/capability-links";
 
 export async function onRequestPost(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
+  const config = getConfig(c.env, c.req.raw);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const registrationId = c.req.param("registrationId");
 
@@ -78,19 +79,20 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   const now = nowIso();
 
   if (registration.status === "pending_email_confirmation") {
-    // Rotate confirmation token and resend the confirm-email
-    const newToken = randomToken(24);
-    const newTokenHash = await sha256Hex(newToken);
-
     await run(
       requestDb(c),
       `UPDATE registrations
-       SET confirmation_token_hash = ?, confirmation_token_expires_at = ?, confirmation_reminder_sent_at = ?, updated_at = ?
+       SET confirmation_reminder_sent_at = ?, updated_at = ?
        WHERE id = ?`,
-      [newTokenHash, null, now, now, registration.id],
+      [now, now, registration.id],
     );
 
-    const confirmationUrl = registrationConfirmPageUrl(appBaseUrl, event, newToken, registration.id);
+    const confirmationUrl = registrationConfirmPageUrl(
+      appBaseUrl,
+      event,
+      queuedCapabilityToken("registration_confirm", registration.id, config.confirmationLinkTtlHours * 60 * 60),
+      registration.id,
+    );
 
     outboxId = await queueEmail(requestDb(c), {
       eventId: event.id,
@@ -100,6 +102,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
       recipientUserId: user.id,
       messageType: "transactional",
       subject: `Confirm your registration for ${event.name}`,
+      capabilityLinkValues: [confirmationUrl],
       data: {
         ...buildEventEmailVariables(event, appBaseUrl),
         firstName: user.first_name ?? "",
@@ -120,17 +123,11 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
       },
     });
   } else {
-    // Rotate manage token and resend registration-confirmed email
-    const freshManageToken = randomToken(24);
-    const freshManageHash = await sha256Hex(freshManageToken);
-
-    await run(requestDb(c), "UPDATE registrations SET manage_token_hash = ?, updated_at = ? WHERE id = ?", [
-      freshManageHash,
-      now,
-      registration.id,
-    ]);
-
-    const manageUrl = registrationManagePageUrl(appBaseUrl, event, freshManageToken);
+    const manageUrl = registrationManagePageUrl(
+      appBaseUrl,
+      event,
+      queuedCapabilityToken("registration_manage", registration.id),
+    );
     const rsvpEmail = c.env.INTERNAL_SIGNING_SECRET
       ? await generateSignedRsvpAddress(registration.id, c.env.INTERNAL_SIGNING_SECRET, c.env.RSVP_EMAIL)
       : undefined;
@@ -153,6 +150,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
       recipientUserId: user.id,
       messageType: "transactional",
       subject: `Registration confirmed for ${event.name}`,
+      capabilityLinkValues: [manageUrl],
       attachments: referralRow
         ? [
             buildBadgeAttachment({

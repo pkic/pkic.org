@@ -8,12 +8,13 @@ import {
   setInviteRemindersPausedUntil,
 } from "../../../../_lib/services/invites";
 import { inviteReminderPreferenceSchema } from "../../../../../assets/shared/schemas/api";
+import { requireInternalSecret } from "../../../../_lib/request";
 
 export async function onRequestPost(c: any): Promise<Response> {
   c.set("sensitive", true);
   const body = await parseJsonBody(c.req, inviteReminderPreferenceSchema);
   const inviteId = new URL(c.req.raw.url).searchParams.get("id");
-  const invite = await findInviteByToken(c.env.DB, c.req.param("token"), inviteId);
+  const invite = await findInviteByToken(c.env.DB, c.req.param("token"), requireInternalSecret(c.env), inviteId);
 
   if (body.action === "unsubscribe") {
     await declineInvite(c.env.DB, {

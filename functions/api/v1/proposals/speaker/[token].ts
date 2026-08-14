@@ -82,7 +82,11 @@ const speakerProfileSchema = z.object({
 export async function onRequestGet(c: any): Promise<Response> {
   try {
     const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-    const { speaker, proposal, user } = await getSpeakerByManageToken(c.env.DB, c.req.param("token"));
+    const { speaker, proposal, user } = await getSpeakerByManageToken(
+      c.env.DB,
+      c.req.param("token"),
+      requireInternalSecret(c.env),
+    );
 
     const [coSpeakers, presentationUploader, presentationTerms, event] = await Promise.all([
       getProposalCoSpeakers(c.env.DB, proposal.id, speaker.user_id),
@@ -143,7 +147,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     const body = await parseJsonBody(c.req, speakerActionSchema);
 
     if (body.action === "confirm") {
-      const info = await getSpeakerByManageToken(c.env.DB, c.req.param("token"));
+      const info = await getSpeakerByManageToken(c.env.DB, c.req.param("token"), requireInternalSecret(c.env));
 
       // Already confirmed is treated as success and does not require resubmission.
       if (info.speaker.status !== "confirmed") {
@@ -163,13 +167,13 @@ export async function onRequestPost(c: any): Promise<Response> {
         });
       }
 
-      await confirmSpeakerParticipation(c.env.DB, c.req.param("token"), {
+      await confirmSpeakerParticipation(c.env.DB, c.req.param("token"), requireInternalSecret(c.env), {
         termsAccepted: true,
       });
       return json({ success: true, status: "confirmed" });
     }
 
-    await declineSpeakerParticipation(c.env.DB, c.req.param("token"), {
+    await declineSpeakerParticipation(c.env.DB, c.req.param("token"), requireInternalSecret(c.env), {
       reason: body.reason ?? null,
     });
     return json({ success: true, status: "declined" });
@@ -181,7 +185,11 @@ export async function onRequestPost(c: any): Promise<Response> {
 export async function onRequestPatch(c: any): Promise<Response> {
   try {
     const body = await parseJsonBody(c.req, speakerProfileSchema);
-    const { speaker, user } = await getSpeakerByManageToken(c.env.DB, c.req.param("token"));
+    const { speaker, user } = await getSpeakerByManageToken(
+      c.env.DB,
+      c.req.param("token"),
+      requireInternalSecret(c.env),
+    );
 
     if (speaker.status === "declined") {
       return json({ error: { code: "SPEAKER_DECLINED", message: "You have declined participation." } }, 403);

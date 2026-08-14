@@ -28,7 +28,7 @@ async function seedUsersAndInvites(
       `),
       env.DB.prepare(`
         INSERT INTO invites (
-          id, event_id, invitee_email, invite_type, token_hash, status, source_type, created_at
+          id, event_id, invitee_email, invite_type, link_secret, status, source_type, created_at
         ) VALUES (
           '${inviteId}', '${eventId}', '${email}', 'attendee', '${crypto.randomUUID().replaceAll("-", "")}', 'sent', 'direct', datetime('now')
         )
@@ -73,6 +73,7 @@ describe("day waitlist priorities", () => {
       sourceType: "invite",
       inviteId: seeded["holder@example.test"].inviteId,
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     const continuity = await createRegistration(env.DB, {
@@ -86,6 +87,7 @@ describe("day waitlist priorities", () => {
       sourceType: "invite",
       inviteId: seeded["continuity@example.test"].inviteId,
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     const general = await createRegistration(env.DB, {
@@ -96,6 +98,7 @@ describe("day waitlist priorities", () => {
       sourceType: "invite",
       inviteId: seeded["general@example.test"].inviteId,
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     const lanes = await queryAll<{ registration_id: string; priority_lane: string }>(
@@ -110,6 +113,7 @@ describe("day waitlist priorities", () => {
       manageToken: holder.manageToken,
       action: "cancel",
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     const statuses = await queryAll<{ registration_id: string; status: string }>(
@@ -177,6 +181,7 @@ describe("day waitlist priorities", () => {
       sourceType: "invite",
       inviteId: seeded["holder-one@example.test"].inviteId,
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     const holderTwo = await createRegistration(env.DB, {
@@ -187,6 +192,7 @@ describe("day waitlist priorities", () => {
       sourceType: "invite",
       inviteId: seeded["holder-two@example.test"].inviteId,
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     const multi = await createRegistration(env.DB, {
@@ -200,6 +206,7 @@ describe("day waitlist priorities", () => {
       sourceType: "invite",
       inviteId: seeded["multi@example.test"].inviteId,
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     const backup = await createRegistration(env.DB, {
@@ -210,18 +217,21 @@ describe("day waitlist priorities", () => {
       sourceType: "invite",
       inviteId: seeded["backup@example.test"].inviteId,
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     await updateRegistrationByManageToken(env.DB, {
       manageToken: holderOne.manageToken,
       action: "cancel",
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     await updateRegistrationByManageToken(env.DB, {
       manageToken: holderTwo.manageToken,
       action: "cancel",
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     await promoteEventWaitlistWithNotifications(env.DB, {
@@ -273,6 +283,7 @@ describe("day waitlist priorities", () => {
       sourceType: "invite",
       inviteId: seeded["holder@example.test"].inviteId,
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     const waiting = await createRegistration(env.DB, {
@@ -283,12 +294,14 @@ describe("day waitlist priorities", () => {
       sourceType: "invite",
       inviteId: seeded["waiting@example.test"].inviteId,
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     await updateRegistrationByManageToken(env.DB, {
       manageToken: holder.manageToken,
       action: "cancel",
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     const result = await runWaitlistPromotionCycle(env.DB, {
@@ -347,6 +360,7 @@ describe("day waitlist priorities", () => {
       sourceType: "invite",
       inviteId: seeded["holder@example.test"].inviteId,
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     await createRegistration(env.DB, {
@@ -357,6 +371,7 @@ describe("day waitlist priorities", () => {
       sourceType: "invite",
       inviteId: seeded["first-waiting@example.test"].inviteId,
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     await createRegistration(env.DB, {
@@ -367,12 +382,14 @@ describe("day waitlist priorities", () => {
       sourceType: "invite",
       inviteId: seeded["second-waiting@example.test"].inviteId,
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     await updateRegistrationByManageToken(env.DB, {
       manageToken: holder.manageToken,
       action: "cancel",
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     await Promise.all([
@@ -447,6 +464,7 @@ describe("day waitlist priorities", () => {
       sourceType: "invite",
       inviteId: seeded["holder@example.test"].inviteId,
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     const organizer = await createRegistration(env.DB, {
@@ -457,6 +475,7 @@ describe("day waitlist priorities", () => {
       sourceType: "invite",
       inviteId: seeded["organizer@example.test"].inviteId,
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     const registration = (

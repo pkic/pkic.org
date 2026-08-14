@@ -20,12 +20,13 @@ import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { AppError } from "../../../../../_lib/errors";
 import { nowIso } from "../../../../../_lib/utils/time";
 import { run } from "../../../../../_lib/db/queries";
+import { requireInternalSecret } from "../../../../../_lib/request";
 
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_HEADSHOT_BYTES = 20 * 1024 * 1024; // 20 MB
 
 export async function onRequestGet(c: any): Promise<Response> {
-  const { user } = await getSpeakerByManageToken(c.env.DB, c.req.param("token"));
+  const { user } = await getSpeakerByManageToken(c.env.DB, c.req.param("token"), requireInternalSecret(c.env));
 
   if (!user.headshot_r2_key) {
     return json({ error: { code: "NOT_FOUND", message: "No headshot on file" } }, 404);
@@ -53,7 +54,7 @@ export async function onRequestGet(c: any): Promise<Response> {
 }
 
 export async function onRequestPut(c: any): Promise<Response> {
-  const { speaker, user } = await getSpeakerByManageToken(c.env.DB, c.req.param("token"));
+  const { speaker, user } = await getSpeakerByManageToken(c.env.DB, c.req.param("token"), requireInternalSecret(c.env));
 
   if (speaker.status === "declined") {
     return json({ error: { code: "SPEAKER_DECLINED", message: "You have declined participation." } }, 403);
@@ -115,7 +116,7 @@ export async function onRequestPut(c: any): Promise<Response> {
 }
 
 export async function onRequestDelete(c: any): Promise<Response> {
-  const { user } = await getSpeakerByManageToken(c.env.DB, c.req.param("token"));
+  const { user } = await getSpeakerByManageToken(c.env.DB, c.req.param("token"), requireInternalSecret(c.env));
 
   const bucket = c.env.SPEAKER_UPLOADS_BUCKET;
   if (bucket && user.headshot_r2_key) {

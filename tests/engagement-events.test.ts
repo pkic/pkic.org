@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
-import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
+import { createContext, deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { onRequestPost as createRegistration } from "../functions/api/v1/events/[eventSlug]/registrations";
 import { onRequestGet as confirmRegistration } from "../functions/api/v1/events/[eventSlug]/registrations/confirm-email";
 import { recordEngagement } from "../functions/_lib/services/engagement";
@@ -50,7 +50,9 @@ describe("engagement events", () => {
       )
     )[0];
 
-    const confirmationUrl = (JSON.parse(payload.payload_json) as { confirmationUrl: string }).confirmationUrl;
+    const confirmationUrl = (
+      await deliveredEmailPayload<{ confirmationUrl: string }>(env.DB, env, payload.payload_json)
+    ).confirmationUrl;
     const token = new URL(confirmationUrl).searchParams.get("token");
     expect(token).toBeTruthy();
 

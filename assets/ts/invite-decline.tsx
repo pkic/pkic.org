@@ -13,6 +13,7 @@ import { inviteDeclineSchema } from "../shared/schemas/api";
 import { getJson, postJson, ApiClientError } from "./shared/api-client";
 import { parseContactText } from "./shared/invite-parser";
 import type { ParsedContact } from "./shared/invite-parser";
+import { showManageLinkRecoveryForm } from "./shared/widgets/link-recovery";
 
 interface DeclineInfoValid {
   status: "valid";
@@ -147,7 +148,7 @@ function boot(): void {
   const successEl = $("[data-decline-success]", root);
 
   if (!token) {
-    showStatus("Invalid link", "This decline link is missing its token. Please use the link from your email.");
+    showInviteRecovery("Invalid link", "This decline link is missing its token. Request a fresh invitation below.");
     return;
   }
 
@@ -167,6 +168,21 @@ function boot(): void {
     const bodyEl = $("[data-status-body]", root!);
     if (bodyEl) bodyEl.textContent = body;
     show(statusEl);
+  }
+
+  function showInviteRecovery(title: string, body: string): void {
+    showStatus(title, body);
+    showManageLinkRecoveryForm({
+      root: root!,
+      loadingSelector: "[data-decline-loading]",
+      sectionSelector: "[data-resend-invite-section]",
+      buttonSelector: "[data-resend-invite-btn]",
+      statusSelector: "[data-resend-invite-status]",
+      emailSelector: "[data-resend-invite-email]",
+      endpoint: `${apiBase}/invites/resend-link`,
+      successMessage:
+        "If the email matches a pending invitation, a fresh link is on its way. Please check your inbox (and spam folder).",
+    });
   }
 
   // ── Main flow ───────────────────────────────────────────────────────────────
@@ -197,17 +213,17 @@ function boot(): void {
     }
 
     if (info.status === "expired") {
-      showStatus(
+      showInviteRecovery(
         "Invitation expired",
-        "This invitation link is no longer valid. Please contact us if you need a new one.",
+        "This invitation link is no longer valid. Request a fresh invitation below.",
       );
       return;
     }
 
     if (info.status === "invalid") {
-      showStatus(
+      showInviteRecovery(
         "Invalid invitation link",
-        "This link doesn\u2019t appear to be valid. Please use the link from your original email.",
+        "This link doesn\u2019t appear to be valid. Request a fresh invitation below.",
       );
       return;
     }

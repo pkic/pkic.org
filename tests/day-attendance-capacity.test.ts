@@ -48,6 +48,7 @@ describe("day attendance capacity", () => {
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     const second = await createRegistration(env.DB, {
@@ -57,6 +58,7 @@ describe("day attendance capacity", () => {
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
 
     expect(second.registration.status).toBe("pending_email_confirmation");
@@ -95,10 +97,12 @@ describe("day attendance capacity", () => {
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
     await confirmRegistrationByToken(env.DB, {
       token: first.confirmationToken as string,
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     const second = await createRegistration(env.DB, {
@@ -108,16 +112,19 @@ describe("day attendance capacity", () => {
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
     const confirmedSecond = await confirmRegistrationByToken(env.DB, {
       token: second.confirmationToken as string,
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     const cancelled = await updateRegistrationByManageToken(env.DB, {
       manageToken: confirmedSecond.manageToken,
       action: "cancel",
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     expect(cancelled.status).toBe("cancelled");
@@ -155,10 +162,12 @@ describe("day attendance capacity", () => {
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
     await confirmRegistrationByToken(env.DB, {
       token: first.confirmationToken as string,
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     const second = await createRegistration(env.DB, {
@@ -168,10 +177,12 @@ describe("day attendance capacity", () => {
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
     const confirmedSecond = await confirmRegistrationByToken(env.DB, {
       token: second.confirmationToken as string,
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     await env.DB.prepare(
@@ -200,6 +211,7 @@ describe("day attendance capacity", () => {
       attendanceType: "in_person",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     const afterClaim = await queryAll<{ status: string }>(
@@ -239,10 +251,12 @@ describe("day attendance capacity", () => {
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
     await confirmRegistrationByToken(env.DB, {
       token: tueHolder.confirmationToken as string,
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     const attendee = await createRegistration(env.DB, {
@@ -256,10 +270,12 @@ describe("day attendance capacity", () => {
       ],
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
     const confirmedAttendee = await confirmRegistrationByToken(env.DB, {
       token: attendee.confirmationToken as string,
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     await env.DB.prepare(
@@ -272,10 +288,12 @@ describe("day attendance capacity", () => {
       dayAttendance: [{ dayDate: "2026-12-03", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
     await confirmRegistrationByToken(env.DB, {
       token: thursdayOther.confirmationToken as string,
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
     await env.DB.prepare(
       "UPDATE event_days SET in_person_capacity = 1, updated_at = datetime('now') WHERE id = 'day-thu'",
@@ -307,6 +325,7 @@ describe("day attendance capacity", () => {
         { dayDate: "2026-12-03", attendanceType: "in_person" },
       ],
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     const waitlistRows = await queryAll<{ day_date: string; status: string }>(
@@ -350,10 +369,12 @@ describe("day attendance capacity", () => {
         dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
         sourceType: "direct",
         confirmationTtlHours: 48,
+        signingSecret: "test-signing-secret",
       });
       await confirmRegistrationByToken(env.DB, {
         token: registration.confirmationToken as string,
         waitlistClaimWindowHours: 24,
+        signingSecret: "test-signing-secret",
       });
     }
 
@@ -409,10 +430,12 @@ describe("day attendance capacity", () => {
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
     await confirmRegistrationByToken(env.DB, {
       token: holder.confirmationToken as string,
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     const waiting = await createRegistration(env.DB, {
@@ -422,10 +445,12 @@ describe("day attendance capacity", () => {
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
     const confirmedWaiting = await confirmRegistrationByToken(env.DB, {
       token: waiting.confirmationToken as string,
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     const backup = await createRegistration(env.DB, {
@@ -435,10 +460,12 @@ describe("day attendance capacity", () => {
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
     await confirmRegistrationByToken(env.DB, {
       token: backup.confirmationToken as string,
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     await updateRegistrationById(

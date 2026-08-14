@@ -9,10 +9,32 @@ import { bootstrap, setStatus } from "./boot";
 import { readField, setField, formatStatusLabel, statusBadgeClass, q, findSubmitButton } from "../shared/form/helpers";
 import { AdminHeadshotManager } from "../shared/headshot/AdminHeadshotManager";
 import { ProfileLinksInput, type ProfileLinksHandle } from "../components/ProfileLinksInput";
+import { showManageLinkRecoveryForm } from "../shared/widgets/link-recovery";
 
 function tokenFromRoot(root: HTMLElement, fallback: string | null): string | null {
   const token = root.dataset.manageToken?.trim();
   return token || fallback;
+}
+
+function showResendProposalManageLinkForm(
+  root: HTMLElement,
+  apiBase: string,
+  eventSlug: string,
+  introMessage: string,
+): void {
+  root.querySelector<HTMLElement>("[data-proposal-manage-content]")?.classList.add("d-none");
+  showManageLinkRecoveryForm({
+    root,
+    loadingSelector: "[data-proposal-manage-loading]",
+    sectionSelector: "[data-resend-proposal-manage-section]",
+    buttonSelector: "[data-resend-proposal-manage-btn]",
+    statusSelector: "[data-resend-proposal-manage-status]",
+    emailSelector: "[data-resend-proposal-manage-email]",
+    endpoint: `${apiBase}/events/${eventSlug}/proposals/resend-manage-link`,
+    successMessage:
+      "If the details match an active proposal, you will receive an email shortly. Please check your inbox (and spam folder).",
+    introMessage,
+  });
 }
 
 function normalizeLinks(raw: ProposalManageResponse["speakers"][number]["links"]): string[] {
@@ -340,7 +362,12 @@ async function main(): Promise<void> {
 
   const token = tokenFromRoot(boot.root, boot.query.token);
   if (!token) {
-    setStatus(boot.statusEl, "Missing manage token.", true);
+    showResendProposalManageLinkForm(
+      boot.root,
+      boot.apiBase,
+      boot.eventSlug,
+      "Missing proposal management token. Request a fresh link below.",
+    );
     return;
   }
   const apiBase = boot.apiBase;
@@ -370,9 +397,17 @@ async function main(): Promise<void> {
     setField(boot.form, "abstract", proposalData.proposal.abstract);
   } catch (error) {
     const normalized = normalizeValidation(error);
-    setStatus(boot.statusEl, normalized.globalMessage, true);
+    showResendProposalManageLinkForm(
+      boot.root,
+      boot.apiBase,
+      boot.eventSlug,
+      `${normalized.globalMessage} You can request a fresh link below.`,
+    );
     return;
   }
+
+  boot.root.querySelector<HTMLElement>("[data-proposal-manage-loading]")?.classList.add("d-none");
+  boot.root.querySelector<HTMLElement>("[data-proposal-manage-content]")?.classList.remove("d-none");
 
   boot.form.addEventListener("submit", async (event) => {
     event.preventDefault();

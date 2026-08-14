@@ -245,10 +245,12 @@ describe("admin event management endpoints", () => {
       attendanceType: "virtual",
       sourceType: "direct",
       confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
     });
     await confirmRegistrationByToken(env.DB, {
       token: created.confirmationToken as string,
       waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     // Cancel via the service (simulates attendee or earlier admin action)

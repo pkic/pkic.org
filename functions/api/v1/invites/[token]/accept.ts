@@ -20,7 +20,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   const signingSecret = requireInternalSecret(c.env);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const inviteId = new URL(c.req.raw.url).searchParams.get("id");
-  const invite = await findInviteByToken(c.env.DB, c.req.param("token"), inviteId);
+  const invite = await findInviteByToken(c.env.DB, c.req.param("token"), signingSecret, inviteId);
   const event = await first<{
     id: string;
     slug: string;
@@ -86,6 +86,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     inviteId: invite.id,
     pendingConfirmationDeadlineHours:
       (config.maxPendingConfirmationReminders + 1) * config.pendingConfirmationReminderIntervalDays * 24,
+    signingSecret,
   });
 
   await acceptInvite(c.env.DB, invite.id);

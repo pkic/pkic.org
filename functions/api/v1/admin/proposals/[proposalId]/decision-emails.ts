@@ -19,7 +19,6 @@ interface ProposalEmailSource {
   title: string;
   event_id: string;
   proposer_user_id: string;
-  manage_token_hash: string;
   presentation_deadline: string | null;
   proposal_type: string;
 }
@@ -57,12 +56,12 @@ export async function buildProposalDecisionEmailPlan(
   options: {
     appBaseUrl: string;
     resolveSpeakerManageUrl: (speaker: ProposalSpeakerWithUser, event: EventEmailSource) => Promise<string>;
-    resolveProposalManageUrl: (event: EventEmailSource, proposalManageToken: string) => Promise<string>;
+    resolveProposalManageUrl: (event: EventEmailSource, proposalId: string) => Promise<string>;
   },
 ): Promise<ProposalDecisionEmailPlan> {
   const proposal = await first<ProposalEmailSource>(
     db,
-    `SELECT id, title, event_id, proposer_user_id, manage_token_hash, presentation_deadline, proposal_type
+    `SELECT id, title, event_id, proposer_user_id, presentation_deadline, proposal_type
      FROM session_proposals
      WHERE id = ?`,
     [payload.proposalId],
@@ -81,7 +80,7 @@ export async function buildProposalDecisionEmailPlan(
 
   const messages: ProposalDecisionEmailMessage[] = [];
   const presentationReminderUserIds = new Set<string>();
-  const proposalManageUrl = event ? await options.resolveProposalManageUrl(event, proposal.manage_token_hash) : "";
+  const proposalManageUrl = event ? await options.resolveProposalManageUrl(event, proposal.id) : "";
 
   const eventSettings = parseJsonSafe<{ proposal?: { sessionTypes?: unknown[] } }>(event?.settings_json ?? "{}", {});
   const sessionTypes = resolveSessionTypes(eventSettings);

@@ -15,6 +15,7 @@ import { parseJsonSafe } from "../../../../../_lib/utils/json";
 import type { ProposalListRecord } from "../../../../../_lib/services/proposals";
 import { resolveSessionTypes } from "../../../../../_lib/services/events";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import { omitCapabilitySecrets } from "../../../../../_lib/services/capability-links";
 import { proposalIdParamsSchema } from "../../../../../../assets/shared/schemas/api";
 
 export async function onRequestGet(c: AdminContext): Promise<Response> {
@@ -61,7 +62,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
 
   return json({
     proposal: {
-      ...proposal,
+      ...omitCapabilitySecrets(proposal),
       details: parseJsonSafe<Record<string, unknown> | null>(proposal.details_json, null),
     },
     access,

@@ -1,9 +1,9 @@
 import { all } from "../../db/queries";
 import { speakerManagePageUrl } from "../frontend-links";
 import { buildEventEmailVariables } from "../events";
-import { randomToken, sha256Hex } from "../../utils/crypto";
+import { queuedCapabilityToken } from "../capability-links";
 import { type DueSpeakerInviteRow, type EventRouteRow, type ReminderCandidatePreview } from "../reminders-support";
-import { batchStatements, batchQueueEmailsAndUpdateState, bulkBuildProposalInviteEmailContexts } from "./shared";
+import { batchQueueEmailsAndUpdateState, bulkBuildProposalInviteEmailContexts } from "./shared";
 import type { DatabaseLike } from "../../types";
 
 export async function runCoSpeakerInviteReminders(
@@ -82,25 +82,6 @@ export async function runCoSpeakerInviteReminders(
   }
 
   if (!dryRun && dueSpeakerInvites.length > 0) {
-    const tokenData = await Promise.all(
-      dueSpeakerInvites.map(async (row) => {
-        const token = randomToken(24);
-        const hash = await sha256Hex(token);
-        return { proposalId: row.proposal_id, userId: row.user_id, speakerId: row.speaker_id, token, hash };
-      }),
-    );
-    const speakerTokenKey = (proposalId: string, userId: string) => `${proposalId}:${userId}`;
-    const speakerTokenByKey = new Map(tokenData.map((t) => [speakerTokenKey(t.proposalId, t.userId), t.token]));
-
-    await batchStatements(
-      db,
-      tokenData.map((t) =>
-        db
-          .prepare("UPDATE proposal_speakers SET manage_token_hash = ? WHERE proposal_id = ? AND user_id = ?")
-          .bind(t.hash, t.proposalId, t.userId),
-      ),
-    );
-
     const emailRows = dueSpeakerInvites.map((row) => {
       const event: EventRouteRow = {
         id: row.event_id,
@@ -112,7 +93,8 @@ export async function runCoSpeakerInviteReminders(
       };
       const reminderNumber = Number(row.reminder_count ?? 0) + 1;
       const subject = `Reminder: please confirm speaker participation — ${event.name}`;
-      const manageToken = speakerTokenByKey.get(speakerTokenKey(row.proposal_id, row.user_id))!;
+      const manageToken = queuedCapabilityToken("speaker_manage", row.speaker_id);
+      const manageUrl = speakerManagePageUrl(appBaseUrl, event, manageToken);
       const ctx = proposalContexts.get(row.proposal_id);
       return {
         eventId: row.event_id,
@@ -120,6 +102,7 @@ export async function runCoSpeakerInviteReminders(
         recipientUserId: row.user_id,
         templateKey: "co_speaker_invite",
         subject,
+        capabilityLinkValues: [manageUrl],
         data: {
           ...buildEventEmailVariables(event, appBaseUrl),
           firstName: row.first_name ?? "",
@@ -129,7 +112,7 @@ export async function runCoSpeakerInviteReminders(
           proposalTitle: ctx?.proposalTitle ?? "",
           proposalAbstract: ctx?.proposalAbstract ?? "",
           speakerLineupText: ctx?.speakerLineupText ?? "",
-          manageUrl: speakerManagePageUrl(appBaseUrl, event, manageToken),
+          manageUrl,
           isReminder: true,
           reminderCount: String(reminderNumber),
         },

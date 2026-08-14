@@ -20,6 +20,7 @@ describe("invite decline-info", () => {
       inviteeFirstName: "Alice",
       inviteType: "attendee",
       ttlHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     const response = await declineInfoGet(
@@ -40,6 +41,7 @@ describe("invite decline-info", () => {
       inviteeEmail: "info-declined@example.test",
       inviteType: "attendee",
       ttlHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     await declinePost(
@@ -85,6 +87,7 @@ describe("invite decline-info", () => {
       inviteeEmail: "decline-past-expiry@example.test",
       inviteType: "attendee",
       ttlHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     await run(env.DB, "UPDATE invites SET expires_at = datetime('now', '-1 day') WHERE id = ?", [invite.id]);
@@ -106,6 +109,7 @@ describe("invite decline-info", () => {
       inviteeEmail: "nps-test@example.test",
       inviteType: "attendee",
       ttlHours: 24,
+      signingSecret: "test-signing-secret",
     });
 
     const response = await declinePost(

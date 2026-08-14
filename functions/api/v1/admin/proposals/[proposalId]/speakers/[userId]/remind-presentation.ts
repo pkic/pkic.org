@@ -62,6 +62,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     recipientUserId: speaker.id,
     subject: `Action required: upload your presentation — ${event.name}`,
     messageType: "transactional",
+    capabilityLinkValues: [uploadUrl],
     data: {
       ...buildEventEmailVariables(event, appBaseUrl),
       firstName: speaker.first_name ?? "",

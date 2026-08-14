@@ -1,7 +1,7 @@
 import { all } from "../../db/queries";
 import { speakerPresentationPageUrl } from "../frontend-links";
 import { buildEventEmailVariables } from "../events";
-import { randomToken, sha256Hex } from "../../utils/crypto";
+import { queuedCapabilityToken } from "../capability-links";
 import {
   daysUntil,
   presentationReminderSubject,
@@ -9,7 +9,7 @@ import {
   type EventRouteRow,
   type ReminderCandidatePreview,
 } from "../reminders-support";
-import { batchStatements, batchQueueEmailsAndUpdateState } from "./shared";
+import { batchQueueEmailsAndUpdateState } from "./shared";
 import type { DatabaseLike } from "../../types";
 
 export async function runPresentationReminders(
@@ -91,49 +91,32 @@ export async function runPresentationReminders(
   );
 
   if (!dryRun && duePresentation.length > 0) {
-    const tokenData = await Promise.all(
-      duePresentation.map(async (row) => {
-        const token = randomToken(24);
-        const hash = await sha256Hex(token);
-        return { proposalId: row.proposal_id, userId: row.user_id, speakerId: row.speaker_id, token, hash };
-      }),
-    );
-    const presTokenKey = (proposalId: string, userId: string) => `${proposalId}:${userId}`;
-    const presTokenByKey = new Map(tokenData.map((t) => [presTokenKey(t.proposalId, t.userId), t.token]));
-
-    await batchStatements(
-      db,
-      tokenData.map((t) =>
-        db
-          .prepare("UPDATE proposal_speakers SET manage_token_hash = ? WHERE proposal_id = ? AND user_id = ?")
-          .bind(t.hash, t.proposalId, t.userId),
-      ),
-    );
-
-    const emailRows = preparedRows.map(
-      ({ row, event, effectiveDeadline, daysToDeadline, reminderNumber, subject }) => ({
+    const emailRows = preparedRows.map(({ row, event, effectiveDeadline, daysToDeadline, reminderNumber, subject }) => {
+      const uploadUrl = speakerPresentationPageUrl(
+        appBaseUrl,
+        event,
+        queuedCapabilityToken("speaker_manage", row.speaker_id),
+      );
+      return {
         eventId: row.event_id,
         recipientEmail: row.email,
         recipientUserId: row.user_id,
         templateKey: "presentation_upload_request",
         subject,
+        capabilityLinkValues: [uploadUrl],
         data: {
           ...buildEventEmailVariables(event, appBaseUrl),
           firstName: row.first_name ?? "",
           proposalTitle: row.proposal_title,
-          uploadUrl: speakerPresentationPageUrl(
-            appBaseUrl,
-            event,
-            presTokenByKey.get(presTokenKey(row.proposal_id, row.user_id))!,
-          ),
+          uploadUrl,
           deadline: effectiveDeadline ?? "",
           isReminder: true,
           reminderCount: String(reminderNumber),
           daysUntilDeadline: daysToDeadline !== null ? String(daysToDeadline) : "",
           __subjectOverride: subject,
         },
-      }),
-    );
+      };
+    });
 
     await batchQueueEmailsAndUpdateState(
       db,
