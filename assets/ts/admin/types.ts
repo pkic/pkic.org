@@ -84,6 +84,15 @@ export type ApiFn = <T = unknown>(
   opts?: RequestInit & { headers?: Record<string, string> },
 ) => Promise<T>;
 
+export interface RegistrationAttendanceChange {
+  changedAt: string;
+  transitions: Array<{
+    fromType: string;
+    toType: string;
+    days: Array<{ dayDate: string; label: string | null }>;
+  }>;
+}
+
 export interface Registration {
   id: string;
   user_id: string;
@@ -100,6 +109,8 @@ export interface Registration {
   dayWaitlist?: Array<{ dayDate: string; status: string; priorityLane: string; offerExpiresAt: string | null }>;
   dayWaitlistSummary?: string | null;
   dayWaitlistCount?: number;
+  attendanceChangeHistory?: RegistrationAttendanceChange[];
+  lastAttendanceChange?: RegistrationAttendanceChange | null;
   sponsor_consent?: boolean;
   dietary_restrictions?: string[] | null;
 }
@@ -481,6 +492,7 @@ export interface EventStatsResponse {
   registrations: {
     byStatus: Record<string, number>;
     byAttendanceType: Record<string, number>;
+    attendanceStatusByType: Record<string, { accepted: number; waitlisted: number }>;
     byStatusAndType: Array<{ status: string; attendance_type: string; count: number }>;
     sponsorConsent: { granted: number; notGranted: number };
     total: number;
@@ -500,18 +512,39 @@ export interface EventStatsResponse {
     byPriorityLane: Record<string, number>;
   };
   attendanceChanges: {
+    /** @deprecated Use dayChanges. */
     totalChanges: number;
+    /** @deprecated Use changedAttendees. */
     changedRegistrations: number;
-    byTransition: Array<{ from_type: string; to_type: string; count: number }>;
+    dayChanges: number;
+    changedAttendees: number;
+    leftInPersonAttendees: number;
+    leftInPersonDayChanges: number;
+    joinedInPersonAttendees: number;
+    joinedInPersonDayChanges: number;
+    byTransition: Array<{
+      from_type: string;
+      to_type: string;
+      attendees: number;
+      day_changes: number;
+    }>;
+    byDay: Array<{
+      day_date: string;
+      label: string | null;
+      sort_order: number;
+      changed_attendees: number;
+      day_changes: number;
+      left_in_person_attendees: number;
+      joined_in_person_attendees: number;
+    }>;
     recent: Array<{
       registration_id: string;
       changed_at: string;
-      day_date: string;
-      day_label: string | null;
       from_type: string;
       to_type: string;
       user_email: string | null;
       display_name: string | null;
+      days: Array<{ day_date: string; label: string | null }>;
     }>;
   };
   registrationsByEventDay: Array<{
@@ -519,7 +552,7 @@ export interface EventStatsResponse {
     label: string | null;
     sort_order: number;
     attendance_type: string;
-    status: string;
+    attendance_status: "accepted" | "waitlisted" | "pending";
     count: number;
   }>;
   invites: {

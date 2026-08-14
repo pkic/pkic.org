@@ -234,6 +234,7 @@ export async function replaceRegistrationDayAttendance(
     eventId: string;
     selections?: DayAttendanceSelection[];
     changedBy?: string;
+    recordHistory?: boolean;
   },
 ): Promise<void> {
   const selections = normalizeSelections(payload.selections);
@@ -273,6 +274,10 @@ export async function replaceRegistrationDayAttendance(
       ) VALUES (?, ?, ?, ?, ?, ?)`,
       [uuid(), payload.registrationId, day.id, selection.attendanceType, nowIso(), nowIso()],
     );
+  }
+
+  if (payload.recordHistory === false) {
+    return;
   }
 
   const changedBy = payload.changedBy ?? "system";

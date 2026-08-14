@@ -293,4 +293,438 @@ describe("admin event management endpoints", () => {
     )[0];
     expect(row.cancelled_at).toBeNull();
   });
+
+  it("separates accepted attendees from active day waitlists in both event statistics views", async () => {
+    const { baseEventId } = await setupAdmin();
+
+    await env.DB.batch([
+      env.DB.prepare(`
+        INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
+        VALUES ('statistics-day-1', '${baseEventId}', '2026-12-01', 'Day 1', 1, 0, datetime('now'), datetime('now'))
+      `),
+      env.DB.prepare(`
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+        VALUES
+          ('statistics-accepted', 'accepted@example.test', 'accepted@example.test', 'Accepted', 'Attendee', datetime('now'), datetime('now')),
+          ('statistics-waitlisted', 'waitlisted@example.test', 'waitlisted@example.test', 'Waitlisted', 'Attendee', datetime('now'), datetime('now')),
+          ('statistics-virtual', 'virtual@example.test', 'virtual@example.test', 'Virtual', 'Attendee', datetime('now'), datetime('now'))
+      `),
+    ]);
+
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const accepted = await createRegistration(env.DB, {
+      event,
+      userId: "statistics-accepted",
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    await confirmRegistrationByToken(env.DB, {
+      token: accepted.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+
+    const waitlisted = await createRegistration(env.DB, {
+      event,
+      userId: "statistics-waitlisted",
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    await confirmRegistrationByToken(env.DB, {
+      token: waitlisted.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+
+    const virtual = await createRegistration(env.DB, {
+      event,
+      userId: "statistics-virtual",
+      attendanceType: "virtual",
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    await confirmRegistrationByToken(env.DB, {
+      token: virtual.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+
+    const overviewResponse = await callAdmin("/api/v1/admin/events/pqc-2026/registrations");
+    expect(overviewResponse.status).toBe(200);
+    const overview = (await overviewResponse.json()) as {
+      stats: {
+        byAttendanceType: Record<string, number>;
+        attendanceStatusByType: Record<string, { accepted: number; waitlisted: number }>;
+      };
+    };
+    expect(overview.stats.byAttendanceType).toMatchObject({ in_person: 2, virtual: 1 });
+    expect(overview.stats.attendanceStatusByType).toMatchObject({
+      in_person: { accepted: 1, waitlisted: 1 },
+      virtual: { accepted: 1, waitlisted: 0 },
+    });
+
+    const statsResponse = await callAdmin("/api/v1/admin/events/pqc-2026/stats");
+    expect(statsResponse.status).toBe(200);
+    const stats = (await statsResponse.json()) as {
+      registrations: {
+        attendanceStatusByType: Record<string, { accepted: number; waitlisted: number }>;
+      };
+      registrationsByEventDay: Array<{ attendance_type: string; attendance_status: string; count: number }>;
+    };
+    expect(stats.registrations.attendanceStatusByType).toEqual(overview.stats.attendanceStatusByType);
+    expect(stats.registrationsByEventDay).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ attendance_type: "in_person", attendance_status: "accepted", count: 1 }),
+        expect.objectContaining({ attendance_type: "in_person", attendance_status: "waitlisted", count: 1 }),
+      ]),
+    );
+  });
+
+  it("preserves system history when a cancelled registration is reactivated", async () => {
+    const { baseEventId } = await setupAdmin();
+
+    await env.DB.batch([
+      env.DB.prepare(`
+        INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
+        VALUES ('reactivation-day', '${baseEventId}', '2026-12-01', 'Day 1', 10, 0, datetime('now'), datetime('now'))
+      `),
+      env.DB.prepare(`
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+        VALUES ('reactivation-attendee', 'reactivation@example.test', 'reactivation@example.test',
+                'Reactivated', 'Attendee', datetime('now'), datetime('now'))
+      `),
+    ]);
+
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const original = await createRegistration(env.DB, {
+      event,
+      userId: "reactivation-attendee",
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    await env.DB.prepare("UPDATE registrations SET status = 'cancelled', cancelled_at = datetime('now') WHERE id = ?")
+      .bind(original.registration.id)
+      .run();
+
+    const reactivated = await createRegistration(env.DB, {
+      event,
+      userId: "reactivation-attendee",
+      attendanceType: "virtual",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+
+    expect(reactivated.reactivated).toBe(true);
+    expect(reactivated.registration.id).toBe(original.registration.id);
+    const history = await queryAll<{ from_type: string; to_type: string; changed_by: string }>(
+      env.DB,
+      `SELECT from_type, to_type, changed_by
+       FROM registration_attendance_history
+       WHERE registration_id = ?`,
+      [original.registration.id],
+    );
+    expect(history).toEqual([{ from_type: "in_person", to_type: "virtual", changed_by: "system" }]);
+
+    const statsResponse = await callAdmin("/api/v1/admin/events/pqc-2026/stats");
+    expect(statsResponse.status).toBe(200);
+    const stats = (await statsResponse.json()) as {
+      attendanceChanges: { changedAttendees: number; dayChanges: number };
+    };
+    expect(stats.attendanceChanges).toMatchObject({ changedAttendees: 0, dayChanges: 0 });
+  });
+
+  it("counts nullable legacy history as a move into in-person attendance", async () => {
+    const { baseEventId } = await setupAdmin();
+
+    await env.DB.batch([
+      env.DB.prepare(`
+        INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
+        VALUES ('legacy-movement-day', '${baseEventId}', '2026-12-01', 'Day 1', 10, 0, datetime('now'), datetime('now'))
+      `),
+      env.DB.prepare(`
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+        VALUES ('legacy-movement-attendee', 'legacy-movement@example.test', 'legacy-movement@example.test',
+                'Legacy', 'Movement', datetime('now'), datetime('now'))
+      `),
+    ]);
+
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const created = await createRegistration(env.DB, {
+      event,
+      userId: "legacy-movement-attendee",
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    await env.DB.prepare(
+      `INSERT INTO registration_attendance_history (
+         id, registration_id, event_day_id, from_type, to_type, changed_by, changed_at
+       ) VALUES ('legacy-null-transition', ?, 'legacy-movement-day', NULL, 'in_person', 'admin:test', datetime('now'))`,
+    )
+      .bind(created.registration.id)
+      .run();
+
+    const statsResponse = await callAdmin("/api/v1/admin/events/pqc-2026/stats");
+    expect(statsResponse.status).toBe(200);
+    const stats = (await statsResponse.json()) as {
+      attendanceChanges: {
+        changedAttendees: number;
+        joinedInPersonAttendees: number;
+        joinedInPersonDayChanges: number;
+        byTransition: Array<{ from_type: string; to_type: string; attendees: number }>;
+      };
+    };
+    expect(stats.attendanceChanges).toMatchObject({
+      changedAttendees: 1,
+      joinedInPersonAttendees: 1,
+      joinedInPersonDayChanges: 1,
+    });
+    expect(stats.attendanceChanges.byTransition).toContainEqual({
+      from_type: "not_attending",
+      to_type: "in_person",
+      attendees: 1,
+      day_changes: 1,
+    });
+
+    const joinedResponse = await callAdmin(
+      "/api/v1/admin/events/pqc-2026/registrations?attendance_change=joined_in_person",
+    );
+    expect(joinedResponse.status).toBe(200);
+    const joined = (await joinedResponse.json()) as { registrations: Array<{ id: string }>; page: { total: number } };
+    expect(joined.page.total).toBe(1);
+    expect(joined.registrations[0]?.id).toBe(created.registration.id);
+  });
+
+  it("counts multi-day attendance movement once per attendee and separately per day", async () => {
+    const { baseEventId } = await setupAdmin();
+
+    await env.DB.batch([
+      env.DB.prepare(`
+        INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
+        VALUES
+          ('movement-day-1', '${baseEventId}', '2026-12-01', 'Day 1', 10, 0, datetime('now'), datetime('now')),
+          ('movement-day-2', '${baseEventId}', '2026-12-02', 'Day 2', 10, 1, datetime('now'), datetime('now')),
+          ('movement-day-3', '${baseEventId}', '2026-12-03', 'Day 3', 10, 2, datetime('now'), datetime('now'))
+      `),
+      env.DB.prepare(`
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+        VALUES ('movement-attendee', 'movement@example.test', 'movement@example.test', 'Movement', 'Attendee', datetime('now'), datetime('now'))
+      `),
+    ]);
+
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const dayAttendance = ["01", "02", "03"].map((day) => ({
+      dayDate: `2026-12-${day}`,
+      attendanceType: "in_person" as const,
+    }));
+    const created = await createRegistration(env.DB, {
+      event,
+      userId: "movement-attendee",
+      attendanceType: "in_person",
+      dayAttendance,
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    await confirmRegistrationByToken(env.DB, {
+      token: created.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+
+    const initialStatsResponse = await callAdmin("/api/v1/admin/events/pqc-2026/stats");
+    expect(initialStatsResponse.status).toBe(200);
+    const initialStats = (await initialStatsResponse.json()) as {
+      attendanceChanges: { changedAttendees: number; dayChanges: number };
+    };
+    expect(initialStats.attendanceChanges).toMatchObject({ changedAttendees: 0, dayChanges: 0 });
+
+    await updateRegistrationById(
+      env.DB,
+      {
+        registrationId: created.registration.id,
+        action: "update",
+        attendanceType: "virtual",
+        dayAttendance: dayAttendance.map((entry) => ({ ...entry, attendanceType: "virtual" as const })),
+        waitlistClaimWindowHours: 24,
+      },
+      "admin:test",
+    );
+
+    const statsResponse = await callAdmin("/api/v1/admin/events/pqc-2026/stats");
+    expect(statsResponse.status).toBe(200);
+    const stats = (await statsResponse.json()) as {
+      attendanceChanges: {
+        changedAttendees: number;
+        dayChanges: number;
+        leftInPersonAttendees: number;
+        leftInPersonDayChanges: number;
+        joinedInPersonAttendees: number;
+        byTransition: Array<{ from_type: string; to_type: string; attendees: number; day_changes: number }>;
+        byDay: Array<{
+          day_date: string;
+          changed_attendees: number;
+          left_in_person_attendees: number;
+          day_changes: number;
+        }>;
+        recent: Array<{ registration_id: string; days: Array<{ day_date: string }> }>;
+      };
+    };
+
+    expect(stats.attendanceChanges).toMatchObject({
+      changedAttendees: 1,
+      dayChanges: 3,
+      leftInPersonAttendees: 1,
+      leftInPersonDayChanges: 3,
+      joinedInPersonAttendees: 0,
+    });
+    expect(stats.attendanceChanges.byTransition).toEqual([
+      { from_type: "in_person", to_type: "virtual", attendees: 1, day_changes: 3 },
+    ]);
+    expect(stats.attendanceChanges.byDay).toHaveLength(3);
+    expect(stats.attendanceChanges.byDay).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          day_date: "2026-12-01",
+          changed_attendees: 1,
+          left_in_person_attendees: 1,
+          day_changes: 1,
+        }),
+      ]),
+    );
+    expect(stats.attendanceChanges.recent).toHaveLength(1);
+    expect(stats.attendanceChanges.recent[0]).toMatchObject({ registration_id: created.registration.id });
+    expect(stats.attendanceChanges.recent[0].days).toHaveLength(3);
+
+    const leftInPersonResponse = await callAdmin(
+      "/api/v1/admin/events/pqc-2026/registrations?attendance_change=left_in_person",
+    );
+    expect(leftInPersonResponse.status).toBe(200);
+    const leftInPerson = (await leftInPersonResponse.json()) as {
+      registrations: Array<{
+        id: string;
+        lastAttendanceChange: {
+          changedAt: string;
+          transitions: Array<{
+            fromType: string;
+            toType: string;
+            days: Array<{ dayDate: string }>;
+          }>;
+        };
+      }>;
+      page: { total: number };
+    };
+    expect(leftInPerson.page.total).toBe(1);
+    expect(leftInPerson.registrations[0]).toMatchObject({ id: created.registration.id });
+    expect(leftInPerson.registrations[0].lastAttendanceChange.transitions).toEqual([
+      expect.objectContaining({ fromType: "in_person", toType: "virtual" }),
+    ]);
+    expect(leftInPerson.registrations[0].lastAttendanceChange.transitions[0].days).toHaveLength(3);
+
+    const joinedInPersonResponse = await callAdmin(
+      "/api/v1/admin/events/pqc-2026/registrations?attendance_change=joined_in_person",
+    );
+    const joinedInPerson = (await joinedInPersonResponse.json()) as { page: { total: number } };
+    expect(joinedInPerson.page.total).toBe(0);
+
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+       VALUES ('movement-later', 'movement-later@example.test', 'movement-later@example.test',
+               'Later', 'Movement', datetime('now'), datetime('now'))`,
+    ).run();
+    const later = await createRegistration(env.DB, {
+      event,
+      userId: "movement-later",
+      attendanceType: "in_person",
+      dayAttendance,
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    await env.DB.prepare(
+      "UPDATE registration_attendance_history SET changed_at = '2025-01-01T00:00:00.000Z' WHERE registration_id = ?",
+    )
+      .bind(created.registration.id)
+      .run();
+    await updateRegistrationById(
+      env.DB,
+      {
+        registrationId: later.registration.id,
+        action: "update",
+        attendanceType: "virtual",
+        dayAttendance: dayAttendance.map((entry) => ({ ...entry, attendanceType: "virtual" as const })),
+        waitlistClaimWindowHours: 24,
+      },
+      "admin:test",
+    );
+    await updateRegistrationById(
+      env.DB,
+      {
+        registrationId: created.registration.id,
+        action: "update",
+        attendanceType: "on_demand",
+        dayAttendance: dayAttendance.map((entry) => ({ ...entry, attendanceType: "on_demand" as const })),
+        waitlistClaimWindowHours: 24,
+      },
+      "admin:test",
+    );
+    await env.DB.prepare(
+      `UPDATE registration_attendance_history
+       SET changed_at = '2030-01-01T00:00:00.000Z'
+       WHERE registration_id = ? AND from_type = 'virtual' AND to_type = 'on_demand'`,
+    )
+      .bind(created.registration.id)
+      .run();
+
+    const recentlyChangedResponse = await callAdmin(
+      "/api/v1/admin/events/pqc-2026/registrations?attendance_change=any",
+    );
+    const recentlyChanged = (await recentlyChangedResponse.json()) as {
+      registrations: Array<{
+        id: string;
+        attendanceChangeHistory: Array<{
+          changedAt: string;
+          transitions: Array<{ fromType: string; toType: string }>;
+        }>;
+        lastAttendanceChange: { changedAt: string };
+      }>;
+      page: { total: number };
+    };
+    expect(recentlyChanged.page.total).toBe(2);
+    expect(recentlyChanged.registrations.map((registration) => registration.id)).toEqual([
+      created.registration.id,
+      later.registration.id,
+    ]);
+    expect(recentlyChanged.registrations[0].attendanceChangeHistory).toHaveLength(2);
+    expect(
+      recentlyChanged.registrations[0].attendanceChangeHistory.map((change) =>
+        change.transitions.map((transition) => `${transition.fromType}->${transition.toType}`),
+      ),
+    ).toEqual([["in_person->virtual"], ["virtual->on_demand"]]);
+    expect(recentlyChanged.registrations[0].lastAttendanceChange.changedAt).toBe("2030-01-01T00:00:00.000Z");
+
+    const unfilteredResponse = await callAdmin("/api/v1/admin/events/pqc-2026/registrations");
+    const invalidFilterResponse = await callAdmin(
+      "/api/v1/admin/events/pqc-2026/registrations?attendance_change=unexpected",
+    );
+    expect(unfilteredResponse.status).toBe(200);
+    expect(invalidFilterResponse.status).toBe(200);
+    const unfiltered = (await unfilteredResponse.json()) as { registrations: Array<{ id: string }> };
+    const invalidFilter = (await invalidFilterResponse.json()) as { registrations: Array<{ id: string }> };
+    expect(invalidFilter.registrations.map(({ id }) => id)).toEqual(unfiltered.registrations.map(({ id }) => id));
+  });
 });
