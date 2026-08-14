@@ -2,17 +2,12 @@ import { StatCard } from "../../../../components/StatCard";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { api } from "../../../api";
+import { ATTENDANCE_TYPE_LABELS, attendanceTypeLabel } from "../../../attendance";
 import { svgStackedBarChart, isoDateRange } from "../../../charts";
 import type { EventStatsResponse } from "../../../types";
 import { useData } from "../../../../hooks/useData";
 import { AttendanceChangeDashboard } from "./AttendanceChangeDashboard";
 
-const ATT_LABELS: Record<string, string> = {
-  in_person: "In-person",
-  virtual: "Virtual",
-  on_demand: "On-demand",
-  not_attending: "Not attending",
-};
 const ATT_COLORS: Record<string, string> = { in_person: "#0d6efd", virtual: "#198754", on_demand: "#fd7e14" };
 const ATT_LIGHT_COLORS: Record<string, string> = { in_person: "#9ec5fe", virtual: "#a3cfbb", on_demand: "#fed8b1" };
 const INVITE_BADGE: Record<string, [string, string]> = {
@@ -64,14 +59,16 @@ export function EventStats({ slug }: { slug: string }) {
     recent: [],
   };
   const registrationsByEventDay = s.registrationsByEventDay ?? [];
-  const attendanceStatuses = Object.entries(ATT_LABELS)
-    .filter(([type]) => type !== "not_attending")
-    .map(([type, label]) => ({
-      type,
-      label,
-      accepted: s.registrations?.attendanceStatusByType?.[type]?.accepted ?? 0,
-      waitlisted: s.registrations?.attendanceStatusByType?.[type]?.waitlisted ?? 0,
-    }));
+  const attendanceTypes = new Set([
+    ...Object.keys(ATTENDANCE_TYPE_LABELS).filter((type) => type !== "not_attending"),
+    ...Object.keys(s.registrations?.attendanceStatusByType ?? {}),
+  ]);
+  const attendanceStatuses = [...attendanceTypes].map((type) => ({
+    type,
+    label: attendanceTypeLabel(type),
+    accepted: s.registrations?.attendanceStatusByType?.[type]?.accepted ?? 0,
+    waitlisted: s.registrations?.attendanceStatusByType?.[type]?.waitlisted ?? 0,
+  }));
   const waitlistedAttendees = attendanceStatuses.reduce((sum, item) => sum + item.waitlisted, 0);
   const acceptedAttendees = attendanceStatuses.reduce((sum, item) => sum + item.accepted, 0);
 
@@ -87,7 +84,7 @@ export function EventStats({ slug }: { slug: string }) {
     growthIdx[r.date][r.attendance_type] = (growthIdx[r.date][r.attendance_type] ?? 0) + r.count;
   }
   const growthSeries = allAttTypes.map((at) => ({
-    label: ATT_LABELS[at] ?? at,
+    label: attendanceTypeLabel(at),
     color: ATT_COLORS[at] ?? "#6c757d",
     values: growthDates.map((d) => growthIdx[d]?.[at] ?? 0),
   }));
@@ -106,12 +103,12 @@ export function EventStats({ slug }: { slug: string }) {
   const daySeries = dayAttTypes
     .flatMap((at) => [
       {
-        label: `${ATT_LABELS[at] ?? at} – Accepted`,
+        label: `${attendanceTypeLabel(at)} – Accepted`,
         color: ATT_COLORS[at] ?? "#6c757d",
         values: dayLabels.map((lbl) => dayIdx[lbl]?.[at]?.accepted ?? 0),
       },
       {
-        label: `${ATT_LABELS[at] ?? at} – Pending`,
+        label: `${attendanceTypeLabel(at)} – Pending`,
         color: ATT_LIGHT_COLORS[at] ?? "#ced4da",
         values: dayLabels.map((lbl) => dayIdx[lbl]?.[at]?.pending ?? 0),
       },

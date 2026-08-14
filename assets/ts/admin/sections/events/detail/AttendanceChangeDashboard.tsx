@@ -1,17 +1,7 @@
 import { StatCard } from "../../../../components/StatCard";
+import { attendanceTypeLabel } from "../../../attendance";
 import type { EventStatsResponse } from "../../../types";
 import { fmt } from "../../../ui";
-
-const ATTENDANCE_LABELS: Record<string, string> = {
-  in_person: "In-person",
-  virtual: "Virtual",
-  on_demand: "On-demand",
-  not_attending: "Not attending",
-};
-
-function attendanceLabel(type: string): string {
-  return ATTENDANCE_LABELS[type] ?? type;
-}
 
 export function AttendanceChangeDashboard({
   slug,
@@ -114,7 +104,7 @@ export function AttendanceChangeDashboard({
                       {changes.byTransition.map((row) => (
                         <tr key={`${row.from_type}->${row.to_type}`}>
                           <td class="small">
-                            {attendanceLabel(row.from_type)} → {attendanceLabel(row.to_type)}
+                            {attendanceTypeLabel(row.from_type)} → {attendanceTypeLabel(row.to_type)}
                           </td>
                           <td class="mono text-end fw-semibold">{row.attendees}</td>
                           <td class="mono text-end text-muted">{row.day_changes}</td>
@@ -151,7 +141,7 @@ export function AttendanceChangeDashboard({
                         {row.days.length > 1 && <span class="text-muted"> ({row.days.length} days)</span>}
                       </td>
                       <td class="small">
-                        {attendanceLabel(row.from_type)} → {attendanceLabel(row.to_type)}
+                        {attendanceTypeLabel(row.from_type)} → {attendanceTypeLabel(row.to_type)}
                       </td>
                       <td class="mono small">{fmt(row.changed_at)}</td>
                     </tr>

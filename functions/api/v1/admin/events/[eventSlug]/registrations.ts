@@ -57,9 +57,11 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const statusFilter = url.searchParams.get("status") ?? "";
 
   const validStatuses = new Set(["registered", "pending_email_confirmation", "cancelled"]);
+  const validAttendanceChanges = new Set(["any", "left_in_person", "joined_in_person"]);
   const bouncedFilter = url.searchParams.get("bounced") ?? "";
   const consentFilter = url.searchParams.get("consent") ?? "";
-  const attendanceChangeFilter = url.searchParams.get("attendance_change") ?? "";
+  const requestedAttendanceChange = url.searchParams.get("attendance_change") ?? "";
+  const attendanceChangeFilter = validAttendanceChanges.has(requestedAttendanceChange) ? requestedAttendanceChange : "";
 
   const conditions: string[] = ["r.event_id = ?"];
   const bindings: unknown[] = [event.id];
@@ -214,8 +216,8 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
       history = [];
       attendanceChangesByRegistrationId.set(row.registration_id, history);
     }
-    let change = history.find((item) => item.changedAt === row.changed_at);
-    if (!change) {
+    let change = history.at(-1);
+    if (!change || change.changedAt !== row.changed_at) {
       change = { changedAt: row.changed_at, transitions: [] };
       history.push(change);
     }

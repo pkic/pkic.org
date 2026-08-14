@@ -162,7 +162,7 @@ export async function createRegistration(
     registrationId: registration.id,
     eventId: registration.event_id,
     selections: payload.dayAttendance,
-    recordHistory: false,
+    recordHistory: Boolean(existing),
   });
   await syncRegistrationDayWaitlist(db, {
     registrationId: registration.id,

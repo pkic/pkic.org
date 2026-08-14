@@ -4,22 +4,18 @@ import { Badge } from "../../../../components/Badge";
 import { ApiDataTable, type ApiTableActions, type Column } from "../../../../components/Table";
 import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
+import { ATTENDANCE_TYPE_LABELS, attendanceTypeLabel } from "../../../attendance";
 import { fmt, toast } from "../../../ui";
 import type { Registration, RegistrationAttendanceChange } from "../../../types";
 import { Invites } from "./Invites";
 import { EventEmail } from "./EventEmail";
 import { EventFormResponses } from "./Forms";
 
-const ATT_LABELS: Record<string, string> = { in_person: "In-person", virtual: "Virtual", on_demand: "On-demand" };
 const ATTENDANCE_CHANGE_PRESETS: Record<string, string> = {
   "attendance-changed": "any",
   "left-in-person": "left_in_person",
   "joined-in-person": "joined_in_person",
 };
-
-function attendanceTypeLabel(t: string): string {
-  return ATT_LABELS[t] ?? t;
-}
 
 function attendanceJourneyLabel(history: RegistrationAttendanceChange[]): string {
   const transitions = history.flatMap((change) => change.transitions);
@@ -74,9 +70,13 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
 
   const pendingConfirmation = stats?.byStatus?.pending_email_confirmation ?? 0;
   const total = stats ? Object.values(stats.byStatus).reduce((s, v) => s + v, 0) : 0;
-  const attendanceStatuses = Object.entries(ATT_LABELS).map(([type, label]) => ({
+  const attendanceTypes = new Set([
+    ...Object.keys(ATTENDANCE_TYPE_LABELS).filter((type) => type !== "not_attending"),
+    ...Object.keys(stats?.attendanceStatusByType ?? {}),
+  ]);
+  const attendanceStatuses = [...attendanceTypes].map((type) => ({
     type,
-    label: label.toLowerCase(),
+    label: attendanceTypeLabel(type).toLowerCase(),
     accepted: stats?.attendanceStatusByType?.[type]?.accepted ?? 0,
     waitlisted: stats?.attendanceStatusByType?.[type]?.waitlisted ?? 0,
   }));
@@ -326,7 +326,11 @@ export function Registrations({ slug, subTab }: { slug: string; subTab?: string 
       />
 
       {tab === "overview" && (
-        <RegistrationsList slug={slug} initialAttendanceChange={ATTENDANCE_CHANGE_PRESETS[subTab ?? ""] ?? ""} />
+        <RegistrationsList
+          key={`${slug}:${subTab ?? "overview"}`}
+          slug={slug}
+          initialAttendanceChange={ATTENDANCE_CHANGE_PRESETS[subTab ?? ""] ?? ""}
+        />
       )}
       {tab === "responses" && <EventFormResponses slug={slug} purpose="event_registration" />}
       {tab === "invites" && <Invites slug={slug} inviteType="attendee" />}

@@ -7,7 +7,7 @@ export interface AttendanceStatusCount {
 }
 
 interface AttendanceStatusRow {
-  attendance_type: string;
+  attendance_type: string | null;
   accepted: number;
   waitlisted: number;
 }
@@ -49,6 +49,22 @@ interface RecentAttendanceChangeRow {
   display_name: string | null;
 }
 
+export interface AttendanceChangeStatistics {
+  dayChanges: number;
+  changedAttendees: number;
+  leftInPersonAttendees: number;
+  leftInPersonDayChanges: number;
+  joinedInPersonAttendees: number;
+  joinedInPersonDayChanges: number;
+  byTransition: AttendanceChangeTransitionRow[];
+  byDay: AttendanceChangeDayRow[];
+  recent: Array<
+    Omit<RecentAttendanceChangeRow, "day_date" | "day_label"> & {
+      days: Array<{ day_date: string; label: string | null }>;
+    }
+  >;
+}
+
 /**
  * Split registered attendees by whether they still have an active day waitlist.
  * A registration is waitlisted until every requested day has either been
@@ -76,13 +92,16 @@ export async function getAttendanceStatusByType(
 
   return Object.fromEntries(
     rows.map((row) => [
-      row.attendance_type,
+      row.attendance_type ?? "not_attending",
       { accepted: Number(row.accepted ?? 0), waitlisted: Number(row.waitlisted ?? 0) },
     ]),
   );
 }
 
-export async function getAttendanceChangeStatistics(db: DatabaseLike, eventId: string) {
+export async function getAttendanceChangeStatistics(
+  db: DatabaseLike,
+  eventId: string,
+): Promise<AttendanceChangeStatistics> {
   const [summaryRows, transitionRows, byDayRows, recentRows] = await Promise.all([
     all<AttendanceChangeSummaryRow>(
       db,

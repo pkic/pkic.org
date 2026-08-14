@@ -268,9 +268,9 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
       byPriorityLane: Object.fromEntries(waitlistLaneRows.map((r) => [r.priority_lane, r.count])),
     },
     attendanceChanges: {
+      ...attendanceChanges,
       totalChanges: attendanceChanges.dayChanges,
       changedRegistrations: attendanceChanges.changedAttendees,
-      ...attendanceChanges,
     },
     registrationsByEventDay: dayAttendanceRows,
     invites: {

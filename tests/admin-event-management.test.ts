@@ -387,6 +387,64 @@ describe("admin event management endpoints", () => {
     );
   });
 
+  it("preserves system history when a cancelled registration is reactivated", async () => {
+    const { baseEventId } = await setupAdmin();
+
+    await env.DB.batch([
+      env.DB.prepare(`
+        INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
+        VALUES ('reactivation-day', '${baseEventId}', '2026-12-01', 'Day 1', 10, 0, datetime('now'), datetime('now'))
+      `),
+      env.DB.prepare(`
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+        VALUES ('reactivation-attendee', 'reactivation@example.test', 'reactivation@example.test',
+                'Reactivated', 'Attendee', datetime('now'), datetime('now'))
+      `),
+    ]);
+
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const original = await createRegistration(env.DB, {
+      event,
+      userId: "reactivation-attendee",
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    await env.DB.prepare("UPDATE registrations SET status = 'cancelled', cancelled_at = datetime('now') WHERE id = ?")
+      .bind(original.registration.id)
+      .run();
+
+    const reactivated = await createRegistration(env.DB, {
+      event,
+      userId: "reactivation-attendee",
+      attendanceType: "virtual",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+
+    expect(reactivated.reactivated).toBe(true);
+    expect(reactivated.registration.id).toBe(original.registration.id);
+    const history = await queryAll<{ from_type: string; to_type: string; changed_by: string }>(
+      env.DB,
+      `SELECT from_type, to_type, changed_by
+       FROM registration_attendance_history
+       WHERE registration_id = ?`,
+      [original.registration.id],
+    );
+    expect(history).toEqual([{ from_type: "in_person", to_type: "virtual", changed_by: "system" }]);
+
+    const statsResponse = await callAdmin("/api/v1/admin/events/pqc-2026/stats");
+    expect(statsResponse.status).toBe(200);
+    const stats = (await statsResponse.json()) as {
+      attendanceChanges: { changedAttendees: number; dayChanges: number };
+    };
+    expect(stats.attendanceChanges).toMatchObject({ changedAttendees: 0, dayChanges: 0 });
+  });
+
   it("counts multi-day attendance movement once per attendee and separately per day", async () => {
     const { baseEventId } = await setupAdmin();
 
@@ -425,6 +483,7 @@ describe("admin event management endpoints", () => {
     });
 
     const initialStatsResponse = await callAdmin("/api/v1/admin/events/pqc-2026/stats");
+    expect(initialStatsResponse.status).toBe(200);
     const initialStats = (await initialStatsResponse.json()) as {
       attendanceChanges: { changedAttendees: number; dayChanges: number };
     };
@@ -593,5 +652,15 @@ describe("admin event management endpoints", () => {
       ),
     ).toEqual([["in_person->virtual"], ["virtual->on_demand"]]);
     expect(recentlyChanged.registrations[0].lastAttendanceChange.changedAt).toBe("2030-01-01T00:00:00.000Z");
+
+    const unfilteredResponse = await callAdmin("/api/v1/admin/events/pqc-2026/registrations");
+    const invalidFilterResponse = await callAdmin(
+      "/api/v1/admin/events/pqc-2026/registrations?attendance_change=unexpected",
+    );
+    expect(unfilteredResponse.status).toBe(200);
+    expect(invalidFilterResponse.status).toBe(200);
+    const unfiltered = (await unfilteredResponse.json()) as { registrations: Array<{ id: string }> };
+    const invalidFilter = (await invalidFilterResponse.json()) as { registrations: Array<{ id: string }> };
+    expect(invalidFilter.registrations.map(({ id }) => id)).toEqual(unfiltered.registrations.map(({ id }) => id));
   });
 });

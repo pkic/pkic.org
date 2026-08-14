@@ -512,7 +512,9 @@ export interface EventStatsResponse {
     byPriorityLane: Record<string, number>;
   };
   attendanceChanges: {
+    /** @deprecated Use dayChanges. */
     totalChanges: number;
+    /** @deprecated Use changedAttendees. */
     changedRegistrations: number;
     dayChanges: number;
     changedAttendees: number;
