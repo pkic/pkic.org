@@ -27,14 +27,22 @@
 
 - Never edit a migration that has been applied to preview or production. Verify both migration ledgers before changing migration history.
 - Squash branch migrations that reached neither preview nor production into the final branch migration instead of appending corrective migrations.
+- Deployments do not apply D1 migrations. Treat preview and production migration application as a separate, manual operation that requires explicit approval.
+- All branch and pull-request previews share the preview database. Keep preview-compatible migrations and code changes coordinated across concurrently active branches.
+- Never copy, import, backfill, or otherwise move production personal data, credentials, secrets, or private uploads into preview. Use synthetic or purpose-created preview fixtures.
 - Prefer additive schema evolution. Avoid table rebuilds and changeable product vocabularies in table-level `CHECK` constraints.
 - Reserve database constraints for durable structural invariants. Enforce evolvable workflow and product policy through shared Zod/domain modules with Vitest coverage, or through reference tables that can evolve additively.
 - If an existing-table rebuild is genuinely unavoidable, document rejected additive designs and require explicit approval, a production-shaped rehearsal, and a tested recovery plan.
 
-## Validation
+## Validation and deployment
 
-- Run targeted checks while iterating, then always run `pnpm run check` before handoff.
-- Run `pnpm run test:e2e` as an additional gate when browser-visible behavior or routing changes. Do not claim that it is part of `check` unless the script explicitly includes it.
+- Match validation cost to the files and behavior changed. Do not run broad suites without a relevant reason.
+- For simple Hugo content or data-only changes under `content/` or `data/` that do not touch templates, executable code, schemas, or configuration, do not run `pnpm run check`, `pnpm run test`, or `pnpm run test:e2e`. Review the diff and validate the affected front matter or YAML; preview the affected page only when rendering may have changed.
+- For shortcode, layout, SCSS, client-side behavior, or navigation changes, run the narrow lint/build checks that cover the changed files and inspect the affected page. Add a focused browser test when interaction or rendering behavior changed.
+- For JavaScript, TypeScript, Worker, schema, migration, build, or lint-configuration changes, run focused checks while iterating and `pnpm run check` before handoff.
+- Run `pnpm run test:e2e` only as an additional gate when browser-visible behavior, routing, or an end-to-end user flow changes. Prefer the smallest relevant Playwright project or test file during iteration.
+- Branches and pull requests are deployed automatically to preview; `main` is deployed automatically to production. Treat `pnpm run deploy:preview` and `pnpm run deploy:production` as exceptional manual operations and never run them without an explicit request and confirmed target.
+- Automatic application deployment does not apply migrations. Report required manual preview or production migration steps separately.
 - Treat a passing check as necessary but not sufficient: verify the final diff against the requested architecture, data, and security invariants.
 
 ## Relevant skills

@@ -68,7 +68,7 @@ git submodule update --remote
 
 The update command can be run to update your local copy when the remote branch changes. Submodules are managed in the file .gitmodules.
 
-## Build and deploy
+## Build and deployment
 
 The Cloudflare Worker uses Vite with `@cloudflare/vite-plugin`. The Vite build runs Hugo, indexes the generated site with Pagefind, bundles the native TypeScript Worker, and writes the deployable Wrangler output config to `dist`.
 
@@ -78,7 +78,11 @@ pnpm run build:preview
 pnpm run build:production
 ```
 
-Deployments must build the selected Cloudflare environment first because the Vite plugin applies `env.preview` or `env.production` during build time:
+Branches and pull requests are automatically deployed as preview sites. All preview sites share the preview D1 database. Merges to `main` are automatically deployed to production.
+
+Database migrations are not applied by those deployments and must be applied separately to the intended environment. Never copy production personal data, credentials, secrets, or private uploads into preview; use synthetic or purpose-created preview data.
+
+Manual deployment is exceptional. If an explicitly approved recovery or operational task requires it, build and deploy the selected Cloudflare environment together because the Vite plugin applies `env.preview` or `env.production` during build time:
 
 ```bash
 pnpm run deploy:preview
