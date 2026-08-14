@@ -20,6 +20,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // Unload YouTube videos on modal close
     unloadYoutubeOnModalClose();
 
+    // Keep nested actions from triggering their session card.
+    initializeSessionActionPropagation();
+
     // Break overlays removed; using inline break cards again
 });
 
@@ -87,6 +90,12 @@ function unloadYoutubeOnModalClose() {
                 iframe.src = src;
             }
         });
+    });
+}
+
+function initializeSessionActionPropagation() {
+    document.querySelectorAll('[data-agenda-stop-propagation]').forEach(element => {
+        element.addEventListener('click', event => event.stopPropagation());
     });
 }
 

@@ -470,6 +470,45 @@ async function setEventDayInPersonCapacity(
 }
 
 test.describe("browser workflows", () => {
+  test("stops and reloads an agenda recording when its modal closes", async ({ page }) => {
+    await setupPage(page);
+    const errorMonitor = monitorErrors(page);
+    const embedRequestCounts = new Map<string, number>();
+
+    await page.route("https://www.youtube-nocookie.com/embed/**", async (route) => {
+      const url = route.request().url();
+      embedRequestCounts.set(url, (embedRequestCounts.get(url) ?? 0) + 1);
+      await route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: "<!doctype html><title>Mock YouTube embed</title>",
+      });
+    });
+
+    await page.goto("/events/2023/pqc-conference-amsterdam-nl/");
+    const watchButton = page.getByRole("button", { name: "Watch", exact: true }).first();
+    await watchButton.click();
+
+    const modal = page.locator(".session-modal.show").first();
+    await expect(modal).toBeVisible();
+    const iframe = modal.locator('iframe[src*="youtube"]').first();
+    await expect(iframe).toBeVisible();
+
+    const embedUrl = await iframe.getAttribute("src");
+    expect(embedUrl).toBeTruthy();
+    const requestsBeforeClose = embedRequestCounts.get(embedUrl ?? "") ?? 0;
+
+    await modal.locator('[data-bs-dismiss="modal"]').first().click();
+    await expect(modal).toBeHidden();
+    await expect.poll(() => embedRequestCounts.get(embedUrl ?? "") ?? 0).toBeGreaterThan(requestsBeforeClose);
+
+    await watchButton.click();
+    await expect(modal).toBeVisible();
+    await expect(iframe).toHaveAttribute("src", embedUrl ?? "");
+
+    errorMonitor.assertClean();
+  });
+
   test("shows a friendly partial waitlist state when a selected day is full", async ({ page }) => {
     await setupPage(page);
     const errorMonitor = monitorErrors(page, {
