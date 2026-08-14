@@ -452,7 +452,25 @@ describe("session-token validation", () => {
     const token = await insertSession(env.DB, adminId, "proposal-read-token", { scopes: ["proposals:read"] });
     const response = await callUsers(token);
     expect(response.status).toBe(403);
-    expect(((await response.json()) as { error?: { code?: string } }).error?.code).toBe("SCOPE_REQUIRED");
+    expect((await response.json()) as { error?: { code?: string; message?: string } }).toEqual({
+      error: {
+        code: "SCOPE_REQUIRED",
+        details: null,
+        message: "You do not have permission to perform this action.",
+      },
+    });
+  });
+
+  it("requires proposal access in addition to event access for presentation archives", async () => {
+    const token = await insertSession(env.DB, adminId, "event-read-token", { scopes: ["events:read"] });
+    const response = await callApp(
+      bearerGet("https://app.test/api/v1/admin/events/pqc-2026/presentations/download", token),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "SCOPE_REQUIRED", message: "You do not have permission to perform this action." },
+    });
   });
 });
 

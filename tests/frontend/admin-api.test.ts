@@ -42,4 +42,20 @@ describe("admin API client", () => {
 
     expect(requestHeaders.get("content-type")).toBe("application/json");
   });
+
+  it("does not expose internal scope names and tells admins to sign in again", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json(
+          { error: { code: "SCOPE_REQUIRED", message: "You do not have permission to perform this action." } },
+          { status: 403 },
+        ),
+      ),
+    );
+
+    await expect(api("/api/v1/admin/proposals/proposal-1/presentation/versions/version-1")).rejects.toThrow(
+      "You do not have permission to perform this action. If your permissions changed recently, sign out and sign in again.",
+    );
+  });
 });

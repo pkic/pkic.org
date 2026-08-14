@@ -14,9 +14,12 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const proposalId = c.req.param("proposalId");
 
-  const proposal = await first<{ id: string; status: string }>(
+  const proposal = await first<{ id: string; status: string; title: string; event_slug: string }>(
     requestDb(c),
-    "SELECT id, status FROM session_proposals WHERE id = ? AND deleted_at IS NULL",
+    `SELECT sp.id, sp.status, sp.title, e.slug AS event_slug
+     FROM session_proposals sp
+     JOIN events e ON e.id = sp.event_id
+     WHERE sp.id = ? AND sp.deleted_at IS NULL`,
     [proposalId],
   );
   if (!proposal) return json({ error: { code: "PROPOSAL_NOT_FOUND", message: "Proposal not found" } }, 404);
@@ -36,7 +39,11 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   const parsed = await parsePresentationUpload(c.req.raw);
   if ("error" in parsed) return json({ error: parsed.error }, parsed.status);
 
-  const r2Key = await storePresentationFile(bucket, proposalId, parsed);
+  const r2Key = await storePresentationFile(
+    bucket,
+    { eventSlug: proposal.event_slug, proposalId, proposalTitle: proposal.title },
+    parsed,
+  );
 
   await recordPresentationUpload(requestDb(c), proposalId, r2Key, admin.id, {
     fileName: parsed.name ?? null,

@@ -21,7 +21,7 @@ export function hasAuthScope(actor: AuthAdmin, scope: AuthScope): boolean {
 
 export function requireAuthScope(actor: AuthAdmin, scope: AuthScope): void {
   if (!hasAuthScope(actor, scope)) {
-    throw new AppError(403, "SCOPE_REQUIRED", `Missing required scope: ${scope}`);
+    throw new AppError(403, "SCOPE_REQUIRED", "You do not have permission to perform this action.");
   }
 }
 
