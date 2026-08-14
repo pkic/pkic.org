@@ -1404,17 +1404,17 @@ test.describe("browser workflows", () => {
     await screenshot("06-admin-presentation-tab");
 
     // Open the review form and submit a "needs_revision" review
-    await page.getByRole("button", { name: /^Review$/i }).click();
-    const statusSelect = page
-      .locator("select")
-      .filter({ hasText: /needs.revision/i })
-      .first();
+    const versionCard = page.locator("[data-presentation-version-card]").filter({ hasText: /Version 1/i });
+    await versionCard.getByRole("button", { name: /^Review$/i }).click();
+    const statusSelect = versionCard.locator("select");
     await expect(statusSelect).toBeVisible({ timeout: 5_000 });
     await statusSelect.selectOption("needs_revision");
-    const noteInput = page.locator("textarea").first();
+    const noteInput = versionCard.locator("textarea");
     await noteInput.fill("Please add speaker notes to each slide before the final review.");
-    await page.getByRole("button", { name: /Save review/i }).click();
-    await expect(page.getByText(/Needs revision/i)).toBeVisible({ timeout: 10_000 });
+    await versionCard.getByRole("button", { name: /Save review/i }).click();
+    await expect(versionCard.locator("[data-presentation-review-status]")).toHaveText("Needs revision", {
+      timeout: 10_000,
+    });
     await screenshot("07-review-submitted");
 
     // ── 7. Speaker downloads their presentation ───────────────────────────────

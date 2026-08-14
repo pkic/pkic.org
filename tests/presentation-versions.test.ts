@@ -19,6 +19,8 @@ import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 import { createProposal, addProposalSpeaker, finalizeProposalDecision } from "../functions/_lib/services/proposals";
+import { createPresentationVersion } from "../functions/_lib/services/presentation-versions";
+import { getPresentationUploader } from "../functions/_lib/services/proposals-speaker-profile";
 import app from "../functions/router";
 import {
   MAX_PRESENTATION_BYTES,
@@ -36,6 +38,7 @@ interface StoredObject {
 class FakePresentationBucket {
   private readonly objects = new Map<string, { buf: ArrayBuffer; contentType: string }>();
   putCalls = 0;
+  putKeys: string[] = [];
   lastPutWasStream = false;
 
   async put(
@@ -44,6 +47,7 @@ class FakePresentationBucket {
     options?: Record<string, unknown>,
   ) {
     this.putCalls += 1;
+    this.putKeys.push(key);
     this.lastPutWasStream = value instanceof ReadableStream;
     let buf: ArrayBuffer;
     if (value instanceof ArrayBuffer) {
@@ -93,12 +97,14 @@ class CountingPresentationBucket {
   async put(_key: string, value: ReadableStream) {
     this.lastPutWasStream = value instanceof ReadableStream;
     const reader = value.getReader();
+    let written = 0;
     while (true) {
       const { done, value: chunk } = await reader.read();
       if (done) break;
-      this.bytesWritten += chunk.byteLength;
+      written += chunk.byteLength;
     }
-    return { size: this.bytesWritten };
+    this.bytesWritten += written;
+    return { size: written };
   }
 
   async delete() {}
@@ -159,6 +165,14 @@ async function seed() {
     adminUserId: adminRow.id,
     adminToken,
   };
+}
+
+async function applyTestMigration(name: string): Promise<void> {
+  const migration = env.TEST_MIGRATIONS.find((candidate) => candidate.name === name);
+  if (!migration) throw new Error(`Missing test migration: ${name}`);
+  for (const query of migration.queries) {
+    await env.DB.prepare(query).run();
+  }
 }
 
 describe("presentation versioning", () => {
@@ -300,24 +314,31 @@ describe("presentation versioning", () => {
     const envWithBucket = { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket };
     const execCtx = { passThroughOnException: () => {}, waitUntil: () => {} } as any;
 
-    await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
-        method: "PUT",
-        ...presentationRequest("v1.pdf"),
-      }),
-      envWithBucket,
-      execCtx,
-    );
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(1_000);
+    let res2: Response;
+    try {
+      await app.fetch(
+        new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+          method: "PUT",
+          ...presentationRequest("v1.pdf"),
+        }),
+        envWithBucket,
+        execCtx,
+      );
 
-    const res2 = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
-        method: "PUT",
-        ...presentationRequest("v2.pdf"),
-      }),
-      envWithBucket,
-      execCtx,
-    );
+      res2 = await app.fetch(
+        new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+          method: "PUT",
+          ...presentationRequest("v2.pdf"),
+        }),
+        envWithBucket,
+        execCtx,
+      );
+    } finally {
+      nowSpy.mockRestore();
+    }
     expect(res2.status).toBe(200);
+    expect(new Set(bucket.putKeys)).toHaveLength(2);
 
     const versions = await queryAll<{ version_number: number; is_current: number }>(
       env.DB,
@@ -327,6 +348,36 @@ describe("presentation versioning", () => {
     expect(versions).toHaveLength(2);
     expect(versions[0]).toMatchObject({ version_number: 1, is_current: 0 });
     expect(versions[1]).toMatchObject({ version_number: 2, is_current: 1 });
+  });
+
+  it("serializes concurrent version creation and keeps exactly one current version", async () => {
+    const { proposalId, speakerUserId } = await seed();
+
+    await Promise.all([
+      createPresentationVersion(env.DB, proposalId, {
+        r2Key: "presentations/concurrent-a.pdf",
+        fileName: "concurrent-a.pdf",
+        fileSize: 4,
+        mimeType: "application/pdf",
+        uploadedByUserId: speakerUserId,
+      }),
+      createPresentationVersion(env.DB, proposalId, {
+        r2Key: "presentations/concurrent-b.pdf",
+        fileName: "concurrent-b.pdf",
+        fileSize: 4,
+        mimeType: "application/pdf",
+        uploadedByUserId: speakerUserId,
+      }),
+    ]);
+
+    const versions = await queryAll<{ version_number: number; is_current: number }>(
+      env.DB,
+      "SELECT version_number, is_current FROM presentation_versions WHERE proposal_id = ? ORDER BY version_number",
+      proposalId,
+    );
+    expect(versions.map((version) => version.version_number)).toEqual([1, 2]);
+    expect(versions.filter((version) => version.is_current === 1)).toHaveLength(1);
+    expect(versions[1].is_current).toBe(1);
   });
 
   it("admin can list versions, download, and submit a review", async () => {
@@ -452,10 +503,10 @@ describe("presentation versioning", () => {
     // presentationUrl lives inside the proposal object; it is computed server-side
     // from the event's frontend route config and always embeds the speaker token.
     expect(body.proposal).toHaveProperty("presentationUrl");
-    if (body.proposal.presentationUrl != null) {
-      expect(body.proposal.presentationUrl as string).toContain(speakerToken);
-      expect(body.proposal.presentationUrl as string).toContain("presentation");
-    }
+    const presentationUrl = body.proposal.presentationUrl as string;
+    expect(typeof presentationUrl).toBe("string");
+    expect(presentationUrl).toContain(speakerToken);
+    expect(presentationUrl).toContain("presentation");
   });
 
   it("speaker can download their current presentation via the download endpoint", async () => {
@@ -488,46 +539,80 @@ describe("presentation versioning", () => {
     expect(new Uint8Array(buf).slice(0, 4)).toEqual(FAKE_PDF);
   });
 
-  it("migration backfill: proposals with presentation_r2_key get a version 1 row", async () => {
-    // This test validates the backfill logic by checking that after reset+migrations
-    // the old columns are gone and all seeded upload data has been migrated.
-    // We simulate a pre-migration state by inserting directly via a raw statement
-    // that bypasses the dropped columns (they no longer exist post-migration).
-    //
-    // Instead we verify that the service correctly surfaces a version row for a
-    // proposal whose data was set through the current upload pathway — this
-    // confirms the full round-trip that the migration was designed to enable.
-
+  it("post-migration schema stores presentation uploads only in version rows", async () => {
     const { proposalId, speakerToken } = await seed();
     const bucket = new FakePresentationBucket();
-    const envWithBucket = { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket };
-    const execCtx = { passThroughOnException: () => {}, waitUntil: () => {} } as any;
-
-    // Upload through the normal path (equivalent to what the migration backfills).
+    const upload = presentationRequest("current.pdf");
     await app.fetch(
       new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
         method: "PUT",
-        ...presentationRequest("legacy.pdf"),
+        ...upload,
       }),
-      envWithBucket,
-      execCtx,
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
 
-    // The presentation_r2_key column must no longer exist on session_proposals —
-    // confirming the migration ran and dropped it.
     const cols = await queryAll<{ name: string }>(env.DB, "PRAGMA table_info(session_proposals)");
     const colNames = cols.map((c) => c.name);
     expect(colNames).not.toContain("presentation_r2_key");
     expect(colNames).not.toContain("presentation_uploaded_at");
     expect(colNames).not.toContain("presentation_uploaded_by_user_id");
 
-    // Version 1 row must exist and be is_current.
     const versions = await queryAll<{ version_number: number; is_current: number; file_name: string | null }>(
       env.DB,
       "SELECT version_number, is_current, file_name FROM presentation_versions WHERE proposal_id = ? AND deleted_at IS NULL",
       proposalId,
     );
     expect(versions).toHaveLength(1);
-    expect(versions[0]).toMatchObject({ version_number: 1, is_current: 1, file_name: "legacy.pdf" });
+    expect(versions[0]).toMatchObject({ version_number: 1, is_current: 1, file_name: "current.pdf" });
+  });
+
+  it("migration backfills a legacy upload with no uploader into version 1", async () => {
+    const { proposalId } = await seed();
+
+    await env.DB.prepare("DROP TABLE presentation_version_reviews").run();
+    await env.DB.prepare("DROP TABLE presentation_versions").run();
+    await env.DB.prepare("ALTER TABLE session_proposals ADD COLUMN presentation_r2_key TEXT").run();
+    await env.DB.prepare("ALTER TABLE session_proposals ADD COLUMN presentation_uploaded_at TEXT").run();
+    await env.DB.prepare("ALTER TABLE session_proposals ADD COLUMN presentation_uploaded_by_user_id TEXT").run();
+    await env.DB.prepare(
+      "UPDATE session_proposals SET presentation_r2_key = ?, presentation_uploaded_at = NULL, presentation_uploaded_by_user_id = NULL WHERE id = ?",
+    )
+      .bind("presentations/legacy.pdf", proposalId)
+      .run();
+
+    await applyTestMigration("0033_presentation_versions.sql");
+    await applyTestMigration("0034_presentation_version_invariants.sql");
+
+    const versions = await queryAll<{
+      version_number: number;
+      r2_key: string;
+      uploaded_by_user_id: string | null;
+      uploaded_at: string;
+      is_current: number;
+    }>(
+      env.DB,
+      "SELECT version_number, r2_key, uploaded_by_user_id, uploaded_at, is_current FROM presentation_versions WHERE proposal_id = ?",
+      proposalId,
+    );
+    expect(versions).toHaveLength(1);
+    expect(versions[0]).toMatchObject({
+      version_number: 1,
+      r2_key: "presentations/legacy.pdf",
+      uploaded_by_user_id: null,
+      is_current: 1,
+    });
+    expect(versions[0].uploaded_at).toBeTruthy();
+    await expect(getPresentationUploader(env.DB, proposalId)).resolves.toMatchObject({
+      firstName: null,
+      lastName: null,
+      uploadedAt: versions[0].uploaded_at,
+    });
+
+    const cols = await queryAll<{ name: string }>(env.DB, "PRAGMA table_info(session_proposals)");
+    const colNames = cols.map((column) => column.name);
+    expect(colNames).not.toContain("presentation_r2_key");
+    expect(colNames).not.toContain("presentation_uploaded_at");
+    expect(colNames).not.toContain("presentation_uploaded_by_user_id");
   });
 });

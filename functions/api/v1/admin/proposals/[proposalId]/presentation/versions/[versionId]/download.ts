@@ -1,6 +1,9 @@
 import { json } from "../../../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../../../_lib/auth/admin";
-import { getPresentationVersion } from "../../../../../../../../_lib/services/presentation-versions";
+import {
+  getPresentationVersion,
+  presentationDownloadResponse,
+} from "../../../../../../../../_lib/services/presentation-versions";
 import { requestDb, type AdminContext } from "../../../../../../../../_lib/db/context";
 
 export async function onRequestGet(c: AdminContext): Promise<Response> {
@@ -19,15 +22,5 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const object = await bucket.get(version.r2Key);
   if (!object) return json({ error: { message: "File not found in storage" } }, 404);
 
-  const fileName = version.fileName ?? `presentation-v${version.versionNumber}`;
-  const safeFileName = fileName.replace(/["\r\n]/g, "_");
-  const headers = new Headers();
-  headers.set("Content-Type", version.mimeType ?? "application/octet-stream");
-  headers.set(
-    "Content-Disposition",
-    `attachment; filename="${safeFileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
-  );
-  headers.set("Content-Length", String(object.size));
-
-  return new Response(object.body, { headers });
+  return presentationDownloadResponse(object, version);
 }

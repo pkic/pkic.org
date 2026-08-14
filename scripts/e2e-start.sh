@@ -63,8 +63,8 @@ if [ "$INTERCEPTOR_READY" -ne 1 ]; then
 fi
 
 INTERCEPT_URL=$(cat "$INTERCEPT_URL_FILE")
-cat .dev.vars > "$E2E_ENV_FILE"
-cat >> "$E2E_ENV_FILE" <<EOF
+cat > "$E2E_ENV_FILE" <<EOF
+INTERNAL_SIGNING_SECRET=e2e-test-signing-secret
 SENDGRID_API_BASE=${INTERCEPT_URL}
 SENDGRID_API_KEY=e2e-test-dummy-key
 APP_BASE_URL=http://127.0.0.1:${E2E_PORT}

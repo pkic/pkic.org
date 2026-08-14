@@ -33,7 +33,7 @@ export async function getPresentationUploader(
     db,
     `SELECT u.first_name, u.last_name, pv.uploaded_at
      FROM presentation_versions pv
-     JOIN users u ON u.id = pv.uploaded_by_user_id
+     LEFT JOIN users u ON u.id = pv.uploaded_by_user_id
      WHERE pv.proposal_id = ? AND pv.is_current = 1 AND pv.deleted_at IS NULL`,
     [proposalId],
   );

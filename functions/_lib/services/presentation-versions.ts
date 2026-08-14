@@ -72,7 +72,7 @@ export async function storePresentationFile(
   upload: PresentationUpload,
 ): Promise<string> {
   const safeName = upload.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100);
-  const r2Key = `presentations/${proposalId}/${Date.now()}-${safeName}`;
+  const r2Key = `presentations/${proposalId}/${Date.now()}-${uuid()}-${safeName}`;
   const stored = await bucket.put(r2Key, upload.body, { httpMetadata: { contentType: upload.type } });
   if (stored.size !== upload.size) {
     await bucket.delete(r2Key);
@@ -184,6 +184,34 @@ export async function getPresentationVersion(db: DatabaseLike, versionId: string
   return rowToVersion(row);
 }
 
+export async function getCurrentPresentationVersion(
+  db: DatabaseLike,
+  proposalId: string,
+): Promise<PresentationVersion | null> {
+  const row = await first<PresentationVersionRow>(
+    db,
+    `${VERSION_SELECT} WHERE pv.proposal_id = ? AND pv.is_current = 1 AND pv.deleted_at IS NULL`,
+    [proposalId],
+  );
+  return row ? rowToVersion(row) : null;
+}
+
+export function presentationDownloadResponse(
+  object: { body: ReadableStream; size: number },
+  version: { fileName: string | null; mimeType: string | null; versionNumber: number },
+): Response {
+  const fileName = version.fileName ?? `presentation-v${version.versionNumber}`;
+  const safeFileName = fileName.replace(/["\r\n]/g, "_");
+  const headers = new Headers();
+  headers.set("Content-Type", version.mimeType ?? "application/octet-stream");
+  headers.set(
+    "Content-Disposition",
+    `attachment; filename="${safeFileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+  );
+  headers.set("Content-Length", String(object.size));
+  return new Response(object.body, { headers });
+}
+
 export async function createPresentationVersion(
   db: DatabaseLike,
   proposalId: string,
@@ -198,13 +226,13 @@ export async function createPresentationVersion(
   const now = nowIso();
   const id = uuid();
 
-  await run(db, "UPDATE presentation_versions SET is_current = 0 WHERE proposal_id = ? AND is_current = 1", [
-    proposalId,
-  ]);
-
-  await run(
-    db,
-    `INSERT INTO presentation_versions
+  await db.batch([
+    db
+      .prepare("UPDATE presentation_versions SET is_current = 0 WHERE proposal_id = ? AND is_current = 1")
+      .bind(proposalId),
+    db
+      .prepare(
+        `INSERT INTO presentation_versions
        (id, proposal_id, version_number, r2_key, file_name, file_size, mime_type,
         uploaded_by_user_id, uploaded_at, is_current)
      VALUES (
@@ -212,8 +240,19 @@ export async function createPresentationVersion(
        (SELECT COALESCE(MAX(version_number), 0) + 1 FROM presentation_versions WHERE proposal_id = ?),
        ?, ?, ?, ?, ?, ?, 1
      )`,
-    [id, proposalId, proposalId, opts.r2Key, opts.fileName, opts.fileSize, opts.mimeType, opts.uploadedByUserId, now],
-  );
+      )
+      .bind(
+        id,
+        proposalId,
+        proposalId,
+        opts.r2Key,
+        opts.fileName,
+        opts.fileSize,
+        opts.mimeType,
+        opts.uploadedByUserId,
+        now,
+      ),
+  ]);
 
   return getPresentationVersion(db, id);
 }

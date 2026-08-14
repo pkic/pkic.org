@@ -654,6 +654,7 @@ function PresentationVersionsTab({
   const [savingReview, setSavingReview] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
 
   async function handleAdminUpload(e: Event) {
     const input = e.target as HTMLInputElement;
@@ -708,16 +709,24 @@ function PresentationVersionsTab({
   }
 
   const uploadButton = (
-    <label class={`btn btn-sm btn-outline-primary ${uploading ? "disabled" : ""}`}>
-      {uploading ? "Uploading…" : "↑ Upload on behalf of speaker"}
+    <div>
+      <button
+        type="button"
+        class="btn btn-sm btn-outline-primary"
+        disabled={uploading}
+        onClick={() => uploadInputRef.current?.click()}
+      >
+        {uploading ? "Uploading…" : "↑ Upload on behalf of speaker"}
+      </button>
       <input
+        ref={uploadInputRef}
         type="file"
         class="d-none"
         accept=".pdf,.pptx,.ppt,.odp,.pptm"
         disabled={uploading}
         onChange={handleAdminUpload}
       />
-    </label>
+    </div>
   );
 
   if (loading) return <Spinner />;
@@ -734,12 +743,15 @@ function PresentationVersionsTab({
     <div>
       <div class="mb-3">{uploadButton}</div>
       {versions.map((v) => (
-        <div key={v.id} class={`card mb-3 ${v.isCurrent ? "border-primary" : ""}`}>
+        <div key={v.id} class={`card mb-3 ${v.isCurrent ? "border-primary" : ""}`} data-presentation-version-card>
           <div class="card-header d-flex align-items-center gap-2 flex-wrap">
             <span class="fw-semibold">Version {v.versionNumber}</span>
             {v.isCurrent && <span class="badge text-bg-primary">Current</span>}
             {v.latestReview && (
-              <span class={`badge text-bg-${reviewStatusBadgeClass(v.latestReview.status)}`}>
+              <span
+                class={`badge text-bg-${reviewStatusBadgeClass(v.latestReview.status)}`}
+                data-presentation-review-status
+              >
                 {reviewStatusLabel(v.latestReview.status)}
               </span>
             )}
