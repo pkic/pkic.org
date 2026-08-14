@@ -10,7 +10,7 @@ Some basic git knowledge is required, please check https://guides.github.com/ to
 2. [Create a fork](https://guides.github.com/activities/forking/#fork) of this repository
 3. [Clone your fork](https://guides.github.com/activities/forking/#clone)
 4. Create local worker secrets for Wrangler by copying `.dev.vars.example` to `.dev.vars` and setting at least `INTERNAL_SIGNING_SECRET`.
-5. Run `npm run dev` in the root directory of your fork (Vite runs the Cloudflare Worker and rebuilds the Hugo site into the static asset output)
+5. Run `pnpm run dev` in the root directory of your fork (Vite runs the Cloudflare Worker and rebuilds the Hugo site into the static asset output)
 6. Open `http://localhost:8788/` in your browser to preview your local version
 7. Make changes until you are satisfied; the preview will update automatically
 8. [Commit and push your changes](https://guides.github.com/activities/forking/#making-changes)
@@ -68,21 +68,25 @@ git submodule update --remote
 
 The update command can be run to update your local copy when the remote branch changes. Submodules are managed in the file .gitmodules.
 
-## Build and deploy
+## Build and deployment
 
 The Cloudflare Worker uses Vite with `@cloudflare/vite-plugin`. The Vite build runs Hugo, indexes the generated site with Pagefind, bundles the native TypeScript Worker, and writes the deployable Wrangler output config to `dist`.
 
 ```bash
-npm run build
-npm run build:preview
-npm run build:production
+pnpm run build
+pnpm run build:preview
+pnpm run build:production
 ```
 
-Deployments must build the selected Cloudflare environment first because the Vite plugin applies `env.preview` or `env.production` during build time:
+Branches and pull requests are automatically deployed as preview sites. All preview sites share the preview D1 database. Merges to `main` are automatically deployed to production.
+
+Database migrations are not applied by those deployments and must be applied separately to the intended environment. Never copy production personal data, credentials, secrets, or private uploads into preview; use synthetic or purpose-created preview data.
+
+Manual deployment is exceptional. If an explicitly approved recovery or operational task requires it, build and deploy the selected Cloudflare environment together because the Vite plugin applies `env.preview` or `env.production` during build time:
 
 ```bash
-npm run deploy:preview
-npm run deploy:production
+pnpm run deploy:preview
+pnpm run deploy:production
 ```
 
 The MCP OAuth binding uses Wrangler automatic provisioning for `OAUTH_KV`. On the first deploy for an environment, Wrangler will create the namespace and write the generated IDs back into [wrangler.jsonc](wrangler.jsonc).
@@ -92,11 +96,11 @@ The MCP OAuth binding uses Wrangler automatic provisioning for `OAUTH_KV`. On th
 Run the local seed flow to create admin/event data, forms/terms, and default email templates in D1+R2:
 
 ```bash
-npm run seed:local
+pnpm run seed:local
 ```
 
 If templates are missing or you want to reseed template versions only:
 
 ```bash
-npm run seed:templates:local
+pnpm run seed:templates:local
 ```

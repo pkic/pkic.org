@@ -61,12 +61,12 @@ Base path: `/api/v1`
 - Supported backend routes are exclusively under `/api/v1/*` and `/r/:code`.
 
 ## Bootstrap
-- Seed initial admin user with `npm run seed:admin:local` (or `npm run seed:admin:remote`).
+- Seed initial admin user with `pnpm run seed:admin:local` (or `pnpm run seed:admin:remote`).
 - Seed script upserts `admin@pkic.org` with global role `admin`.
 - Seed or update an event from YAML config (includes event metadata, terms, organizers, and forms/questions):
-- Local: `npm run seed:event:local`
-- Remote: `npm run seed:event:remote`
-- Custom config file: `npm run seed:event:local -- --config scripts/seed-event.yaml`
+- Local: `pnpm run seed:event:local`
+- Remote: `pnpm run seed:event:remote`
+- Custom config file: `pnpm run seed:event:local -- --config scripts/seed-event.yaml`
 - Default config path: `scripts/seed-event.yaml`
 - Terms can include optional `displayText` for exact consent checkbox wording while still storing `termKey` + `version` for audit/compliance.
 - Event days can be configured in YAML (`event.days`) with optional per-day in-person capacity.

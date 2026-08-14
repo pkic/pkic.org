@@ -20,6 +20,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // Unload YouTube videos on modal close
     unloadYoutubeOnModalClose();
 
+    // Keep nested actions from triggering their session card.
+    initializeSessionActionPropagation();
+
     // Break overlays removed; using inline break cards again
 });
 
@@ -82,9 +85,17 @@ function unloadYoutubeOnModalClose() {
         modal.addEventListener('hidden.bs.modal', function () {
             const iframe = modal.querySelector('iframe[src*="youtube"]');
             if (iframe) {
-                iframe.src = iframe.src;
+                const src = iframe.src;
+                iframe.src = '';
+                iframe.src = src;
             }
         });
+    });
+}
+
+function initializeSessionActionPropagation() {
+    document.querySelectorAll('[data-agenda-stop-propagation]').forEach(element => {
+        element.addEventListener('click', event => event.stopPropagation());
     });
 }
 
@@ -92,7 +103,6 @@ function initializeLocationFiltering() {
     // Handle individual location buttons
     document.querySelectorAll('.location-filter-btn').forEach(button => {
         button.addEventListener('click', function () {
-            const location = this.getAttribute('data-location');
             const tabPane = this.closest('.tab-pane');
 
             // Toggle active state for multiple selection
@@ -264,8 +274,6 @@ function initializeFullscreen() {
     fullscreenBtns.forEach(fullscreenBtn => {
         fullscreenBtn.addEventListener('click', function () {
             const container = document.getElementById('agenda-container');
-            const icon = this.querySelector('svg');
-
             if (container.classList.contains('agenda-fullscreen')) {
                 // Exit fullscreen
                 container.classList.remove('agenda-fullscreen');

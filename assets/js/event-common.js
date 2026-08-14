@@ -313,7 +313,7 @@ export function getSessionsForTime({ day, time, location, startOffsetSeconds = 0
     const agendaSource = getFilteredAgenda(day);
     const sessions = [];
 
-    Object.entries(agendaSource).forEach(([dayKey, dayAgenda]) => {
+    Object.values(agendaSource).forEach(dayAgenda => {
         dayAgenda.forEach((agendaSlot, index) => {
             if (!agendaSlot.sessions || !Array.isArray(agendaSlot.sessions)) {
                 return;

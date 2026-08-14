@@ -26,11 +26,11 @@
     });
 
     noResult.classList.toggle('d-none', totalVisible > 0 || !q);
-    updateSidebarEmpties(q);
+    updateSidebarEmpties();
     updateActiveLetter();
   }
 
-  function updateSidebarEmpties(q) {
+  function updateSidebarEmpties() {
     if (!sidebar) return;
     sidebar.querySelectorAll('.az-sidebar-link').forEach(function (link) {
       if (link.classList.contains('is-empty')) return;

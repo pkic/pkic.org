@@ -1,4 +1,5 @@
 .DS_Store
+._*
 public
 dist
 resources/_gen/

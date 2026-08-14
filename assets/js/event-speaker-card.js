@@ -8,10 +8,6 @@ import {
 let speakersData = [];
 let currentSpeakerIndex = 0;
 
-function getAllSpeakers() {
-    return speakersData;
-}
-
 function showSpeakerCard() {
     const { name, speaker, index } = getHashParams();
 

@@ -58,7 +58,7 @@
 
 ## Stage 9: Hugo Frontend Integration (TypeScript-only)
 - [x] Add TypeScript frontend structure (`assets/ts/event-flows`, `assets/ts/shared`) and strict frontend tsconfig.
-- [x] Add frontend test/typecheck scripts and include them in `npm run check`.
+- [x] Add frontend test/typecheck scripts and include them in `pnpm run check`.
 - [x] Add event route metadata support in sync schema (`event.frontend.routes`) and backend route resolver.
 - [x] Add forms hydration endpoint (`GET /events/:eventSlug/forms`) with required terms in response.
 - [x] Add manage token read endpoints (`GET /registrations/manage/:token`, `GET /proposals/manage/:token`).
@@ -82,4 +82,3 @@
 - [ ] On-demand Open Graph image per referral code: when a link from `/r/:code` is shared, scrape or redirect with og:image/twitter:image pointing to a generated image showing the attendee's first name and a CTA.
 - [ ] Cloudflare Worker or Pages Function generates/caches per-attendee images in R2 (e.g. Satori/HTML-to-PNG or a hosted service).
 - [ ] Update `referral_codes` redirect handler to inject OG meta tags in a thin HTML wrapper for social crawlers, then JS-redirect actual visitors.
-

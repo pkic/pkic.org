@@ -59,7 +59,7 @@ function runSeed(mode, database, wranglerEnv, persistTo) {
     sql,
   ];
 
-  execFileSync("npx", args, {
+  execFileSync("pnpm", ["exec", ...args], {
     cwd: process.cwd(),
     stdio: "inherit",
   });
