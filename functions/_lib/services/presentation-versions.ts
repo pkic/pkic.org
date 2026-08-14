@@ -201,13 +201,14 @@ export function presentationDownloadResponse(
   version: { fileName: string | null; mimeType: string | null; versionNumber: number },
 ): Response {
   const fileName = version.fileName ?? `presentation-v${version.versionNumber}`;
-  const safeFileName = fileName.replace(/["\r\n]/g, "_");
+  const safeFileName = fileName.replace(/[^\x20-\x7e]|["\\]/g, "_");
+  const encodedFileName = encodeURIComponent(fileName).replace(
+    /['()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
   const headers = new Headers();
   headers.set("Content-Type", version.mimeType ?? "application/octet-stream");
-  headers.set(
-    "Content-Disposition",
-    `attachment; filename="${safeFileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
-  );
+  headers.set("Content-Disposition", `attachment; filename="${safeFileName}"; filename*=UTF-8''${encodedFileName}`);
   headers.set("Content-Length", String(object.size));
   return new Response(object.body, { headers });
 }

@@ -19,7 +19,10 @@ import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 import { createProposal, addProposalSpeaker, finalizeProposalDecision } from "../functions/_lib/services/proposals";
-import { createPresentationVersion } from "../functions/_lib/services/presentation-versions";
+import {
+  createPresentationVersion,
+  presentationDownloadResponse,
+} from "../functions/_lib/services/presentation-versions";
 import { getPresentationUploader } from "../functions/_lib/services/proposals-speaker-profile";
 import app from "../functions/router";
 import {
@@ -537,6 +540,23 @@ describe("presentation versioning", () => {
     expect(dlRes.headers.get("content-disposition")).toMatch(/quantum-talk\.pdf/);
     const buf = await dlRes.arrayBuffer();
     expect(new Uint8Array(buf).slice(0, 4)).toEqual(FAKE_PDF);
+  });
+
+  it("encodes presentation download filenames with an ASCII fallback", () => {
+    const response = presentationDownloadResponse(
+      { body: new Blob([FAKE_PDF]).stream(), size: FAKE_PDF.byteLength },
+      {
+        fileName: `a\\b "é"('*)\r\n.pdf`,
+        mimeType: "application/pdf",
+        versionNumber: 1,
+      },
+    );
+    const disposition = response.headers.get("content-disposition") ?? "";
+
+    expect(disposition).not.toMatch(/[^\x20-\x7e]/);
+    expect(disposition).not.toContain("\\");
+    expect(disposition).not.toContain("é");
+    expect(disposition).toContain("filename*=UTF-8''a%5Cb%20%22%C3%A9%22%28%27%2A%29%0D%0A.pdf");
   });
 
   it("post-migration schema stores presentation uploads only in version rows", async () => {
