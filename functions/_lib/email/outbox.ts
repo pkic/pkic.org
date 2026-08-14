@@ -11,7 +11,7 @@ import { loadEmailLayout, loadEmailPartials } from "./partials";
 import { sendViaSendgrid } from "./sendgrid";
 import { applyCampaignCustomText } from "./campaign-custom";
 import { parseQueuedEmailAttachments, type QueuedEmailAttachment } from "./attachments";
-import { authorizeQueuedCapabilityLinks, materializeQueuedCapabilityLinks } from "../services/capability-links";
+import { authorizeQueuedCapabilityLinks, materializeQueuedCapabilityLinks } from "../auth/capability-links";
 import type { DatabaseLike, Env, StatementLike } from "../types";
 
 function uint8ToBase64(bytes: Uint8Array): string {
