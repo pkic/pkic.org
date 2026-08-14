@@ -60,9 +60,7 @@ export async function getSpeakerByManageToken(
     sp_submitted_at: string;
     sp_updated_at: string;
     sp_withdrawn_at: string | null;
-    sp_presentation_r2_key: string | null;
     sp_presentation_deadline: string | null;
-    sp_presentation_uploaded_at: string | null;
     u_id: string;
     u_email: string;
     u_first_name: string | null;
@@ -100,9 +98,7 @@ export async function getSpeakerByManageToken(
        sp.submitted_at    AS sp_submitted_at,
        sp.updated_at      AS sp_updated_at,
        sp.withdrawn_at    AS sp_withdrawn_at,
-       sp.presentation_r2_key        AS sp_presentation_r2_key,
        sp.presentation_deadline      AS sp_presentation_deadline,
-       sp.presentation_uploaded_at   AS sp_presentation_uploaded_at,
        u.id               AS u_id,
        u.email            AS u_email,
        u.first_name       AS u_first_name,
@@ -152,9 +148,7 @@ export async function getSpeakerByManageToken(
       submitted_at: row.sp_submitted_at,
       updated_at: row.sp_updated_at,
       withdrawn_at: row.sp_withdrawn_at,
-      presentation_r2_key: row.sp_presentation_r2_key,
       presentation_deadline: row.sp_presentation_deadline,
-      presentation_uploaded_at: row.sp_presentation_uploaded_at,
     },
     user: {
       id: row.u_id,

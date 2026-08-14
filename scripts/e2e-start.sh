@@ -5,8 +5,9 @@
 set -e
 
 STATE_DIR=$(mktemp -d)
-INTERCEPT_URL_FILE="test-results/e2e-sendgrid-url"
+INTERCEPT_URL_FILE="${E2E_SENDGRID_URL_FILE:-test-results/e2e-sendgrid-url}"
 E2E_ENV_FILE="$STATE_DIR/.e2e.vars"
+E2E_PORT="${E2E_PORT:-8788}"
 
 # Some environments inject npm_config_* keys that newer npm versions warn
 # about as unknown config. Clear them for this script so Playwright webServer
@@ -66,14 +67,14 @@ cat .dev.vars > "$E2E_ENV_FILE"
 cat >> "$E2E_ENV_FILE" <<EOF
 SENDGRID_API_BASE=${INTERCEPT_URL}
 SENDGRID_API_KEY=e2e-test-dummy-key
-APP_BASE_URL=http://127.0.0.1:8788
+APP_BASE_URL=http://127.0.0.1:${E2E_PORT}
 EMAIL_BADGE_DELAY_SECONDS=0
 DEFAULT_MIN_PROPOSAL_REVIEWS=0
 EOF
 
 npx wrangler dev \
   --env=local \
-  --port=8788 \
+  --port="$E2E_PORT" \
   --persist-to="$STATE_DIR" \
   --env-file="$E2E_ENV_FILE" \
   < /dev/null

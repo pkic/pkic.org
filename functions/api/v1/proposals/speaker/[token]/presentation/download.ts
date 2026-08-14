@@ -6,9 +6,10 @@
 import { json } from "../../../../../../_lib/http";
 import { getSpeakerByManageToken } from "../../../../../../_lib/services/proposals";
 import { first } from "../../../../../../_lib/db/queries";
+import { requireInternalSecret } from "../../../../../../_lib/request";
 
 export async function onRequestGet(c: any): Promise<Response> {
-  const { proposal } = await getSpeakerByManageToken(c.env.DB, c.req.param("token"));
+  const { proposal } = await getSpeakerByManageToken(c.env.DB, c.req.param("token"), requireInternalSecret(c.env));
 
   const version = await first<{
     r2_key: string;
