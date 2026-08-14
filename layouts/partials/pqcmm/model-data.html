@@ -1,0 +1,20 @@
+{{- $page := .page -}}
+{{- $version := .version | default ($page.Param "version") -}}
+{{- $assetPath := printf "data/pqcmm/pqcmm-model-%s.yaml" $version -}}
+{{- $asset := resources.Get $assetPath -}}
+{{- if not $asset -}}
+  {{- errorf "PQCMM model data not found: %s" $assetPath -}}
+{{- end -}}
+{{- $targetPath := printf "wg/pqc/pqcmm/data/pqcmm-model-%s.yaml" $version -}}
+{{- $published := $asset | resources.Copy $targetPath -}}
+{{- $published.Publish -}}
+{{- $data := $asset.Content | transform.Unmarshal -}}
+{{- $schemaPath := printf "data/pqcmm/pqcmm-model.schema-%s.json" $data.schemaVersion -}}
+{{- $schemaAsset := resources.Get $schemaPath -}}
+{{- if not $schemaAsset -}}
+  {{- errorf "PQCMM model schema not found: %s" $schemaPath -}}
+{{- end -}}
+{{- $schemaTargetPath := printf "wg/pqc/pqcmm/data/pqcmm-model.schema-%s.json" $data.schemaVersion -}}
+{{- $schemaPublished := $schemaAsset | resources.Copy $schemaTargetPath -}}
+{{- $schemaPublished.Publish -}}
+{{- return (dict "data" $data "resource" $published "schemaResource" $schemaPublished) -}}
