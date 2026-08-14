@@ -13,12 +13,15 @@ interface ApiOpts extends RequestInit {
 }
 
 export async function api<T = unknown>(path: string, opts?: ApiOpts): Promise<T> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const headers = new Headers(opts?.headers);
+  if (!headers.has("content-type")) {
+    headers.set("content-type", "application/json");
+  }
 
   const res = await fetch(path, {
     ...opts,
     credentials: "same-origin",
-    headers: { ...headers, ...(opts?.headers ?? {}) },
+    headers,
   });
 
   const data: { error?: { message?: string; code?: string } } =

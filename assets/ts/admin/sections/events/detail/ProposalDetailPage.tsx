@@ -945,6 +945,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
   const proposalRequiresPresentation =
     sessionTypes.find((t) => t.label.toLowerCase() === proposal.proposal_type.toLowerCase())?.requiresPresentation ??
     false;
+  const canManagePresentation = proposal.status === "accepted" || proposalRequiresPresentation || versions.length > 0;
   const quorumMet = reviews.length >= minReviewsRequired;
   const needsWorkRequiresNote = isNeedsWorkDecision(decisionStatus) && !decisionNote.trim();
   const selectedDecisionPreview =
@@ -986,7 +987,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     { key: "submission", label: "Submission" },
     { key: "speakers", label: `Speakers (${loadingSub ? "…" : speakers.length})` },
     { key: "reviews", label: `Reviews (${loadingSub ? "…" : reviews.length})` },
-    ...(proposalRequiresPresentation
+    ...(canManagePresentation
       ? [
           {
             key: "presentation",

@@ -3,6 +3,14 @@ import { expect, test } from "@playwright/test";
 test("renders the admin proposal detail workflow with submission answers and operator actions", async ({ page }) => {
   const openedUrls: string[] = [];
   const consoleErrors: string[] = [];
+  let adminUpload:
+    | {
+        contentType: string | undefined;
+        fileName: string | undefined;
+        fileSize: string | undefined;
+        body: Buffer | null;
+      }
+    | undefined;
 
   page.on("console", (msg) => {
     if (msg.type() === "error") {
@@ -106,6 +114,21 @@ test("renders the admin proposal detail workflow with submission answers and ope
   });
 
   await page.route("**/api/v1/admin/proposals/proposal-1/presentation/versions", async (route) => {
+    if (route.request().method() === "POST") {
+      const headers = route.request().headers();
+      adminUpload = {
+        contentType: headers["content-type"],
+        fileName: headers["x-presentation-file-name"],
+        fileSize: headers["x-presentation-file-size"],
+        body: route.request().postDataBuffer(),
+      };
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true }),
+      });
+      return;
+    }
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -122,7 +145,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
           id: "proposal-1",
           event_id: "event-1",
           proposer_user_id: "user-1",
-          status: "under_review",
+          status: "accepted",
           proposal_type: "panel",
           title: "Operational PKI at Internet Scale",
           abstract: "A practical session on operating certificate platforms with clear failure domains.",
@@ -132,9 +155,9 @@ test("renders the admin proposal detail workflow with submission answers and ope
           proposer_first_name: "Sam",
           proposer_last_name: "Speaker",
           review_count: 1,
-          decision_status: null,
+          decision_status: "accepted",
           decision_note: null,
-          decision_decided_at: null,
+          decision_decided_at: "2025-02-01T11:00:00.000Z",
           details: {
             audience: "Platform operators",
             format: "panel",
@@ -237,5 +260,17 @@ test("renders the admin proposal detail workflow with submission answers and ope
   openedUrls.push(...(await page.evaluate(() => (window as Window & { __openedUrls?: string[] }).__openedUrls ?? [])));
 
   expect(openedUrls).toContain("https://app.test/propose-manage/?event=pqc-2026&token=proposal-token");
+
+  await page.getByRole("tab", { name: "Presentation" }).click();
+  const fileChooserPromise = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: /Upload on behalf of speaker/ }).click();
+  const fileChooser = await fileChooserPromise;
+  const pdfBody = Buffer.from("%PDF-1.7 admin upload");
+  await fileChooser.setFiles({ name: "admin-upload.pdf", mimeType: "application/pdf", buffer: pdfBody });
+
+  await expect.poll(() => adminUpload?.contentType).toBe("application/pdf");
+  expect(adminUpload?.fileName).toBe("admin-upload.pdf");
+  expect(adminUpload?.fileSize).toBe(String(pdfBody.byteLength));
+  expect(adminUpload?.body).toEqual(pdfBody);
   expect(consoleErrors).toEqual([]);
 });
