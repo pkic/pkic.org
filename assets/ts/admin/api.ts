@@ -5,6 +5,7 @@
  * 401 responses by clearing auth (triggering a re-render to Login).
  */
 import { clearAuth } from "./state";
+import { ADMIN_PERMISSION_DENIED_MESSAGE } from "../../shared/auth-errors";
 import { ApiClientError } from "../shared/api-client";
 import type { ApiErrorPayload } from "../shared/types";
 
@@ -37,7 +38,7 @@ export async function api<T = unknown>(path: string, opts?: ApiOpts): Promise<T>
         code: errorCode,
         message:
           errorCode === "SCOPE_REQUIRED"
-            ? "You do not have permission to perform this action. If your permissions changed recently, sign out and sign in again."
+            ? ADMIN_PERMISSION_DENIED_MESSAGE
             : ((data as ApiErrorPayload).error?.message ?? `HTTP ${res.status}`),
         details: (data as ApiErrorPayload).error?.details ?? null,
       },

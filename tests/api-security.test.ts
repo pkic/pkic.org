@@ -20,6 +20,7 @@ import { resetDb } from "./helpers/reset-db";
 import { SELF, env } from "cloudflare:test";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
+import { PERMISSION_DENIED_MESSAGE } from "../assets/shared/auth-errors";
 import { signAdminSessionToken } from "../functions/_lib/auth/admin";
 import type { AuthScope } from "../functions/_lib/auth/scopes";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
@@ -456,7 +457,7 @@ describe("session-token validation", () => {
       error: {
         code: "SCOPE_REQUIRED",
         details: null,
-        message: "You do not have permission to perform this action.",
+        message: PERMISSION_DENIED_MESSAGE,
       },
     });
   });
@@ -469,7 +470,7 @@ describe("session-token validation", () => {
 
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toMatchObject({
-      error: { code: "SCOPE_REQUIRED", message: "You do not have permission to perform this action." },
+      error: { code: "SCOPE_REQUIRED", message: PERMISSION_DENIED_MESSAGE },
     });
   });
 });

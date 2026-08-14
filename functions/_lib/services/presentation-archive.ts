@@ -115,7 +115,12 @@ export function eventPresentationArchiveResponse(
   async function* archiveInputs() {
     for (const [index, item] of items.entries()) {
       const name = archiveEntryName(item, index, items.length, options.includeAllVersions === true);
-      const object = await bucket.get(item.r2Key);
+      let object: R2ObjectBody | null;
+      try {
+        object = await bucket.get(item.r2Key);
+      } catch {
+        object = null;
+      }
       if (!object) {
         yield {
           name: `_missing/${name}.txt`,

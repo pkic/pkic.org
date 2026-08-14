@@ -1,5 +1,6 @@
 import { AppError } from "../errors";
 import type { AuthAdmin } from "../types";
+import { PERMISSION_DENIED_MESSAGE } from "../../../assets/shared/auth-errors";
 
 export const AUTH_SCOPES = [
   "admin:read",
@@ -21,7 +22,7 @@ export function hasAuthScope(actor: AuthAdmin, scope: AuthScope): boolean {
 
 export function requireAuthScope(actor: AuthAdmin, scope: AuthScope): void {
   if (!hasAuthScope(actor, scope)) {
-    throw new AppError(403, "SCOPE_REQUIRED", "You do not have permission to perform this action.");
+    throw new AppError(403, "SCOPE_REQUIRED", PERMISSION_DENIED_MESSAGE);
   }
 }
 

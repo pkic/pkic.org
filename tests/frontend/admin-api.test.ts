@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../../assets/ts/admin/api";
+import { ADMIN_PERMISSION_DENIED_MESSAGE, PERMISSION_DENIED_MESSAGE } from "../../assets/shared/auth-errors";
 import { presentationUploadRequest } from "../../assets/shared/presentation-upload";
 
 describe("admin API client", () => {
@@ -47,15 +48,24 @@ describe("admin API client", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
-        Response.json(
-          { error: { code: "SCOPE_REQUIRED", message: "You do not have permission to perform this action." } },
-          { status: 403 },
-        ),
+        Response.json({ error: { code: "SCOPE_REQUIRED", message: PERMISSION_DENIED_MESSAGE } }, { status: 403 }),
       ),
     );
 
     await expect(api("/api/v1/admin/proposals/proposal-1/presentation/versions/version-1")).rejects.toThrow(
-      "You do not have permission to perform this action. If your permissions changed recently, sign out and sign in again.",
+      ADMIN_PERMISSION_DENIED_MESSAGE,
     );
+  });
+
+  it("uses the HTTP status fallback when an error response has no code", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(null, { status: 500 })),
+    );
+
+    await expect(api("/api/v1/admin/proposals/proposal-1/presentation/versions/version-1")).rejects.toMatchObject({
+      code: "HTTP_ERROR",
+      message: "HTTP 500",
+    });
   });
 });

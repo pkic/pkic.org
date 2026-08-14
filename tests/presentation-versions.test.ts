@@ -40,6 +40,7 @@ interface StoredObject {
 
 class FakePresentationBucket {
   private readonly objects = new Map<string, { buf: ArrayBuffer; contentType: string }>();
+  readonly getFailures = new Set<string>();
   putCalls = 0;
   putKeys: string[] = [];
   lastPutWasStream = false;
@@ -73,6 +74,7 @@ class FakePresentationBucket {
   }
 
   async get(key: string): Promise<StoredObject | null> {
+    if (this.getFailures.has(key)) throw new Error("Simulated R2 retrieval failure");
     const stored = this.objects.get(key);
     if (!stored) return null;
     const buf = stored.buf;
@@ -404,6 +406,7 @@ describe("presentation versioning", () => {
       mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
       uploadedByUserId: adminUserId,
     });
+    bucket.getFailures.add(secondKey);
 
     const response = await app.fetch(
       new Request("https://app.test/api/v1/admin/events/pqc-2026/presentations/download", {
@@ -421,10 +424,13 @@ describe("presentation versioning", () => {
     const archiveText = new TextDecoder().decode(archive);
     expect(archiveText).toContain(`001 - Another Session - ${secondProposal.id.slice(0, 12)}.pptx`);
     expect(archiveText).toContain(`002 - Post-Quantum Key Exchange - ${proposalId.slice(0, 12)}.pdf`);
-    expect(archiveText).toContain("second-presentation-marker");
+    expect(archiveText).toContain(`_missing/001 - Another Session - ${secondProposal.id.slice(0, 12)}.pptx.txt`);
+    expect(archiveText).toContain('The stored file for "Another Session" could not be found.');
     expect(archiveText).toContain("current-version-marker");
     expect(archiveText).not.toContain("superseded-version-marker");
+    expect(archiveText).not.toContain("second-presentation-marker");
 
+    bucket.getFailures.clear();
     const allVersionsResponse = await app.fetch(
       new Request("https://app.test/api/v1/admin/events/pqc-2026/presentations/download?versions=all", {
         headers: { authorization: `Bearer ${adminToken}` },
@@ -437,6 +443,7 @@ describe("presentation versioning", () => {
       'attachment; filename="pqc-2026-presentations-all-versions.zip"',
     );
     const allVersionsText = new TextDecoder().decode(await allVersionsResponse.arrayBuffer());
+    expect(allVersionsText).toContain("second-presentation-marker");
     expect(allVersionsText).toContain("superseded-version-marker");
     expect(allVersionsText).toContain(`002 - Post-Quantum Key Exchange - ${proposalId.slice(0, 12)} - v001.pdf`);
     expect(allVersionsText).toContain(
