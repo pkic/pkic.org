@@ -32,11 +32,7 @@ export default defineConfig(async () => {
       include: ["tests/**/*.test.ts"],
       exclude: ["tests/frontend/**", "tests/e2e/**"],
       setupFiles: ["./tests/helpers/apply-migrations.ts"],
-      poolOptions: {
-        workers: {
-          singleWorker: true,
-        },
-      },
+      maxWorkers: 3,
     },
   };
 });

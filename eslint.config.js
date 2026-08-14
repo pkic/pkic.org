@@ -22,6 +22,7 @@ export default tseslint.config(
   {
     ignores: [
       "**/._*",
+      ".cache/**",
       ".wrangler/**",
       "backups/**",
       "coverage/**",

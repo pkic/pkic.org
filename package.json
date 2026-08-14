@@ -50,6 +50,7 @@
     "@resvg/resvg-wasm": "^2.6.2",
     "agents": "^0.13.3",
     "chanfana": "^3.3.0",
+    "client-zip": "^2.5.0",
     "handlebars": "^4.7.9",
     "hono": "^4.12.27",
     "ical.js": "^2.2.1",

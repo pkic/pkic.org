@@ -274,3 +274,53 @@ test("renders the admin proposal detail workflow with submission answers and ope
   expect(adminUpload?.body).toEqual(pdfBody);
   expect(consoleErrors).toEqual([]);
 });
+
+test("offers an event-level presentation ZIP from the proposals overview", async ({ page }) => {
+  await page.route("**/api/v1/admin/auth/session", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ success: true, admin: { email: "admin@pkic.org" } }),
+    });
+  });
+  await page.route("**/api/v1/admin/events/pqc-2026", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        event: {
+          id: "event-1",
+          slug: "pqc-2026",
+          name: "PQC Conference 2026",
+          starts_at: "2026-11-01T09:00:00.000Z",
+          venue: "Amsterdam",
+        },
+      }),
+    });
+  });
+  await page.route("**/api/v1/admin/events/pqc-2026/proposals**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        proposals: [],
+        access: { canReview: true, canFinalize: true, eventPermissions: ["review", "finalize"] },
+        stats: { byStatus: {}, byRecommendation: {}, reviewedCount: 0, unreviewedCount: 0, total: 0 },
+        pagination: { offset: 0, limit: 50, total: 0, hasMore: false },
+      }),
+    });
+  });
+
+  await page.goto("/admin/#/events/pqc-2026/proposals");
+
+  const currentDownload = page.getByRole("link", { name: "Current presentations" });
+  await expect(currentDownload).toBeVisible();
+  await expect(currentDownload).toHaveAttribute("href", "/api/v1/admin/events/pqc-2026/presentations/download");
+
+  const allVersionsDownload = page.getByRole("link", { name: "All versions" });
+  await expect(allVersionsDownload).toBeVisible();
+  await expect(allVersionsDownload).toHaveAttribute(
+    "href",
+    "/api/v1/admin/events/pqc-2026/presentations/download?versions=all",
+  );
+});

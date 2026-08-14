@@ -5,8 +5,8 @@
  *   Content-Type: multipart/form-data
  *   Field: "file" — PDF or PowerPoint file (PPTX / ODP / PPTM accepted)
  *
- * The file is stored in the SPEAKER_UPLOADS_BUCKET R2 bucket under:
- *   presentations/{proposalId}/{timestamp}-{originalFilename}
+ * The file is stored in the SPEAKER_UPLOADS_BUCKET R2 bucket under a
+ * human-searchable event and proposal prefix.
  *
  * Each upload creates a new version in presentation_versions; the previous version is retained.
  * Speakers can re-upload until the deadline.
@@ -43,9 +43,12 @@ export async function onRequestPut(c: any): Promise<Response> {
     );
   }
 
-  const deadlineRow = await first<{ presentation_deadline: string | null }>(
+  const deadlineRow = await first<{ presentation_deadline: string | null; title: string; event_slug: string }>(
     c.env.DB,
-    "SELECT presentation_deadline FROM session_proposals WHERE id = ?",
+    `SELECT sp.presentation_deadline, sp.title, e.slug AS event_slug
+     FROM session_proposals sp
+     JOIN events e ON e.id = sp.event_id
+     WHERE sp.id = ?`,
     [proposal.id],
   );
   if (deadlineRow?.presentation_deadline && new Date(deadlineRow.presentation_deadline) < new Date()) {
@@ -66,7 +69,15 @@ export async function onRequestPut(c: any): Promise<Response> {
   const parsed = await parsePresentationUpload(c.req.raw);
   if ("error" in parsed) return json({ error: parsed.error }, parsed.status);
 
-  const r2Key = await storePresentationFile(bucket, proposal.id, parsed);
+  const r2Key = await storePresentationFile(
+    bucket,
+    {
+      eventSlug: deadlineRow?.event_slug ?? "event",
+      proposalId: proposal.id,
+      proposalTitle: deadlineRow?.title ?? "proposal",
+    },
+    parsed,
+  );
 
   await recordPresentationUpload(c.env.DB, proposal.id, r2Key, speaker.user_id, {
     fileName: parsed.name ?? null,

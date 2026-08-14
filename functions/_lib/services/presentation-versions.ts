@@ -19,6 +19,12 @@ export interface PresentationUpload {
   type: string;
 }
 
+export interface PresentationStorageContext {
+  eventSlug: string;
+  proposalId: string;
+  proposalTitle: string;
+}
+
 type PresentationUploadError = { error: { code: string; message: string }; status: number };
 
 /**
@@ -65,14 +71,30 @@ export function parsePresentationUpload(request: Request): PresentationUpload | 
   return { body: request.body, name, size: declaredSize, type };
 }
 
-/** Stream a validated upload to R2 and return the r2Key. */
+function storagePathSegment(value: string, fallback: string, maxLength = 100): string {
+  return (
+    value
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, maxLength)
+      .replace(/-+$/g, "") || fallback
+  );
+}
+
+/** Stream a validated upload to a human-searchable R2 key and return that key. */
 export async function storePresentationFile(
   bucket: R2Bucket,
-  proposalId: string,
+  context: PresentationStorageContext,
   upload: PresentationUpload,
 ): Promise<string> {
-  const safeName = upload.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100);
-  const r2Key = `presentations/${proposalId}/${Date.now()}-${uuid()}-${safeName}`;
+  const eventSlug = storagePathSegment(context.eventSlug, "event");
+  const proposalTitle = storagePathSegment(context.proposalTitle, "proposal");
+  const proposalId = storagePathSegment(context.proposalId, "unknown", 64);
+  const safeName = upload.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100) || "presentation";
+  const r2Key = `presentations/${eventSlug}/${proposalTitle}--${proposalId}/${Date.now()}-${uuid()}-${safeName}`;
   const stored = await bucket.put(r2Key, upload.body, { httpMetadata: { contentType: upload.type } });
   if (stored.size !== upload.size) {
     await bucket.delete(r2Key);

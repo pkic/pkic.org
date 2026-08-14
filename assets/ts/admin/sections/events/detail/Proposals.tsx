@@ -194,6 +194,22 @@ function ProposalsList({ slug }: { slug: string }) {
         deps={[slug, statusFilter, recommendationFilter]}
         toolbar={({ resetPage }) => (
           <>
+            <div class="btn-group" role="group" aria-label="Download event presentations">
+              <a
+                class="btn btn-sm btn-outline-secondary"
+                href={`/api/v1/admin/events/${encodeURIComponent(slug)}/presentations/download`}
+                title="Download the current presentation for every accepted proposal"
+              >
+                ↓ Current presentations
+              </a>
+              <a
+                class="btn btn-sm btn-outline-secondary"
+                href={`/api/v1/admin/events/${encodeURIComponent(slug)}/presentations/download?versions=all`}
+                title="Download every retained presentation version for accepted proposals"
+              >
+                All versions
+              </a>
+            </div>
             <select
               class="form-select form-select-sm adm-filter-select"
               value={statusFilter}

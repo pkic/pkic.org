@@ -5,6 +5,7 @@
  * 401 responses by clearing auth (triggering a re-render to Login).
  */
 import { clearAuth } from "./state";
+import { ADMIN_PERMISSION_DENIED_MESSAGE } from "../../shared/auth-errors";
 import { ApiClientError } from "../shared/api-client";
 import type { ApiErrorPayload } from "../shared/types";
 
@@ -31,10 +32,14 @@ export async function api<T = unknown>(path: string, opts?: ApiOpts): Promise<T>
     if (res.status === 401) {
       clearAuth();
     }
+    const errorCode = (data as ApiErrorPayload).error?.code ?? "HTTP_ERROR";
     const fallback: ApiErrorPayload = {
       error: {
-        code: (data as ApiErrorPayload).error?.code ?? "HTTP_ERROR",
-        message: (data as ApiErrorPayload).error?.message ?? `HTTP ${res.status}`,
+        code: errorCode,
+        message:
+          errorCode === "SCOPE_REQUIRED"
+            ? ADMIN_PERMISSION_DENIED_MESSAGE
+            : ((data as ApiErrorPayload).error?.message ?? `HTTP ${res.status}`),
         details: (data as ApiErrorPayload).error?.details ?? null,
       },
     };

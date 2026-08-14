@@ -40,6 +40,7 @@ interface StoredObject {
 
 class FakePresentationBucket {
   private readonly objects = new Map<string, { buf: ArrayBuffer; contentType: string }>();
+  readonly getFailures = new Set<string>();
   putCalls = 0;
   putKeys: string[] = [];
   lastPutWasStream = false;
@@ -73,6 +74,7 @@ class FakePresentationBucket {
   }
 
   async get(key: string): Promise<StoredObject | null> {
+    if (this.getFailures.has(key)) throw new Error("Simulated R2 retrieval failure");
     const stored = this.objects.get(key);
     if (!stored) return null;
     const buf = stored.buf;
@@ -204,6 +206,9 @@ describe("presentation versioning", () => {
     const body = (await res.json()) as { success: boolean };
     expect(body.success).toBe(true);
     expect(bucket.lastPutWasStream).toBe(true);
+    expect(bucket.putKeys[0]).toMatch(
+      new RegExp(`^presentations/pqc-2026/post-quantum-key-exchange--${proposalId}/\\d+-[a-f0-9-]+-slides\\.pdf$`),
+    );
 
     const versions = await queryAll<{ version_number: number; is_current: number; deleted_at: string | null }>(
       env.DB,
@@ -351,6 +356,99 @@ describe("presentation versioning", () => {
     expect(versions).toHaveLength(2);
     expect(versions[0]).toMatchObject({ version_number: 1, is_current: 0 });
     expect(versions[1]).toMatchObject({ version_number: 2, is_current: 1 });
+  });
+
+  it("streams all current event presentations in a human-readable ZIP archive", async () => {
+    const { eventId, proposalId, speakerToken, speakerUserId, adminUserId, adminToken } = await seed();
+    const bucket = new FakePresentationBucket();
+    const envWithBucket = { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket };
+    const execCtx = { passThroughOnException: () => {}, waitUntil: () => {} } as any;
+
+    for (const [name, content] of [
+      ["superseded.pdf", "%PDF superseded-version-marker"],
+      ["current.pdf", "%PDF current-version-marker"],
+    ]) {
+      const upload = presentationUploadRequest(new File([content], name, { type: "application/pdf" }));
+      const response = await app.fetch(
+        new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+          method: "PUT",
+          ...upload,
+        }),
+        envWithBucket,
+        execCtx,
+      );
+      expect(response.status).toBe(200);
+    }
+
+    const { proposal: secondProposal } = await createProposal(env.DB, {
+      eventId,
+      proposerUserId: speakerUserId,
+      proposalType: "talk",
+      title: "Another Session",
+      abstract: "A second accepted session with a legacy R2 object key.",
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+    });
+    await finalizeProposalDecision(env.DB, {
+      proposalId: secondProposal.id,
+      decidedByUserId: adminUserId,
+      finalStatus: "accepted",
+      minReviewsRequired: 0,
+    });
+    const secondKey = "presentations/legacy-second.pptx";
+    const secondContent = "PPTX second-presentation-marker";
+    await bucket.put(secondKey, secondContent, {
+      httpMetadata: { contentType: "application/vnd.openxmlformats-officedocument.presentationml.presentation" },
+    });
+    await createPresentationVersion(env.DB, secondProposal.id, {
+      r2Key: secondKey,
+      fileName: "second-deck.pptx",
+      fileSize: secondContent.length,
+      mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      uploadedByUserId: adminUserId,
+    });
+    bucket.getFailures.add(secondKey);
+
+    const response = await app.fetch(
+      new Request("https://app.test/api/v1/admin/events/pqc-2026/presentations/download", {
+        headers: { authorization: `Bearer ${adminToken}` },
+      }),
+      envWithBucket,
+      execCtx,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("application/zip");
+    expect(response.headers.get("content-disposition")).toBe('attachment; filename="pqc-2026-presentations.zip"');
+    const archive = new Uint8Array(await response.arrayBuffer());
+    expect(Array.from(archive.slice(0, 4))).toEqual([0x50, 0x4b, 0x03, 0x04]);
+    const archiveText = new TextDecoder().decode(archive);
+    expect(archiveText).toContain(`001 - Another Session - ${secondProposal.id.slice(0, 12)}.pptx`);
+    expect(archiveText).toContain(`002 - Post-Quantum Key Exchange - ${proposalId.slice(0, 12)}.pdf`);
+    expect(archiveText).toContain(`_missing/001 - Another Session - ${secondProposal.id.slice(0, 12)}.pptx.txt`);
+    expect(archiveText).toContain('The stored file for "Another Session" could not be found.');
+    expect(archiveText).toContain("current-version-marker");
+    expect(archiveText).not.toContain("superseded-version-marker");
+    expect(archiveText).not.toContain("second-presentation-marker");
+
+    bucket.getFailures.clear();
+    const allVersionsResponse = await app.fetch(
+      new Request("https://app.test/api/v1/admin/events/pqc-2026/presentations/download?versions=all", {
+        headers: { authorization: `Bearer ${adminToken}` },
+      }),
+      envWithBucket,
+      execCtx,
+    );
+    expect(allVersionsResponse.status).toBe(200);
+    expect(allVersionsResponse.headers.get("content-disposition")).toBe(
+      'attachment; filename="pqc-2026-presentations-all-versions.zip"',
+    );
+    const allVersionsText = new TextDecoder().decode(await allVersionsResponse.arrayBuffer());
+    expect(allVersionsText).toContain("second-presentation-marker");
+    expect(allVersionsText).toContain("superseded-version-marker");
+    expect(allVersionsText).toContain(`002 - Post-Quantum Key Exchange - ${proposalId.slice(0, 12)} - v001.pdf`);
+    expect(allVersionsText).toContain(
+      `003 - Post-Quantum Key Exchange - ${proposalId.slice(0, 12)} - v002-current.pdf`,
+    );
   });
 
   it("serializes concurrent version creation and keeps exactly one current version", async () => {

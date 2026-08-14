@@ -20,6 +20,7 @@ import { resetDb } from "./helpers/reset-db";
 import { SELF, env } from "cloudflare:test";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
+import { PERMISSION_DENIED_MESSAGE } from "../assets/shared/auth-errors";
 import { signAdminSessionToken } from "../functions/_lib/auth/admin";
 import type { AuthScope } from "../functions/_lib/auth/scopes";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
@@ -452,7 +453,25 @@ describe("session-token validation", () => {
     const token = await insertSession(env.DB, adminId, "proposal-read-token", { scopes: ["proposals:read"] });
     const response = await callUsers(token);
     expect(response.status).toBe(403);
-    expect(((await response.json()) as { error?: { code?: string } }).error?.code).toBe("SCOPE_REQUIRED");
+    expect((await response.json()) as { error?: { code?: string; message?: string } }).toEqual({
+      error: {
+        code: "SCOPE_REQUIRED",
+        details: null,
+        message: PERMISSION_DENIED_MESSAGE,
+      },
+    });
+  });
+
+  it("requires proposal access in addition to event access for presentation archives", async () => {
+    const token = await insertSession(env.DB, adminId, "event-read-token", { scopes: ["events:read"] });
+    const response = await callApp(
+      bearerGet("https://app.test/api/v1/admin/events/pqc-2026/presentations/download", token),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "SCOPE_REQUIRED", message: PERMISSION_DENIED_MESSAGE },
+    });
   });
 });
 
