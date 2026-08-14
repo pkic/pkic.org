@@ -26,10 +26,6 @@ cascade:
   params:
     sectionNav: true
 
-chair:
-  name: Roman Cinkais
-  viceChair: Kennedy Nwup
-
 keyDeliverables:
   - title: PKI Maturity Model
     description: A complete five-level framework for evaluating and benchmarking PKI implementations across all critical domains — from governance and risk management to cryptographic controls and certificate lifecycle.

@@ -1,8 +1,8 @@
 -- Migration 0046: `member_since` columns for organizations and members
 --
 -- data/members/*.yaml's `memberSince` key (how long an organization or
--- individual has been a PKIC member) had nowhere real to land: the §6
--- Step 2 migration script never read it, and the Interim Admin Tool's
+-- individual has been a PKIC member) had nowhere real to land: the
+-- migration script never read it, and the Interim Admin Tool's
 -- "Add organization" form already collects a `memberSince` date from staff
 -- (assets/ts/admin/sections/Organizations.tsx, AdminMemberCreateInput in
 -- admin-members.ts) but silently drops it — there is no column to write it

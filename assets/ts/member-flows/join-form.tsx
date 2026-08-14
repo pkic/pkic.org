@@ -1,5 +1,5 @@
 /**
- * Membership application form (PRD §1.2/§1.4).
+ * Membership application form.
  *
  * Replaces the legacy native-POST-to-/api/v1/forms shortcode with a fetch-based
  * shell: category/name/email/organization/legal-agreement fields stay static
@@ -16,12 +16,12 @@ import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
 import { setStatus, readField, findSubmitButton } from "../shared/form/helpers";
 import { SuccessPanel } from "../components/SuccessPanel";
 import { memberApplicationCreateSchema } from "../../shared/schemas/member-applications";
+import { INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../shared/schemas/membership-categories";
 import type { FormDefinition } from "../shared/types";
 
 const API_BASE = "/api/v1";
 const MEMBERS_DATA_URL = "/members/members-data.json";
 
-const INDIVIDUAL_CATEGORIES = new Set(["H5", "H6", "H7"]);
 const UNIVERSITY_EMAIL_CATEGORIES = new Set(["H5"]);
 
 const PUBLIC_EMAIL_DOMAINS = new Set([
@@ -67,7 +67,7 @@ const PUBLIC_EMAIL_DOMAINS = new Set([
 // ── Pure/testable helpers ──────────────────────────────────────────────────
 
 export function isIndividualCategory(categoryCode: string): boolean {
-  return INDIVIDUAL_CATEGORIES.has(categoryCode);
+  return INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(categoryCode);
 }
 
 export function requiresUniversityEmail(categoryCode: string): boolean {

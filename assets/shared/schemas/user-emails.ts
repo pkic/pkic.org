@@ -21,7 +21,7 @@ export const userEmailResponseSchema = z.object({
 export const userEmailsListRouteSchema = {
   tags: ["Users"],
   summary: "List a user's secondary email addresses",
-  description: "Admin/display/search only -- does not affect login. See PRD user_emails table.",
+  description: "Admin/display/search only -- does not affect login. See user_emails table.",
   request: { params: userIdEmailsParamsSchema },
   responses: {
     "200": {

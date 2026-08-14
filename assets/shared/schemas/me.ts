@@ -1,9 +1,10 @@
 /**
- * Member self-service (PRD §4.9, §4.10). All endpoints operate on the
+ * Member self-service. All endpoints operate on the
  * caller's own identity, resolved from a member session — never a
  * target-user path parameter.
  */
 import { z } from "zod";
+import { linksSchema } from "./api";
 
 export const myOrganizationRepresentativeSchema = z.object({
   userId: z.uuid(),
@@ -21,7 +22,7 @@ export const myProfileSchema = z.object({
   preferredName: z.string().nullable(),
   jobTitle: z.string().nullable(),
   biography: z.string().nullable(),
-  links: z.array(z.string()),
+  links: linksSchema,
   membershipCategory: z.string(),
   organizationId: z.uuid().nullable(),
   organizationName: z.string().nullable(),
@@ -40,7 +41,7 @@ export const myProfileSchema = z.object({
 
 export const myProfileGetRouteSchema = {
   tags: ["Me"],
-  summary: "Get my profile (PRD §4.10)",
+  summary: "Get my profile",
   responses: {
     "200": { description: "My profile.", content: { "application/json": { schema: myProfileSchema } } },
   },
@@ -52,13 +53,13 @@ export const myProfileUpdateSchema = z.object({
   preferredName: z.string().trim().max(120).optional(),
   jobTitle: z.string().trim().max(160).optional(),
   biography: z.string().trim().max(5000).optional(),
-  links: z.array(z.url()).max(15).optional(),
+  links: linksSchema.optional(),
   organizationName: z.string().trim().max(200).optional(),
 });
 
 export const myProfileUpdateRouteSchema = {
   tags: ["Me"],
-  summary: "Update my profile (PRD §4.10)",
+  summary: "Update my profile",
   description: "organizationName is only honored for org-less categories (H5/H6/H7); ignored otherwise.",
   request: {
     body: { content: { "application/json": { schema: myProfileUpdateSchema } }, required: true },
@@ -68,24 +69,24 @@ export const myProfileUpdateRouteSchema = {
   },
 };
 
+export const myApplicationSummarySchema = z.object({
+  id: z.string(),
+  status: z.string(),
+  stage: z.string(),
+  membershipCategory: z.string(),
+  createdAt: z.string(),
+});
+
 export const myApplicationsListRouteSchema = {
   tags: ["Me"],
-  summary: "My application history (PRD §4.10)",
+  summary: "My application history",
   responses: {
     "200": {
       description: "My applications.",
       content: {
         "application/json": {
           schema: z.object({
-            applications: z.array(
-              z.object({
-                id: z.string(),
-                status: z.string(),
-                stage: z.string(),
-                membershipCategory: z.string(),
-                createdAt: z.string(),
-              }),
-            ),
+            applications: z.array(myApplicationSummarySchema),
           }),
         },
       },
@@ -122,7 +123,7 @@ export const myApplicationDetailSchema = z.object({
 
 export const myApplicationDetailRouteSchema = {
   tags: ["Me"],
-  summary: "My application detail: original application, status history, and timeline (PRD §4.10, §11 UI-1)",
+  summary: "My application detail: original application, status history, and timeline",
   request: { params: z.object({ id: z.string() }) },
   responses: {
     "200": { description: "My application.", content: { "application/json": { schema: myApplicationDetailSchema } } },
@@ -143,8 +144,8 @@ export const myVoteHistoryEntrySchema = z.object({
 
 export const myVotesListRouteSchema = {
   tags: ["Me"],
-  summary: "My vote history (PRD §4.10)",
-  description: "Every ballot the caller has cast, most recent first (PRD §4.8, Phase 4B).",
+  summary: "My vote history",
+  description: "Every ballot the caller has cast, most recent first.",
   responses: {
     "200": {
       description: "My votes.",
@@ -159,7 +160,7 @@ export const myOrganizationVisibilityUpdateSchema = z.object({
 
 export const myOrganizationVisibilityUpdateRouteSchema = {
   tags: ["Me"],
-  summary: "Toggle whether I appear on my organization's public page (PRD §4.10)",
+  summary: "Toggle whether I appear on my organization's public page",
   request: {
     body: { content: { "application/json": { schema: myOrganizationVisibilityUpdateSchema } }, required: true },
   },
@@ -177,7 +178,7 @@ export const myWorkingGroupSummarySchema = z.object({
 
 export const myWorkingGroupsListRouteSchema = {
   tags: ["Me"],
-  summary: "List my working group memberships (PRD §4.9)",
+  summary: "List my working group memberships",
   responses: {
     "200": {
       description: "My working groups.",
@@ -188,7 +189,7 @@ export const myWorkingGroupsListRouteSchema = {
 
 export const myWorkingGroupJoinRouteSchema = {
   tags: ["Me"],
-  summary: "Join a working group (PRD §4.9)",
+  summary: "Join a working group",
   request: { params: z.object({ wgId: z.string() }) },
   responses: {
     "200": { description: "Joined." },
@@ -199,7 +200,7 @@ export const myWorkingGroupJoinRouteSchema = {
 
 export const myWorkingGroupLeaveRouteSchema = {
   tags: ["Me"],
-  summary: "Leave a working group (PRD §4.9)",
+  summary: "Leave a working group",
   request: { params: z.object({ wgId: z.string() }) },
   responses: {
     "200": { description: "Left." },
@@ -239,7 +240,20 @@ export const addCoworkerRouteSchema = {
   },
 };
 
-// ── Organization profile & content moderation (PRD §4.11) ────────────────
+// ── Organization profile & content moderation ────────────────
+
+export const myOrganizationReviewSchema = z.object({
+  id: z.uuid(),
+  organizationId: z.uuid(),
+  submittedByUserId: z.uuid(),
+  proposedChanges: z.record(z.string(), z.unknown()),
+  hasLogoChange: z.boolean(),
+  status: z.string(),
+  reviewerUserId: z.uuid().nullable(),
+  reviewerNote: z.string().nullable(),
+  submittedAt: z.string(),
+  reviewedAt: z.string().nullable(),
+});
 
 export const myOrganizationProfileSchema = z.object({
   id: z.uuid(),
@@ -254,21 +268,17 @@ export const myOrganizationProfileSchema = z.object({
   pressUrl: z.string().nullable(),
   pressFeedUrl: z.string().nullable(),
   careersUrl: z.string().nullable(),
-  socialX: z.string().nullable(),
-  socialLinkedin: z.string().nullable(),
-  socialFacebook: z.string().nullable(),
-  socialInstagram: z.string().nullable(),
-  socialYoutube: z.string().nullable(),
+  links: linksSchema,
   isOrgContact: z.boolean(),
   isPrimaryContact: z.boolean(),
   pendingSecondaryContactUserId: z.uuid().nullable(),
   votingDelegateUserId: z.uuid().nullable(),
-  pendingReview: z.record(z.string(), z.unknown()).nullable(),
+  pendingReview: myOrganizationReviewSchema.nullable(),
 });
 
 export const myOrganizationProfileGetRouteSchema = {
   tags: ["Me"],
-  summary: "View my organization's current live profile (PRD §4.11)",
+  summary: "View my organization's current live profile",
   responses: {
     "200": {
       description: "My organization's profile.",
@@ -288,16 +298,12 @@ export const myOrganizationContentChangeSchema = z.object({
   pressUrl: z.url().nullable().optional(),
   pressFeedUrl: z.url().nullable().optional(),
   careersUrl: z.url().nullable().optional(),
-  socialX: z.url().nullable().optional(),
-  socialLinkedin: z.url().nullable().optional(),
-  socialFacebook: z.url().nullable().optional(),
-  socialInstagram: z.url().nullable().optional(),
-  socialYoutube: z.url().nullable().optional(),
+  links: linksSchema.optional(),
 });
 
 export const myOrganizationContentChangeRouteSchema = {
   tags: ["Me"],
-  summary: "Submit an organization content change for staff review (PRD §4.11)",
+  summary: "Submit an organization content change for staff review",
   description:
     "Only the org's primary or secondary contact may call this. Queues the change in the moderation queue — the live profile is unchanged until a staff admin approves it. Only one pending submission per organization at a time.",
   request: {
@@ -311,22 +317,9 @@ export const myOrganizationContentChangeRouteSchema = {
   },
 };
 
-export const myOrganizationReviewSchema = z.object({
-  id: z.uuid(),
-  organizationId: z.uuid(),
-  submittedByUserId: z.uuid(),
-  proposedChanges: z.record(z.string(), z.unknown()),
-  hasLogoChange: z.boolean(),
-  status: z.string(),
-  reviewerUserId: z.uuid().nullable(),
-  reviewerNote: z.string().nullable(),
-  submittedAt: z.string(),
-  reviewedAt: z.string().nullable(),
-});
-
 export const myOrganizationReviewsListRouteSchema = {
   tags: ["Me"],
-  summary: "Status of my organization's pending/past content submissions (PRD §4.11)",
+  summary: "Status of my organization's pending/past content submissions",
   responses: {
     "200": {
       description: "My organization's review history.",
@@ -338,7 +331,7 @@ export const myOrganizationReviewsListRouteSchema = {
 
 export const myOrganizationReviewWithdrawRouteSchema = {
   tags: ["Me"],
-  summary: "Withdraw a pending organization content submission (PRD §4.11)",
+  summary: "Withdraw a pending organization content submission",
   request: { params: z.object({ id: z.uuid() }) },
   responses: {
     "200": { description: "Withdrawn." },
@@ -349,7 +342,7 @@ export const myOrganizationReviewWithdrawRouteSchema = {
 
 export const myOrganizationLogoUploadRouteSchema = {
   tags: ["Me"],
-  summary: "Propose a new organization logo (PRD §4.11)",
+  summary: "Propose a new organization logo",
   description:
     "multipart/form-data with a single 'file' field. Held in R2 staging and folds into the org's single pending content review until a staff admin approves it.",
   responses: {
@@ -366,7 +359,7 @@ export const mySecondaryContactNominateSchema = z.object({
 
 export const mySecondaryContactNominateRouteSchema = {
   tags: ["Me"],
-  summary: "Nominate a secondary contact for my organization (PRD §4.11)",
+  summary: "Nominate a secondary contact for my organization",
   description:
     "Only the primary contact may call this. Held as a pending nomination (organizations.pending_secondary_contact_user_id) until a staff admin confirms it. Pass userId: null to withdraw a pending nomination.",
   request: {
@@ -387,7 +380,7 @@ export const myVotingDelegateUpdateSchema = z.object({
 
 export const myVotingDelegateUpdateRouteSchema = {
   tags: ["Me"],
-  summary: "Set my organization's standing forum-vote delegate (PRD §4.8)",
+  summary: "Set my organization's standing forum-vote delegate",
   description:
     "Only the org's primary or secondary contact may call this. Takes effect immediately (no staff confirmation). Pass userId: null to clear the override and fall back to the primary contact.",
   request: {
@@ -402,7 +395,7 @@ export const myVotingDelegateUpdateRouteSchema = {
 
 export const myHeadshotUploadRouteSchema = {
   tags: ["Me"],
-  summary: "Upload my headshot (PRD §4.10)",
+  summary: "Upload my headshot",
   description: "multipart/form-data with a single 'file' field. JPEG, PNG, or WebP, up to 5MB.",
   responses: {
     "200": { description: "Uploaded." },
@@ -411,17 +404,24 @@ export const myHeadshotUploadRouteSchema = {
   },
 };
 
-// ── Notification preferences (PRD §7 Account Settings, §11 UI-1) ─────────
+// ── Notification preferences (Account Settings) ─────────
 
 export const myNotificationPreferencesSchema = z.object({
   workingGroupUpdates: z.boolean(),
   voteReminders: z.boolean(),
   generalAnnouncements: z.boolean(),
+  // Weekly digest of working-group join/leave activity, sent only to
+  // members currently assigned as a WG chair or vice-chair (2026-07-31
+  // manual-testing feedback — see wg-chair-digest.ts). Shown to every
+  // member in Account Settings regardless of chair status, matching this
+  // schema's existing precedent (voteReminders is shown to H-category
+  // members too, who cannot vote at all).
+  wgChairMembershipDigest: z.boolean(),
 });
 
 export const myNotificationPreferencesGetRouteSchema = {
   tags: ["Me"],
-  summary: "Get my email notification preferences (PRD §7, §11 UI-1)",
+  summary: "Get my email notification preferences",
   responses: {
     "200": {
       description: "My notification preferences (all default to true/opted-in).",
@@ -434,7 +434,7 @@ export const myNotificationPreferencesUpdateSchema = myNotificationPreferencesSc
 
 export const myNotificationPreferencesUpdateRouteSchema = {
   tags: ["Me"],
-  summary: "Update my email notification preferences (PRD §7, §11 UI-1)",
+  summary: "Update my email notification preferences",
   request: {
     body: { content: { "application/json": { schema: myNotificationPreferencesUpdateSchema } }, required: true },
   },
@@ -446,7 +446,7 @@ export const myNotificationPreferencesUpdateRouteSchema = {
   },
 };
 
-// ── Organization sponsorship view (PRD §4.13, Phase 4E) ────────────────────
+// ── Organization sponsorship view ────────────────────
 
 export const myOrganizationSponsorshipSchema = z.object({
   tier: z.string().nullable(),

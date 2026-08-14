@@ -1,7 +1,7 @@
 /**
  * membership-scheduled-jobs.test.ts
  *
- * PRD §4.5/§4.6 consultation batch, EC review batch, on-hold reminders/
+ * consultation batch, EC review batch, on-hold reminders/
  * auto-close, and EC-window auto-approve
  * (functions/_lib/services/membership-scheduled-jobs.ts). Called directly
  * as service functions rather than through HTTP, matching how these run —
@@ -26,7 +26,7 @@ async function createApplication(overrides: Record<string, unknown> = {}): Promi
   await env.DB.prepare(
     `INSERT INTO member_applications
        (id, applicant_email, applicant_name, organization_name, organization_domain, membership_category,
-        answers_json, status, stage, on_hold_subtype, stage_entered_at, manage_token_hash, created_at, updated_at)
+        form_submission_id, status, stage, on_hold_subtype, stage_entered_at, manage_token_hash, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${stageEnteredAt}, ?, datetime('now'), datetime('now'))`,
   )
     .bind(
@@ -36,7 +36,7 @@ async function createApplication(overrides: Record<string, unknown> = {}): Promi
       (overrides.organization_name as string) ?? "Example Org",
       (overrides.organization_domain as string) ?? "example.test",
       (overrides.membership_category as string) ?? "F",
-      (overrides.answers_json as string) ?? null,
+      (overrides.form_submission_id as string) ?? null,
       (overrides.status as string) ?? "in_consultation",
       (overrides.stage as string) ?? "in_consultation",
       (overrides.on_hold_subtype as string) ?? null,
@@ -46,7 +46,7 @@ async function createApplication(overrides: Record<string, unknown> = {}): Promi
   return { id };
 }
 
-describe("Membership scheduled jobs (PRD §4.5/§4.6)", () => {
+describe("Membership scheduled jobs", () => {
   beforeEach(async () => {
     await resetDb();
   });

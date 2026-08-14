@@ -1,9 +1,9 @@
 /**
  * membership-onboarding.test.ts
  *
- * PRD §4.7 post-approval onboarding — POST /api/v1/admin/applications/:id/approve.
+ * post-approval onboarding — POST /api/v1/admin/applications/:id/approve.
  * Covers org-tied vs. individual branches, primary contact assignment,
- * organization_domains_json write, Google Groups enqueue, CA WG constraint,
+ * organization_domains write, Google Groups enqueue, CA WG constraint,
  * and the three onboarding emails.
  */
 import { describe, expect, it, beforeEach } from "vitest";
@@ -12,6 +12,7 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { createApplicationFormSubmission } from "./helpers/member-applications";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -37,12 +38,16 @@ async function seedWorkingGroup(slug: string, mailingListEmail: string | null = 
     .run();
 }
 
-async function createEcReviewApplication(overrides: Record<string, unknown> = {}): Promise<{ id: string }> {
+async function createEcReviewApplication(
+  overrides: Record<string, unknown> = {},
+  answers: Record<string, unknown> = { working_groups: ["pqc"] },
+): Promise<{ id: string }> {
   const id = crypto.randomUUID();
+  const formSubmissionId = await createApplicationFormSubmission(answers);
   await env.DB.prepare(
     `INSERT INTO member_applications
        (id, applicant_email, applicant_name, organization_name, organization_domain, membership_category,
-        answers_json, status, stage, stage_entered_at, manage_token_hash, created_at, updated_at)
+        form_submission_id, status, stage, stage_entered_at, manage_token_hash, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, 'ec_review', 'ec_review', datetime('now'), ?, datetime('now'), datetime('now'))`,
   )
     .bind(
@@ -52,14 +57,14 @@ async function createEcReviewApplication(overrides: Record<string, unknown> = {}
       (overrides.organization_name as string) ?? "Acme Corp",
       (overrides.organization_domain as string) ?? "acme.test",
       (overrides.membership_category as string) ?? "F",
-      (overrides.answers_json as string) ?? JSON.stringify({ working_groups: ["pqc"] }),
+      formSubmissionId,
       crypto.randomUUID(),
     )
     .run();
   return { id };
 }
 
-describe("Post-approval onboarding (PRD §4.7)", () => {
+describe("Post-approval onboarding", () => {
   let adminToken: string;
 
   beforeEach(async () => {
@@ -81,15 +86,16 @@ describe("Post-approval onboarding (PRD §4.7)", () => {
     const orgRows = await queryAll<{
       name: string;
       primary_contact_user_id: string;
-      organization_domains_json: string;
-    }>(
-      env.DB,
-      "SELECT name, primary_contact_user_id, organization_domains_json FROM organizations WHERE id = ?",
-      body.organizationId,
-    );
+    }>(env.DB, "SELECT name, primary_contact_user_id FROM organizations WHERE id = ?", body.organizationId);
     expect(orgRows[0].name).toBe("Acme Corp");
     expect(orgRows[0].primary_contact_user_id).toBe(body.userId);
-    expect(JSON.parse(orgRows[0].organization_domains_json)).toEqual(["acme.test"]);
+
+    const domainRows = await queryAll<{ domain: string }>(
+      env.DB,
+      "SELECT domain FROM organization_domains WHERE organization_id = ?",
+      body.organizationId,
+    );
+    expect(domainRows.map((r) => r.domain)).toEqual(["acme.test"]);
 
     const memberRows = await queryAll<{ member_type: string; status: string; organization_id: string }>(
       env.DB,
@@ -109,14 +115,15 @@ describe("Post-approval onboarding (PRD §4.7)", () => {
     expect(appRows[0].stage).toBe("approved");
   });
 
-  it("carries job_title/linkedin from the application's answers_json into the provisioned user (Fix 5b)", async () => {
-    const { id } = await createEcReviewApplication({
-      answers_json: JSON.stringify({
+  it("carries job_title/linkedin from the application's answers into the provisioned user (Fix 5b)", async () => {
+    const { id } = await createEcReviewApplication(
+      {},
+      {
         working_groups: ["pqc"],
         job_title: "Chief Cryptography Officer",
         linkedin: "https://linkedin.com/in/newmember",
-      }),
-    });
+      },
+    );
     const response = await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
     expect(response.status).toBe(200);
     const body = (await response.json()) as { userId: string };
@@ -128,16 +135,15 @@ describe("Post-approval onboarding (PRD §4.7)", () => {
     );
     expect(userRows[0].job_title).toBe("Chief Cryptography Officer");
     expect(userRows[0].links_json).toBeTruthy();
-    const links = JSON.parse(userRows[0].links_json as string) as { linkedin?: string };
-    expect(links.linkedin).toBe("https://linkedin.com/in/newmember");
+    const links = JSON.parse(userRows[0].links_json as string) as string[];
+    expect(links).toEqual(["https://linkedin.com/in/newmember"]);
   });
 
   it("creates no organization for an individual (H6) application", async () => {
-    const { id } = await createEcReviewApplication({
-      organization_name: null,
-      membership_category: "H6",
-      answers_json: JSON.stringify({ working_groups: [] }),
-    });
+    const { id } = await createEcReviewApplication(
+      { organization_name: null, membership_category: "H6" },
+      { working_groups: [] },
+    );
     const response = await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
     expect(response.status).toBe(200);
     const body = (await response.json()) as { organizationId: string | null };
@@ -171,10 +177,7 @@ describe("Post-approval onboarding (PRD §4.7)", () => {
   });
 
   it("enforces the CA working group constraint even if requested by a non-A category", async () => {
-    const { id } = await createEcReviewApplication({
-      membership_category: "B",
-      answers_json: JSON.stringify({ working_groups: ["ca", "pqc"] }),
-    });
+    const { id } = await createEcReviewApplication({ membership_category: "B" }, { working_groups: ["ca", "pqc"] });
     const response = await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
     const body = (await response.json()) as { userId: string; workingGroupSlugs: string[] };
     expect(body.workingGroupSlugs).not.toContain("ca");
@@ -189,10 +192,7 @@ describe("Post-approval onboarding (PRD §4.7)", () => {
   });
 
   it("allows category A into the CA working group", async () => {
-    const { id } = await createEcReviewApplication({
-      membership_category: "A",
-      answers_json: JSON.stringify({ working_groups: ["ca"] }),
-    });
+    const { id } = await createEcReviewApplication({ membership_category: "A" }, { working_groups: ["ca"] });
     const response = await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
     const body = (await response.json()) as { workingGroupSlugs: string[] };
     expect(body.workingGroupSlugs).toContain("ca");

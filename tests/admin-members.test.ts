@@ -1,7 +1,7 @@
 /**
  * admin-members.test.ts
  *
- * PRD §6 "Interim Admin Tool — Manual Member Management (pre-Phase 4A)" —
+ * "Interim Admin Tool — Manual Member Management" —
  * POST/GET /api/v1/admin/members, gated by the existing `membership:write`
  * permission (held by `admin` and `membership_processor` roles).
  */

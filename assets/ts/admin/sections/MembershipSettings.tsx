@@ -1,5 +1,5 @@
 /**
- * Membership → Settings (PRD §4.3). A plain form over the singleton
+ * Membership → Settings. A plain form over the singleton
  * membership_settings row.
  */
 import { useState, useEffect, useCallback } from "preact/hooks";

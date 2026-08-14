@@ -1,6 +1,7 @@
-import { OpenAPIRoute } from "chanfana";
+import type { z } from "zod";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { parseJsonBody } from "../../../../../_lib/validation";
-import { handleError, json } from "../../../../../_lib/http";
+import { json } from "../../../../../_lib/http";
 import { getConfig, resolveAppBaseUrl } from "../../../../../_lib/config";
 import { buildEventEmailVariables, getEventBySlug } from "../../../../../_lib/services/events";
 import { confirmRegistrationByToken } from "../../../../../_lib/services/registrations";
@@ -146,8 +147,11 @@ async function confirmRegistration(c: any, token: string, registrationId?: strin
   });
 }
 
-export async function onRequestPost(c: any): Promise<Response> {
-  const body = await parseJsonBody(c.req, registrationConfirmSchema);
+export async function onRequestPost(
+  c: any,
+  data?: { body: z.infer<typeof registrationConfirmSchema> },
+): Promise<Response> {
+  const body = data?.body ?? (await parseJsonBody(c.req, registrationConfirmSchema));
   return confirmRegistration(c, body.token, body.id);
 }
 
@@ -177,26 +181,12 @@ export async function onRequest(c: any): Promise<Response> {
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
 }
 
-export class EventsEventSlugRegistrationsConfirmEmailGet extends OpenAPIRoute {
-  schema = registrationConfirmEmailGetRouteSchema;
+export const EventsEventSlugRegistrationsConfirmEmailGet = openApiRoute(
+  registrationConfirmEmailGetRouteSchema,
+  onRequestGet,
+);
 
-  async handle(c: any) {
-    try {
-      return await onRequestGet(c);
-    } catch (error) {
-      return handleError(error);
-    }
-  }
-}
-
-export class EventsEventSlugRegistrationsConfirmEmailPost extends OpenAPIRoute {
-  schema = registrationConfirmEmailPostRouteSchema;
-
-  async handle(c: any) {
-    try {
-      return await onRequestPost(c);
-    } catch (error) {
-      return handleError(error);
-    }
-  }
-}
+export const EventsEventSlugRegistrationsConfirmEmailPost = openApiRoute(
+  registrationConfirmEmailPostRouteSchema,
+  onRequestPost,
+);

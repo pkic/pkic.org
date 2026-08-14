@@ -58,10 +58,6 @@ intro: >
   We publish practical guidance, host the annual PQC Conference, and actively track NIST
   standardization efforts to help organizations plan and execute their cryptographic migrations.
 
-chair:
-  name: Paul van Brouwershaven
-  viceChair: Sven Rajala
-
 focus:
   - title: Algorithm Migration
     description: Guiding organizations through the transition from classical to NIST-standardized post-quantum algorithms (ML-KEM, ML-DSA, SLH-DSA).

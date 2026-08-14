@@ -1,0 +1,23 @@
+{{/*
+  wg/chairs-og-card.html — mount point for the client-fetched WG chair/vice-chair
+  panel on the Puppeteer-rendered OG card (all.og-card.html). Same public
+  GET /api/v1/working-groups/:slug endpoint as wg/chairs-app.html's sidebar
+  widget, rendered in "card" mode (full person-card markup, sized like
+  person-card.html's "sm") instead of the sidebar's compact rows. Starts
+  hidden — functions/api/v1/og/card/[...path].ts's `waitUntil: networkidle0`
+  screenshot wait gives the widget's fetch (and this mount's own
+  `data-module` script) time to resolve and reveal it before capture; if the
+  WG has no chair yet it just stays hidden, same as the old frontmatter-based
+  panel's fallback. Params (dict): slug (required), label, color.
+*/}}
+<aside
+  class="og-visual-aside--card"
+  data-wg-chairs
+  data-mode="card"
+  data-module="member-flows/wg-chairs-widget"
+  data-api-base="/api/v1"
+  data-wg-slug="{{ .slug }}"
+  data-wg-label="{{ .label }}"
+  data-color="{{ .color | default "green" }}"
+  hidden
+></aside>

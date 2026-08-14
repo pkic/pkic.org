@@ -1,11 +1,11 @@
 /**
  * organization-content-review.test.ts
  *
- * PRD §4.11's workflow half (Phase 4C): member content submission ->
+ * workflow half: member content submission ->
  * moderation queue -> staff approve/reject, plus secondary contact
  * nomination -> staff confirmation. The data-bearing columns/admin
- * profile-edit surface these build on were pulled forward in Phase 4A (see
- * admin-organizations.test.ts); this file covers what's new in Phase 4C.
+ * profile-edit surface these build on were pulled forward in (see
+ * admin-organizations.test.ts); this file covers what's new.
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
@@ -22,7 +22,11 @@ function request(token: string, path: string, init: RequestInit = {}): Request {
 }
 
 async function call(token: string, path: string, init: RequestInit = {}): Promise<Response> {
-  return app.fetch(request(token, path, init), env as any, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
+  return app.fetch(
+    request(token, path, init),
+    env as any,
+    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+  );
 }
 
 async function seedOrgWithContact(
@@ -73,13 +77,15 @@ async function addRepresentative(organizationId: string, email: string, category
   return userId;
 }
 
-describe("Organization content moderation (PRD §4.11, Phase 4C)", () => {
+describe("Organization content moderation", () => {
   let adminToken: string;
 
   beforeEach(async () => {
     await resetDb();
     await seedEventAndAdmin(env.DB);
-    const adminRow = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1"))[0];
+    const adminRow = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
+    )[0];
     adminToken = await createAdminSession(env.DB, adminRow.id, "admin-content-review-token");
   });
 
@@ -93,7 +99,11 @@ describe("Organization content moderation (PRD §4.11, Phase 4C)", () => {
     });
     expect(response.status).toBe(200);
 
-    const orgRows = await queryAll<{ description: string }>(env.DB, "SELECT description FROM organizations WHERE id = ?", organizationId);
+    const orgRows = await queryAll<{ description: string }>(
+      env.DB,
+      "SELECT description FROM organizations WHERE id = ?",
+      organizationId,
+    );
     expect(orgRows[0].description).toBe("Old description");
 
     const reviewRows = await queryAll<{ status: string; organization_id: string }>(
@@ -124,7 +134,10 @@ describe("Organization content moderation (PRD §4.11, Phase 4C)", () => {
     const token = await createMemberSession(env.DB, userId, "double-submit-token");
 
     await call(token, "/api/v1/me/organization", { method: "PATCH", body: JSON.stringify({ slogan: "First" }) });
-    const second = await call(token, "/api/v1/me/organization", { method: "PATCH", body: JSON.stringify({ slogan: "Second" }) });
+    const second = await call(token, "/api/v1/me/organization", {
+      method: "PATCH",
+      body: JSON.stringify({ slogan: "Second" }),
+    });
 
     expect(second.status).toBe(409);
     const body = (await second.json()) as { error: { code: string } };
@@ -135,16 +148,26 @@ describe("Organization content moderation (PRD §4.11, Phase 4C)", () => {
     const { userId } = await seedOrgWithContact("primary4@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "withdraw-token");
 
-    const submitResponse = await call(token, "/api/v1/me/organization", { method: "PATCH", body: JSON.stringify({ slogan: "First" }) });
+    const submitResponse = await call(token, "/api/v1/me/organization", {
+      method: "PATCH",
+      body: JSON.stringify({ slogan: "First" }),
+    });
     const { review } = (await submitResponse.json()) as { review: { id: string } };
 
     const withdrawResponse = await call(token, `/api/v1/me/organization/reviews/${review.id}`, { method: "DELETE" });
     expect(withdrawResponse.status).toBe(200);
 
-    const rows = await queryAll<{ status: string }>(env.DB, "SELECT status FROM organization_content_reviews WHERE id = ?", review.id);
+    const rows = await queryAll<{ status: string }>(
+      env.DB,
+      "SELECT status FROM organization_content_reviews WHERE id = ?",
+      review.id,
+    );
     expect(rows[0].status).toBe("withdrawn");
 
-    const resubmit = await call(token, "/api/v1/me/organization", { method: "PATCH", body: JSON.stringify({ slogan: "Second" }) });
+    const resubmit = await call(token, "/api/v1/me/organization", {
+      method: "PATCH",
+      body: JSON.stringify({ slogan: "Second" }),
+    });
     expect(resubmit.status).toBe(200);
   });
 
@@ -164,12 +187,16 @@ describe("Organization content moderation (PRD §4.11, Phase 4C)", () => {
 
     const detailResponse = await call(adminToken, `/api/v1/admin/organizations/content-reviews/${review.id}`);
     expect(detailResponse.status).toBe(200);
-    const detailBody = (await detailResponse.json()) as { review: { diff: Array<{ field: string; current: unknown; proposed: unknown }> } };
+    const detailBody = (await detailResponse.json()) as {
+      review: { diff: Array<{ field: string; current: unknown; proposed: unknown }> };
+    };
     const descriptionDiff = detailBody.review.diff.find((d) => d.field === "description");
     expect(descriptionDiff?.current).toBe("Old description");
     expect(descriptionDiff?.proposed).toBe("Approved description");
 
-    const approveResponse = await call(adminToken, `/api/v1/admin/organizations/content-reviews/${review.id}/approve`, { method: "POST" });
+    const approveResponse = await call(adminToken, `/api/v1/admin/organizations/content-reviews/${review.id}/approve`, {
+      method: "POST",
+    });
     expect(approveResponse.status).toBe(200);
 
     const orgRows = await queryAll<{ description: string; website: string }>(
@@ -204,7 +231,11 @@ describe("Organization content moderation (PRD §4.11, Phase 4C)", () => {
     });
     expect(rejectResponse.status).toBe(200);
 
-    const orgRows = await queryAll<{ description: string }>(env.DB, "SELECT description FROM organizations WHERE id = ?", organizationId);
+    const orgRows = await queryAll<{ description: string }>(
+      env.DB,
+      "SELECT description FROM organizations WHERE id = ?",
+      organizationId,
+    );
     expect(orgRows[0].description).toBe("Old description");
 
     const reviewRows = await queryAll<{ status: string; reviewer_note: string }>(
@@ -238,13 +269,15 @@ describe("Organization content moderation (PRD §4.11, Phase 4C)", () => {
   });
 });
 
-describe("Secondary contact nomination & confirmation (PRD §4.11, Phase 4C)", () => {
+describe("Secondary contact nomination & confirmation", () => {
   let adminToken: string;
 
   beforeEach(async () => {
     await resetDb();
     await seedEventAndAdmin(env.DB);
-    const adminRow = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1"))[0];
+    const adminRow = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
+    )[0];
     adminToken = await createAdminSession(env.DB, adminRow.id, "admin-secondary-contact-token");
   });
 
@@ -259,7 +292,10 @@ describe("Secondary contact nomination & confirmation (PRD §4.11, Phase 4C)", (
     });
     expect(nominateResponse.status).toBe(200);
 
-    const orgRows = await queryAll<{ pending_secondary_contact_user_id: string | null; secondary_contact_user_id: string | null }>(
+    const orgRows = await queryAll<{
+      pending_secondary_contact_user_id: string | null;
+      secondary_contact_user_id: string | null;
+    }>(
       env.DB,
       "SELECT pending_secondary_contact_user_id, secondary_contact_user_id FROM organizations WHERE id = ?",
       organizationId,
@@ -267,12 +303,19 @@ describe("Secondary contact nomination & confirmation (PRD §4.11, Phase 4C)", (
     expect(orgRows[0].pending_secondary_contact_user_id).toBe(nomineeUserId);
     expect(orgRows[0].secondary_contact_user_id).toBeNull();
 
-    const confirmResponse = await call(adminToken, `/api/v1/admin/organizations/${organizationId}/confirm-secondary-contact`, {
-      method: "POST",
-    });
+    const confirmResponse = await call(
+      adminToken,
+      `/api/v1/admin/organizations/${organizationId}/confirm-secondary-contact`,
+      {
+        method: "POST",
+      },
+    );
     expect(confirmResponse.status).toBe(200);
 
-    const confirmedRows = await queryAll<{ pending_secondary_contact_user_id: string | null; secondary_contact_user_id: string | null }>(
+    const confirmedRows = await queryAll<{
+      pending_secondary_contact_user_id: string | null;
+      secondary_contact_user_id: string | null;
+    }>(
       env.DB,
       "SELECT pending_secondary_contact_user_id, secondary_contact_user_id FROM organizations WHERE id = ?",
       organizationId,
@@ -348,7 +391,7 @@ describe("Secondary contact nomination & confirmation (PRD §4.11, Phase 4C)", (
   });
 });
 
-describe("Voting delegate (PRD §4.8) + GET /api/v1/me/organization profile (§11 UI-2)", () => {
+describe("Voting delegate + GET /api/v1/me/organization profile", () => {
   beforeEach(async () => {
     await resetDb();
     await seedEventAndAdmin(env.DB);

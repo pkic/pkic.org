@@ -1,11 +1,12 @@
 import { all, first } from "../db/queries";
 import { parseJsonSafe } from "../utils/json";
+import { parseLinksJson, findLinkedinUrl } from "../../../assets/shared/schemas/api";
 import type { DatabaseLike } from "../types";
 
 /**
- * Public member directory (PRD §1.5/§1.6). D1 is the source of truth,
- * populated from data/members/*.yaml by scripts/migrate-members-yaml-to-d1.mjs
- * (§6 Step 2). Most content fields (description/website/slogan/content/blog/
+ * Public member directory. D1 is the source of truth,
+ * populated from data/members/*.yaml by scripts/migrate-members-yaml-to-d1.mjs.
+ * Most content fields (description/website/slogan/content/blog/
  * press/careers/social) live on the real `organizations` columns added in
  * migration 0037 — `data_json` predates that migration and is nothing writes
  * to it anymore, but it's kept as a fallback source for any row that only
@@ -23,11 +24,6 @@ interface OrgDataJson {
   description?: string;
   logoUrl?: string;
   slogan?: string;
-}
-
-interface UserLinksJson {
-  linkedin?: string;
-  x?: string;
 }
 
 export interface PublicMemberSummary {
@@ -58,13 +54,7 @@ export interface PublicMemberDetail extends PublicMemberSummary {
   pressUrl: string | null;
   pressFeedUrl: string | null;
   careersUrl: string | null;
-  social: {
-    x: string | null;
-    linkedin: string | null;
-    facebook: string | null;
-    instagram: string | null;
-    youtube: string | null;
-  };
+  links: string[];
   representatives: PublicMemberRepresentative[];
   jobTitle: string | null;
   linkedin: string | null;
@@ -202,16 +192,13 @@ async function loadRepresentatives(db: DatabaseLike, organizationId: string): Pr
     [organizationId],
   );
 
-  return rows.map((r) => {
-    const links = parseJsonSafe<UserLinksJson>(r.links_json, {});
-    return {
-      name: [r.first_name, r.last_name].filter(Boolean).join(" ") || "Unknown",
-      jobTitle: r.job_title,
-      bio: r.biography,
-      linkedin: links.linkedin ?? null,
-      photoUrl: r.headshot_r2_key ? `/api/v1/members/${r.member_id}/logo` : null,
-    };
-  });
+  return rows.map((r) => ({
+    name: [r.first_name, r.last_name].filter(Boolean).join(" ") || "Unknown",
+    jobTitle: r.job_title,
+    bio: r.biography,
+    linkedin: findLinkedinUrl(parseLinksJson(r.links_json)),
+    photoUrl: r.headshot_r2_key ? `/api/v1/members/${r.member_id}/logo` : null,
+  }));
 }
 
 /** `idOrSlug` resolves against an organization's UUID primary key, its clean
@@ -226,7 +213,7 @@ export async function getPublicMemberById(db: DatabaseLike, idOrSlug: string): P
   if (!row) return null;
 
   const summary = toSummary(row);
-  const links = parseJsonSafe<UserLinksJson>(row.links_json, {});
+  const userLinks = parseLinksJson(row.links_json);
   const representatives = row.organization_id ? await loadRepresentatives(db, row.organization_id) : [];
 
   const orgRow = row.organization_id
@@ -237,15 +224,10 @@ export async function getPublicMemberById(db: DatabaseLike, idOrSlug: string): P
         press_url: string | null;
         press_feed_url: string | null;
         careers_url: string | null;
-        social_x: string | null;
-        social_linkedin: string | null;
-        social_facebook: string | null;
-        social_instagram: string | null;
-        social_youtube: string | null;
+        links_json: string | null;
       }>(
         db,
-        `SELECT content_markdown, blog_url, blog_feed_url, press_url, press_feed_url, careers_url,
-                social_x, social_linkedin, social_facebook, social_instagram, social_youtube
+        `SELECT content_markdown, blog_url, blog_feed_url, press_url, press_feed_url, careers_url, links_json
          FROM organizations WHERE id = ?`,
         [row.organization_id],
       )
@@ -259,16 +241,10 @@ export async function getPublicMemberById(db: DatabaseLike, idOrSlug: string): P
     pressUrl: orgRow?.press_url ?? null,
     pressFeedUrl: orgRow?.press_feed_url ?? null,
     careersUrl: orgRow?.careers_url ?? null,
-    social: {
-      x: orgRow?.social_x ?? null,
-      linkedin: orgRow?.social_linkedin ?? null,
-      facebook: orgRow?.social_facebook ?? null,
-      instagram: orgRow?.social_instagram ?? null,
-      youtube: orgRow?.social_youtube ?? null,
-    },
+    links: row.organization_id ? parseLinksJson(orgRow?.links_json ?? null) : userLinks,
     representatives,
     jobTitle: row.organization_id ? null : row.job_title,
-    linkedin: row.organization_id ? null : (links.linkedin ?? null),
+    linkedin: row.organization_id ? null : findLinkedinUrl(userLinks),
   };
 }
 
@@ -315,9 +291,20 @@ export interface WorkingGroupMemberPublic {
   organizationName: string | null;
 }
 
+export interface WorkingGroupChairPublic {
+  name: string;
+  organizationName: string | null;
+  organizationLogoUrl: string | null;
+  organizationWebsite: string | null;
+  photoUrl: string | null;
+  linkedin: string | null;
+}
+
 export interface WorkingGroupDetail extends WorkingGroupSummary {
   mailingListEmail: string | null;
   members: WorkingGroupMemberPublic[];
+  chair: WorkingGroupChairPublic | null;
+  viceChair: WorkingGroupChairPublic | null;
 }
 
 interface WorkingGroupRow {
@@ -343,6 +330,67 @@ export async function listWorkingGroups(db: DatabaseLike): Promise<WorkingGroupS
   }));
 }
 
+// Chairs are resolved from user_roles (role-wg_chair/role-wg_vice_chair,
+// context_type='working_group'), the same live source admin-working-groups.ts
+// reads — not the dead working_groups.chair_user_id column, and not the
+// static content/wg/*/_index.md `chair:`/`viceChair:` frontmatter this
+// replaces so staff no longer need a git commit to update a WG's public
+// chair listing. No email (matching this endpoint's existing "public subset"
+// convention for the member roster), but photo/LinkedIn/org-logo are public
+// by nature (same assets the member directory already serves publicly via
+// GET /api/v1/members/:id/logo — getMemberLogoR2Key resolves both an
+// organization id and a members.id, so the URLs below reuse that endpoint
+// as-is).
+async function getWorkingGroupChairsPublic(
+  db: DatabaseLike,
+  wgId: string,
+): Promise<{ chair: WorkingGroupChairPublic | null; viceChair: WorkingGroupChairPublic | null }> {
+  const rows = await all<{
+    role_id: string;
+    first_name: string | null;
+    last_name: string | null;
+    org_id: string | null;
+    org_name: string | null;
+    org_logo_r2_key: string | null;
+    org_website: string | null;
+    member_id: string | null;
+    headshot_r2_key: string | null;
+    links_json: string | null;
+  }>(
+    db,
+    `SELECT ur.role_id, u.first_name, u.last_name, o.id AS org_id, o.name AS org_name,
+            o.logo_r2_key AS org_logo_r2_key, o.website AS org_website,
+            m.id AS member_id, u.headshot_r2_key, u.links_json
+     FROM user_roles ur
+     JOIN users u ON u.id = ur.user_id
+     LEFT JOIN members m ON m.user_id = u.id AND m.status = 'active'
+     LEFT JOIN organizations o ON o.id = m.organization_id
+     WHERE ur.context_type = 'working_group' AND ur.context_id = ?
+       AND ur.role_id IN ('role-wg_chair', 'role-wg_vice_chair')
+       AND ur.revoked_at IS NULL
+       AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+     ORDER BY ur.created_at DESC`,
+    [wgId],
+  );
+
+  const toPublic = (row: (typeof rows)[number] | undefined): WorkingGroupChairPublic | null => {
+    if (!row) return null;
+    return {
+      name: [row.first_name, row.last_name].filter(Boolean).join(" ") || "Unknown",
+      organizationName: row.org_name,
+      organizationLogoUrl: row.org_logo_r2_key && row.org_id ? `/api/v1/members/${row.org_id}/logo` : null,
+      organizationWebsite: row.org_website,
+      photoUrl: row.headshot_r2_key && row.member_id ? `/api/v1/members/${row.member_id}/logo` : null,
+      linkedin: findLinkedinUrl(parseLinksJson(row.links_json)),
+    };
+  };
+
+  return {
+    chair: toPublic(rows.find((r) => r.role_id === "role-wg_chair")),
+    viceChair: toPublic(rows.find((r) => r.role_id === "role-wg_vice_chair")),
+  };
+}
+
 export async function getWorkingGroupByIdOrSlug(
   db: DatabaseLike,
   idOrSlug: string,
@@ -366,6 +414,8 @@ export async function getWorkingGroupByIdOrSlug(
     [wg.id],
   );
 
+  const { chair, viceChair } = await getWorkingGroupChairsPublic(db, wg.id);
+
   return {
     id: wg.id,
     name: wg.name,
@@ -373,6 +423,8 @@ export async function getWorkingGroupByIdOrSlug(
     description: wg.description,
     active: wg.active === 1,
     mailingListEmail: wg.mailing_list_email,
+    chair,
+    viceChair,
     members: members.map((m) => ({
       name: [m.first_name, m.last_name].filter(Boolean).join(" ") || "Unknown",
       organizationName: m.org_name,

@@ -1,7 +1,7 @@
 /**
  * Shared "not built yet" placeholder for the four Member Portal nav
- * sections out of scope for this phase (PRD §11.2's UI-2/UI-3/UI-4) — the
- * backend for each is already live and tested (§11.1's gap inventory), only
+ * sections out of scope for this — the
+ * backend for each is already live and tested, only
  * the frontend is pending.
  */
 export function Placeholder({ upcomingPhase }: { upcomingPhase: string }) {

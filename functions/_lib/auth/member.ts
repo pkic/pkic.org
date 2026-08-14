@@ -1,32 +1,47 @@
 /**
- * Member-facing (non-staff) authentication — PRD §4.9/§4.10.
+ * Member-facing (non-staff) authentication.
  *
- * A parallel module to ./admin.ts, not a reuse of it: admin.ts's
+ * Shares session/magic-link mechanism with ./admin.ts and
+ * ./sponsor-portal.ts via ./session-engine.ts (cookie parsing, JWT claims
+ * base shape, session/magic-link row issue/fetch/consume). What stays
+ * separate is the eligibility gate and identity: admin.ts's
  * STAFF_ACCESS_CONDITION deliberately excludes plain members (role='user'
  * with no user_roles/permission_grants), so `/api/v1/me/*` needs its own
- * eligibility gate — an active `members` row — and its own session type.
- * The underlying tables (`sessions`, `auth_magic_links`) are already
- * generic (not admin-named), so this reuses them directly, same as
- * admin.ts does, just with a distinct JWT `typ` claim so an admin session
- * token can never be replayed against a member-only endpoint or vice versa.
+ * eligibility gate — an active `members` row — and its own JWT `typ` claim
+ * so an admin session token can never be replayed against a member-only
+ * endpoint or vice versa.
  *
  * Scope: magic-link login only. Passkey login for members is not built in
  * this phase — the existing passkey service (_lib/services/passkeys.ts)
  * hardcodes admin-session issuance (findEligibleStaffUserById,
  * issueAdminSession) in completePasskeyAuthentication, and generalizing it
- * is more surface area than Phase 4A's actual requirements call for (the
- * PRD's "Auth modernization" goal already treats magic link as a fully
- * sufficient fallback). Flagged as follow-up in prd.md, same class of
- * decision as Phase 3's deferred passkey management UI.
+ * is more surface area than call for (the
+ * "Auth modernization" goal already treats magic link as a fully
+ * sufficient fallback). same class of
+ * decision as the deferred passkey management UI.
  */
 import { AppError } from "../errors";
-import { first, run } from "../db/queries";
+import { first } from "../db/queries";
 import { normalizeEmail } from "../validation";
-import { nowIso, addMinutes, addHours } from "../utils/time";
-import { randomToken, sha256Hex } from "../utils/crypto";
 import { signJwt, verifyJwt, type JwtVerifyResult } from "../utils/jwt";
-import { uuid } from "../utils/ids";
 import type { AuthMember, DatabaseLike, Env } from "../types";
+import {
+  getBearerToken,
+  getSessionCookieToken,
+  serializeSessionCookie,
+  serializeExpiredSessionCookie,
+  sessionExpiresAtToExp,
+  hasBaseSessionTokenClaims,
+  insertSessionRow,
+  fetchSessionRow,
+  assertSessionActive,
+  revokeSessionRow,
+  insertMagicLinkRow,
+  fetchMagicLinkRowByToken,
+  validateAndConsumeMagicLinkRow,
+  type SessionTableConfig,
+  type MagicLinkTableConfig,
+} from "./session-engine";
 
 interface MemberEligibleUserRow {
   id: string;
@@ -58,13 +73,6 @@ const MEMBER_ELIGIBLE_USER_SELECT = `
   LEFT JOIN organizations o ON o.id = m.organization_id
 `;
 
-interface MemberSessionRow {
-  id: string;
-  user_id: string;
-  expires_at: string;
-  revoked_at: string | null;
-}
-
 export interface MemberSessionTokenClaims {
   typ: "member-session";
   sub: string;
@@ -76,79 +84,25 @@ const MEMBER_SESSION_TOKEN_TYPE = "member-session";
 export const MEMBER_SESSION_COOKIE_NAME = "pkic_member_session";
 export const MEMBER_SESSION_COOKIE_PATH = "/api/v1";
 
+const SESSIONS_TABLE: SessionTableConfig = { table: "sessions", subjectColumn: "user_id" };
+const MAGIC_LINKS_TABLE: MagicLinkTableConfig = { table: "auth_magic_links", subjectColumn: "user_id" };
+
 const memberByRequest = new WeakMap<Request, AuthMember>();
 
-function parseCookieHeader(cookieHeader: string): Map<string, string> {
-  const values = new Map<string, string>();
-  for (const part of cookieHeader.split(";")) {
-    const trimmed = part.trim();
-    if (!trimmed) continue;
-    const separatorIndex = trimmed.indexOf("=");
-    if (separatorIndex <= 0) continue;
-    const name = trimmed.slice(0, separatorIndex).trim();
-    const value = trimmed.slice(separatorIndex + 1).trim();
-    if (!name) continue;
-    values.set(name, decodeURIComponent(value));
-  }
-  return values;
-}
-
-function getBearerToken(request: Request): string | null {
-  const auth = request.headers.get("authorization") ?? "";
-  const match = auth.match(/^Bearer\s+(.+)$/i);
-  return match?.[1] ?? null;
-}
-
 export function getMemberSessionCookieToken(request: Request): string | null {
-  const cookieHeader = request.headers.get("cookie") ?? "";
-  if (!cookieHeader) return null;
-  return parseCookieHeader(cookieHeader).get(MEMBER_SESSION_COOKIE_NAME) ?? null;
-}
-
-function isSecureRequest(request: Request): boolean {
-  return new URL(request.url).protocol === "https:";
+  return getSessionCookieToken(request, MEMBER_SESSION_COOKIE_NAME);
 }
 
 export function serializeMemberSessionCookie(token: string, request: Request): string {
-  const parts = [
-    `${MEMBER_SESSION_COOKIE_NAME}=${encodeURIComponent(token)}`,
-    `Path=${MEMBER_SESSION_COOKIE_PATH}`,
-    "HttpOnly",
-    "SameSite=Strict",
-  ];
-  if (isSecureRequest(request)) parts.push("Secure");
-  return parts.join("; ");
+  return serializeSessionCookie(MEMBER_SESSION_COOKIE_NAME, MEMBER_SESSION_COOKIE_PATH, token, request);
 }
 
 export function serializeExpiredMemberSessionCookie(request: Request): string {
-  const parts = [
-    `${MEMBER_SESSION_COOKIE_NAME}=`,
-    `Path=${MEMBER_SESSION_COOKIE_PATH}`,
-    "HttpOnly",
-    "SameSite=Strict",
-    "Max-Age=0",
-    "Expires=Thu, 01 Jan 1970 00:00:00 GMT",
-  ];
-  if (isSecureRequest(request)) parts.push("Secure");
-  return parts.join("; ");
-}
-
-function sessionExpiresAtToExp(expiresAt: string): number {
-  const ms = new Date(expiresAt).getTime();
-  if (!Number.isFinite(ms)) {
-    throw new Error(`Invalid expiresAt timestamp: ${expiresAt}`);
-  }
-  return Math.floor(ms / 1000);
+  return serializeExpiredSessionCookie(MEMBER_SESSION_COOKIE_NAME, MEMBER_SESSION_COOKIE_PATH, request);
 }
 
 function isMemberSessionTokenClaims(claims: object): claims is MemberSessionTokenClaims {
-  const candidate = claims as Partial<MemberSessionTokenClaims>;
-  return (
-    candidate.typ === MEMBER_SESSION_TOKEN_TYPE &&
-    typeof candidate.sub === "string" &&
-    typeof candidate.sid === "string" &&
-    typeof candidate.exp === "number"
-  );
+  return hasBaseSessionTokenClaims(claims, MEMBER_SESSION_TOKEN_TYPE);
 }
 
 function toAuthMember(row: MemberEligibleUserRow): AuthMember {
@@ -200,43 +154,19 @@ export async function issueMemberSession(
   member: AuthMember,
   sessionTtlHours: number,
 ): Promise<{ member: AuthMember; sessionId: string; expiresAt: string }> {
-  const sessionId = uuid();
-  const sessionHash = await sha256Hex(randomToken(24));
-  const expiresAt = addHours(nowIso(), sessionTtlHours);
-
-  await run(
-    db,
-    `INSERT INTO sessions (id, user_id, token_hash, expires_at, revoked_at, created_at)
-     VALUES (?, ?, ?, ?, NULL, ?)`,
-    [sessionId, member.userId, sessionHash, expiresAt, nowIso()],
-  );
-
+  const { sessionId, expiresAt } = await insertSessionRow(db, SESSIONS_TABLE, member.userId, sessionTtlHours);
   return { member: { ...member, sessionId, expiresAt }, sessionId, expiresAt };
 }
 
 async function getMemberBySessionClaims(db: DatabaseLike, claims: MemberSessionTokenClaims): Promise<AuthMember> {
-  const row = await first<MemberSessionRow>(
-    db,
-    `SELECT id, user_id, expires_at, revoked_at FROM sessions WHERE id = ? AND user_id = ?`,
-    [claims.sid, claims.sub],
-  );
-
-  if (!row) {
-    throw new AppError(401, "AUTH_INVALID", "Invalid member session token");
-  }
-  if (row.revoked_at) {
-    throw new AppError(401, "AUTH_REVOKED", "Member session is revoked");
-  }
-  if (new Date(row.expires_at).getTime() <= Date.now()) {
-    throw new AppError(401, "AUTH_EXPIRED", "Member session expired");
-  }
+  const row = assertSessionActive(await fetchSessionRow(db, SESSIONS_TABLE, claims.sid, claims.sub), "member");
 
   const member = await findEligibleMemberById(db, claims.sub);
   if (!member) {
     throw new AppError(403, "AUTH_FORBIDDEN", "This account is no longer an active member");
   }
 
-  return { ...member, sessionId: row.id, expiresAt: row.expires_at };
+  return { ...member, sessionId: row.id, expiresAt: row.expiresAt };
 }
 
 export function cacheMemberForRequest(request: Request, member: AuthMember): void {
@@ -293,26 +223,7 @@ export async function requestMemberMagicLink(
     return { token: null, member: null };
   }
 
-  const token = randomToken(24);
-  const tokenHash = await sha256Hex(token);
-  const now = nowIso();
-
-  await run(
-    db,
-    `INSERT INTO auth_magic_links (
-      id, user_id, token_hash, expires_at, used_at, request_ip_hash, user_agent_hash, created_at
-    ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?)`,
-    [
-      uuid(),
-      row.id,
-      tokenHash,
-      addMinutes(now, payload.ttlMinutes),
-      payload.ipHash ?? null,
-      payload.userAgentHash ?? null,
-      now,
-    ],
-  );
-
+  const token = await insertMagicLinkRow(db, MAGIC_LINKS_TABLE, row.id, payload);
   return { token, member: toAuthMember(row) };
 }
 
@@ -320,45 +231,14 @@ export async function verifyMemberMagicLink(
   db: DatabaseLike,
   payload: { token: string; sessionTtlHours: number; ipHash?: string | null; userAgentHash?: string | null },
 ): Promise<{ member: AuthMember; sessionId: string; expiresAt: string }> {
-  const tokenHash = await sha256Hex(payload.token);
-  const row = await first<{
-    id: string;
-    user_id: string;
-    expires_at: string;
-    used_at: string | null;
-    request_ip_hash: string | null;
-    user_agent_hash: string | null;
-  }>(
-    db,
-    `SELECT id, user_id, expires_at, used_at, request_ip_hash, user_agent_hash FROM auth_magic_links WHERE token_hash = ?`,
-    [tokenHash],
-  );
-
+  const row = await fetchMagicLinkRowByToken(db, MAGIC_LINKS_TABLE, payload.token);
   if (!row) {
     throw new AppError(404, "MAGIC_LINK_INVALID", "Invalid member magic link token");
   }
-  if (row.used_at) {
-    throw new AppError(409, "MAGIC_LINK_USED", "Magic link already used");
-  }
-  if (new Date(row.expires_at).getTime() <= Date.now()) {
-    throw new AppError(410, "MAGIC_LINK_EXPIRED", "Magic link expired");
-  }
-  if (row.request_ip_hash && row.request_ip_hash !== payload.ipHash) {
-    throw new AppError(403, "MAGIC_LINK_CONTEXT_MISMATCH", "Magic link is not valid from this network");
-  }
-  if (row.user_agent_hash && row.user_agent_hash !== payload.userAgentHash) {
-    throw new AppError(403, "MAGIC_LINK_CONTEXT_MISMATCH", "Magic link is not valid from this browser");
-  }
 
-  const consume = await run(db, "UPDATE auth_magic_links SET used_at = ? WHERE id = ? AND used_at IS NULL", [
-    nowIso(),
-    row.id,
-  ]);
-  if (consume.changes === 0) {
-    throw new AppError(409, "MAGIC_LINK_USED", "Magic link already used");
-  }
+  await validateAndConsumeMagicLinkRow(db, MAGIC_LINKS_TABLE.table, row, payload);
 
-  const member = await findEligibleMemberById(db, row.user_id);
+  const member = await findEligibleMemberById(db, row.subjectId);
   if (!member) {
     throw new AppError(403, "AUTH_FORBIDDEN", "This account is no longer an active member");
   }
@@ -367,5 +247,5 @@ export async function verifyMemberMagicLink(
 }
 
 export async function revokeMemberSession(db: DatabaseLike, sessionId: string): Promise<void> {
-  await run(db, "UPDATE sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE id = ?", [nowIso(), sessionId]);
+  await revokeSessionRow(db, SESSIONS_TABLE.table, sessionId);
 }

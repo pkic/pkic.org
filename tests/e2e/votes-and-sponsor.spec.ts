@@ -1,5 +1,5 @@
 /**
- * E2E coverage for §11 UI-6: the public votes pages (/votes/, /votes/detail/)
+ * E2E coverage for: the public votes pages (/votes/, /votes/detail/)
  * and the event-scoped "Sponsor Now" self-service checkout widget.
  *
  * Votes: a real vote is created and made public through the actual admin

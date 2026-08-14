@@ -1,7 +1,7 @@
 /**
  * Member portal entry point, mounted at /portal/ (data-module="member-flows/portal-page").
  *
- * PRD §11 UI-1 turned this from a single read-only profile screen into a
+ * Turned this from a single read-only profile screen into a
  * real multi-section portal (nav shell + My Profile edit + Account Settings
  * incl. passkeys + My Application) — see assets/ts/member-flows/portal/ for
  * the shell, sections, and state. This file is kept as the mount point so

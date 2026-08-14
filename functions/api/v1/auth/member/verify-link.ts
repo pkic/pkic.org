@@ -1,5 +1,5 @@
 /**
- * POST /api/v1/auth/member/verify-link — PRD §4.9/§4.10.
+ * POST /api/v1/auth/member/verify-link.
  * Mirrors admin/auth/verify-link.ts, issuing a member session instead of an
  * admin session (see functions/_lib/auth/member.ts). Member sessions are
  * long-lived (default 720h / 30 days) since members aren't expected to

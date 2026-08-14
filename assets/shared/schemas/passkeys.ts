@@ -1,5 +1,5 @@
 /**
- * Phase 3 (PRD §3) passkey (WebAuthn) API schemas.
+ * Passkey (WebAuthn) API schemas.
  *
  * `options` in the /begin responses is the opaque
  * PublicKeyCredentialCreationOptionsJSON / PublicKeyCredentialRequestOptionsJSON
@@ -77,7 +77,7 @@ export const passkeyAuthenticateCompleteResponseSchema = z.object({
 export const passkeyRegisterBeginRouteSchema = {
   tags: ["Passkeys"],
   summary: "Begin passkey registration",
-  description: "PRD §3.4 — returns WebAuthn PublicKeyCredentialCreationOptions for an authenticated user.",
+  description: "Returns WebAuthn PublicKeyCredentialCreationOptions for an authenticated user.",
   responses: {
     "200": {
       description: "Registration options.",
@@ -90,7 +90,7 @@ export const passkeyRegisterBeginRouteSchema = {
 export const passkeyRegisterCompleteRouteSchema = {
   tags: ["Passkeys"],
   summary: "Complete passkey registration",
-  description: "PRD §3.4 — verifies the credential and stores it in passkey_credentials.",
+  description: "Verifies the credential and stores it in passkey_credentials.",
   request: {
     body: { content: { "application/json": { schema: passkeyRegisterCompleteSchema } }, required: true },
   },
@@ -105,7 +105,7 @@ export const passkeyRegisterCompleteRouteSchema = {
 export const passkeyAuthenticateBeginRouteSchema = {
   tags: ["Passkeys"],
   summary: "Begin passkey authentication",
-  description: "PRD §3.4 — discovery flow, no authentication required.",
+  description: "Discovery flow, no authentication required.",
   responses: {
     "200": {
       description: "Authentication options.",
@@ -117,7 +117,7 @@ export const passkeyAuthenticateBeginRouteSchema = {
 export const passkeyAuthenticateCompleteRouteSchema = {
   tags: ["Passkeys"],
   summary: "Complete passkey authentication",
-  description: "PRD §3.4 — verifies the assertion and creates a session, same as magic-link verification.",
+  description: "Verifies the assertion and creates a session, same as magic-link verification.",
   request: {
     body: { content: { "application/json": { schema: passkeyAuthenticateCompleteSchema } }, required: true },
   },

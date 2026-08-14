@@ -1,5 +1,5 @@
 /**
- * Sponsor portal root (PRD §4.13, §11 UI-7) — mounted at /sponsor-portal/.
+ * Sponsor portal root — mounted at /sponsor-portal/.
  * Much smaller than the member/admin portals: no nav shell, just a
  * token-verification gate in front of a single Attendees screen (see
  * state.ts's header comment for why session state has to be persisted

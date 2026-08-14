@@ -466,9 +466,13 @@ describe("proposal HTTP error responses (full router stack)", () => {
     const { adminUserId } = await seedProposalWithSpeaker(eventId);
     const adminToken = await createAdminSession(env.DB, adminUserId, "unknown-proposal-token");
 
-    const response = await callApp(`/api/v1/admin/proposals/does-not-exist/finalize`, adminToken, {
-      finalStatus: "rejected",
-    });
+    const response = await callApp(
+      `/api/v1/admin/proposals/00000000-0000-0000-0000-000000000000/finalize`,
+      adminToken,
+      {
+        finalStatus: "rejected",
+      },
+    );
     expect(response.status).toBe(404);
     const body = (await response.json()) as { error?: { code?: string } };
     expect(body.error?.code).toBe("PROPOSAL_NOT_FOUND");

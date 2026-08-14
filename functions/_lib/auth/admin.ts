@@ -1,26 +1,39 @@
 import { AppError } from "../errors";
-import { first, run } from "../db/queries";
+import { first } from "../db/queries";
 import { normalizeEmail } from "../validation";
-import { nowIso, addMinutes, addHours } from "../utils/time";
-import { randomToken, sha256Hex } from "../utils/crypto";
 import { signJwt, verifyJwt, type JwtVerifyResult } from "../utils/jwt";
-import { uuid } from "../utils/ids";
+import { sha256Hex } from "../utils/crypto";
 import { AUTH_SCOPES } from "./scopes";
 import { computeGrantsForUser } from "./permissions";
 import type { AuthAdmin, DatabaseLike, Env } from "../types";
+import {
+  getBearerToken,
+  getSessionCookieToken,
+  serializeSessionCookie,
+  serializeExpiredSessionCookie,
+  sessionExpiresAtToExp,
+  hasBaseSessionTokenClaims,
+  insertSessionRow,
+  assertSessionActive,
+  revokeSessionRow,
+  insertMagicLinkRow,
+  validateAndConsumeMagicLinkRow,
+  type SessionTableConfig,
+  type MagicLinkTableConfig,
+} from "./session-engine";
 
 /**
  * Who may sign in through the admin auth flow (magic link / session).
  *
  * Historically this was `role = 'admin'` only — the legacy flat admin flag.
- * Phase 2 (PRD §2) introduces non-admin staff roles (membership_processor,
+ * Introduces non-admin staff roles (membership_processor,
  * wg_chair, event_organizer, program_committee) that must also be able to
  * log in, scoped to whatever `user_roles`/`permission_grants` they hold.
- * `role='admin'` remains a valid path (§0.4 — the column is retained,
+ * `role='admin'` remains a valid path (the column is retained,
  * non-authoritative, backfilled into `user_roles` at migration time), OR'd
  * with "has at least one active (non-expired, non-revoked) grant" so a
  * membership processor with zero admin-only-route access can still obtain a
- * session and be authorized per-permission on Phase 2 endpoints.
+ * session and be authorized per-permission on endpoints.
  */
 const STAFF_ACCESS_CONDITION = `(
   u.role = 'admin'
@@ -69,6 +82,9 @@ const ADMIN_SESSION_TOKEN_TYPE = "admin-session";
 export const ADMIN_SESSION_COOKIE_NAME = "pkic_admin_session";
 export const ADMIN_SESSION_COOKIE_PATH = "/api/v1";
 
+const SESSIONS_TABLE: SessionTableConfig = { table: "sessions", subjectColumn: "user_id" };
+const MAGIC_LINKS_TABLE: MagicLinkTableConfig = { table: "auth_magic_links", subjectColumn: "user_id" };
+
 const adminByRequest = new WeakMap<Request, AuthAdmin>();
 const adminAuthTransportByRequest = new WeakMap<Request, AdminAuthTransport>();
 
@@ -103,89 +119,27 @@ export function getCachedAdminAuthTransport(request: Request): AdminAuthTranspor
   return adminAuthTransportByRequest.get(request);
 }
 
-function parseCookieHeader(cookieHeader: string): Map<string, string> {
-  const values = new Map<string, string>();
-  for (const part of cookieHeader.split(";")) {
-    const trimmed = part.trim();
-    if (!trimmed) continue;
-    const separatorIndex = trimmed.indexOf("=");
-    if (separatorIndex <= 0) continue;
-    const name = trimmed.slice(0, separatorIndex).trim();
-    const value = trimmed.slice(separatorIndex + 1).trim();
-    if (!name) continue;
-    values.set(name, decodeURIComponent(value));
-  }
-  return values;
-}
-
-function getBearerToken(request: Request): string | null {
-  const auth = request.headers.get("authorization") ?? "";
-  const match = auth.match(/^Bearer\s+(.+)$/i);
-  return match?.[1] ?? null;
-}
-
 export function getAdminSessionCookieToken(request: Request): string | null {
-  const cookieHeader = request.headers.get("cookie") ?? "";
-  if (!cookieHeader) return null;
-  return parseCookieHeader(cookieHeader).get(ADMIN_SESSION_COOKIE_NAME) ?? null;
-}
-
-function isSecureAdminSessionRequest(request: Request): boolean {
-  return new URL(request.url).protocol === "https:";
+  return getSessionCookieToken(request, ADMIN_SESSION_COOKIE_NAME);
 }
 
 export function serializeAdminSessionCookie(token: string, request: Request): string {
-  const parts = [
-    `${ADMIN_SESSION_COOKIE_NAME}=${encodeURIComponent(token)}`,
-    `Path=${ADMIN_SESSION_COOKIE_PATH}`,
-    "HttpOnly",
-    "SameSite=Strict",
-  ];
-
-  if (isSecureAdminSessionRequest(request)) {
-    parts.push("Secure");
-  }
-
-  return parts.join("; ");
+  return serializeSessionCookie(ADMIN_SESSION_COOKIE_NAME, ADMIN_SESSION_COOKIE_PATH, token, request);
 }
 
 export function serializeExpiredAdminSessionCookie(request: Request): string {
-  const parts = [
-    `${ADMIN_SESSION_COOKIE_NAME}=`,
-    `Path=${ADMIN_SESSION_COOKIE_PATH}`,
-    "HttpOnly",
-    "SameSite=Strict",
-    "Max-Age=0",
-    "Expires=Thu, 01 Jan 1970 00:00:00 GMT",
-  ];
-
-  if (isSecureAdminSessionRequest(request)) {
-    parts.push("Secure");
-  }
-
-  return parts.join("; ");
-}
-
-function sessionExpiresAtToExp(expiresAt: string): number {
-  const ms = new Date(expiresAt).getTime();
-  if (!Number.isFinite(ms)) {
-    throw new Error(`Invalid expiresAt timestamp: ${expiresAt}`);
-  }
-  return Math.floor(ms / 1000);
+  return serializeExpiredSessionCookie(ADMIN_SESSION_COOKIE_NAME, ADMIN_SESSION_COOKIE_PATH, request);
 }
 
 function isAdminSessionTokenClaims(claims: object): claims is AdminSessionTokenClaims {
+  if (!hasBaseSessionTokenClaims(claims, ADMIN_SESSION_TOKEN_TYPE)) return false;
   const candidate = claims as Partial<AdminSessionTokenClaims>;
   return (
-    candidate.typ === ADMIN_SESSION_TOKEN_TYPE &&
-    typeof candidate.sub === "string" &&
-    typeof candidate.sid === "string" &&
     typeof candidate.email === "string" &&
     typeof candidate.role === "string" &&
     Array.isArray(candidate.scopes) &&
     candidate.scopes.every((scope) => typeof scope === "string") &&
-    (candidate.state === undefined || typeof candidate.state === "string") &&
-    typeof candidate.exp === "number"
+    (candidate.state === undefined || typeof candidate.state === "string")
   );
 }
 
@@ -274,13 +228,13 @@ export async function requireAdminFromRequest(
 }
 
 export async function revokeAdminSession(db: DatabaseLike, sessionId: string): Promise<void> {
-  await run(db, "UPDATE sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE id = ?", [nowIso(), sessionId]);
+  await revokeSessionRow(db, SESSIONS_TABLE.table, sessionId);
 }
 
 /**
  * True if `userId` is currently eligible to hold a session at all — the same
  * STAFF_ACCESS_CONDITION gate `requestAdminMagicLink`/`verifyAdminMagicLink`
- * apply. Used by the Phase 3 (PRD §3) passkey authentication flow to
+ * apply. Used by the passkey authentication flow to
  * re-check eligibility at login time rather than trusting that it still
  * holds just because a passkey was registered in the past (registration
  * itself requires an already-authenticated, already-eligible actor — see
@@ -304,16 +258,7 @@ export async function issueAdminSession(
   user: Pick<AdminUserRow, "id" | "email" | "role">,
   sessionTtlHours: number,
 ): Promise<{ admin: AuthAdmin; sessionId: string; expiresAt: string }> {
-  const sessionId = uuid();
-  const sessionHash = await sha256Hex(randomToken(24));
-  const expiresAt = addHours(nowIso(), sessionTtlHours);
-
-  await run(
-    db,
-    `INSERT INTO sessions (id, user_id, token_hash, expires_at, revoked_at, created_at)
-     VALUES (?, ?, ?, ?, NULL, ?)`,
-    [sessionId, user.id, sessionHash, expiresAt, nowIso()],
-  );
+  const { sessionId, expiresAt } = await insertSessionRow(db, SESSIONS_TABLE, user.id, sessionTtlHours);
 
   return {
     admin: {
@@ -337,28 +282,21 @@ export async function getAdminBySessionClaims(db: DatabaseLike, claims: AdminSes
     [claims.sid, claims.sub],
   );
 
-  if (!row) {
-    throw new AppError(401, "AUTH_INVALID", "Invalid admin session token");
-  }
+  // assertSessionActive throws (401 AUTH_INVALID/AUTH_REVOKED/AUTH_EXPIRED) before
+  // this point if row is null/revoked/expired, so the non-null assertion below is safe.
+  assertSessionActive(row ? { revokedAt: row.revoked_at, expiresAt: row.expires_at } : null, "admin");
+  const activeRow = row!;
 
-  if (row.revoked_at) {
-    throw new AppError(401, "AUTH_REVOKED", "Admin session is revoked");
-  }
-
-  if (new Date(row.expires_at).getTime() <= Date.now()) {
-    throw new AppError(401, "AUTH_EXPIRED", "Admin session expired");
-  }
-
-  const grants = await computeGrantsForUser(db, row.user_id, row.email);
+  const grants = await computeGrantsForUser(db, activeRow.user_id, activeRow.email);
 
   return {
-    id: row.user_id,
-    email: row.email,
-    role: row.role,
+    id: activeRow.user_id,
+    email: activeRow.email,
+    role: activeRow.role,
     scopes: claims.scopes,
     grants,
-    sessionId: row.id,
-    expiresAt: row.expires_at,
+    sessionId: activeRow.id,
+    expiresAt: activeRow.expires_at,
     state: claims.state ?? null,
   };
 }
@@ -383,25 +321,7 @@ export async function requestAdminMagicLink(
     return { token: null, admin: null };
   }
 
-  const token = randomToken(24);
-  const tokenHash = await sha256Hex(token);
-  const now = nowIso();
-
-  await run(
-    db,
-    `INSERT INTO auth_magic_links (
-      id, user_id, token_hash, expires_at, used_at, request_ip_hash, user_agent_hash, created_at
-    ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?)`,
-    [
-      uuid(),
-      admin.id,
-      tokenHash,
-      addMinutes(now, payload.ttlMinutes),
-      payload.ipHash ?? null,
-      payload.userAgentHash ?? null,
-      now,
-    ],
-  );
+  const token = await insertMagicLinkRow(db, MAGIC_LINKS_TABLE, admin.id, payload);
 
   return {
     token,
@@ -440,33 +360,20 @@ export async function verifyAdminMagicLink(
     throw new AppError(404, "MAGIC_LINK_INVALID", "Invalid admin magic link token");
   }
 
-  if (row.used_at) {
-    throw new AppError(409, "MAGIC_LINK_USED", "Magic link already used");
-  }
+  await validateAndConsumeMagicLinkRow(
+    db,
+    MAGIC_LINKS_TABLE.table,
+    {
+      id: row.id,
+      expiresAt: row.expires_at,
+      usedAt: row.used_at,
+      requestIpHash: row.request_ip_hash,
+      userAgentHash: row.user_agent_hash,
+    },
+    payload,
+  );
 
-  if (new Date(row.expires_at).getTime() <= Date.now()) {
-    throw new AppError(410, "MAGIC_LINK_EXPIRED", "Magic link expired");
-  }
-
-  if (row.request_ip_hash && row.request_ip_hash !== payload.ipHash) {
-    throw new AppError(403, "MAGIC_LINK_CONTEXT_MISMATCH", "Magic link is not valid from this network");
-  }
-
-  if (row.user_agent_hash && row.user_agent_hash !== payload.userAgentHash) {
-    throw new AppError(403, "MAGIC_LINK_CONTEXT_MISMATCH", "Magic link is not valid from this browser");
-  }
-
-  // Atomic consume to prevent TOCTOU race: only the request that flips used_at
-  // from NULL wins. Other concurrent verifications get MAGIC_LINK_USED.
-  const consume = await run(db, "UPDATE auth_magic_links SET used_at = ? WHERE id = ? AND used_at IS NULL", [
-    nowIso(),
-    row.id,
-  ]);
-  if (consume.changes === 0) {
-    throw new AppError(409, "MAGIC_LINK_USED", "Magic link already used");
-  }
-
-  // Legacy AUTH_SCOPES only apply to role='admin' — a Phase 2 staff role
+  // Legacy AUTH_SCOPES only apply to role='admin' — a staff role
   // (membership_processor, wg_chair, event_organizer, program_committee)
   // authorizes purely through `grants`, computed fresh from
   // user_roles/permission_grants on every request (see

@@ -13,7 +13,7 @@ const TABS = [
 ];
 
 /**
- * PRD §2.4 — admin portal UI for Phase 2's access-control backend.
+ * Admin portal UI for access-control backend.
  *
  * "Working Groups" and "Chairs" used to live here as tabs but were promoted
  * to their own top-level sidebar sections (see Sidebar.tsx / AdminShell.tsx)

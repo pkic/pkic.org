@@ -1,6 +1,6 @@
 /**
  * Mirrors the server-side PERMISSIONS list (functions/_lib/auth/permissions.ts,
- * PRD §2.1) for building selects/checkboxes in the Access Control UI. The
+ * ) for building selects/checkboxes in the Access Control UI. The
  * server is the source of truth — an unknown value is rejected server-side
  * (isPermission) regardless of what this list contains.
  */

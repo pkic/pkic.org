@@ -1,7 +1,7 @@
 /**
  * me-endpoints.test.ts
  *
- * PRD §4.9/§4.10 member self-service: profile get/update, organization
+ * member self-service: profile get/update, organization
  * visibility, application history, votes stub, and working group
  * join/leave (including the CA category-A constraint).
  */
@@ -65,7 +65,7 @@ async function insertActiveMember(email: string, category: string): Promise<stri
   return userId;
 }
 
-describe("Member self-service /api/v1/me/* (PRD §4.9/§4.10)", () => {
+describe("Member self-service /api/v1/me/*", () => {
   beforeEach(async () => {
     await resetDb();
   });
@@ -229,7 +229,12 @@ describe("Member self-service /api/v1/me/* (PRD §4.9/§4.10)", () => {
     const getResponse = await call(token, "/api/v1/me/notification-preferences");
     expect(getResponse.status).toBe(200);
     const defaults = await getResponse.json();
-    expect(defaults).toEqual({ workingGroupUpdates: true, voteReminders: true, generalAnnouncements: true });
+    expect(defaults).toEqual({
+      workingGroupUpdates: true,
+      voteReminders: true,
+      generalAnnouncements: true,
+      wgChairMembershipDigest: true,
+    });
 
     const patchResponse = await call(token, "/api/v1/me/notification-preferences", {
       method: "PATCH",
@@ -237,7 +242,12 @@ describe("Member self-service /api/v1/me/* (PRD §4.9/§4.10)", () => {
     });
     expect(patchResponse.status).toBe(200);
     const patched = await patchResponse.json();
-    expect(patched).toEqual({ workingGroupUpdates: true, voteReminders: false, generalAnnouncements: true });
+    expect(patched).toEqual({
+      workingGroupUpdates: true,
+      voteReminders: false,
+      generalAnnouncements: true,
+      wgChairMembershipDigest: true,
+    });
 
     // Persisted, not just returned — a second GET reflects the same state.
     const getAfterResponse = await call(token, "/api/v1/me/notification-preferences");
@@ -260,7 +270,7 @@ describe("Member self-service /api/v1/me/* (PRD §4.9/§4.10)", () => {
     expect(afterBody.headshotUrl).toBe(`/api/v1/headshots/${userId}/123.jpg`);
   });
 
-  it("GET /api/v1/me/votes is a gated stub returning an empty list (voting is Phase 4B)", async () => {
+  it("GET /api/v1/me/votes is a gated stub returning an empty list", async () => {
     const userId = await insertActiveMember("votes-stub@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "votes-stub-token");
 

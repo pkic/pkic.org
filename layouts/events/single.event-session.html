@@ -167,7 +167,7 @@
             letter-spacing: 0.3px;
             white-space: nowrap;
         }
-        
+
         /* Ensure headshot images have consistent sizing and are blocks */
         .headshot {
             display: block;
@@ -765,10 +765,9 @@
             {{/*
               This standalone kiosk/digital-signage page loads no client JS
               bundle (no loader.ts include), so the client-fetched sponsors-
-              wall component (prd.md item 8 gap-closure plan) can't mount
+              wall component can't mount
               here — left on the build-time hugo.Data partial deliberately,
-              unlike every other sponsor surface. Out of scope for this pass;
-              not one of item 8's enumerated public sponsor surfaces.
+              unlike every other sponsor surface.
             */}}
             {{ .Scratch.Set "sponsoring" "Post-Quantum Cryptography Conference Kuala Lumpur 2025" }}
             {{ .Scratch.Set "level" "Diamond" }}

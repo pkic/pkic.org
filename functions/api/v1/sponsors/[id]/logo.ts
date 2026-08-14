@@ -5,10 +5,10 @@
  * (consortium or member-linked event) sponsors already have a logo at
  * GET /api/v1/members/:id/logo, since they're backed by an organizations row.
  */
-import { OpenAPIRoute } from "chanfana";
 import { AppError } from "../../../../_lib/errors";
 import { getNonMemberSponsorLogoR2Key } from "../../../../_lib/services/public-sponsors";
 import { sponsorLogoRouteSchema } from "../../../../../assets/shared/schemas/public-sponsors";
+import { openApiRoute } from "../../../../_lib/openapi/route";
 
 const PUBLIC_CACHE_CONTROL = "public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600";
 
@@ -45,10 +45,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   });
 }
 
-export class SponsorsIdLogoGet extends OpenAPIRoute {
-  schema = sponsorLogoRouteSchema;
-
-  async handle(c: any) {
-    return onRequestGet(c);
-  }
-}
+// Thin openApiRoute wrap — onRequestGet is imported directly by
+// tests/public-sponsors-api.test.ts, so it stays untouched. GET has no
+// request body, so wrapping is safe.
+export const SponsorsIdLogoGet = openApiRoute(sponsorLogoRouteSchema, (c: any) => onRequestGet(c));

@@ -2,19 +2,17 @@
  * GET  /api/v1/admin/roles — list roles with their permission bundles
  * POST /api/v1/admin/roles — create a custom role
  *
- * Backs `roles`/`role_permissions` (PRD §2.2/§2.3). Built-in roles
+ * Backs `roles`/`role_permissions`. Built-in roles
  * (`is_system_role = 1`) ship with the portal and cannot be deleted, but
- * per §2.2 their bundles "can be customized by an admin as the portal
+ * their bundles "can be customized by an admin as the portal
  * evolves" — that customization isn't a separate endpoint here; an admin
  * edits a built-in role's bundle the same way as a custom one would be
- * managed going forward (out of Phase 2's explicit test scope — only
- * creation and deletion are covered by §10.4's tests/roles.test.ts).
+ * managed going forward (explicit test scope — only
+ * creation and deletion are covered by tests/roles.test.ts).
  */
-import { OpenAPIRoute } from "chanfana";
-import { parseJsonBody } from "../../../../_lib/validation";
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
-import { requirePermission, isPermission } from "../../../../_lib/auth/permissions";
+import { hasPermission, requirePermission, isPermission } from "../../../../_lib/auth/permissions";
 import { all, first, run } from "../../../../_lib/db/queries";
 import { nowIso } from "../../../../_lib/utils/time";
 import { uuid } from "../../../../_lib/utils/ids";
@@ -22,13 +20,13 @@ import { writeAuditLog } from "../../../../_lib/services/audit";
 import { AppError } from "../../../../_lib/errors";
 import { resolveOrderBy } from "../../../../_lib/db/sort";
 import {
-  roleCreateSchema,
   rolesCreateRouteSchema,
   rolesListQuerySchema,
   rolesListRouteSchema,
   ADMIN_ROLES_SORT_COLUMNS,
 } from "../../../../../assets/shared/schemas/access-control";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
+import { openApiRoute } from "../../../../_lib/openapi/route";
 
 interface RoleRow {
   id: string;
@@ -54,10 +52,13 @@ async function serializeRoles(dbRoles: RoleRow[], permissionsByRole: Map<string,
   }));
 }
 
-export async function onRequestGet(c: AdminContext): Promise<Response> {
+export const RolesList = openApiRoute(rolesListRouteSchema, async (c: AdminContext, _data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "access:grant");
 
+  // The invalid-sort fallback below intentionally differs from strict
+  // schema rejection — same "quietly ignore" behavior admin-organizations.ts's
+  // route uses — so this stays a manual parse rather than `data.query`.
   const url = new URL(c.req.raw.url);
   // An invalid sort value fails schema validation (unknown column), so
   // `parsed.success` is false and we just fall back to the default order —
@@ -79,17 +80,20 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   }
 
   return json({ roles: await serializeRoles(roles, permissionsByRole) });
-}
+});
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+export const RolesCreate = openApiRoute(rolesCreateRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "access:grant");
 
-  const body = await parseJsonBody(c.req, roleCreateSchema);
+  const body = data.body;
 
   for (const permission of body.permissions) {
     if (!isPermission(permission)) {
       throw new AppError(400, "INVALID_PERMISSION", `Unknown permission: ${permission}`);
+    }
+    if (!hasPermission(admin, permission)) {
+      throw new AppError(403, "PERMISSION_REQUIRED", `Cannot bundle a permission you do not hold: ${permission}`);
     }
   }
 
@@ -134,18 +138,4 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     },
     201,
   );
-}
-
-export class RolesList extends OpenAPIRoute {
-  schema = rolesListRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestGet(c);
-  }
-}
-
-export class RolesCreate extends OpenAPIRoute {
-  schema = rolesCreateRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestPost(c);
-  }
-}
+});

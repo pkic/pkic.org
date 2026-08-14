@@ -7,7 +7,7 @@ export interface PickedContext {
   contextId: string | null;
 }
 
-/** contextType/contextId picker for permission_grants / user_roles (PRD §2.1 — both null, or both set). */
+/** contextType/contextId picker for permission_grants / user_roles (both null, or both set). */
 export function ContextPicker({
   value,
   onChange,

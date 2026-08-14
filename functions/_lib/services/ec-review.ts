@@ -1,5 +1,5 @@
 /**
- * Executive Council review (PRD §4.6). EC membership (`users.is_ec_member`)
+ * Executive Council review. EC membership (`users.is_ec_member`)
  * is a distinct designation from `membership:approve` — this module is used
  * both by the member-session EC decision path (an EC member is a regular
  * A-G/H member who happens to hold the flag) and the staff-admin override
@@ -26,7 +26,7 @@ export interface EcDecisionRow {
 
 /**
  * Records (or revises) an EC member's decision on an application currently
- * in ec_review. Revisable — the PRD gives EC members a window to decide, not
+ * in ec_review. Revisable — Gives EC members a window to decide, not
  * a one-shot vote, and nothing forbids changing a decision before the
  * window closes or another EC member's decline halts the process.
  */
@@ -92,7 +92,7 @@ export async function listEcDecisions(db: DatabaseLike, applicationId: string): 
   ]);
 }
 
-/** True if any EC member has declined — halts auto-approval per §4.6. */
+/** True if any EC member has declined — halts auto-approval. */
 export async function hasEcDecline(db: DatabaseLike, applicationId: string): Promise<boolean> {
   const row = await first<{ id: string }>(
     db,

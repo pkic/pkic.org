@@ -1,11 +1,12 @@
 /**
- * Member profile & working-group self-service (PRD §4.9, §4.10). All
+ * Member profile & working-group self-service. All
  * functions here operate on the caller's own AuthMember identity —
  * `/api/v1/me/*` never accepts a target user/member id, by design.
  */
 import { all, first, run } from "../db/queries";
 import { nowIso } from "../utils/time";
 import { stringifyJson, parseJsonSafe } from "../utils/json";
+import { parseLinksJson, serializeLinks } from "../../../assets/shared/schemas/api";
 import { AppError } from "../errors";
 import { normalizeEmail } from "../validation";
 import { VOTING_CATEGORIES, getMemberApplicationById } from "./member-applications";
@@ -82,21 +83,6 @@ function representativeDisplayName(row: OrganizationRepresentativeRow): string |
   return full || null;
 }
 
-// `links_json` has two legitimate shapes in the wild: a `string[]` (written
-// by this file's own updateMyProfile) and a `{linkedin, x}` object (written
-// by scripts/migrate-members-yaml-to-d1.mjs — the same shape
-// members-directory.ts's public directory already reads). Handle both
-// instead of assuming an array, which crashed every migrated user's first
-// `GET /api/v1/me` after magic-link login with `raw.map is not a function`.
-function normalizeLinks(linksJson: string | null): string[] {
-  const raw = parseJsonSafe<unknown>(linksJson, []);
-  const values = Array.isArray(raw) ? raw : raw && typeof raw === "object" ? Object.values(raw) : [];
-  return values
-    .map((entry) => (typeof entry === "string" ? entry : ""))
-    .map((url) => url.trim())
-    .filter(Boolean);
-}
-
 function toProfile(
   row: MyProfileRow,
   member: AuthMember,
@@ -113,7 +99,7 @@ function toProfile(
     preferredName: row.preferred_name,
     jobTitle: row.job_title,
     biography: row.biography,
-    links: normalizeLinks(row.links_json),
+    links: parseLinksJson(row.links_json),
     membershipCategory: row.member_type,
     organizationId: row.organization_id,
     organizationName: row.org_name ?? row.organization_name,
@@ -122,7 +108,7 @@ function toProfile(
     // Public capability-URL path (functions/api/v1/headshots/:userId/:file) —
     // matches admin/users/[userId]/index.ts's identical construction.
     headshotUrl: row.headshot_r2_key ? `/api/v1/${row.headshot_r2_key}` : null,
-    // §4.10: organization is locked to membership for org-tied categories;
+    // organization is locked to membership for org-tied categories;
     // H5/H6/H7 (org-less) may set a free-text organization name.
     canEditOrganizationName: isIndividual,
     isOrgContact,
@@ -177,7 +163,7 @@ export interface MyProfileUpdateInput {
   jobTitle?: string;
   biography?: string;
   links?: string[];
-  /** Only honored for org-less categories (H5/H6/H7) — see §4.10. */
+  /** Only honored for org-less categories (H5/H6/H7). */
   organizationName?: string;
 }
 
@@ -205,13 +191,13 @@ export async function updateMyProfile(
       input.preferredName ?? null,
       input.jobTitle ?? null,
       input.biography ?? null,
-      input.links ? stringifyJson(input.links) : null,
+      input.links ? serializeLinks(input.links) : null,
       now,
       member.userId,
     ],
   );
 
-  // organization is locked to membership for org-tied categories (§4.10) —
+  // organization is locked to membership for org-tied categories —
   // only H5/H6/H7 (member.organizationId === null) may set a free-text name.
   if (member.organizationId === null && input.organizationName !== undefined) {
     await run(db, `UPDATE users SET organization_name = ?, updated_at = ? WHERE id = ?`, [
@@ -293,7 +279,7 @@ export interface MyApplicationDetail {
 }
 
 /**
- * §4.10's "My Application" tab: original application, status history, and
+ * "My Application" tab: original application, status history, and
  * timeline. Scoped to the caller's own application(s) by matching
  * `applicant_email` against the member session's email — `/api/v1/me/*`
  * never accepts a target id that isn't independently ownership-checked
@@ -315,7 +301,7 @@ export async function getMyApplicationDetail(
       `SELECT from_stage, to_stage, note, created_at FROM member_application_events WHERE application_id = ? ORDER BY created_at ASC`,
       [applicationId],
     ),
-    // kind = 'communication' only — 'note' rows are staff-internal (§4.2's
+    // kind = 'communication' only — 'note' rows are staff-internal (
     // application_communications.kind discriminator) and must never reach
     // the applicant.
     all<{ subject: string | null; body: string; created_at: string }>(
@@ -345,7 +331,7 @@ export async function getMyApplicationDetail(
   };
 }
 
-// ── Working group self-service (§4.9) ────────────────────────────────────
+// ── Working group self-service ────────────────────────────────────
 
 export interface MyWorkingGroupMembership {
   workingGroupId: string;
@@ -389,33 +375,49 @@ export function isVotingCategory(category: string): boolean {
   return VOTING_CATEGORIES.has(category);
 }
 
-// ── Notification preferences (PRD §7 Account Settings, §11 UI-1) ─────────
+// ── Notification preferences (Account Settings) ─────────
 
 export interface MyNotificationPreferences {
   workingGroupUpdates: boolean;
   voteReminders: boolean;
   generalAnnouncements: boolean;
+  // Weekly WG chair digest opt-out (2026-07-31 manual-testing feedback) —
+  // see wg-chair-digest.ts, the only reader of this key outside this file.
+  wgChairMembershipDigest: boolean;
 }
 
-// Opt-out model: every category defaults to on, matching §4.10's
+// Opt-out model: every category defaults to on, matching
 // opt-in-by-default precedent for showOnOrgProfile.
 const DEFAULT_NOTIFICATION_PREFERENCES: MyNotificationPreferences = {
   workingGroupUpdates: true,
   voteReminders: true,
   generalAnnouncements: true,
+  wgChairMembershipDigest: true,
 };
+
+/**
+ * Keyed by an arbitrary userId rather than an AuthMember session — used by
+ * wg-chair-digest.ts's scheduled job, which resolves recipients (WG chairs)
+ * directly from user_roles rather than from an authenticated request.
+ */
+export async function getUserNotificationPreferences(
+  db: DatabaseLike,
+  userId: string,
+): Promise<MyNotificationPreferences> {
+  const row = await first<{ notification_preferences_json: string | null }>(
+    db,
+    "SELECT notification_preferences_json FROM users WHERE id = ?",
+    [userId],
+  );
+  const stored = parseJsonSafe<Partial<MyNotificationPreferences>>(row?.notification_preferences_json ?? null, {});
+  return { ...DEFAULT_NOTIFICATION_PREFERENCES, ...stored };
+}
 
 export async function getMyNotificationPreferences(
   db: DatabaseLike,
   member: AuthMember,
 ): Promise<MyNotificationPreferences> {
-  const row = await first<{ notification_preferences_json: string | null }>(
-    db,
-    "SELECT notification_preferences_json FROM users WHERE id = ?",
-    [member.userId],
-  );
-  const stored = parseJsonSafe<Partial<MyNotificationPreferences>>(row?.notification_preferences_json ?? null, {});
-  return { ...DEFAULT_NOTIFICATION_PREFERENCES, ...stored };
+  return getUserNotificationPreferences(db, member.userId);
 }
 
 export async function updateMyNotificationPreferences(

@@ -27,6 +27,7 @@ import email_Router from "./email/router";
 import email_templates_Router from "./email-templates/router";
 import events_Router from "./events/router";
 import forms_Router from "./forms/router";
+import leadership_positions_Router from "./leadership-positions/router";
 import mailing_lists_Router from "./mailing-lists/router";
 import members_Router from "./members/router";
 import membership_settings_Router from "./membership-settings/router";
@@ -63,20 +64,20 @@ function isAdminAuthPath(path: string): boolean {
 }
 
 /**
- * `/admin/events/**` and `/admin/proposals/**` are gated by the Phase 2
- * (PRD §2) context-aware permission system instead of this legacy global
+ * `/admin/events/**` and `/admin/proposals/**` are gated by the
+ * context-aware permission system instead of this legacy global
  * scope system — see requireEventManagementAccess
  * (events/[eventSlug]/router.ts), getProposalAccessForEvent
  * (_lib/auth/proposal-access.ts), and the per-handler requirePermission
  * calls (e.g. events/[eventSlug]/permissions.ts). Applying the legacy
- * `events:read` inference here as well would 403 every Phase 2 non-admin
+ * `events:read` inference here as well would 403 every non-admin
  * role (event_organizer, program_committee) before they ever reach that
  * check, since only role='admin' actors carry a non-empty legacy `scopes`
- * array under the Phase 2 model (see functions/_lib/auth/admin.ts). This is
+ * array under the model (see functions/_lib/auth/admin.ts). This is
  * a no-op for role='admin' actors either way — their full legacy scopes
  * array always satisfied this check trivially.
  */
-function isPhase2PermissionGatedAdminPath(path: string): boolean {
+function isPermissionGatedAdminPath(path: string): boolean {
   return (
     path.startsWith("/api/v1/admin/events") ||
     path.startsWith("/api/v1/admin/proposals") ||
@@ -102,7 +103,7 @@ function enforceAdminScopes(c: Context<RequestDbContext>): void {
   }
 
   const path = normalizedAdminPath(c.req.path);
-  if (isPhase2PermissionGatedAdminPath(path)) {
+  if (isPermissionGatedAdminPath(path)) {
     return;
   }
 
@@ -185,6 +186,7 @@ openapi.route("/email", email_Router);
 openapi.route("/email-templates", email_templates_Router);
 openapi.route("/events", events_Router);
 openapi.route("/forms", forms_Router);
+openapi.route("/leadership-positions", leadership_positions_Router);
 openapi.route("/mailing-lists", mailing_lists_Router);
 openapi.route("/members", members_Router);
 openapi.route("/membership-settings", membership_settings_Router);

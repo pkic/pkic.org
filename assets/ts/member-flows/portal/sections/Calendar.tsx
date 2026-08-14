@@ -1,6 +1,6 @@
 /**
  * Calendar — ICS download + time-slot preference per subscribed meeting
- * series (PRD §4.12, §11 UI-3). Series list is scoped server-side to the
+ * series. Series list is scoped server-side to the
  * consortium series (everyone) plus the series for any working group the
  * member currently belongs to (`listMyMeetingSeries`) — there's nothing to
  * join/leave here, that's the Working Groups tab's job.

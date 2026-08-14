@@ -1,5 +1,5 @@
 /**
- * Organizations → Content Review (PRD §4.11, Phase 4C). Moderation queue
+ * Organizations → Content Review. Moderation queue
  * for member-submitted organization profile changes: a list of pending
  * submissions, a side-by-side diff view, and approve/reject actions with a
  * reviewer note field.
@@ -24,13 +24,14 @@ function fieldLabel(field: string): string {
     pressUrl: "Press URL",
     pressFeedUrl: "Press feed URL",
     careersUrl: "Careers URL",
-    socialX: "X / Twitter",
-    socialLinkedin: "LinkedIn",
-    socialFacebook: "Facebook",
-    socialInstagram: "Instagram",
-    socialYoutube: "YouTube",
+    links: "Links",
   };
   return labels[field] ?? field;
+}
+
+/** `links` diff values are string[] (one URL per line via pre-wrap); every other field is already a plain string. */
+function formatDiffValue(value: unknown): string {
+  return Array.isArray(value) ? value.join("\n") : String(value ?? "");
 }
 
 function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: () => void }) {
@@ -123,9 +124,13 @@ function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: ()
                   <tr key={d.field}>
                     <td class="fw-semibold">{fieldLabel(d.field)}</td>
                     <td class="text-muted" style={{ whiteSpace: "pre-wrap", maxWidth: "320px" }}>
-                      {d.current == null || d.current === "" ? <em>(empty)</em> : String(d.current)}
+                      {d.current == null || d.current === "" || (Array.isArray(d.current) && d.current.length === 0) ? (
+                        <em>(empty)</em>
+                      ) : (
+                        formatDiffValue(d.current)
+                      )}
                     </td>
-                    <td style={{ whiteSpace: "pre-wrap", maxWidth: "320px" }}>{String(d.proposed ?? "")}</td>
+                    <td style={{ whiteSpace: "pre-wrap", maxWidth: "320px" }}>{formatDiffValue(d.proposed)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -235,9 +240,7 @@ export function OrganizationContentReviews() {
               ))}
             </div>
           </div>
-          <div class="col-md-8">
-            {selectedId && <ReviewDetail reviewId={selectedId} onDecided={handleDecided} />}
-          </div>
+          <div class="col-md-8">{selectedId && <ReviewDetail reviewId={selectedId} onDecided={handleDecided} />}</div>
         </div>
       )}
     </div>

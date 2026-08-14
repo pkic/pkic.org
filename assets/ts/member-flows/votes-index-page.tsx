@@ -1,5 +1,5 @@
 /**
- * Public votes index (PRD §4.8 "Public-facing pages", §11 UI-6). A Hugo
+ * Public votes index (Public-facing pages). A Hugo
  * static shell that fetches GET /api/v1/votes (already filtered server-side
  * to visibility='public') and lists them grouped by status, mirroring the
  * member-directory-page.tsx pattern: one client-side fetch per page load,

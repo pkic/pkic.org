@@ -1,7 +1,7 @@
 /**
  * passkeys.test.ts
  *
- * PRD §3 Passkey Authentication (§10.4's tests/passkeys.test.ts). Uses the
+ * Passkey Authentication (tests/passkeys.test.ts). Uses the
  * mock authenticator helper (tests/helpers/webauthn-mock-authenticator.ts)
  * to exercise real registration/verification/authentication logic against
  * @simplewebauthn/server rather than mocking it.
@@ -55,7 +55,7 @@ async function insertStaffUser(email: string): Promise<string> {
   return id;
 }
 
-/** Org-less (H5) active member — PRD §0.1's INDIVIDUAL_MEMBERSHIP_CATEGORIES, avoids an organizations row. */
+/** Org-less (H5) active member — INDIVIDUAL_MEMBERSHIP_CATEGORIES, avoids an organizations row. */
 async function insertActiveMemberUser(email: string): Promise<string> {
   const userId = crypto.randomUUID();
   const memberId = crypto.randomUUID();
@@ -83,7 +83,7 @@ async function beginAuthentication(): Promise<BeginResponse> {
   return (await response.json()) as BeginResponse;
 }
 
-describe("passkeys (Phase 3 WebAuthn)", () => {
+describe("passkeys (WebAuthn)", () => {
   let userId: string;
   let token: string;
 
@@ -296,7 +296,7 @@ describe("passkeys (Phase 3 WebAuthn)", () => {
   });
 });
 
-describe("member passkey login (PRD §11 UI-1 — generalizing passkeys beyond staff)", () => {
+describe("member passkey login (generalizing passkeys beyond staff)", () => {
   let memberUserId: string;
   let memberToken: string;
 

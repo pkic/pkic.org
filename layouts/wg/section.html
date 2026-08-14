@@ -70,7 +70,7 @@
 {{- if .Params.sectionNav -}}
 <nav class="wg-section-nav wg-{{ .Params.wgID | lower }}" id="wgSectionNav" aria-label="Page sections">
   <div class="container d-flex gap-1">
-    {{ if or .Params.intro .Content .Params.chair }}
+    {{ if or .Params.intro .Content }}
     <a class="wg-nav-link is-active" href="{{ .RelPermalink }}">About</a>
     {{ end }}
     {{ if .Params.keyDeliverables }}
@@ -183,7 +183,7 @@
 {{- end -}}
 
 {{/* Intro + CTA — only when there's something meaningful to show */}}
-{{ if or .Params.intro .Content .Params.chair }}
+{{ if or .Params.intro .Content }}
 <section class="pt-4 pb-5" id="wg-about">
   <div class="container">
     <div class="row align-items-start g-4">
@@ -194,22 +194,12 @@
         {{ .Content }}
       </div>
       <div class="col-lg-4">
-        {{ with .Params.chair }}
-        <div class="wg-leadership-label">Working Group Leadership</div>
-        <div class="consortium-leaders">
-          {{ partial "leader-card.html" (dict "name" .name "role" (printf "%s Chair" $wgID) "color" $color "affiliation" .affiliation) }}
-          {{ with .viceChair }}
-          {{ partial "leader-card.html" (dict "name" . "role" (printf "%s Vice Chair" $wgID) "color" $color) }}
-          {{ end }}
-        </div>
-        {{ end }}
-        {{ with .Params.chairs }}
-        <div class="wg-leadership-label">Working Group Leadership</div>
-        <div class="consortium-leaders">
-          {{ range . }}
-          {{ partial "leader-card.html" (dict "name" .name "role" (printf "%s %s" $wgID (.role | default "Chair")) "color" $color "affiliation" .affiliation) }}
-          {{ end }}
-        </div>
+        {{/* Chair/vice-chair are admin-assigned (Access Control → Working
+             Groups/Chairs, backed by user_roles) and fetched client-side
+             from the public working-groups API — no more chair:/viceChair:
+             frontmatter to edit via a git commit. */}}
+        {{ with .Params.wgID }}
+        {{ partial "wg/chairs-app.html" (dict "slug" (. | lower) "label" $wgID "color" $color) }}
         {{ end }}
         <div class="mt-3 text-center">
         {{ with $.Param "heroButton" }}

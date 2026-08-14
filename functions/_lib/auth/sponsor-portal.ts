@@ -1,29 +1,44 @@
 /**
- * Sponsor portal authentication — PRD §4.13 "Sponsor Portal — Attendee Data
+ * Sponsor portal authentication — "Sponsor Portal — Attendee Data
  * Access".
  *
- * A parallel module to ./member.ts, not a reuse of it: a sponsor contact has
- * no `users` row ("no separate account required, consistent with the
+ * Shares session/magic-link mechanism with ./admin.ts and ./member.ts via
+ * ./session-engine.ts. What stays separate: a sponsor contact has no
+ * `users` row ("no separate account required, consistent with the
  * non-member sponsor use case"), so the identity being authenticated is a
- * `sponsorships.id`, not a `users.id`. `auth_magic_links`/`sessions` are both
- * `user_id NOT NULL`, so this uses its own tables
+ * `sponsorships.id`, not a `users.id`. `auth_magic_links`/`sessions` are
+ * both `user_id NOT NULL`, so this uses its own tables
  * (`sponsor_portal_magic_links`/`sponsor_portal_sessions`, migration 0042)
  * with the same shape, and a distinct JWT `typ` claim so a sponsor-portal
  * session can never be replayed against an admin/member endpoint or vice
  * versa.
  *
  * Access is re-checked against the live `sponsorships` row on every request
- * (not just at token-issuance time) — §4.13: "Access window: Active while
+ * (not just at token-issuance time): "Access window: Active while
  * the sponsorship is in `active` stage; revoked if sponsorship lapses."
  */
 import { AppError } from "../errors";
-import { first, run } from "../db/queries";
+import { first } from "../db/queries";
 import { normalizeEmail } from "../validation";
-import { nowIso, addMinutes, addHours } from "../utils/time";
-import { randomToken, sha256Hex } from "../utils/crypto";
 import { signJwt, verifyJwt, type JwtVerifyResult } from "../utils/jwt";
-import { uuid } from "../utils/ids";
 import type { DatabaseLike } from "../types";
+import {
+  getBearerToken,
+  getSessionCookieToken,
+  serializeSessionCookie,
+  serializeExpiredSessionCookie,
+  sessionExpiresAtToExp,
+  hasBaseSessionTokenClaims,
+  insertSessionRow,
+  fetchSessionRow,
+  assertSessionActive,
+  revokeSessionRow,
+  insertMagicLinkRow,
+  fetchMagicLinkRowByToken,
+  validateAndConsumeMagicLinkRow,
+  type SessionTableConfig,
+  type MagicLinkTableConfig,
+} from "./session-engine";
 
 export interface SponsorPortalSession {
   sponsorshipId: string;
@@ -47,6 +62,12 @@ const SPONSOR_PORTAL_SESSION_TOKEN_TYPE = "sponsor-portal-session";
 export const SPONSOR_PORTAL_SESSION_COOKIE_NAME = "pkic_sponsor_portal_session";
 export const SPONSOR_PORTAL_SESSION_COOKIE_PATH = "/api/v1/sponsor-portal";
 
+const SESSIONS_TABLE: SessionTableConfig = { table: "sponsor_portal_sessions", subjectColumn: "sponsorship_id" };
+const MAGIC_LINKS_TABLE: MagicLinkTableConfig = {
+  table: "sponsor_portal_magic_links",
+  subjectColumn: "sponsorship_id",
+};
+
 const sponsorPortalByRequest = new WeakMap<Request, SponsorPortalSession>();
 
 export interface SponsorPortalSessionTokenClaims {
@@ -57,83 +78,23 @@ export interface SponsorPortalSessionTokenClaims {
 }
 
 function isSponsorPortalSessionTokenClaims(claims: object): claims is SponsorPortalSessionTokenClaims {
-  const candidate = claims as Partial<SponsorPortalSessionTokenClaims>;
-  return (
-    candidate.typ === SPONSOR_PORTAL_SESSION_TOKEN_TYPE &&
-    typeof candidate.sub === "string" &&
-    typeof candidate.sid === "string" &&
-    typeof candidate.exp === "number"
-  );
-}
-
-function parseCookieHeader(cookieHeader: string): Map<string, string> {
-  const values = new Map<string, string>();
-  for (const part of cookieHeader.split(";")) {
-    const trimmed = part.trim();
-    if (!trimmed) continue;
-    const separatorIndex = trimmed.indexOf("=");
-    if (separatorIndex <= 0) continue;
-    const name = trimmed.slice(0, separatorIndex).trim();
-    const value = trimmed.slice(separatorIndex + 1).trim();
-    if (!name) continue;
-    values.set(name, decodeURIComponent(value));
-  }
-  return values;
-}
-
-function getBearerToken(request: Request): string | null {
-  const auth = request.headers.get("authorization") ?? "";
-  const match = auth.match(/^Bearer\s+(.+)$/i);
-  return match?.[1] ?? null;
+  return hasBaseSessionTokenClaims(claims, SPONSOR_PORTAL_SESSION_TOKEN_TYPE);
 }
 
 export function getSponsorPortalSessionCookieToken(request: Request): string | null {
-  const cookieHeader = request.headers.get("cookie") ?? "";
-  if (!cookieHeader) return null;
-  return parseCookieHeader(cookieHeader).get(SPONSOR_PORTAL_SESSION_COOKIE_NAME) ?? null;
-}
-
-function isSecureRequest(request: Request): boolean {
-  return new URL(request.url).protocol === "https:";
+  return getSessionCookieToken(request, SPONSOR_PORTAL_SESSION_COOKIE_NAME);
 }
 
 export function serializeSponsorPortalSessionCookie(token: string, request: Request): string {
-  const parts = [
-    `${SPONSOR_PORTAL_SESSION_COOKIE_NAME}=${encodeURIComponent(token)}`,
-    `Path=${SPONSOR_PORTAL_SESSION_COOKIE_PATH}`,
-    "HttpOnly",
-    "SameSite=Strict",
-  ];
-  if (isSecureRequest(request)) parts.push("Secure");
-  return parts.join("; ");
+  return serializeSessionCookie(SPONSOR_PORTAL_SESSION_COOKIE_NAME, SPONSOR_PORTAL_SESSION_COOKIE_PATH, token, request);
 }
 
 export function serializeExpiredSponsorPortalSessionCookie(request: Request): string {
-  const parts = [
-    `${SPONSOR_PORTAL_SESSION_COOKIE_NAME}=`,
-    `Path=${SPONSOR_PORTAL_SESSION_COOKIE_PATH}`,
-    "HttpOnly",
-    "SameSite=Strict",
-    "Max-Age=0",
-    "Expires=Thu, 01 Jan 1970 00:00:00 GMT",
-  ];
-  if (isSecureRequest(request)) parts.push("Secure");
-  return parts.join("; ");
+  return serializeExpiredSessionCookie(SPONSOR_PORTAL_SESSION_COOKIE_NAME, SPONSOR_PORTAL_SESSION_COOKIE_PATH, request);
 }
 
 export async function revokeSponsorPortalSession(db: DatabaseLike, sessionId: string): Promise<void> {
-  await run(db, "UPDATE sponsor_portal_sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE id = ?", [
-    nowIso(),
-    sessionId,
-  ]);
-}
-
-function sessionExpiresAtToExp(expiresAt: string): number {
-  const ms = new Date(expiresAt).getTime();
-  if (!Number.isFinite(ms)) {
-    throw new Error(`Invalid expiresAt timestamp: ${expiresAt}`);
-  }
-  return Math.floor(ms / 1000);
+  await revokeSessionRow(db, SESSIONS_TABLE.table, sessionId);
 }
 
 async function findActiveEventSponsorship(
@@ -190,18 +151,7 @@ export async function issueSponsorPortalSession(
   sponsorshipId: string,
   sessionTtlHours: number,
 ): Promise<{ sessionId: string; expiresAt: string }> {
-  const sessionId = uuid();
-  const sessionHash = await sha256Hex(randomToken(24));
-  const expiresAt = addHours(nowIso(), sessionTtlHours);
-
-  await run(
-    db,
-    `INSERT INTO sponsor_portal_sessions (id, sponsorship_id, token_hash, expires_at, revoked_at, created_at)
-     VALUES (?, ?, ?, ?, NULL, ?)`,
-    [sessionId, sponsorshipId, sessionHash, expiresAt, nowIso()],
-  );
-
-  return { sessionId, expiresAt };
+  return insertSessionRow(db, SESSIONS_TABLE, sponsorshipId, sessionTtlHours);
 }
 
 export function cacheSponsorPortalSessionForRequest(request: Request, session: SponsorPortalSession): void {
@@ -233,22 +183,12 @@ export async function requireSponsorPortalFromRequest(
     );
   }
 
-  const sessionRow = await first<{ id: string; sponsorship_id: string; expires_at: string; revoked_at: string | null }>(
-    db,
-    `SELECT id, sponsorship_id, expires_at, revoked_at FROM sponsor_portal_sessions WHERE id = ? AND sponsorship_id = ?`,
-    [verified.claims.sid, verified.claims.sub],
+  const sessionRow = assertSessionActive(
+    await fetchSessionRow(db, SESSIONS_TABLE, verified.claims.sid, verified.claims.sub),
+    "sponsor portal",
   );
-  if (!sessionRow) {
-    throw new AppError(401, "AUTH_INVALID", "Invalid sponsor portal session token");
-  }
-  if (sessionRow.revoked_at) {
-    throw new AppError(401, "AUTH_REVOKED", "Sponsor portal session is revoked");
-  }
-  if (new Date(sessionRow.expires_at).getTime() <= Date.now()) {
-    throw new AppError(401, "AUTH_EXPIRED", "Sponsor portal session expired");
-  }
 
-  const sponsorship = await findActiveEventSponsorship(db, sessionRow.sponsorship_id);
+  const sponsorship = await findActiveEventSponsorship(db, sessionRow.subjectId);
   if (!sponsorship) {
     throw new AppError(403, "AUTH_FORBIDDEN", "This sponsorship is no longer active");
   }
@@ -256,7 +196,7 @@ export async function requireSponsorPortalFromRequest(
   const session = {
     ...toSponsorPortalSession(sponsorship),
     sessionId: sessionRow.id,
-    expiresAt: sessionRow.expires_at,
+    expiresAt: sessionRow.expiresAt,
   };
   cacheSponsorPortalSessionForRequest(request, session);
   return session;
@@ -274,7 +214,7 @@ export async function requireSponsorPortalFromRequest(
  * a sponsor contact re-requesting an expired link only ever knows the
  * event's public slug (e.g. from the event's own page or the original
  * invitation email), never the internal id, so the self-service form this
- * feeds (§11 UI-7) can only ever collect a slug. Mirrors the
+ * feeds can only ever collect a slug. Mirrors the
  * "resolved server-side to the internal events.id" convention
  * POST /api/v1/sponsorship/checkout already established.
  */
@@ -318,73 +258,21 @@ export async function issueSponsorPortalMagicLinkForSponsorship(
   sponsorshipId: string,
   payload: { ipHash?: string | null; userAgentHash?: string | null; ttlMinutes: number },
 ): Promise<string> {
-  const token = randomToken(24);
-  const tokenHash = await sha256Hex(token);
-  const now = nowIso();
-
-  await run(
-    db,
-    `INSERT INTO sponsor_portal_magic_links (
-      id, sponsorship_id, token_hash, expires_at, used_at, request_ip_hash, user_agent_hash, created_at
-    ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?)`,
-    [
-      uuid(),
-      sponsorshipId,
-      tokenHash,
-      addMinutes(now, payload.ttlMinutes),
-      payload.ipHash ?? null,
-      payload.userAgentHash ?? null,
-      now,
-    ],
-  );
-
-  return token;
+  return insertMagicLinkRow(db, MAGIC_LINKS_TABLE, sponsorshipId, payload);
 }
 
 export async function verifySponsorPortalMagicLink(
   db: DatabaseLike,
   payload: { token: string; sessionTtlHours: number; ipHash?: string | null; userAgentHash?: string | null },
 ): Promise<{ session: SponsorPortalSession; sessionId: string; expiresAt: string }> {
-  const tokenHash = await sha256Hex(payload.token);
-  const row = await first<{
-    id: string;
-    sponsorship_id: string;
-    expires_at: string;
-    used_at: string | null;
-    request_ip_hash: string | null;
-    user_agent_hash: string | null;
-  }>(
-    db,
-    `SELECT id, sponsorship_id, expires_at, used_at, request_ip_hash, user_agent_hash
-     FROM sponsor_portal_magic_links WHERE token_hash = ?`,
-    [tokenHash],
-  );
-
+  const row = await fetchMagicLinkRowByToken(db, MAGIC_LINKS_TABLE, payload.token);
   if (!row) {
     throw new AppError(404, "MAGIC_LINK_INVALID", "Invalid sponsor portal magic link token");
   }
-  if (row.used_at) {
-    throw new AppError(409, "MAGIC_LINK_USED", "Magic link already used");
-  }
-  if (new Date(row.expires_at).getTime() <= Date.now()) {
-    throw new AppError(410, "MAGIC_LINK_EXPIRED", "Magic link expired");
-  }
-  if (row.request_ip_hash && row.request_ip_hash !== payload.ipHash) {
-    throw new AppError(403, "MAGIC_LINK_CONTEXT_MISMATCH", "Magic link is not valid from this network");
-  }
-  if (row.user_agent_hash && row.user_agent_hash !== payload.userAgentHash) {
-    throw new AppError(403, "MAGIC_LINK_CONTEXT_MISMATCH", "Magic link is not valid from this browser");
-  }
 
-  const consume = await run(db, "UPDATE sponsor_portal_magic_links SET used_at = ? WHERE id = ? AND used_at IS NULL", [
-    nowIso(),
-    row.id,
-  ]);
-  if (consume.changes === 0) {
-    throw new AppError(409, "MAGIC_LINK_USED", "Magic link already used");
-  }
+  await validateAndConsumeMagicLinkRow(db, MAGIC_LINKS_TABLE.table, row, payload);
 
-  const sponsorship = await findActiveEventSponsorship(db, row.sponsorship_id);
+  const sponsorship = await findActiveEventSponsorship(db, row.subjectId);
   if (!sponsorship) {
     throw new AppError(403, "AUTH_FORBIDDEN", "This sponsorship is no longer active");
   }

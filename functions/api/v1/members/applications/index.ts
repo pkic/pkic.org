@@ -1,13 +1,12 @@
 /**
  * POST /api/v1/members/applications
  *
- * Replaces POST /api/v1/forms (form_type=membership) — PRD §1.2. Creates a
+ * Replaces POST /api/v1/forms (form_type=membership). Creates a
  * member_applications record directly in D1; no GitHub issue is filed.
  *
  * The old /api/v1/forms endpoint (functions/api/v1/forms.ts) is left in
  * place and untouched: the Hugo joinform shortcode still posts there until
- * the frontend is converted to call this endpoint (see prd.md Phase 1 —
- * Hugo Frontend Follow-Up).
+ * the frontend is converted to call this endpoint.
  */
 import { OpenAPIRoute } from "chanfana";
 import { getConfig } from "../../../../_lib/config";
@@ -40,8 +39,8 @@ export async function onRequestPost(c: any): Promise<Response> {
     key: getClientIp(c.req.raw),
   });
 
-  // Field-level 422 (not the codebase's usual 400 VALIDATION_ERROR) per PRD
-  // §1.1/§10.4: this public application endpoint specifically must return
+  // Field-level 422 (not the codebase's usual 400 VALIDATION_ERROR):
+  // this public application endpoint specifically must return
   // 422 Unprocessable Entity for missing/invalid required fields.
   let rawBody: unknown;
   try {

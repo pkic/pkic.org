@@ -1,9 +1,9 @@
 /**
- * My Application — PRD §4.10/§7: view original application, status history,
+ * My Application — View original application, status history,
  * and timeline. Most members have exactly one application, but the backend
  * (GET /api/v1/me/applications) returns every application matching the
  * caller's email, so this renders as a list that expands into a detail view
- * (master/detail within a single tab — no route param, since §11 UI-1
+ * (master/detail within a single tab — no route param, since
  * scoped the nav shell's routing to top-level sections only).
  */
 import { useEffect, useState } from "preact/hooks";

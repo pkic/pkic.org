@@ -1,4 +1,5 @@
-import { OpenAPIRoute } from "chanfana";
+import type { z } from "zod";
+import { openApiRoute } from "../../../../_lib/openapi/route";
 import { parseJsonBody } from "../../../../_lib/validation";
 import { json } from "../../../../_lib/http";
 import {
@@ -26,10 +27,10 @@ import { eventProposalCreateRouteSchema } from "../../../../../assets/shared/sch
 import { requireInternalSecret } from "../../../../_lib/request";
 import { queuedCapabilityToken } from "../../../../_lib/services/capability-links";
 
-export async function onRequestPost(c: any): Promise<Response> {
+export async function onRequestPost(c: any, data?: { body: z.infer<typeof proposalCreateSchema> }): Promise<Response> {
   const config = getConfig(c.env, c.req.raw);
   const signingSecret = requireInternalSecret(c.env);
-  const body = await parseJsonBody(c.req, proposalCreateSchema);
+  const body = data?.body ?? (await parseJsonBody(c.req, proposalCreateSchema));
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
@@ -206,10 +207,4 @@ export async function onRequestPost(c: any): Promise<Response> {
   });
 }
 
-export class EventsEventSlugProposalsPost extends OpenAPIRoute {
-  schema = eventProposalCreateRouteSchema;
-
-  async handle(c: any) {
-    return onRequestPost(c);
-  }
-}
+export const EventsEventSlugProposalsPost = openApiRoute(eventProposalCreateRouteSchema, onRequestPost);

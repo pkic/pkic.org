@@ -12,7 +12,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
       email: admin.email,
       role: admin.role,
       scopes: admin.scopes ?? [],
-      // Phase 2 (PRD §2.1) contextual permissions, recomputed from
+      // Contextual permissions, recomputed from
       // user_roles/permission_grants on every request — see
       // functions/_lib/auth/admin.ts.
       grants: admin.grants ?? [],

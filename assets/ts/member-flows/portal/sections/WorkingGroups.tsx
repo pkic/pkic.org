@@ -1,6 +1,6 @@
 /**
- * Working Groups — self-service join/leave (PRD §4.9, §11 UI-3). Backend
- * enforces the CA working group's category-A-only constraint (§4.9's "CA WG
+ * Working Groups — self-service join/leave. Backend
+ * enforces the CA working group's category-A-only constraint ("CA WG
  * constraint enforced at the API level", `assertCaConstraint` in
  * working-groups.ts) — that stays the real guard. This component only
  * additionally hides the CA group from the list entirely for non-category-A

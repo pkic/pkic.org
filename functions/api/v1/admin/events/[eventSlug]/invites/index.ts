@@ -4,7 +4,10 @@ import { getEventBySlug } from "../../../../../../_lib/services/events";
 import { all, first } from "../../../../../../_lib/db/queries";
 import { resolveOrderBy } from "../../../../../../_lib/db/sort";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
-import { EVENT_INVITES_SORT_COLUMNS, eventInvitesSortValueSchema } from "../../../../../../../assets/shared/schemas/api";
+import {
+  EVENT_INVITES_SORT_COLUMNS,
+  eventInvitesSortValueSchema,
+} from "../../../../../../../assets/shared/schemas/api";
 
 /**
  * GET /api/v1/admin/events/:eventSlug/invites

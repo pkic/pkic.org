@@ -16,7 +16,7 @@ export const membershipSettingsUpdateSchema = membershipSettingsSchema.omit({ up
 
 export const membershipSettingsGetRouteSchema = {
   tags: ["Membership"],
-  summary: "Get membership workflow settings (PRD §4.3)",
+  summary: "Get membership workflow settings",
   responses: {
     "200": { description: "Current settings.", content: { "application/json": { schema: membershipSettingsSchema } } },
   },
@@ -24,7 +24,7 @@ export const membershipSettingsGetRouteSchema = {
 
 export const membershipSettingsUpdateRouteSchema = {
   tags: ["Membership"],
-  summary: "Update membership workflow settings (PRD §4.3)",
+  summary: "Update membership workflow settings",
   request: {
     body: { content: { "application/json": { schema: membershipSettingsUpdateSchema } }, required: true },
   },

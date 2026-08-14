@@ -4,25 +4,21 @@
  * via POST /api/v1/admin/organizations/:id/members instead, since that also
  * needs an organization to attach to.
  */
-import { OpenAPIRoute } from "chanfana";
-import { parseJsonBody } from "../../../../../_lib/validation";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { grantIndividualMembership } from "../../../../../_lib/services/admin-organizations";
-import {
-  individualMembershipGrantSchema,
-  userMembershipGrantRouteSchema,
-} from "../../../../../../assets/shared/schemas/admin-organizations";
+import { userMembershipGrantRouteSchema } from "../../../../../../assets/shared/schemas/admin-organizations";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+export const UserMembershipGrant = openApiRoute(userMembershipGrantRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "membership:write");
 
-  const userId = c.req.param("userId");
-  const body = await parseJsonBody(c.req, individualMembershipGrantSchema);
+  const userId = data.params.userId;
+  const body = data.body;
   const member = await grantIndividualMembership(requestDb(c), userId, body.membershipCategory);
 
   await writeAuditLog(requestDb(c), "admin", admin.id, "member_created", "member", member.id, {
@@ -31,11 +27,4 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   });
 
   return json({ member }, 201);
-}
-
-export class UserMembershipGrant extends OpenAPIRoute {
-  schema = userMembershipGrantRouteSchema;
-  async handle(c: AdminContext): Promise<Response> {
-    return onRequestPost(c);
-  }
-}
+});

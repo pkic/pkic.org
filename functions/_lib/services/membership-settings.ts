@@ -1,5 +1,5 @@
 /**
- * Membership workflow settings (PRD §4.3) — a single configurable row
+ * Membership workflow settings — a single configurable row
  * (migration 0038 seeds `id = 'default'`), read by the consultation/EC
  * batch jobs (membership-scheduled-jobs.ts) and the admin settings screen.
  */

@@ -1,10 +1,11 @@
 /**
- * Admin membership application endpoints (PRD §4.2) — list/detail, stage
+ * Admin membership application endpoints — list/detail, stage
  * transitions, communications/notes, EC decision staff override, approval.
  */
 import { z } from "zod";
 import { normalizedEmailSchema } from "./api";
 import { membershipCategorySchema } from "./member-applications";
+import { paginationQuerySchema, paginatedResponseSchema, sortColumnSchema } from "./pagination";
 
 /** Allowlisted sort columns for GET /api/v1/admin/applications — see listAdminApplications. */
 export const ADMIN_APPLICATIONS_SORT_COLUMNS = [
@@ -15,26 +16,10 @@ export const ADMIN_APPLICATIONS_SORT_COLUMNS = [
   "created_at",
 ] as const;
 
-const sortValueSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(41)
-  .refine(
-    (value) => {
-      const field = value.startsWith("-") ? value.slice(1) : value;
-      return (ADMIN_APPLICATIONS_SORT_COLUMNS as readonly string[]).includes(field);
-    },
-    { message: "Unknown sort column" },
-  )
-  .optional();
-
-export const adminApplicationsListQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(200).optional(),
-  offset: z.coerce.number().int().min(0).optional(),
+export const adminApplicationsListQuerySchema = paginationQuerySchema.extend({
   stage: z.string().trim().min(1).max(40).optional(),
   status: z.string().trim().min(1).max(40).optional(),
-  sort: sortValueSchema,
+  sort: sortColumnSchema(ADMIN_APPLICATIONS_SORT_COLUMNS),
 });
 
 export const adminApplicationSummarySchema = z.object({
@@ -59,12 +44,7 @@ export const adminApplicationsListRouteSchema = {
     "200": {
       description: "Applications list.",
       content: {
-        "application/json": {
-          schema: z.object({
-            applications: z.array(adminApplicationSummarySchema),
-            page: z.object({ limit: z.number(), offset: z.number(), total: z.number(), hasMore: z.boolean() }),
-          }),
-        },
+        "application/json": { schema: paginatedResponseSchema("applications", adminApplicationSummarySchema) },
       },
     },
   },
@@ -96,7 +76,7 @@ export const applicationStageTransitionSchema = z.object({
 
 export const applicationStageTransitionRouteSchema = {
   tags: ["Membership"],
-  summary: "Transition a membership application's stage (PRD §4.2)",
+  summary: "Transition a membership application's stage",
   request: {
     params: z.object({ id: z.string() }),
     body: { content: { "application/json": { schema: applicationStageTransitionSchema } }, required: true },
@@ -117,7 +97,7 @@ export const applicationCommunicationCreateSchema = z.object({
 
 export const applicationCommunicationCreateRouteSchema = {
   tags: ["Membership"],
-  summary: "Send a communication to an applicant (PRD §4.2)",
+  summary: "Send a communication to an applicant",
   description: "Queues an email via the existing email_outbox and records it on the application's staff-only timeline.",
   request: {
     params: z.object({ id: z.string() }),
@@ -135,7 +115,7 @@ export const applicationNoteCreateSchema = z.object({
 
 export const applicationNoteCreateRouteSchema = {
   tags: ["Membership"],
-  summary: "Add an internal note to an application (PRD §4.2)",
+  summary: "Add an internal note to an application",
   description: "Never emailed; visible only to staff/processors.",
   request: {
     params: z.object({ id: z.string() }),
@@ -161,7 +141,7 @@ export const adminEcDecisionCreateSchema = z
 
 export const adminEcDecisionCreateRouteSchema = {
   tags: ["Membership"],
-  summary: "Record an EC decision on behalf of an EC member (staff override, PRD §4.6)",
+  summary: "Record an EC decision on behalf of an EC member (staff override)",
   description: "Fallback for exceptional access cases; written to audit_log with actor and reason.",
   request: {
     params: z.object({ id: z.string() }),
@@ -177,7 +157,7 @@ export const adminEcDecisionCreateRouteSchema = {
 
 export const applicationApproveRouteSchema = {
   tags: ["Membership"],
-  summary: "Approve an application and run post-approval onboarding (PRD §4.7)",
+  summary: "Approve an application and run post-approval onboarding",
   request: { params: z.object({ id: z.string() }) },
   responses: {
     "200": { description: "Application approved and member provisioned." },
@@ -192,8 +172,8 @@ export const applicationApproveRouteSchema = {
 // this lets staff correct typos/mistakes in what the applicant originally
 // submitted (e.g. a mistyped email domain) without moving the application
 // through any stage. Only a fixed subset of top-level columns plus a fixed
-// subset of answers_json keys are editable — see admin-applications.ts's
-// updateAdminApplication for the merge behavior on answers_json.
+// subset of form_submission_answers keys are editable — see
+// admin-applications.ts's updateAdminApplication for the upsert behavior.
 
 export const applicationEditableAnswersSchema = z.object({
   job_title: z.string().trim().max(200).nullable().optional(),
@@ -226,7 +206,7 @@ export const applicationUpdateRouteSchema = {
   tags: ["Membership"],
   summary: "Correct an applicant's submitted fields (staff, does not transition stage)",
   description:
-    "Edits applicantName/applicantEmail/organizationName/membershipCategory and a fixed subset of answers_json keys. Writes an audit_log entry and a member_application_events row so the correction is visible in the timeline.",
+    "Edits applicantName/applicantEmail/organizationName/membershipCategory and a fixed subset of form_submission_answers keys. Writes an audit_log entry and a member_application_events row so the correction is visible in the timeline.",
   request: {
     params: z.object({ id: z.string() }),
     body: { content: { "application/json": { schema: applicationUpdateSchema } }, required: true },

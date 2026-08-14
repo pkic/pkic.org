@@ -1,6 +1,6 @@
 /**
- * Sponsor portal attendee list + CSV export (PRD §4.13 "Sponsor Portal —
- * Attendee Data Access", §11 UI-7). Talks to
+ * Sponsor portal attendee list + CSV export (Sponsor Portal —
+ * Attendee Data Access). Talks to
  * GET /api/v1/sponsor-portal/events/:eventId/attendees (JSON list) and
  * links directly to .../attendees/export (CSV) — the export link is a
  * plain <a>, not a fetch+blob dance, since the session is an HttpOnly

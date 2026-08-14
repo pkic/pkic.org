@@ -1,5 +1,5 @@
 /**
- * Self-service coworker enrollment (PRD §4.10-adjacent, member portal).
+ * Self-service coworker enrollment (member portal).
  *
  * Deliberately self-contained rather than reusing
  * `admin-organizations.ts`'s `addOrganizationRepresentative` — two other
@@ -121,7 +121,7 @@ export async function addCoworker(
 
 /**
  * Primary contact nominates (or withdraws a nomination for) a secondary
- * contact (§4.11). Held in `organizations.pending_secondary_contact_user_id`
+ * contact. Held in `organizations.pending_secondary_contact_user_id`
  * until a staff admin confirms it via
  * `POST /api/v1/admin/organizations/:id/confirm-secondary-contact` — the
  * primary contact cannot promote someone directly.
@@ -175,13 +175,13 @@ export async function nominateSecondaryContact(
 }
 
 /**
- * Sets an organization's standing forum-vote delegate (PRD §4.8). Unlike
+ * Sets an organization's standing forum-vote delegate. Unlike
  * the secondary-contact nomination above, this takes effect immediately —
- * §4.8 describes no staff-confirmation step, only "the primary or secondary
+ * describes no staff-confirmation step, only "the primary or secondary
  * contact can change the voting delegate at any time." A NULL delegate
  * falls back to the primary contact at ballot-cast time (resolved live by
  * votes.ts's resolveVotingDelegateUserId, never snapshotted) — this is also
- * what makes §4.8's "delegate change mid-vote" rule work for free: a
+ * what makes "delegate change mid-vote" rule work for free: a
  * ballot already cast by the outgoing delegate is keyed to the
  * organization, not the user, so it stands regardless of a later change.
  */

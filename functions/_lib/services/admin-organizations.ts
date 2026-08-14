@@ -1,11 +1,11 @@
 /**
  * Admin Organizations management — post-approval organization profile
- * (§4.11's data-bearing columns, pulled forward by migration 0037) plus
+ * (data-bearing columns, pulled forward by migration 0037) plus
  * its representative roster (the `members` rows tying `users` to this
  * `organization_id`, established by migration 0033).
  *
  * This is the "manage an organization once it's approved" surface the
- * §6 Interim Admin Tool didn't provide — that tool only ever created new
+ * Interim Admin Tool didn't provide — that tool only ever created new
  * org+member rows, with no way to edit a profile or roster afterward.
  */
 import { all, first, run } from "../db/queries";
@@ -15,6 +15,7 @@ import { findOrCreateUser } from "./users";
 import { normalizeOrgName } from "./sponsorship";
 import { AppError } from "../errors";
 import { resolveOrderBy } from "../db/sort";
+import { serializeLinks, parseLinksJson } from "../../../assets/shared/schemas/api";
 import type { DatabaseLike, StatementLike } from "../types";
 
 function splitName(fullName: string): { firstName: string | null; lastName: string | null } {
@@ -114,11 +115,7 @@ interface OrgDetailRow extends OrgSummaryRow {
   press_url: string | null;
   press_feed_url: string | null;
   careers_url: string | null;
-  social_x: string | null;
-  social_linkedin: string | null;
-  social_facebook: string | null;
-  social_instagram: string | null;
-  social_youtube: string | null;
+  links_json: string | null;
   primary_contact_user_id: string | null;
   secondary_contact_user_id: string | null;
 }
@@ -141,7 +138,7 @@ async function fetchOrgDetailRow(db: DatabaseLike, id: string): Promise<OrgDetai
     `SELECT o.id, o.name, o.website, o.description, o.slogan, o.logo_r2_key, o.member_since, o.created_at, o.updated_at,
             o.membership_category,
             o.content_markdown, o.blog_url, o.blog_feed_url, o.press_url, o.press_feed_url, o.careers_url,
-            o.social_x, o.social_linkedin, o.social_facebook, o.social_instagram, o.social_youtube,
+            o.links_json,
             o.primary_contact_user_id, o.secondary_contact_user_id,
             (SELECT COUNT(*) FROM members m WHERE m.organization_id = o.id) AS member_count,
             pu.first_name AS primary_contact_first_name, pu.last_name AS primary_contact_last_name,
@@ -176,11 +173,7 @@ function toOrgDetail(row: OrgDetailRow, representatives: RepresentativeRow[]) {
     pressUrl: row.press_url,
     pressFeedUrl: row.press_feed_url,
     careersUrl: row.careers_url,
-    socialX: row.social_x,
-    socialLinkedin: row.social_linkedin,
-    socialFacebook: row.social_facebook,
-    socialInstagram: row.social_instagram,
-    socialYoutube: row.social_youtube,
+    links: parseLinksJson(row.links_json),
     primaryContactUserId: row.primary_contact_user_id,
     secondaryContactUserId: row.secondary_contact_user_id,
     representatives: representatives.map((r) => ({
@@ -220,11 +213,6 @@ const UPDATABLE_COLUMNS: Record<string, string> = {
   pressUrl: "press_url",
   pressFeedUrl: "press_feed_url",
   careersUrl: "careers_url",
-  socialX: "social_x",
-  socialLinkedin: "social_linkedin",
-  socialFacebook: "social_facebook",
-  socialInstagram: "social_instagram",
-  socialYoutube: "social_youtube",
 };
 
 export interface OrganizationUpdateInput {
@@ -246,11 +234,7 @@ export interface OrganizationUpdateInput {
   pressUrl?: string | null;
   pressFeedUrl?: string | null;
   careersUrl?: string | null;
-  socialX?: string | null;
-  socialLinkedin?: string | null;
-  socialFacebook?: string | null;
-  socialInstagram?: string | null;
-  socialYoutube?: string | null;
+  links?: string[];
   primaryContactUserId?: string | null;
   secondaryContactUserId?: string | null;
 }
@@ -299,6 +283,10 @@ export async function updateAdminOrganization(db: DatabaseLike, id: string, inpu
   if (key_in(input, "name")) {
     setClauses.push("normalized_name = ?");
     values.push(normalizeOrgName(input.name as string));
+  }
+  if (input.links !== undefined) {
+    setClauses.push("links_json = ?");
+    values.push(serializeLinks(input.links));
   }
   if (input.primaryContactUserId !== undefined) {
     setClauses.push("primary_contact_user_id = ?");
@@ -399,7 +387,7 @@ export async function addOrganizationRepresentative(
     firstName: firstName ?? undefined,
     lastName: lastName ?? undefined,
     jobTitle: input.jobTitle,
-    linksJson: input.linkedin ? JSON.stringify({ linkedin: input.linkedin }) : null,
+    linksJson: input.linkedin ? serializeLinks([input.linkedin]) : null,
     allowProfileUpdate: true,
   });
 
@@ -498,7 +486,7 @@ export async function updateAdminMember(db: DatabaseLike, memberId: string, inpu
     await run(db, `UPDATE members SET ${setClauses.join(", ")} WHERE id = ?`, values);
   }
 
-  // §4.11: "If the nominated user's membership lapses before confirmation,
+  // "If the nominated user's membership lapses before confirmation,
   // the pending nomination is automatically cleared."
   if (input.status !== undefined && input.status !== "active" && member.organization_id) {
     await run(
@@ -550,14 +538,17 @@ export async function grantIndividualMembership(db: DatabaseLike, userId: string
   };
 }
 
-// ── Secondary contact nomination confirmation (§4.11) ───────────────────
+// ── Secondary contact nomination confirmation ───────────────────
 
 export interface ConfirmSecondaryContactResult {
   organizationId: string;
   secondaryContactUserId: string;
 }
 
-export async function confirmSecondaryContact(db: DatabaseLike, organizationId: string): Promise<ConfirmSecondaryContactResult> {
+export async function confirmSecondaryContact(
+  db: DatabaseLike,
+  organizationId: string,
+): Promise<ConfirmSecondaryContactResult> {
   const org = await first<{ id: string; pending_secondary_contact_user_id: string | null }>(
     db,
     "SELECT id, pending_secondary_contact_user_id FROM organizations WHERE id = ?",
@@ -600,7 +591,7 @@ export async function removeAdminMember(db: DatabaseLike, memberId: string): Pro
       "UPDATE organizations SET secondary_contact_user_id = NULL, updated_at = ? WHERE id = ? AND secondary_contact_user_id = ?",
       [now, member.organization_id, member.user_id],
     );
-    // §4.11: clear a pending secondary-contact nomination for a rep who's just been removed entirely.
+    // clear a pending secondary-contact nomination for a rep who's just been removed entirely.
     await run(
       db,
       "UPDATE organizations SET pending_secondary_contact_user_id = NULL WHERE id = ? AND pending_secondary_contact_user_id = ?",

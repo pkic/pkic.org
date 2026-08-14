@@ -32,7 +32,7 @@ export async function createAdminSession(
   });
 }
 
-/** PRD §4.9/§4.10 member-facing session — mirrors createAdminSession's shape. */
+/** member-facing session — mirrors createAdminSession's shape. */
 export async function createMemberSession(
   db: DatabaseLike,
   userId: string,

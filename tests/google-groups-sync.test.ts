@@ -1,7 +1,7 @@
 /**
  * google-groups-sync.test.ts
  *
- * PRD §4.7/§4.9 Google Groups sync queue + processor
+ * Google Groups sync queue + processor
  * (functions/_lib/services/google-groups.ts). No live Google Workspace is
  * available in this environment, so this covers the queue mechanics and the
  * graceful unconfigured path — not a real Directory API call.
@@ -28,7 +28,7 @@ async function insertUser(email: string): Promise<string> {
   return id;
 }
 
-describe("Google Groups sync (PRD §4.7/§4.9)", () => {
+describe("Google Groups sync", () => {
   beforeEach(async () => {
     await resetDb();
   });

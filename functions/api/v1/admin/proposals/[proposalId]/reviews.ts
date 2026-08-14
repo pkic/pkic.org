@@ -13,6 +13,7 @@ import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { first } from "../../../../../_lib/db/queries";
 import { proposalIdParamsSchema, reviewUpsertSchema } from "../../../../../../assets/shared/schemas/api";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import type { z } from "zod";
 
 export async function onRequestGet(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
@@ -35,7 +36,17 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   return json({ proposalId, reviews });
 }
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+/**
+ * `data` is supplied when called through the `openApiRoute` factory (the
+ * real HTTP path — the body is already validated there, and re-reading it
+ * here would throw since chanfana already consumed the request stream).
+ * Falls back to parsing the body itself when called directly, as tests do,
+ * bypassing the factory entirely.
+ */
+export async function onRequestPost(
+  c: AdminContext,
+  data?: { body?: z.infer<typeof reviewUpsertSchema> },
+): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const proposalId = c.req.param("proposalId");
   const proposal = await first<{ event_id: string }>(
@@ -52,7 +63,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     return json({ error: { code: "FORBIDDEN", message: "Missing permission to review proposals" } }, 403);
   }
 
-  const body = await parseJsonBody(c.req, reviewUpsertSchema);
+  const body = data?.body ?? (await parseJsonBody(c.req, reviewUpsertSchema));
   const existing = await first<{
     id: string;
     recommendation: string;

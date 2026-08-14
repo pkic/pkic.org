@@ -1,5 +1,5 @@
 /**
- * Sponsor interest form — Path A of PRD §1.3 (express interest, no payment).
+ * Sponsor interest form — express interest, no payment.
  *
  * This is the generic consortium sponsor page (content/sponsors/sponsor.md),
  * which has no event context, so Path B self-service Stripe checkout isn't

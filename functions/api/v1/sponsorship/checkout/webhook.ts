@@ -1,7 +1,7 @@
 /**
  * POST /api/v1/sponsorship/checkout/webhook
  *
- * Stripe webhook for sponsorship self-service checkout (PRD §1.3 Path B).
+ * Stripe webhook for sponsorship self-service checkout.
  * Signature verification mirrors functions/api/v1/webhooks/stripe.ts
  * (raw fetch + Web Crypto HMAC-SHA256, no SDK). Only
  * checkout.session.completed / async_payment_succeeded are handled — on
@@ -51,6 +51,8 @@ interface StripeCheckoutSession {
   id: string;
   payment_status?: string | null;
   metadata?: Record<string, string> | null;
+  amount_total?: number | null;
+  currency?: string | null;
 }
 
 export async function onRequestPost(c: any): Promise<Response> {
@@ -98,6 +100,11 @@ export async function onRequestPost(c: any): Promise<Response> {
     contactEmail: metadata.contact_email,
     organizationName: metadata.organization_name ?? null,
     eventId: metadata.event_id ?? null,
+    // Stripe's own reported amount/currency on the completed session — the
+    // authoritative record of what was actually charged, not re-derived
+    // from current tier config (which may have changed since checkout).
+    priceAmountCents: session.amount_total ?? null,
+    priceCurrency: session.currency ?? null,
   });
 
   const brochureOutboxId = await queueEmail(db, {

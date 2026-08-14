@@ -12,10 +12,10 @@ import { adminEventProposalsQuerySchema, eventSlugParamsSchema } from "../../../
 export async function onRequestGet(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
-  // Phase 2 (PRD §2): viewing the proposal list requires proposals:read,
+  // Viewing the proposal list requires proposals:read,
   // globally or scoped to this event — see functions/_lib/auth/permissions.ts.
   // This is what actually denies a program_committee/event_organizer grant
-  // scoped to a *different* event (§10.4's tests/roles.test.ts).
+  // scoped to a *different* event (tests/roles.test.ts).
   requirePermission(admin, "proposals:read", { type: "event", id: event.id });
   const access = await getProposalAccessForEvent(requestDb(c), event.id, admin);
 

@@ -21,7 +21,7 @@ export const ecDecisionResponseSchema = z.object({
 
 export const ecDecisionCreateRouteSchema = {
   tags: ["Membership"],
-  summary: "Record an EC review decision (PRD §4.6)",
+  summary: "Record an EC review decision",
   request: {
     params: z.object({ id: z.string() }),
     body: { content: { "application/json": { schema: ecDecisionCreateSchema } }, required: true },

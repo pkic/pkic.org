@@ -7,7 +7,7 @@ import { PERMISSIONS } from "../../permissions";
 import { UserPicker, type PickedUser } from "./UserPicker";
 import { ContextPicker, type PickedContext } from "./ContextPicker";
 
-/** PRD §2.4 — "Access Control section: grant/revoke permissions per user, with context and expiry pickers". */
+/** Access Control section: grant/revoke permissions per user, with context and expiry pickers. */
 export function Grants({ userLabels }: { userLabels: Map<string, AdminUser> }) {
   const tableRef = useRef<ApiTableActions | null>(null);
   const [user, setUser] = useState<PickedUser | null>(null);

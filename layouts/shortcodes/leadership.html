@@ -1,0 +1,23 @@
+{{/*
+  leadership shortcode — mounts the client-fetched, admin-managed
+  Board of Directors / Executive Council / PKIC forum chair display
+  (see layouts/partials/leadership/app.html and
+  assets/ts/member-flows/leadership-widget.tsx). Replaces the old
+  leadership-grid + person-card static markdown lists on
+  content/about/board.md, executive-council.md and _index.md.
+
+  Usage:
+    {{< leadership source="roster" body="board" >}}
+    {{< leadership source="roster" body="executive_council" >}}
+    {{< leadership source="forum" >}}
+
+  Parameters:
+    source ("roster" default | "forum")
+    body   ("board" | "executive_council" — required when source is "roster")
+    color  accent color slug (optional, default "green")
+*/}}
+{{- partial "leadership/app.html" (dict
+    "source" (.Get "source")
+    "body"   (.Get "body")
+    "color"  (.Get "color")
+) -}}

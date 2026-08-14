@@ -6,6 +6,7 @@ import { processPendingOutbox, summarizePendingOutbox } from "../../../../_lib/e
 import { runReminderCycle } from "../../../../_lib/services/reminders";
 import { runRetentionJob, summarizeRetentionJob } from "../../../../_lib/services/retention";
 import { runConsultationBatch, runEcReviewBatch } from "../../../../_lib/services/membership-scheduled-jobs";
+import { runWeeklyWgChairDigest } from "../../../../_lib/services/wg-chair-digest";
 import { adminRunJobsSchema } from "../../../../../assets/shared/schemas/api";
 
 export async function onRequestPost(c: any): Promise<Response> {
@@ -65,8 +66,8 @@ export async function onRequestPost(c: any): Promise<Response> {
       ? await processPendingOutbox(c.env.DB, c.env, body.outboxLimit)
       : { processed: 0, failed: 0 };
 
-  // Manual off-cycle triggers for the twice-weekly membership batches
-  // (PRD §4.5/§4.6, normally fired by the cron in functions/router.ts).
+  // Manual off-cycle triggers for the twice-weekly membership batches,
+  // normally fired by the cron in functions/router.ts).
   // No dry-run preview — see adminRunJobsSchema's note on why.
   const consultationBatch =
     body.runConsultationBatch && !body.dryRun
@@ -75,6 +76,11 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   const ecReviewBatch =
     body.runEcReviewBatch && !body.dryRun ? await runEcReviewBatch(c.env.DB, c.env) : { transitioned: 0 };
+
+  const wgChairDigest =
+    body.runWgChairDigest && !body.dryRun
+      ? await runWeeklyWgChairDigest(c.env.DB, c.env)
+      : { workingGroupsWithChanges: 0, emailsSent: 0 };
 
   return json({
     success: true,
@@ -93,6 +99,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     },
     consultationBatch,
     ecReviewBatch,
+    wgChairDigest,
   });
 }
 

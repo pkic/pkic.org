@@ -1,7 +1,7 @@
 /**
  * membership-settings-endpoints.test.ts
  *
- * PRD §4.3 — GET/PATCH /api/v1/admin/membership-settings (singleton row
+ * GET/PATCH /api/v1/admin/membership-settings (singleton row
  * seeded by migration 0038).
  */
 import { describe, expect, it, beforeEach } from "vitest";
@@ -26,7 +26,7 @@ async function call(token: string, path: string, init: RequestInit = {}): Promis
   );
 }
 
-describe("Membership workflow settings (PRD §4.3)", () => {
+describe("Membership workflow settings", () => {
   let adminToken: string;
   let adminId: string;
 

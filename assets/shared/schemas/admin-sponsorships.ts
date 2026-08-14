@@ -1,11 +1,12 @@
 /**
- * Admin sponsorship sales pipeline (PRD §4.13, Phase 4E). Backs
+ * Admin sponsorship sales pipeline. Backs
  * `GET/POST /api/v1/admin/sponsorships`, `GET/PATCH .../:id`,
  * `PATCH .../:id/stage`, `GET .../:id/events`, and
  * `GET/PUT /api/v1/admin/events/:eventSlug/sponsor-tiers`.
  */
 import { z } from "zod";
 import { normalizedEmailSchema } from "./api";
+import { paginationQuerySchema, paginatedResponseSchema } from "./pagination";
 
 function trimmedString(min: number, max: number): z.ZodString {
   return z.string().trim().min(min).max(max);
@@ -46,6 +47,8 @@ export const adminSponsorshipSchema = z.object({
   assignedToUserId: z.uuid().nullable(),
   assignedToName: z.string().nullable(),
   notes: z.string().nullable(),
+  priceAmountCents: z.number().nullable(),
+  priceCurrency: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -62,29 +65,61 @@ export const sponsorshipEventSchema = z.object({
 
 // ── List ─────────────────────────────────────────────────────────────────
 
-export const sponsorshipsListQuerySchema = z.object({
+export const sponsorshipsListQuerySchema = paginationQuerySchema.extend({
   type: sponsorTypeSchema.optional(),
   stage: sponsorshipPipelineStageSchema.optional(),
   tier: trimmedString(1, 100).optional(),
-  limit: z.coerce.number().int().min(1).max(200).optional(),
-  offset: z.coerce.number().int().min(0).optional(),
+  // Company-scoped filters — decomposed from a company list row's `key`,
+  // used to fetch one company's sponsorships for the detail panel instead
+  // of the full list.
+  organizationId: z.uuid().optional(),
+  nonMemberName: trimmedString(1, 200).optional(),
+  contactName: trimmedString(1, 200).optional(),
 });
 
 export const sponsorshipsListRouteSchema = {
   tags: ["Sponsorships"],
   summary: "List sponsorships (admin sales pipeline)",
-  description: "Paginated, optionally filtered by sponsor type / pipeline stage / tier.",
+  description: "Paginated, optionally filtered by sponsor type / pipeline stage / tier / company.",
   request: { query: sponsorshipsListQuerySchema },
   responses: {
     "200": {
       description: "Sponsorships list.",
       content: {
-        "application/json": {
-          schema: z.object({
-            sponsorships: z.array(adminSponsorshipSchema),
-            page: z.object({ limit: z.number(), offset: z.number(), total: z.number(), hasMore: z.boolean() }),
-          }),
-        },
+        "application/json": { schema: paginatedResponseSchema("sponsorships", adminSponsorshipSchema) },
+      },
+    },
+  },
+};
+
+// ── Companies (grouped list) ────────────────────────────────────────────
+
+export const sponsorshipCompanySchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  website: z.string().nullable(),
+  sponsorshipCount: z.number(),
+  /** Comma-separated distinct pipeline stages across this company's sponsorships. */
+  stages: z.string(),
+});
+
+export const sponsorshipCompaniesListQuerySchema = paginationQuerySchema.extend({
+  type: sponsorTypeSchema.optional(),
+  stage: sponsorshipPipelineStageSchema.optional(),
+  tier: trimmedString(1, 100).optional(),
+});
+
+export const sponsorshipCompaniesListRouteSchema = {
+  tags: ["Sponsorships"],
+  summary: "List sponsorship companies (admin sales pipeline, grouped)",
+  description:
+    "Paginated companies (member organization, or non-member sponsor/contact name) matching sponsorships, grouped and sorted in D1 — not the full sponsorship list.",
+  request: { query: sponsorshipCompaniesListQuerySchema },
+  responses: {
+    "200": {
+      description: "Sponsorship companies list.",
+      content: {
+        "application/json": { schema: paginatedResponseSchema("companies", sponsorshipCompanySchema) },
       },
     },
   },
@@ -278,5 +313,55 @@ export const eventSponsorTiersPutRouteSchema = {
       description: "Sponsor tier config replaced.",
       content: { "application/json": { schema: z.object({ tiers: z.array(eventSponsorTierSchema) }) } },
     },
+  },
+};
+
+// ── Sponsorship tier pricing config (self-service checkout) ──
+//
+// Managed data, not a code constant (migration 0053) — a price change is a
+// PATCH, not a deployment. Distinct from eventSponsorTiersSchema above,
+// which controls attendee-data-access per event, not pricing.
+
+export const sponsorshipTierConfigSchema = z.object({
+  id: z.uuid(),
+  sponsorType: z.string(),
+  tier: z.string(),
+  currency: z.string(),
+  amountCents: z.number(),
+  active: z.boolean(),
+});
+
+export const sponsorshipTierConfigListRouteSchema = {
+  tags: ["Sponsorships"],
+  summary: "List sponsorship tier pricing config",
+  responses: {
+    "200": {
+      description: "Tier pricing config.",
+      content: { "application/json": { schema: z.object({ tiers: z.array(sponsorshipTierConfigSchema) }) } },
+    },
+  },
+};
+
+export const sponsorshipTierConfigIdParamsSchema = z.object({ id: z.uuid() });
+
+export const sponsorshipTierConfigUpdateSchema = z.object({
+  amountCents: z.number().int().min(0).max(100_000_000).optional(),
+  currency: z.string().trim().toLowerCase().length(3).optional(),
+  active: z.boolean().optional(),
+});
+
+export const sponsorshipTierConfigUpdateRouteSchema = {
+  tags: ["Sponsorships"],
+  summary: "Update a sponsorship tier's price/currency/active state",
+  request: {
+    params: sponsorshipTierConfigIdParamsSchema,
+    body: { content: { "application/json": { schema: sponsorshipTierConfigUpdateSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Updated.",
+      content: { "application/json": { schema: z.object({ tier: sponsorshipTierConfigSchema }) } },
+    },
+    "404": { description: "Tier config not found." },
   },
 };

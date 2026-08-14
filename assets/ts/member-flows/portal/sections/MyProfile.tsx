@@ -1,9 +1,9 @@
 /**
- * My Profile — edit (PRD §4.10, §11 UI-1). Editable fields per §4.10: first
+ * My Profile — edit. Editable fields: first
  * name, last name, preferred name, job title, biography, social links.
  * Organization name is only editable for org-less (H5/H6/H7) members
  * (profile.canEditOrganizationName). Headshot upload and the org-page
- * visibility toggle live in the same tab per §7's nav table.
+ * visibility toggle live in the same tab nav table.
  */
 import { useState } from "preact/hooks";
 import { getJson, patchJson, postJson, ApiClientError } from "../../../shared/api-client";
@@ -13,21 +13,11 @@ import { ErrorAlert } from "../../../components/ErrorAlert";
 import { profile as profileSignal, saveProfile } from "../state";
 import { toast } from "../ui";
 import type { MyProfile as MyProfileType, MyProfileUpdateInput } from "../types";
+import { linksToText, textToLinks } from "../../../shared/links-text";
 
 async function refreshProfile(): Promise<void> {
   const refreshed = await getJson<MyProfileType>("/api/v1/me");
   saveProfile(refreshed);
-}
-
-function linksToText(links: string[]): string {
-  return links.join("\n");
-}
-
-function textToLinks(text: string): string[] {
-  return text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
 }
 
 export function MyProfile() {

@@ -2,7 +2,7 @@
  * Shared actor resolution for endpoints usable by either staff (AuthAdmin)
  * or ordinary members (AuthMember) holding the *same* underlying identity
  * concept (a `users.id` row) — today, just the passkey endpoints
- * (`/api/v1/auth/passkeys/*`, PRD §3.4/§11 UI-1), which are keyed on
+ * (`/api/v1/auth/passkeys/*`, which are keyed on
  * `passkey_credentials.user_id` regardless of which session type owns it.
  *
  * Tries the admin session first (cookie name `pkic_admin_session`, checked

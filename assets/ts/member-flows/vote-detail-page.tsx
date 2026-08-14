@@ -1,11 +1,11 @@
 /**
- * Public vote detail (PRD §4.8 "Public-facing pages", §11 UI-6). Reads
+ * Public vote detail Public-facing pages). Reads
  * `?slug=` from the query string and fetches GET /api/v1/votes/:slug,
  * mirroring member-detail-page.tsx's `?id=` pattern for the same reason:
  * D1 (not a build-time scan) is the source of truth, so there's no
  * per-vote static page for Hugo to generate at build time.
  *
- * The `result` shape depends on the vote's `publicDetailLevel` (§4.8):
+ * The `result` shape depends on the vote's `publicDetailLevel`:
  * outcome_only carries just `{outcome}` (or, for elections with no
  * `outcome` key written server-side, `{outcome: "decided"}` — see
  * functions/_lib/services/votes.ts `publicResultForDetailLevel`);

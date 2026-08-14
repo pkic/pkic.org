@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** Schemas for the public sponsor display endpoints (prd.md item 8 gap-closure plan). */
+/** Schemas for the public sponsor display endpoints. */
 
 export const publicSponsorItemSchema = z.object({
   id: z.string(),

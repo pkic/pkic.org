@@ -1,5 +1,5 @@
 /**
- * Membership → Applications (PRD §4.2). Staff review/transition membership
+ * Membership → Applications. Staff review/transition membership
  * applications through the stage machine, send communications, add
  * internal notes, view uploaded documents, and record EC decisions.
  * List/detail split mirrors Users.tsx; list mirrors Members.tsx's use of
@@ -35,7 +35,7 @@ const ON_HOLD_SUBTYPES = [
 ];
 
 // Friendly labels for the working_groups answer (array of slugs) — mirrors
-// the options seeded in migrations/0034_phase1_applications_sponsorships_working_groups.sql.
+// the options seeded in migrations/0034_applications_sponsorships_working_groups.sql.
 const WORKING_GROUP_LABELS: Record<string, string> = {
   pqc: "Post-Quantum Cryptography Working Group",
   cm: "Cryptographic Module Working Group",
@@ -814,7 +814,7 @@ function ConsultationQueueBanner() {
       <span>
         <strong>{count ?? "…"}</strong> application{count === 1 ? "" : "s"} currently queued for member consultation.
       </span>
-      <span class="text-muted">Next scheduled batch: Mon &amp; Wed 07:15 UTC (PRD §4.5).</span>
+      <span class="text-muted">Next scheduled batch: Mon &amp; Wed 07:15 UTC.</span>
     </div>
   );
 }

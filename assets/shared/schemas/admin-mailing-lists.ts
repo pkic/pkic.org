@@ -1,8 +1,7 @@
 /**
- * Managed mailing list configuration (PRD §4.14). Admin role required (see
- * prd.md's Admin Portal Navigation Structure table) — enforced by the
- * legacy AUTH_SCOPES gate (functions/api/v1/admin/router.ts's
- * enforceAdminScopes), same as the Users list, not a Phase 2 named
+ * Managed mailing list configuration. Admin role required
+ * enforced by the legacy AUTH_SCOPES gate (functions/api/v1/admin/router.ts's
+ * enforceAdminScopes), same as the Users list, not a named
  * permission.
  */
 import { z } from "zod";
@@ -54,7 +53,10 @@ export const mailingListCreateRouteSchema = {
     body: { content: { "application/json": { schema: mailingListCreateSchema } }, required: true },
   },
   responses: {
-    "201": { description: "Created.", content: { "application/json": { schema: z.object({ mailingList: mailingListSchema }) } } },
+    "201": {
+      description: "Created.",
+      content: { "application/json": { schema: z.object({ mailingList: mailingListSchema }) } },
+    },
     "409": { description: "A mailing list with that email already exists." },
   },
 };
@@ -78,7 +80,10 @@ export const mailingListUpdateRouteSchema = {
     body: { content: { "application/json": { schema: mailingListUpdateSchema } }, required: true },
   },
   responses: {
-    "200": { description: "Updated.", content: { "application/json": { schema: z.object({ mailingList: mailingListSchema }) } } },
+    "200": {
+      description: "Updated.",
+      content: { "application/json": { schema: z.object({ mailingList: mailingListSchema }) } },
+    },
     "404": { description: "Mailing list not found." },
     "409": { description: "A mailing list with that email already exists." },
   },

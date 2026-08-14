@@ -30,6 +30,7 @@ import {
   registrationHeadshotDeleteRouteSchema,
   registrationHeadshotUploadRouteSchema,
 } from "../../../../../../assets/shared/schemas/api";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 const ALLOWED_MIME_TYPES = new Set<string>(REGISTRATION_HEADSHOT_ALLOWED_MIME_TYPES);
 const MAX_HEADSHOT_BYTES = REGISTRATION_HEADSHOT_MAX_BYTES;
 
@@ -139,8 +140,8 @@ async function onPut(c: any): Promise<Response> {
 
 // ── DELETE — remove headshot ──────────────────────────────────────────────────
 
-async function onDelete(c: any): Promise<Response> {
-  const resolved = await resolveManageToken(c.req.raw, c.env, c.req.param("token"));
+async function onDelete(c: any, token: string): Promise<Response> {
+  const resolved = await resolveManageToken(c.req.raw, c.env, token);
   if (resolved instanceof Response) return resolved;
   const { registration } = resolved;
 
@@ -180,10 +181,16 @@ async function onDelete(c: any): Promise<Response> {
 
 export async function onRequest(c: any): Promise<Response> {
   if (c.req.raw.method === "PUT") return onPut(c);
-  if (c.req.raw.method === "DELETE") return onDelete(c);
+  if (c.req.raw.method === "DELETE") return onDelete(c, c.req.param("token"));
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
 }
 
+// PUT stays a manual OpenAPIRoute (not openApiRoute-wrapped): the schema's
+// body is multipart/form-data (registrationHeadshotUploadFormSchema is
+// documentation-only for that content type — chanfana can't validate it),
+// and onPut reads the multipart body itself via c.req.raw.formData(). Routing
+// this through openApiRoute would make chanfana's getValidatedData() touch
+// the request body before the handler's own formData() read runs.
 export class RegistrationsManageTokenHeadshotPut extends OpenAPIRoute {
   schema = registrationHeadshotUploadRouteSchema;
 
@@ -192,10 +199,6 @@ export class RegistrationsManageTokenHeadshotPut extends OpenAPIRoute {
   }
 }
 
-export class RegistrationsManageTokenHeadshotDelete extends OpenAPIRoute {
-  schema = registrationHeadshotDeleteRouteSchema;
-
-  async handle(c: any) {
-    return onDelete(c);
-  }
-}
+export const RegistrationsManageTokenHeadshotDelete = openApiRoute(registrationHeadshotDeleteRouteSchema, (c, data) =>
+  onDelete(c, data.params.token),
+);

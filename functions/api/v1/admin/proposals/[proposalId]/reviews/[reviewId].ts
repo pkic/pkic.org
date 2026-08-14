@@ -9,8 +9,19 @@ import { writeAuditLog } from "../../../../../../_lib/services/audit";
 import { buildProposalReviewAuditDetails, updateReviewById } from "../../../../../../_lib/services/proposals";
 import { proposalReviewIdParamsSchema, reviewPatchSchema } from "../../../../../../../assets/shared/schemas/api";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
+import type { z } from "zod";
 
-export async function onRequestPatch(c: AdminContext): Promise<Response> {
+/**
+ * `data` is supplied when called through the `openApiRoute` factory (the
+ * real HTTP path — the body is already validated there, and re-reading it
+ * here would throw since chanfana already consumed the request stream).
+ * Falls back to parsing the body itself when called directly, as tests do,
+ * bypassing the factory entirely.
+ */
+export async function onRequestPatch(
+  c: AdminContext,
+  data?: { body?: z.infer<typeof reviewPatchSchema> },
+): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const proposalId = c.req.param("proposalId");
   const reviewId = c.req.param("reviewId");
@@ -38,7 +49,7 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
     return json({ error: { code: "PROPOSAL_REVIEW_NOT_FOUND", message: "Proposal review not found" } }, 404);
   }
 
-  const body = await parseJsonBody(c.req, reviewPatchSchema);
+  const body = data?.body ?? (await parseJsonBody(c.req, reviewPatchSchema));
 
   const existing = await first<{
     recommendation: string;

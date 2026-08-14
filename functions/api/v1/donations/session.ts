@@ -10,10 +10,10 @@
  * data needed for the "I just donated X" badge is returned.
  */
 
-import { OpenAPIRoute } from "chanfana";
 import { donationSessionGetRouteSchema, donationSessionQuerySchema } from "../../../../assets/shared/schemas/donation";
 import { json } from "../../../_lib/http";
 import type { Env } from "../../../_lib/types";
+import { openApiRoute } from "../../../_lib/openapi/route";
 interface DonationBadgeRow {
   gross_amount: number;
   currency: string;
@@ -85,10 +85,11 @@ export async function onRequestGet(c: any): Promise<Response> {
   });
 }
 
-export class DonationsSessionGet extends OpenAPIRoute {
-  schema = donationSessionGetRouteSchema;
-
-  async handle(c: any) {
-    return onRequestGet(c);
-  }
-}
+// Kept as a thin openApiRoute wrap around the untouched onRequestGet — that
+// function is imported directly by tests/donation-checkout.test.ts and
+// tests/donation-session-promoter-webhook.test.ts (bypassing chanfana
+// entirely), so its manual query-parsing/error-shape behavior can't change
+// here. GET has no request body, so wrapping it doesn't risk the
+// double-body-read hazard that rules out wrapping the POST endpoints in this
+// directory (see donations/promoter.ts).
+export const DonationsSessionGet = openApiRoute(donationSessionGetRouteSchema, (c: any) => onRequestGet(c));

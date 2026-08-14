@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** Schemas for the public member directory & working groups endpoints (PRD §1.5). */
+/** Schemas for the public member directory & working groups endpoints. */
 
 export const publicMemberSummarySchema = z.object({
   id: z.string(),
@@ -33,7 +33,7 @@ export const membersListResponseSchema = z.object({
 export const membersListRouteSchema = {
   tags: ["Members"],
   summary: "Public member directory",
-  description: "Paginated, publicly readable member directory. D1 is the source of truth (PRD §1.6).",
+  description: "Paginated, publicly readable member directory. D1 is the source of truth.",
   request: { query: membersListQuerySchema },
   responses: {
     "200": {
@@ -121,9 +121,20 @@ export const workingGroupsListRouteSchema = {
   },
 };
 
+const workingGroupChairSchema = z.object({
+  name: z.string(),
+  organizationName: z.string().nullable(),
+  organizationLogoUrl: z.string().nullable(),
+  organizationWebsite: z.string().nullable(),
+  photoUrl: z.string().nullable(),
+  linkedin: z.string().nullable(),
+});
+
 export const workingGroupDetailSchema = workingGroupSummarySchema.extend({
   mailingListEmail: z.string().nullable(),
   members: z.array(z.object({ name: z.string(), organizationName: z.string().nullable() })),
+  chair: workingGroupChairSchema.nullable(),
+  viceChair: workingGroupChairSchema.nullable(),
 });
 
 export const workingGroupDetailRouteSchema = {

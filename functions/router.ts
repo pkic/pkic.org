@@ -10,6 +10,7 @@ import {
 } from "./_lib/services/membership-scheduled-jobs";
 import { runSponsorshipDueWork } from "./_lib/services/sponsorship-scheduled-jobs";
 import { runVotesDueWork } from "./_lib/services/votes-scheduled-jobs";
+import { runWeeklyWgChairDigest } from "./_lib/services/wg-chair-digest";
 import api_Router from "./api/router";
 import donate_Router from "./donate/router";
 import r_Router from "./r/router";
@@ -69,9 +70,12 @@ function mcpOpenApiSpecResponse(): Response {
 
 const REMINDER_CRON = "*/15 * * * *";
 const RETENTION_CRON = "0 3 * * *";
-// PRD §4.3 defaults: consultation batch Mon/Wed 07:15 UTC, EC review batch Mon/Wed 08:15 UTC.
+// defaults: consultation batch Mon/Wed 07:15 UTC, EC review batch Mon/Wed 08:15 UTC.
 const CONSULTATION_BATCH_CRON = "15 7 * * 1,3";
 const EC_REVIEW_BATCH_CRON = "15 8 * * 1,3";
+// Weekly WG chair membership-change digest (2026-07-31 manual-testing
+// feedback) — Monday 08:00 UTC, ahead of the EC review batch's 08:15 slot.
+const WG_CHAIR_DIGEST_CRON = "0 8 * * 1";
 
 app.get("/og/*", OgCardGet);
 app.get(OPENAPI_JSON_PATH, openApiSpecResponse);
@@ -92,15 +96,15 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
   try {
     if (controller.cron === REMINDER_CRON) {
       const dueWork = await runScheduledDueWork(env);
-      // Membership due-work (PRD §4.6/§4.7/§4.9 on-hold reminders/auto-close,
+      // Membership due-work (on-hold reminders/auto-close,
       // EC-window auto-approve, Google Groups sync) runs as a sibling call on
       // the same 15-minute trigger — see membership-scheduled-jobs.ts's own
       // note on why this isn't woven into runScheduledDueWork's pass loop.
       const membershipDueWork = await runMembershipDueWork(env.DB, env);
-      // Sponsorship renewal reminders/auto-lapse (PRD §4.13) — same "sibling
+      // Sponsorship renewal reminders/auto-lapse — same "sibling
       // call on the 15-minute trigger" pattern as membershipDueWork above.
       const sponsorshipDueWork = await runSponsorshipDueWork(env.DB, env);
-      // Voting open/close/round-advance (PRD §4.8) — same sibling pattern.
+      // Voting open/close/round-advance — same sibling pattern.
       const votesDueWork = await runVotesDueWork(env.DB, env);
 
       logInfo("SCHEDULED_REMINDERS_COMPLETED", {
@@ -131,6 +135,12 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
     if (controller.cron === EC_REVIEW_BATCH_CRON) {
       const ecReviewBatch = await runEcReviewBatch(env.DB, env);
       logInfo("SCHEDULED_EC_REVIEW_BATCH_COMPLETED", { cron: controller.cron, ecReviewBatch });
+      return;
+    }
+
+    if (controller.cron === WG_CHAIR_DIGEST_CRON) {
+      const wgChairDigest = await runWeeklyWgChairDigest(env.DB, env);
+      logInfo("SCHEDULED_WG_CHAIR_DIGEST_COMPLETED", { cron: controller.cron, wgChairDigest });
       return;
     }
 

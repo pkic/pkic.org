@@ -1,9 +1,9 @@
 /**
- * Member directory listing (PRD §1.6 Part B). Replaces the Hugo-data-driven
+ * Member directory listing. Replaces the Hugo-data-driven
  * A-Z grid (layouts/partials/members/listing.html, driven by hugo.Data.members
  * at build time) with a Preact component that fetches GET /api/v1/members.
  *
- * D1 is now the source of truth (§6 Step 2 has run), so this fetches once
+ * D1 is now the source of truth (Step 2 has run), so this fetches once
  * per page-load (group is fixed per page: "organization" for /members/,
  * "independent" for /members/independent/) at a limit generous enough to
  * cover the whole directory in one request, then filters/groups by letter
@@ -61,7 +61,9 @@ function MemberCard({ member, detailBase }: { member: DirectoryMember; detailBas
   // Org-tied members get a clean URL (functions/members/[slug].ts); org-less
   // individuals have no organizations row to hold a slug on, so they keep
   // the query-string form.
-  const href = member.slug ? `/members/${encodeURIComponent(member.slug)}/` : `${detailBase}?id=${encodeURIComponent(member.id)}`;
+  const href = member.slug
+    ? `/members/${encodeURIComponent(member.slug)}/`
+    : `${detailBase}?id=${encodeURIComponent(member.id)}`;
   const colorIdx = member.name.length % 6;
 
   return (

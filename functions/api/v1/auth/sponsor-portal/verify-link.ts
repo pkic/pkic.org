@@ -1,5 +1,5 @@
 /**
- * POST /api/v1/auth/sponsor-portal/verify-link — PRD §4.13.
+ * POST /api/v1/auth/sponsor-portal/verify-link.
  * Mirrors auth/member/verify-link.ts, issuing a sponsor-portal session
  * instead of a member session (see _lib/auth/sponsor-portal.ts).
  */

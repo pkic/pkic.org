@@ -1,0 +1,293 @@
+/**
+ * leadership.test.ts
+ *
+ * Board of Directors / Executive Council leadership positions (migration
+ * 0049) — admin CRUD (functions/api/v1/admin/leadership-positions) and the
+ * public roster + forum-chairs reads (functions/api/v1/leadership). See
+ * functions/_lib/services/leadership.ts for the design (a dedicated table
+ * instead of user_roles, since Board/EC need many simultaneous holders, an
+ * explicit admin-set "from" date, and a free-text title).
+ */
+import { describe, expect, it, beforeEach } from "vitest";
+import { env } from "cloudflare:workers";
+import app from "../functions/router";
+import { resetDb } from "./helpers/reset-db";
+import { createAdminSession } from "./helpers/auth";
+import { queryAll, seedEventAndAdmin } from "./helpers/context";
+
+function request(token: string | null, path: string, init: RequestInit = {}): Request {
+  const headers = new Headers(init.headers);
+  if (token) headers.set("authorization", `Bearer ${token}`);
+  if (init.body && !headers.has("content-type")) {
+    headers.set("content-type", "application/json");
+  }
+  return new Request(`https://app.test${path}`, { ...init, headers });
+}
+
+async function call(token: string | null, path: string, init: RequestInit = {}): Promise<Response> {
+  return app.fetch(
+    request(token, path, init),
+    env as any,
+    {
+      passThroughOnException: () => {},
+      waitUntil: () => {},
+    } as any,
+  );
+}
+
+async function insertUser(email: string, name?: [string, string]): Promise<string> {
+  const id = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO users (id, email, normalized_email, first_name, last_name, role, active, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+  )
+    .bind(id, email, email, name?.[0] ?? null, name?.[1] ?? null)
+    .run();
+  return id;
+}
+
+async function insertOrganization(name: string, website: string): Promise<string> {
+  const id = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO organizations (id, name, normalized_name, website, created_at, updated_at)
+     VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))`,
+  )
+    .bind(id, name, name.toLowerCase(), website)
+    .run();
+  return id;
+}
+
+async function insertMember(userId: string, organizationId: string): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
+     VALUES (?, 'A', ?, ?, 'active', datetime('now'), datetime('now'))`,
+  )
+    .bind(crypto.randomUUID(), userId, organizationId)
+    .run();
+}
+
+async function assignRole(
+  userId: string,
+  roleId: string,
+  grantedBy: string,
+  context?: { type: string; id: string },
+): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, granted_by_user_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
+  )
+    .bind(crypto.randomUUID(), userId, roleId, context?.type ?? null, context?.id ?? null, grantedBy)
+    .run();
+}
+
+describe("leadership positions (migration 0049) — Board / Executive Council rosters", () => {
+  let adminToken: string;
+  let adminId: string;
+
+  beforeEach(async () => {
+    await resetDb();
+    await seedEventAndAdmin(env.DB);
+    const adminRow = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
+    )[0];
+    adminId = adminRow.id;
+    adminToken = await createAdminSession(env.DB, adminId, "admin-leadership-token");
+  });
+
+  it("creates a position, requiring the target user to exist", async () => {
+    const memberId = await insertUser("chair@example.test", ["Chris", "Bailey"]);
+
+    const missingUser = await call(adminToken, "/api/v1/admin/leadership-positions", {
+      method: "POST",
+      body: JSON.stringify({
+        body: "board",
+        userId: crypto.randomUUID(),
+        title: "Board Chair",
+        startsAt: "2025-03-01",
+      }),
+    });
+    expect(missingUser.status).toBe(404);
+
+    const created = await call(adminToken, "/api/v1/admin/leadership-positions", {
+      method: "POST",
+      body: JSON.stringify({ body: "board", userId: memberId, title: "Board Chair", startsAt: "2025-03-01" }),
+    });
+    expect(created.status).toBe(201);
+    const position = (await created.json()) as { id: string; name: string; title: string; endsAt: string | null };
+    expect(position.name).toBe("Chris Bailey");
+    expect(position.title).toBe("Board Chair");
+    expect(position.endsAt).toBeNull();
+  });
+
+  it("lists positions scoped to the requested body only", async () => {
+    const boardMember = await insertUser("board-only@example.test", ["Board", "Only"]);
+    const ecMember = await insertUser("ec-only@example.test", ["Ec", "Only"]);
+
+    await call(adminToken, "/api/v1/admin/leadership-positions", {
+      method: "POST",
+      body: JSON.stringify({ body: "board", userId: boardMember, title: "Board Member", startsAt: "2022-06-01" }),
+    });
+    await call(adminToken, "/api/v1/admin/leadership-positions", {
+      method: "POST",
+      body: JSON.stringify({ body: "executive_council", userId: ecMember, title: "EC Member", startsAt: "2022-06-01" }),
+    });
+
+    const boardList = (await (await call(adminToken, "/api/v1/admin/leadership-positions?body=board")).json()) as {
+      positions: Array<{ name: string }>;
+    };
+    expect(boardList.positions.map((p) => p.name)).toEqual(["Board Only"]);
+
+    const ecList = (await (
+      await call(adminToken, "/api/v1/admin/leadership-positions?body=executive_council")
+    ).json()) as { positions: Array<{ name: string }> };
+    expect(ecList.positions.map((p) => p.name)).toEqual(["Ec Only"]);
+  });
+
+  it("rejects an unknown body value", async () => {
+    const response = await call(adminToken, "/api/v1/admin/leadership-positions?body=not-a-body");
+    expect(response.status).toBe(400);
+  });
+
+  it("updates a position's title and dates, and moving endsAt into the past turns it into a past position", async () => {
+    const userId = await insertUser("editable@example.test", ["Ed", "Itable"]);
+    const createResponse = await call(adminToken, "/api/v1/admin/leadership-positions", {
+      method: "POST",
+      body: JSON.stringify({ body: "board", userId, title: "Board Member", startsAt: "2022-06-01" }),
+    });
+    const created = (await createResponse.json()) as { id: string };
+
+    const patchResponse = await call(adminToken, `/api/v1/admin/leadership-positions/${created.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ title: "Board Chair", endsAt: "2026-01-01" }),
+    });
+    expect(patchResponse.status).toBe(200);
+    const patched = (await patchResponse.json()) as { title: string; endsAt: string | null };
+    expect(patched.title).toBe("Board Chair");
+    expect(patched.endsAt).toBe("2026-01-01");
+
+    const list = (await (await call(adminToken, "/api/v1/admin/leadership-positions?body=board")).json()) as {
+      positions: Array<{ endsAt: string | null }>;
+    };
+    expect(list.positions[0].endsAt).toBe("2026-01-01");
+  });
+
+  it("PATCH/DELETE on an unknown position id returns 404", async () => {
+    const patchResponse = await call(adminToken, `/api/v1/admin/leadership-positions/${crypto.randomUUID()}`, {
+      method: "PATCH",
+      body: JSON.stringify({ title: "X" }),
+    });
+    expect(patchResponse.status).toBe(404);
+
+    const deleteResponse = await call(adminToken, `/api/v1/admin/leadership-positions/${crypto.randomUUID()}`, {
+      method: "DELETE",
+    });
+    expect(deleteResponse.status).toBe(404);
+  });
+
+  it("deletes a position", async () => {
+    const userId = await insertUser("removable@example.test", ["Rem", "Ovable"]);
+    const createResponse = await call(adminToken, "/api/v1/admin/leadership-positions", {
+      method: "POST",
+      body: JSON.stringify({ body: "executive_council", userId, title: "EC Member", startsAt: "2022-06-01" }),
+    });
+    const created = (await createResponse.json()) as { id: string };
+
+    const deleteResponse = await call(adminToken, `/api/v1/admin/leadership-positions/${created.id}`, {
+      method: "DELETE",
+    });
+    expect(deleteResponse.status).toBe(200);
+
+    const list = (await (
+      await call(adminToken, "/api/v1/admin/leadership-positions?body=executive_council")
+    ).json()) as { positions: unknown[] };
+    expect(list.positions).toHaveLength(0);
+  });
+
+  it("a staff user without access:grant is denied create/list/update/delete", async () => {
+    const staffUserId = await insertUser("staff-no-grant@example.test");
+    await assignRole(staffUserId, "role-membership_processor", adminId);
+    const staffToken = await createAdminSession(env.DB, staffUserId, "staff-no-grant-token");
+
+    expect((await call(staffToken, "/api/v1/admin/leadership-positions?body=board")).status).toBe(403);
+    expect(
+      (
+        await call(staffToken, "/api/v1/admin/leadership-positions", {
+          method: "POST",
+          body: JSON.stringify({ body: "board", userId: staffUserId, title: "Board Member", startsAt: "2022-06-01" }),
+        })
+      ).status,
+    ).toBe(403);
+  });
+
+  it("public GET /api/v1/leadership/:body returns current and past positions with organization enrichment, isolated per body", async () => {
+    const orgId = await insertOrganization("Digitorus", "https://digitorus.com");
+    const chairUserId = await insertUser("paul@example.test", ["Paul", "van Brouwershaven"]);
+    await insertMember(chairUserId, orgId);
+    const pastUserId = await insertUser("kirk@example.test", ["Kirk", "Hall"]);
+
+    await call(adminToken, "/api/v1/admin/leadership-positions", {
+      method: "POST",
+      body: JSON.stringify({ body: "board", userId: chairUserId, title: "Board Chair", startsAt: "2025-03-01" }),
+    });
+    await call(adminToken, "/api/v1/admin/leadership-positions", {
+      method: "POST",
+      body: JSON.stringify({
+        body: "board",
+        userId: pastUserId,
+        title: "Board Chair",
+        startsAt: "2022-06-01",
+        endsAt: "2025-02-01",
+      }),
+    });
+
+    // Unauthenticated request — proves this is genuinely public, not just admin-reachable.
+    const response = await call(null, "/api/v1/leadership/board");
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      current: Array<{ name: string; organizationName: string | null; organizationWebsite: string | null }>;
+      past: Array<{ name: string; endsAt: string | null }>;
+    };
+    expect(body.current).toHaveLength(1);
+    expect(body.current[0].name).toBe("Paul van Brouwershaven");
+    expect(body.current[0].organizationName).toBe("Digitorus");
+    expect(body.current[0].organizationWebsite).toBe("https://digitorus.com");
+    expect(body.past).toHaveLength(1);
+    expect(body.past[0].name).toBe("Kirk Hall");
+    expect(body.past[0].endsAt).toBe("2025-02-01");
+
+    // Executive Council roster is independent of Board's.
+    const ecResponse = await call(null, "/api/v1/leadership/executive_council");
+    const ecBody = (await ecResponse.json()) as { current: unknown[]; past: unknown[] };
+    expect(ecBody.current).toHaveLength(0);
+    expect(ecBody.past).toHaveLength(0);
+  });
+
+  it("public GET /api/v1/leadership/:body 404s for an unknown body", async () => {
+    const response = await call(null, "/api/v1/leadership/not-a-body");
+    expect(response.status).toBe(404);
+  });
+
+  it("public GET /api/v1/leadership/forum-chairs resolves role-forum_chair/role-forum_vice_chair", async () => {
+    const emptyResponse = await call(null, "/api/v1/leadership/forum-chairs");
+    expect(emptyResponse.status).toBe(200);
+    expect((await emptyResponse.json()) as { chair: unknown }).toEqual({ chair: null, viceChair: null });
+
+    const chairRole = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM roles WHERE name = 'forum_chair'"))[0];
+    const viceChairRole = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM roles WHERE name = 'forum_vice_chair'")
+    )[0];
+    const chairUserId = await insertUser("forum-chair@example.test", ["Forum", "Chair"]);
+    const viceChairUserId = await insertUser("forum-vice-chair@example.test", ["Forum", "ViceChair"]);
+    await assignRole(chairUserId, chairRole.id, adminId);
+    await assignRole(viceChairUserId, viceChairRole.id, adminId);
+
+    const response = await call(null, "/api/v1/leadership/forum-chairs");
+    const body = (await response.json()) as {
+      chair: { name: string; startsAt: string } | null;
+      viceChair: { name: string } | null;
+    };
+    expect(body.chair?.name).toBe("Forum Chair");
+    expect(body.chair?.startsAt).toBeTruthy();
+    expect(body.viceChair?.name).toBe("Forum ViceChair");
+  });
+});
