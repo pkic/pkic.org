@@ -73,7 +73,6 @@
      correctly. We detect the current version base and the pinned version base
      from data/pkimm-versions.yaml, then rewrite each deliverable URL below. */}}
 {{- $isPkimm := eq ($wg.Params.wgID | upper) "PKIMM" -}}
-{{- $isPqc := eq ($wg.Params.wgID | upper) "PQC" -}}
 {{- $pkimmVersions := slice -}}
 {{- $pkimmCurrentBase := "" -}}
 {{- $pkimmCurrentVersion := "" -}}
@@ -200,16 +199,7 @@
       {{- $treePage := cond $isActive $.Page $delSection -}}
 <div class="wg-nav-tree-panel wg-{{ $wg.Params.wgID | lower }}" id="wg-nav-tree-{{ $slug }}" hidden>
   {{ partial "wg/sidebar-tree.html" $treePage }}
-  {{ if $isPkimm }}
-  {{- $delVersioned := false -}}
-  {{- range $pkimmVersions -}}{{- if strings.HasPrefix $delURL .path -}}{{- $delVersioned = true -}}{{- end -}}{{- end -}}
-  {{- if $delVersioned }}
-  {{ partial "wg/pkimm-version-switcher.html" $.Page }}
-  {{- end }}
-  {{ end }}
-  {{ if and $isPqc (strings.HasPrefix $delURL "/wg/pqc/pqcmm/") }}
-  {{ partial "wg/pqcmm-version-switcher.html" $.Page }}
-  {{ end }}
+  {{ partial "wg/model-version-switcher-for-path.html" (dict "page" $.Page "path" $delURL) }}
 </div>
     {{- end -}}
   {{- end -}}
