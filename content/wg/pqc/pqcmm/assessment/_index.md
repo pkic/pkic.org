@@ -26,7 +26,7 @@ The model supports three progressive validation methods depending on your market
 
 Use the offline-capable assessment below to evaluate one product or service against PQCMM Version {{< pqcmm-version >}}. Assessment data and uploaded evidence stay in your browser. You can export a portable JSON assessment package or generate a PDF report that embeds the machine-readable assessment and its evidence files.
 
-{{< pqcmm-assessment >}}
+{{< pqcmm-assessment version="previews/pr-169" >}}
 
 Read the [self-assessment guidance](/wg/pqc/pqcmm/assessment/self-assessment/) before sharing a result. A browser-generated report remains a self-assessment even when an executive later signs it; independent assessment and PKI Consortium certification require their separate review workflows.
 
