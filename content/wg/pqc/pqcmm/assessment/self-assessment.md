@@ -15,11 +15,13 @@ A self-assessment is performed by the vendor themselves, or by a procuring organ
 Self-assessments are fast, low-cost, and suitable as a starting point — for example, as a response to a supplier questionnaire, a request for proposal, or an internal post-quantum cryptography gap analysis.
 
 > A self-assessment is **indicative**, not authoritative. It reflects the vendor's own view of their product and is not independently verified. Relying parties should treat self-assessed PQCMM levels as a useful signal, not a guarantee.
-{.callout-info}
+> {.callout-info}
+
+The assessment does not preselect a signer. The PDF provides optional signature fields for an accountable executive and a security executive, while the external signing workflow determines the actual signer at signing time and may add further signatures. This supports delegated approval and last-minute signer changes without changing the assessment content. Any applied signature, trusted time, organization binding, and role-authority evidence must be validated by the recipient.
 
 ## Web-Based Assessment
 
-Use the offline-capable assessment below to evaluate one product or service against PQCMM Version {{< param version >}}. Assessment data and uploaded evidence stay in your browser. You can export a portable JSON assessment or generate a PDF report that embeds the machine-readable assessment and its evidence files.
+Use the offline-capable assessment below to evaluate one product or service against PQCMM Version {{< pqcmm-version >}}. Assessment data and uploaded evidence stay in your browser. You can export a portable JSON assessment package or generate a PDF report that embeds the machine-readable assessment and its evidence files. Executive approval does not change the report's status as a self-assessment or make it PKI Consortium certified.
 
 {{< pqcmm-assessment >}}
 
@@ -31,7 +33,7 @@ The website, assessment, and downstream imports use the same versioned model dat
 
 ## How to Perform a Self-Assessment
 
-1. **Select the product or service in scope.** A PQCMM assessment applies to a single product or service. Assess each separately.
+1. **Select the product or service in scope.** A PQCMM assessment applies to a single product or service. Assess each separately. Provide at least one canonical CPE 2.3 name or package URL (pURL) so inventory, discovery, and reporting systems can match the result to the assessed solution.
 
 2. **Establish the baseline, then work upward.** [Level 0](/wg/pqc/pqcmm/levels/0-none/) is the mutually exclusive baseline for a product with no PQC capability. For Levels 1 through 5, a product achieves a level only if it meets **all criteria** for that level and every lower positive level.
 
@@ -50,9 +52,10 @@ Self-assessment results can be shared with customers or procurement teams as a *
 When sharing, include:
 
 - The product name and version assessed.
+- At least one canonical CPE 2.3 name or package URL (pURL).
 - The assessed PQCMM level.
 - The date of the assessment.
-- The **evidence package** supporting the claim: for each criterion at the claimed level and all lower levels, the artefact(s) (release notes URL, configuration guide reference, SBOM/CBOM file, test results, etc.) that substantiate the answer. The evidence package must be available to recipients of the declaration on request.
+- The **evidence package** supporting the claim: for each criterion at the claimed level and all lower levels, the artifacts (release notes URL, configuration guide reference, SBOM/CBOM file, test results, etc.) that substantiate the answer. The evidence package must be available to recipients of the declaration on request.
 - A summary of the criteria met and any notable gaps at the next level.
 - A caveat that the assessment is self-declared and has not been independently verified.
 
@@ -60,8 +63,8 @@ Recipients should treat any self-assessed PQCMM level claim that is not accompan
 
 ## Limitations
 
-| Limitation | Mitigation |
-|---|---|
+| Limitation                  | Mitigation                                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------------------------- |
 | No independent verification | Engage a [third-party assessor](/wg/pqc/pqcmm/assessment/third-party/) for independent validation |
-| Potential for overstatement | Be conservative: if a criterion is partially met, do not claim the level |
-| Point-in-time snapshot | Re-assess after each significant product release |
+| Potential for overstatement | Be conservative: if a criterion is partially met, do not claim the level                          |
+| Point-in-time snapshot      | Re-assess after each significant product release                                                  |
