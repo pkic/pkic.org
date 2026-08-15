@@ -227,12 +227,12 @@
     <aside class="wg-sidebar-wrap wg-{{ $wg.Params.wgID | lower }}" id="wg-sidebar-wrap">
       {{ partial "wg/sidebar.html" $.Page }}
     </aside>
-    <div class="wg-main-content" data-pagefind-body>
+    <div class="wg-main-content" data-pagefind-body{{ with $.Page.Params.sourceEditURL }} data-edit-url="{{ . }}"{{ end }}>
       {{ .Content }}
     </div>
   </div>
   {{- else }}
-  <div class="wg-prose" data-pagefind-body>
+  <div class="wg-prose" data-pagefind-body{{ with $.Page.Params.sourceEditURL }} data-edit-url="{{ . }}"{{ end }}>
     {{ .Content }}
   </div>
   {{- end }}

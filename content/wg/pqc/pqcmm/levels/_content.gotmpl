@@ -1,0 +1,37 @@
+{{- $config := hugo.Data.pqcmm -}}
+{{- $assetName := printf "pqcmm-model-%s.yaml" $config.modelVersion -}}
+{{- $releaseAsset := partial "pqcmm/release-asset.html" (dict
+  "repository" $config.repository
+  "releaseTag" $config.releaseTag
+  "assetName" $assetName
+  "expectedDigest" $config.digests.model
+) -}}
+{{- $model := $releaseAsset.resource.Content | transform.Unmarshal -}}
+
+{{- range $level := $model.levels -}}
+  {{- $sourcePath := strings.TrimSuffix "/" $level.sourcePage -}}
+  {{- $pagePath := path.Base $sourcePath -}}
+  {{- $sourceEditURL := printf "https://github.com/%s/edit/main/model/pqcmm-model-%s.yaml" $config.repository $config.modelVersion -}}
+  {{- $questionsHeading := cond (eq $level.number 0) "Supplier Intake Questions" "Assessment Questions" -}}
+  {{- $contentValue := printf "%s\n\n## Criteria\n\n{{< pqcmm-criteria level=\"%d\" >}}\n\n## %s\n\n{{< pqcmm-assessment-questions level=\"%d\" >}}" $level.summary $level.number $questionsHeading $level.number -}}
+  {{- if $level.evidenceChecklist.items -}}
+    {{- $contentValue = printf "%s\n\n## Evidence Checklist\n\n{{< pqcmm-evidence-checklist level=\"%d\" >}}" $contentValue $level.number -}}
+  {{- end -}}
+  {{- $page := dict
+    "content" (dict "mediaType" "text/markdown" "value" $contentValue)
+    "date" (time.AsTime "2026-05-07T00:00:00Z")
+    "description" $level.description
+    "kind" "page"
+    "linkTitle" (printf "%d — %s" $level.number $level.name)
+    "params" (dict
+      "generatedFromPqcmmRelease" $config.releaseTag
+      "sectionNav" true
+      "sourceEditURL" $sourceEditURL
+    )
+    "path" $pagePath
+    "summary" $level.summary
+    "title" $level.title
+    "weight" (mul (add $level.number 1) 10)
+  -}}
+  {{- $.AddPage $page -}}
+{{- end -}}
