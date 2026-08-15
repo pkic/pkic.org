@@ -13,7 +13,7 @@ version: "0.1.0"
 > These clauses are **illustrative examples only**. They are intended as a starting point for legal and procurement teams adapting them to their own jurisdiction, contract framework, and risk tolerance. The PKI Consortium accepts **no liability** for the use of these examples and they do **not** constitute legal advice. Have qualified legal counsel review any clause before incorporating it into a binding contract.
 {.callout-warning}
 
-This page is at version **{{< param version >}}**. Changes are tracked in the [PQCMM version history](/wg/pqc/pqcmm/version-history/).
+This page is at version **{{< pqcmm-version >}}**. Changes are tracked in the [PQCMM version history](/wg/pqc/pqcmm/version-history/).
 
 ## How to Use These Clauses
 
