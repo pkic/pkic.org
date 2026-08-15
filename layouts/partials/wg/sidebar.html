@@ -27,4 +27,7 @@
   {{ partial "wg/pkimm-version-switcher.html" . }}
   {{- end -}}
   {{- end -}}
+  {{- if strings.HasPrefix .RelPermalink "/wg/pqc/pqcmm/" -}}
+  {{ partial "wg/pqcmm-version-switcher.html" . }}
+  {{- end -}}
 </nav>

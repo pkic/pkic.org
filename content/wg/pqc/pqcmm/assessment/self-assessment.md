@@ -19,11 +19,11 @@ Self-assessments are fast, low-cost, and suitable as a starting point — for ex
 
 The assessment does not preselect a signer. The PDF provides optional signature fields for an accountable executive and a security executive, while the external signing workflow determines the actual signer at signing time and may add further signatures. This supports delegated approval and last-minute signer changes without changing the assessment content. Any applied signature, trusted time, organization binding, and role-authority evidence must be validated by the recipient.
 
-## Web-Based Assessment
+## Start the Web-Based Assessment
 
-Use the offline-capable assessment below to evaluate one product or service against PQCMM Version {{< pqcmm-version >}}. Assessment data and uploaded evidence stay in your browser. You can export a portable JSON assessment package or generate a PDF report that embeds the machine-readable assessment and its evidence files. Executive approval does not change the report's status as a self-assessment or make it PKI Consortium certified.
+The interactive tool is embedded on the [PQCMM assessment page](/wg/pqc/pqcmm/assessment/#self-assessment-tool). It evaluates one product or service against the selected PQCMM release while keeping assessment data and uploaded evidence in your browser.
 
-{{< pqcmm-assessment >}}
+[Start the PQCMM self-assessment →](/wg/pqc/pqcmm/assessment/#self-assessment-tool)
 
 ### Model Data and GRC Integration
 
