@@ -73,6 +73,7 @@
      correctly. We detect the current version base and the pinned version base
      from data/pkimm-versions.yaml, then rewrite each deliverable URL below. */}}
 {{- $isPkimm := eq ($wg.Params.wgID | upper) "PKIMM" -}}
+{{- $isPqc := eq ($wg.Params.wgID | upper) "PQC" -}}
 {{- $pkimmVersions := slice -}}
 {{- $pkimmCurrentBase := "" -}}
 {{- $pkimmCurrentVersion := "" -}}
@@ -205,6 +206,9 @@
   {{- if $delVersioned }}
   {{ partial "wg/pkimm-version-switcher.html" $.Page }}
   {{- end }}
+  {{ end }}
+  {{ if and $isPqc (strings.HasPrefix $delURL "/wg/pqc/pqcmm/") }}
+  {{ partial "wg/pqcmm-version-switcher.html" $.Page }}
   {{ end }}
 </div>
     {{- end -}}
