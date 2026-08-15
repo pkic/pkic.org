@@ -1,0 +1,38 @@
+{{- $repository := .repository -}}
+{{- $releaseTag := .releaseTag -}}
+{{- $assetName := .assetName -}}
+{{- $expectedDigest := .expectedDigest -}}
+{{- if not (findRE `^[a-f0-9]{64}$` $expectedDigest) -}}
+  {{- errorf "PQCMM release asset %s has no pinned SHA-256 digest" $assetName -}}
+{{- end -}}
+{{- $releaseURL := printf "https://api.github.com/repos/%s/releases/tags/%s" $repository $releaseTag -}}
+{{- $releaseResult := try (resources.GetRemote $releaseURL) -}}
+{{- with $releaseResult.Err -}}
+  {{- errorf "Unable to fetch PQCMM release %s from %s: %s" $releaseTag $releaseURL . -}}
+{{- end -}}
+{{- $release := $releaseResult.Value.Content | transform.Unmarshal -}}
+{{- if ne $release.tag_name $releaseTag -}}
+  {{- errorf "PQCMM release API returned tag %q, expected %q" $release.tag_name $releaseTag -}}
+{{- end -}}
+{{- $matches := where $release.assets "name" $assetName -}}
+{{- if ne (len $matches) 1 -}}
+  {{- errorf "PQCMM release %s must contain exactly one %s asset" $releaseTag $assetName -}}
+{{- end -}}
+{{- $assetMetadata := index $matches 0 -}}
+{{- if not (hasPrefix $assetMetadata.digest "sha256:") -}}
+  {{- errorf "PQCMM release asset %s has no SHA-256 digest" $assetName -}}
+{{- end -}}
+{{- $apiDigest := strings.TrimPrefix "sha256:" $assetMetadata.digest -}}
+{{- if ne $apiDigest $expectedDigest -}}
+  {{- errorf "PQCMM release API digest for %s does not match the pinned digest" $assetName -}}
+{{- end -}}
+{{- $assetResult := try (resources.GetRemote $assetMetadata.browser_download_url) -}}
+{{- with $assetResult.Err -}}
+  {{- errorf "Unable to fetch PQCMM release asset %s: %s" $assetName . -}}
+{{- end -}}
+{{- $asset := $assetResult.Value -}}
+{{- $actualDigest := crypto.SHA256 $asset.Content -}}
+{{- if ne $actualDigest $expectedDigest -}}
+  {{- errorf "PQCMM release asset %s failed SHA-256 verification" $assetName -}}
+{{- end -}}
+{{- return (dict "resource" $asset "metadata" $assetMetadata "release" $release) -}}
