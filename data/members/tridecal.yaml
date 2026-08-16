@@ -9,7 +9,7 @@ organizationDomains:
 description: Engineered for institutional scale. Tridecal orchestrates high-concurrency frameworks, Post-Quantum Cryptography to deliver resilient, sovereign ecosystems for the modern world.
 
 # membership
-memberSince: 2026-08-09
+memberSince: 2026-07-30
 memberType: F
 workingGroups:
   - CBOM
@@ -24,29 +24,29 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/tridecal/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
