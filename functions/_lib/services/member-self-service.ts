@@ -16,6 +16,7 @@ import {
   addWorkingGroupMember,
   removeWorkingGroupMember,
 } from "./working-groups";
+import { resolveRepresentativeRoleHolders } from "./membership/representative-roles";
 import type { AuthMember, DatabaseLike } from "../types";
 
 export interface MyOrganizationRepresentative {
@@ -57,16 +58,13 @@ interface MyProfileRow {
   biography: string | null;
   links_json: string | null;
   organization_name: string | null;
-  member_type: string;
+  category_code: string;
   organization_id: string | null;
   show_on_org_profile: number;
   headshot_r2_key: string | null;
   member_since: string | null;
   member_created_at: string;
   org_name: string | null;
-  org_member_since: string | null;
-  primary_contact_user_id: string | null;
-  secondary_contact_user_id: string | null;
 }
 
 interface OrganizationRepresentativeRow {
@@ -87,10 +85,9 @@ function toProfile(
   row: MyProfileRow,
   member: AuthMember,
   organizationRepresentatives: MyOrganizationRepresentative[] | null,
+  isOrgContact: boolean,
 ): MyProfile {
   const isIndividual = row.organization_id === null;
-  const isOrgContact =
-    !isIndividual && (member.userId === row.primary_contact_user_id || member.userId === row.secondary_contact_user_id);
   return {
     userId: member.userId,
     email: row.email,
@@ -100,10 +97,10 @@ function toProfile(
     jobTitle: row.job_title,
     biography: row.biography,
     links: parseLinksJson(row.links_json),
-    membershipCategory: row.member_type,
+    membershipCategory: row.category_code,
     organizationId: row.organization_id,
     organizationName: row.org_name ?? row.organization_name,
-    memberSince: (isIndividual ? row.member_since : row.org_member_since) ?? row.member_created_at,
+    memberSince: row.member_since ?? row.member_created_at,
     showOnOrgProfile: row.show_on_org_profile === 1,
     // Public capability-URL path (functions/api/v1/headshots/:userId/:file) —
     // matches admin/users/[userId]/index.ts's identical construction.
@@ -120,40 +117,47 @@ export async function getMyProfile(db: DatabaseLike, member: AuthMember): Promis
   const row = await first<MyProfileRow>(
     db,
     `SELECT u.email, u.first_name, u.last_name, u.preferred_name, u.job_title, u.biography, u.links_json,
-            u.organization_name, u.headshot_r2_key, m.member_type, m.organization_id, m.show_on_org_profile,
-            m.member_since, m.created_at AS member_created_at, o.name AS org_name, o.member_since AS org_member_since,
-            o.primary_contact_user_id, o.secondary_contact_user_id
+            u.organization_name, u.headshot_r2_key, mca.category_code, m.organization_id,
+            COALESCE(r.show_on_org_profile, 1) AS show_on_org_profile,
+            m.member_since, m.created_at AS member_created_at, o.name AS org_name
      FROM users u
-     JOIN members m ON m.user_id = u.id
+     JOIN members m ON m.id = ?
+     JOIN member_category_assignments mca ON mca.member_id = m.id
      LEFT JOIN organizations o ON o.id = m.organization_id
+     LEFT JOIN organization_representatives r ON r.member_id = m.id AND r.user_id = u.id AND r.left_at IS NULL
      WHERE u.id = ?`,
-    [member.userId],
+    [member.memberId, member.userId],
   );
   if (!row) {
     throw new AppError(404, "NOT_FOUND", "Profile not found");
   }
 
   let organizationRepresentatives: MyOrganizationRepresentative[] | null = null;
+  let isOrgContact = false;
   if (row.organization_id) {
-    const repRows = await all<OrganizationRepresentativeRow>(
-      db,
-      `SELECT u.id AS user_id, u.first_name, u.last_name, u.preferred_name, u.email
-       FROM members m
-       JOIN users u ON u.id = m.user_id
-       WHERE m.organization_id = ? AND m.status = 'active'
-       ORDER BY u.first_name, u.last_name`,
-      [row.organization_id],
-    );
+    const [repRows, holders] = await Promise.all([
+      all<OrganizationRepresentativeRow>(
+        db,
+        `SELECT u.id AS user_id, u.first_name, u.last_name, u.preferred_name, u.email
+         FROM organization_representatives r
+         JOIN users u ON u.id = r.user_id
+         WHERE r.member_id = ? AND r.left_at IS NULL
+         ORDER BY u.first_name, u.last_name`,
+        [member.memberId],
+      ),
+      resolveRepresentativeRoleHolders(db, member.memberId),
+    ]);
     organizationRepresentatives = repRows.map((r) => ({
       userId: r.user_id,
       name: representativeDisplayName(r),
       email: r.email,
-      isPrimaryContact: r.user_id === row.primary_contact_user_id,
-      isSecondaryContact: r.user_id === row.secondary_contact_user_id,
+      isPrimaryContact: r.user_id === holders.primaryContactUserId,
+      isSecondaryContact: r.user_id === holders.secondaryContactUserId,
     }));
+    isOrgContact = member.userId === holders.primaryContactUserId || member.userId === holders.secondaryContactUserId;
   }
 
-  return toProfile(row, member, organizationRepresentatives);
+  return toProfile(row, member, organizationRepresentatives, isOrgContact);
 }
 
 export interface MyProfileUpdateInput {
@@ -215,11 +219,15 @@ export async function updateOrganizationVisibility(
   member: AuthMember,
   showOnOrgProfile: boolean,
 ): Promise<void> {
-  await run(db, `UPDATE members SET show_on_org_profile = ?, updated_at = ? WHERE id = ?`, [
-    showOnOrgProfile ? 1 : 0,
-    nowIso(),
-    member.memberId,
-  ]);
+  if (!member.organizationId) {
+    throw new AppError(422, "NO_ORGANIZATION", "This preference only applies to organization representatives");
+  }
+  await run(
+    db,
+    `UPDATE organization_representatives SET show_on_org_profile = ?, updated_at = ?
+     WHERE member_id = ? AND user_id = ? AND left_at IS NULL`,
+    [showOnOrgProfile ? 1 : 0, nowIso(), member.memberId, member.userId],
+  );
 }
 
 export interface MyApplicationSummary {

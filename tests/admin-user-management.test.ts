@@ -7,6 +7,7 @@ import { resetDb } from "./helpers/reset-db";
 import { onRequestPatch as patchUser } from "../functions/api/v1/admin/users/[userId]/index";
 import { onRequestPost as anonymizeUser } from "../functions/api/v1/admin/users/[userId]/anonymize";
 import app from "../functions/router";
+import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 
 let adminToken: string;
 
@@ -353,12 +354,8 @@ describe("admin users list — type filter", () => {
 
   async function seedMember(email: string): Promise<string> {
     const userId = await seedUser(env.DB, email);
-    await env.DB.prepare(
-      `INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
-       VALUES (?, 'H5', ?, NULL, 'active', datetime('now'), datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), userId)
-      .run();
+    const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, "H5", new Date().toISOString());
+    await env.DB.batch(statements);
     return userId;
   }
 

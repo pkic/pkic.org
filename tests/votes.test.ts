@@ -13,6 +13,13 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import {
+  seedOrganizationAggregate,
+  addRepresentative,
+  assignRepresentativeRole,
+  REPRESENTATIVE_ROLE_IDS,
+} from "./helpers/membership";
+import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { closeDueVotes } from "../functions/_lib/services/votes";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
@@ -68,26 +75,51 @@ async function insertOrganization(name: string): Promise<string> {
   return id;
 }
 
+/**
+ * Sets the organization's primary contact and (optionally) voting delegate
+ * via role-primary_contact/role-voting_delegate grants (migration 0038) —
+ * the same mechanism resolveVotingDelegateUserId (votes/ballots.ts) reads.
+ * `primaryContactUserId`/`votingDelegateUserId` must already be active
+ * representatives of this organization (insertMemberUser adds them as such
+ * when called with an organizationId).
+ */
 async function setOrgContacts(
   orgId: string,
   primaryContactUserId: string | null,
   votingDelegateUserId: string | null = null,
 ): Promise<void> {
-  await env.DB.prepare(`UPDATE organizations SET primary_contact_user_id = ?, voting_delegate_user_id = ? WHERE id = ?`)
-    .bind(primaryContactUserId, votingDelegateUserId, orgId)
-    .run();
+  const memberId = await seedOrganizationAggregate(env.DB, orgId);
+  if (primaryContactUserId) {
+    await assignRepresentativeRole(env.DB, memberId, primaryContactUserId, REPRESENTATIVE_ROLE_IDS.primaryContact);
+  }
+  if (votingDelegateUserId) {
+    await assignRepresentativeRole(env.DB, memberId, votingDelegateUserId, REPRESENTATIVE_ROLE_IDS.votingDelegate);
+  }
 }
 
-/** Creates a user + active member row (optionally org-tied) in one call, category A-G by default. */
+/**
+ * Creates a user + active membership in one call, category A-G by default.
+ * With `organizationId`: reuses (or creates) that organization's aggregate
+ * with `category` and adds the user as an active representative of it —
+ * matching the real self-service/admin join path. Without: creates an
+ * org-less individual aggregate directly with `category`, regardless of
+ * whether `category` is one of the individual-only codes — nothing at the
+ * DB layer ties a category to org-tied-ness (that's `assets/shared/schemas/
+ * membership-categories.ts` application policy, not a constraint), and
+ * several ballot-eligibility tests below intentionally use a voting
+ * category (e.g. "F") with no organization to isolate WG-level eligibility
+ * from forum-level org-contact resolution.
+ */
 async function insertMemberUser(category: string, organizationId: string | null = null): Promise<string> {
   userCounter += 1;
   const userId = await insertUser(`voter-${userCounter}@example.test`);
-  await env.DB.prepare(
-    `INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`,
-  )
-    .bind(crypto.randomUUID(), category, userId, organizationId)
-    .run();
+  if (organizationId) {
+    const memberId = await seedOrganizationAggregate(env.DB, organizationId, category);
+    await addRepresentative(env.DB, memberId, userId);
+  } else {
+    const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, category, new Date().toISOString());
+    await env.DB.batch(statements);
+  }
   return userId;
 }
 

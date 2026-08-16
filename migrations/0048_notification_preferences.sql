@@ -1,4 +1,4 @@
--- Migration 0045: Notification preferences (Member Portal Navigation
+-- Migration 0048: Notification preferences (Member Portal Navigation
 -- Structure "Account Settings" row)
 --
 -- Account Settings nav section lists "notification preferences"

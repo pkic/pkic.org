@@ -11,6 +11,8 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createMemberSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
+import { seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
+import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 
 function requestWithAuth(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -42,26 +44,27 @@ const INDIVIDUAL_CATEGORIES = new Set(["H5", "H6", "H7"]);
 
 async function insertActiveMember(email: string, category: string): Promise<string> {
   const userId = crypto.randomUUID();
-  const memberId = crypto.randomUUID();
-  let organizationId: string | null = null;
-  if (!INDIVIDUAL_CATEGORIES.has(category)) {
-    organizationId = crypto.randomUUID();
-    await env.DB.prepare(
-      `INSERT INTO organizations (id, name, normalized_name, created_at, updated_at) VALUES (?, ?, ?, datetime('now'), datetime('now'))`,
-    )
-      .bind(organizationId, `Org for ${email}`, `org for ${email}`)
-      .run();
+  await env.DB.prepare(
+    `INSERT INTO users (id, email, normalized_email, first_name, role, active, created_at, updated_at)
+     VALUES (?, ?, ?, 'Test', 'user', 1, datetime('now'), datetime('now'))`,
+  )
+    .bind(userId, email, email)
+    .run();
+
+  if (INDIVIDUAL_CATEGORIES.has(category)) {
+    const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, category, new Date().toISOString());
+    await env.DB.batch(statements);
+    return userId;
   }
-  await env.DB.batch([
-    env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, first_name, role, active, created_at, updated_at)
-       VALUES (?, ?, ?, 'Test', 'user', 1, datetime('now'), datetime('now'))`,
-    ).bind(userId, email, email),
-    env.DB.prepare(
-      `INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`,
-    ).bind(memberId, category, userId, organizationId),
-  ]);
+
+  const organizationId = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO organizations (id, name, normalized_name, created_at, updated_at) VALUES (?, ?, ?, datetime('now'), datetime('now'))`,
+  )
+    .bind(organizationId, `Org for ${email}`, `org for ${email}`)
+    .run();
+  const memberId = await seedOrganizationAggregate(env.DB, organizationId, category);
+  await addRepresentative(env.DB, memberId, userId);
   return userId;
 }
 
@@ -124,7 +127,7 @@ describe("Member self-service /api/v1/me/*", () => {
     expect(individualBody.organizationName).toBe("My Consultancy");
   });
 
-  it("PATCH /api/v1/me/organization-visibility toggles members.show_on_org_profile", async () => {
+  it("PATCH /api/v1/me/organization-visibility toggles organization_representatives.show_on_org_profile", async () => {
     const userId = await insertActiveMember("visibility@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "visibility-token");
 
@@ -136,7 +139,7 @@ describe("Member self-service /api/v1/me/*", () => {
 
     const rows = await queryAll<{ show_on_org_profile: number }>(
       env.DB,
-      "SELECT show_on_org_profile FROM members WHERE user_id = ?",
+      "SELECT show_on_org_profile FROM organization_representatives WHERE user_id = ? AND left_at IS NULL",
       userId,
     );
     expect(rows[0].show_on_org_profile).toBe(0);

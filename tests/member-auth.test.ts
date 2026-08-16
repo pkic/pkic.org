@@ -11,6 +11,7 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createMemberSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
+import { insertIndividualMember } from "./helpers/membership";
 
 function request(path: string, init: RequestInit = {}, token?: string): Request {
   const headers = new Headers(init.headers);
@@ -28,18 +29,7 @@ async function call(path: string, init: RequestInit = {}, token?: string): Promi
 }
 
 async function insertActiveMember(email: string, category = "F"): Promise<string> {
-  const userId = crypto.randomUUID();
-  const memberId = crypto.randomUUID();
-  await env.DB.batch([
-    env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-       VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
-    ).bind(userId, email, email),
-    env.DB.prepare(
-      `INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
-       VALUES (?, ?, ?, NULL, 'active', datetime('now'), datetime('now'))`,
-    ).bind(memberId, category, userId),
-  ]);
+  const { userId } = await insertIndividualMember(env.DB, category, email);
   return userId;
 }
 

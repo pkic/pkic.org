@@ -12,9 +12,11 @@
  * stays resolvable, don't hard-delete), applied here to an admin-initiated
  * merge instead of an end-user email-change collision.
  *
- * Deliberately reassigned: working_group_members, members (the
- * representative/individual-membership row), user_roles,
- * permission_grants, passkey_credentials. Deliberately NOT reassigned:
+ * Deliberately reassigned: working_group_members, members (the org-less
+ * individual membership row), organization_representatives, user_roles
+ * (also covers representative-role grants: primary/secondary contact,
+ * voting delegate), permission_grants, passkey_credentials. Deliberately
+ * NOT reassigned:
  * registrations, donations, speaker_proposals, audit_log, email_outbox,
  * sessions/refresh_tokens, member_applications.assigned_to_user_id,
  * ec_decisions, vote_ballots/vote_candidates -- these keep pointing at the
@@ -106,6 +108,25 @@ export async function mergeUsers(
   if (sourceMembership && !survivorMembership) {
     stmts.push(db.prepare(`UPDATE members SET user_id = ? WHERE user_id = ?`).bind(survivorId, sourceUserId));
   }
+
+  // 2b. organization_representatives: repoint the source's active rows to
+  //     the survivor, same "skip if survivor already actively represents
+  //     that same organization" rule as working_group_members above —
+  //     uq_organization_representatives_active_pair would reject a plain
+  //     repoint into an existing active (member_id, survivorId) pair.
+  stmts.push(
+    db
+      .prepare(
+        `UPDATE organization_representatives
+            SET user_id = ?, updated_at = ?
+          WHERE user_id = ?
+            AND left_at IS NULL
+            AND member_id NOT IN (
+              SELECT member_id FROM organization_representatives WHERE user_id = ? AND left_at IS NULL
+            )`,
+      )
+      .bind(survivorId, now, sourceUserId, survivorId),
+  );
 
   // 3. user_roles / permission_grants / passkey_credentials: no uniqueness
   //    constraints on any of these -- repoint unconditionally.

@@ -1,4 +1,4 @@
--- Migration 0039: Secondary email addresses + user merge support
+-- Migration 0042: Secondary email addresses + user merge support
 --
 -- Follow-up to a real, visible problem from the YAML->D1 migration:
 -- Google Groups roster CSVs used different email addresses than

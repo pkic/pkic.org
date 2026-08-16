@@ -83,12 +83,27 @@ describe("Post-approval onboarding", () => {
     const body = (await response.json()) as { organizationId: string; memberId: string; userId: string };
     expect(body.organizationId).toBeTruthy();
 
-    const orgRows = await queryAll<{
-      name: string;
-      primary_contact_user_id: string;
-    }>(env.DB, "SELECT name, primary_contact_user_id FROM organizations WHERE id = ?", body.organizationId);
+    const orgRows = await queryAll<{ name: string }>(
+      env.DB,
+      "SELECT name FROM organizations WHERE id = ?",
+      body.organizationId,
+    );
     expect(orgRows[0].name).toBe("Acme Corp");
-    expect(orgRows[0].primary_contact_user_id).toBe(body.userId);
+
+    const primaryContactRows = await queryAll<{ user_id: string }>(
+      env.DB,
+      `SELECT user_id FROM user_roles WHERE context_type = 'organization' AND context_id = ? AND role_id = 'role-primary_contact' AND revoked_at IS NULL`,
+      body.memberId,
+    );
+    expect(primaryContactRows[0].user_id).toBe(body.userId);
+
+    const repRows = await queryAll<{ user_id: string; left_at: string | null }>(
+      env.DB,
+      "SELECT user_id, left_at FROM organization_representatives WHERE member_id = ? AND user_id = ?",
+      body.memberId,
+      body.userId,
+    );
+    expect(repRows[0].left_at).toBeNull();
 
     const domainRows = await queryAll<{ domain: string }>(
       env.DB,
@@ -102,9 +117,16 @@ describe("Post-approval onboarding", () => {
       "SELECT member_type, status, organization_id FROM members WHERE id = ?",
       body.memberId,
     );
-    expect(memberRows[0].member_type).toBe("F");
+    expect(memberRows[0].member_type).toBe("organization");
     expect(memberRows[0].status).toBe("active");
     expect(memberRows[0].organization_id).toBe(body.organizationId);
+
+    const categoryRows = await queryAll<{ category_code: string }>(
+      env.DB,
+      "SELECT category_code FROM member_category_assignments WHERE member_id = ?",
+      body.memberId,
+    );
+    expect(categoryRows[0].category_code).toBe("F");
 
     const appRows = await queryAll<{ status: string; stage: string }>(
       env.DB,

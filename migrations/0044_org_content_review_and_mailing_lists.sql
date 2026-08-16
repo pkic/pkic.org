@@ -1,23 +1,36 @@
--- Migration 0041: Organization Profile Moderation & Managed
+-- Migration 0044: Organization Profile Moderation & Managed
 -- Mailing List Configuration
 --
 -- (the *workflow* half — the data-bearing half was pulled forward
--- by migration 0037; see that migration's own header.
+-- by migration 0040; see that migration's own header.
 -- No CHECK constraints, per this repo's standing convention
 -- — allowed values are documented in `-- allowed:` comments and validated at
 -- the application layer (Zod) instead.
+--
+-- Voting delegate is not a column here: it is a role-voting_delegate grant
+-- in user_roles (migration 0038), the same organization-context mechanism
+-- primary/secondary contact use, resolved with no separate fallback column.
 
--- ── workflow-only columns, deferred by migration 0037 ──────────────
-ALTER TABLE organizations ADD COLUMN voting_delegate_user_id TEXT REFERENCES users(id);
--- NULL means primary_contact_user_id is the default voting delegate for
--- forum-level votes (not yet built, column added now
--- to read/write it without another schema pull).
-ALTER TABLE organizations ADD COLUMN pending_secondary_contact_user_id TEXT REFERENCES users(id);
--- Holds a secondary contact nomination (PATCH /api/v1/me/organization/secondary-contact)
--- until confirmed by a staff admin.
 ALTER TABLE organizations ADD COLUMN logo_staging_r2_key TEXT;
 -- Pending logo awaiting moderation approval; promoted to logo_r2_key when
 -- the review it's attached to is approved.
+
+-- ── Secondary contact nomination ─────────────────────────────────────────
+-- Workflow state (a pending nomination awaiting staff confirmation), not an
+-- aggregate or representative fact — so it gets its own small table rather
+-- than living on organizations or organization_representatives. One
+-- pending nomination per organization at a time.
+CREATE TABLE organization_secondary_contact_nominations (
+  id                TEXT NOT NULL PRIMARY KEY,
+  member_id         TEXT NOT NULL UNIQUE,
+  -- the organization's aggregate row (members.id)
+  nominated_user_id TEXT NOT NULL,
+  nominated_by_user_id TEXT NOT NULL,
+  created_at        TEXT NOT NULL,
+  FOREIGN KEY(member_id) REFERENCES members(id),
+  FOREIGN KEY(nominated_user_id) REFERENCES users(id),
+  FOREIGN KEY(nominated_by_user_id) REFERENCES users(id)
+);
 
 -- ── Organization content moderation queue ────────────────────────
 CREATE TABLE organization_content_reviews (

@@ -1,4 +1,4 @@
--- Migration 0042: Sponsorship Management
+-- Migration 0045: Sponsorship Management
 --
 -- `sponsorships`/`sponsorship_events` already exist (migration 0034, pulled
 -- forward for inquiry/checkout endpoints) with every column

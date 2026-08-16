@@ -1,10 +1,9 @@
 /**
- * Interim Admin Tool Interim Admin Tool — Manual Member
- * Management). Creates an organization (or org-less
- * individual) plus representative(s) plus member row(s) directly, and
- * lists every `members` row for the admin UI (unfiltered by status,
- * unlike the public directory in members-directory.ts which only
- * surfaces one "primary" row per organization).
+ * Interim Admin Tool (Interim Admin Tool — Manual Member
+ * Management). Creates an organization (or org-less individual) plus
+ * representative(s) directly, and lists every representative/individual
+ * for the admin UI (unfiltered by status, unlike the public directory in
+ * members-directory.ts which only surfaces active members).
  */
 import { all, first } from "../db/queries";
 import { normalizeEmail } from "../validation";
@@ -13,6 +12,12 @@ import { uuid } from "../utils/ids";
 import { buildFindOrCreateUserStatement, type UserRecord } from "./users";
 import { normalizeOrgName } from "./sponsorship";
 import { getWorkingGroupBySlugOrId, buildAddWorkingGroupMemberStatements } from "./working-groups";
+import {
+  getOrCreateOrganizationMemberAggregate,
+  buildCreateIndividualMemberStatements,
+} from "./membership/memberships";
+import { buildAddRepresentativeStatement } from "./membership/representatives";
+import { REPRESENTATIVE_ROLE_IDS, buildAssignRepresentativeRoleStatements } from "./membership/representative-roles";
 import { AppError } from "../errors";
 import { serializeLinks } from "../../../assets/shared/schemas/api";
 import { INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../../assets/shared/schemas/membership-categories";
@@ -56,22 +61,15 @@ function splitName(fullName: string): { firstName: string | null; lastName: stri
 }
 
 /**
- * Creates active organizations/users/members(/working_group_members) rows.
- * Idempotent on the organization (an existing org with the same normalized
- * name is reused, matching the migration script's upsert convention), but
- * NOT on membership: `members.user_id` is UNIQUE, so a representative who
- * already holds a membership causes the whole request to fail with 409
- * before anything is written — this is an interactive admin tool, not a
- * bulk import, so a silent no-op (the migration script's behavior) would be
- * a confusing UX here.
+ * Creates (or reuses) one membership aggregate plus N representative rows
+ * (org-tied) or one individual aggregate (org-less). Idempotent on the
+ * organization (an existing org with the same normalized name is reused,
+ * matching the migration script's upsert convention).
  *
- * Every write past the pre-flight checks lands in one atomic `db.batch()`
- * — user resolution (via `buildFindOrCreateUserStatement`, unexecuted
- * until the batch runs), organization create/update, member rows,
- * primary/secondary contact assignment, and working-group membership (via
- * working-groups.ts's canonical `buildAddWorkingGroupMemberStatements`,
- * not a reimplementation) — so a later failure can't leave a partially
- * provisioned membership or an orphaned `users` row.
+ * The aggregate is resolved first via `getOrCreateOrganizationMemberAggregate`
+ * (its own small race-safe batch+read, org-tied case only), then every
+ * remaining write — user resolution, representative rows, representative
+ * role grants, working-group membership — lands in one atomic `db.batch()`.
  */
 export async function createAdminMember(
   db: DatabaseLike,
@@ -80,7 +78,8 @@ export async function createAdminMember(
   const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(input.membershipCategory);
   const now = nowIso();
 
-  for (const rep of input.representatives) {
+  if (isIndividual) {
+    const rep = input.representatives[0];
     const existingUser = await first<{ id: string }>(db, "SELECT id FROM users WHERE normalized_email = ?", [
       normalizeEmail(rep.email),
     ]);
@@ -92,27 +91,108 @@ export async function createAdminMember(
         throw new AppError(409, "ALREADY_MEMBER", `${rep.email} already holds a membership`);
       }
     }
+
+    const { firstName, lastName } = splitName(rep.name);
+    const { user, statement: userStatement } = await buildFindOrCreateUserStatement(db, {
+      email: rep.email,
+      firstName: firstName ?? undefined,
+      lastName: lastName ?? undefined,
+      jobTitle: rep.role,
+      linksJson: rep.linkedin ? serializeLinks([rep.linkedin]) : null,
+      allowProfileUpdate: true,
+    });
+
+    const statements: StatementLike[] = [];
+    if (userStatement) statements.push(userStatement);
+    const { memberId, statements: memberStatements } = buildCreateIndividualMemberStatements(
+      db,
+      user.id,
+      input.membershipCategory,
+      now,
+    );
+    statements.push(...memberStatements);
+    statements.push(db.prepare("UPDATE members SET member_since = ? WHERE id = ?").bind(input.memberSince, memberId));
+
+    for (const slug of input.workingGroupSlugs) {
+      const wg = await getWorkingGroupBySlugOrId(db, slug);
+      if (!wg) continue;
+      statements.push(...(await buildAddWorkingGroupMemberStatements(db, wg, user.id)));
+    }
+
+    await db.batch(statements);
+
+    return {
+      organizationId: null,
+      members: [
+        {
+          id: memberId,
+          userId: user.id,
+          organizationId: null,
+          organizationName: null,
+          name: rep.name,
+          email: user.email,
+          membershipCategory: input.membershipCategory,
+          status: "active",
+          showOnOrgProfile: true,
+          createdAt: now,
+        },
+      ],
+    };
   }
 
-  let organizationId: string | null = null;
-  let isNewOrganization = false;
+  const normalizedOrgName = normalizeOrgName(input.organizationName as string);
+  const existingOrg = await first<{ id: string }>(db, "SELECT id FROM organizations WHERE normalized_name = ?", [
+    normalizedOrgName,
+  ]);
 
-  if (!isIndividual && input.organizationName) {
-    const normalizedOrgName = normalizeOrgName(input.organizationName);
-    const existingOrg = await first<{ id: string }>(db, "SELECT id FROM organizations WHERE normalized_name = ?", [
-      normalizedOrgName,
+  let organizationId: string;
+  if (existingOrg) {
+    organizationId = existingOrg.id;
+  } else {
+    organizationId = uuid();
+    await db
+      .prepare(
+        `INSERT INTO organizations (id, name, normalized_name, data_json, description, website, created_at, updated_at)
+         VALUES (?, ?, ?, NULL, ?, ?, ?, ?)`,
+      )
+      .bind(
+        organizationId,
+        input.organizationName,
+        normalizedOrgName,
+        input.description ?? null,
+        input.website ?? null,
+        now,
+        now,
+      )
+      .run();
+  }
+
+  const aggregate = await getOrCreateOrganizationMemberAggregate(db, organizationId, input.membershipCategory, now);
+  await db
+    .prepare("UPDATE members SET member_since = COALESCE(member_since, ?) WHERE id = ?")
+    .bind(input.memberSince, aggregate.id)
+    .run();
+
+  for (const rep of input.representatives) {
+    const existingUser = await first<{ id: string }>(db, "SELECT id FROM users WHERE normalized_email = ?", [
+      normalizeEmail(rep.email),
     ]);
-
-    if (existingOrg) {
-      organizationId = existingOrg.id;
-    } else {
-      organizationId = uuid();
-      isNewOrganization = true;
+    if (existingUser) {
+      const alreadyRepresenting = await first<{ id: string }>(
+        db,
+        "SELECT id FROM organization_representatives WHERE member_id = ? AND user_id = ? AND left_at IS NULL",
+        [aggregate.id, existingUser.id],
+      );
+      if (alreadyRepresenting) {
+        throw new AppError(409, "ALREADY_MEMBER", `${rep.email} already represents this organization`);
+      }
     }
   }
 
   const statements: StatementLike[] = [];
   const users: UserRecord[] = [];
+  const representativeIds: string[] = [];
+
   for (const rep of input.representatives) {
     const { firstName, lastName } = splitName(rep.name);
     const { user, statement } = await buildFindOrCreateUserStatement(db, {
@@ -125,104 +205,65 @@ export async function createAdminMember(
     });
     users.push(user);
     if (statement) statements.push(statement);
-  }
 
-  if (organizationId && isNewOrganization) {
-    statements.push(
-      db
-        .prepare(
-          `INSERT INTO organizations (id, name, normalized_name, data_json, description, website, membership_category, member_since, created_at, updated_at)
-           VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
-        )
-        .bind(
-          organizationId,
-          input.organizationName,
-          normalizeOrgName(input.organizationName as string),
-          input.description ?? null,
-          input.website ?? null,
-          input.membershipCategory,
-          input.memberSince,
-          now,
-          now,
-        ),
-    );
-  } else if (organizationId) {
-    // Category is an organization-level fact (migration 0040). Keep it (and
-    // every existing org-tied representative's member_type mirror) in sync
-    // with what was just submitted — matters when this call reuses an
-    // existing organization rather than creating a new one.
-    statements.push(
-      db
-        .prepare("UPDATE organizations SET membership_category = ?, updated_at = ? WHERE id = ?")
-        .bind(input.membershipCategory, now, organizationId),
-      // Don't clobber an already-set member_since (e.g. from the
-      // migration script) just because this submission reuses an existing
-      // organization.
-      db
-        .prepare("UPDATE organizations SET member_since = ?, updated_at = ? WHERE id = ? AND member_since IS NULL")
-        .bind(input.memberSince, now, organizationId),
-      db
-        .prepare("UPDATE members SET member_type = ?, updated_at = ? WHERE organization_id = ?")
-        .bind(input.membershipCategory, now, organizationId),
-    );
-  }
-
-  const members: AdminMemberSummary[] = [];
-
-  for (const [index, rep] of input.representatives.entries()) {
-    const user = users[index];
-    const memberId = uuid();
-    statements.push(
-      db
-        .prepare(
-          `INSERT INTO members (id, member_type, user_id, organization_id, status, tier, data_json, created_at, updated_at, show_on_org_profile, member_since)
-           VALUES (?, ?, ?, ?, 'active', NULL, NULL, ?, ?, 1, ?)`,
-        )
-        .bind(memberId, input.membershipCategory, user.id, organizationId, now, now, input.memberSince),
-    );
-
-    if (organizationId && index === 0) {
-      statements.push(
-        db
-          .prepare(
-            `UPDATE organizations SET primary_contact_user_id = ?, updated_at = ? WHERE id = ? AND primary_contact_user_id IS NULL`,
-          )
-          .bind(user.id, now, organizationId),
-      );
-    }
-    if (organizationId && index === 1) {
-      statements.push(
-        db
-          .prepare(
-            `UPDATE organizations SET secondary_contact_user_id = ?, updated_at = ? WHERE id = ? AND secondary_contact_user_id IS NULL`,
-          )
-          .bind(user.id, now, organizationId),
-      );
-    }
+    const { representativeId, statement: repStatement } = buildAddRepresentativeStatement(db, {
+      memberId: aggregate.id,
+      userId: user.id,
+      now,
+    });
+    representativeIds.push(representativeId);
+    statements.push(repStatement);
 
     for (const slug of input.workingGroupSlugs) {
       const wg = await getWorkingGroupBySlugOrId(db, slug);
       if (!wg) continue;
       statements.push(...(await buildAddWorkingGroupMemberStatements(db, wg, user.id)));
     }
-
-    members.push({
-      id: memberId,
-      userId: user.id,
-      organizationId,
-      organizationName: input.organizationName ?? null,
-      name: rep.name,
-      email: user.email,
-      membershipCategory: input.membershipCategory,
-      status: "active",
-      showOnOrgProfile: true,
-      createdAt: now,
-    });
   }
 
-  if (statements.length > 0) {
-    await db.batch(statements);
+  await db.batch(statements);
+
+  // Representative role grants run after the representative rows commit —
+  // buildAssignRepresentativeRoleStatements verifies an active
+  // organization_representatives row exists before granting, so it must
+  // observe the rows just inserted above.
+  const roleStatements: StatementLike[] = [];
+  if (input.representatives.length >= 1) {
+    roleStatements.push(
+      ...(await buildAssignRepresentativeRoleStatements(db, {
+        memberId: aggregate.id,
+        userId: users[0].id,
+        roleId: REPRESENTATIVE_ROLE_IDS.primaryContact,
+        now,
+      })),
+    );
   }
+  if (input.representatives.length >= 2) {
+    roleStatements.push(
+      ...(await buildAssignRepresentativeRoleStatements(db, {
+        memberId: aggregate.id,
+        userId: users[1].id,
+        roleId: REPRESENTATIVE_ROLE_IDS.secondaryContact,
+        now,
+      })),
+    );
+  }
+  if (roleStatements.length > 0) {
+    await db.batch(roleStatements);
+  }
+
+  const members: AdminMemberSummary[] = input.representatives.map((rep, index) => ({
+    id: representativeIds[index],
+    userId: users[index].id,
+    organizationId,
+    organizationName: input.organizationName ?? null,
+    name: rep.name,
+    email: users[index].email,
+    membershipCategory: aggregate.categoryCode,
+    status: "active",
+    showOnOrgProfile: true,
+    createdAt: now,
+  }));
 
   return { organizationId, members };
 }
@@ -235,18 +276,36 @@ interface AdminMemberRow {
   first_name: string | null;
   last_name: string | null;
   email: string;
-  member_type: string;
+  category_code: string;
   status: string;
   show_on_org_profile: number;
   created_at: string;
 }
 
+// One row per individual member (organization_id IS NULL) unioned with one
+// row per active organization representative — a single bounded, sorted
+// query so LIMIT/OFFSET apply to the combined set once, not to each half
+// independently (which would produce wrong pages beyond page 1).
 const ADMIN_MEMBERS_SELECT = `
-  SELECT m.id, m.user_id, m.organization_id, o.name AS org_name,
-         u.first_name, u.last_name, u.email, m.member_type, m.status, m.show_on_org_profile, m.created_at
+  SELECT m.id AS id, m.user_id, NULL AS organization_id, NULL AS org_name,
+         u.first_name, u.last_name, u.email, mca.category_code, m.status,
+         1 AS show_on_org_profile, m.created_at
   FROM members m
-  LEFT JOIN organizations o ON o.id = m.organization_id
   JOIN users u ON u.id = m.user_id
+  JOIN member_category_assignments mca ON mca.member_id = m.id
+  WHERE m.organization_id IS NULL
+
+  UNION ALL
+
+  SELECT r.id AS id, r.user_id, m.organization_id, o.name AS org_name,
+         u.first_name, u.last_name, u.email, mca.category_code, m.status,
+         r.show_on_org_profile, r.created_at
+  FROM organization_representatives r
+  JOIN members m ON m.id = r.member_id
+  JOIN organizations o ON o.id = m.organization_id
+  JOIN users u ON u.id = r.user_id
+  JOIN member_category_assignments mca ON mca.member_id = m.id
+  WHERE r.left_at IS NULL
 `;
 
 function toAdminMemberSummary(row: AdminMemberRow): AdminMemberSummary {
@@ -257,7 +316,7 @@ function toAdminMemberSummary(row: AdminMemberRow): AdminMemberSummary {
     organizationName: row.org_name,
     name: [row.first_name, row.last_name].filter(Boolean).join(" ") || row.email,
     email: row.email,
-    membershipCategory: row.member_type,
+    membershipCategory: row.category_code,
     status: row.status,
     showOnOrgProfile: row.show_on_org_profile === 1,
     createdAt: row.created_at,
@@ -265,21 +324,22 @@ function toAdminMemberSummary(row: AdminMemberRow): AdminMemberSummary {
 }
 
 /**
- * Unfiltered-by-status admin listing — one row per representative, unlike
- * the public directory (members-directory.ts) which collapses each
- * organization to a single "primary contact" row and only shows
- * status='active' members.
+ * Unfiltered-by-status admin listing — one row per individual member or
+ * per active organization representative, unlike the public directory
+ * (members-directory.ts) which collapses each organization to a single
+ * "primary contact" row and only shows status='active' members.
  */
 export async function listAdminMembers(
   db: DatabaseLike,
   params: { limit: number; offset: number },
 ): Promise<{ members: AdminMemberSummary[]; total: number }> {
   const [rows, totalRow] = await Promise.all([
-    all<AdminMemberRow>(db, `${ADMIN_MEMBERS_SELECT} ORDER BY m.created_at DESC LIMIT ? OFFSET ?`, [
-      params.limit,
-      params.offset,
-    ]),
-    first<{ total: number }>(db, `SELECT COUNT(*) AS total FROM members`),
+    all<AdminMemberRow>(
+      db,
+      `SELECT * FROM (${ADMIN_MEMBERS_SELECT}) combined ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      [params.limit, params.offset],
+    ),
+    first<{ total: number }>(db, `SELECT COUNT(*) AS total FROM (${ADMIN_MEMBERS_SELECT}) combined`),
   ]);
 
   return { members: rows.map(toAdminMemberSummary), total: totalRow?.total ?? 0 };

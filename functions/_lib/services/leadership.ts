@@ -186,10 +186,12 @@ export async function getLeadershipPublic(
     `SELECT lp.id, lp.body, lp.user_id, u.first_name, u.last_name, u.email,
             lp.title, lp.starts_at, lp.ends_at, lp.created_at, lp.updated_at,
             o.id AS org_id, o.name AS org_name, o.logo_r2_key AS org_logo_r2_key, o.website AS org_website,
-            m.id AS member_id, u.headshot_r2_key, u.links_json
+            COALESCE(rep.id, mi.id) AS member_id, u.headshot_r2_key, u.links_json
      FROM leadership_positions lp
      JOIN users u ON u.id = lp.user_id
-     LEFT JOIN members m ON m.user_id = u.id AND m.status = 'active'
+     LEFT JOIN organization_representatives rep ON rep.user_id = u.id AND rep.left_at IS NULL
+     LEFT JOIN members m ON m.id = rep.member_id
+     LEFT JOIN members mi ON mi.user_id = u.id AND mi.status = 'active'
      LEFT JOIN organizations o ON o.id = m.organization_id
      WHERE lp.body = ?
      ORDER BY lp.starts_at ASC`,
@@ -244,10 +246,12 @@ export async function getForumChairsPublic(
     db,
     `SELECT ur.role_id, u.first_name, u.last_name, o.id AS org_id, o.name AS org_name,
             o.logo_r2_key AS org_logo_r2_key, o.website AS org_website,
-            m.id AS member_id, u.headshot_r2_key, u.links_json, ur.created_at
+            COALESCE(rep.id, mi.id) AS member_id, u.headshot_r2_key, u.links_json, ur.created_at
      FROM user_roles ur
      JOIN users u ON u.id = ur.user_id
-     LEFT JOIN members m ON m.user_id = u.id AND m.status = 'active'
+     LEFT JOIN organization_representatives rep ON rep.user_id = u.id AND rep.left_at IS NULL
+     LEFT JOIN members m ON m.id = rep.member_id
+     LEFT JOIN members mi ON mi.user_id = u.id AND mi.status = 'active'
      LEFT JOIN organizations o ON o.id = m.organization_id
      WHERE ur.context_type IS NULL AND ur.context_id IS NULL
        AND ur.role_id IN ('role-forum_chair', 'role-forum_vice_chair')

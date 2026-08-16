@@ -1,4 +1,4 @@
--- Migration 0043: Meeting Calendar Management
+-- Migration 0046: Meeting Calendar Management
 --
 -- Replaces the static ICS files committed to the pkic/members Git repo with
 -- a portal-managed system: meeting_series (one per recurring meeting, e.g.

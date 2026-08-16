@@ -98,31 +98,49 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
     expect(body.organizationId).toBeTruthy();
     expect(body.members).toHaveLength(1);
 
-    const orgRows = await queryAll<{ name: string; primary_contact_user_id: string; member_since: string }>(
+    const orgRows = await queryAll<{ name: string }>(
       env.DB,
-      "SELECT name, primary_contact_user_id, member_since FROM organizations WHERE id = ?",
+      "SELECT name FROM organizations WHERE id = ?",
       body.organizationId,
     );
     expect(orgRows[0].name).toBe("Acme Corp");
-    expect(orgRows[0].primary_contact_user_id).toBe(body.members[0].userId);
-    // Regression guard: createAdminMember used to accept `memberSince` in the
-    // request but never write it anywhere (migration 0046 added the column).
-    expect(orgRows[0].member_since).toBe("2026-01-15");
 
-    const memberRows = await queryAll<{
-      member_type: string;
-      status: string;
-      show_on_org_profile: number;
-      member_since: string;
-    }>(
+    const aggregateRows = await queryAll<{ id: string; member_type: string; status: string; member_since: string }>(
       env.DB,
-      "SELECT member_type, status, show_on_org_profile, member_since FROM members WHERE id = ?",
+      "SELECT id, member_type, status, member_since FROM members WHERE organization_id = ?",
+      body.organizationId,
+    );
+    expect(aggregateRows).toHaveLength(1);
+    expect(aggregateRows[0].member_type).toBe("organization");
+    expect(aggregateRows[0].status).toBe("active");
+    // Regression guard: createAdminMember used to accept `memberSince` in the
+    // request but never write it anywhere (migration 0049 added the column,
+    // now on `members`, not `organizations`).
+    expect(aggregateRows[0].member_since).toBe("2026-01-15");
+
+    const categoryRows = await queryAll<{ category_code: string }>(
+      env.DB,
+      "SELECT category_code FROM member_category_assignments WHERE member_id = ?",
+      aggregateRows[0].id,
+    );
+    expect(categoryRows[0].category_code).toBe("F");
+
+    const primaryContactRows = await queryAll<{ user_id: string }>(
+      env.DB,
+      `SELECT user_id FROM user_roles WHERE context_type = 'organization' AND context_id = ? AND role_id = 'role-primary_contact' AND revoked_at IS NULL`,
+      aggregateRows[0].id,
+    );
+    expect(primaryContactRows[0].user_id).toBe(body.members[0].userId);
+
+    // body.members[0].id is this representative's own organization_representatives.id
+    // (see admin-organizations.ts's toOrgDetail comment) — not the shared aggregate id.
+    const repRows = await queryAll<{ show_on_org_profile: number; left_at: string | null }>(
+      env.DB,
+      "SELECT show_on_org_profile, left_at FROM organization_representatives WHERE id = ?",
       body.members[0].id,
     );
-    expect(memberRows[0].member_type).toBe("F");
-    expect(memberRows[0].status).toBe("active");
-    expect(memberRows[0].show_on_org_profile).toBe(1);
-    expect(memberRows[0].member_since).toBe("2026-01-15");
+    expect(repRows[0].show_on_org_profile).toBe(1);
+    expect(repRows[0].left_at).toBeNull();
 
     const wgRows = await queryAll(
       env.DB,
@@ -197,27 +215,45 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
     expect(response.status).toBe(201);
     const body = (await response.json()) as { organizationId: string; members: Array<{ userId: string }> };
 
-    const orgRows = await queryAll<{ primary_contact_user_id: string; secondary_contact_user_id: string }>(
+    const aggregateRow = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM members WHERE organization_id = ?", body.organizationId)
+    )[0];
+    const roleRows = await queryAll<{ role_id: string; user_id: string }>(
       env.DB,
-      "SELECT primary_contact_user_id, secondary_contact_user_id FROM organizations WHERE id = ?",
-      body.organizationId,
+      `SELECT role_id, user_id FROM user_roles
+       WHERE context_type = 'organization' AND context_id = ? AND revoked_at IS NULL
+         AND role_id IN ('role-primary_contact', 'role-secondary_contact')`,
+      aggregateRow.id,
     );
-    expect(orgRows[0].primary_contact_user_id).toBe(body.members[0].userId);
-    expect(orgRows[0].secondary_contact_user_id).toBe(body.members[1].userId);
+    const primaryContact = roleRows.find((r) => r.role_id === "role-primary_contact");
+    const secondaryContact = roleRows.find((r) => r.role_id === "role-secondary_contact");
+    expect(primaryContact?.user_id).toBe(body.members[0].userId);
+    expect(secondaryContact?.user_id).toBe(body.members[1].userId);
   });
 
-  it("returns 409 when a representative already holds a membership", async () => {
+  it("returns 409 when the same email is already an active representative of this exact organization", async () => {
+    await call(adminToken, "/api/v1/admin/members", { method: "POST", body: JSON.stringify(orgMemberBody()) });
+
+    // Reusing the same organization (same normalized name) with the same
+    // representative email is a duplicate-representative conflict.
+    const response = await call(adminToken, "/api/v1/admin/members", {
+      method: "POST",
+      body: JSON.stringify(orgMemberBody()),
+    });
+    expect(response.status).toBe(409);
+  });
+
+  it("does not conflict when the same person represents a different organization (multi-org representation is allowed)", async () => {
     await call(adminToken, "/api/v1/admin/members", { method: "POST", body: JSON.stringify(orgMemberBody()) });
 
     const response = await call(adminToken, "/api/v1/admin/members", {
       method: "POST",
       body: JSON.stringify(orgMemberBody({ organizationName: "Other Corp" })),
     });
-    expect(response.status).toBe(409);
+    expect(response.status).toBe(201);
 
-    // No second organization should have been created by the failed attempt.
     const orgRows = await queryAll(env.DB, "SELECT id FROM organizations WHERE normalized_name = 'other corp'");
-    expect(orgRows).toHaveLength(0);
+    expect(orgRows).toHaveLength(1);
   });
 
   it("lists created members unfiltered by status", async () => {

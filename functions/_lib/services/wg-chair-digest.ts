@@ -64,7 +64,8 @@ export async function runWeeklyWgChairDigest(db: DatabaseLike, env: Env): Promis
       `SELECT wgm.joined_at, wgm.left_at, u.first_name, u.last_name, o.name AS org_name
        FROM working_group_members wgm
        JOIN users u ON u.id = wgm.user_id
-       LEFT JOIN members m ON m.user_id = wgm.user_id AND m.status = 'active'
+       LEFT JOIN organization_representatives rep ON rep.user_id = wgm.user_id AND rep.left_at IS NULL
+       LEFT JOIN members m ON m.id = rep.member_id
        LEFT JOIN organizations o ON o.id = m.organization_id
        WHERE wgm.working_group_id = ?
          AND (wgm.joined_at >= ? OR (wgm.left_at IS NOT NULL AND wgm.left_at >= ?))

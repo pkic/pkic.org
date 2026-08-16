@@ -1,17 +1,23 @@
 /**
  * admin-organizations.test.ts
  *
- * Fix 1 (migration 0040) — membership category becomes an organization-level
- * property (organizations.membership_category), no longer independently set
- * per representative. Covers:
+ * Phase 1 §1.4 corrected design — membership category lives once per
+ * membership aggregate (member_category_assignments), not on
+ * `organizations` and not per-representative. Covers:
  *   - GET org detail surfaces membershipCategory once at the top level, not
  *     per representative.
- *   - PATCH org membershipCategory cascades to every existing org-tied
- *     representative's members.member_type.
+ *   - PATCH org membershipCategory updates the aggregate's single category
+ *     assignment (no "cascade to every representative" — there's only ever
+ *     one category per aggregate now).
  *   - POST .../organizations/:id/members (add representative) inherits the
  *     org's category and rejects when the org has none set yet.
- *   - PATCH .../members/:id rejects membershipCategory for org-tied members
- *     but still allows it for org-less individual (H5/H6/H7) members.
+ *   - PATCH .../members/:id rejects membershipCategory/status for a
+ *     representative id (those live on the aggregate now) but still allows
+ *     showOnOrgProfile, and still allows membershipCategory for an org-less
+ *     individual (H5/H6/H7) member id.
+ *   - Reusing an existing organization with a *different* category is a
+ *     409 conflict (getOrCreateOrganizationMemberAggregate), not a silent
+ *     cascade-update.
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
@@ -48,9 +54,10 @@ function orgMemberBody(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe("Admin Organizations — org-level membership category (migration 0040, Fix 1)", () => {
+describe("Admin Organizations — membership category on the aggregate (Phase 1 §1.4)", () => {
   let adminToken: string;
 
+  /** memberId here is the representative's own organization_representatives.id (see admin-organizations.ts). */
   async function createOrg(overrides: Record<string, unknown> = {}): Promise<{
     organizationId: string;
     memberId: string;
@@ -68,6 +75,24 @@ describe("Admin Organizations — org-level membership category (migration 0040,
     return { organizationId: body.organizationId, memberId: body.members[0].id, userId: body.members[0].userId };
   }
 
+  async function aggregateIdFor(organizationId: string): Promise<string> {
+    const rows = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM members WHERE organization_id = ?",
+      organizationId,
+    );
+    return rows[0].id;
+  }
+
+  async function categoryFor(memberId: string): Promise<string | null> {
+    const rows = await queryAll<{ category_code: string }>(
+      env.DB,
+      "SELECT category_code FROM member_category_assignments WHERE member_id = ?",
+      memberId,
+    );
+    return rows[0]?.category_code ?? null;
+  }
+
   beforeEach(async () => {
     await resetDb();
     await seedEventAndAdmin(env.DB);
@@ -77,15 +102,10 @@ describe("Admin Organizations — org-level membership category (migration 0040,
     adminToken = await createAdminSession(env.DB, adminRow.id, "admin-orgs-token");
   });
 
-  it("creating an organization via the Interim Admin Tool sets organizations.membership_category", async () => {
+  it("creating an organization via the Interim Admin Tool sets its aggregate's category assignment", async () => {
     const { organizationId } = await createOrg();
-
-    const orgRows = await queryAll<{ membership_category: string | null }>(
-      env.DB,
-      "SELECT membership_category FROM organizations WHERE id = ?",
-      organizationId,
-    );
-    expect(orgRows[0].membership_category).toBe("F");
+    const aggregateId = await aggregateIdFor(organizationId);
+    expect(await categoryFor(aggregateId)).toBe("F");
   });
 
   it("GET org detail surfaces membershipCategory once at the top level, not per representative", async () => {
@@ -124,23 +144,25 @@ describe("Admin Organizations — org-level membership category (migration 0040,
     expect(categories).toEqual([...categories].sort());
   });
 
-  it("creating an organization via the Interim Admin Tool sets member_since (migration 0046, regression guard)", async () => {
+  it("creating an organization via the Interim Admin Tool sets member_since on the aggregate (migration 0049, regression guard)", async () => {
     const { organizationId } = await createOrg();
+    const aggregateId = await aggregateIdFor(organizationId);
 
-    const orgRows = await queryAll<{ member_since: string | null }>(
+    const memberRows = await queryAll<{ member_since: string | null }>(
       env.DB,
-      "SELECT member_since FROM organizations WHERE id = ?",
-      organizationId,
+      "SELECT member_since FROM members WHERE id = ?",
+      aggregateId,
     );
-    expect(orgRows[0].member_since).toBe("2026-01-15");
+    expect(memberRows[0].member_since).toBe("2026-01-15");
 
     const response = await call(adminToken, `/api/v1/admin/organizations/${organizationId}`);
     const body = (await response.json()) as { organization: { memberSince: string } };
     expect(body.organization.memberSince).toBe("2026-01-15");
   });
 
-  it("PATCH org memberSince updates the stored value", async () => {
+  it("PATCH org memberSince updates the aggregate's stored value", async () => {
     const { organizationId } = await createOrg();
+    const aggregateId = await aggregateIdFor(organizationId);
 
     const response = await call(adminToken, `/api/v1/admin/organizations/${organizationId}`, {
       method: "PATCH",
@@ -150,24 +172,25 @@ describe("Admin Organizations — org-level membership category (migration 0040,
     const body = (await response.json()) as { organization: { memberSince: string } };
     expect(body.organization.memberSince).toBe("2020-03-01");
 
-    const orgRows = await queryAll<{ member_since: string }>(
+    const memberRows = await queryAll<{ member_since: string }>(
       env.DB,
-      "SELECT member_since FROM organizations WHERE id = ?",
-      organizationId,
+      "SELECT member_since FROM members WHERE id = ?",
+      aggregateId,
     );
-    expect(orgRows[0].member_since).toBe("2020-03-01");
+    expect(memberRows[0].member_since).toBe("2020-03-01");
   });
 
-  it("PATCH org membershipCategory cascades to every existing org-tied representative's member_type", async () => {
-    const { organizationId, memberId } = await createOrg();
+  it("PATCH org membershipCategory updates the aggregate's single category assignment", async () => {
+    const { organizationId } = await createOrg();
 
-    // Add a second representative under the original category first.
+    // Add a second representative under the original category first — both
+    // representatives share the same aggregate, so there's nothing
+    // per-representative to cascade to.
     const addResponse = await call(adminToken, `/api/v1/admin/organizations/${organizationId}/members`, {
       method: "POST",
       body: JSON.stringify({ name: "Second Rep", email: "second@acme.test" }),
     });
     expect(addResponse.status).toBe(201);
-    const added = (await addResponse.json()) as { representative: { memberId: string } };
 
     const patchResponse = await call(adminToken, `/api/v1/admin/organizations/${organizationId}`, {
       method: "PATCH",
@@ -177,14 +200,15 @@ describe("Admin Organizations — org-level membership category (migration 0040,
     const patched = (await patchResponse.json()) as { organization: { membershipCategory: string | null } };
     expect(patched.organization.membershipCategory).toBe("G");
 
-    const memberRows = await queryAll<{ id: string; member_type: string }>(
+    const aggregateId = await aggregateIdFor(organizationId);
+    expect(await categoryFor(aggregateId)).toBe("G");
+
+    const repCount = await queryAll<{ total: number }>(
       env.DB,
-      "SELECT id, member_type FROM members WHERE organization_id = ? ORDER BY created_at ASC",
-      organizationId,
+      "SELECT COUNT(*) AS total FROM organization_representatives WHERE member_id = ? AND left_at IS NULL",
+      aggregateId,
     );
-    expect(memberRows).toHaveLength(2);
-    expect(memberRows.find((m) => m.id === memberId)?.member_type).toBe("G");
-    expect(memberRows.find((m) => m.id === added.representative.memberId)?.member_type).toBe("G");
+    expect(Number(repCount[0].total)).toBe(2);
   });
 
   it("adding a representative inherits the organization's current category", async () => {
@@ -198,18 +222,23 @@ describe("Admin Organizations — org-level membership category (migration 0040,
     const body = (await response.json()) as { representative: { memberId: string } };
     expect(body.representative).not.toHaveProperty("membershipCategory");
 
-    const memberRows = await queryAll<{ member_type: string }>(
+    const repRows = await queryAll<{ member_id: string }>(
       env.DB,
-      "SELECT member_type FROM members WHERE id = ?",
+      "SELECT member_id FROM organization_representatives WHERE id = ?",
       body.representative.memberId,
     );
-    expect(memberRows[0].member_type).toBe("B");
+    expect(await categoryFor(repRows[0].member_id)).toBe("B");
   });
 
   it("rejects adding a representative when the organization has no category set yet", async () => {
-    const { organizationId } = await createOrg();
-    // Simulate a pre-migration organization that never got a category backfilled.
-    await env.DB.prepare("UPDATE organizations SET membership_category = NULL WHERE id = ?").bind(organizationId).run();
+    // A bare organization row created outside the Interim Admin Tool flow —
+    // no members aggregate, and therefore no category, exists for it yet.
+    const organizationId = crypto.randomUUID();
+    await env.DB.prepare(
+      "INSERT INTO organizations (id, name, normalized_name, created_at, updated_at) VALUES (?, ?, ?, datetime('now'), datetime('now'))",
+    )
+      .bind(organizationId, "No Category Org", "no category org")
+      .run();
 
     const response = await call(adminToken, `/api/v1/admin/organizations/${organizationId}/members`, {
       method: "POST",
@@ -220,34 +249,43 @@ describe("Admin Organizations — org-level membership category (migration 0040,
     expect(body.error.code).toBe("ORG_CATEGORY_NOT_SET");
   });
 
-  it("rejects membershipCategory on PATCH .../members/:id for an org-tied representative", async () => {
+  it("rejects membershipCategory and status on PATCH .../members/:id for a representative id — those live on the aggregate", async () => {
     const { memberId } = await createOrg();
 
-    const response = await call(adminToken, `/api/v1/admin/members/${memberId}`, {
+    const categoryResponse = await call(adminToken, `/api/v1/admin/members/${memberId}`, {
       method: "PATCH",
       body: JSON.stringify({ membershipCategory: "H5" }),
     });
-    expect(response.status).toBe(422);
-    const body = (await response.json()) as { error: { code: string } };
-    expect(body.error.code).toBe("MEMBERSHIP_CATEGORY_NOT_EDITABLE");
+    expect(categoryResponse.status).toBe(422);
+    expect(((await categoryResponse.json()) as { error: { code: string } }).error.code).toBe(
+      "REPRESENTATIVE_FIELD_NOT_EDITABLE",
+    );
+
+    const statusResponse = await call(adminToken, `/api/v1/admin/members/${memberId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: "inactive" }),
+    });
+    expect(statusResponse.status).toBe(422);
+    expect(((await statusResponse.json()) as { error: { code: string } }).error.code).toBe(
+      "REPRESENTATIVE_FIELD_NOT_EDITABLE",
+    );
   });
 
-  it("still allows other fields (status, showOnOrgProfile) to be edited on an org-tied representative", async () => {
+  it("still allows showOnOrgProfile to be edited on a representative id", async () => {
     const { memberId } = await createOrg();
 
     const response = await call(adminToken, `/api/v1/admin/members/${memberId}`, {
       method: "PATCH",
-      body: JSON.stringify({ status: "inactive", showOnOrgProfile: false }),
+      body: JSON.stringify({ showOnOrgProfile: false }),
     });
     expect(response.status).toBe(200);
 
-    const memberRows = await queryAll<{ status: string; show_on_org_profile: number }>(
+    const repRows = await queryAll<{ show_on_org_profile: number }>(
       env.DB,
-      "SELECT status, show_on_org_profile FROM members WHERE id = ?",
+      "SELECT show_on_org_profile FROM organization_representatives WHERE id = ?",
       memberId,
     );
-    expect(memberRows[0].status).toBe("inactive");
-    expect(memberRows[0].show_on_org_profile).toBe(0);
+    expect(repRows[0].show_on_org_profile).toBe(0);
   });
 
   it("org-less individual (H5/H6/H7) category remains independently editable via PATCH .../members/:id", async () => {
@@ -276,16 +314,15 @@ describe("Admin Organizations — org-level membership category (migration 0040,
       "SELECT member_type, organization_id FROM members WHERE id = ?",
       created.members[0].id,
     );
-    expect(memberRows[0].member_type).toBe("H7");
+    expect(memberRows[0].member_type).toBe("individual");
     expect(memberRows[0].organization_id).toBeNull();
+    expect(await categoryFor(created.members[0].id)).toBe("H7");
   });
 
-  it("reusing an existing organization with a different category cascades to its prior representatives too", async () => {
-    const { organizationId, memberId } = await createOrg({ membershipCategory: "C" });
+  it("reusing an existing organization with a different category is a 409 conflict, not a silent cascade", async () => {
+    const { organizationId } = await createOrg({ membershipCategory: "C" });
+    const aggregateId = await aggregateIdFor(organizationId);
 
-    // Re-submit the Interim Admin Tool with the same org name but a
-    // different category and a different representative — this exercises
-    // the "reuse an existing organization" branch of createAdminMember.
     const secondResponse = await call(adminToken, "/api/v1/admin/members", {
       method: "POST",
       body: JSON.stringify(
@@ -295,22 +332,35 @@ describe("Admin Organizations — org-level membership category (migration 0040,
         }),
       ),
     });
+    expect(secondResponse.status).toBe(409);
+    expect(((await secondResponse.json()) as { error: { code: string } }).error.code).toBe("MEMBER_CATEGORY_CONFLICT");
+
+    // The conflicting attempt must not have mutated the existing category.
+    expect(await categoryFor(aggregateId)).toBe("C");
+  });
+
+  it("reusing an existing organization with the SAME category succeeds and adds the new representative", async () => {
+    const { organizationId } = await createOrg({ membershipCategory: "C" });
+
+    const secondResponse = await call(adminToken, "/api/v1/admin/members", {
+      method: "POST",
+      body: JSON.stringify(
+        orgMemberBody({
+          membershipCategory: "C",
+          representatives: [{ name: "Later Rep", email: "later@acme.test" }],
+        }),
+      ),
+    });
     expect(secondResponse.status).toBe(201);
     const secondBody = (await secondResponse.json()) as { organizationId: string };
     expect(secondBody.organizationId).toBe(organizationId);
 
-    const orgRows = await queryAll<{ membership_category: string | null }>(
+    const aggregateId = await aggregateIdFor(organizationId);
+    const repCount = await queryAll<{ total: number }>(
       env.DB,
-      "SELECT membership_category FROM organizations WHERE id = ?",
-      organizationId,
+      "SELECT COUNT(*) AS total FROM organization_representatives WHERE member_id = ? AND left_at IS NULL",
+      aggregateId,
     );
-    expect(orgRows[0].membership_category).toBe("D");
-
-    const memberRows = await queryAll<{ member_type: string }>(
-      env.DB,
-      "SELECT member_type FROM members WHERE id = ?",
-      memberId,
-    );
-    expect(memberRows[0].member_type).toBe("D");
+    expect(Number(repCount[0].total)).toBe(2);
   });
 });

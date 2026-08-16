@@ -8,6 +8,8 @@ import { onRequestGet as getMember } from "../functions/api/v1/members/[id]";
 import { onRequestGet as getMemberLogo } from "../functions/api/v1/members/[id]/logo";
 import { onRequestGet as listWorkingGroups } from "../functions/api/v1/working-groups/index";
 import { onRequestGet as getWorkingGroup } from "../functions/api/v1/working-groups/[id]";
+import { seedOrganizationAggregate, addRepresentative as addRepresentativeRow, insertUser } from "./helpers/membership";
+import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 
 async function callEndpoint(handler: (c: any) => Promise<Response>, ctx: any): Promise<Response> {
   try {
@@ -43,24 +45,32 @@ async function seedOrgMember(params: {
       params.organizationName.toLowerCase(),
       params.dataJson ?? null,
     ),
-    env.DB.prepare(
-      `INSERT INTO members (id, member_type, user_id, organization_id, status, tier, created_at, updated_at)
-       VALUES (?, 'A', ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-    ).bind(crypto.randomUUID(), params.userId, params.organizationId, params.status, params.tier ?? "A"),
   ]);
+  const memberId = await seedOrganizationAggregate(env.DB, params.organizationId, params.tier ?? "A");
+  if (params.status !== "active") {
+    await env.DB.prepare("UPDATE members SET status = ? WHERE id = ?").bind(params.status, memberId).run();
+  }
+  await addRepresentativeRow(env.DB, memberId, params.userId);
+  return memberId;
 }
 
 async function seedIndividualMember(params: { userId: string; status: string; tier?: string }) {
-  await env.DB.batch([
-    env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-    ).bind(params.userId, `${params.userId}@example.test`, `${params.userId}@example.test`, "Solo", "Member"),
-    env.DB.prepare(
-      `INSERT INTO members (id, member_type, user_id, organization_id, status, tier, created_at, updated_at)
-       VALUES (?, 'H6', ?, NULL, ?, ?, datetime('now'), datetime('now'))`,
-    ).bind(crypto.randomUUID(), params.userId, params.status, params.tier ?? "H6"),
-  ]);
+  await env.DB.prepare(
+    `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+  )
+    .bind(params.userId, `${params.userId}@example.test`, `${params.userId}@example.test`, "Solo", "Member")
+    .run();
+  const { statements } = buildCreateIndividualMemberStatements(
+    env.DB,
+    params.userId,
+    params.tier ?? "H6",
+    new Date().toISOString(),
+  );
+  await env.DB.batch(statements);
+  if (params.status !== "active") {
+    await env.DB.prepare("UPDATE members SET status = ? WHERE user_id = ?").bind(params.status, params.userId).run();
+  }
 }
 
 describe("GET /api/v1/members (public directory)", () => {
@@ -102,24 +112,15 @@ describe("GET /api/v1/members (public directory)", () => {
 
   it("surfaces only one directory entry per organization even with multiple representatives", async () => {
     const organizationId = crypto.randomUUID();
-    await seedOrgMember({
+    const memberId = await seedOrgMember({
       userId: crypto.randomUUID(),
       organizationId,
       organizationName: "Multi Rep Org",
       status: "active",
     });
     // Second representative for the same org — should not create a second directory entry.
-    const secondUserId = crypto.randomUUID();
-    await env.DB.batch([
-      env.DB.prepare(
-        `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-      ).bind(secondUserId, `${secondUserId}@example.test`, `${secondUserId}@example.test`, "Second", "Rep"),
-      env.DB.prepare(
-        `INSERT INTO members (id, member_type, user_id, organization_id, status, tier, created_at, updated_at)
-         VALUES (?, 'A', ?, ?, 'active', 'A', datetime('now'), datetime('now'))`,
-      ).bind(crypto.randomUUID(), secondUserId, organizationId),
-    ]);
+    const secondUserId = await insertUser(env.DB);
+    await addRepresentativeRow(env.DB, memberId, secondUserId);
 
     const response = await callEndpoint(
       listMembers,
@@ -262,7 +263,7 @@ describe("GET /api/v1/members/:id", () => {
   it("includes org content fields and only show_on_org_profile=1 representatives", async () => {
     const organizationId = crypto.randomUUID();
     const shownUserId = crypto.randomUUID();
-    await seedOrgMember({
+    const memberId = await seedOrgMember({
       userId: shownUserId,
       organizationId,
       organizationName: "Content Org",
@@ -280,17 +281,8 @@ describe("GET /api/v1/members/:id", () => {
       .bind("CTO", "Leads engineering.", shownUserId)
       .run();
 
-    const hiddenUserId = crypto.randomUUID();
-    await env.DB.batch([
-      env.DB.prepare(
-        `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-      ).bind(hiddenUserId, `${hiddenUserId}@example.test`, `${hiddenUserId}@example.test`, "Hidden", "Rep"),
-      env.DB.prepare(
-        `INSERT INTO members (id, member_type, user_id, organization_id, status, tier, created_at, updated_at, show_on_org_profile)
-         VALUES (?, 'A', ?, ?, 'active', 'A', datetime('now'), datetime('now'), 0)`,
-      ).bind(crypto.randomUUID(), hiddenUserId, organizationId),
-    ]);
+    const hiddenUserId = await insertUser(env.DB);
+    await addRepresentativeRow(env.DB, memberId, hiddenUserId, { showOnOrgProfile: false });
 
     const response = await callEndpoint(
       getMember,
@@ -332,10 +324,10 @@ describe("GET /api/v1/members/:id", () => {
       representatives: Array<{ name: string; photoUrl: string | null }>;
     };
     expect(body.representatives).toHaveLength(1);
-    const repMemberRow = await env.DB.prepare(`SELECT id FROM members WHERE user_id = ?`).bind(repUserId).first<{
-      id: string;
-    }>();
-    expect(body.representatives[0].photoUrl).toBe(`/api/v1/members/${repMemberRow!.id}/logo`);
+    const repRow = await env.DB.prepare(`SELECT id FROM organization_representatives WHERE user_id = ?`)
+      .bind(repUserId)
+      .first<{ id: string }>();
+    expect(body.representatives[0].photoUrl).toBe(`/api/v1/members/${repRow!.id}/logo`);
   });
 
   it("returns the individual member's own bio/job title, with no representatives list", async () => {
@@ -443,7 +435,7 @@ describe("GET /api/v1/members/:id/logo", () => {
     expect(Array.from(buf)).toEqual([5, 6, 7, 8]);
   });
 
-  it("serves an organization representative's photo keyed by their own members.id", async () => {
+  it("serves an organization representative's photo keyed by their own organization_representatives.id", async () => {
     const organizationId = crypto.randomUUID();
     const repUserId = crypto.randomUUID();
     await seedOrgMember({
@@ -457,9 +449,9 @@ describe("GET /api/v1/members/:id/logo", () => {
     const bytes = new Uint8Array([9, 9, 9]);
     await env.ASSETS_BUCKET!.put(r2Key, bytes);
 
-    const repMemberRow = await env.DB.prepare(`SELECT id FROM members WHERE user_id = ?`).bind(repUserId).first<{
-      id: string;
-    }>();
+    const repRow = await env.DB.prepare(`SELECT id FROM organization_representatives WHERE user_id = ?`)
+      .bind(repUserId)
+      .first<{ id: string }>();
 
     // The organization's own id must not resolve to the representative's photo.
     const orgLogoResponse = await callEndpoint(
@@ -472,8 +464,8 @@ describe("GET /api/v1/members/:id/logo", () => {
 
     const response = await callEndpoint(
       getMemberLogo,
-      createContext(env, getRequest(`https://pkic.org/api/v1/members/${repMemberRow!.id}/logo`), {
-        id: repMemberRow!.id,
+      createContext(env, getRequest(`https://pkic.org/api/v1/members/${repRow!.id}/logo`), {
+        id: repRow!.id,
       }),
     );
     expect(response.status).toBe(200);
@@ -590,7 +582,6 @@ describe("GET /api/v1/working-groups/:id", () => {
 
     const chairUserId = crypto.randomUUID();
     const orgId = crypto.randomUUID();
-    const memberRowId = crypto.randomUUID();
     await env.DB.batch([
       env.DB.prepare(
         `INSERT INTO organizations (id, name, normalized_name, website, logo_r2_key, created_at, updated_at)
@@ -609,14 +600,12 @@ describe("GET /api/v1/working-groups/:id", () => {
         JSON.stringify({ linkedin: "https://linkedin.com/in/chairperson" }),
       ),
       env.DB.prepare(
-        `INSERT INTO members (id, member_type, user_id, organization_id, status, tier, created_at, updated_at)
-         VALUES (?, 'A', ?, ?, 'active', 'A', datetime('now'), datetime('now'))`,
-      ).bind(memberRowId, chairUserId, orgId),
-      env.DB.prepare(
         `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, created_at)
          VALUES (?, ?, 'role-wg_chair', 'working_group', ?, datetime('now'))`,
       ).bind(crypto.randomUUID(), chairUserId, wgId),
     ]);
+    const aggregateId = await seedOrganizationAggregate(env.DB, orgId, "A");
+    const representativeId = await addRepresentativeRow(env.DB, aggregateId, chairUserId);
 
     const response = await callEndpoint(
       getWorkingGroup,
@@ -637,7 +626,7 @@ describe("GET /api/v1/working-groups/:id", () => {
     expect(body.chair?.organizationName).toBe("Chair Org");
     expect(body.chair?.organizationWebsite).toBe("https://chairorg.example");
     expect(body.chair?.organizationLogoUrl).toBe(`/api/v1/members/${orgId}/logo`);
-    expect(body.chair?.photoUrl).toBe(`/api/v1/members/${memberRowId}/logo`);
+    expect(body.chair?.photoUrl).toBe(`/api/v1/members/${representativeId}/logo`);
     expect(body.chair?.linkedin).toBe("https://linkedin.com/in/chairperson");
   });
 

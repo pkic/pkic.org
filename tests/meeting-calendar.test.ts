@@ -16,6 +16,8 @@ import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createApplicationFormSubmission } from "./helpers/member-applications";
 import { resolveWgJoinCalendarInviteByMailingListEmail } from "../functions/_lib/services/meeting-calendar";
+import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
+import { seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -55,12 +57,13 @@ async function insertUser(email: string): Promise<string> {
 }
 
 async function insertMember(userId: string, category: string, organizationId: string | null = null): Promise<void> {
-  await env.DB.prepare(
-    `INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`,
-  )
-    .bind(crypto.randomUUID(), category, userId, organizationId)
-    .run();
+  if (organizationId) {
+    const memberId = await seedOrganizationAggregate(env.DB, organizationId, category);
+    await addRepresentative(env.DB, memberId, userId);
+    return;
+  }
+  const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, category, new Date().toISOString());
+  await env.DB.batch(statements);
 }
 
 async function insertWorkingGroup(name: string, slug: string, mailingListEmail: string | null = null): Promise<string> {

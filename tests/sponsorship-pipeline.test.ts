@@ -12,6 +12,12 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import {
+  seedOrganizationAggregate,
+  addRepresentative,
+  assignRepresentativeRole,
+  REPRESENTATIVE_ROLE_IDS,
+} from "./helpers/membership";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -31,25 +37,21 @@ async function call(token: string, path: string, init: RequestInit = {}): Promis
 async function seedOrganization(name: string): Promise<{ organizationId: string; userId: string }> {
   const organizationId = crypto.randomUUID();
   const userId = crypto.randomUUID();
-  const memberId = crypto.randomUUID();
 
   await env.DB.batch([
     env.DB.prepare(
-      `INSERT INTO organizations (id, name, normalized_name, membership_category, created_at, updated_at)
-       VALUES (?, ?, ?, 'B', datetime('now'), datetime('now'))`,
+      `INSERT INTO organizations (id, name, normalized_name, created_at, updated_at)
+       VALUES (?, ?, ?, datetime('now'), datetime('now'))`,
     ).bind(organizationId, name, name.toLowerCase()),
     env.DB.prepare(
       `INSERT INTO users (id, email, normalized_email, first_name, role, active, created_at, updated_at)
        VALUES (?, ?, ?, 'Test', 'user', 1, datetime('now'), datetime('now'))`,
     ).bind(userId, `contact@${name.toLowerCase()}.test`, `contact@${name.toLowerCase()}.test`),
-    env.DB.prepare(
-      `INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
-       VALUES (?, 'B', ?, ?, 'active', datetime('now'), datetime('now'))`,
-    ).bind(memberId, userId, organizationId),
   ]);
-  await env.DB.prepare("UPDATE organizations SET primary_contact_user_id = ? WHERE id = ?")
-    .bind(userId, organizationId)
-    .run();
+
+  const memberId = await seedOrganizationAggregate(env.DB, organizationId, "B");
+  await addRepresentative(env.DB, memberId, userId);
+  await assignRepresentativeRole(env.DB, memberId, userId, REPRESENTATIVE_ROLE_IDS.primaryContact);
 
   return { organizationId, userId };
 }

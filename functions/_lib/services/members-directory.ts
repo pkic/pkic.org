@@ -12,11 +12,11 @@ import type { DatabaseLike } from "../types";
  * to it anymore, but it's kept as a fallback source for any row that only
  * has it set (e.g. rows seeded directly in tests).
  *
- * Design note: `members` now allows multiple rows per organization_id (one
- * per representative, migration 0033). A public directory entry is one row
- * per *organization* (or one row per individual, org-less member) — so for
- * org-tied members we surface only the earliest-created ("primary contact")
- * row per organization_id as that organization's directory entry.
+ * Design note: `members` holds exactly one aggregate row per organization
+ * (migration 0000/0037) — a public directory entry is one row per
+ * *organization* (or one row per individual, org-less member), with N
+ * `organization_representatives` rows resolved separately for the detail
+ * view's representative roster (see `loadRepresentatives`).
  */
 
 interface OrgDataJson {
@@ -70,14 +70,13 @@ interface DirectoryRow {
   org_website: string | null;
   org_slogan: string | null;
   org_logo_r2_key: string | null;
-  org_member_since: string | null;
   first_name: string | null;
   last_name: string | null;
   job_title: string | null;
   biography: string | null;
   links_json: string | null;
   headshot_r2_key: string | null;
-  member_type: string;
+  category_code: string;
   tier: string | null;
   member_since: string | null;
   created_at: string;
@@ -104,39 +103,29 @@ function toSummary(row: DirectoryRow): PublicMemberSummary {
     // they keep UUID-keyed profile URLs (see functions/members/[slug].ts).
     slug: row.organization_id ? row.org_slug : null,
     name,
-    memberType: row.member_type,
+    memberType: row.category_code,
     tier: row.tier,
     website: row.org_website ?? orgData.website ?? null,
     description: row.org_description ?? orgData.description ?? (isIndividual ? row.biography : null) ?? null,
     slogan: row.org_slogan ?? orgData.slogan ?? null,
     logoUrl,
-    // Org-tied members share the organization's own join date; org-less
-    // individuals carry their own on the members row. Both fall back to the
-    // row's creation time for records that predate migration 0046 (or a
-    // creation path that didn't supply a real one).
-    memberSince: (row.organization_id ? row.org_member_since : row.member_since) ?? row.created_at,
+    // Falls back to the row's creation time for records that predate
+    // migration 0049 (or a creation path that didn't supply a real one).
+    memberSince: row.member_since ?? row.created_at,
   };
 }
 
 const DIRECTORY_SELECT = `
   SELECT m.id AS member_id, m.organization_id, o.slug AS org_slug, o.name AS org_name, o.data_json AS org_data_json,
          o.description AS org_description, o.website AS org_website, o.slogan AS org_slogan,
-         o.logo_r2_key AS org_logo_r2_key, o.member_since AS org_member_since,
+         o.logo_r2_key AS org_logo_r2_key,
          u.first_name, u.last_name, u.job_title, u.biography, u.links_json, u.headshot_r2_key,
-         m.member_type, m.tier, m.member_since, m.created_at
+         mca.category_code, m.tier, m.member_since, m.created_at
   FROM members m
   LEFT JOIN organizations o ON o.id = m.organization_id
   LEFT JOIN users u ON u.id = m.user_id
+  JOIN member_category_assignments mca ON mca.member_id = m.id
   WHERE m.status = 'active'
-    AND (
-      m.organization_id IS NULL
-      OR m.id = (
-        SELECT m2.id FROM members m2
-        WHERE m2.organization_id = m.organization_id AND m2.status = 'active'
-        ORDER BY m2.created_at ASC, m2.id ASC
-        LIMIT 1
-      )
-    )
 `;
 
 /** group: "organization" = org-tied categories; "independent" = org-less H5/H6/H7 */
@@ -175,7 +164,7 @@ export async function listPublicMembers(
 
 async function loadRepresentatives(db: DatabaseLike, organizationId: string): Promise<PublicMemberRepresentative[]> {
   const rows = await all<{
-    member_id: string;
+    representative_id: string;
     first_name: string | null;
     last_name: string | null;
     job_title: string | null;
@@ -184,10 +173,11 @@ async function loadRepresentatives(db: DatabaseLike, organizationId: string): Pr
     headshot_r2_key: string | null;
   }>(
     db,
-    `SELECT m.id AS member_id, u.first_name, u.last_name, u.job_title, u.biography, u.links_json, u.headshot_r2_key
-     FROM members m
-     JOIN users u ON u.id = m.user_id
-     WHERE m.organization_id = ? AND m.status = 'active' AND m.show_on_org_profile = 1
+    `SELECT r.id AS representative_id, u.first_name, u.last_name, u.job_title, u.biography, u.links_json, u.headshot_r2_key
+     FROM organization_representatives r
+     JOIN members m ON m.id = r.member_id
+     JOIN users u ON u.id = r.user_id
+     WHERE m.organization_id = ? AND r.left_at IS NULL AND r.show_on_org_profile = 1
      ORDER BY u.last_name ASC, u.first_name ASC`,
     [organizationId],
   );
@@ -197,7 +187,7 @@ async function loadRepresentatives(db: DatabaseLike, organizationId: string): Pr
     jobTitle: r.job_title,
     bio: r.biography,
     linkedin: findLinkedinUrl(parseLinksJson(r.links_json)),
-    photoUrl: r.headshot_r2_key ? `/api/v1/members/${r.member_id}/logo` : null,
+    photoUrl: r.headshot_r2_key ? `/api/v1/members/${r.representative_id}/logo` : null,
   }));
 }
 
@@ -251,13 +241,11 @@ export async function getPublicMemberById(db: DatabaseLike, idOrSlug: string): P
 /**
  * `id` matches the directory `id` field for organizations and org-less
  * individuals (H5/H6/H7) — see `toSummary` — but is also called with a
- * representative's own `members.id` (see `loadRepresentatives`'s
- * `photoUrl`), since an org-tied representative has no `organizations` row
- * of their own to key a logo off of. In every non-organization case the
- * photo lives on `users.headshot_r2_key` (the same column self-service
- * headshot uploads use), so the second query intentionally has no
- * `organization_id IS NULL` restriction — it resolves individuals and
- * representatives alike.
+ * representative's own `organization_representatives.id` (see
+ * `loadRepresentatives`'s `photoUrl`), since an org-tied representative has
+ * no `organizations` row of their own to key a logo off of. In every
+ * non-organization case the photo lives on `users.headshot_r2_key` (the
+ * same column self-service headshot uploads use).
  */
 export async function getMemberLogoR2Key(db: DatabaseLike, id: string): Promise<string | null> {
   const orgRow = await first<{ logo_r2_key: string | null }>(db, `SELECT logo_r2_key FROM organizations WHERE id = ?`, [
@@ -265,7 +253,7 @@ export async function getMemberLogoR2Key(db: DatabaseLike, id: string): Promise<
   ]);
   if (orgRow) return orgRow.logo_r2_key ?? null;
 
-  const memberRow = await first<{ headshot_r2_key: string | null }>(
+  const individualRow = await first<{ headshot_r2_key: string | null }>(
     db,
     `SELECT u.headshot_r2_key AS headshot_r2_key
      FROM members m
@@ -273,7 +261,17 @@ export async function getMemberLogoR2Key(db: DatabaseLike, id: string): Promise<
      WHERE m.id = ?`,
     [id],
   );
-  return memberRow?.headshot_r2_key ?? null;
+  if (individualRow) return individualRow.headshot_r2_key ?? null;
+
+  const representativeRow = await first<{ headshot_r2_key: string | null }>(
+    db,
+    `SELECT u.headshot_r2_key AS headshot_r2_key
+     FROM organization_representatives r
+     JOIN users u ON u.id = r.user_id
+     WHERE r.id = ?`,
+    [id],
+  );
+  return representativeRow?.headshot_r2_key ?? null;
 }
 
 // ── Working groups ──────────────────────────────────────────────────────────
@@ -360,10 +358,12 @@ async function getWorkingGroupChairsPublic(
     db,
     `SELECT ur.role_id, u.first_name, u.last_name, o.id AS org_id, o.name AS org_name,
             o.logo_r2_key AS org_logo_r2_key, o.website AS org_website,
-            m.id AS member_id, u.headshot_r2_key, u.links_json
+            COALESCE(rep.id, mi.id) AS member_id, u.headshot_r2_key, u.links_json
      FROM user_roles ur
      JOIN users u ON u.id = ur.user_id
-     LEFT JOIN members m ON m.user_id = u.id AND m.status = 'active'
+     LEFT JOIN organization_representatives rep ON rep.user_id = u.id AND rep.left_at IS NULL
+     LEFT JOIN members m ON m.id = rep.member_id
+     LEFT JOIN members mi ON mi.user_id = u.id AND mi.status = 'active'
      LEFT JOIN organizations o ON o.id = m.organization_id
      WHERE ur.context_type = 'working_group' AND ur.context_id = ?
        AND ur.role_id IN ('role-wg_chair', 'role-wg_vice_chair')
@@ -380,6 +380,8 @@ async function getWorkingGroupChairsPublic(
       organizationName: row.org_name,
       organizationLogoUrl: row.org_logo_r2_key && row.org_id ? `/api/v1/members/${row.org_id}/logo` : null,
       organizationWebsite: row.org_website,
+      // member_id here is either an organization_representatives.id (org-tied
+      // chair) or an individual members.id — both resolve via getMemberLogoR2Key.
       photoUrl: row.headshot_r2_key && row.member_id ? `/api/v1/members/${row.member_id}/logo` : null,
       linkedin: findLinkedinUrl(parseLinksJson(row.links_json)),
     };
@@ -407,7 +409,8 @@ export async function getWorkingGroupByIdOrSlug(
     `SELECT u.first_name, u.last_name, o.name AS org_name
      FROM working_group_members wgm
      JOIN users u ON u.id = wgm.user_id
-     LEFT JOIN members m ON m.user_id = wgm.user_id AND m.status = 'active'
+     LEFT JOIN organization_representatives rep ON rep.user_id = wgm.user_id AND rep.left_at IS NULL
+     LEFT JOIN members m ON m.id = rep.member_id
      LEFT JOIN organizations o ON o.id = m.organization_id
      WHERE wgm.working_group_id = ? AND wgm.left_at IS NULL
      ORDER BY u.last_name ASC, u.first_name ASC`,

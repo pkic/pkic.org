@@ -1,4 +1,4 @@
--- Migration 0044: Voting System
+-- Migration 0047: Voting System
 --
 -- Adds the five tables Database Schema Additions calls for (votes,
 -- vote_proposals, vote_proposal_endorsements, vote_candidates,

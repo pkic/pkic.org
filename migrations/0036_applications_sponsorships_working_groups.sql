@@ -1,4 +1,4 @@
--- Migration 0034: RESTful API & Portal-Managed Forms
+-- Migration 0036: RESTful API & Portal-Managed Forms
 --
 -- (Membership Application Endpoint), (Sponsor Interest
 -- Endpoint), and (public members / working-groups endpoints) all need
@@ -39,13 +39,9 @@ CREATE TABLE member_applications (
   organization_name    TEXT,
   organization_domain  TEXT,
   membership_category  TEXT NOT NULL,
-  -- allowed: A | B | C | D | E | F | G | H1 | H2 | H3 | H4 | H5 | H6 | H7 | H8
   form_submission_id   TEXT,
-  -- reserved for a future form_submissions-backed write path; unused for now
-  -- (see functions/_lib/services/member-applications.ts) — answers are
-  -- stored directly on this row in answers_json, the same pattern already
-  -- used by registrations.custom_answers_json.
-  answers_json         TEXT,
+  -- the application's answers live in form_submissions/form_submission_answers
+  -- (against the 'membership-application' form seeded below), not on this row.
   status               TEXT NOT NULL DEFAULT 'pending',
   -- allowed: pending | in_review | on_hold | in_consultation | ec_review | approved | declined | withdrawn
   stage                TEXT NOT NULL DEFAULT 'pending',
@@ -55,10 +51,15 @@ CREATE TABLE member_applications (
   manage_token_hash    TEXT NOT NULL UNIQUE,
   -- sha256 of the applicant's status/document-upload token; plaintext is
   -- returned once at submission time and emailed, never stored.
+  on_hold_subtype      TEXT,
+  -- allowed: request_authority | request_org_email | request_pki_experience
+  --        | request_org_application | request_information
+  -- distinguishes *why* an application is on_hold; NULL when not on_hold.
   created_at           TEXT NOT NULL,
   updated_at           TEXT NOT NULL,
   FOREIGN KEY(form_submission_id) REFERENCES form_submissions(id),
-  FOREIGN KEY(assigned_to_user_id) REFERENCES users(id)
+  FOREIGN KEY(assigned_to_user_id) REFERENCES users(id),
+  FOREIGN KEY(membership_category) REFERENCES membership_categories(code)
 );
 
 CREATE INDEX idx_member_applications_email ON member_applications(applicant_email);
@@ -122,6 +123,10 @@ CREATE TABLE sponsorships (
   renewal_date           TEXT,
   assigned_to_user_id    TEXT,
   notes                  TEXT,
+  price_amount_cents     INTEGER,
+  price_currency         TEXT,
+  -- price snapshot on the transaction, so a later sponsorship_tier_config
+  -- change never affects an already-completed sponsorship's recorded price.
   created_at             TEXT NOT NULL,
   updated_at             TEXT NOT NULL,
   FOREIGN KEY(organization_id) REFERENCES organizations(id),
@@ -149,18 +154,20 @@ CREATE INDEX idx_sponsorship_events_sponsorship ON sponsorship_events(sponsorshi
 
 -- ── Working groups ─────────────────────────────────────────────
 
+-- Chairs/vice-chairs are resolved from user_roles (role-wg_chair/
+-- role-wg_vice_chair, context_type='working_group') — see migration 0038 —
+-- not a column here, so there is exactly one source of truth for who chairs
+-- a working group.
 CREATE TABLE working_groups (
   id                       TEXT NOT NULL PRIMARY KEY,
   name                     TEXT NOT NULL,
   slug                     TEXT NOT NULL UNIQUE,
   description              TEXT,
   mailing_list_email       TEXT,
-  chair_user_id            TEXT,
   min_endorsers_for_ballot INTEGER NOT NULL DEFAULT 0,
   active                   INTEGER NOT NULL DEFAULT 1,
   created_at               TEXT NOT NULL,
-  updated_at               TEXT NOT NULL,
-  FOREIGN KEY(chair_user_id) REFERENCES users(id)
+  updated_at               TEXT NOT NULL
 );
 
 CREATE TABLE working_group_members (
@@ -175,28 +182,31 @@ CREATE TABLE working_group_members (
 
 CREATE INDEX idx_wg_members_wg ON working_group_members(working_group_id, left_at);
 CREATE INDEX idx_wg_members_user ON working_group_members(user_id);
+-- At most one active (left_at IS NULL) membership per (working_group, user);
+-- partial so a user can rejoin after leaving.
+CREATE UNIQUE INDEX idx_wg_members_active_unique ON working_group_members(working_group_id, user_id) WHERE left_at IS NULL;
 
 INSERT OR IGNORE INTO working_groups
-  (id, name, slug, description, mailing_list_email, chair_user_id, min_endorsers_for_ballot, active, created_at, updated_at)
+  (id, name, slug, description, mailing_list_email, min_endorsers_for_ballot, active, created_at, updated_at)
 VALUES
   (lower(hex(randomblob(16))), 'Post-Quantum Cryptography Working Group', 'pqc',
    'Preparing the PKI ecosystem for the quantum computing era through collaborative research, education, standards alignment, and practical tooling.',
-   NULL, NULL, 0, 1, datetime('now'), datetime('now')),
+   NULL, 0, 1, datetime('now'), datetime('now')),
   (lower(hex(randomblob(16))), 'Cryptographic Module Working Group', 'cm',
    'A central forum for addressing cryptographic module (CM) and hardware security module (HSM) related topics within the PKI ecosystem.',
-   NULL, NULL, 0, 1, datetime('now'), datetime('now')),
+   NULL, 0, 1, datetime('now'), datetime('now')),
   (lower(hex(randomblob(16))), 'PKI Maturity Model Working Group', 'pkimm',
    'Building a globally recognized PKI maturity model for evaluating, planning, and comparing PKI implementations.',
-   NULL, NULL, 0, 1, datetime('now'), datetime('now')),
+   NULL, 0, 1, datetime('now'), datetime('now')),
   (lower(hex(randomblob(16))), 'Training and Certification Working Group', 'tcwg',
    'Advancing PKI knowledge and skills through structured training paths, certification programs, and accessible educational resources.',
-   NULL, NULL, 0, 1, datetime('now'), datetime('now')),
+   NULL, 0, 1, datetime('now'), datetime('now')),
   (lower(hex(randomblob(16))), 'CA Working Group', 'ca',
    'A working group for discussions and information sharing among publicly trusted Certificate Authorities.',
-   NULL, NULL, 0, 1, datetime('now'), datetime('now')),
+   NULL, 0, 1, datetime('now'), datetime('now')),
   (lower(hex(randomblob(16))), 'CBOM Profiles Working Group', 'cbom',
    'Developing a neutral, open methodology for defining Cryptographic Bill of Materials (CBOM) profiles that map onto industry BOM standards such as SPDX and CycloneDX.',
-   NULL, NULL, 0, 1, datetime('now'), datetime('now'));
+   NULL, 0, 1, datetime('now'), datetime('now'));
 
 -- ── Portal-managed membership application form ───────────────────────
 -- forms.purpose already allows 'application' (migration 0000) — no rebuild

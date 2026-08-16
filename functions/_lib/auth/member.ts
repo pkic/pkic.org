@@ -46,6 +46,7 @@ import {
 interface MemberEligibleUserRow {
   id: string;
   email: string;
+  normalized_email: string;
   active: number;
   member_id: string;
   organization_id: string | null;
@@ -53,24 +54,36 @@ interface MemberEligibleUserRow {
   is_ec_member: number;
 }
 
-// A user is member-session-eligible when they hold an active `members` row
-// — the INNER JOIN below is the whole eligibility gate. Unlike admin's
-// STAFF_ACCESS_CONDITION there is no role or grant check; self-service is
-// identity-gated (see AuthMember's doc comment in types.ts).
+// A user is member-session-eligible when they hold an active individual
+// `members` row (org-less: member_type='individual', user_id=that user) OR
+// an active `organization_representatives` row for an active org-tied
+// aggregate (org-tied members rows have user_id IS NULL — migration
+// 0000's CHECK — so a representative is never found via members.user_id
+// directly). Unlike admin's STAFF_ACCESS_CONDITION there is no role or
+// grant check; self-service is identity-gated (see AuthMember's doc
+// comment in types.ts).
 //
-// membership_category resolution (migration 0040): for org-tied members,
-// organizations.membership_category is the source of truth; members.member_type
-// is only a denormalized mirror for those rows. For org-less individual
-// members (H5/H6/H7, organization_id IS NULL) there is no organization row
-// to join, so COALESCE falls through to members.member_type, which stays
-// the real, independently-editable category for that case.
+// A person who is simultaneously an org-less individual member AND an
+// active representative of some organization (edge case, not disallowed by
+// any constraint) would match both halves of this UNION; the first row D1
+// returns wins. Not resolved further in this pass.
 const MEMBER_ELIGIBLE_USER_SELECT = `
-  SELECT u.id, u.email, u.active, u.is_ec_member,
-         m.id AS member_id, m.organization_id,
-         COALESCE(o.membership_category, m.member_type) AS membership_category
+  SELECT u.id, u.email, u.normalized_email, u.active, u.is_ec_member,
+         m.id AS member_id, NULL AS organization_id,
+         mca.category_code AS membership_category
   FROM users u
   JOIN members m ON m.user_id = u.id AND m.status = 'active'
-  LEFT JOIN organizations o ON o.id = m.organization_id
+  JOIN member_category_assignments mca ON mca.member_id = m.id
+
+  UNION ALL
+
+  SELECT u.id, u.email, u.normalized_email, u.active, u.is_ec_member,
+         m.id AS member_id, m.organization_id,
+         mca.category_code AS membership_category
+  FROM users u
+  JOIN organization_representatives r ON r.user_id = u.id AND r.left_at IS NULL
+  JOIN members m ON m.id = r.member_id AND m.status = 'active'
+  JOIN member_category_assignments mca ON mca.member_id = m.id
 `;
 
 export interface MemberSessionTokenClaims {
@@ -143,9 +156,11 @@ export async function verifyMemberSessionToken(
 
 /** True if `userId` currently holds an active `members` row. */
 export async function findEligibleMemberById(db: DatabaseLike, userId: string): Promise<AuthMember | null> {
-  const row = await first<MemberEligibleUserRow>(db, `${MEMBER_ELIGIBLE_USER_SELECT} WHERE u.id = ? AND u.active = 1`, [
-    userId,
-  ]);
+  const row = await first<MemberEligibleUserRow>(
+    db,
+    `SELECT * FROM (${MEMBER_ELIGIBLE_USER_SELECT}) combined WHERE id = ? AND active = 1`,
+    [userId],
+  );
   return row ? toAuthMember(row) : null;
 }
 
@@ -215,7 +230,7 @@ export async function requestMemberMagicLink(
   const email = normalizeEmail(payload.email);
   const row = await first<MemberEligibleUserRow>(
     db,
-    `${MEMBER_ELIGIBLE_USER_SELECT} WHERE u.normalized_email = ? AND u.active = 1`,
+    `SELECT * FROM (${MEMBER_ELIGIBLE_USER_SELECT}) combined WHERE normalized_email = ? AND active = 1`,
     [email],
   );
 

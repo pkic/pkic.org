@@ -11,6 +11,7 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 
 function requestWithAuth(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -43,16 +44,13 @@ async function createEcReviewApplication(): Promise<{ id: string }> {
 
 async function insertActiveMember(email: string, isEcMember: boolean): Promise<string> {
   const userId = crypto.randomUUID();
-  const memberId = crypto.randomUUID();
+  const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, "A", new Date().toISOString());
   await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO users (id, email, normalized_email, role, active, is_ec_member, created_at, updated_at)
        VALUES (?, ?, ?, 'user', 1, ?, datetime('now'), datetime('now'))`,
     ).bind(userId, email, email, isEcMember ? 1 : 0),
-    env.DB.prepare(
-      `INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
-       VALUES (?, 'A', ?, NULL, 'active', datetime('now'), datetime('now'))`,
-    ).bind(memberId, userId),
+    ...statements,
   ]);
   return userId;
 }

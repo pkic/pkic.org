@@ -1,4 +1,4 @@
--- Migration 0038: Membership Workflow Migration
+-- Migration 0041: Membership Workflow Migration
 --
 -- Built application submission and the
 -- public read API; built access control; built passkeys.
@@ -9,14 +9,6 @@
 -- values are documented in `-- allowed:` comments and validated at the
 -- application layer (Zod) instead.
 
--- ── On-hold sub-type ──────────────────────────────────────────────
--- Distinguishes *why* an application is on_hold, replacing the GitHub
--- label scheme (hold:authority, hold:org-email, etc.). NULL when the
--- application isn't currently on_hold.
-ALTER TABLE member_applications ADD COLUMN on_hold_subtype TEXT;
--- allowed: request_authority | request_org_email | request_pki_experience
---        | request_org_application | request_information
-
 -- ── EC member designation ─────────────────────────────────────────
 -- A distinct designation from `membership:approve` — controls who receives
 -- ec-review-batch emails and who sees the EC decision screen, independent
@@ -24,13 +16,21 @@ ALTER TABLE member_applications ADD COLUMN on_hold_subtype TEXT;
 ALTER TABLE users ADD COLUMN is_ec_member INTEGER NOT NULL DEFAULT 0;
 
 -- ── Organization domain(s) (duplicate-check gap) ────────────────────
--- Duplicate-domain check only covered member_applications, not
--- approved members, because organizations had no domain column.
--- Populated at approval time from the applicant's email domain; existing
--- organizations are not backfilled -
--- status for the documented limitation. JSON array to allow more than one
--- domain per organization over time (e.g. after a rebrand).
-ALTER TABLE organizations ADD COLUMN organization_domains_json TEXT;
+-- Duplicate-domain check only covered member_applications, not approved
+-- members, because organizations had no domain relation. Domains are
+-- normalized identity data used for uniqueness and lookup, not flexible
+-- display metadata, so they get a real indexed table directly rather than a
+-- JSON column normalized later. Populated at approval time from the
+-- applicant's email domain; existing organizations are not backfilled.
+CREATE TABLE organization_domains (
+  id              TEXT NOT NULL PRIMARY KEY,
+  organization_id TEXT NOT NULL REFERENCES organizations(id),
+  domain          TEXT NOT NULL,
+  created_at      TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX idx_organization_domains_domain ON organization_domains(domain);
+CREATE INDEX idx_organization_domains_org ON organization_domains(organization_id);
 
 -- ── EC decisions ───────────────────────
 CREATE TABLE ec_decisions (

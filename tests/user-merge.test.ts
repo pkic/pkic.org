@@ -16,6 +16,9 @@ import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { requestAdminMagicLink } from "../functions/_lib/auth/admin";
+import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
+import { insertOrganization, seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
+import { isActiveRepresentative } from "../functions/_lib/services/membership/representatives";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -65,14 +68,14 @@ async function joinWorkingGroup(wgId: string, userId: string): Promise<void> {
 }
 
 async function insertMember(userId: string, membershipCategory: string): Promise<string> {
-  const id = crypto.randomUUID();
-  await env.DB.prepare(
-    `INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
-     VALUES (?, ?, ?, NULL, 'active', datetime('now'), datetime('now'))`,
-  )
-    .bind(id, membershipCategory, userId)
-    .run();
-  return id;
+  const { memberId, statements } = buildCreateIndividualMemberStatements(
+    env.DB,
+    userId,
+    membershipCategory,
+    new Date().toISOString(),
+  );
+  await env.DB.batch(statements);
+  return memberId;
 }
 
 async function insertPasskey(userId: string, credentialId: string): Promise<void> {
@@ -248,6 +251,45 @@ describe("secondary emails + user merge", () => {
     expect(sourceRow.merged_into_user_id).toBe(survivorId);
     expect(sourceRow.active).toBe(0);
     expect(sourceRow.email).not.toBe("duplicate@example.test");
+  });
+
+  it("merges organization_representatives rows, skipping an org the survivor already actively represents", async () => {
+    const survivorId = await insertUser("rep-survivor@example.test");
+    const sourceId = await insertUser("rep-source@example.test");
+
+    const orgAId = await insertOrganization(env.DB, "Org A");
+    const orgBId = await insertOrganization(env.DB, "Org B");
+    const memberAId = await seedOrganizationAggregate(env.DB, orgAId, "A");
+    const memberBId = await seedOrganizationAggregate(env.DB, orgBId, "B");
+
+    // Source represents both orgs; survivor already actively represents org B.
+    await addRepresentative(env.DB, memberAId, sourceId);
+    await addRepresentative(env.DB, memberBId, sourceId);
+    await addRepresentative(env.DB, memberBId, survivorId);
+
+    const response = await call(adminToken, `/api/v1/admin/users/${survivorId}/merge`, {
+      method: "POST",
+      body: JSON.stringify({ sourceUserId: sourceId }),
+    });
+    expect(response.status).toBe(200);
+
+    // Org A: reassigned to the survivor (they had no conflicting active row there).
+    expect(await isActiveRepresentative(env.DB, memberAId, survivorId)).toBe(true);
+    expect(await isActiveRepresentative(env.DB, memberAId, sourceId)).toBe(false);
+
+    // Org B: survivor's own pre-existing active row stands; the source's
+    // row is left as harmless history rather than repointed into a
+    // uq_organization_representatives_active_pair conflict.
+    expect(await isActiveRepresentative(env.DB, memberBId, survivorId)).toBe(true);
+    const sourceOrgBRow = (
+      await queryAll<{ user_id: string; left_at: string | null }>(
+        env.DB,
+        "SELECT user_id, left_at FROM organization_representatives WHERE member_id = ? AND user_id = ?",
+        memberBId,
+        sourceId,
+      )
+    )[0];
+    expect(sourceOrgBRow).toBeDefined();
   });
 
   it("rejects a merge when both accounts hold a membership", async () => {

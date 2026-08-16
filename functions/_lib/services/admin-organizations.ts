@@ -1,8 +1,7 @@
 /**
  * Admin Organizations management — post-approval organization profile
- * (data-bearing columns, pulled forward by migration 0037) plus
- * its representative roster (the `members` rows tying `users` to this
- * `organization_id`, established by migration 0033).
+ * (data-bearing columns, pulled forward by migration 0040) plus its
+ * representative roster (`organization_representatives`, migration 0037).
  *
  * This is the "manage an organization once it's approved" surface the
  * Interim Admin Tool didn't provide — that tool only ever created new
@@ -10,12 +9,26 @@
  */
 import { all, first, run } from "../db/queries";
 import { nowIso } from "../utils/time";
-import { uuid } from "../utils/ids";
-import { findOrCreateUser } from "./users";
-import { normalizeOrgName } from "./sponsorship";
 import { AppError } from "../errors";
 import { resolveOrderBy } from "../db/sort";
+import { findOrCreateUser } from "./users";
+import { normalizeOrgName } from "./sponsorship";
 import { serializeLinks, parseLinksJson } from "../../../assets/shared/schemas/api";
+import {
+  getOrCreateOrganizationMemberAggregate,
+  buildCreateIndividualMemberStatements,
+} from "./membership/memberships";
+import {
+  isActiveRepresentative,
+  buildAddRepresentativeStatement,
+  buildCloseRepresentativeStatement,
+} from "./membership/representatives";
+import {
+  REPRESENTATIVE_ROLE_IDS,
+  resolveRepresentativeRoleHolders,
+  buildAssignRepresentativeRoleStatements,
+  buildRevokeRepresentativeRoleStatement,
+} from "./membership/representative-roles";
 import type { DatabaseLike, StatementLike } from "../types";
 
 function splitName(fullName: string): { firstName: string | null; lastName: string | null } {
@@ -27,6 +40,19 @@ function splitName(fullName: string): { firstName: string | null; lastName: stri
 
 function logoUrlFor(id: string, logoR2Key: string | null): string | null {
   return logoR2Key ? `/api/v1/members/${id}/logo` : null;
+}
+
+async function getOrgAggregate(
+  db: DatabaseLike,
+  organizationId: string,
+): Promise<{ id: string; categoryCode: string | null } | null> {
+  return first<{ id: string; categoryCode: string | null }>(
+    db,
+    `SELECT m.id AS id, mca.category_code AS categoryCode
+     FROM members m LEFT JOIN member_category_assignments mca ON mca.member_id = m.id
+     WHERE m.organization_id = ?`,
+    [organizationId],
+  );
 }
 
 // ── List ─────────────────────────────────────────────────────────────────
@@ -49,12 +75,18 @@ interface OrgSummaryRow {
 }
 
 const ORG_SUMMARY_SELECT = `
-  SELECT o.id, o.name, o.website, o.description, o.slogan, o.logo_r2_key, o.member_since, o.membership_category, o.created_at, o.updated_at,
-         (SELECT COUNT(*) FROM members m WHERE m.organization_id = o.id) AS member_count,
+  SELECT o.id, o.name, o.website, o.description, o.slogan, o.logo_r2_key, m.member_since, o.created_at, o.updated_at,
+         mca.category_code AS membership_category,
+         (SELECT COUNT(*) FROM organization_representatives r
+           JOIN members m2 ON m2.id = r.member_id WHERE m2.organization_id = o.id AND r.left_at IS NULL) AS member_count,
          pu.first_name AS primary_contact_first_name, pu.last_name AS primary_contact_last_name,
          pu.email AS primary_contact_email
   FROM organizations o
-  LEFT JOIN users pu ON pu.id = o.primary_contact_user_id
+  LEFT JOIN members m ON m.organization_id = o.id
+  LEFT JOIN member_category_assignments mca ON mca.member_id = m.id
+  LEFT JOIN user_roles pr ON pr.context_type = 'organization' AND pr.context_id = m.id
+    AND pr.role_id = '${REPRESENTATIVE_ROLE_IDS.primaryContact}' AND pr.revoked_at IS NULL
+  LEFT JOIN users pu ON pu.id = pr.user_id
 `;
 
 function toOrgSummary(row: OrgSummaryRow) {
@@ -68,7 +100,7 @@ function toOrgSummary(row: OrgSummaryRow) {
     logoUrl: logoUrlFor(row.id, row.logo_r2_key),
     membershipCategory: row.membership_category,
     // Falls back to the row's own creation time for organizations created
-    // before migration 0046 added this column (or via a path that never set
+    // before migration 0049 added this column (or via a path that never set
     // it) — matches the same fallback members-directory.ts/member-self-service.ts use.
     memberSince: row.member_since ?? row.created_at,
     memberCount: row.member_count,
@@ -108,7 +140,6 @@ export async function listAdminOrganizations(
 // ── Detail ───────────────────────────────────────────────────────────────
 
 interface OrgDetailRow extends OrgSummaryRow {
-  membership_category: string | null;
   content_markdown: string | null;
   blog_url: string | null;
   blog_feed_url: string | null;
@@ -116,18 +147,16 @@ interface OrgDetailRow extends OrgSummaryRow {
   press_feed_url: string | null;
   careers_url: string | null;
   links_json: string | null;
-  primary_contact_user_id: string | null;
-  secondary_contact_user_id: string | null;
 }
 
 interface RepresentativeRow {
+  representative_id: string;
   member_id: string;
   user_id: string;
   first_name: string | null;
   last_name: string | null;
   email: string;
   job_title: string | null;
-  status: string;
   show_on_org_profile: number;
   created_at: string;
 }
@@ -135,16 +164,20 @@ interface RepresentativeRow {
 async function fetchOrgDetailRow(db: DatabaseLike, id: string): Promise<OrgDetailRow | null> {
   return first<OrgDetailRow>(
     db,
-    `SELECT o.id, o.name, o.website, o.description, o.slogan, o.logo_r2_key, o.member_since, o.created_at, o.updated_at,
-            o.membership_category,
+    `SELECT o.id, o.name, o.website, o.description, o.slogan, o.logo_r2_key, m.member_since, o.created_at, o.updated_at,
+            mca.category_code AS membership_category,
             o.content_markdown, o.blog_url, o.blog_feed_url, o.press_url, o.press_feed_url, o.careers_url,
             o.links_json,
-            o.primary_contact_user_id, o.secondary_contact_user_id,
-            (SELECT COUNT(*) FROM members m WHERE m.organization_id = o.id) AS member_count,
+            (SELECT COUNT(*) FROM organization_representatives r
+              JOIN members m2 ON m2.id = r.member_id WHERE m2.organization_id = o.id AND r.left_at IS NULL) AS member_count,
             pu.first_name AS primary_contact_first_name, pu.last_name AS primary_contact_last_name,
             pu.email AS primary_contact_email
      FROM organizations o
-     LEFT JOIN users pu ON pu.id = o.primary_contact_user_id
+     LEFT JOIN members m ON m.organization_id = o.id
+     LEFT JOIN member_category_assignments mca ON mca.member_id = m.id
+     LEFT JOIN user_roles pr ON pr.context_type = 'organization' AND pr.context_id = m.id
+       AND pr.role_id = '${REPRESENTATIVE_ROLE_IDS.primaryContact}' AND pr.revoked_at IS NULL
+     LEFT JOIN users pu ON pu.id = pr.user_id
      WHERE o.id = ?`,
     [id],
   );
@@ -153,20 +186,28 @@ async function fetchOrgDetailRow(db: DatabaseLike, id: string): Promise<OrgDetai
 async function fetchRepresentatives(db: DatabaseLike, organizationId: string): Promise<RepresentativeRow[]> {
   return all<RepresentativeRow>(
     db,
-    `SELECT m.id AS member_id, m.user_id, u.first_name, u.last_name, u.email, u.job_title,
-            m.status, m.show_on_org_profile, m.created_at
-     FROM members m
-     JOIN users u ON u.id = m.user_id
-     WHERE m.organization_id = ?
-     ORDER BY m.created_at ASC`,
+    `SELECT r.id AS representative_id, r.member_id, r.user_id, u.first_name, u.last_name, u.email, u.job_title,
+            r.show_on_org_profile, r.created_at
+     FROM organization_representatives r
+     JOIN members m ON m.id = r.member_id
+     JOIN users u ON u.id = r.user_id
+     WHERE m.organization_id = ? AND r.left_at IS NULL
+     ORDER BY r.created_at ASC`,
     [organizationId],
   );
 }
 
-function toOrgDetail(row: OrgDetailRow, representatives: RepresentativeRow[]) {
+async function toOrgDetail(
+  db: DatabaseLike,
+  row: OrgDetailRow,
+  representatives: RepresentativeRow[],
+  memberId: string | null,
+) {
+  const holders = memberId
+    ? await resolveRepresentativeRoleHolders(db, memberId)
+    : { primaryContactUserId: null, secondaryContactUserId: null, votingDelegateUserId: null };
   return {
     ...toOrgSummary(row),
-    membershipCategory: row.membership_category,
     contentMarkdown: row.content_markdown,
     blogUrl: row.blog_url,
     blogFeedUrl: row.blog_feed_url,
@@ -174,18 +215,23 @@ function toOrgDetail(row: OrgDetailRow, representatives: RepresentativeRow[]) {
     pressFeedUrl: row.press_feed_url,
     careersUrl: row.careers_url,
     links: parseLinksJson(row.links_json),
-    primaryContactUserId: row.primary_contact_user_id,
-    secondaryContactUserId: row.secondary_contact_user_id,
+    primaryContactUserId: holders.primaryContactUserId,
+    secondaryContactUserId: holders.secondaryContactUserId,
+    votingDelegateUserId: holders.votingDelegateUserId,
     representatives: representatives.map((r) => ({
-      memberId: r.member_id,
+      // memberId here is the representative's own organization_representatives.id
+      // — the identifier PATCH/DELETE /api/v1/admin/members/:id expects — not
+      // the shared aggregate members.id (every representative of this
+      // organization shares one aggregate row).
+      memberId: r.representative_id,
       userId: r.user_id,
       name: [r.first_name, r.last_name].filter(Boolean).join(" ") || r.email,
       email: r.email,
       jobTitle: r.job_title,
-      status: r.status,
+      status: "active",
       showOnOrgProfile: r.show_on_org_profile === 1,
-      isPrimaryContact: r.user_id === row.primary_contact_user_id,
-      isSecondaryContact: r.user_id === row.secondary_contact_user_id,
+      isPrimaryContact: r.user_id === holders.primaryContactUserId,
+      isSecondaryContact: r.user_id === holders.secondaryContactUserId,
       createdAt: r.created_at,
     })),
   };
@@ -194,16 +240,14 @@ function toOrgDetail(row: OrgDetailRow, representatives: RepresentativeRow[]) {
 export async function getAdminOrganization(db: DatabaseLike, id: string) {
   const row = await fetchOrgDetailRow(db, id);
   if (!row) throw new AppError(404, "NOT_FOUND", "Organization not found");
-  const representatives = await fetchRepresentatives(db, id);
-  return toOrgDetail(row, representatives);
+  const [representatives, aggregate] = await Promise.all([fetchRepresentatives(db, id), getOrgAggregate(db, id)]);
+  return toOrgDetail(db, row, representatives, aggregate?.id ?? null);
 }
 
 // ── Update profile ───────────────────────────────────────────────────────
 
 const UPDATABLE_COLUMNS: Record<string, string> = {
   name: "name",
-  membershipCategory: "membership_category",
-  memberSince: "member_since",
   description: "description",
   website: "website",
   contentMarkdown: "content_markdown",
@@ -217,12 +261,6 @@ const UPDATABLE_COLUMNS: Record<string, string> = {
 
 export interface OrganizationUpdateInput {
   name?: string;
-  /**
-   * Organization-level category (migration 0040). Setting this cascades to
-   * every existing org-tied representative's members.member_type in the
-   * same batch, so the denormalized per-member column never drifts from
-   * the org's actual category.
-   */
   membershipCategory?: string;
   memberSince?: string | null;
   description?: string | null;
@@ -252,16 +290,37 @@ export async function updateAdminOrganization(db: DatabaseLike, id: string, inpu
     if (conflict) throw new AppError(409, "DUPLICATE", "Another organization already uses that name");
   }
 
+  let aggregateId: string | null;
+  if (input.membershipCategory !== undefined) {
+    // Explicit staff-driven change, not the create-time race — always
+    // apply the requested category rather than routing through
+    // getOrCreateOrganizationMemberAggregate, which is a get-or-CREATE
+    // primitive that rejects a differing category as a conflict (that
+    // conflict guard exists for concurrent first-time creation, not for
+    // an admin legitimately changing an already-assigned category here).
+    const existingAggregate = await getOrgAggregate(db, id);
+    if (existingAggregate) {
+      aggregateId = existingAggregate.id;
+      await run(db, "UPDATE member_category_assignments SET category_code = ?, updated_at = ? WHERE member_id = ?", [
+        input.membershipCategory,
+        nowIso(),
+        aggregateId,
+      ]);
+    } else {
+      const aggregate = await getOrCreateOrganizationMemberAggregate(db, id, input.membershipCategory);
+      aggregateId = aggregate.id;
+    }
+  } else {
+    const aggregate = await getOrgAggregate(db, id);
+    aggregateId = aggregate?.id ?? null;
+  }
+
   for (const [field, userId] of [
     ["primaryContactUserId", input.primaryContactUserId],
     ["secondaryContactUserId", input.secondaryContactUserId],
   ] as const) {
-    if (!userId) continue;
-    const isRepresentative = await first<{ id: string }>(
-      db,
-      "SELECT id FROM members WHERE organization_id = ? AND user_id = ?",
-      [id, userId],
-    );
+    if (!userId || !aggregateId) continue;
+    const isRepresentative = await isActiveRepresentative(db, aggregateId, userId);
     if (!isRepresentative) {
       throw new AppError(
         422,
@@ -280,21 +339,13 @@ export async function updateAdminOrganization(db: DatabaseLike, id: string, inpu
     setClauses.push(`${column} = ?`);
     values.push(value);
   }
-  if (key_in(input, "name")) {
+  if (input.name !== undefined) {
     setClauses.push("normalized_name = ?");
-    values.push(normalizeOrgName(input.name as string));
+    values.push(normalizeOrgName(input.name));
   }
   if (input.links !== undefined) {
     setClauses.push("links_json = ?");
     values.push(serializeLinks(input.links));
-  }
-  if (input.primaryContactUserId !== undefined) {
-    setClauses.push("primary_contact_user_id = ?");
-    values.push(input.primaryContactUserId);
-  }
-  if (input.secondaryContactUserId !== undefined) {
-    setClauses.push("secondary_contact_user_id = ?");
-    values.push(input.secondaryContactUserId);
   }
 
   const statements: StatementLike[] = [];
@@ -304,25 +355,61 @@ export async function updateAdminOrganization(db: DatabaseLike, id: string, inpu
     values.push(id);
     statements.push(db.prepare(`UPDATE organizations SET ${setClauses.join(", ")} WHERE id = ?`).bind(...values));
   }
-  if (input.membershipCategory !== undefined) {
-    // Cascade: members.member_type is a mirror of the org's category for
-    // every org-tied representative, not an independently editable value —
-    // keep them in sync in the same batch as the organization row update.
+
+  const now = nowIso();
+  if (aggregateId && input.memberSince !== undefined) {
     statements.push(
       db
-        .prepare("UPDATE members SET member_type = ?, updated_at = ? WHERE organization_id = ?")
-        .bind(input.membershipCategory, nowIso(), id),
+        .prepare("UPDATE members SET member_since = ?, updated_at = ? WHERE id = ?")
+        .bind(input.memberSince, now, aggregateId),
     );
   }
+  if (aggregateId && input.primaryContactUserId !== undefined) {
+    if (input.primaryContactUserId) {
+      statements.push(
+        ...(await buildAssignRepresentativeRoleStatements(db, {
+          memberId: aggregateId,
+          userId: input.primaryContactUserId,
+          roleId: REPRESENTATIVE_ROLE_IDS.primaryContact,
+          now,
+        })),
+      );
+    } else {
+      statements.push(
+        buildRevokeRepresentativeRoleStatement(db, {
+          memberId: aggregateId,
+          roleId: REPRESENTATIVE_ROLE_IDS.primaryContact,
+          now,
+        }),
+      );
+    }
+  }
+  if (aggregateId && input.secondaryContactUserId !== undefined) {
+    if (input.secondaryContactUserId) {
+      statements.push(
+        ...(await buildAssignRepresentativeRoleStatements(db, {
+          memberId: aggregateId,
+          userId: input.secondaryContactUserId,
+          roleId: REPRESENTATIVE_ROLE_IDS.secondaryContact,
+          now,
+        })),
+      );
+    } else {
+      statements.push(
+        buildRevokeRepresentativeRoleStatement(db, {
+          memberId: aggregateId,
+          roleId: REPRESENTATIVE_ROLE_IDS.secondaryContact,
+          now,
+        }),
+      );
+    }
+  }
+
   if (statements.length > 0) {
     await db.batch(statements);
   }
 
   return getAdminOrganization(db, id);
-}
-
-function key_in<T extends object>(obj: T, key: keyof T): boolean {
-  return obj[key] !== undefined;
 }
 
 // ── Representatives ──────────────────────────────────────────────────────
@@ -339,38 +426,30 @@ export async function addOrganizationRepresentative(
   organizationId: string,
   input: AddRepresentativeInput,
 ) {
-  const org = await first<{
-    id: string;
-    primary_contact_user_id: string | null;
-    secondary_contact_user_id: string | null;
-    membership_category: string | null;
-  }>(
-    db,
-    "SELECT id, primary_contact_user_id, secondary_contact_user_id, membership_category FROM organizations WHERE id = ?",
-    [organizationId],
-  );
+  const org = await first<{ id: string }>(db, "SELECT id FROM organizations WHERE id = ?", [organizationId]);
   if (!org) throw new AppError(404, "NOT_FOUND", "Organization not found");
+
+  const aggregate = await getOrgAggregate(db, organizationId);
   // New representatives always inherit the organization's category — it's
   // no longer set per-representative. If the org has never had one set,
   // require staff to set it (PATCH .../organizations/:id) before adding
   // reps, rather than silently accepting an ad-hoc value here.
-  if (!org.membership_category) {
+  if (!aggregate?.categoryCode) {
     throw new AppError(
       422,
       "ORG_CATEGORY_NOT_SET",
       "Set this organization's membership category before adding representatives",
     );
   }
+  const memberId = aggregate.id;
 
   const existingUser = await first<{ id: string }>(db, "SELECT id FROM users WHERE normalized_email = ?", [
     input.email.trim().toLowerCase(),
   ]);
   if (existingUser) {
-    const existingMember = await first<{ id: string }>(db, "SELECT id FROM members WHERE user_id = ?", [
-      existingUser.id,
-    ]);
-    if (existingMember) {
-      throw new AppError(409, "ALREADY_MEMBER", `${input.email} already holds a membership`);
+    const alreadyRepresenting = await isActiveRepresentative(db, memberId, existingUser.id);
+    if (alreadyRepresenting) {
+      throw new AppError(409, "ALREADY_MEMBER", `${input.email} already represents this organization`);
     }
   }
 
@@ -392,43 +471,53 @@ export async function addOrganizationRepresentative(
   });
 
   const now = nowIso();
-  const memberId = uuid();
-  await run(
-    db,
-    `INSERT INTO members (id, member_type, user_id, organization_id, status, tier, data_json, created_at, updated_at, show_on_org_profile)
-     VALUES (?, ?, ?, ?, 'active', NULL, NULL, ?, ?, 1)`,
-    [memberId, org.membership_category, user.id, organizationId, now, now],
-  );
+  const { representativeId, statement } = buildAddRepresentativeStatement(db, { memberId, userId: user.id, now });
+  await db.batch([statement]);
 
-  if (!org.primary_contact_user_id) {
-    await run(db, "UPDATE organizations SET primary_contact_user_id = ?, updated_at = ? WHERE id = ?", [
-      user.id,
-      now,
-      organizationId,
-    ]);
-  } else if (!org.secondary_contact_user_id) {
-    await run(db, "UPDATE organizations SET secondary_contact_user_id = ?, updated_at = ? WHERE id = ?", [
-      user.id,
-      now,
-      organizationId,
-    ]);
+  const holders = await resolveRepresentativeRoleHolders(db, memberId);
+  let assignedRole: "primary" | "secondary" | null = null;
+  if (!holders.primaryContactUserId) {
+    await db.batch(
+      await buildAssignRepresentativeRoleStatements(db, {
+        memberId,
+        userId: user.id,
+        roleId: REPRESENTATIVE_ROLE_IDS.primaryContact,
+        now,
+      }),
+    );
+    assignedRole = "primary";
+  } else if (!holders.secondaryContactUserId) {
+    await db.batch(
+      await buildAssignRepresentativeRoleStatements(db, {
+        memberId,
+        userId: user.id,
+        roleId: REPRESENTATIVE_ROLE_IDS.secondaryContact,
+        now,
+      }),
+    );
+    assignedRole = "secondary";
   }
 
   return {
-    memberId,
+    // memberId is this representative's own organization_representatives.id
+    // — see toOrgDetail's identical note — not the shared aggregate id.
+    memberId: representativeId,
     userId: user.id,
     name: input.name,
     email: user.email,
     jobTitle: input.jobTitle ?? null,
     status: "active",
     showOnOrgProfile: true,
-    isPrimaryContact: !org.primary_contact_user_id,
-    isSecondaryContact: Boolean(org.primary_contact_user_id) && !org.secondary_contact_user_id,
+    isPrimaryContact: assignedRole === "primary",
+    isSecondaryContact: assignedRole === "secondary",
     createdAt: now,
   };
 }
 
-// ── Single-member edit/remove ───────────────────────────────────────────
+// ── Single-member/representative edit/remove ──────────────────────────────
+// `id` is ambiguous by design (see route header) — it may be an individual
+// `members.id` or an `organization_representatives.id`. Disambiguated by
+// lookup here rather than the route needing to know which.
 
 export interface MemberUpdateInput {
   membershipCategory?: string;
@@ -436,73 +525,81 @@ export interface MemberUpdateInput {
   showOnOrgProfile?: boolean;
 }
 
-interface MemberRow {
+interface IndividualMemberRow {
   id: string;
   user_id: string;
-  organization_id: string | null;
-  member_type: string;
   status: string;
-  show_on_org_profile: number;
 }
 
-export async function updateAdminMember(db: DatabaseLike, memberId: string, input: MemberUpdateInput) {
-  const member = await first<MemberRow>(
+export async function updateAdminMember(db: DatabaseLike, id: string, input: MemberUpdateInput) {
+  const representative = await first<{ id: string; member_id: string; user_id: string; show_on_org_profile: number }>(
     db,
-    "SELECT id, user_id, organization_id, member_type, status, show_on_org_profile FROM members WHERE id = ?",
-    [memberId],
+    "SELECT id, member_id, user_id, show_on_org_profile FROM organization_representatives WHERE id = ? AND left_at IS NULL",
+    [id],
+  );
+
+  if (representative) {
+    if (input.membershipCategory !== undefined || input.status !== undefined) {
+      throw new AppError(
+        422,
+        "REPRESENTATIVE_FIELD_NOT_EDITABLE",
+        "A representative's category/status follow their organization's aggregate — edit those on the organization instead",
+      );
+    }
+    if (input.showOnOrgProfile !== undefined) {
+      await run(db, "UPDATE organization_representatives SET show_on_org_profile = ?, updated_at = ? WHERE id = ?", [
+        input.showOnOrgProfile ? 1 : 0,
+        nowIso(),
+        id,
+      ]);
+    }
+    const orgRow = await first<{ organization_id: string }>(db, "SELECT organization_id FROM members WHERE id = ?", [
+      representative.member_id,
+    ]);
+    return {
+      id,
+      userId: representative.user_id,
+      organizationId: orgRow?.organization_id ?? null,
+      membershipCategory: null,
+      status: "active",
+      showOnOrgProfile: input.showOnOrgProfile ?? representative.show_on_org_profile === 1,
+    };
+  }
+
+  const member = await first<IndividualMemberRow>(
+    db,
+    "SELECT id, user_id, status FROM members WHERE id = ? AND organization_id IS NULL",
+    [id],
   );
   if (!member) throw new AppError(404, "NOT_FOUND", "Member not found");
 
-  // Category is only independently editable for org-less individual members
-  // (H5/H6/H7). For org-tied members it's a mirror of
-  // organizations.membership_category — edit it on the organization instead.
-  if (input.membershipCategory !== undefined && member.organization_id) {
-    throw new AppError(
-      422,
-      "MEMBERSHIP_CATEGORY_NOT_EDITABLE",
-      "This representative's category follows their organization — edit it on the organization instead",
-    );
-  }
-
   const setClauses: string[] = [];
   const values: unknown[] = [];
-  if (input.membershipCategory !== undefined) {
-    setClauses.push("member_type = ?");
-    values.push(input.membershipCategory);
-  }
   if (input.status !== undefined) {
     setClauses.push("status = ?");
     values.push(input.status);
   }
-  if (input.showOnOrgProfile !== undefined) {
-    setClauses.push("show_on_org_profile = ?");
-    values.push(input.showOnOrgProfile ? 1 : 0);
-  }
-
   if (setClauses.length > 0) {
     setClauses.push("updated_at = ?");
     values.push(nowIso());
-    values.push(memberId);
+    values.push(id);
     await run(db, `UPDATE members SET ${setClauses.join(", ")} WHERE id = ?`, values);
   }
-
-  // "If the nominated user's membership lapses before confirmation,
-  // the pending nomination is automatically cleared."
-  if (input.status !== undefined && input.status !== "active" && member.organization_id) {
-    await run(
-      db,
-      "UPDATE organizations SET pending_secondary_contact_user_id = NULL WHERE id = ? AND pending_secondary_contact_user_id = ?",
-      [member.organization_id, member.user_id],
-    );
+  if (input.membershipCategory !== undefined) {
+    await run(db, `UPDATE member_category_assignments SET category_code = ?, updated_at = ? WHERE member_id = ?`, [
+      input.membershipCategory,
+      nowIso(),
+      id,
+    ]);
   }
 
   return {
-    id: memberId,
+    id,
     userId: member.user_id,
-    organizationId: member.organization_id,
-    membershipCategory: input.membershipCategory ?? member.member_type,
+    organizationId: null,
+    membershipCategory: input.membershipCategory ?? null,
     status: input.status ?? member.status,
-    showOnOrgProfile: input.showOnOrgProfile ?? member.show_on_org_profile === 1,
+    showOnOrgProfile: true,
   };
 }
 
@@ -519,13 +616,8 @@ export async function grantIndividualMembership(db: DatabaseLike, userId: string
   if (existingMember) throw new AppError(409, "ALREADY_MEMBER", "This user already holds a membership");
 
   const now = nowIso();
-  const memberId = uuid();
-  await run(
-    db,
-    `INSERT INTO members (id, member_type, user_id, organization_id, status, tier, data_json, created_at, updated_at, show_on_org_profile)
-     VALUES (?, ?, ?, NULL, 'active', NULL, NULL, ?, ?, 1)`,
-    [memberId, membershipCategory, userId, now, now],
-  );
+  const { memberId, statements } = buildCreateIndividualMemberStatements(db, userId, membershipCategory, now);
+  await db.batch(statements);
 
   return {
     id: memberId,
@@ -549,55 +641,91 @@ export async function confirmSecondaryContact(
   db: DatabaseLike,
   organizationId: string,
 ): Promise<ConfirmSecondaryContactResult> {
-  const org = await first<{ id: string; pending_secondary_contact_user_id: string | null }>(
-    db,
-    "SELECT id, pending_secondary_contact_user_id FROM organizations WHERE id = ?",
-    [organizationId],
-  );
+  const org = await first<{ id: string }>(db, "SELECT id FROM organizations WHERE id = ?", [organizationId]);
   if (!org) throw new AppError(404, "NOT_FOUND", "Organization not found");
-  if (!org.pending_secondary_contact_user_id) {
+
+  const aggregate = await getOrgAggregate(db, organizationId);
+  const nomination = aggregate
+    ? await first<{ nominated_user_id: string }>(
+        db,
+        "SELECT nominated_user_id FROM organization_secondary_contact_nominations WHERE member_id = ?",
+        [aggregate.id],
+      )
+    : null;
+  if (!aggregate || !nomination) {
     throw new AppError(409, "NO_PENDING_NOMINATION", "This organization has no pending secondary contact nomination");
   }
 
   const now = nowIso();
-  await run(
-    db,
-    "UPDATE organizations SET secondary_contact_user_id = ?, pending_secondary_contact_user_id = NULL, updated_at = ? WHERE id = ?",
-    [org.pending_secondary_contact_user_id, now, organizationId],
-  );
+  await db.batch([
+    ...(await buildAssignRepresentativeRoleStatements(db, {
+      memberId: aggregate.id,
+      userId: nomination.nominated_user_id,
+      roleId: REPRESENTATIVE_ROLE_IDS.secondaryContact,
+      now,
+    })),
+    db.prepare("DELETE FROM organization_secondary_contact_nominations WHERE member_id = ?").bind(aggregate.id),
+  ]);
 
-  return { organizationId, secondaryContactUserId: org.pending_secondary_contact_user_id };
+  return { organizationId, secondaryContactUserId: nomination.nominated_user_id };
 }
 
-export async function removeAdminMember(db: DatabaseLike, memberId: string): Promise<MemberRow> {
-  const member = await first<MemberRow>(
+export async function removeAdminMember(
+  db: DatabaseLike,
+  id: string,
+): Promise<{ user_id: string; organization_id: string | null }> {
+  const representative = await first<{ id: string; member_id: string; user_id: string }>(
     db,
-    "SELECT id, user_id, organization_id, member_type, status, show_on_org_profile FROM members WHERE id = ?",
-    [memberId],
+    "SELECT id, member_id, user_id FROM organization_representatives WHERE id = ? AND left_at IS NULL",
+    [id],
+  );
+
+  if (representative) {
+    const orgRow = await first<{ organization_id: string }>(db, "SELECT organization_id FROM members WHERE id = ?", [
+      representative.member_id,
+    ]);
+    const now = nowIso();
+    const statements: StatementLike[] = [
+      buildCloseRepresentativeStatement(db, {
+        memberId: representative.member_id,
+        userId: representative.user_id,
+        now,
+      }),
+      buildRevokeRepresentativeRoleStatement(db, {
+        memberId: representative.member_id,
+        roleId: REPRESENTATIVE_ROLE_IDS.primaryContact,
+        now,
+      }),
+      buildRevokeRepresentativeRoleStatement(db, {
+        memberId: representative.member_id,
+        roleId: REPRESENTATIVE_ROLE_IDS.secondaryContact,
+        now,
+      }),
+      buildRevokeRepresentativeRoleStatement(db, {
+        memberId: representative.member_id,
+        roleId: REPRESENTATIVE_ROLE_IDS.votingDelegate,
+        now,
+      }),
+      db
+        .prepare("DELETE FROM organization_secondary_contact_nominations WHERE member_id = ? AND nominated_user_id = ?")
+        .bind(representative.member_id, representative.user_id),
+    ];
+    // The two role-revoke statements above are unconditional UPDATEs (0
+    // rows affected if that role wasn't held by this user) — safe as
+    // no-ops, avoiding a read to check which role (if any) this rep held.
+    await db.batch(statements);
+    return { user_id: representative.user_id, organization_id: orgRow?.organization_id ?? null };
+  }
+
+  const member = await first<{ id: string; user_id: string }>(
+    db,
+    "SELECT id, user_id FROM members WHERE id = ? AND organization_id IS NULL",
+    [id],
   );
   if (!member) throw new AppError(404, "NOT_FOUND", "Member not found");
 
-  await run(db, "DELETE FROM members WHERE id = ?", [memberId]);
+  await run(db, "DELETE FROM member_category_assignments WHERE member_id = ?", [id]);
+  await run(db, "DELETE FROM members WHERE id = ?", [id]);
 
-  if (member.organization_id) {
-    const now = nowIso();
-    await run(
-      db,
-      "UPDATE organizations SET primary_contact_user_id = NULL, updated_at = ? WHERE id = ? AND primary_contact_user_id = ?",
-      [now, member.organization_id, member.user_id],
-    );
-    await run(
-      db,
-      "UPDATE organizations SET secondary_contact_user_id = NULL, updated_at = ? WHERE id = ? AND secondary_contact_user_id = ?",
-      [now, member.organization_id, member.user_id],
-    );
-    // clear a pending secondary-contact nomination for a rep who's just been removed entirely.
-    await run(
-      db,
-      "UPDATE organizations SET pending_secondary_contact_user_id = NULL WHERE id = ? AND pending_secondary_contact_user_id = ?",
-      [member.organization_id, member.user_id],
-    );
-  }
-
-  return member;
+  return { user_id: member.user_id, organization_id: null };
 }

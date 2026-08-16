@@ -23,6 +23,7 @@ import { uuid } from "../utils/ids";
 import { parseJsonSafe } from "../utils/json";
 import { parseLinksJson, serializeLinks } from "../../../assets/shared/schemas/api";
 import { AppError } from "../errors";
+import { resolveRepresentativeRoleHolders } from "./membership/representative-roles";
 import type { AuthAdmin, AuthMember, DatabaseLike } from "../types";
 
 /** camelCase field -> organizations column. Deliberately excludes `name`,
@@ -60,22 +61,19 @@ export interface ContentReviewFieldInput {
 interface OrgContactRow {
   id: string;
   name: string;
-  primary_contact_user_id: string | null;
-  secondary_contact_user_id: string | null;
 }
 
 export async function requireOrgContact(db: DatabaseLike, member: AuthMember): Promise<OrgContactRow> {
   if (!member.organizationId) {
     throw new AppError(403, "NO_ORGANIZATION", "Your membership is not tied to an organization");
   }
-  const org = await first<OrgContactRow>(
-    db,
-    "SELECT id, name, primary_contact_user_id, secondary_contact_user_id FROM organizations WHERE id = ?",
-    [member.organizationId],
-  );
+  const org = await first<OrgContactRow>(db, "SELECT id, name FROM organizations WHERE id = ?", [
+    member.organizationId,
+  ]);
   if (!org) throw new AppError(404, "NOT_FOUND", "Organization not found");
 
-  const isContact = member.userId === org.primary_contact_user_id || member.userId === org.secondary_contact_user_id;
+  const holders = await resolveRepresentativeRoleHolders(db, member.memberId);
+  const isContact = member.userId === holders.primaryContactUserId || member.userId === holders.secondaryContactUserId;
   if (!isContact) {
     throw new AppError(
       403,
@@ -136,15 +134,21 @@ export async function getMyOrganizationProfile(db: DatabaseLike, member: AuthMem
   const row = await first<Record<string, unknown>>(
     db,
     `SELECT id, name, description, website, content_markdown, slogan, logo_r2_key,
-            blog_url, blog_feed_url, press_url, press_feed_url, careers_url, links_json,
-            primary_contact_user_id, secondary_contact_user_id, pending_secondary_contact_user_id,
-            voting_delegate_user_id
+            blog_url, blog_feed_url, press_url, press_feed_url, careers_url, links_json
      FROM organizations WHERE id = ?`,
     [member.organizationId],
   );
   if (!row) throw new AppError(404, "NOT_FOUND", "Organization not found");
 
-  const pendingReview = await fetchPendingReview(db, member.organizationId as string);
+  const [pendingReview, holders, nomination] = await Promise.all([
+    fetchPendingReview(db, member.organizationId as string),
+    resolveRepresentativeRoleHolders(db, member.memberId),
+    first<{ nominated_user_id: string }>(
+      db,
+      "SELECT nominated_user_id FROM organization_secondary_contact_nominations WHERE member_id = ?",
+      [member.memberId],
+    ),
+  ]);
 
   return {
     id: row.id,
@@ -160,10 +164,10 @@ export async function getMyOrganizationProfile(db: DatabaseLike, member: AuthMem
     pressFeedUrl: row.press_feed_url,
     careersUrl: row.careers_url,
     links: parseLinksJson(row.links_json as string | null),
-    isOrgContact: member.userId === row.primary_contact_user_id || member.userId === row.secondary_contact_user_id,
-    isPrimaryContact: member.userId === row.primary_contact_user_id,
-    pendingSecondaryContactUserId: row.pending_secondary_contact_user_id,
-    votingDelegateUserId: row.voting_delegate_user_id,
+    isOrgContact: member.userId === holders.primaryContactUserId || member.userId === holders.secondaryContactUserId,
+    isPrimaryContact: member.userId === holders.primaryContactUserId,
+    pendingSecondaryContactUserId: nomination?.nominated_user_id ?? null,
+    votingDelegateUserId: holders.votingDelegateUserId,
     pendingReview: pendingReview ? toReviewSummary(pendingReview) : null,
   };
 }

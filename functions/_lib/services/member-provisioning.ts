@@ -1,13 +1,12 @@
 /**
  * Shared organization/user/member/working-group-membership creation logic
- * (approval onboarding). Mirrors the shape `admin-members.ts`'s
- * `createAdminMember` (Interim Admin Tool) already established — kept as
- * a separate function rather than a refactor of that already-shipped,
- * tested path, to avoid regression risk on working code; both call the same
- * underlying primitives (`buildFindOrCreateUserStatement`, `normalizeOrgName`,
- * `buildAddWorkingGroupMemberStatements`) and land every write in one
- * atomic `db.batch()`, so a later failure can't leave a partially
- * provisioned membership or an orphaned `users` row.
+ * (approval onboarding). Mirrors `admin-members.ts`'s `createAdminMember`
+ * (Interim Admin Tool) shape — kept as a separate function rather than a
+ * refactor of that already-shipped, tested path, to avoid regression risk
+ * on working code; both build on the same underlying primitives
+ * (`buildFindOrCreateUserStatement`, `normalizeOrgName`,
+ * `buildAddWorkingGroupMemberStatements`,
+ * `getOrCreateOrganizationMemberAggregate`, representative/role builders).
  *
  * Adds one thing the Interim Admin Tool didn't need: recording an
  * `organization_domains` row at creation time, closing the duplicate-check
@@ -20,7 +19,14 @@ import { uuid } from "../utils/ids";
 import { buildFindOrCreateUserStatement, type UserRecord } from "./users";
 import { normalizeOrgName } from "./sponsorship";
 import { getWorkingGroupBySlugOrId, buildAddWorkingGroupMemberStatements } from "./working-groups";
+import {
+  getOrCreateOrganizationMemberAggregate,
+  buildCreateIndividualMemberStatements,
+} from "./membership/memberships";
+import { buildAddRepresentativeStatement } from "./membership/representatives";
+import { REPRESENTATIVE_ROLE_IDS, buildAssignRepresentativeRoleStatements } from "./membership/representative-roles";
 import { serializeLinks } from "../../../assets/shared/schemas/api";
+import { INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../../assets/shared/schemas/membership-categories";
 import type { DatabaseLike, StatementLike } from "../types";
 
 export interface ProvisionRepresentative {
@@ -63,63 +69,93 @@ function splitName(fullName: string): { firstName: string | null; lastName: stri
   return { firstName: tokens.slice(0, -1).join(" "), lastName: tokens[tokens.length - 1] };
 }
 
-interface PendingMember {
-  rep: ProvisionRepresentative;
-  user: UserRecord;
-  memberId: string;
-  /** Index into `statements` of this rep's contact-assignment UPDATE, or null if none was queued. */
-  contactStatementIndex: number | null;
-  contactRole: "primary" | "secondary" | null;
-}
-
 export async function provisionOrganizationAndMembers(
   db: DatabaseLike,
   input: ProvisionOrganizationAndMembersInput,
 ): Promise<ProvisionOrganizationAndMembersResult> {
   const now = nowIso();
-  const statements: StatementLike[] = [];
+  const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(input.membershipCategory);
 
-  let organizationId: string | null = null;
-  let organizationWasCreated = false;
-
-  if (input.organizationName) {
-    const normalizedOrgName = normalizeOrgName(input.organizationName);
-    const existingOrg = await first<{ id: string }>(db, "SELECT id FROM organizations WHERE normalized_name = ?", [
-      normalizedOrgName,
-    ]);
-
-    if (existingOrg) {
-      organizationId = existingOrg.id;
-    } else {
-      organizationId = uuid();
-      organizationWasCreated = true;
-      statements.push(
-        db
-          .prepare(
-            `INSERT INTO organizations (id, name, normalized_name, data_json, description, website, created_at, updated_at)
-             VALUES (?, ?, ?, NULL, ?, ?, ?, ?)`,
-          )
-          .bind(
-            organizationId,
-            input.organizationName,
-            normalizedOrgName,
-            input.description ?? null,
-            input.website ?? null,
-            now,
-            now,
-          ),
+  if (isIndividual || !input.organizationName) {
+    // Org-less individual (H5/H6/H7): one aggregate per representative,
+    // same as the admin tool's individual path.
+    const statements: StatementLike[] = [];
+    const members: ProvisionedMember[] = [];
+    for (const rep of input.representatives) {
+      const { firstName, lastName } = splitName(rep.name);
+      const { user, statement: userStatement } = await buildFindOrCreateUserStatement(db, {
+        email: rep.email,
+        firstName: firstName ?? undefined,
+        lastName: lastName ?? undefined,
+        jobTitle: rep.jobTitle ?? undefined,
+        linksJson: rep.linkedin ? serializeLinks([rep.linkedin]) : null,
+        allowProfileUpdate: true,
+      });
+      if (userStatement) statements.push(userStatement);
+      const { memberId, statements: memberStatements } = buildCreateIndividualMemberStatements(
+        db,
+        user.id,
+        input.membershipCategory,
+        now,
       );
-      if (input.organizationDomain) {
-        statements.push(
-          db
-            .prepare(`INSERT INTO organization_domains (id, organization_id, domain, created_at) VALUES (?, ?, ?, ?)`)
-            .bind(uuid(), organizationId, input.organizationDomain, now),
-        );
-      }
+      statements.push(...memberStatements);
+      members.push({
+        memberId,
+        userId: user.id,
+        email: user.email,
+        name: rep.name,
+        organizationId: null,
+        assignedContactRole: null,
+      });
     }
+    if (statements.length > 0) await db.batch(statements);
+    return { organizationId: null, organizationWasCreated: false, members };
   }
 
-  const pending: PendingMember[] = [];
+  let organizationId: string;
+  let organizationWasCreated = false;
+
+  const normalizedOrgName = normalizeOrgName(input.organizationName);
+  const existingOrg = await first<{ id: string }>(db, "SELECT id FROM organizations WHERE normalized_name = ?", [
+    normalizedOrgName,
+  ]);
+
+  const preStatements: StatementLike[] = [];
+  if (existingOrg) {
+    organizationId = existingOrg.id;
+  } else {
+    organizationId = uuid();
+    organizationWasCreated = true;
+    preStatements.push(
+      db
+        .prepare(
+          `INSERT INTO organizations (id, name, normalized_name, data_json, description, website, created_at, updated_at)
+           VALUES (?, ?, ?, NULL, ?, ?, ?, ?)`,
+        )
+        .bind(
+          organizationId,
+          input.organizationName,
+          normalizedOrgName,
+          input.description ?? null,
+          input.website ?? null,
+          now,
+          now,
+        ),
+    );
+    if (input.organizationDomain) {
+      preStatements.push(
+        db
+          .prepare(`INSERT INTO organization_domains (id, organization_id, domain, created_at) VALUES (?, ?, ?, ?)`)
+          .bind(uuid(), organizationId, input.organizationDomain, now),
+      );
+    }
+  }
+  if (preStatements.length > 0) await db.batch(preStatements);
+
+  const aggregate = await getOrCreateOrganizationMemberAggregate(db, organizationId, input.membershipCategory, now);
+
+  const statements: StatementLike[] = [];
+  const pending: { rep: ProvisionRepresentative; user: UserRecord }[] = [];
 
   for (const [index, rep] of input.representatives.entries()) {
     const { firstName, lastName } = splitName(rep.name);
@@ -133,40 +169,12 @@ export async function provisionOrganizationAndMembers(
     });
     if (userStatement) statements.push(userStatement);
 
-    const memberId = uuid();
-    statements.push(
-      db
-        .prepare(
-          `INSERT INTO members (id, member_type, user_id, organization_id, status, tier, data_json, created_at, updated_at, show_on_org_profile)
-           VALUES (?, ?, ?, ?, 'active', NULL, NULL, ?, ?, 1)`,
-        )
-        .bind(memberId, input.membershipCategory, user.id, organizationId, now, now),
-    );
-
-    let contactStatementIndex: number | null = null;
-    let contactRole: "primary" | "secondary" | null = null;
-    if (organizationId && index === 0) {
-      contactRole = "primary";
-      contactStatementIndex = statements.length;
-      statements.push(
-        db
-          .prepare(
-            `UPDATE organizations SET primary_contact_user_id = ?, updated_at = ? WHERE id = ? AND primary_contact_user_id IS NULL`,
-          )
-          .bind(user.id, now, organizationId),
-      );
-    }
-    if (organizationId && index === 1) {
-      contactRole = "secondary";
-      contactStatementIndex = statements.length;
-      statements.push(
-        db
-          .prepare(
-            `UPDATE organizations SET secondary_contact_user_id = ?, updated_at = ? WHERE id = ? AND secondary_contact_user_id IS NULL`,
-          )
-          .bind(user.id, now, organizationId),
-      );
-    }
+    const { statement: repStatement } = buildAddRepresentativeStatement(db, {
+      memberId: aggregate.id,
+      userId: user.id,
+      now,
+    });
+    statements.push(repStatement);
 
     for (const slug of input.workingGroupSlugs) {
       const wg = await getWorkingGroupBySlugOrId(db, slug);
@@ -174,27 +182,57 @@ export async function provisionOrganizationAndMembers(
       statements.push(...(await buildAddWorkingGroupMemberStatements(db, wg, user.id)));
     }
 
-    pending.push({ rep, user, memberId, contactStatementIndex, contactRole });
+    pending.push({ rep, user });
+    void index;
   }
 
-  const results = statements.length > 0 ? await db.batch(statements) : [];
+  if (statements.length > 0) await db.batch(statements);
 
-  const members: ProvisionedMember[] = pending.map(({ rep, user, memberId, contactStatementIndex, contactRole }) => {
-    let assignedContactRole: "primary" | "secondary" | null = null;
-    if (contactStatementIndex !== null) {
-      const changes =
-        (results[contactStatementIndex] as { meta?: { changes?: number } } | undefined)?.meta?.changes ?? 0;
-      if (changes > 0) assignedContactRole = contactRole;
-    }
-    return {
-      memberId,
-      userId: user.id,
-      email: user.email,
-      name: rep.name,
-      organizationId,
-      assignedContactRole,
-    };
-  });
+  // Only assign primary/secondary contact when the organization has none
+  // yet — reusing an already-contacted organization must not silently
+  // reassign its existing contacts.
+  const existingHolders = await first<{ primary: string | null; secondary: string | null }>(
+    db,
+    `SELECT
+       (SELECT user_id FROM user_roles WHERE context_type = 'organization' AND context_id = ? AND role_id = ? AND revoked_at IS NULL) AS "primary",
+       (SELECT user_id FROM user_roles WHERE context_type = 'organization' AND context_id = ? AND role_id = ? AND revoked_at IS NULL) AS "secondary"`,
+    [aggregate.id, REPRESENTATIVE_ROLE_IDS.primaryContact, aggregate.id, REPRESENTATIVE_ROLE_IDS.secondaryContact],
+  );
+
+  const roleStatements: StatementLike[] = [];
+  const assignedContactRoles: ("primary" | "secondary" | null)[] = pending.map(() => null);
+  if (!existingHolders?.primary && pending.length >= 1) {
+    roleStatements.push(
+      ...(await buildAssignRepresentativeRoleStatements(db, {
+        memberId: aggregate.id,
+        userId: pending[0].user.id,
+        roleId: REPRESENTATIVE_ROLE_IDS.primaryContact,
+        now,
+      })),
+    );
+    assignedContactRoles[0] = "primary";
+  }
+  if (!existingHolders?.secondary && pending.length >= 2) {
+    roleStatements.push(
+      ...(await buildAssignRepresentativeRoleStatements(db, {
+        memberId: aggregate.id,
+        userId: pending[1].user.id,
+        roleId: REPRESENTATIVE_ROLE_IDS.secondaryContact,
+        now,
+      })),
+    );
+    assignedContactRoles[1] = "secondary";
+  }
+  if (roleStatements.length > 0) await db.batch(roleStatements);
+
+  const members: ProvisionedMember[] = pending.map(({ rep, user }, index) => ({
+    memberId: aggregate.id,
+    userId: user.id,
+    email: user.email,
+    name: rep.name,
+    organizationId,
+    assignedContactRole: assignedContactRoles[index],
+  }));
 
   return { organizationId, organizationWasCreated, members };
 }

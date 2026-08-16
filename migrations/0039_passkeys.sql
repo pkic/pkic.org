@@ -1,4 +1,4 @@
--- Migration 0036: Passkey Authentication
+-- Migration 0039: Passkey Authentication
 --
 -- Adds passkey_credentials. All columns are TEXT/INTEGER, matching
 -- the rest of this schema (no other table in this codebase uses a BLOB
