@@ -6,7 +6,7 @@ website: https://fedlin.com
 organizationDomains:
   - fedlin.com
 # Short description, longer content can be placed in `content/members/`
-description: FEDLIN builds the controls a compliance platform only monitors — and runs them: SOC 2, NIST 800-53 Rev 5, and post-quantum key exchange.
+description: "FEDLIN builds the controls a compliance platform only monitors — and runs them: SOC 2, NIST 800-53 Rev 5, and post-quantum key exchange."
 
 # membership
 memberSince: 2026-08-09
@@ -25,28 +25,28 @@ sponsor:
 # Blog posts
 blog:
   url: https://fedlin.com/blog/
-  feed: 
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://linkedin.com/company/fedlinconsulting
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
