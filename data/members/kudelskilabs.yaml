@@ -9,7 +9,7 @@ organizationDomains:
 description: Global leader in intelligent security. We protect critical infrastructure, autonomous systems, and more with Swiss innovation, AI, and advanced cryptography.
 
 # membership
-memberSince: 2026-08-09
+memberSince: 2026-07-30
 memberType: F
 workingGroups:
   - PKIMM
@@ -21,28 +21,28 @@ sponsor:
 # Blog posts
 blog:
   url: https://kudelskilabs.com/blog
-  feed: 
+  feed:
   language: en_US
 
 # Press Releases
 press:
   url: https://kudelskilabs.com/newsroom
-  feed: 
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
   x: https://x.com/KudelskiLabs
-  facebook: 
-  instagram: 
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/kudelski-labs
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
