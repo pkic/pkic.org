@@ -1,0 +1,63 @@
+id: comcast
+name: Comcast
+slogan:
+website: https://corporate.comcast.com/
+# Business domains for email
+organizationDomains:
+  - comcast.com
+# Short description, longer content can be placed in `content/members/`
+description: As a global media and tech company, Comcast reaches hundreds of millions of customers, viewers, and guests with world-class connectivity and platforms and beloved content and experiences.
+
+# membership
+memberSince: 2026-08-09
+memberType: H3
+workingGroups:
+  - CBOM
+  - CM
+  - PKIMM
+  - PQC
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url:
+  feed:
+  language: en_US
+
+# Press Releases
+press:
+  url: https://corporate.comcast.com/press
+  feed:
+  language: en_US
+
+# Careers
+careers:
+  url: https://corporate.comcast.com/careers
+  feed:
+  language: en_US
+
+# Social media
+social:
+  x:
+  facebook:
+  instagram: https://www.instagram.com/comcast
+  linkedin:
+  youtube: https://www.youtube.com/comcast
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Bahman Rashidi
+    role: Sr. Director, Cybersecurity & Privacy Research Engineering
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/bahman-rashidi/
+    description: Bahman is the Sr. Director, Cybersecurity & Privacy Research Engineering at Comcast and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
