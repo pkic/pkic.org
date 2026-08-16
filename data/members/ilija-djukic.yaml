@@ -1,0 +1,64 @@
+id: ilija-djukic
+name: Ilija Djukic
+slogan:
+website:
+# Business domains for email
+organizationDomains:
+
+# Short description, longer content can be placed in `content/members/`
+description: Ilija is the Independent AI / Cyber / Standards Governance Operator.
+
+# membership
+memberSince: 2026-08-09
+memberType: H6
+workingGroups:
+  - CBOM
+  - CM
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url:
+  feed:
+  language: en_US
+
+# Press Releases
+press:
+  url:
+  feed:
+  language: en_US
+
+# Careers
+careers:
+  url:
+  feed:
+  language: en_US
+
+# Social media
+social:
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Ilija Djukic
+    role: Independent AI / Cyber / Standards Governance Operator
+    social:
+      x:
+      linkedin:
+    description: My work focuses on AI governance, cybersecurity, digital trust, and Post-Quantum Cryptography (PQC) readiness. I have developed implementation and assurance frameworks covering PKI governance, cryptographic migration planning, digital identity, trust infrastructures, standards mapping, risk assessment, and evidence-based validation. My activities include preparing organizations for post-quantum transition, secure PKI deployment, and cryptographic governance aligned with international standards and operational requirements.
+
+# Long-form content (markdown)
+content: |
