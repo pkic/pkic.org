@@ -6,7 +6,7 @@ website: https://corporate.comcast.com/
 organizationDomains:
   - comcast.com
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: As a global media and tech company, Comcast reaches hundreds of millions of customers, viewers, and guests with world-class connectivity and platforms and beloved content and experiences.
 
 # membership
 memberSince: 2026-08-09
@@ -23,29 +23,29 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url: https://corporate.comcast.com/press
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url: https://corporate.comcast.com/careers
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram: https://www.instagram.com/comcast
+  linkedin:
+  youtube: https://www.youtube.com/comcast
 
 # Here you can list those who represent or have represented the member.
 #
