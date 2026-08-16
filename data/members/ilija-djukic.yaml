@@ -1,12 +1,12 @@
 id: ilija-djukic
 name: Ilija Djukic
 slogan:
-website: https://komorars.ba/
+website:
 # Business domains for email
 organizationDomains:
 
 # Short description, longer content can be placed in `content/members/`
-description: Privrеdnа kоmоrа RS zajedno sа pоdručnim kоmоrаmа Bаnjа Lukа, Biјеlјinа, Dоbој, Istоčnо Sаrајеvо i Тrеbinjе čini јеdinstvеn kоmоrski sistеm.
+description: Ilija is the Independent AI / Cyber / Standards Governance Operator.
 
 # membership
 memberSince: 2026-08-09
@@ -24,29 +24,29 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
-  feed: https://komorars.ba/feed/
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: https://www.facebook.com/privrednakomorars
-  instagram: 
-  linkedin: 
-  youtube: https://www.youtube.com/@privrednakomorarepublikesr9898
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -57,8 +57,8 @@ representatives:
     role: Independent AI / Cyber / Standards Governance Operator
     social:
       x:
-      linkedin: 
-    description: Ilija is the Independent AI / Cyber / Standards Governance Operator at Ilija Djukic and represents the organization at the PKI Consortium.
+      linkedin:
+    description: My work focuses on AI governance, cybersecurity, digital trust, and Post-Quantum Cryptography (PQC) readiness. I have developed implementation and assurance frameworks covering PKI governance, cryptographic migration planning, digital identity, trust infrastructures, standards mapping, risk assessment, and evidence-based validation. My activities include preparing organizations for post-quantum transition, secure PKI deployment, and cryptographic governance aligned with international standards and operational requirements.
 
 # Long-form content (markdown)
 content: |
