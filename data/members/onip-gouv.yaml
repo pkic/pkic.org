@@ -1,4 +1,4 @@
-id: gouv
+id: onip-gouv
 name: ONIP
 slogan:
 website: https://onip.gouv.cd/
@@ -6,10 +6,10 @@ website: https://onip.gouv.cd/
 organizationDomains:
   - onip.gouv.cd
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: The National Population Office is responsible for population identification in the Democratic Republic of the Congo.
 
 # membership
-memberSince: 2026-08-09
+memberSince: 2026-07-30
 memberType: H1
 workingGroups:
 
@@ -20,41 +20,41 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
 # Those who no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: WABULAKOMBE ISENGO Wenceslas
+  - name: Wabulakombe Isengo Wenceslas
     role: IT Expert
     social:
       x:
       linkedin: https://www.linkedin.com/in/wenceslas-isengo-376949a7/
-    description: WABULAKOMBE ISENGO is the IT Expert at ONIP and represents the organization at the PKI Consortium.
+    description: Wabulakombe is the IT Expert at ONIP and represents the organization at the PKI Consortium.
 
 # Long-form content (markdown)
 content: |
