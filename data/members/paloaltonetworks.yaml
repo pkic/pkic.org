@@ -6,7 +6,7 @@ website: https://www.paloaltonetworks.com/
 organizationDomains:
   - paloaltonetworks.com
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: We enable cyber transformation. Our best-of-breed platforms, world-class threat intelligence and expert services deliver what’s next in cybersecurity.
 
 # membership
 memberSince: 2026-08-12
@@ -20,29 +20,29 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url: https://www.paloaltonetworks.com/blog/
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url: https://www.paloaltonetworks.com/company/newsroom
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url: https://jobs.paloaltonetworks.com/en/
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x: https://twitter.com/PaloAltoNtwks
+  facebook: https://www.facebook.com/PaloAltoNetworks/
+  instagram:
+  linkedin: https://www.linkedin.com/company/palo-alto-networks
+  youtube: https://www.youtube.com/user/paloaltonetworks
 
 # Here you can list those who represent or have represented the member.
 #
