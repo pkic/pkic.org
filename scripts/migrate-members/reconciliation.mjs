@@ -3,7 +3,6 @@
  * representatives with roster CSV emails. No SQL, no filesystem I/O beyond
  * what parsers.mjs already loaded into plain data.
  */
-import { normalizeEmail } from "./parsers.mjs";
 
 export function normalizeOrgName(name) {
   // Matches functions/_lib/services/sponsorship.ts's normalizeOrgName —
@@ -131,5 +130,3 @@ export function candidateEmailsForDomains(domains, emailsByDomain) {
   candidates.sort((a, b) => a.joinSortKey.localeCompare(b.joinSortKey));
   return candidates;
 }
-
-export { normalizeEmail };
