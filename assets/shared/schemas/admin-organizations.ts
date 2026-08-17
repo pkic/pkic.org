@@ -10,7 +10,8 @@
  * admin-members.ts rather than redefining it.
  */
 import { z } from "zod";
-import { normalizedEmailSchema, linksSchema } from "./api";
+import { normalizedEmailSchema } from "./api";
+import { linksSchema } from "./links";
 import { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "./admin-members";
 import { MEMBER_STATUSES, memberStatusSchema } from "./membership-categories";
 import { paginationQuerySchema, paginatedResponseSchema, sortColumnSchema } from "./pagination";

@@ -6,7 +6,7 @@
 import { all, first, run } from "../db/queries";
 import { nowIso } from "../utils/time";
 import { stringifyJson, parseJsonSafe } from "../utils/json";
-import { parseLinksJson, serializeLinks } from "../../../assets/shared/schemas/api";
+import { parseLinksJson, serializeLinks } from "../../../assets/shared/schemas/links";
 import { AppError } from "../errors";
 import { normalizeEmail } from "../validation";
 import { VOTING_CATEGORIES } from "./membership/applications/create";

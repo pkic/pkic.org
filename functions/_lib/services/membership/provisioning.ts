@@ -56,7 +56,7 @@ import {
   buildAssignRepresentativeRoleStatementsForNewRepresentative,
   resolveRepresentativeRoleHolders,
 } from "./representative-roles";
-import { serializeLinks } from "../../../../assets/shared/schemas/api";
+import { serializeLinks } from "../../../../assets/shared/schemas/links";
 import { INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../../../assets/shared/schemas/membership-categories";
 import type { DatabaseLike, StatementLike } from "../../types";
 

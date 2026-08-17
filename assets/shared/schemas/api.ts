@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { defaultedSourceTypeSchema, sourceTypeSchema } from "./source";
-import { linksSchema, parseLinksJson, serializeLinks, findLinkedinUrl } from "./links";
+import { linksSchema } from "./links";
 
-export { sourceTypeSchema, linksSchema, parseLinksJson, serializeLinks, findLinkedinUrl };
+export { sourceTypeSchema };
 
 const namePattern = /^[\p{L}\p{N} .,'’\-()&/]+$/u;
 const slugPattern = /^[a-z0-9]+(?:[a-z0-9-]*[a-z0-9])?$/;

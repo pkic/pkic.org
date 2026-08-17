@@ -4,7 +4,7 @@
  * target-user path parameter.
  */
 import { z } from "zod";
-import { linksSchema } from "./api";
+import { linksSchema } from "./links";
 import { applicationStageSchema } from "./member-applications";
 import { voteTypeSchema, voteScopeTypeSchema, voteStatusSchema } from "./votes";
 import { contentReviewStatusSchema } from "./admin-organizations";
