@@ -18,6 +18,8 @@ import {
   type VoteStatus,
   type VoteSummary,
   type CandidateSummary,
+  type VoteFullResult,
+  type VoteResult,
 } from "./shared";
 import type { AuthMember, DatabaseLike } from "../../types";
 
@@ -25,7 +27,7 @@ export interface PortalVoteSummary extends VoteSummary {
   candidates: CandidateSummary[] | null;
   canCastBallot: boolean;
   hasCastBallot: boolean;
-  result: unknown | null;
+  result: VoteResult;
 }
 
 async function memberCanCastBallot(db: DatabaseLike, vote: VoteRow, member: AuthMember): Promise<boolean> {
@@ -70,7 +72,10 @@ async function toPortalVoteSummary(db: DatabaseLike, row: VoteRow, member: AuthM
   const candidates = row.vote_type === "election" ? await getCandidates(db, row.id) : null;
   const canCastBallot = await memberCanCastBallot(db, row, member);
   const hasCastBallot = await memberHasCastBallot(db, row, member);
-  const result = row.status === "closed" ? parseJsonSafe<Record<string, unknown>>(row.result_json, {}) : null;
+  const result =
+    row.status === "closed"
+      ? (parseJsonSafe<Record<string, unknown>>(row.result_json, {}) as unknown as VoteResult)
+      : null;
   return { ...summary, candidates, canCastBallot, hasCastBallot, result };
 }
 
@@ -115,12 +120,12 @@ export async function getVoteDetailForMember(
   return toPortalVoteSummary(db, row, member);
 }
 
-export async function getVoteResultsForMember(db: DatabaseLike, voteIdOrSlug: string): Promise<unknown> {
+export async function getVoteResultsForMember(db: DatabaseLike, voteIdOrSlug: string): Promise<VoteFullResult> {
   const row = await getVoteRowOrThrow(db, voteIdOrSlug);
   if (row.status !== "closed") {
     throw new AppError(409, "VOTE_NOT_CLOSED", "Results are hidden until the vote closes");
   }
-  return parseJsonSafe<Record<string, unknown>>(row.result_json, {});
+  return parseJsonSafe<Record<string, unknown>>(row.result_json, {}) as unknown as VoteFullResult;
 }
 
 // ── /api/v1/me/votes, replaces the old stub ─────────────

@@ -73,8 +73,12 @@ function scopeBadgeLabel(scopeType: VoteScopeType, scopeId: string | null, wgNam
   return scopeId ? (wgNames.get(scopeId) ?? "Working Group") : "Working Group";
 }
 
-function isElectionResult(result: MotionVoteResult | ElectionVoteResult): result is ElectionVoteResult {
+function isElectionResult(result: NonNullable<PortalVote["result"]>): result is ElectionVoteResult {
   return "rounds" in result;
+}
+
+function isMotionResult(result: NonNullable<PortalVote["result"]>): result is MotionVoteResult {
+  return "counts" in result;
 }
 
 function MotionResultView({ result }: { result: MotionVoteResult }) {
@@ -260,8 +264,10 @@ function VoteCard({
               (vote.result ? (
                 isElectionResult(vote.result) ? (
                   <ElectionResultView result={vote.result} candidates={vote.candidates ?? []} />
-                ) : (
+                ) : isMotionResult(vote.result) ? (
                   <MotionResultView result={vote.result} />
+                ) : (
+                  <p class="text-muted small mb-0">No result recorded.</p>
                 )
               ) : (
                 <p class="text-muted small mb-0">No result recorded.</p>

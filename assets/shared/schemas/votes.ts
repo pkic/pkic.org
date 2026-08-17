@@ -37,6 +37,57 @@ export const voteProposalStatusSchema = z.enum(VOTE_PROPOSAL_STATUSES);
 
 export const BALLOT_CHOICES = ["in_favor", "opposed", "abstain"] as const;
 
+// ── Closed-vote result contract ──────────────────────────────────────
+// result_json is written by exactly two producers, never a third shape:
+// functions/_lib/services/votes/tally.ts's computeMotionResult (motions
+// and consultations) and votes/closing.ts's { rounds, winnerCandidateId }
+// (elections). There's no literal discriminant tag on either — the
+// caller already knows which shape to expect from the vote's own
+// voteType — so this is a plain (not zod discriminatedUnion) union of
+// the two real shapes, not `z.unknown()`.
+
+export const voteBallotCountsSchema = z.object({
+  in_favor: z.number().int().nonnegative(),
+  opposed: z.number().int().nonnegative(),
+  abstain: z.number().int().nonnegative(),
+});
+
+export const motionVoteResultSchema = z.object({
+  thresholdType: thresholdTypeSchema.extract(["simple_majority", "supermajority"]),
+  counts: voteBallotCountsSchema,
+  totalBallots: z.number().int().nonnegative(),
+  outcome: z.enum(["passed", "failed"]),
+});
+
+export const electionRoundTallySchema = z.object({
+  round: z.number().int().nonnegative(),
+  counts: z.record(z.string(), z.number().int().nonnegative()),
+  eliminatedCandidateIds: z.array(z.string()),
+  winnerCandidateId: z.string().nullable(),
+});
+
+export const electionVoteResultSchema = z.object({
+  rounds: z.array(electionRoundTallySchema),
+  winnerCandidateId: z.string().nullable().optional(),
+});
+
+/** Full-detail closed-vote result, as returned by the staff-only ballots/results endpoints. */
+export const voteFullResultSchema = z.union([motionVoteResultSchema, electionVoteResultSchema]);
+
+/**
+ * Redacted shape returned when a public vote's publicDetailLevel is
+ * 'outcome_only' — see votes/public.ts's publicResultForDetailLevel.
+ */
+export const voteOutcomeOnlyResultSchema = z.object({ outcome: z.string().nullable() });
+
+/**
+ * result as returned by the public/portal list and detail endpoints: null
+ * before close, or — for public endpoints — outcome-only or the full
+ * shape depending on the vote's publicDetailLevel (portal endpoints
+ * always return the full shape, never outcome-only).
+ */
+export const voteResultSchema = z.union([voteOutcomeOnlyResultSchema, voteFullResultSchema]).nullable();
+
 export const voteIdParamsSchema = z.object({ id: z.string() });
 export const voteSlugParamsSchema = z.object({ slug: z.string() });
 export const proposalIdParamsSchema = z.object({ id: z.uuid() });
@@ -73,7 +124,7 @@ export const voteSummaryFieldsSchema = {
 export const publicVoteSchema = z.object({
   ...voteSummaryFieldsSchema,
   candidates: z.array(candidateSummarySchema).nullable(),
-  result: z.unknown().nullable(),
+  result: voteResultSchema,
 });
 
 export const portalVoteSchema = z.object({
@@ -81,7 +132,7 @@ export const portalVoteSchema = z.object({
   candidates: z.array(candidateSummarySchema).nullable(),
   canCastBallot: z.boolean(),
   hasCastBallot: z.boolean(),
-  result: z.unknown().nullable(),
+  result: voteResultSchema,
 });
 
 // ── Public (no auth) — "Votes (public — no auth required)" ────────────
@@ -196,7 +247,7 @@ export const voteResultsRouteSchema = {
   responses: {
     "200": {
       description: "Full result detail.",
-      content: { "application/json": { schema: z.object({ result: z.unknown() }) } },
+      content: { "application/json": { schema: z.object({ result: voteFullResultSchema.nullable() }) } },
     },
     "409": { description: "Results are hidden until the vote closes." },
   },

@@ -5,6 +5,7 @@
  * 1400+ line votes.ts (PR #1 review) — see votes/index.ts for the barrel
  * that re-exports everything under the original module surface.
  */
+import type { z } from "zod";
 import { all, first } from "../../db/queries";
 import { parseJsonSafe } from "../../utils/json";
 import { AppError } from "../../errors";
@@ -19,6 +20,8 @@ import type {
   VOTE_VISIBILITIES,
   PUBLIC_DETAIL_LEVELS,
   BALLOT_CHOICES,
+  voteFullResultSchema,
+  voteResultSchema,
 } from "../../../../assets/shared/schemas/votes";
 import type { AuthMember, DatabaseLike } from "../../types";
 
@@ -33,6 +36,8 @@ export type VoteProposalStatus = (typeof VOTE_PROPOSAL_STATUSES)[number];
 export type VoteVisibility = (typeof VOTE_VISIBILITIES)[number];
 export type PublicDetailLevel = (typeof PUBLIC_DETAIL_LEVELS)[number];
 export type BallotChoice = (typeof BALLOT_CHOICES)[number];
+export type VoteFullResult = z.infer<typeof voteFullResultSchema>;
+export type VoteResult = z.infer<typeof voteResultSchema>;
 
 export const MOTION_CHOICES = new Set<BallotChoice>(["in_favor", "opposed", "abstain"]);
 

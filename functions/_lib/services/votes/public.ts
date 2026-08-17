@@ -14,6 +14,7 @@ import {
   type VoteScopeType,
   type VoteSummary,
   type CandidateSummary,
+  type VoteResult,
 } from "./shared";
 import type { DatabaseLike } from "../../types";
 
@@ -31,20 +32,20 @@ export interface PublicVoteListParams {
 
 export interface PublicVoteSummary extends VoteSummary {
   candidates: CandidateSummary[] | null;
-  result: unknown;
+  result: VoteResult;
 }
 
-function publicResultForDetailLevel(row: VoteRow): unknown {
+function publicResultForDetailLevel(row: VoteRow): VoteResult {
   if (row.status !== "closed" || !row.result_json) return null;
   const full = parseJsonSafe<Record<string, unknown>>(row.result_json, {});
   if (row.public_detail_level === "outcome_only") {
-    return { outcome: full.outcome ?? (full.winnerCandidateId ? "decided" : null) };
+    return { outcome: (full.outcome as string | undefined) ?? (full.winnerCandidateId ? "decided" : null) };
   }
   // aggregate and full_breakdown (full_breakdown never contains voter
   // identities to begin with — result_json only stores counts, never
   // user_id — so "full_breakdown" and "aggregate" are equivalent here; the
   // distinction only matters for the staff-only raw ballots endpoint).
-  return full;
+  return full as unknown as VoteResult;
 }
 
 async function toPublicVoteSummary(db: DatabaseLike, row: VoteRow): Promise<PublicVoteSummary> {
