@@ -2,14 +2,14 @@
 
 This walks through standing up the site locally and loading a real snapshot
 of the production database from `backups/d1/`, instead of the synthetic
-data that `npm run seed:local` creates.
+data that `pnpm run seed:local` creates.
 
 ## 1. Prerequisites
 
 - Node.js + [pnpm](https://pnpm.io/) (this repo pins `pnpm@11.5.1` via
   `packageManager` in `package.json`)
 - `wrangler` — no separate install needed, it's already a devDependency and
-  is invoked through `npx wrangler` / the `npm run` scripts below
+  is invoked through `pnpm exec wrangler` / the `pnpm run` scripts below
 
 ## 2. Install dependencies
 
@@ -33,17 +33,17 @@ if you're testing email sending or the membership/sponsor-interest forms
 The local D1 database is a SQLite file managed by Wrangler under
 `.wrangler/state/v3/d1`. The backup file doesn't contain `DROP TABLE`
 statements, so importing it into a database that already has tables (e.g.
-one already seeded via `npm run seed:local`) will fail with
+one already seeded via `pnpm run seed:local`) will fail with
 "table ... already exists".
 
-If you've previously run `npm run migrate:local` or `npm run seed:local`,
+If you've previously run `pnpm run migrate:local` or `pnpm run seed:local`,
 wipe the local D1 state first:
 
 ```bash
 rm -rf .wrangler/state/v3/d1
 ```
 
-**Wipe all of `.wrangler/state/v3`, not just `d1`, if `npm run dev` fails
+**Wipe all of `.wrangler/state/v3`, not just `d1`, if `pnpm run dev` fails
 to start.** KV, cache, and other local storage under `.wrangler/state/v3`
 are implemented the same way D1 is — as SQLite-backed Durable Objects —
 and old copies left over from before a `miniflare`/`workerd` dependency
@@ -71,33 +71,36 @@ this also clears D1.)
 ## 5. Import the backup
 
 Pick the backup you want from `backups/d1/` — e.g.
-`backups/d1/production-20260722-114200.sql` — and import it directly into
+`backups/d1/production-20260816-135329.sql` — and import it directly into
 the `local` environment's D1 binding:
 
 ```bash
-npx wrangler d1 execute DB --env local --local \
-  --file=backups/d1/production-20260722-114200.sql --yes
+pnpm exec wrangler d1 execute DB --env local --local \
+  --file=backups/d1/production-20260816-135329.sql --yes
 ```
 
 The dump already contains the full schema (including the `d1_migrations`
 tracking table) and all rows, so you do **not** need to run
-`npm run migrate:local` first — running migrations against an empty DB and
+`pnpm run migrate:local` first — running migrations against an empty DB and
 then importing the dump would just collide on `CREATE TABLE`.
 
 If new migrations have landed since the backup was taken, apply them on
 top after importing:
 
 ```bash
-npm run migrate:local
+pnpm run migrate:local
 ```
 
-This step is currently required even for a
-same-day backup: `migrations/0033_rebuild_members_multi_representative.sql`
-rebuilds the `members` table and hasn't been applied to production yet, so
-every existing backup in `backups/d1/` predates it.
+This step is currently required even for a same-day backup: this branch
+still carries an undeployed range of local-only migrations (currently
+`migrations/0035` onward — check the current `migrations/` directory and,
+per the root `AGENTS.md` migration-ledger rule, confirm against the actual
+remote ledgers rather than assuming from this doc) that haven't been
+applied to production yet, so every existing backup in `backups/d1/`
+predates them.
 
 **If import fails with `no such table: main.users`:** the dump was taken
-before `npm run backup:local`/`backup:preview`/`backup:production` started
+before `pnpm run backup:local`/`backup:preview`/`backup:production` started
 reordering exports (schema before data — see `scripts/reorder-d1-dump.mjs`
 for why this matters: `d1 export` interleaves each table's `CREATE TABLE`
 with its own rows in creation order, and a table created early, like
@@ -113,7 +116,7 @@ node scripts/reorder-d1-dump.mjs backups/d1/production-20260722-114200.sql
 ## 6. Start the dev server
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 This runs Vite with `CLOUDFLARE_ENV=local`, which builds the Hugo site and
@@ -155,7 +158,7 @@ the browser you paste the link into, and verification will fail with
 2. Pull the magic-link URL back out of the local outbox:
 
    ```bash
-   npx wrangler d1 execute DB --env local --local --command \
+   pnpm exec wrangler d1 execute DB --env local --local --command \
      "SELECT payload_json FROM email_outbox WHERE template_key='admin_magic_link' ORDER BY created_at DESC LIMIT 1;"
    ```
 
@@ -173,19 +176,19 @@ by default) — just repeat the steps above to get a fresh one.
 ## 8. (Optional) Verify the data loaded
 
 ```bash
-npx wrangler d1 execute DB --env local --local \
+pnpm exec wrangler d1 execute DB --env local --local \
   --command "SELECT COUNT(*) FROM events;"
 ```
 
 ## 9. Stop the dev server
 
-`npm run dev` runs in the foreground, so press `Ctrl+C` in the terminal
+`pnpm run dev` runs in the foreground, so press `Ctrl+C` in the terminal
 where you started it. That kills the Vite/Wrangler process and frees up
 port 8788.
 
 This does **not** touch the local D1 state — `.wrangler/state/v3/d1` (and
 the production data you imported into it) is left on disk, so running
-`npm run dev` again later picks up right where you left off. If you want
+`pnpm run dev` again later picks up right where you left off. If you want
 to get rid of the imported production data instead of just stopping the
 server, remove the local state as in step 4:
 
@@ -199,5 +202,5 @@ rm -rf .wrangler/state/v3/d1
   copy with the same care as production and don't commit it or push it
   anywhere.
 - To take a fresh backup yourself instead of using an existing file in
-  `backups/d1/`, run `npm run backup:production` (requires production
+  `backups/d1/`, run `pnpm run backup:production` (requires production
   Cloudflare credentials).
