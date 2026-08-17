@@ -32,9 +32,18 @@ export async function getWorkingGroupBySlugOrId(db: DatabaseLike, wgIdOrSlug: st
   );
 }
 
-/** Only category-A members may belong to the CA working group. */
-export function assertCaConstraint(wg: WorkingGroupRow, membershipCategory: string | null): void {
-  if (wg.slug === CA_WORKING_GROUP_SLUG && membershipCategory !== CA_ONLY_CATEGORY) {
+/**
+ * Only category-A members may belong to the CA working group. Takes every
+ * membership category the target person currently holds (a person may
+ * represent more than one organization at once, migration 0037) and
+ * passes if *any* of them is category A — checking a single arbitrarily
+ * -picked category here previously meant a person representing both a
+ * category-A and a non-A organization could be accepted or rejected
+ * depending on which row an unordered scalar subquery happened to return
+ * (PR #1 review, phase1-2-review-20260817.md blocker 2).
+ */
+export function assertCaConstraint(wg: WorkingGroupRow, membershipCategories: readonly string[]): void {
+  if (wg.slug === CA_WORKING_GROUP_SLUG && !membershipCategories.includes(CA_ONLY_CATEGORY)) {
     throw new AppError(403, "CA_CATEGORY_REQUIRED", "Only category A members may join the CA working group");
   }
 }
