@@ -13,10 +13,42 @@
   {{- $pagePath := path.Base $sourcePath -}}
   {{- $sourceEditURL := printf "https://github.com/%s/edit/main/model/pqcmm-model-%s.yaml" $config.repository $config.modelVersion -}}
   {{- $questionsHeading := cond (eq $level.number 0) "Supplier Intake Questions" "Assessment Questions" -}}
-  {{- $contentValue := printf "%s\n\n## Criteria\n\n{{< pqcmm-criteria level=\"%d\" >}}\n\n## %s\n\n{{< pqcmm-assessment-questions level=\"%d\" >}}" $level.summary $level.number $questionsHeading $level.number -}}
-  {{- if $level.evidenceChecklist.items -}}
-    {{- $contentValue = printf "%s\n\n## Evidence Checklist\n\n{{< pqcmm-evidence-checklist level=\"%d\" >}}" $contentValue $level.number -}}
+
+  {{/* Model-defined sections. A section placed after the criteria is a subsection of
+       them, so it renders one heading level deeper and keeps its published anchor. */}}
+  {{- $afterCriteria := slice -}}
+  {{- $afterAssessment := slice -}}
+  {{- $afterEvidence := slice -}}
+  {{- range $section := $level.sections -}}
+    {{- $placement := default "after-criteria" $section.placement -}}
+    {{- $heading := cond (eq $placement "after-criteria") "###" "##" -}}
+    {{- $rendered := printf "%s %s\n\n%s" $heading $section.title $section.body -}}
+    {{- if eq $placement "after-assessment" -}}
+      {{- $afterAssessment = $afterAssessment | append $rendered -}}
+    {{- else if eq $placement "after-evidence-checklist" -}}
+      {{- $afterEvidence = $afterEvidence | append $rendered -}}
+    {{- else -}}
+      {{- $afterCriteria = $afterCriteria | append $rendered -}}
+    {{- end -}}
   {{- end -}}
+
+  {{/* Each group is joined into one string before it is appended. Appending a slice
+       to a slice is type-dependent in Hugo and can nest instead of concatenating. */}}
+  {{- $parts := slice $level.summary (printf "## Criteria\n\n{{< pqcmm-criteria level=\"%d\" >}}" $level.number) -}}
+  {{- with $afterCriteria -}}
+    {{- $parts = $parts | append (delimit . "\n\n") -}}
+  {{- end -}}
+  {{- $parts = $parts | append (printf "## %s\n\n{{< pqcmm-assessment-questions level=\"%d\" >}}" $questionsHeading $level.number) -}}
+  {{- with $afterAssessment -}}
+    {{- $parts = $parts | append (delimit . "\n\n") -}}
+  {{- end -}}
+  {{- if $level.evidenceChecklist.items -}}
+    {{- $parts = $parts | append (printf "## Evidence Checklist\n\n{{< pqcmm-evidence-checklist level=\"%d\" >}}" $level.number) -}}
+  {{- end -}}
+  {{- with $afterEvidence -}}
+    {{- $parts = $parts | append (delimit . "\n\n") -}}
+  {{- end -}}
+  {{- $contentValue := delimit $parts "\n\n" -}}
   {{- $page := dict
     "content" (dict "mediaType" "text/markdown" "value" $contentValue)
     "date" (time.AsTime "2026-05-07T00:00:00Z")
