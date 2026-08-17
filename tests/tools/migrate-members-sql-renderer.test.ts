@@ -96,6 +96,28 @@ describe("buildUpsertUserStatement", () => {
     expect(statement).toContain("INSERT INTO users");
     expect(statement).toContain(sqlString(normalizedEmail));
   });
+
+  it("ends the statement with the CASE...END clause, not a trailing comma after END", () => {
+    // Regression test: wrangler's local `d1 execute` SQL statement splitter
+    // (unstable_splitSqlQuery) only recognizes a CASE block as closed when
+    // END is immediately followed by ";" or whitespace. "END," (comma, no
+    // space) desyncs its compound-statement tracking and silently merges
+    // every later statement in the file into this one until EOF, eventually
+    // failing with D1's 100KB per-statement SQLITE_TOOBIG limit once enough
+    // real data has accumulated (confirmed against wrangler's own splitter
+    // and against the real 419-org dataset, 2026-08-17). The CASE clause
+    // must stay the last clause in the SET list, ending in "END;".
+    const { statement } = buildUpsertUserStatement({
+      email: "alice@acme.example",
+      firstName: null,
+      lastName: null,
+      jobTitle: null,
+      biography: null,
+      linksJson: null,
+      headshotR2Key: null,
+    });
+    expect(statement.trim()).toMatch(/END;$/);
+  });
 });
 
 describe("buildIndividualMemberAggregateStatements", () => {

@@ -191,15 +191,28 @@ ON CONFLICT(normalized_email) DO UPDATE SET
   job_title = COALESCE(users.job_title, excluded.job_title),
   biography = COALESCE(users.biography, excluded.biography),
   links_json = COALESCE(users.links_json, excluded.links_json),
+  updated_at = datetime('now'),
   -- 'headshots/...' keys are hand-uploaded via the admin self-service headshot
   -- endpoint (SPEAKER_UPLOADS_BUCKET) and must never be clobbered by a rerun.
   -- Anything else (NULL, or a previous 'member-photos/...' migration key) is
   -- fair game so a corrected/updated YAML photo actually takes effect on rerun.
+  --
+  -- Deliberately the LAST clause, ending the statement with "END;" rather
+  -- than "END," followed by another clause. wrangler's local d1 execute
+  -- SQL statement splitter (unstable_splitSqlQuery) only recognizes a CASE
+  -- block as closed when END is immediately followed by a semicolon or
+  -- whitespace -- "END," (comma, no space) never satisfies that, so the
+  -- splitter's compound-statement tracking never pops and it silently
+  -- merges every later statement in the file into this one until EOF,
+  -- eventually failing with D1's 100KB per-statement SQLITE_TOOBIG limit
+  -- once enough real data has accumulated. Confirmed against wrangler's
+  -- own splitter directly; only affects local d1 execute --file/--command
+  -- (--remote uploads the raw file for server-side ingestion instead, so
+  -- real preview/production imports are unaffected).
   headshot_r2_key = CASE
     WHEN users.headshot_r2_key LIKE 'headshots/%' THEN users.headshot_r2_key
     ELSE COALESCE(excluded.headshot_r2_key, users.headshot_r2_key)
-  END,
-  updated_at = datetime('now');
+  END;
 `;
   return { statement, normalizedEmail };
 }

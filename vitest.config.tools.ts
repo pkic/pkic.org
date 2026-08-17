@@ -9,7 +9,10 @@ export default defineConfig({
   test: {
     include: ["tests/tools/**/*.test.ts"],
     environment: "node",
-    testTimeout: 60_000,
-    hookTimeout: 60_000,
+    // The fresh-D1 smoke test shells out to real wrangler/workerd processes
+    // (migrations apply + d1 execute) — observed 42-55s even on an
+    // otherwise-idle machine, so 60s cuts it close under any real load.
+    testTimeout: 120_000,
+    hookTimeout: 120_000,
   },
 });
