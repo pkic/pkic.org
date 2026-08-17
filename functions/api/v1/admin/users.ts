@@ -21,6 +21,7 @@ import {
   usersTypeValueSchema,
 } from "../../../../assets/shared/schemas/admin-users";
 import { requestDb, type AdminContext } from "../../../_lib/db/context";
+import { deterministicRepresentativeJoinSql } from "../../../_lib/services/membership/representative-lookup";
 
 interface UserRow {
   id: string;
@@ -113,11 +114,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
      -- 0037) — join to a single deterministic representative row (earliest
      -- joined_at) instead of fanning out one result row (and one
      -- duplicate/miscounted page entry) per represented organization.
-     LEFT JOIN organization_representatives rep ON rep.id = (
-       SELECT r2.id FROM organization_representatives r2
-       WHERE r2.user_id = u.id AND r2.left_at IS NULL
-       ORDER BY r2.joined_at ASC LIMIT 1
-     )
+${deterministicRepresentativeJoinSql("u.id")}
      LEFT JOIN members m ON m.id = rep.member_id
      LEFT JOIN members mi ON mi.user_id = u.id
      LEFT JOIN organizations o ON o.id = m.organization_id
@@ -135,11 +132,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const totalRow = await first<{ total: number }>(
     requestDb(c),
     `SELECT COUNT(*) AS total FROM users u
-     LEFT JOIN organization_representatives rep ON rep.id = (
-       SELECT r2.id FROM organization_representatives r2
-       WHERE r2.user_id = u.id AND r2.left_at IS NULL
-       ORDER BY r2.joined_at ASC LIMIT 1
-     )
+${deterministicRepresentativeJoinSql("u.id")}
      LEFT JOIN members m ON m.id = rep.member_id
      LEFT JOIN members mi ON mi.user_id = u.id
      ${totalWhere}`,

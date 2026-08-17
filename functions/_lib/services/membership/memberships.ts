@@ -68,7 +68,14 @@ export function buildGetOrCreateOrganizationMemberAggregateStatements(
   return { proposedId, statements };
 }
 
-async function readOrganizationMemberAggregate(
+/**
+ * Exported so callers folding this aggregate into a larger atomic batch
+ * (see membership/provisioning.ts) can resolve an *existing* aggregate
+ * before building any statements — the same pre-write conflict check
+ * `getOrCreateOrganizationMemberAggregate` does after its own batch, just
+ * usable before one too.
+ */
+export async function readOrganizationMemberAggregate(
   db: DatabaseLike,
   organizationId: string,
 ): Promise<MemberAggregateRow | null> {
@@ -79,6 +86,20 @@ async function readOrganizationMemberAggregate(
      WHERE m.organization_id = ?`,
     [organizationId],
   );
+}
+
+/** Shared by both the standalone get-or-create below and provisioning.ts's pre-batch resolution. */
+export function assertNoAggregateCategoryConflict(
+  row: MemberAggregateRow,
+  categoryCode: string,
+): asserts row is { id: string; category_code: string } {
+  if (row.category_code && row.category_code !== categoryCode) {
+    throw new AppError(
+      409,
+      "MEMBER_CATEGORY_CONFLICT",
+      "Organization already has a different membership category assigned",
+    );
+  }
 }
 
 /**
@@ -100,13 +121,7 @@ export async function getOrCreateOrganizationMemberAggregate(
   if (!row) {
     throw new AppError(500, "MEMBER_AGGREGATE_RACE_UNRESOLVED", "Concurrent member creation did not converge");
   }
-  if (row.category_code && row.category_code !== categoryCode) {
-    throw new AppError(
-      409,
-      "MEMBER_CATEGORY_CONFLICT",
-      "Organization already has a different membership category assigned",
-    );
-  }
+  assertNoAggregateCategoryConflict(row, categoryCode);
   return { id: row.id, categoryCode: row.category_code ?? categoryCode };
 }
 

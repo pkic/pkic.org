@@ -195,6 +195,53 @@ describe("admin working groups", () => {
     expect(response.status).toBe(201);
   });
 
+  it("deterministically allows a person representing both a category-A and a non-A organization (not an arbitrary pick)", async () => {
+    // PR #1 review, phase1-2-review-20260817.md blocker 2: the CA
+    // eligibility check previously used an unordered scalar subquery, so a
+    // person representing more than one organization (a supported case
+    // since migration 0037) could be accepted or rejected depending on
+    // whichever row SQLite happened to return. Run this several times —
+    // a flaky pass/fail pattern is exactly what the old bug would produce.
+    const wgId = await insertWorkingGroup("CA Working Group", "ca");
+    const userId = await insertUser("multi-org-member@example.test");
+
+    const nonAOrgId = await insertOrganization(env.DB);
+    const nonAMemberId = await seedOrganizationAggregate(env.DB, nonAOrgId, "F");
+    await addRepresentative(env.DB, nonAMemberId, userId);
+
+    const aOrgId = await insertOrganization(env.DB);
+    const aMemberId = await seedOrganizationAggregate(env.DB, aOrgId, "A");
+    await addRepresentative(env.DB, aMemberId, userId);
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const response = await call(adminToken, `/api/v1/admin/working-groups/${wgId}/members`, {
+        method: "POST",
+        body: JSON.stringify({ userId }),
+      });
+      expect(response.status).toBe(201);
+      await call(adminToken, `/api/v1/admin/working-groups/${wgId}/members/${userId}`, { method: "DELETE" });
+    }
+  });
+
+  it("deterministically rejects a person who represents only non-A organizations, across multiple affiliations", async () => {
+    const wgId = await insertWorkingGroup("CA Working Group", "ca");
+    const userId = await insertUser("multi-non-a-member@example.test");
+
+    const orgOneId = await insertOrganization(env.DB);
+    const memberOneId = await seedOrganizationAggregate(env.DB, orgOneId, "F");
+    await addRepresentative(env.DB, memberOneId, userId);
+
+    const orgTwoId = await insertOrganization(env.DB);
+    const memberTwoId = await seedOrganizationAggregate(env.DB, orgTwoId, "G");
+    await addRepresentative(env.DB, memberTwoId, userId);
+
+    const response = await call(adminToken, `/api/v1/admin/working-groups/${wgId}/members`, {
+      method: "POST",
+      body: JSON.stringify({ userId }),
+    });
+    expect(response.status).toBe(403);
+  });
+
   // ── Fix 2: chair / vice chair via user_roles (migration 0040) ────────────
 
   async function findRoleId(name: string): Promise<string> {

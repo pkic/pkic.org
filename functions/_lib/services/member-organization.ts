@@ -12,7 +12,7 @@ import { normalizeEmail } from "../validation";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { AppError } from "../errors";
-import { findOrCreateUser } from "./users";
+import { buildFindOrCreateUserStatement } from "./users";
 import { isActiveRepresentative, buildAddRepresentativeStatement } from "./membership/representatives";
 import {
   REPRESENTATIVE_ROLE_IDS,
@@ -66,7 +66,12 @@ export async function addCoworker(
   const firstName = nameParts[0] ?? undefined;
   const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : undefined;
 
-  const user = await findOrCreateUser(db, {
+  // User creation and the representative-row insert used to be two
+  // separate commits (findOrCreateUser executes immediately) — a failure
+  // between them could leave a bare user row with no representative
+  // relationship to show for it. Both now build (not execute) and commit
+  // together in one db.batch() (PR #1 review blocker 4).
+  const { user, statement: userStatement } = await buildFindOrCreateUserStatement(db, {
     email: input.email,
     firstName,
     lastName,
@@ -77,12 +82,13 @@ export async function addCoworker(
   });
 
   const now = nowIso();
-  const { representativeId, statement } = buildAddRepresentativeStatement(db, {
+  const { representativeId, statement: representativeStatement } = buildAddRepresentativeStatement(db, {
     memberId: member.memberId,
     userId: user.id,
     now,
   });
-  await db.batch([statement]);
+  const statements = userStatement ? [userStatement, representativeStatement] : [representativeStatement];
+  await db.batch(statements);
 
   return {
     memberId: representativeId,

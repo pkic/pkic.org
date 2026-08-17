@@ -18,6 +18,8 @@ import {
   addWorkingGroupMember,
   removeWorkingGroupMember,
 } from "./working-groups";
+import { deterministicRepresentativeJoinSql } from "./membership/representative-lookup";
+import { findEligibleMemberById } from "../auth/member";
 import type { DatabaseLike } from "../types";
 
 /**
@@ -208,11 +210,7 @@ export async function getAdminWorkingGroupDetail(
      -- (migration 0037) — join to a single deterministic representative
      -- row (earliest joined_at) instead of fanning out one result row per
      -- represented organization.
-     LEFT JOIN organization_representatives rep ON rep.id = (
-       SELECT r2.id FROM organization_representatives r2
-       WHERE r2.user_id = wgm.user_id AND r2.left_at IS NULL
-       ORDER BY r2.joined_at ASC LIMIT 1
-     )
+${deterministicRepresentativeJoinSql("wgm.user_id")}
      LEFT JOIN members m ON m.id = rep.member_id
      LEFT JOIN members mi ON mi.user_id = wgm.user_id AND mi.status = 'active'
      LEFT JOIN organizations o ON o.id = m.organization_id
@@ -383,19 +381,15 @@ export async function addMemberToWorkingGroup(db: DatabaseLike, wgId: string, ta
     throw new AppError(404, "USER_NOT_FOUND", "User not found");
   }
 
-  const membership = await first<{ category_code: string }>(
-    db,
-    `SELECT mca.category_code
-     FROM member_category_assignments mca
-     WHERE mca.member_id = COALESCE(
-       (SELECT m.id FROM members m
-          JOIN organization_representatives rep ON rep.member_id = m.id
-          WHERE rep.user_id = ? AND rep.left_at IS NULL),
-       (SELECT id FROM members WHERE user_id = ? AND status = 'active')
-     )`,
-    [targetUserId, targetUserId],
-  );
-  assertCaConstraint(wg, membership?.category_code ?? null);
+  // Check every membership category the target holds, not one arbitrarily
+  // picked by an unordered scalar subquery — a staff-driven add has no
+  // "acting as" context to key off, so eligibility must consider all of
+  // the target's affiliations (findEligibleMemberById, the same canonical
+  // deterministic multi-membership resolver the member-session/portal
+  // switcher uses), not just one.
+  const eligibleMember = await findEligibleMemberById(db, targetUserId);
+  const membershipCategories = eligibleMember?.activeMemberships.map((m) => m.membershipCategory) ?? [];
+  assertCaConstraint(wg, membershipCategories);
 
   await addWorkingGroupMember(db, wg, targetUserId);
 }

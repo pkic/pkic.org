@@ -375,7 +375,11 @@ export async function joinMyWorkingGroup(db: DatabaseLike, member: AuthMember, w
   if (!wg) {
     throw new AppError(404, "WORKING_GROUP_NOT_FOUND", "Working group not found");
   }
-  assertCaConstraint(wg, member.membershipCategory);
+  // Gated on the member's currently-active "acting as" context only (not
+  // every organization they represent) — self-service join is an action
+  // taken through a specific, explicitly-chosen membership context, unlike
+  // the admin add-member path below.
+  assertCaConstraint(wg, [member.membershipCategory]);
   await addWorkingGroupMember(db, wg, member.userId);
 }
 

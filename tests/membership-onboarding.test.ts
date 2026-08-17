@@ -13,6 +13,7 @@ import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createApplicationFormSubmission } from "./helpers/member-applications";
+import { insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -275,5 +276,47 @@ describe("Post-approval onboarding", () => {
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
     expect(response.status).toBe(409);
+  });
+
+  it("atomicity (PR #1 review blocker 4): a provisioning failure leaves the application in ec_review, with no partial event/queue rows", async () => {
+    // Seed an organization whose aggregate already has a *different*
+    // category than the application requests — forces
+    // buildProvisionOrganizationMembership to throw MEMBER_CATEGORY_CONFLICT
+    // before any statement is built. Before this fix, provisioning,
+    // the stage transition, and the Google Groups enqueues were three
+    // separate db.batch() calls; a failure here previously could only
+    // ever occur *after* provisioning already committed (since the old
+    // conflict check ran inside provisioning's own post-batch re-read),
+    // which would have left a member/organization created for an
+    // application still sitting in ec_review. Now the conflict is
+    // detected before anything is built at all, so this assertion holds
+    // for both designs — the real regression coverage is the "nothing
+    // partial" checks below, not just the 409 itself.
+    const orgId = await insertOrganization(env.DB, "Conflicting Category Org");
+    await seedOrganizationAggregate(env.DB, orgId, "F");
+    const { id } = await createEcReviewApplication({
+      organization_name: "Conflicting Category Org",
+      organization_domain: "conflicting.test",
+      membership_category: "G",
+    });
+
+    const response = await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
+    expect(response.status).toBe(409);
+
+    const applications = await queryAll<{ status: string; stage: string }>(
+      env.DB,
+      "SELECT status, stage FROM member_applications WHERE id = ?",
+      id,
+    );
+    expect(applications[0]).toMatchObject({ status: "ec_review", stage: "ec_review" });
+
+    const events = await queryAll(env.DB, "SELECT id FROM member_application_events WHERE application_id = ?", id);
+    expect(events).toHaveLength(0);
+
+    const syncRows = await queryAll(env.DB, "SELECT id FROM google_groups_sync_queue");
+    expect(syncRows).toHaveLength(0);
+
+    const users = await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = ?", "newmember@acme.test");
+    expect(users).toHaveLength(0);
   });
 });

@@ -9,11 +9,24 @@
  * provisionOrganizationMembership use case) into one file (PR #1 review
  * §1.5) — the two were only ever used together.
  *
+ * Atomicity: provisioning (organization/aggregate/representative/role
+ * statements from provisioning.ts's build-only entry point), the
+ * application's stage transition + event insert, and every Google Groups
+ * sync-queue enqueue all commit in exactly one `db.batch()` at the end of
+ * this function — not three-plus separate commits, so a failure anywhere
+ * in the sequence can never leave a member/organization provisioned for
+ * an application that's still stuck in `ec_review` (PR #1 review
+ * blocker 4).
+ *
  * Does not call queueEmail directly (no access to env/executionCtx here —
  * same DB-only/route-owns-email split every other service in this codebase
  * uses, see queries.ts's own header note). Returns everything the caller
  * needs to queue member-account-claim, application-approved-welcome, and
- * org-contact-assigned.
+ * org-contact-assigned — those email-outbox writes and the audit-log
+ * write happen in the HTTP route after this commits, deliberately outside
+ * this atomic boundary: they're secondary effects with their own
+ * idempotent-retry machinery (the outbox), not membership state that
+ * needs all-or-nothing commit semantics.
  *
  * ICS calendar attachments (welcome email) are resolved and
  * attached by the caller (functions/api/v1/admin/applications/[id]/approve.ts,
@@ -28,10 +41,10 @@ import { uuid } from "../../../utils/ids";
 import { AppError } from "../../../errors";
 import { getApplicationAnswers, getMemberApplicationById } from "./queries";
 import { INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "./create";
-import { provisionOrganizationMembership } from "../provisioning";
-import { enqueueGoogleGroupsSync } from "../../google-groups";
+import { buildProvisionOrganizationMembership } from "../provisioning";
+import { buildEnqueueGoogleGroupsSyncStatement } from "../../google-groups";
 import { resolveAutoSyncListEmails } from "../../mailing-lists";
-import type { DatabaseLike } from "../../../types";
+import type { DatabaseLike, StatementLike } from "../../../types";
 
 const CA_WORKING_GROUP_SLUG = "ca";
 const CA_ONLY_CATEGORY = "A";
@@ -87,17 +100,33 @@ export async function approveApplication(
   const jobTitle = typeof answers.job_title === "string" && answers.job_title.trim() ? answers.job_title.trim() : null;
   const linkedin = typeof answers.linkedin === "string" && answers.linkedin.trim() ? answers.linkedin.trim() : null;
 
-  const { organizationId, organizationWasCreated, representatives } = await provisionOrganizationMembership(db, {
+  // Everything below is built (not executed) and committed exactly once
+  // at the end of this function: the provisioning statements, the
+  // application's stage transition + event, and every Google Groups sync
+  // enqueue. Previously these landed in three-plus separate `db.batch()`
+  // calls, so a failure after provisioning succeeded but before the stage
+  // transition committed could leave a member/organization created for an
+  // application still stuck in `ec_review` (PR #1 review blocker 4). All
+  // reads needed to decide *what* to build (auto-sync list membership, WG
+  // name/mailing-list lookups) still happen before any statement is
+  // built, same as provisioning.ts's own pattern.
+  const provisioning = await buildProvisionOrganizationMembership(db, {
     organizationName: isIndividual ? null : application.organization_name,
     organizationDomain: isIndividual ? null : application.organization_domain,
     membershipCategory: application.membership_category,
     representatives: [{ name: application.applicant_name, email: application.applicant_email, jobTitle, linkedin }],
     workingGroupSlugs,
   });
+  // Pure/synchronous — safe to call before the batch below commits, since
+  // every id and decision it reports was already resolved by a pre-batch
+  // read while building `provisioning.statements`.
+  const { organizationId, organizationWasCreated, representatives } = provisioning.buildResult();
   const member = representatives[0];
 
   const now = nowIso();
-  await db.batch([
+  const statements: StatementLike[] = [...provisioning.statements];
+
+  statements.push(
     db
       .prepare(
         `UPDATE member_applications SET status = 'approved', stage = 'approved', stage_entered_at = ?, updated_at = ? WHERE id = ?`,
@@ -116,11 +145,11 @@ export async function approveApplication(
         params.eventNote ?? "Application approved",
         now,
       ),
-  ]);
+  );
 
-  // Google Groups enqueue (real API client is in google-groups.ts;
-  // this only writes queue rows, safe to call regardless of whether the live
-  // integration is configured). which lists to add depends on the
+  // Google Groups enqueue (real API client is in google-groups.ts; this
+  // only writes queue rows, safe regardless of whether the live
+  // integration is configured). Which lists to add depends on the
   // staff-managed mailing_lists config, not a hardcoded constant/category
   // check — resolveAutoSyncListEmails reads it at runtime. (This happens to
   // still resolve to "pkic@ always, consultation@ only for A-G" out of the
@@ -128,7 +157,12 @@ export async function approveApplication(
   // but it's now data, not code.)
   const autoSyncListEmails = await resolveAutoSyncListEmails(db, application.membership_category);
   for (const googleGroupEmail of autoSyncListEmails) {
-    await enqueueGoogleGroupsSync(db, { userId: member.userId, googleGroupEmail, action: "add_to_list" });
+    const { statement } = buildEnqueueGoogleGroupsSyncStatement(db, {
+      userId: member.userId,
+      googleGroupEmail,
+      action: "add_to_list",
+    });
+    statements.push(statement);
   }
 
   const workingGroupNames: string[] = [];
@@ -141,13 +175,16 @@ export async function approveApplication(
     if (!wg) continue;
     workingGroupNames.push(wg.name);
     if (wg.mailing_list_email) {
-      await enqueueGoogleGroupsSync(db, {
+      const { statement } = buildEnqueueGoogleGroupsSyncStatement(db, {
         userId: member.userId,
         googleGroupEmail: wg.mailing_list_email,
         action: "add_to_list",
       });
+      statements.push(statement);
     }
   }
+
+  await db.batch(statements);
 
   return {
     applicationId: application.id,
