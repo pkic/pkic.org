@@ -11,6 +11,7 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { insertOrgRepresentative, REPRESENTATIVE_ROLE_IDS } from "./helpers/membership";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -354,5 +355,99 @@ describe("roles (Built-in and custom roles)", () => {
       body: JSON.stringify({ roleId: "role-admin" }),
     });
     expect(allowed.status).toBe(201);
+  });
+
+  describe("POST /api/v1/admin/users/:userId/roles rejects representative role IDs granted outside an organization context", () => {
+    // A representative role (primary/secondary contact, voting delegate) is
+    // singleton-per-organization and carries a service-layer invariant (the
+    // target user must actively represent the organization). The mounted
+    // route must reject every context other than
+    // contextType='organization' + a real contextId outright — it must
+    // never fall through to the generic single_holder_per_context insert
+    // path, which has no concept of "actively represents this org".
+    for (const roleId of [
+      REPRESENTATIVE_ROLE_IDS.primaryContact,
+      REPRESENTATIVE_ROLE_IDS.secondaryContact,
+      REPRESENTATIVE_ROLE_IDS.votingDelegate,
+    ]) {
+      it(`rejects ${roleId} with no context at all`, async () => {
+        const { userId } = await insertOrgRepresentative(env.DB);
+        const response = await call(adminToken, `/api/v1/admin/users/${userId}/roles`, {
+          method: "POST",
+          body: JSON.stringify({ roleId }),
+        });
+        expect(response.status).toBe(422);
+        const body = (await response.json()) as { error: { code: string } };
+        expect(body.error.code).toBe("REPRESENTATIVE_ROLE_REQUIRES_ORGANIZATION_CONTEXT");
+        const rows = await queryAll(env.DB, "SELECT id FROM user_roles WHERE user_id = ? AND role_id = ?", [
+          userId,
+          roleId,
+        ]);
+        expect(rows).toHaveLength(0);
+      });
+
+      it(`rejects ${roleId} with a working_group context`, async () => {
+        const { userId } = await insertOrgRepresentative(env.DB);
+        const response = await call(adminToken, `/api/v1/admin/users/${userId}/roles`, {
+          method: "POST",
+          body: JSON.stringify({ roleId, contextType: "working_group", contextId: crypto.randomUUID() }),
+        });
+        expect(response.status).toBe(422);
+        const body = (await response.json()) as { error: { code: string } };
+        expect(body.error.code).toBe("REPRESENTATIVE_ROLE_REQUIRES_ORGANIZATION_CONTEXT");
+        const rows = await queryAll(env.DB, "SELECT id FROM user_roles WHERE user_id = ? AND role_id = ?", [
+          userId,
+          roleId,
+        ]);
+        expect(rows).toHaveLength(0);
+      });
+
+      it(`rejects ${roleId} with an event context`, async () => {
+        const { userId } = await insertOrgRepresentative(env.DB);
+        const response = await call(adminToken, `/api/v1/admin/users/${userId}/roles`, {
+          method: "POST",
+          body: JSON.stringify({ roleId, contextType: "event", contextId: eventAId }),
+        });
+        expect(response.status).toBe(422);
+        const body = (await response.json()) as { error: { code: string } };
+        expect(body.error.code).toBe("REPRESENTATIVE_ROLE_REQUIRES_ORGANIZATION_CONTEXT");
+        const rows = await queryAll(env.DB, "SELECT id FROM user_roles WHERE user_id = ? AND role_id = ?", [
+          userId,
+          roleId,
+        ]);
+        expect(rows).toHaveLength(0);
+      });
+
+      it(`rejects ${roleId} with contextType='organization' but no contextId (schema-level rejection)`, async () => {
+        const { userId } = await insertOrgRepresentative(env.DB);
+        const response = await call(adminToken, `/api/v1/admin/users/${userId}/roles`, {
+          method: "POST",
+          body: JSON.stringify({ roleId, contextType: "organization" }),
+        });
+        // contextType without a matching contextId is already rejected by
+        // userRoleAssignSchema's superRefine before the handler runs — this
+        // confirms the schema layer closes the gap too, not just the
+        // handler's own check.
+        expect(response.status).toBe(400);
+        const rows = await queryAll(env.DB, "SELECT id FROM user_roles WHERE user_id = ? AND role_id = ?", [
+          userId,
+          roleId,
+        ]);
+        expect(rows).toHaveLength(0);
+      });
+    }
+
+    it("still succeeds with a real organization context and an active representative", async () => {
+      const { userId, memberId } = await insertOrgRepresentative(env.DB);
+      const response = await call(adminToken, `/api/v1/admin/users/${userId}/roles`, {
+        method: "POST",
+        body: JSON.stringify({
+          roleId: REPRESENTATIVE_ROLE_IDS.primaryContact,
+          contextType: "organization",
+          contextId: memberId,
+        }),
+      });
+      expect(response.status).toBe(201);
+    });
   });
 });

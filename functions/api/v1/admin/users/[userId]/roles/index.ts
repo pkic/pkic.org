@@ -114,8 +114,20 @@ export const UserRolesAssign = openApiRoute(userRolesAssignRouteSchema, async (c
   // invariant (the target user must actively represent the organization) —
   // a bare INSERT here would bypass both. Route those through the same
   // canonical service used by every other representative-role grant path
-  // instead of duplicating the check inline.
-  if (contextType === "organization" && contextId && isRepresentativeRoleId(body.roleId)) {
+  // instead of duplicating the check inline. A representative role ID with
+  // any other context (null, event, working_group, or organization without
+  // a contextId) must be rejected outright — it must never reach the
+  // generic single_holder_per_context path below, which has no concept of
+  // "actively represents this organization" and would happily insert an
+  // invalid grant.
+  if (isRepresentativeRoleId(body.roleId)) {
+    if (!(contextType === "organization" && contextId)) {
+      throw new AppError(
+        422,
+        "REPRESENTATIVE_ROLE_REQUIRES_ORGANIZATION_CONTEXT",
+        "Representative roles require contextType='organization' and a contextId",
+      );
+    }
     if (expiresAt) {
       throw new AppError(
         422,
