@@ -56,6 +56,13 @@
  *     org-tied representative's record is meaningless without knowing which
  *     real person at the organization it belongs to.)
  *
+ * This is the thin orchestration entry point (scripts/AGENTS.md): CLI
+ * parsing lives in scripts/migrate-members/cli.mjs, YAML/CSV ingestion in
+ * parsers.mjs, representative/email matching in reconciliation.mjs, SQL
+ * rendering in sql-renderer.mjs, report formatting in report.mjs, and the
+ * wrangler/R2 side effects in r2-adapter.mjs. `buildMigration` below is the
+ * one place that stitches those together in file-processing order.
+ *
  * Usage:
  *   node scripts/migrate-members-yaml-to-d1.mjs --local
  *   node scripts/migrate-members-yaml-to-d1.mjs --preview
@@ -78,10 +85,38 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
-import { execFileSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
 import YAML from "yaml";
+
+import { parseArgs, ENVS } from "./migrate-members/cli.mjs";
+import {
+  loadRosterCsv,
+  loadMemberYamlFiles,
+  activeRepresentatives,
+  splitName,
+  urlizeName,
+} from "./migrate-members/parsers.mjs";
+import {
+  buildEmailsByDomain,
+  candidateEmailsForDomains,
+  matchRepsToCandidates,
+  sentinelEmailForSlug,
+} from "./migrate-members/reconciliation.mjs";
+import {
+  buildUpsertOrganizationStatement,
+  buildOrganizationDomainStatements,
+  buildOrganizationMemberAggregateStatements,
+  buildOrganizationRepresentativeStatement,
+  buildRepresentativeRoleGrantStatement,
+  buildUpsertUserStatement,
+  buildIndividualMemberAggregateStatements,
+  buildConsortiumSponsorshipStatements,
+  buildEventSponsorshipStatements,
+  buildNonMemberConsortiumSponsorshipStatement,
+  buildNonMemberEventSponsorshipStatements,
+  buildWorkingGroupMemberStatement,
+} from "./migrate-members/sql-renderer.mjs";
+import { repSummary, renderMarkdownReport } from "./migrate-members/report.mjs";
+import { findLogoFile, findRepPhotoFile, runWranglerD1, uploadLogosToR2 } from "./migrate-members/r2-adapter.mjs";
 
 const ROOT = process.cwd();
 const MEMBERS_DIR = path.join(ROOT, "data", "members");
@@ -135,378 +170,6 @@ const EVENT_NAME_ALIASES = {
   },
 };
 
-// Matches scripts/seed.mjs's ENVS table — same three wrangler.jsonc
-// environments, same binding ("DB") in every one of them.
-const ENVS = {
-  local: { wranglerFlag: "--local", wranglerEnv: "local" },
-  preview: { wranglerFlag: "--remote", wranglerEnv: "preview" },
-  production: { wranglerFlag: "--remote", wranglerEnv: "production" },
-};
-
-// ── CLI args ─────────────────────────────────────────────────────────────
-
-// Matches wrangler.jsonc's per-environment R2 bucket names (`preview`'s
-// `pkic-assets-preview` differs from `local`/`production`'s `pkic-assets`) —
-// used as parseArgs's default so `--preview` without an explicit
-// `--logo-bucket` doesn't silently upload photos into the production bucket.
-const LOGO_BUCKET_BY_ENV = {
-  local: "pkic-assets",
-  preview: "pkic-assets-preview",
-  production: "pkic-assets",
-};
-
-function parseArgs(argv) {
-  const parsed = {
-    env: null,
-    database: "DB",
-    persistTo: null,
-    dryRun: false,
-    uploadLogos: true,
-    logoBucket: null,
-    outDir: path.join(ROOT, "ignore"),
-  };
-
-  for (let i = 0; i < argv.length; i += 1) {
-    const arg = argv[i];
-    const next = argv[i + 1];
-
-    if (arg === "--local") parsed.env = "local";
-    else if (arg === "--preview") parsed.env = "preview";
-    else if (arg === "--production" || arg === "--remote") parsed.env = "production";
-    else if (arg === "--db" && next) {
-      parsed.database = next;
-      i += 1;
-    } else if (arg === "--persist-to" && next) {
-      parsed.persistTo = next;
-      i += 1;
-    } else if (arg === "--dry-run") parsed.dryRun = true;
-    // --upload-logos is now the default; kept as an accepted no-op flag so
-    // existing invocations (docs, muscle memory) don't break.
-    else if (arg === "--upload-logos") parsed.uploadLogos = true;
-    else if (arg === "--skip-logos") parsed.uploadLogos = false;
-    else if (arg === "--logo-bucket" && next) {
-      parsed.logoBucket = next;
-      i += 1;
-    } else if (arg === "--out" && next) {
-      parsed.outDir = path.isAbsolute(next) ? next : path.join(ROOT, next);
-      i += 1;
-    }
-  }
-
-  if (!parsed.env && !parsed.dryRun) {
-    console.error("Specify one of --local, --preview, --production (or use --dry-run alone to just inspect output).");
-    process.exit(1);
-  }
-  parsed.env = parsed.env ?? "local";
-  parsed.logoBucket = parsed.logoBucket ?? LOGO_BUCKET_BY_ENV[parsed.env];
-
-  return parsed;
-}
-
-// ── SQL string helpers (matches scripts/seed-event.mjs conventions) ────────
-
-function sqlString(value) {
-  return `'${String(value).replaceAll("'", "''")}'`;
-}
-
-function toSqlNullableText(value) {
-  if (value === null || value === undefined) return "NULL";
-  const str = String(value).trim();
-  return str.length === 0 ? "NULL" : sqlString(str);
-}
-
-// ── Small domain helpers ────────────────────────────────────────────────
-
-function normalizeEmail(email) {
-  return String(email).trim().toLowerCase();
-}
-
-function normalizeOrgName(name) {
-  // Matches functions/_lib/services/sponsorship.ts's normalizeOrgName —
-  // this is the same upsert key convention (organizations.normalized_name).
-  return name.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-function emailDomain(email) {
-  const at = email.lastIndexOf("@");
-  return at === -1 ? "" : email.slice(at + 1).toLowerCase();
-}
-
-// `.invalid` is reserved by RFC 2606 as never resolvable/deliverable —
-// matches the sentinel-email convention `user-merge.ts`'s `mergeUsers`
-// already established for anonymized accounts (`merged-<id>@deleted.invalid`).
-// Deterministic (keyed on the YAML slug, not a random id) so re-running the
-// migration upserts the same placeholder row instead of creating a new one
-// each time.
-function sentinelEmailForSlug(slug) {
-  return `unmatched-${slug}@members.invalid`;
-}
-
-/**
- * Rewrites Hugo shortcodes found in YAML `content` fields into plain URLs,
- * since `organizations.content_markdown` is rendered as Markdown, not Hugo
- * template syntax — a literal `{{< youtube ID >}}` would otherwise show up
- * as unresolved shortcode text on an organization's profile page instead of
- * a link. Only the three shortcodes actually present in data/members/*.yaml
- * are handled (checked 2026-07-28): `youtube`, `vimeo`, `video`.
- */
-function convertHugoShortcodes(content) {
-  if (!content) return content;
-  return String(content)
-    .replace(/\{\{<\s*youtube\s+([\w-]+)\s*>\}\}/gi, (_, id) => `https://www.youtube.com/watch?v=${id}`)
-    .replace(/\{\{<\s*vimeo\s+(\d+)\s*>\}\}/gi, (_, id) => `https://vimeo.com/${id}`)
-    .replace(/\{\{<\s*video\s+([^>]*)>\}\}/gi, (_, attrs) => {
-      const match = attrs.match(/link\s*=\s*"([^"]+)"/);
-      return match ? match[1] : "";
-    });
-}
-
-function splitName(fullName) {
-  const tokens = String(fullName).trim().split(/\s+/).filter(Boolean);
-  if (tokens.length === 0) return { firstName: null, lastName: null };
-  if (tokens.length === 1) return { firstName: tokens[0], lastName: null };
-  return { firstName: tokens.slice(0, -1).join(" "), lastName: tokens[tokens.length - 1] };
-}
-
-// ── CSV parsing ──────────────────────────────────────────────────────────
-// Each export has a non-CSV title line, then a real header line, then data
-// rows. Nickname (column 2) is occasionally quoted with an embedded comma
-// (e.g. "Dholakia, Sandip") — a tiny quote-aware splitter handles that.
-
-function parseCsvLine(line) {
-  const fields = [];
-  let current = "";
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i += 1) {
-    const ch = line[i];
-    if (inQuotes) {
-      if (ch === '"' && line[i + 1] === '"') {
-        current += '"';
-        i += 1;
-      } else if (ch === '"') {
-        inQuotes = false;
-      } else {
-        current += ch;
-      }
-    } else if (ch === '"') {
-      inQuotes = true;
-    } else if (ch === ",") {
-      fields.push(current);
-      current = "";
-    } else {
-      current += ch;
-    }
-  }
-  fields.push(current);
-  return fields;
-}
-
-/** Returns a Map<normalizedEmail, { joinSortKey: string }> for one roster CSV. */
-function loadRosterCsv(filePath) {
-  const raw = fs.readFileSync(filePath, "utf8");
-  const lines = raw.split(/\r?\n/).filter((l) => l.length > 0);
-  // lines[0] = title ("Members for group X"), lines[1] = header, lines[2+] = data
-  const byEmail = new Map();
-
-  for (let i = 2; i < lines.length; i += 1) {
-    const fields = parseCsvLine(lines[i]);
-    const email = normalizeEmail(fields[0] ?? "");
-    if (!email || !email.includes("@")) continue;
-
-    const [, , , , , , year, month, day, hour, minute, second] = fields;
-    const joinSortKey = [year, month, day, hour, minute, second]
-      .map((v) => String(Number.parseInt(v ?? "0", 10) || 0).padStart(4, "0"))
-      .join("-");
-
-    // Last-write-wins is fine: duplicate emails in an export are the same
-    // person; we just need *a* join timestamp for ordering purposes.
-    byEmail.set(email, { joinSortKey });
-  }
-
-  return byEmail;
-}
-
-// ── YAML loading ─────────────────────────────────────────────────────────
-
-function loadMemberYamlFiles(membersDir = MEMBERS_DIR) {
-  const files = fs.readdirSync(membersDir).filter((f) => f.endsWith(".yaml") || f.endsWith(".yml"));
-  return files.map((filename) => {
-    const raw = fs.readFileSync(path.join(membersDir, filename), "utf8");
-    const doc = YAML.parse(raw) ?? {};
-    return { filename, slug: path.basename(filename, path.extname(filename)), doc };
-  });
-}
-
-function activeRepresentatives(doc) {
-  const reps = Array.isArray(doc.representatives) ? doc.representatives : [];
-  // A rep with `till` set no longer represents the org
-  // from/till convention) — excluded from user/member creation, but still
-  // real historical content (attribution on blog posts etc.), so we leave
-  // the YAML untouched; we just don't mint a portal account for them here.
-  return reps.filter((r) => r && typeof r.name === "string" && r.name.trim().length > 0 && !r.till);
-}
-
-/** Full detail (not just a name) for a representative dropped from the
- * import — used in the report so staff completing them via the Interim
- * Admin Tool don't have to re-derive LinkedIn/role/bio from the YAML. */
-function repSummary(r) {
-  return {
-    name: r.name,
-    role: r.role ?? null,
-    linkedin: r.social?.linkedin || null,
-    bio: r.description ?? null,
-  };
-}
-
-function findLogoFile(slug) {
-  const dir = path.join(LOGO_DIR, slug);
-  if (!fs.existsSync(dir)) return null;
-  const candidates = fs.readdirSync(dir).filter((f) => /\.(svg|png|jpg|jpeg)$/i.test(f));
-  // Require an exact `<slug>.<ext>` match. Falling back to "the first file
-  // in the directory" when no exact match exists previously risked silently
-  // picking an unrelated file (e.g. a representative's headshot living in
-  // the same directory) as the organization logo.
-  const exact = candidates.find((f) => path.basename(f, path.extname(f)) === slug);
-  return exact ? path.join(dir, exact) : null;
-}
-
-/** Mirrors Hugo's `urlize`: lowercase, strip diacritics, non-alphanumerics -> hyphens. */
-function urlizeName(name) {
-  return String(name)
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "") // combining diacritical marks left behind by NFD
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-// Short tokens (van, der, von, de, la, ...) are dropped before name/email
-// matching — they're common enough across unrelated candidates in the same
-// org that counting them as a match produces false positives more often
-// than real signal.
-const NAME_MATCH_MIN_TOKEN_LENGTH = 4;
-
-function nameTokens(fullName) {
-  return String(fullName)
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((token) => token.length >= NAME_MATCH_MIN_TOKEN_LENGTH);
-}
-
-function emailLocalAlnum(email) {
-  const at = String(email).lastIndexOf("@");
-  const local = at === -1 ? String(email) : String(email).slice(0, at);
-  return local
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-}
-
-/**
- * Pairs YAML `representatives[]` entries with domain-matched roster emails
- * by name, instead of blindly zipping listed order against join-date order
- * (which silently attaches one representative's bio/role to a different
- * person's email whenever the YAML list order and the roster join order
- * don't happen to match.
- *
- * Each representative's name tokens are checked as substrings of each
- * candidate email's local part; confident matches (score > 0) are assigned
- * greedily, highest-scoring first. Anything a name match can't resolve
- * falls back to the original join-order positional pairing, same
- * "best effort, flagged for staff confirmation" behavior as before this
- * matched on names at all.
- *
- * Returns an array parallel to `reps`: the matched candidate's index into
- * `candidates`, or null if every candidate is already claimed.
- */
-function matchRepsToCandidates(reps, candidates) {
-  const repTokens = reps.map((r) => nameTokens(r.name));
-  const candidateLocals = candidates.map((c) => emailLocalAlnum(c.email));
-
-  const scored = [];
-  for (let ri = 0; ri < reps.length; ri += 1) {
-    for (let ci = 0; ci < candidates.length; ci += 1) {
-      const score = repTokens[ri].reduce((n, token) => n + (candidateLocals[ci].includes(token) ? 1 : 0), 0);
-      if (score > 0) scored.push({ ri, ci, score });
-    }
-  }
-  scored.sort((a, b) => b.score - a.score);
-
-  const assignment = new Array(reps.length).fill(null);
-  const usedCandidates = new Set();
-  for (const { ri, ci } of scored) {
-    if (assignment[ri] !== null || usedCandidates.has(ci)) continue;
-    assignment[ri] = ci;
-    usedCandidates.add(ci);
-  }
-
-  let nextCandidate = 0;
-  for (let ri = 0; ri < reps.length; ri += 1) {
-    if (assignment[ri] !== null) continue;
-    while (nextCandidate < candidates.length && usedCandidates.has(nextCandidate)) nextCandidate += 1;
-    if (nextCandidate >= candidates.length) continue;
-    assignment[ri] = nextCandidate;
-    usedCandidates.add(nextCandidate);
-    nextCandidate += 1;
-  }
-
-  return assignment;
-}
-
-/**
- * Per-representative photo, sourced from the same `assets/images/members/<orgSlug>/`
- * directory as the org logo — the old Hugo `single.html` looked these up at
- * `/images/members/<orgSlug>/<repId-or-urlized-name>.*` (falling back to the
- * urlized representative name when no explicit `id` was set on the YAML
- * `representatives[]` entry). Distinct from `findLogoFile`, which only ever
- * matches the org's own `<orgSlug>.*` file.
- */
-function findRepPhotoFile(orgSlug, rep) {
-  const dir = path.join(LOGO_DIR, orgSlug);
-  if (!fs.existsSync(dir)) return null;
-  const repSlug = String(rep.id ?? urlizeName(rep.name));
-  if (!repSlug) return null;
-  const candidates = fs.readdirSync(dir).filter((f) => /\.(svg|png|jpg|jpeg)$/i.test(f));
-  const exact = candidates.find((f) => path.basename(f, path.extname(f)) === repSlug);
-  return exact ? path.join(dir, exact) : null;
-}
-
-// ── Reconciliation ───────────────────────────────────────────────────────
-
-function buildEmailsByDomain(pkicRoster) {
-  const byDomain = new Map();
-  for (const [email, meta] of pkicRoster.entries()) {
-    const domain = emailDomain(email);
-    if (!domain) continue;
-    const list = byDomain.get(domain) ?? [];
-    list.push({ email, joinSortKey: meta.joinSortKey });
-    byDomain.set(domain, list);
-  }
-  for (const list of byDomain.values()) {
-    list.sort((a, b) => a.joinSortKey.localeCompare(b.joinSortKey));
-  }
-  return byDomain;
-}
-
-function candidateEmailsForDomains(domains, emailsByDomain) {
-  const seen = new Set();
-  const candidates = [];
-  for (const domain of domains) {
-    const list = emailsByDomain.get(String(domain).trim().toLowerCase()) ?? [];
-    for (const entry of list) {
-      if (seen.has(entry.email)) continue;
-      seen.add(entry.email);
-      candidates.push(entry);
-    }
-  }
-  candidates.sort((a, b) => a.joinSortKey.localeCompare(b.joinSortKey));
-  return candidates;
-}
-
 /**
  * Builds the full set of SQL statements plus a structured report, per the
  * reconciliation algorithm.
@@ -541,7 +204,7 @@ function buildMigration({
   }
   const emailsByDomain = buildEmailsByDomain(combinedRoster);
 
-  const statements = [];
+  const statements = ["PRAGMA foreign_keys = ON;"];
   const logoUploads = []; // { slug, filePath, r2Key }
   const claimedEmails = new Set();
   const createdUserEmails = new Set(); // every email we insert a `users` row for
@@ -563,233 +226,25 @@ function buildMigration({
     workingGroupCounts: Object.fromEntries(Object.keys(WORKING_GROUP_CSVS).map((k) => [k, 0])),
   };
 
-  statements.push("PRAGMA foreign_keys = ON;");
-
-  function upsertOrganization({ slug, name, doc, logoR2Key }) {
-    const normalizedName = normalizeOrgName(name);
-    const social = doc.social ?? {};
-    const blog = doc.blog ?? {};
-    const press = doc.press ?? {};
-    const careers = doc.careers ?? {};
-    const contentMarkdown = convertHugoShortcodes(doc.content);
-    // YAML `id:` (e.g. `id: keyfactor`) backs the clean public URL slug
-    // (`/members/<slug>`) — falls back to the filename-derived slug for the
-    // (currently nonexistent) case of a file with no `id:` key at all.
-    const urlSlug = String(doc.id ?? slug).trim() || slug;
-    // Canonical persisted shape is a plain URL array (assets/shared/schemas/
-    // api.ts's linksSchema) — no per-provider organizations.social_* columns.
-    const links = [social.linkedin, social.x, social.facebook, social.instagram, social.youtube].filter(Boolean);
-    const linksJson = links.length > 0 ? JSON.stringify(links) : null;
-
-    statements.push(`
-INSERT INTO organizations (
-  id, name, normalized_name, data_json, slug,
-  description, website, content_markdown, slogan, logo_r2_key, links_json,
-  blog_url, blog_feed_url, press_url, press_feed_url, careers_url,
-  created_at, updated_at
-) VALUES (
-  ${sqlString(randomUUID())}, ${sqlString(name)}, ${sqlString(normalizedName)}, NULL, ${toSqlNullableText(urlSlug)},
-  ${toSqlNullableText(doc.description)}, ${toSqlNullableText(doc.website)}, ${toSqlNullableText(contentMarkdown)}, ${toSqlNullableText(doc.slogan)}, ${toSqlNullableText(logoR2Key)}, ${linksJson ? sqlString(linksJson) : "NULL"},
-  ${toSqlNullableText(blog.url)}, ${toSqlNullableText(blog.feed)}, ${toSqlNullableText(press.url)}, ${toSqlNullableText(press.feed)}, ${toSqlNullableText(careers.url)},
-  datetime('now'), datetime('now')
-)
-ON CONFLICT(normalized_name) DO UPDATE SET
-  name = excluded.name,
-  description = excluded.description,
-  website = excluded.website,
-  content_markdown = excluded.content_markdown,
-  slogan = excluded.slogan,
-  logo_r2_key = COALESCE(excluded.logo_r2_key, organizations.logo_r2_key),
-  links_json = COALESCE(organizations.links_json, excluded.links_json),
-  -- Never clobber a slug staff may have hand-set via the admin UI after the
-  -- initial migration — only fill when still unset.
-  slug = COALESCE(organizations.slug, excluded.slug),
-  blog_url = excluded.blog_url,
-  blog_feed_url = excluded.blog_feed_url,
-  press_url = excluded.press_url,
-  press_feed_url = excluded.press_feed_url,
-  careers_url = excluded.careers_url,
-  updated_at = datetime('now');
-`);
-
-    return normalizedName;
-  }
-
-  /** One row per YAML `organizationDomains` entry — idempotent via the
-   * table's global UNIQUE(domain) index (migration 0041). */
-  function upsertOrganizationDomains(normalizedOrgName, domains) {
-    for (const domain of domains) {
-      const trimmed = String(domain).trim().toLowerCase();
-      if (!trimmed) continue;
-      statements.push(`
-INSERT OR IGNORE INTO organization_domains (id, organization_id, domain, created_at)
-SELECT ${sqlString(randomUUID())}, o.id, ${sqlString(trimmed)}, datetime('now')
-FROM organizations o WHERE o.normalized_name = ${sqlString(normalizedOrgName)};
-`);
-    }
-  }
-
-  /**
-   * Get-or-create the organization's single `members` aggregate row
-   * (member_type='organization') plus its `member_category_assignments`
-   * row — same `INSERT OR IGNORE` + unique-constraint idiom as
-   * `getOrCreateOrganizationMemberAggregate` in
-   * `functions/_lib/services/membership/memberships.ts`, keyed by a
-   * `normalized_name` subquery instead of a known id since the
-   * organization may already exist (ON CONFLICT) from a prior run.
-   * `members.organization_id`/`member_category_assignments.member_id` are
-   * both unique, so re-running this is a no-op once the rows exist.
-   */
-  function ensureOrganizationMemberAggregate(normalizedOrgName, categoryCode, memberSince) {
-    statements.push(`
-INSERT OR IGNORE INTO members (id, member_type, organization_id, status, member_since, created_at, updated_at)
-SELECT ${sqlString(randomUUID())}, 'organization', o.id, 'active', ${toSqlNullableText(memberSince)}, datetime('now'), datetime('now')
-FROM organizations o WHERE o.normalized_name = ${sqlString(normalizedOrgName)};
-`);
-    // Never clobber a `member_since` staff may have hand-set — only fill
-    // in when it's still unset (e.g. a rerun after the YAML gained the key).
-    statements.push(`
-UPDATE members SET member_since = COALESCE(member_since, ${toSqlNullableText(memberSince)}), updated_at = datetime('now')
-WHERE organization_id = (SELECT id FROM organizations WHERE normalized_name = ${sqlString(normalizedOrgName)})
-  AND member_since IS NULL;
-`);
-    if (categoryCode) {
-      statements.push(`
-INSERT OR IGNORE INTO member_category_assignments (member_id, category_code, created_at, updated_at)
-SELECT m.id, ${sqlString(categoryCode)}, datetime('now'), datetime('now')
-FROM members m JOIN organizations o ON o.id = m.organization_id
-WHERE o.normalized_name = ${sqlString(normalizedOrgName)};
-`);
-    }
-  }
-
-  /**
-   * One `organization_representatives` row for (org, user) — idempotent via
-   * `uq_organization_representatives_active_pair` (migration 0037), the
-   * same partial-unique-index guard `buildAddRepresentativeStatement` in
-   * `functions/_lib/services/membership/representatives.ts` relies on.
-   */
-  function addOrganizationRepresentative(normalizedOrgName, normalizedEmail, showOnOrgProfile) {
-    statements.push(`
-INSERT OR IGNORE INTO organization_representatives (id, member_id, user_id, show_on_org_profile, joined_at, left_at, created_at, updated_at)
-SELECT ${sqlString(randomUUID())}, m.id, u.id, ${showOnOrgProfile ? 1 : 0}, datetime('now'), NULL, datetime('now'), datetime('now')
-FROM members m
-JOIN organizations o ON o.id = m.organization_id
-JOIN users u ON u.normalized_email = ${sqlString(normalizedEmail)}
-WHERE o.normalized_name = ${sqlString(normalizedOrgName)};
-`);
-  }
-
-  /**
-   * Grants a singleton representative role (primary/secondary contact) if
-   * the organization doesn't already have an active holder — idempotent via
-   * `uq_user_roles_single_holder_per_context` (migration 0038), the same
-   * partial-unique-index guard the real assign-role statement builders rely
-   * on. Never clobbers a contact staff already set by hand.
-   */
-  function grantRepresentativeRoleIfUnset(normalizedOrgName, normalizedEmail, roleId) {
-    statements.push(`
-INSERT OR IGNORE INTO user_roles (id, user_id, role_id, context_type, context_id, granted_by_user_id, single_holder_per_context, created_at)
-SELECT ${sqlString(randomUUID())}, u.id, ${sqlString(roleId)}, 'organization', m.id, NULL, 1, datetime('now')
-FROM members m
-JOIN organizations o ON o.id = m.organization_id
-JOIN users u ON u.normalized_email = ${sqlString(normalizedEmail)}
-WHERE o.normalized_name = ${sqlString(normalizedOrgName)};
-`);
-  }
-
-  function upsertUser({ email, firstName, lastName, jobTitle, biography, linksJson, headshotR2Key }) {
-    const normalized = normalizeEmail(email);
-    createdUserEmails.add(normalized);
-    statements.push(`
-INSERT INTO users (
-  id, email, normalized_email, first_name, last_name, job_title, biography, links_json,
-  headshot_r2_key, role, active, created_at, updated_at
-) VALUES (
-  ${sqlString(randomUUID())}, ${sqlString(email)}, ${sqlString(normalized)},
-  ${toSqlNullableText(firstName)}, ${toSqlNullableText(lastName)}, ${toSqlNullableText(jobTitle)},
-  ${toSqlNullableText(biography)}, ${linksJson ? sqlString(linksJson) : "NULL"},
-  ${toSqlNullableText(headshotR2Key)},
-  'user', 1, datetime('now'), datetime('now')
-)
-ON CONFLICT(normalized_email) DO UPDATE SET
-  first_name = COALESCE(users.first_name, excluded.first_name),
-  last_name = COALESCE(users.last_name, excluded.last_name),
-  job_title = COALESCE(users.job_title, excluded.job_title),
-  biography = COALESCE(users.biography, excluded.biography),
-  links_json = COALESCE(users.links_json, excluded.links_json),
-  -- 'headshots/...' keys are hand-uploaded via the admin self-service headshot
-  -- endpoint (SPEAKER_UPLOADS_BUCKET) and must never be clobbered by a rerun.
-  -- Anything else (NULL, or a previous 'member-photos/...' migration key) is
-  -- fair game so a corrected/updated YAML photo actually takes effect on rerun.
-  headshot_r2_key = CASE
-    WHEN users.headshot_r2_key LIKE 'headshots/%' THEN users.headshot_r2_key
-    ELSE COALESCE(excluded.headshot_r2_key, users.headshot_r2_key)
-  END,
-  updated_at = datetime('now');
-`);
-    return normalized;
-  }
-
-  /**
-   * Individual (org-less, H5/H6/H7) aggregate: one `members` row
-   * (member_type='individual') plus its `member_category_assignments` row.
-   * `members.user_id` is unique, so `INSERT OR IGNORE` is the whole race
-   * guard — matches `buildCreateIndividualMemberStatements` in
-   * `functions/_lib/services/membership/memberships.ts`, just tolerant of
-   * reruns (this script's own callers, unlike a live request, may execute
-   * against an aggregate that already exists).
-   */
-  function ensureIndividualMemberAggregate(normalizedEmail, categoryCode, memberSince) {
-    statements.push(`
-INSERT OR IGNORE INTO members (id, member_type, user_id, status, member_since, created_at, updated_at)
-SELECT ${sqlString(randomUUID())}, 'individual', u.id, 'active', ${toSqlNullableText(memberSince)}, datetime('now'), datetime('now')
-FROM users u WHERE u.normalized_email = ${sqlString(normalizedEmail)};
-`);
-    statements.push(`
-UPDATE members SET member_since = COALESCE(member_since, ${toSqlNullableText(memberSince)}), updated_at = datetime('now')
-WHERE user_id = (SELECT id FROM users WHERE normalized_email = ${sqlString(normalizedEmail)})
-  AND member_since IS NULL;
-`);
-    if (categoryCode) {
-      statements.push(`
-INSERT OR IGNORE INTO member_category_assignments (member_id, category_code, created_at, updated_at)
-SELECT m.id, ${sqlString(categoryCode)}, datetime('now'), datetime('now')
-FROM members m JOIN users u ON u.id = m.user_id
-WHERE u.normalized_email = ${sqlString(normalizedEmail)};
-`);
-    }
+  function upsertUser(input) {
+    const { statement, normalizedEmail } = buildUpsertUserStatement(input);
+    statements.push(statement);
+    createdUserEmails.add(normalizedEmail);
+    return normalizedEmail;
   }
 
   // ── Step 3e: sponsorship reconciliation (data/members/*.yaml `sponsor:`) ──
-  // Previously deliberately skipped by this script (see file header); now
-  // migrates both the consortium-wide tier and any per-event sponsorships.
-  // Guarded by NOT EXISTS instead of an ON CONFLICT target (sponsorships has
-  // no natural unique key for "this org's consortium sponsorship" / "this
-  // org's sponsorship of this event") so re-running the migration doesn't
-  // duplicate rows, but also doesn't clobber a tier staff later changed by
-  // hand via the admin Sponsorships screen.
-  function upsertSponsorships({ normalizedOrgName, doc, filename, name, report }) {
+  // Migrates both the org's consortium-wide tier and any per-event
+  // sponsorships. See buildConsortiumSponsorshipStatements/
+  // buildEventSponsorshipStatements for the idempotency guards.
+  function upsertSponsorshipsForOrg({ normalizedOrgName, doc, filename, name }) {
     const sponsor = doc.sponsor;
     if (!sponsor) return;
 
     const level = String(sponsor.level ?? "").trim();
     if (level) {
       const startDate = sponsor.since ?? doc.memberSince ?? null;
-      statements.push(`
-INSERT INTO sponsorships (id, sponsor_type, organization_id, tier, pipeline_stage, start_date, created_at, updated_at)
-SELECT ${sqlString(randomUUID())}, 'consortium', o.id, ${sqlString(level)}, 'active', ${toSqlNullableText(startDate)}, datetime('now'), datetime('now')
-FROM organizations o
-WHERE o.normalized_name = ${sqlString(normalizedOrgName)}
-  AND NOT EXISTS (SELECT 1 FROM sponsorships s WHERE s.organization_id = o.id AND s.sponsor_type = 'consortium');
-`);
-      statements.push(`
-UPDATE organizations
-SET sponsor_tier = COALESCE(sponsor_tier, ${sqlString(level)}),
-    sponsor_start_date = COALESCE(sponsor_start_date, ${toSqlNullableText(startDate)}),
-    updated_at = datetime('now')
-WHERE normalized_name = ${sqlString(normalizedOrgName)};
-`);
+      statements.push(...buildConsortiumSponsorshipStatements(normalizedOrgName, level, startDate));
     }
 
     const sponsoring = sponsor.sponsoring;
@@ -802,21 +257,7 @@ WHERE normalized_name = ${sqlString(normalizedOrgName)};
           report.unmatchedEventSponsorships.push({ file: filename, name, eventName, tier });
           continue;
         }
-        statements.push(`
-INSERT INTO events (id, slug, name, timezone, starts_at, ends_at, created_at, updated_at)
-VALUES (${sqlString(randomUUID())}, ${sqlString(alias.slug)}, ${sqlString(alias.name)}, ${sqlString(alias.timezone)}, ${toSqlNullableText(alias.startsAt)}, ${toSqlNullableText(alias.endsAt)}, datetime('now'), datetime('now'))
-ON CONFLICT(slug) DO NOTHING;
-`);
-        statements.push(`
-INSERT INTO sponsorships (id, sponsor_type, organization_id, event_id, tier, pipeline_stage, created_at, updated_at)
-SELECT ${sqlString(randomUUID())}, 'event', o.id, e.id, ${sqlString(tier)}, 'active', datetime('now'), datetime('now')
-FROM organizations o, events e
-WHERE o.normalized_name = ${sqlString(normalizedOrgName)}
-  AND e.slug = ${sqlString(alias.slug)}
-  AND NOT EXISTS (
-    SELECT 1 FROM sponsorships s WHERE s.organization_id = o.id AND s.sponsor_type = 'event' AND s.event_id = e.id
-  );
-`);
+        statements.push(...buildEventSponsorshipStatements(normalizedOrgName, alias, tier));
       }
     }
   }
@@ -867,7 +308,7 @@ WHERE o.normalized_name = ${sqlString(normalizedOrgName)}
       // (the same column self-service headshot uploads use).
       let headshotR2Key = null;
       if (uploadLogos) {
-        const photoFile = findLogoFile(slug);
+        const photoFile = findLogoFile(LOGO_DIR, slug);
         if (photoFile) {
           headshotR2Key = `member-photos/${slug}/${path.basename(photoFile)}`;
           logoUploads.push({ slug, filePath: photoFile, r2Key: headshotR2Key });
@@ -891,7 +332,9 @@ WHERE o.normalized_name = ${sqlString(normalizedOrgName)}
         headshotR2Key,
       });
       claimedEmails.add(normalizedEmail);
-      ensureIndividualMemberAggregate(normalizedEmail, memberType || null, doc.memberSince);
+      statements.push(
+        ...buildIndividualMemberAggregateStatements(normalizedEmail, memberType || null, doc.memberSince),
+      );
       if (needsEmail) report.totals.sentinelIndividuals += 1;
       else report.totals.matchedOrgs += 1;
       continue;
@@ -901,16 +344,24 @@ WHERE o.normalized_name = ${sqlString(normalizedOrgName)}
     // matched or not.
     let logoR2Key = null;
     if (uploadLogos) {
-      const logoFile = findLogoFile(slug);
+      const logoFile = findLogoFile(LOGO_DIR, slug);
       if (logoFile) {
         logoR2Key = `org-logos/${slug}/${path.basename(logoFile)}`;
         logoUploads.push({ slug, filePath: logoFile, r2Key: logoR2Key });
       }
     }
-    const normalizedOrgName = upsertOrganization({ slug, name, doc, logoR2Key });
-    upsertOrganizationDomains(normalizedOrgName, domains);
-    ensureOrganizationMemberAggregate(normalizedOrgName, memberType || null, doc.memberSince);
-    upsertSponsorships({ normalizedOrgName, doc, filename, name, report });
+    const { statement: organizationStatement, normalizedOrgName } = buildUpsertOrganizationStatement({
+      slug,
+      name,
+      doc,
+      logoR2Key,
+    });
+    statements.push(organizationStatement);
+    statements.push(...buildOrganizationDomainStatements(normalizedOrgName, domains));
+    statements.push(
+      ...buildOrganizationMemberAggregateStatements(normalizedOrgName, memberType || null, doc.memberSince),
+    );
+    upsertSponsorshipsForOrg({ normalizedOrgName, doc, filename, name });
 
     if (candidates.length === 0) {
       report.totals.unmatched.push({
@@ -967,7 +418,7 @@ WHERE o.normalized_name = ${sqlString(normalizedOrgName)}
       // distinct from the org's own `<orgSlug>.*` logo file.
       let repHeadshotR2Key = null;
       if (uploadLogos) {
-        const photoFile = findRepPhotoFile(slug, rep);
+        const photoFile = findRepPhotoFile(LOGO_DIR, slug, rep, urlizeName);
         if (photoFile) {
           repHeadshotR2Key = `member-photos/${slug}/${path.basename(photoFile)}`;
           logoUploads.push({ slug, filePath: photoFile, r2Key: repHeadshotR2Key });
@@ -984,7 +435,7 @@ WHERE o.normalized_name = ${sqlString(normalizedOrgName)}
         headshotR2Key: repHeadshotR2Key,
       });
       claimedEmails.add(normalizedEmail);
-      addOrganizationRepresentative(normalizedOrgName, normalizedEmail, true);
+      statements.push(buildOrganizationRepresentativeStatement(normalizedOrgName, normalizedEmail, true));
       contactEmails.push(normalizedEmail);
     }
 
@@ -1003,12 +454,18 @@ WHERE o.normalized_name = ${sqlString(normalizedOrgName)}
         linksJson: null,
       });
       claimedEmails.add(normalizedEmail);
-      addOrganizationRepresentative(normalizedOrgName, normalizedEmail, false);
+      statements.push(buildOrganizationRepresentativeStatement(normalizedOrgName, normalizedEmail, false));
       contactEmails.push(normalizedEmail);
     }
 
-    if (contactEmails[0]) grantRepresentativeRoleIfUnset(normalizedOrgName, contactEmails[0], "role-primary_contact");
-    if (contactEmails[1]) grantRepresentativeRoleIfUnset(normalizedOrgName, contactEmails[1], "role-secondary_contact");
+    if (contactEmails[0])
+      statements.push(
+        buildRepresentativeRoleGrantStatement(normalizedOrgName, contactEmails[0], "role-primary_contact"),
+      );
+    if (contactEmails[1])
+      statements.push(
+        buildRepresentativeRoleGrantStatement(normalizedOrgName, contactEmails[1], "role-secondary_contact"),
+      );
 
     report.totals.matchedOrgs += 1;
   }
@@ -1053,26 +510,11 @@ WHERE o.normalized_name = ${sqlString(normalizedOrgName)}
 
   // ── Step 3b: working_group_members from the per-WG roster CSVs ─────────
 
-  const wgIdExpr = (slug) => `(SELECT id FROM working_groups WHERE slug = ${sqlString(slug)})`;
-
   for (const [wgSlug, roster] of Object.entries(wgRosters)) {
-    for (const [email, meta] of roster.entries()) {
+    for (const [email] of roster.entries()) {
       if (!createdUserEmails.has(email)) continue; // not a user we created (shouldn't happen, defensive)
       report.workingGroupCounts[wgSlug] += 1;
-
-      const joinedAt = "datetime('now')"; // roster export has no real calendar date, only join-order fields
-      void meta;
-      statements.push(`
-INSERT INTO working_group_members (id, working_group_id, user_id, joined_at, left_at)
-SELECT ${sqlString(randomUUID())}, ${wgIdExpr(wgSlug)}, (SELECT id FROM users WHERE normalized_email = ${sqlString(email)}), ${joinedAt}, NULL
-WHERE (SELECT id FROM users WHERE normalized_email = ${sqlString(email)}) IS NOT NULL
-  AND NOT EXISTS (
-    SELECT 1 FROM working_group_members wgm
-    WHERE wgm.working_group_id = ${wgIdExpr(wgSlug)}
-      AND wgm.user_id = (SELECT id FROM users WHERE normalized_email = ${sqlString(email)})
-      AND wgm.left_at IS NULL
-  );
-`);
+      statements.push(buildWorkingGroupMemberStatement(wgSlug, email));
     }
   }
 
@@ -1105,13 +547,7 @@ WHERE (SELECT id FROM users WHERE normalized_email = ${sqlString(email)}) IS NOT
       const sponsor = entry.sponsor ?? {};
       const level = String(sponsor.level ?? "").trim();
       if (level) {
-        statements.push(`
-INSERT INTO sponsorships (id, sponsor_type, non_member_name, non_member_website, non_member_logo_r2_key, tier, pipeline_stage, created_at, updated_at)
-SELECT ${sqlString(randomUUID())}, 'consortium', ${sqlString(sponsorName)}, ${toSqlNullableText(website)}, ${toSqlNullableText(logoR2Key)}, ${sqlString(level)}, 'active', datetime('now'), datetime('now')
-WHERE NOT EXISTS (
-  SELECT 1 FROM sponsorships WHERE sponsor_type = 'consortium' AND organization_id IS NULL AND non_member_name = ${sqlString(sponsorName)}
-);
-`);
+        statements.push(buildNonMemberConsortiumSponsorshipStatement(sponsorName, website, logoR2Key, level));
         report.nonMemberSponsorships.created += 1;
       }
 
@@ -1125,21 +561,7 @@ WHERE NOT EXISTS (
             report.nonMemberSponsorships.unmatchedEvents.push({ name: sponsorName, eventName, tier });
             continue;
           }
-          statements.push(`
-INSERT INTO events (id, slug, name, timezone, starts_at, ends_at, created_at, updated_at)
-VALUES (${sqlString(randomUUID())}, ${sqlString(alias.slug)}, ${sqlString(alias.name)}, ${sqlString(alias.timezone)}, ${toSqlNullableText(alias.startsAt)}, ${toSqlNullableText(alias.endsAt)}, datetime('now'), datetime('now'))
-ON CONFLICT(slug) DO NOTHING;
-`);
-          statements.push(`
-INSERT INTO sponsorships (id, sponsor_type, non_member_name, non_member_website, non_member_logo_r2_key, event_id, tier, pipeline_stage, created_at, updated_at)
-SELECT ${sqlString(randomUUID())}, 'event', ${sqlString(sponsorName)}, ${toSqlNullableText(website)}, ${toSqlNullableText(logoR2Key)}, e.id, ${sqlString(tier)}, 'active', datetime('now'), datetime('now')
-FROM events e
-WHERE e.slug = ${sqlString(alias.slug)}
-  AND NOT EXISTS (
-    SELECT 1 FROM sponsorships s
-    WHERE s.sponsor_type = 'event' AND s.organization_id IS NULL AND s.non_member_name = ${sqlString(sponsorName)} AND s.event_id = e.id
-  );
-`);
+          statements.push(...buildNonMemberEventSponsorshipStatements(sponsorName, website, logoR2Key, alias, tier));
           report.nonMemberSponsorships.created += 1;
         }
       }
@@ -1149,147 +571,10 @@ WHERE e.slug = ${sqlString(alias.slug)}
   return { sql: statements.join("\n"), report, logoUploads };
 }
 
-// ── Report rendering ─────────────────────────────────────────────────────
-
-function formatRep(rep) {
-  const bits = [];
-  if (rep.role) bits.push(rep.role);
-  if (rep.linkedin) bits.push(rep.linkedin);
-  return bits.length ? `${rep.name} (${bits.join(", ")})` : rep.name;
-}
-
-function renderMarkdownReport(report) {
-  const lines = [];
-  lines.push(`# Member migration report (${report.generatedAt})`);
-  lines.push("");
-  lines.push(`- YAML files processed: ${report.totals.yamlFiles}`);
-  lines.push(`- Organizations/individuals with at least one domain-matched email: ${report.totals.matchedOrgs}`);
-  lines.push(
-    `- Org-less individuals created with a placeholder email (needs a real email attached via Users → Edit): ${report.totals.sentinelIndividuals}`,
-  );
-  lines.push(
-    `- Unmatched org-tied representatives (no domain match at all — needs the Interim Admin Tool): ${report.totals.unmatched.length}`,
-  );
-  lines.push(`- Bare roster users (no attributable YAML org): ${report.bareRosterUsers.length}`);
-  lines.push(
-    `- WG-only roster users (subscribed to a WG list but absent from pkic.csv): ${report.wgOnlyRosterUsers.length}`,
-  );
-  lines.push(`- Missing membership category (\`memberType\` blank in YAML): ${report.totals.missingCategory.length}`);
-  lines.push(
-    `- Ambiguous representative/email pairing (needs staff confirmation): ${report.totals.ambiguousPairing.length}`,
-  );
-  lines.push(
-    `- Event sponsorships with an unrecognized event name (needs an EVENT_NAME_ALIASES entry): ${report.unmatchedEventSponsorships.length}`,
-  );
-  lines.push(
-    `- Non-member sponsorships created from data/sponsors.yaml (consortium + event rows): ${report.nonMemberSponsorships.created}`,
-  );
-  lines.push("");
-  lines.push("## Working group roster membership counts");
-  for (const [slug, count] of Object.entries(report.workingGroupCounts)) {
-    lines.push(`- ${slug}: ${count}`);
-  }
-  lines.push("");
-  lines.push("## Unmatched — finish via `POST /api/v1/admin/members` (Interim Admin Tool)");
-  for (const item of report.totals.unmatched) {
-    lines.push(
-      `- **${item.name}** (\`${item.file}\`, category ${item.memberType || "unknown"}) — ${item.reason}. Representatives: ${item.representatives.map(formatRep).join("; ") || "(none listed)"}${item.workingGroupsHint?.length ? `. WG hint: ${item.workingGroupsHint.join(", ")}` : ""}`,
-    );
-  }
-  lines.push("");
-  lines.push("## Org-less individuals created with a placeholder email — attach a real email via Users → Edit");
-  for (const item of report.needsEmailIndividuals) {
-    lines.push(
-      `- **${item.name}** (\`${item.file}\`, category ${item.memberType || "unknown"}) — created as \`${item.sentinelEmail}\`. ${item.reason}${item.workingGroupsHint?.length ? `. WG hint: ${item.workingGroupsHint.join(", ")}` : ""}`,
-    );
-  }
-  lines.push("");
-  lines.push("## Missing membership category — staff must set before launch");
-  for (const item of report.totals.missingCategory) {
-    lines.push(`- ${item.name} (\`${item.file}\`)`);
-  }
-  lines.push("");
-  lines.push("## Ambiguous pairing — confirm representative ↔ email assignment");
-  for (const item of report.totals.ambiguousPairing) {
-    if (item.note) {
-      lines.push(`- **${item.name}** (\`${item.file}\`) — ${item.note}: ${item.unpaired.map(formatRep).join("; ")}`);
-    } else {
-      lines.push(
-        `- **${item.name}** (\`${item.file}\`) — representatives [${item.representatives.join(", ")}] paired best-effort (listed order) against emails [${item.candidateEmails.join(", ")}]`,
-      );
-    }
-  }
-  lines.push("");
-  lines.push(
-    "## Bare roster users (no YAML organization match) — working groups shown are where staff can look to reconcile identity manually",
-  );
-  for (const { email, workingGroups } of report.bareRosterUsers) {
-    lines.push(`- ${email}${workingGroups.length ? ` — WGs: ${workingGroups.join(", ")}` : " — no WG membership"}`);
-  }
-  lines.push("");
-  lines.push("## WG-only roster users (not in pkic.csv at all)");
-  for (const { email, workingGroups } of report.wgOnlyRosterUsers) {
-    lines.push(`- ${email}${workingGroups.length ? ` — WGs: ${workingGroups.join(", ")}` : ""}`);
-  }
-  lines.push("");
-  lines.push("## Event sponsorships with an unrecognized event name — add an EVENT_NAME_ALIASES entry in the script");
-  for (const item of report.unmatchedEventSponsorships) {
-    lines.push(`- **${item.name}** (\`${item.file}\`) — \`${item.eventName}\` (tier ${item.tier})`);
-  }
-  lines.push("");
-  lines.push(
-    "## Non-member event sponsorships with an unrecognized event name (data/sponsors.yaml) — add an EVENT_NAME_ALIASES entry",
-  );
-  for (const item of report.nonMemberSponsorships.unmatchedEvents) {
-    lines.push(`- **${item.name}** — \`${item.eventName}\` (tier ${item.tier})`);
-  }
-  return lines.join("\n");
-}
-
 // ── Execution ────────────────────────────────────────────────────────────
 
-function runWranglerD1(cli, sql) {
-  const envConfig = ENVS[cli.env];
-  const tmpPath = path.join(os.tmpdir(), `pkic-migrate-members-${Date.now()}.sql`);
-  fs.writeFileSync(tmpPath, sql, "utf8");
-  const args = [
-    "wrangler",
-    "d1",
-    "execute",
-    cli.database,
-    "--env",
-    envConfig.wranglerEnv,
-    envConfig.wranglerFlag,
-    ...(cli.persistTo ? [`--persist-to=${cli.persistTo}`] : []),
-    "--file",
-    tmpPath,
-  ];
-  try {
-    execFileSync("pnpm", ["exec", ...args], { cwd: ROOT, stdio: "inherit" });
-  } finally {
-    fs.unlinkSync(tmpPath);
-  }
-}
-
-function uploadLogosToR2(cli, logoUploads) {
-  const envConfig = ENVS[cli.env];
-  for (const { filePath, r2Key } of logoUploads) {
-    const args = [
-      "wrangler",
-      "r2",
-      "object",
-      "put",
-      `${cli.logoBucket}/${r2Key}`,
-      "--file",
-      filePath,
-      ...(envConfig.wranglerFlag === "--local" ? ["--local"] : []),
-    ];
-    execFileSync("pnpm", ["exec", ...args], { cwd: ROOT, stdio: "inherit" });
-  }
-}
-
 function main() {
-  const cli = parseArgs(process.argv.slice(2));
+  const cli = parseArgs(process.argv.slice(2), ROOT);
   const { sql, report, logoUploads } = buildMigration({
     uploadLogos: cli.uploadLogos,
   });
@@ -1315,16 +600,16 @@ function main() {
     return;
   }
 
-  runWranglerD1(cli, sql);
+  runWranglerD1(ROOT, ENVS[cli.env], cli, sql);
 
   if (cli.uploadLogos && logoUploads.length > 0) {
     console.log(`Uploading ${logoUploads.length} organization logos to R2 bucket ${cli.logoBucket}...`);
-    uploadLogosToR2(cli, logoUploads);
+    uploadLogosToR2(ROOT, ENVS[cli.env], cli, logoUploads);
   }
 }
 
 // Guarded so this module can be imported (e.g. by the fresh-D1 smoke test
-// in tests/migrate-members-importer.test.ts) without executing the CLI.
+// in tests/tools/migrate-members-importer.test.ts) without executing the CLI.
 if (import.meta.url === `file://${process.argv[1]}`) {
   main();
 }
