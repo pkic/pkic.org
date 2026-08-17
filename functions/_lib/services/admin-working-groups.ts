@@ -206,12 +206,13 @@ export async function getAdminWorkingGroupDetail(
     `SELECT u.id AS user_id, u.first_name, u.last_name, u.email, o.name AS org_name, mca.category_code, wgm.joined_at
      FROM working_group_members wgm
      JOIN users u ON u.id = wgm.user_id
-     -- A WG member can represent more than one organization at once
-     -- (migration 0037) — join to a single deterministic representative
-     -- row (earliest joined_at) instead of fanning out one result row per
-     -- represented organization.
+     -- Prefer the membership this WG seat was actually recorded against
+     -- (wgm.member_id, PR #1 review blocker 2) when the row has one. Older
+     -- rows (or ambiguous staff-driven adds with no single "acting as"
+     -- context, see addMemberToWorkingGroup) fall back to the deterministic
+     -- representative pick, same as before this column existed.
 ${deterministicRepresentativeJoinSql("wgm.user_id")}
-     LEFT JOIN members m ON m.id = rep.member_id
+     LEFT JOIN members m ON m.id = COALESCE(wgm.member_id, rep.member_id)
      LEFT JOIN members mi ON mi.user_id = wgm.user_id AND mi.status = 'active'
      LEFT JOIN organizations o ON o.id = m.organization_id
      LEFT JOIN member_category_assignments mca ON mca.member_id = COALESCE(m.id, mi.id)
@@ -388,10 +389,15 @@ export async function addMemberToWorkingGroup(db: DatabaseLike, wgId: string, ta
   // deterministic multi-membership resolver the member-session/portal
   // switcher uses), not just one.
   const eligibleMember = await findEligibleMemberById(db, targetUserId);
-  const membershipCategories = eligibleMember?.activeMemberships.map((m) => m.membershipCategory) ?? [];
+  const activeMemberships = eligibleMember?.activeMemberships ?? [];
+  const membershipCategories = activeMemberships.map((m) => m.membershipCategory);
   assertCaConstraint(wg, membershipCategories);
 
-  await addWorkingGroupMember(db, wg, targetUserId);
+  // Only record member_id when it's unambiguous — a target with more than
+  // one active membership has no single "acting as" context a staff-driven
+  // add can infer (see buildAddWorkingGroupMemberStatements's own note).
+  const memberId = activeMemberships.length === 1 ? activeMemberships[0].memberId : null;
+  await addWorkingGroupMember(db, wg, targetUserId, memberId);
 }
 
 export async function removeMemberFromWorkingGroup(

@@ -57,6 +57,7 @@ export function prepareAuditLog(
   entityType: string,
   entityId: string | null,
   details: unknown,
+  createdAt = nowIso(),
 ): StatementLike {
   return db
     .prepare(
@@ -72,6 +73,6 @@ export function prepareAuditLog(
       entityType,
       entityId,
       stringifyJson(normalizeAuditDetails(details)),
-      nowIso(),
+      createdAt,
     );
 }

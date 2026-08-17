@@ -195,6 +195,56 @@ describe("admin working groups", () => {
     expect(response.status).toBe(201);
   });
 
+  it("records member_id on the working_group_members row when the target has exactly one active membership (PR #1 review blocker 2)", async () => {
+    const wgId = await insertWorkingGroup("Test PQC 2", "test-pqc-2");
+    const userId = await insertUser("single-membership@example.test");
+    await insertMember(userId, "F");
+
+    const response = await call(adminToken, `/api/v1/admin/working-groups/${wgId}/members`, {
+      method: "POST",
+      body: JSON.stringify({ userId }),
+    });
+    expect(response.status).toBe(201);
+
+    const [rep] = await queryAll<{ member_id: string }>(
+      env.DB,
+      "SELECT member_id FROM organization_representatives WHERE user_id = ?",
+      userId,
+    );
+    const [wgm] = await queryAll<{ member_id: string | null }>(
+      env.DB,
+      "SELECT member_id FROM working_group_members WHERE working_group_id = ? AND user_id = ?",
+      wgId,
+      userId,
+    );
+    expect(wgm!.member_id).toBe(rep!.member_id);
+  });
+
+  it("leaves member_id null on the working_group_members row when the target holds more than one active membership (no unambiguous context)", async () => {
+    const wgId = await insertWorkingGroup("Test PQC 3", "test-pqc-3");
+    const userId = await insertUser("multi-membership@example.test");
+    const orgIdA = await insertOrganization(env.DB, "Multi-Org A");
+    const memberIdA = await seedOrganizationAggregate(env.DB, orgIdA, "F");
+    await addRepresentative(env.DB, memberIdA, userId);
+    const orgIdB = await insertOrganization(env.DB, "Multi-Org B");
+    const memberIdB = await seedOrganizationAggregate(env.DB, orgIdB, "F");
+    await addRepresentative(env.DB, memberIdB, userId);
+
+    const response = await call(adminToken, `/api/v1/admin/working-groups/${wgId}/members`, {
+      method: "POST",
+      body: JSON.stringify({ userId }),
+    });
+    expect(response.status).toBe(201);
+
+    const [wgm] = await queryAll<{ member_id: string | null }>(
+      env.DB,
+      "SELECT member_id FROM working_group_members WHERE working_group_id = ? AND user_id = ?",
+      wgId,
+      userId,
+    );
+    expect(wgm!.member_id).toBeNull();
+  });
+
   it("deterministically allows a person representing both a category-A and a non-A organization (not an arbitrary pick)", async () => {
     // PR #1 review, phase1-2-review-20260817.md blocker 2: the CA
     // eligibility check previously used an unordered scalar subquery, so a

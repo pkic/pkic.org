@@ -380,7 +380,7 @@ export async function joinMyWorkingGroup(db: DatabaseLike, member: AuthMember, w
   // taken through a specific, explicitly-chosen membership context, unlike
   // the admin add-member path below.
   assertCaConstraint(wg, [member.membershipCategory]);
-  await addWorkingGroupMember(db, wg, member.userId);
+  await addWorkingGroupMember(db, wg, member.userId, member.memberId);
 }
 
 export async function leaveMyWorkingGroup(db: DatabaseLike, member: AuthMember, wgIdOrSlug: string): Promise<void> {

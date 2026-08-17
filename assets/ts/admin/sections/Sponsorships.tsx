@@ -12,9 +12,8 @@ import { ApiDataTable, type ApiTableActions, type Column } from "../../component
 import { api } from "../api";
 import { toast, fmt } from "../ui";
 import { SPONSORSHIP_PIPELINE_STAGES } from "../types";
+import { SPONSOR_TYPES } from "../../../shared/schemas/admin-sponsorships";
 import type { Sponsorship, SponsorshipCompany, SponsorshipEvent, SponsorshipPipelineStage } from "../types";
-
-const SPONSOR_TYPES = ["consortium", "event"] as const;
 
 function stageBadgeClass(stage: SponsorshipPipelineStage): string {
   if (stage === "active") return "text-bg-success";

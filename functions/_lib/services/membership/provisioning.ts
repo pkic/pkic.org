@@ -176,7 +176,7 @@ async function buildProvisionIndividualMemberships(
     for (const slug of input.workingGroupSlugs) {
       const wg = await getWorkingGroupBySlugOrId(db, slug);
       if (!wg) continue;
-      statements.push(...(await buildAddWorkingGroupMemberStatements(db, wg, user.id)));
+      statements.push(...(await buildAddWorkingGroupMemberStatements(db, wg, user.id, memberId)));
     }
 
     representatives.push({
@@ -364,7 +364,7 @@ async function buildProvisionOrganizationTiedMemberships(
     for (const slug of input.workingGroupSlugs) {
       const wg = await getWorkingGroupBySlugOrId(db, slug);
       if (!wg) continue;
-      statements.push(...(await buildAddWorkingGroupMemberStatements(db, wg, user.id)));
+      statements.push(...(await buildAddWorkingGroupMemberStatements(db, wg, user.id, aggregateId)));
     }
 
     pending.push({ rep, user, representativeId });

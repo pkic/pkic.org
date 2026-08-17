@@ -68,6 +68,8 @@ export async function buildAddWorkingGroupMemberStatements(
   db: DatabaseLike,
   wg: WorkingGroupRow,
   targetUserId: string,
+  /** The membership this WG seat is held on behalf of, when the caller has an unambiguous one to record (PR #1 review blocker 2). Null when the caller has no single "acting as" context (e.g. a staff add for a target with more than one active membership). */
+  memberId: string | null = null,
 ): Promise<StatementLike[]> {
   const existing = await first<{ id: string }>(
     db,
@@ -79,9 +81,9 @@ export async function buildAddWorkingGroupMemberStatements(
   const statements: StatementLike[] = [
     db
       .prepare(
-        `INSERT OR IGNORE INTO working_group_members (id, working_group_id, user_id, joined_at, left_at) VALUES (?, ?, ?, ?, NULL)`,
+        `INSERT OR IGNORE INTO working_group_members (id, working_group_id, user_id, member_id, joined_at, left_at) VALUES (?, ?, ?, ?, ?, NULL)`,
       )
-      .bind(uuid(), wg.id, targetUserId, nowIso()),
+      .bind(uuid(), wg.id, targetUserId, memberId, nowIso()),
   ];
 
   if (wg.mailing_list_email) {
@@ -102,8 +104,9 @@ export async function addWorkingGroupMember(
   db: DatabaseLike,
   wg: WorkingGroupRow,
   targetUserId: string,
+  memberId: string | null = null,
 ): Promise<void> {
-  const statements = await buildAddWorkingGroupMemberStatements(db, wg, targetUserId);
+  const statements = await buildAddWorkingGroupMemberStatements(db, wg, targetUserId, memberId);
   if (statements.length > 0) {
     await db.batch(statements);
   }

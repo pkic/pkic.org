@@ -11,29 +11,33 @@
  *
  * Atomicity: provisioning (organization/aggregate/representative/role
  * statements from provisioning.ts's build-only entry point), the
- * application's stage transition + event insert, and every Google Groups
- * sync-queue enqueue all commit in exactly one `db.batch()` at the end of
- * this function — not three-plus separate commits, so a failure anywhere
- * in the sequence can never leave a member/organization provisioned for
- * an application that's still stuck in `ec_review` (PR #1 review
- * blocker 4).
+ * application's stage transition + event insert, every Google Groups
+ * sync-queue enqueue, the member-account-claim/application-approved-welcome/
+ * org-contact-assigned email-outbox inserts, and the audit-log insert all
+ * commit in exactly one `db.batch()` at the end of this function — not
+ * three-plus separate commits, so a failure anywhere in the sequence can
+ * never leave a member/organization provisioned (or a claim email queued)
+ * for an application that's still stuck in `ec_review`, and can never
+ * leave membership state committed with no durable record either at all
+ * (PR #1 review phase1-2-review-20260817.md blocker 4: "durable external
+ * effects should enter the outbox in that same boundary").
  *
- * Does not call queueEmail directly (no access to env/executionCtx here —
- * same DB-only/route-owns-email split every other service in this codebase
- * uses, see queries.ts's own header note). Returns everything the caller
- * needs to queue member-account-claim, application-approved-welcome, and
- * org-contact-assigned — those email-outbox writes and the audit-log
- * write happen in the HTTP route after this commits, deliberately outside
- * this atomic boundary: they're secondary effects with their own
- * idempotent-retry machinery (the outbox), not membership state that
- * needs all-or-nothing commit semantics.
+ * `loginUrl` is a plain string, not `env`/`config` — building the email
+ * *content* (subject/body data) needs no D1 or Worker binding access, only
+ * the base URL, which callers already resolve from their own `env` before
+ * calling in (see the two callers: admin/applications/[id]/approve.ts and
+ * scheduled-jobs.ts's runEcWindowAutoApprove). Actually *sending* still
+ * happens after this returns, via each caller's own
+ * `c.executionCtx.waitUntil(processOutboxByIdBackground(...))` /
+ * `processOutboxByIdBackground(...)` over the returned `outboxIds` — that
+ * part needs `env`/`executionCtx` this module still doesn't have, and
+ * doesn't need to: the outbox's own idempotent-retry machinery covers
+ * delivery, only the *queueing* needed to be atomic with membership state.
  *
- * ICS calendar attachments (welcome email) are resolved and
- * attached by the caller (functions/api/v1/admin/applications/[id]/approve.ts,
- * scheduled-jobs.ts's runEcWindowAutoApprove), not here — see
- * meeting-calendar.ts's resolveApprovalIcsAttachments, called with this
- * function's own workingGroupSlugs result. Same DB-only/route-owns-email
- * split as the rest of this file.
+ * The audit-log insert is folded in only when `actorUserId` is set (the
+ * interactive admin route always sets it; the unattended EC-window
+ * auto-approve job passes `null` and intentionally writes no audit entry,
+ * unchanged from its prior behavior).
  */
 import { first } from "../../../db/queries";
 import { nowIso } from "../../../utils/time";
@@ -44,10 +48,16 @@ import { INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "./create";
 import { buildProvisionOrganizationMembership } from "../provisioning";
 import { buildEnqueueGoogleGroupsSyncStatement } from "../../google-groups";
 import { resolveAutoSyncListEmails } from "../../mailing-lists";
+import { prepareQueueEmailStatement } from "../../../email/outbox";
+import { prepareAuditLog } from "../../audit";
+import { resolveApprovalIcsAttachments } from "../../meeting-calendar";
+import {
+  buildMemberAccountClaimEmail,
+  buildApplicationApprovedWelcomeEmail,
+  buildOrgContactAssignedEmail,
+} from "../notifications";
+import { CA_WORKING_GROUP_SLUG, CA_ONLY_CATEGORY } from "../../working-groups";
 import type { DatabaseLike, StatementLike } from "../../../types";
-
-const CA_WORKING_GROUP_SLUG = "ca";
-const CA_ONLY_CATEGORY = "A";
 
 export interface ApproveApplicationResult {
   applicationId: string;
@@ -61,6 +71,8 @@ export interface ApproveApplicationResult {
   workingGroupSlugs: string[];
   workingGroupNames: string[];
   assignedContactRole: "primary" | "secondary" | null;
+  /** IDs of email_outbox rows queued in the same batch as membership provisioning — pass each to `processOutboxByIdBackground` after this commits. */
+  outboxIds: string[];
 }
 
 function applicationWorkingGroupSlugs(answers: Record<string, unknown>): string[] {
@@ -71,7 +83,14 @@ function applicationWorkingGroupSlugs(answers: Record<string, unknown>): string[
 
 export async function approveApplication(
   db: DatabaseLike,
-  params: { applicationId: string; actorUserId: string | null; eventNote?: string },
+  params: {
+    applicationId: string;
+    actorUserId: string | null;
+    eventNote?: string;
+    loginUrl: string;
+    /** Route caller sends this once a contact role is assigned; the unattended auto-approve job never did, unchanged. */
+    sendOrgContactAssignedEmail?: boolean;
+  },
 ): Promise<ApproveApplicationResult> {
   const application = await getMemberApplicationById(db, params.applicationId);
   if (!application) {
@@ -184,6 +203,64 @@ export async function approveApplication(
     }
   }
 
+  // Every email below is queued (not sent — sending needs env/executionCtx,
+  // which callers still own, see header comment), so the insert can commit
+  // in the same batch as membership state above. All reads it depends on
+  // (icsAttachments) already happened.
+  const icsAttachments = await resolveApprovalIcsAttachments(db, workingGroupSlugs);
+  const outboxIds: string[] = [];
+
+  const claimEmail = prepareQueueEmailStatement(
+    db,
+    buildMemberAccountClaimEmail({ recipientEmail: member.email, memberName: member.name, loginUrl: params.loginUrl }),
+    now,
+  );
+  statements.push(claimEmail.statement);
+  outboxIds.push(claimEmail.id);
+
+  const welcomeEmail = prepareQueueEmailStatement(
+    db,
+    buildApplicationApprovedWelcomeEmail({
+      recipientEmail: member.email,
+      applicantName: member.name,
+      loginUrl: params.loginUrl,
+      workingGroupNames,
+      icsAttachments,
+    }),
+    now,
+  );
+  statements.push(welcomeEmail.statement);
+  outboxIds.push(welcomeEmail.id);
+
+  if (params.sendOrgContactAssignedEmail && member.assignedContactRole) {
+    const contactEmail = prepareQueueEmailStatement(
+      db,
+      buildOrgContactAssignedEmail({
+        recipientEmail: member.email,
+        memberName: member.name,
+        contactRole: member.assignedContactRole,
+      }),
+      now,
+    );
+    statements.push(contactEmail.statement);
+    outboxIds.push(contactEmail.id);
+  }
+
+  if (params.actorUserId) {
+    statements.push(
+      prepareAuditLog(
+        db,
+        "admin",
+        params.actorUserId,
+        "application_approved",
+        "member_application",
+        application.id,
+        { memberId: member.membershipId, organizationId },
+        now,
+      ),
+    );
+  }
+
   await db.batch(statements);
 
   return {
@@ -198,5 +275,6 @@ export async function approveApplication(
     workingGroupSlugs,
     workingGroupNames,
     assignedContactRole: member.assignedContactRole,
+    outboxIds,
   };
 }

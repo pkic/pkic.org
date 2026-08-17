@@ -174,14 +174,27 @@ CREATE TABLE working_group_members (
   id               TEXT NOT NULL PRIMARY KEY,
   working_group_id TEXT NOT NULL,
   user_id          TEXT NOT NULL,
+  -- Which membership (individual or organization-tied aggregate, `members.id`
+  -- from migration 0037 below) this WG seat is held on behalf of. Nullable:
+  -- a staff-driven add for a target holding more than one active membership
+  -- has no unambiguous "acting as" context to record (PR #1 review,
+  -- phase1-2-review-20260817.md blocker 2 — "Working-group participation...
+  -- need an explicit member_id when the person acts on behalf of a
+  -- particular member"). Forward references `members`, created by the next
+  -- migration in this same unreleased range — SQLite does not validate FK
+  -- target existence at CREATE TABLE time, only at DML time, and `members`
+  -- exists by the time any row here is ever written.
+  member_id        TEXT,
   joined_at        TEXT NOT NULL,
   left_at          TEXT,
   FOREIGN KEY(working_group_id) REFERENCES working_groups(id),
-  FOREIGN KEY(user_id) REFERENCES users(id)
+  FOREIGN KEY(user_id) REFERENCES users(id),
+  FOREIGN KEY(member_id) REFERENCES members(id)
 );
 
 CREATE INDEX idx_wg_members_wg ON working_group_members(working_group_id, left_at);
 CREATE INDEX idx_wg_members_user ON working_group_members(user_id);
+CREATE INDEX idx_wg_members_member ON working_group_members(member_id);
 -- At most one active (left_at IS NULL) membership per (working_group, user);
 -- partial so a user can rejoin after leaving.
 CREATE UNIQUE INDEX idx_wg_members_active_unique ON working_group_members(working_group_id, user_id) WHERE left_at IS NULL;

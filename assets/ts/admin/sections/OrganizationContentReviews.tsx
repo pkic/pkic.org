@@ -10,8 +10,7 @@ import { ErrorAlert } from "../../components/ErrorAlert";
 import { api } from "../api";
 import { toast, fmt } from "../ui";
 import type { OrganizationContentReviewDetail, OrganizationContentReviewSummary } from "../types";
-
-const STATUS_TABS = ["pending", "approved", "rejected", "withdrawn"] as const;
+import { CONTENT_REVIEW_STATUSES as STATUS_TABS } from "../../../shared/schemas/admin-organizations";
 
 function fieldLabel(field: string): string {
   const labels: Record<string, string> = {

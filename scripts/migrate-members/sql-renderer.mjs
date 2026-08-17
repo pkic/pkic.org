@@ -383,14 +383,26 @@ WHERE e.slug = ${sqlString(alias.slug)}
 
 export function buildWorkingGroupMemberStatement(wgSlug, email) {
   const wgIdExpr = `(SELECT id FROM working_groups WHERE slug = ${sqlString(wgSlug)})`;
+  const userIdExpr = `(SELECT id FROM users WHERE normalized_email = ${sqlString(email)})`;
+  // Best-effort member_id (PR #1 review blocker 2): the same deterministic
+  // representative-then-individual resolution used at read time
+  // (representative-lookup.ts's deterministicRepresentativeJoinSql),
+  // computed once here at import time instead. Many WG-roster emails have
+  // no resolvable membership at all (bare/unattributed roster rows, see
+  // roster-users.mjs's own header note) — this correctly yields NULL for
+  // those, same as a staff-driven admin add with no unambiguous context.
+  const memberIdExpr = `COALESCE(
+    (SELECT r2.member_id FROM organization_representatives r2 WHERE r2.user_id = ${userIdExpr} AND r2.left_at IS NULL ORDER BY r2.joined_at ASC LIMIT 1),
+    (SELECT id FROM members WHERE user_id = ${userIdExpr})
+  )`;
   return `
-INSERT INTO working_group_members (id, working_group_id, user_id, joined_at, left_at)
-SELECT ${sqlString(randomUUID())}, ${wgIdExpr}, (SELECT id FROM users WHERE normalized_email = ${sqlString(email)}), datetime('now'), NULL
-WHERE (SELECT id FROM users WHERE normalized_email = ${sqlString(email)}) IS NOT NULL
+INSERT INTO working_group_members (id, working_group_id, user_id, member_id, joined_at, left_at)
+SELECT ${sqlString(randomUUID())}, ${wgIdExpr}, ${userIdExpr}, ${memberIdExpr}, datetime('now'), NULL
+WHERE ${userIdExpr} IS NOT NULL
   AND NOT EXISTS (
     SELECT 1 FROM working_group_members wgm
     WHERE wgm.working_group_id = ${wgIdExpr}
-      AND wgm.user_id = (SELECT id FROM users WHERE normalized_email = ${sqlString(email)})
+      AND wgm.user_id = ${userIdExpr}
       AND wgm.left_at IS NULL
   );
 `;

@@ -6,6 +6,7 @@
  */
 import { z } from "zod";
 import { paginationQuerySchema, paginatedResponseSchema, sortColumnSchema } from "./pagination";
+import { VOTING_CATEGORY_LETTERS } from "./membership-categories";
 
 export const VOTE_TYPES = ["election", "motion", "consultation"] as const;
 export const voteTypeSchema = z.enum(VOTE_TYPES);
@@ -35,8 +36,6 @@ export const VOTE_PROPOSAL_STATUSES = [
 export const voteProposalStatusSchema = z.enum(VOTE_PROPOSAL_STATUSES);
 
 export const BALLOT_CHOICES = ["in_favor", "opposed", "abstain"] as const;
-
-const MEMBERSHIP_CATEGORY_LETTERS = ["A", "B", "C", "D", "E", "F", "G"] as const;
 
 export const voteIdParamsSchema = z.object({ id: z.string() });
 export const voteSlugParamsSchema = z.object({ slug: z.string() });
@@ -227,7 +226,7 @@ export const submitProposalSchema = z.object({
   voteType: voteTypeSchema,
   scopeType: voteScopeTypeSchema,
   scopeId: z.string().nullable().optional(),
-  eligibleCategories: z.array(z.enum(MEMBERSHIP_CATEGORY_LETTERS)).nullable().optional(),
+  eligibleCategories: z.array(z.enum(VOTING_CATEGORY_LETTERS)).nullable().optional(),
   proposedOpensAt: z.iso.datetime({ offset: true }).nullable().optional(),
   proposedClosesAt: z.iso.datetime({ offset: true }).nullable().optional(),
 });
@@ -373,7 +372,7 @@ export const adminVoteCreateSchema = z.object({
   scopeType: voteScopeTypeSchema,
   scopeId: z.string().nullable().optional(),
   thresholdType: thresholdTypeSchema,
-  eligibleCategories: z.array(z.enum(MEMBERSHIP_CATEGORY_LETTERS)).nullable().optional(),
+  eligibleCategories: z.array(z.enum(VOTING_CATEGORY_LETTERS)).nullable().optional(),
   opensAt: z.iso.datetime({ offset: true }).optional(),
   closesAt: z.iso.datetime({ offset: true }),
   candidates: z.array(adminCandidateInputSchema).max(50).optional(),

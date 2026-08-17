@@ -179,14 +179,18 @@ describe("Post-approval onboarding", () => {
   it("adds the member to working_group_members for requested WGs and enqueues Google Groups sync", async () => {
     const { id } = await createEcReviewApplication();
     const response = await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
-    const body = (await response.json()) as { userId: string };
+    const body = (await response.json()) as { userId: string; memberId: string };
 
-    const wgRows = await queryAll(
+    const wgRows = await queryAll<{ member_id: string | null }>(
       env.DB,
-      "SELECT 1 FROM working_group_members wgm JOIN working_groups wg ON wg.id = wgm.working_group_id WHERE wgm.user_id = ? AND wg.slug = 'pqc'",
+      "SELECT wgm.member_id FROM working_group_members wgm JOIN working_groups wg ON wg.id = wgm.working_group_id WHERE wgm.user_id = ? AND wg.slug = 'pqc'",
       body.userId,
     );
     expect(wgRows).toHaveLength(1);
+    // PR #1 review blocker 2: provisioning always knows exactly which
+    // membership the WG join is on behalf of — not ambiguous the way a
+    // staff-driven add for an existing user with multiple orgs can be.
+    expect(wgRows[0]!.member_id).toBe(body.memberId);
 
     const queueRows = await queryAll<{ google_group_email: string; action: string }>(
       env.DB,
@@ -240,6 +244,59 @@ describe("Post-approval onboarding", () => {
     expect(claimEmails).toHaveLength(1);
     expect(welcomeEmails).toHaveLength(1);
     expect(contactEmails).toHaveLength(1);
+  });
+
+  it("writes the audit-log entry and queues the emails in the same commit as membership provisioning (PR #1 review blocker 4)", async () => {
+    const { id } = await createEcReviewApplication();
+    await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
+
+    const auditRows = await queryAll<{ actor_type: string; actor_id: string; entity_id: string; created_at: string }>(
+      env.DB,
+      "SELECT actor_type, actor_id, entity_id, created_at FROM audit_log WHERE action = 'application_approved' AND entity_id = ?",
+      id,
+    );
+    expect(auditRows).toHaveLength(1);
+    expect(auditRows[0]!.actor_type).toBe("admin");
+
+    // Same `now` timestamp is used to build the stage-transition, the
+    // email-outbox inserts, and the audit-log insert inside approve.ts's
+    // one `db.batch()` — proof they're one statement set, not three-plus
+    // separately timed writes.
+    const [{ stage_entered_at: applicationApprovedAt }] = await queryAll<{ stage_entered_at: string }>(
+      env.DB,
+      "SELECT stage_entered_at FROM member_applications WHERE id = ?",
+      id,
+    );
+    const [claimEmail] = await queryAll<{ created_at: string }>(
+      env.DB,
+      "SELECT created_at FROM email_outbox WHERE template_key = 'member-account-claim'",
+    );
+    expect(claimEmail!.created_at).toBe(applicationApprovedAt);
+    expect(auditRows[0]!.created_at).toBe(applicationApprovedAt);
+  });
+
+  it("does not write an audit-log entry for the unattended EC-window auto-approve path (no admin actor)", async () => {
+    const { id } = await createEcReviewApplication();
+    await env.DB.prepare(`UPDATE member_applications SET stage_entered_at = datetime('now', '-30 days') WHERE id = ?`)
+      .bind(id)
+      .run();
+
+    const { runEcWindowAutoApprove } = await import("../functions/_lib/services/membership/scheduled-jobs");
+    const result = await runEcWindowAutoApprove(env.DB, env as any);
+    expect(result.autoApproved).toBe(1);
+
+    const auditRows = await queryAll(
+      env.DB,
+      "SELECT id FROM audit_log WHERE action = 'application_approved' AND entity_id = ?",
+      id,
+    );
+    expect(auditRows).toHaveLength(0);
+
+    const claimEmails = await queryAll(
+      env.DB,
+      "SELECT id FROM email_outbox WHERE template_key = 'member-account-claim'",
+    );
+    expect(claimEmails).toHaveLength(1);
   });
 
   it("rejects approval when the application is not in ec_review", async () => {

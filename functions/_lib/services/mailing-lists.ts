@@ -18,9 +18,10 @@ import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { parseJsonSafe } from "../utils/json";
 import { AppError } from "../errors";
+import { MAILING_LIST_TYPES } from "../../../assets/shared/schemas/admin-mailing-lists";
 import type { DatabaseLike } from "../types";
 
-export const MAILING_LIST_TYPES = ["all_members", "consultation", "ec", "working_group", "custom"] as const;
+export { MAILING_LIST_TYPES };
 export type MailingListType = (typeof MAILING_LIST_TYPES)[number];
 
 interface MailingListRow {
