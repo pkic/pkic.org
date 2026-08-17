@@ -1,3 +1,8 @@
+import { SPONSORSHIP_PIPELINE_STAGES, type SponsorshipPipelineStage } from "../../shared/schemas/admin-sponsorships";
+
+export { SPONSORSHIP_PIPELINE_STAGES };
+export type { SponsorshipPipelineStage };
+
 export interface EventSummary {
   id: string;
   slug: string;
@@ -797,18 +802,6 @@ export interface MailingList {
   createdAt: string;
   updatedAt: string;
 }
-
-// Sponsorship sales pipeline
-export const SPONSORSHIP_PIPELINE_STAGES = [
-  "new_inquiry",
-  "contacted",
-  "proposal_sent",
-  "negotiating",
-  "payment_pending",
-  "active",
-  "lapsed",
-] as const;
-export type SponsorshipPipelineStage = (typeof SPONSORSHIP_PIPELINE_STAGES)[number];
 
 export interface Sponsorship {
   id: string;

@@ -25,6 +25,7 @@ export const SPONSORSHIP_PIPELINE_STAGES = [
   "lapsed",
 ] as const;
 export const sponsorshipPipelineStageSchema = z.enum(SPONSORSHIP_PIPELINE_STAGES);
+export type SponsorshipPipelineStage = (typeof SPONSORSHIP_PIPELINE_STAGES)[number];
 
 export const sponsorshipIdParamsSchema = z.object({ id: z.uuid() });
 

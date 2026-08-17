@@ -11,7 +11,10 @@
 import { uuid } from "../../../utils/ids";
 import { nowIso } from "../../../utils/time";
 import { AppError } from "../../../errors";
-import { ON_HOLD_SUBTYPES } from "../../../../../assets/shared/schemas/member-applications";
+import {
+  ON_HOLD_SUBTYPES,
+  APPLICATION_STAGE_TRANSITIONS,
+} from "../../../../../assets/shared/schemas/member-applications";
 import { getMemberApplicationById, type MemberApplicationRow } from "./queries";
 import type { ApplicationStage } from "./create";
 import type { DatabaseLike } from "../../../types";
@@ -20,16 +23,7 @@ export { ON_HOLD_SUBTYPES };
 export type OnHoldSubtype = (typeof ON_HOLD_SUBTYPES)[number];
 const ON_HOLD_SUBTYPE_SET = new Set<string>(ON_HOLD_SUBTYPES);
 
-const ALLOWED_STAGE_TRANSITIONS: Record<ApplicationStage, ApplicationStage[]> = {
-  pending: ["in_review", "withdrawn"],
-  in_review: ["on_hold", "in_consultation", "declined", "withdrawn"],
-  on_hold: ["in_review", "withdrawn"],
-  in_consultation: ["ec_review", "withdrawn"],
-  ec_review: ["declined", "withdrawn"],
-  approved: [],
-  declined: [],
-  withdrawn: [],
-};
+const ALLOWED_STAGE_TRANSITIONS: Record<ApplicationStage, ApplicationStage[]> = APPLICATION_STAGE_TRANSITIONS;
 
 export const ON_HOLD_SUBTYPE_EMAIL_TEMPLATES: Record<OnHoldSubtype, string> = {
   request_authority: "application-hold-authority",

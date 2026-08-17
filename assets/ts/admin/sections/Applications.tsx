@@ -13,26 +13,10 @@ import { Badge } from "../../components/Badge";
 import { api } from "../api";
 import { toast, fmt } from "../ui";
 import { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../../shared/schemas/admin-members";
+import { ON_HOLD_SUBTYPES, APPLICATION_STAGE_TRANSITIONS } from "../../../shared/schemas/member-applications";
 import type { AdminApplicationDetail, AdminApplicationSummary } from "../types";
 
-const STAGE_TRANSITIONS: Record<string, string[]> = {
-  pending: ["in_review", "withdrawn"],
-  in_review: ["on_hold", "in_consultation", "declined", "withdrawn"],
-  on_hold: ["in_review", "withdrawn"],
-  in_consultation: ["ec_review", "withdrawn"],
-  ec_review: ["declined", "withdrawn"],
-  approved: [],
-  declined: [],
-  withdrawn: [],
-};
-
-const ON_HOLD_SUBTYPES = [
-  "request_authority",
-  "request_org_email",
-  "request_pki_experience",
-  "request_org_application",
-  "request_information",
-];
+const STAGE_TRANSITIONS: Record<string, string[]> = APPLICATION_STAGE_TRANSITIONS;
 
 // Friendly labels for the working_groups answer (array of slugs) — mirrors
 // the options seeded in migrations/0034_applications_sponsorships_working_groups.sql.
@@ -92,7 +76,7 @@ function ApplicationDetailView({ applicationId, onBack }: { applicationId: strin
   const [detail, setDetail] = useState<AdminApplicationDetail | null>(null);
   const [transitioning, setTransitioning] = useState(false);
   const [toStage, setToStage] = useState("");
-  const [onHoldSubtype, setOnHoldSubtype] = useState(ON_HOLD_SUBTYPES[0]);
+  const [onHoldSubtype, setOnHoldSubtype] = useState<string>(ON_HOLD_SUBTYPES[0]);
   const [transitionNote, setTransitionNote] = useState("");
   const [commSubject, setCommSubject] = useState("");
   const [commBody, setCommBody] = useState("");

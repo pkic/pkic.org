@@ -30,6 +30,30 @@ export const ON_HOLD_SUBTYPES = [
 ] as const;
 export const onHoldSubtypeSchema = z.enum(ON_HOLD_SUBTYPES);
 
+/**
+ * Canonical application stage-transition graph — the single source of
+ * truth for both the backend enforcement in
+ * functions/_lib/services/membership/applications/transition.ts
+ * (isValidStageTransition) and the frontend Applications.tsx admin screen,
+ * which previously hand-declared an independent copy of this exact object
+ * (PR #1 review, phase1-2-review-20260817.md blocker 9). `approved` has no
+ * listed destinations here on purpose — reaching it requires the full
+ * onboarding orchestration in approveApplication(), not a bare transition.
+ */
+export const APPLICATION_STAGE_TRANSITIONS: Record<
+  (typeof APPLICATION_STAGES)[number],
+  (typeof APPLICATION_STAGES)[number][]
+> = {
+  pending: ["in_review", "withdrawn"],
+  in_review: ["on_hold", "in_consultation", "declined", "withdrawn"],
+  on_hold: ["in_review", "withdrawn"],
+  in_consultation: ["ec_review", "withdrawn"],
+  ec_review: ["declined", "withdrawn"],
+  approved: [],
+  declined: [],
+  withdrawn: [],
+};
+
 export const memberApplicationCreateSchema = z
   .object({
     applicantEmail: normalizedEmailSchema,
