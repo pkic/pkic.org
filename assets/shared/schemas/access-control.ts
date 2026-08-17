@@ -4,7 +4,7 @@
  */
 import { z } from "zod";
 
-const contextTypeSchema = z.enum(["event", "working_group"]);
+const contextTypeSchema = z.enum(["event", "working_group", "organization"]);
 
 function trimmedString(min: number, max: number): z.ZodString {
   return z.string().trim().min(min).max(max);

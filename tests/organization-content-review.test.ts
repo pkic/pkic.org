@@ -3,9 +3,13 @@
  *
  * workflow half: member content submission ->
  * moderation queue -> staff approve/reject, plus secondary contact
- * nomination -> staff confirmation. The data-bearing columns/admin
- * profile-edit surface these build on were pulled forward in (see
- * admin-organizations.test.ts); this file covers what's new.
+ * nomination -> staff confirmation, plus voting delegate self-service. The
+ * data-bearing columns/admin profile-edit surface these build on were
+ * pulled forward in migration 0040 (see admin-organizations.test.ts); this
+ * file covers what's new. Primary/secondary contact and voting delegate are
+ * role-primary_contact/role-secondary_contact/role-voting_delegate grants
+ * (user_roles, migration 0038) — see functions/_lib/services/membership/
+ * representative-roles.ts — not columns on `organizations`.
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
@@ -13,6 +17,14 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import {
+  insertUser,
+  insertOrganization,
+  seedOrganizationAggregate,
+  addRepresentative as addRepresentativeRow,
+  assignRepresentativeRole,
+  REPRESENTATIVE_ROLE_IDS,
+} from "./helpers/membership";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -32,48 +44,25 @@ async function call(token: string, path: string, init: RequestInit = {}): Promis
 async function seedOrgWithContact(
   email: string,
   category: string,
-): Promise<{ organizationId: string; userId: string }> {
-  const organizationId = crypto.randomUUID();
-  const userId = crypto.randomUUID();
-  const memberId = crypto.randomUUID();
-
-  await env.DB.prepare(
-    `INSERT INTO organizations (id, name, normalized_name, membership_category, description, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'Old description', datetime('now'), datetime('now'))`,
-  )
-    .bind(organizationId, `Org for ${email}`, `org for ${email}`, category)
+): Promise<{ organizationId: string; memberId: string; userId: string }> {
+  const organizationId = await insertOrganization(env.DB, `Org for ${email}`);
+  await env.DB.prepare("UPDATE organizations SET description = 'Old description' WHERE id = ?")
+    .bind(organizationId)
     .run();
-
-  await env.DB.batch([
-    env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, first_name, role, active, created_at, updated_at)
-       VALUES (?, ?, ?, 'Test', 'user', 1, datetime('now'), datetime('now'))`,
-    ).bind(userId, email, email),
-    env.DB.prepare(
-      `INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`,
-    ).bind(memberId, category, userId, organizationId),
-  ]);
-  await env.DB.prepare("UPDATE organizations SET primary_contact_user_id = ? WHERE id = ?")
-    .bind(userId, organizationId)
-    .run();
-
-  return { organizationId, userId };
+  const userId = await insertUser(env.DB, email);
+  const memberId = await seedOrganizationAggregate(env.DB, organizationId, category);
+  await addRepresentativeRow(env.DB, memberId, userId);
+  await assignRepresentativeRole(env.DB, memberId, userId, REPRESENTATIVE_ROLE_IDS.primaryContact);
+  return { organizationId, memberId, userId };
 }
 
-async function addRepresentative(organizationId: string, email: string, category: string): Promise<string> {
-  const userId = crypto.randomUUID();
-  const memberId = crypto.randomUUID();
-  await env.DB.batch([
-    env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, first_name, role, active, created_at, updated_at)
-       VALUES (?, ?, ?, 'Test', 'user', 1, datetime('now'), datetime('now'))`,
-    ).bind(userId, email, email),
-    env.DB.prepare(
-      `INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`,
-    ).bind(memberId, category, userId, organizationId),
-  ]);
+/** Adds another active representative to an org that already has an aggregate. */
+async function addRepresentative(organizationId: string, email: string): Promise<string> {
+  const userId = await insertUser(env.DB, email);
+  const memberRow = (
+    await queryAll<{ id: string }>(env.DB, "SELECT id FROM members WHERE organization_id = ?", organizationId)
+  )[0];
+  await addRepresentativeRow(env.DB, memberRow.id, userId);
   return userId;
 }
 
@@ -117,7 +106,7 @@ describe("Organization content moderation", () => {
 
   it("rejects a non-contact representative's submission with 403", async () => {
     const { organizationId } = await seedOrgWithContact("primary2@example.test", "F");
-    const nonContactUserId = await addRepresentative(organizationId, "non-contact@example.test", "F");
+    const nonContactUserId = await addRepresentative(organizationId, "non-contact@example.test");
     const token = await createMemberSession(env.DB, nonContactUserId, "non-contact-content-token");
 
     const response = await call(token, "/api/v1/me/organization", {
@@ -282,8 +271,8 @@ describe("Secondary contact nomination & confirmation", () => {
   });
 
   it("lets the primary contact nominate a fellow representative, held pending until staff confirms", async () => {
-    const { organizationId, userId: primaryUserId } = await seedOrgWithContact("primary7@example.test", "F");
-    const nomineeUserId = await addRepresentative(organizationId, "nominee@example.test", "F");
+    const { organizationId, memberId, userId: primaryUserId } = await seedOrgWithContact("primary7@example.test", "F");
+    const nomineeUserId = await addRepresentative(organizationId, "nominee@example.test");
     const token = await createMemberSession(env.DB, primaryUserId, "nominate-token");
 
     const nominateResponse = await call(token, "/api/v1/me/organization/secondary-contact", {
@@ -292,16 +281,19 @@ describe("Secondary contact nomination & confirmation", () => {
     });
     expect(nominateResponse.status).toBe(200);
 
-    const orgRows = await queryAll<{
-      pending_secondary_contact_user_id: string | null;
-      secondary_contact_user_id: string | null;
-    }>(
+    const nominationRows = await queryAll<{ nominated_user_id: string }>(
       env.DB,
-      "SELECT pending_secondary_contact_user_id, secondary_contact_user_id FROM organizations WHERE id = ?",
-      organizationId,
+      "SELECT nominated_user_id FROM organization_secondary_contact_nominations WHERE member_id = ?",
+      memberId,
     );
-    expect(orgRows[0].pending_secondary_contact_user_id).toBe(nomineeUserId);
-    expect(orgRows[0].secondary_contact_user_id).toBeNull();
+    expect(nominationRows[0].nominated_user_id).toBe(nomineeUserId);
+
+    const secondaryBefore = await queryAll<{ total: number }>(
+      env.DB,
+      `SELECT COUNT(*) AS total FROM user_roles WHERE context_type = 'organization' AND context_id = ? AND role_id = 'role-secondary_contact' AND revoked_at IS NULL`,
+      memberId,
+    );
+    expect(Number(secondaryBefore[0].total)).toBe(0);
 
     const confirmResponse = await call(
       adminToken,
@@ -312,16 +304,19 @@ describe("Secondary contact nomination & confirmation", () => {
     );
     expect(confirmResponse.status).toBe(200);
 
-    const confirmedRows = await queryAll<{
-      pending_secondary_contact_user_id: string | null;
-      secondary_contact_user_id: string | null;
-    }>(
+    const secondaryAfter = await queryAll<{ user_id: string }>(
       env.DB,
-      "SELECT pending_secondary_contact_user_id, secondary_contact_user_id FROM organizations WHERE id = ?",
-      organizationId,
+      `SELECT user_id FROM user_roles WHERE context_type = 'organization' AND context_id = ? AND role_id = 'role-secondary_contact' AND revoked_at IS NULL`,
+      memberId,
     );
-    expect(confirmedRows[0].secondary_contact_user_id).toBe(nomineeUserId);
-    expect(confirmedRows[0].pending_secondary_contact_user_id).toBeNull();
+    expect(secondaryAfter[0].user_id).toBe(nomineeUserId);
+
+    const nominationAfter = await queryAll<{ total: number }>(
+      env.DB,
+      "SELECT COUNT(*) AS total FROM organization_secondary_contact_nominations WHERE member_id = ?",
+      memberId,
+    );
+    expect(Number(nominationAfter[0].total)).toBe(0);
   });
 
   it("rejects confirmation with 409 when there is no pending nomination", async () => {
@@ -334,8 +329,8 @@ describe("Secondary contact nomination & confirmation", () => {
 
   it("rejects a non-primary-contact nomination attempt with 403", async () => {
     const { organizationId } = await seedOrgWithContact("primary9@example.test", "F");
-    const nonContactUserId = await addRepresentative(organizationId, "not-primary@example.test", "F");
-    const nomineeUserId = await addRepresentative(organizationId, "nominee2@example.test", "F");
+    const nonContactUserId = await addRepresentative(organizationId, "not-primary@example.test");
+    const nomineeUserId = await addRepresentative(organizationId, "nominee2@example.test");
     const token = await createMemberSession(env.DB, nonContactUserId, "non-primary-nominate-token");
 
     const response = await call(token, "/api/v1/me/organization/secondary-contact", {
@@ -345,7 +340,7 @@ describe("Secondary contact nomination & confirmation", () => {
     expect(response.status).toBe(403);
   });
 
-  it("rejects nominating someone who isn't an active member of the same org with 422", async () => {
+  it("rejects nominating someone who isn't an active representative of the same org with 422", async () => {
     const { userId: primaryUserId } = await seedOrgWithContact("primary10@example.test", "F");
     const outsiderUserId = crypto.randomUUID();
     await env.DB.prepare(
@@ -363,9 +358,9 @@ describe("Secondary contact nomination & confirmation", () => {
     expect(response.status).toBe(422);
   });
 
-  it("auto-clears a pending nomination when the nominee's membership lapses", async () => {
-    const { organizationId, userId: primaryUserId } = await seedOrgWithContact("primary11@example.test", "F");
-    const nomineeUserId = await addRepresentative(organizationId, "lapsing-nominee@example.test", "F");
+  it("auto-clears a pending nomination when the nominee's representative row is removed", async () => {
+    const { organizationId, memberId, userId: primaryUserId } = await seedOrgWithContact("primary11@example.test", "F");
+    const nomineeUserId = await addRepresentative(organizationId, "lapsing-nominee@example.test");
     const token = await createMemberSession(env.DB, primaryUserId, "lapse-token");
 
     await call(token, "/api/v1/me/organization/secondary-contact", {
@@ -373,21 +368,25 @@ describe("Secondary contact nomination & confirmation", () => {
       body: JSON.stringify({ userId: nomineeUserId }),
     });
 
-    const nomineeMemberRow = (
-      await queryAll<{ id: string }>(env.DB, "SELECT id FROM members WHERE user_id = ?", nomineeUserId)
+    const nomineeRepRow = (
+      await queryAll<{ id: string }>(
+        env.DB,
+        "SELECT id FROM organization_representatives WHERE member_id = ? AND user_id = ?",
+        memberId,
+        nomineeUserId,
+      )
     )[0];
-    const patchResponse = await call(adminToken, `/api/v1/admin/members/${nomineeMemberRow.id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ status: "inactive" }),
+    const removeResponse = await call(adminToken, `/api/v1/admin/members/${nomineeRepRow.id}`, {
+      method: "DELETE",
     });
-    expect(patchResponse.status).toBe(200);
+    expect(removeResponse.status).toBe(200);
 
-    const orgRows = await queryAll<{ pending_secondary_contact_user_id: string | null }>(
+    const nominationRows = await queryAll<{ total: number }>(
       env.DB,
-      "SELECT pending_secondary_contact_user_id FROM organizations WHERE id = ?",
-      organizationId,
+      "SELECT COUNT(*) AS total FROM organization_secondary_contact_nominations WHERE member_id = ?",
+      memberId,
     );
-    expect(orgRows[0].pending_secondary_contact_user_id).toBeNull();
+    expect(Number(nominationRows[0].total)).toBe(0);
   });
 });
 
@@ -406,7 +405,7 @@ describe("Voting delegate + GET /api/v1/me/organization profile", () => {
     const beforeBody = (await before.json()) as { votingDelegateUserId: string | null };
     expect(beforeBody.votingDelegateUserId).toBeNull();
 
-    const delegateUserId = await addRepresentative(organizationId, "delegate-rep@example.test", "F");
+    const delegateUserId = await addRepresentative(organizationId, "delegate-rep@example.test");
     const setResponse = await call(token, "/api/v1/me/organization/voting-delegate", {
       method: "PATCH",
       body: JSON.stringify({ userId: delegateUserId }),
@@ -418,13 +417,11 @@ describe("Voting delegate + GET /api/v1/me/organization profile", () => {
     expect(afterBody.votingDelegateUserId).toBe(delegateUserId);
   });
 
-  it("lets the secondary contact set and clear the voting delegate, persisting to organizations.voting_delegate_user_id", async () => {
-    const { organizationId } = await seedOrgWithContact("delegate-primary2@example.test", "F");
-    const secondaryUserId = await addRepresentative(organizationId, "delegate-secondary@example.test", "F");
-    await env.DB.prepare("UPDATE organizations SET secondary_contact_user_id = ? WHERE id = ?")
-      .bind(secondaryUserId, organizationId)
-      .run();
-    const delegateUserId = await addRepresentative(organizationId, "delegate-target@example.test", "F");
+  it("lets the secondary contact set and clear the voting delegate (role-voting_delegate grant)", async () => {
+    const { organizationId, memberId } = await seedOrgWithContact("delegate-primary2@example.test", "F");
+    const secondaryUserId = await addRepresentative(organizationId, "delegate-secondary@example.test");
+    await assignRepresentativeRole(env.DB, memberId, secondaryUserId, REPRESENTATIVE_ROLE_IDS.secondaryContact);
+    const delegateUserId = await addRepresentative(organizationId, "delegate-target@example.test");
     const token = await createMemberSession(env.DB, secondaryUserId, "delegate-set-token");
 
     const setResponse = await call(token, "/api/v1/me/organization/voting-delegate", {
@@ -433,12 +430,12 @@ describe("Voting delegate + GET /api/v1/me/organization profile", () => {
     });
     expect(setResponse.status).toBe(200);
 
-    const setRows = await queryAll<{ voting_delegate_user_id: string | null }>(
+    const setRows = await queryAll<{ user_id: string }>(
       env.DB,
-      "SELECT voting_delegate_user_id FROM organizations WHERE id = ?",
-      organizationId,
+      `SELECT user_id FROM user_roles WHERE context_type = 'organization' AND context_id = ? AND role_id = 'role-voting_delegate' AND revoked_at IS NULL`,
+      memberId,
     );
-    expect(setRows[0].voting_delegate_user_id).toBe(delegateUserId);
+    expect(setRows[0].user_id).toBe(delegateUserId);
 
     const clearResponse = await call(token, "/api/v1/me/organization/voting-delegate", {
       method: "PATCH",
@@ -446,17 +443,17 @@ describe("Voting delegate + GET /api/v1/me/organization profile", () => {
     });
     expect(clearResponse.status).toBe(200);
 
-    const clearedRows = await queryAll<{ voting_delegate_user_id: string | null }>(
+    const clearedRows = await queryAll<{ total: number }>(
       env.DB,
-      "SELECT voting_delegate_user_id FROM organizations WHERE id = ?",
-      organizationId,
+      `SELECT COUNT(*) AS total FROM user_roles WHERE context_type = 'organization' AND context_id = ? AND role_id = 'role-voting_delegate' AND revoked_at IS NULL`,
+      memberId,
     );
-    expect(clearedRows[0].voting_delegate_user_id).toBeNull();
+    expect(Number(clearedRows[0].total)).toBe(0);
   });
 
   it("rejects a non-contact representative's voting-delegate update with 403", async () => {
     const { organizationId } = await seedOrgWithContact("delegate-primary3@example.test", "F");
-    const nonContactUserId = await addRepresentative(organizationId, "delegate-non-contact@example.test", "F");
+    const nonContactUserId = await addRepresentative(organizationId, "delegate-non-contact@example.test");
     const token = await createMemberSession(env.DB, nonContactUserId, "delegate-non-contact-token");
 
     const response = await call(token, "/api/v1/me/organization/voting-delegate", {
@@ -468,7 +465,7 @@ describe("Voting delegate + GET /api/v1/me/organization profile", () => {
     expect(body.error.code).toBe("NOT_ORG_CONTACT");
   });
 
-  it("rejects a voting delegate who isn't an active member of the same org with 422", async () => {
+  it("rejects a voting delegate who isn't an active representative of the same org with 422", async () => {
     const { userId: primaryUserId } = await seedOrgWithContact("delegate-primary4@example.test", "F");
     const outsiderUserId = crypto.randomUUID();
     await env.DB.prepare(

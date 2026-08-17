@@ -5,7 +5,7 @@
 import { all, first } from "../../db/queries";
 import { parseJsonSafe } from "../../utils/json";
 import { AppError } from "../../errors";
-import { VOTING_CATEGORIES } from "../member-applications";
+import { VOTING_CATEGORIES } from "../membership/applications/create";
 import { resolveVotingDelegateUserId } from "./ballots";
 import {
   toVoteSummary,

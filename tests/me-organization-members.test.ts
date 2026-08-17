@@ -12,6 +12,15 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createMemberSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
+import {
+  insertUser,
+  insertOrganization,
+  seedOrganizationAggregate,
+  addRepresentative,
+  assignRepresentativeRole,
+  insertIndividualMember,
+  REPRESENTATIVE_ROLE_IDS,
+} from "./helpers/membership";
 
 function requestWithAuth(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -29,7 +38,6 @@ async function call(token: string, path: string, init: RequestInit = {}): Promis
 }
 
 interface SeedOrgOptions {
-  membershipCategory?: string | null;
   contactSlot?: "primary" | "secondary" | "none";
 }
 
@@ -38,68 +46,25 @@ interface SeedOrgOptions {
 async function seedOrgWithContact(
   email: string,
   category: string,
-  { membershipCategory = category, contactSlot = "primary" }: SeedOrgOptions = {},
+  { contactSlot = "primary" }: SeedOrgOptions = {},
 ): Promise<{ organizationId: string; userId: string; memberId: string }> {
-  const organizationId = crypto.randomUUID();
-  const userId = crypto.randomUUID();
-  const memberId = crypto.randomUUID();
-
-  await env.DB.prepare(
-    `INSERT INTO organizations (id, name, normalized_name, membership_category, created_at, updated_at)
-     VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))`,
-  )
-    .bind(organizationId, `Org for ${email}`, `org for ${email}`, membershipCategory)
-    .run();
-
-  await env.DB.batch([
-    env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, first_name, role, active, created_at, updated_at)
-       VALUES (?, ?, ?, 'Test', 'user', 1, datetime('now'), datetime('now'))`,
-    ).bind(userId, email, email),
-    env.DB.prepare(
-      `INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`,
-    ).bind(memberId, category, userId, organizationId),
-  ]);
+  const organizationId = await insertOrganization(env.DB, `Org for ${email}`);
+  const userId = await insertUser(env.DB, email);
+  const memberId = await seedOrganizationAggregate(env.DB, organizationId, category);
+  await addRepresentative(env.DB, memberId, userId);
 
   if (contactSlot === "primary") {
-    await env.DB.prepare("UPDATE organizations SET primary_contact_user_id = ? WHERE id = ?")
-      .bind(userId, organizationId)
-      .run();
+    await assignRepresentativeRole(env.DB, memberId, userId, REPRESENTATIVE_ROLE_IDS.primaryContact);
   } else if (contactSlot === "secondary") {
     // Give the org a distinct primary contact first so this user is
     // unambiguously the *secondary* contact.
-    const otherPrimaryId = crypto.randomUUID();
-    await env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, first_name, role, active, created_at, updated_at)
-       VALUES (?, ?, ?, 'Other', 'user', 1, datetime('now'), datetime('now'))`,
-    )
-      .bind(otherPrimaryId, `primary-${email}`, `primary-${email}`)
-      .run();
-    await env.DB.prepare(
-      "UPDATE organizations SET primary_contact_user_id = ?, secondary_contact_user_id = ? WHERE id = ?",
-    )
-      .bind(otherPrimaryId, userId, organizationId)
-      .run();
+    const otherPrimaryId = await insertUser(env.DB, `primary-${email}`);
+    await addRepresentative(env.DB, memberId, otherPrimaryId);
+    await assignRepresentativeRole(env.DB, memberId, otherPrimaryId, REPRESENTATIVE_ROLE_IDS.primaryContact);
+    await assignRepresentativeRole(env.DB, memberId, userId, REPRESENTATIVE_ROLE_IDS.secondaryContact);
   }
 
   return { organizationId, userId, memberId };
-}
-
-async function seedIndividualMember(email: string, category: string): Promise<string> {
-  const userId = crypto.randomUUID();
-  const memberId = crypto.randomUUID();
-  await env.DB.batch([
-    env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, first_name, role, active, created_at, updated_at)
-       VALUES (?, ?, ?, 'Test', 'user', 1, datetime('now'), datetime('now'))`,
-    ).bind(userId, email, email),
-    env.DB.prepare(
-      `INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
-       VALUES (?, ?, ?, NULL, 'active', datetime('now'), datetime('now'))`,
-    ).bind(memberId, category, userId),
-  ]);
-  return userId;
 }
 
 describe("POST /api/v1/me/organization/members — self-service coworker enrollment", () => {
@@ -107,8 +72,8 @@ describe("POST /api/v1/me/organization/members — self-service coworker enrollm
     await resetDb();
   });
 
-  it("lets the primary contact add a coworker, inheriting the org's membership_category", async () => {
-    const { organizationId, userId } = await seedOrgWithContact("primary@example.test", "F");
+  it("lets the primary contact add a coworker as a new representative of the same organization", async () => {
+    const { memberId, userId } = await seedOrgWithContact("primary@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "coworker-happy-token");
 
     const response = await call(token, "/api/v1/me/organization/members", {
@@ -121,15 +86,23 @@ describe("POST /api/v1/me/organization/members — self-service coworker enrollm
     expect(body.name).toBe("New Coworker");
     expect(body.email).toBe("coworker@example.test");
 
-    const rows = await queryAll<{ member_type: string; organization_id: string; status: string }>(
+    // The coworker gets an organization_representatives row against the
+    // SAME aggregate, not a new members row.
+    const repRows = await queryAll<{ member_id: string; left_at: string | null }>(
       env.DB,
-      "SELECT member_type, organization_id, status FROM members WHERE user_id = ?",
+      "SELECT member_id, left_at FROM organization_representatives WHERE user_id = ?",
       body.userId,
     );
-    expect(rows).toHaveLength(1);
-    expect(rows[0].member_type).toBe("F");
-    expect(rows[0].organization_id).toBe(organizationId);
-    expect(rows[0].status).toBe("active");
+    expect(repRows).toHaveLength(1);
+    expect(repRows[0].member_id).toBe(memberId);
+    expect(repRows[0].left_at).toBeNull();
+
+    const memberRows = await queryAll<{ total: number }>(
+      env.DB,
+      "SELECT COUNT(*) AS total FROM members WHERE user_id = ?",
+      body.userId,
+    );
+    expect(Number(memberRows[0].total)).toBe(0);
   });
 
   it("lets the secondary contact add a coworker too", async () => {
@@ -145,20 +118,10 @@ describe("POST /api/v1/me/organization/members — self-service coworker enrollm
   });
 
   it("rejects a non-contact org member with 403", async () => {
-    const { organizationId } = await seedOrgWithContact("primary2@example.test", "F");
+    const { memberId } = await seedOrgWithContact("primary2@example.test", "F");
     // A second representative of the same org who is neither primary nor secondary contact.
-    const nonContactUserId = crypto.randomUUID();
-    const nonContactMemberId = crypto.randomUUID();
-    await env.DB.batch([
-      env.DB.prepare(
-        `INSERT INTO users (id, email, normalized_email, first_name, role, active, created_at, updated_at)
-         VALUES (?, ?, ?, 'Test', 'user', 1, datetime('now'), datetime('now'))`,
-      ).bind(nonContactUserId, "non-contact@example.test", "non-contact@example.test"),
-      env.DB.prepare(
-        `INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
-         VALUES (?, 'F', ?, ?, 'active', datetime('now'), datetime('now'))`,
-      ).bind(nonContactMemberId, nonContactUserId, organizationId),
-    ]);
+    const nonContactUserId = await insertUser(env.DB, "non-contact@example.test");
+    await addRepresentative(env.DB, memberId, nonContactUserId);
     const token = await createMemberSession(env.DB, nonContactUserId, "non-contact-token");
 
     const response = await call(token, "/api/v1/me/organization/members", {
@@ -172,7 +135,7 @@ describe("POST /api/v1/me/organization/members — self-service coworker enrollm
   });
 
   it("rejects an org-less individual member with 403", async () => {
-    const userId = await seedIndividualMember("individual@example.test", "H6");
+    const { userId } = await insertIndividualMember(env.DB, "H6", "individual@example.test");
     const token = await createMemberSession(env.DB, userId, "individual-token");
 
     const response = await call(token, "/api/v1/me/organization/members", {
@@ -185,15 +148,16 @@ describe("POST /api/v1/me/organization/members — self-service coworker enrollm
     expect(body.error.code).toBe("NO_ORGANIZATION");
   });
 
-  it("rejects an email that already holds an active membership with 409", async () => {
-    const { userId } = await seedOrgWithContact("primary3@example.test", "F");
+  it("rejects an email that is already an active representative of this same organization with 409", async () => {
+    const { memberId, userId } = await seedOrgWithContact("primary3@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "already-member-token");
-    // Someone already an active member elsewhere.
-    await seedIndividualMember("existing-member@example.test", "H6");
+    // Someone already an active representative of this exact organization.
+    const existingRepUserId = await insertUser(env.DB, "existing-rep@example.test");
+    await addRepresentative(env.DB, memberId, existingRepUserId);
 
     const response = await call(token, "/api/v1/me/organization/members", {
       method: "POST",
-      body: JSON.stringify({ name: "Existing Member", email: "existing-member@example.test" }),
+      body: JSON.stringify({ name: "Existing Rep", email: "existing-rep@example.test" }),
     });
 
     expect(response.status).toBe(409);

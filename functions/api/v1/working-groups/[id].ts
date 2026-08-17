@@ -8,7 +8,7 @@
  */
 import { AppError } from "../../../_lib/errors";
 import { json } from "../../../_lib/http";
-import { getWorkingGroupByIdOrSlug } from "../../../_lib/services/members-directory";
+import { getWorkingGroupByIdOrSlug } from "../../../_lib/services/membership/directory";
 import { workingGroupDetailRouteSchema } from "../../../../assets/shared/schemas/members-directory";
 import { openApiRoute } from "../../../_lib/openapi/route";
 

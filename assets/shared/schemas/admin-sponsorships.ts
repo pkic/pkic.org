@@ -30,7 +30,7 @@ export const sponsorshipIdParamsSchema = z.object({ id: z.uuid() });
 
 export const adminSponsorshipSchema = z.object({
   id: z.uuid(),
-  sponsorType: z.string(),
+  sponsorType: sponsorTypeSchema,
   organizationId: z.uuid().nullable(),
   organizationName: z.string().nullable(),
   nonMemberName: z.string().nullable(),
@@ -40,8 +40,12 @@ export const adminSponsorshipSchema = z.object({
   contactEmail: z.string().nullable(),
   eventId: z.uuid().nullable(),
   eventName: z.string().nullable(),
+  // tier is intentionally a bare string, not a z.enum — it's a
+  // reference-table-backed evolvable vocabulary (sponsorship_tier_config,
+  // migration 0053), not a fixed code enum (PR #1 review §1.3's "reference
+  // table" enforcement category).
   tier: z.string().nullable(),
-  pipelineStage: z.string(),
+  pipelineStage: sponsorshipPipelineStageSchema,
   startDate: z.string().nullable(),
   renewalDate: z.string().nullable(),
   assignedToUserId: z.uuid().nullable(),
@@ -324,7 +328,7 @@ export const eventSponsorTiersPutRouteSchema = {
 
 export const sponsorshipTierConfigSchema = z.object({
   id: z.uuid(),
-  sponsorType: z.string(),
+  sponsorType: sponsorTypeSchema,
   tier: z.string(),
   currency: z.string(),
   amountCents: z.number(),

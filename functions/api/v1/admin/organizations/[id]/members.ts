@@ -30,7 +30,7 @@ export const OrganizationAddRepresentative = openApiRoute(
       "organization",
       organizationId,
       {
-        memberId: representative.memberId,
+        representativeId: representative.representativeId,
         email: representative.email,
       },
     );

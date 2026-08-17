@@ -3,7 +3,7 @@
  *
  * consultation batch, EC review batch, on-hold reminders/
  * auto-close, and EC-window auto-approve
- * (functions/_lib/services/membership-scheduled-jobs.ts). Called directly
+ * (functions/_lib/services/membership/scheduled-jobs.ts). Called directly
  * as service functions rather than through HTTP, matching how these run —
  * cron-triggered, not endpoint-triggered (see functions/router.ts).
  */
@@ -16,7 +16,7 @@ import {
   runEcReviewBatch,
   runOnHoldReminders,
   runEcWindowAutoApprove,
-} from "../functions/_lib/services/membership-scheduled-jobs";
+} from "../functions/_lib/services/membership/scheduled-jobs";
 import { getMembershipSettings, updateMembershipSettings } from "../functions/_lib/services/membership-settings";
 import { recordEcDecision } from "../functions/_lib/services/ec-review";
 

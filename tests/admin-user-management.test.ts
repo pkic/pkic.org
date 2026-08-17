@@ -7,6 +7,7 @@ import { resetDb } from "./helpers/reset-db";
 import { onRequestPatch as patchUser } from "../functions/api/v1/admin/users/[userId]/index";
 import { onRequestPost as anonymizeUser } from "../functions/api/v1/admin/users/[userId]/anonymize";
 import app from "../functions/router";
+import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 
 let adminToken: string;
 
@@ -353,12 +354,8 @@ describe("admin users list — type filter", () => {
 
   async function seedMember(email: string): Promise<string> {
     const userId = await seedUser(env.DB, email);
-    await env.DB.prepare(
-      `INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
-       VALUES (?, 'H5', ?, NULL, 'active', datetime('now'), datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), userId)
-      .run();
+    const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, "H5", new Date().toISOString());
+    await env.DB.batch(statements);
     return userId;
   }
 
@@ -467,5 +464,32 @@ describe("admin users list — type filter", () => {
     expect(byEmail["type-all-member@example.test"]).toBe("member");
     expect(byEmail["type-all-attendee@example.test"]).toBe("event_attendee");
     expect(byEmail["type-all-contact@example.test"]).toBe("contact_only");
+  });
+
+  it("lists a user representing two organizations exactly once, and the total count matches (regression: unscoped organization_representatives join previously fanned out one row per represented organization)", async () => {
+    await setup();
+    const userId = await seedUser(env.DB, "type-multi-org@example.test");
+    const orgAId = crypto.randomUUID();
+    const orgBId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO organizations (id, name, normalized_name, created_at, updated_at) VALUES (?, ?, ?, datetime('now'), datetime('now'))`,
+      ).bind(orgAId, "Org A", "org a"),
+      env.DB.prepare(
+        `INSERT INTO organizations (id, name, normalized_name, created_at, updated_at) VALUES (?, ?, ?, datetime('now'), datetime('now'))`,
+      ).bind(orgBId, "Org B", "org b"),
+    ]);
+    const { getOrCreateOrganizationMemberAggregate } =
+      await import("../functions/_lib/services/membership/memberships");
+    const { buildAddRepresentativeStatement } = await import("../functions/_lib/services/membership/representatives");
+    const now = new Date().toISOString();
+    const memberA = await getOrCreateOrganizationMemberAggregate(env.DB, orgAId, "A", now);
+    const memberB = await getOrCreateOrganizationMemberAggregate(env.DB, orgBId, "B", now);
+    const { statement: repA } = buildAddRepresentativeStatement(env.DB, { memberId: memberA.id, userId, now });
+    const { statement: repB } = buildAddRepresentativeStatement(env.DB, { memberId: memberB.id, userId, now });
+    await env.DB.batch([repA, repB]);
+
+    const data = await listUsers("type=member&q=type-multi-org@example.test");
+    expect(data.users.filter((u) => u.email === "type-multi-org@example.test")).toHaveLength(1);
   });
 });

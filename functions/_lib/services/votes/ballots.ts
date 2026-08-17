@@ -5,6 +5,7 @@ import { all, first, run } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import { AppError } from "../../errors";
+import { REPRESENTATIVE_ROLE_IDS, resolveRepresentativeRoleHolders } from "../membership/representative-roles";
 import {
   getVoteRowOrThrow,
   eligibleCategoriesOf,
@@ -17,21 +18,14 @@ import {
 } from "./shared";
 import type { AuthMember, DatabaseLike } from "../../types";
 
-interface OrgDelegateRow {
-  id: string;
-  primary_contact_user_id: string | null;
-  voting_delegate_user_id: string | null;
-}
-
-/** organizations.voting_delegate_user_id NULL falls back to primary_contact_user_id. */
+/** role-voting_delegate (user_roles, context_type='organization') falls back to role-primary_contact when unset. */
 export async function resolveVotingDelegateUserId(db: DatabaseLike, organizationId: string): Promise<string | null> {
-  const org = await first<OrgDelegateRow>(
-    db,
-    `SELECT id, primary_contact_user_id, voting_delegate_user_id FROM organizations WHERE id = ?`,
-    [organizationId],
-  );
+  const org = await first<{ member_id: string }>(db, `SELECT id AS member_id FROM members WHERE organization_id = ?`, [
+    organizationId,
+  ]);
   if (!org) return null;
-  return org.voting_delegate_user_id ?? org.primary_contact_user_id;
+  const holders = await resolveRepresentativeRoleHolders(db, org.member_id);
+  return holders.votingDelegateUserId ?? holders.primaryContactUserId;
 }
 
 export interface ForumVoteDelegateRecipient {
@@ -56,21 +50,21 @@ export async function resolveForumVoteDelegateRecipients(
   const row = await getVoteRowOrThrow(db, voteId);
   if (row.scope_type !== "forum") return null;
 
-  const orgs = await all<{
-    id: string;
-    name: string;
-    primary_contact_user_id: string | null;
-    voting_delegate_user_id: string | null;
-  }>(
+  const orgs = await all<{ id: string; name: string; delegate_user_id: string | null }>(
     db,
-    `SELECT DISTINCT o.id, o.name, o.primary_contact_user_id, o.voting_delegate_user_id
-     FROM organizations o JOIN members m ON m.organization_id = o.id
-     WHERE m.status = 'active'`,
+    `SELECT o.id, o.name,
+            COALESCE(vd.user_id, pc.user_id) AS delegate_user_id
+     FROM organizations o
+     JOIN members m ON m.organization_id = o.id AND m.status = 'active'
+     LEFT JOIN user_roles vd ON vd.context_type = 'organization' AND vd.context_id = m.id
+       AND vd.role_id = '${REPRESENTATIVE_ROLE_IDS.votingDelegate}' AND vd.revoked_at IS NULL
+     LEFT JOIN user_roles pc ON pc.context_type = 'organization' AND pc.context_id = m.id
+       AND pc.role_id = '${REPRESENTATIVE_ROLE_IDS.primaryContact}' AND pc.revoked_at IS NULL`,
   );
 
   const recipients: ForumVoteDelegateRecipient[] = [];
   for (const org of orgs) {
-    const delegateId = org.voting_delegate_user_id ?? org.primary_contact_user_id;
+    const delegateId = org.delegate_user_id;
     if (!delegateId) continue;
     const user = await first<{ email: string; first_name: string | null; last_name: string | null }>(
       db,

@@ -8,7 +8,7 @@
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { AppError } from "../../../../../_lib/errors";
 import { json } from "../../../../../_lib/http";
-import { verifyApplicationManageToken } from "../../../../../_lib/services/member-applications";
+import { verifyApplicationManageToken } from "../../../../../_lib/services/membership/applications/queries";
 import { memberApplicationStatusRouteSchema } from "../../../../../../assets/shared/schemas/member-applications";
 
 export async function onRequestGet(c: any): Promise<Response> {

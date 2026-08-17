@@ -21,6 +21,7 @@
     "assets/shared/**/*.ts"
   ],
   "exclude": [
-    "tests/frontend/**"
+    "tests/frontend/**",
+    "tests/tools/**"
   ]
 }

@@ -4,7 +4,7 @@
  */
 import { z } from "zod";
 import { normalizedEmailSchema } from "./api";
-import { membershipCategorySchema } from "./member-applications";
+import { membershipCategorySchema, applicationStageSchema, onHoldSubtypeSchema } from "./member-applications";
 import { paginationQuerySchema, paginatedResponseSchema, sortColumnSchema } from "./pagination";
 
 /** Allowlisted sort columns for GET /api/v1/admin/applications — see listAdminApplications. */
@@ -17,8 +17,8 @@ export const ADMIN_APPLICATIONS_SORT_COLUMNS = [
 ] as const;
 
 export const adminApplicationsListQuerySchema = paginationQuerySchema.extend({
-  stage: z.string().trim().min(1).max(40).optional(),
-  status: z.string().trim().min(1).max(40).optional(),
+  stage: applicationStageSchema.optional(),
+  status: applicationStageSchema.optional(),
   sort: sortColumnSchema(ADMIN_APPLICATIONS_SORT_COLUMNS),
 });
 
@@ -28,9 +28,9 @@ export const adminApplicationSummarySchema = z.object({
   applicantName: z.string(),
   organizationName: z.string().nullable(),
   membershipCategory: z.string(),
-  status: z.string(),
-  stage: z.string(),
-  onHoldSubtype: z.string().nullable(),
+  status: applicationStageSchema,
+  stage: applicationStageSchema,
+  onHoldSubtype: onHoldSubtypeSchema.nullable(),
   assignedToUserId: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -60,17 +60,14 @@ export const adminApplicationDetailRouteSchema = {
   },
 };
 
-const ON_HOLD_SUBTYPES = [
-  "request_authority",
-  "request_org_email",
-  "request_pki_experience",
-  "request_org_application",
-  "request_information",
-] as const;
-
 export const applicationStageTransitionSchema = z.object({
-  toStage: z.enum(["in_review", "on_hold", "in_consultation", "ec_review", "declined", "withdrawn"]),
-  onHoldSubtype: z.enum(ON_HOLD_SUBTYPES).optional(),
+  // "pending" and "approved" are deliberately excluded: pending is only a
+  // starting state, and reaching approved requires the full onboarding
+  // orchestration in approveApplication() (member-provisioning.ts), not a
+  // bare stage flip — see functions/_lib/services/member-applications.ts's
+  // ALLOWED_STAGE_TRANSITIONS header comment.
+  toStage: applicationStageSchema.exclude(["pending", "approved"]),
+  onHoldSubtype: onHoldSubtypeSchema.optional(),
   note: z.string().trim().max(2000).optional(),
 });
 

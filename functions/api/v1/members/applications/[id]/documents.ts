@@ -16,7 +16,7 @@ import {
   verifyApplicationManageToken,
   listApplicationDocuments,
   recordApplicationDocument,
-} from "../../../../../_lib/services/member-applications";
+} from "../../../../../_lib/services/membership/applications/queries";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import {
   applicationDocumentListRouteSchema,

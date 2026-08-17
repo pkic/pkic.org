@@ -12,6 +12,7 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
+import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import {
   buildAuthenticationResponse,
   buildRegistrationResponse,
@@ -58,16 +59,13 @@ async function insertStaffUser(email: string): Promise<string> {
 /** Org-less (H5) active member — INDIVIDUAL_MEMBERSHIP_CATEGORIES, avoids an organizations row. */
 async function insertActiveMemberUser(email: string): Promise<string> {
   const userId = crypto.randomUUID();
-  const memberId = crypto.randomUUID();
+  const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, "H5", new Date().toISOString());
   await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO users (id, email, normalized_email, first_name, role, active, created_at, updated_at)
        VALUES (?, ?, ?, 'Test', 'user', 1, datetime('now'), datetime('now'))`,
     ).bind(userId, email, email),
-    env.DB.prepare(
-      `INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
-       VALUES (?, 'H5', ?, NULL, 'active', datetime('now'), datetime('now'))`,
-    ).bind(memberId, userId),
+    ...statements,
   ]);
   return userId;
 }

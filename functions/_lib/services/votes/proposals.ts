@@ -19,6 +19,7 @@ import {
   type VoteScopeType,
   type ThresholdType,
   type VoteStatus,
+  type VoteProposalStatus,
   type VoteSummary,
 } from "./shared";
 import type { AuthMember, DatabaseLike } from "../../types";
@@ -34,7 +35,7 @@ interface ProposalRow {
   eligible_categories: string | null;
   proposed_opens_at: string | null;
   proposed_closes_at: string | null;
-  status: string;
+  status: VoteProposalStatus;
   vote_id: string | null;
   rejection_reason: string | null;
   created_at: string;
@@ -49,7 +50,7 @@ export interface ProposalSummary {
   scopeType: VoteScopeType;
   scopeId: string | null;
   proposedByUserId: string;
-  status: string;
+  status: VoteProposalStatus;
   voteId: string | null;
   rejectionReason: string | null;
   endorsementCount: number;
@@ -177,7 +178,7 @@ export async function submitVoteProposal(
 
 export async function listVoteProposals(
   db: DatabaseLike,
-  params: { scopeType?: VoteScopeType; scopeId?: string; status?: string },
+  params: { scopeType?: VoteScopeType; scopeId?: string; status?: VoteProposalStatus },
 ): Promise<ProposalSummary[]> {
   const conditions: string[] = [];
   const args: unknown[] = [];
@@ -202,7 +203,7 @@ export async function listVoteProposals(
 
 export async function listAllVoteProposalsForAdmin(
   db: DatabaseLike,
-  params: { status?: string },
+  params: { status?: VoteProposalStatus },
 ): Promise<ProposalSummary[]> {
   if (!params.status) {
     const rows = await all<ProposalRow>(db, `SELECT * FROM vote_proposals ORDER BY created_at DESC`);

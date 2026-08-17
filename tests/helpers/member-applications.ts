@@ -3,7 +3,7 @@ import { queryAll } from "./context";
 
 /**
  * member_applications no longer carries its own answers_json blob (PR review
- * fix — see functions/_lib/services/member-applications.ts's
+ * fix — see functions/_lib/services/membership/applications/queries.ts's
  * getApplicationAnswers); answers live in form_submissions/
  * form_submission_answers via the 'membership-application' global form
  * seeded by migrations/0034. resetDb() wipes forms/form_fields like every

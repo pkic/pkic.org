@@ -14,6 +14,7 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
 
 function request(token: string | null, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -58,12 +59,8 @@ async function insertOrganization(name: string, website: string): Promise<string
 }
 
 async function insertMember(userId: string, organizationId: string): Promise<void> {
-  await env.DB.prepare(
-    `INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
-     VALUES (?, 'A', ?, ?, 'active', datetime('now'), datetime('now'))`,
-  )
-    .bind(crypto.randomUUID(), userId, organizationId)
-    .run();
+  const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
+  await addRepresentative(env.DB, memberId, userId);
 }
 
 async function assignRole(

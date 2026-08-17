@@ -4,6 +4,32 @@ import { membershipCategorySchema, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "./me
 
 export { membershipCategorySchema };
 
+// Canonical closed-state vocabulary for member_applications.status/stage
+// (kept as one column pair set to the same value — see
+// functions/_lib/services/member-applications.ts's ALLOWED_STAGE_TRANSITIONS,
+// which is the actual state-machine enforcement; this is its shared,
+// API-facing type, not a second source of truth) — PR #1 review §1.3.
+export const APPLICATION_STAGES = [
+  "pending",
+  "in_review",
+  "on_hold",
+  "in_consultation",
+  "ec_review",
+  "approved",
+  "declined",
+  "withdrawn",
+] as const;
+export const applicationStageSchema = z.enum(APPLICATION_STAGES);
+
+export const ON_HOLD_SUBTYPES = [
+  "request_authority",
+  "request_org_email",
+  "request_pki_experience",
+  "request_org_application",
+  "request_information",
+] as const;
+export const onHoldSubtypeSchema = z.enum(ON_HOLD_SUBTYPES);
+
 export const memberApplicationCreateSchema = z
   .object({
     applicantEmail: normalizedEmailSchema,
@@ -28,8 +54,8 @@ export type MemberApplicationCreateInput = z.infer<typeof memberApplicationCreat
 
 export const memberApplicationCreateResponseSchema = z.object({
   applicationId: z.string(),
-  status: z.string(),
-  stage: z.string(),
+  status: applicationStageSchema,
+  stage: applicationStageSchema,
   manageToken: z.string().describe("Applicant token for status checks and document uploads — shown once"),
 });
 
@@ -53,8 +79,8 @@ export const memberApplicationCreateRouteSchema = {
 
 export const memberApplicationStatusResponseSchema = z.object({
   id: z.string(),
-  status: z.string(),
-  stage: z.string(),
+  status: applicationStageSchema,
+  stage: applicationStageSchema,
   stageEnteredAt: z.string(),
   createdAt: z.string(),
 });

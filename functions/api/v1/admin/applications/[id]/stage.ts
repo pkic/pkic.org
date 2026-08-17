@@ -13,7 +13,7 @@ import { getConfig } from "../../../../../_lib/config";
 import { queueEmail, processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { getMembershipSettings } from "../../../../../_lib/services/membership-settings";
-import { transitionApplicationStage } from "../../../../../_lib/services/member-applications";
+import { transitionApplicationStage } from "../../../../../_lib/services/membership/applications/transition";
 import { applicationStageTransitionRouteSchema } from "../../../../../../assets/shared/schemas/admin-applications";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 

@@ -9,7 +9,7 @@
  */
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { AppError } from "../../../../_lib/errors";
-import { getMemberLogoR2Key } from "../../../../_lib/services/members-directory";
+import { getMemberLogoR2Key } from "../../../../_lib/services/membership/directory";
 import { memberLogoRouteSchema } from "../../../../../assets/shared/schemas/members-directory";
 
 const PUBLIC_CACHE_CONTROL = "public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600";

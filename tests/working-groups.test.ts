@@ -13,6 +13,9 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
+import { isIndividualMembershipCategory } from "../assets/shared/schemas/membership-categories";
+import { insertOrganization, seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -43,12 +46,19 @@ async function insertUser(email: string): Promise<string> {
 }
 
 async function insertMember(userId: string, membershipCategory: string): Promise<void> {
-  await env.DB.prepare(
-    `INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
-     VALUES (?, ?, ?, NULL, 'active', datetime('now'), datetime('now'))`,
-  )
-    .bind(crypto.randomUUID(), membershipCategory, userId)
-    .run();
+  if (isIndividualMembershipCategory(membershipCategory)) {
+    const { statements } = buildCreateIndividualMemberStatements(
+      env.DB,
+      userId,
+      membershipCategory,
+      new Date().toISOString(),
+    );
+    await env.DB.batch(statements);
+    return;
+  }
+  const orgId = await insertOrganization(env.DB);
+  const memberId = await seedOrganizationAggregate(env.DB, orgId, membershipCategory);
+  await addRepresentative(env.DB, memberId, userId);
 }
 
 async function insertWorkingGroup(name: string, slug: string): Promise<string> {

@@ -6,7 +6,7 @@
  * visibility toggle live in the same tab nav table.
  */
 import { useState } from "preact/hooks";
-import { getJson, patchJson, postJson, ApiClientError } from "../../../shared/api-client";
+import { getJson, patchJson, postJson, putJson, ApiClientError } from "../../../shared/api-client";
 import { AdminHeadshotManager } from "../../../shared/headshot/AdminHeadshotManager";
 import { Spinner } from "../../../components/Spinner";
 import { ErrorAlert } from "../../../components/ErrorAlert";
@@ -130,6 +130,8 @@ export function MyProfile() {
             </div>
           </div>
         )}
+
+        {current.activeMemberships.length > 1 && <ActiveMembershipSwitcher current={current} />}
       </div>
 
       <div class="col-md-8">
@@ -250,6 +252,82 @@ export function MyProfile() {
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Only rendered when the caller represents more than one organization (or
+ * an organization plus their own individual membership) concurrently —
+ * lets them pick which membership context the rest of the portal (working
+ * groups, votes, applications, etc.) acts as. Switching reissues the
+ * session cookie server-side (PUT /api/v1/me/active-membership) and then
+ * does a full navigation rather than a signal update, so every other
+ * org-scoped screen re-fetches under the new context instead of holding
+ * stale state from the previous one.
+ */
+function ActiveMembershipSwitcher({ current }: { current: MyProfileType }) {
+  const [switching, setSwitching] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // The currently-active entry is whichever membership matches the
+  // organization (or org-less-ness) the rest of this profile response is
+  // already scoped to.
+  const activeMemberId =
+    current.activeMemberships.find((m) => m.organizationId === current.organizationId)?.memberId ?? null;
+
+  async function handleSwitch(memberId: string): Promise<void> {
+    if (memberId === activeMemberId) return;
+    setError(null);
+    setSwitching(memberId);
+    try {
+      await putJson<MyProfileType>("/api/v1/me/active-membership", { memberId });
+      // A full reload, not window.location.assign to this same route — the
+      // caller is already on #/profile, so assigning that same URL is a
+      // no-op and would leave every other org-scoped screen (working
+      // groups, votes, applications) holding state from the org context
+      // just switched away from.
+      window.location.reload();
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : "Could not switch membership. Please try again.");
+      setSwitching(null);
+    }
+  }
+
+  return (
+    <div class="card border-0 shadow-sm mt-3">
+      <div class="card-body">
+        <h3 class="h6 mb-2">Acting as</h3>
+        <p class="text-muted small mb-2">
+          You represent more than one membership. Switch which one the portal acts as below.
+        </p>
+        <ul class="list-group list-group-flush">
+          {current.activeMemberships.map((m) => {
+            const isActive = m.memberId === activeMemberId;
+            return (
+              <li key={m.memberId} class="list-group-item d-flex justify-content-between align-items-center px-0">
+                <span>
+                  {m.organizationName ?? "My own membership"}{" "}
+                  <span class="text-muted small">({m.membershipCategory})</span>
+                </span>
+                {isActive ? (
+                  <span class="badge text-bg-success">Current</span>
+                ) : (
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline-success"
+                    disabled={switching !== null}
+                    onClick={() => void handleSwitch(m.memberId)}
+                  >
+                    {switching === m.memberId ? "Switching…" : "Switch"}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        {error && <div class="alert alert-danger mt-2 small">✕ {error}</div>}
       </div>
     </div>
   );

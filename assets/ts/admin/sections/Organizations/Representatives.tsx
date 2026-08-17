@@ -132,7 +132,7 @@ export function RepresentativeRow({ rep, onChanged }: { rep: AdminOrganizationRe
   async function patch(body: Record<string, unknown>) {
     setBusy(true);
     try {
-      await api(`/api/v1/admin/members/${rep.memberId}`, { method: "PATCH", body: JSON.stringify(body) });
+      await api(`/api/v1/admin/members/${rep.representativeId}`, { method: "PATCH", body: JSON.stringify(body) });
       toast("Representative updated", "success");
       onChanged();
     } catch (err) {
@@ -146,7 +146,7 @@ export function RepresentativeRow({ rep, onChanged }: { rep: AdminOrganizationRe
     if (!confirm(`Remove ${rep.name} as a representative? Their user account is not deleted.`)) return;
     setBusy(true);
     try {
-      await api(`/api/v1/admin/members/${rep.memberId}`, { method: "DELETE" });
+      await api(`/api/v1/admin/members/${rep.representativeId}`, { method: "DELETE" });
       toast("Representative removed", "success");
       onChanged();
     } catch (err) {

@@ -13,6 +13,7 @@ import {
   MEMBERSHIP_CATEGORIES,
   membershipCategorySchema,
   INDIVIDUAL_MEMBERSHIP_CATEGORIES,
+  memberStatusSchema,
 } from "./membership-categories";
 
 export { MEMBERSHIP_CATEGORIES, membershipCategorySchema, INDIVIDUAL_MEMBERSHIP_CATEGORIES };
@@ -76,7 +77,7 @@ export const adminMemberSummarySchema = z.object({
   name: z.string(),
   email: z.string(),
   membershipCategory: z.string(),
-  status: z.string(),
+  status: memberStatusSchema,
   showOnOrgProfile: z.boolean(),
   createdAt: z.string(),
 });

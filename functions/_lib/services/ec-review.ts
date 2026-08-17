@@ -10,7 +10,7 @@ import { all, first, run } from "../db/queries";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { AppError } from "../errors";
-import { getMemberApplicationById } from "./member-applications";
+import { getMemberApplicationById } from "./membership/applications/queries";
 import type { DatabaseLike } from "../types";
 
 export type EcDecisionValue = "approve" | "decline";

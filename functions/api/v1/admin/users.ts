@@ -33,7 +33,7 @@ interface UserRow {
   created_at: string;
   links_json: string | null;
   member_id: string | null;
-  member_type: string | null;
+  member_category: string | null;
   member_status: string | null;
   member_organization_id: string | null;
   member_organization_name: string | null;
@@ -96,17 +96,33 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const orderBy = resolveOrderBy(sort, ADMIN_USERS_SORT_COLUMNS, "ORDER BY u.role ASC, u.email ASC");
 
+  // "member" covers both an org-less individual (members.user_id set
+  // directly) and an organization representative (members.user_id is NULL
+  // for org-tied aggregates — migration 0000's CHECK — so a representative
+  // resolves only via their own organization_representatives row).
   const users = await all<UserRow>(
     requestDb(c),
     `SELECT u.id, u.email, u.first_name, u.last_name, u.organization_name, u.role, u.active, u.created_at,
             u.links_json,
-            m.id AS member_id, m.member_type, m.status AS member_status,
+            COALESCE(rep.id, mi.id) AS member_id, mca.category_code AS member_category,
+            COALESCE(m.status, mi.status) AS member_status,
             m.organization_id AS member_organization_id, o.name AS member_organization_name,
             (SELECT COUNT(*) FROM event_participants ep WHERE ep.user_id = u.id) AS event_participation_count
      FROM users u
-     LEFT JOIN members m ON m.user_id = u.id
+     -- A user can represent more than one organization at once (migration
+     -- 0037) — join to a single deterministic representative row (earliest
+     -- joined_at) instead of fanning out one result row (and one
+     -- duplicate/miscounted page entry) per represented organization.
+     LEFT JOIN organization_representatives rep ON rep.id = (
+       SELECT r2.id FROM organization_representatives r2
+       WHERE r2.user_id = u.id AND r2.left_at IS NULL
+       ORDER BY r2.joined_at ASC LIMIT 1
+     )
+     LEFT JOIN members m ON m.id = rep.member_id
+     LEFT JOIN members mi ON mi.user_id = u.id
      LEFT JOIN organizations o ON o.id = m.organization_id
-     ${where}
+     LEFT JOIN member_category_assignments mca ON mca.member_id = COALESCE(m.id, mi.id)
+     ${where.replace(/\bm\.id\b/g, "COALESCE(m.id, mi.id)")}
      ${orderBy}
      LIMIT ? OFFSET ?`,
     [...params, limit + 1, offset],
@@ -115,9 +131,18 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const hasMore = users.length > limit;
   const rows = hasMore ? users.slice(0, limit) : users;
 
+  const totalWhere = where.replace(/\bm\.id\b/g, "COALESCE(m.id, mi.id)");
   const totalRow = await first<{ total: number }>(
     requestDb(c),
-    `SELECT COUNT(*) AS total FROM users u LEFT JOIN members m ON m.user_id = u.id ${where}`,
+    `SELECT COUNT(*) AS total FROM users u
+     LEFT JOIN organization_representatives rep ON rep.id = (
+       SELECT r2.id FROM organization_representatives r2
+       WHERE r2.user_id = u.id AND r2.left_at IS NULL
+       ORDER BY r2.joined_at ASC LIMIT 1
+     )
+     LEFT JOIN members m ON m.id = rep.member_id
+     LEFT JOIN members mi ON mi.user_id = u.id
+     ${totalWhere}`,
     params,
   );
   const total = Number(totalRow?.total ?? 0);
@@ -129,7 +154,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
       membership: row.member_id
         ? {
             memberId: row.member_id,
-            membershipCategory: row.member_type,
+            membershipCategory: row.member_category,
             status: row.member_status,
             organizationId: row.member_organization_id,
             organizationName: row.member_organization_name,

@@ -22,6 +22,18 @@ export const voteVisibilitySchema = z.enum(VOTE_VISIBILITIES);
 export const PUBLIC_DETAIL_LEVELS = ["outcome_only", "aggregate", "full_breakdown"] as const;
 export const publicDetailLevelSchema = z.enum(PUBLIC_DETAIL_LEVELS);
 
+export const VOTE_STATUSES = ["scheduled", "open", "closed", "cancelled"] as const;
+export const voteStatusSchema = z.enum(VOTE_STATUSES);
+
+export const VOTE_PROPOSAL_STATUSES = [
+  "open_for_endorsement",
+  "endorsed",
+  "rejected",
+  "withdrawn",
+  "converted_to_vote",
+] as const;
+export const voteProposalStatusSchema = z.enum(VOTE_PROPOSAL_STATUSES);
+
 export const BALLOT_CHOICES = ["in_favor", "opposed", "abstain"] as const;
 
 const MEMBERSHIP_CATEGORY_LETTERS = ["A", "B", "C", "D", "E", "F", "G"] as const;
@@ -52,7 +64,7 @@ export const voteSummaryFieldsSchema = {
   opensAt: z.string(),
   closesAt: z.string(),
   currentRound: z.number(),
-  status: z.string(),
+  status: voteStatusSchema,
   visibility: voteVisibilitySchema,
   publicDetailLevel: publicDetailLevelSchema,
   createdAt: z.string(),
@@ -79,7 +91,7 @@ export const publicVotesListQuerySchema = z.object({
   type: voteTypeSchema.optional(),
   scope: voteScopeTypeSchema.optional(),
   wg: z.string().optional(),
-  status: z.enum(["open", "closed"]).optional(),
+  status: voteStatusSchema.extract(["open", "closed"]).optional(),
   from: z.iso.date().optional(),
   to: z.iso.date().optional(),
   page: z.coerce.number().int().min(1).optional(),
@@ -201,7 +213,7 @@ export const proposalSummarySchema = z.object({
   scopeType: voteScopeTypeSchema,
   scopeId: z.uuid().nullable(),
   proposedByUserId: z.uuid(),
-  status: z.string(),
+  status: voteProposalStatusSchema,
   voteId: z.uuid().nullable(),
   rejectionReason: z.string().nullable(),
   endorsementCount: z.number(),
@@ -333,7 +345,7 @@ export const ADMIN_VOTES_SORT_COLUMNS = [
 ] as const;
 
 export const adminVotesListQuerySchema = paginationQuerySchema.extend({
-  status: z.enum(["scheduled", "open", "closed", "cancelled"]).optional(),
+  status: voteStatusSchema.optional(),
   sort: sortColumnSchema(ADMIN_VOTES_SORT_COLUMNS),
 });
 
@@ -455,7 +467,7 @@ export const adminVoteBallotsRouteSchema = {
 // ── Admin proposal moderation ────────────────────────────────────────
 
 export const adminListProposalsQuerySchema = z.object({
-  status: z.string().optional(),
+  status: voteProposalStatusSchema.optional(),
 });
 
 export const adminListProposalsRouteSchema = {

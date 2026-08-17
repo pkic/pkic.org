@@ -8,17 +8,31 @@
 import { all, first } from "../../db/queries";
 import { parseJsonSafe } from "../../utils/json";
 import { AppError } from "../../errors";
-import { VOTING_CATEGORIES } from "../member-applications";
+import { VOTING_CATEGORIES } from "../membership/applications/create";
 import { getWorkingGroupBySlugOrId } from "../working-groups";
+import type {
+  VOTE_TYPES,
+  VOTE_SCOPE_TYPES,
+  THRESHOLD_TYPES,
+  VOTE_STATUSES,
+  VOTE_PROPOSAL_STATUSES,
+  VOTE_VISIBILITIES,
+  PUBLIC_DETAIL_LEVELS,
+  BALLOT_CHOICES,
+} from "../../../../assets/shared/schemas/votes";
 import type { AuthMember, DatabaseLike } from "../../types";
 
-export type VoteType = "election" | "motion" | "consultation";
-export type VoteScopeType = "forum" | "working_group";
-export type ThresholdType = "simple_majority" | "supermajority" | "successive_elimination";
-export type VoteStatus = "scheduled" | "open" | "closed" | "cancelled";
-export type VoteVisibility = "private" | "public";
-export type PublicDetailLevel = "outcome_only" | "aggregate" | "full_breakdown";
-export type BallotChoice = "in_favor" | "opposed" | "abstain";
+// Derived from the canonical shared schema (assets/shared/schemas/votes.ts)
+// rather than hand-duplicated, so the DB-facing service layer and the API
+// response contract can never drift apart (PR #1 review §1.3).
+export type VoteType = (typeof VOTE_TYPES)[number];
+export type VoteScopeType = (typeof VOTE_SCOPE_TYPES)[number];
+export type ThresholdType = (typeof THRESHOLD_TYPES)[number];
+export type VoteStatus = (typeof VOTE_STATUSES)[number];
+export type VoteProposalStatus = (typeof VOTE_PROPOSAL_STATUSES)[number];
+export type VoteVisibility = (typeof VOTE_VISIBILITIES)[number];
+export type PublicDetailLevel = (typeof PUBLIC_DETAIL_LEVELS)[number];
+export type BallotChoice = (typeof BALLOT_CHOICES)[number];
 
 export const MOTION_CHOICES = new Set<BallotChoice>(["in_favor", "opposed", "abstain"]);
 

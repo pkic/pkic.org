@@ -197,15 +197,26 @@ export async function getAdminWorkingGroupDetail(
     last_name: string | null;
     email: string;
     org_name: string | null;
-    member_type: string | null;
+    category_code: string | null;
     joined_at: string;
   }>(
     db,
-    `SELECT u.id AS user_id, u.first_name, u.last_name, u.email, o.name AS org_name, m.member_type, wgm.joined_at
+    `SELECT u.id AS user_id, u.first_name, u.last_name, u.email, o.name AS org_name, mca.category_code, wgm.joined_at
      FROM working_group_members wgm
      JOIN users u ON u.id = wgm.user_id
-     LEFT JOIN members m ON m.user_id = wgm.user_id AND m.status = 'active'
+     -- A WG member can represent more than one organization at once
+     -- (migration 0037) — join to a single deterministic representative
+     -- row (earliest joined_at) instead of fanning out one result row per
+     -- represented organization.
+     LEFT JOIN organization_representatives rep ON rep.id = (
+       SELECT r2.id FROM organization_representatives r2
+       WHERE r2.user_id = wgm.user_id AND r2.left_at IS NULL
+       ORDER BY r2.joined_at ASC LIMIT 1
+     )
+     LEFT JOIN members m ON m.id = rep.member_id
+     LEFT JOIN members mi ON mi.user_id = wgm.user_id AND mi.status = 'active'
      LEFT JOIN organizations o ON o.id = m.organization_id
+     LEFT JOIN member_category_assignments mca ON mca.member_id = COALESCE(m.id, mi.id)
      WHERE wgm.working_group_id = ? AND wgm.left_at IS NULL
      ORDER BY u.last_name ASC, u.first_name ASC`,
     [row.id],
@@ -218,7 +229,7 @@ export async function getAdminWorkingGroupDetail(
       name: [m.first_name, m.last_name].filter(Boolean).join(" ") || "Unknown",
       email: m.email,
       organizationName: m.org_name,
-      memberCategory: m.member_type,
+      memberCategory: m.category_code,
       joinedAt: m.joined_at,
     })),
   };
@@ -372,10 +383,19 @@ export async function addMemberToWorkingGroup(db: DatabaseLike, wgId: string, ta
     throw new AppError(404, "USER_NOT_FOUND", "User not found");
   }
 
-  const membership = await first<{ member_type: string }>(db, "SELECT member_type FROM members WHERE user_id = ?", [
-    targetUserId,
-  ]);
-  assertCaConstraint(wg, membership?.member_type ?? null);
+  const membership = await first<{ category_code: string }>(
+    db,
+    `SELECT mca.category_code
+     FROM member_category_assignments mca
+     WHERE mca.member_id = COALESCE(
+       (SELECT m.id FROM members m
+          JOIN organization_representatives rep ON rep.member_id = m.id
+          WHERE rep.user_id = ? AND rep.left_at IS NULL),
+       (SELECT id FROM members WHERE user_id = ? AND status = 'active')
+     )`,
+    [targetUserId, targetUserId],
+  );
+  assertCaConstraint(wg, membership?.category_code ?? null);
 
   await addWorkingGroupMember(db, wg, targetUserId);
 }

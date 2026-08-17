@@ -10,7 +10,7 @@ import { writeAuditLog } from "../../../../../_lib/services/audit";
 import {
   addApplicationCommunication,
   getMemberApplicationById,
-} from "../../../../../_lib/services/member-applications";
+} from "../../../../../_lib/services/membership/applications/queries";
 import { AppError } from "../../../../../_lib/errors";
 import { applicationCommunicationCreateRouteSchema } from "../../../../../../assets/shared/schemas/admin-applications";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";

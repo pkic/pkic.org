@@ -8,7 +8,7 @@
 import { openApiRoute } from "../../../_lib/openapi/route";
 import { AppError } from "../../../_lib/errors";
 import { json } from "../../../_lib/http";
-import { getPublicMemberById } from "../../../_lib/services/members-directory";
+import { getPublicMemberById } from "../../../_lib/services/membership/directory";
 import { memberDetailRouteSchema } from "../../../../assets/shared/schemas/members-directory";
 
 const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=60";

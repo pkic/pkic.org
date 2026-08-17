@@ -187,7 +187,7 @@ export async function findOrCreateUser(db: DatabaseLike, payload: FindOrCreateUs
  * Same resolution as `findOrCreateUser`, but returns an unexecuted
  * statement instead of writing immediately — lets a caller that's already
  * assembling a larger atomic `db.batch()` (e.g. admin-members.ts's
- * createAdminMember, member-provisioning.ts's provisionOrganizationAndMembers)
+ * createAdminMember, membership/provisioning.ts's provisionOrganizationMembership)
  * fold the user write into that same transition instead of committing it
  * ahead of a batch that might still fail.
  */

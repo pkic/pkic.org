@@ -10,7 +10,8 @@ import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { AppError } from "../../../../../_lib/errors";
 import { json } from "../../../../../_lib/http";
 import { requireMemberFromRequest } from "../../../../../_lib/auth/member";
-import { submitApplicationConcern, VOTING_CATEGORIES } from "../../../../../_lib/services/member-applications";
+import { submitApplicationConcern } from "../../../../../_lib/services/membership/applications/queries";
+import { VOTING_CATEGORIES } from "../../../../../_lib/services/membership/applications/create";
 import { applicationConcernCreateRouteSchema } from "../../../../../../assets/shared/schemas/member-applications";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 

@@ -77,9 +77,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     },
     userId: user.id,
     attendanceType: (body.attendanceType ?? deriveEventAttendanceType(body.dayAttendance)) as
-      | "in_person"
-      | "virtual"
-      | "on_demand",
+      "in_person" | "virtual" | "on_demand",
     dayAttendance: body.dayAttendance,
     sourceType: "invite",
     customAnswersJson: Object.keys(customAnswers).length > 0 ? JSON.stringify(customAnswers) : null,

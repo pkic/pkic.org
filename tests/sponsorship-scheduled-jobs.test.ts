@@ -44,8 +44,8 @@ describe("Sponsorship renewal reminders & auto-lapse", () => {
 
     organizationId = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO organizations (id, name, normalized_name, membership_category, sponsor_tier, sponsor_start_date, created_at, updated_at)
-       VALUES (?, 'Renewal Org', 'renewal org', 'B', 'Gold', datetime('now'), datetime('now'), datetime('now'))`,
+      `INSERT INTO organizations (id, name, normalized_name, sponsor_tier, sponsor_start_date, created_at, updated_at)
+       VALUES (?, 'Renewal Org', 'renewal org', 'Gold', datetime('now'), datetime('now'), datetime('now'))`,
     )
       .bind(organizationId)
       .run();

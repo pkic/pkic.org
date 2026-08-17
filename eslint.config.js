@@ -10,7 +10,7 @@ const sourceTypeScriptFiles = [
   "assets/shared/**/*.ts",
   "tests/**/*.ts",
 ];
-const toolingTypeScriptFiles = ["*.config.ts"];
+const toolingTypeScriptFiles = ["*.config.ts", "tests/tools/**/*.ts"];
 const allTypeScriptFiles = [...sourceTypeScriptFiles, ...toolingTypeScriptFiles];
 
 const typedTypeScriptConfigs = tseslint.configs.recommendedTypeChecked.map((config) => ({

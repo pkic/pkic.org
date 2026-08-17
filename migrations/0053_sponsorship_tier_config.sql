@@ -12,7 +12,7 @@ CREATE TABLE sponsorship_tier_config (
   tier         TEXT NOT NULL,
   currency     TEXT NOT NULL DEFAULT 'usd',
   amount_cents INTEGER NOT NULL,
-  active       INTEGER NOT NULL DEFAULT 1,
+  active       INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL,
   UNIQUE(sponsor_type, tier)
@@ -28,7 +28,6 @@ INSERT INTO sponsorship_tier_config (id, sponsor_type, tier, currency, amount_ce
   (lower(hex(randomblob(16))), 'event', 'Inspirator', 'usd', 2000000, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), 'event', 'Leader',     'usd', 3500000, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'));
 
--- Price snapshot on the transaction, so a later config change never affects
--- an already-completed sponsorship's recorded price.
-ALTER TABLE sponsorships ADD COLUMN price_amount_cents INTEGER;
-ALTER TABLE sponsorships ADD COLUMN price_currency TEXT;
+-- sponsorships.price_amount_cents/price_currency (the price snapshot this
+-- config feeds) are defined directly in migration 0036's initial
+-- sponsorships table, not added here.

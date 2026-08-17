@@ -46,6 +46,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     userId: verified.member.userId,
     sessionId: verified.sessionId,
     expiresAt: verified.expiresAt,
+    activeMemberId: verified.member.memberId,
   });
 
   const response = json({ success: true, expiresAt: verified.expiresAt, member: verified.member });

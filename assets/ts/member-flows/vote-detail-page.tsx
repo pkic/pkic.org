@@ -87,8 +87,7 @@ function MotionResult({ result }: { result: Record<string, unknown> }) {
 function ElectionResult({ result, candidates }: { result: Record<string, unknown>; candidates: VoteCandidate[] }) {
   const winnerCandidateId = result.winnerCandidateId as string | null | undefined;
   const rounds = result.rounds as
-    | { round: number; counts: Record<string, number>; eliminatedCandidateIds: string[] }[]
-    | undefined;
+    { round: number; counts: Record<string, number>; eliminatedCandidateIds: string[] }[] | undefined;
   const nameOf = (id: string): string => candidates.find((c) => c.id === id)?.candidateName ?? id;
 
   return (

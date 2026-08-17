@@ -47,7 +47,7 @@ interface UserDetailRow {
 
 interface MembershipRow {
   id: string;
-  member_type: string;
+  category_code: string;
   status: string;
   show_on_org_profile: number;
   organization_id: string | null;
@@ -95,13 +95,35 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     }
   }
 
+  // Individual membership (members.user_id set) or organization
+  // representative (members.user_id is NULL for org-tied aggregates —
+  // migration 0000's CHECK — so a representative resolves only via their
+  // own organization_representatives row).
+  // A user can hold an individual membership and/or represent more than one
+  // organization concurrently (migration 0037) — this summary shows
+  // exactly one, so order deterministically (individual row first, then
+  // organizations by earliest joined_at) rather than an arbitrary LIMIT 1
+  // over an unordered UNION.
   const memberRow = await first<MembershipRow>(
     requestDb(c),
-    `SELECT m.id, m.member_type, m.status, m.show_on_org_profile, m.organization_id, o.name AS organization_name, m.created_at
+    `SELECT m.id, mca.category_code, m.status, 1 AS show_on_org_profile, NULL AS organization_id, NULL AS organization_name, m.created_at,
+            '0_' || m.created_at AS sort_key
      FROM members m
-     LEFT JOIN organizations o ON o.id = m.organization_id
-     WHERE m.user_id = ?`,
-    [userId],
+     JOIN member_category_assignments mca ON mca.member_id = m.id
+     WHERE m.user_id = ?
+
+     UNION ALL
+
+     SELECT r.id, mca.category_code, m.status, r.show_on_org_profile, m.organization_id, o.name AS organization_name, r.created_at,
+            '1_' || r.joined_at AS sort_key
+     FROM organization_representatives r
+     JOIN members m ON m.id = r.member_id
+     JOIN organizations o ON o.id = m.organization_id
+     JOIN member_category_assignments mca ON mca.member_id = m.id
+     WHERE r.user_id = ? AND r.left_at IS NULL
+     ORDER BY sort_key ASC
+     LIMIT 1`,
+    [userId, userId],
   );
 
   let membership = null;
@@ -117,7 +139,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     );
     membership = {
       memberId: memberRow.id,
-      membershipCategory: memberRow.member_type,
+      membershipCategory: memberRow.category_code,
       status: memberRow.status,
       showOnOrgProfile: memberRow.show_on_org_profile === 1,
       organizationId: memberRow.organization_id,

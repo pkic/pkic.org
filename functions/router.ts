@@ -7,7 +7,7 @@ import {
   runConsultationBatch,
   runEcReviewBatch,
   runMembershipDueWork,
-} from "./_lib/services/membership-scheduled-jobs";
+} from "./_lib/services/membership/scheduled-jobs";
 import { runSponsorshipDueWork } from "./_lib/services/sponsorship-scheduled-jobs";
 import { runVotesDueWork } from "./_lib/services/votes-scheduled-jobs";
 import { runWeeklyWgChairDigest } from "./_lib/services/wg-chair-digest";
@@ -98,7 +98,7 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
       const dueWork = await runScheduledDueWork(env);
       // Membership due-work (on-hold reminders/auto-close,
       // EC-window auto-approve, Google Groups sync) runs as a sibling call on
-      // the same 15-minute trigger — see membership-scheduled-jobs.ts's own
+      // the same 15-minute trigger — see membership/scheduled-jobs.ts's own
       // note on why this isn't woven into runScheduledDueWork's pass loop.
       const membershipDueWork = await runMembershipDueWork(env.DB, env);
       // Sponsorship renewal reminders/auto-lapse — same "sibling

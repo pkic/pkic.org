@@ -12,7 +12,10 @@
 import { z } from "zod";
 import { normalizedEmailSchema, linksSchema } from "./api";
 import { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "./admin-members";
+import { MEMBER_STATUSES, memberStatusSchema } from "./membership-categories";
 import { paginationQuerySchema, paginatedResponseSchema, sortColumnSchema } from "./pagination";
+
+export { MEMBER_STATUSES, memberStatusSchema };
 
 function trimmedString(min: number, max: number): z.ZodString {
   return z.string().trim().min(min).max(max);
@@ -27,9 +30,6 @@ export const INDIVIDUAL_MEMBERSHIP_CATEGORIES_LIST = MEMBERSHIP_CATEGORIES.filte
   INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(c),
 ) as [string, ...string[]];
 export const individualMembershipCategorySchema = z.enum(INDIVIDUAL_MEMBERSHIP_CATEGORIES_LIST);
-
-export const MEMBER_STATUSES = ["active", "inactive", "pending", "lapsed"] as const;
-export const memberStatusSchema = z.enum(MEMBER_STATUSES);
 
 export const organizationIdParamsSchema = z.object({ id: z.uuid() });
 export const memberIdParamsSchema = z.object({ id: z.uuid() });
@@ -52,19 +52,26 @@ export const adminOrganizationSummarySchema = z.object({
   updatedAt: z.string(),
 });
 
-// membershipCategory is deliberately absent here — category is now an
-// organization-level fact (organizations.membership_category), surfaced
-// once at the top of adminOrganizationDetailSchema rather than repeated
-// per representative. members.member_type still mirrors it in the DB for
-// org-tied representatives, but that's a denormalized implementation
-// detail, not something this API exposes per-row anymore.
+// membershipCategory is deliberately absent here — category lives once per
+// aggregate (member_category_assignments, migration 0037), surfaced once at
+// the top of adminOrganizationDetailSchema rather than repeated per
+// representative.
+//
+// Two distinct identities, both explicit rather than one polymorphic
+// `memberId` (PR #1 review): `representativeId` is this person's own
+// organization_representatives.id — the id PATCH/DELETE
+// /api/v1/admin/members/:id expects to edit/remove *this* representative.
+// `membershipId` is the shared members.id aggregate every representative of
+// this organization has in common — never representative-specific, and
+// never the id to pass to edit/remove a single representative.
 export const adminOrganizationRepresentativeSchema = z.object({
-  memberId: z.uuid(),
+  representativeId: z.uuid(),
+  membershipId: z.uuid().nullable(),
   userId: z.uuid(),
   name: z.string(),
   email: z.string(),
   jobTitle: z.string().nullable(),
-  status: z.string(),
+  status: memberStatusSchema,
   showOnOrgProfile: z.boolean(),
   isPrimaryContact: z.boolean(),
   isSecondaryContact: z.boolean(),
@@ -168,10 +175,11 @@ export const organizationUpdateRouteSchema = {
 // ── Add representative to an existing organization ─────────────────────────
 
 // membershipCategory is deliberately not accepted here — an added
-// representative always inherits organizations.membership_category (set
-// once per org via PATCH /api/v1/admin/organizations/:id). If the
-// organization has no category set yet, the request is rejected (422) and
-// staff must set the org's category first.
+// representative always inherits the organization's shared aggregate
+// category (member_category_assignments, set once per org via PATCH
+// /api/v1/admin/organizations/:id). If the organization has no category set
+// yet, the request is rejected (422) and staff must set the org's category
+// first.
 export const organizationRepresentativeAddSchema = z.object({
   name: trimmedString(1, 200),
   email: normalizedEmailSchema,
@@ -265,7 +273,7 @@ export const memberDeleteRouteSchema = {
   tags: ["Membership"],
   summary: "Remove a membership (detach a representative)",
   description:
-    "Deletes the members row. The underlying user account is untouched. If the removed person was an organization's primary or secondary contact, that slot is cleared.",
+    "Closes the org-less individual members row, or the organization_representatives row for an organization representative (:id is disambiguated by lookup, not by caller). The underlying user account and, for a representative, the organization's shared aggregate are untouched. If the removed person held the organization's primary/secondary contact or voting delegate role, that role's grant is revoked — but only if this person actually held it, never another representative's.",
   request: { params: memberIdParamsSchema },
   responses: {
     "200": { description: "Membership removed." },
@@ -279,7 +287,7 @@ export const confirmSecondaryContactRouteSchema = {
   tags: ["Organizations"],
   summary: "Confirm a pending secondary contact nomination",
   description:
-    "Confirms the nomination held in organizations.pending_secondary_contact_user_id (submitted by the primary contact via PATCH /api/v1/me/organization/secondary-contact), promoting it to secondary_contact_user_id.",
+    "Confirms the nomination held in organization_secondary_contact_nominations (submitted by the primary contact via PATCH /api/v1/me/organization/secondary-contact), granting the nominee the role-secondary_contact representative role (migration 0038).",
   request: { params: organizationIdParamsSchema },
   responses: {
     "200": {
@@ -297,13 +305,16 @@ export const confirmSecondaryContactRouteSchema = {
 
 // ── Organization content moderation queue ──────────────────────────
 
+export const CONTENT_REVIEW_STATUSES = ["pending", "approved", "rejected", "withdrawn"] as const;
+export const contentReviewStatusSchema = z.enum(CONTENT_REVIEW_STATUSES);
+
 export const contentReviewSummarySchema = z.object({
   id: z.uuid(),
   organizationId: z.uuid(),
   submittedByUserId: z.uuid(),
   proposedChanges: z.record(z.string(), z.unknown()),
   hasLogoChange: z.boolean(),
-  status: z.string(),
+  status: contentReviewStatusSchema,
   reviewerUserId: z.uuid().nullable(),
   reviewerNote: z.string().nullable(),
   submittedAt: z.string(),
@@ -314,7 +325,7 @@ export const contentReviewSummarySchema = z.object({
 });
 
 export const contentReviewsListQuerySchema = paginationQuerySchema.extend({
-  status: z.enum(["pending", "approved", "rejected", "withdrawn"]).optional(),
+  status: contentReviewStatusSchema.optional(),
 });
 
 export const contentReviewsListRouteSchema = {
