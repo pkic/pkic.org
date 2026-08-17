@@ -37,6 +37,7 @@ describe("renderMarkdownReport", () => {
       needsEmailIndividuals: [],
       bareRosterUsers: [],
       wgOnlyRosterUsers: [],
+      invalidLinks: [],
       unmatchedEventSponsorships: [],
       nonMemberSponsorships: { created: 0, unmatchedEvents: [] },
       workingGroupCounts: { ca: 0 },
@@ -70,6 +71,7 @@ describe("renderMarkdownReport", () => {
       needsEmailIndividuals: [],
       bareRosterUsers: [],
       wgOnlyRosterUsers: [],
+      invalidLinks: [],
       unmatchedEventSponsorships: [],
       nonMemberSponsorships: { created: 0, unmatchedEvents: [] },
       workingGroupCounts: {},
@@ -77,5 +79,29 @@ describe("renderMarkdownReport", () => {
     const markdown = renderMarkdownReport(report);
     expect(markdown).toContain("**Acme Corp** (`acme.yaml`, category A) — no roster subscriber at this domain");
     expect(markdown).toContain("Alice (CEO)");
+  });
+
+  it("includes dropped invalid links with their file and offending URL", () => {
+    const report = {
+      generatedAt: "2026-08-17T00:00:00.000Z",
+      totals: {
+        yamlFiles: 1,
+        matchedOrgs: 1,
+        sentinelIndividuals: 0,
+        unmatched: [],
+        missingCategory: [],
+        ambiguousPairing: [],
+      },
+      needsEmailIndividuals: [],
+      bareRosterUsers: [],
+      wgOnlyRosterUsers: [],
+      invalidLinks: [{ file: "acme.yaml", name: "Acme Corp", url: "ttps://x.com/acme" }],
+      unmatchedEventSponsorships: [],
+      nonMemberSponsorships: { created: 0, unmatchedEvents: [] },
+      workingGroupCounts: {},
+    };
+    const markdown = renderMarkdownReport(report);
+    expect(markdown).toContain("Invalid links dropped");
+    expect(markdown).toContain("**Acme Corp** (`acme.yaml`) — `ttps://x.com/acme`");
   });
 });

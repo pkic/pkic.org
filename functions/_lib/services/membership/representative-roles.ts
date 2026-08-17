@@ -15,20 +15,14 @@ import { uuid } from "../../utils/ids";
 import { AppError } from "../../errors";
 import { isActiveRepresentative } from "./representatives";
 import type { DatabaseLike, StatementLike } from "../../types";
+import {
+  REPRESENTATIVE_ROLE_IDS,
+  isRepresentativeRoleId,
+  type RepresentativeRoleId,
+} from "../../../../assets/shared/schemas/representative-roles";
 
-export const REPRESENTATIVE_ROLE_IDS = {
-  primaryContact: "role-primary_contact",
-  secondaryContact: "role-secondary_contact",
-  votingDelegate: "role-voting_delegate",
-} as const;
-
-export type RepresentativeRoleId = (typeof REPRESENTATIVE_ROLE_IDS)[keyof typeof REPRESENTATIVE_ROLE_IDS];
-
-const REPRESENTATIVE_ROLE_ID_SET: ReadonlySet<string> = new Set(Object.values(REPRESENTATIVE_ROLE_IDS));
-
-export function isRepresentativeRoleId(roleId: string): roleId is RepresentativeRoleId {
-  return REPRESENTATIVE_ROLE_ID_SET.has(roleId);
-}
+export { REPRESENTATIVE_ROLE_IDS, isRepresentativeRoleId };
+export type { RepresentativeRoleId };
 
 /**
  * Builds [revoke-previous-holder, insert-new-grant] statements for one of

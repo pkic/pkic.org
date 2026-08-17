@@ -8,6 +8,55 @@
 import { randomUUID } from "node:crypto";
 import { normalizeEmail, convertHugoShortcodes } from "./parsers.mjs";
 import { normalizeOrgName } from "./reconciliation.mjs";
+import { linksSchema, serializeLinks } from "../../assets/shared/schemas/links.ts";
+
+/**
+ * Canonical `links_json` codec entry point for the importer — validates
+ * against the same `linksSchema` (URL format, http(s)-only, max 15
+ * entries, no duplicates) that every runtime write path uses, instead of a
+ * raw `JSON.stringify`. A single malformed link in one YAML file (real
+ * examples found in production data: "ttps://..." typos missing the
+ * leading "h") must not abort the entire multi-hundred-organization
+ * import — invalid or duplicate entries are dropped and reported via
+ * `onInvalid` instead of thrown. The final, filtered list is still run
+ * through `linksSchema.parse` as a canonical-contract guarantee (belt and
+ * suspenders — should always pass given the pre-filtering below, but this
+ * is what actually enforces "never persist something linksSchema would
+ * reject", not just "we tried to filter"). Returns `null` for an empty
+ * (or fully-filtered-out) list, matching every call site's prior
+ * null-when-empty convention.
+ *
+ * @param {string[] | null | undefined} links
+ * @param {(url: string) => void} [onInvalid]
+ */
+export function buildLinksJson(links, onInvalid = () => {}) {
+  if (!links || links.length === 0) return null;
+  const seen = new Set();
+  const valid = [];
+  for (const raw of links) {
+    const trimmed = String(raw ?? "").trim();
+    let ok =
+      trimmed.length > 0 && trimmed.length <= 500 && (trimmed.startsWith("https://") || trimmed.startsWith("http://"));
+    if (ok) {
+      try {
+        new URL(trimmed);
+      } catch {
+        ok = false;
+      }
+    }
+    const key = trimmed.toLowerCase();
+    if (!ok || seen.has(key)) {
+      onInvalid(raw);
+      continue;
+    }
+    seen.add(key);
+    valid.push(trimmed);
+  }
+  const capped = valid.slice(0, 15);
+  for (const dropped of valid.slice(15)) onInvalid(dropped);
+  if (capped.length === 0) return null;
+  return serializeLinks(linksSchema.parse(capped));
+}
 
 // ── SQL string helpers (matches scripts/seed-event.mjs conventions) ────────
 
@@ -25,8 +74,10 @@ export function toSqlNullableText(value) {
  * `organizations` upsert — no `membership_category`/`social_*` columns
  * (dropped by Phase 1; category lives in `member_category_assignments`,
  * social links in the canonical `links_json` array).
+ *
+ * @param {{ slug: string, name: string, doc: Record<string, any>, logoR2Key: string | null, onInvalidLink?: (url: string) => void }} input
  */
-export function buildUpsertOrganizationStatement({ slug, name, doc, logoR2Key }) {
+export function buildUpsertOrganizationStatement({ slug, name, doc, logoR2Key, onInvalidLink = () => {} }) {
   const normalizedOrgName = normalizeOrgName(name);
   const social = doc.social ?? {};
   const blog = doc.blog ?? {};
@@ -38,9 +89,9 @@ export function buildUpsertOrganizationStatement({ slug, name, doc, logoR2Key })
   // (currently nonexistent) case of a file with no `id:` key at all.
   const urlSlug = String(doc.id ?? slug).trim() || slug;
   // Canonical persisted shape is a plain URL array (assets/shared/schemas/
-  // api.ts's linksSchema) — no per-provider organizations.social_* columns.
+  // links.ts's linksSchema) — no per-provider organizations.social_* columns.
   const links = [social.linkedin, social.x, social.facebook, social.instagram, social.youtube].filter(Boolean);
-  const linksJson = links.length > 0 ? JSON.stringify(links) : null;
+  const linksJson = buildLinksJson(links, onInvalidLink);
 
   const statement = `
 INSERT INTO organizations (

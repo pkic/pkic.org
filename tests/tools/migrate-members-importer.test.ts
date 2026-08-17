@@ -187,4 +187,150 @@ memberType: H5
     const sentinelUser = queryD1(persistTo, "SELECT email FROM users WHERE email = 'unmatched-bob@members.invalid'");
     expect(sentinelUser).toHaveLength(1);
   });
+
+  it("rejects the entire import — no SQL generated at all — when any record has a missing or unknown category", () => {
+    const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pkic-importer-fixture-"));
+    tmpDirs.push(fixtureRoot);
+    const membersDir = path.join(fixtureRoot, "members");
+    const csvDir = path.join(fixtureRoot, "csv");
+    fs.mkdirSync(membersDir);
+    fs.mkdirSync(csvDir);
+
+    // One perfectly valid org, one with no memberType at all — the whole
+    // batch must be rejected, not just the bad record silently dropped or
+    // silently imported with a null category (PR #1 review blocker 1).
+    fs.writeFileSync(
+      path.join(membersDir, "acme.yaml"),
+      `id: acme\nname: Acme Corp\nmemberType: A\norganizationDomains:\n  - acme.example\n`,
+      "utf8",
+    );
+    fs.writeFileSync(path.join(membersDir, "no-category.yaml"), `id: no-category\nname: No Category Inc\n`, "utf8");
+
+    writeFixtureRosterCsv(path.join(csvDir, "pkic.csv"), []);
+    for (const wg of ["ca", "cbom", "cm", "pkimm", "pqc", "tcwg"]) {
+      writeFixtureRosterCsv(path.join(csvDir, `${wg}.csv`), []);
+    }
+
+    expect(() =>
+      buildMigration({
+        uploadLogos: false,
+        membersDir,
+        csvDir,
+        sponsorsYamlPath: path.join(fixtureRoot, "sponsors-does-not-exist.yaml"),
+      }),
+    ).toThrowError(/Category preflight failed: 1 record\(s\) rejected\. No SQL was generated\./);
+  });
+
+  it("is idempotent: running the generated SQL twice against the same D1 produces identical row counts and identities", () => {
+    const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pkic-importer-fixture-"));
+    tmpDirs.push(fixtureRoot);
+    const membersDir = path.join(fixtureRoot, "members");
+    const csvDir = path.join(fixtureRoot, "csv");
+    fs.mkdirSync(membersDir);
+    fs.mkdirSync(csvDir);
+
+    // Org-tied member with two representatives (primary + secondary
+    // contact roles), a consortium sponsorship, and an event sponsorship
+    // against a known EVENT_NAME_ALIASES entry — exercises every table
+    // this migration writes to, so a rerun exercising the same rows is a
+    // meaningful idempotency check, not just "no duplicate orgs".
+    fs.writeFileSync(
+      path.join(membersDir, "acme.yaml"),
+      `id: acme
+name: Acme Corp
+memberType: A
+organizationDomains:
+  - acme.example
+memberSince: "2020-01-01"
+description: "A test organization."
+website: https://acme.example
+representatives:
+  - name: Alice Anderson
+    role: CEO
+  - name: Carol Contact
+    role: COO
+sponsor:
+  level: gold
+  since: "2021-01-01"
+  sponsoring:
+    Post-Quantum Cryptography Conference Amsterdam 2023:
+      level: silver
+`,
+      "utf8",
+    );
+    fs.writeFileSync(path.join(membersDir, "bob.yaml"), `id: bob\nname: Bob Individual\nmemberType: H5\n`, "utf8");
+
+    writeFixtureRosterCsv(path.join(csvDir, "pkic.csv"), [
+      ["alice@acme.example", "Alice", "x", "x", "x", "x", "2023", "01", "15", "10", "00", "00"],
+      ["carol@acme.example", "Carol", "x", "x", "x", "x", "2023", "01", "16", "10", "00", "00"],
+    ]);
+    writeFixtureRosterCsv(path.join(csvDir, "ca.csv"), [
+      ["alice@acme.example", "Alice", "x", "x", "x", "x", "2023", "01", "15", "10", "00", "00"],
+    ]);
+    for (const wg of ["cbom", "cm", "pkimm", "pqc", "tcwg"]) {
+      writeFixtureRosterCsv(path.join(csvDir, `${wg}.csv`), []);
+    }
+
+    const { sql } = buildMigration({
+      uploadLogos: false,
+      membersDir,
+      csvDir,
+      sponsorsYamlPath: path.join(fixtureRoot, "sponsors-does-not-exist.yaml"),
+    });
+    const sqlFile = path.join(fixtureRoot, "import.sql");
+    fs.writeFileSync(sqlFile, sql, "utf8");
+
+    const persistTo = fs.mkdtempSync(path.join(os.tmpdir(), "pkic-importer-d1-idempotency-"));
+    tmpDirs.push(persistTo);
+    runWrangler(["d1", "migrations", "apply", "DB", "--env", "local", "--local", "--persist-to", persistTo]);
+
+    function runImport(): void {
+      runWrangler(["d1", "execute", "DB", "--env", "local", "--local", "--persist-to", persistTo, "--file", sqlFile]);
+    }
+
+    function snapshot(): Record<string, Record<string, unknown>[]> {
+      return {
+        organizations: queryD1(persistTo, "SELECT id, normalized_name FROM organizations ORDER BY normalized_name"),
+        members: queryD1(persistTo, "SELECT id, member_type, organization_id, user_id FROM members ORDER BY id"),
+        categoryAssignments: queryD1(
+          persistTo,
+          "SELECT member_id, category_code FROM member_category_assignments ORDER BY member_id",
+        ),
+        representatives: queryD1(
+          persistTo,
+          "SELECT id, member_id, user_id FROM organization_representatives ORDER BY id",
+        ),
+        roles: queryD1(
+          persistTo,
+          "SELECT id, user_id, role_id, context_id FROM user_roles WHERE context_type = 'organization' ORDER BY id",
+        ),
+        sponsorships: queryD1(
+          persistTo,
+          "SELECT id, sponsor_type, organization_id, event_id, tier FROM sponsorships ORDER BY id",
+        ),
+        workingGroupMembers: queryD1(
+          persistTo,
+          "SELECT id, working_group_id, user_id FROM working_group_members ORDER BY id",
+        ),
+      };
+    }
+
+    runImport();
+    const first = snapshot();
+
+    // Sanity: the fixture actually exercised every table being compared —
+    // an idempotency check over all-empty tables would be vacuous.
+    expect(first.organizations).toHaveLength(1);
+    expect(first.members).toHaveLength(2);
+    expect(first.categoryAssignments).toHaveLength(2);
+    expect(first.representatives).toHaveLength(2);
+    expect(first.roles.length).toBeGreaterThanOrEqual(2); // primary + secondary contact
+    expect(first.sponsorships).toHaveLength(2); // consortium + event
+    expect(first.workingGroupMembers).toHaveLength(1);
+
+    runImport();
+    const second = snapshot();
+
+    expect(second).toEqual(first);
+  });
 });

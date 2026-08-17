@@ -49,6 +49,9 @@ export function renderMarkdownReport(report) {
   lines.push(
     `- Non-member sponsorships created from data/sponsors.yaml (consortium + event rows): ${report.nonMemberSponsorships.created}`,
   );
+  lines.push(
+    `- Invalid links dropped (failed canonical URL/protocol validation, or a duplicate — see linksSchema): ${report.invalidLinks.length}`,
+  );
   lines.push("");
   lines.push("## Working group roster membership counts");
   for (const [slug, count] of Object.entries(report.workingGroupCounts)) {
@@ -107,6 +110,11 @@ export function renderMarkdownReport(report) {
   );
   for (const item of report.nonMemberSponsorships.unmatchedEvents) {
     lines.push(`- **${item.name}** — \`${item.eventName}\` (tier ${item.tier})`);
+  }
+  lines.push("");
+  lines.push("## Invalid links dropped — fix the source YAML and rerun");
+  for (const item of report.invalidLinks) {
+    lines.push(`- **${item.name}** (\`${item.file}\`) — \`${item.url}\``);
   }
   return lines.join("\n");
 }

@@ -10,7 +10,42 @@ import {
   buildUpsertUserStatement,
   buildIndividualMemberAggregateStatements,
   buildWorkingGroupMemberStatement,
+  buildLinksJson,
 } from "../../scripts/migrate-members/sql-renderer.mjs";
+
+describe("buildLinksJson", () => {
+  it("returns null for an empty or all-invalid list", () => {
+    expect(buildLinksJson([])).toBeNull();
+    expect(buildLinksJson(null)).toBeNull();
+    expect(buildLinksJson(["ttps://x.com/acme", "not-a-url"])).toBeNull();
+  });
+
+  it("validates against the canonical linksSchema: rejects non-http(s), drops invalid entries instead of throwing", () => {
+    const invalid: string[] = [];
+    const result = buildLinksJson(
+      ["https://linkedin.com/company/acme", "ttps://x.com/acme", "ftp://bad.example"],
+      (url: string) => invalid.push(url),
+    );
+    expect(result).toBe(JSON.stringify(["https://linkedin.com/company/acme"]));
+    expect(invalid).toEqual(["ttps://x.com/acme", "ftp://bad.example"]);
+  });
+
+  it("dedupes case-insensitively and caps at 15 entries, reporting both the duplicate and the over-cap entry as invalid", () => {
+    const links = Array.from({ length: 16 }, (_, i) => `https://example.com/${i}`);
+    links.push("HTTPS://EXAMPLE.COM/0"); // case-insensitive duplicate of the first
+    const invalid: string[] = [];
+    const result = buildLinksJson(links, (url: string) => invalid.push(url));
+    expect(JSON.parse(result as string)).toHaveLength(15);
+    expect(invalid).toEqual(["HTTPS://EXAMPLE.COM/0", "https://example.com/15"]);
+  });
+
+  it('real production-data regression: a typo\'d protocol ("ttps://" missing the leading h) is dropped, not silently persisted', () => {
+    const invalid: string[] = [];
+    const result = buildLinksJson(["ttps://x.com/veracruzcerene"], (url: string) => invalid.push(url));
+    expect(result).toBeNull();
+    expect(invalid).toEqual(["ttps://x.com/veracruzcerene"]);
+  });
+});
 
 describe("sqlString / toSqlNullableText", () => {
   it("escapes embedded single quotes", () => {
