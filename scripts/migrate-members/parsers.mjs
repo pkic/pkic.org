@@ -72,8 +72,18 @@ export function loadRosterCsv(filePath) {
   return byEmail;
 }
 
+/**
+ * Excludes hidden files (dotfiles, including macOS AppleDouble sidecar
+ * files like `._acme.yaml` created when a directory is copied off an
+ * HFS+/APFS volume onto a non-Apple filesystem) and non-regular files
+ * (directories, symlinks, sockets) — only a real `.yaml`/`.yml` file with
+ * a visible name is a member record.
+ */
 export function loadMemberYamlFiles(membersDir) {
-  const files = fs.readdirSync(membersDir).filter((f) => f.endsWith(".yaml") || f.endsWith(".yml"));
+  const files = fs
+    .readdirSync(membersDir)
+    .filter((f) => (f.endsWith(".yaml") || f.endsWith(".yml")) && !f.startsWith("."))
+    .filter((f) => fs.statSync(path.join(membersDir, f)).isFile());
   return files.map((filename) => {
     const raw = fs.readFileSync(path.join(membersDir, filename), "utf8");
     const doc = YAML.parse(raw) ?? {};

@@ -69,6 +69,31 @@ describe("loadRosterCsv / loadMemberYamlFiles", () => {
     expect(records).toHaveLength(1);
     expect(records[0]).toMatchObject({ filename: "acme.yaml", slug: "acme", doc: { name: "Acme Corp" } });
   });
+
+  it("excludes AppleDouble sidecar files and other hidden dotfiles", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pkic-parsers-appledouble-"));
+    tmpDirs.push(dir);
+    fs.writeFileSync(path.join(dir, "acme.yaml"), "name: Acme Corp\nmemberType: A\n", "utf8");
+    // AppleDouble sidecar file, produced when a directory is copied off an
+    // HFS+/APFS volume onto a non-Apple filesystem (e.g. ScanDisk-backed runs).
+    fs.writeFileSync(path.join(dir, "._acme.yaml"), "\x00\x05\x16\x07", "utf8");
+    fs.writeFileSync(path.join(dir, ".hidden.yaml"), "name: Hidden\n", "utf8");
+
+    const records = loadMemberYamlFiles(dir);
+    expect(records).toHaveLength(1);
+    expect(records[0].filename).toBe("acme.yaml");
+  });
+
+  it("excludes non-regular files (directories) even with a matching extension", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pkic-parsers-dir-"));
+    tmpDirs.push(dir);
+    fs.writeFileSync(path.join(dir, "acme.yaml"), "name: Acme Corp\nmemberType: A\n", "utf8");
+    fs.mkdirSync(path.join(dir, "subdir.yaml"));
+
+    const records = loadMemberYamlFiles(dir);
+    expect(records).toHaveLength(1);
+    expect(records[0].filename).toBe("acme.yaml");
+  });
 });
 
 describe("activeRepresentatives", () => {
