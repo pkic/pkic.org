@@ -13,18 +13,28 @@
  * slightly different column lists). Both now call this one function and
  * map its result onto their own existing response shape.
  *
- * Atomicity: `getOrCreateOrganizationMemberAggregate` is its own small
- * race-safe get-or-create unit (INSERT OR IGNORE + unconditional re-read —
- * see memberships.ts) and organization/domain creation must commit before
- * it so the aggregate's FK resolves; every write after that — user
- * resolution, representative rows, working-group membership, and contact
- * role grants — lands in one `db.batch()`. Role grants use
+ * Atomicity: every write for the organization-tied path — organization,
+ * domain, membership aggregate, category assignment, `member_since`,
+ * representative rows, contact-role grants, and working-group memberships
+ * — is built as statements (never executed) and committed exactly once in
+ * a single `db.batch()` at the end of `provisionOrganizationTiedMemberships`.
+ * Everything that decides *what* to build (does the organization/aggregate
+ * already exist, is a contact role vacant, does a rejected-membership
+ * conflict exist) is a plain read that runs before any statement is built
+ * — never a branch on the result of an earlier write in the same request
+ * — so a failure anywhere in the batch can never leave a
+ * partially-provisioned organization (PR #1 review blocker 4: "the use
+ * case should build one command set and commit once"). Role grants use
  * `buildAssignRepresentativeRoleStatementsForNewRepresentative` (skips the
  * active-representative DB check) rather than
  * `buildAssignRepresentativeRoleStatements`, because the representative row
  * being granted a role is itself being inserted earlier in this same
  * batch — a DB read couldn't see it yet, and the invariant holds by
- * construction.
+ * construction. See buildResolveOrCreateAggregateStatements's own comment
+ * for the one residual race this design accepts (a rare concurrent
+ * request racing to create the aggregate for a *pre-existing*
+ * organization fails its whole batch cleanly via a foreign-key check,
+ * rather than writing anything against the wrong aggregate).
  */
 import { first } from "../../db/queries";
 import { normalizeEmail } from "../../validation";
@@ -34,7 +44,12 @@ import { AppError } from "../../errors";
 import { buildFindOrCreateUserStatement, type UserRecord } from "../users";
 import { normalizeOrgName } from "../sponsorship";
 import { getWorkingGroupBySlugOrId, buildAddWorkingGroupMemberStatements } from "../working-groups";
-import { getOrCreateOrganizationMemberAggregate, buildCreateIndividualMemberStatements } from "./memberships";
+import {
+  buildGetOrCreateOrganizationMemberAggregateStatements,
+  buildCreateIndividualMemberStatements,
+  readOrganizationMemberAggregate,
+  assertNoAggregateCategoryConflict,
+} from "./memberships";
 import { buildAddRepresentativeStatement, isActiveRepresentative } from "./representatives";
 import {
   REPRESENTATIVE_ROLE_IDS,
@@ -108,11 +123,23 @@ async function buildRepresentativeUserStatement(db: DatabaseLike, rep: Provision
   });
 }
 
-async function provisionIndividualMemberships(
+export interface BuiltProvisioning {
+  statements: StatementLike[];
+  /**
+   * Constructs the final result after the caller commits `statements`
+   * (via this module's own `db.batch()`, or folded into a larger one —
+   * see membership/applications/approve.ts). Pure and synchronous: every
+   * id and decision it reports was already resolved by a pre-batch read
+   * before `statements` was built, so it needs no further DB access.
+   */
+  buildResult: () => ProvisionMembershipResult;
+}
+
+async function buildProvisionIndividualMemberships(
   db: DatabaseLike,
   input: ProvisionMembershipInput,
   now: string,
-): Promise<ProvisionMembershipResult> {
+): Promise<BuiltProvisioning> {
   const rejectExisting = input.rejectExistingMembership ?? true;
   const statements: StatementLike[] = [];
   const representatives: ProvisionedRepresentative[] = [];
@@ -164,25 +191,36 @@ async function provisionIndividualMemberships(
     });
   }
 
-  if (statements.length > 0) await db.batch(statements);
-  return { organizationId: null, organizationWasCreated: false, representatives };
+  return {
+    statements,
+    buildResult: () => ({ organizationId: null, organizationWasCreated: false, representatives }),
+  };
 }
 
-async function resolveOrganizationId(
+/**
+ * Resolves (via a pre-batch read, not a write) whether the organization
+ * already exists, and builds — without executing — the statements needed
+ * to create it if not. The caller folds these into one final `db.batch()`
+ * alongside the aggregate/representative/role statements, so organization
+ * creation is no longer its own separate commit (PR #1 review blocker 4:
+ * "Organization creation commits... member aggregate creation commits
+ * separately... representatives/roles commit later").
+ */
+async function buildResolveOrganizationStatements(
   db: DatabaseLike,
   input: ProvisionMembershipInput,
-): Promise<{ organizationId: string; organizationWasCreated: boolean }> {
+  now: string,
+): Promise<{ organizationId: string; organizationWasCreated: boolean; statements: StatementLike[] }> {
   const normalizedOrgName = normalizeOrgName(input.organizationName as string);
   const existingOrg = await first<{ id: string }>(db, "SELECT id FROM organizations WHERE normalized_name = ?", [
     normalizedOrgName,
   ]);
   if (existingOrg) {
-    return { organizationId: existingOrg.id, organizationWasCreated: false };
+    return { organizationId: existingOrg.id, organizationWasCreated: false, statements: [] };
   }
 
   const organizationId = uuid();
-  const now = nowIso();
-  const preStatements: StatementLike[] = [
+  const statements: StatementLike[] = [
     db
       .prepare(
         `INSERT INTO organizations (id, name, normalized_name, data_json, description, website, created_at, updated_at)
@@ -199,32 +237,97 @@ async function resolveOrganizationId(
       ),
   ];
   if (input.organizationDomain) {
-    preStatements.push(
+    statements.push(
       db
         .prepare(`INSERT INTO organization_domains (id, organization_id, domain, created_at) VALUES (?, ?, ?, ?)`)
         .bind(uuid(), organizationId, input.organizationDomain, now),
     );
   }
-  await db.batch(preStatements);
-  return { organizationId, organizationWasCreated: true };
+  return { organizationId, organizationWasCreated: true, statements };
 }
 
-async function provisionOrganizationTiedMemberships(
+/**
+ * Resolves (via a pre-batch read) whether the organization's shared
+ * membership aggregate already exists, throwing the same
+ * `MEMBER_CATEGORY_CONFLICT` `getOrCreateOrganizationMemberAggregate`
+ * would — but *before* anything is built or written, not after a batch
+ * that already committed representative/role rows against the wrong
+ * aggregate. Builds the create statements only when no aggregate exists
+ * yet. `INSERT OR IGNORE` in the built statements still guards the rare
+ * concurrent-request race (two callers both see "no aggregate yet" for a
+ * pre-existing organization and both mint their own id): the losing
+ * batch's own aggregate insert is silently ignored, so its *subsequent*
+ * representative-row insert in the same batch (referencing its own
+ * unpersisted candidate id) fails its `member_id` foreign-key check —
+ * the whole batch rolls back cleanly rather than writing a representative
+ * against an aggregate that doesn't exist. For a brand-new organization
+ * (created in this same batch) there is no such race at all: nothing else
+ * can reference an organization id no other request has ever seen.
+ */
+async function buildResolveOrCreateAggregateStatements(
+  db: DatabaseLike,
+  organizationId: string,
+  categoryCode: string,
+  now: string,
+): Promise<{ aggregateId: string; statements: StatementLike[] }> {
+  const existing = await readOrganizationMemberAggregate(db, organizationId);
+  if (existing) {
+    assertNoAggregateCategoryConflict(existing, categoryCode);
+    return { aggregateId: existing.id, statements: [] };
+  }
+  const { proposedId, statements } = buildGetOrCreateOrganizationMemberAggregateStatements(
+    db,
+    organizationId,
+    categoryCode,
+    now,
+  );
+  return { aggregateId: proposedId, statements };
+}
+
+/**
+ * Every write this function makes — organization, aggregate, category
+ * assignment, `member_since`, representative rows, contact-role grants,
+ * and working-group memberships — is built here without executing
+ * anything, then committed exactly once via a single `db.batch()` at the
+ * end of `provisionOrganizationTiedMemberships`. All decisions about
+ * *what* to build (does the org/aggregate already exist, is a contact
+ * role vacant, does a rejected-membership conflict exist) are resolved by
+ * plain reads before any statement is built, never by branching on the
+ * result of an earlier write in the same request — so a failure anywhere
+ * in the batch can never leave a partially-provisioned organization (PR
+ * #1 review blocker 4).
+ */
+async function buildProvisionOrganizationTiedMemberships(
   db: DatabaseLike,
   input: ProvisionMembershipInput,
   now: string,
-): Promise<ProvisionMembershipResult> {
+): Promise<BuiltProvisioning> {
   const rejectExisting = input.rejectExistingMembership ?? true;
   const onlyIfVacant = input.onlyAssignContactRolesIfVacant ?? true;
 
-  const { organizationId, organizationWasCreated } = await resolveOrganizationId(db, input);
+  const statements: StatementLike[] = [];
 
-  const aggregate = await getOrCreateOrganizationMemberAggregate(db, organizationId, input.membershipCategory, now);
+  const {
+    organizationId,
+    organizationWasCreated,
+    statements: orgStatements,
+  } = await buildResolveOrganizationStatements(db, input, now);
+  statements.push(...orgStatements);
+
+  const { aggregateId, statements: aggregateStatements } = await buildResolveOrCreateAggregateStatements(
+    db,
+    organizationId,
+    input.membershipCategory,
+    now,
+  );
+  statements.push(...aggregateStatements);
+
   if (input.memberSince) {
-    await db
-      .prepare("UPDATE members SET member_since = COALESCE(member_since, ?) WHERE id = ?")
-      .bind(input.memberSince, aggregate.id)
-      .run();
+    statements.push(
+      db
+        .prepare("UPDATE members SET member_since = COALESCE(member_since, ?) WHERE id = ?")
+        .bind(input.memberSince, aggregateId),
+    );
   }
 
   if (rejectExisting) {
@@ -233,7 +336,7 @@ async function provisionOrganizationTiedMemberships(
         normalizeEmail(rep.email),
       ]);
       if (existingUser) {
-        const alreadyRepresenting = await isActiveRepresentative(db, aggregate.id, existingUser.id);
+        const alreadyRepresenting = await isActiveRepresentative(db, aggregateId, existingUser.id);
         if (alreadyRepresenting) {
           throw new AppError(409, "ALREADY_MEMBER", `${rep.email} already represents this organization`);
         }
@@ -242,10 +345,9 @@ async function provisionOrganizationTiedMemberships(
   }
 
   const existingHolders = onlyIfVacant
-    ? await resolveRepresentativeRoleHolders(db, aggregate.id)
+    ? await resolveRepresentativeRoleHolders(db, aggregateId)
     : { primaryContactUserId: null, secondaryContactUserId: null, votingDelegateUserId: null };
 
-  const statements: StatementLike[] = [];
   const pending: { rep: ProvisionRepresentativeInput; user: UserRecord; representativeId: string }[] = [];
 
   for (const rep of input.representatives) {
@@ -253,7 +355,7 @@ async function provisionOrganizationTiedMemberships(
     if (userStatement) statements.push(userStatement);
 
     const { representativeId, statement: repStatement } = buildAddRepresentativeStatement(db, {
-      memberId: aggregate.id,
+      memberId: aggregateId,
       userId: user.id,
       now,
     });
@@ -272,7 +374,7 @@ async function provisionOrganizationTiedMemberships(
   if (!existingHolders.primaryContactUserId && pending.length >= 1) {
     statements.push(
       ...buildAssignRepresentativeRoleStatementsForNewRepresentative(db, {
-        memberId: aggregate.id,
+        memberId: aggregateId,
         userId: pending[0].user.id,
         roleId: REPRESENTATIVE_ROLE_IDS.primaryContact,
         now,
@@ -283,7 +385,7 @@ async function provisionOrganizationTiedMemberships(
   if (!existingHolders.secondaryContactUserId && pending.length >= 2) {
     statements.push(
       ...buildAssignRepresentativeRoleStatementsForNewRepresentative(db, {
-        memberId: aggregate.id,
+        memberId: aggregateId,
         userId: pending[1].user.id,
         roleId: REPRESENTATIVE_ROLE_IDS.secondaryContact,
         now,
@@ -292,30 +394,51 @@ async function provisionOrganizationTiedMemberships(
     assignedContactRoles[1] = "secondary";
   }
 
-  if (statements.length > 0) await db.batch(statements);
-
-  const representatives: ProvisionedRepresentative[] = pending.map(({ rep, user, representativeId }, index) => ({
-    userId: user.id,
-    email: user.email,
-    name: rep.name,
-    organizationId,
-    membershipId: aggregate.id,
-    representativeId,
-    assignedContactRole: assignedContactRoles[index],
-    createdAt: now,
-  }));
-
-  return { organizationId, organizationWasCreated, representatives };
+  return {
+    statements,
+    buildResult: () => ({
+      organizationId,
+      organizationWasCreated,
+      representatives: pending.map(({ rep, user, representativeId }, index) => ({
+        userId: user.id,
+        email: user.email,
+        name: rep.name,
+        organizationId,
+        membershipId: aggregateId,
+        representativeId,
+        assignedContactRole: assignedContactRoles[index],
+        createdAt: now,
+      })),
+    }),
+  };
 }
 
+/**
+ * Builds every provisioning statement without executing anything — for
+ * callers that need to fold this into a larger atomic `db.batch()`
+ * alongside their own statements (e.g. membership/applications/approve.ts,
+ * which commits provisioning together with the application's stage
+ * transition and Google Groups sync enqueues in one boundary instead of
+ * three).
+ */
+export async function buildProvisionOrganizationMembership(
+  db: DatabaseLike,
+  input: ProvisionMembershipInput,
+): Promise<BuiltProvisioning> {
+  const now = nowIso();
+  const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(input.membershipCategory);
+  if (isIndividual || !input.organizationName) {
+    return buildProvisionIndividualMemberships(db, input, now);
+  }
+  return buildProvisionOrganizationTiedMemberships(db, input, now);
+}
+
+/** Builds and immediately commits, for callers that don't need to fold this into a larger batch. */
 export async function provisionOrganizationMembership(
   db: DatabaseLike,
   input: ProvisionMembershipInput,
 ): Promise<ProvisionMembershipResult> {
-  const now = nowIso();
-  const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(input.membershipCategory);
-  if (isIndividual || !input.organizationName) {
-    return provisionIndividualMemberships(db, input, now);
-  }
-  return provisionOrganizationTiedMemberships(db, input, now);
+  const { statements, buildResult } = await buildProvisionOrganizationMembership(db, input);
+  if (statements.length > 0) await db.batch(statements);
+  return buildResult();
 }

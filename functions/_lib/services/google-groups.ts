@@ -24,7 +24,7 @@ import { all, first, run } from "../db/queries";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { logError, logInfo } from "../logging";
-import type { DatabaseLike, Env } from "../types";
+import type { DatabaseLike, Env, StatementLike } from "../types";
 
 export type GoogleGroupsSyncAction = "add_to_list" | "remove_from_list";
 export type GoogleGroupsSyncStatus = "pending" | "processing" | "completed" | "failed";
@@ -39,6 +39,25 @@ export interface GoogleGroupsSyncQueueRow {
   last_error: string | null;
   created_at: string;
   processed_at: string | null;
+}
+
+/**
+ * Statement-builder form of enqueueGoogleGroupsSync, for callers folding
+ * the enqueue into a larger atomic `db.batch()` instead of committing it
+ * as its own round-trip — see membership/applications/approve.ts.
+ */
+export function buildEnqueueGoogleGroupsSyncStatement(
+  db: DatabaseLike,
+  params: { userId: string; googleGroupEmail: string; action: GoogleGroupsSyncAction },
+): { id: string; statement: StatementLike } {
+  const id = uuid();
+  const statement = db
+    .prepare(
+      `INSERT INTO google_groups_sync_queue (id, user_id, action, google_group_email, status, attempts, last_error, created_at, processed_at)
+       VALUES (?, ?, ?, ?, 'pending', 0, NULL, ?, NULL)`,
+    )
+    .bind(id, params.userId, params.action, params.googleGroupEmail, nowIso());
+  return { id, statement };
 }
 
 export async function enqueueGoogleGroupsSync(
