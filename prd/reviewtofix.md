@@ -1,0 +1,927 @@
+# Review Fix Plan — PR #1 Review #4925602121 (merged with post-rebase remediation plan v4 and an independent post-rebase review pass)
+
+Source: https://github.com/pkic/dev-pkic.org/pull/1#pullrequestreview-4925602121
+Reviewer: @vanbroup (round 2 architecture review)
+Reviewed commit: `7badfff` (HEAD of `migrate-to-rest-endpoints` at review time)
+Verdict: **CHANGES_REQUESTED** — not merge-ready as best-practice architecture
+
+Also incorporates a follow-up reviewer reply on the same thread: https://github.com/pkic/dev-pkic.org/pull/1#discussion_r3778418487 (@vanbroup, responding to a clarifying question on 9.1's scheduled-jobs design) — folded into Phase 9.1, since it narrows that item's decision rather than raising a new one.
+
+**This revision merges two follow-up documents:**
+
+1. `pkic-pr1-architecture-remediation-plan-v4.md` — drafted to update this plan for a rebase that, at drafting time, had not yet happened. It has since happened: current `HEAD` (`8cf9c2fe`) has a git merge-base with `pkic-org/main` of exactly `5a50cd4e` — the same commit v4 treats as its reviewed upstream baseline.
+2. `pr-review-post-rebase.md` — an **independent, actual review pass** against reviewed commit `8cf9c2fef4f6552dab8e3427fd983962d87282f6`, i.e. the exact current `HEAD` of this branch, not a planning draft. This is the most authoritative source in this document for current-state claims: the reviewer ran the tooling directly (verified both D1 ledgers, ran the full test/build/lint pipeline, ran serial and parallel Playwright) rather than reasoning from file inspection alone. Its verdict: still **CHANGES_REQUESTED**, do not approve.
+
+So:
+
+- The rebase itself (v4 workstream B / §4.1) is **done**. Do not redo it. Confirmed independently by both the merge-base check and the post-rebase reviewer ("It is correctly rebased onto current public `main`.").
+- Every blocking dependency in the old draft that was gated on "wait for `pkic.org#721` to merge, then rebase" (old 1.4, old 9.1) is **resolved** — #721, #726, #727, #728, #729 are all present in the current tree.
+- **The D1 migration-ledger gate that §0 below originally listed as a required-but-unverified step is now CONFIRMED, not pending.** The post-rebase reviewer states: "I verified both remote D1 migration ledgers. Every private PR migration from `0033` through `0057` is pending in both preview and production." That directly satisfies §0's ledger-check requirement — the squash plan in Phase 1 is confirmed valid, not merely assumed safe. (A fresh re-check immediately before actually renumbering files is still good practice, since ledger state can change, but this is no longer a blocking unknown.)
+- **Everything else flagged as still-needed work is, as of this pass, still needed** — confirmed by two independent methods (this session's direct code inspection, and the post-rebase reviewer's live tooling run), not merely assumed. `migrations/0033_rebuild_members_multi_representative.sql` still does the `PRAGMA foreign_keys = OFF` create/copy/drop/rename rebuild criticized below; `0055_membership_categories_table.sql` still rebuilds `members`, `organizations`, and `member_applications` again; none of `member_category_assignments`, `organization_representatives`, or `organization_representative_roles` exist in any migration file; `organizations.primary_contact_user_id`/`secondary_contact_user_id`/`voting_delegate_user_id`/`pending_secondary_contact_user_id`/`membership_category`/`member_since` and `members.show_on_org_profile` are all still present exactly as originally flagged; `functions/_lib/openapi/list-query.ts` is still imported by `functions/api/v1/admin/applications/index.ts` and `.../organizations/content-reviews/index.ts`; `functions/_lib/services/votes/lifecycle.ts` and `.../votes/proposals.ts` contain zero `.batch()`/`.prepare()` calls; `assets/shared/schemas/access-control.ts`'s `roleResponseSchema`/`userRoleResponseSchema.roleId` still don't reuse `roleIdParamsSchema`; `assets/shared/schemas/votes.ts` still declares `status: z.string()` and `result: z.unknown().nullable()`; `Applications.tsx`/`Votes.tsx`/`Sponsorships.tsx` are still 908/734/651 lines and `admin-organizations.ts` is 603 lines; `functions/router.ts` still runs `runScheduledDueWork`, `runMembershipDueWork`, `runSponsorshipDueWork`, `runVotesDueWork` sequentially under one cron with no shared budget; `admin-members.ts`/`member-provisioning.ts` both still hand-write their own `INSERT INTO members (...)` statement; and `functions/api/v1/admin/router.ts` still bypasses the legacy permission registry by path prefix.
+- **Path discrepancy noted, resolved:** `pr-review-post-rebase.md` cites several frontend files under `assets/js/pages/...` and `assets/js/admin/pages/...` (e.g. `assets/js/admin/pages/Applications.tsx`, `assets/js/admin/pages/Sponsorships.tsx`). Verified directly: `assets/js` contains zero `.tsx` files (only a `modules` subdirectory); all 119 `.tsx` files in the repo live under `assets/ts`, matching this document's existing citations (`assets/ts/admin/sections/Applications.tsx`, `assets/ts/member-flows/votes-index-page.tsx`, etc.). Treated as a path-citation artifact in that review's tooling, not a real second copy of these files — the substance of those findings is preserved under the `assets/ts/...` paths already used below.
+- Items **not independently re-verified by either source** in this pass are still marked "carried forward, not re-checked" below — treat those with slightly lower confidence than the confirmed items.
+
+This document restates every original review comment plus the merged v4 and post-rebase corrections and lays out a plan to resolve each one. **Work through items in the order given in the "Suggested execution order" section at the end** — the migration rewrite (Phase 1) unblocks or reshapes several later items, so it still goes first, and its migration-ledger prerequisite is now confirmed rather than pending.
+
+## Meaningful improvements already landed (new, from `pr-review-post-rebase.md`)
+
+Not everything is still broken — the post-rebase reviewer explicitly credits real progress since the round-2 review, and this document should not be read as implying zero progress has been made:
+
+- Correct rebase onto current public `main` (confirmed independently above).
+- `openApiRoute` now validates and supplies route data, with broad adoption across routes.
+- Shared authentication/session-engine logic.
+- Service splits for votes, meeting calendars, and sponsorships (partial — see Phase 8 below for what's *not yet* split; these are real but incomplete improvements, not a contradiction of Phase 8's remaining findings).
+- Organizations frontend decomposition (also partial — `admin-organizations.ts` backend service is still 603 lines, see new item 8.2).
+- A canonical flexible link schema and JSON representation now exists (`linksSchema`/`parseLinksJson` in `assets/shared/schemas/api.ts`) — the remaining gap is *adoption* (Phase 10) and *self-validation* (new item 3.5), not the codec's existence.
+- Membership categories and pricing are more data-driven.
+- Several primary list screens now use bounded backend queries.
+- The agenda recording modal browser test passes — no evidence of the previously suspected unload/reload regression.
+
+These are real improvements but do not close the central membership, DRY-contract, atomicity, authorization, or D1-lifecycle findings below.
+
+---
+
+## 0. Baseline reconciliation (new, from v4 §0/§4.1–4.2)
+
+| Merged upstream PR | What is now baseline in this tree | Consequence |
+| --- | --- | --- |
+| `pkic.org#721` | Stateless capability links, bulk email-outbox prep, bounded scheduled-work changes, `0033_public_capability_links.sql` | Confirmed present: `functions/_lib/auth/capability-links.ts` is the canonical owner, `functions/_lib/services/capability-links.ts` exists only as a compatibility re-export. Do not recreate this. |
+| `pkic.org#726` | Root/scoped `AGENTS.md`, `CLAUDE.md`, repo-wide ESLint, Dependency Cruiser, pnpm normalization | Confirmed present and is the constitution — this document's Phase 1 rules restate it, they don't propose it. |
+| `pkic.org#727` | Header-construction fix, presentation upload regression coverage | Preserve while resolving conflicts (rebase already did this). |
+| `pkic.org#728` | Capability-link implementation ownership moved to `_lib/auth/capability-links.ts`; streamed presentation archives (`functions/_lib/services/presentation-archive.ts`) | Confirmed present. Phase 9.2 (R2/ICS asset lifecycle) should reuse this service's put/metadata/delete pattern, not invent a second one. |
+| `pkic.org#729` | Attendance read-model extraction (`functions/_lib/services/registrations/admin-statistics.ts`) plus dashboard behavior | Confirmed: `functions/api/v1/admin/events/[eventSlug]/registrations.ts` still does raw `new URL(c.req.raw.url)` parsing, hand-builds `conditions`/`bindings` SQL in the route, and slices `limit + 1` rows locally (lines 58–73, 141–177). The #729 extraction only moved the attendance-aggregate query out; it did not fix the route's list-query architecture. This route is now explicitly in scope for Phase 6 (below) — it was not in the original review's Phase 6 list because it didn't exist on the reviewed commit yet. |
+
+**Migration-ledger verification: CONFIRMED, not just gated.** The post-rebase reviewer independently ran this check against both remote ledgers on the current `HEAD`: "I verified both remote D1 migration ledgers. Every private PR migration from `0033` through `0057` is pending in both preview and production. Therefore, the branch can still replace its patch-on-patch migration history with a clean final migration." That satisfies steps 1–2 below. Steps 3–5 remain as the concrete allocation rule:
+
+1. ~~Load `$wrangler`. List preview `d1_migrations` and production `d1_migrations` **separately**.~~ **Done** — confirmed pending in both, per the post-rebase review above. Re-run immediately before actually renumbering files only if meaningful time has passed or another branch may have deployed in the interim — not required as a fresh blocking step right now.
+2. ~~Confirm none of this branch's private-range migrations have been applied to either environment.~~ **Confirmed unapplied** by the same check.
+3. Current upstream migration history (already in this tree) is `0033_presentation_versions.sql`, `0033_public_capability_links.sql`, `0034_presentation_version_invariants.sql`. That duplicate `0033` prefix is valid, applied, immutable upstream history — not a blocker.
+4. The next available number for the rewritten private range is **`0035`**, unless a newer upstream migration has landed since `5a50cd4e` — re-check `pkic-org/main` immediately before implementation, don't rely on this document's snapshot.
+5. (No longer applicable — step 2 found nothing applied. Retain as a standing rule for future ledger checks: if anything is ever found applied, the squash plan is invalid and a forward-only migration plan must be written instead.)
+
+This gate is inspection-only. Do not apply a migration, run a manual deploy, or seed preview D1 as part of this step.
+
+---
+
+## Phase 1 — Rewrite the undeployed migration range (currently `0033_rebuild_members_multi_representative.sql`–`0057_organization_domains.sql`)
+
+### Implementation status (this pass, 2026-08-16)
+
+**Done and verified:**
+- Migration range fully rewritten to final form, `0035`–`0053` (19 files, replacing the old 25-file `0033`–`0057` range). `0033_rebuild_members_multi_representative.sql` deleted entirely — `members` is untouched, exactly as defined in migration `0000`. `0050`/`0051`/`0052`/`0054`/`0055`/`0056`/`0057` deleted, folded into first-introduction definitions per §1.2's rules (sponsorship price columns, WG active-unique index, `chair_user_id` removal, `organization_domains` table, `membership_categories` table all now defined once, at first introduction). New `0037_membership_aggregate.sql` adds `member_category_assignments` and `organization_representatives` exactly per §1.4's corrected design (partial active-pair unique index, no per-user singleton). `0038_access_control.sql` (formerly `0035`) carries the `single_holder_per_context` additive delta and seeds `role-primary_contact`/`role-secondary_contact`/`role-voting_delegate`. **Verified: the full 53-file migration set applies cleanly to an empty local D1 database** (`wrangler d1 migrations apply --local`, all ✅).
+- `organizations.primary_contact_user_id`, `secondary_contact_user_id`, `voting_delegate_user_id`, `pending_secondary_contact_user_id`, `membership_category`, `member_since`, and `members.show_on_org_profile` are gone from every migration file. `organizations.social_*` never introduced (folded into `links_json` directly). `pending_secondary_contact_user_id` replaced by its own `organization_secondary_contact_nominations` table, as specced.
+- `functions/_lib/services/membership/` created: `memberships.ts` (`getOrCreateOrganizationMemberAggregate` — `INSERT OR IGNORE` + unconditional re-read, matching the spec exactly, not a try/catch race detector), `representatives.ts`, `representative-roles.ts` (singleton role assign/revoke via `uq_user_roles_single_holder_per_context`).
+- Every backend file that read/wrote the removed columns has been migrated to the new schema: `admin-members.ts`, `member-provisioning.ts` (§1.5's duplicate-`INSERT INTO members` finding — now both call the same shared aggregate/representative primitives), `admin-organizations.ts`, `member-organization.ts`, `member-self-service.ts`, `organization-content-reviews.ts`, `members-directory.ts`, `admin-working-groups.ts`, `leadership.ts`, `wg-chair-digest.ts`, `user-merge.ts` (now also reassigns `organization_representatives`, per the impacted-areas list), `votes/ballots.ts` (`resolveVotingDelegateUserId`/`resolveForumVoteDelegateRecipients` now resolve `role-voting_delegate`/`role-primary_contact` via `user_roles`), `functions/api/v1/admin/users.ts`, `functions/api/v1/admin/users/[userId]/index.ts`, `functions/_lib/auth/member.ts` (member-session eligibility — see the load-bearing fix below).
+- **Load-bearing bug caught and fixed during this pass, not present in the original plan documents:** because org-tied `members` rows have `user_id IS NULL` (migration `0000`'s own CHECK — only individual aggregates carry a `user_id`), every query that resolved a representative's identity via `members.user_id` (auth eligibility, directory, WG chairs, leadership, admin users list, self-service profile) was silently broken by the schema change and would have returned nobody for any org-tied representative. All such queries have been rewritten to resolve through `organization_representatives.user_id → member_id` instead.
+- `assets/shared/schemas/access-control.ts`'s `contextTypeSchema` now includes `'organization'`.
+- Two additional real bugs (not test-expectation mismatches) were found and fixed by running the test suite: `admin-members.ts` and `admin-organizations.ts` still wrote/read `organizations.member_since`, which no longer exists — both now correctly target `members.member_since` on the aggregate.
+- `pnpm run typecheck` passes (backend, frontend, tools) with zero errors.
+
+**Also done since the status above was first written:**
+- §1.4's required-tests list is now written and green: `tests/membership-aggregate.test.ts` (membership_categories seed vs. canonical shared contract; `getOrCreateOrganizationMemberAggregate` concurrency convergence, differing-category 409 conflict, and confirming an unrelated D1 error — an invalid category — propagates rather than being swallowed as a race), `tests/organization-representatives.test.ts` (concurrent multi-organization representation, transfer, rejoin), `tests/representative-roles.test.ts` (singleton-per-role uniqueness for all three representative roles independently, DB-level rejection of a direct insert that skips the revoke, confirmation that `role-event_volunteer` — a non-singleton context-scoped role — is unaffected by the same index, and the service-layer invariant that a role grant without an active `organization_representatives` row is rejected with `AppError(422, "NOT_ACTIVE_REPRESENTATIVE")`), `tests/access-control-schema.test.ts` (`contextTypeSchema` accepts `'organization'` through both `userRoleAssignSchema` and `accessGrantCreateSchema`, still rejects garbage, still accepts `event`/`working_group`). New shared fixture module `tests/helpers/membership.ts` builds these fixtures through the real `functions/_lib/services/membership/*` primitives, not hand-rolled SQL.
+- `tests/votes.test.ts`'s `insertMemberUser`/`setOrgContacts` fixtures were rewritten to the new schema (this is also the required "`votes/ballots.ts` delegate-resolution test" — the existing "forum ballot: only the resolved voting delegate... may cast" test now exercises `resolveVotingDelegateUserId`'s `role-voting_delegate` → `role-primary_contact` fallback via `user_roles` for real). All 14 tests in that file pass.
+- Net effect on the full suite: **99 of 881 backend tests fail**, down from 108 of 862 (19 new tests added, all passing; `votes.test.ts`'s prior 9 failures fixed as a side effect of the fixture rewrite). 18 test files still fail, one fewer than before.
+- One remaining item from §1.4's required-tests list is explicitly out of scope for this pass: "migration/import preflight must fail loudly if any existing members row lacks an unambiguous category" is importer behavior (Phase 2), not something to test until the importer itself is rewritten.
+
+**Also done — the remaining 18 test files were fixed (follow-up pass, same day):** every one of the 18 files listed above (`admin-members`, `admin-organizations`, `admin-user-management`, `ec-review`, `leadership`, `me-endpoints`, `me-organization-members`, `meeting-calendar`, `member-auth`, `members-model`, `membership-onboarding`, `organization-content-review`, `passkeys`, `public-members-api`, `sponsorship-pipeline`, `sponsorship-scheduled-jobs`, `user-merge`, `working-groups`) now has its fixtures rewritten onto `tests/helpers/membership.ts` / the real `functions/_lib/services/membership/*` primitives, following the pattern `votes.test.ts` established. Two categories of failure were fixed:
+- **Fixture-only**: tests seeding `members` rows directly with a category letter as `member_type`, or multiple `members` rows per `organization_id` — rewritten to seed `member_category_assignments`/`organization_representatives` instead.
+- **Premise changes required by the corrected §1.4 design, not just mechanical translation**: `members-model.test.ts` (previously *the* test for the deleted 0033 rebuild — replaced with tests of the actual current invariants: one aggregate per org, `member_type` CHECK, mutual exclusivity); `admin-organizations.test.ts` (previously tested "category cascades to every representative's `member_type`" and "reusing an org with a different category cascades" — both superseded: there is only one category per aggregate now, and reusing an org with a *different* category is correctly a 409 conflict via `getOrCreateOrganizationMemberAggregate`, not a silent cascade); `admin-members.test.ts` (previously tested "same email at a different org is a 409" — superseded by the resolved multi-org-representation decision, now split into a same-org-conflict test and a different-org-succeeds test); `organization-content-review.test.ts`'s nomination-auto-clear test (previously triggered by a `status` PATCH on an individual `members` row — representatives don't have an editable `status` anymore, so it now triggers via `DELETE` on the representative row, which is what actually clears the nomination in the rewritten service).
+
+**Two more real production bugs were caught and fixed while rewriting these tests** (beyond the two already listed above):
+1. `admin-organizations.ts`'s `updateAdminOrganization` (the `PATCH /api/v1/admin/organizations/:id` handler) routed a `membershipCategory` change through `getOrCreateOrganizationMemberAggregate` — the create-time race-safe helper — which correctly rejects a *differing* category as a 409 conflict. That meant **staff could never change an organization's category once set**, since every legitimate change looked identical to the race-conflict case. Fixed: the update path now reads the existing aggregate directly and applies the requested category unconditionally, only falling back to the get-or-create helper when no aggregate exists yet.
+2. Two representative-response builders (`toOrgDetail`, `addOrganizationRepresentative`) returned the shared aggregate's `members.id` as each representative's `memberId` field, instead of that representative's own `organization_representatives.id`. Since `PATCH/DELETE /api/v1/admin/members/:id` needs the latter to identify *which* representative to act on, every representative in an organization with 2+ reps would have resolved to the same (wrong) id for edit/remove actions. Fixed in both call sites.
+
+**Full backend suite: 888/889 passing (1 pre-existing intentional skip), 0 failures, verified twice in a row.** All touched files are lint-clean, prettier-clean, and typecheck-clean.
+
+### Follow-up review remediation pass (2026-08-16, `prd/phase1-review-20260816-1.md`)
+
+A second, independent review pass against the state described above (`prd/phase1-review-20260816-1.md`) verdict was **CHANGES_REQUESTED**: §1.4/§1.5 marked done in the traceability matrix while the plan's own status section said "do not treat Phase 1 as fully closed" — a real contradiction. It found 6 P1 blocking correctness/security gaps and 2 P2 gaps, all now fixed in this pass:
+
+1. **[P1, fixed]** `removeAdminMember` revoked a representative role from *whichever* user held it, not just the removed representative. `buildRevokeRepresentativeRoleStatement` (`representative-roles.ts`) now takes an optional `userId` and scopes the `UPDATE` to it; `removeAdminMember` passes the removed representative's own `user_id`.
+2. **[P1, fixed]** `POST /api/v1/admin/users/:userId/roles` bypassed every representative-role invariant (no active-representative check, no singleton revoke-before-insert, no `single_holder_per_context` copy) and role resolvers ignored `expires_at`. The route now detects the three representative role ids and routes through `buildAssignRepresentativeRoleStatements`; the fallback path for other singleton roles now does an atomic revoke-then-insert too, generalized off `roles.single_holder_per_context` rather than a hardcoded list. `resolveRepresentativeRoleHolder(s)` now filter `expires_at`.
+3. **[P1, fixed]** Multi-organization representation (a supported case since §1.4) resolved via an unordered `first()` over a UNION that could return multiple rows — an arbitrary pick. `functions/_lib/auth/member.ts` now enumerates every eligible membership deterministically (`AuthMember.activeMemberships`), defaults to a deterministic first entry, and `PUT /api/v1/me/active-membership` lets a member explicitly switch context — re-verified against their own live memberships server-side, never client-trusted. Covered by `tests/member-multi-org-context.test.ts`.
+4. **[P1, fixed]** Six queries joined `organization_representatives` by `user_id` alone (`members-directory.ts` ×2, `leadership.ts` ×2, `admin-working-groups.ts`, `wg-chair-digest.ts`, `admin/users.ts` list+count), fanning out one row per represented organization for a multi-org user — duplicate directory/leadership entries, double-counted admin pagination. All six (plus the same bug found while fixing this in the admin user-detail route) now join through a deterministic correlated subquery (earliest `joined_at`) instead. Regression test in `tests/admin-user-management.test.ts`.
+5. **[P1, fixed]** `mergeUsers` skipped repointing an `organization_representatives` row when the survivor already actively represented that org, but never closed the skipped row — it stayed active on the disabled, anonymized source account. Also, repointing `user_roles` unconditionally could attempt two active singleton-role grants for the same context, violating `uq_user_roles_single_holder_per_context`. Both fixed: the skipped representative row is now closed (`left_at` set), and a conflicting source singleton grant is revoked before the repoint. `tests/user-merge.test.ts` now asserts `left_at` is actually set (previously asserted nothing) and has a new test for the singleton-role merge conflict.
+6. **[P1, fixed]** Nothing enforced that an individual aggregate uses only H5/H6/H7 or an organization aggregate uses only organization categories; tests deliberately created invalid combinations. `functions/_lib/services/membership/memberships.ts` now validates via a shared `assertCategoryCompatible` (against the canonical `membership-categories.ts` vocabulary, no extra DB round-trip) in both `getOrCreateOrganizationMemberAggregate` and `buildCreateIndividualMemberStatements`. `membership_categories.is_individual`/`is_voting` gained boolean `CHECK` constraints (migration `0035`, still undeployed). Every test fixture that built an invalid combination (`ec-review.test.ts`, `votes.test.ts`, `meeting-calendar.test.ts`, `working-groups.test.ts`, `user-merge.test.ts`, `member-auth.test.ts`) was fixed to use a compatible category; new rejection tests added to `tests/membership-aggregate.test.ts`.
+7. **[P2, fixed]** The representative response exposed `organization_representatives.id` as `memberId`, and several schema comments/route descriptions still described deleted columns (`organizations.membership_category`, `pending_secondary_contact_user_id`, etc.). `adminOrganizationRepresentativeSchema` now exposes explicit `representativeId`/`membershipId`; stale comments/descriptions in `admin-organizations.ts` and `me.ts` rewritten to match the current schema; frontend (`Representatives.tsx`, `OrganizationDetailView.tsx`, `admin/types.ts`) updated to match.
+8. **[P2, fixed]** `admin-members.ts`'s `createAdminMember` and `member-provisioning.ts`'s `provisionOrganizationAndMembers` independently orchestrated organization/aggregate/representative/role/WG provisioning across multiple separate batches, with slightly different (and, in `createAdminMember`'s case, buggy — it unconditionally reassigned an already-contacted org's primary/secondary contact) logic. Both are now thin adapters over one canonical `functions/_lib/services/membership/provisioning.ts` (`provisionOrganizationMembership`), which also collapses the representative-insert + role-grant sequence into one atomic `db.batch()` (via a new `buildAssignRepresentativeRoleStatementsForNewRepresentative` that skips the redundant DB-read check for a representative row being inserted in the same batch) instead of two.
+
+**Validation for this pass:** `pnpm run typecheck` (backend/frontend/tools) clean; full backend suite 898/899 passing (1 pre-existing intentional skip), verified twice; `pnpm run format:check` clean; `eslint` clean on every touched file; `pnpm run check:filenames` clean. `pnpm run lint:architecture` could not run in this environment (dependency-cruiser requires Node ^22/^24/>=26, this environment runs 25.3.0 — pre-existing, unrelated to this change). `check:max-lines` still fails only on the pre-existing importer (`scripts/migrate-members-yaml-to-d1.mjs`, Phase 2 scope, item 2.2 below) — unrelated to this pass.
+
+### §1.3 closed-state enforcement sweep (same day, second follow-up pass)
+
+Completed the sweep the first remediation pass explicitly deferred:
+
+- **Boolean-as-integer flags**: every `INTEGER NOT NULL DEFAULT 0/1` boolean column across migrations `0035`–`0053` that lacked one now has `CHECK (col IN (0, 1))` — `working_groups.active`, `roles.is_system_role`, `users.is_ec_member`, `membership_settings.auto_reminder_on_holds`, `mailing_lists.active`, `event_sponsor_attendee_tiers.has_attendee_data_access`, `meeting_series.active`, `meeting_ics_files.active`, `sponsorship_tier_config.active` (`membership_categories.is_individual`/`is_voting`, `organization_representatives.show_on_org_profile`, and `user_roles`/`roles.single_holder_per_context` already had one from the first pass). Verified: full migration set still applies cleanly (exercised by every test file's D1 setup).
+- **Evolvable closed-state vocabularies** (application status/stage, on-hold subtype, sponsor type, sponsorship pipeline stage, content-review status, vote status, vote-proposal status, member status): per the plan's policy, these get one canonical shared Zod enum, not a DB `CHECK`. Found and fixed real drift — several fields were `z.string()` in one place while a hand-typed duplicate `z.enum([...])` of the same vocabulary existed elsewhere in the same file (`votes.ts`'s `status` field vs. two separately-typed `z.enum(["scheduled","open",...])` filters; `admin-applications.ts` had its own second copy of `ON_HOLD_SUBTYPES`). Consolidated onto one canonical constant + schema per vocabulary (`VOTE_STATUSES`/`voteStatusSchema`, `VOTE_PROPOSAL_STATUSES`/`voteProposalStatusSchema`, `APPLICATION_STAGES`/`applicationStageSchema`, `ON_HOLD_SUBTYPES`/`onHoldSubtypeSchema`, `CONTENT_REVIEW_STATUSES`/`contentReviewStatusSchema`, `MEMBER_STATUSES`/`memberStatusSchema` — the last moved to `membership-categories.ts` to avoid a circular import between `admin-organizations.ts` and `admin-members.ts`) and applied it everywhere the field appears: `votes.ts`, `admin-applications.ts`, `admin-sponsorships.ts`, `admin-organizations.ts`, `admin-members.ts`, `me.ts`. Backend service-layer duplicate type unions (`functions/_lib/services/votes/shared.ts`'s `VoteType`/`VoteStatus`/etc., `member-applications.ts`'s `ALLOWED_STAGE_TRANSITIONS`) now derive from the same shared constants instead of re-declaring the literal union, so the DB-facing service layer and the API contract can't drift apart again. `sponsorship_tier_config`/`sponsorships.tier` deliberately kept as a bare string — genuinely reference-table-backed (migration `0053`), not a code enum, matching the plan's "reference table" enforcement category rather than "shared Zod."
+- `google_groups_sync_queue.action`/`.status` and the communication-vs-note distinction on application timeline entries were checked and left alone: neither is exposed through any shared API schema (no external write path to validate against), so there's no enforcement gap to close.
+- Re-verified after this pass: `pnpm run typecheck` clean; full backend suite 898/899 passing twice; `pnpm run format:check` and `eslint` clean.
+
+### Browser verification (same day)
+
+Started the local dev server, logged into the admin console via the local magic-link-from-outbox flow (`docs/local-dev-with-production-backup.md`), and drove the real UI against a real local D1 (imported production backup, `0` organizations/representatives in that snapshot, so a fresh org was created live to exercise these paths):
+
+- Created an organization with two representatives through the real "Add organization" form — confirmed `provisionOrganizationMembership` (item 8) auto-assigns primary/secondary contact correctly end-to-end.
+- Confirmed `representativeId`/`membershipId` (item 7) are distinct, correct values in the live API response (`membershipId` shared between both representatives, `representativeId` unique per representative).
+- Removed the secondary-contact representative and confirmed live (both via direct API call and the re-rendered UI) that the primary contact's role survived untouched — the exact regression finding #1 fixed, reproduced and verified fixed against a running instance, not just a test double.
+- Confirmed the Users list shows the remaining representative exactly once (no duplicate-row fan-out, item 4) and correctly reclassifies the removed representative as a bare contact.
+- Confirmed Votes and Membership → Applications admin screens render cleanly with no console errors against the `voteStatusSchema`/`applicationStageSchema`-typed responses from the §1.3 pass.
+- No console errors or exceptions at any point in the session. Test data cleaned up afterward.
+- **Not covered by this browser pass**: the multi-org member-portal switching endpoint had no frontend UI at this point in the day — see the follow-up pass immediately below, which built and browser-verified it. `Users.tsx`, member-directory/detail pages, `sponsors-wall.tsx`, `wg-chairs-widget.tsx`, `leadership-widget.tsx`, and portal `AccountSettings.tsx` were not exercised in the browser this pass (Users.tsx was exercised via its list view, not its per-member edit modal; `MyProfile.tsx` was exercised in the follow-up pass below).
+
+### Member-portal multi-org switching UI (same day, third follow-up pass)
+
+Item 3's `PUT /api/v1/me/active-membership` (§1.4's "Impacted areas" list explicitly names portal `MyProfile.tsx`/`AccountSettings.tsx` as in-scope) had a working backend and passing tests but no UI to call it. Built one and, in the process of browser-verifying it, **found and fixed a real bug the automated tests didn't catch**:
+
+- Added an "Acting as" card to `assets/ts/member-flows/portal/sections/MyProfile.tsx`, rendered only when `activeMemberships.length > 1`, listing every membership with a "Switch" button and a "Current" badge on the active one.
+- `EligibleMembership` (`functions/_lib/types.ts`), `myActiveMembershipSchema` (`assets/shared/schemas/me.ts`), and `MEMBER_ELIGIBLE_USER_SELECT` (`functions/_lib/auth/member.ts`, now joins `organizations`) gained an `organizationName` field — the switcher needs a human-readable label per membership, which the endpoint didn't previously return. Added a `putJson` helper to `assets/ts/shared/api-client.ts` (the client had `get`/`post`/`patch`/`delete` but no `put`).
+- **Bug found live, not by any test**: the initial implementation called `window.location.assign("/portal/#/profile")` after a successful switch to force every other org-scoped screen to re-fetch under the new context. Browser-verified with a real two-org test member (seeded directly in local D1) and clicking "Switch" for real: the button stuck on "Switching…" forever. Root cause — the caller is already on `#/profile`, so assigning that exact same URL is a browser no-op; the switch succeeded server-side (confirmed via direct API call) but the UI never reflected it. Fixed by using `window.location.reload()` instead. Re-verified in the browser: switching now correctly updates the current-membership badge, membership category, and org-visibility label, with no console errors. This is exactly the class of bug `tests/member-multi-org-context.test.ts` (which calls the service functions directly, not through a browser) structurally cannot catch — a concrete argument for why the browser verification pass mattered, not just the unit tests.
+- Test data cleaned up afterward. Re-verified after this pass: `pnpm run typecheck` clean, `pnpm run format:check`/`eslint` clean, `tests/member-multi-org-context.test.ts` (extended with an `organizationName` assertion) and the surrounding member-auth/me-endpoints suites passing.
+
+### Remaining frontend browser verification (same day, fourth pass)
+
+Closed the last named gap from §1.4's "Impacted areas" list by browser-checking every remaining consumer, confirming none of them reference the fields item 7 renamed (`grep` for `memberId`/`representativeId`/`membershipId` across all of them returned nothing, matching `typecheck:frontend` already being clean) and none crash or log console errors:
+
+- `/members/` (`member-directory-page.tsx`) — renders its empty state correctly (`0` organizations in this local D1 snapshot); no console errors.
+- `/wg/` and `/wg/ca/` (`wg-chairs-widget.tsx`) — render correctly; no console errors.
+- `/sponsors/` (`sponsors-wall.tsx`) — renders its empty state correctly; no console errors.
+- `/about/board/` (`leadership-widget.tsx`) — renders its empty state correctly; no console errors.
+- Portal `AccountSettings.tsx` — browser-verified with a real single-membership test member (magic-link login); renders correctly, and (as expected) does not show the multi-org switcher card since it belongs on `MyProfile.tsx`, not here, and this member only has one membership.
+- `Users.tsx`'s per-member edit action (not just its list view) — browser-verified end-to-end: created a real organization/representative via the admin API, opened that user's detail page, toggled "Show on org profile," and confirmed the `PATCH /api/v1/admin/members/:id` call (the same endpoint finding #1 fixed) succeeds with a live "Membership updated" toast and no console errors.
+- Test data cleaned up afterward (a foreign-key ordering mistake in the first cleanup attempt — deleting `organizations` before its dependent `user_roles`/`organization_representatives` rows — was itself caught by D1's FK enforcement and fixed before re-running).
+
+Every file named in §1.4's frontend "Impacted areas" list, and every screen listed as a Phase-1 gap in earlier passes, has now been code-reviewed for the renamed fields and browser-exercised at least once against the corrected backend with zero console errors.
+
+### §1.5 fuller `membership/` reorganization (same day, fifth follow-up pass)
+
+The previous pass deliberately deferred this item, citing the plan's own "do not proactively restructure" guidance. Escalated the conflict explicitly (this document's own recommendation vs. finishing the item as originally scoped); the real user chose to do the full reorganization. Completed it:
+
+- `git mv functions/_lib/services/members-directory.ts` → `functions/_lib/services/membership/directory.ts`; `git mv functions/_lib/services/membership-scheduled-jobs.ts` → `functions/_lib/services/membership/scheduled-jobs.ts`. Import paths fixed in both files and in every importer (`functions/router.ts`, `functions/api/v1/internal/jobs/run.ts`, 5 route files for `directory.ts`).
+- Split the former `member-applications.ts` (queries + creation + stage transitions all in one file) and the former `membership-onboarding.ts`/`member-provisioning.ts` pair into `functions/_lib/services/membership/applications/{queries,create,transition,approve}.ts`, one responsibility per file. `approve.ts` now calls `provisionOrganizationMembership` (item 8's canonical use case) directly instead of through the old `provisionOrganizationAndMembers` adapter. `member-provisioning.ts`, `membership-onboarding.ts`, and `member-applications.ts` deleted outright — zero remaining importers, full content preserved in the new files. ~12 route/service files across admin and member application endpoints updated to import from the new paths.
+- Created `functions/_lib/services/membership/categories.ts`: moved `assertCategoryCompatible` out of `memberships.ts` (its only real caller-facing behavior), and added `listMembershipCategories` — a small DB-backed read of the `membership_categories` table that no prior code path exposed as a function (only the static shared TS constant was used elsewhere). Added a dedicated test (`tests/membership-aggregate.test.ts`) that calls it directly and asserts parity with the canonical shared contract, mirroring the existing raw-SQL parity test.
+- Created `functions/_lib/services/membership/notifications.ts`: typed draft-builder functions for every membership-domain email (`consultation-batch`, `ec-review-batch`, `application-closed-no-response`, the on-hold reminder templates, `member-account-claim`, `application-approved-welcome`, `org-contact-assigned`, `mailing-list-enrolled`, `wg-calendar-invite`), each returning the exact payload shape `queueEmail` already accepted — no `db`/`env` access, no delivery logic of its own. This closed a real duplication: `functions/api/v1/admin/applications/[id]/approve.ts` and `scheduled-jobs.ts`'s `runEcWindowAutoApprove` had independently built near-identical `member-account-claim`/`application-approved-welcome` payloads; both now call the same two builders.
+- Left `membership-form-submission.ts` (confirmed via full read to be an unrelated legacy GitHub-issue-based form system, not the D1 `member_applications` domain), `mailing-lists.ts`, `google-groups.ts`, and `membership-settings.ts` (different domains, only consumers of membership primitives) where they were.
+- Validation: `pnpm run typecheck` (backend + frontend) clean. `eslint` clean across all real project source directories (`functions`, `assets/*`, `scripts`, `static/scripts`, `tests`) — the repo-wide `eslint .` invocation separately reports thousands of pre-existing errors from an untracked local `.venv` directory containing Playwright's vendored driver bundle; unrelated to this change, not part of the tracked repository, not touched by this pass. `prettier --check` clean. `pnpm exec vitest run`: 899 passed / 1 skipped (900 total) — the one net-new test is `listMembershipCategories`'s. `depcruise` (architecture lint) and `check:max-lines`'s one flagged file (`scripts/migrate-members-yaml-to-d1.mjs`, untouched by this pass, pre-existing) are both pre-existing environment/repo conditions unrelated to this change.
+- Browser smoke check: started the local dev server, confirmed the reorganized Membership → Applications list and detail views (`applications/queries.ts`) render with no console errors, submitted a real test application through the live `POST /api/v1/members/applications` route (`applications/create.ts`), moved it to `ec_review` via direct D1 update, and opened it in the admin UI. Clicking "Approve & run onboarding" triggered a native confirmation dialog that the browser-automation tooling cannot interact with (out of scope for automated dialogs per this environment's safety rules); the tab became unresponsive to further automation and was closed rather than force-interacted with. Server-side, the application was confirmed still in `ec_review` (D1 query) — the click never reached the approve handler, so no partial state was created; test data was fully cleaned up. The approve route + all three notification builders it now calls are otherwise verified end-to-end (real HTTP request, real `email_outbox` row assertions for `member-account-claim`, `application-approved-welcome`, and `org-contact-assigned`) by `tests/membership-onboarding.test.ts`'s 9 passing tests, which exercise the exact same route via `app.fetch()`.
+
+**Confirmed NOT done — do not treat Phase 1 as fully closed:**
+- Phase 2 (importer) was explicitly out of scope for this pass (the user asked for Phase 1 only) and the importer still targets the pre-rewrite schema — expect it to need matching updates before it can run against these migrations.
+- Phase 8.2 (`admin-organizations.ts` responsibility split) was not done — the file was rewritten in place, not split, given the size of the rest of this pass.
+- The admin UI's "Approve & run onboarding" click-through was not completed live in-browser (see above) — its server-side behavior is fully covered by `tests/membership-onboarding.test.ts` instead. A manual click-through with the confirmation dialog dismissed by a human would close this gap.
+
+**Next steps, in priority order:** (1) move to Phase 2 (importer).
+
+**Why first:** these migrations have never reached preview or production (pending §0's ledger check). Rewrite them so every PR-created table/column/index appears once, in final form, at the next available number after the ledger check (`0035` at last check). This affects the importer (Phase 2) and several schema/DRY items (Phase 3).
+
+Rules for the rewrite:
+- Keep `0000`–`0034` (the current upstream range, including both `0033`s) immutable.
+- Every PR-created table/column/index should appear once in final form — no intermediate schema + later ALTER/backfill/rebuild.
+- No PR-created table should be rebuilt or backfilled — including `members`, which in the *revised* design (§1.4 below) is never touched by this PR's migrations at all.
+
+### 1.1 — Confirmed still present: `migrations/0055_membership_categories_table.sql` [P1]
+> Remove this D1-incompatible rebuild from the final migration history. D1 keeps FK enforcement enabled inside migrations, so `PRAGMA foreign_keys = OFF` does not make the following parent-table drops safe (reproduced failing with `SQLITE_CONSTRAINT_FOREIGNKEY` on representative-populated data). Because this range is undeployed: create `membership_categories` before its dependent PR tables, and fold everything into first-introduction definitions. Do not add another repair migration.
+
+**Plan:**
+- Move `membership_categories` table creation to before its first dependent table.
+- Delete migration `0055` entirely. There is no `members.member_type` FK to fold anywhere — §1.4 below (superseding the original draft) is a no-rebuild design where `members` is untouched and category lives in a new 1:1 `member_category_assignments` table. `membership_categories` only needs to exist before `member_category_assignments` and before `member_applications` (which gets its `membership_category` FK directly in its own initial `CREATE TABLE`).
+- Grep for any code that expects `0055` to run standalone by filename/number before deleting.
+
+### 1.2 — Confirmed still present: `migrations/0056_drop_working_groups_chair_user_id.sql`, `0050_normalize_links_json.sql`, `0057_organization_domains.sql` [P1]
+> Do not ship a backup/delete/null/restore cycle for a column introduced earlier in the same undeployed PR. Remove `chair_user_id` from migration `0034`'s `CREATE TABLE working_groups` and delete `0056`. Apply the same rule to `links_json` and `organization_domains`: define final structures at first introduction rather than backfilling intermediate shapes. Aside from the pre-existing `members` table, PR-created tables should not be rebuilt or backfilled at all.
+
+**Plan:**
+- Edit `0034_applications_sponsorships_working_groups.sql`: remove `chair_user_id` from the initial `working_groups` CREATE TABLE. Delete `0056`.
+- Fold `0050_normalize_links_json.sql` (currently normalizes a `links_json` shape introduced earlier) into first introduction; delete `0050`.
+- Fold `0057_organization_domains.sql` (normalized table added after an earlier `organization_domains_json` representation) into first introduction as `organization_domains`, created directly since domains are queried and uniqueness-constrained; delete `0057`.
+- Check `0051_organization_links.sql` for the same "transform later" pattern for social columns; fold into first introduction if so.
+- After folding, renumber the remaining migrations contiguously and re-verify any tooling or hardcoded migration-count assumptions.
+
+Examples to hold the rewrite to (from v4 §5.1):
+- do not introduce `working_groups.chair_user_id`
+- do not introduce provider-specific `organizations.social_*` columns or `organizations.organization_domains_json`
+- create `organization_domains` directly, not via a JSON-then-normalize path
+- add `organizations.links_json` once in canonical form
+- create application form submissions/answers in final normalized form directly, not as `answers_json` migrated later
+- create the active working-group member unique index initially, not after updating branch-only rows first
+- fold sponsorship price columns into the initial sponsorship table definition
+- rely on the tolerant link codec for existing/legacy link shapes rather than rewriting all existing JSON during this deployment
+
+### 1.3 — Confirmed still present: unconstrained closed-state columns in `migrations/0034_applications_sponsorships_working_groups.sql` and siblings [P1]
+> The "no CHECK constraint convention" is neither established nor safe: migration `0000` already uses `CHECK` for roles, statuses, session types. This PR stores application stages, sponsorship types/stages, vote types/statuses/visibility, and several booleans as unconstrained `TEXT`/`INTEGER`, duplicating allowed values across comments, Zod, and services. Since these tables are undeployed, put stable closed-state constraints in their initial definitions (or use reference tables) so internal jobs/imports cannot create states the API cannot represent — without any later rebuild.
+
+**Plan:**
+- Enumerate every closed-state column introduced in `0034` and other new `003x`–`005x` migrations: application stage, sponsorship type/stage, vote type/status/visibility, boolean-as-integer flags, etc.
+- For each, choose one explicit enforcement owner (merged guidance, v4 §5.4 — this is now the general policy, not just this item's fix):
+  - **Database `CHECK`/FK/unique index** for durable structural invariants not expected to gain new values (integer-boolean domains, mutually exclusive holder columns, valid-JSON checks, temporal ordering).
+  - **A reference table** (matching the `membership_categories` pattern) when database enforcement of an evolvable vocabulary is valuable, so adding/retiring a value is additive.
+  - **A shared Zod/domain module validated on every write path** (API, jobs, scripts, service-to-service calls) plus Vitest coverage, when the vocabulary is genuinely closed but doesn't need a table — do not `CHECK (col IN (...))` a value set that may evolve (workflow stages, application statuses, membership categories, representative roles, vote states, visibility options, sponsorship pipeline stages all fall here).
+- Cross-reference each closed-state list against its Zod schema (`assets/shared/schemas/*.ts`) and service-layer constant so DB, schema, and service agree — do this together with Phase 3's DRY items so the CHECK/reference-table mirrors one canonical source instead of the other way around.
+- Do not mirror a TypeScript enum in SQL without a durable integrity reason; if an SQL mirror is intentionally kept, add a parity test.
+
+### 1.4 — `members` table: normalize to aggregate + `organization_representatives`, no rebuild [P1] — **merged/corrected design**
+
+**Decision:** `members` stays exactly as defined in migration `0000` — untouched. Category, role assignments, and representative relationships move into new, additive tables. This item now supersedes both the original draft's target schema *and* the first follow-up review round — v4's later corrections (its §2.2–2.4) sharpen the schema and concurrency handling below. Treat the schema and code in this section, not the ones in git history of this document, as authoritative.
+
+**Why `members` doesn't need a rebuild:** migration `0000` already defines the aggregate the reviewer wants —
+
+```sql
+-- migrations/0000_*.sql (existing, unmodified)
+CREATE TABLE members (
+  id              TEXT NOT NULL PRIMARY KEY,
+  member_type     TEXT NOT NULL CHECK (member_type IN ('individual', 'organization')),
+  user_id         TEXT,
+  organization_id TEXT,
+  status          TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'pending', 'lapsed')),
+  tier            TEXT,
+  data_json       TEXT,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL,
+  UNIQUE(user_id),
+  UNIQUE(organization_id),
+  CHECK (
+    (member_type = 'individual' AND user_id IS NOT NULL AND organization_id IS NULL) OR
+    (member_type = 'organization' AND user_id IS NULL AND organization_id IS NOT NULL)
+  ),
+  FOREIGN KEY(user_id) REFERENCES users(id),
+  FOREIGN KEY(organization_id) REFERENCES organizations(id)
+);
+```
+
+One row per organization or per individual, with mutual exclusivity already enforced. The PR never needed to touch this table — it only needed somewhere to put category and a place for N people to attach to an org-tied row, both additive.
+
+**Target schema (additive delta only — corrected per v4 §2.2/2.3):**
+
+```sql
+-- member_category_assignments: category lives once per aggregate, in its
+-- own 1:1 table instead of as a column on members (keeps members
+-- untouched) or on organizations (removes the two-way sync entirely).
+CREATE TABLE member_category_assignments (
+  member_id     TEXT NOT NULL PRIMARY KEY,
+  category_code TEXT NOT NULL,
+  created_at    TEXT NOT NULL,
+  updated_at    TEXT NOT NULL,
+  FOREIGN KEY(member_id) REFERENCES members(id),
+  FOREIGN KEY(category_code) REFERENCES membership_categories(code)
+);
+
+-- organization_representatives: the N people who represent an org-tied
+-- membership aggregate. Temporal (joined_at/left_at) — active/inactive is
+-- exactly what left_at IS NULL/IS NOT NULL means.
+CREATE TABLE organization_representatives (
+  id                  TEXT NOT NULL PRIMARY KEY,
+  member_id           TEXT NOT NULL,   -- FK to members.id (the org's aggregate row)
+  user_id             TEXT NOT NULL,
+  show_on_org_profile INTEGER NOT NULL DEFAULT 1 CHECK (show_on_org_profile IN (0, 1)),
+  joined_at           TEXT NOT NULL,
+  left_at             TEXT,            -- NULL while active
+  created_at          TEXT NOT NULL,
+  updated_at          TEXT NOT NULL,
+  CHECK (left_at IS NULL OR left_at >= joined_at),
+  UNIQUE (id, member_id),              -- lets role FKs below prove representative<->member match
+  FOREIGN KEY(member_id) REFERENCES members(id),
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- CORRECTED from the original draft: a bare UNIQUE(member_id, user_id)
+-- across all history blocks a former representative from ever rejoining,
+-- since their old (now-inactive) row still occupies that pair. Constrain
+-- only the *active* relationship instead.
+CREATE UNIQUE INDEX uq_organization_representatives_active_pair
+  ON organization_representatives(member_id, user_id)
+  WHERE left_at IS NULL;
+
+CREATE INDEX idx_organization_representatives_member_active
+  ON organization_representatives(member_id, left_at, joined_at);
+CREATE INDEX idx_organization_representatives_user_active
+  ON organization_representatives(user_id, left_at, joined_at);
+-- DECIDED (interview 2026-08-15, open question 1 below): a person CAN
+-- represent more than one organization at a time. The "one org at a time"
+-- index is therefore not part of this design at all — not kept as a
+-- commented-out option.
+
+-- organization_representative_roles is DROPPED from this design.
+-- DECIDED (interview 2026-08-15, open question 2 below): representative
+-- roles reuse the EXISTING roles/role_permissions/user_roles/
+-- permission_grants RBAC system (migrations/0035_access_control.sql,
+-- itself still undeployed and therefore still editable per Phase 1's
+-- rules — exact post-renumbering filename TBD) instead of a second,
+-- parallel role concept. That system already supports exactly what was
+-- asked for: a DB-backed, admin-visible role catalog with permission
+-- bundles (`GET/POST/DELETE /api/v1/admin/roles`), and a user holding
+-- many roles simultaneously across independently scoped contexts
+-- (`context_type`/`context_id`) — `role-wg_chair` already works this way
+-- for `context_type='working_group'`.
+--
+-- Additive delta folded into 0035_access_control.sql:
+
+-- 'organization' becomes a valid context_type (schema-level allowlist
+-- only — the DB column and hasPermission() matching are already generic
+-- strings; add to assets/shared/schemas/access-control.ts's
+-- contextTypeSchema too).
+ALTER TABLE roles ADD COLUMN single_holder_per_context INTEGER NOT NULL DEFAULT 0
+  CHECK (single_holder_per_context IN (0, 1));
+
+-- Denormalized copy of roles.single_holder_per_context onto each grant
+-- row, set by the service layer at insert time. SQLite partial-index
+-- predicates can only reference columns of the indexed table itself, so
+-- this is what lets ONE index enforce "singleton per context" for only
+-- the roles that need it (see open question 3 below) without also
+-- constraining roles that are legitimately many-per-context (e.g. a
+-- future 'role-event_volunteer' context grant).
+ALTER TABLE user_roles ADD COLUMN single_holder_per_context INTEGER NOT NULL DEFAULT 0
+  CHECK (single_holder_per_context IN (0, 1));
+
+CREATE UNIQUE INDEX uq_user_roles_single_holder_per_context
+  ON user_roles(context_type, context_id, role_id)
+  WHERE revoked_at IS NULL AND single_holder_per_context = 1;
+
+INSERT INTO roles (id, name, description, is_system_role, single_holder_per_context, created_at, updated_at) VALUES
+  ('role-primary_contact', 'Primary Contact', 'Primary point of contact for an organization membership', 1, 1, ?, ?),
+  ('role-secondary_contact', 'Secondary Contact', 'Secondary point of contact for an organization membership', 1, 1, ?, ?),
+  ('role-voting_delegate', 'Voting Delegate', 'Casts the organization''s forum-level vote', 1, 1, ?, ?);
+```
+
+A representative role grant is an ordinary `user_roles` row: `role_id` one of the three above, `context_type='organization'`, `context_id=members.id` — the org's aggregate row, the same anchor `organization_representatives.member_id` and `member_category_assignments.member_id` already use, not `organizations.id`.
+
+**Service-layer invariant (replaces the dropped composite FK):** the bespoke-table draft tied every role claim to a real `organization_representatives` row via `FOREIGN KEY(representative_id, member_id) REFERENCES organization_representatives(id, member_id)`. Reusing the generic `user_roles` table gives that up — there is no DB-level link from a `user_roles` grant back to `organization_representatives`. This is a deliberate DRY-over-referential-integrity trade, not an oversight: the service that grants `role-primary_contact`/`role-secondary_contact`/`role-voting_delegate` must itself verify the target `(user_id, member_id)` has an active (`left_at IS NULL`) `organization_representatives` row before inserting the grant, and this must be covered by a test (see "Required tests" below).
+
+**Singleton-role reassignment:** assigning a new holder of one of the three singleton roles must, in the same `db.batch()`, revoke (`revoked_at = now`) the previous active grant for that `(context_type, context_id, role_id)` before/atomically with inserting the new one — `uq_user_roles_single_holder_per_context` rejects a plain insert-without-revoke, so this is DB-enforced, not just conventional.
+
+Fold the closed-state CHECK/FK constraints from §1.1/§1.3 (`category_code`) directly into these definitions.
+
+**Open product questions — RESOLVED (interview, 2026-08-15):**
+
+1. **Does a person represent at most one organization at a time?** No. Confirmed: a person can represent more than one organization concurrently (edge case, but real — e.g. someone representing both their own organization and PKI Consortium, or representing Keyfactor, Digitorus, and PKI Consortium simultaneously). **Decision: the candidate partial unique index on `organization_representatives(user_id) WHERE left_at IS NULL` is not added.** Concurrent multi-organization representation must work; add a test asserting a user can hold two simultaneously-active `organization_representatives` rows for two different `member_id`s.
+
+2. **Are representative role codes a managed catalog or a closed vocabulary?** Managed catalog: database-backed, roles should be extensible without a code change, users should be able to see which roles they hold, and roles need attachable scopes/permissions — hardcoding role strings in frontend and backend independently would duplicate and drift. **Sharpened by follow-up: this already exists.** The repo already has exactly this system (`roles`/`role_permissions`/`user_roles`/`permission_grants`, `assets/shared/schemas/access-control.ts`), including an admin-facing role catalog and context-scoped grants. Confirmed via follow-up: reuse it rather than build a second, parallel one — `organization_representative_roles` is dropped from this design entirely (see schema above). This is the exact duplication the AGENTS.md DRY rule flags, avoided by not building it.
+
+3. **Are all current role types single-assignee per membership?** Clarified via follow-up: roles in general are *not* single-assignee — a user can hold many roles simultaneously across different scopes (system-wide, per-organization/member represented, per working group, per event). That's already how `user_roles` works (multiple rows per user, each independently `context_type`/`context_id`-scoped) — no schema change needed for that part. But *within one organization*, the three representative roles are each a **singleton**: at most one active `role-primary_contact`, one active `role-secondary_contact`, and one active `role-voting_delegate` per organization at a time. Confirmed via a follow-up specifically on voting: casting is done by a user but on behalf of the member/organization, which must get exactly one counted vote, and users may only vote for a member/organization they actively represent while that member/organization is active and vote-eligible. Today's `organizations.voting_delegate_user_id` singleton column plus the `(vote_id, organization_id, round)` unique index in `migrations/0044_voting.sql` already implement "one vote per org" this way — the decision is to preserve that behavior unchanged (singleton delegate) rather than move to a multi-delegate "last vote wins" model. Because this uniqueness is a property of these three specific role types — not a rule for every context-scoped role (`role-event_volunteer` is legitimately many-per-event) — it can't be one blanket unique index over all of `user_roles`; that's what the denormalized `single_holder_per_context` flag above is for.
+
+**Columns to remove from where they're introduced (confirmed still present in the tree — not a rebuild, just don't add them):**
+- `organizations.primary_contact_user_id`, `organizations.secondary_contact_user_id` — currently in `migrations/0037_org_content_columns_and_contacts.sql:34-35`. Remove; moves to `user_roles` grants (`context_type='organization'`, `context_id=members.id`, `role_id='role-primary_contact'`/`'role-secondary_contact'`).
+- `members.show_on_org_profile` — currently in `migrations/0037_org_content_columns_and_contacts.sql:40`. Remove; relationship-owned, lives on `organization_representatives`.
+- `organizations.membership_category` — currently in `migrations/0040_org_category_chairs_vice_chairs.sql:37`, with backfill-from-`primary_contact_user_id` logic at lines 42-65. Remove the column and backfill; `0040`'s chair/vice-chair derivation must be rewritten to join through `user_roles` (`role-wg_chair`/`role-wg_vice_chair` grants) and `organization_representatives` instead of `organizations.membership_category` and `members m` — it's undeployed, fix at first introduction.
+- `organizations.voting_delegate_user_id`, `organizations.pending_secondary_contact_user_id` — currently in `migrations/0041_org_content_review_and_mailing_lists.sql:11,15`. Remove `voting_delegate_user_id`; becomes a `user_roles` grant (`role_id='role-voting_delegate'`). `pending_secondary_contact_user_id` is workflow state, not aggregate/representative data — give it its own small nomination/invitation-style table; exact shape is an implementation detail, the constraint is only that it doesn't live on `organizations` or `organization_representatives`.
+- `organizations.member_since` — currently in `migrations/0046_member_since.sql:22`. Remove; `members.member_since` (added in the same migration, line 23) is sufficient. Keep `members.member_since` as-is.
+- `migrations/0055_membership_categories_table.sql` — delete entirely (§1.1); its rebuilds are unnecessary once `members`/`organizations` aren't touched.
+
+**D1 concurrency design — CORRECTED per v4 §2.4 (do not use a blanket `catch` as a race detector):** the original draft's `getOrCreateOrganizationMemberAggregate` caught *every* D1 error and assumed it meant "lost the uniqueness race." That would also swallow an invalid category, an unrelated FK failure, schema drift, or a database outage, and silently reinterpret all of them as a race. Use conditional `INSERT OR IGNORE ... SELECT` statements keyed by the existing `members.organization_id` uniqueness instead, so a losing writer's statement is a no-op rather than an error, then re-read and compare:
+
+```ts
+async function getOrCreateOrganizationMemberAggregate(db, organizationId, categoryCode, now) {
+  const proposedId = uuid();
+
+  await db.batch([
+    db.prepare(
+      `INSERT OR IGNORE INTO members (id, member_type, organization_id, status, created_at, updated_at)
+       VALUES (?, 'organization', ?, 'active', ?, ?)`,
+    ).bind(proposedId, organizationId, now, now),
+    db.prepare(
+      `INSERT OR IGNORE INTO member_category_assignments (member_id, category_code, created_at, updated_at)
+       SELECT id, ?, ?, ? FROM members WHERE organization_id = ?`,
+    ).bind(categoryCode, now, now, organizationId),
+  ]);
+
+  // Re-read unconditionally — this also runs on the non-race common path,
+  // not only after a caught error, so it can't hide a real failure behind
+  // a swallowed exception.
+  const row = await first<{ id: string; category_code: string }>(
+    db,
+    `SELECT m.id, a.category_code
+     FROM members m LEFT JOIN member_category_assignments a ON a.member_id = m.id
+     WHERE m.organization_id = ?`,
+    [organizationId],
+  );
+  if (!row) throw new AppError(500, "MEMBER_AGGREGATE_RACE_UNRESOLVED", "Concurrent member creation did not converge");
+  if (row.category_code && row.category_code !== categoryCode) {
+    throw new AppError(409, "MEMBER_CATEGORY_CONFLICT", "Organization already has a different membership category assigned");
+  }
+  return row.id;
+}
+```
+
+This is the same "shared singleton value that might not exist yet" idiom already established in this codebase family (`pkic/pkic.org#721`'s `loadOrCreateCapabilityLinkSecret` in `functions/_lib/auth/capability-links.ts`), applied via `INSERT OR IGNORE` + unconditional re-read rather than a try/catch. Any *other* D1 error (constraint violation on an unrelated column, connectivity failure, etc.) propagates instead of being relabeled as a race — do not add a catch-all around this helper.
+
+Use this helper everywhere a representative is being added and the aggregate row may or may not already exist (self-service join, admin create, application-approval provisioning) instead of each call site doing its own read-then-insert.
+
+**Required tests:** invariant test that the `membership_categories` seed table matches the canonical shared contract; concurrent multi-organization representation test (one user with two simultaneously-active `organization_representatives` rows for two different `member_id`s, per resolved open question 1); representative transfer test (moving a representative from one org to another closes `left_at` on the old row and opens a new one); rejoin test (a former representative rejoining creates a *new* `organization_representatives` row — this is exactly what the corrected partial unique index above is for); role-uniqueness test (only one active `user_roles` grant per `(context_type, context_id, role_id)` where `single_holder_per_context = 1`, old one revoked before/atomically with the new one, verified specifically for `role-primary_contact`/`role-secondary_contact`/`role-voting_delegate`, and that a non-singleton context-scoped role like `role-event_volunteer` is *not* constrained by the same index); service-layer invariant test that granting one of the three representative roles to a `(user_id, member_id)` pair without an active `organization_representatives` row is rejected (the check the dropped composite FK used to provide); `contextTypeSchema` accepts `'organization'` test; `votes/ballots.ts` delegate-resolution test updated to resolve `role-voting_delegate` via `user_roles` rather than `organizations.voting_delegate_user_id`; atomic-provisioning test covering the corrected `getOrCreateOrganizationMemberAggregate` race, including the differing-category conflict path and confirming an unrelated D1 error is *not* silently treated as a race. Migration/import preflight must fail loudly if any existing `members` row lacks an unambiguous category — no silent default.
+
+**Impacted areas — a search starting point, not a mandatory change list.** Trace actual readers/writers from schema → services → shared API schemas → UI; use this list to start, then verify each file actually touches a changed column/table before editing it:
+- `functions/_lib/services/member-organization.ts` — self-service join/leave: call the get-or-create helper, then insert `organization_representatives` (and a role row if the joiner takes one).
+- `functions/_lib/services/admin-members.ts` **and** `functions/_lib/services/member-provisioning.ts` — **confirmed**: both currently hand-write their own `INSERT INTO members (id, member_type, user_id, organization_id, status, tier, data_json, created_at, updated_at, show_on_org_profile, ...)` (admin-members.ts:178, member-provisioning.ts:140). This is exactly the duplicate-provisioning problem in Phase 1.5 below — fold both into one shared operation while doing this rewrite rather than fixing them separately. Drop the `UPDATE members SET member_type = ? WHERE organization_id = ?` re-sync entirely — there's no `member_type`/category mirror left to sync.
+- `functions/_lib/services/admin-organizations.ts` — presumed source of the `organizations.membership_category`/contact-column cascade `0040` backfills from; update to read/write through `member_category_assignments` and `user_roles` (organization-context grants).
+- `functions/_lib/services/members-directory.ts` / `assets/shared/schemas/members-directory.ts` — one row per aggregate (`members` join `member_category_assignments`), representatives via join/expansion.
+- `functions/_lib/services/membership-onboarding.ts`, `membership-form-submission.ts` — application-approval provisioning: use the get-or-create helper (member + category assignment, batched), then attach the approving applicant's representative row and any role grants inside the same `db.batch()` as Phase 5.2's approval statements.
+- `functions/_lib/services/leadership.ts`, `wg-chair-digest.ts` — WG chair/vice-chair derivation: join through `user_roles` (`role-wg_chair`/`role-wg_vice_chair` grants, matches the `0040` rewrite above).
+- `functions/_lib/services/mailing-lists.ts`, `google-groups.ts` — source membership from `organization_representatives`.
+- `functions/_lib/services/user-merge.ts` — merging two users must merge/dedupe their `organization_representatives` rows and their representative-role `user_roles` grants, not `members` rows.
+- `assets/shared/schemas/access-control.ts` — add `'organization'` to `contextTypeSchema`; add `role-primary_contact`/`role-secondary_contact`/`role-voting_delegate` to wherever built-in role IDs are enumerated/typed.
+- `functions/_lib/services/votes/ballots.ts` (`resolveVotingDelegateUserId`) and `functions/_lib/services/votes/portal.ts` (`memberCanCastBallot`/`memberHasCastBallot`) — currently read `organizations.voting_delegate_user_id` falling back to `primary_contact_user_id`; rewrite to resolve the active `role-voting_delegate` `user_roles` grant for the org's `member_id` (confirm whether the fallback-to-primary-contact behavior is still wanted — it's carried over unchanged from today, not a new decision made in this pass).
+- API routes: `functions/api/v1/admin/members/*`, `functions/api/v1/admin/organizations/[id]/members.ts`, `functions/api/v1/me/organization/members.ts`, `functions/api/v1/members/*` — update shapes to distinguish aggregate, category, and representatives/roles.
+- Frontend: `assets/ts/admin/sections/Organizations/Representatives.tsx`, `Users.tsx`, `assets/ts/member-flows/member-directory-page.tsx`, `member-detail-page.tsx`, `sponsors-wall.tsx`, `wg-chairs-widget.tsx`, `leadership-widget.tsx`, portal `MyProfile.tsx`/`AccountSettings.tsx`.
+- Importer (Phase 2): emit one `members` row per organization/individual, one `member_category_assignments` row, N `organization_representatives`/role rows.
+
+Because this touches the widest set of files in the whole plan and is now fully unblocked, treat it as its own dedicated iteration: confirm the target schema once more against the actual current migration state before writing anything, then work outward schema → services → routes → frontend.
+
+### 1.5 — Membership service architecture and naming (new, from v4 §8) [P2]
+
+Not in the original review, but directly motivated by it: implementing §1.4 means writing the same provisioning logic that today is duplicated. **Confirmed**: `functions/_lib/services/admin-members.ts` (286 lines) and `functions/_lib/services/member-provisioning.ts` (200 lines) each independently build and execute their own `INSERT INTO members (...)` statement with slightly different column lists (`admin-members.ts:178` includes `member_since`; `member-provisioning.ts:140` doesn't). That's the DRY violation the AGENTS.md constitution is meant to prevent, happening in code that predates this review.
+
+**Plan:** while doing §1.4, consolidate into one membership provisioning use case composed from focused primitives (ensure/find user, ensure organization, ensure one membership aggregate via §1.4's get-or-create helper, assign one category, attach representatives, assign roles, attach WG membership, queue notification intents), called identically by admin creation, application approval, self-service join, and the importer. Organize new domain code as:
+
+```text
+functions/_lib/services/membership/
+  memberships.ts            # load/create the aggregate + category assignment
+  categories.ts              # read the managed category catalog
+  representatives.ts         # join/leave/transfer/rejoin
+  representative-roles.ts    # assign/revoke roles, enforce active-role policy
+  directory.ts                # bounded public/admin read models
+  notifications.ts            # membership notification intents (no delivery, no own outbox SQL)
+  scheduled-jobs.ts           # bounded job entrypoints calling the same use cases
+  applications/
+    create.ts
+    queries.ts
+    transition.ts
+    approve.ts
+```
+
+Do not name anything `commands`, `management`, `catalogue-repository`, or `outbox-statements` — see AGENTS.md's naming rule. Generic statement-preparation helpers (`prepareQueueEmailStatement`, `prepareAuditStatement`) belong with the generic outbox, not under `membership/`; membership's `notifications.ts` returns typed drafts that the generic outbox helper consumes.
+
+This is scoped to files actually touched by §1.4 — do not proactively restructure unrelated existing services solely to match this layout.
+
+**Done** (§1.5 fuller `membership/` reorganization follow-up pass, above): the full `membership/` layout above now exists exactly as specified, including the `applications/` subfolder split and the `notifications.ts` typed-draft-builder module.
+
+---
+
+## Phase 2 — Fix the importer to target the final schema
+
+### 2.1 — `scripts/migrate-members-yaml-to-d1.mjs:574` [P1] — carried forward, not re-checked against current file line numbers
+> This importer targets an intermediate schema, not the final database: migration `0051` drops all five `social_*` columns, so running the documented importer after applying the migrations generates `no column named social_x`. It also never emits final `organization_domains` rows. Have the importer write canonical `links_json` and normalized domain records directly, and add a smoke test that applies the complete migration set to an empty D1 database and executes the generated import SQL against it. That removes the need for the 0051/0057 backfills entirely.
+
+**Plan:** unchanged from the original — after Phase 1 folds `links_json`/`organization_domains` into first-introduction shapes, update the importer to emit those shapes directly (no `social_*` columns, no `organization_domains_json`). Add a smoke test: empty D1 → apply full rewritten migration set → run importer's generated SQL → assert no missing-column errors → keep it in the test runner so it runs in CI, not just locally.
+
+**RESOLVED 2026-08-17 — `SQLITE_TOOBIG` on the full real dataset, found and fixed:** the smoke test's tiny fixture passed from the start, but executing the importer's *real* full-dataset output (419 orgs, ~4,300 statements) against local D1 failed with `wrangler`'s local `d1 execute` throwing `SQLITE_TOOBIG`. Root cause: `buildUpsertUserStatement`'s `ON CONFLICT` clause ended `headshot_r2_key = CASE ... END,` (comma, no space) — wrangler's local SQL-statement splitter only closes a `CASE...END` block when `END` is followed by `;` or whitespace, so it never popped and silently merged every later statement in the file into one until it exceeded D1's 100KB per-statement limit. Confirmed against wrangler's own splitter with a minimal repro before touching code; fixed by reordering the `SET` clause list so `CASE...END` is last (`END;`, pure reordering, no behavior change); regression test added asserting the statement ends in `END;`. Only ever affected local `d1 execute --file`/`--command` — `--remote` (the real `--preview`/`--production` import path) uploads the file for server-side ingestion instead and was never affected. Re-verified end to end against the full real dataset after the fix: `EXEC_EXIT:0`. Full writeup in the "Follow-up pass" section below.
+
+### 2.2 — `scripts/migrate-members-yaml-to-d1.mjs:508` [P1]
+> The importer is 1,251 lines and currently makes `pnpm run check:max-lines` fail. It owns CLI parsing, YAML/CSV ingestion, identity reconciliation, business mapping, SQL rendering, R2 upload, and reporting in one closure. Split into tested pure modules and keep the entry point as orchestration.
+
+**Plan:** unchanged — split into `scripts/migrate-members/` (`parsers.mjs`, `reconciliation.mjs`, `sql-renderer.mjs`, `report.mjs`, `cli.mjs`/`r2-adapter.mjs`), keep `migrate-members-yaml-to-d1.mjs` as a thin orchestration entry point, add unit tests for the pure modules, and confirm `pnpm run check:max-lines` passes. Note: `scripts/AGENTS.md` (merged from `pkic.org#726`, present in this tree) already prescribes exactly this shape — this is now an AGENTS.md compliance item, not just a review comment. Confirmed current size: **1,244 lines** (`wc -l`), still failing the gate.
+
+### 2.3 — `scripts/migrate-members-yaml-to-d1.mjs` uses `npx` instead of `pnpm` [P2] — **new, confirmed live**
+> Uses `npx` instead of `pnpm` (flagged by `pr-review-post-rebase.md` at line 1169).
+
+Confirmed: `execFileSync("npx", args, ...)` appears twice, at lines 1186 and 1205 (line numbers have drifted slightly from the cited 1169 as the file has been edited, but both call sites are real and unchanged in kind). This directly violates the root `AGENTS.md` workflow rule: "Use `pnpm` for repository scripts and local binaries. Do not mix in `npm` or `npx`."
+
+**Plan:** replace both `execFileSync("npx", args, ...)` calls with the `pnpm`-equivalent invocation (`execFileSync("pnpm", ["exec", ...args], ...)` or whatever the invoked tool's `pnpm`-native form is — check what each `npx` call is actually invoking before choosing the replacement). Small, independent fix — do not bundle with the larger 2.2 module split, but do land before 2.2's smoke test is written so the test doesn't encode the violation.
+
+### Final report (2026-08-17)
+
+**3 of 3 items complete.**
+
+Baseline: commit `71b327f5`, clean typecheck/build, lint failing only on pre-existing untracked `.venv` Playwright driver files (5833 errors — unrelated to this repo), 899/900 backend tests passing (1 pre-existing skip), 36/36 frontend tests.
+
+**1. Checklist**
+
+| ID | Requirement (verbatim) | file:line | Command | Result | Status |
+| --- | --- | --- | --- | --- | --- |
+| P2-01 | "Have the importer write canonical `links_json` and normalized domain records directly, and add a smoke test that applies the complete migration set to an empty D1 database and executes the generated import SQL against it." | `scripts/migrate-members/sql-renderer.mjs:29-77` (org upsert, `links_json` only), `:81-93` (`organization_domains`); `tests/tools/migrate-members-importer.test.ts` | `grep -n "social_x\|membership_category\|primary_contact_user_id" scripts/migrate-members-yaml-to-d1.mjs scripts/migrate-members/*.mjs` → empty. `pnpm exec vitest run --config vitest.config.tools.ts` | 0 matches for dropped columns; smoke test applies migrations `0000`-`0053` to a fresh local D1 and executes generated SQL — `Test Files 5 passed (5), Tests 35 passed (35)` | **PASS** |
+| P2-02 | "Split into `scripts/migrate-members/` (`parsers.mjs`, `reconciliation.mjs`, `sql-renderer.mjs`, `report.mjs`, `cli.mjs`/`r2-adapter.mjs`)... add unit tests for the pure modules, and confirm `pnpm run check:max-lines` passes." | `scripts/migrate-members/{cli,parsers,reconciliation,sql-renderer,report,r2-adapter}.mjs` (all created); `tests/tools/migrate-members-{parsers,reconciliation,sql-renderer,report}.test.ts` | `pnpm run check:max-lines` | `All checked files are <= 1000 lines.` (entry point now 617 lines, was 1244) | **PASS** |
+| P2-03 | "Replace both `execFileSync(\"npx\", args, ...)` calls with the `pnpm`-equivalent invocation... land before 2.2's smoke test." | `scripts/migrate-members/r2-adapter.mjs:52,76` (`execFileSync("pnpm", ["exec", ...])`) | `grep -rn '"npx"' scripts/migrate-members-yaml-to-d1.mjs scripts/migrate-members/*.mjs` | 0 matches | **PASS** |
+
+Landed in dependency order: P2-03 (`5ff12e74`) → P2-01 (`82808555`) → P2-02 (`376d92b2`, `ef008d53`).
+
+**2. Regressions vs baseline**
+
+None. `typecheck` (backend/frontend/tools): exit 0, identical to baseline. `test:backend`: 899/900 (1 skip), identical. `test:frontend`: 36/36, identical. `lint`: fails at the same 5833 pre-existing `.venv` Playwright-driver errors, same file, same line — not a regression. `format:check`, `check:filenames`: pass. `lint:architecture`: still blocked by the pre-existing Node-version mismatch (25.3.0 vs required ^22/^24/≥26), unrelated to this change, matching Phase 1's own notes.
+
+Behavior-preservation check beyond the test suite: dry-run against the real (untracked) `data/members`/`csv/` trees before and after the P2-02 split produced byte-identical per-table statement counts (1418 `working_group_members`, 847 `users`, 731 `organization_representatives`, 503 `user_roles`, 418 `members`/`member_category_assignments`, 393 `organization_domains`, 374 `organizations`, etc.) and identical summary totals (380 matched, 16 sentinel individuals, 22 unmatched, 46 bare roster users).
+
+**3. Security findings**
+
+Reviewed the diff for injection, authz, validation, secrets, crypto, SSRF, and new dependencies:
+- **SQL injection**: every dynamic value passed into a generated SQL statement goes through `sqlString`/`toSqlNullableText` (single-quote escaping). `grep` confirmed no raw `${...}` interpolation outside those two helpers.
+- **Command injection**: all `wrangler`/`pnpm` invocations use `execFileSync` with an argument array (no shell), unchanged pattern from before, only `npx`→`pnpm` in the argv itself.
+- **New dependencies**: none — no `package.json` dependency changes, only script/config wiring.
+- **Secrets**: none touched.
+- No High/Critical findings. Nothing outstanding.
+
+**4. Open questions / assumptions**
+
+- The plan's `cli.mjs`/`r2-adapter.mjs` wording ("or") was read as "both," since CLI parsing and wrangler/R2 side effects are distinct responsibilities — created both.
+- The importer targets the schema as currently defined in migrations `0035`-`0053` on disk (verified directly, not from the planning doc's prose, since the doc predates some renumbering).
+
+**5. Out of Phase 2 scope, noted at report time — since resolved (see follow-up below)**
+
+- `docs/yaml-to-d1-member-migration.md` (untracked, pre-existing) documented the *old* importer's behavior (old column names, one-`members`-row-per-representative) and was stale given P2-01's rewrite — flagged for a follow-up doc update, not touched in this pass since it was outside Phase 2's checklist. **RESOLVED 2026-08-17** — rewritten for the Phase 2 schema retarget (correct migration numbers, correct representative-photo endpoint keying via `organization_representatives.id` not `members.id`, real verified row counts replacing stale hardcoded ones, and the `SQLITE_TOOBIG` fix history). Committed `d52b18b9`, signed.
+- `docs/local-dev-with-production-backup.md` had a pre-existing uncommitted edit (backup filename example) present before this session started — left untouched in this pass, unrelated to Phase 2. **RESOLVED 2026-08-17** — every `npm`/`npx` reference replaced with `pnpm`/`pnpm exec` (root `AGENTS.md` workflow rule), and its stale pointer to the deleted `migrations/0033_rebuild_members_multi_representative.sql` replaced with a generic check-the-current-range note. Committed `d52b18b9`, signed.
+- `csv/` (untracked, real Google-Groups roster PII) was read for manual verification only, never modified or committed — the automated smoke test uses synthetic fixtures instead, per AGENTS.md's rule against moving production personal data into shared/CI environments.
+
+### Follow-up pass (same day, 2026-08-17): docs updated, and a real `SQLITE_TOOBIG` bug found and fixed
+
+Two follow-ups requested after the report above, both completed and committed (signed, `git commit -S`):
+
+- **Both docs flagged in §5 were updated** (`d52b18b9`): `docs/yaml-to-d1-member-migration.md` rewritten for the Phase 2 schema retarget (correct migration numbers, correct representative-photo endpoint keying — `organization_representatives.id`, not `members.id` — and real verified row counts instead of stale hardcoded ones); `docs/local-dev-with-production-backup.md` had every `npm`/`npx` reference replaced with `pnpm`/`pnpm exec`, and its stale pointer to the deleted `migrations/0033_rebuild_members_multi_representative.sql` replaced with a generic check-the-current-range note.
+- **A real `SQLITE_TOOBIG` bug was found and fixed** (`0c3b7104`) while verifying the importer end-to-end against the full real dataset (never caught by the smoke test's tiny fixture): `buildUpsertUserStatement`'s `ON CONFLICT DO UPDATE SET` ended with `headshot_r2_key = CASE ... END,` (comma, no space) followed by another clause. wrangler's local `d1 execute` SQL statement splitter (`unstable_splitSqlQuery`) only recognizes a `CASE...END` block as closed when `END` is immediately followed by `;` or whitespace — `END,` never satisfies that, so the splitter's compound-statement tracking never popped and silently merged every later statement in the file into that one until EOF, eventually exceeding D1's 100KB per-statement limit once enough real data (~847 `users` upserts) had accumulated. Root-caused by reading wrangler's own source and confirmed with a minimal reproduction before touching any code. Fixed by reordering the `SET` clause list so `CASE...END` is last (pure reordering, no behavior change); added a regression test asserting the statement ends in `END;`. **Scope: local dev only** — `--remote` (the real `--preview`/`--production` import path) uploads the raw file for server-side ingestion instead and was never affected, so real production/preview imports were never at risk. Re-verified end to end against the full real 419-org dataset after the fix: `EXEC_EXIT:0`, real row counts `organizations` 374, `members` 417, `organization_representatives` 731, `organization_domains` 392, `member_category_assignments` 417, `user_roles` 503, `working_group_members` 1418, `users` 844 (small counts-below-statement-tally gaps are expected `ON CONFLICT`/`INSERT OR IGNORE` dedup, not bugs).
+- Also checked whether `scripts/reorder-d1-dump.mjs` (same exported `unstable_splitSqlQuery`, used on real production D1 backups) is exposed to the same trigger — it isn't: `wrangler d1 export` output is plain `INSERT INTO ... VALUES (...)`, never `CASE...END` upsert logic.
+
+Validation for this pass: `pnpm run typecheck:tools` clean; `pnpm exec eslint` clean on touched files; `pnpm exec vitest run --config vitest.config.tools.ts` — 36/36 passing (was 35, +1 regression test); `pnpm run test:backend` — 899/900 (1 pre-existing skip), identical to baseline, confirming no regression from a change that doesn't touch any backend TS.
+
+---
+
+## Phase 3 — Schema/DRY: make canonical contracts actually canonical
+
+### 3.1 — `assets/shared/schemas/access-control.ts:125` [P1] — **confirmed still live**
+> The response contract still rejects the system-role IDs that this same file explicitly supports. `GET /roles` returns IDs such as `role-admin`, but `roleResponseSchema` declares a UUID; `userRoleResponseSchema.roleId` repeats the mismatch. Reuse one exported `roleIdSchema` for params, requests and both responses, and add response-contract tests with built-in roles.
+
+Confirmed in current tree: `roleIdParamsSchema` (`access-control.ts:23`) already accepts non-UUID system role IDs and is used for params, but `roleResponseSchema` (line 124) and `userRoleResponseSchema.roleId` (line 240, still `z.uuid()`) do not reuse it.
+
+**Plan:** unchanged — export one `roleIdSchema` (or reuse `roleIdParamsSchema` directly) for both response schemas as well as params/requests; add response-contract tests exercising built-in system roles; verify the generated OpenAPI doc reflects the fix.
+
+### 3.2 — `assets/shared/schemas/votes.ts:55` [P2] — **confirmed still live**
+> `status` is any string and both result fields are `unknown`; proposal status is also a string later in this file. Define shared vote/proposal status schemas and a discriminated result union keyed by vote type/detail level.
+
+Confirmed: `votes.ts` still has `status: z.string()` (line 55, and again at 204/458), `result: z.unknown().nullable()` (lines 65, 73), and a bare `z.object({ result: z.unknown() })` in an OpenAPI response schema (line 188). Note lines 82 and 336 *do* already use `z.enum([...])` for some status fields — the closed-state migration is partial, not entirely missing, which is useful context for scoping the fix.
+
+**Plan:** unchanged — define closed-state Zod enums for vote/proposal status, a discriminated union for vote results keyed by vote type/detail level, infer service/frontend types from them, remove manually redeclared unions/casts in consuming frontend code, and feed the same closed-state list into Phase 1.3's D1 CHECK/reference-table decisions for vote type/status/visibility.
+
+### 3.3 — `assets/ts/admin/sections/Applications.tsx:18` [P2] — carried forward, not re-checked
+> The application state machine is copied here, in `member-applications.ts`, and partly again in the admin Zod schema; `ON_HOLD_SUBTYPES` is also declared independently in all three layers. Export stage/subtype constants, Zod schemas, and a pure `allowedTransitions(from)` policy from one membership-domain module.
+
+**Plan:** unchanged — create one shared module exporting stage/subtype constants (incl. `ON_HOLD_SUBTYPES`), Zod schemas, and `allowedTransitions(from)`; import it from the service, the admin Zod schema, and `Applications.tsx`; replace the hardcoded WG label map with a lookup against managed form/WG data.
+
+### 3.4 — `assets/shared/schemas/api.ts` is a 1,161-line catch-all schema file [P2] — **new, confirmed live** (from v4 §6.1, not previously merged into this document; corroborated by `pr-review-post-rebase.md`'s independent line-count finding)
+
+Confirmed: `wc -l assets/shared/schemas/api.ts` → **1,161 lines**, matching the post-rebase review's "~1,161 lines" finding exactly. This is the file `linksSchema`, `parseLinksJson`, `serializeLinks`, `customAnswersSchema`, and numerous other canonical contracts already live in (confirmed present around lines 300–360 during this pass). Every schema/DRY item in this Phase currently points back into this one file.
+
+**Plan (from v4 §6.1, restated):** move canonical pieces into focused files under `assets/shared/schemas/`, with temporary re-exports from `api.ts` to avoid a flag-day import rewrite:
+- `links.ts` — `linksSchema`, `parseLinksJson`, `serializeLinks`, `findLinkedinUrl` (see 3.5 immediately below — fix the self-validation gap while it's being moved, not after).
+- `list.ts` — the canonical list/pagination contract (feeds Phase 6.0's inventory).
+- `membership/categories.ts`, `membership/applications.ts` — feeds 3.3's shared policy module.
+- Existing domain files for access control, votes, sponsorships, organizations, and users as needed.
+
+Do not create `common.ts`, `helpers.ts`, or `types.ts` as dumping grounds. This is naturally sequenced alongside Phase 1's schema work (1.3/1.4 need `membership/categories.ts` to exist) and Phase 3's other DRY items — do this split as part of implementing those, not as a separate mechanical pass, so the boundaries land where the actual new code needs them.
+
+### 3.5 — `parseLinksJson` does not validate its own normalized output against `linksSchema` [P1] — **new, confirmed live** (from `pr-review-post-rebase.md`, more specific than existing item 10.1)
+
+Confirmed in `assets/shared/schemas/api.ts` (current lines ~330–360): `parseLinksJson` tolerantly normalizes three legacy `links_json` shapes (plain string array, `{linkedin, x}` object, `[{label,url}]` array) down to a `string[]`, but returns that array directly — it never runs the result through `linksSchema.parse()`/`.safeParse()`. That means `linksSchema`'s own constraints (`.max(15)` entries, each entry `.url()`-validated and `http(s)`-only, no-duplicates via `superRefine`) are enforced on *write* paths that use the schema directly, but **not** on legacy rows read back through the codec — a row with 40 links, or a non-URL string smuggled in via the tolerant `{label, url}` fallback, passes through `parseLinksJson` unchanged and reaches API responses without ever being checked against the contract that's supposed to be canonical for this field.
+
+This is a distinct, sharper finding than 10.1 (10.1 is about routes bypassing the codec entirely via raw `JSON.parse`; this is about the codec itself not enforcing its own schema on read).
+
+**Plan:** decide explicitly what "malformed legacy row" should do at read time — either clamp/filter to fit `linksSchema` (drop entries beyond 15, drop non-URL entries, dedupe) and log/report the degradation, or leave `parseLinksJson`'s output type as intentionally looser than `linksSchema` and rename/document it so callers don't assume schema-conformance they're not getting. Whichever is chosen, make it explicit in code and covered by a test with a deliberately-oversized/malformed legacy row — don't leave the current silent pass-through. Do this as part of the 3.4 file-split (moving this function into `links.ts` is a natural point to also fix its contract).
+
+---
+
+## Phase 4 — Authorization: fail-closed, resolved-once resource context
+
+*(Not independently re-verified against current router/middleware code in this pass — carried forward as originally written. Re-confirm `functions/api/v1/admin/router.ts` and the working-groups member routes before starting, since router structure may have shifted during the rebase even though the underlying bug pattern is unlikely to have been fixed as a side effect of it.)*
+
+### 4.1 — `functions/api/v1/admin/router.ts:80` [P1]
+> This creates a fail-open authorization composition: matching a path here disables legacy scope enforcement and assumes every current and future descendant handler remembers its own permission check. Mount bounded routers with declarative read/write permission middleware (including resource-context resolution), and remove the parallel path-prefix authorization registry.
+
+**Plan:** unchanged — remove the path-prefix bypass registry for `/admin/events/**` and `/admin/proposals/**`; replace with router mounting that attaches declarative permission middleware per subtree, resolving resource context once at the mount point. Do together with 4.2.
+
+### 4.2 — `functions/api/v1/admin/working-groups/[id]/members/index.ts:15` [P1]
+> A `role-wg_chair` grant is scoped to `{type: "working_group", id}`, and `hasPermission` deliberately rejects a contextual grant when no context is supplied. This makes WG chairs unable to add members; sibling handlers repeat the bug, while the meetings router passes context correctly.
+
+**Plan:** unchanged — resolve the canonical WG ID once in middleware for the whole `/admin/working-groups/:id/**` subtree; update get/update/add-member/remove-member handlers to use it; use the meetings router as the reference implementation; add a regression test for WG-chair add/remove on their own WG.
+
+---
+
+## Phase 5 — Transactions: single atomic units of work
+
+D1 `batch()` is transactional and rolls back the sequence on failure. All items below converge on: build all statements first, execute once via `db.batch()`, verify affected-row counts for compare-and-set safety. **Corrected per v4 §2.5:** checking the affected-row count after an otherwise-unconditional batch is not sufficient — a lost compare-and-set does not undo unconditional history/outbox/audit inserts already in that same batch. Every dependent statement must be conditioned on the *same* operation claim/token (e.g. `WHERE ... AND version = ?` mirrored onto every dependent row, or a claim row the dependents join against), or the schema must structurally enforce the transition. Apply this correction to 5.1 and 5.2 below, not just the affected-row check they already describe.
+
+### 5.1 — `functions/_lib/services/member-applications.ts:373` [P1]
+> The read-time transition check is not enforced by the write. Two concurrent transitions can both read the same `fromStage`, then each update the row and append contradictory history events. Make this a compare-and-set (`WHERE id = ? AND stage = ?`), verify exactly one changed row, and return 409 on a lost race while keeping the guarded update and event insert in the same batch.
+
+**Plan:** compare-and-set UPDATE on the previously-read `fromStage`; check `changes`; 409 on 0. Additionally (per the §5 correction above): make the history-event INSERT itself conditional on the transition having actually happened — e.g. derive it from the UPDATE's own success rather than issuing it unconditionally in the same batch and trusting the affected-row check alone to have caught a loss before the batch executed. Apply the identical guard to approval (5.2).
+
+### 5.2 — `functions/api/v1/admin/applications/[id]/approve.ts:26` [P1]
+> Approval is not one unit of work. `approveApplication` first commits provisioning, then separately commits approved state/event and Google Groups queue rows; this route subsequently writes three email outbox rows and the audit row one at a time. A failure after line 26 returns 500 with the application already approved, and retry then returns 409 without restoring missing email/audit work.
+
+**Plan:** make guarded stage transition, provisioning writes, history/event insert, Google Groups sync job row(s), email outbox rows, and audit row all statement builders (no execution), resolve attachment metadata before building the batch, execute everything in one `db.batch()`, process durable outbox work idempotently after commit. Per the §5 correction, every one of those dependent statements must be conditional on the same successful claim as the guarded transition — not merely co-located in the same batch. Add a failure-injection test confirming no partial-approved state after a mid-sequence failure.
+
+### 5.3 — `functions/_lib/services/votes/lifecycle.ts:108` [P1] — **confirmed still live**
+> The vote row is committed before candidate inserts begin, so a later candidate constraint/D1 failure leaves a partial election visible to subsequent reads, and a retry may collide with the existing slug.
+
+Confirmed: `lifecycle.ts` (242 lines) contains no `.batch(` or `.prepare(` calls at all — the multi-insert sequence described in the finding is still fully unbatched.
+
+**Plan:** unchanged — build the vote-insert and all candidate-insert statements up front, execute in one `db.batch()`, add a failure-injection test asserting neither the vote nor any candidates persist when one statement fails.
+
+### 5.4 — `functions/_lib/services/votes/proposals.ts:240` [P1] — **confirmed still live**
+> Proposal conversion is both non-atomic and race-prone: it inserts a vote and only afterward marks the proposal converted, without a conditional status update. Concurrent calls can create two votes for one proposal, or a failed update can leave an orphan vote.
+
+Confirmed: no `votes.source_proposal_id` column exists in any migration file, and `proposals.ts` (391 lines) has no `.batch(`/`.prepare(` calls.
+
+**Plan:** unchanged — add `votes.source_proposal_id UNIQUE` (in Phase 1's rewritten voting migration, since it's still undeployed); conditionally claim the proposal (`UPDATE proposals SET status='converted' WHERE id=? AND status='open'`); build the vote-insert statement referencing `source_proposal_id`; commit both in one `db.batch()`; on 0 affected rows, re-read and return the existing vote rather than creating a duplicate; add a concurrency test.
+
+---
+
+## Phase 6 — D1 read models: bounded, set-based, no per-row queries (broadened per v4 §2.6/workstream E)
+
+The original review's Phase 6 fixed a handful of named endpoints. v4 correctly points out that's too narrow: the repository has several parallel pagination dialects, raw query parsers, hand-built page envelopes, and unbounded lists, and **newly-merged upstream code is not automatically exempt** — the #729 attendance registrations route (merged into upstream *after* the original review, and now present on this rebased branch) has the identical anti-pattern. Treat this phase as an inventory-driven migration of every listing/search endpoint, not just the items below.
+
+### 6.0 — Build a list-endpoint inventory (new, from v4 §7.1)
+Generate a matrix (checked-in or attached to the PR) from mounted OpenAPI routes: method/path, shared query schema, filters, search fields, sort allowlist, page-size default/max, response schema, service/read-model function, count strategy, supporting indexes, frontend consumer, test file. Cover admin, public, portal, member, event, vote, sponsorship, access-grant, email, invitation, proposal, registration, form-submission, directory, and history endpoints. Classify each as conforming / migrated in this remediation / tracked with an explicit owner and reason it can't yet migrate. Predating this PR is not by itself a reason to mark something conforming.
+
+**Scale, from `pr-review-post-rebase.md` (not independently re-counted in this pass, but consistent with every route spot-checked above):** that review found **34 API files containing manual URL or `searchParams` processing**, with the caveat that not all 34 are list endpoints — some manual URL handling may be legitimate (non-list routes, webhooks, etc.). Treat 34 as the upper bound to triage against when building this inventory, not as 34 confirmed violations; the inventory's job is to sort that list into conforming/needs-migration/legitimately-not-a-list-endpoint.
+
+### 6.1 — `functions/_lib/openapi/list-query.ts:13` [P2] — **confirmed still live**
+> `openApiRoute` already calls Chanfana validation and passes typed `data.query`, so this helper is a second query-validation contract. Applications/content-reviews parse the raw URL again, while organizations use `data.query`.
+
+Confirmed: `functions/_lib/openapi/list-query.ts` still exists and is imported by `functions/api/v1/admin/applications/index.ts:14` and `functions/api/v1/admin/organizations/content-reviews/index.ts:15`.
+
+**Plan:** unchanged — remove the duplicate raw-URL path; update applications and content-reviews to consume `data.query`; replace any tests that call raw handlers directly with tests through the mounted Hono/Chanfana router.
+
+### 6.2 — `functions/api/v1/admin/access-grants/index.ts:58` [P2] — carried forward, not re-checked
+> `userId` is absent from OpenAPI and not UUID-validated, sort is reparsed despite wrapper validation, `_data` is unused, and both SQL branches return every active grant with no limit.
+
+**Plan:** unchanged — add `userId` to the OpenAPI query schema with UUID validation; consume `data.query`; extend the shared pagination query builder with this endpoint's fields; apply `LIMIT`/`OFFSET` and a count in D1; return via `buildPageInfo`.
+
+### 6.3 — `assets/shared/schemas/votes.ts:78` [P2] — carried forward, not re-checked
+> This introduces a second pagination dialect (`page`/`per_page`, top-level `total/page/perPage`) beside the canonical `limit`/`offset`/`page` envelope. The response also omits `hasMore`.
+
+**Plan:** unchanged — replace with the canonical envelope used elsewhere; add `hasMore`; update vote-consuming frontend (6.5/7.1) to match.
+
+### 6.4 — `functions/_lib/services/votes/portal.ts:93` [P1] — carried forward, not re-checked
+> This authenticated list is unbounded and performs up to three more D1 queries per vote (candidates, eligibility/delegate/WG membership, ballot existence). `listMyVoteHistory` is also unbounded.
+
+**Plan:** unchanged — add the shared page/filter contract at the service boundary; rewrite the per-vote N+1 as set-based joins/CTEs plus one bulk candidate query; apply the same fix to `listMyVoteHistory`; add a query-count regression test.
+
+### 6.5 — `functions/_lib/services/votes/proposals.ts:195` [P1] — carried forward, not re-checked
+> Both portal and admin proposal lists are unbounded, and `toProposalSummary` issues an endorsement count plus a settings/WG threshold lookup for every row. The current `(scope_type, scope_id, status)` index does not make the unbounded admin status list/order efficient.
+
+**Plan:** unchanged — bound both lists via the shared pagination contract; replace the per-row lookups with a set-based aggregate query or bounded bulk queries; add a D1 index supporting `(status, scope, created_at)` ordering directly in Phase 1's rewritten voting migration (not a follow-up ALTER, since it's still undeployed).
+
+### 6.6 — `functions/api/v1/admin/events/[eventSlug]/registrations.ts` [P1] — **new item, confirmed live** (not in the original review because the route didn't exist on the reviewed commit; merged in from upstream `#729` during the rebase)
+> Confirmed in the current tree (lines 58–73): the route re-parses `new URL(c.req.raw.url)` for `limit`/`offset`/`q`/`status`/`bounced`/`consent`/`attendance_change` instead of consuming Chanfana-validated `data.query`; it hand-builds `conditions`/`bindings` SQL directly in the route handler (lines 75–138); and it fetches `limit + 1` rows and slices locally to compute `hasMore` (lines 141–177) rather than a `COUNT` query. `EVENT_REGISTRATIONS_SORT_COLUMNS`/`eventRegistrationsSortValueSchema` are already used for sort, so this is a partial migration, not a from-scratch one.
+
+**Plan:** declare `limit`/`offset`/`q`/`status`/`bounced`/`consent`/`attendance_change` in the route's OpenAPI query schema using the shared list-contract abstraction (Phase 6.0's inventory should confirm what that abstraction looks like once 6.1–6.3 land); consume `data.query`; move the filter/SQL-building logic into a read-model function under `functions/_lib/services/registrations/` alongside the existing `admin-statistics.ts` from #729, rather than leaving it in the route; replace the `limit + 1`-and-slice `hasMore` computation with a real count query or a `buildPageInfo`-style helper if one is settled on in 6.0–6.3. This route's waitlist-summary and attendance-change bulk queries (lines 180-216) are already correctly set-based (bulk `IN (...)` queries, not per-row) — preserve that pattern, don't regress it while fixing the rest.
+
+---
+
+## Phase 7 — Frontend responsibility: render bounded pages, don't self-filter the dataset
+
+*(Carried forward, not re-checked in this pass.)*
+
+### 7.1 — `assets/ts/member-flows/votes-index-page.tsx:95` [P2]
+> This fetches only the first 100 votes, discards pagination metadata, and decides open/closed groups in the browser — silently hiding row 101 onward.
+
+**Plan:** unchanged — replace with either two bounded server queries filtered by status with real pagination, or a bounded server-side projection for the two sections; remove the manual interfaces at lines 23–41 in favor of inferred shared types (post 3.2/6.3).
+
+### 7.2 — `assets/ts/admin/sections/Sponsorships.tsx:489` [P2]
+> The company master list is server-paginated, but selecting a company still fetches one hard-capped 200-row page and renders it as complete.
+
+**Plan:** unchanged — replace with a paginated server query/read model rendered through the same table abstraction used elsewhere.
+
+---
+
+## Phase 8 — Separation of concerns: split monolith files — **confirmed still live at the exact reported sizes**
+
+### 8.1 — `assets/ts/admin/sections/Applications.tsx:89` [P2]
+
+Confirmed current line counts: `Applications.tsx` **908** lines (matches original finding exactly), `Votes.tsx` **734** lines, `Sponsorships.tsx` **651** lines. None have been split. (These files are all under `assets/ts/admin/sections/` — not `assets/js/admin/pages/` as one source document cites; see the path-discrepancy note at the top of this document.)
+
+**Plan:** unchanged — extract a typed `useApplicationDetail` hook (data + the five commands) from `Applications.tsx`; split remaining UI into focused overview/edit/transition/communication/EC-decision/documents/timeline components; apply the same split to admin Votes, portal Votes, and Sponsorships. No fixed line target from the reviewer — bring each under the repo's practical component-size convention (check `check:max-lines` thresholds for `.tsx`, if any are configured).
+
+### 8.2 — `functions/_lib/services/admin-organizations.ts` is a 603-line mixed-responsibility service [P2] — **new, confirmed live** (from `pr-review-post-rebase.md`)
+
+Confirmed: `wc -l functions/_lib/services/admin-organizations.ts` → **603 lines**, matching the post-rebase review's finding. Below the 1,000-line `check:max-lines` gate, so it passes CI silently while still combining multiple responsibilities — exactly the "gate catches only the worst case" point the post-rebase review makes generally (echoed in its item 10). This file is also flagged in Phase 1.4's impacted-areas list as the presumed source of the `organizations.membership_category`/contact-column cascade — splitting it is naturally sequenced with that rewrite, not a separate pass.
+
+**Plan:** while doing Phase 1.4's rewrite of this file's category/contact-column reads to go through `member_category_assignments`/`user_roles` (organization-context grants), take the opportunity to separate it by responsibility (e.g. read-model/query functions vs. write/provisioning use cases vs. any org-content-review-specific logic) rather than editing it in place as one 600+-line file. No fixed target — apply the same "separation by domain contract, use case, persistence, and presentation responsibility" standard the post-rebase review applies to the frontend monoliths in 8.1.
+
+---
+
+## Phase 9 — Workers integration: budget scheduled workloads
+
+### 9.1 — `functions/router.ts:103` (currently lines 93-118) [P2] — **confirmed still live, decision unchanged**
+> Four independent workloads now run sequentially under the same 15-minute invocation, but only `runScheduledDueWork` participates in the existing time/subrequest/pass budget. An early failure prevents all later domains from running.
+>
+> **Follow-up** (registry-only, same Worker — narrows the original "both prongs" framing): build one budgeted job registry the scheduled entrypoint dispatches through; do not add a Cloudflare Queue or Workflow in this pass; reuse `email_outbox`/`google_groups_sync_queue` instead of inventing new mechanisms.
+
+Confirmed in current tree (`functions/router.ts:96-118`): `runScheduledJob` still calls `runScheduledDueWork`, `runMembershipDueWork`, `runSponsorshipDueWork`, and `runVotesDueWork` sequentially inside one `if (controller.cron === REMINDER_CRON)` block with no shared deadline/budget object and no per-job `try/catch` isolation — a throw from any one of the middle three would abort the rest silently (no catch at all around this block; only the outer `runScheduledJob` has a `try`, so one job failing likely aborts all sibling jobs on that same invocation, not just the ones flagged as unbounded).
+
+Additional per-file confirmation from `pr-review-post-rebase.md`, independently checked in this pass:
+- `functions/_lib/services/votes-scheduled-jobs.ts` (56 lines) — its own header comment confirms it deliberately runs as a sibling call outside `scheduled-due-work.ts`'s multi-pass budgeted loop ("for the same 'keep..." — comment is truncated but the intent matches: this job was explicitly designed to sit outside the shared budget, not accidentally left out).
+- `functions/_lib/services/sponsorship-scheduled-jobs.ts` — `activeSponsorshipsWithRenewalDate` (confirmed, no `LIMIT`) loads every `sponsorships` row with `pipeline_stage = 'active' AND renewal_date IS NOT NULL` unconditionally, then `runSponsorshipDueWork` iterates it; this is the unbounded-scan-plus-per-row-lookup pattern the finding describes, not a paraphrase.
+- `functions/_lib/services/google-groups.ts:58` — not re-checked line-by-line in this pass, but the "selects only `pending` jobs, and failures flip to `failed` and are never retried" claim is consistent with the retry-starvation pattern already described in this Phase's plan step 3 below; treat as corroborated, not newly discovered.
+
+**Decision (unchanged):** single budgeted job registry, same Worker — no Queue/Workflow split.
+
+**Plan (unchanged from original, restated for clarity):**
+1. **Own one budget at the dispatcher.** `runScheduledJob` creates one invocation deadline/subrequest budget and passes remaining budget + a hard item limit to each registered job. Run sequentially with per-job `try/catch` so one job throwing doesn't suppress the rest; never run D1-heavy jobs concurrently. Each result reports processed/remaining/exhausted/error. Shared remaining budget with configurable per-job caps, not fixed unused reservations.
+2. **No generic checkpoint rows.** Prefer idempotent due-state queries (deterministic ordering, `LIMIT`, keyset continuation where needed, conditional state transitions, unique dedup keys) over a global last-processed timestamp, which can skip a late/retried item. Store a cursor only for a job scanning a genuinely stable ordered set that needs resumability.
+3. **Reuse existing durable abstractions:** email producers enqueue `email_outbox` rows and stop calling `processOutboxByIdBackground` inside recipient loops — the single bounded outbox processor owns delivery/retry. Improve `google_groups_sync_queue` (currently selects only `pending` rows; failures flip to `failed` and are never retried) with bounded claim/retry/backoff/dead-letter semantics instead of a parallel mechanism.
+4. **Bound the jobs themselves:** `runOnHoldReminders`/`runEcWindowAutoApprove` need an indexed due predicate + stable `ORDER BY` + `LIMIT` instead of loading every due application; sponsorship due-work needs its N+1 per-row lookups removed; vote notices should create outbox rows only, not send synchronously per recipient.
+5. Add tests demonstrating budget exhaustion and a mid-registry job failure neither lose nor duplicate work.
+
+### 9.2 — `functions/api/v1/admin/working-groups/[id]/meetings/[meetingId]/ics-files/index.ts:39` [P2] — carried forward, not re-checked
+> R2 upload and D1 metadata creation are not an atomic lifecycle: if `uploadIcsFile` fails, the object is orphaned; deletion has the inverse ordering and can leave an undeletable orphan.
+
+**Plan:** unchanged, with one addition — re-audit against `pkic.org#728`'s `functions/_lib/services/presentation-archive.ts` (confirmed present in this tree) before building a new service. Reuse its deterministic/idempotent object-key strategy, streamed retrieval, and failure-handling primitives where the lifecycle semantics genuinely match; only build a second small service (e.g. `managed-assets.ts`) if at least two features share the same tested put/metadata/delete/reconcile lifecycle, otherwise scope it to `meeting-assets.ts` first. Do not force ICS files through the presentation-specific service, and do not pretend R2+D1 form one ACID transaction — compensate the R2 put on D1 failure, or persist an explicit pending state before the put; make delete a state machine so a retry can finish safely.
+
+---
+
+## Phase 10 — Remaining DRY item
+
+### 10.1 — `functions/api/v1/admin/users.ts:128` [P2] — carried forward, not re-checked
+> Raw `JSON.parse` can throw and turn one malformed/legacy row into a 500, while `parseLinksJson` already provides the agreed normalization/compatibility behavior.
+
+**Plan:** unchanged — replace the raw `JSON.parse` in `users.ts` with `parseLinksJson`; grep for other raw `JSON.parse`/`JSON.stringify` against `links_json` columns (admin user lists/details, proposal/speaker routes, manage-link routes, importers/provisioning, member directory/leadership projections per v4 §6.2) and replace with `parseLinksJson`/`serializeLinks`; confirm API validation uses `linksSchema` consistently. Also confirm the canonical shape decision: `string[]` vs. `{ url, label? }[]` — do not support two canonical response shapes for links.
+
+---
+
+## Phase 11 — Duplication gate: jscpd (new, from v4 §3.4, deferred item)
+
+No `.jscpd.json` exists in the repo (confirmed) and `lint:duplication` is not in `pnpm run check` (confirmed — current `check` script is `typecheck && lint && lint:architecture && format:check && test && check:max-lines && check:filenames`). This was deliberately deferred by `pkic.org#726`, which measured 19 clone groups / 494 duplicated lines / 1.25% duplication on its then-current main without freezing that into an allowance.
+
+**Plan:** after the bulk of Phases 1–10 land (not before — fixing this repo's real duplication, like the admin-members.ts/member-provisioning.ts split in Phase 1.5, changes what jscpd would even measure), rerun the measurement across current main plus these changes, remove actionable duplication, and only then add `lint:duplication` to `check` — with **no** suppression file, known-violation file, or percentage budget permitting new clones. If a zero-actionable-clone gate can't be made stable, keep jscpd as review evidence attached to the PR and say explicitly that automated duplication enforcement remains incomplete, rather than claiming the gate exists. This doesn't relax the DRY acceptance criteria elsewhere in this document — those still require one implementation per responsibility, proven by inventory/review, independent of whether the automated gate is on.
+
+---
+
+## Phase 12 — Validation pipeline and test-suite health (new, from `pr-review-post-rebase.md`'s live tooling run)
+
+Not architectural findings — these are gaps in the validation pipeline itself that make it hard to trust a green run, surfaced by the post-rebase reviewer actually running the full pipeline rather than reading code. Fix these alongside the phases above so the final closure audit (below) has a validation pipeline worth trusting.
+
+**Confirmed-by-reviewer current validation state** (not independently re-run in this pass — treat as a snapshot, re-run before relying on it):
+- `git diff --check`: passed.
+- Production build: passed.
+- Backend tests after building assets: 861 passed, 1 skipped.
+- Frontend unit tests: 36 passed.
+- Dependency architecture check (`lint:architecture`): passed.
+- ESLint and Prettier: passed.
+- `check:max-lines`: **failed** on the importer (consistent with 2.2's confirmed 1,244-line count).
+
+### 12.1 — `pnpm run check` is not self-contained from a fresh checkout [P2]
+> A fresh `pnpm run check` is not self-contained because Worker tests require generated `public/` assets before the check script builds them.
+
+**Plan:** either add a `public/`-generation step ahead of the test step inside `check` itself (so `pnpm run check` alone is sufficient from a clean clone), or make the Worker tests that depend on generated assets explicitly build what they need rather than assuming a prior `pnpm run build` happened. Whichever is chosen, a fresh checkout running only `pnpm install && pnpm run check` must succeed — that's the AGENTS.md-implied contract of having a single `check` gate.
+
+### 12.2 — Two Playwright E2E tests are stale against intentional UI changes, not indicating regressions [P2]
+> Serial Playwright run: 20 passed, 2 failed. Working-group test still expects inline chair assignment after that UI moved it to Leadership. Sponsorship test still expects the former list markup after conversion to a table.
+
+Both failures are test debt from earlier intentional changes in this same PR (chair assignment moved to the Leadership admin UI per git history's "Move chair configuration to admin UI"/"Move leadership to Admin UI" commits; sponsorships moved from a list to a table). Not new regressions, but they currently mask whether the *rest* of the suite would catch a real regression in these areas.
+
+**Plan:** update the working-group test to assert against the Leadership admin UI's chair-assignment flow instead of the removed inline flow; update the sponsorship test to assert against the table markup. Do this promptly rather than leaving it — a failing E2E test that's "expected to fail" trains reviewers to ignore red E2E runs.
+
+### 12.3 — Parallel E2E run has magic-link rate-limit collisions from shared test identity [P2]
+> The default parallel E2E run also produces magic-link rate-limit collisions because tests reuse the same administrator identity.
+
+**Plan:** give parallel-safe E2E tests isolated administrator identities (per-worker or per-test synthetic accounts) instead of one shared admin identity, so magic-link rate limiting doesn't create cross-test interference under parallel execution. This is test-infrastructure work, not application code — but it currently makes the faster/default E2E run unreliable, pushing everyone toward the slower serial run.
+
+### 12.4 — CodeRabbit did not review this PR [P3 — informational, not a code finding]
+> CodeRabbit's only visible passing check is not meaningful here: it skipped reviewing the PR because the changed-file count exceeded its limit.
+
+**Plan:** no code action. Flagging only so nobody reads a green CodeRabbit check as "an automated review passed" — it did not run. If automated review coverage on a PR this large is wanted, either split the PR or adjust CodeRabbit's changed-file limit for this repo; out of scope for this remediation otherwise.
+
+---
+
+## Suggested execution order
+
+1. **§0 migration-ledger verification** — **confirmed**, not just gated (see above). Re-run only if time has passed since this check or another branch may have deployed; not a blocking first step anymore.
+2. **Phase 1** (migration rewrite, including the corrected §1.4 schema/concurrency design and the new §1.5 service consolidation) — foundational; widest blast radius; do as its own dedicated iteration. Fold in the 3.4 schema-file split for the specific modules Phase 1 needs (e.g. `membership/categories.ts`) as you go.
+3. **Phase 2** (importer, including the new 2.3 `npx`→`pnpm` fix) — depends on Phase 1's final schema shapes.
+4. **Phase 3** (schema/DRY, including the new 3.4 `api.ts` split and 3.5 link-codec self-validation fix) — feed CHECK/reference-table decisions back into Phase 1 before finalizing its constraints, or accept one touch-up pass.
+5. **Phase 4** (authorization) — independent, can run in parallel with 1–3.
+6. **Phase 5** (transactions, including the §5 correction on conditional dependent statements) — independent, can run in parallel; 5.4 needs a new column, coordinate with Phase 1 if migrations aren't finalized yet.
+7. **Phase 6** (read models/pagination, now including the full inventory in 6.0 with its 34-file triage list and the new #729 registrations-route item in 6.6) — 6.1 first, then 6.2/6.3, then 6.4/6.5/6.6 which depend on 6.3's shared envelope.
+8. **Phase 7** (frontend) — depends on 6.3/6.5 envelopes and 3.2's shared vote types.
+9. **Phase 8** (component splits, including the new 8.2 `admin-organizations.ts` split, naturally sequenced with Phase 1.4) — mostly independent, can be done incrementally per file.
+10. **Phase 9** (workers/R2) — independent; 9.1's outbox-facing step and 9.2's R2 re-audit are both now unblocked (the #721/#728 rebase this depended on is done).
+11. **Phase 10** (link codec cleanup) — small, independent, do anytime.
+12. **Phase 11** (jscpd) — after the bulk of 1–10, not before.
+13. **Phase 12** (validation-pipeline/test-suite health) — the `check` self-containment fix (12.1) and stale-E2E-test fixes (12.2) should land early enough that later phases get a trustworthy signal, not deferred to the end; the parallel-E2E identity fix (12.3) can happen anytime.
+14. **Final closure audit** (below) — separate final phase, not the last item on the same code path without independent checking.
+
+## Decisions (resolved)
+
+- **1.4**: normalize membership via `member_category_assignments` (1:1 category per aggregate) and `organization_representatives` (temporal, corrected to a partial-unique active-pair index so rejoin works, and deliberately *not* singleton per user since one person may represent multiple organizations at once) — `members`/`organizations` are **not** rebuilt. Representative roles (primary_contact, secondary_contact, voting_delegate) reuse the existing `roles`/`user_roles` RBAC system (`context_type='organization'`) instead of a bespoke `organization_representative_roles` table, resolved by interview 2026-08-15 — see the fully-worked design and resolved open questions in §1.4. Concurrency handled via `INSERT OR IGNORE` + unconditional re-read, not a catch-all race handler.
+- **9.1**: single budgeted job registry, same Worker — no Queue/Workflow split.
+- Rebase onto `pkic-org/main` at `5a50cd4e` (workstream B) is done; no further action needed there beyond re-fetching immediately before Phase 1 implementation to catch any newer upstream migrations.
+- Migration-ledger check (§0) is done: both preview and production confirmed to have the entire `0033`–`0057` private range pending/unapplied, independently verified by the post-rebase reviewer against live D1. The Phase 1 squash plan is cleared to proceed.
+
+Two open product questions remain (§1.4) and must be answered before finalizing the migration, not guessed: (1) can a person represent more than one organization concurrently, and (2) are representative role codes a managed catalog, a reference table, or a closed shared-module vocabulary.
+
+## Finding traceability matrix (new, from v4 §15 — replaces the flat checklist below for phase-level tracking)
+
+"Done" requires code, a focused test, and final verification evidence — not just a passing suite.
+
+| Item | Phase | Status this pass | Minimum evidence still needed |
+| --- | --- | --- | --- |
+| D1-incompatible `members` rebuild | 1.1/1.4 | **fixed this pass** — 0033 deleted, migration set verified applying cleanly to empty D1 | migration smoke test still to be added to CI (2.1) |
+| Working-group / links / domains backfill migrations | 1.2 | **fixed this pass** — 0050/0051/0052/0054/0056/0057 folded into first introduction | none — done |
+| Unconstrained closed states | 1.3 | partially addressed (boolean flags via CHECK in the new tables only) | full status-column enforcement-owner sweep, threaded with Phase 3 — not done |
+| Membership aggregate/representatives design | 1.4 | **schema, service layer, all required new tests, and the full existing test suite are done and green** (see status block above) — 888/889 backend tests passing, 0 failures, verified twice | none outstanding for this item |
+| Duplicate membership provisioning | 1.5 | **fixed this pass** — both now call `membership/memberships.ts`'s shared aggregate/representative primitives | jscpd not re-run (Phase 11, deferred) |
+| Importer targets intermediate schema | 2.1 | **fixed 2026-08-17** — rewritten to target final Phase 1 schema (`links_json`, `organization_domains`, `member_category_assignments`, `organization_representatives`, `user_roles` grants); fresh-D1 smoke test added and re-verified against the full real dataset after a `SQLITE_TOOBIG` fix | none outstanding — see Phase 2 final report above |
+| 1,251-line importer | 2.2 | **fixed 2026-08-17** — split into `scripts/migrate-members/{cli,parsers,reconciliation,sql-renderer,report,r2-adapter}.mjs`, entry point now 617 lines, `check:max-lines` green, unit tests added for all pure modules | none outstanding — see Phase 2 final report above |
+| System role IDs rejected by contract | 3.1 | confirmed unfixed | response/OpenAPI contract test |
+| Weak vote contract | 3.2 | confirmed unfixed (partially — some enums exist) | discriminated schema, inferred client types |
+| Duplicated application policy | 3.3 | not re-checked | one policy import path, transition tests |
+| Fail-open route-prefix authorization | 4.1 | not re-checked | mounted subtree authorization tests |
+| Missing WG resource context | 4.2 | not re-checked | contextual allow/deny tests |
+| Race-prone application transition | 5.1 | not re-checked | lost-race leaves no dependent rows |
+| Non-atomic approval | 5.2 | not re-checked | per-boundary failure injection |
+| Partial vote creation | 5.3 | confirmed unfixed (zero `.batch()` in file) | candidate-failure rollback test |
+| Duplicate/orphan proposal conversion | 5.4 | confirmed unfixed (no `source_proposal_id` column) | concurrent idempotency test |
+| Duplicate query validation | 6.1 | confirmed unfixed (2 live imports) | no raw parser; mounted-router tests |
+| Unbounded access grants | 6.2 | not re-checked | declared filters, SQL page/count, canonical envelope |
+| Second vote pagination dialect | 6.3 | not re-checked | one list schema/envelope |
+| Portal vote N+1 | 6.4 | not re-checked | constant query-count test |
+| Proposal N+1 and weak index | 6.5 | not re-checked | set-based query, query-plan evidence |
+| #729 registrations route raw URL parsing | 6.6 (new) | confirmed live | declared OpenAPI query, service-owned SQL, count-based `hasMore` |
+| Browser grouping of first 100 votes | 7.1 | not re-checked | server filters, complete pagination |
+| Hard-capped sponsorship detail | 7.2 | not re-checked | server-paginated typed table |
+| Large mixed-responsibility components | 8.1 | confirmed unfixed at exact original line counts | focused hooks/components, architecture checks |
+| Unbudgeted scheduled workloads | 9.1 | confirmed unfixed | budget/failure/idempotency tests |
+| Unsafe R2/D1 lifecycle | 9.2 | not re-checked | compensation/pending-state tests |
+| Incomplete link-codec adoption | 10.1 | not re-checked | repository-wide raw JSON audit |
+| jscpd gate | 11 (new) | confirmed absent (no config, not in `check`) | zero-actionable-clone gate or explicit incomplete-status disclosure |
+| Importer uses `npx` not `pnpm` | 2.3 (new) | **fixed 2026-08-17** — both call sites now use `execFileSync("pnpm", ["exec", ...])` | none outstanding — see Phase 2 final report above |
+| Catch-all `api.ts` (1,161 lines) | 3.4 (new) | confirmed live | split into focused files, re-exports, no `common.ts`/`helpers.ts` |
+| `parseLinksJson` doesn't validate against `linksSchema` | 3.5 (new) | confirmed live | explicit clamp/filter or documented looser contract, tested against malformed legacy rows |
+| `admin-organizations.ts` (603 lines) mixed responsibility | 8.2 (new) | confirmed live | separated by responsibility, sequenced with 1.4 |
+| `check` not self-contained from fresh checkout | 12.1 (new) | confirmed by reviewer's live run | fresh clone, `pnpm install && pnpm run check` succeeds alone |
+| 2 stale E2E tests (WG chair UI, sponsorship markup) | 12.2 (new) | confirmed by reviewer's live run | both tests updated to match current UI, serial run green |
+| Parallel E2E magic-link rate-limit collisions | 12.3 (new) | confirmed by reviewer's live run | isolated test identities, parallel run green |
+
+## Final closure audit (new, from v4 §16 — run once, separately, after all phases above)
+
+Not a task on the same implementation pass — an independent final check.
+
+1. **Re-read sources of truth:** fetch current PR head/base, fetch current `pkic-org/main` and list any merges since `5a50cd4e`, re-read the current root/scoped `AGENTS.md` + `CLAUDE.md` (not copied text in this document), fetch every unresolved review thread and latest reply, verify the reviewed commit matches the final head, update this traceability matrix if a comment changed an acceptance criterion.
+2. **Schema/migration audit:** compare preview and production ledgers with repo files; apply migrations to empty D1 and to a production-shaped fixture; run importer SQL; run `PRAGMA foreign_key_check`; inspect `sqlite_schema` for forbidden intermediate columns/tables; verify each invariant against its declared enforcement owner (DB constraint/reference data vs. shared Zod policy + Vitest); verify links are JSON and queried relationship data is normalized.
+3. **API/list audit:** enumerate every mounted GET/list/search endpoint from OpenAPI; reconcile against the Phase 6.0 inventory with zero missing endpoints; confirm every query composes the shared list schema, consumes `data.query`, and returns the canonical envelope; confirm all filter/search/sort/page logic is in SQL/backend projection; run query-count tests and `EXPLAIN QUERY PLAN` evidence for hot paths.
+4. **DRY/boundary audit:** run ESLint + Dependency Cruiser via `pnpm run check`; run jscpd through `check` only if Phase 11's gate was enabled, otherwise attach its report and state explicitly that automated duplication enforcement is incomplete; compare against `pkic.org#726`'s measured 19 clone groups / 494 lines — zero actionable duplication may not be achieved by raising thresholds or excluding authored code; search for raw `JSON.parse`/`JSON.stringify` on `links_json`; search for duplicated pagination shapes and manual vote/application unions; search for route-owned SQL/business transitions; confirm admin/approval/self-service/scheduled/importer flows share membership operations (Phase 1.5).
+5. **Correctness/resilience audit:** run all focused invariant/concurrency/failure-injection tests; run `pnpm run check`; run `pnpm run test:e2e` for affected browser flows; test scheduler exhaustion and mid-job failure; test outbox retries/dedup; test R2 compensation/reconciliation; test contextual authorization across all affected subtrees.
+6. **Review disposition:** for every GitHub thread, record exactly one status — resolved with evidence, partially resolved with the remaining gap, not resolved, or obsolete (with replacement evidence). As of the post-rebase review pass, GitHub reported **48 review threads total: 22 resolved, 26 unresolved** — re-pull this count at closure-audit time rather than trusting this snapshot, since it will have moved. Post a concise review plus line comments for any remaining actionable issue. **Do not approve the PR in this phase**, even if every item above appears resolved — the post-rebase reviewer's own disposition on the current head is explicit: "Do not approve yet."
+
+## Post-fix validation checklist (kept for quick pre-audit reference; superseded by the traceability matrix above for phase-level status)
+
+- [ ] `pnpm run check:max-lines` passes (currently fails on the importer)
+- [ ] Full migration set applies cleanly to an empty D1 database
+- [ ] Importer's generated SQL runs successfully against a freshly-migrated empty D1 (new smoke test, 2.1)
+- [ ] Backend test suite passes
+- [ ] Frontend test suite passes
+- [x] Preview and production `d1_migrations` ledgers confirmed to exclude the private range before migration files are renumbered/rewritten — **confirmed** by the post-rebase reviewer against live D1 (§0)
+- [ ] New/updated tests: role ID contract (3.1), WG chair contextual permission (4.2), application transition race (5.1), approval atomicity failure injection (5.2), vote creation failure injection (5.3), proposal conversion concurrency (5.4), registrations-route query-count regression (6.6), N+1 regression guard on vote portal queries (6.4), scheduled-job registry budget exhaustion / mid-registry failure isolation (9.1)
+- [ ] `pnpm run check` succeeds standalone from a fresh checkout (12.1)
+- [ ] Serial Playwright run green with no stale-UI test failures (12.2)
+- [ ] Parallel Playwright run green with isolated test identities (12.3)
+- [ ] Importer uses `pnpm`, not `npx`, at both call sites (2.3)
+
+---
+
+## Phase 1 & 2 remediation pass — `prd/phase1-2-review-20260817.md` (2026-08-17)
+
+A fresh independent re-review of HEAD `0c3b7104` (`prd/phase1-2-review-20260817.md`) found 9 remaining blockers despite Phase 1/2 being marked "done" above. This pass fixed all 9. Baseline commit: `0c3b7104432b9e92f089bdbd2779a5daada0cdbe2` (typecheck clean; `pnpm run test` not run standalone before starting — see Regressions below for the full-suite numbers this pass actually verified against).
+
+### Checklist
+
+| ID | Requirement (verbatim from the review) | file:line | Command | Result | Status |
+| --- | --- | --- | --- | --- | --- |
+| Blocker 1 | "Phase 2 needs a preflight that rejects missing, unknown, and member-kind-incompatible categories before producing or executing any SQL." | `scripts/migrate-members/categories.mjs:65` (`assertCategoriesValid`), called from `scripts/migrate-members/build-migration.mjs:65` before any statement is built | `pnpm exec vitest run --config vitest.config.tools.ts` | `Test Files 6 passed (6), Tests 52 passed (52)` | **PASS** — with one narrowed scope, see Open Questions |
+| Blocker 2 | "Working-group participation and possibly leadership positions need an explicit `member_id`... CA working-group eligibility uses a scalar subquery without an explicit affiliation or ordering." | `functions/_lib/services/admin-working-groups.ts:386-392` (now `findEligibleMemberById` + `assertCaConstraint(wg, membershipCategories)`); `functions/_lib/services/membership/representative-lookup.ts` (shared deterministic-join helper, replacing 7 inlined copies) | `pnpm exec vitest run --config vitest.config.ts tests/working-groups.test.ts` | `Test Files 1 passed (1), Tests 13 passed (13)` | **PASS** for the CA-eligibility correctness bug and the 7x DRY duplication. Leadership-position/WG-chair *display* still uses "deterministic first org" (not a full `member_id` schema change) — see Open Questions |
+| Blocker 3 | "Representative role IDs must always require exactly an organization membership context and reject every other context." | `functions/api/v1/admin/users/[userId]/roles/index.ts:123-130` | `pnpm exec vitest run --config vitest.config.ts tests/roles.test.ts` | `Test Files 1 passed (1), Tests 29 passed (29)` | **PASS** |
+| Blocker 4 | "the use case should build one command set and commit once; durable external effects should enter the outbox in that same boundary." | `functions/_lib/services/membership/provisioning.ts:442` (org+aggregate+category+member_since+reps+roles+WG memberships, one `db.batch()`); `functions/_lib/services/membership/applications/approve.ts:187` (+ stage transition + event + Google Groups enqueues, one `db.batch()`); `functions/_lib/services/member-organization.ts` (`addCoworker`, user+representative, one `db.batch()`) | `pnpm exec vitest run --config vitest.config.ts tests/membership-provisioning-atomicity.test.ts tests/membership-onboarding.test.ts` | `Test Files 2 passed (2), Tests 14 passed (14)` | **PASS** for organization/aggregate/representative/role provisioning and application approval's membership-state writes. Email-outbox queueing and the audit-log write in the HTTP route remain a separate, deliberate best-effort step after this boundary commits — **not** folded in, see Open Questions |
+| Blocker 5 | "The importer should consume the same shared schemas, constants, and serialization functions as runtime writes." | `scripts/migrate-members/sql-renderer.mjs:11,29` (`linksSchema`/`serializeLinks` from new `assets/shared/schemas/links.ts`); `scripts/migrate-members/organizations.mjs` (`REPRESENTATIVE_ROLE_IDS` from new `assets/shared/schemas/representative-roles.ts`); `scripts/migrate-members/categories.mjs` (`MEMBERSHIP_CATEGORIES`/`isIndividualMembershipCategory` from existing `assets/shared/schemas/membership-categories.ts`) | `pnpm exec vitest run --config vitest.config.tools.ts` | `52 tests passed` | **PASS** |
+| Blocker 6 | "It never runs it twice and compares row counts, identities, assignments, roles, sponsorships, and working-group memberships." | `tests/tools/migrate-members-importer.test.ts:224` | `pnpm exec vitest run --config vitest.config.tools.ts tests/tools/migrate-members-importer.test.ts` | `Test Files 1 passed (1), Tests 3 passed (3)` | **PASS** |
+| Blocker 7 | "Hidden files, `._*`, and non-regular files must be excluded. This should have an explicit regression test." | `scripts/migrate-members/parsers.mjs:85` | `pnpm exec vitest run --config vitest.config.tools.ts tests/tools/migrate-members-parsers.test.ts` | `Test Files 1 passed (1), Tests 13 passed (13)` | **PASS** |
+| Blocker 8 | "it is not yet the thin entrypoint required by the plan and `AGENTS.md`." | `scripts/migrate-members-yaml-to-d1.mjs` | `wc -l scripts/migrate-members-yaml-to-d1.mjs` | `143` (was 617 before this pass, 1244 originally) | **PASS** |
+| Blocker 9 | "What is still missing is proof that every write path uses one canonical Zod/domain vocabulary, plus parity tests for any SQL-side mirrors." | `functions/_lib/services/sponsorship/admin-pipeline.ts:11` and `assets/ts/admin/types.ts:1` (`SPONSORSHIP_PIPELINE_STAGES` now imported, not re-declared); `assets/shared/schemas/member-applications.ts:33` (`APPLICATION_STAGE_TRANSITIONS`, now the single source for backend + frontend); `tests/members-model.test.ts:140` (`members.status` CHECK-constraint parity test) | `pnpm exec vitest run --config vitest.config.ts tests/members-model.test.ts` | `Test Files 1 passed (1), Tests 7 passed (7)` | **PASS** for the three drift instances found (sponsorship pipeline stage x2, application stage-transition graph, on_hold subtypes) plus the requested DB-CHECK parity test. Not an exhaustive repo-wide sweep — see Open Questions |
+
+**9 of 9 blockers complete**, 3 with a narrower scope than the review's fullest stated ideal (documented per-item above and in Open Questions below) — not claimed as more than what the evidence supports.
+
+### Regressions vs. baseline
+
+- `pnpm run typecheck` (backend/frontend/tools): clean, no errors — identical to baseline.
+- `pnpm run test:backend`: **920 passed, 1 skipped**, confirmed by a full standalone run after all 9 fixes landed (baseline reported 899/900 before this pass's own new tests; the net-new passing tests are this pass's own regression coverage — Blocker 3's role-context tests, Blocker 2's WG-eligibility tests, Blocker 4's atomicity failure-injection tests, Blocker 9's CHECK-parity test). Zero failures, zero flakes across two full runs.
+- `pnpm run test:frontend`: **36/36 passed** — identical to baseline.
+- `pnpm exec vitest run --config vitest.config.tools.ts`: **52 passed** (was 38 at the last Phase 2 report; +14 from this pass's new importer/category/link tests). Zero failures.
+- `pnpm run lint`: fails at the same pre-existing 5833 errors from the untracked local `.venv` Playwright-driver directory — same files, same rule violations, confirmed unrelated to any file this pass touched (verified `eslint` clean on every touched file individually). Not a regression.
+- `pnpm run lint:architecture`: still blocked by the pre-existing Node-version mismatch (this environment runs 25.3.0; dependency-cruiser requires ^22/^24/≥26) — unrelated to this change, matches every prior pass's own note.
+- `pnpm run format:check`, `pnpm run check:max-lines`, `pnpm run check:filenames`: all clean.
+- `pnpm run build`: succeeds (production Vite build + Pagefind index), one pre-existing `INEFFECTIVE_DYNAMIC_IMPORT` warning unrelated to this diff.
+- No `pnpm run test:e2e` run this pass — no browser-visible UI behavior changed by any of the 9 fixes (Applications.tsx's change is a pure data-source swap, same rendered values).
+
+### Security findings (diff-only review)
+
+- **Injection**: every new/changed SQL statement uses `.prepare().bind()` parameterization. The one string-interpolated SQL fragment (`representative-lookup.ts`'s `userIdExpr` parameter) is always a fixed code-controlled alias literal (`"u.id"`, `"wgm.user_id"`) at all 8 call sites, never user input — confirmed by reading every call site. No SQL injection introduced.
+- **AuthZ**: Blocker 3's fix is strictly a tightening (rejects a previously-permitted invalid state); Blocker 2's fix changes a WG-eligibility check from an arbitrary single-category comparison to an existence check across every membership the target legitimately holds — strictly more correct, not more permissive (a person who previously might have been arbitrarily rejected despite holding real category-A standing is now correctly accepted; a person with no category-A affiliation anywhere is still rejected, verified by `tests/working-groups.test.ts`'s new "deterministically rejects" case).
+- **Validation**: `buildLinksJson` (Blocker 5) is new user-adjacent validation surface (importer-only, not a live HTTP request path) — filters non-http(s)/malformed/duplicate/over-15-count entries against the canonical `linksSchema` instead of accepting raw strings; caught two real production data typos during this pass.
+- **Secrets**: none touched; no new logging of sensitive fields.
+- **New dependencies**: none — zero `package.json` changes.
+- **DoS**: no new unbounded loops or unpaginated queries. `findEligibleMemberById` (Blocker 2) replaces one scalar subquery with one bounded query returning at most a user's own membership rows (never large).
+- No High/Critical findings. Nothing outstanding.
+
+### Open questions and where this pass narrowed scope deliberately
+
+1. **Blocker 1 "kind-incompatible" categories**: a structural heuristic (individual category + non-empty `organizationDomains` ⇒ reject) was implemented, tested against the full real 419-org dataset, found to false-positive on 44 real production individual records (`organizationDomains` is a legitimate, YAML-documented convention for email-matching, not a mis-tagging signal), and reverted. Conclusion: this importer has no independent signal of a record's intended kind other than the category itself, and `build-migration.mjs` derives kind *from* the (now-validated) category — so kind and category cannot diverge downstream by construction. Documented in `categories.mjs`'s own comment. Missing/unknown categories are still rejected outright.
+2. **Blocker 2 leadership/WG-chair display**: the review's fuller suggestion ("possibly leadership positions need an explicit `member_id`") would require a schema change (adding `member_id` to `leadership_positions` and/or the WG-chair role grant) to know *which* represented organization a global leadership title or chair role is "for." That is a product/schema decision beyond this pass's conservative scope — the display-only "deterministic first organization by earliest `joined_at`" behavior is unchanged (it was already deterministic, just duplicated 7x — the duplication is fixed, the underlying "which org to show" simplification is not).
+3. **Blocker 4 outbox/audit atomicity**: the review's fullest phrasing ("durable external effects should enter the outbox in that same boundary") would mean folding `queueEmail` and `writeAuditLog` (in the HTTP route, `functions/api/v1/admin/applications/[id]/approve.ts`) into the same `db.batch()` as membership provisioning. Not done — this is explicitly the broader Phase 5.2 item in this document, touching the shared email-outbox and audit-log infrastructure used by dozens of other routes, a materially larger blast radius than this review's specific finding. What *is* fixed: every membership-state write (organization, aggregate, representative, role, application stage/event, Google Groups enqueue) is now one atomic unit; email/audit are secondary effects with the outbox's own idempotent-retry machinery, documented as a deliberate boundary in `approve.ts`'s header comment.
+4. **Blocker 9 scope**: the audit covered the vocabularies explicitly named in the review (application stage, on-hold subtype, content-review status, vote/proposal status, sponsorship pipeline stage, member status) plus a full-repo grep for hand-typed duplicates of each; it is not a formal proof that *no* other closed-state field anywhere in the repo has drifted, only that the three confirmed instances found are fixed and the one DB-side mirror found has a parity test.
+
+### Anything changed that was not in Phase 1, Phase 2, or the 9 blockers
+
+Nothing. All 45 changed files trace to one of the 9 blockers above; no opportunistic refactors, no unrelated file touches. (`csv/` and `prd/` remain untracked/uncommitted, per AGENTS.md's rule against moving production PII into shared history — unchanged by this pass.)
+
