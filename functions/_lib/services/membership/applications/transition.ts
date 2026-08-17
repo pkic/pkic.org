@@ -11,19 +11,14 @@
 import { uuid } from "../../../utils/ids";
 import { nowIso } from "../../../utils/time";
 import { AppError } from "../../../errors";
-import {
-  ON_HOLD_SUBTYPES,
-  APPLICATION_STAGE_TRANSITIONS,
-} from "../../../../../assets/shared/schemas/member-applications";
+import { ON_HOLD_SUBTYPES, allowedTransitions } from "../../../../../assets/shared/schemas/member-applications";
 import { getMemberApplicationById, type MemberApplicationRow } from "./queries";
 import type { ApplicationStage } from "./create";
 import type { DatabaseLike } from "../../../types";
 
-export { ON_HOLD_SUBTYPES };
+export { ON_HOLD_SUBTYPES, allowedTransitions };
 export type OnHoldSubtype = (typeof ON_HOLD_SUBTYPES)[number];
 const ON_HOLD_SUBTYPE_SET = new Set<string>(ON_HOLD_SUBTYPES);
-
-const ALLOWED_STAGE_TRANSITIONS: Record<ApplicationStage, ApplicationStage[]> = APPLICATION_STAGE_TRANSITIONS;
 
 export const ON_HOLD_SUBTYPE_EMAIL_TEMPLATES: Record<OnHoldSubtype, string> = {
   request_authority: "application-hold-authority",
@@ -39,7 +34,7 @@ const STAGE_EMAIL_TEMPLATES: Partial<Record<string, string>> = {
 };
 
 export function isValidStageTransition(fromStage: string, toStage: string): boolean {
-  const allowed = (ALLOWED_STAGE_TRANSITIONS as Record<string, ApplicationStage[]>)[fromStage] ?? [];
+  const allowed = allowedTransitions(fromStage as ApplicationStage) ?? [];
   return allowed.includes(toStage as ApplicationStage);
 }
 

@@ -13,21 +13,13 @@ import { Badge } from "../../components/Badge";
 import { api } from "../api";
 import { toast, fmt } from "../ui";
 import { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../../shared/schemas/admin-members";
-import { ON_HOLD_SUBTYPES, APPLICATION_STAGE_TRANSITIONS } from "../../../shared/schemas/member-applications";
-import type { AdminApplicationDetail, AdminApplicationSummary } from "../types";
-
-const STAGE_TRANSITIONS: Record<string, string[]> = APPLICATION_STAGE_TRANSITIONS;
-
-// Friendly labels for the working_groups answer (array of slugs) — mirrors
-// the options seeded in migrations/0034_applications_sponsorships_working_groups.sql.
-const WORKING_GROUP_LABELS: Record<string, string> = {
-  pqc: "Post-Quantum Cryptography Working Group",
-  cm: "Cryptographic Module Working Group",
-  pkimm: "PKI Maturity Model Working Group",
-  tcwg: "Training and Certification Working Group",
-  ca: "CA Working Group",
-  cbom: "CBOM Profiles Working Group",
-};
+import {
+  APPLICATION_STAGES,
+  ON_HOLD_SUBTYPES,
+  allowedTransitions,
+  type ApplicationStage,
+} from "../../../shared/schemas/member-applications";
+import type { AdminApplicationDetail, AdminApplicationSummary, AdminWorkingGroupSummary } from "../types";
 
 /** Application-answer keys editable via PATCH /api/v1/admin/applications/:id (Fix 3). */
 interface ApplicationEditForm {
@@ -88,6 +80,7 @@ function ApplicationDetailView({ applicationId, onBack }: { applicationId: strin
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
   const [editForm, setEditForm] = useState<ApplicationEditForm | null>(null);
+  const [workingGroupLabels, setWorkingGroupLabels] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -105,6 +98,14 @@ function ApplicationDetailView({ applicationId, onBack }: { applicationId: strin
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    // Labels for the working_groups answer (array of slugs) — read from the
+    // managed working_groups table instead of a hand-typed slug->name copy.
+    api<{ workingGroups: AdminWorkingGroupSummary[] }>("/api/v1/admin/working-groups")
+      .then((d) => setWorkingGroupLabels(Object.fromEntries(d.workingGroups.map((g) => [g.slug, g.name]))))
+      .catch(() => setWorkingGroupLabels({}));
+  }, []);
 
   async function submitTransition(e: Event) {
     e.preventDefault();
@@ -251,7 +252,7 @@ function ApplicationDetailView({ applicationId, onBack }: { applicationId: strin
   if (error) return <ErrorAlert error={error} />;
   if (!detail) return null;
 
-  const availableTransitions = STAGE_TRANSITIONS[detail.stage] ?? [];
+  const availableTransitions = allowedTransitions(detail.stage as ApplicationStage) ?? [];
 
   return (
     <div>
@@ -528,7 +529,7 @@ function ApplicationDetailView({ applicationId, onBack }: { applicationId: strin
                       {asStringArray(detail.answers.working_groups).length > 0 ? (
                         <ul class="list-unstyled mb-0 small">
                           {asStringArray(detail.answers.working_groups).map((slug) => (
-                            <li key={slug}>{WORKING_GROUP_LABELS[slug] ?? slug}</li>
+                            <li key={slug}>{workingGroupLabels[slug] ?? slug}</li>
                           ))}
                         </ul>
                       ) : (
@@ -829,7 +830,7 @@ function ApplicationsList({ onViewApplication }: { onViewApplication: (id: strin
             }}
           >
             <option value="">All stages</option>
-            {Object.keys(STAGE_TRANSITIONS).map((s) => (
+            {APPLICATION_STAGES.map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>

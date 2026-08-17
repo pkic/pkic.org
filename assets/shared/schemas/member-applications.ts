@@ -40,10 +40,9 @@ export const onHoldSubtypeSchema = z.enum(ON_HOLD_SUBTYPES);
  * listed destinations here on purpose — reaching it requires the full
  * onboarding orchestration in approveApplication(), not a bare transition.
  */
-export const APPLICATION_STAGE_TRANSITIONS: Record<
-  (typeof APPLICATION_STAGES)[number],
-  (typeof APPLICATION_STAGES)[number][]
-> = {
+export type ApplicationStage = (typeof APPLICATION_STAGES)[number];
+
+export const APPLICATION_STAGE_TRANSITIONS: Record<ApplicationStage, ApplicationStage[]> = {
   pending: ["in_review", "withdrawn"],
   in_review: ["on_hold", "in_consultation", "declined", "withdrawn"],
   on_hold: ["in_review", "withdrawn"],
@@ -53,6 +52,13 @@ export const APPLICATION_STAGE_TRANSITIONS: Record<
   declined: [],
   withdrawn: [],
 };
+
+/** Pure transition-graph lookup — the one place both the backend
+ * (isValidStageTransition) and the frontend (Applications.tsx) read the
+ * allowed next stages from, instead of indexing APPLICATION_STAGE_TRANSITIONS directly. */
+export function allowedTransitions(from: ApplicationStage): ApplicationStage[] {
+  return APPLICATION_STAGE_TRANSITIONS[from];
+}
 
 export const memberApplicationCreateSchema = z
   .object({
