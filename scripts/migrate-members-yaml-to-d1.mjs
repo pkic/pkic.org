@@ -1183,7 +1183,7 @@ function runWranglerD1(cli, sql) {
     tmpPath,
   ];
   try {
-    execFileSync("npx", args, { cwd: ROOT, stdio: "inherit" });
+    execFileSync("pnpm", ["exec", ...args], { cwd: ROOT, stdio: "inherit" });
   } finally {
     fs.unlinkSync(tmpPath);
   }
@@ -1202,7 +1202,7 @@ function uploadLogosToR2(cli, logoUploads) {
       filePath,
       ...(envConfig.wranglerFlag === "--local" ? ["--local"] : []),
     ];
-    execFileSync("npx", args, { cwd: ROOT, stdio: "inherit" });
+    execFileSync("pnpm", ["exec", ...args], { cwd: ROOT, stdio: "inherit" });
   }
 }
 
