@@ -196,6 +196,19 @@ export interface PermissionGrant {
  * `interested_parties` roles carry no `role_permissions` rows (see
  * functions/_lib/auth/member.ts).
  */
+/**
+ * One aggregate a user is eligible to act as: their own org-less individual
+ * membership, or an organization they actively represent. A user can hold
+ * more than one of these concurrently (multi-organization representation is
+ * a supported product case — see functions/_lib/auth/member.ts).
+ */
+export interface EligibleMembership {
+  memberId: string;
+  organizationId: string | null;
+  organizationName: string | null;
+  membershipCategory: string;
+}
+
 export interface AuthMember {
   userId: string;
   email: string;
@@ -203,6 +216,15 @@ export interface AuthMember {
   organizationId: string | null;
   membershipCategory: string;
   isEcMember: boolean;
+  /**
+   * Every membership context this user is currently eligible to act
+   * through, deterministically ordered (individual membership first, then
+   * organizations by earliest joined_at) — memberId/organizationId above
+   * are always exactly the first entry unless the caller explicitly
+   * selected a different one (see selectActiveMembership in
+   * functions/_lib/auth/member.ts). Always has at least one entry.
+   */
+  activeMemberships: EligibleMembership[];
   sessionId?: string;
   expiresAt?: string;
 }

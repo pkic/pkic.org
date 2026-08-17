@@ -109,7 +109,15 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
             m.organization_id AS member_organization_id, o.name AS member_organization_name,
             (SELECT COUNT(*) FROM event_participants ep WHERE ep.user_id = u.id) AS event_participation_count
      FROM users u
-     LEFT JOIN organization_representatives rep ON rep.user_id = u.id AND rep.left_at IS NULL
+     -- A user can represent more than one organization at once (migration
+     -- 0037) — join to a single deterministic representative row (earliest
+     -- joined_at) instead of fanning out one result row (and one
+     -- duplicate/miscounted page entry) per represented organization.
+     LEFT JOIN organization_representatives rep ON rep.id = (
+       SELECT r2.id FROM organization_representatives r2
+       WHERE r2.user_id = u.id AND r2.left_at IS NULL
+       ORDER BY r2.joined_at ASC LIMIT 1
+     )
      LEFT JOIN members m ON m.id = rep.member_id
      LEFT JOIN members mi ON mi.user_id = u.id
      LEFT JOIN organizations o ON o.id = m.organization_id
@@ -127,7 +135,11 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const totalRow = await first<{ total: number }>(
     requestDb(c),
     `SELECT COUNT(*) AS total FROM users u
-     LEFT JOIN organization_representatives rep ON rep.user_id = u.id AND rep.left_at IS NULL
+     LEFT JOIN organization_representatives rep ON rep.id = (
+       SELECT r2.id FROM organization_representatives r2
+       WHERE r2.user_id = u.id AND r2.left_at IS NULL
+       ORDER BY r2.joined_at ASC LIMIT 1
+     )
      LEFT JOIN members m ON m.id = rep.member_id
      LEFT JOIN members mi ON mi.user_id = u.id
      ${totalWhere}`,

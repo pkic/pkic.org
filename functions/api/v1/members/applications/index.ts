@@ -22,7 +22,7 @@ import {
   hasActiveApplicationForDomain,
   hasConflictingOrganizationDomain,
   INDIVIDUAL_MEMBERSHIP_CATEGORIES,
-} from "../../../../_lib/services/member-applications";
+} from "../../../../_lib/services/membership/applications/create";
 import {
   memberApplicationCreateRouteSchema,
   memberApplicationCreateSchema,

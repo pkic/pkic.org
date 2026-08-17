@@ -9,7 +9,8 @@ import { stringifyJson, parseJsonSafe } from "../utils/json";
 import { parseLinksJson, serializeLinks } from "../../../assets/shared/schemas/api";
 import { AppError } from "../errors";
 import { normalizeEmail } from "../validation";
-import { VOTING_CATEGORIES, getMemberApplicationById } from "./member-applications";
+import { VOTING_CATEGORIES } from "./membership/applications/create";
+import { getMemberApplicationById } from "./membership/applications/queries";
 import {
   getWorkingGroupBySlugOrId,
   assertCaConstraint,
@@ -17,7 +18,7 @@ import {
   removeWorkingGroupMember,
 } from "./working-groups";
 import { resolveRepresentativeRoleHolders } from "./membership/representative-roles";
-import type { AuthMember, DatabaseLike } from "../types";
+import type { AuthMember, DatabaseLike, EligibleMembership } from "../types";
 
 export interface MyOrganizationRepresentative {
   userId: string;
@@ -47,6 +48,13 @@ export interface MyProfile {
   isOrgContact: boolean;
   /** Full representative roster for the caller's organization; null when org-less. */
   organizationRepresentatives: MyOrganizationRepresentative[] | null;
+  /**
+   * Every membership context this member is currently eligible to act
+   * through (see AuthMember.activeMemberships) — lets a person who
+   * represents more than one organization see, and switch, which one is
+   * currently active via PUT /api/v1/me/active-membership.
+   */
+  activeMemberships: EligibleMembership[];
 }
 
 interface MyProfileRow {
@@ -110,6 +118,7 @@ function toProfile(
     canEditOrganizationName: isIndividual,
     isOrgContact,
     organizationRepresentatives,
+    activeMemberships: member.activeMemberships,
   };
 }
 

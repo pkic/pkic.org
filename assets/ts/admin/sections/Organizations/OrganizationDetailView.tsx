@@ -212,7 +212,9 @@ export function OrganizationDetailView({ organizationId, onBack }: { organizatio
                   </td>
                 </tr>
               ) : (
-                org.representatives.map((rep) => <RepresentativeRow key={rep.memberId} rep={rep} onChanged={load} />)
+                org.representatives.map((rep) => (
+                  <RepresentativeRow key={rep.representativeId} rep={rep} onChanged={load} />
+                ))
               )}
             </tbody>
           </table>

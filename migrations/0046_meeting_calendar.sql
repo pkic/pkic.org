@@ -7,9 +7,10 @@
 -- member_meeting_preferences (a member's chosen variant per series, NULL
 -- meaning "send me all variants").
 --
--- No CHECK constraints, per this repo's standing convention — allowed
--- values are documented in `-- allowed:` comments and validated at the
--- application layer (Zod) instead.
+-- Enforcement policy (PR #1 review, §1.3): boolean-as-integer flags (`active`
+-- below) get a DB CHECK. `scope_type` and other evolvable closed-state
+-- vocabularies stay `-- allowed:` comments validated by a shared Zod schema
+-- on every write path instead of a CHECK.
 
 CREATE TABLE meeting_series (
   id                TEXT NOT NULL PRIMARY KEY,
@@ -17,7 +18,7 @@ CREATE TABLE meeting_series (
   scope_type        TEXT NOT NULL,
   -- allowed: consortium | working_group
   working_group_id  TEXT REFERENCES working_groups(id),
-  active            INTEGER NOT NULL DEFAULT 1,
+  active            INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
   created_at        TEXT NOT NULL,
   updated_at        TEXT NOT NULL
 );
@@ -32,7 +33,7 @@ CREATE TABLE meeting_ics_files (
   -- e.g. '09:00 CET', '17:00 CET'
   year                 INTEGER NOT NULL,
   r2_key               TEXT NOT NULL,
-  active               INTEGER NOT NULL DEFAULT 1,
+  active               INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
   uploaded_by_user_id  TEXT REFERENCES users(id),
   created_at           TEXT NOT NULL
 );

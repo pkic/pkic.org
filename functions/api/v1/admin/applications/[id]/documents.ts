@@ -6,7 +6,10 @@ import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
-import { getMemberApplicationById, listApplicationDocuments } from "../../../../../_lib/services/member-applications";
+import {
+  getMemberApplicationById,
+  listApplicationDocuments,
+} from "../../../../../_lib/services/membership/applications/queries";
 import { AppError } from "../../../../../_lib/errors";
 import { adminApplicationDocumentsListRouteSchema } from "../../../../../../assets/shared/schemas/admin-applications";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";

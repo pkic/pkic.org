@@ -4,7 +4,7 @@
  * Public list of active working groups.
  */
 import { json } from "../../../_lib/http";
-import { listWorkingGroups } from "../../../_lib/services/members-directory";
+import { listWorkingGroups } from "../../../_lib/services/membership/directory";
 import { workingGroupsListRouteSchema } from "../../../../assets/shared/schemas/members-directory";
 import { openApiRoute } from "../../../_lib/openapi/route";
 

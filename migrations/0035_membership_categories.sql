@@ -14,9 +14,9 @@
 
 CREATE TABLE membership_categories (
   code         TEXT NOT NULL PRIMARY KEY,
-  is_individual INTEGER NOT NULL DEFAULT 0,
+  is_individual INTEGER NOT NULL DEFAULT 0 CHECK (is_individual IN (0, 1)),
   -- org-less categories (H5/H6/H7) — mirrors INDIVIDUAL_MEMBERSHIP_CATEGORIES
-  is_voting     INTEGER NOT NULL DEFAULT 0
+  is_voting     INTEGER NOT NULL DEFAULT 0 CHECK (is_voting IN (0, 1))
   -- forum + WG voting rights (A-G only) — mirrors VOTING_CATEGORIES
 );
 

@@ -219,11 +219,13 @@ async function toOrgDetail(
     secondaryContactUserId: holders.secondaryContactUserId,
     votingDelegateUserId: holders.votingDelegateUserId,
     representatives: representatives.map((r) => ({
-      // memberId here is the representative's own organization_representatives.id
-      // — the identifier PATCH/DELETE /api/v1/admin/members/:id expects — not
-      // the shared aggregate members.id (every representative of this
-      // organization shares one aggregate row).
-      memberId: r.representative_id,
+      // representativeId is this representative's own
+      // organization_representatives.id — the identifier PATCH/DELETE
+      // /api/v1/admin/members/:id expects — never the shared aggregate
+      // members.id (every representative of this organization shares one
+      // aggregate row, exposed separately below as membershipId).
+      representativeId: r.representative_id,
+      membershipId: memberId,
       userId: r.user_id,
       name: [r.first_name, r.last_name].filter(Boolean).join(" ") || r.email,
       email: r.email,
@@ -499,9 +501,9 @@ export async function addOrganizationRepresentative(
   }
 
   return {
-    // memberId is this representative's own organization_representatives.id
-    // — see toOrgDetail's identical note — not the shared aggregate id.
-    memberId: representativeId,
+    // representativeId/membershipId — see toOrgDetail's identical note.
+    representativeId,
+    membershipId: memberId,
     userId: user.id,
     name: input.name,
     email: user.email,
@@ -694,25 +696,30 @@ export async function removeAdminMember(
       buildRevokeRepresentativeRoleStatement(db, {
         memberId: representative.member_id,
         roleId: REPRESENTATIVE_ROLE_IDS.primaryContact,
+        userId: representative.user_id,
         now,
       }),
       buildRevokeRepresentativeRoleStatement(db, {
         memberId: representative.member_id,
         roleId: REPRESENTATIVE_ROLE_IDS.secondaryContact,
+        userId: representative.user_id,
         now,
       }),
       buildRevokeRepresentativeRoleStatement(db, {
         memberId: representative.member_id,
         roleId: REPRESENTATIVE_ROLE_IDS.votingDelegate,
+        userId: representative.user_id,
         now,
       }),
       db
         .prepare("DELETE FROM organization_secondary_contact_nominations WHERE member_id = ? AND nominated_user_id = ?")
         .bind(representative.member_id, representative.user_id),
     ];
-    // The two role-revoke statements above are unconditional UPDATEs (0
-    // rows affected if that role wasn't held by this user) — safe as
-    // no-ops, avoiding a read to check which role (if any) this rep held.
+    // The three role-revoke statements above are scoped to this
+    // representative's own user_id (0 rows affected if they didn't hold
+    // that role) — safe as no-ops, avoiding a read to check which role (if
+    // any) this rep held, and critically NOT clearing a role actually held
+    // by a different representative of the same organization.
     await db.batch(statements);
     return { user_id: representative.user_id, organization_id: orgRow?.organization_id ?? null };
   }

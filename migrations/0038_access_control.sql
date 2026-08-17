@@ -30,7 +30,7 @@ CREATE TABLE roles (
   id             TEXT    NOT NULL PRIMARY KEY,
   name           TEXT    NOT NULL UNIQUE,
   description    TEXT,
-  is_system_role INTEGER NOT NULL DEFAULT 0,
+  is_system_role INTEGER NOT NULL DEFAULT 0 CHECK (is_system_role IN (0, 1)),
   single_holder_per_context INTEGER NOT NULL DEFAULT 0 CHECK (single_holder_per_context IN (0, 1)),
   -- when 1, at most one active grant of this role may exist per
   -- (context_type, context_id) — see uq_user_roles_single_holder_per_context

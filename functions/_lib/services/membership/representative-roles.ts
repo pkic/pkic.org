@@ -31,6 +31,43 @@ export function isRepresentativeRoleId(roleId: string): roleId is Representative
 }
 
 /**
+ * Builds [revoke-previous-holder, insert-new-grant] statements for one of
+ * the three singleton representative roles, without verifying the active
+ * `organization_representatives` invariant — for callers that are
+ * themselves inserting that exact representative row earlier in the same
+ * `db.batch()` (so the invariant holds by construction; a DB read couldn't
+ * see the uncommitted insert anyway). Any other caller must use
+ * `buildAssignRepresentativeRoleStatements` instead, which verifies it.
+ */
+export function buildAssignRepresentativeRoleStatementsForNewRepresentative(
+  db: DatabaseLike,
+  input: {
+    memberId: string;
+    userId: string;
+    roleId: RepresentativeRoleId;
+    grantedByUserId?: string | null;
+    now?: string;
+  },
+): StatementLike[] {
+  const now = input.now ?? nowIso();
+  return [
+    db
+      .prepare(
+        `UPDATE user_roles SET revoked_at = ?
+         WHERE context_type = 'organization' AND context_id = ? AND role_id = ? AND revoked_at IS NULL`,
+      )
+      .bind(now, input.memberId, input.roleId),
+    db
+      .prepare(
+        `INSERT INTO user_roles
+           (id, user_id, role_id, context_type, context_id, granted_by_user_id, single_holder_per_context, created_at)
+         VALUES (?, ?, ?, 'organization', ?, ?, 1, ?)`,
+      )
+      .bind(uuid(), input.userId, input.roleId, input.memberId, input.grantedByUserId ?? null, now),
+  ];
+}
+
+/**
  * Builds [revoke-previous-holder?, insert-new-grant] statements for one of
  * the three singleton representative roles. Throws before building any
  * statement if `(userId, memberId)` has no active `organization_representatives`
@@ -51,8 +88,6 @@ export async function buildAssignRepresentativeRoleStatements(
     now?: string;
   },
 ): Promise<StatementLike[]> {
-  const now = input.now ?? nowIso();
-
   const isRepresentative = await isActiveRepresentative(db, input.memberId, input.userId);
   if (!isRepresentative) {
     throw new AppError(
@@ -61,30 +96,31 @@ export async function buildAssignRepresentativeRoleStatements(
       "Only an active representative of this organization can hold this role",
     );
   }
-
-  const statements: StatementLike[] = [
-    db
-      .prepare(
-        `UPDATE user_roles SET revoked_at = ?
-         WHERE context_type = 'organization' AND context_id = ? AND role_id = ? AND revoked_at IS NULL`,
-      )
-      .bind(now, input.memberId, input.roleId),
-    db
-      .prepare(
-        `INSERT INTO user_roles
-           (id, user_id, role_id, context_type, context_id, granted_by_user_id, single_holder_per_context, created_at)
-         VALUES (?, ?, ?, 'organization', ?, ?, 1, ?)`,
-      )
-      .bind(uuid(), input.userId, input.roleId, input.memberId, input.grantedByUserId ?? null, now),
-  ];
-  return statements;
+  return buildAssignRepresentativeRoleStatementsForNewRepresentative(db, input);
 }
 
+/**
+ * Revokes the active grant of `roleId` for `memberId`. When `userId` is
+ * given, only that user's grant is revoked (a no-op UPDATE if that user
+ * isn't the current holder) — required whenever the caller is reacting to
+ * one specific representative leaving, since these roles are singletons
+ * per-organization but the removed representative may not be the current
+ * holder at all. Omit `userId` only when the caller genuinely means "clear
+ * whoever holds this role" (e.g. an explicit admin unassign action).
+ */
 export function buildRevokeRepresentativeRoleStatement(
   db: DatabaseLike,
-  input: { memberId: string; roleId: RepresentativeRoleId; now?: string },
+  input: { memberId: string; roleId: RepresentativeRoleId; userId?: string; now?: string },
 ): StatementLike {
   const now = input.now ?? nowIso();
+  if (input.userId) {
+    return db
+      .prepare(
+        `UPDATE user_roles SET revoked_at = ?
+         WHERE context_type = 'organization' AND context_id = ? AND role_id = ? AND user_id = ? AND revoked_at IS NULL`,
+      )
+      .bind(now, input.memberId, input.roleId, input.userId);
+  }
   return db
     .prepare(
       `UPDATE user_roles SET revoked_at = ?
@@ -107,8 +143,9 @@ export async function resolveRepresentativeRoleHolder(
     db,
     `SELECT user_id FROM user_roles
      WHERE context_type = 'organization' AND context_id = ? AND role_id = ? AND revoked_at IS NULL
+       AND (expires_at IS NULL OR expires_at > ?)
      LIMIT 1`,
-    [memberId, roleId],
+    [memberId, roleId, nowIso()],
   );
   return row?.user_id ?? null;
 }
@@ -127,9 +164,11 @@ export async function resolveRepresentativeRoleHolders(
     db,
     `SELECT role_id, user_id FROM user_roles
      WHERE context_type = 'organization' AND context_id = ? AND revoked_at IS NULL
+       AND (expires_at IS NULL OR expires_at > ?)
        AND role_id IN (?, ?, ?)`,
     [
       memberId,
+      nowIso(),
       REPRESENTATIVE_ROLE_IDS.primaryContact,
       REPRESENTATIVE_ROLE_IDS.secondaryContact,
       REPRESENTATIVE_ROLE_IDS.votingDelegate,

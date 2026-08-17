@@ -113,7 +113,23 @@ export async function mergeUsers(
   //     the survivor, same "skip if survivor already actively represents
   //     that same organization" rule as working_group_members above —
   //     uq_organization_representatives_active_pair would reject a plain
-  //     repoint into an existing active (member_id, survivorId) pair.
+  //     repoint into an existing active (member_id, survivorId) pair. A
+  //     skipped row is not left dangling on the (about to be disabled)
+  //     source account: it's closed (left_at set), matching what actually
+  //     leaving that organization looks like everywhere else.
+  stmts.push(
+    db
+      .prepare(
+        `UPDATE organization_representatives
+            SET left_at = ?, updated_at = ?
+          WHERE user_id = ?
+            AND left_at IS NULL
+            AND member_id IN (
+              SELECT member_id FROM organization_representatives WHERE user_id = ? AND left_at IS NULL
+            )`,
+      )
+      .bind(now, now, sourceUserId, survivorId),
+  );
   stmts.push(
     db
       .prepare(
@@ -128,8 +144,38 @@ export async function mergeUsers(
       .bind(survivorId, now, sourceUserId, survivorId),
   );
 
-  // 3. user_roles / permission_grants / passkey_credentials: no uniqueness
-  //    constraints on any of these -- repoint unconditionally.
+  // 3. user_roles: revoke the source's active singleton-role grants
+  //    (uq_user_roles_single_holder_per_context, migration 0038) that would
+  //    otherwise collide with a grant the survivor already actively holds
+  //    for the same (context_type, context_id, role_id) — e.g. both users
+  //    are representatives of the same organization and both separately
+  //    hold role-primary_contact for it. Left un-revoked, the unconditional
+  //    repoint below would attempt two active grants of the same singleton
+  //    role in the same context and violate the unique index, failing the
+  //    whole merge. Non-conflicting grants (including this same source row
+  //    once revoked here) still repoint unconditionally afterward, same as
+  //    permission_grants/passkey_credentials, so merge history stays
+  //    resolvable through merged_into_user_id either way.
+  stmts.push(
+    db
+      .prepare(
+        `UPDATE user_roles SET revoked_at = ?
+          WHERE user_id = ? AND revoked_at IS NULL AND single_holder_per_context = 1
+            AND EXISTS (
+              SELECT 1 FROM user_roles ur2
+              WHERE ur2.user_id = ? AND ur2.revoked_at IS NULL
+                AND ur2.context_type = user_roles.context_type
+                AND ur2.context_id = user_roles.context_id
+                AND ur2.role_id = user_roles.role_id
+            )`,
+      )
+      .bind(now, sourceUserId, survivorId),
+  );
+
+  // 3b. user_roles / permission_grants / passkey_credentials: no other
+  //     uniqueness constraints -- repoint unconditionally. Runs after 3a in
+  //     the same batch, so the just-revoked conflicting grants (no longer
+  //     active) repoint safely too, as inactive history.
   stmts.push(db.prepare(`UPDATE user_roles SET user_id = ? WHERE user_id = ?`).bind(survivorId, sourceUserId));
   stmts.push(db.prepare(`UPDATE permission_grants SET user_id = ? WHERE user_id = ?`).bind(survivorId, sourceUserId));
   stmts.push(db.prepare(`UPDATE passkey_credentials SET user_id = ? WHERE user_id = ?`).bind(survivorId, sourceUserId));

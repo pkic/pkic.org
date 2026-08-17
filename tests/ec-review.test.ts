@@ -44,7 +44,7 @@ async function createEcReviewApplication(): Promise<{ id: string }> {
 
 async function insertActiveMember(email: string, isEcMember: boolean): Promise<string> {
   const userId = crypto.randomUUID();
-  const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, "A", new Date().toISOString());
+  const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, "H5", new Date().toISOString());
   await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO users (id, email, normalized_email, role, active, is_ec_member, created_at, updated_at)

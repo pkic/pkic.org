@@ -20,6 +20,7 @@ import {
   REPRESENTATIVE_ROLE_IDS,
 } from "./helpers/membership";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
+import { isIndividualMembershipCategory } from "../assets/shared/schemas/membership-categories";
 import { closeDueVotes } from "../functions/_lib/services/votes";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
@@ -99,26 +100,27 @@ async function setOrgContacts(
 
 /**
  * Creates a user + active membership in one call, category A-G by default.
- * With `organizationId`: reuses (or creates) that organization's aggregate
- * with `category` and adds the user as an active representative of it —
- * matching the real self-service/admin join path. Without: creates an
- * org-less individual aggregate directly with `category`, regardless of
- * whether `category` is one of the individual-only codes — nothing at the
- * DB layer ties a category to org-tied-ness (that's `assets/shared/schemas/
- * membership-categories.ts` application policy, not a constraint), and
- * several ballot-eligibility tests below intentionally use a voting
- * category (e.g. "F") with no organization to isolate WG-level eligibility
- * from forum-level org-contact resolution.
+ * Individual-only categories (H5/H6/H7) get an org-less individual
+ * aggregate; every other category is inherently organization-tied
+ * (functions/_lib/services/membership/memberships.ts now enforces this —
+ * PR #1 review flagged tests that previously created impossible
+ * individual+org-category combinations), so `organizationId` is reused
+ * when given or a fresh organization is synthesized otherwise. Several
+ * ballot-eligibility tests below pass a voting category (e.g. "F") with no
+ * explicit `organizationId` to isolate WG-level eligibility from
+ * forum-level org-contact resolution — a bare representative row (no
+ * primary-contact/voting-delegate role) still achieves that isolation.
  */
 async function insertMemberUser(category: string, organizationId: string | null = null): Promise<string> {
   userCounter += 1;
   const userId = await insertUser(`voter-${userCounter}@example.test`);
-  if (organizationId) {
-    const memberId = await seedOrganizationAggregate(env.DB, organizationId, category);
-    await addRepresentative(env.DB, memberId, userId);
-  } else {
+  if (isIndividualMembershipCategory(category)) {
     const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, category, new Date().toISOString());
     await env.DB.batch(statements);
+  } else {
+    const orgId = organizationId ?? (await insertOrganization(`Voter Org ${crypto.randomUUID()}`));
+    const memberId = await seedOrganizationAggregate(env.DB, orgId, category);
+    await addRepresentative(env.DB, memberId, userId);
   }
   return userId;
 }

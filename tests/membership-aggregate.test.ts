@@ -14,7 +14,11 @@ import {
   INDIVIDUAL_MEMBERSHIP_CATEGORIES,
   VOTING_CATEGORIES,
 } from "../assets/shared/schemas/membership-categories";
-import { getOrCreateOrganizationMemberAggregate } from "../functions/_lib/services/membership/memberships";
+import {
+  getOrCreateOrganizationMemberAggregate,
+  buildCreateIndividualMemberStatements,
+} from "../functions/_lib/services/membership/memberships";
+import { listMembershipCategories } from "../functions/_lib/services/membership/categories";
 import { AppError } from "../functions/_lib/errors";
 
 interface MembershipCategoryRow {
@@ -44,6 +48,20 @@ describe("membership_categories seed table", () => {
         INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(code),
       );
       expect(row!.is_voting === 1, `is_voting mismatch for ${code}`).toBe(VOTING_CATEGORIES.has(code));
+    }
+  });
+
+  it("listMembershipCategories reads the same catalog through the service function", async () => {
+    const entries = await listMembershipCategories(env.DB);
+    const byCode = new Map(entries.map((e) => [e.code, e]));
+
+    expect(new Set(byCode.keys())).toEqual(new Set(MEMBERSHIP_CATEGORIES));
+
+    for (const code of MEMBERSHIP_CATEGORIES) {
+      const entry = byCode.get(code);
+      expect(entry, `listMembershipCategories is missing ${code}`).toBeDefined();
+      expect(entry!.isIndividual).toBe(INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(code));
+      expect(entry!.isVoting).toBe(VOTING_CATEGORIES.has(code));
     }
   });
 });
@@ -98,26 +116,49 @@ describe("getOrCreateOrganizationMemberAggregate", () => {
     expect(row.category_code).toBe("A");
   });
 
-  it("does not treat an unrelated D1 error as a race — an invalid category propagates instead of being swallowed", async () => {
+  it("rejects an unknown category code before any write — a shared-service validation, not a D1 FK surprise", async () => {
     const organizationId = await insertOrganization(env.DB);
 
-    // "zzz" is not a seeded membership_categories.code — the
-    // member_category_assignments FK must reject it. A blanket try/catch
-    // race-detector would misinterpret this as "someone else already
-    // created the aggregate" and silently re-read instead of failing.
-    await expect(getOrCreateOrganizationMemberAggregate(env.DB, organizationId, "zzz")).rejects.toThrow();
+    // "zzz" is not a MEMBERSHIP_CATEGORIES code — assertCategoryCompatible
+    // (functions/_lib/services/membership/memberships.ts) now rejects it
+    // synchronously, before building any statement, so no partial members
+    // row is ever written for an invalid code.
+    try {
+      await getOrCreateOrganizationMemberAggregate(env.DB, organizationId, "zzz");
+      expect.unreachable("expected AppError for an unknown category code");
+    } catch (err) {
+      expect(err).toBeInstanceOf(AppError);
+      expect((err as AppError).status).toBe(422);
+    }
 
     const memberRows = await queryAll<{ total: number }>(
       env.DB,
       "SELECT COUNT(*) AS total FROM members WHERE organization_id = ?",
       organizationId,
     );
-    // The members row insert (no FK to membership_categories) is not
-    // itself rejected, but no category assignment should have landed for
-    // the invalid code, and the caller must see the real D1 error, not a
-    // success. AppError is not thrown here — the raw D1 FK failure
-    // propagates unchanged, confirming it isn't reinterpreted.
-    expect(Number(memberRows[0].total)).toBeLessThanOrEqual(1);
+    expect(Number(memberRows[0].total)).toBe(0);
+  });
+
+  it("rejects an individual-only category (H5/H6/H7) for an organization aggregate", async () => {
+    const organizationId = await insertOrganization(env.DB);
+    try {
+      await getOrCreateOrganizationMemberAggregate(env.DB, organizationId, "H5");
+      expect.unreachable("expected AppError for an individual-only category on an organization aggregate");
+    } catch (err) {
+      expect(err).toBeInstanceOf(AppError);
+      expect((err as AppError).status).toBe(422);
+      expect((err as AppError).code).toBe("MEMBERSHIP_CATEGORY_TYPE_MISMATCH");
+    }
+  });
+
+  it("does not treat an unrelated D1 error as a race — a nonexistent organization propagates its own FK failure", async () => {
+    // A valid, individual-compatible category ("A") passes the app-level
+    // check, so this exercises the D1 layer itself: members.organization_id
+    // FKs to organizations(id) (migration 0000), and no such organization
+    // was created. A blanket try/catch race-detector would misinterpret
+    // this as "someone else already created the aggregate" and silently
+    // re-read instead of failing.
+    await expect(getOrCreateOrganizationMemberAggregate(env.DB, crypto.randomUUID(), "A")).rejects.toThrow();
   });
 
   it("returns AppError instances (not generic errors) for the conflict path specifically", async () => {
@@ -130,6 +171,30 @@ describe("getOrCreateOrganizationMemberAggregate", () => {
     } catch (err) {
       expect(err).toBeInstanceOf(AppError);
       expect((err as AppError).status).toBe(409);
+    }
+  });
+});
+
+describe("buildCreateIndividualMemberStatements — category compatibility", () => {
+  it("rejects an organization-tied category for an individual (org-less) aggregate", () => {
+    expect(() =>
+      buildCreateIndividualMemberStatements(env.DB, crypto.randomUUID(), "A", new Date().toISOString()),
+    ).toThrow(AppError);
+    try {
+      buildCreateIndividualMemberStatements(env.DB, crypto.randomUUID(), "A", new Date().toISOString());
+      expect.unreachable("expected AppError for an org-tied category on an individual aggregate");
+    } catch (err) {
+      expect(err).toBeInstanceOf(AppError);
+      expect((err as AppError).status).toBe(422);
+      expect((err as AppError).code).toBe("MEMBERSHIP_CATEGORY_TYPE_MISMATCH");
+    }
+  });
+
+  it("accepts every individual-only category (H5/H6/H7)", () => {
+    for (const code of ["H5", "H6", "H7"]) {
+      expect(() =>
+        buildCreateIndividualMemberStatements(env.DB, crypto.randomUUID(), code, new Date().toISOString()),
+      ).not.toThrow();
     }
   });
 });

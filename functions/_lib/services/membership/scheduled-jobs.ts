@@ -6,28 +6,30 @@
  * (scheduled-due-work.ts) since they're not time-window-sensitive the way
  * the twice-weekly batches are.
  */
-import { all, run } from "../db/queries";
-import { uuid } from "../utils/ids";
-import { nowIso } from "../utils/time";
-import { getConfig } from "../config";
-import { queueEmail, processOutboxByIdBackground } from "../email/outbox";
-import { getMembershipSettings } from "./membership-settings";
+import { all, run } from "../../db/queries";
+import { uuid } from "../../utils/ids";
+import { nowIso } from "../../utils/time";
+import { getConfig } from "../../config";
+import { queueEmail, processOutboxByIdBackground } from "../../email/outbox";
+import { getMembershipSettings } from "../membership-settings";
+import { transitionApplicationStage, ON_HOLD_SUBTYPE_EMAIL_TEMPLATES } from "./applications/transition";
+import type { MemberApplicationRow } from "./applications/queries";
+import { hasEcDecline } from "../ec-review";
+import { approveApplication } from "./applications/approve";
+import { processGoogleGroupsSyncQueue } from "../google-groups";
+import { resolveApprovalIcsAttachments, resolveWgJoinCalendarInviteByMailingListEmail } from "../meeting-calendar";
 import {
-  transitionApplicationStage,
-  ON_HOLD_SUBTYPE_EMAIL_TEMPLATES,
-  type MemberApplicationRow,
-} from "./member-applications";
-import { hasEcDecline } from "./ec-review";
-import { approveApplication } from "./membership-onboarding";
-import { processGoogleGroupsSyncQueue } from "./google-groups";
-import { resolveApprovalIcsAttachments, resolveWgJoinCalendarInviteByMailingListEmail } from "./meeting-calendar";
-import { logInfo } from "../logging";
-import type { DatabaseLike, Env } from "../types";
-
-function maskEmail(email: string): string {
-  const [, domain] = email.split("@");
-  return domain ? `***@${domain}` : "***";
-}
+  buildConsultationBatchEmail,
+  buildEcReviewBatchEmail,
+  buildApplicationClosedNoResponseEmail,
+  buildOnHoldReminderEmail,
+  buildMemberAccountClaimEmail,
+  buildApplicationApprovedWelcomeEmail,
+  buildMailingListEnrolledEmail,
+  buildWgCalendarInviteEmail,
+} from "./notifications";
+import { logInfo } from "../../logging";
+import type { DatabaseLike, Env } from "../../types";
 
 function daysSince(iso: string): number {
   return (Date.now() - new Date(iso).getTime()) / 86_400_000;
@@ -45,20 +47,17 @@ export async function runConsultationBatch(db: DatabaseLike, env: Env): Promise<
     return { applicationsNotified: 0 };
   }
 
-  const outboxId = await queueEmail(db, {
-    templateKey: "consultation-batch",
-    recipientEmail: settings.consultation_email_recipients,
-    messageType: "transactional",
-    subject: `PKI Consortium member consultation — ${applications.length} application(s)`,
-    data: {
-      applicationCount: applications.length,
+  const outboxId = await queueEmail(
+    db,
+    buildConsultationBatchEmail({
+      recipientEmail: settings.consultation_email_recipients,
       applications: applications.map((a) => ({
-        maskedEmail: maskEmail(a.applicant_email),
+        applicantEmail: a.applicant_email,
         organizationName: a.organization_name ?? a.applicant_name,
         membershipCategory: a.membership_category,
       })),
-    },
-  });
+    }),
+  );
   await processOutboxByIdBackground(db, env, outboxId);
 
   return { applicationsNotified: applications.length };
@@ -92,21 +91,18 @@ export async function runEcReviewBatch(db: DatabaseLike, env: Env): Promise<{ tr
   }
 
   const config = getConfig(env);
-  const outboxId = await queueEmail(db, {
-    templateKey: "ec-review-batch",
-    recipientEmail: settings.ec_email_recipients,
-    messageType: "transactional",
-    subject: `PKI Consortium EC review — ${transitioned.length} application(s)`,
-    data: {
-      applicationCount: transitioned.length,
+  const outboxId = await queueEmail(
+    db,
+    buildEcReviewBatchEmail({
+      recipientEmail: settings.ec_email_recipients,
       ecReviewWindowDays: settings.ec_review_window_days,
       applications: transitioned.map((a) => ({
         organizationName: a.organization_name ?? a.applicant_name,
         membershipCategory: a.membership_category,
         reviewUrl: `${config.appBaseUrl}/admin/#/applications/${a.id}`,
       })),
-    },
-  });
+    }),
+  );
   await processOutboxByIdBackground(db, env, outboxId);
 
   return { transitioned: transitioned.length };
@@ -138,13 +134,14 @@ export async function runOnHoldReminders(
         actorUserId: null,
         note: "Auto-closed — no response within the on-hold deadline",
       });
-      const outboxId = await queueEmail(db, {
-        templateKey: "application-closed-no-response",
-        recipientEmail: result.application.applicant_email,
-        messageType: "transactional",
-        subject: "Your PKI Consortium membership application has been closed",
-        data: { applicantName: result.application.applicant_name, deadlineDays },
-      });
+      const outboxId = await queueEmail(
+        db,
+        buildApplicationClosedNoResponseEmail({
+          recipientEmail: result.application.applicant_email,
+          applicantName: result.application.applicant_name,
+          deadlineDays,
+        }),
+      );
       await processOutboxByIdBackground(db, env, outboxId);
       autoClosed++;
       continue;
@@ -165,13 +162,15 @@ export async function runOnHoldReminders(
       ON_HOLD_SUBTYPE_EMAIL_TEMPLATES[application.on_hold_subtype as keyof typeof ON_HOLD_SUBTYPE_EMAIL_TEMPLATES];
     if (!templateKey) continue;
 
-    const outboxId = await queueEmail(db, {
-      templateKey,
-      recipientEmail: application.applicant_email,
-      messageType: "transactional",
-      subject: "Reminder: action needed on your PKI Consortium membership application",
-      data: { applicantName: application.applicant_name, deadlineDays },
-    });
+    const outboxId = await queueEmail(
+      db,
+      buildOnHoldReminderEmail({
+        templateKey,
+        recipientEmail: application.applicant_email,
+        applicantName: application.applicant_name,
+        deadlineDays,
+      }),
+    );
     await processOutboxByIdBackground(db, env, outboxId);
 
     await run(
@@ -223,24 +222,23 @@ export async function runEcWindowAutoApprove(
     });
 
     const loginUrl = `${config.appBaseUrl}/portal/`;
-    const claimOutboxId = await queueEmail(db, {
-      templateKey: "member-account-claim",
-      recipientEmail: result.email,
-      messageType: "transactional",
-      subject: "Set up your PKI Consortium member account",
-      data: { memberName: result.name, loginUrl },
-    });
+    const claimOutboxId = await queueEmail(
+      db,
+      buildMemberAccountClaimEmail({ recipientEmail: result.email, memberName: result.name, loginUrl }),
+    );
     await processOutboxByIdBackground(db, env, claimOutboxId);
 
     const icsAttachments = await resolveApprovalIcsAttachments(db, result.workingGroupSlugs);
-    const welcomeOutboxId = await queueEmail(db, {
-      templateKey: "application-approved-welcome",
-      recipientEmail: result.email,
-      messageType: "transactional",
-      subject: "Welcome to the PKI Consortium!",
-      data: { applicantName: result.name, loginUrl, workingGroups: result.workingGroupNames.join(", ") },
-      attachments: icsAttachments,
-    });
+    const welcomeOutboxId = await queueEmail(
+      db,
+      buildApplicationApprovedWelcomeEmail({
+        recipientEmail: result.email,
+        applicantName: result.name,
+        loginUrl,
+        workingGroupNames: result.workingGroupNames,
+        icsAttachments,
+      }),
+    );
     await processOutboxByIdBackground(db, env, welcomeOutboxId);
 
     autoApproved++;
@@ -268,13 +266,10 @@ export async function runGoogleGroupsSyncPass(
 
     const memberName = [row.first_name, row.last_name].filter(Boolean).join(" ") || row.email;
 
-    const outboxId = await queueEmail(db, {
-      templateKey: "mailing-list-enrolled",
-      recipientEmail: row.email,
-      messageType: "transactional",
-      subject: "You have been added to PKI Consortium mailing lists",
-      data: { memberName, lists: groupEmails },
-    });
+    const outboxId = await queueEmail(
+      db,
+      buildMailingListEnrolledEmail({ recipientEmail: row.email, memberName, lists: groupEmails }),
+    );
     await processOutboxByIdBackground(db, env, outboxId);
 
     // "Member joins a WG" trigger: attach that WG's active ICS
@@ -286,14 +281,15 @@ export async function runGoogleGroupsSyncPass(
       const invite = await resolveWgJoinCalendarInviteByMailingListEmail(db, groupEmail);
       if (!invite) continue;
 
-      const calendarOutboxId = await queueEmail(db, {
-        templateKey: "wg-calendar-invite",
-        recipientEmail: row.email,
-        messageType: "transactional",
-        subject: `Calendar invite: ${invite.workingGroupName}`,
-        data: { memberName, workingGroupName: invite.workingGroupName },
-        attachments: invite.attachments,
-      });
+      const calendarOutboxId = await queueEmail(
+        db,
+        buildWgCalendarInviteEmail({
+          recipientEmail: row.email,
+          memberName,
+          workingGroupName: invite.workingGroupName,
+          attachments: invite.attachments,
+        }),
+      );
       await processOutboxByIdBackground(db, env, calendarOutboxId);
     }
   }

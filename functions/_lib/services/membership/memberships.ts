@@ -11,6 +11,7 @@ import { first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import { AppError } from "../../errors";
+import { assertCategoryCompatible } from "./categories";
 import type { DatabaseLike, StatementLike } from "../../types";
 
 export interface MemberAggregate {
@@ -48,6 +49,7 @@ export function buildGetOrCreateOrganizationMemberAggregateStatements(
   categoryCode: string,
   now: string,
 ): { proposedId: string; statements: StatementLike[] } {
+  assertCategoryCompatible(categoryCode, false);
   const proposedId = uuid();
   const statements: StatementLike[] = [
     db
@@ -122,6 +124,7 @@ export function buildCreateIndividualMemberStatements(
   categoryCode: string,
   now: string,
 ): { memberId: string; statements: StatementLike[] } {
+  assertCategoryCompatible(categoryCode, true);
   const memberId = uuid();
   const statements: StatementLike[] = [
     db

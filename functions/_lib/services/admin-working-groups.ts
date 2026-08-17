@@ -204,7 +204,15 @@ export async function getAdminWorkingGroupDetail(
     `SELECT u.id AS user_id, u.first_name, u.last_name, u.email, o.name AS org_name, mca.category_code, wgm.joined_at
      FROM working_group_members wgm
      JOIN users u ON u.id = wgm.user_id
-     LEFT JOIN organization_representatives rep ON rep.user_id = wgm.user_id AND rep.left_at IS NULL
+     -- A WG member can represent more than one organization at once
+     -- (migration 0037) — join to a single deterministic representative
+     -- row (earliest joined_at) instead of fanning out one result row per
+     -- represented organization.
+     LEFT JOIN organization_representatives rep ON rep.id = (
+       SELECT r2.id FROM organization_representatives r2
+       WHERE r2.user_id = wgm.user_id AND r2.left_at IS NULL
+       ORDER BY r2.joined_at ASC LIMIT 1
+     )
      LEFT JOIN members m ON m.id = rep.member_id
      LEFT JOIN members mi ON mi.user_id = wgm.user_id AND mi.status = 'active'
      LEFT JOIN organizations o ON o.id = m.organization_id

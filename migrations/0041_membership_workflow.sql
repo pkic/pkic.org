@@ -5,15 +5,20 @@
 -- Nothing yet takes an application through review -> consultation ->
 -- EC review -> approval -> onboarding, and nothing lets an approved member
 -- log in and self-manage. This migration adds the schema those flows need.
--- No CHECK constraints, per this repo's standing convention — allowed
--- values are documented in `-- allowed:` comments and validated at the
--- application layer (Zod) instead.
+--
+-- Enforcement policy (PR #1 review, §1.3): boolean-as-integer flags get a
+-- DB CHECK (durable structural invariant, not expected to gain a third
+-- value) — see `is_ec_member` below. Evolvable closed-state vocabularies
+-- (application/sponsorship stage, on-hold subtype, sync-queue status) stay
+-- `-- allowed:` comments validated by a shared Zod schema on every write
+-- path instead of a CHECK, since retiring/adding a workflow stage should be
+-- additive, not a migration.
 
 -- ── EC member designation ─────────────────────────────────────────
 -- A distinct designation from `membership:approve` — controls who receives
 -- ec-review-batch emails and who sees the EC decision screen, independent
 -- of staff/processor role.
-ALTER TABLE users ADD COLUMN is_ec_member INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN is_ec_member INTEGER NOT NULL DEFAULT 0 CHECK (is_ec_member IN (0, 1));
 
 -- ── Organization domain(s) (duplicate-check gap) ────────────────────
 -- Duplicate-domain check only covered member_applications, not approved
@@ -128,7 +133,7 @@ CREATE TABLE membership_settings (
   consultation_email_recipients TEXT NOT NULL DEFAULT 'consultation@lists.pkic.org',
   ec_email_recipients           TEXT NOT NULL DEFAULT 'ec@lists.pkic.org',
   cc_applicant_emails           TEXT NOT NULL DEFAULT 'members@pkic.org',
-  auto_reminder_on_holds        INTEGER NOT NULL DEFAULT 1,
+  auto_reminder_on_holds        INTEGER NOT NULL DEFAULT 1 CHECK (auto_reminder_on_holds IN (0, 1)),
   forum_vote_min_endorsers      INTEGER NOT NULL DEFAULT 0,
   updated_at                    TEXT NOT NULL,
   updated_by_user_id            TEXT,

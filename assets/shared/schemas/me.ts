@@ -5,6 +5,9 @@
  */
 import { z } from "zod";
 import { linksSchema } from "./api";
+import { applicationStageSchema } from "./member-applications";
+import { voteTypeSchema, voteScopeTypeSchema, voteStatusSchema } from "./votes";
+import { contentReviewStatusSchema } from "./admin-organizations";
 
 export const myOrganizationRepresentativeSchema = z.object({
   userId: z.uuid(),
@@ -12,6 +15,16 @@ export const myOrganizationRepresentativeSchema = z.object({
   email: z.string(),
   isPrimaryContact: z.boolean(),
   isSecondaryContact: z.boolean(),
+});
+
+// One membership context (own org-less membership, or an organization
+// actively represented) a member can act as. A person can hold more than
+// one at once — see functions/_lib/auth/member.ts.
+export const myActiveMembershipSchema = z.object({
+  memberId: z.uuid(),
+  organizationId: z.uuid().nullable(),
+  organizationName: z.string().nullable(),
+  membershipCategory: z.string(),
 });
 
 export const myProfileSchema = z.object({
@@ -37,6 +50,12 @@ export const myProfileSchema = z.object({
   // Full representative roster for the caller's organization, or null when
   // the member has no organization.
   organizationRepresentatives: z.array(myOrganizationRepresentativeSchema).nullable(),
+  // Every membership context this member is currently eligible to act
+  // through. Always at least one entry (the one reflected in the fields
+  // above); more than one only when the caller represents multiple
+  // organizations (or an organization plus their own individual
+  // membership) concurrently.
+  activeMemberships: z.array(myActiveMembershipSchema).min(1),
 });
 
 export const myProfileGetRouteSchema = {
@@ -44,6 +63,24 @@ export const myProfileGetRouteSchema = {
   summary: "Get my profile",
   responses: {
     "200": { description: "My profile.", content: { "application/json": { schema: myProfileSchema } } },
+  },
+};
+
+export const myActiveMembershipSwitchSchema = z.object({
+  memberId: z.uuid(),
+});
+
+export const myActiveMembershipSwitchRouteSchema = {
+  tags: ["Me"],
+  summary: "Switch my active membership context",
+  description:
+    "Only meaningful for a member who represents more than one organization (or an organization plus an individual membership) concurrently. Re-verifies memberId against the caller's own live eligible memberships — a member can never select one they don't actually hold — then reissues the session cookie scoped to it.",
+  request: {
+    body: { content: { "application/json": { schema: myActiveMembershipSwitchSchema } }, required: true },
+  },
+  responses: {
+    "200": { description: "Switched.", content: { "application/json": { schema: myProfileSchema } } },
+    "403": { description: "The caller does not actively hold this membership." },
   },
 };
 
@@ -71,8 +108,8 @@ export const myProfileUpdateRouteSchema = {
 
 export const myApplicationSummarySchema = z.object({
   id: z.string(),
-  status: z.string(),
-  stage: z.string(),
+  status: applicationStageSchema,
+  stage: applicationStageSchema,
   membershipCategory: z.string(),
   createdAt: z.string(),
 });
@@ -95,8 +132,8 @@ export const myApplicationsListRouteSchema = {
 };
 
 export const myApplicationTimelineEntrySchema = z.object({
-  fromStage: z.string().nullable(),
-  toStage: z.string(),
+  fromStage: applicationStageSchema.nullable(),
+  toStage: applicationStageSchema,
   note: z.string().nullable(),
   createdAt: z.string(),
 });
@@ -113,8 +150,8 @@ export const myApplicationDetailSchema = z.object({
   applicantEmail: z.string(),
   organizationName: z.string().nullable(),
   membershipCategory: z.string(),
-  status: z.string(),
-  stage: z.string(),
+  status: applicationStageSchema,
+  stage: applicationStageSchema,
   stageEnteredAt: z.string(),
   createdAt: z.string(),
   timeline: z.array(myApplicationTimelineEntrySchema),
@@ -135,9 +172,9 @@ export const myVoteHistoryEntrySchema = z.object({
   voteId: z.uuid(),
   slug: z.string(),
   title: z.string(),
-  voteType: z.string(),
-  scopeType: z.string(),
-  status: z.string(),
+  voteType: voteTypeSchema,
+  scopeType: voteScopeTypeSchema,
+  status: voteStatusSchema,
   choice: z.string(),
   submittedAt: z.string(),
 });
@@ -217,7 +254,7 @@ export const addCoworkerRouteSchema = {
   tags: ["Me"],
   summary: "Enroll a coworker as a representative of my organization (self-service)",
   description:
-    "Only the organization's primary or secondary contact may call this. The new member's category is inherited from the organization's own membership_category.",
+    "Only the organization's primary or secondary contact may call this. The new representative's category is inherited from the organization's shared membership category (member_category_assignments).",
   request: {
     body: { content: { "application/json": { schema: addCoworkerSchema } }, required: true },
   },
@@ -248,7 +285,7 @@ export const myOrganizationReviewSchema = z.object({
   submittedByUserId: z.uuid(),
   proposedChanges: z.record(z.string(), z.unknown()),
   hasLogoChange: z.boolean(),
-  status: z.string(),
+  status: contentReviewStatusSchema,
   reviewerUserId: z.uuid().nullable(),
   reviewerNote: z.string().nullable(),
   submittedAt: z.string(),
@@ -361,7 +398,7 @@ export const mySecondaryContactNominateRouteSchema = {
   tags: ["Me"],
   summary: "Nominate a secondary contact for my organization",
   description:
-    "Only the primary contact may call this. Held as a pending nomination (organizations.pending_secondary_contact_user_id) until a staff admin confirms it. Pass userId: null to withdraw a pending nomination.",
+    "Only the primary contact may call this. Held as a pending nomination (organization_secondary_contact_nominations) until a staff admin confirms it. Pass userId: null to withdraw a pending nomination.",
   request: {
     body: { content: { "application/json": { schema: mySecondaryContactNominateSchema } }, required: true },
   },

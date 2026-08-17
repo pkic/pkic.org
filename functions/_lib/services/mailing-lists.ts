@@ -1,7 +1,7 @@
 /**
  * Managed mailing list configuration. Staff manage the full
  * list of Google Groups here instead of them being hardcoded — see
- * resolveAutoSyncListEmails, which membership-onboarding.ts now calls
+ * resolveAutoSyncListEmails, which membership/applications/approve.ts now calls
  * instead of the PKIC_ALL_MEMBERS_LIST/CONSULTATION_LIST constants it used
  * to hardcode.
  *
@@ -160,7 +160,7 @@ export async function deleteMailingList(db: DatabaseLike, id: string): Promise<v
  * The Google Groups sync engine's runtime read of `mailing_lists` —
  * every active all_members/consultation list whose auto_sync_categories
  * either includes `membershipCategory` or is unset (meaning "every
- * category"). Called from membership-onboarding.ts's approveApplication in
+ * category"). Called from membership/applications/approve.ts's approveApplication in
  * place of the PKIC_ALL_MEMBERS_LIST/CONSULTATION_LIST constants it used to
  * hardcode.
  */

@@ -165,7 +165,7 @@ CREATE TABLE working_groups (
   description              TEXT,
   mailing_list_email       TEXT,
   min_endorsers_for_ballot INTEGER NOT NULL DEFAULT 0,
-  active                   INTEGER NOT NULL DEFAULT 1,
+  active                   INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
   created_at               TEXT NOT NULL,
   updated_at               TEXT NOT NULL
 );

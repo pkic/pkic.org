@@ -7,7 +7,7 @@
  * calls for mostly static data."
  */
 import { json } from "../../../_lib/http";
-import { listPublicMembers } from "../../../_lib/services/members-directory";
+import { listPublicMembers } from "../../../_lib/services/membership/directory";
 import { membersListQuerySchema, membersListRouteSchema } from "../../../../assets/shared/schemas/members-directory";
 import { openApiRoute } from "../../../_lib/openapi/route";
 

@@ -75,7 +75,7 @@ CREATE TABLE mailing_lists (
   -- Only consulted for list_type IN ('all_members','consultation') — see
   -- resolveAutoSyncListEmails in mailing-lists.ts. NULL means "every
   -- membership category" (used by the all_members list).
-  active                    INTEGER NOT NULL DEFAULT 1,
+  active                    INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
   created_at                TEXT NOT NULL,
   updated_at                TEXT NOT NULL
 );

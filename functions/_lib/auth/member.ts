@@ -21,10 +21,10 @@
  * decision as the deferred passkey management UI.
  */
 import { AppError } from "../errors";
-import { first } from "../db/queries";
+import { all, first } from "../db/queries";
 import { normalizeEmail } from "../validation";
 import { signJwt, verifyJwt, type JwtVerifyResult } from "../utils/jwt";
-import type { AuthMember, DatabaseLike, Env } from "../types";
+import type { AuthMember, EligibleMembership, DatabaseLike, Env } from "../types";
 import {
   getBearerToken,
   getSessionCookieToken,
@@ -50,8 +50,10 @@ interface MemberEligibleUserRow {
   active: number;
   member_id: string;
   organization_id: string | null;
+  organization_name: string | null;
   membership_category: string;
   is_ec_member: number;
+  sort_key: string;
 }
 
 // A user is member-session-eligible when they hold an active individual
@@ -63,14 +65,21 @@ interface MemberEligibleUserRow {
 // grant check; self-service is identity-gated (see AuthMember's doc
 // comment in types.ts).
 //
-// A person who is simultaneously an org-less individual member AND an
-// active representative of some organization (edge case, not disallowed by
-// any constraint) would match both halves of this UNION; the first row D1
-// returns wins. Not resolved further in this pass.
+// A person can be simultaneously an org-less individual member AND an
+// active representative of one or more organizations, and can represent
+// more than one organization at once (confirmed product decision — see
+// migration 0037's header). This UNION can therefore return multiple rows
+// for one user id. `sort_key` gives every consumer a single, deterministic
+// ordering (individual row first, then organizations by earliest
+// joined_at) instead of relying on whichever row D1 happens to return
+// first — callers that need every eligible context read all rows
+// (resolveEligibleMemberships); callers that just need "is this email
+// eligible at all" may still take the first.
 const MEMBER_ELIGIBLE_USER_SELECT = `
   SELECT u.id, u.email, u.normalized_email, u.active, u.is_ec_member,
-         m.id AS member_id, NULL AS organization_id,
-         mca.category_code AS membership_category
+         m.id AS member_id, NULL AS organization_id, NULL AS organization_name,
+         mca.category_code AS membership_category,
+         '0_' || m.created_at AS sort_key
   FROM users u
   JOIN members m ON m.user_id = u.id AND m.status = 'active'
   JOIN member_category_assignments mca ON mca.member_id = m.id
@@ -78,12 +87,14 @@ const MEMBER_ELIGIBLE_USER_SELECT = `
   UNION ALL
 
   SELECT u.id, u.email, u.normalized_email, u.active, u.is_ec_member,
-         m.id AS member_id, m.organization_id,
-         mca.category_code AS membership_category
+         m.id AS member_id, m.organization_id, o.name AS organization_name,
+         mca.category_code AS membership_category,
+         '1_' || r.joined_at AS sort_key
   FROM users u
   JOIN organization_representatives r ON r.user_id = u.id AND r.left_at IS NULL
   JOIN members m ON m.id = r.member_id AND m.status = 'active'
   JOIN member_category_assignments mca ON mca.member_id = m.id
+  JOIN organizations o ON o.id = m.organization_id
 `;
 
 export interface MemberSessionTokenClaims {
@@ -91,6 +102,16 @@ export interface MemberSessionTokenClaims {
   sub: string;
   sid: string;
   exp: number;
+  /**
+   * The membership context (members.id) this session is currently acting
+   * as, for a user eligible through more than one (see
+   * MEMBER_ELIGIBLE_USER_SELECT's header). Optional: absent means "use the
+   * deterministic default" — every read re-verifies this against the
+   * user's live eligible memberships (getMemberBySessionClaims), so a
+   * stale or tampered claim can never select a context the user doesn't
+   * actually hold.
+   */
+  mid?: string;
 }
 
 const MEMBER_SESSION_TOKEN_TYPE = "member-session";
@@ -118,26 +139,45 @@ function isMemberSessionTokenClaims(claims: object): claims is MemberSessionToke
   return hasBaseSessionTokenClaims(claims, MEMBER_SESSION_TOKEN_TYPE);
 }
 
-function toAuthMember(row: MemberEligibleUserRow): AuthMember {
+function toEligibleMembership(row: MemberEligibleUserRow): EligibleMembership {
   return {
-    userId: row.id,
-    email: row.email,
     memberId: row.member_id,
     organizationId: row.organization_id,
+    organizationName: row.organization_name,
     membershipCategory: row.membership_category,
-    isEcMember: row.is_ec_member === 1,
+  };
+}
+
+/**
+ * Builds the resolved AuthMember for a user's full set of eligible
+ * membership rows (already ordered deterministically by sort_key). Selects
+ * `preferredMemberId` as the active context if it's actually one of this
+ * user's eligible memberships, otherwise falls back to the first (default)
+ * row — never an arbitrary one, and never one the user doesn't hold.
+ */
+function toAuthMember(rows: MemberEligibleUserRow[], preferredMemberId?: string | null): AuthMember {
+  const selected = (preferredMemberId && rows.find((row) => row.member_id === preferredMemberId)) || rows[0];
+  return {
+    userId: selected.id,
+    email: selected.email,
+    memberId: selected.member_id,
+    organizationId: selected.organization_id,
+    membershipCategory: selected.membership_category,
+    isEcMember: selected.is_ec_member === 1,
+    activeMemberships: rows.map(toEligibleMembership),
   };
 }
 
 export async function signMemberSessionToken(
   secret: string,
-  payload: { userId: string; sessionId: string; expiresAt: string },
+  payload: { userId: string; sessionId: string; expiresAt: string; activeMemberId?: string },
 ): Promise<string> {
   const claims: MemberSessionTokenClaims = {
     typ: MEMBER_SESSION_TOKEN_TYPE,
     sub: payload.userId,
     sid: payload.sessionId,
     exp: sessionExpiresAtToExp(payload.expiresAt),
+    ...(payload.activeMemberId ? { mid: payload.activeMemberId } : {}),
   };
   return signJwt(secret, claims as unknown as Record<string, unknown>);
 }
@@ -154,14 +194,34 @@ export async function verifyMemberSessionToken(
   return { ok: true, claims: result.claims };
 }
 
-/** True if `userId` currently holds an active `members` row. */
-export async function findEligibleMemberById(db: DatabaseLike, userId: string): Promise<AuthMember | null> {
-  const row = await first<MemberEligibleUserRow>(
+/**
+ * Every membership context `userId` is currently eligible to act through,
+ * deterministically ordered (see MEMBER_ELIGIBLE_USER_SELECT's header).
+ * Empty array, not null, when the user holds none.
+ */
+async function resolveEligibleMembershipRows(db: DatabaseLike, userId: string): Promise<MemberEligibleUserRow[]> {
+  return all<MemberEligibleUserRow>(
     db,
-    `SELECT * FROM (${MEMBER_ELIGIBLE_USER_SELECT}) combined WHERE id = ? AND active = 1`,
+    `SELECT * FROM (${MEMBER_ELIGIBLE_USER_SELECT}) combined WHERE id = ? AND active = 1 ORDER BY sort_key ASC`,
     [userId],
   );
-  return row ? toAuthMember(row) : null;
+}
+
+/**
+ * True if `userId` currently holds an active `members` row, in which case
+ * the returned AuthMember's `memberId`/`organizationId` default to
+ * `preferredMemberId` when given and still eligible, otherwise to the
+ * deterministic first eligible membership — never an arbitrary D1 row
+ * order.
+ */
+export async function findEligibleMemberById(
+  db: DatabaseLike,
+  userId: string,
+  preferredMemberId?: string | null,
+): Promise<AuthMember | null> {
+  const rows = await resolveEligibleMembershipRows(db, userId);
+  if (rows.length === 0) return null;
+  return toAuthMember(rows, preferredMemberId);
 }
 
 export async function issueMemberSession(
@@ -176,12 +236,33 @@ export async function issueMemberSession(
 async function getMemberBySessionClaims(db: DatabaseLike, claims: MemberSessionTokenClaims): Promise<AuthMember> {
   const row = assertSessionActive(await fetchSessionRow(db, SESSIONS_TABLE, claims.sid, claims.sub), "member");
 
-  const member = await findEligibleMemberById(db, claims.sub);
+  const member = await findEligibleMemberById(db, claims.sub, claims.mid);
   if (!member) {
     throw new AppError(403, "AUTH_FORBIDDEN", "This account is no longer an active member");
   }
 
   return { ...member, sessionId: row.id, expiresAt: row.expiresAt };
+}
+
+/**
+ * Switches the acting membership context for an already-authenticated
+ * member session — the explicit, authorized alternative to ever picking a
+ * membership implicitly. Re-verifies `memberId` against the caller's own
+ * live eligible memberships (not the client-supplied claim, not a cached
+ * list) before allowing the switch, so a user can never select an
+ * organization they don't actually represent.
+ */
+export async function switchActiveMembership(
+  db: DatabaseLike,
+  member: AuthMember,
+  memberId: string,
+): Promise<AuthMember> {
+  const rows = await resolveEligibleMembershipRows(db, member.userId);
+  if (!rows.some((row) => row.member_id === memberId)) {
+    throw new AppError(403, "NOT_ACTIVE_MEMBERSHIP", "You do not actively hold this membership");
+  }
+  const selected = toAuthMember(rows, memberId);
+  return { ...selected, sessionId: member.sessionId, expiresAt: member.expiresAt };
 }
 
 export function cacheMemberForRequest(request: Request, member: AuthMember): void {
@@ -230,7 +311,7 @@ export async function requestMemberMagicLink(
   const email = normalizeEmail(payload.email);
   const row = await first<MemberEligibleUserRow>(
     db,
-    `SELECT * FROM (${MEMBER_ELIGIBLE_USER_SELECT}) combined WHERE normalized_email = ? AND active = 1`,
+    `SELECT * FROM (${MEMBER_ELIGIBLE_USER_SELECT}) combined WHERE normalized_email = ? AND active = 1 ORDER BY sort_key ASC`,
     [email],
   );
 
@@ -239,7 +320,11 @@ export async function requestMemberMagicLink(
   }
 
   const token = await insertMagicLinkRow(db, MAGIC_LINKS_TABLE, row.id, payload);
-  return { token, member: toAuthMember(row) };
+  // Only used by the request-link route to address the notification email
+  // and to log/report eligibility — the actual session-granting selection
+  // of an active membership happens fresh in verifyMemberMagicLink via
+  // findEligibleMemberById, not from this snapshot.
+  return { token, member: toAuthMember([row]) };
 }
 
 export async function verifyMemberMagicLink(

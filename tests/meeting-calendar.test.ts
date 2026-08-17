@@ -17,7 +17,8 @@ import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createApplicationFormSubmission } from "./helpers/member-applications";
 import { resolveWgJoinCalendarInviteByMailingListEmail } from "../functions/_lib/services/meeting-calendar";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
-import { seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
+import { isIndividualMembershipCategory } from "../assets/shared/schemas/membership-categories";
+import { insertOrganization, seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -57,13 +58,14 @@ async function insertUser(email: string): Promise<string> {
 }
 
 async function insertMember(userId: string, category: string, organizationId: string | null = null): Promise<void> {
-  if (organizationId) {
-    const memberId = await seedOrganizationAggregate(env.DB, organizationId, category);
-    await addRepresentative(env.DB, memberId, userId);
+  if (isIndividualMembershipCategory(category)) {
+    const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, category, new Date().toISOString());
+    await env.DB.batch(statements);
     return;
   }
-  const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, category, new Date().toISOString());
-  await env.DB.batch(statements);
+  const orgId = organizationId ?? (await insertOrganization(env.DB));
+  const memberId = await seedOrganizationAggregate(env.DB, orgId, category);
+  await addRepresentative(env.DB, memberId, userId);
 }
 
 async function insertWorkingGroup(name: string, slug: string, mailingListEmail: string | null = null): Promise<string> {

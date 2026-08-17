@@ -1,36 +1,37 @@
 /**
  * Post-approval onboarding orchestration. The sole path to
  * `member_applications.status = 'approved'` — transitionApplicationStage
- * (member-applications.ts) deliberately excludes 'approved' as a
- * destination so this full orchestration can't be bypassed by a bare
- * stage-transition call.
+ * (transition.ts) deliberately excludes 'approved' as a destination so this
+ * full orchestration can't be bypassed by a bare stage-transition call.
+ *
+ * Merges the former membership-onboarding.ts (orchestration) and
+ * member-provisioning.ts (its one caller of the canonical
+ * provisionOrganizationMembership use case) into one file (PR #1 review
+ * §1.5) — the two were only ever used together.
  *
  * Does not call queueEmail directly (no access to env/executionCtx here —
  * same DB-only/route-owns-email split every other service in this codebase
- * uses, see member-applications.ts's own header note). Returns everything
- * the caller needs to queue member-account-claim, application-approved-
- * welcome, and org-contact-assigned.
+ * uses, see queries.ts's own header note). Returns everything the caller
+ * needs to queue member-account-claim, application-approved-welcome, and
+ * org-contact-assigned.
  *
  * ICS calendar attachments (welcome email) are resolved and
- * attached by the caller (approve.ts, membership-scheduled-jobs.ts's
- * runEcWindowAutoApprove), not here — see meeting-calendar.ts's
- * resolveApprovalIcsAttachments, called with this function's own
- * workingGroupSlugs result. Same DB-only/route-owns-email split as the rest
- * of this file.
+ * attached by the caller (functions/api/v1/admin/applications/[id]/approve.ts,
+ * scheduled-jobs.ts's runEcWindowAutoApprove), not here — see
+ * meeting-calendar.ts's resolveApprovalIcsAttachments, called with this
+ * function's own workingGroupSlugs result. Same DB-only/route-owns-email
+ * split as the rest of this file.
  */
-import { first } from "../db/queries";
-import { nowIso } from "../utils/time";
-import { uuid } from "../utils/ids";
-import { AppError } from "../errors";
-import {
-  getApplicationAnswers,
-  getMemberApplicationById,
-  INDIVIDUAL_MEMBERSHIP_CATEGORIES,
-} from "./member-applications";
-import { provisionOrganizationAndMembers } from "./member-provisioning";
-import { enqueueGoogleGroupsSync } from "./google-groups";
-import { resolveAutoSyncListEmails } from "./mailing-lists";
-import type { DatabaseLike } from "../types";
+import { first } from "../../../db/queries";
+import { nowIso } from "../../../utils/time";
+import { uuid } from "../../../utils/ids";
+import { AppError } from "../../../errors";
+import { getApplicationAnswers, getMemberApplicationById } from "./queries";
+import { INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "./create";
+import { provisionOrganizationMembership } from "../provisioning";
+import { enqueueGoogleGroupsSync } from "../../google-groups";
+import { resolveAutoSyncListEmails } from "../../mailing-lists";
+import type { DatabaseLike } from "../../../types";
 
 const CA_WORKING_GROUP_SLUG = "ca";
 const CA_ONLY_CATEGORY = "A";
@@ -71,13 +72,12 @@ export async function approveApplication(
 
   // The apply form collects job_title/linkedin/working_groups as free-form
   // answers (form_fields seeded in migration 0034, now stored as real
-  // form_submission_answers rows — see member-applications.ts's
-  // getApplicationAnswers) but this call site previously only forwarded
-  // name/email into provisionOrganizationAndMembers — even though that
-  // function (and findOrCreateUser under it) already know how to persist
-  // both. That silently dropped every approved applicant's job title and
-  // LinkedIn URL. Read them back out here so they land on the newly
-  // provisioned user.
+  // form_submission_answers rows — see queries.ts's getApplicationAnswers)
+  // but this call site previously only forwarded name/email into
+  // provisionOrganizationMembership — even though that function (and
+  // findOrCreateUser under it) already know how to persist both. That
+  // silently dropped every approved applicant's job title and LinkedIn URL.
+  // Read them back out here so they land on the newly provisioned user.
   const answers = await getApplicationAnswers(db, application.form_submission_id);
   const requestedWorkingGroupSlugs = applicationWorkingGroupSlugs(answers);
   // CA WG constraint: only category A may be added to ca@.
@@ -87,14 +87,14 @@ export async function approveApplication(
   const jobTitle = typeof answers.job_title === "string" && answers.job_title.trim() ? answers.job_title.trim() : null;
   const linkedin = typeof answers.linkedin === "string" && answers.linkedin.trim() ? answers.linkedin.trim() : null;
 
-  const { organizationId, organizationWasCreated, members } = await provisionOrganizationAndMembers(db, {
+  const { organizationId, organizationWasCreated, representatives } = await provisionOrganizationMembership(db, {
     organizationName: isIndividual ? null : application.organization_name,
     organizationDomain: isIndividual ? null : application.organization_domain,
     membershipCategory: application.membership_category,
     representatives: [{ name: application.applicant_name, email: application.applicant_email, jobTitle, linkedin }],
     workingGroupSlugs,
   });
-  const member = members[0];
+  const member = representatives[0];
 
   const now = nowIso();
   await db.batch([
@@ -153,7 +153,7 @@ export async function approveApplication(
     applicationId: application.id,
     organizationId,
     organizationWasCreated,
-    memberId: member.memberId,
+    memberId: member.membershipId,
     userId: member.userId,
     email: member.email,
     name: member.name,

@@ -1,7 +1,7 @@
-import { all, first } from "../db/queries";
-import { parseJsonSafe } from "../utils/json";
-import { parseLinksJson, findLinkedinUrl } from "../../../assets/shared/schemas/api";
-import type { DatabaseLike } from "../types";
+import { all, first } from "../../db/queries";
+import { parseJsonSafe } from "../../utils/json";
+import { parseLinksJson, findLinkedinUrl } from "../../../../assets/shared/schemas/api";
+import type { DatabaseLike } from "../../types";
 
 /**
  * Public member directory. D1 is the source of truth,
@@ -361,7 +361,15 @@ async function getWorkingGroupChairsPublic(
             COALESCE(rep.id, mi.id) AS member_id, u.headshot_r2_key, u.links_json
      FROM user_roles ur
      JOIN users u ON u.id = ur.user_id
-     LEFT JOIN organization_representatives rep ON rep.user_id = u.id AND rep.left_at IS NULL
+     -- A chair/vice-chair can represent more than one organization at once
+     -- (migration 0037) — join to a single deterministic representative
+     -- row (earliest joined_at) instead of fanning out one result row per
+     -- represented organization.
+     LEFT JOIN organization_representatives rep ON rep.id = (
+       SELECT r2.id FROM organization_representatives r2
+       WHERE r2.user_id = u.id AND r2.left_at IS NULL
+       ORDER BY r2.joined_at ASC LIMIT 1
+     )
      LEFT JOIN members m ON m.id = rep.member_id
      LEFT JOIN members mi ON mi.user_id = u.id AND mi.status = 'active'
      LEFT JOIN organizations o ON o.id = m.organization_id
@@ -409,7 +417,15 @@ export async function getWorkingGroupByIdOrSlug(
     `SELECT u.first_name, u.last_name, o.name AS org_name
      FROM working_group_members wgm
      JOIN users u ON u.id = wgm.user_id
-     LEFT JOIN organization_representatives rep ON rep.user_id = wgm.user_id AND rep.left_at IS NULL
+     -- A WG member can represent more than one organization at once
+     -- (migration 0037) — join to a single deterministic representative
+     -- row (earliest joined_at) instead of fanning out one result row per
+     -- represented organization.
+     LEFT JOIN organization_representatives rep ON rep.id = (
+       SELECT r2.id FROM organization_representatives r2
+       WHERE r2.user_id = wgm.user_id AND r2.left_at IS NULL
+       ORDER BY r2.joined_at ASC LIMIT 1
+     )
      LEFT JOIN members m ON m.id = rep.member_id
      LEFT JOIN organizations o ON o.id = m.organization_id
      WHERE wgm.working_group_id = ? AND wgm.left_at IS NULL

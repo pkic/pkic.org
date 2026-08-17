@@ -12,7 +12,7 @@ CREATE TABLE sponsorship_tier_config (
   tier         TEXT NOT NULL,
   currency     TEXT NOT NULL DEFAULT 'usd',
   amount_cents INTEGER NOT NULL,
-  active       INTEGER NOT NULL DEFAULT 1,
+  active       INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL,
   UNIQUE(sponsor_type, tier)

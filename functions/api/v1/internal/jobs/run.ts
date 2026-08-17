@@ -5,7 +5,7 @@ import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
 import { processPendingOutbox, summarizePendingOutbox } from "../../../../_lib/email/outbox";
 import { runReminderCycle } from "../../../../_lib/services/reminders";
 import { runRetentionJob, summarizeRetentionJob } from "../../../../_lib/services/retention";
-import { runConsultationBatch, runEcReviewBatch } from "../../../../_lib/services/membership-scheduled-jobs";
+import { runConsultationBatch, runEcReviewBatch } from "../../../../_lib/services/membership/scheduled-jobs";
 import { runWeeklyWgChairDigest } from "../../../../_lib/services/wg-chair-digest";
 import { adminRunJobsSchema } from "../../../../../assets/shared/schemas/api";
 

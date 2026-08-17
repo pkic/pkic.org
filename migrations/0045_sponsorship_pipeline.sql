@@ -40,7 +40,7 @@ CREATE TABLE event_sponsor_attendee_tiers (
   id                       TEXT NOT NULL PRIMARY KEY,
   event_id                 TEXT NOT NULL REFERENCES events(id),
   tier_name                TEXT NOT NULL,
-  has_attendee_data_access INTEGER NOT NULL DEFAULT 0,
+  has_attendee_data_access INTEGER NOT NULL DEFAULT 0 CHECK (has_attendee_data_access IN (0, 1)),
   created_at               TEXT NOT NULL,
   updated_at               TEXT NOT NULL,
   UNIQUE(event_id, tier_name)

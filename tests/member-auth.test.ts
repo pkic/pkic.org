@@ -28,7 +28,7 @@ async function call(path: string, init: RequestInit = {}, token?: string): Promi
   );
 }
 
-async function insertActiveMember(email: string, category = "F"): Promise<string> {
+async function insertActiveMember(email: string, category = "H5"): Promise<string> {
   const { userId } = await insertIndividualMember(env.DB, category, email);
   return userId;
 }

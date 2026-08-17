@@ -17,8 +17,17 @@ import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { requestAdminMagicLink } from "../functions/_lib/auth/admin";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
-import { insertOrganization, seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
+import {
+  insertOrganization,
+  seedOrganizationAggregate,
+  addRepresentative,
+  assignRepresentativeRole,
+} from "./helpers/membership";
 import { isActiveRepresentative } from "../functions/_lib/services/membership/representatives";
+import {
+  REPRESENTATIVE_ROLE_IDS,
+  resolveRepresentativeRoleHolder,
+} from "../functions/_lib/services/membership/representative-roles";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -194,7 +203,7 @@ describe("secondary emails + user merge", () => {
       .run();
 
     await insertPasskey(sourceId, "test-credential-id-1");
-    await insertMember(sourceId, "F");
+    await insertMember(sourceId, "H5");
 
     const response = await call(adminToken, `/api/v1/admin/users/${survivorId}/merge`, {
       method: "POST",
@@ -278,9 +287,11 @@ describe("secondary emails + user merge", () => {
     expect(await isActiveRepresentative(env.DB, memberAId, sourceId)).toBe(false);
 
     // Org B: survivor's own pre-existing active row stands; the source's
-    // row is left as harmless history rather than repointed into a
-    // uq_organization_representatives_active_pair conflict.
+    // row is explicitly closed (left_at set) rather than repointed into a
+    // uq_organization_representatives_active_pair conflict — it must not
+    // stay active on the now-disabled, anonymized source account.
     expect(await isActiveRepresentative(env.DB, memberBId, survivorId)).toBe(true);
+    expect(await isActiveRepresentative(env.DB, memberBId, sourceId)).toBe(false);
     const sourceOrgBRow = (
       await queryAll<{ user_id: string; left_at: string | null }>(
         env.DB,
@@ -290,13 +301,45 @@ describe("secondary emails + user merge", () => {
       )
     )[0];
     expect(sourceOrgBRow).toBeDefined();
+    expect(sourceOrgBRow.left_at).not.toBeNull();
+  });
+
+  it("merging two users who both hold role-primary_contact for the same organization does not violate the singleton-role index", async () => {
+    const survivorId = await insertUser("role-conflict-survivor@example.test");
+    const sourceId = await insertUser("role-conflict-source@example.test");
+
+    const orgId = await insertOrganization(env.DB, "Org Conflict");
+    const memberId = await seedOrganizationAggregate(env.DB, orgId, "A");
+
+    // Both users represent the org and separately hold role-primary_contact
+    // for it (possible before a merge, since each was assigned
+    // independently) -- repointing the source's grant onto the survivor
+    // unconditionally would attempt two active grants for the same
+    // singleton (context_type, context_id, role_id) and violate
+    // uq_user_roles_single_holder_per_context.
+    await addRepresentative(env.DB, memberId, sourceId);
+    await addRepresentative(env.DB, memberId, survivorId);
+    await assignRepresentativeRole(env.DB, memberId, sourceId, REPRESENTATIVE_ROLE_IDS.primaryContact);
+    await assignRepresentativeRole(env.DB, memberId, survivorId, REPRESENTATIVE_ROLE_IDS.primaryContact);
+
+    const response = await call(adminToken, `/api/v1/admin/users/${survivorId}/merge`, {
+      method: "POST",
+      body: JSON.stringify({ sourceUserId: sourceId }),
+    });
+    expect(response.status).toBe(200);
+
+    // The survivor's own grant stands; the source's conflicting grant was
+    // revoked rather than repointed into a duplicate active singleton.
+    expect(await resolveRepresentativeRoleHolder(env.DB, memberId, REPRESENTATIVE_ROLE_IDS.primaryContact)).toBe(
+      survivorId,
+    );
   });
 
   it("rejects a merge when both accounts hold a membership", async () => {
     const survivorId = await insertUser("survivor-both@example.test");
     const sourceId = await insertUser("duplicate-both@example.test");
-    await insertMember(survivorId, "F");
-    await insertMember(sourceId, "G");
+    await insertMember(survivorId, "H5");
+    await insertMember(sourceId, "H6");
 
     const response = await call(adminToken, `/api/v1/admin/users/${survivorId}/merge`, {
       method: "POST",

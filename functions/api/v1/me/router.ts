@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
 import { MeGet, MePatch } from "./index";
+import { MeActiveMembershipSwitch } from "./active-membership";
 import { MeOrganizationVisibilityPatch } from "./organization-visibility";
 import { MeOrganizationGet, MeOrganizationPatch } from "./organization/index";
 import { MeOrganizationMembersPost } from "./organization/members";
@@ -23,6 +24,7 @@ export const openapi = fromHono(app);
 
 openapi.get("/", MeGet);
 openapi.patch("/", MePatch);
+openapi.put("/active-membership", MeActiveMembershipSwitch);
 openapi.patch("/organization-visibility", MeOrganizationVisibilityPatch);
 openapi.get("/organization", MeOrganizationGet);
 openapi.patch("/organization", MeOrganizationPatch);

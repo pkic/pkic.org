@@ -219,13 +219,13 @@ describe("Admin Organizations — membership category on the aggregate (Phase 1 
       body: JSON.stringify({ name: "New Rep", email: "newrep@acme.test", jobTitle: "Engineer" }),
     });
     expect(response.status).toBe(201);
-    const body = (await response.json()) as { representative: { memberId: string } };
+    const body = (await response.json()) as { representative: { representativeId: string } };
     expect(body.representative).not.toHaveProperty("membershipCategory");
 
     const repRows = await queryAll<{ member_id: string }>(
       env.DB,
       "SELECT member_id FROM organization_representatives WHERE id = ?",
-      body.representative.memberId,
+      body.representative.representativeId,
     );
     expect(await categoryFor(repRows[0].member_id)).toBe("B");
   });

@@ -730,7 +730,8 @@ export interface AdminOrganizationSummary {
 }
 
 export interface AdminOrganizationRepresentative {
-  memberId: string;
+  representativeId: string;
+  membershipId: string | null;
   userId: string;
   name: string;
   email: string;

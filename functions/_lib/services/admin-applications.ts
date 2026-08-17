@@ -12,15 +12,17 @@ import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import {
   emailDomain,
+  INDIVIDUAL_MEMBERSHIP_CATEGORIES,
+  MEMBERSHIP_APPLICATION_FORM_KEY,
+} from "./membership/applications/create";
+import {
   getApplicationAnswers,
   getMemberApplicationById,
-  INDIVIDUAL_MEMBERSHIP_CATEGORIES,
   listApplicationCommunications,
   listApplicationConcerns,
   listApplicationDocuments,
-  MEMBERSHIP_APPLICATION_FORM_KEY,
   type MemberApplicationRow,
-} from "./member-applications";
+} from "./membership/applications/queries";
 import { getGlobalFormByKey } from "./forms";
 import { listEcDecisions } from "./ec-review";
 import { ADMIN_APPLICATIONS_SORT_COLUMNS } from "../../../assets/shared/schemas/admin-applications";
