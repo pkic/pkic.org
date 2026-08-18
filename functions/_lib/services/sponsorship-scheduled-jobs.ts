@@ -16,13 +16,33 @@ import { all, run } from "../db/queries";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { getConfig } from "../config";
-import { queueEmail, processOutboxByIdBackground } from "../email/outbox";
-import type { AdminSponsorshipRow } from "./sponsorship";
+import { queueEmail } from "../email/outbox";
 import type { DatabaseLike, Env } from "../types";
 
 const REMINDER_60_NOTE = "Renewal reminder sent (60 days)";
 const REMINDER_30_NOTE = "Renewal reminder sent (30 days)";
 const ONE_DAY_MS = 86_400_000;
+
+/**
+ * Narrower than the admin pipeline's `AdminSponsorshipRow` — this due-work
+ * pass only ever renders a reminder/lapse email, so it selects (and joins)
+ * only the columns that requires, including `assigned_to_email` directly
+ * from the same `users` join instead of a per-row follow-up lookup (PR #1
+ * review §9.1's N+1 finding — the join was already there, just not
+ * selecting the one column this file actually needs).
+ */
+interface SponsorshipDueWorkRow {
+  id: string;
+  sponsor_type: string;
+  organization_id: string | null;
+  organization_name: string | null;
+  non_member_name: string | null;
+  contact_name: string | null;
+  tier: string | null;
+  pipeline_stage: string;
+  renewal_date: string | null;
+  assigned_to_email: string | null;
+}
 
 function daysUntil(iso: string): number {
   return (new Date(iso).getTime() - Date.now()) / ONE_DAY_MS;
@@ -46,24 +66,25 @@ async function recordReminderSent(db: DatabaseLike, sponsorshipId: string, stage
   );
 }
 
-async function sponsorName(row: AdminSponsorshipRow): Promise<string> {
+function sponsorName(row: SponsorshipDueWorkRow): string {
   return row.organization_name ?? row.non_member_name ?? row.contact_name ?? "Sponsor";
 }
 
-async function activeSponsorshipsWithRenewalDate(db: DatabaseLike): Promise<AdminSponsorshipRow[]> {
-  return all<AdminSponsorshipRow>(
+async function activeSponsorshipsWithRenewalDate(db: DatabaseLike, limit: number): Promise<SponsorshipDueWorkRow[]> {
+  // Indexed due predicate + stable ORDER BY + LIMIT (PR #1 review §9.1) —
+  // was an unbounded scan of every active-with-renewal-date sponsorship.
+  return all<SponsorshipDueWorkRow>(
     db,
     `SELECT sp.id, sp.sponsor_type, sp.organization_id, o.name AS organization_name,
-            sp.non_member_name, sp.non_member_website, sp.contact_name, sp.contact_email,
-            sp.event_id, e.name AS event_name, sp.tier, sp.pipeline_stage,
-            sp.start_date, sp.renewal_date, sp.assigned_to_user_id,
-            COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS assigned_to_name,
-            sp.notes, sp.created_at, sp.updated_at
+            sp.non_member_name, sp.contact_name, sp.tier, sp.pipeline_stage,
+            sp.renewal_date, u.email AS assigned_to_email
      FROM sponsorships sp
      LEFT JOIN organizations o ON o.id = sp.organization_id
-     LEFT JOIN events e ON e.id = sp.event_id
      LEFT JOIN users u ON u.id = sp.assigned_to_user_id
-     WHERE sp.pipeline_stage = 'active' AND sp.renewal_date IS NOT NULL`,
+     WHERE sp.pipeline_stage = 'active' AND sp.renewal_date IS NOT NULL
+     ORDER BY sp.renewal_date ASC
+     LIMIT ?`,
+    [limit],
   );
 }
 
@@ -73,9 +94,13 @@ export interface SponsorshipDueWorkResult {
   autoLapsed: number;
 }
 
-export async function runSponsorshipDueWork(db: DatabaseLike, env: Env): Promise<SponsorshipDueWorkResult> {
+export async function runSponsorshipDueWork(
+  db: DatabaseLike,
+  env: Env,
+  limit = 100,
+): Promise<SponsorshipDueWorkResult> {
   const config = getConfig(env);
-  const sponsorships = await activeSponsorshipsWithRenewalDate(db);
+  const sponsorships = await activeSponsorshipsWithRenewalDate(db, limit);
   let reminders60Sent = 0;
   let reminders30Sent = 0;
   let autoLapsed = 0;
@@ -83,17 +108,13 @@ export async function runSponsorshipDueWork(db: DatabaseLike, env: Env): Promise
   for (const sponsorship of sponsorships) {
     if (!sponsorship.renewal_date) continue;
     const daysLeft = daysUntil(sponsorship.renewal_date);
-
-    let assignedEmail: string | null = null;
-    if (sponsorship.assigned_to_user_id) {
-      const assignedRows = await all<{ email: string }>(db, `SELECT email FROM users WHERE id = ?`, [
-        sponsorship.assigned_to_user_id,
-      ]);
-      assignedEmail = assignedRows[0]?.email ?? null;
-    }
+    // assigned_to_email comes from the same LEFT JOIN the bulk query above
+    // already performs — no per-row follow-up lookup (PR #1 review §9.1's
+    // N+1 finding).
+    const assignedEmail = sponsorship.assigned_to_email;
 
     const templateData = {
-      organizationName: await sponsorName(sponsorship),
+      organizationName: sponsorName(sponsorship),
       tier: sponsorship.tier,
       renewalDate: sponsorship.renewal_date,
       adminUrl: `${config.appBaseUrl}/admin/#/sponsorships/${sponsorship.id}`,
@@ -125,14 +146,14 @@ export async function runSponsorshipDueWork(db: DatabaseLike, env: Env): Promise
       await db.batch(statements);
 
       if (assignedEmail) {
-        const outboxId = await queueEmail(db, {
+        // Enqueue only (PR #1 review §9.1) — no synchronous send per recipient.
+        await queueEmail(db, {
           templateKey: "sponsorship-lapsed-staff",
           recipientEmail: assignedEmail,
           messageType: "transactional",
           subject: `Sponsorship lapsed: ${templateData.organizationName}`,
           data: templateData,
         });
-        await processOutboxByIdBackground(db, env, outboxId);
       }
       autoLapsed++;
       continue;
@@ -141,28 +162,26 @@ export async function runSponsorshipDueWork(db: DatabaseLike, env: Env): Promise
     if (!assignedEmail) continue;
 
     if (daysLeft <= 60 && daysLeft > 30 && !(await alreadySent(db, sponsorship.id, REMINDER_60_NOTE))) {
-      const outboxId = await queueEmail(db, {
+      await queueEmail(db, {
         templateKey: "sponsorship-renewal-reminder-60",
         recipientEmail: assignedEmail,
         messageType: "transactional",
         subject: `Sponsorship renewal due in 60 days: ${templateData.organizationName}`,
         data: templateData,
       });
-      await processOutboxByIdBackground(db, env, outboxId);
       await recordReminderSent(db, sponsorship.id, sponsorship.pipeline_stage, REMINDER_60_NOTE);
       reminders60Sent++;
       continue;
     }
 
     if (daysLeft <= 30 && !(await alreadySent(db, sponsorship.id, REMINDER_30_NOTE))) {
-      const outboxId = await queueEmail(db, {
+      await queueEmail(db, {
         templateKey: "sponsorship-renewal-reminder-30",
         recipientEmail: assignedEmail,
         messageType: "transactional",
         subject: `Sponsorship renewal due in 30 days: ${templateData.organizationName}`,
         data: templateData,
       });
-      await processOutboxByIdBackground(db, env, outboxId);
       await recordReminderSent(db, sponsorship.id, sponsorship.pipeline_stage, REMINDER_30_NOTE);
       reminders30Sent++;
     }

@@ -157,6 +157,10 @@ CREATE TABLE sponsorships (
 CREATE INDEX idx_sponsorships_stage ON sponsorships(pipeline_stage);
 CREATE INDEX idx_sponsorships_event ON sponsorships(event_id);
 CREATE INDEX idx_sponsorships_org ON sponsorships(organization_id);
+-- Supports the scheduled sponsorship renewal-reminder/auto-lapse due-work
+-- query's ORDER BY renewal_date LIMIT ? (PR #1 review §9.1) with a direct
+-- index range scan instead of an unbounded full-stage scan.
+CREATE INDEX idx_sponsorships_stage_renewal ON sponsorships(pipeline_stage, renewal_date);
 
 CREATE TABLE sponsorship_events (
   id             TEXT NOT NULL PRIMARY KEY,

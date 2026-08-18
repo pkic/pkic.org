@@ -129,4 +129,80 @@ describe("Sponsorship renewal reminders & auto-lapse", () => {
     expect(result.reminders30Sent).toBe(0);
     expect(result.autoLapsed).toBe(0);
   });
+
+  it("PR #1 review §9.1: enqueues without sending synchronously — outbox rows stay 'queued'", async () => {
+    await seedActiveConsortiumSponsorship({
+      organizationId,
+      assignedToUserId: staffUserId,
+      renewalDate: isoDaysFromNow(45),
+    });
+
+    await runSponsorshipDueWork(env.DB, env as any);
+
+    const outboxRows = await queryAll<{ status: string }>(
+      env.DB,
+      "SELECT status FROM email_outbox WHERE template_key = 'sponsorship-renewal-reminder-60'",
+    );
+    expect(outboxRows).toHaveLength(1);
+    expect(outboxRows[0].status).toBe("queued");
+  });
+
+  it("PR #1 review §9.1: is bounded by a LIMIT instead of scanning every active-with-renewal-date sponsorship", async () => {
+    for (let i = 0; i < 3; i++) {
+      const orgId = crypto.randomUUID();
+      await env.DB.prepare(
+        `INSERT INTO organizations (id, name, normalized_name, sponsor_tier, sponsor_start_date, created_at, updated_at)
+         VALUES (?, ?, ?, 'Gold', datetime('now'), datetime('now'), datetime('now'))`,
+      )
+        .bind(orgId, `Limit Org ${i}`, `limit org ${i}`)
+        .run();
+      // Renewal dates ascending, so the LIMIT-bounded (ORDER BY renewal_date
+      // ASC) query deterministically keeps only the most urgent ones.
+      await seedActiveConsortiumSponsorship({
+        organizationId: orgId,
+        assignedToUserId: staffUserId,
+        renewalDate: isoDaysFromNow(20 + i),
+      });
+    }
+
+    const result = await runSponsorshipDueWork(env.DB, env as any, 2);
+    expect(result.reminders30Sent).toBe(2);
+  });
+
+  it("PR #1 review §9.1: resolves the assigned staff member's email from the bulk query's own join — no per-row users lookup", async () => {
+    await seedActiveConsortiumSponsorship({
+      organizationId,
+      assignedToUserId: staffUserId,
+      renewalDate: isoDaysFromNow(-2),
+    });
+
+    const preparedStatements: string[] = [];
+    const countingDb = new Proxy(env.DB, {
+      get(target, prop, receiver) {
+        const value = Reflect.get(target, prop, receiver);
+        if (prop === "prepare") {
+          return (sql: string) => {
+            preparedStatements.push(sql);
+            return value.call(target, sql);
+          };
+        }
+        return value;
+      },
+    });
+
+    const result = await runSponsorshipDueWork(countingDb as typeof env.DB, env as any);
+    expect(result.autoLapsed).toBe(1);
+
+    const outboxRows = await queryAll<{ recipient_email: string }>(
+      env.DB,
+      "SELECT recipient_email FROM email_outbox WHERE template_key = 'sponsorship-lapsed-staff'",
+    );
+    expect(outboxRows[0].recipient_email).toBe("admin@pkic.org");
+
+    // The N+1 finding's exact literal query — `SELECT email FROM users
+    // WHERE id = ?`, issued once per row — must never appear: the assigned
+    // user's email now comes from the bulk query's own LEFT JOIN.
+    const userLookups = preparedStatements.filter((sql) => /FROM users WHERE id/i.test(sql));
+    expect(userLookups).toHaveLength(0);
+  });
 });
