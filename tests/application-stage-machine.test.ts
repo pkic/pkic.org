@@ -79,6 +79,35 @@ describe("Application stage machine, communications, notes", () => {
     expect(events).toHaveLength(1);
   });
 
+  it("compare-and-set: two concurrent transitions from the same stage produce exactly one success and one 409, with exactly one event row", async () => {
+    const { id } = await createApplication();
+
+    const [first, second] = await Promise.all([
+      call(adminToken, `/api/v1/admin/applications/${id}/stage`, {
+        method: "PATCH",
+        body: JSON.stringify({ toStage: "in_review" }),
+      }),
+      call(adminToken, `/api/v1/admin/applications/${id}/stage`, {
+        method: "PATCH",
+        body: JSON.stringify({ toStage: "in_review" }),
+      }),
+    ]);
+
+    const statuses = [first.status, second.status].sort();
+    expect(statuses).toEqual([200, 409]);
+
+    const rows = await queryAll<{ stage: string; status: string }>(
+      env.DB,
+      "SELECT stage, status FROM member_applications WHERE id = ?",
+      id,
+    );
+    expect(rows[0].stage).toBe("in_review");
+    expect(rows[0].status).toBe("in_review");
+
+    const events = await queryAll(env.DB, "SELECT * FROM member_application_events WHERE application_id = ?", id);
+    expect(events).toHaveLength(1);
+  });
+
   it("rejects an invalid transition (pending -> ec_review)", async () => {
     const { id } = await createApplication();
     const response = await call(adminToken, `/api/v1/admin/applications/${id}/stage`, {
