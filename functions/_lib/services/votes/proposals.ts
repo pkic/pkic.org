@@ -71,13 +71,11 @@ async function minEndorsersFor(db: DatabaseLike, scopeType: VoteScopeType, scope
   return wg?.min_endorsers_for_ballot ?? 0;
 }
 
-async function toProposalSummary(db: DatabaseLike, row: ProposalRow): Promise<ProposalSummary> {
-  const countRow = await first<{ n: number }>(
-    db,
-    `SELECT COUNT(*) AS n FROM vote_proposal_endorsements WHERE proposal_id = ?`,
-    [row.id],
-  );
-  const minEndorsersRequired = await minEndorsersFor(db, row.scope_type, row.scope_id);
+function toProposalSummaryFromRow(
+  row: ProposalRow,
+  endorsementCount: number,
+  minEndorsersRequired: number,
+): ProposalSummary {
   return {
     id: row.id,
     title: row.title,
@@ -89,10 +87,75 @@ async function toProposalSummary(db: DatabaseLike, row: ProposalRow): Promise<Pr
     status: row.status,
     voteId: row.vote_id,
     rejectionReason: row.rejection_reason,
-    endorsementCount: countRow?.n ?? 0,
+    endorsementCount,
     minEndorsersRequired,
     createdAt: row.created_at,
   };
+}
+
+async function toProposalSummary(db: DatabaseLike, row: ProposalRow): Promise<ProposalSummary> {
+  const countRow = await first<{ n: number }>(
+    db,
+    `SELECT COUNT(*) AS n FROM vote_proposal_endorsements WHERE proposal_id = ?`,
+    [row.id],
+  );
+  const minEndorsersRequired = await minEndorsersFor(db, row.scope_type, row.scope_id);
+  return toProposalSummaryFromRow(row, countRow?.n ?? 0, minEndorsersRequired);
+}
+
+/** Bulk-loads endorsement counts for several proposals in one query instead of one query per proposal. */
+async function loadEndorsementCounts(db: DatabaseLike, proposalIds: string[]): Promise<Map<string, number>> {
+  if (proposalIds.length === 0) return new Map();
+  const placeholders = proposalIds.map(() => "?").join(", ");
+  const rows = await all<{ proposal_id: string; n: number }>(
+    db,
+    `SELECT proposal_id, COUNT(*) AS n FROM vote_proposal_endorsements
+     WHERE proposal_id IN (${placeholders}) GROUP BY proposal_id`,
+    proposalIds,
+  );
+  return new Map(rows.map((r) => [r.proposal_id, r.n]));
+}
+
+/**
+ * Bulk-resolves minEndorsersRequired for several proposals in at most two
+ * queries total (one membership-settings read shared by every forum-scoped
+ * proposal, one bulk working_groups lookup for every WG-scoped proposal)
+ * instead of one query per proposal.
+ */
+async function loadMinEndorsersByProposal(db: DatabaseLike, rows: ProposalRow[]): Promise<Map<string, number>> {
+  const result = new Map<string, number>();
+  const forumRows = rows.filter((r) => r.scope_type === "forum");
+  const wgRows = rows.filter((r) => r.scope_type === "working_group" && r.scope_id);
+
+  if (forumRows.length > 0) {
+    const settings = await getMembershipSettings(db);
+    for (const r of forumRows) result.set(r.id, settings.forum_vote_min_endorsers);
+  }
+  if (wgRows.length > 0) {
+    const wgIds = [...new Set(wgRows.map((r) => r.scope_id as string))];
+    const placeholders = wgIds.map(() => "?").join(", ");
+    const workingGroups = await all<{ id: string; min_endorsers_for_ballot: number }>(
+      db,
+      `SELECT id, min_endorsers_for_ballot FROM working_groups WHERE id IN (${placeholders})`,
+      wgIds,
+    );
+    const byWgId = new Map(workingGroups.map((w) => [w.id, w.min_endorsers_for_ballot]));
+    for (const r of wgRows) result.set(r.id, byWgId.get(r.scope_id as string) ?? 0);
+  }
+  return result;
+}
+
+/** Bulk-builds proposal summaries for a page of rows with exactly two extra queries, regardless of page size. */
+async function toProposalSummaries(db: DatabaseLike, rows: ProposalRow[]): Promise<ProposalSummary[]> {
+  if (rows.length === 0) return [];
+  const proposalIds = rows.map((r) => r.id);
+  const [endorsementCounts, minEndorsersByProposal] = await Promise.all([
+    loadEndorsementCounts(db, proposalIds),
+    loadMinEndorsersByProposal(db, rows),
+  ]);
+  return rows.map((row) =>
+    toProposalSummaryFromRow(row, endorsementCounts.get(row.id) ?? 0, minEndorsersByProposal.get(row.id) ?? 0),
+  );
 }
 
 async function getProposalRowOrThrow(db: DatabaseLike, id: string): Promise<ProposalRow> {
@@ -178,8 +241,14 @@ export async function submitVoteProposal(
 
 export async function listVoteProposals(
   db: DatabaseLike,
-  params: { scopeType?: VoteScopeType; scopeId?: string; status?: VoteProposalStatus },
-): Promise<ProposalSummary[]> {
+  params: {
+    scopeType?: VoteScopeType;
+    scopeId?: string;
+    status?: VoteProposalStatus;
+    limit: number;
+    offset: number;
+  },
+): Promise<{ proposals: ProposalSummary[]; total: number }> {
   const conditions: string[] = [];
   const args: unknown[] = [];
   if (params.scopeType) {
@@ -192,27 +261,37 @@ export async function listVoteProposals(
   }
   conditions.push("status = ?");
   args.push(params.status ?? "open_for_endorsement");
+  const where = conditions.join(" AND ");
 
-  const rows = await all<ProposalRow>(
-    db,
-    `SELECT * FROM vote_proposals WHERE ${conditions.join(" AND ")} ORDER BY created_at DESC`,
-    args,
-  );
-  return Promise.all(rows.map((r) => toProposalSummary(db, r)));
+  const [rows, totalRow] = await Promise.all([
+    all<ProposalRow>(db, `SELECT * FROM vote_proposals WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`, [
+      ...args,
+      params.limit,
+      params.offset,
+    ]),
+    first<{ total: number }>(db, `SELECT COUNT(*) AS total FROM vote_proposals WHERE ${where}`, args),
+  ]);
+
+  return { proposals: await toProposalSummaries(db, rows), total: totalRow?.total ?? 0 };
 }
 
 export async function listAllVoteProposalsForAdmin(
   db: DatabaseLike,
-  params: { status?: VoteProposalStatus },
-): Promise<ProposalSummary[]> {
-  if (!params.status) {
-    const rows = await all<ProposalRow>(db, `SELECT * FROM vote_proposals ORDER BY created_at DESC`);
-    return Promise.all(rows.map((r) => toProposalSummary(db, r)));
-  }
-  const rows = await all<ProposalRow>(db, `SELECT * FROM vote_proposals WHERE status = ? ORDER BY created_at DESC`, [
-    params.status,
+  params: { status?: VoteProposalStatus; limit: number; offset: number },
+): Promise<{ proposals: ProposalSummary[]; total: number }> {
+  const where = params.status ? "WHERE status = ?" : "";
+  const whereArgs = params.status ? [params.status] : [];
+
+  const [rows, totalRow] = await Promise.all([
+    all<ProposalRow>(db, `SELECT * FROM vote_proposals ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`, [
+      ...whereArgs,
+      params.limit,
+      params.offset,
+    ]),
+    first<{ total: number }>(db, `SELECT COUNT(*) AS total FROM vote_proposals ${where}`, whereArgs),
   ]);
-  return Promise.all(rows.map((r) => toProposalSummary(db, r)));
+
+  return { proposals: await toProposalSummaries(db, rows), total: totalRow?.total ?? 0 };
 }
 
 export async function getVoteProposalDetail(
@@ -238,37 +317,70 @@ async function convertProposalToVote(db: DatabaseLike, proposal: ProposalRow): P
   const slug = await uniqueSlug(db, proposal.title);
   const status: VoteStatus = new Date(opensAt).getTime() <= Date.now() ? "open" : "scheduled";
 
-  await run(
-    db,
-    `INSERT INTO votes
-       (id, slug, title, description, vote_type, scope_type, scope_id, created_by_user_id, proposed_by_user_id,
-        eligible_categories, threshold_type, opens_at, closes_at, current_round, status, result_json,
-        visibility, public_detail_level, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, 1, ?, NULL, 'private', 'aggregate', ?, ?)`,
-    [
-      id,
-      slug,
-      proposal.title,
-      proposal.description,
-      proposal.vote_type,
-      proposal.scope_type,
-      proposal.scope_id,
-      proposal.proposed_by_user_id,
-      proposal.eligible_categories,
-      thresholdType,
-      opensAt,
-      closesAt,
-      status,
-      now,
-      now,
-    ],
-  );
-
-  await run(db, `UPDATE vote_proposals SET status = 'converted_to_vote', vote_id = ?, updated_at = ? WHERE id = ?`, [
-    id,
-    now,
-    proposal.id,
+  // Conversion is claimed and committed as one db.batch() (PR #1 review
+  // §5.4): concurrent endorsement (last-endorser-triggers-conversion) and
+  // admin approval both call this function, and both previously read the
+  // proposal's status, decided to convert, then wrote in two separate,
+  // unconditional statements — two concurrent callers could both insert a
+  // vote for the same proposal, or a failed second write could orphan a
+  // vote. Both statements below gate on the proposal's *own* current status
+  // (open_for_endorsement) — not on the value they write, which every
+  // racer would share and couldn't be used to tell winner from loser —
+  // so only the caller that still finds it open_for_endorsement at this
+  // batch's (fully serialized) execution time inserts anything.
+  // votes.source_proposal_id UNIQUE (migration 0047) structurally backstops
+  // this: it can't hold two votes even if this guard were ever bypassed.
+  const results = await db.batch([
+    db
+      .prepare(
+        `INSERT INTO votes
+           (id, slug, title, description, vote_type, scope_type, scope_id, created_by_user_id, proposed_by_user_id,
+            source_proposal_id, eligible_categories, threshold_type, opens_at, closes_at, current_round, status,
+            result_json, visibility, public_detail_level, created_at, updated_at)
+         SELECT ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 1, ?, NULL, 'private', 'aggregate', ?, ?
+         FROM vote_proposals
+         WHERE id = ? AND status = 'open_for_endorsement'`,
+      )
+      .bind(
+        id,
+        slug,
+        proposal.title,
+        proposal.description,
+        proposal.vote_type,
+        proposal.scope_type,
+        proposal.scope_id,
+        proposal.proposed_by_user_id,
+        proposal.id,
+        proposal.eligible_categories,
+        thresholdType,
+        opensAt,
+        closesAt,
+        status,
+        now,
+        now,
+        proposal.id,
+      ),
+    db
+      .prepare(
+        `UPDATE vote_proposals SET status = 'converted_to_vote', vote_id = ?, updated_at = ?
+         WHERE id = ? AND status = 'open_for_endorsement'`,
+      )
+      .bind(id, now, proposal.id),
   ]);
+
+  const voteInserted = (results[0]?.meta?.changes ?? 0) > 0;
+  if (!voteInserted) {
+    // Lost the race — re-read and return the winner's vote rather than
+    // creating a duplicate. If nothing converted it (rejected/withdrawn
+    // concurrently instead), there is no vote to return.
+    const current = await first<{ vote_id: string | null }>(db, `SELECT vote_id FROM vote_proposals WHERE id = ?`, [
+      proposal.id,
+    ]);
+    if (current?.vote_id) {
+      return toVoteSummary(await getVoteRowOrThrow(db, current.vote_id));
+    }
+    throw new AppError(409, "PROPOSAL_NOT_CONVERTIBLE", "This proposal is no longer open for endorsement");
+  }
 
   return toVoteSummary(await getVoteRowOrThrow(db, id));
 }

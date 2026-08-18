@@ -98,6 +98,48 @@ describe("permission_grants (Access grants)", () => {
     expect(rows[0].expires_at).toBe(expiresAt);
   });
 
+  it("GET /api/v1/admin/access-grants returns a bounded page envelope and filters by userId", async () => {
+    const otherUserId = await insertUser("other@example.test");
+    for (let i = 0; i < 3; i += 1) {
+      await env.DB.prepare(
+        `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+         VALUES (?, ?, ?, ?, datetime('now'))`,
+      )
+        .bind(crypto.randomUUID(), staffUserId, `perm:${i}`, adminId)
+        .run();
+    }
+    await env.DB.prepare(
+      `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+       VALUES (?, ?, 'events:read', ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), otherUserId, adminId)
+      .run();
+
+    const boundedResponse = await call(adminToken, "/api/v1/admin/access-grants?limit=2&offset=0");
+    expect(boundedResponse.status).toBe(200);
+    const boundedPayload = (await boundedResponse.json()) as {
+      grants: { id: string }[];
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
+    expect(boundedPayload.grants).toHaveLength(2);
+    expect(boundedPayload.page).toEqual({ limit: 2, offset: 0, total: 4, hasMore: true });
+
+    const filteredResponse = await call(adminToken, `/api/v1/admin/access-grants?userId=${otherUserId}`);
+    expect(filteredResponse.status).toBe(200);
+    const filteredPayload = (await filteredResponse.json()) as {
+      grants: { userId: string }[];
+      page: { total: number; hasMore: boolean };
+    };
+    expect(filteredPayload.grants).toHaveLength(1);
+    expect(filteredPayload.grants[0].userId).toBe(otherUserId);
+    expect(filteredPayload.page).toEqual({ limit: 50, offset: 0, total: 1, hasMore: false });
+  });
+
+  it("GET /api/v1/admin/access-grants rejects a non-UUID userId filter", async () => {
+    const response = await call(adminToken, "/api/v1/admin/access-grants?userId=not-a-uuid");
+    expect(response.status).toBe(400);
+  });
+
   it("expired grants are not honored", async () => {
     const staffToken = await createAdminSession(env.DB, staffUserId, "staff-expired-token");
     // Baseline unrelated grant keeps the user eligible for a session even

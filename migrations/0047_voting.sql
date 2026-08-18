@@ -42,6 +42,17 @@ CREATE TABLE votes (
   proposed_by_user_id   TEXT REFERENCES users(id),
   -- set when converted from an endorsed member proposal; NULL for direct
   -- staff/chair creation
+  source_proposal_id    TEXT UNIQUE,
+  -- set by convertProposalToVote (proposals.ts) alongside proposed_by_user_id.
+  -- UNIQUE structurally enforces "a proposal converts to at most one vote,
+  -- ever" — the compare-and-set on vote_proposals.status guards the normal
+  -- path, this is the backstop for a lost race (PR #1 review §5.4).
+  -- Deliberately no REFERENCES vote_proposals(id): that would form a real
+  -- FK cycle with vote_proposals.vote_id -> votes.id (a converted pair
+  -- points at each other), which no bulk per-table DELETE order can
+  -- satisfy — every write path only ever sets this to the id of the
+  -- proposal row being converted in the very same db.batch(), so the
+  -- application layer, not a declared FK, is what keeps it valid.
   eligible_categories   TEXT,
   -- JSON array of membership category letters entitled to a ballot beyond
   -- the standing A-G/WG-membership rules; NULL means "all A-G per the
@@ -127,6 +138,12 @@ CREATE TABLE vote_proposals (
 );
 
 CREATE INDEX idx_vote_proposals_scope_status ON vote_proposals(scope_type, scope_id, status);
+
+-- Supports both the bounded portal list (status + scope, ordered by
+-- created_at) and the bounded admin list (status alone, ordered by
+-- created_at) via a shared leading (status) column.
+CREATE INDEX idx_vote_proposals_status_scope_created_at
+  ON vote_proposals(status, scope_type, scope_id, created_at);
 
 CREATE TABLE vote_proposal_endorsements (
   id               TEXT PRIMARY KEY,

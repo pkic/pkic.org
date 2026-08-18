@@ -8,6 +8,7 @@ import { linksSchema } from "./links";
 import { applicationStageSchema } from "./member-applications";
 import { voteTypeSchema, voteScopeTypeSchema, voteStatusSchema } from "./votes";
 import { contentReviewStatusSchema } from "./admin-organizations";
+import { paginationQuerySchema, paginatedResponseSchema } from "./pagination";
 
 export const myOrganizationRepresentativeSchema = z.object({
   userId: z.uuid(),
@@ -183,10 +184,11 @@ export const myVotesListRouteSchema = {
   tags: ["Me"],
   summary: "My vote history",
   description: "Every ballot the caller has cast, most recent first.",
+  request: { query: paginationQuerySchema },
   responses: {
     "200": {
       description: "My votes.",
-      content: { "application/json": { schema: z.object({ votes: z.array(myVoteHistoryEntrySchema) }) } },
+      content: { "application/json": { schema: paginatedResponseSchema("votes", myVoteHistoryEntrySchema) } },
     },
   },
 };

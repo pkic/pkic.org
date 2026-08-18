@@ -112,6 +112,8 @@ export function Grants({ userLabels }: { userLabels: Map<string, AdminUser> }) {
       <ApiDataTable<AccessGrant>
         endpoint="/api/v1/admin/access-grants"
         resolve={(d) => (d as { grants: AccessGrant[] }).grants}
+        resolvePage={(d) => (d as { page: { total: number; hasMore: boolean } }).page}
+        paginate
         actionsRef={tableRef}
         columns={[
           {

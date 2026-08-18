@@ -726,6 +726,58 @@ describe("admin event management endpoints", () => {
     expect(invalidFilter.registrations.map(({ id }) => id)).toEqual(unfiltered.registrations.map(({ id }) => id));
   });
 
+  it("bounds the registrations list via limit/offset with a real COUNT-based hasMore, not a limit+1 slice", async () => {
+    await setupAdmin();
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+       VALUES
+         ('bounded-a', 'bounded-a@example.test', 'bounded-a@example.test', 'A', 'Attendee', datetime('now'), datetime('now')),
+         ('bounded-b', 'bounded-b@example.test', 'bounded-b@example.test', 'B', 'Attendee', datetime('now'), datetime('now')),
+         ('bounded-c', 'bounded-c@example.test', 'bounded-c@example.test', 'C', 'Attendee', datetime('now'), datetime('now'))`,
+    ).run();
+
+    for (const userId of ["bounded-a", "bounded-b", "bounded-c"]) {
+      const registration = await createRegistration(env.DB, {
+        event,
+        userId,
+        attendanceType: "virtual",
+        sourceType: "direct",
+        confirmationTtlHours: 48,
+        signingSecret: "test-signing-secret",
+      });
+      await confirmRegistrationByToken(env.DB, {
+        token: registration.confirmationToken as string,
+        waitlistClaimWindowHours: 24,
+        signingSecret: "test-signing-secret",
+      });
+    }
+
+    type ListResponse = {
+      registrations: Array<{ id: string }>;
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
+
+    const page1Res = await callAdmin("/api/v1/admin/events/pqc-2026/registrations?limit=2&offset=0");
+    expect(page1Res.status).toBe(200);
+    const page1 = (await page1Res.json()) as ListResponse;
+    expect(page1.registrations).toHaveLength(2);
+    expect(page1.page).toEqual({ limit: 2, offset: 0, total: 3, hasMore: true });
+
+    const page2Res = await callAdmin("/api/v1/admin/events/pqc-2026/registrations?limit=2&offset=2");
+    expect(page2Res.status).toBe(200);
+    const page2 = (await page2Res.json()) as ListResponse;
+    expect(page2.registrations).toHaveLength(1);
+    expect(page2.page).toEqual({ limit: 2, offset: 2, total: 3, hasMore: false });
+
+    const ids = new Set([...page1.registrations, ...page2.registrations].map((r) => r.id));
+    expect(ids.size).toBe(3);
+
+    const invalidLimitRes = await callAdmin("/api/v1/admin/events/pqc-2026/registrations?limit=not-a-number");
+    expect(invalidLimitRes.status).toBe(400);
+  });
+
   // PR #1 review Phase 4 item 1: bare GET/POST /admin/events previously had
   // no permission check at all beyond bare authentication — any
   // authenticated staff-portal actor, including one with zero role or

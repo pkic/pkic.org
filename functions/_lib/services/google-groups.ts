@@ -37,8 +37,17 @@ export interface GoogleGroupsSyncQueueRow {
   status: GoogleGroupsSyncStatus;
   attempts: number;
   last_error: string | null;
+  next_attempt_at: string | null;
   created_at: string;
   processed_at: string | null;
+}
+
+/** Terminal attempt count — a row still failing after this many tries is dead-lettered ('failed', no further retry). */
+export const MAX_SYNC_ATTEMPTS = 5;
+
+/** Exponential backoff (1 min, 2 min, 4 min, ...), capped at 1 hour — same shape as email_outbox's retry cadence. */
+function syncRetryBackoffMs(attemptsAfterThisFailure: number): number {
+  return Math.min(60 * 60_000, 60_000 * 2 ** (attemptsAfterThisFailure - 1));
 }
 
 /**
@@ -77,8 +86,10 @@ export async function enqueueGoogleGroupsSync(
 export async function listPendingGoogleGroupsSync(db: DatabaseLike, limit = 50): Promise<GoogleGroupsSyncQueueRow[]> {
   return all<GoogleGroupsSyncQueueRow>(
     db,
-    `SELECT * FROM google_groups_sync_queue WHERE status = 'pending' ORDER BY created_at ASC LIMIT ?`,
-    [limit],
+    `SELECT * FROM google_groups_sync_queue
+     WHERE status = 'pending' AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
+     ORDER BY created_at ASC LIMIT ?`,
+    [nowIso(), limit],
   );
 }
 
@@ -262,12 +273,23 @@ export async function processGoogleGroupsSyncQueue(
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      const attempts = row.attempts + 1;
+      const deadLettered = attempts >= MAX_SYNC_ATTEMPTS;
       await run(
         db,
-        `UPDATE google_groups_sync_queue SET status = 'failed', attempts = attempts + 1, last_error = ?, processed_at = ? WHERE id = ?`,
-        [message, nowIso(), row.id],
+        `UPDATE google_groups_sync_queue
+         SET status = ?, attempts = ?, last_error = ?, next_attempt_at = ?, processed_at = ?
+         WHERE id = ?`,
+        [
+          deadLettered ? "failed" : "pending",
+          attempts,
+          message,
+          deadLettered ? null : new Date(Date.now() + syncRetryBackoffMs(attempts)).toISOString(),
+          deadLettered ? nowIso() : null,
+          row.id,
+        ],
       );
-      logError("google_groups_sync_item_failed", { queueId: row.id, error: message });
+      logError("google_groups_sync_item_failed", { queueId: row.id, error: message, attempts, deadLettered });
       failed++;
     }
   }

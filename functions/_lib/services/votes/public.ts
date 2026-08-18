@@ -22,11 +22,11 @@ export interface PublicVoteListParams {
   type?: VoteType;
   scope?: VoteScopeType;
   wg?: string;
-  status?: "open" | "closed";
+  status?: Array<"scheduled" | "open" | "closed">;
   from?: string;
   to?: string;
-  page?: number;
-  perPage?: number;
+  limit?: number;
+  offset?: number;
   sort?: "closes_at" | "created_at";
 }
 
@@ -75,10 +75,9 @@ export async function listPublicVotes(
     conditions.push("scope_id = ?");
     args.push(wg?.id ?? "__none__");
   }
-  if (params.status === "open") {
-    conditions.push("status = 'open'");
-  } else if (params.status === "closed") {
-    conditions.push("status = 'closed'");
+  if (params.status && params.status.length > 0) {
+    conditions.push(`status IN (${params.status.map(() => "?").join(", ")})`);
+    args.push(...params.status);
   }
   if (params.from) {
     conditions.push("closes_at >= ?");
@@ -90,15 +89,14 @@ export async function listPublicVotes(
   }
 
   const sortColumn = params.sort === "created_at" ? "created_at" : "closes_at";
-  const perPage = Math.min(Math.max(params.perPage ?? 20, 1), 100);
-  const page = Math.max(params.page ?? 1, 1);
-  const offset = (page - 1) * perPage;
+  const limit = params.limit ?? 20;
+  const offset = params.offset ?? 0;
 
   const where = conditions.join(" AND ");
   const rows = await all<VoteRow>(
     db,
     `SELECT * FROM votes WHERE ${where} ORDER BY ${sortColumn} DESC LIMIT ? OFFSET ?`,
-    [...args, perPage, offset],
+    [...args, limit, offset],
   );
   const totalRow = await first<{ total: number }>(db, `SELECT COUNT(*) AS total FROM votes WHERE ${where}`, args);
 

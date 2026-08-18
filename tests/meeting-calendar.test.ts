@@ -15,7 +15,11 @@ import { resetDb } from "./helpers/reset-db";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createApplicationFormSubmission } from "./helpers/member-applications";
-import { resolveWgJoinCalendarInviteByMailingListEmail } from "../functions/_lib/services/meeting-calendar";
+import {
+  resolveWgJoinCalendarInviteByMailingListEmail,
+  uploadIcsFile,
+  deleteIcsFile,
+} from "../functions/_lib/services/meeting-calendar";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { isIndividualMembershipCategory } from "../assets/shared/schemas/membership-categories";
 import { insertOrganization, seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
@@ -259,6 +263,68 @@ describe("Meeting calendar management", () => {
       seriesId,
     );
     expect(prefRows[0].ics_file_id).toBeNull();
+  });
+
+  it("upload atomicity (PR #1 review §9.2): a D1 insert failure after a successful R2 put does not leave an orphaned object", async () => {
+    const wgId = await insertWorkingGroup("PQC Orphan", "pqc-orphan");
+    const seriesId = await insertMeetingSeries("working_group", "PQC WG Meeting", wgId);
+
+    await expect(
+      uploadIcsFile(
+        env.DB,
+        env.ASSETS_BUCKET!,
+        seriesId,
+        { scopeType: "working_group", workingGroupId: wgId },
+        {
+          label: "09:00 CET",
+          year: 2026,
+          buffer: new TextEncoder().encode("BEGIN:VCALENDAR\nEND:VCALENDAR").buffer,
+          contentType: "text/calendar",
+          // A syntactically valid but non-existent user id — violates
+          // meeting_ics_files.uploaded_by_user_id's FK, forcing the D1
+          // insert to fail after the R2 put has already succeeded.
+          uploadedByUserId: "00000000-0000-4000-8000-000000000000",
+        },
+      ),
+    ).rejects.toThrow();
+
+    const remaining = await queryAll(env.DB, "SELECT id FROM meeting_ics_files WHERE series_id = ?", seriesId);
+    expect(remaining).toHaveLength(0);
+
+    const listed = await env.ASSETS_BUCKET!.list({ prefix: `meeting-ics/${seriesId}/` });
+    expect(listed.objects).toHaveLength(0);
+  });
+
+  it("delete atomicity (PR #1 review §9.2): an R2 delete failure leaves the D1 row intact so a retry can finish safely", async () => {
+    const wgId = await insertWorkingGroup("PQC Retry", "pqc-retry");
+    const seriesId = await insertMeetingSeries("working_group", "PQC WG Meeting", wgId);
+    const fileId = await insertIcsFile(seriesId, "09:00 CET", 2026, "meeting-ics/retry.ics");
+    await env.ASSETS_BUCKET!.put("meeting-ics/retry.ics", "BEGIN:VCALENDAR\nEND:VCALENDAR");
+
+    const failingBucket = {
+      delete: () => {
+        throw new Error("simulated R2 outage");
+      },
+    } as unknown as R2Bucket;
+
+    await expect(
+      deleteIcsFile(env.DB, failingBucket, seriesId, fileId, { scopeType: "working_group", workingGroupId: wgId }),
+    ).rejects.toThrow("simulated R2 outage");
+
+    // The D1 row must still exist — a retry (with a healthy bucket) can find
+    // it and finish the delete. The pre-fix ordering deleted the D1 row
+    // first, which would have left this object unreachable by any retry.
+    const stillThere = await queryAll(env.DB, "SELECT id FROM meeting_ics_files WHERE id = ?", fileId);
+    expect(stillThere).toHaveLength(1);
+    expect(await env.ASSETS_BUCKET!.get("meeting-ics/retry.ics")).toBeTruthy();
+
+    const { r2Key } = await deleteIcsFile(env.DB, env.ASSETS_BUCKET!, seriesId, fileId, {
+      scopeType: "working_group",
+      workingGroupId: wgId,
+    });
+    expect(r2Key).toBe("meeting-ics/retry.ics");
+    expect(await queryAll(env.DB, "SELECT id FROM meeting_ics_files WHERE id = ?", fileId)).toHaveLength(0);
+    expect(await env.ASSETS_BUCKET!.get("meeting-ics/retry.ics")).toBeNull();
   });
 
   it("deletes a whole meeting series — cascades to its ICS files, their R2 objects, and member preferences", async () => {

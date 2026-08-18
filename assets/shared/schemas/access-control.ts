@@ -3,6 +3,7 @@
  * ("access grants"), roles, and user_roles (role assignment).
  */
 import { z } from "zod";
+import { paginationQuerySchema, paginatedResponseSchema, sortColumnSchema } from "./pagination";
 
 const contextTypeSchema = z.enum(["event", "working_group", "organization"]);
 
@@ -78,22 +79,9 @@ export const ADMIN_ACCESS_GRANTS_SORT_COLUMNS = [
   "created_at",
 ] as const;
 
-const accessGrantsSortValueSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(41)
-  .refine(
-    (value) => {
-      const field = value.startsWith("-") ? value.slice(1) : value;
-      return (ADMIN_ACCESS_GRANTS_SORT_COLUMNS as readonly string[]).includes(field);
-    },
-    { message: "Unknown sort column" },
-  )
-  .optional();
-
-export const accessGrantsListQuerySchema = z.object({
-  sort: accessGrantsSortValueSchema,
+export const accessGrantsListQuerySchema = paginationQuerySchema.extend({
+  userId: z.uuid().optional(),
+  sort: sortColumnSchema(ADMIN_ACCESS_GRANTS_SORT_COLUMNS),
 });
 
 export const accessGrantsListRouteSchema = {
@@ -103,7 +91,7 @@ export const accessGrantsListRouteSchema = {
   responses: {
     "200": {
       description: "Active grants.",
-      content: { "application/json": { schema: z.object({ grants: z.array(accessGrantResponseSchema) }) } },
+      content: { "application/json": { schema: paginatedResponseSchema("grants", accessGrantResponseSchema) } },
     },
   },
 };

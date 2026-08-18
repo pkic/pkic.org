@@ -137,15 +137,28 @@ export const portalVoteSchema = z.object({
 
 // ── Public (no auth) — "Votes (public — no auth required)" ────────────
 
-export const publicVotesListQuerySchema = z.object({
+/**
+ * Comma-separated list of public-facing vote statuses (`?status=open,scheduled`).
+ * A bare single value (`?status=open`) still validates to a one-element
+ * array, so this is a strict superset of the old single-value filter.
+ */
+const publicVoteStatusListSchema = z
+  .string()
+  .transform((value) => value.split(",").map((entry) => entry.trim()))
+  .pipe(
+    z
+      .array(voteStatusSchema.extract(["scheduled", "open", "closed"]))
+      .min(1)
+      .max(3),
+  );
+
+export const publicVotesListQuerySchema = paginationQuerySchema.extend({
   type: voteTypeSchema.optional(),
   scope: voteScopeTypeSchema.optional(),
   wg: z.string().optional(),
-  status: voteStatusSchema.extract(["open", "closed"]).optional(),
+  status: publicVoteStatusListSchema.optional(),
   from: z.iso.date().optional(),
   to: z.iso.date().optional(),
-  page: z.coerce.number().int().min(1).optional(),
-  per_page: z.coerce.number().int().min(1).max(100).optional(),
   sort: z.enum(["closes_at", "created_at"]).optional(),
 });
 
@@ -157,16 +170,7 @@ export const publicVotesListRouteSchema = {
   responses: {
     "200": {
       description: "Public votes.",
-      content: {
-        "application/json": {
-          schema: z.object({
-            votes: z.array(publicVoteSchema),
-            total: z.number(),
-            page: z.number(),
-            perPage: z.number(),
-          }),
-        },
-      },
+      content: { "application/json": { schema: paginatedResponseSchema("votes", publicVoteSchema) } },
     },
   },
 };
@@ -198,10 +202,11 @@ export const portalVotesListRouteSchema = {
   tags: ["Portal Votes"],
   summary: "List all votes visible to the caller",
   description: "Every forum vote, every public vote, plus every vote scoped to a working group the caller belongs to.",
+  request: { query: paginationQuerySchema },
   responses: {
     "200": {
       description: "Visible votes.",
-      content: { "application/json": { schema: z.object({ votes: z.array(portalVoteSchema) }) } },
+      content: { "application/json": { schema: paginatedResponseSchema("votes", portalVoteSchema) } },
     },
   },
 };
@@ -302,7 +307,7 @@ export const submitProposalRouteSchema = {
   },
 };
 
-export const listProposalsQuerySchema = z.object({
+export const listProposalsQuerySchema = paginationQuerySchema.extend({
   scopeType: voteScopeTypeSchema.optional(),
   scopeId: z.string().optional(),
 });
@@ -314,7 +319,7 @@ export const listProposalsRouteSchema = {
   responses: {
     "200": {
       description: "Open proposals.",
-      content: { "application/json": { schema: z.object({ proposals: z.array(proposalSummarySchema) }) } },
+      content: { "application/json": { schema: paginatedResponseSchema("proposals", proposalSummarySchema) } },
     },
   },
 };
@@ -516,7 +521,7 @@ export const adminVoteBallotsRouteSchema = {
 
 // ── Admin proposal moderation ────────────────────────────────────────
 
-export const adminListProposalsQuerySchema = z.object({
+export const adminListProposalsQuerySchema = paginationQuerySchema.extend({
   status: voteProposalStatusSchema.optional(),
 });
 
@@ -527,7 +532,7 @@ export const adminListProposalsRouteSchema = {
   responses: {
     "200": {
       description: "Proposals.",
-      content: { "application/json": { schema: z.object({ proposals: z.array(proposalSummarySchema) }) } },
+      content: { "application/json": { schema: paginatedResponseSchema("proposals", proposalSummarySchema) } },
     },
   },
 };

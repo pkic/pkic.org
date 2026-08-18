@@ -10,6 +10,7 @@ import { resolveVotingDelegateUserId } from "./ballots";
 import {
   toVoteSummary,
   getCandidates,
+  getCandidatesForVotes,
   getVoteRowOrThrow,
   eligibleCategoriesOf,
   type VoteRow,
@@ -79,28 +80,106 @@ async function toPortalVoteSummary(db: DatabaseLike, row: VoteRow, member: AuthM
   return { ...summary, candidates, canCastBallot, hasCastBallot, result };
 }
 
+/**
+ * Whether the member can cast a ballot for `vote`, given precomputed
+ * per-request values (their resolved forum voting delegate and the set of
+ * working groups they belong to) instead of a fresh query per vote — the
+ * eligibility checks below intentionally mirror memberCanCastBallot's,
+ * since that async/per-row version stays in use by the single-vote detail
+ * endpoint, where a query-per-vote isn't an N+1 concern.
+ */
+function canCastBallotForList(
+  vote: VoteRow,
+  member: AuthMember,
+  delegateUserId: string | null,
+  wgIds: ReadonlySet<string>,
+): boolean {
+  if (vote.status !== "open") return false;
+  if (!VOTING_CATEGORIES.has(member.membershipCategory)) return false;
+  const restriction = eligibleCategoriesOf(vote);
+  if (restriction && !restriction.includes(member.membershipCategory)) return false;
+
+  if (vote.scope_type === "forum") {
+    return Boolean(member.organizationId) && delegateUserId === member.userId;
+  }
+  return vote.scope_id ? wgIds.has(vote.scope_id) : false;
+}
+
+/** Bulk-loads which (vote, round) pairs the member has already cast a ballot for, in one query instead of one per vote. */
+async function loadCastBallotRounds(db: DatabaseLike, voteIds: string[], member: AuthMember): Promise<Set<string>> {
+  if (voteIds.length === 0) return new Set();
+  const placeholders = voteIds.map(() => "?").join(", ");
+  const memberConditions = ["(user_id = ? AND organization_id IS NULL)"];
+  const memberArgs: unknown[] = [member.userId];
+  if (member.organizationId) {
+    memberConditions.push("(organization_id = ?)");
+    memberArgs.push(member.organizationId);
+  }
+  const rows = await all<{ vote_id: string; round: number }>(
+    db,
+    `SELECT vote_id, round FROM vote_ballots WHERE vote_id IN (${placeholders}) AND (${memberConditions.join(" OR ")})`,
+    [...voteIds, ...memberArgs],
+  );
+  return new Set(rows.map((r) => `${r.vote_id}:${r.round}`));
+}
+
 /** Votes visible to a member: public ones, plus every WG they belong to, plus every forum vote. */
-export async function listVisibleVotesForMember(db: DatabaseLike, member: AuthMember): Promise<PortalVoteSummary[]> {
+export async function listVisibleVotesForMember(
+  db: DatabaseLike,
+  member: AuthMember,
+  params: { limit: number; offset: number },
+): Promise<{ votes: PortalVoteSummary[]; total: number }> {
   const wgRows = await all<{ working_group_id: string }>(
     db,
     `SELECT working_group_id FROM working_group_members WHERE user_id = ? AND left_at IS NULL`,
     [member.userId],
   );
-  const wgIds = wgRows.map((r) => r.working_group_id);
+  const wgIds = new Set(wgRows.map((r) => r.working_group_id));
 
   const conditions = ["(scope_type = 'forum' OR visibility = 'public')"];
   const args: unknown[] = [];
-  if (wgIds.length > 0) {
-    conditions.push(`OR (scope_type = 'working_group' AND scope_id IN (${wgIds.map(() => "?").join(", ")}))`);
+  if (wgIds.size > 0) {
+    conditions.push(`OR (scope_type = 'working_group' AND scope_id IN (${[...wgIds].map(() => "?").join(", ")}))`);
     args.push(...wgIds);
   }
+  const where = conditions.join(" ");
 
-  const rows = await all<VoteRow>(
-    db,
-    `SELECT * FROM votes WHERE ${conditions.join(" ")} ORDER BY closes_at DESC`,
-    args,
-  );
-  return Promise.all(rows.map((r) => toPortalVoteSummary(db, r, member)));
+  const [rows, totalRow] = await Promise.all([
+    all<VoteRow>(db, `SELECT * FROM votes WHERE ${where} ORDER BY closes_at DESC LIMIT ? OFFSET ?`, [
+      ...args,
+      params.limit,
+      params.offset,
+    ]),
+    first<{ total: number }>(db, `SELECT COUNT(*) AS total FROM votes WHERE ${where}`, args),
+  ]);
+
+  if (rows.length === 0) return { votes: [], total: totalRow?.total ?? 0 };
+
+  const voteIds = rows.map((r) => r.id);
+  const electionVoteIds = rows.filter((r) => r.vote_type === "election").map((r) => r.id);
+
+  const [candidatesByVoteId, delegateUserId, castBallotRounds] = await Promise.all([
+    getCandidatesForVotes(db, electionVoteIds),
+    member.organizationId ? resolveVotingDelegateUserId(db, member.organizationId) : Promise.resolve(null),
+    loadCastBallotRounds(db, voteIds, member),
+  ]);
+
+  const votes = rows.map((row) => {
+    const summary = toVoteSummary(row);
+    const result =
+      row.status === "closed"
+        ? (parseJsonSafe<Record<string, unknown>>(row.result_json, {}) as unknown as VoteResult)
+        : null;
+    return {
+      ...summary,
+      candidates: row.vote_type === "election" ? (candidatesByVoteId.get(row.id) ?? []) : null,
+      canCastBallot: canCastBallotForList(row, member, delegateUserId, wgIds),
+      hasCastBallot: castBallotRounds.has(`${row.id}:${row.current_round}`),
+      result,
+    };
+  });
+
+  return { votes, total: totalRow?.total ?? 0 };
 }
 
 export async function getVoteDetailForMember(
@@ -141,24 +220,31 @@ export interface MyVoteHistoryEntry {
   submittedAt: string;
 }
 
-export async function listMyVoteHistory(db: DatabaseLike, member: AuthMember): Promise<MyVoteHistoryEntry[]> {
-  const rows = await all<{
-    vote_id: string;
-    slug: string;
-    title: string;
-    vote_type: VoteType;
-    scope_type: VoteScopeType;
-    status: VoteStatus;
-    choice: string;
-    submitted_at: string;
-  }>(
-    db,
-    `SELECT b.vote_id, v.slug, v.title, v.vote_type, v.scope_type, v.status, b.choice, b.submitted_at
-     FROM vote_ballots b JOIN votes v ON v.id = b.vote_id
-     WHERE b.user_id = ? ORDER BY b.submitted_at DESC`,
-    [member.userId],
-  );
-  return rows.map((r) => ({
+export async function listMyVoteHistory(
+  db: DatabaseLike,
+  member: AuthMember,
+  params: { limit: number; offset: number },
+): Promise<{ votes: MyVoteHistoryEntry[]; total: number }> {
+  const [rows, totalRow] = await Promise.all([
+    all<{
+      vote_id: string;
+      slug: string;
+      title: string;
+      vote_type: VoteType;
+      scope_type: VoteScopeType;
+      status: VoteStatus;
+      choice: string;
+      submitted_at: string;
+    }>(
+      db,
+      `SELECT b.vote_id, v.slug, v.title, v.vote_type, v.scope_type, v.status, b.choice, b.submitted_at
+       FROM vote_ballots b JOIN votes v ON v.id = b.vote_id
+       WHERE b.user_id = ? ORDER BY b.submitted_at DESC LIMIT ? OFFSET ?`,
+      [member.userId, params.limit, params.offset],
+    ),
+    first<{ total: number }>(db, `SELECT COUNT(*) AS total FROM vote_ballots WHERE user_id = ?`, [member.userId]),
+  ]);
+  const votes = rows.map((r) => ({
     voteId: r.vote_id,
     slug: r.slug,
     title: r.title,
@@ -168,4 +254,5 @@ export async function listMyVoteHistory(db: DatabaseLike, member: AuthMember): P
     choice: r.choice,
     submittedAt: r.submitted_at,
   }));
+  return { votes, total: totalRow?.total ?? 0 };
 }

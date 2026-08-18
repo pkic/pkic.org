@@ -11,6 +11,7 @@ import {
   listProposalsQuerySchema,
   listProposalsRouteSchema,
 } from "../../../../../assets/shared/schemas/votes";
+import { buildPageInfo } from "../../../../../assets/shared/schemas/pagination";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 
 export const PortalVoteProposalsPost = openApiRoute(submitProposalRouteSchema, async (c: AdminContext, data) => {
@@ -23,7 +24,9 @@ export const PortalVoteProposalsPost = openApiRoute(submitProposalRouteSchema, a
 // GET keeps its own query parsing (rather than the factory's validated
 // data.query) because it deliberately falls back to an empty filter object
 // on an invalid/unknown scopeType instead of rejecting the request —
-// behavior that real schema validation would not reproduce.
+// behavior that real schema validation would not reproduce. limit/offset
+// share that same safeParse + fallback, but default to the standard page
+// size when omitted or invalid rather than falling back to "unbounded".
 export async function onRequestGet(c: AdminContext): Promise<Response> {
   const db = requestDb(c);
   await requireMemberFromRequest(db, c.req.raw, c.env);
@@ -31,10 +34,14 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const parsed = listProposalsQuerySchema.safeParse({
     scopeType: url.searchParams.get("scopeType") ?? undefined,
     scopeId: url.searchParams.get("scopeId") ?? undefined,
+    limit: url.searchParams.get("limit") ?? undefined,
+    offset: url.searchParams.get("offset") ?? undefined,
   });
   const q = parsed.success ? parsed.data : {};
-  const proposals = await listVoteProposals(db, q);
-  return json({ proposals });
+  const limit = q.limit ?? 50;
+  const offset = q.offset ?? 0;
+  const { proposals, total } = await listVoteProposals(db, { ...q, limit, offset });
+  return json({ proposals, page: buildPageInfo(limit, offset, total, proposals.length) });
 }
 
 export const PortalVoteProposalsGet = openApiRoute(listProposalsRouteSchema, onRequestGet);

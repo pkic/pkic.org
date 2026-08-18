@@ -588,6 +588,157 @@ describe("Voting system", () => {
     expect(voteRows).toHaveLength(1);
   });
 
+  it("GET /api/v1/portal/vote-proposals and GET /api/v1/admin/vote-proposals are bounded, correctly aggregate across scopes, and don't fan out queries per proposal", async () => {
+    const wgId = await insertWorkingGroup("Bounded Proposals WG", "bounded-proposals-wg", 3);
+    const proposerId = await insertMemberUser("F");
+    await insertWgMembership(wgId, proposerId);
+    const proposerToken = await createMemberSession(env.DB, proposerId, "bounded-proposer-token");
+
+    const wgProposalIds: string[] = [];
+    for (let i = 0; i < 2; i += 1) {
+      const res = await call(proposerToken, "/api/v1/portal/vote-proposals", {
+        method: "POST",
+        body: JSON.stringify({
+          title: `WG Proposal ${i}`,
+          description: "N/A",
+          voteType: "motion",
+          scopeType: "working_group",
+          scopeId: wgId,
+        }),
+      });
+      const { proposal } = (await res.json()) as { proposal: { id: string } };
+      wgProposalIds.push(proposal.id);
+    }
+    // Forum proposals require a positive forum_vote_min_endorsers (default 0).
+    await env.DB.prepare("UPDATE membership_settings SET forum_vote_min_endorsers = 2 WHERE id = 'default'").run();
+    const forumRes = await call(proposerToken, "/api/v1/portal/vote-proposals", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Forum Proposal",
+        description: "N/A",
+        voteType: "motion",
+        scopeType: "forum",
+      }),
+    });
+    const { proposal: forumProposal } = (await forumRes.json()) as { proposal: { id: string } };
+
+    // Endorse one WG proposal once (below its threshold of 3) so
+    // endorsementCount must differ between it and its sibling.
+    await call(proposerToken, `/api/v1/portal/vote-proposals/${wgProposalIds[0]}/endorse`, { method: "POST" });
+
+    // Query-count regression check, mirroring the portal-votes-list test:
+    // the bulk endorsement-count and min-endorsers loaders must issue a
+    // fixed number of queries regardless of how many proposals are on the
+    // page (an N+1 would grow this between a 1-item and a 3-item page).
+    const originalPrepare = env.DB.prepare.bind(env.DB);
+    let prepareCalls = 0;
+    (env.DB as unknown as { prepare: typeof env.DB.prepare }).prepare = (query: string) => {
+      prepareCalls += 1;
+      return originalPrepare(query);
+    };
+    try {
+      const onePageRes = await call(proposerToken, "/api/v1/portal/vote-proposals?scopeType=working_group&limit=1");
+      expect(onePageRes.status).toBe(200);
+      const onePageCount = prepareCalls;
+
+      prepareCalls = 0;
+      const twoPageRes = await call(proposerToken, "/api/v1/portal/vote-proposals?scopeType=working_group&limit=2");
+      expect(twoPageRes.status).toBe(200);
+      expect(prepareCalls).toBe(onePageCount);
+    } finally {
+      (env.DB as unknown as { prepare: typeof env.DB.prepare }).prepare = originalPrepare;
+    }
+
+    const wgListRes = await call(
+      proposerToken,
+      "/api/v1/portal/vote-proposals?scopeType=working_group&limit=1&offset=0",
+    );
+    const wgListBody = (await wgListRes.json()) as {
+      proposals: Array<{ id: string; endorsementCount: number; minEndorsersRequired: number }>;
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
+    expect(wgListBody.proposals).toHaveLength(1);
+    expect(wgListBody.page).toEqual({ limit: 1, offset: 0, total: 2, hasMore: true });
+
+    const wgListFullRes = await call(proposerToken, "/api/v1/portal/vote-proposals?scopeType=working_group&limit=50");
+    const wgListFullBody = (await wgListFullRes.json()) as {
+      proposals: Array<{ id: string; endorsementCount: number; minEndorsersRequired: number }>;
+    };
+    const byId = new Map(wgListFullBody.proposals.map((p) => [p.id, p]));
+    expect(byId.get(wgProposalIds[0])!.endorsementCount).toBe(1);
+    expect(byId.get(wgProposalIds[1])!.endorsementCount).toBe(0);
+    expect(byId.get(wgProposalIds[0])!.minEndorsersRequired).toBe(3);
+
+    const adminListRes = await call(adminToken, "/api/v1/admin/vote-proposals?limit=2&offset=0");
+    expect(adminListRes.status).toBe(200);
+    const adminListBody = (await adminListRes.json()) as {
+      proposals: Array<{ id: string; scopeType: string; minEndorsersRequired: number }>;
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
+    expect(adminListBody.proposals).toHaveLength(2);
+    expect(adminListBody.page).toEqual({ limit: 2, offset: 0, total: 3, hasMore: true });
+    // Most-recently-created first: the forum proposal (created last) must
+    // be on this first page, proving the bulk forum-scope
+    // (getMembershipSettings) branch of loadMinEndorsersByProposal ran.
+    const forumEntry = adminListBody.proposals.find((p) => p.id === forumProposal.id);
+    expect(forumEntry).toBeDefined();
+    expect(forumEntry!.minEndorsersRequired).toBe(2);
+  });
+
+  it("atomicity (PR #1 review §5.4): two concurrent admin approvals of the same proposal converge on exactly one vote", async () => {
+    const wgId = await insertWorkingGroup("Race WG", "race-wg", 5);
+    const proposerId = await insertMemberUser("F");
+    await insertWgMembership(wgId, proposerId);
+    const proposerToken = await createMemberSession(env.DB, proposerId, "race-proposer-token");
+
+    const submitRes = await call(proposerToken, "/api/v1/portal/vote-proposals", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Racing Conversion",
+        description: "N/A",
+        voteType: "motion",
+        scopeType: "working_group",
+        scopeId: wgId,
+      }),
+    });
+    const { proposal } = (await submitRes.json()) as { proposal: { id: string } };
+
+    const [first, second] = await Promise.all([
+      call(adminToken, `/api/v1/admin/vote-proposals/${proposal.id}/approve`, { method: "POST" }),
+      call(adminToken, `/api/v1/admin/vote-proposals/${proposal.id}/approve`, { method: "POST" }),
+    ]);
+
+    // The winner always gets 200 with the vote it created. The loser either
+    // also gets 200 (re-reading the winner's vote via convertProposalToVote's
+    // CAS fallback, if its own read-check raced ahead of the winner's write)
+    // or 409 from approveVoteProposal's own pre-existing read-check (if it
+    // ran after the winner's write already committed) — both are correct;
+    // what must never happen is a second vote or an unhandled error.
+    expect(first.status).not.toBe(500);
+    expect(second.status).not.toBe(500);
+    for (const status of [first.status, second.status]) {
+      expect([200, 409]).toContain(status);
+    }
+    expect([first.status, second.status]).toContain(200);
+
+    const voteRows = await queryAll<{ id: string }>(env.DB, "SELECT id FROM votes WHERE title = 'Racing Conversion'");
+    expect(voteRows).toHaveLength(1);
+
+    for (const res of [first, second]) {
+      if (res.status !== 200) continue;
+      const body = (await res.json()) as { convertedVote: { id: string } };
+      expect(body.convertedVote.id).toBe(voteRows[0].id);
+    }
+
+    const proposalRows = await queryAll<{ status: string; vote_id: string }>(
+      env.DB,
+      "SELECT status, vote_id FROM vote_proposals WHERE id = ?",
+      proposal.id,
+    );
+    expect(proposalRows[0].status).toBe("converted_to_vote");
+    expect(proposalRows[0].vote_id).toBe(voteRows[0].id);
+  });
+
   it("proposal submission is disabled when the scope's min_endorsers is 0", async () => {
     const wgId = await insertWorkingGroup("No Endorsement WG", "no-endorse-wg", 0);
     const proposerId = await insertMemberUser("F");
@@ -692,8 +843,117 @@ describe("Voting system", () => {
     expect(publicBody.vote.result.counts).toBeUndefined();
 
     const listRes = await callAnon("/api/v1/votes");
-    const listBody = (await listRes.json()) as { votes: Array<{ slug: string }> };
+    const listBody = (await listRes.json()) as {
+      votes: Array<{ slug: string }>;
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
     expect(listBody.votes.some((v) => v.slug === vote.slug)).toBe(true);
+    expect(listBody.page).toEqual({ limit: 20, offset: 0, total: listBody.votes.length, hasMore: false });
+  });
+
+  it("public GET /api/v1/votes uses the canonical limit/offset envelope, not page/per_page", async () => {
+    for (let i = 0; i < 3; i += 1) {
+      const createRes = await call(adminToken, "/api/v1/admin/votes", {
+        method: "POST",
+        body: JSON.stringify({
+          title: `Bounded Public Vote ${i}`,
+          voteType: "motion",
+          scopeType: "forum",
+          thresholdType: "simple_majority",
+          closesAt: new Date(Date.now() + 3600_000).toISOString(),
+        }),
+      });
+      const { vote } = (await createRes.json()) as { vote: { id: string } };
+      await call(adminToken, `/api/v1/admin/votes/${vote.id}/visibility`, {
+        method: "PATCH",
+        body: JSON.stringify({ visibility: "public", publicDetailLevel: "aggregate" }),
+      });
+    }
+
+    const boundedRes = await callAnon("/api/v1/votes?limit=2&offset=0&sort=created_at");
+    expect(boundedRes.status).toBe(200);
+    const boundedBody = (await boundedRes.json()) as {
+      votes: unknown[];
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
+    expect(boundedBody.votes).toHaveLength(2);
+    expect(boundedBody.page.limit).toBe(2);
+    expect(boundedBody.page.offset).toBe(0);
+    expect(boundedBody.page.total).toBeGreaterThanOrEqual(3);
+    expect(boundedBody.page.hasMore).toBe(true);
+  });
+
+  it("public GET /api/v1/votes?status= accepts a comma-separated list, matching the votes-index-page 'open+scheduled' section query", async () => {
+    const openCreateRes = await call(adminToken, "/api/v1/admin/votes", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Multi-Status Open Vote",
+        voteType: "motion",
+        scopeType: "forum",
+        thresholdType: "simple_majority",
+        closesAt: new Date(Date.now() + 3600_000).toISOString(),
+      }),
+    });
+    const { vote: openVote } = (await openCreateRes.json()) as { vote: { id: string; slug: string } };
+    await call(adminToken, `/api/v1/admin/votes/${openVote.id}/visibility`, {
+      method: "PATCH",
+      body: JSON.stringify({ visibility: "public", publicDetailLevel: "aggregate" }),
+    });
+
+    const scheduledCreateRes = await call(adminToken, "/api/v1/admin/votes", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Multi-Status Scheduled Vote",
+        voteType: "motion",
+        scopeType: "forum",
+        thresholdType: "simple_majority",
+        opensAt: new Date(Date.now() + 3600_000).toISOString(),
+        closesAt: new Date(Date.now() + 7200_000).toISOString(),
+      }),
+    });
+    const { vote: scheduledVote } = (await scheduledCreateRes.json()) as { vote: { id: string; slug: string } };
+    await call(adminToken, `/api/v1/admin/votes/${scheduledVote.id}/visibility`, {
+      method: "PATCH",
+      body: JSON.stringify({ visibility: "public", publicDetailLevel: "aggregate" }),
+    });
+
+    const closedCreateRes = await call(adminToken, "/api/v1/admin/votes", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Multi-Status Closed Vote",
+        voteType: "motion",
+        scopeType: "forum",
+        thresholdType: "simple_majority",
+        closesAt: new Date(Date.now() + 1000).toISOString(),
+      }),
+    });
+    const { vote: closedVote } = (await closedCreateRes.json()) as { vote: { id: string; slug: string } };
+    await call(adminToken, `/api/v1/admin/votes/${closedVote.id}/visibility`, {
+      method: "PATCH",
+      body: JSON.stringify({ visibility: "public", publicDetailLevel: "aggregate" }),
+    });
+    await new Promise((r) => setTimeout(r, 1100));
+    await closeDueVotes(env.DB);
+
+    const openSectionRes = await callAnon("/api/v1/votes?status=open,scheduled&sort=created_at");
+    expect(openSectionRes.status).toBe(200);
+    const openSectionBody = (await openSectionRes.json()) as { votes: Array<{ slug: string; status: string }> };
+    const openSectionSlugs = openSectionBody.votes.map((v) => v.slug);
+    expect(openSectionSlugs).toContain(openVote.slug);
+    expect(openSectionSlugs).toContain(scheduledVote.slug);
+    expect(openSectionSlugs).not.toContain(closedVote.slug);
+    expect(openSectionBody.votes.every((v) => v.status === "open" || v.status === "scheduled")).toBe(true);
+
+    const closedSectionRes = await callAnon("/api/v1/votes?status=closed&sort=created_at");
+    expect(closedSectionRes.status).toBe(200);
+    const closedSectionBody = (await closedSectionRes.json()) as { votes: Array<{ slug: string; status: string }> };
+    const closedSectionSlugs = closedSectionBody.votes.map((v) => v.slug);
+    expect(closedSectionSlugs).toContain(closedVote.slug);
+    expect(closedSectionSlugs).not.toContain(openVote.slug);
+    expect(closedSectionSlugs).not.toContain(scheduledVote.slug);
+
+    const invalidStatusRes = await callAnon("/api/v1/votes?status=not-a-status");
+    expect(invalidStatusRes.status).toBe(400);
   });
 
   it("GET /api/v1/me/votes returns the caller's own ballot history", async () => {
@@ -723,10 +983,96 @@ describe("Voting system", () => {
 
     const res = await call(token, "/api/v1/me/votes");
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { votes: Array<{ voteId: string; choice: string }> };
+    const body = (await res.json()) as {
+      votes: Array<{ voteId: string; choice: string }>;
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
     expect(body.votes).toHaveLength(1);
     expect(body.votes[0].voteId).toBe(vote.id);
     expect(body.votes[0].choice).toBe("in_favor");
+    expect(body.page).toEqual({ limit: 50, offset: 0, total: 1, hasMore: false });
+  });
+
+  it("GET /api/v1/portal/votes returns bounded, correctly-computed canCastBallot/hasCastBallot/candidates without a per-vote query fan-out", async () => {
+    const orgId = await insertOrganization("Portal Votes Org");
+    const delegateUserId = await insertMemberUser("A", orgId);
+    await setOrgContacts(orgId, delegateUserId, delegateUserId);
+    const token = await createMemberSession(env.DB, delegateUserId, "portal-votes-token");
+
+    const closesAt = new Date(Date.now() + 3600_000).toISOString();
+    const voteIds: string[] = [];
+    for (let i = 0; i < 3; i += 1) {
+      const createRes = await call(adminToken, "/api/v1/admin/votes", {
+        method: "POST",
+        body: JSON.stringify({
+          title: `Forum Election ${i}`,
+          voteType: "election",
+          scopeType: "forum",
+          thresholdType: "simple_majority",
+          closesAt,
+          candidates: [{ name: "Alice" }, { name: "Bob" }],
+        }),
+      });
+      const { vote } = (await createRes.json()) as { vote: { id: string } };
+      voteIds.push(vote.id);
+    }
+
+    // Cast a ballot on the first vote so hasCastBallot must be true for it
+    // and false for the other two — proves the bulk lookup is keyed
+    // per-vote, not a single flag applied to the whole page.
+    const firstDetail = await call(token, `/api/v1/portal/votes/${voteIds[0]}`);
+    const { vote: firstVoteDetail } = (await firstDetail.json()) as {
+      vote: { candidates: Array<{ id: string; candidateName: string }> };
+    };
+    const aliceId = firstVoteDetail.candidates!.find((c) => c.candidateName === "Alice")!.id;
+    await call(token, `/api/v1/portal/votes/${voteIds[0]}/ballots`, {
+      method: "POST",
+      body: JSON.stringify({ choice: aliceId }),
+    });
+
+    // Query-count regression check: the list handler must issue a bounded
+    // number of D1 queries regardless of how many votes are on the page —
+    // wrap prepare() and assert the count doesn't grow between a
+    // single-vote page and the full 3-vote page (an N+1 would fail this).
+    const originalPrepare = env.DB.prepare.bind(env.DB);
+    let prepareCalls = 0;
+    (env.DB as unknown as { prepare: typeof env.DB.prepare }).prepare = (query: string) => {
+      prepareCalls += 1;
+      return originalPrepare(query);
+    };
+    try {
+      const onePageRes = await call(token, "/api/v1/portal/votes?limit=1");
+      expect(onePageRes.status).toBe(200);
+      const onePageCount = prepareCalls;
+
+      prepareCalls = 0;
+      const fullPageRes = await call(token, "/api/v1/portal/votes?limit=50");
+      expect(fullPageRes.status).toBe(200);
+      const fullPageCount = prepareCalls;
+
+      expect(fullPageCount).toBe(onePageCount);
+
+      const body = (await fullPageRes.json()) as {
+        votes: Array<{
+          id: string;
+          candidates: Array<{ candidateName: string }> | null;
+          canCastBallot: boolean;
+          hasCastBallot: boolean;
+        }>;
+        page: { limit: number; offset: number; total: number; hasMore: boolean };
+      };
+      expect(body.page).toEqual({ limit: 50, offset: 0, total: 3, hasMore: false });
+      const byId = new Map(body.votes.map((v) => [v.id, v]));
+      expect(byId.get(voteIds[0])!.hasCastBallot).toBe(true);
+      expect(byId.get(voteIds[1])!.hasCastBallot).toBe(false);
+      expect(byId.get(voteIds[2])!.hasCastBallot).toBe(false);
+      for (const id of voteIds) {
+        expect(byId.get(id)!.canCastBallot).toBe(true);
+        expect(byId.get(id)!.candidates).toHaveLength(2);
+      }
+    } finally {
+      (env.DB as unknown as { prepare: typeof env.DB.prepare }).prepare = originalPrepare;
+    }
   });
 
   it("RSS feed responds with XML for public votes", async () => {
