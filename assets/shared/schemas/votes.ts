@@ -292,7 +292,7 @@ export const submitProposalRouteSchema = {
   },
 };
 
-export const listProposalsQuerySchema = z.object({
+export const listProposalsQuerySchema = paginationQuerySchema.extend({
   scopeType: voteScopeTypeSchema.optional(),
   scopeId: z.string().optional(),
 });
@@ -304,7 +304,7 @@ export const listProposalsRouteSchema = {
   responses: {
     "200": {
       description: "Open proposals.",
-      content: { "application/json": { schema: z.object({ proposals: z.array(proposalSummarySchema) }) } },
+      content: { "application/json": { schema: paginatedResponseSchema("proposals", proposalSummarySchema) } },
     },
   },
 };
@@ -506,7 +506,7 @@ export const adminVoteBallotsRouteSchema = {
 
 // ── Admin proposal moderation ────────────────────────────────────────
 
-export const adminListProposalsQuerySchema = z.object({
+export const adminListProposalsQuerySchema = paginationQuerySchema.extend({
   status: voteProposalStatusSchema.optional(),
 });
 
@@ -517,7 +517,7 @@ export const adminListProposalsRouteSchema = {
   responses: {
     "200": {
       description: "Proposals.",
-      content: { "application/json": { schema: z.object({ proposals: z.array(proposalSummarySchema) }) } },
+      content: { "application/json": { schema: paginatedResponseSchema("proposals", proposalSummarySchema) } },
     },
   },
 };

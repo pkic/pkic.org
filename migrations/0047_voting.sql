@@ -139,6 +139,12 @@ CREATE TABLE vote_proposals (
 
 CREATE INDEX idx_vote_proposals_scope_status ON vote_proposals(scope_type, scope_id, status);
 
+-- Supports both the bounded portal list (status + scope, ordered by
+-- created_at) and the bounded admin list (status alone, ordered by
+-- created_at) via a shared leading (status) column.
+CREATE INDEX idx_vote_proposals_status_scope_created_at
+  ON vote_proposals(status, scope_type, scope_id, created_at);
+
 CREATE TABLE vote_proposal_endorsements (
   id               TEXT PRIMARY KEY,
   proposal_id      TEXT NOT NULL REFERENCES vote_proposals(id),

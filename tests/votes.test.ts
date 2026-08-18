@@ -588,6 +588,103 @@ describe("Voting system", () => {
     expect(voteRows).toHaveLength(1);
   });
 
+  it("GET /api/v1/portal/vote-proposals and GET /api/v1/admin/vote-proposals are bounded, correctly aggregate across scopes, and don't fan out queries per proposal", async () => {
+    const wgId = await insertWorkingGroup("Bounded Proposals WG", "bounded-proposals-wg", 3);
+    const proposerId = await insertMemberUser("F");
+    await insertWgMembership(wgId, proposerId);
+    const proposerToken = await createMemberSession(env.DB, proposerId, "bounded-proposer-token");
+
+    const wgProposalIds: string[] = [];
+    for (let i = 0; i < 2; i += 1) {
+      const res = await call(proposerToken, "/api/v1/portal/vote-proposals", {
+        method: "POST",
+        body: JSON.stringify({
+          title: `WG Proposal ${i}`,
+          description: "N/A",
+          voteType: "motion",
+          scopeType: "working_group",
+          scopeId: wgId,
+        }),
+      });
+      const { proposal } = (await res.json()) as { proposal: { id: string } };
+      wgProposalIds.push(proposal.id);
+    }
+    // Forum proposals require a positive forum_vote_min_endorsers (default 0).
+    await env.DB.prepare("UPDATE membership_settings SET forum_vote_min_endorsers = 2 WHERE id = 'default'").run();
+    const forumRes = await call(proposerToken, "/api/v1/portal/vote-proposals", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Forum Proposal",
+        description: "N/A",
+        voteType: "motion",
+        scopeType: "forum",
+      }),
+    });
+    const { proposal: forumProposal } = (await forumRes.json()) as { proposal: { id: string } };
+
+    // Endorse one WG proposal once (below its threshold of 3) so
+    // endorsementCount must differ between it and its sibling.
+    await call(proposerToken, `/api/v1/portal/vote-proposals/${wgProposalIds[0]}/endorse`, { method: "POST" });
+
+    // Query-count regression check, mirroring the portal-votes-list test:
+    // the bulk endorsement-count and min-endorsers loaders must issue a
+    // fixed number of queries regardless of how many proposals are on the
+    // page (an N+1 would grow this between a 1-item and a 3-item page).
+    const originalPrepare = env.DB.prepare.bind(env.DB);
+    let prepareCalls = 0;
+    (env.DB as unknown as { prepare: typeof env.DB.prepare }).prepare = (query: string) => {
+      prepareCalls += 1;
+      return originalPrepare(query);
+    };
+    try {
+      const onePageRes = await call(proposerToken, "/api/v1/portal/vote-proposals?scopeType=working_group&limit=1");
+      expect(onePageRes.status).toBe(200);
+      const onePageCount = prepareCalls;
+
+      prepareCalls = 0;
+      const twoPageRes = await call(proposerToken, "/api/v1/portal/vote-proposals?scopeType=working_group&limit=2");
+      expect(twoPageRes.status).toBe(200);
+      expect(prepareCalls).toBe(onePageCount);
+    } finally {
+      (env.DB as unknown as { prepare: typeof env.DB.prepare }).prepare = originalPrepare;
+    }
+
+    const wgListRes = await call(
+      proposerToken,
+      "/api/v1/portal/vote-proposals?scopeType=working_group&limit=1&offset=0",
+    );
+    const wgListBody = (await wgListRes.json()) as {
+      proposals: Array<{ id: string; endorsementCount: number; minEndorsersRequired: number }>;
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
+    expect(wgListBody.proposals).toHaveLength(1);
+    expect(wgListBody.page).toEqual({ limit: 1, offset: 0, total: 2, hasMore: true });
+
+    const wgListFullRes = await call(proposerToken, "/api/v1/portal/vote-proposals?scopeType=working_group&limit=50");
+    const wgListFullBody = (await wgListFullRes.json()) as {
+      proposals: Array<{ id: string; endorsementCount: number; minEndorsersRequired: number }>;
+    };
+    const byId = new Map(wgListFullBody.proposals.map((p) => [p.id, p]));
+    expect(byId.get(wgProposalIds[0])!.endorsementCount).toBe(1);
+    expect(byId.get(wgProposalIds[1])!.endorsementCount).toBe(0);
+    expect(byId.get(wgProposalIds[0])!.minEndorsersRequired).toBe(3);
+
+    const adminListRes = await call(adminToken, "/api/v1/admin/vote-proposals?limit=2&offset=0");
+    expect(adminListRes.status).toBe(200);
+    const adminListBody = (await adminListRes.json()) as {
+      proposals: Array<{ id: string; scopeType: string; minEndorsersRequired: number }>;
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
+    expect(adminListBody.proposals).toHaveLength(2);
+    expect(adminListBody.page).toEqual({ limit: 2, offset: 0, total: 3, hasMore: true });
+    // Most-recently-created first: the forum proposal (created last) must
+    // be on this first page, proving the bulk forum-scope
+    // (getMembershipSettings) branch of loadMinEndorsersByProposal ran.
+    const forumEntry = adminListBody.proposals.find((p) => p.id === forumProposal.id);
+    expect(forumEntry).toBeDefined();
+    expect(forumEntry!.minEndorsersRequired).toBe(2);
+  });
+
   it("atomicity (PR #1 review §5.4): two concurrent admin approvals of the same proposal converge on exactly one vote", async () => {
     const wgId = await insertWorkingGroup("Race WG", "race-wg", 5);
     const proposerId = await insertMemberUser("F");
