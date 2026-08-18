@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
 import { queryAll } from "./helpers/context";
 import { insertUser, insertOrganization, seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
+import { MEMBER_STATUSES } from "../assets/shared/schemas/membership-categories";
 
 beforeEach(async () => {
   await resetDb();
@@ -122,6 +123,37 @@ describe("members model", () => {
       env.DB.prepare(
         `INSERT INTO members (id, member_type, user_id, status, created_at, updated_at)
            VALUES (?, 'individual', ?, 'active', datetime('now'), datetime('now'))`,
+      )
+        .bind(crypto.randomUUID(), userId)
+        .run(),
+    ).rejects.toThrow();
+  });
+
+  // Parity test (PR #1 review, phase1-2-review-20260817.md blocker 9):
+  // members.status has a DB-level CHECK constraint (migration 0000,
+  // deployed/immutable) mirroring the canonical MEMBER_STATUSES shared
+  // constant. Nothing previously proved these two stay in sync — this
+  // asserts the DB accepts every value the constant claims is valid and
+  // rejects one that isn't, so a future edit to MEMBER_STATUSES without a
+  // matching migration fails this test instead of silently drifting.
+  it("members.status CHECK constraint accepts exactly the canonical MEMBER_STATUSES values", async () => {
+    for (const status of MEMBER_STATUSES) {
+      const userId = await insertUser(env.DB);
+      await expect(
+        env.DB.prepare(
+          `INSERT INTO members (id, member_type, user_id, status, created_at, updated_at)
+           VALUES (?, 'individual', ?, ?, datetime('now'), datetime('now'))`,
+        )
+          .bind(crypto.randomUUID(), userId, status)
+          .run(),
+      ).resolves.toBeDefined();
+    }
+
+    const userId = await insertUser(env.DB);
+    await expect(
+      env.DB.prepare(
+        `INSERT INTO members (id, member_type, user_id, status, created_at, updated_at)
+         VALUES (?, 'individual', ?, 'not_a_real_status', datetime('now'), datetime('now'))`,
       )
         .bind(crypto.randomUUID(), userId)
         .run(),

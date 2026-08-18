@@ -19,8 +19,11 @@ export const accessGrantIdParamsSchema = z.object({ id: z.uuid() });
 // or look up its holders via GET .../roles/:id/assignments) with a 400
 // before the handler ever ran — discovered while wiring up WG vice-chair
 // and forum chair/vice-chair assignment (Fix 2/3), which exclusively
-// assign system roles.
-export const roleIdParamsSchema = z.object({ id: trimmedString(1, 80) });
+// assign system roles. Reused everywhere a role id appears — params,
+// request bodies, and response payloads alike — so none of them drift
+// back to z.uuid() individually.
+export const roleIdSchema = trimmedString(1, 80);
+export const roleIdParamsSchema = z.object({ id: roleIdSchema });
 export const userIdRolesParamsSchema = z.object({ userId: z.uuid() });
 export const userRoleIdParamsSchema = z.object({ userId: z.uuid(), userRoleId: z.uuid() });
 
@@ -122,7 +125,7 @@ export const roleCreateSchema = z.object({
 });
 
 export const roleResponseSchema = z.object({
-  id: z.uuid(),
+  id: roleIdSchema,
   name: z.string(),
   description: z.string().nullable(),
   isSystemRole: z.boolean(),
@@ -216,10 +219,7 @@ export const roleAssignmentsListRouteSchema = {
 
 export const userRoleAssignSchema = z
   .object({
-    // Not always a UUID — see roleIdParamsSchema's comment above; system
-    // roles (role-wg_chair, role-forum_chair, ...) must be assignable here
-    // too, not just custom roles.
-    roleId: trimmedString(1, 80),
+    roleId: roleIdSchema,
     contextType: contextTypeSchema.nullable().optional(),
     contextId: trimmedString(1, 80).nullable().optional(),
     expiresAt: z.iso.datetime().nullable().optional(),
@@ -237,7 +237,7 @@ export const userRoleAssignSchema = z
 export const userRoleResponseSchema = z.object({
   id: z.uuid(),
   userId: z.uuid(),
-  roleId: z.uuid(),
+  roleId: roleIdSchema,
   roleName: z.string(),
   contextType: z.string().nullable(),
   contextId: z.string().nullable(),

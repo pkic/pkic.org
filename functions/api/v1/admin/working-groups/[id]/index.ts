@@ -4,7 +4,6 @@
  */
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
-import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { getAdminWorkingGroupDetail, updateWorkingGroup } from "../../../../../_lib/services/admin-working-groups";
 import { AppError } from "../../../../../_lib/errors";
@@ -15,10 +14,10 @@ import {
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 
+// Access is gated by this resource's own router middleware (see
+// ../router.ts's requireWorkingGroupAccess), not by a per-handler
+// requirePermission call.
 export const WorkingGroupGet = openApiRoute(workingGroupGetRouteSchema, async (c: AdminContext, data) => {
-  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  requirePermission(admin, "working-groups:read");
-
   const workingGroup = await getAdminWorkingGroupDetail(requestDb(c), data.params.id);
   if (!workingGroup) {
     throw new AppError(404, "WORKING_GROUP_NOT_FOUND", "Working group not found");
@@ -28,7 +27,6 @@ export const WorkingGroupGet = openApiRoute(workingGroupGetRouteSchema, async (c
 
 export const WorkingGroupUpdate = openApiRoute(workingGroupUpdateRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  requirePermission(admin, "working-groups:write");
 
   const id = data.params.id;
   const body = data.body;

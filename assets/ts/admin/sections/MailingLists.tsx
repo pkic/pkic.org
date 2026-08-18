@@ -11,8 +11,7 @@ import { ErrorAlert } from "../../components/ErrorAlert";
 import { api } from "../api";
 import { toast } from "../ui";
 import type { MailingList } from "../types";
-
-const LIST_TYPES = ["all_members", "consultation", "ec", "working_group", "custom"] as const;
+import { MAILING_LIST_TYPES as LIST_TYPES } from "../../../shared/schemas/admin-mailing-lists";
 
 type SortKey = "email" | "label" | "listType" | "autoSyncCategories" | "active";
 type SortDir = "asc" | "desc";

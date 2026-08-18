@@ -36,7 +36,8 @@ export function isIndividualMembershipCategory(category: string): boolean {
 }
 
 /** Categories with voting rights (forum + WG) — H categories never vote. */
-export const VOTING_CATEGORIES = new Set<string>(["A", "B", "C", "D", "E", "F", "G"]);
+export const VOTING_CATEGORY_LETTERS = ["A", "B", "C", "D", "E", "F", "G"] as const;
+export const VOTING_CATEGORIES = new Set<string>(VOTING_CATEGORY_LETTERS);
 
 /** members.status (migration 0000, deployed/immutable CHECK constraint — mirrored here, not duplicated ad hoc, per PR #1 review §1.3). */
 export const MEMBER_STATUSES = ["active", "inactive", "pending", "lapsed"] as const;

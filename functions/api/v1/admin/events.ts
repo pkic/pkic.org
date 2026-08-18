@@ -1,6 +1,7 @@
 import { parseJsonBody } from "../../../_lib/validation";
 import { json } from "../../../_lib/http";
 import { requireAdminFromRequest } from "../../../_lib/auth/admin";
+import { requirePermission } from "../../../_lib/auth/permissions";
 import { all, first } from "../../../_lib/db/queries";
 import { resolveOrderBy } from "../../../_lib/db/sort";
 import { upsertEventFromHugo } from "../../../_lib/services/events";
@@ -39,7 +40,8 @@ interface EventWithStats {
  * Supports both session-token auth and ADMIN_API_KEY.
  */
 export async function onRequestGet(c: AdminContext): Promise<Response> {
-  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  requirePermission(admin, "events:read");
 
   const url = new URL(c.req.raw.url);
   const parsedSort = eventsListSortValueSchema.safeParse(url.searchParams.get("sort") ?? undefined);
@@ -95,6 +97,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
  */
 export async function onRequestPost(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  requirePermission(admin, "events:write");
   const body = await parseJsonBody(c.req, adminCreateEventSchema);
 
   // Check slug uniqueness before upsert to give a clear error

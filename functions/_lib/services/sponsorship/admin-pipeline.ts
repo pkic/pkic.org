@@ -6,18 +6,14 @@ import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { AppError } from "../../errors";
 import { eventSponsorTierHasAttendeeAccess } from "./event-tiers";
+import {
+  SPONSORSHIP_PIPELINE_STAGES,
+  type SponsorshipPipelineStage,
+} from "../../../../assets/shared/schemas/admin-sponsorships";
 import type { DatabaseLike } from "../../types";
 
-export const SPONSORSHIP_PIPELINE_STAGES = [
-  "new_inquiry",
-  "contacted",
-  "proposal_sent",
-  "negotiating",
-  "payment_pending",
-  "active",
-  "lapsed",
-] as const;
-export type SponsorshipPipelineStage = (typeof SPONSORSHIP_PIPELINE_STAGES)[number];
+export { SPONSORSHIP_PIPELINE_STAGES };
+export type { SponsorshipPipelineStage };
 
 export interface AdminSponsorshipRow {
   id: string;

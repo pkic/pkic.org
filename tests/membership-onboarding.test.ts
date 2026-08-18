@@ -179,14 +179,18 @@ describe("Post-approval onboarding", () => {
   it("adds the member to working_group_members for requested WGs and enqueues Google Groups sync", async () => {
     const { id } = await createEcReviewApplication();
     const response = await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
-    const body = (await response.json()) as { userId: string };
+    const body = (await response.json()) as { userId: string; memberId: string };
 
-    const wgRows = await queryAll(
+    const wgRows = await queryAll<{ member_id: string | null }>(
       env.DB,
-      "SELECT 1 FROM working_group_members wgm JOIN working_groups wg ON wg.id = wgm.working_group_id WHERE wgm.user_id = ? AND wg.slug = 'pqc'",
+      "SELECT wgm.member_id FROM working_group_members wgm JOIN working_groups wg ON wg.id = wgm.working_group_id WHERE wgm.user_id = ? AND wg.slug = 'pqc'",
       body.userId,
     );
     expect(wgRows).toHaveLength(1);
+    // PR #1 review blocker 2: provisioning always knows exactly which
+    // membership the WG join is on behalf of — not ambiguous the way a
+    // staff-driven add for an existing user with multiple orgs can be.
+    expect(wgRows[0]!.member_id).toBe(body.memberId);
 
     const queueRows = await queryAll<{ google_group_email: string; action: string }>(
       env.DB,
@@ -242,6 +246,59 @@ describe("Post-approval onboarding", () => {
     expect(contactEmails).toHaveLength(1);
   });
 
+  it("writes the audit-log entry and queues the emails in the same commit as membership provisioning (PR #1 review blocker 4)", async () => {
+    const { id } = await createEcReviewApplication();
+    await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
+
+    const auditRows = await queryAll<{ actor_type: string; actor_id: string; entity_id: string; created_at: string }>(
+      env.DB,
+      "SELECT actor_type, actor_id, entity_id, created_at FROM audit_log WHERE action = 'application_approved' AND entity_id = ?",
+      id,
+    );
+    expect(auditRows).toHaveLength(1);
+    expect(auditRows[0]!.actor_type).toBe("admin");
+
+    // Same `now` timestamp is used to build the stage-transition, the
+    // email-outbox inserts, and the audit-log insert inside approve.ts's
+    // one `db.batch()` — proof they're one statement set, not three-plus
+    // separately timed writes.
+    const [{ stage_entered_at: applicationApprovedAt }] = await queryAll<{ stage_entered_at: string }>(
+      env.DB,
+      "SELECT stage_entered_at FROM member_applications WHERE id = ?",
+      id,
+    );
+    const [claimEmail] = await queryAll<{ created_at: string }>(
+      env.DB,
+      "SELECT created_at FROM email_outbox WHERE template_key = 'member-account-claim'",
+    );
+    expect(claimEmail!.created_at).toBe(applicationApprovedAt);
+    expect(auditRows[0]!.created_at).toBe(applicationApprovedAt);
+  });
+
+  it("does not write an audit-log entry for the unattended EC-window auto-approve path (no admin actor)", async () => {
+    const { id } = await createEcReviewApplication();
+    await env.DB.prepare(`UPDATE member_applications SET stage_entered_at = datetime('now', '-30 days') WHERE id = ?`)
+      .bind(id)
+      .run();
+
+    const { runEcWindowAutoApprove } = await import("../functions/_lib/services/membership/scheduled-jobs");
+    const result = await runEcWindowAutoApprove(env.DB, env as any);
+    expect(result.autoApproved).toBe(1);
+
+    const auditRows = await queryAll(
+      env.DB,
+      "SELECT id FROM audit_log WHERE action = 'application_approved' AND entity_id = ?",
+      id,
+    );
+    expect(auditRows).toHaveLength(0);
+
+    const claimEmails = await queryAll(
+      env.DB,
+      "SELECT id FROM email_outbox WHERE template_key = 'member-account-claim'",
+    );
+    expect(claimEmails).toHaveLength(1);
+  });
+
   it("rejects approval when the application is not in ec_review", async () => {
     const id = crypto.randomUUID();
     await env.DB.prepare(
@@ -276,6 +333,76 @@ describe("Post-approval onboarding", () => {
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
     expect(response.status).toBe(409);
+  });
+
+  it("atomicity (PR #1 review §5 correction): two concurrent approvals of the same application produce exactly one success, one 409, and no duplicate provisioning/event/audit/email rows", async () => {
+    const { id } = await createEcReviewApplication();
+
+    const [first, second] = await Promise.all([
+      call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" }),
+      call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" }),
+    ]);
+
+    const winner = first.status === 200 ? first : second;
+    const statuses = [first.status, second.status].sort();
+    expect(statuses).toEqual([200, 409]);
+
+    const body = (await winner.json()) as { memberId: string; organizationId: string; userId: string };
+
+    const applications = await queryAll<{ status: string; stage: string }>(
+      env.DB,
+      "SELECT status, stage FROM member_applications WHERE id = ?",
+      id,
+    );
+    expect(applications[0]).toMatchObject({ status: "approved", stage: "approved" });
+
+    const events = await queryAll(
+      env.DB,
+      "SELECT id FROM member_application_events WHERE application_id = ? AND to_stage = 'approved'",
+      id,
+    );
+    expect(events).toHaveLength(1);
+
+    const orgCount = await queryAll(env.DB, "SELECT id FROM organizations WHERE name = 'Acme Corp'");
+    expect(orgCount).toHaveLength(1);
+
+    const repRows = await queryAll(
+      env.DB,
+      "SELECT id FROM organization_representatives WHERE member_id = ? AND user_id = ? AND left_at IS NULL",
+      body.memberId,
+      body.userId,
+    );
+    expect(repRows).toHaveLength(1);
+
+    const auditRows = await queryAll(
+      env.DB,
+      "SELECT id FROM audit_log WHERE action = 'application_approved' AND entity_id = ?",
+      id,
+    );
+    expect(auditRows).toHaveLength(1);
+
+    const claimEmails = await queryAll(
+      env.DB,
+      "SELECT id FROM email_outbox WHERE template_key = 'member-account-claim'",
+    );
+    expect(claimEmails).toHaveLength(1);
+
+    const syncRows = await queryAll<{ google_group_email: string }>(
+      env.DB,
+      "SELECT google_group_email FROM google_groups_sync_queue WHERE user_id = ?",
+      body.userId,
+    );
+    // Distinct target lists are unaffected by the race (the loser enqueues
+    // nothing extra, and nothing goes to the wrong list). Row *count* isn't
+    // asserted here: independent of this test, a pre-existing bug
+    // double-enqueues a working group's own mailing_list_email once via
+    // provisionOrganizationMembership's WG-join path
+    // (working-groups.ts's buildAddWorkingGroupMemberStatements) and again
+    // via this route's own WG loop, on every single approval — racing or
+    // not. Out of scope for Phase 5 (not a transaction-atomicity issue);
+    // flagged in the Phase 5 write-up rather than fixed here.
+    const groupEmails = new Set(syncRows.map((r) => r.google_group_email));
+    expect(groupEmails).toEqual(new Set(["pkic@lists.pkic.org", "consultation@lists.pkic.org", "pqc@lists.pkic.org"]));
   });
 
   it("atomicity (PR #1 review blocker 4): a provisioning failure leaves the application in ec_review, with no partial event/queue rows", async () => {

@@ -56,7 +56,7 @@ import {
   buildAssignRepresentativeRoleStatementsForNewRepresentative,
   resolveRepresentativeRoleHolders,
 } from "./representative-roles";
-import { serializeLinks } from "../../../../assets/shared/schemas/api";
+import { serializeLinks } from "../../../../assets/shared/schemas/links";
 import { INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../../../assets/shared/schemas/membership-categories";
 import type { DatabaseLike, StatementLike } from "../../types";
 
@@ -176,7 +176,7 @@ async function buildProvisionIndividualMemberships(
     for (const slug of input.workingGroupSlugs) {
       const wg = await getWorkingGroupBySlugOrId(db, slug);
       if (!wg) continue;
-      statements.push(...(await buildAddWorkingGroupMemberStatements(db, wg, user.id)));
+      statements.push(...(await buildAddWorkingGroupMemberStatements(db, wg, user.id, memberId)));
     }
 
     representatives.push({
@@ -364,7 +364,7 @@ async function buildProvisionOrganizationTiedMemberships(
     for (const slug of input.workingGroupSlugs) {
       const wg = await getWorkingGroupBySlugOrId(db, slug);
       if (!wg) continue;
-      statements.push(...(await buildAddWorkingGroupMemberStatements(db, wg, user.id)));
+      statements.push(...(await buildAddWorkingGroupMemberStatements(db, wg, user.id, aggregateId)));
     }
 
     pending.push({ rep, user, representativeId });

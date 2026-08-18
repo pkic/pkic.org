@@ -49,7 +49,7 @@ export function parseLinksJson(raw: string | null | undefined): string[] {
     return [];
   }
   const values = Array.isArray(parsed) ? parsed : parsed && typeof parsed === "object" ? Object.values(parsed) : [];
-  return values
+  const candidates = values
     .map((entry) => {
       if (typeof entry === "string") return entry;
       if (entry && typeof entry === "object") {
@@ -61,6 +61,22 @@ export function parseLinksJson(raw: string | null | undefined): string[] {
     })
     .map((url) => url.trim())
     .filter(Boolean);
+
+  // Enforce the exact contract linksSchema validates on write (http(s)-only,
+  // no case-insensitive duplicates, at most 15) against the tolerantly
+  // normalized legacy shapes above too, instead of returning them unchecked
+  // — a malformed/oversized legacy row degrades by dropping the offending
+  // entries rather than reaching an API response never checked against the
+  // schema that's supposed to be canonical for this field.
+  const deduped: string[] = [];
+  const seen = new Set<string>();
+  for (const url of candidates) {
+    const key = url.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(url);
+  }
+  return deduped.filter((url) => linkUrlSchema.safeParse(url).success).slice(0, 15);
 }
 
 export function serializeLinks(links: string[]): string {

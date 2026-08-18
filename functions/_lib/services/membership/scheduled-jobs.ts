@@ -17,14 +17,12 @@ import type { MemberApplicationRow } from "./applications/queries";
 import { hasEcDecline } from "../ec-review";
 import { approveApplication } from "./applications/approve";
 import { processGoogleGroupsSyncQueue } from "../google-groups";
-import { resolveApprovalIcsAttachments, resolveWgJoinCalendarInviteByMailingListEmail } from "../meeting-calendar";
+import { resolveWgJoinCalendarInviteByMailingListEmail } from "../meeting-calendar";
 import {
   buildConsultationBatchEmail,
   buildEcReviewBatchEmail,
   buildApplicationClosedNoResponseEmail,
   buildOnHoldReminderEmail,
-  buildMemberAccountClaimEmail,
-  buildApplicationApprovedWelcomeEmail,
   buildMailingListEnrolledEmail,
   buildWgCalendarInviteEmail,
 } from "./notifications";
@@ -215,31 +213,17 @@ export async function runEcWindowAutoApprove(
       continue;
     }
 
+    const loginUrl = `${config.appBaseUrl}/portal/`;
     const result = await approveApplication(db, {
       applicationId: application.id,
       actorUserId: null,
       eventNote: "auto_approved_no_ec_objection",
+      loginUrl,
     });
 
-    const loginUrl = `${config.appBaseUrl}/portal/`;
-    const claimOutboxId = await queueEmail(
-      db,
-      buildMemberAccountClaimEmail({ recipientEmail: result.email, memberName: result.name, loginUrl }),
-    );
-    await processOutboxByIdBackground(db, env, claimOutboxId);
-
-    const icsAttachments = await resolveApprovalIcsAttachments(db, result.workingGroupSlugs);
-    const welcomeOutboxId = await queueEmail(
-      db,
-      buildApplicationApprovedWelcomeEmail({
-        recipientEmail: result.email,
-        applicantName: result.name,
-        loginUrl,
-        workingGroupNames: result.workingGroupNames,
-        icsAttachments,
-      }),
-    );
-    await processOutboxByIdBackground(db, env, welcomeOutboxId);
+    for (const outboxId of result.outboxIds) {
+      await processOutboxByIdBackground(db, env, outboxId);
+    }
 
     autoApproved++;
   }

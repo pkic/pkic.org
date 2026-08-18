@@ -13,7 +13,7 @@ import { AppError } from "../errors";
 import { resolveOrderBy } from "../db/sort";
 import { findOrCreateUser } from "./users";
 import { normalizeOrgName } from "./sponsorship";
-import { serializeLinks, parseLinksJson } from "../../../assets/shared/schemas/api";
+import { serializeLinks, parseLinksJson } from "../../../assets/shared/schemas/links";
 import {
   getOrCreateOrganizationMemberAggregate,
   buildCreateIndividualMemberStatements,

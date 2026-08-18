@@ -1,3 +1,9 @@
+import { SPONSORSHIP_PIPELINE_STAGES, type SponsorshipPipelineStage } from "../../shared/schemas/admin-sponsorships";
+import { MAILING_LIST_TYPES } from "../../shared/schemas/admin-mailing-lists";
+
+export { SPONSORSHIP_PIPELINE_STAGES };
+export type { SponsorshipPipelineStage };
+
 export interface EventSummary {
   id: string;
   slug: string;
@@ -790,25 +796,13 @@ export interface MailingList {
   id: string;
   email: string;
   label: string;
-  listType: "all_members" | "consultation" | "ec" | "working_group" | "custom";
+  listType: (typeof MAILING_LIST_TYPES)[number];
   workingGroupId: string | null;
   autoSyncCategories: string[] | null;
   active: boolean;
   createdAt: string;
   updatedAt: string;
 }
-
-// Sponsorship sales pipeline
-export const SPONSORSHIP_PIPELINE_STAGES = [
-  "new_inquiry",
-  "contacted",
-  "proposal_sent",
-  "negotiating",
-  "payment_pending",
-  "active",
-  "lapsed",
-] as const;
-export type SponsorshipPipelineStage = (typeof SPONSORSHIP_PIPELINE_STAGES)[number];
 
 export interface Sponsorship {
   id: string;

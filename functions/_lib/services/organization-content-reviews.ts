@@ -21,7 +21,7 @@ import { all, first, run } from "../db/queries";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { parseJsonSafe } from "../utils/json";
-import { parseLinksJson, serializeLinks } from "../../../assets/shared/schemas/api";
+import { parseLinksJson, serializeLinks } from "../../../assets/shared/schemas/links";
 import { AppError } from "../errors";
 import { resolveRepresentativeRoleHolders } from "./membership/representative-roles";
 import type { AuthAdmin, AuthMember, DatabaseLike } from "../types";

@@ -14,7 +14,7 @@
 import { all, first, run } from "../db/queries";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
-import { parseLinksJson, findLinkedinUrl } from "../../../assets/shared/schemas/api";
+import { parseLinksJson, findLinkedinUrl } from "../../../assets/shared/schemas/links";
 import { deterministicRepresentativeJoinSql } from "./membership/representative-lookup";
 import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";

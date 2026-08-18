@@ -23,6 +23,16 @@ describe("OpenAPI schema generation", () => {
     expect(operation.description).toContain("Required scopes: `proposal-reviews:write`.");
   });
 
+  it("documents role ids as plain strings, not uuid()-formatted, so built-in system roles are valid per the spec (Phase 3 §3.1)", () => {
+    const spec = decorateOpenApiSpec(openapi.schema);
+    const rolesGet = spec.paths["/api/v1/admin/roles"].get;
+    const roleIdSchema =
+      rolesGet.responses["200"].content["application/json"].schema.properties.roles.items.properties.id;
+
+    expect(roleIdSchema.type).toBe("string");
+    expect(roleIdSchema.format).toBeUndefined();
+  });
+
   it("uses structured schemas for registration confirmation day arrays", () => {
     const dayAttendanceSchema = registrationConfirmResponseSchema.shape.dayAttendance;
     const dayWaitlistSchema = registrationConfirmResponseSchema.shape.dayWaitlist;

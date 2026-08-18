@@ -1,6 +1,6 @@
 import { all, first } from "../../db/queries";
 import { parseJsonSafe } from "../../utils/json";
-import { parseLinksJson, findLinkedinUrl } from "../../../../assets/shared/schemas/api";
+import { parseLinksJson, findLinkedinUrl } from "../../../../assets/shared/schemas/links";
 import { deterministicRepresentativeJoinSql } from "./representative-lookup";
 import type { DatabaseLike } from "../../types";
 

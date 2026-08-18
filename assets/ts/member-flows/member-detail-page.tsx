@@ -15,7 +15,7 @@ import { getJson } from "../shared/api-client";
 import { Spinner } from "../components/Spinner";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { Markdown } from "../components/Markdown";
-import { findLinkedinUrl } from "../../shared/schemas/api";
+import { findLinkedinUrl } from "../../shared/schemas/links";
 
 const API_BASE_FALLBACK = "/api/v1";
 

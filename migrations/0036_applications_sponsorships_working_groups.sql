@@ -80,6 +80,22 @@ CREATE TABLE member_application_events (
 
 CREATE INDEX idx_member_application_events_app ON member_application_events(application_id, created_at);
 
+-- Approval is a one-time, terminal transition (approveApplication is the
+-- sole path to status='approved'). This structurally rejects a second
+-- concurrent approval batch outright: if two approve() calls both pass the
+-- read-time stage check and race to commit, the loser's event insert
+-- violates this index, failing its entire db.batch() (one transaction) —
+-- so its provisioning/email/audit/Google-Groups writes in the same batch
+-- never commit either, without needing per-statement claim-token chaining.
+-- Scoped to `from_stage != 'approved'` (a real transition into approved) so
+-- it does NOT also reject updateAdminApplication's own
+-- from_stage = to_stage = 'approved' marker event, which records a details
+-- edit on an application that's already approved without representing a
+-- second approval.
+CREATE UNIQUE INDEX uq_member_application_events_approved
+  ON member_application_events(application_id)
+  WHERE to_stage = 'approved' AND (from_stage IS NULL OR from_stage != 'approved');
+
 CREATE TABLE application_documents (
   id                TEXT NOT NULL PRIMARY KEY,
   application_id    TEXT NOT NULL,
@@ -174,14 +190,27 @@ CREATE TABLE working_group_members (
   id               TEXT NOT NULL PRIMARY KEY,
   working_group_id TEXT NOT NULL,
   user_id          TEXT NOT NULL,
+  -- Which membership (individual or organization-tied aggregate, `members.id`
+  -- from migration 0037 below) this WG seat is held on behalf of. Nullable:
+  -- a staff-driven add for a target holding more than one active membership
+  -- has no unambiguous "acting as" context to record (PR #1 review,
+  -- phase1-2-review-20260817.md blocker 2 — "Working-group participation...
+  -- need an explicit member_id when the person acts on behalf of a
+  -- particular member"). Forward references `members`, created by the next
+  -- migration in this same unreleased range — SQLite does not validate FK
+  -- target existence at CREATE TABLE time, only at DML time, and `members`
+  -- exists by the time any row here is ever written.
+  member_id        TEXT,
   joined_at        TEXT NOT NULL,
   left_at          TEXT,
   FOREIGN KEY(working_group_id) REFERENCES working_groups(id),
-  FOREIGN KEY(user_id) REFERENCES users(id)
+  FOREIGN KEY(user_id) REFERENCES users(id),
+  FOREIGN KEY(member_id) REFERENCES members(id)
 );
 
 CREATE INDEX idx_wg_members_wg ON working_group_members(working_group_id, left_at);
 CREATE INDEX idx_wg_members_user ON working_group_members(user_id);
+CREATE INDEX idx_wg_members_member ON working_group_members(member_id);
 -- At most one active (left_at IS NULL) membership per (working_group, user);
 -- partial so a user can rejoin after leaving.
 CREATE UNIQUE INDEX idx_wg_members_active_unique ON working_group_members(working_group_id, user_id) WHERE left_at IS NULL;

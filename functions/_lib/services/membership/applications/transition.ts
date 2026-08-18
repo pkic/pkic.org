@@ -11,25 +11,14 @@
 import { uuid } from "../../../utils/ids";
 import { nowIso } from "../../../utils/time";
 import { AppError } from "../../../errors";
-import { ON_HOLD_SUBTYPES } from "../../../../../assets/shared/schemas/member-applications";
+import { ON_HOLD_SUBTYPES, allowedTransitions } from "../../../../../assets/shared/schemas/member-applications";
 import { getMemberApplicationById, type MemberApplicationRow } from "./queries";
 import type { ApplicationStage } from "./create";
 import type { DatabaseLike } from "../../../types";
 
-export { ON_HOLD_SUBTYPES };
+export { ON_HOLD_SUBTYPES, allowedTransitions };
 export type OnHoldSubtype = (typeof ON_HOLD_SUBTYPES)[number];
 const ON_HOLD_SUBTYPE_SET = new Set<string>(ON_HOLD_SUBTYPES);
-
-const ALLOWED_STAGE_TRANSITIONS: Record<ApplicationStage, ApplicationStage[]> = {
-  pending: ["in_review", "withdrawn"],
-  in_review: ["on_hold", "in_consultation", "declined", "withdrawn"],
-  on_hold: ["in_review", "withdrawn"],
-  in_consultation: ["ec_review", "withdrawn"],
-  ec_review: ["declined", "withdrawn"],
-  approved: [],
-  declined: [],
-  withdrawn: [],
-};
 
 export const ON_HOLD_SUBTYPE_EMAIL_TEMPLATES: Record<OnHoldSubtype, string> = {
   request_authority: "application-hold-authority",
@@ -45,7 +34,7 @@ const STAGE_EMAIL_TEMPLATES: Partial<Record<string, string>> = {
 };
 
 export function isValidStageTransition(fromStage: string, toStage: string): boolean {
-  const allowed = (ALLOWED_STAGE_TRANSITIONS as Record<string, ApplicationStage[]>)[fromStage] ?? [];
+  const allowed = allowedTransitions(fromStage as ApplicationStage) ?? [];
   return allowed.includes(toStage as ApplicationStage);
 }
 
@@ -95,22 +84,41 @@ export async function transitionApplicationStage(
 
   const now = nowIso();
   const nextOnHoldSubtype = params.toStage === "on_hold" ? (params.onHoldSubtype as string) : null;
+  const fromStage = application.stage;
 
-  await db.batch([
+  const [updateResult] = await db.batch([
+    // Compare-and-set: only applies if the row is still in the stage we read.
+    // Two concurrent transitions reading the same fromStage can no longer
+    // both win — the loser's UPDATE affects 0 rows.
     db
       .prepare(
         `UPDATE member_applications
          SET status = ?, stage = ?, stage_entered_at = ?, on_hold_subtype = ?, updated_at = ?
-         WHERE id = ?`,
+         WHERE id = ? AND stage = ?`,
       )
-      .bind(params.toStage, params.toStage, now, nextOnHoldSubtype, now, application.id),
+      .bind(params.toStage, params.toStage, now, nextOnHoldSubtype, now, application.id, fromStage),
+    // Conditioned on the UPDATE above having itself changed a row (SQLite's
+    // changes() reflects the immediately preceding statement within the same
+    // batch/transaction) — not merely on the row's current state, which a
+    // concurrent winner transitioning to the same toStage could satisfy even
+    // for the loser. A lost compare-and-set must not leave a history event
+    // for a transition that never happened.
     db
       .prepare(
         `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         SELECT ?, ?, ?, ?, ?, ?, ?
+         WHERE changes() = 1`,
       )
-      .bind(uuid(), application.id, application.stage, params.toStage, params.actorUserId, params.note ?? null, now),
+      .bind(uuid(), application.id, fromStage, params.toStage, params.actorUserId, params.note ?? null, now),
   ]);
+
+  if ((updateResult.meta?.changes ?? 0) === 0) {
+    throw new AppError(
+      409,
+      "STAGE_TRANSITION_CONFLICT",
+      `Application stage changed concurrently; expected '${fromStage}'`,
+    );
+  }
 
   const suggestedEmailTemplateKey =
     params.toStage === "on_hold"

@@ -195,6 +195,56 @@ describe("admin working groups", () => {
     expect(response.status).toBe(201);
   });
 
+  it("records member_id on the working_group_members row when the target has exactly one active membership (PR #1 review blocker 2)", async () => {
+    const wgId = await insertWorkingGroup("Test PQC 2", "test-pqc-2");
+    const userId = await insertUser("single-membership@example.test");
+    await insertMember(userId, "F");
+
+    const response = await call(adminToken, `/api/v1/admin/working-groups/${wgId}/members`, {
+      method: "POST",
+      body: JSON.stringify({ userId }),
+    });
+    expect(response.status).toBe(201);
+
+    const [rep] = await queryAll<{ member_id: string }>(
+      env.DB,
+      "SELECT member_id FROM organization_representatives WHERE user_id = ?",
+      userId,
+    );
+    const [wgm] = await queryAll<{ member_id: string | null }>(
+      env.DB,
+      "SELECT member_id FROM working_group_members WHERE working_group_id = ? AND user_id = ?",
+      wgId,
+      userId,
+    );
+    expect(wgm!.member_id).toBe(rep!.member_id);
+  });
+
+  it("leaves member_id null on the working_group_members row when the target holds more than one active membership (no unambiguous context)", async () => {
+    const wgId = await insertWorkingGroup("Test PQC 3", "test-pqc-3");
+    const userId = await insertUser("multi-membership@example.test");
+    const orgIdA = await insertOrganization(env.DB, "Multi-Org A");
+    const memberIdA = await seedOrganizationAggregate(env.DB, orgIdA, "F");
+    await addRepresentative(env.DB, memberIdA, userId);
+    const orgIdB = await insertOrganization(env.DB, "Multi-Org B");
+    const memberIdB = await seedOrganizationAggregate(env.DB, orgIdB, "F");
+    await addRepresentative(env.DB, memberIdB, userId);
+
+    const response = await call(adminToken, `/api/v1/admin/working-groups/${wgId}/members`, {
+      method: "POST",
+      body: JSON.stringify({ userId }),
+    });
+    expect(response.status).toBe(201);
+
+    const [wgm] = await queryAll<{ member_id: string | null }>(
+      env.DB,
+      "SELECT member_id FROM working_group_members WHERE working_group_id = ? AND user_id = ?",
+      wgId,
+      userId,
+    );
+    expect(wgm!.member_id).toBeNull();
+  });
+
   it("deterministically allows a person representing both a category-A and a non-A organization (not an arbitrary pick)", async () => {
     // PR #1 review, phase1-2-review-20260817.md blocker 2: the CA
     // eligibility check previously used an unordered scalar subquery, so a
@@ -374,5 +424,70 @@ describe("admin working groups", () => {
       body: JSON.stringify({ name: "Should Not Be Created" }),
     });
     expect(response.status).toBe(403);
+  });
+
+  // ── Phase 4 item 2: WG chair contextual permission on add/remove member ──
+  // A role-wg_chair grant is scoped to {type: "working_group", id}, and
+  // hasPermission rejects a contextual grant when no context is supplied.
+  // These assert the working-groups/:id/** subtree gate
+  // (requireWorkingGroupAccess in working-groups/[id]/router.ts) actually
+  // resolves and passes that context, rather than calling requirePermission
+  // with no context like the sibling handlers used to.
+
+  async function assignWgChair(userId: string, wgId: string): Promise<void> {
+    const chairRoleId = await findRoleId("wg_chair");
+    await env.DB.prepare(
+      `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, granted_by_user_id, created_at)
+       VALUES (?, ?, ?, 'working_group', ?, ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), userId, chairRoleId, wgId, adminId)
+      .run();
+  }
+
+  it("a WG chair (context-scoped working-groups:write) can add and remove a member on their own working group", async () => {
+    const wgId = await insertWorkingGroup("Chair-Managed WG", "chair-managed-wg");
+    const chairUserId = await insertUser("chair-manages-own@example.test");
+    await assignWgChair(chairUserId, wgId);
+    const chairToken = await createAdminSession(env.DB, chairUserId, "chair-manages-own-token");
+
+    const targetUserId = await insertUser("chair-added-member@example.test");
+
+    const addResponse = await call(chairToken, `/api/v1/admin/working-groups/${wgId}/members`, {
+      method: "POST",
+      body: JSON.stringify({ userId: targetUserId }),
+    });
+    expect(addResponse.status).toBe(201);
+
+    const removeResponse = await call(chairToken, `/api/v1/admin/working-groups/${wgId}/members/${targetUserId}`, {
+      method: "DELETE",
+    });
+    expect(removeResponse.status).toBe(200);
+  });
+
+  it("a WG chair scoped to a different working group cannot add or remove a member on this one", async () => {
+    const ownWgId = await insertWorkingGroup("Chair's Own WG", "chairs-own-wg");
+    const otherWgId = await insertWorkingGroup("Other WG", "other-wg");
+    const chairUserId = await insertUser("chair-other-wg@example.test");
+    await assignWgChair(chairUserId, ownWgId);
+    const chairToken = await createAdminSession(env.DB, chairUserId, "chair-other-wg-token");
+
+    const targetUserId = await insertUser("not-added-member@example.test");
+
+    const addResponse = await call(chairToken, `/api/v1/admin/working-groups/${otherWgId}/members`, {
+      method: "POST",
+      body: JSON.stringify({ userId: targetUserId }),
+    });
+    expect(addResponse.status).toBe(403);
+
+    // Seed the member directly (bypassing the API) so removal has something
+    // to act on, and confirm the chair still can't remove it via the API.
+    await call(adminToken, `/api/v1/admin/working-groups/${otherWgId}/members`, {
+      method: "POST",
+      body: JSON.stringify({ userId: targetUserId }),
+    });
+    const removeResponse = await call(chairToken, `/api/v1/admin/working-groups/${otherWgId}/members/${targetUserId}`, {
+      method: "DELETE",
+    });
+    expect(removeResponse.status).toBe(403);
   });
 });

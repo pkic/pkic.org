@@ -166,6 +166,30 @@ describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application field
     expect(events[0].actor_user_id).toBe(adminId);
   });
 
+  it("allows editing an already-approved application's details more than once (uq_member_application_events_approved must not reject the from_stage=to_stage='approved' marker event)", async () => {
+    const { id } = await createApplication({ stage: "approved", status: "approved" });
+
+    const first = await call(adminToken, `/api/v1/admin/applications/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ applicantName: "First Correction" }),
+    });
+    expect(first.status).toBe(200);
+
+    const second = await call(adminToken, `/api/v1/admin/applications/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ applicantName: "Second Correction" }),
+    });
+    expect(second.status).toBe(200);
+
+    const events = await queryAll<{ from_stage: string; to_stage: string }>(
+      env.DB,
+      "SELECT from_stage, to_stage FROM member_application_events WHERE application_id = ? ORDER BY created_at",
+      id,
+    );
+    expect(events).toHaveLength(2);
+    expect(events.every((e) => e.from_stage === "approved" && e.to_stage === "approved")).toBe(true);
+  });
+
   it("writes an audit_log entry for the edit", async () => {
     const { id } = await createApplication();
 

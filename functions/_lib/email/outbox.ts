@@ -112,27 +112,32 @@ function sniffImageAttachmentFormat(contentType: string, bytes: Uint8Array): { c
   return { contentType: "image/jpeg", ext: "jpg" };
 }
 
-export async function queueEmail(
-  db: DatabaseLike,
-  payload: {
-    eventId?: string | null;
-    baseUrl?: string;
-    templateKey: string;
-    recipientUserId?: string | null;
-    recipientEmail: string;
-    subject?: string | null;
-    data: Record<string, unknown>;
-    capabilityLinkValues?: unknown[];
-    messageType: "transactional" | "promotional";
-    calendar?: CalendarPayload;
-    attachments?: QueuedEmailAttachment[];
-    replyTo?: string;
-    bounceAddress?: string;
-    /** Delay delivery by this many seconds (e.g. to let OG badge rendering finish). */
-    sendAfterSeconds?: number;
-  },
-): Promise<string> {
-  const id = uuid();
+export interface QueueEmailPayload {
+  eventId?: string | null;
+  baseUrl?: string;
+  templateKey: string;
+  recipientUserId?: string | null;
+  recipientEmail: string;
+  subject?: string | null;
+  data: Record<string, unknown>;
+  capabilityLinkValues?: unknown[];
+  messageType: "transactional" | "promotional";
+  calendar?: CalendarPayload;
+  attachments?: QueuedEmailAttachment[];
+  replyTo?: string;
+  bounceAddress?: string;
+  /** Delay delivery by this many seconds (e.g. to let OG badge rendering finish). */
+  sendAfterSeconds?: number;
+}
+
+const EMAIL_OUTBOX_INSERT_SQL = `INSERT INTO email_outbox (
+      id, event_id, template_key, template_version, recipient_user_id, recipient_email,
+      subject, payload_json, message_type, provider, provider_message_id, status, attempts,
+      send_after, last_error, created_at, updated_at, sent_at
+    ) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, 'sendgrid', NULL, 'queued', 0, ?, NULL, ?, ?, NULL)`;
+
+/** Shared row-shaping between `queueEmail` (immediate) and `prepareQueueEmailStatement` (batched) so both insert identical rows. */
+function buildEmailOutboxValues(payload: QueueEmailPayload, id: string, queuedAt: string): unknown[] {
   const data = { ...payload.data } as Record<string, unknown>;
 
   if (typeof payload.baseUrl === "string" && payload.baseUrl) {
@@ -160,31 +165,44 @@ export async function queueEmail(
   const sendAfter =
     payload.sendAfterSeconds && payload.sendAfterSeconds > 0
       ? new Date(Date.now() + payload.sendAfterSeconds * 1000).toISOString()
-      : nowIso();
+      : queuedAt;
 
-  await run(
-    db,
-    `INSERT INTO email_outbox (
-      id, event_id, template_key, template_version, recipient_user_id, recipient_email,
-      subject, payload_json, message_type, provider, provider_message_id, status, attempts,
-      send_after, last_error, created_at, updated_at, sent_at
-    ) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, 'sendgrid', NULL, 'queued', 0, ?, NULL, ?, ?, NULL)`,
-    [
-      id,
-      payload.eventId ?? null,
-      payload.templateKey,
-      payload.recipientUserId ?? null,
-      payload.recipientEmail,
-      payload.subject ?? null,
-      stringifyJson(storedData),
-      payload.messageType,
-      sendAfter,
-      nowIso(),
-      nowIso(),
-    ],
-  );
+  return [
+    id,
+    payload.eventId ?? null,
+    payload.templateKey,
+    payload.recipientUserId ?? null,
+    payload.recipientEmail,
+    payload.subject ?? null,
+    stringifyJson(storedData),
+    payload.messageType,
+    sendAfter,
+    queuedAt,
+    queuedAt,
+  ];
+}
 
+export async function queueEmail(db: DatabaseLike, payload: QueueEmailPayload): Promise<string> {
+  const id = uuid();
+  await run(db, EMAIL_OUTBOX_INSERT_SQL, buildEmailOutboxValues(payload, id, nowIso()));
   return id;
+}
+
+/**
+ * Same row as `queueEmail`, but returns a prepared statement instead of
+ * executing — for callers that need the outbox insert to commit in the
+ * same `db.batch()` as other durable writes (e.g.
+ * membership/applications/approve.ts folding the claim/welcome/contact
+ * emails into the same atomic boundary as provisioning, PR #1 review
+ * phase1-2-review-20260817.md blocker 4).
+ */
+export function prepareQueueEmailStatement(
+  db: DatabaseLike,
+  payload: QueueEmailPayload,
+  queuedAt = nowIso(),
+): { id: string; statement: StatementLike } {
+  const id = uuid();
+  return { id, statement: db.prepare(EMAIL_OUTBOX_INSERT_SQL).bind(...buildEmailOutboxValues(payload, id, queuedAt)) };
 }
 
 /** Builds prepared outbox inserts so callers can combine them with related D1 writes. */
@@ -215,13 +233,7 @@ export function prepareBulkQueueEmailStatements(
       return {
         id,
         statement: db
-          .prepare(
-            `INSERT INTO email_outbox (
-              id, event_id, template_key, template_version, recipient_user_id, recipient_email,
-              subject, payload_json, message_type, provider, provider_message_id, status, attempts,
-              send_after, last_error, created_at, updated_at, sent_at
-            ) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, 'sendgrid', NULL, 'queued', 0, ?, NULL, ?, ?, NULL)`,
-          )
+          .prepare(EMAIL_OUTBOX_INSERT_SQL)
           .bind(
             id,
             row.eventId,

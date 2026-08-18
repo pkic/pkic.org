@@ -38,10 +38,11 @@ export const WgMeetingDelete = openApiRoute(wgMeetingDeleteRouteSchema, async (c
   const wg = await getWorkingGroupBySlugOrId(db, data.params.id);
   if (!wg) throw new AppError(404, "WORKING_GROUP_NOT_FOUND", "Working group not found");
 
-  // Access is already gated by this resource's own router middleware (see
-  // ../router.ts's requireWgMeetingsAccess) — requireAdminFromRequest here
-  // just re-reads the (request-cached) admin to get its id for the audit
-  // log, matching the ../../members/[userId].ts precedent.
+  // Access is already gated by the parent working-groups/:id/ router's own
+  // middleware (see ../../router.ts's requireWorkingGroupAccess) —
+  // requireAdminFromRequest here just re-reads the (request-cached) admin
+  // to get its id for the audit log, matching the ../../members/[userId].ts
+  // precedent.
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
 
   const meetingId = data.params.meetingId;

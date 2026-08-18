@@ -1,9 +1,9 @@
 /**
  * GET/POST /api/v1/admin/working-groups/:id/meetings — list/create meeting
- * series for a working group. Access is gated by this router's
- * own middleware (see ./router.ts), not by a per-handler requirePermission
- * call — matches events/[eventSlug]/router.ts's requireEventManagementAccess
- * precedent.
+ * series for a working group. Access is gated by the parent working-groups/
+ * :id/ router's own middleware (see ../router.ts's requireWorkingGroupAccess),
+ * not by a per-handler requirePermission call — matches
+ * events/[eventSlug]/router.ts's requireEventManagementAccess precedent.
  */
 import { json } from "../../../../../../_lib/http";
 import { listAdminMeetingSeriesForWg, createWgMeetingSeries } from "../../../../../../_lib/services/meeting-calendar";
