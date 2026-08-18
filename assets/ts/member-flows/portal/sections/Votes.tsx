@@ -287,7 +287,7 @@ function VotesList({ wgNames }: { wgNames: Map<string, string> }) {
 
   const reload = useCallback(async () => {
     try {
-      const data = await getJson<{ votes: PortalVote[] }>("/api/v1/portal/votes");
+      const data = await getJson<{ votes: PortalVote[] }>("/api/v1/portal/votes?limit=200");
       setVotes(data.votes);
       setError(null);
     } catch (e) {

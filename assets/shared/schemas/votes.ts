@@ -187,10 +187,11 @@ export const portalVotesListRouteSchema = {
   tags: ["Portal Votes"],
   summary: "List all votes visible to the caller",
   description: "Every forum vote, every public vote, plus every vote scoped to a working group the caller belongs to.",
+  request: { query: paginationQuerySchema },
   responses: {
     "200": {
       description: "Visible votes.",
-      content: { "application/json": { schema: z.object({ votes: z.array(portalVoteSchema) }) } },
+      content: { "application/json": { schema: paginatedResponseSchema("votes", portalVoteSchema) } },
     },
   },
 };

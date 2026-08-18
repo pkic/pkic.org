@@ -813,10 +813,96 @@ describe("Voting system", () => {
 
     const res = await call(token, "/api/v1/me/votes");
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { votes: Array<{ voteId: string; choice: string }> };
+    const body = (await res.json()) as {
+      votes: Array<{ voteId: string; choice: string }>;
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
     expect(body.votes).toHaveLength(1);
     expect(body.votes[0].voteId).toBe(vote.id);
     expect(body.votes[0].choice).toBe("in_favor");
+    expect(body.page).toEqual({ limit: 50, offset: 0, total: 1, hasMore: false });
+  });
+
+  it("GET /api/v1/portal/votes returns bounded, correctly-computed canCastBallot/hasCastBallot/candidates without a per-vote query fan-out", async () => {
+    const orgId = await insertOrganization("Portal Votes Org");
+    const delegateUserId = await insertMemberUser("A", orgId);
+    await setOrgContacts(orgId, delegateUserId, delegateUserId);
+    const token = await createMemberSession(env.DB, delegateUserId, "portal-votes-token");
+
+    const closesAt = new Date(Date.now() + 3600_000).toISOString();
+    const voteIds: string[] = [];
+    for (let i = 0; i < 3; i += 1) {
+      const createRes = await call(adminToken, "/api/v1/admin/votes", {
+        method: "POST",
+        body: JSON.stringify({
+          title: `Forum Election ${i}`,
+          voteType: "election",
+          scopeType: "forum",
+          thresholdType: "simple_majority",
+          closesAt,
+          candidates: [{ name: "Alice" }, { name: "Bob" }],
+        }),
+      });
+      const { vote } = (await createRes.json()) as { vote: { id: string } };
+      voteIds.push(vote.id);
+    }
+
+    // Cast a ballot on the first vote so hasCastBallot must be true for it
+    // and false for the other two — proves the bulk lookup is keyed
+    // per-vote, not a single flag applied to the whole page.
+    const firstDetail = await call(token, `/api/v1/portal/votes/${voteIds[0]}`);
+    const { vote: firstVoteDetail } = (await firstDetail.json()) as {
+      vote: { candidates: Array<{ id: string; candidateName: string }> };
+    };
+    const aliceId = firstVoteDetail.candidates!.find((c) => c.candidateName === "Alice")!.id;
+    await call(token, `/api/v1/portal/votes/${voteIds[0]}/ballots`, {
+      method: "POST",
+      body: JSON.stringify({ choice: aliceId }),
+    });
+
+    // Query-count regression check: the list handler must issue a bounded
+    // number of D1 queries regardless of how many votes are on the page —
+    // wrap prepare() and assert the count doesn't grow between a
+    // single-vote page and the full 3-vote page (an N+1 would fail this).
+    const originalPrepare = env.DB.prepare.bind(env.DB);
+    let prepareCalls = 0;
+    (env.DB as unknown as { prepare: typeof env.DB.prepare }).prepare = (query: string) => {
+      prepareCalls += 1;
+      return originalPrepare(query);
+    };
+    try {
+      const onePageRes = await call(token, "/api/v1/portal/votes?limit=1");
+      expect(onePageRes.status).toBe(200);
+      const onePageCount = prepareCalls;
+
+      prepareCalls = 0;
+      const fullPageRes = await call(token, "/api/v1/portal/votes?limit=50");
+      expect(fullPageRes.status).toBe(200);
+      const fullPageCount = prepareCalls;
+
+      expect(fullPageCount).toBe(onePageCount);
+
+      const body = (await fullPageRes.json()) as {
+        votes: Array<{
+          id: string;
+          candidates: Array<{ candidateName: string }> | null;
+          canCastBallot: boolean;
+          hasCastBallot: boolean;
+        }>;
+        page: { limit: number; offset: number; total: number; hasMore: boolean };
+      };
+      expect(body.page).toEqual({ limit: 50, offset: 0, total: 3, hasMore: false });
+      const byId = new Map(body.votes.map((v) => [v.id, v]));
+      expect(byId.get(voteIds[0])!.hasCastBallot).toBe(true);
+      expect(byId.get(voteIds[1])!.hasCastBallot).toBe(false);
+      expect(byId.get(voteIds[2])!.hasCastBallot).toBe(false);
+      for (const id of voteIds) {
+        expect(byId.get(id)!.canCastBallot).toBe(true);
+        expect(byId.get(id)!.candidates).toHaveLength(2);
+      }
+    } finally {
+      (env.DB as unknown as { prepare: typeof env.DB.prepare }).prepare = originalPrepare;
+    }
   });
 
   it("RSS feed responds with XML for public votes", async () => {
