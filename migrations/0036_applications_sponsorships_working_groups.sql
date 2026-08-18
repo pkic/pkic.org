@@ -80,6 +80,22 @@ CREATE TABLE member_application_events (
 
 CREATE INDEX idx_member_application_events_app ON member_application_events(application_id, created_at);
 
+-- Approval is a one-time, terminal transition (approveApplication is the
+-- sole path to status='approved'). This structurally rejects a second
+-- concurrent approval batch outright: if two approve() calls both pass the
+-- read-time stage check and race to commit, the loser's event insert
+-- violates this index, failing its entire db.batch() (one transaction) —
+-- so its provisioning/email/audit/Google-Groups writes in the same batch
+-- never commit either, without needing per-statement claim-token chaining.
+-- Scoped to `from_stage != 'approved'` (a real transition into approved) so
+-- it does NOT also reject updateAdminApplication's own
+-- from_stage = to_stage = 'approved' marker event, which records a details
+-- edit on an application that's already approved without representing a
+-- second approval.
+CREATE UNIQUE INDEX uq_member_application_events_approved
+  ON member_application_events(application_id)
+  WHERE to_stage = 'approved' AND (from_stage IS NULL OR from_stage != 'approved');
+
 CREATE TABLE application_documents (
   id                TEXT NOT NULL PRIMARY KEY,
   application_id    TEXT NOT NULL,

@@ -38,6 +38,16 @@
  * interactive admin route always sets it; the unattended EC-window
  * auto-approve job passes `null` and intentionally writes no audit entry,
  * unchanged from its prior behavior).
+ *
+ * Race-safety (PR #1 review §5 correction): the stage-transition UPDATE is
+ * a compare-and-set (`WHERE stage = <the stage this call read>`), and the
+ * event insert is conditioned on that UPDATE's own success rather than on
+ * the row's post-write state (which a concurrent winner racing to the same
+ * 'approved' target could also satisfy). `uq_member_application_events_approved`
+ * (migration 0036) backstops this by rejecting a second concurrent
+ * approval's event insert outright, failing that whole `db.batch()` so its
+ * provisioning/notification/audit statements never commit either — see the
+ * inline comments around the guard below for the full mechanism.
  */
 import { first } from "../../../db/queries";
 import { nowIso } from "../../../utils/time";
@@ -143,27 +153,35 @@ export async function approveApplication(
   const member = representatives[0];
 
   const now = nowIso();
+  const fromStage = application.stage;
   const statements: StatementLike[] = [...provisioning.statements];
 
+  // Compare-and-set: only applies if the application is still in ec_review,
+  // guarding against a stale read racing a concurrent decline/on-hold/
+  // second-approval transition. The 0-affected-rows outcome alone doesn't
+  // stop the batch (D1 batch doesn't short-circuit on a WHERE match miss),
+  // so a lost race is caught two ways below: the event insert is
+  // conditioned on this UPDATE's own success (changes() = 1, not on the
+  // row's post-write state, which a concurrent winner transitioning to the
+  // same 'approved' target could also satisfy), and
+  // uq_member_application_events_approved (migration 0036) makes a second
+  // concurrent approval's event insert fail outright, aborting this whole
+  // db.batch() — including the provisioning/notification/audit statements
+  // below — rather than leaving them committed alongside a rejected guard.
+  const guardIndex = statements.length;
   statements.push(
     db
       .prepare(
-        `UPDATE member_applications SET status = 'approved', stage = 'approved', stage_entered_at = ?, updated_at = ? WHERE id = ?`,
+        `UPDATE member_applications SET status = 'approved', stage = 'approved', stage_entered_at = ?, updated_at = ? WHERE id = ? AND stage = ?`,
       )
-      .bind(now, now, application.id),
+      .bind(now, now, application.id, fromStage),
     db
       .prepare(
         `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
-         VALUES (?, ?, ?, 'approved', ?, ?, ?)`,
+         SELECT ?, ?, ?, 'approved', ?, ?, ?
+         WHERE changes() = 1`,
       )
-      .bind(
-        uuid(),
-        application.id,
-        application.stage,
-        params.actorUserId,
-        params.eventNote ?? "Application approved",
-        now,
-      ),
+      .bind(uuid(), application.id, fromStage, params.actorUserId, params.eventNote ?? "Application approved", now),
   );
 
   // Google Groups enqueue (real API client is in google-groups.ts; this
@@ -261,7 +279,35 @@ export async function approveApplication(
     );
   }
 
-  await db.batch(statements);
+  let results: Awaited<ReturnType<DatabaseLike["batch"]>>;
+  try {
+    results = await db.batch(statements);
+  } catch (err) {
+    // A concurrent second approval of this same application is the one
+    // failure this batch is expected to hit via a natural constraint
+    // (uq_member_application_events_approved, or a representative/role
+    // uniqueness constraint inside provisioning.statements) rather than a
+    // silent 0-row guard update. Confirm that's actually what happened
+    // before reporting it as a clean 409 — any other batch failure (a real
+    // DB error, an unrelated constraint) is rethrown unchanged.
+    const current = await getMemberApplicationById(db, application.id);
+    if (current && current.stage !== "ec_review") {
+      throw new AppError(
+        409,
+        "APPLICATION_ALREADY_APPROVED",
+        "Application was already approved or moved to a different stage",
+      );
+    }
+    throw err;
+  }
+
+  if ((results[guardIndex]?.meta?.changes ?? 0) === 0) {
+    throw new AppError(
+      409,
+      "APPLICATION_ALREADY_APPROVED",
+      `Application stage changed concurrently; expected '${fromStage}'`,
+    );
+  }
 
   return {
     applicationId: application.id,
