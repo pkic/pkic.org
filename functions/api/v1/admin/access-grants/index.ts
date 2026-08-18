@@ -20,10 +20,10 @@ import { AppError } from "../../../../_lib/errors";
 import { resolveOrderBy } from "../../../../_lib/db/sort";
 import {
   accessGrantsCreateRouteSchema,
-  accessGrantsListQuerySchema,
   accessGrantsListRouteSchema,
   ADMIN_ACCESS_GRANTS_SORT_COLUMNS,
 } from "../../../../../assets/shared/schemas/access-control";
+import { buildPageInfo } from "../../../../../assets/shared/schemas/pagination";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 
@@ -49,40 +49,31 @@ function serializeGrant(row: GrantRow) {
   };
 }
 
-export const AccessGrantsList = openApiRoute(accessGrantsListRouteSchema, async (c: AdminContext, _data) => {
+export const AccessGrantsList = openApiRoute(accessGrantsListRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   if (!hasPermission(admin, "access:grant") && !hasPermission(admin, "access:revoke")) {
     requirePermission(admin, "access:grant");
   }
 
-  // userId isn't part of the declared query schema (it's a free-form
-  // filter, not a sort/shape concern), and the invalid-sort fallback below
-  // intentionally differs from strict schema rejection — same "quietly
-  // ignore" behavior admin-organizations.ts's route uses — so this query
-  // parsing stays manual rather than switching to `data.query`.
-  const url = new URL(c.req.raw.url);
-  const userId = url.searchParams.get("userId");
-  // An invalid sort value fails schema validation (unknown column), so
-  // `parsed.success` is false and we just fall back to the default order —
-  // same "quietly ignore" behavior admin-organizations.ts's route uses.
-  const parsed = accessGrantsListQuerySchema.safeParse({ sort: url.searchParams.get("sort") ?? undefined });
-  const sort = parsed.success ? parsed.data.sort : undefined;
+  const { userId, sort, limit = 50, offset = 0 } = data.query;
   const orderBy = resolveOrderBy(sort, ADMIN_ACCESS_GRANTS_SORT_COLUMNS, "ORDER BY created_at DESC");
+  const where = userId ? "WHERE user_id = ? AND revoked_at IS NULL" : "WHERE revoked_at IS NULL";
+  const whereArgs = userId ? [userId] : [];
 
-  const rows = userId
-    ? await all<GrantRow>(
-        requestDb(c),
-        `SELECT id, user_id, permission, context_type, context_id, expires_at, created_at
-         FROM permission_grants WHERE user_id = ? AND revoked_at IS NULL ${orderBy}`,
-        [userId],
-      )
-    : await all<GrantRow>(
-        requestDb(c),
-        `SELECT id, user_id, permission, context_type, context_id, expires_at, created_at
-         FROM permission_grants WHERE revoked_at IS NULL ${orderBy}`,
-      );
+  const [rows, totalRow] = await Promise.all([
+    all<GrantRow>(
+      requestDb(c),
+      `SELECT id, user_id, permission, context_type, context_id, expires_at, created_at
+       FROM permission_grants ${where} ${orderBy} LIMIT ? OFFSET ?`,
+      [...whereArgs, limit, offset],
+    ),
+    first<{ total: number }>(requestDb(c), `SELECT COUNT(*) AS total FROM permission_grants ${where}`, whereArgs),
+  ]);
 
-  return json({ grants: rows.map(serializeGrant) });
+  return json({
+    grants: rows.map(serializeGrant),
+    page: buildPageInfo(limit, offset, totalRow?.total ?? 0, rows.length),
+  });
 });
 
 export const AccessGrantsCreate = openApiRoute(accessGrantsCreateRouteSchema, async (c: AdminContext, data) => {
