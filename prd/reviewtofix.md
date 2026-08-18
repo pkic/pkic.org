@@ -619,6 +619,96 @@ Confirmed: no `votes.source_proposal_id` column exists in any migration file, an
 
 ## Phase 6 — D1 read models: bounded, set-based, no per-row queries (broadened per v4 §2.6/workstream E)
 
+### Implementation status (this pass, 2026-08-18) — 7 of 7 items complete
+
+All seven Phase 6 items (6.0–6.6) are implemented, tested, and committed
+(`c6089ff6`/`bdbd8e71`, `ef9c921d`, `c647942e`, `0fc41a02`, `0868ef46`, `63a7ff7f`,
+`6574251a`, one commit per item plus a follow-up for 6.1). Full verification-pass
+evidence table:
+
+| ID | Requirement (paraphrased, see verbatim text below) | Evidence (file:line) | Command | Result | Verdict |
+|---|---|---|---|---|---|
+| 6.0 | Build a list-endpoint inventory, classify every list/search endpoint | `prd/phase6-list-endpoint-inventory.md` (checked in) | `Explore` agent audit of all `functions/api/v1/**` GET routes | 57 endpoints inventoried: 9 migrated, 5+24 conforming, 17 needs-migration (3 P1/14 P2) tracked with owner+reason, 19 out-of-scope. Independently re-derived the "34 files" claim via `grep -rl "new URL(c.req.raw.url)" functions/api/v1` → 29 files, confirming it was already an overcount. | PASS |
+| 6.1 | Remove `list-query.ts` duplicate query-validation path; applications/content-reviews consume `data.query` | `functions/api/v1/admin/applications/index.ts:17`, `.../content-reviews/index.ts:21`; `functions/_lib/openapi/list-query.ts` deleted | `ls functions/_lib/openapi/list-query.ts` → No such file; `grep -rn list-query functions/` → no hits; `pnpm exec vitest run tests/admin-applications.test.ts tests/organization-content-review.test.ts` | File absent, both routes use `data.query`, 32/32 tests pass | PASS |
+| 6.2 | `userId` UUID-validated, `data.query` consumed, `LIMIT`/`OFFSET` + count, `buildPageInfo` | `assets/shared/schemas/access-control.ts:83` (`userId: z.uuid().optional()`), `functions/api/v1/admin/access-grants/index.ts:58,63-70` | `pnpm exec vitest run tests/permission-grants.test.ts tests/roles.test.ts tests/api-security.test.ts` | 134/134 tests pass, incl. new bounded-pagination + invalid-UUID-rejection tests | PASS |
+| 6.3 | Replace `page`/`per_page` dialect with canonical `limit`/`offset` + `hasMore` | `assets/shared/schemas/votes.ts:140,158` (`paginationQuerySchema.extend`, `paginatedResponseSchema`) | `pnpm exec vitest run tests/votes.test.ts` | 19/19 tests pass, incl. new envelope-shape test | PASS |
+| 6.4 | Bound `portal.ts` lists at the service boundary; replace per-vote N+1 with set-based bulk queries; regression test | `functions/_lib/services/votes/portal.ts:91` (`canCastBallotForList`), `:109` (`loadCastBallotRounds`), `:147-164` (bounded `LIMIT`/`OFFSET` + bulk `Promise.all`) | `pnpm exec vitest run tests/votes.test.ts` (query-count regression test wraps `db.prepare`) | Query count identical for 1-vote vs 3-vote page (proven, not asserted); 19/19 pass | PASS |
+| 6.5 | Bound both proposal lists; replace per-row lookups with bulk queries; add supporting D1 index in the still-undeployed migration | `functions/_lib/services/votes/proposals.ts:107` (`loadEndorsementCounts`), `:125` (`loadMinEndorsersByProposal`); `migrations/0047_voting.sql:145` (`idx_vote_proposals_status_scope_created_at`) | `pnpm exec wrangler d1 migrations list DB --env preview/production --remote` (re-verified unapplied before editing); `pnpm exec vitest run tests/votes.test.ts` | Both ledgers confirmed migration unapplied; 19/19 tests pass, incl. query-count regression + endorsement/min-endorsers correctness across mixed scopes | PASS |
+| 6.6 | Declare query schema, consume `data.query`, move SQL to a read-model service, replace `limit+1`-slice with real `COUNT`, preserve the already-correct bulk waitlist/attendance-change queries | `functions/api/v1/admin/events/[eventSlug]/registrations.ts:10` (`openApiRoute`), `functions/_lib/services/registrations/admin-list.ts:220-227` (bounded `SELECT` + `COUNT` via `Promise.all`), `:230-263` (unchanged bulk `IN (...)` waitlist/attendance-change queries) | `pnpm exec vitest run tests/admin-event-management.test.ts tests/proposal-participants.test.ts tests/manage-read-endpoints.test.ts tests/admin-vip-admit.test.ts tests/roles.test.ts tests/api-security.test.ts` | `grep -n "limit + 1\|limit+1" ...` → no hits; 155/155 tests pass, incl. new 2-page real-total/hasMore test and invalid-limit-now-400 test | PASS |
+
+**7 of 7 items complete.** Every item has an executable test (new or pre-existing,
+re-run and passing) as its acceptance criterion; none are TODOs, stubs, or partial.
+
+**Regression check:** full `pnpm run build` (clean), `pnpm run test` (backend 972/973
+passing incl. 1 pre-existing intentional skip — 6 net-new tests added, zero failures;
+frontend 36/36; tools 52/52 — all previously-passing tests still pass, exit code 0),
+`pnpm run typecheck` (backend/frontend/tools, zero errors), lint scoped to real project
+source (`eslint functions assets/shared assets/ts assets/js scripts static/scripts
+tests`, zero errors — the repo-wide `eslint .` command still fails only on the
+pre-existing untracked `.venv` Playwright vendor bundle, unrelated to this change and
+already excluded by the scoped invocation used elsewhere in this document),
+`format:check`, `check:max-lines`, and `check:filenames` all clean. `lint:architecture`
+still cannot run in this environment (dependency-cruiser requires Node ^22/^24/>=26,
+this environment runs 25.3.0) — pre-existing, unrelated to this change, same limitation
+noted in the Phase 1 status block above.
+
+**Security review (this diff only):** no new SQL injection surface — every new/changed
+query interpolates only fixed literals or `?`-placeholder counts (never raw filter
+values) into SQL strings; filter *values* are always passed through the parameterized
+`bindings`/`args` array, verified by direct read of every touched query in
+`functions/_lib/services/registrations/admin-list.ts`,
+`functions/_lib/services/votes/{portal,proposals,public}.ts`, and
+`functions/api/v1/admin/access-grants/index.ts`. No new authz surface: 6.6's route
+mount moved from `app.get` to `openapi.get` on the same underlying Hono app instance,
+so the pre-existing `app.use("*", requireEventManagementAccess)` permission-gate
+middleware (registered before all route declarations) still applies unchanged; verified
+by confirming existing authz-focused tests (`tests/roles.test.ts`,
+`tests/api-security.test.ts`) still pass. No secrets, new dependencies, or crypto
+touched. No new redirect/SSRF surface. `access-grants`' new `userId` filter is
+UUID-validated and gated behind the same `access:grant`/`access:revoke` permission
+check as before — not a new IDOR surface (an admin who can already list all grants can
+now filter that same list by user, not access anything new).
+
+**Behavior-preservation finding surfaced and fixed during this pass:** the 6.6 rewrite
+initially declared `status`/`bounced`/`consent`/`attendance_change` as strict `z.enum`
+schemas, which changed an invalid filter value from "silently ignored" (pre-existing
+behavior for all four fields, and `sort`) to a `400` rejection — caught by
+`tests/admin-event-management.test.ts`'s existing `?attendance_change=unexpected`
+coverage (a real, deliberate pre-existing test, not incidental). Fixed by declaring
+those fields as loose strings, moving the same allowlist-based tolerant filtering into
+the new service (`VALID_REGISTRATION_STATUSES`/`VALID_ATTENDANCE_CHANGE_FILTERS`), and
+leaving `sort` to `resolveOrderBy`'s existing graceful fallback — preserving the
+endpoint's original behavior exactly while still gaining real `limit`/`offset`
+validation (the one part of the query contract that had no pre-existing tolerant
+behavior to preserve).
+
+**Open questions and assumptions:**
+1. 6.0's "matrix (checked-in or attached to the PR)" format wasn't specified — checked
+   in `prd/phase6-list-endpoint-inventory.md` per this repo's `prd/*.md` convention.
+2. "Shared list-contract abstraction" (referenced in 6.1–6.6) resolved to the
+   pre-existing `assets/shared/schemas/pagination.ts` (`paginationQuerySchema`,
+   `buildPageInfo`, `paginatedResponseSchema`, `sortColumnSchema`) — already the
+   canonical implementation per 6.0's audit; extended, not replaced.
+3. 6.5's "Phase 1's rewritten voting migration" resolved to `migrations/0047_voting.sql`
+   (the actual current voting migration on disk, confirmed still-undeployed against
+   both preview and production D1 ledgers immediately before editing).
+4. Portal routes (`portal/vote-proposals`, `admin/events/:eventSlug/registrations`)
+   that had a *documented, tested* tolerant-validation design were preserved as-is
+   rather than switched to strict Chanfana validation, since the plan's items ask for
+   pagination/read-model fixes, not a behavior change to existing filter semantics — see
+   the finding above.
+
+**Not in Phase 6's scope, found during 6.0's inventory and intentionally not touched
+this pass:** 3 P1 and 14 P2 list endpoints still need migration (`admin/email/outbox`,
+`admin/events/:eventSlug/proposals`, `admin/forms/:formKey/submissions` are P1); 3
+cross-cutting findings (duplicate sort-schema helpers, the repo-wide
+tolerant-sort-fallback convention, and redundant `limit+1`-slice-plus-real-`COUNT`
+double computation in 4 files) — all logged with owners in
+`prd/phase6-list-endpoint-inventory.md` for a future pass, per the plan's instruction
+that "predating this PR is not by itself a reason to mark something conforming."
+
+---
+
 The original review's Phase 6 fixed a handful of named endpoints. v4 correctly points out that's too narrow: the repository has several parallel pagination dialects, raw query parsers, hand-built page envelopes, and unbounded lists, and **newly-merged upstream code is not automatically exempt** — the #729 attendance registrations route (merged into upstream *after* the original review, and now present on this rebased branch) has the identical anti-pattern. Treat this phase as an inventory-driven migration of every listing/search endpoint, not just the items below.
 
 ### 6.0 — Build a list-endpoint inventory (new, from v4 §7.1)
