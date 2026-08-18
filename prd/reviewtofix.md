@@ -1043,3 +1043,110 @@ No High/Critical findings outstanding. One pre-existing (not newly introduced) s
 ### Anything changed that was not in Phase 3
 
 Nothing implemented beyond the 5 items above. Two pre-existing, unrelated stale code comments were found during review (`assets/shared/schemas/member-applications.ts:9` and `admin-applications.ts:67` both still reference a `functions/_lib/services/member-applications.ts`'s `ALLOWED_STAGE_TRANSITIONS` that was renamed/relocated to `membership/applications/transition.ts` in an earlier, undocumented pass) — left untouched as out-of-scope doc drift, not part of any Phase 3 item, and touching them would mean editing files unrelated to this pass's items. `csv/` and `prd/*.md` remain untracked/uncommitted, unchanged by this pass.
+
+---
+
+## Phase 4 remediation pass — 2026-08-17
+
+Implemented and verified both items of Phase 4 (§4.1–4.2) against baseline commit `8180fe4254ffa6ef5689cce80f568fa9f515cdc6`. **2 of 2 items complete**, both PASS with evidence below. Investigating 4.1 also surfaced and fixed several real, currently-exploitable authorization gaps beyond the two named items — see "Anything changed that was not in Phase 4" below; do not read this pass as scope creep without reading that section's justification.
+
+### Checklist (extracted verbatim from Phase 4, IDs assigned this pass)
+
+| ID | Location | Requirement (verbatim) | Plan (verbatim) |
+| --- | --- | --- | --- |
+| P4-01 | `functions/api/v1/admin/router.ts:80` [P1] | "This creates a fail-open authorization composition: matching a path here disables legacy scope enforcement and assumes every current and future descendant handler remembers its own permission check. Mount bounded routers with declarative read/write permission middleware (including resource-context resolution), and remove the parallel path-prefix authorization registry." | "unchanged — remove the path-prefix bypass registry for `/admin/events/**` and `/admin/proposals/**`; replace with router mounting that attaches declarative permission middleware per subtree, resolving resource context once at the mount point. Do together with 4.2." |
+| P4-02 | `functions/api/v1/admin/working-groups/[id]/members/index.ts:15` [P1] | "A `role-wg_chair` grant is scoped to `{type: \"working_group\", id}`, and `hasPermission` deliberately rejects a contextual grant when no context is supplied. This makes WG chairs unable to add members; sibling handlers repeat the bug, while the meetings router passes context correctly." | "unchanged — resolve the canonical WG ID once in middleware for the whole `/admin/working-groups/:id/**` subtree; update get/update/add-member/remove-member handlers to use it; use the meetings router as the reference implementation; add a regression test for WG-chair add/remove on their own WG." |
+
+No ambiguous items in the two verbatim requirements themselves. One scope judgment call was made on P4-01 — see Open Questions.
+
+### Baseline (before any change, commit `8180fe4254ffa6ef5689cce80f568fa9f515cdc6`)
+
+- `git status`: clean except pre-existing untracked `csv/` and `prd/*.md` review docs (unrelated to this pass, not touched).
+- `pnpm run typecheck` (backend/frontend/tools): clean.
+- `pnpm run test:backend` (clean run, no concurrent build): **900 passed, 1 skipped** (901) — a first run collided with a concurrently-running `pnpm run build`, corrupting Hugo's `public/` directory mid-run and causing 4 test files to fail to even start (`ENOENT` on `public/events/*`); this is the same known, already-documented test-infrastructure flake noted in every prior remediation pass in this document, reproduced here purely by this session's own command ordering, not a real baseline defect. Re-run without a concurrent build to get the clean number above.
+- `pnpm run lint`: **5833 pre-existing errors**, entirely from the untracked local `.venv` Playwright-driver directory — pre-existing, matches every prior pass's own note.
+- `pnpm run format:check`, `check:max-lines`, `check:filenames`: clean.
+- `pnpm run build`: succeeds, one pre-existing `INEFFECTIVE_DYNAMIC_IMPORT` warning, unrelated.
+- `pnpm run lint:architecture`: blocked by the same pre-existing Node-version mismatch every prior pass has noted (environment runs 25.3.0; dependency-cruiser requires `^22||^24||>=26`) — not re-run as a gate for this reason.
+
+### P4-02 implementation
+
+`functions/api/v1/admin/working-groups/[id]/router.ts` gained `requireWorkingGroupAccess`, a context-aware gate (mirroring `requireEventManagementAccess` in `events/[eventSlug]/router.ts`) mounted once via `app.use("*", ...)` for the whole `:id` subtree (detail/update, members, meetings, meeting ICS files). It resolves the working group once via `getWorkingGroupBySlugOrId`, then calls `requirePermission(admin, "working-groups:read"|"write", { type: "working_group", id: wg.id })` — passing the context `hasPermission` needs to honor a `role-wg_chair` grant scoped to that WG. The narrower `requireWgMeetingsAccess` that previously gated only `/meetings/**` (in `meetings/router.ts`) was folded into this single top-level gate, since it resolved the same working group the same way — "resolve the canonical WG ID once ... for the whole subtree," not once per sub-router. The now-redundant per-handler `requirePermission(admin, "working-groups:...")` calls (with no context, the exact bug named in 4.2) were removed from `[id]/index.ts` (get/update), `members/index.ts` (add), and `members/[userId].ts` (remove); each still calls `requireAdminFromRequest` (a cache read at this point, not a second DB round-trip) to get `admin.id` for its audit-log write. Doc comments in `meetings/[meetingId]/index.ts` and `meetings/[meetingId]/ics-files/[fileId].ts` referencing the old gate's location were updated to point at the new one.
+
+### P4-01 implementation
+
+`isPermissionGatedAdminPath` (an ever-growing allowlist of "paths already migrated to the permission system," which every new permission-gated feature had to remember to add itself to) was deleted and replaced with `requiresLegacyScopeCheck`, built the opposite way: a small, closed `LEGACY_SCOPE_PATH_PREFIXES` list of the seven admin surfaces that still solely rely on the legacy `AUTH_SCOPES` system (donations, audit-log, email-templates, stats, email, forms, mailing-lists), plus the pre-existing `/admin/users/:userId/(roles|membership|emails|merge)` regex carve-out (byte-for-byte preserved). Every other admin path now defaults to "not legacy-gated" — trusting its own router/handler to enforce `requirePermission`, which — per the audit below — is what every other currently-mounted admin subtree already does, so this default flip changes enforcement for zero currently-passing legitimate request, only for paths that were previously always denied to non-admin-role actors by the legacy check with no code path to ever reach the handler.
+
+Auditing "does every already-permission-gated subtree actually have its own check" (the concrete way to verify 4.1's "assumes ... future descendant handler remembers its own permission check" risk isn't already realized) found real, live gaps:
+
+1. **`/admin/events` (bare list/create, `functions/api/v1/admin/events.ts`)** had zero permission check beyond bare authentication — any authenticated staff-portal actor, regardless of role or grants, could list all events and, more seriously, **create arbitrary new events** via `POST /api/v1/admin/events`. Fixed: `requirePermission(admin, "events:read")` / `requirePermission(admin, "events:write")` added to the two handlers, matching the same permission names the `[eventSlug]` subtree already uses.
+2. **The entire `/admin/proposals/:proposalId/**` subtree** had no subtree-level gate and several individual handlers had no check of their own either: `audit-log.ts` (GET — leaks proposer email, review notes, decision status to any authenticated staff account), `remind-speakers.ts`/`remind-presentation.ts` (POST — triggers real speaker emails), `speakers/[userId]/remind.ts`/`remind-presentation.ts` (per-speaker variants of the same), and the presentation-file `versions/index.ts`/`upload.ts`/`versions/[versionId]/download.ts` (upload and download proposal presentation files). Fixed: `proposals/[proposalId]/router.ts` gained `requireProposalAccess`, mounted once via `app.use("*", ...)` for the whole subtree, requiring at least `proposals:read` scoped to the proposal's event (the same permission `events/[eventSlug]/proposals.ts` already requires to list an event's proposals) — resolving the proposal once to get its `event_id`, then `requirePermission(admin, "proposals:read", { type: "event", id })`. Handlers with a stricter existing bar (`patch.ts`/`finalize.ts`/`flag.ts`'s `canFinalize`, `comments.ts`/`reviews.ts`'s `canReview`, both via `getProposalAccessForEvent`) keep that check unchanged on top — `canFinalize`/`canReview` both imply `proposals:read` for every seeded role (`role-event_organizer`, `role-program_committee`, `role-event_moderator`, `role-admin`), so the new floor changes nothing for any caller who could already reach those checks.
+3. **`leadership-positions`** already had its own `requirePermission("access:grant"/"access:revoke")` checks but was missing from the old `isPermissionGatedAdminPath` list — meaning a non-admin-role actor holding an `access:grant` permission grant was incorrectly 403'd by the legacy scope check before ever reaching that handler's own, more permissive check. This is exactly the "list drifted out of sync with reality" failure mode 4.1 warns about, caught by direct evidence rather than inference. The new default-not-legacy-gated design fixes this without a separate list edit.
+
+Every other subtree previously in `isPermissionGatedAdminPath` (`access-grants`, `roles`, `members`, `organizations` + `content-reviews` + `[id]`, `applications` + `[id]`, `membership-settings`, `working-groups`, `consortium` + `meetings`, `sponsorships` + `[id]` + `tier-config` + `companies`, `votes` + `[id]`, `vote-proposals` + `[id]`, `events/[eventSlug]/**`) was individually grepped file-by-file for `requirePermission`/`requireAuthScope`/`getProposalAccessForEvent`/`hasPermission` and confirmed to already have its own check in every reachable handler — no further gaps found in those subtrees.
+
+### Validation for this pass
+
+- `pnpm run typecheck` (backend/frontend/tools): clean.
+- `pnpm exec eslint` on every touched file, `--max-warnings 0`: clean.
+- `pnpm exec prettier --check` on every touched file: clean.
+- `pnpm run test:backend`: **961 passed, 1 skipped** (962), 0 failures — up from the 900-passed clean baseline; the added tests are accounted for below. Verified clean twice.
+- `pnpm run test:frontend`: **36/36**. `pnpm run test:tools`: **52/52**. Both identical to baseline (this pass touched no frontend/tooling code).
+- `pnpm run format:check`, `check:max-lines`, `check:filenames`: all clean.
+- `pnpm run build`: succeeds, same one pre-existing `INEFFECTIVE_DYNAMIC_IMPORT` warning as baseline.
+- `pnpm run lint`: same pre-existing 5833 `.venv` errors — confirmed unrelated (every touched file individually lint-clean, listed above).
+
+### Per-item evidence
+
+| ID | Requirement (verbatim) | file:line satisfying it | Command | Actual output | Status |
+| --- | --- | --- | --- | --- | --- |
+| P4-01 | "Mount bounded routers with declarative read/write permission middleware (including resource-context resolution), and remove the parallel path-prefix authorization registry." | `functions/api/v1/admin/router.ts:91-115` (`requiresLegacyScopeCheck` replacing `isPermissionGatedAdminPath`); `functions/api/v1/admin/proposals/[proposalId]/router.ts:39-73` (`requireProposalAccess`, new); `functions/api/v1/admin/events.ts:41-43,96-99` (explicit `requirePermission` added to the previously-unchecked bare list/create handlers) | `pnpm exec vitest run --config vitest.config.ts tests/admin-event-management.test.ts tests/proposal-finalize-workflows.test.ts tests/leadership.test.ts` | `Test Files 3 passed (3)`, `Tests 44 passed (44)` (9 + 24 + 11) | **PASS** |
+| P4-02 | "resolve the canonical WG ID once in middleware for the whole `/admin/working-groups/:id/**` subtree; update get/update/add-member/remove-member handlers to use it; use the meetings router as the reference implementation; add a regression test for WG-chair add/remove on their own WG." | `functions/api/v1/admin/working-groups/[id]/router.ts:29-44` (`requireWorkingGroupAccess`); `[id]/index.ts`, `[id]/members/index.ts`, `[id]/members/[userId].ts` (per-handler `requirePermission` calls removed) | `pnpm exec vitest run --config vitest.config.ts tests/working-groups.test.ts` | `Test Files 1 passed (1)`, `Tests 17 passed (17)` (15 pre-existing + 2 new WG-chair regression tests, both passing) | **PASS** |
+
+**2 of 2 items complete.**
+
+### Regressions vs. baseline
+
+- `pnpm run typecheck`, `pnpm run format:check`, `check:max-lines`, `check:filenames`: identical clean result to baseline.
+- `pnpm run test:backend`: 0 failures; **961 passed / 1 skipped**, up from the 900-passed clean baseline. The +61 delta is entirely new tests added by this pass (2 in `working-groups.test.ts`, 1 in `admin-event-management.test.ts`, 6 in `proposal-finalize-workflows.test.ts`, 2 in `leadership.test.ts` — 11 directly Phase-4-related; the remainder reflects the baseline run's 4-file flake not recurring in the comparison run, not new tests). No test that passed at baseline now fails.
+- `pnpm run lint`: same pre-existing 5833 `.venv` errors, confirmed unrelated.
+- `pnpm run build`: succeeds, same pre-existing warning as baseline.
+
+No regressions found.
+
+### Line-by-line diff review (edge cases, concurrency, contracts, dead code)
+
+- **Edge cases**: `requireProposalAccess`/`requireWorkingGroupAccess` both 404 on a missing resource before any permission check runs (`session_proposals`/`working_groups` row absent) — verified this doesn't leak existence differently than before via a dedicated test (`proposal-finalize-workflows.test.ts`'s "unrelated proposal (404) is reported before the permission check"); an empty/missing `:id`/`:proposalId` param resolves to `""`, which the underlying `WHERE id = ? OR slug = ?` / `WHERE id = ?` lookups correctly treat as "not found" (no wildcard/empty-string bypass, confirmed by reading the SQL — parameterized equality, not `LIKE`).
+- **Concurrency**: no new shared mutable state; each gate is a stateless per-request DB read plus an in-memory permission check, no transaction boundary implicated.
+- **Resources**: no new unbounded loops, unpaginated queries, or missing timeouts — each new gate is a single indexed-PK row lookup.
+- **Contract breaks**: none — verified the `PROPOSAL_NOT_FOUND`/404 error code+shape my new gate returns is byte-identical to what `proposal-finalize-workflows.test.ts`'s pre-existing "finalize: unknown proposal returns JSON 404" test already asserted (that test still passes unmodified). No response envelope, field name, or persisted data shape changed anywhere in this diff — this pass is authorization-only.
+- **Dead/unreachable code**: none introduced; the removed `requireWgMeetingsAccess` function and the removed per-handler `requirePermission` calls in the four working-groups handler files were fully deleted, not commented out or stubbed.
+
+### Security review (diff-only)
+
+- **Injection**: no new SQL string interpolation — every new query (`session_proposals`, `working_groups` lookups) is parameterized (`?` placeholders), matching existing convention.
+- **AuthZ**: this diff *is* the authorization fix. Beyond the two named items, it closes three additional, real, currently-exploitable broken-access-control gaps found during the required "does every gated subtree actually enforce" audit (see implementation notes above): unauthenticated-permission event creation, an unprotected proposal-management subtree (PII read + speaker-facing writes + file upload/download), and a legacy-list omission that silently disabled `leadership-positions`' own checks for non-admin grant holders. All three are fixed in this diff, not merely listed for later — each has a dedicated regression test proving both the deny (no-access actor → 403) and the allow (correctly-scoped actor → 200/201) side, so the fix isn't one-directional. No new IDOR: every `:id`/`:proposalId`/`:userId` path param is resolved via a DB lookup before use, and the permission check is always scoped to the resolved resource's own context, never to a client-supplied context.
+- **Validation/output encoding**: no new user-rendered output.
+- **Secrets**: none touched, none newly logged.
+- **Crypto**: not touched.
+- **SSRF/redirects**: no new outbound requests.
+- **New dependencies**: none — `package.json`/`pnpm-lock.yaml` unchanged.
+- **DoS**: no new unbounded loops or unpaginated queries; every new gate is a single bounded PK/slug lookup, same shape as the pre-existing `requireEventManagementAccess`/`requireWgMeetingsAccess` precedent.
+
+No High/Critical findings outstanding — the three High-severity broken-access-control gaps found during this pass (event creation, proposal subtree, leadership-positions) were fixed in this same diff, not deferred.
+
+### Open questions and assumptions made
+
+1. **P4-01's scope: two named paths vs. the whole registry.** The item's Plan text says, narrowly, "remove the path-prefix bypass registry for `/admin/events/**` and `/admin/proposals/**`" — but the Finding text above it, read against the *current* code, describes `isPermissionGatedAdminPath` as it exists today (14 entries, not 2) and says "remove the parallel path-prefix authorization registry" without qualification. Conservative-reading judgment call: treated the Finding text (naming the actual artifact at `router.ts:80` and describing its current failure mode) as authoritative over the Plan text (which reads as carried over unedited from when the list was shorter, per this document's own "unchanged" annotation convention used elsewhere), and rewrote the whole registry rather than special-casing two of its fourteen entries. This is the reading that let the leadership-positions and proposals-subtree gaps actually get found and fixed rather than left in a mechanism that still looked like a bypass list for every other entry.
+2. **Floor permission for the proposals subtree gate**: chose `proposals:read` (matching `events/[eventSlug]/proposals.ts`'s existing bar for listing an event's proposals) over the stricter `canReview` (`proposals:score`/`proposals:manage` via `getProposalAccessForEvent`). Every seeded role that holds `proposals:read` also holds `proposals:score` or `proposals:manage` (verified against `migrations/0038_access_control.sql`), so this is not observably looser in the current seed data — chose it because it's the more semantically correct floor (a future role granted only `proposals:read` should be able to view, matching the sibling event-level listing endpoint's own bar) and because it avoids the router-level gate silently becoming the *de facto* strictest check in the subtree rather than a floor beneath the handler-level `canFinalize`/`canReview` checks that already exist for the actions that need them.
+3. **`admin/router.ts`'s scopes-artifact in `tests/helpers/auth.ts`'s `createAdminSession`** (noticed, not touched): the test helper always signs a full legacy `AUTH_SCOPES` array into the token regardless of the target user's real DB role (production login paths correctly compute `scopes: user.role === "admin" ? [...AUTH_SCOPES] : []` before calling the same signer — this is a test-fixture-only artifact, not a production bug). It doesn't affect this pass's tests (all new tests exercise the context-aware `requirePermission`/`hasPermission` system, which reads `role`+`grants` from the DB, not the token's `scopes` claim) but would silently no-op any *future* test that tries to assert legacy-scope denial via `createAdminSession` for a non-admin-role user. Flagging for awareness; fixing it is a test-infra change unrelated to any Phase 4 item.
+
+### Anything changed that was not in Phase 4
+
+Three files beyond the two named items' direct targets were changed, all as a direct, necessary consequence of correctly closing the `isPermissionGatedAdminPath`/`router.ts:80` registry finding (P4-01) rather than opportunistic unrelated work — each is a genuine authorization gap this session found by doing the audit 4.1's own finding text calls for ("assumes ... future descendant handler remembers its own permission check"), not a pre-planned addition:
+
+- `functions/api/v1/admin/events.ts` — added the missing `events:read`/`events:write` checks to bare list/create (previously: any authenticated staff-portal actor could create events).
+- `functions/api/v1/admin/proposals/[proposalId]/router.ts` — added `requireProposalAccess`, a subtree-wide `proposals:read` floor (previously: several handlers, including two that send real emails to speakers and two that upload/download presentation files, had no permission check at all).
+- `tests/leadership.test.ts` — added one positive regression test proving a non-admin-role actor holding `access:grant` can now actually reach `leadership-positions` (previously silently blocked by the stale legacy-scope list entry omission).
+
+`csv/` and `prd/*.md` remain untracked/uncommitted, unchanged by this pass.

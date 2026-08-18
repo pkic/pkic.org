@@ -216,6 +216,34 @@ describe("leadership positions (migration 0049) — Board / Executive Council ro
     ).toBe(403);
   });
 
+  // PR #1 review Phase 4 item 1: leadership-positions had its own
+  // requirePermission("access:grant"/"access:revoke") checks but was
+  // missing from admin/router.ts's old path-prefix bypass list, so a
+  // non-admin-role actor holding an access:grant permission_grant was
+  // incorrectly 403'd by the legacy scope check before ever reaching that
+  // handler's own, more permissive check. The rewritten router.ts no
+  // longer legacy-gates this subtree, so this grant now actually works.
+  it("a non-admin-role staff user holding an access:grant permission_grant CAN create and list leadership positions", async () => {
+    const staffUserId = await insertUser("staff-with-grant@example.test");
+    const targetUserId = await insertUser("board-target@example.test");
+    await env.DB.prepare(
+      `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+       VALUES (?, ?, 'access:grant', ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), staffUserId, adminId)
+      .run();
+    const staffToken = await createAdminSession(env.DB, staffUserId, "staff-with-grant-token");
+
+    const createResponse = await call(staffToken, "/api/v1/admin/leadership-positions", {
+      method: "POST",
+      body: JSON.stringify({ body: "board", userId: targetUserId, title: "Board Member", startsAt: "2022-06-01" }),
+    });
+    expect(createResponse.status).toBe(201);
+
+    const listResponse = await call(staffToken, "/api/v1/admin/leadership-positions?body=board");
+    expect(listResponse.status).toBe(200);
+  });
+
   it("public GET /api/v1/leadership/:body returns current and past positions with organization enrichment, isolated per body", async () => {
     const orgId = await insertOrganization("Digitorus", "https://digitorus.com");
     const chairUserId = await insertUser("paul@example.test", ["Paul", "van Brouwershaven"]);

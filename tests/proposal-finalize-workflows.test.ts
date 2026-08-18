@@ -559,3 +559,123 @@ describe("proposal HTTP error responses (full router stack)", () => {
     expect(Array.isArray(body.messages)).toBe(true);
   });
 });
+
+// ── PR #1 review Phase 4 item 1: /admin/proposals/:proposalId/** floor gate ──
+// requireProposalAccess (proposals/[proposalId]/router.ts) now requires at
+// least proposals:read on the proposal's event for every route in this
+// subtree. Several handlers (audit-log.ts, remind-speakers.ts among them)
+// previously had no permission check at all beyond bare authentication, so
+// any authenticated staff-portal actor — including one with zero role or
+// permission grants — could read or act on any event's proposals.
+describe("proposal subtree access gate (full router stack)", () => {
+  beforeEach(async () => {
+    await resetDb();
+  });
+
+  async function insertStaffUser(email: string): Promise<string> {
+    const id = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+       VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+    )
+      .bind(id, email, email)
+      .run();
+    return id;
+  }
+
+  async function assignEventModerator(userId: string, eventId: string, grantedBy: string): Promise<void> {
+    await env.DB.prepare(
+      `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, granted_by_user_id, created_at)
+       VALUES (?, ?, 'role-event_moderator', 'event', ?, ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), userId, eventId, grantedBy)
+      .run();
+  }
+
+  // Grants a role unrelated to proposals/events so the user passes
+  // STAFF_ACCESS_CONDITION (can obtain a session at all) while still
+  // lacking proposals:read — otherwise a truly grant-less user can't even
+  // authenticate, and the test would observe 401 (no session) rather than
+  // the 403 (authenticated, unauthorized) this gate is meant to prove.
+  async function assignUnrelatedStaffRole(userId: string): Promise<void> {
+    await env.DB.prepare(
+      `INSERT INTO user_roles (id, user_id, role_id, granted_by_user_id, created_at)
+       VALUES (?, ?, 'role-membership_processor', NULL, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), userId)
+      .run();
+  }
+
+  async function callAppGet(path: string, adminToken: string): Promise<Response> {
+    return app.fetch(
+      new Request(`https://app.test${path}`, { headers: { authorization: `Bearer ${adminToken}` } }),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+  }
+
+  async function insertOtherEvent(): Promise<{ eventId: string }> {
+    const eventId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO events (id, slug, name, timezone, starts_at, ends_at, capacity_in_person, registration_mode, invite_limit_attendee, settings_json, created_at, updated_at)
+       VALUES (?, 'other-event', 'Other Event', 'Europe/Amsterdam', '2026-06-01T08:00:00.000Z', '2026-06-02T18:00:00.000Z', 1, 'invite_or_open', 5, '{}', datetime('now'), datetime('now'))`,
+    )
+      .bind(eventId)
+      .run();
+    return { eventId };
+  }
+
+  it("audit-log: a staff user with no event-scoped access cannot view a proposal's audit log", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId } = await seedProposalWithSpeaker(eventId);
+    const staffId = await insertStaffUser("no-access-audit@wf.test");
+    await assignUnrelatedStaffRole(staffId);
+    const staffToken = await createAdminSession(env.DB, staffId, "no-access-audit-token");
+
+    const response = await callAppGet(`/api/v1/admin/proposals/${proposalId}/audit-log`, staffToken);
+    expect(response.status).toBe(403);
+  });
+
+  it("remind-speakers: a staff user with no event-scoped access cannot trigger speaker reminders", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId } = await seedProposalWithSpeaker(eventId);
+    const staffId = await insertStaffUser("no-access-remind@wf.test");
+    await assignUnrelatedStaffRole(staffId);
+    const staffToken = await createAdminSession(env.DB, staffId, "no-access-remind-token");
+
+    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/remind-speakers`, staffToken, {});
+    expect(response.status).toBe(403);
+  });
+
+  it("detail: an unrelated proposal (404) is reported before the permission check, so existence isn't leaked differently", async () => {
+    const staffId = await insertStaffUser("no-access-detail@wf.test");
+    await assignUnrelatedStaffRole(staffId);
+    const staffToken = await createAdminSession(env.DB, staffId, "no-access-detail-token");
+
+    const response = await callAppGet(`/api/v1/admin/proposals/does-not-exist/audit-log`, staffToken);
+    expect(response.status).toBe(404);
+  });
+
+  it("audit-log: a staff user with an event-scoped proposals:read grant (event_moderator) can view the audit log", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const staffId = await insertStaffUser("moderator@wf.test");
+    await assignEventModerator(staffId, eventId, adminUserId);
+    const staffToken = await createAdminSession(env.DB, staffId, "moderator-token");
+
+    const response = await callAppGet(`/api/v1/admin/proposals/${proposalId}/audit-log`, staffToken);
+    expect(response.status).toBe(200);
+  });
+
+  it("audit-log: a moderator scoped to a different event cannot view this event's proposal audit log", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const { eventId: otherEventId } = await insertOtherEvent();
+    const staffId = await insertStaffUser("other-event-moderator@wf.test");
+    await assignEventModerator(staffId, otherEventId, adminUserId);
+    const staffToken = await createAdminSession(env.DB, staffId, "other-event-moderator-token");
+
+    const response = await callAppGet(`/api/v1/admin/proposals/${proposalId}/audit-log`, staffToken);
+    expect(response.status).toBe(403);
+  });
+});

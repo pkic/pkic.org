@@ -725,4 +725,55 @@ describe("admin event management endpoints", () => {
     const invalidFilter = (await invalidFilterResponse.json()) as { registrations: Array<{ id: string }> };
     expect(invalidFilter.registrations.map(({ id }) => id)).toEqual(unfiltered.registrations.map(({ id }) => id));
   });
+
+  // PR #1 review Phase 4 item 1: bare GET/POST /admin/events previously had
+  // no permission check at all beyond bare authentication — any
+  // authenticated staff-portal actor, including one with zero role or
+  // permission grants, could list events and (more seriously) create new
+  // ones. Now requires events:read/events:write respectively.
+  it("a staff user without events:write cannot create an event, and without events:read cannot list them", async () => {
+    await setupAdmin();
+    const staffId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+       VALUES (?, 'no-events-perm@example.test', 'no-events-perm@example.test', 'user', 1, datetime('now'), datetime('now'))`,
+    )
+      .bind(staffId)
+      .run();
+    // Grants a role unrelated to events so the user passes
+    // STAFF_ACCESS_CONDITION (can obtain a session at all).
+    await env.DB.prepare(
+      `INSERT INTO user_roles (id, user_id, role_id, granted_by_user_id, created_at)
+       VALUES (?, ?, 'role-membership_processor', NULL, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), staffId)
+      .run();
+    const staffToken = await createAdminSession(env.DB, staffId, "no-events-perm-token");
+
+    const createResponse = await app.fetch(
+      new Request("https://app.test/api/v1/admin/events", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${staffToken}` },
+        body: JSON.stringify({
+          slug: "should-not-be-created",
+          name: "Should Not Be Created",
+          timezone: "Europe/Amsterdam",
+          registrationMode: "open",
+          inviteLimitAttendee: 10,
+        }),
+      }),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(createResponse.status).toBe(403);
+
+    const listResponse = await app.fetch(
+      new Request("https://app.test/api/v1/admin/events", {
+        headers: { authorization: `Bearer ${staffToken}` },
+      }),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(listResponse.status).toBe(403);
+  });
 });

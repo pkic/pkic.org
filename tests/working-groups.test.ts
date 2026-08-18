@@ -425,4 +425,69 @@ describe("admin working groups", () => {
     });
     expect(response.status).toBe(403);
   });
+
+  // ── Phase 4 item 2: WG chair contextual permission on add/remove member ──
+  // A role-wg_chair grant is scoped to {type: "working_group", id}, and
+  // hasPermission rejects a contextual grant when no context is supplied.
+  // These assert the working-groups/:id/** subtree gate
+  // (requireWorkingGroupAccess in working-groups/[id]/router.ts) actually
+  // resolves and passes that context, rather than calling requirePermission
+  // with no context like the sibling handlers used to.
+
+  async function assignWgChair(userId: string, wgId: string): Promise<void> {
+    const chairRoleId = await findRoleId("wg_chair");
+    await env.DB.prepare(
+      `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, granted_by_user_id, created_at)
+       VALUES (?, ?, ?, 'working_group', ?, ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), userId, chairRoleId, wgId, adminId)
+      .run();
+  }
+
+  it("a WG chair (context-scoped working-groups:write) can add and remove a member on their own working group", async () => {
+    const wgId = await insertWorkingGroup("Chair-Managed WG", "chair-managed-wg");
+    const chairUserId = await insertUser("chair-manages-own@example.test");
+    await assignWgChair(chairUserId, wgId);
+    const chairToken = await createAdminSession(env.DB, chairUserId, "chair-manages-own-token");
+
+    const targetUserId = await insertUser("chair-added-member@example.test");
+
+    const addResponse = await call(chairToken, `/api/v1/admin/working-groups/${wgId}/members`, {
+      method: "POST",
+      body: JSON.stringify({ userId: targetUserId }),
+    });
+    expect(addResponse.status).toBe(201);
+
+    const removeResponse = await call(chairToken, `/api/v1/admin/working-groups/${wgId}/members/${targetUserId}`, {
+      method: "DELETE",
+    });
+    expect(removeResponse.status).toBe(200);
+  });
+
+  it("a WG chair scoped to a different working group cannot add or remove a member on this one", async () => {
+    const ownWgId = await insertWorkingGroup("Chair's Own WG", "chairs-own-wg");
+    const otherWgId = await insertWorkingGroup("Other WG", "other-wg");
+    const chairUserId = await insertUser("chair-other-wg@example.test");
+    await assignWgChair(chairUserId, ownWgId);
+    const chairToken = await createAdminSession(env.DB, chairUserId, "chair-other-wg-token");
+
+    const targetUserId = await insertUser("not-added-member@example.test");
+
+    const addResponse = await call(chairToken, `/api/v1/admin/working-groups/${otherWgId}/members`, {
+      method: "POST",
+      body: JSON.stringify({ userId: targetUserId }),
+    });
+    expect(addResponse.status).toBe(403);
+
+    // Seed the member directly (bypassing the API) so removal has something
+    // to act on, and confirm the chair still can't remove it via the API.
+    await call(adminToken, `/api/v1/admin/working-groups/${otherWgId}/members`, {
+      method: "POST",
+      body: JSON.stringify({ userId: targetUserId }),
+    });
+    const removeResponse = await call(chairToken, `/api/v1/admin/working-groups/${otherWgId}/members/${targetUserId}`, {
+      method: "DELETE",
+    });
+    expect(removeResponse.status).toBe(403);
+  });
 });
