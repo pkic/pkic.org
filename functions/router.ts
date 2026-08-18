@@ -1,8 +1,10 @@
 import { Hono } from "hono";
 import { fromHono, getReDocUI, getSwaggerUI } from "chanfana";
 import { logError, logInfo } from "./_lib/logging";
+import { getConfig } from "./_lib/config";
 import { runRetentionJob } from "./_lib/services/retention";
 import { runScheduledDueWork } from "./_lib/services/scheduled-due-work";
+import { runScheduledJobRegistry, type ScheduledJobDefinition } from "./_lib/services/scheduled-job-registry";
 import {
   runConsultationBatch,
   runEcReviewBatch,
@@ -95,24 +97,39 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
 
   try {
     if (controller.cron === REMINDER_CRON) {
-      const dueWork = await runScheduledDueWork(env);
-      // Membership due-work (on-hold reminders/auto-close,
-      // EC-window auto-approve, Google Groups sync) runs as a sibling call on
-      // the same 15-minute trigger — see membership/scheduled-jobs.ts's own
-      // note on why this isn't woven into runScheduledDueWork's pass loop.
-      const membershipDueWork = await runMembershipDueWork(env.DB, env);
-      // Sponsorship renewal reminders/auto-lapse — same "sibling
-      // call on the 15-minute trigger" pattern as membershipDueWork above.
-      const sponsorshipDueWork = await runSponsorshipDueWork(env.DB, env);
-      // Voting open/close/round-advance — same sibling pattern.
-      const votesDueWork = await runVotesDueWork(env.DB, env);
+      const config = getConfig(env);
+      // One shared budget for all four domains (PR #1 review §9.1) — was
+      // four sequential calls with no shared deadline and no failure
+      // isolation, so an early throw silently aborted every job after it.
+      // registry.run's per-job try/catch means a mid-registry failure no
+      // longer loses or blocks its siblings; each job's own query LIMIT
+      // (membership/sponsorship-scheduled-jobs.ts, votes' pre-existing
+      // LIMIT) bounds a single pass instead of relying on time/subrequest
+      // budgeting mid-job.
+      const jobs: ScheduledJobDefinition<unknown>[] = [
+        { name: "due_work", minRemainingMsToRun: 5_000, run: (jobEnv) => runScheduledDueWork(jobEnv) },
+        {
+          name: "membership_due_work",
+          minRemainingMsToRun: 2_000,
+          run: (jobEnv) =>
+            runMembershipDueWork(jobEnv.DB, jobEnv, {
+              onHoldReminderLimit: config.scheduledOnHoldReminderLimit,
+              ecAutoApproveLimit: config.scheduledEcAutoApproveLimit,
+            }),
+        },
+        {
+          name: "sponsorship_due_work",
+          minRemainingMsToRun: 2_000,
+          run: (jobEnv) => runSponsorshipDueWork(jobEnv.DB, jobEnv, config.scheduledSponsorshipDueWorkLimit),
+        },
+        { name: "votes_due_work", minRemainingMsToRun: 2_000, run: (jobEnv) => runVotesDueWork(jobEnv.DB, jobEnv) },
+      ];
+      const registryResult = await runScheduledJobRegistry(env, jobs, config.reminderCronBudgetMs);
 
       logInfo("SCHEDULED_REMINDERS_COMPLETED", {
         cron: controller.cron,
-        dueWork,
-        membershipDueWork,
-        sponsorshipDueWork,
-        votesDueWork,
+        outcomes: registryResult.outcomes,
+        elapsedMs: registryResult.elapsedMs,
       });
       return;
     }
