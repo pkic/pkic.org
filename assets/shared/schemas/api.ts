@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { defaultedSourceTypeSchema, sourceTypeSchema } from "./source";
 import { linksSchema } from "./links";
+import { paginationQuerySchema } from "./pagination";
 
 export { sourceTypeSchema };
 
@@ -133,9 +134,32 @@ export const eventsListSortValueSchema = sortValueSchema(EVENTS_LIST_SORT_COLUMN
 export const EVENT_TEAM_SORT_COLUMNS = ["user_email", "role_id", "created_at", "expires_at"] as const;
 export const eventTeamSortValueSchema = sortValueSchema(EVENT_TEAM_SORT_COLUMNS);
 
-/** Allowlisted sort columns for GET /api/v1/admin/events/:eventSlug/registrations — see functions/api/v1/admin/events/[eventSlug]/registrations.ts. */
+/**
+ * Allowlisted sort columns for GET /api/v1/admin/events/:eventSlug/registrations
+ * — see functions/_lib/services/registrations/admin-list.ts. Unlike the
+ * other `*SortValueSchema` allowlists above, this one isn't wrapped in a
+ * strict refine()-validated schema: an invalid `?sort=` value here falls
+ * back to the default order via resolveOrderBy rather than a 400, matching
+ * this endpoint's pre-existing tolerant behavior for its other filters.
+ */
 export const EVENT_REGISTRATIONS_SORT_COLUMNS = ["display_name", "status", "attendance_type", "created_at"] as const;
-export const eventRegistrationsSortValueSchema = sortValueSchema(EVENT_REGISTRATIONS_SORT_COLUMNS);
+
+// status/bounced/consent/attendance_change/sort intentionally accept any
+// string here and are validated leniently in listAdminEventRegistrations /
+// resolveOrderBy (an unrecognized value is treated as "no filter" / "default
+// order", not a 400) — the pre-Phase-6 route had this exact "quietly ignore
+// an unknown value" behavior for all of them (see
+// tests/admin-event-management.test.ts's "?attendance_change=unexpected"
+// coverage), so real enum/refine validation here would be a behavior
+// change, not a refactor.
+export const adminEventRegistrationsQuerySchema = paginationQuerySchema.extend({
+  q: z.string().trim().max(200).optional(),
+  status: z.string().trim().optional(),
+  bounced: z.string().trim().optional(),
+  consent: z.string().trim().optional(),
+  attendance_change: z.string().trim().optional(),
+  sort: z.string().trim().max(41).optional(),
+});
 
 /** Allowlisted sort columns for GET /api/v1/admin/events/:eventSlug/invites — see functions/api/v1/admin/events/[eventSlug]/invites/index.ts. */
 export const EVENT_INVITES_SORT_COLUMNS = ["invitee_email", "status", "created_at", "accepted_at"] as const;
