@@ -32,14 +32,12 @@ export const ConsortiumMeetingIcsUploadPost = openApiRoute(
     }
 
     const meetingId = data.params.meetingId;
-    const r2Key = `meeting-ics/${meetingId}/${Date.now()}.ics`;
-    await bucket.put(r2Key, buffer, { httpMetadata: { contentType: contentType || "text/calendar" } });
-
     const icsFile = await uploadIcsFile(
       db,
+      bucket,
       meetingId,
       { scopeType: "consortium" },
-      { label, year, r2Key, uploadedByUserId: admin.id },
+      { label, year, buffer, contentType: contentType || "text/calendar", uploadedByUserId: admin.id },
     );
 
     return json({ icsFile }, 201);

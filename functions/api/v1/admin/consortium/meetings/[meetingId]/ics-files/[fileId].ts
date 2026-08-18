@@ -44,8 +44,7 @@ export const ConsortiumMeetingIcsDelete = openApiRoute(
 
     const meetingId = data.params.meetingId;
     const fileId = data.params.fileId;
-    const { r2Key } = await deleteIcsFile(db, meetingId, fileId, { scopeType: "consortium" });
-    if (c.env.ASSETS_BUCKET) await c.env.ASSETS_BUCKET.delete(r2Key);
+    await deleteIcsFile(db, c.env.ASSETS_BUCKET, meetingId, fileId, { scopeType: "consortium" });
     await writeAuditLog(db, "admin", admin.id, "meeting_ics_file_deleted", "meeting_ics_file", fileId, {
       scopeType: "consortium",
       seriesId: meetingId,
