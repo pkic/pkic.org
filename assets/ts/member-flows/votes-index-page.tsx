@@ -37,7 +37,6 @@ interface PublicVote {
 
 interface PublicVotesResponse {
   votes: PublicVote[];
-  total: number;
 }
 
 const VOTE_TYPE_LABELS: Record<VoteType, string> = {
@@ -92,7 +91,7 @@ function VotesIndex({ apiBase, detailBase }: { apiBase: string; detailBase: stri
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getJson<PublicVotesResponse>(`${apiBase}/votes?per_page=${FETCH_LIMIT}&sort=closes_at`)
+    getJson<PublicVotesResponse>(`${apiBase}/votes?limit=${FETCH_LIMIT}&sort=closes_at`)
       .then((data) => setVotes(data.votes))
       .catch((e) => setError((e as Error).message));
   }, [apiBase]);

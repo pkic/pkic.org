@@ -25,8 +25,8 @@ export interface PublicVoteListParams {
   status?: "open" | "closed";
   from?: string;
   to?: string;
-  page?: number;
-  perPage?: number;
+  limit?: number;
+  offset?: number;
   sort?: "closes_at" | "created_at";
 }
 
@@ -90,15 +90,14 @@ export async function listPublicVotes(
   }
 
   const sortColumn = params.sort === "created_at" ? "created_at" : "closes_at";
-  const perPage = Math.min(Math.max(params.perPage ?? 20, 1), 100);
-  const page = Math.max(params.page ?? 1, 1);
-  const offset = (page - 1) * perPage;
+  const limit = params.limit ?? 20;
+  const offset = params.offset ?? 0;
 
   const where = conditions.join(" AND ");
   const rows = await all<VoteRow>(
     db,
     `SELECT * FROM votes WHERE ${where} ORDER BY ${sortColumn} DESC LIMIT ? OFFSET ?`,
-    [...args, perPage, offset],
+    [...args, limit, offset],
   );
   const totalRow = await first<{ total: number }>(db, `SELECT COUNT(*) AS total FROM votes WHERE ${where}`, args);
 

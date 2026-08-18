@@ -746,8 +746,44 @@ describe("Voting system", () => {
     expect(publicBody.vote.result.counts).toBeUndefined();
 
     const listRes = await callAnon("/api/v1/votes");
-    const listBody = (await listRes.json()) as { votes: Array<{ slug: string }> };
+    const listBody = (await listRes.json()) as {
+      votes: Array<{ slug: string }>;
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
     expect(listBody.votes.some((v) => v.slug === vote.slug)).toBe(true);
+    expect(listBody.page).toEqual({ limit: 20, offset: 0, total: listBody.votes.length, hasMore: false });
+  });
+
+  it("public GET /api/v1/votes uses the canonical limit/offset envelope, not page/per_page", async () => {
+    for (let i = 0; i < 3; i += 1) {
+      const createRes = await call(adminToken, "/api/v1/admin/votes", {
+        method: "POST",
+        body: JSON.stringify({
+          title: `Bounded Public Vote ${i}`,
+          voteType: "motion",
+          scopeType: "forum",
+          thresholdType: "simple_majority",
+          closesAt: new Date(Date.now() + 3600_000).toISOString(),
+        }),
+      });
+      const { vote } = (await createRes.json()) as { vote: { id: string } };
+      await call(adminToken, `/api/v1/admin/votes/${vote.id}/visibility`, {
+        method: "PATCH",
+        body: JSON.stringify({ visibility: "public", publicDetailLevel: "aggregate" }),
+      });
+    }
+
+    const boundedRes = await callAnon("/api/v1/votes?limit=2&offset=0&sort=created_at");
+    expect(boundedRes.status).toBe(200);
+    const boundedBody = (await boundedRes.json()) as {
+      votes: unknown[];
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
+    expect(boundedBody.votes).toHaveLength(2);
+    expect(boundedBody.page.limit).toBe(2);
+    expect(boundedBody.page.offset).toBe(0);
+    expect(boundedBody.page.total).toBeGreaterThanOrEqual(3);
+    expect(boundedBody.page.hasMore).toBe(true);
   });
 
   it("GET /api/v1/me/votes returns the caller's own ballot history", async () => {

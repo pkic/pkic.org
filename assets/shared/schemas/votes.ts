@@ -137,15 +137,13 @@ export const portalVoteSchema = z.object({
 
 // ── Public (no auth) — "Votes (public — no auth required)" ────────────
 
-export const publicVotesListQuerySchema = z.object({
+export const publicVotesListQuerySchema = paginationQuerySchema.extend({
   type: voteTypeSchema.optional(),
   scope: voteScopeTypeSchema.optional(),
   wg: z.string().optional(),
   status: voteStatusSchema.extract(["open", "closed"]).optional(),
   from: z.iso.date().optional(),
   to: z.iso.date().optional(),
-  page: z.coerce.number().int().min(1).optional(),
-  per_page: z.coerce.number().int().min(1).max(100).optional(),
   sort: z.enum(["closes_at", "created_at"]).optional(),
 });
 
@@ -157,16 +155,7 @@ export const publicVotesListRouteSchema = {
   responses: {
     "200": {
       description: "Public votes.",
-      content: {
-        "application/json": {
-          schema: z.object({
-            votes: z.array(publicVoteSchema),
-            total: z.number(),
-            page: z.number(),
-            perPage: z.number(),
-          }),
-        },
-      },
+      content: { "application/json": { schema: paginatedResponseSchema("votes", publicVoteSchema) } },
     },
   },
 };
