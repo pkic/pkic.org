@@ -766,6 +766,94 @@ Confirmed: `functions/_lib/openapi/list-query.ts` still exists and is imported b
 
 ---
 
+## Phase 7 remediation pass — 2026-08-18
+
+Implemented and verified both items of Phase 7 (§7.1–7.2) against baseline commit `a3737aa56ee751dbbca0d3df905c367b2c41e844`. **2 of 2 items complete**, both PASS with evidence below. Each was committed separately (P7-01, then P7-02).
+
+### Checklist (extracted verbatim, IDs assigned this pass)
+
+| ID | Location | Requirement (verbatim) | Plan (verbatim) |
+| --- | --- | --- | --- |
+| P7-01 | `assets/ts/member-flows/votes-index-page.tsx:95` [P2] | "This fetches only the first 100 votes, discards pagination metadata, and decides open/closed groups in the browser — silently hiding row 101 onward." | "unchanged — replace with either two bounded server queries filtered by status with real pagination, or a bounded server-side projection for the two sections; remove the manual interfaces at lines 23–41 in favor of inferred shared types (post 3.2/6.3)." |
+| P7-02 | `assets/ts/admin/sections/Sponsorships.tsx:489` [P2] | "The company master list is server-paginated, but selecting a company still fetches one hard-capped 200-row page and renders it as complete." | "unchanged — replace with a paginated server query/read model rendered through the same table abstraction used elsewhere." |
+
+### Baseline (before any change, commit `a3737aa56ee751dbbca0d3df905c367b2c41e844`)
+
+- `git status`: clean except pre-existing untracked `csv/` and `prd/*.md` review docs (unrelated to this pass, not touched).
+- `pnpm run typecheck`: clean (backend/frontend/tools).
+- `pnpm run test:backend`: **972 passed, 1 skipped** (973), 0 failures.
+- `pnpm run test:frontend`: **36 passed** (36).
+- `pnpm run test:tools`: **52 passed** (52).
+- `pnpm run lint`: **5833 pre-existing errors**, entirely from the untracked local `.venv` Playwright-driver directory — pre-existing, matches every prior pass's own note; no tracked source file affected.
+- `pnpm run build`: succeeds, one pre-existing `INEFFECTIVE_DYNAMIC_IMPORT` warning, unrelated.
+- `pnpm run check:max-lines`, `pnpm run check:filenames`: clean.
+
+### P7-01 implementation
+
+`assets/ts/member-flows/votes-index-page.tsx` no longer does one `FETCH_LIMIT=100` fetch grouped client-side. `SECTION_STATUS_FILTER` (line 48) maps each rendered section to its own status filter (`open` → `"open,scheduled"`, `closed` → `"closed"`); `buildVotesSectionUrl`/`fetchVotesSection` (lines 74, 83) issue one bounded, server-paginated `GET /api/v1/votes?status=...&limit=20&offset=...` request per section. `VotesIndex` (line 146) fetches both sections' first page via `Promise.all` on mount, and `loadMore` (line 161) fetches the next page on an explicit "Load more" click, appended via `mergeVotesSection` (line 79) rather than replacing — so a section whose real total exceeds one page shows a "Load more" control (`VoteSectionView`, line 113, gated on `section.page.hasMore`) instead of silently truncating. The manual `PublicVote`/`VoteType`/`VoteScopeType`/`PublicVotesResponse` interfaces (old lines 23–41) are gone; `PublicVote`/`PageInfo` are now `z.infer` types from the shared `publicVoteSchema`/`pageInfoSchema` (`assets/shared/schemas/votes.ts`, `assets/shared/schemas/pagination.ts`).
+
+The public list contract itself needed a small additive extension to support this: the "open for voting" section groups `open` and `scheduled` votes together (pre-existing UI grouping, unchanged), but the public `status` filter only ever accepted one bare value (`"open"` or `"closed"`, `assets/shared/schemas/votes.ts`). `publicVoteStatusListSchema` (votes.ts:145) now accepts a comma-separated list (`?status=open,scheduled`), validated per-element against the same enum plus `"scheduled"` (previously excluded from public filtering, now allowed since it's what the UI already displayed under "Open for voting" via the old unfiltered fetch). A bare single value still validates to a one-element array, so this is a strict superset of the prior contract — no existing caller's behavior changes. `functions/_lib/services/votes/public.ts`'s `listPublicVotes` builds a parameterized `status IN (?, ...)` clause (public.ts:78-81) instead of the old `=` branch-per-value; all bound as query parameters, no string interpolation.
+
+Regression test: `tests/votes.test.ts` — "public GET /api/v1/votes?status= accepts a comma-separated list..." creates one open, one scheduled, and one closed public vote, and asserts `status=open,scheduled` returns exactly the first two (never the closed one) while `status=closed` returns only the closed one, plus a 400 on an invalid status value. Frontend unit tests: `tests/frontend/votes-index-page.test.ts` — `buildVotesSectionUrl` produces the expected per-section URL (including the `open,scheduled` filter and offset carry-forward for "Load more"), and `mergeVotesSection` appends rather than replaces.
+
+Browser-verified against the local dev server (real magic-link admin login, 28 real test votes created via the live admin API — 25 open + 3 scheduled — then deleted afterward): "Open for voting" correctly merged scheduled+open, the 20-item page boundary produced a real "Load more" button, clicking it appended the remaining 8 without dropping the first 20, and the "Closed" section stayed correctly absent (0 closed votes seeded). No console errors at any point.
+
+### P7-02 implementation
+
+`assets/ts/admin/sections/Sponsorships.tsx`'s `loadCompanySponsorships` no longer does one `limit=200&offset=0` fetch rendered as complete. `buildCompanySponsorshipsUrl` (line 465) builds the same bounded `limit=200` request but now offset-parameterized; `loadCompanySponsorships` (line 521) accepts an `offset` parameter (default 0) and, via `mergeCompanySponsorshipsPage` (line 485), either replaces the list (fresh offset-0 load — company switch or filter change) or appends onto it (offset > 0 — "Load more"). `companyPage` state (line 513) tracks the real `page` envelope from the last fetch; a "Load more" button (line 699) renders only when `companyPage?.hasMore` is true, wired to `loadMoreCompanySponsorships` (line 562), which is guarded against firing while a load is already in flight or after the list is exhausted.
+
+`companySponsorships` is now updated via the functional `setState` form (`setCompanySponsorships((prev) => mergeCompanySponsorshipsPage(prev, offset, data).sponsorships)`, Sponsorships.tsx:540) rather than closing over the `companySponsorships` state variable directly — the first draft of this fix read the state variable from within a `useCallback` memoized only on `[type, stage]`, which would have merged against a stale snapshot; caught and fixed before commit, not left as a latent bug.
+
+Regression/unit test: `tests/frontend/sponsorships-company-detail.test.ts` — `companyDetailParams` decomposes all three company-key prefixes; `buildCompanySponsorshipsUrl` produces the expected bounded URL with and without type/stage filters, and carries the offset forward for a "Load more" page; `mergeCompanySponsorshipsPage` replaces on offset 0, appends on offset > 0 (proving earlier rows survive a "Load more"), and confirms a first page at the 200-row cap still reports `hasMore: true`/the real `total` rather than silently capping.
+
+Browser-verified against the local dev server (same admin session): created 3 real test sponsorships for a throwaway company via the live admin API, opened the company in the Sponsorships pipeline UI, confirmed the detail panel renders all 3 with no "Load more" button (total ≤ page size, correctly hidden) and no console errors, selected one to confirm the existing detail-panel flow still works unchanged, then deleted the test data. Creating a company with 200+ real sponsorships to visually exercise "Load more" itself was not attempted (would require 200+ individual POSTs) — that boundary is covered by the unit test above instead.
+
+### Validation for this pass
+
+- `pnpm run typecheck` (backend/frontend/tools): clean.
+- `pnpm run lint`: same 5833 pre-existing `.venv` errors as baseline; zero in any tracked/touched file.
+- `pnpm run test:frontend`: **48 passed** (48) — 36 baseline + 12 new (3 in `votes-index-page.test.ts`, 9 in `sponsorships-company-detail.test.ts`).
+- `pnpm run test:backend`: **973 passed, 1 skipped** (974) — 972 baseline + 1 new (`votes.test.ts`'s multi-status filter test), 0 failures.
+- `pnpm run test:tools`: **52 passed** (52), unchanged.
+- `pnpm run build`: succeeds, same pre-existing `INEFFECTIVE_DYNAMIC_IMPORT` warning, unrelated.
+- `pnpm run check:max-lines`, `pnpm run check:filenames`: clean.
+
+### Regressions vs. baseline
+
+None. Every baseline-passing check (typecheck, lint against tracked source, all three test suites, build, max-lines, filenames) still passes; the only deltas are the new tests added by this pass, all passing.
+
+### Line-by-line diff review (edge cases, concurrency, contracts, dead code)
+
+- **Concurrency (found, not fixed — low severity):** `Sponsorships.tsx`'s company-detail panel has no request-generation guard or `AbortController`. If a user clicks "Load more" and then changes the type/stage filter before that request resolves, the two responses can land out of order — a late-arriving stale "Load more" page could append onto the freshly-filtered list, producing a momentarily mixed-filter display. This exact class of race (no cancellation on company-switch or filter-change) already existed before this pass for the single-fetch case; this pass's "append" merge makes the *visible symptom* of a losing race slightly different (mixed rows instead of a full stale replacement) but does not introduce a new kind of hazard, doesn't affect any persisted data, and self-corrects on the next filter change or company selection. Judged low-severity/cosmetic for an internal staff-only admin tool — not fixed in this pass; flagged here per the review's own concurrency-check requirement rather than fixed unrequested (scope discipline — an `AbortController`/generation-counter fix would touch this file's broader fetch pattern beyond the two flagged items).
+- **Contract:** the public `status` filter's parameter shape changed from "one of `open`/`closed`" to "comma-separated list of `scheduled`/`open`/`closed`" — verified additive/non-breaking: every previously-valid single value still parses to the identical one-element array and produces the identical SQL condition (confirmed by `tests/votes.test.ts`'s pre-existing bounded-envelope test still passing unmodified).
+- **Edge cases:** empty/whitespace-only status tokens, and any value outside the three-way enum (including the pre-existing `"cancelled"` exclusion), are rejected with 400 by the zod pipe before reaching the service layer — verified by the new backend test's `status=not-a-status` assertion. Array length is capped at 3 (`.max(3)`), so an oversized comma-separated payload is rejected rather than building an unbounded `IN (...)` clause.
+- **No dead code, no TODOs/stubs, no commented-out code introduced.**
+
+### Security review (diff-only)
+
+- **Injection:** the new `status IN (?, ...)` clause (`functions/_lib/services/votes/public.ts`) uses one bound placeholder per array element with values passed through D1's parameter binding — no string interpolation of user input into SQL. `buildCompanySponsorshipsUrl`/`buildVotesSectionUrl` build query strings via `URLSearchParams`, which percent-encodes every value — no raw concatenation of user- or server-derived strings into a URL.
+- **Authz:** neither change touches an authorization boundary. The public votes endpoint's mandatory `visibility = 'public'` condition is untouched and still applied unconditionally before the new status clause; the status-filter widening only changes *which already-public* rows a given query can select together, never which rows are exposed. The Sponsorships change is entirely client-side pagination against the existing, already-authorized `GET /api/v1/admin/sponsorships` route (no new endpoint, no new permission surface).
+- **Validation/output encoding:** all new query params are zod-validated server-side (`publicVoteStatusListSchema`) before use; rendered vote/sponsorship fields flow through the same Preact JSX auto-escaping as before this pass (no new `dangerouslySetInnerHTML` or raw HTML injection points).
+- **DoS:** both new "Load more" flows are strictly bounded per request (`limit=20` / `limit=200`, matching the existing shared pagination contract's `max(200)`), fetch only on explicit user action, and cannot exceed the server-reported real total.
+- **Secrets/PII:** no new logging, no new error-body fields; the existing `ApiClientError`/`api()` error surfaces are unchanged.
+- **New dependencies:** none added.
+
+No High/Critical findings. One low-severity, unfixed concurrency finding (above), explicitly out of scope for this pass's two items.
+
+### Open questions and assumptions made
+
+1. **P7-01's two-sections-via-two-queries interpretation.** The plan's first option ("two bounded server queries filtered by status") doesn't literally fit the UI's pre-existing grouping (the "Open for voting" section merges `open`+`scheduled`, and the public status filter previously only accepted one bare value). Read conservatively as: the *UI* should end up with exactly two independently-paginated sections, each backed by its own bounded server query — implemented by extending the existing single-value `status` filter to accept a comma-separated list (additive, backward-compatible) rather than inventing a second query dialect or a bespoke "grouped projection" endpoint. This keeps one canonical list endpoint/contract per AGENTS.md's DRY requirement instead of adding a parallel one.
+2. **P7-02's "Load more" page size.** Kept the existing `limit=200` per page (not shrunk) — the finding was about the fetch being treated as *complete*, not about the page being too large; changing the page size itself wasn't requested and wasn't needed to close the finding.
+3. **P7-02's large-scale "Load more" browser verification.** Exercising the actual 200+ row "Load more" boundary live in the browser would require creating 200+ real sponsorship records through the admin API — judged disproportionate to this item's scope; the boundary (append vs. replace, `hasMore`/`total` correctness at exactly 200 rows) is instead covered by `tests/frontend/sponsorships-company-detail.test.ts`'s dedicated 200-row test.
+
+### Anything changed that was not in Phase 7
+
+Nothing beyond the two items' direct targets and their tests. One doc comment (the block comment above `Sponsorships()`, describing the company-detail fetch as "naturally bounded") was updated in the same file to stay accurate to the new paginated behavior — not a separate change, part of P7-02's own scope.
+
+`csv/` and `prd/*.md` remain untracked/uncommitted, unchanged by this pass.
+
+---
+
 ## Phase 8 — Separation of concerns: split monolith files — **confirmed still live at the exact reported sizes**
 
 ### 8.1 — `assets/ts/admin/sections/Applications.tsx:89` [P2]
