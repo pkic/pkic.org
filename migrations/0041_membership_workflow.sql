@@ -110,8 +110,13 @@ CREATE TABLE google_groups_sync_queue (
   google_group_email TEXT NOT NULL,
   status            TEXT NOT NULL DEFAULT 'pending',
   -- allowed: pending | processing | completed | failed
+  -- 'pending' also covers a row awaiting retry after a transient failure —
+  -- next_attempt_at gates when it becomes claimable again (PR #1 review
+  -- §9.1: bounded claim/retry/backoff/dead-letter instead of an immediate,
+  -- unretried 'failed').
   attempts          INTEGER NOT NULL DEFAULT 0,
   last_error        TEXT,
+  next_attempt_at   TEXT,
   created_at        TEXT NOT NULL,
   processed_at      TEXT,
   FOREIGN KEY(user_id) REFERENCES users(id)
