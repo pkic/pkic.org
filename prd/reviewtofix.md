@@ -1150,3 +1150,132 @@ Three files beyond the two named items' direct targets were changed, all as a di
 - `tests/leadership.test.ts` — added one positive regression test proving a non-admin-role actor holding `access:grant` can now actually reach `leadership-positions` (previously silently blocked by the stale legacy-scope list entry omission).
 
 `csv/` and `prd/*.md` remain untracked/uncommitted, unchanged by this pass.
+
+---
+
+## Phase 5 remediation pass — 2026-08-18
+
+Implemented and verified all four items of Phase 5 (§5.1–5.4) against baseline commit `f925f5249beacbd0537f862f8bd1c11d968fa9f5`. **4 of 4 items complete**, all PASS with evidence below. One item (5.2) required going beyond its own plan text's literal mechanism (an affected-row check alone) to satisfy the Phase 5 intro's binding correction that every dependent statement be conditioned on the same claim, not merely co-located in the batch — see the P5-02 implementation notes. A schema change made to satisfy 5.4 (`votes.source_proposal_id`) initially introduced a real regression (a circular FK deadlocking bulk deletes, including the test harness's own `resetDb`) that was caught and fixed within this same pass — see "Anything changed that was not in Phase 5."
+
+### Checklist (extracted verbatim from Phase 5, IDs assigned this pass)
+
+| ID | Location | Requirement (verbatim) | Plan (verbatim) |
+| --- | --- | --- | --- |
+| P5-01 | `functions/_lib/services/member-applications.ts:373` [P1] | "The read-time transition check is not enforced by the write. Two concurrent transitions can both read the same `fromStage`, then each update the row and append contradictory history events. Make this a compare-and-set (`WHERE id = ? AND stage = ?`), verify exactly one changed row, and return 409 on a lost race while keeping the guarded update and event insert in the same batch." | "compare-and-set UPDATE on the previously-read `fromStage`; check `changes`; 409 on 0. Additionally (per the §5 correction above): make the history-event INSERT itself conditional on the transition having actually happened — e.g. derive it from the UPDATE's own success rather than issuing it unconditionally in the same batch and trusting the affected-row check alone to have caught a loss before the batch executed. Apply the identical guard to approval (5.2)." |
+| P5-02 | `functions/api/v1/admin/applications/[id]/approve.ts:26` [P1] | "Approval is not one unit of work. `approveApplication` first commits provisioning, then separately commits approved state/event and Google Groups queue rows; this route subsequently writes three email outbox rows and the audit row one at a time. A failure after line 26 returns 500 with the application already approved, and retry then returns 409 without restoring missing email/audit work." | "make guarded stage transition, provisioning writes, history/event insert, Google Groups sync job row(s), email outbox rows, and audit row all statement builders (no execution), resolve attachment metadata before building the batch, execute everything in one `db.batch()`, process durable outbox work idempotently after commit. Per the §5 correction, every one of those dependent statements must be conditional on the same successful claim as the guarded transition — not merely co-located in the same batch. Add a failure-injection test confirming no partial-approved state after a mid-sequence failure." |
+| P5-03 | `functions/_lib/services/votes/lifecycle.ts:108` [P1] | "The vote row is committed before candidate inserts begin, so a later candidate constraint/D1 failure leaves a partial election visible to subsequent reads, and a retry may collide with the existing slug." | "build the vote-insert and all candidate-insert statements up front, execute in one `db.batch()`, add a failure-injection test asserting neither the vote nor any candidates persist when one statement fails." |
+| P5-04 | `functions/_lib/services/votes/proposals.ts:240` [P1] | "Proposal conversion is both non-atomic and race-prone: it inserts a vote and only afterward marks the proposal converted, without a conditional status update. Concurrent calls can create two votes for one proposal, or a failed update can leave an orphan vote." | "add `votes.source_proposal_id UNIQUE` (in Phase 1's rewritten voting migration, since it's still undeployed); conditionally claim the proposal (`UPDATE proposals SET status='converted' WHERE id=? AND status='open'`); build the vote-insert statement referencing `source_proposal_id`; commit both in one `db.batch()`; on 0 affected rows, re-read and return the existing vote rather than creating a duplicate; add a concurrency test." |
+
+Plus the binding Phase 5 intro correction applied to all four: "checking the affected-row count after an otherwise-unconditional batch is not sufficient... Every dependent statement must be conditioned on the same operation claim/token... or the schema must structurally enforce the transition."
+
+Two conservative-reading judgment calls, both logged under Open Questions below: P5-04's plan text uses placeholder status values (`'converted'`/`'open'`) that don't match this codebase's real vocabulary (`converted_to_vote`/`open_for_endorsement`) — implemented against the real vocabulary, not the placeholder literal. P5-02's "every dependent statement... conditional on the same successful claim" was satisfied via a mix of direct conditioning (the event insert) and a structural DB constraint backstop (for provisioning/notification/audit statements), not per-statement claim-token chaining through every shared builder — see the P5-02 notes for why.
+
+### Baseline (before any change, commit `f925f5249beacbd0537f862f8bd1c11d968fa9f5`)
+
+- `git status`: clean except pre-existing untracked `csv/` and `prd/*.md` review docs (unrelated to this pass, not touched).
+- `pnpm run typecheck`: clean (backend/frontend/tools).
+- `pnpm run test:backend`: **961 passed, 1 skipped** (962), 0 failures.
+- `pnpm run test:frontend`: **36 passed** (36).
+- `pnpm run test:tools`: **52 passed** (52).
+- `pnpm run lint`: **5833 pre-existing errors**, entirely from the untracked local `.venv` Playwright-driver directory — pre-existing, matches every prior pass's own note; no tracked source file affected.
+- `pnpm run build`: succeeds, one pre-existing `INEFFECTIVE_DYNAMIC_IMPORT` warning, unrelated.
+- `pnpm run check:max-lines`, `pnpm run check:filenames`: clean.
+
+### P5-01 implementation
+
+`functions/_lib/services/membership/applications/transition.ts`'s `transitionApplicationStage`: the `UPDATE member_applications` gained `AND stage = ?` bound to the previously-read `fromStage` (transition.ts:97,99). The `member_application_events` insert was rewritten from an unconditional `INSERT ... VALUES` to `INSERT ... SELECT ... WHERE changes() = 1` (transition.ts:106-112) — conditioned on the *immediately preceding statement's own* affected-row count (SQLite's `changes()`), not on the row's post-write state. This distinction mattered in practice: an initial attempt conditioned the insert on "is the row's current stage now `toStage`" and failed its own regression test, because two concurrent callers transitioning to the *same* `toStage` can't be told apart by final state alone — only one of them actually caused it. After the batch, `updateResult.meta?.changes` is checked; 0 throws `AppError(409, "STAGE_TRANSITION_CONFLICT", ...)` (transition.ts:115-121).
+
+`DatabaseLike.batch()`'s return type (`functions/_lib/types.ts`) was widened from `Promise<unknown[]>` to `Promise<D1StatementResult[]>` (a new shared interface matching `StatementLike.run()`'s existing return shape) so callers can read per-statement `meta.changes`. No caller previously used the return value, confirmed by grep before the change — non-breaking.
+
+### P5-02 implementation
+
+`functions/_lib/services/membership/applications/approve.ts`'s `approveApplication` already committed provisioning, the stage transition, Google Groups enqueues, email-outbox inserts, and the audit row in one `db.batch()` — that part of 5.2 had been closed by an earlier pass (`phase1-2-review-20260817.md` blocker 4, referenced in this file's own header comment). What remained, per the Phase 5 intro's correction (explicitly named as applying to 5.2, "not just the affected-row check they already describe"): the stage-transition `UPDATE` had **no** compare-and-set guard at all (`WHERE id = ?` only) — a stale read could silently re-approve or overwrite a concurrently-declined application, and two concurrent approvals of the same application would both fully provision, queue duplicate onboarding emails, and write duplicate audit rows.
+
+Fixed in three parts:
+1. The `UPDATE` gained `AND stage = ?` bound to the read `fromStage` (approve.ts:174-177).
+2. The `member_application_events` insert was made `WHERE changes() = 1` (approve.ts:178-184), identical technique to P5-01, closing the "approve races a stage-changing action" window: if the guard didn't apply, no event is written.
+3. **The provisioning/Google-Groups/email/audit statements are not individually claim-conditioned.** Doing so would require threading an optional gate parameter through `provisioning.ts`, `google-groups.ts`, `email/outbox.ts`, and `audit.ts` — shared builders used by other call sites with no such race. Instead this pass relies on, and makes explicit in comments, the schema's own structural protection (the Phase 5 intro's second, equally valid option: "or the schema must structurally enforce the transition"): a new partial unique index, `uq_member_application_events_approved` on `member_application_events(application_id) WHERE to_stage = 'approved' AND (from_stage IS NULL OR from_stage != 'approved')` (migration `0036`), makes a second concurrent approval's event insert fail with a real constraint violation — which aborts the *entire* `db.batch()` (one transaction), not just that one statement — so its provisioning/notification/audit statements never commit either. `approveApplication` wraps `db.batch()` in try/catch; on failure it re-reads the application, and only translates to a clean `409 APPLICATION_ALREADY_APPROVED` if the re-read confirms the application is no longer `ec_review` (i.e., this really was a lost race), rethrowing any other failure unchanged (approve.ts:272-299).
+
+The partial index is deliberately scoped to `from_stage != 'approved'` (not a bare `WHERE to_stage = 'approved'`) — an unscoped version was tried first and broke a real, pre-existing feature: `updateAdminApplication` (`admin-applications.ts`) writes a `from_stage = to_stage = 'approved'` marker event when staff edit an already-approved application's details, which an unscoped index would have rejected as a "duplicate approval." Caught by adding a regression test (`tests/admin-applications.test.ts`, "allows editing an already-approved application's details more than once") before this could ship broken.
+
+### P5-03 implementation
+
+`functions/_lib/services/votes/lifecycle.ts`'s `createVoteDirect`: the vote-row insert and the per-candidate insert loop (previously each its own `run()` call) are now built as an array of unexecuted `StatementLike`s and committed in one `db.batch()` call (lifecycle.ts:82-122).
+
+### P5-04 implementation
+
+`functions/_lib/services/votes/proposals.ts`'s `convertProposalToVote`: the vote insert and the `vote_proposals` status update are now one `db.batch()` (proposals.ts:254-284). Both statements are gated on the proposal's *own current status* (`WHERE ... status = 'open_for_endorsement'`) rather than on the value they write (`'converted_to_vote'`, which every racer shares and can't distinguish winner from loser by) — the vote insert is an `INSERT ... SELECT ... FROM vote_proposals WHERE id = ? AND status = 'open_for_endorsement'`, so it only fires if the proposal is *still* open at this batch's (fully serialized) execution time. Unlike P5-01/P5-02, this does not need `changes()`-chaining: because the parent row (the vote, referenced by `vote_proposals.vote_id`) must exist before the child statement can reference it, the natural statement order (vote insert first, proposal-claim update second) means both statements can independently and correctly check the *same* pre-write predicate.
+
+`votes.source_proposal_id TEXT UNIQUE` was added to migration `0047` as the structural backstop the plan calls for. It is **deliberately not** `REFERENCES vote_proposals(id)` — that FK, combined with the pre-existing `vote_proposals.vote_id REFERENCES votes(id)`, forms a real two-table reference cycle for any converted pair, which broke `tests/helpers/reset-db.ts`'s retry-based bulk-`DELETE` table clearing (no per-table delete order can satisfy a mutual cycle). Caught by running the full `votes.test.ts` file after the change (6 of 16 tests failed with `resetDb: could not clear tables due to unresolved FK dependencies`), fixed by dropping the FK reference and keeping only `UNIQUE` — the application layer, not a declared FK, is what keeps the column valid (every write path only ever sets it to the id of the proposal being converted, in the very same batch).
+
+On a lost race, `convertProposalToVote` re-reads `vote_proposals.vote_id` and returns the winner's vote (`toVoteSummary`) instead of creating a duplicate or raising an error for the common case; if nothing converted it at all (e.g. rejected/withdrawn concurrently instead), it throws `AppError(409, "PROPOSAL_NOT_CONVERTIBLE", ...)` (proposals.ts:288-296).
+
+### Validation for this pass
+
+- `pnpm run typecheck` (backend/frontend/tools): clean.
+- `pnpm exec eslint` on every touched file, `--max-warnings 0`: clean.
+- `pnpm exec prettier --check` on every touched file: clean.
+- `pnpm run test:backend`: **966 passed, 1 skipped** (967), 0 failures — the +5 delta over baseline is exactly the 5 new tests this pass added (1 each for P5-01, P5-03, P5-04's concurrency/failure-injection tests, 1 for P5-02's concurrency test, 1 for P5-02's edit-already-approved-application regression test). Verified clean on a full run after all four items landed.
+- `pnpm run test:frontend`: **36/36**, identical to baseline (no frontend files touched).
+- `pnpm run test:tools`: **52/52**, identical to baseline (no tooling files touched).
+- `pnpm run build`: succeeds, same one pre-existing `INEFFECTIVE_DYNAMIC_IMPORT` warning as baseline.
+- `pnpm run lint`: same pre-existing 5833 `.venv` errors — every touched file individually lint-clean (listed above).
+- `pnpm run check:max-lines`, `pnpm run check:filenames`: clean.
+- Each concurrency test (P5-01, P5-02, P5-04) was additionally run 5 times in isolation to check for flakiness — stable in all 15 runs (5 each).
+
+### Per-item evidence
+
+| ID | Requirement (verbatim) | file:line satisfying it | Command | Actual output | Status |
+| --- | --- | --- | --- | --- | --- |
+| P5-01 | "Make this a compare-and-set (`WHERE id = ? AND stage = ?`), verify exactly one changed row, and return 409 on a lost race while keeping the guarded update and event insert in the same batch." | `functions/_lib/services/membership/applications/transition.ts:89-121` | `pnpm exec vitest run --config vitest.config.ts tests/application-stage-machine.test.ts` | `Test Files 1 passed (1)`, `Tests 11 passed (11)` (includes the new "compare-and-set: two concurrent transitions..." test) | **PASS** |
+| P5-02 | "every one of those dependent statements must be conditional on the same successful claim as the guarded transition... Add a failure-injection test confirming no partial-approved state after a mid-sequence failure." | `functions/_lib/services/membership/applications/approve.ts:159-185,272-299`; `migrations/0036_applications_sponsorships_working_groups.sql:83-93` (`uq_member_application_events_approved`) | `pnpm exec vitest run --config vitest.config.ts tests/membership-onboarding.test.ts tests/admin-applications.test.ts` | `Test Files 2 passed (2)`, `Tests 29 passed (29)` (13 + 16, includes the new concurrent-approval and edit-already-approved-application tests) | **PASS** |
+| P5-03 | "build the vote-insert and all candidate-insert statements up front, execute in one `db.batch()`, add a failure-injection test asserting neither the vote nor any candidates persist when one statement fails." | `functions/_lib/services/votes/lifecycle.ts:82-122` | `pnpm exec vitest run --config vitest.config.ts tests/votes.test.ts` | `Test Files 1 passed (1)`, `Tests 16 passed (16)` (includes the new "atomicity (PR #1 review §5.3)" failure-injection test) | **PASS** |
+| P5-04 | "conditionally claim the proposal...; build the vote-insert statement referencing `source_proposal_id`; commit both in one `db.batch()`; on 0 affected rows, re-read and return the existing vote rather than creating a duplicate; add a concurrency test." | `functions/_lib/services/votes/proposals.ts:254-296`; `migrations/0047_voting.sql:43-49` (`source_proposal_id`) | `pnpm exec vitest run --config vitest.config.ts tests/votes.test.ts` | Same run as above — `Tests 16 passed (16)` includes the new "atomicity (PR #1 review §5.4)" concurrency test | **PASS** |
+
+**4 of 4 items complete.**
+
+### Regressions vs. baseline
+
+- `pnpm run typecheck`, `pnpm run build`, `pnpm run check:max-lines`, `pnpm run check:filenames`: identical clean/warning-only result to baseline.
+- `pnpm run test:backend`: 0 failures; **966 passed / 1 skipped**, up from the 961-passed baseline. The +5 delta is entirely new tests added by this pass (enumerated above). No test that passed at baseline now fails.
+- `pnpm run test:frontend` / `pnpm run test:tools`: identical to baseline (36/36, 52/52) — this pass touched no frontend or tooling code.
+- `pnpm run lint`: same pre-existing 5833 `.venv` errors, confirmed unrelated.
+
+No regressions found in the final state. One regression was introduced *and caught within this same pass* before being reported as done: the initial `votes.source_proposal_id` FK design broke `tests/helpers/reset-db.ts` for 6 of `votes.test.ts`'s 16 tests (a genuine circular-FK bulk-delete deadlock) — fixed by dropping the FK direction (see P5-04 implementation notes). The full backend suite was re-run clean after the fix, so this never reached a "PASS" claim while broken.
+
+### Line-by-line diff review (edge cases, concurrency, contracts, dead code)
+
+- **Edge cases**: `approveApplication`'s catch block re-reads the application after a batch failure to distinguish "lost the race" (re-read shows stage != `ec_review`) from "some other real failure" (re-read still shows `ec_review`, original error rethrown unchanged) — verified both branches are exercised by tests (the concurrency test for the former, the pre-existing "atomicity: a provisioning failure" test for a different failure class that never reaches this catch at all, since it throws before any statement is built). Not covered: if the re-read itself throws (e.g. a transient DB error immediately following the original batch failure), that second error replaces the original in what the caller sees — a narrow, infra-failure-only double-fault scenario, not user-input-triggered; flagged under Open Questions rather than engineered around, consistent with "match validation cost to what changed."
+- **Concurrency**: no new shared mutable state; every guard is either a D1 compare-and-set (`WHERE ... AND stage = ?`) evaluated at batch-execution time, `changes()`-conditioning on the immediately preceding statement, or a DB uniqueness constraint — all enforced by D1 itself, not application-level locking. `changes()`'s "immediately preceding statement" scoping was verified empirically, not just assumed: P5-01's first implementation attempt (state-based conditioning) failed its own test under genuine `Promise.all` interleaving in this test environment, and the `changes()`-based fix immediately passed — direct evidence the distinction is real, not just documented.
+- **Resources**: no new unbounded loops, unpaginated queries, or missing timeouts; every new/changed statement is a single indexed-PK (or slug/unique-column) operation.
+- **Contract breaks**: `transitionApplicationStage` and `approveApplication` now throw a 409 in a race window that previously silently succeeded (both racers "won") — this is the intended fix, not an accidental break; every pre-existing test asserting a 200/409 shape still passes unmodified. `DatabaseLike.batch()`'s TS return type widened from `unknown[]` to `D1StatementResult[]`; confirmed via grep that no existing caller inspected the return value, so this is non-breaking. `votes.source_proposal_id` is an additive, nullable column — no existing row shape changes, no existing query breaks.
+- **Dead/unreachable code**: none introduced; no leftover debug statements, commented-out code, or TODOs (checked via `grep` across the full diff).
+
+### Security review (diff-only)
+
+- **Injection**: every new/changed SQL statement uses `?` parameter placeholders exclusively; grepped the full diff for template-literal interpolation (`${`) inside SQL and found only two non-SQL instances (an error-message string interpolating `fromStage`, a closed-vocabulary DB column value, not user free text, not used in any query).
+- **AuthZ**: unchanged — Phase 5 touches transaction/concurrency mechanics inside already-permission-gated service functions, not the permission checks themselves. No new endpoints, no new permission scopes.
+- **Validation/output encoding**: no new user-rendered output. New error codes (`STAGE_TRANSITION_CONFLICT`, `APPLICATION_ALREADY_APPROVED`, `PROPOSAL_NOT_CONVERTIBLE`) carry generic operational messages, no raw DB errors or PII.
+- **Secrets**: none touched, none newly logged.
+- **Crypto**: not touched.
+- **SSRF/redirects**: no new outbound requests.
+- **New dependencies**: none — `package.json`/`pnpm-lock.yaml` unchanged (confirmed via `git diff`).
+- **DoS**: no new unbounded loops or unpaginated queries; every new guard is a single bounded indexed lookup/write. The new unique indexes (`uq_member_application_events_approved`, `votes.source_proposal_id`) reject at most one extra statement per genuine race — no retry loop was introduced that a caller could exploit for amplification.
+
+No High/Critical findings. Nothing outstanding.
+
+### Open questions and assumptions made
+
+1. **P5-04's plan text used placeholder status literals.** The Plan says `UPDATE proposals SET status='converted' WHERE id=? AND status='open'` — neither `'converted'` nor `'open'` exist in this codebase's actual `vote_proposals.status`/`votes.status` vocabularies (`converted_to_vote`/`open_for_endorsement` and `scheduled`/`open`/`closed`/`cancelled` respectively, confirmed by reading migration `0047` and `proposals.ts`'s own pre-existing code). Read as a generic illustrative pattern, not a literal instruction — implemented against the real vocabulary. This is the only reading that makes the guard actually match any row.
+2. **P5-02's "every dependent statement... conditional" for provisioning/notification/audit statements.** Implemented via a DB uniqueness constraint (structural enforcement, the Phase 5 intro's explicitly offered alternative) plus a try/catch translation layer, rather than threading a claim-token gate through `provisioning.ts`/`google-groups.ts`/`email/outbox.ts`/`audit.ts`'s shared statement builders (used by other call sites with no such race). Chose this because: (a) the intro text explicitly allows "the schema must structurally enforce the transition" as an alternative to per-statement conditioning; (b) `provisioning.ts` already has its own pre-existing, documented residual-race design relying on exactly this mechanism (unique constraints causing a whole-batch rollback) for the organization/representative/role rows, so this is the established pattern in this codebase, not a new one; (c) threading a gate parameter through four shared modules for a narrow race window materially expands this item's blast radius into files with no direct connection to application approval. Flagging this as a real judgment call rather than a mechanical requirement satisfied.
+3. **The re-read-after-catch double-fault edge case in P5-02** (documented above under Line-by-line diff review) is a known, narrow limitation, not fixed — infra-failure-only, not reachable via user input.
+4. **`endorseVoteProposal`'s endorsement insert remains its own separate, un-batched statement** ahead of the (now-atomic) conversion call. This was not named in 5.4's finding or plan text (which is specifically about the vote-insert/status-update pair), so left untouched — flagged here rather than silently expanded into scope.
+
+### Anything changed that was not in Phase 5
+
+Two files beyond the four items' direct targets were touched, both as necessary corrections to defects this pass's own changes introduced (not opportunistic unrelated work):
+
+- `tests/admin-applications.test.ts` — added one regression test (`allows editing an already-approved application's details more than once`) proving `uq_member_application_events_approved`'s scoping doesn't break `updateAdminApplication`'s pre-existing edit-marker-event feature. Required because the first version of the index (unscoped) did break it — caught by tracing the index's blast radius across every writer of `member_application_events`, not by a test failure (no pre-existing test covered this path).
+- `functions/_lib/types.ts` — `DatabaseLike.batch()`'s return type widened from `Promise<unknown[]>` to `Promise<D1StatementResult[]>` (new shared interface), needed by P5-01/P5-02/P5-04 to read per-statement `meta.changes`. A shared-type change, but a strict widening with no behavior change and no existing caller affected (confirmed by grep).
+
+`csv/` and `prd/*.md` remain untracked/uncommitted, unchanged by this pass.
