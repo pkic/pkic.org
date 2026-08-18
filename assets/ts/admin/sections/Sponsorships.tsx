@@ -445,11 +445,52 @@ function SponsorshipDetail({ id, onChanged }: { id: string; onChanged: () => voi
  * to fetch that company's sponsorships — organization/non-member-name/
  * contact-name, matching the same fallback order the grouping query uses.
  */
-function companyDetailParams(key: string): Record<string, string> {
+export function companyDetailParams(key: string): Record<string, string> {
   if (key.startsWith("org:")) return { organizationId: key.slice("org:".length) };
   if (key.startsWith("nonmember:")) return { nonMemberName: key.slice("nonmember:".length) };
   if (key.startsWith("contact:")) return { contactName: key.slice("contact:".length) };
   return {};
+}
+
+const COMPANY_SPONSORSHIPS_PAGE_SIZE = 200;
+
+interface CompanySponsorshipsPage {
+  limit: number;
+  offset: number;
+  total: number;
+  hasMore: boolean;
+}
+
+/** Builds the bounded, offset-paginated fetch URL for one company's sponsorships page. */
+export function buildCompanySponsorshipsUrl(
+  companyKey: string,
+  filters: { type?: string; stage?: string },
+  offset: number,
+): string {
+  const params = new URLSearchParams({
+    ...companyDetailParams(companyKey),
+    limit: String(COMPANY_SPONSORSHIPS_PAGE_SIZE),
+    offset: String(offset),
+  });
+  if (filters.type) params.set("type", filters.type);
+  if (filters.stage) params.set("stage", filters.stage);
+  return `/api/v1/admin/sponsorships?${params.toString()}`;
+}
+
+/**
+ * Appends a fetched page onto the previously-loaded rows for offset > 0
+ * ("Load more"), or replaces them outright for a fresh offset-0 load —
+ * never silently drops rows beyond the first page (PR #1 review Phase 7.2).
+ */
+export function mergeCompanySponsorshipsPage(
+  previousSponsorships: Sponsorship[],
+  offset: number,
+  fetched: { sponsorships: Sponsorship[]; page: CompanySponsorshipsPage },
+): { sponsorships: Sponsorship[]; page: CompanySponsorshipsPage } {
+  return {
+    sponsorships: offset === 0 ? fetched.sponsorships : [...previousSponsorships, ...fetched.sponsorships],
+    page: fetched.page,
+  };
 }
 
 /**
@@ -460,44 +501,54 @@ function companyDetailParams(key: string): Record<string, string> {
  * grouping/sorting/pagination happens in D1 via `/companies`
  * (`listSponsorshipCompanies`), not by fetching every matching sponsorship
  * into the browser to group client-side (PR #1 review) — the detail panel
- * then fetches only the selected company's (naturally bounded) rows.
+ * fetches only the selected company's rows, one server-paginated page at a
+ * time, with an explicit "Load more" rather than a single capped fetch
+ * rendered as complete (PR #1 review, Phase 7.2).
  */
 export function Sponsorships() {
   const [type, setType] = useState<"" | (typeof SPONSOR_TYPES)[number]>("");
   const [stage, setStage] = useState<"" | SponsorshipPipelineStage>("");
   const [selectedCompany, setSelectedCompany] = useState<SponsorshipCompany | null>(null);
   const [companySponsorships, setCompanySponsorships] = useState<Sponsorship[]>([]);
+  const [companyPage, setCompanyPage] = useState<CompanySponsorshipsPage | null>(null);
   const [companyLoading, setCompanyLoading] = useState(false);
+  const [companyLoadingMore, setCompanyLoadingMore] = useState(false);
   const [companyError, setCompanyError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const tableRef = useRef<ApiTableActions | null>(null);
 
   const loadCompanySponsorships = useCallback(
-    async (company: SponsorshipCompany) => {
-      setCompanyLoading(true);
-      setCompanyError(null);
+    async (company: SponsorshipCompany, offset = 0) => {
+      if (offset === 0) {
+        setCompanyLoading(true);
+        setCompanyError(null);
+      } else {
+        setCompanyLoadingMore(true);
+      }
       try {
         if (company.key.startsWith("sponsorship:")) {
           const id = company.key.slice("sponsorship:".length);
           const data = await api<{ sponsorship: Sponsorship }>(`/api/v1/admin/sponsorships/${id}`);
           setCompanySponsorships([data.sponsorship]);
+          setCompanyPage(null);
           setSelectedId(data.sponsorship.id);
           return;
         }
-        const params = new URLSearchParams({ ...companyDetailParams(company.key), limit: "200", offset: "0" });
-        if (type) params.set("type", type);
-        if (stage) params.set("stage", stage);
-        const data = await api<{ sponsorships: Sponsorship[] }>(`/api/v1/admin/sponsorships?${params.toString()}`);
-        setCompanySponsorships(data.sponsorships);
+        const url = buildCompanySponsorshipsUrl(company.key, { type, stage }, offset);
+        const data = await api<{ sponsorships: Sponsorship[]; page: CompanySponsorshipsPage }>(url);
+        setCompanySponsorships((prev) => mergeCompanySponsorshipsPage(prev, offset, data).sponsorships);
+        setCompanyPage(data.page);
         setSelectedId((prev) => {
           if (prev && data.sponsorships.some((s) => s.id === prev)) return prev;
-          return data.sponsorships.length === 1 ? data.sponsorships[0].id : null;
+          if (offset === 0) return data.page.total === 1 ? (data.sponsorships[0]?.id ?? null) : null;
+          return prev;
         });
       } catch (e) {
         setCompanyError((e as Error).message);
       } finally {
         setCompanyLoading(false);
+        setCompanyLoadingMore(false);
       }
     },
     [type, stage],
@@ -508,9 +559,15 @@ export function Sponsorships() {
     void loadCompanySponsorships(company);
   }
 
+  function loadMoreCompanySponsorships() {
+    if (!selectedCompany || !companyPage?.hasMore || companyLoadingMore) return;
+    void loadCompanySponsorships(selectedCompany, companySponsorships.length);
+  }
+
   function backToCompanies() {
     setSelectedCompany(null);
     setCompanySponsorships([]);
+    setCompanyPage(null);
     setSelectedId(null);
   }
 
@@ -639,6 +696,18 @@ export function Sponsorships() {
                     </button>
                   ))}
                 </div>
+                {companyPage?.hasMore && (
+                  <div class="text-center mt-2">
+                    <button
+                      type="button"
+                      class="btn btn-outline-secondary btn-sm"
+                      disabled={companyLoadingMore}
+                      onClick={loadMoreCompanySponsorships}
+                    >
+                      {companyLoadingMore ? "Loading…" : "Load more"}
+                    </button>
+                  </div>
+                )}
               </div>
               <div class="col-md-7">{selectedId && <SponsorshipDetail id={selectedId} onChanged={reloadAll} />}</div>
             </div>
