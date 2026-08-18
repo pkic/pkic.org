@@ -238,37 +238,70 @@ async function convertProposalToVote(db: DatabaseLike, proposal: ProposalRow): P
   const slug = await uniqueSlug(db, proposal.title);
   const status: VoteStatus = new Date(opensAt).getTime() <= Date.now() ? "open" : "scheduled";
 
-  await run(
-    db,
-    `INSERT INTO votes
-       (id, slug, title, description, vote_type, scope_type, scope_id, created_by_user_id, proposed_by_user_id,
-        eligible_categories, threshold_type, opens_at, closes_at, current_round, status, result_json,
-        visibility, public_detail_level, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, 1, ?, NULL, 'private', 'aggregate', ?, ?)`,
-    [
-      id,
-      slug,
-      proposal.title,
-      proposal.description,
-      proposal.vote_type,
-      proposal.scope_type,
-      proposal.scope_id,
-      proposal.proposed_by_user_id,
-      proposal.eligible_categories,
-      thresholdType,
-      opensAt,
-      closesAt,
-      status,
-      now,
-      now,
-    ],
-  );
-
-  await run(db, `UPDATE vote_proposals SET status = 'converted_to_vote', vote_id = ?, updated_at = ? WHERE id = ?`, [
-    id,
-    now,
-    proposal.id,
+  // Conversion is claimed and committed as one db.batch() (PR #1 review
+  // §5.4): concurrent endorsement (last-endorser-triggers-conversion) and
+  // admin approval both call this function, and both previously read the
+  // proposal's status, decided to convert, then wrote in two separate,
+  // unconditional statements — two concurrent callers could both insert a
+  // vote for the same proposal, or a failed second write could orphan a
+  // vote. Both statements below gate on the proposal's *own* current status
+  // (open_for_endorsement) — not on the value they write, which every
+  // racer would share and couldn't be used to tell winner from loser —
+  // so only the caller that still finds it open_for_endorsement at this
+  // batch's (fully serialized) execution time inserts anything.
+  // votes.source_proposal_id UNIQUE (migration 0047) structurally backstops
+  // this: it can't hold two votes even if this guard were ever bypassed.
+  const results = await db.batch([
+    db
+      .prepare(
+        `INSERT INTO votes
+           (id, slug, title, description, vote_type, scope_type, scope_id, created_by_user_id, proposed_by_user_id,
+            source_proposal_id, eligible_categories, threshold_type, opens_at, closes_at, current_round, status,
+            result_json, visibility, public_detail_level, created_at, updated_at)
+         SELECT ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 1, ?, NULL, 'private', 'aggregate', ?, ?
+         FROM vote_proposals
+         WHERE id = ? AND status = 'open_for_endorsement'`,
+      )
+      .bind(
+        id,
+        slug,
+        proposal.title,
+        proposal.description,
+        proposal.vote_type,
+        proposal.scope_type,
+        proposal.scope_id,
+        proposal.proposed_by_user_id,
+        proposal.id,
+        proposal.eligible_categories,
+        thresholdType,
+        opensAt,
+        closesAt,
+        status,
+        now,
+        now,
+        proposal.id,
+      ),
+    db
+      .prepare(
+        `UPDATE vote_proposals SET status = 'converted_to_vote', vote_id = ?, updated_at = ?
+         WHERE id = ? AND status = 'open_for_endorsement'`,
+      )
+      .bind(id, now, proposal.id),
   ]);
+
+  const voteInserted = (results[0]?.meta?.changes ?? 0) > 0;
+  if (!voteInserted) {
+    // Lost the race — re-read and return the winner's vote rather than
+    // creating a duplicate. If nothing converted it (rejected/withdrawn
+    // concurrently instead), there is no vote to return.
+    const current = await first<{ vote_id: string | null }>(db, `SELECT vote_id FROM vote_proposals WHERE id = ?`, [
+      proposal.id,
+    ]);
+    if (current?.vote_id) {
+      return toVoteSummary(await getVoteRowOrThrow(db, current.vote_id));
+    }
+    throw new AppError(409, "PROPOSAL_NOT_CONVERTIBLE", "This proposal is no longer open for endorsement");
+  }
 
   return toVoteSummary(await getVoteRowOrThrow(db, id));
 }

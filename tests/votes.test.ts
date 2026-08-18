@@ -588,6 +588,60 @@ describe("Voting system", () => {
     expect(voteRows).toHaveLength(1);
   });
 
+  it("atomicity (PR #1 review §5.4): two concurrent admin approvals of the same proposal converge on exactly one vote", async () => {
+    const wgId = await insertWorkingGroup("Race WG", "race-wg", 5);
+    const proposerId = await insertMemberUser("F");
+    await insertWgMembership(wgId, proposerId);
+    const proposerToken = await createMemberSession(env.DB, proposerId, "race-proposer-token");
+
+    const submitRes = await call(proposerToken, "/api/v1/portal/vote-proposals", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Racing Conversion",
+        description: "N/A",
+        voteType: "motion",
+        scopeType: "working_group",
+        scopeId: wgId,
+      }),
+    });
+    const { proposal } = (await submitRes.json()) as { proposal: { id: string } };
+
+    const [first, second] = await Promise.all([
+      call(adminToken, `/api/v1/admin/vote-proposals/${proposal.id}/approve`, { method: "POST" }),
+      call(adminToken, `/api/v1/admin/vote-proposals/${proposal.id}/approve`, { method: "POST" }),
+    ]);
+
+    // The winner always gets 200 with the vote it created. The loser either
+    // also gets 200 (re-reading the winner's vote via convertProposalToVote's
+    // CAS fallback, if its own read-check raced ahead of the winner's write)
+    // or 409 from approveVoteProposal's own pre-existing read-check (if it
+    // ran after the winner's write already committed) — both are correct;
+    // what must never happen is a second vote or an unhandled error.
+    expect(first.status).not.toBe(500);
+    expect(second.status).not.toBe(500);
+    for (const status of [first.status, second.status]) {
+      expect([200, 409]).toContain(status);
+    }
+    expect([first.status, second.status]).toContain(200);
+
+    const voteRows = await queryAll<{ id: string }>(env.DB, "SELECT id FROM votes WHERE title = 'Racing Conversion'");
+    expect(voteRows).toHaveLength(1);
+
+    for (const res of [first, second]) {
+      if (res.status !== 200) continue;
+      const body = (await res.json()) as { convertedVote: { id: string } };
+      expect(body.convertedVote.id).toBe(voteRows[0].id);
+    }
+
+    const proposalRows = await queryAll<{ status: string; vote_id: string }>(
+      env.DB,
+      "SELECT status, vote_id FROM vote_proposals WHERE id = ?",
+      proposal.id,
+    );
+    expect(proposalRows[0].status).toBe("converted_to_vote");
+    expect(proposalRows[0].vote_id).toBe(voteRows[0].id);
+  });
+
   it("proposal submission is disabled when the scope's min_endorsers is 0", async () => {
     const wgId = await insertWorkingGroup("No Endorsement WG", "no-endorse-wg", 0);
     const proposerId = await insertMemberUser("F");
