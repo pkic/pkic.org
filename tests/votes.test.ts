@@ -222,6 +222,38 @@ describe("Voting system", () => {
     expect(twoCandidatesElimination.status).toBe(422);
   });
 
+  it("atomicity (PR #1 review §5.3): a candidate-insert failure leaves no vote row and no candidate rows behind", async () => {
+    const closesAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const votesBefore = await queryAll(env.DB, "SELECT id FROM votes");
+    const candidatesBefore = await queryAll(env.DB, "SELECT id FROM vote_candidates");
+
+    const response = await call(adminToken, "/api/v1/admin/votes", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Doomed Election",
+        voteType: "election",
+        scopeType: "forum",
+        thresholdType: "simple_majority",
+        closesAt,
+        candidates: [
+          { name: "Alice" },
+          // A syntactically valid but non-existent user id — violates
+          // vote_candidates.user_id's FK, forcing a failure mid-sequence
+          // (not on the first candidate) rather than before any statement
+          // was built at all.
+          { name: "Bob", userId: "00000000-0000-4000-8000-000000000000" },
+        ],
+      }),
+    });
+    expect(response.status).not.toBe(200);
+
+    const votesAfter = await queryAll(env.DB, "SELECT id FROM votes");
+    expect(votesAfter).toHaveLength(votesBefore.length);
+
+    const candidatesAfter = await queryAll(env.DB, "SELECT id FROM vote_candidates");
+    expect(candidatesAfter).toHaveLength(candidatesBefore.length);
+  });
+
   it("a WG chair (context-scoped votes:create) can create a vote for their own WG but not another WG", async () => {
     const ownWgId = await insertWorkingGroup("Own WG", "own-wg-vote");
     const otherWgId = await insertWorkingGroup("Other WG", "other-wg-vote");

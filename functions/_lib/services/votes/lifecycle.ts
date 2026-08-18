@@ -79,41 +79,47 @@ export async function createVoteDirect(
   const slug = await uniqueSlug(db, input.title);
   const status: VoteStatus = new Date(opensAt).getTime() <= Date.now() ? "open" : "scheduled";
 
-  await run(
-    db,
-    `INSERT INTO votes
-       (id, slug, title, description, vote_type, scope_type, scope_id, created_by_user_id, proposed_by_user_id,
-        eligible_categories, threshold_type, opens_at, closes_at, current_round, status, result_json,
-        visibility, public_detail_level, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 1, ?, NULL, 'private', 'aggregate', ?, ?)`,
-    [
-      id,
-      slug,
-      input.title,
-      input.description ?? null,
-      input.voteType,
-      input.scopeType,
-      scopeId,
-      admin.id,
-      input.eligibleCategories ? stringifyJson(input.eligibleCategories) : null,
-      input.thresholdType,
-      opensAt,
-      input.closesAt,
-      status,
-      now,
-      now,
-    ],
-  );
-
-  for (let i = 0; i < candidates.length; i += 1) {
-    const c = candidates[i];
-    await run(
-      db,
-      `INSERT INTO vote_candidates (id, vote_id, user_id, candidate_name, candidate_bio, nominated_by_user_id, sort_order, eliminated_round, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
-      [uuid(), id, c.userId ?? null, c.name, c.bio ?? null, admin.id, i, now],
-    );
-  }
+  // Build every statement first, execute once via db.batch() — the vote row
+  // and its candidates are one atomic unit of work (PR #1 review §5.3): a
+  // constraint failure on any candidate insert must not leave a vote row
+  // committed with no candidates (or only some), visible to concurrent
+  // reads, or a slug a retry then collides with.
+  const statements = [
+    db
+      .prepare(
+        `INSERT INTO votes
+           (id, slug, title, description, vote_type, scope_type, scope_id, created_by_user_id, proposed_by_user_id,
+            eligible_categories, threshold_type, opens_at, closes_at, current_round, status, result_json,
+            visibility, public_detail_level, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 1, ?, NULL, 'private', 'aggregate', ?, ?)`,
+      )
+      .bind(
+        id,
+        slug,
+        input.title,
+        input.description ?? null,
+        input.voteType,
+        input.scopeType,
+        scopeId,
+        admin.id,
+        input.eligibleCategories ? stringifyJson(input.eligibleCategories) : null,
+        input.thresholdType,
+        opensAt,
+        input.closesAt,
+        status,
+        now,
+        now,
+      ),
+    ...candidates.map((c, i) =>
+      db
+        .prepare(
+          `INSERT INTO vote_candidates (id, vote_id, user_id, candidate_name, candidate_bio, nominated_by_user_id, sort_order, eliminated_round, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+        )
+        .bind(uuid(), id, c.userId ?? null, c.name, c.bio ?? null, admin.id, i, now),
+    ),
+  ];
+  await db.batch(statements);
 
   return toVoteSummary(await getVoteRowOrThrow(db, id));
 }
