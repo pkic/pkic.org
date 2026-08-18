@@ -1,0 +1,60 @@
+id: intersoftsecurity
+name: intersoft security
+slogan:
+website: https://www.intersoftsecurity.com/
+# Business domains for email
+organizationDomains:
+  - intersoftsecurity.com
+# Short description, longer content can be placed in `content/members/`
+description: 
+
+# membership
+memberSince: 2026-08-18
+memberType: H2
+workingGroups:
+
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press:
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: 
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/in/gcimmino/
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Giuseppe Cimmino
+    role: Founder
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/gcimmino/
+    description: Giuseppe is the Founder at intersoft security and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
