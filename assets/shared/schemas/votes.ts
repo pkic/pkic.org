@@ -137,11 +137,26 @@ export const portalVoteSchema = z.object({
 
 // ── Public (no auth) — "Votes (public — no auth required)" ────────────
 
+/**
+ * Comma-separated list of public-facing vote statuses (`?status=open,scheduled`).
+ * A bare single value (`?status=open`) still validates to a one-element
+ * array, so this is a strict superset of the old single-value filter.
+ */
+const publicVoteStatusListSchema = z
+  .string()
+  .transform((value) => value.split(",").map((entry) => entry.trim()))
+  .pipe(
+    z
+      .array(voteStatusSchema.extract(["scheduled", "open", "closed"]))
+      .min(1)
+      .max(3),
+  );
+
 export const publicVotesListQuerySchema = paginationQuerySchema.extend({
   type: voteTypeSchema.optional(),
   scope: voteScopeTypeSchema.optional(),
   wg: z.string().optional(),
-  status: voteStatusSchema.extract(["open", "closed"]).optional(),
+  status: publicVoteStatusListSchema.optional(),
   from: z.iso.date().optional(),
   to: z.iso.date().optional(),
   sort: z.enum(["closes_at", "created_at"]).optional(),

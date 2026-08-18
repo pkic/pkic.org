@@ -883,6 +883,79 @@ describe("Voting system", () => {
     expect(boundedBody.page.hasMore).toBe(true);
   });
 
+  it("public GET /api/v1/votes?status= accepts a comma-separated list, matching the votes-index-page 'open+scheduled' section query", async () => {
+    const openCreateRes = await call(adminToken, "/api/v1/admin/votes", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Multi-Status Open Vote",
+        voteType: "motion",
+        scopeType: "forum",
+        thresholdType: "simple_majority",
+        closesAt: new Date(Date.now() + 3600_000).toISOString(),
+      }),
+    });
+    const { vote: openVote } = (await openCreateRes.json()) as { vote: { id: string; slug: string } };
+    await call(adminToken, `/api/v1/admin/votes/${openVote.id}/visibility`, {
+      method: "PATCH",
+      body: JSON.stringify({ visibility: "public", publicDetailLevel: "aggregate" }),
+    });
+
+    const scheduledCreateRes = await call(adminToken, "/api/v1/admin/votes", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Multi-Status Scheduled Vote",
+        voteType: "motion",
+        scopeType: "forum",
+        thresholdType: "simple_majority",
+        opensAt: new Date(Date.now() + 3600_000).toISOString(),
+        closesAt: new Date(Date.now() + 7200_000).toISOString(),
+      }),
+    });
+    const { vote: scheduledVote } = (await scheduledCreateRes.json()) as { vote: { id: string; slug: string } };
+    await call(adminToken, `/api/v1/admin/votes/${scheduledVote.id}/visibility`, {
+      method: "PATCH",
+      body: JSON.stringify({ visibility: "public", publicDetailLevel: "aggregate" }),
+    });
+
+    const closedCreateRes = await call(adminToken, "/api/v1/admin/votes", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Multi-Status Closed Vote",
+        voteType: "motion",
+        scopeType: "forum",
+        thresholdType: "simple_majority",
+        closesAt: new Date(Date.now() + 1000).toISOString(),
+      }),
+    });
+    const { vote: closedVote } = (await closedCreateRes.json()) as { vote: { id: string; slug: string } };
+    await call(adminToken, `/api/v1/admin/votes/${closedVote.id}/visibility`, {
+      method: "PATCH",
+      body: JSON.stringify({ visibility: "public", publicDetailLevel: "aggregate" }),
+    });
+    await new Promise((r) => setTimeout(r, 1100));
+    await closeDueVotes(env.DB);
+
+    const openSectionRes = await callAnon("/api/v1/votes?status=open,scheduled&sort=created_at");
+    expect(openSectionRes.status).toBe(200);
+    const openSectionBody = (await openSectionRes.json()) as { votes: Array<{ slug: string; status: string }> };
+    const openSectionSlugs = openSectionBody.votes.map((v) => v.slug);
+    expect(openSectionSlugs).toContain(openVote.slug);
+    expect(openSectionSlugs).toContain(scheduledVote.slug);
+    expect(openSectionSlugs).not.toContain(closedVote.slug);
+    expect(openSectionBody.votes.every((v) => v.status === "open" || v.status === "scheduled")).toBe(true);
+
+    const closedSectionRes = await callAnon("/api/v1/votes?status=closed&sort=created_at");
+    expect(closedSectionRes.status).toBe(200);
+    const closedSectionBody = (await closedSectionRes.json()) as { votes: Array<{ slug: string; status: string }> };
+    const closedSectionSlugs = closedSectionBody.votes.map((v) => v.slug);
+    expect(closedSectionSlugs).toContain(closedVote.slug);
+    expect(closedSectionSlugs).not.toContain(openVote.slug);
+    expect(closedSectionSlugs).not.toContain(scheduledVote.slug);
+
+    const invalidStatusRes = await callAnon("/api/v1/votes?status=not-a-status");
+    expect(invalidStatusRes.status).toBe(400);
+  });
+
   it("GET /api/v1/me/votes returns the caller's own ballot history", async () => {
     const wgId = await insertWorkingGroup("MyVotes WG", "myvotes-wg");
     const voterId = await insertMemberUser("F");

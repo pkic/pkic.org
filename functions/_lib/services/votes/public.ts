@@ -22,7 +22,7 @@ export interface PublicVoteListParams {
   type?: VoteType;
   scope?: VoteScopeType;
   wg?: string;
-  status?: "open" | "closed";
+  status?: Array<"scheduled" | "open" | "closed">;
   from?: string;
   to?: string;
   limit?: number;
@@ -75,10 +75,9 @@ export async function listPublicVotes(
     conditions.push("scope_id = ?");
     args.push(wg?.id ?? "__none__");
   }
-  if (params.status === "open") {
-    conditions.push("status = 'open'");
-  } else if (params.status === "closed") {
-    conditions.push("status = 'closed'");
+  if (params.status && params.status.length > 0) {
+    conditions.push(`status IN (${params.status.map(() => "?").join(", ")})`);
+    args.push(...params.status);
   }
   if (params.from) {
     conditions.push("closes_at >= ?");
