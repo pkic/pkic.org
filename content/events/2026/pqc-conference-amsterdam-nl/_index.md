@@ -142,6 +142,14 @@ data:
       bio: |
         Marin Ivezic has spent three decades leading national and large-enterprise IT/OT transformation programs of up to $500M, including turnarounds of failing ones. A former quantum entrepreneur, he has served as a Fortune Global 500 CISO and CTO and led global and regional cybersecurity practices at Accenture, IBM, and Big 4 firms. He is now founder and CEO of Applied Quantum, advising governments and enterprises on post-quantum migration, and writes the personal blog PostQuantum.com, which draws more than a million unique visitors a month.
 
+    - name: Louise Davey
+      title: President, LDIQ
+      bio: |
+        Louise Davey is a Business Transformation Architect and Leader specializing in organizational readiness for emerging technologies. She helps large institutions develop new operational capabilities, protect against systemic risk, and strengthen data and technology governance. With 30+ years of executive and advisory experience in large, complex organizations, Louise translates advanced technological concepts (data, cybersecurity, AI, quantum) into measurable business outcomes, resilience, and agility. A former CTO and COO, an active board member and advisor, with an M.Sc. in Physics from McGill, she bridges two worlds: engaging deeply with scientists and engineers on technical concepts, and translating urgency into strategic implications and actions for CEOs, boards, and regulators. She is the author of "Quantum How: What every board member and executive needs to know to lead in the quantum era" and a member of the PKI Consortium.
+      website: https://ldiq.ca/
+      social:
+        linkedin: https://www.linkedin.com/in/louisedavey/
+
     - name: Daniel Apon
       title: Director of Cryptography, Anduril Industries
       bio: |
@@ -149,6 +157,15 @@ data:
 
     - name: Fred Roos
       title: Security Architect, ING
+      bio: |
+        Fred Roos is a Security Architect in the Global CISO team of ING. For more than 20 years he has been closely involved with PKI, key management, and applied cryptography within ING, combining operational excellence and ongoing developments with strategic approaches and a focus on improving ING's security posture and compliance.
+      social:
+        linkedin: https://www.linkedin.com/in/fred-roos-8978488/
+
+    - name: Lory Thorpe
+      title: Quantum Safe Strategy Advisor, IBM
+      bio: |
+        Lory Thorpe is an executive technology leader and board advisor with more than 20 years of experience shaping the strategy, commercialization, and adoption of emerging technologies across global industries. Her expertise spans advanced connectivity and communication, quantum readiness, cybersecurity, and deep tech. As a Senior Strategy Advisor within IBM, Lory leads the Quantum Safe agenda for industries, helping organizations prepare for the risks and opportunities of the quantum era. She is the Chair of the GSMA Post Quantum Telco Network Task Force, the first global telecom industry forum dedicated to post-quantum cryptography adoption.
 
     - name: Rieck Manfred
       title: Head of Quantum Tech / Co-Founder, Deutsche Bahn / Federal Quantum Alliance
@@ -185,6 +202,13 @@ data:
       bio: |
         Thalia Laing is a Principal Cryptographer and Security Researcher in HP Security Lab, where her work focuses on applying cryptography to security-critical systems and the migration of products to quantum-resistant cryptography. She has played a leading role in the design and deployment of quantum-resistant firmware integrity protections for commercial endpoint devices. Thalia holds a PhD in Cryptography from the Information Security Group at Royal Holloway, University of London.
 
+    - name: Antonio Javier Cabrera Gutierrez
+      title: Staff System Architect, Infineon Technologies AG
+      bio: |
+        Antonio Javier Cabrera Gutierrez received his B.Eng. and M.Eng. degrees in Computer Engineering from the University of Granada, Spain, and joined Infineon Technologies AG in Neubiberg, Germany, in 2019 as a Ph.D. candidate in collaboration with the University of Granada, researching secure and reliable communication protocols in Industrial IoT networks. Since earning his Ph.D. in 2023, he has worked as a Security Architect for the TPM in the Edge Systems division, where he drives product requirements and innovations in collaboration with customers and standardization bodies, including the Trusted Computing Group (TCG). In TCG, he chairs the Internet of Things Work Group, extending TCG security standards and technologies into resource-constrained embedded devices.
+      social:
+        linkedin: https://www.linkedin.com/in/antoniojaviercabreragutierrez/
+
     - name: Rumen Doynov
       title: Assistant Professor, Technical University of Sofia
       bio: |
@@ -216,6 +240,8 @@ data:
 
     - name: Zygmunt Lozinski
       title: Quantum Safe Networks, IBM
+      bio: |
+        Zygmunt's mission is to make the world's networks quantum safe. His research is on quantum risk in telecommunications, critical infrastructure, and national security. Zygmunt is one of the co-founders of the GSMA Post Quantum Telco Network Task Force and editor for its publications, and he works with governments on national PQC guidance. He has extensive experience in telecommunications, network cloud / NFV, edge computing, orchestration, and 5G security.
 
     - name: Sarah McCarthy
       title: SVP Cryptography, Citi
@@ -231,11 +257,6 @@ data:
         Michele Mosca is a co-founder and CEO of evolutionQ and a Professor of Mathematics at the University of Waterloo. He is widely recognized as a pioneer in quantum computing and a leading voice on the cybersecurity implications of quantum technologies. He is a co-founder of the Institute for Quantum Computing and a founding member of the Perimeter Institute for Theoretical Physics, and has helped lead international initiatives in quantum-safe security including the Open Quantum Safe project and the ETSI-IQC Quantum-Safe Cryptography Conference. He holds a doctorate in quantum computer algorithms from the University of Oxford.
       social:
         linkedin: https://www.linkedin.com/in/dr-mosca/
-
-    - name: William Newhouse
-      title: Cybersecurity Engineer & Migration to PQC Project Lead, NIST NCCoE
-      bio: |
-        Bill Newhouse is a cybersecurity engineer at NIST's National Cybersecurity Center of Excellence (NCCoE), where he leads the Migration to Post-Quantum Cryptography (PQC) project — a collaboration with industry and government that shares insights on practices easing the migration to PQC algorithms. Mr. Newhouse has been with the U.S. federal government since 1986, focused initially on telecommunications, then information assurance, and now cybersecurity.
 
     - name: Bruno Couillard
       title: CEO & Co-Founder, Crypto4A
@@ -262,9 +283,6 @@ data:
     #     quantum technology in Bloomberg, Reuters, the Wall Street Journal, and Forbes.
     #   # Committee note: the "Scaling Quantum Safe" (HSBC) session was accepted with the intent that
     #   # Intallura is the lead/visible speaker and Antti Ropponen (IBM) supports — confirm before publishing.
-    # - name: Lory Thorpe
-    #   title: Quantum Safe Strategy Advisor, IBM
-    #   # Status: invited, not yet confirmed for the "Your Suppliers Aren't Ready" panel.
     # - name: Christopher Czajczyc
     #   title: Partner, Deloitte
     #   # Status: invited, not yet confirmed for the "Your Suppliers Aren't Ready" panel.
@@ -294,18 +312,31 @@ data:
   #
   # Placement pass (this revision) cross-references the PKI Consortium CFP system directly:
   # only proposals with decision_status = accepted are placed as real sessions below; every
-  # other slot stays "To be announced" (154 proposals submitted, 20 accepted so far — the
-  # rest are still under review). Arc groupings and hall assignments follow the same
-  # red = strategic / blue = technical logic used in the earlier working draft:
-  #   Day 1 — threat framing, standards landing, migration cost/scale at the top and close.
-  #   Day 2 — deployment reality: hardware, discovery/readiness measurement, supply chain.
-  #   Day 3 — policy/coordination, sector case studies, forward-looking synthesis and close.
-  # Speakers are spread across different days where the content allows it, so no one person
-  # carries two full sessions on the same day. Two explicit committee constraints honoured:
+  # other slot stays "To be announced" (22 accepted so far — the rest are still under review).
+  # Hall assignment follows the proposal's declared track: Strategy and Roadmaps / Policy and
+  # Standards → red (plenary) hall; Technical Deep Dive → blue hall; Deployments and Lessons
+  # Learned → whichever hall matches the audience of the talk. Day arcs:
+  #   Day 1 — threat framing, standards landing, where adoption actually stands, and the
+  #           board/governance close (Davey) so the strategic hall ends on a strong note.
+  #   Day 2 — deployment reality: supply chain, hardware roots of trust, real migrations
+  #           (Anduril, LMS at scale), breakouts, and the program-scale close (Ivezic).
+  #   Day 3 — sector coordination (financial), global regulation, architecture for the long
+  #           run (Osborne, Mosca), and the NCCoE collaboration panel as the finale.
+  # Balancing rules applied: key speakers are spread across all three days; no speaker
+  # presents twice on the same day or in two rooms at once; competing topics are not run
+  # head-to-head (e.g. the two "hybrid" talks are on different days, the hardware talks are
+  # separated); each day ends on real content in both halls, and Day 3 keeps strong draws
+  # (Osborne, HSBC, Mosca, NCCoE panel) to retain attendees. Committee notes honoured:
   #   - Cinkais/Nwup (PKIMM Extension Framework) accepted specifically "as a breakout session".
-  #   - Newhouse (NIST NCCoE panel) must stay on Day 3 due to speaker availability.
-  # The HSBC session (Ropponen + Intallura) is kept in the red/strategic hall per the
-  # committee's explicit instruction that it is a board-level story, not a technical one.
+  #   - O. Couillard (quantum-safe audit log) accepted for a breakout room.
+  #   - NCCoE "Collaborative Efforts" panel must stay on Day 3 due to speaker availability.
+  #     William Newhouse withdrew (scheduling conflict); a new moderator is being sought.
+  #   - HSBC session (Ropponen + Intallura) and Davey's "Board Factor" stay in the strategic
+  #     hall per committee instruction (board-level stories).
+  #   - Lozinski's regulation tutorial runs in the long single-room roundtable block pending
+  #     the committee's panel-vs-roundtable decision.
+  #   - Cabrera Gutierrez (TPMs) was asked to cover the hardware refresh cycle; the title may
+  #     still be shortened with the speaker.
   agenda:
     2026-12-01:
       - time: "08:00"
@@ -348,13 +379,14 @@ data:
             locations:
               - plenary
 
-          - title: "Hybrid is a Redistribution of Risk, Not a Removal of It"
+          - title: "PQC PKI: The Good, the Broken, and the Hybrid"
             description: |
-              The post-quantum migration debate routinely flattens "hybrid versus pure PQC" into a security question — one algorithm or two? — when it is really an operational architecture question about which class of failure your organisation is structured to handle.
-              This talk reframes the choice. Hybrid for key exchange is largely settled: deploy it now. Hybrid for authentication is harder, and the costs depend on construction. Composite signatures buy atomicity by binding two algorithms into one credential, but the same atomicity removes component-wise recovery and undoes two decades of hash-agility infrastructure. Parallel approaches deliver dual-algorithm assurance without the binding, fitting how PKI has handled every previous algorithm migration.
-              Drawing on a failure-mode analysis across twenty-five operational and cryptographic scenarios, the talk argues that for most enterprise authentication deployments, parallel is the better-fitting hybrid — and the conscious choice rarely defaults to it.
+              2025 was a year full of preparations for deploying PQC in practice. Standards, software libraries, HSMs, a lot of everything was updated to support PQC algorithms.
+              PQC 2026 started with a lot of PQC capable components and a statement like, "It's OK to have not acted YET. 2026 will be the last time this can be said". At the end of 2025 and the beginning of 2026 was also the time for great confusion. As organizations started to ponder on the next practical steps, they had to make decisions on what algorithms to use, hybrid solutions or not, and in the case of hybrids what type of hybrid PKI. Have companies deployed PQC in production by now? The answer is yes, production deployment have started. Decisions have been made and some earlier thoughts had to be dismissed. This presentation will highlight PQC PKI choices and hierarchies based on some real world decisions.
+              Architecture, algorithms, and combinations. What has been chosen and why. And maybe even more interesting, what didn't work and why? The presenters do not claim to have seen all PQC PKI deployments of 2026, but we have seen a few, and this is real world experience from those.
             speakers:
-              - Michael Osborne
+              - Tomas Gustavsson
+              - Sven Rajala
             locations:
               - blue_hall
 
@@ -369,31 +401,6 @@ data:
               - room_a
 
       - time: "11:45"
-        sessions:
-          - title: "PQC PKI: The Good, the Broken, and the Hybrid"
-            description: |
-              2025 was a year full of preparations for deploying PQC in practice. Standards, software libraries, HSMs, a lot of everything was updated to support PQC algorithms.
-              PQC 2026 started with a lot of PQC capable components and a statement like, "It's OK to have not acted YET. 2026 will be the last time this can be said". At the end of 2025 and the beginning of 2026 was also the time for great confusion. As organizations started to ponder on the next practical steps, they had to make decisions on what algorithms to use, hybrid solutions or not, and in the case of hybrids what type of hybrid PKI. Have companies deployed PQC in production by now? The answer is yes, production deployment have started. Decisions have been made and some earlier thoughts had to be dismissed. This presentation will highlight PQC PKI choices and hierarchies based on some real world decisions.
-              Architecture, algorithms, and combinations. What has been chosen and why. And maybe even more interesting, what didn't work and why? The presenters do not claim to have seen all PQC PKI deployments of 2026, but we have seen a few, and this is real world experience from those.
-            speakers:
-              - Tomas Gustavsson
-              - Sven Rajala
-            locations:
-              - plenary
-
-          - title: "Gaming the Speed-vs-Memory Tradeoff for ML-DSA and ML-KEM"
-            description: |
-              FIPS is only a suggestion, sortof. Specifically, FIPS only requires "mathematical equivalence" to the listed algorithms, and that gives a surprisingly wide latitude for implementations to play algorithmic games in search of either fast or small implementations.
-              This talk will explore speed-vs-memory tradeoff techniques applicable to the ML-DSA and ML-KEM algorithms and the results that they obtain within the Bouncy Castle Rust library. We start with a close look at the "default" implementation, then at what you can do to move around the High Speed <--> Low Memory spectrum. In one direction, you can pre-expand intermediate values at key-load time for faster sign, verify, encaps and decaps operations which gives performance increases in the 40% - 60% range (especially valuable if doing multiple operations against the same key). In the other direction, your in-memory private key representation can consist of only intermediate seed values and you can re-derive the active lattice values one entry at a time as they are needed; you pay a penalty for deriving the same intermediate values multiple times for a dramatic reduction in memory footprint. This technique has a particularly pronounced effect on ML-DSA where ML-DSA-87.sign() can be performed in under 30 kb of peak memory usage, which represents roughly a 7.5x decrease in memory usage in exchange for a 6x increase in runtime; which is a win on heavily-loaded servers where parallelism is gated by RAM not by CPU.
-            speakers:
-              - Mike Ounsworth
-            locations:
-              - blue_hall
-
-      - time: "12:30"
-        title: Lunch
-
-      - time: "14:00"
         sessions:
           - title: "Where the PQC Migration Actually Stands: A Cross-Ecosystem Census of 2.8 Million Packages"
             description: |
@@ -415,6 +422,23 @@ data:
             speakers:
               - Rumen Doynov
               - Alexander Shestakov
+            locations:
+              - blue_hall
+
+      - time: "12:30"
+        title: Lunch
+
+      - time: "14:00"
+        sessions:
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - plenary
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
             locations:
               - blue_hall
 
@@ -499,20 +523,27 @@ data:
 
       - time: "16:15"
         sessions:
-          - title: "120,000 Tasks: The Cryptography Was the Easy Part"
+          - title: "The Board Factor: What Makes PQC Programs Succeed or Stall"
             description: |
-              The integrated master schedule for one large enterprise's post-quantum migration grew past 120,000 discrete tasks. It was not a count of devices, certificates, or applications to upgrade. If it were, 120,000 would be small. The direct remediation work, the actual cutovers across every device and application, accounted for fewer than 30,000 tasks (a million-plus devices, systems, and apps grouped into upgrade batches).
-              The remaining 90,000 or so tasks are the enablement system: inventory as a living capability, governance and reporting cadence, vendor lifecycle enforcement, testing and assurance, workforce change, ecosystem and partner alignment, and ongoing operations during the long hybrid period.
-              Drawing on that 120,000-task plan (illustrative of complexity, not a universal count) and on three decades running high-stakes delivery programs such as national payments systems and federal health-records platforms, the talk turns to what actually governs whether such a program finishes. It is rarely the cryptography. It is the density of interdependencies: vendors waiting on internal teams, shared infrastructure that must be ready before application waves can move, regulatory deadlines colliding with finite engineering capacity. It is ownership, because cryptography is everyone's problem and therefore no one's, so the program needs a single accountable lead with authority across security, IT, engineering, procurement, and OT. It is workforce capacity, since the trained people a program needs at its peak in years four to eight cannot be conjured on demand. And it is funding that has to survive several budget cycles and more than one CISO. PKI realities sit inside this frame: certificate migration planned as waves rather than a single flag day, and PKI and HSM procurement and certification lead times treated as hard scheduling constraints.
-              Attendees leave able to right-size and sequence their own program, separate a credible plan from a wishful timeline, argue for a single accountable owner and the governance to back one, build the board case for multi-year funding, and prioritize by risk so the program delivers measurable security gains in years one to three while the longer effort runs on.
+              Most PQC programs are structurally set up to fail. Not for lack of standards or technology, but because the complexity of organizational systems is beyond what their programs are designed to control.
+              Post-quantum cryptography migration is more than a technology upgrade. It is a multi-year enterprise transformation that cuts across business lines, processes, vendors, data, contracts, procurement, risk appetite, funding, operating models, and executive accountability. These are not technology variables. Yet many organizations are still treating it as a technical remediation exercise. That is a mistake.
+              Digital trust is a critical business asset. And the cryptographic infrastructure that supports it is a highly distributed, deeply embedded, complex digital estate with dependencies that span every system, every process, and every layer of the technology stack. In this way, parallels can be made to data governance: fifteen years of CDO mandate cycles rife with failure, trying to govern something that is everywhere, essential, and owned by no one. PQC has a hard 3 to 7-year deadline. We simply cannot afford to make the same mistakes. This is not only a cryptography problem. It is a complex systems problem.
+              PQC programs face nearly every structural condition that predicts failure: a long-time horizon, ambiguous impact timing, no single natural owner, deep technical complexity, unclear business prioritization, complex and unmapped dependencies, limited cryptographic literacy, budget uncertainty, and a strategic portfolio process that favours near-term value creation over invisible long-term risk reduction. Add to this a fundamental accountability problem: the executive leaders responsible for taking action today may not be the same as those who face the consequences tomorrow. The usual forcing functions for urgency, ownership, and escalation are weak. In the absence of authoritative action, the cryptographic estate is heading for the same governance failure mode we saw with enterprise data: granular, everywhere, essential, owned by no one, and left in the hands of IT.
+              Ashby's Law for complex systems is clear: a system will defeat any controller that underestimates its complexity. Operational budgets, decision rights, and risk acceptance are distributed throughout the system; only the board holds authority over all three.
+              The session opens with two questions put directly to attendees: (1) why will your PQC program succeed when so many enterprise-scale programs fail, and (2) who is accountable for its success (or failure)? Participants respond in writing. Many will struggle, exposing the real issue: not whether PQC matters, but whether organizations understand the conditions required to succeed, and who should be held accountable if they don't.
+              Drawing on systems theory principles and over 30 years designing, delivering, and remediating large-scale transformations and operating models, this session examines why PQC migration is structurally harder than most organizations currently understand. It shows why cryptographic inventory, technical standards, vendor readiness, and migration planning are necessary but insufficient, and why board engagement is the single most determining factor in a program's success. The session closes by returning to the same two questions, this time providing concrete, practice-tested moves to establish who is ultimately accountable for PQC program success and to secure the board engagement needed to make sure yours does.
+              The issues that will stall many PQC programs are visible and navigable. Can you engage your board effectively to overcome them?
             speakers:
-              - Marin Ivezic
+              - Louise Davey
             locations:
               - plenary
 
-          - title: To be announced
+          - title: "Gaming the Speed-vs-Memory Tradeoff for ML-DSA and ML-KEM"
             description: |
-              Session details will be announced soon.
+              FIPS is only a suggestion, sortof. Specifically, FIPS only requires "mathematical equivalence" to the listed algorithms, and that gives a surprisingly wide latitude for implementations to play algorithmic games in search of either fast or small implementations.
+              This talk will explore speed-vs-memory tradeoff techniques applicable to the ML-DSA and ML-KEM algorithms and the results that they obtain within the Bouncy Castle Rust library. We start with a close look at the "default" implementation, then at what you can do to move around the High Speed <--> Low Memory spectrum. In one direction, you can pre-expand intermediate values at key-load time for faster sign, verify, encaps and decaps operations which gives performance increases in the 40% - 60% range (especially valuable if doing multiple operations against the same key). In the other direction, your in-memory private key representation can consist of only intermediate seed values and you can re-derive the active lattice values one entry at a time as they are needed; you pay a penalty for deriving the same intermediate values multiple times for a dramatic reduction in memory footprint. This technique has a particularly pronounced effect on ML-DSA where ML-DSA-87.sign() can be performed in under 30 kb of peak memory usage, which represents roughly a 7.5x decrease in memory usage in exchange for a 6x increase in runtime; which is a win on heavily-loaded servers where parallelism is gated by RAM not by CPU.
+            speakers:
+              - Mike Ounsworth
             locations:
               - blue_hall
 
@@ -608,7 +639,7 @@ data:
               - Paul van Brouwershaven
               - Fred Roos
               - Rieck Manfred
-              # - Lory Thorpe (IBM) — invited, not yet confirmed
+              - Lory Thorpe
               # - Christopher Czajczyc (Deloitte) — invited, not yet confirmed
             locations:
               - plenary
@@ -620,12 +651,13 @@ data:
             locations:
               - blue_hall
 
-          - title: "Post-Quantum Migration at Anduril"
+          - title: "Roundtable (topic to be announced)"
             description: |
-              Anduril's post-quantum cryptography (PQC) migration is well underway. Our particular focus is on the most constrained, most possibly complicated signals environments in which to establish secure, modern communications infrastructure. In this talk, I survey the technical roadmap of Anduril Industries from no-PQC to full-PQC, with special emphasis on DDIL (Denied, Disrupted, Intermittent, and Limited) communication scenarios. This talk discusses organizational challenges, engineering roadblocks (and successes), ranging from early planning and implementation, to simulation testing, live field testing, and deployment roll-out. A special emphasis is on interoperability of protocols and cryptographic primitives, and how to effectively handle various international regulation jurisdictions, as well as a call for further, future collaboration in this space, especially on common standards across various standardization bodies.
-            durationMinutes: 45
-            speakers:
-              - Daniel Apon
+              A smaller, single-room roundtable — capped at ~30 participants,
+              running longer than the standard breakout format to allow for a
+              deeper, off-the-record conversation.
+            track: Roundtable
+            durationMinutes: 105
             locations:
               - room_a
 
@@ -661,9 +693,11 @@ data:
 
       - time: "11:45"
         sessions:
-          - title: To be announced
+          - title: "Post-Quantum Migration at Anduril"
             description: |
-              Session details will be announced soon.
+              Anduril's post-quantum cryptography (PQC) migration is well underway. Our particular focus is on the most constrained, most possibly complicated signals environments in which to establish secure, modern communications infrastructure. In this talk, I survey the technical roadmap of Anduril Industries from no-PQC to full-PQC, with special emphasis on DDIL (Denied, Disrupted, Intermittent, and Limited) communication scenarios. This talk discusses organizational challenges, engineering roadblocks (and successes), ranging from early planning and implementation, to simulation testing, live field testing, and deployment roll-out. A special emphasis is on interoperability of protocols and cryptographic primitives, and how to effectively handle various international regulation jurisdictions, as well as a call for further, future collaboration in this space, especially on common standards across various standardization bodies.
+            speakers:
+              - Daniel Apon
             locations:
               - plenary
 
@@ -682,9 +716,14 @@ data:
 
       - time: "14:00"
         sessions:
-          - title: To be announced
+          - title: "PQC Starts at the Root of Trust: The Role of TPMs in Protecting Next-Generation Device Identities"
             description: |
-              Session details will be announced soon.
+              As organizations prepare for the transition to post-quantum cryptography, much of the conversation focuses on algorithms, certificates, and PKI infrastructure. Yet the success of any migration ultimately depends on where cryptographic keys are generated, stored, and protected. For billions of enterprise and IoT devices, that foundation is the Trusted Platform Module (TPM).
+              This session explores the role of TPMs as the hardware root of trust enabling post-quantum migration for device identities and machine credentials. From certificate enrollment and key attestation to secure storage and cryptographic agility, TPMs provide the security foundation that allows PKI ecosystems to evolve without compromising trust.
+              We will examine the practical challenges PKI teams face when introducing post-quantum algorithms into existing deployments — including the hardware refresh cycle — and describe how TPM capabilities can support the transition while maintaining compatibility with existing enterprise and IoT infrastructures.
+              Attendees will gain a clearer understanding of how hardware-backed key protection intersects with PQC deployment, why device identity should be part of every migration roadmap, and what steps organizations can take today to prepare for a quantum-resilient future.
+            speakers:
+              - Antonio Javier Cabrera Gutierrez
             locations:
               - plenary
 
@@ -702,12 +741,9 @@ data:
             locations:
               - room_a
 
-          - title: "Adding PQ Capabilities to SSH Protocol: The Fedora Approach"
+          - title: To be announced
             description: |
-              OpenSSH and libssh are 2 mostly widespread implementations of SSH protocol. Real-world requirements for PQ crypto causes writing significant patches to OpenSSH because of difference of the upstream and downstream requirements. libssh upstream is more binded to Fedora maintainers and lands the changes upstream.
-              The talk covers key downstream changes in OpenSSH: using OpenSSL code, providing extra algorithms support, FIPS compatibility quirks, in OpenSSH, and corresponding changes in libssh.
-            speakers:
-              - Dmitry Belyavskiy
+              Session details will be announced soon.
             locations:
               - room_b
 
@@ -786,19 +822,23 @@ data:
 
       - time: "16:15"
         sessions:
-          - title: To be announced
+          - title: "120,000 Tasks: The Cryptography Was the Easy Part"
             description: |
-              Session details will be announced soon.
+              The integrated master schedule for one large enterprise's post-quantum migration grew past 120,000 discrete tasks. It was not a count of devices, certificates, or applications to upgrade. If it were, 120,000 would be small. The direct remediation work, the actual cutovers across every device and application, accounted for fewer than 30,000 tasks (a million-plus devices, systems, and apps grouped into upgrade batches).
+              The remaining 90,000 or so tasks are the enablement system: inventory as a living capability, governance and reporting cadence, vendor lifecycle enforcement, testing and assurance, workforce change, ecosystem and partner alignment, and ongoing operations during the long hybrid period.
+              Drawing on that 120,000-task plan (illustrative of complexity, not a universal count) and on three decades running high-stakes delivery programs such as national payments systems and federal health-records platforms, the talk turns to what actually governs whether such a program finishes. It is rarely the cryptography. It is the density of interdependencies: vendors waiting on internal teams, shared infrastructure that must be ready before application waves can move, regulatory deadlines colliding with finite engineering capacity. It is ownership, because cryptography is everyone's problem and therefore no one's, so the program needs a single accountable lead with authority across security, IT, engineering, procurement, and OT. It is workforce capacity, since the trained people a program needs at its peak in years four to eight cannot be conjured on demand. And it is funding that has to survive several budget cycles and more than one CISO. PKI realities sit inside this frame: certificate migration planned as waves rather than a single flag day, and PKI and HSM procurement and certification lead times treated as hard scheduling constraints.
+              Attendees leave able to right-size and sequence their own program, separate a credible plan from a wishful timeline, argue for a single accountable owner and the governance to back one, build the board case for multi-year funding, and prioritize by risk so the program delivers measurable security gains in years one to three while the longer effort runs on.
+            speakers:
+              - Marin Ivezic
             locations:
               - plenary
 
-          - title: "Practical Implementation of Hardware-Separated Composite Signatures for Large-Scale PKI During the PQC Migration Period"
+          - title: "Adding PQ Capabilities to SSH Protocol: The Fedora Approach"
             description: |
-              The transition to Post-Quantum Cryptography (PQC) presents a significant challenge for organizations operating large-scale Public Key Infrastructures (PKIs). While PQC standards are becoming available, replacing vast numbers of deployed hardware tokens such as smart cards remains operationally expensive and time-consuming.
-              In this session, we present our implementation experience with the IETF LAMPS draft "Composite ML-DSA for Use in X.509 Public Key Infrastructure" in a hardware-separated environment for large-scale PKI migration. The approach combines existing smart cards holding traditional signature keys (e.g., RSA) with server-side Hardware Security Modules (HSMs) providing PQC signature capabilities (e.g., ML-DSA), enabling organizations to begin introducing PQC without requiring immediate replacement of end-user hardware. We discuss three representative risks observed during implementation and evaluation: cross-protocol signature composition, unintended reuse of composite-signature keys for single-algorithm signatures, and device impersonation across separated trust domains, and present a device-binding architecture that addresses them while maintaining compatibility with the IETF LAMPS composite signature framework.
-              We also evaluate the potential operational impact of this approach using a large-scale PKI migration model involving tens of millions of certificates, and share architectural considerations, implementation experiences, and validation results from a prototype built using cloud-based HSM services and commercially available PKI smart cards.
+              OpenSSH and libssh are 2 mostly widespread implementations of SSH protocol. Real-world requirements for PQ crypto causes writing significant patches to OpenSSH because of difference of the upstream and downstream requirements. libssh upstream is more binded to Fedora maintainers and lands the changes upstream.
+              The talk covers key downstream changes in OpenSSH: using OpenSSL code, providing extra algorithms support, FIPS compatibility quirks, in OpenSSH, and corresponding changes in libssh.
             speakers:
-              - Akane Suzuki
+              - Dmitry Belyavskiy
             locations:
               - blue_hall
 
@@ -879,9 +919,13 @@ data:
             locations:
               - plenary
 
-          - title: To be announced
+          - title: "Hybrid is a Redistribution of Risk, Not a Removal of It"
             description: |
-              Session details will be announced soon.
+              The post-quantum migration debate routinely flattens "hybrid versus pure PQC" into a security question — one algorithm or two? — when it is really an operational architecture question about which class of failure your organisation is structured to handle.
+              This talk reframes the choice. Hybrid for key exchange is largely settled: deploy it now. Hybrid for authentication is harder, and the costs depend on construction. Composite signatures buy atomicity by binding two algorithms into one credential, but the same atomicity removes component-wise recovery and undoes two decades of hash-agility infrastructure. Parallel approaches deliver dual-algorithm assurance without the binding, fitting how PKI has handled every previous algorithm migration.
+              Drawing on a failure-mode analysis across twenty-five operational and cryptographic scenarios, the talk argues that for most enterprise authentication deployments, parallel is the better-fitting hybrid — and the conscious choice rarely defaults to it.
+            speakers:
+              - Michael Osborne
             locations:
               - blue_hall
 
@@ -1055,19 +1099,23 @@ data:
           - title: "Collaborative Efforts to Support Migration to PQC"
             description: |
               A panel discussion that shares examples of how over 55 different organizations have collaborated within the NCCoE Migration to PQC project — using cryptographic visibility to support risk management decisions for migration actions, and performing demonstrations using PQC for interoperability and benchmarking to inform PKI system owners on starting to use PQC algorithms.
-              Bill Newhouse, the NCCoE Migration to PQC lead, moderates a panel of collaborators who have been working on implementing PQC algorithms in PKI systems (such as the US Government PIV card).
+              A panel of NCCoE collaborators who have been working on implementing PQC algorithms in PKI systems (such as the US Government PIV card). Moderator to be announced.
             track: Panel discussion
             speakers:
-              - William Newhouse
+              # Moderator to be announced — William Newhouse (NIST NCCoE) withdrew due to a scheduling conflict.
               - Bruno Couillard
               - Ted Shorter
               - Evgeny Gervis
             locations:
               - plenary
 
-          - title: To be announced
+          - title: "Practical Implementation of Hardware-Separated Composite Signatures for Large-Scale PKI During the PQC Migration Period"
             description: |
-              Session details will be announced soon.
+              The transition to Post-Quantum Cryptography (PQC) presents a significant challenge for organizations operating large-scale Public Key Infrastructures (PKIs). While PQC standards are becoming available, replacing vast numbers of deployed hardware tokens such as smart cards remains operationally expensive and time-consuming.
+              In this session, we present our implementation experience with the IETF LAMPS draft "Composite ML-DSA for Use in X.509 Public Key Infrastructure" in a hardware-separated environment for large-scale PKI migration. The approach combines existing smart cards holding traditional signature keys (e.g., RSA) with server-side Hardware Security Modules (HSMs) providing PQC signature capabilities (e.g., ML-DSA), enabling organizations to begin introducing PQC without requiring immediate replacement of end-user hardware. We discuss three representative risks observed during implementation and evaluation: cross-protocol signature composition, unintended reuse of composite-signature keys for single-algorithm signatures, and device impersonation across separated trust domains, and present a device-binding architecture that addresses them while maintaining compatibility with the IETF LAMPS composite signature framework.
+              We also evaluate the potential operational impact of this approach using a large-scale PKI migration model involving tens of millions of certificates, and share architectural considerations, implementation experiences, and validation results from a prototype built using cloud-based HSM services and commercially available PKI smart cards.
+            speakers:
+              - Akane Suzuki
             locations:
               - blue_hall
 
@@ -1087,6 +1135,7 @@ data:
 
       - time: "17:05"
         title: "End of day three — thank you for joining us!"
+
 ---
 
 Quantum computers will soon break the cryptographic foundation of the modern enterprise. This is no longer a theoretical risk for cryptography experts to debate—it is an imminent business continuity crisis that every digital organisation must solve.
