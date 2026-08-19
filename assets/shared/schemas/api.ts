@@ -73,9 +73,14 @@ export const adminEmailOutboxQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).optional(),
 });
 
-export const adminEventProposalsQuerySchema = z.object({
+export const adminEventProposalsQuerySchema = paginationQuerySchema.extend({
   status: z.string().trim().optional(),
   recommendation: z.enum(["accept", "reject", "needs-work"]).optional(),
+  // Not the bare-column `sortColumnSchema` convention used elsewhere — each
+  // of these values resolves to a multi-column ORDER BY (e.g. score_desc
+  // sorts NULLs-last, then submitted_at as a tiebreaker), which a single
+  // allowlisted column name can't express. See orderByMap in
+  // functions/api/v1/admin/events/[eventSlug]/proposals.ts.
   sort: z
     .enum([
       "submitted_desc",
@@ -100,8 +105,9 @@ export const adminEventProposalsQuerySchema = z.object({
     .optional(),
   q: z.string().trim().optional(),
   search: z.string().trim().optional(),
-  limit: z.coerce.number().int().min(1).max(200).optional(),
-  offset: z.coerce.number().int().min(0).optional(),
+  // "1" shows the soft-deleted queue instead of live proposals; any other
+  // value (including omitted) keeps the default live view.
+  deleted: z.string().trim().optional(),
 });
 
 // ── `?sort=` allowlists for admin event-scoped list endpoints (B5) ─────────
