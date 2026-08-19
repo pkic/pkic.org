@@ -13,6 +13,7 @@ import { applyCampaignCustomText } from "./campaign-custom";
 import { parseQueuedEmailAttachments, type QueuedEmailAttachment } from "./attachments";
 import { authorizeQueuedCapabilityLinks, materializeQueuedCapabilityLinks } from "../auth/capability-links";
 import type { DatabaseLike, Env, StatementLike } from "../types";
+import type { EmailContentType, EmailMessageType } from "../../../assets/shared/schemas/admin-email-templates";
 
 function uint8ToBase64(bytes: Uint8Array): string {
   const chunkSize = 12288; // 12kb chunks to avoid stack overflow
@@ -33,7 +34,7 @@ interface OutboxRow {
   recipient_email: string;
   subject: string | null;
   payload_json: string;
-  message_type: "transactional" | "promotional";
+  message_type: EmailMessageType;
   provider: string;
   provider_message_id: string | null;
   status: "queued" | "sending" | "sent" | "failed" | "retrying" | "bounced";
@@ -121,7 +122,7 @@ export interface QueueEmailPayload {
   subject?: string | null;
   data: Record<string, unknown>;
   capabilityLinkValues?: unknown[];
-  messageType: "transactional" | "promotional";
+  messageType: EmailMessageType;
   calendar?: CalendarPayload;
   attachments?: QueuedEmailAttachment[];
   replyTo?: string;
@@ -214,7 +215,7 @@ export interface BulkEmailQueueRow {
   subject: string;
   data: Record<string, unknown>;
   capabilityLinkValues?: unknown[];
-  messageType: "transactional" | "promotional";
+  messageType: EmailMessageType;
 }
 
 export interface PreparedBulkEmailQueueRow {
@@ -343,7 +344,7 @@ async function processOutboxRow(db: DatabaseLike, env: Env, row: OutboxRow): Pro
     let templateVersion = 0;
     let subject: string;
     let contentWithCustom: string;
-    let resolvedContentType: "markdown" | "html" | "text";
+    let resolvedContentType: EmailContentType;
 
     if (bodyOverride) {
       // Direct body still supports subject placeholders like {{eventName}}.
@@ -353,7 +354,7 @@ async function processOutboxRow(db: DatabaseLike, env: Env, row: OutboxRow): Pro
     } else {
       const template = await resolveTemplate(db, row.template_key);
       templateVersion = template.version;
-      resolvedContentType = template.contentType as "markdown" | "html" | "text";
+      resolvedContentType = template.contentType as EmailContentType;
       const customText =
         typeof payload.__adminCampaignCustomText === "string" ? payload.__adminCampaignCustomText : null;
       contentWithCustom = applyCampaignCustomText(template.content, resolvedContentType, customText);

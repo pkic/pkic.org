@@ -8,6 +8,7 @@ import { resolveTemplate } from "../../../../../_lib/email/templates";
 import { renderEmail, renderSubject } from "../../../../../_lib/email/render";
 import { loadEmailLayout, loadEmailPartials } from "../../../../../_lib/email/partials";
 import { proposalManagePageUrl, speakerManagePageUrl } from "../../../../../_lib/services/frontend-links";
+import type { EmailContentType } from "../../../../../../assets/shared/schemas/admin-email-templates";
 import { finalizeProposalSchema } from "../../../../../../assets/shared/schemas/api";
 import { buildProposalDecisionEmailPlan } from "./decision-emails";
 import type { AdminContext } from "../../../../../_lib/db/context";
@@ -82,7 +83,7 @@ export async function onRequestPost(
           template.content,
           dataWithPartials,
           layoutHtml,
-          template.contentType as "markdown" | "html" | "text",
+          template.contentType as EmailContentType,
           appBaseUrl,
         );
 

@@ -9,6 +9,7 @@ import {
 } from "../../../email-template-helpers";
 import { toast } from "../../../ui";
 import type { EmailTemplateVersion } from "../../../types";
+import type { EmailMessageType } from "../../../../../shared/schemas/admin-email-templates";
 
 const HELPER_CATEGORIES: TemplateHelperCategory[] = ["Variables", "Conditions", "CTAs"];
 const PERSONAL_ONLY_HELPERS = new Set([
@@ -89,7 +90,7 @@ interface CampaignPayload {
   templateKey?: string;
   subjectOverride: string;
   bodyContent: string;
-  messageType?: "transactional" | "promotional";
+  messageType?: EmailMessageType;
   sendMode: "personal" | "bcc_batch";
   batchSize: number;
   filter: {
@@ -208,7 +209,7 @@ export function EventEmail({
 
   const [templateKey, setTemplateKey] = useState("");
   const [mode, setMode] = useState<"personal" | "bcc_batch">("personal");
-  const [messageType, setMessageType] = useState<"transactional" | "promotional">("promotional");
+  const [messageType, setMessageType] = useState<EmailMessageType>("promotional");
   const [batchSize, setBatchSize] = useState(500);
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
@@ -427,7 +428,7 @@ export function EventEmail({
           <select
             class="form-select form-select-sm"
             value={messageType}
-            onChange={(e) => setMessageType((e.target as HTMLSelectElement).value as "transactional" | "promotional")}
+            onChange={(e) => setMessageType((e.target as HTMLSelectElement).value as EmailMessageType)}
           >
             <option value="transactional">Transactional</option>
             <option value="promotional">Promotional</option>

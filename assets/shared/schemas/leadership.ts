@@ -9,6 +9,7 @@ import { z } from "zod";
  */
 
 export const leadershipBodySchema = z.enum(["board", "executive_council"]);
+export type LeadershipBody = z.infer<typeof leadershipBodySchema>;
 
 function trimmedString(min: number, max: number): z.ZodString {
   return z.string().trim().min(min).max(max);

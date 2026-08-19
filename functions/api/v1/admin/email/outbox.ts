@@ -23,6 +23,7 @@ import { json } from "../../../../_lib/http";
 import { parseJsonSafe } from "../../../../_lib/utils/json";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { adminEmailOutboxGetRouteSchema } from "../../../../../assets/shared/schemas/route-contracts";
+import type { EmailMessageType } from "../../../../../assets/shared/schemas/admin-email-templates";
 interface OutboxListRow {
   id: string;
   event_id: string | null;
@@ -33,7 +34,7 @@ interface OutboxListRow {
   recipient_email: string;
   subject: string | null;
   payload_json: string;
-  message_type: "transactional" | "promotional";
+  message_type: EmailMessageType;
   provider: string;
   provider_message_id: string | null;
   status: "queued" | "sending" | "sent" | "failed" | "retrying" | "bounced";

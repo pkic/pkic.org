@@ -2,6 +2,7 @@ import { z } from "zod";
 import { defaultedSourceTypeSchema, sourceTypeSchema } from "./source";
 import { linksSchema } from "./links";
 import { paginationQuerySchema, sortColumnSchema } from "./pagination";
+import { emailContentTypeSchema, emailMessageTypeSchema } from "./admin-email-templates";
 
 export { sourceTypeSchema };
 
@@ -66,7 +67,7 @@ export const registrationManageTokenParamsSchema = z.object({
 
 export const adminEmailOutboxQuerySchema = z.object({
   status: z.string().trim().optional(),
-  messageType: z.enum(["transactional", "promotional"]).optional(),
+  messageType: emailMessageTypeSchema.optional(),
   dueNow: z.coerce.boolean().optional(),
   q: z.string().trim().optional(),
   limit: z.coerce.number().int().min(1).max(200).optional(),
@@ -608,8 +609,8 @@ export const adminSpeakerBioPatchSchema = z.object({
 export const adminEmailTemplateVersionSchema = z.object({
   content: z.string().min(1).max(500_000),
   subjectTemplate: z.string().trim().min(1).max(512).optional(),
-  contentType: z.enum(["markdown", "html", "text"]).optional(),
-  messageType: z.enum(["transactional", "promotional"]).optional(),
+  contentType: emailContentTypeSchema.optional(),
+  messageType: emailMessageTypeSchema.optional(),
 });
 
 export const adminEmailTemplateActivateSchema = z.object({
@@ -619,7 +620,7 @@ export const adminEmailTemplateActivateSchema = z.object({
 export const adminEmailTemplatePreviewSchema = z.object({
   subjectTemplate: z.string().trim().min(1).max(512).optional(),
   content: z.string().min(1).max(500_000),
-  contentType: z.enum(["markdown", "html", "text"]).default("markdown"),
+  contentType: emailContentTypeSchema.default("markdown"),
   layoutHtml: z.string().min(1).max(500_000).optional(),
   data: z.record(z.string().trim().min(1).max(80), z.unknown()).optional(),
 });
@@ -890,21 +891,29 @@ export const adminCreateEventSchema = z.object({
   virtualUrl: z.string().trim().url().max(500).nullable().optional(),
 });
 
+/** Event-team permission grant. Canonical vocabulary — see AGENTS.md DRY policy (mirrors the `event_permissions.permission` CHECK constraint). */
+export const eventTeamPermissionSchema = z.enum(["organizer", "program_committee", "moderator", "volunteer"]);
+export type EventTeamPermission = z.infer<typeof eventTeamPermissionSchema>;
+
 export const adminEventPermissionSchema = z.object({
   userEmail: normalizedEmailSchema,
-  permission: z.enum(["organizer", "program_committee", "moderator", "volunteer"]),
+  permission: eventTeamPermissionSchema,
   //Grant time-bounded event reviewer access from the event detail screen.
   expiresAt: z.iso.datetime().nullable().optional(),
 });
 
+/** Staff account role. Canonical vocabulary — see AGENTS.md DRY policy (mirrors the `users.role` CHECK constraint). */
+export const adminRoleValueSchema = z.enum(["admin", "user", "guest"]);
+export type AdminRoleValue = z.infer<typeof adminRoleValueSchema>;
+
 export const adminUserRoleSchema = z.object({
-  role: z.enum(["admin", "user", "guest"]),
+  role: adminRoleValueSchema,
 });
 
 /** PATCH body for updating a user's role, active status, email, and/or PII fields. */
 export const adminUserUpdateSchema = z
   .object({
-    role: z.enum(["admin", "user", "guest"]).optional(),
+    role: adminRoleValueSchema.optional(),
     active: z.boolean().optional(),
     email: z.string().trim().toLowerCase().email().optional(),
     firstName: z.string().trim().max(80).nullable().optional(),
@@ -999,7 +1008,7 @@ const campaignBaseSchema = z.object({
   subjectOverride: z.string().trim().min(1).max(500).optional(),
   customText: z.string().trim().max(100_000).optional(),
   bodyContent: z.string().trim().max(100_000).optional(),
-  messageType: z.enum(["transactional", "promotional"]).optional(),
+  messageType: emailMessageTypeSchema.optional(),
   sendMode: z.enum(["personal", "bcc_batch"]),
   batchSize: z.number().int().min(1).max(500).default(50),
   filter: campaignFilterSchema,

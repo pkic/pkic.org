@@ -12,6 +12,7 @@ import { ProfileLinksInput, type ProfileLinksHandle } from "../../components/Pro
 import { normalizeProfileLinks } from "./profile-links";
 import { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../../shared/schemas/admin-members";
 import { MEMBER_STATUSES } from "../../../shared/schemas/admin-organizations";
+import { adminRoleValueSchema } from "../../../shared/schemas/api";
 import { UserPicker, type PickedUser } from "./access-control/UserPicker";
 
 // ────────────────────────────────────────────────────────
@@ -878,7 +879,7 @@ export function UserDetailView({ userId, onBack }: { userId: string; onBack: () 
                       <div class="col-sm-6">
                         <div class="form-label small mb-1">Role</div>
                         <div class="d-flex gap-3">
-                          {(["admin", "user", "guest"] as const).map((r) => (
+                          {adminRoleValueSchema.options.map((r) => (
                             <div key={r} class="form-check mb-0">
                               <input
                                 class="form-check-input"

@@ -11,10 +11,10 @@ import {
   PREVIEW_DEFAULTS,
   type TemplateHelperCategory,
 } from "../email-template-helpers";
+import type { EmailContentType, EmailMessageType } from "../../../shared/schemas/admin-email-templates";
 
 const EMAIL_LAYOUT_TEMPLATE_KEY = "email_layout";
 const HELPER_CATEGORIES: TemplateHelperCategory[] = ["Variables", "Conditions", "CTAs"];
-type EmailMessageType = "transactional" | "promotional";
 
 // ────────────────────────────────────────────────────────
 // Syntax highlight
@@ -81,9 +81,7 @@ function TemplateEditor({
   const current = active ?? versions[0];
   const isLayout = templateKey === EMAIL_LAYOUT_TEMPLATE_KEY;
 
-  const [contentType, setContentType] = useState<"markdown" | "html" | "text">(
-    (current?.content_type as "markdown" | "html" | "text") ?? "markdown",
-  );
+  const [contentType, setContentType] = useState<EmailContentType>(current?.content_type ?? "markdown");
   const [messageType, setMessageType] = useState<EmailMessageType>(current?.message_type ?? "transactional");
   const [subject, setSubject] = useState(current?.subject_template ?? "");
   const [body, setBody] = useState(current?.body ?? "");
@@ -159,7 +157,7 @@ function TemplateEditor({
     const newBody = version.body ?? "";
     setSubject(version.subject_template ?? "");
     setBody(newBody);
-    setContentType((version.content_type as "markdown" | "html" | "text") ?? "markdown");
+    setContentType(version.content_type ?? "markdown");
     setMessageType(version.message_type ?? "transactional");
     if (bodyTextareaRef.current) {
       bodyTextareaRef.current.value = newBody;
@@ -289,7 +287,7 @@ function TemplateEditor({
                       class="form-select form-select-sm"
                       value={contentType}
                       onChange={(e) =>
-                        setContentType((e.target as HTMLSelectElement).value as "markdown" | "html" | "text")
+                        setContentType((e.target as HTMLSelectElement).value as EmailContentType)
                       }
                     >
                       <option value="markdown">Markdown</option>
@@ -544,7 +542,7 @@ function TemplateEditor({
 function CreateTemplate({ onCreated, onCancel }: { onCreated: (key: string) => void; onCancel: () => void }) {
   const [key, setKey] = useState("");
   const [subject, setSubject] = useState("");
-  const [contentType, setContentType] = useState<"markdown" | "html" | "text">("markdown");
+  const [contentType, setContentType] = useState<EmailContentType>("markdown");
   const [messageType, setMessageType] = useState<EmailMessageType>("transactional");
   const [body, setBody] = useState("");
   const [saving, setSaving] = useState(false);
@@ -639,7 +637,7 @@ function CreateTemplate({ onCreated, onCancel }: { onCreated: (key: string) => v
             <select
               class="form-select form-select-sm"
               value={contentType}
-              onChange={(e) => setContentType((e.target as HTMLSelectElement).value as "markdown" | "html" | "text")}
+              onChange={(e) => setContentType((e.target as HTMLSelectElement).value as EmailContentType)}
             >
               <option value="markdown">Markdown</option>
               <option value="html">HTML</option>

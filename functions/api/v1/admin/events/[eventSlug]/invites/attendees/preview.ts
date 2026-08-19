@@ -8,6 +8,7 @@ import { renderEmail, renderSubject } from "../../../../../../../_lib/email/rend
 import { resolveTemplate } from "../../../../../../../_lib/email/templates";
 import { loadEmailLayout } from "../../../../../../../_lib/email/partials";
 import { registrationPageUrl, inviteDeclineUrl } from "../../../../../../../_lib/services/frontend-links";
+import type { EmailContentType } from "../../../../../../../../assets/shared/schemas/admin-email-templates";
 import { requireInternalSecret } from "../../../../../../../_lib/request";
 import {
   computeAttendeeInviteDigest,
@@ -61,7 +62,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     template.content,
     data,
     layoutHtml,
-    template.contentType as "markdown" | "html" | "text",
+    template.contentType as EmailContentType,
     appBaseUrl,
   );
 
