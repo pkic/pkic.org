@@ -492,4 +492,21 @@ describe("admin users list — type filter", () => {
     const data = await listUsers("type=member&q=type-multi-org@example.test");
     expect(data.users.filter((u) => u.email === "type-multi-org@example.test")).toHaveLength(1);
   });
+
+  it("tolerates a malformed links_json row instead of 500ing the whole list (P10-01)", async () => {
+    await setup();
+    const userId = await seedUser(env.DB, "type-malformed-links@example.test");
+    await env.DB.prepare("UPDATE users SET links_json = ? WHERE id = ?").bind("{not valid json", userId).run();
+
+    const response = await app.fetch(
+      adminRequest("/api/v1/admin/users?q=type-malformed-links@example.test", "GET"),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as { users: Array<{ email: string; links: string[] }> };
+    const user = data.users.find((u) => u.email === "type-malformed-links@example.test");
+    expect(user?.links).toEqual([]);
+  });
 });

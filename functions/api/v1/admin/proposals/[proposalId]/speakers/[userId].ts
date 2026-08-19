@@ -15,6 +15,7 @@ import { first } from "../../../../../../_lib/db/queries";
 import { writeAuditLog } from "../../../../../../_lib/services/audit";
 import { adminSpeakerBioPatchSchema } from "../../../../../../../assets/shared/schemas/api";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
+import { parseLinksJson, serializeLinks } from "../../../../../../../assets/shared/schemas/links";
 
 export async function onRequestPatch(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
@@ -65,7 +66,7 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
     jobTitle: body.jobTitle === undefined ? undefined : body.jobTitle || null,
     biography: body.biography === undefined ? undefined : body.biography || null,
     linksJson:
-      body.links === undefined ? undefined : body.links && body.links.length > 0 ? JSON.stringify(body.links) : null,
+      body.links === undefined ? undefined : body.links && body.links.length > 0 ? serializeLinks(body.links) : null,
   });
   if (body.role && body.role !== speaker.role) {
     await updateProposalSpeakerRole(requestDb(c), { proposalId, userId, role: body.role });
@@ -91,7 +92,7 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
     changes.biography = { from: speaker.biography, to: body.biography || null };
   }
   if (body.links !== undefined) {
-    const previousLinks = speaker.links_json ? JSON.parse(speaker.links_json) : [];
+    const previousLinks = parseLinksJson(speaker.links_json);
     changes.links = { from: previousLinks, to: body.links ?? [] };
   }
   if (body.role && body.role !== speaker.role) {

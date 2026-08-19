@@ -22,6 +22,7 @@ import {
 } from "../../../../assets/shared/schemas/admin-users";
 import { requestDb, type AdminContext } from "../../../_lib/db/context";
 import { deterministicRepresentativeJoinSql } from "../../../_lib/services/membership/representative-lookup";
+import { parseLinksJson } from "../../../../assets/shared/schemas/links";
 
 interface UserRow {
   id: string;
@@ -143,7 +144,7 @@ ${deterministicRepresentativeJoinSql("u.id")}
   return json({
     users: rows.map(({ links_json, event_participation_count, ...row }) => ({
       ...row,
-      links: links_json ? JSON.parse(links_json) : [],
+      links: parseLinksJson(links_json),
       membership: row.member_id
         ? {
             memberId: row.member_id,
