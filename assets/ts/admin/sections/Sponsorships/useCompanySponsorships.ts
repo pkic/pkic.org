@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../api";
 import type { Sponsorship, SponsorshipCompany } from "../../types";
 import {
@@ -25,8 +25,21 @@ export function useCompanySponsorships(filters: { type: string; stage: string })
   const [companyError, setCompanyError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  // Request-generation guard (Phase 7 line-by-line review, P7-R01): "Load
+  // more" and a type/stage filter change can both be in flight at once, and
+  // their responses can land out of order — e.g. an offset-0 refetch from a
+  // filter change resolves before an earlier "Load more" page, then that
+  // stale page arrives and appends onto the wrong (now-superseded) filtered
+  // set. Every call bumps this counter and captures its own id; a response
+  // is only applied if the counter still matches, i.e. no newer call has
+  // started since. Loading flags are reset unconditionally per-call (each
+  // call owns the flag it set), so a superseded request can't leave a
+  // spinner stuck on.
+  const requestIdRef = useRef(0);
+
   const loadCompanySponsorships = useCallback(
     async (company: SponsorshipCompany, offset = 0) => {
+      const requestId = ++requestIdRef.current;
       if (offset === 0) {
         setCompanyLoading(true);
         setCompanyError(null);
@@ -37,6 +50,7 @@ export function useCompanySponsorships(filters: { type: string; stage: string })
         if (company.key.startsWith("sponsorship:")) {
           const id = company.key.slice("sponsorship:".length);
           const data = await api<{ sponsorship: Sponsorship }>(`/api/v1/admin/sponsorships/${id}`);
+          if (requestId !== requestIdRef.current) return;
           setCompanySponsorships([data.sponsorship]);
           setCompanyPage(null);
           setSelectedId(data.sponsorship.id);
@@ -44,6 +58,7 @@ export function useCompanySponsorships(filters: { type: string; stage: string })
         }
         const url = buildCompanySponsorshipsUrl(company.key, filters, offset);
         const data = await api<{ sponsorships: Sponsorship[]; page: CompanySponsorshipsPage }>(url);
+        if (requestId !== requestIdRef.current) return;
         setCompanySponsorships((prev) => mergeCompanySponsorshipsPage(prev, offset, data).sponsorships);
         setCompanyPage(data.page);
         setSelectedId((prev) => {
@@ -52,10 +67,10 @@ export function useCompanySponsorships(filters: { type: string; stage: string })
           return prev;
         });
       } catch (e) {
-        setCompanyError((e as Error).message);
+        if (requestId === requestIdRef.current) setCompanyError((e as Error).message);
       } finally {
-        setCompanyLoading(false);
-        setCompanyLoadingMore(false);
+        if (offset === 0) setCompanyLoading(false);
+        else setCompanyLoadingMore(false);
       }
     },
     [filters.type, filters.stage],
