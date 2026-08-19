@@ -4,6 +4,7 @@ import { sha256Hex } from "../utils/crypto";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import type { DatabaseLike } from "../types";
+import type { EmailContentType, EmailMessageType } from "../../../assets/shared/schemas/admin-email-templates";
 
 const TEMPLATE_CACHE_TTL_MS = 60_000;
 
@@ -14,7 +15,7 @@ interface CachedTemplateResolution {
     content: string;
     contentType: string;
     subjectTemplate: string | null;
-    messageType: "transactional" | "promotional";
+    messageType: EmailMessageType;
   } | null;
 }
 
@@ -37,9 +38,9 @@ export interface TemplateVersionRow {
   /** Template body stored in the DB. */
   body: string | null;
   /** Format of the body: 'markdown' | 'html' | 'text'. Defaults to 'markdown'. */
-  content_type: "markdown" | "html" | "text";
+  content_type: EmailContentType;
   /** Delivery classification used as the default when this template is selected in send forms. */
-  message_type: "transactional" | "promotional";
+  message_type: EmailMessageType;
   /** Deprecated: legacy R2 key (kept for backward compatibility, no longer used). */
   r2_object_key: string | null;
   checksum_sha256: string;
@@ -79,9 +80,9 @@ export async function createTemplateVersion(
   payload: {
     templateKey: string;
     content: string;
-    contentType?: "markdown" | "html" | "text";
+    contentType?: EmailContentType;
     subjectTemplate?: string | null;
-    messageType?: "transactional" | "promotional" | null;
+    messageType?: EmailMessageType | null;
     createdByUserId: string;
   },
 ): Promise<TemplateVersionRow> {
@@ -162,7 +163,7 @@ export async function resolveTemplate(
   content: string;
   contentType: string;
   subjectTemplate: string | null;
-  messageType: "transactional" | "promotional";
+  messageType: EmailMessageType;
 }> {
   const cached = activeTemplateCache.get(templateKey);
   if (cached && cached.expiresAt > Date.now()) {

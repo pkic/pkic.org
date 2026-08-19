@@ -22,19 +22,18 @@ import {
   adminEventPermissionSchema,
   EVENT_TEAM_SORT_COLUMNS,
   eventTeamSortValueSchema,
+  type EventTeamPermission,
 } from "../../../../../../assets/shared/schemas/api";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
-type EventPermissionValue = "organizer" | "program_committee" | "moderator" | "volunteer";
-
-const PERMISSION_TO_ROLE_ID: Record<EventPermissionValue, string> = {
+const PERMISSION_TO_ROLE_ID: Record<EventTeamPermission, string> = {
   organizer: "role-event_organizer",
   program_committee: "role-program_committee",
   moderator: "role-event_moderator",
   volunteer: "role-event_volunteer",
 };
 
-const ROLE_ID_TO_PERMISSION: Record<string, EventPermissionValue> = {
+const ROLE_ID_TO_PERMISSION: Record<string, EventTeamPermission> = {
   "role-event_organizer": "organizer",
   "role-program_committee": "program_committee",
   "role-event_moderator": "moderator",
@@ -100,7 +99,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   requirePermission(admin, "events:manage", { type: "event", id: event.id });
 
   const normalizedEmail = normalizeEmail(body.userEmail);
-  const roleId = PERMISSION_TO_ROLE_ID[body.permission as EventPermissionValue];
+  const roleId = PERMISSION_TO_ROLE_ID[body.permission as EventTeamPermission];
 
   const existing = await first<ExistingPermRow>(
     requestDb(c),
