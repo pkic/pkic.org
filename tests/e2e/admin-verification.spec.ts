@@ -243,7 +243,7 @@ test.describe("Admin browser-verification pass", () => {
     await expect(page.locator("tr").filter({ hasText: email })).toHaveCount(0);
   });
 
-  test("working groups: create, assign chair/vice chair, add/remove member, deactivate/reactivate", async ({
+  test("working groups: create, assign chair/vice chair via Leadership, add/remove member, deactivate/reactivate", async ({
     page,
   }) => {
     page.on("dialog", (d) => d.accept());
@@ -264,18 +264,31 @@ test.describe("Admin browser-verification pass", () => {
     const wgSelect = panel.locator("select");
     await wgSelect.selectOption({ label: wgName });
     await expect(page.getByText("Roster (0)")).toBeVisible();
+    await expect(panel.getByText('Chair and vice chair are assigned from the "Leadership" section.')).toBeVisible();
 
-    // Assign the seeded admin as chair and vice chair — a real user row,
-    // no separate fixture needed for the UserPicker search. Each form also
-    // has a datetime-local "expires" input, so scope by placeholder rather
-    // than a bare `input` locator to avoid a strict-mode multi-match.
-    const chairForm = panel.locator("form").filter({ has: page.getByText("Assign chair") });
-    const chairPicker = chairForm.getByPlaceholder("Search by email or name…");
+    // Chair/vice-chair assignment lives on the dedicated Leadership admin
+    // page, not this panel (moved there per git history's "Move chair
+    // configuration to admin UI" — this panel only displays the current
+    // holders read-only). Assign the seeded admin as chair — a real user
+    // row, no separate fixture needed for the UserPicker search.
+    await page.goto("/admin/#/leadership");
+    const wgBlock = page.locator("div.border.rounded").filter({ hasText: wgName });
+    await expect(wgBlock).toBeVisible();
+
+    const chairSlot = wgBlock
+      .locator("div.d-flex.align-items-center.gap-2.flex-wrap")
+      .filter({ has: page.getByText("Chair", { exact: true }) });
+    const chairPicker = chairSlot.getByPlaceholder("Search by email or name…");
     await chairPicker.fill("admin@pkic.org");
-    await expect(chairForm.getByText("admin@pkic.org")).toBeVisible({ timeout: 5_000 });
-    await chairForm.getByText("admin@pkic.org").click();
-    await chairForm.getByRole("button", { name: "Assign as chair" }).click();
+    await expect(chairSlot.getByText("admin@pkic.org")).toBeVisible({ timeout: 5_000 });
+    await chairSlot.getByText("admin@pkic.org").click();
+    await chairSlot.getByRole("button", { name: "Assign" }).click();
     await expect(page.locator(".my-toast", { hasText: "Chair assigned" })).toBeVisible();
+    await expect(chairSlot.getByText("admin@pkic.org")).toBeVisible();
+
+    // Back on the Working groups panel, the new chair now shows read-only.
+    await page.goto("/admin/#/working-groups");
+    await wgSelect.selectOption({ label: wgName });
     await expect(panel.getByText("admin@pkic.org").first()).toBeVisible();
 
     // Add the same admin user to the roster (a distinct code path from
@@ -427,7 +440,12 @@ test.describe("Admin browser-verification pass", () => {
     await form.getByRole("button", { name: "Create", exact: true }).click();
     await expect(page.locator(".my-toast", { hasText: "Sponsorship created" })).toBeVisible();
 
-    await page.locator(".list-group-item").filter({ hasText: contactName }).click();
+    // The top-level list now groups sponsorships by company (a table, one
+    // row per company); this sponsorship has no organization or non-member
+    // name, so it groups under its contact name. Drill into that company,
+    // then pick its (only) sponsorship from the resulting list.
+    await page.locator("tr").filter({ hasText: contactName }).click();
+    await page.locator(".list-group-item").first().click();
     const detail = page.locator(".card").filter({ has: page.getByRole("heading", { name: contactName }) });
     await expect(detail).toBeVisible();
     // New sponsorships default to pipeline_stage='new_inquiry' (migration
