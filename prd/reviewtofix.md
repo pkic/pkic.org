@@ -1116,6 +1116,105 @@ Nothing beyond the two named items' direct fixes and their own tests. `csv/` and
 
 ---
 
+## Phase 10 remediation pass — 2026-08-18
+
+Implemented and verified the single item of Phase 10 (§10.1) against baseline commit `ad20c83dedfa53bba1570fedafb37631fdd897fa`. **1 of 1 item complete**, PASS with evidence below, across 2 commits (P10-01a: swap raw `JSON.parse`/`JSON.stringify` for `parseLinksJson`/`serializeLinks` at every site that already agreed on the `string[]` shape; P10-01b: converge the two routes that instead accepted/emitted `{label,url}[]` onto the same canonical `linksSchema`/`string[]` shape, updating their frontend callers).
+
+### Checklist (extracted verbatim from Phase 10, ID assigned this pass)
+
+| ID | Location | Requirement (verbatim) | Plan (verbatim) |
+| --- | --- | --- | --- |
+| P10-01 | `functions/api/v1/admin/users.ts:128` [P2] | "Raw `JSON.parse` can throw and turn one malformed/legacy row into a 500, while `parseLinksJson` already provides the agreed normalization/compatibility behavior." | "unchanged — replace the raw `JSON.parse` in `users.ts` with `parseLinksJson`; grep for other raw `JSON.parse`/`JSON.stringify` against `links_json` columns (admin user lists/details, proposal/speaker routes, manage-link routes, importers/provisioning, member directory/leadership projections per v4 §6.2) and replace with `parseLinksJson`/`serializeLinks`; confirm API validation uses `linksSchema` consistently. Also confirm the canonical shape decision: `string[]` vs. `{ url, label? }[]` — do not support two canonical response shapes for links." |
+
+No ambiguous language in the item itself. One judgment call was made implementing the plan's "confirm the canonical shape decision" clause — logged under Open Questions below.
+
+### Baseline (before any change, commit `ad20c83dedfa53bba1570fedafb37631fdd897fa`)
+
+- `git status`: clean except pre-existing untracked `csv/` and `prd/*.md` review docs (unrelated to this pass, not touched).
+- `pnpm run build:production`: succeeds, one pre-existing `INEFFECTIVE_DYNAMIC_IMPORT` warning, unrelated.
+- `pnpm run test` (backend/frontend/tools): **989 passed, 1 skipped** backend (990); **48 passed** frontend (48); **52 passed** tools (52). 0 failures.
+- `pnpm run lint`: **5833 pre-existing errors**, entirely from the untracked local `.venv` Playwright-driver directory plus a vendored minified bundle — pre-existing, matches every prior pass's own note.
+- `pnpm run typecheck` (backend/frontend/tools): clean.
+
+### Scope audit (the plan's own "grep for other raw JSON.parse/JSON.stringify against links_json" clause)
+
+Grepped every file referencing `links_json` (`grep -rln "links_json" functions/ assets/ scripts/`) across the five areas the plan names:
+
+- **Admin user lists/details:** `functions/api/v1/admin/users.ts` (named target) and `functions/api/v1/admin/users/[userId]/index.ts` both had raw `JSON.parse`/`JSON.stringify`.
+- **Proposal/speaker routes:** `functions/api/v1/admin/proposals/[proposalId]/speakers.ts`, `functions/api/v1/admin/proposals/[proposalId]/speakers/[userId].ts`, `functions/api/v1/proposals/manage/[token].ts`, `functions/api/v1/proposals/manage/[token]/speakers/[userId].ts`, and `functions/api/v1/proposals/speaker/[token].ts` all had raw `JSON.parse`/`JSON.stringify` against `links_json`. The last two also validated `links` with an inline `z.array(z.object({label,url}))` schema instead of the shared `linksSchema` — the "canonical shape" ambiguity the plan calls out directly.
+- **Manage-link routes:** `resend-manage-link.ts`/`resend-speaker-manage-link.ts` (proposal and registration variants) — these are capability-token *resend* routes, coincidentally also named "manage"; grepped and confirmed none touch `links_json` at all (one has an unrelated `JSON.stringify(proposalIds)`). Nothing to change.
+- **Importers/provisioning:** `scripts/migrate-members/sql-renderer.mjs` already imports and uses `linksSchema`/`serializeLinks` as "a canonical-contract guarantee" (per its own inline comment); `scripts/migrate-members-yaml-to-d1.mjs`'s only `JSON.stringify` call serializes an unrelated report file. Already compliant, nothing to change.
+- **Member directory/leadership projections:** `functions/_lib/services/leadership.ts`, `functions/_lib/services/membership/directory.ts`, `functions/_lib/services/member-self-service.ts`, `functions/_lib/services/admin-organizations/{profile,queries}.ts` all already route through `parseLinksJson`/`serializeLinks`. Already compliant, nothing to change.
+- **Out of scope, confirmed and left alone:** `functions/_lib/services/organization-content-reviews.ts:208`'s `JSON.stringify(changedFields)` serializes a heterogeneous `proposed_changes_json` diff object (of which `links` is only one possible key), not the `links_json` column itself; `proposals/manage/[token].ts:102`'s `JSON.parse(proposal.details_json)` is a different column (`details_json`), untouched.
+
+### P10-01a implementation (`62f02256`) — codec consistency, no shape change
+
+Six read/write sites already agreed on the `string[]` shape but called raw `JSON.parse`/`JSON.stringify` instead of the shared codec: `functions/api/v1/admin/users.ts:147`, `functions/api/v1/admin/proposals/[proposalId]/speakers.ts:92`, `functions/api/v1/admin/proposals/[proposalId]/speakers/[userId].ts:69,95`, `functions/api/v1/admin/users/[userId]/index.ts:158,231`, and `functions/api/v1/proposals/manage/[token].ts:116`. Each now imports and calls `parseLinksJson`/`serializeLinks` from `assets/shared/schemas/links.ts` instead. `parseLinksJson` catches the `JSON.parse` failure internally and returns `[]` rather than throwing, which is what turns a malformed/legacy row from a 500 into a normal (empty-links) response — the exact defect named in the item.
+
+### P10-01b implementation (`a38047b8`) — canonical shape convergence
+
+`functions/api/v1/proposals/manage/[token]/speakers/[userId].ts` and `functions/api/v1/proposals/speaker/[token].ts` were the only two routes validating incoming `links` as `z.array(z.object({label: string, url: z.url()}))` (max 10, any URL scheme) instead of the shared `linksSchema` (`string[]`, max 15, http(s)-only, case-insensitive-dedup) used by every other links-accepting route (`adminSpeakerBioPatchSchema`, `adminUserUpdateSchema`, org-profile, member-self-service). Their two frontend callers — `assets/ts/event-flows/proposal-manage-page.tsx` and `assets/ts/event-flows/speaker-manage-page.tsx` — each carried a bespoke `normalizeLinks()` reimplementation purely to tolerate the `{label,url}` object shape their own request payload had just wrapped strings into (`.map((url) => ({ label: url, url }))`).
+
+Both route schemas now use the shared `linksSchema` directly; both routes' reads/writes now go through `parseLinksJson`/`serializeLinks`; both frontend callers now send `linksRef.current?.getLinks() ?? []` (already `string[]` from the shared `ProfileLinksInput`/`renderProfileLinks` widgets) directly, and their `normalizeLinks()` helpers dropped the now-dead object-tolerant branch. `assets/ts/shared/types.ts`'s `ProposalManageResponse["speakers"][number].links` and the local `SpeakerManageResponse["profile"].links` type in `speaker-manage-page.tsx` were tightened from `Array<string | {label,url}>` to `string[]` to match the now-guaranteed response shape.
+
+### Validation for this pass
+
+- `pnpm run typecheck` (backend/frontend/tools): clean after both commits.
+- `pnpm run test:backend`: **990 passed, 1 skipped** (991), 0 failures — the +1 over the 989-passed baseline is exactly the one new regression test this pass added (`tests/admin-user-management.test.ts`'s malformed-`links_json` test). No test that passed at baseline now fails.
+- `pnpm run test:frontend`: **48/48**, identical to baseline.
+- `pnpm run build:production`: succeeds, same pre-existing `INEFFECTIVE_DYNAMIC_IMPORT` warning as baseline.
+- `pnpm run lint`: same pre-existing 5833 `.venv`/vendored-bundle errors; confirmed via `grep` that zero of them fall inside any file this pass touched.
+- `git diff ad20c83d..HEAD --stat`: 12 files changed, 49 insertions(+), 48 deletions(-) — a small, focused diff.
+- `pnpm run test:e2e` was **not** run: no existing e2e spec exercises the links-editing flow on either changed page (`tests/e2e/browser-rendering.spec.ts` only touches headshot/presentation/resend-form flows on these pages), and the change is a wire-format/type change behind an unchanged widget UI, not new browser-visible behavior or routing — confirmed by inspection per `AGENTS.md`'s validation-cost guidance rather than run speculatively.
+
+### Per-item evidence
+
+| ID | Requirement (verbatim) | file:line satisfying it | Command run | Actual output | Verdict |
+| --- | --- | --- | --- | --- | --- |
+| P10-01 | "replace the raw `JSON.parse` in `users.ts` with `parseLinksJson`" | `functions/api/v1/admin/users.ts:25,147` | `pnpm exec vitest run --config vitest.config.ts tests/admin-user-management.test.ts -t "malformed links_json"` | `Test Files  1 passed (1)` / `Tests  1 passed \| 22 skipped (23)` — new test seeds a user with `links_json = "{not valid json"` and asserts the list endpoint returns 200 with `links: []` instead of 500; confirmed this test fails (`expected 500 to be 200`) against the pre-fix file via `git stash` | **PASS** |
+| P10-01 | "grep for other raw `JSON.parse`/`JSON.stringify` against `links_json` columns... and replace with `parseLinksJson`/`serializeLinks`" | `functions/api/v1/admin/proposals/[proposalId]/speakers.ts:19,92`; `.../speakers/[userId].ts:18,69,95`; `functions/api/v1/admin/users/[userId]/index.ts:16,158,231`; `functions/api/v1/proposals/manage/[token].ts:11,116`; `.../manage/[token]/speakers/[userId].ts:15,73,80`; `functions/api/v1/proposals/speaker/[token].ts:41,125,197` | `grep -rn "JSON\.parse\|JSON\.stringify" functions/api/v1/admin/users.ts "functions/api/v1/admin/proposals/[proposalId]/speakers.ts" "functions/api/v1/admin/proposals/[proposalId]/speakers/[userId].ts" "functions/api/v1/admin/users/[userId]/index.ts" "functions/api/v1/proposals/manage/[token].ts" "functions/api/v1/proposals/manage/[token]/speakers/[userId].ts" "functions/api/v1/proposals/speaker/[token].ts"` | Zero matches against `links_json` in any of the seven files (the one remaining hit, `proposals/manage/[token].ts:102`, is `details_json`, a different column, correctly left alone) | **PASS** |
+| P10-01 | "confirm API validation uses `linksSchema` consistently" | `assets/shared/schemas/api.ts:344,355,621,932` (`adminSpeakerBioPatchSchema`, `adminUserUpdateSchema`, org-profile schemas) plus `functions/api/v1/proposals/manage/[token]/speakers/[userId].ts:27` and `functions/api/v1/proposals/speaker/[token].ts:72` (now `linksSchema.optional()`, converged this pass) | `grep -rn "linksSchema" assets/shared/schemas/api.ts functions/api/v1/proposals/manage/\[token\]/speakers/\[userId\].ts functions/api/v1/proposals/speaker/\[token\].ts` | Every `links`-accepting schema in the repo now references the shared `linksSchema` — no inline re-declaration remains | **PASS** |
+| P10-01 | "confirm the canonical shape decision: `string[]` vs. `{ url, label? }[]` — do not support two canonical response shapes for links" | `functions/api/v1/proposals/manage/[token]/speakers/[userId].ts:27`; `functions/api/v1/proposals/speaker/[token].ts:72`; `assets/ts/event-flows/proposal-manage-page.tsx:41-44,111`; `assets/ts/event-flows/speaker-manage-page.tsx:40,51-54,282`; `assets/ts/shared/types.ts:128` | `pnpm exec vitest run --config vitest.config.ts tests/speaker-management.test.ts -t "speaker profile fields"` | `Test Files  1 passed (1)` / `Tests  2 passed \| 10 skipped (12)` — both tests now send `links: ["https://..."]` (`string[]`) and assert the GET response echoes back the same `string[]`, proving the round-trip is single-shape end to end | **PASS** |
+
+**1 of 1 item complete.**
+
+### Regressions vs. baseline
+
+None. `pnpm run typecheck`, `pnpm run test:backend` (990 passed/1 skipped, up from 989/1 — the +1 is the new regression test), `pnpm run test:frontend` (48/48), `pnpm run lint` (5833 pre-existing `.venv`/vendored-bundle errors only, none in touched files), `pnpm run build:production` all match baseline exactly or improve on it after both commits.
+
+### Line-by-line diff review (edge cases, concurrency, resources, contract breaks, dead code)
+
+- **Edge cases:** `parseLinksJson` already degrades a malformed row to `[]` (verified by the new regression test) and tolerates the pre-existing `{linkedin, x}` and `{label,url}[]` legacy shapes on read (`assets/shared/schemas/links.ts:51-63`) — so any row previously written by the two now-converged routes in the old `{label,url}[]` shape continues to read back correctly (as the extracted `url`) after this pass, with no backfill needed. `linksSchema`'s max array length is 15 vs. the two converged routes' previous inline max of 10 — a deliberate, minor relaxation from consolidating onto the one shared schema instead of a second bespoke cap; logged under Open Questions.
+- **Concurrency:** not applicable — no shared mutable state, no new async coordination; every change is either a pure codec swap or a schema/type change.
+- **Resources:** not applicable — no new loops, queries, or external calls introduced.
+- **Contract breaks:** the two converged routes' request/response shape for `links` changed from `{label,url}[]` to `string[]`. Both routes are token-authenticated, capability-link-only endpoints (`proposals/manage/[token]/speakers/[userId]` and `proposals/speaker/[token]`) with exactly one first-party caller each (`proposal-manage-page.tsx`, `speaker-manage-page.tsx`), both updated in the same commit — confirmed via `grep -rln` that no other caller sends the old shape to either endpoint. `parseLinksJson`'s legacy-shape tolerance on read means any row a pre-this-pass client already wrote in the old shape still decodes correctly, so this is not a breaking change for already-persisted data. No D1 schema or persisted-data-shape change.
+- **Dead/unreachable code:** the object-tolerant branches in both frontend `normalizeLinks()` helpers were removed as part of the same commit that made them unreachable (the backend now always returns `string[]`), rather than left behind — `pnpm run typecheck:frontend` and `pnpm run lint` (on the touched files) both clean, confirming no orphaned imports or now-unused branches remain.
+
+### Security review (diff-only)
+
+- **Injection:** no SQL/command/path/template/deserialization changes — every touched query already used `?` placeholders before and after this pass; the diff itself only changes application-layer JSON codec calls and one Zod schema reference per route.
+- **AuthZ:** unchanged — no new endpoints, no permission-check changes. The two converged routes keep their existing manage-token/speaker-token authentication (`requireInternalSecret`/`getSpeakerByManageToken`/`getProposalByManageToken`), untouched by this diff.
+- **Validation/output encoding — net improvement:** the two converged routes' *old* inline schema validated `url` with a bare `z.url()`, which (unlike `linksSchema`'s `linkUrlSchema`) does **not** restrict the URL scheme — a speaker could previously submit e.g. `javascript:...` or `data:...` as a "link." The converged `linksSchema` enforces `startsWith("https://") || startsWith("http://")`, closing that gap; no rendering-site XSS was found to be reachable via this input in the current codebase (grepped for `.links` reaching an `href`/`dangerouslySetInnerHTML`/similar sink — none found), but the input-side validation is strictly tighter after this pass than before.
+- **Secrets:** no secrets or PII newly logged; the new backend test seeds only a synthetic test email and a literal malformed-JSON string.
+- **Crypto:** not touched.
+- **SSRF/redirects:** not touched — no new outbound requests.
+- **New dependencies:** none — `git diff ad20c83d..HEAD -- package.json pnpm-lock.yaml` is empty; no audit run needed.
+- **DoS:** not applicable — no new unbounded loops, queries, or missing rate limits; `linksSchema`'s own `.max(15)` cap (vs. the prior routes' `.max(10)`) still bounds array size, just at a marginally larger but still-fixed limit.
+
+No High/Critical/Medium findings. Nothing outstanding from this pass's own diff.
+
+### Open questions and assumptions made
+
+1. **Read conservatively per the task's own instruction, the ambiguous "confirm the canonical shape decision" clause was resolved in favor of `string[]`** (the shape every other links-accepting route in the repo already used, and the one `linksSchema` — the repo's one shared canonical schema — encodes), rather than the reverse (converging everything else onto `{label,url}[]`, which would have required inventing a `label` value for every existing plain-string link with no source of truth for what that label should be). This is the more conservative reading: it converges two outlier routes onto the many-times-larger existing convention instead of the other direction.
+2. **`linksSchema`'s max-array-length (15) vs. the two converged routes' prior inline cap (10) is a deliberate side effect of consolidating onto one shared schema, not an independently-decided policy change.** Flagged rather than silently accepted; if a stricter max-10 is actually required for speaker-submitted links specifically, that would need its own product-policy decision, not a schema fork.
+3. **`assets/ts/admin/sections/profile-links.ts`'s `normalizeProfileLinks()` helper is a third, near-identical reimplementation of the same object-tolerant normalization logic the two frontend pages in this pass had.** It lives in the `admin/` bundle and is consumed by `Users.tsx`/`ProposalDetailPage.tsx`, both of which already receive `string[]` today (their backing routes, `admin/users.ts` and the admin proposal-speakers routes, were both fixed in P10-01a). Left untouched: it is defensive rather than broken (a `string[]` input still normalizes correctly through it), consolidating it with the two `event-flows/` pages' local helpers would mean importing across the admin/public bundle boundary (an architecture question outside this item's scope), and the item's own text scopes the "canonical shape" fix to backend `links_json` codec/response-shape, not frontend normalization-helper deduplication.
+
+### Anything changed that was not in Phase 10
+
+Nothing beyond the one named item's direct fix, its two frontend callers (required because P10-01 explicitly named the `string[]` vs. `{url,label?}[]` ambiguity across full request/response round-trips, not just the backend), and their tests. `csv/` and `prd/*.md` remain untracked/uncommitted, unchanged by this pass. One incidental, unrelated submodule pointer drift in `content/wg/pqc/pqccm` (triggered by running `pnpm run build:production` during validation, not by any edit in this pass) was left untouched in the working tree — not staged, not committed.
+
+---
+
 ## Phase 11 — Duplication gate: jscpd (new, from v4 §3.4, deferred item)
 
 No `.jscpd.json` exists in the repo (confirmed) and `lint:duplication` is not in `pnpm run check` (confirmed — current `check` script is `typecheck && lint && lint:architecture && format:check && test && check:max-lines && check:filenames`). This was deliberately deferred by `pkic.org#726`, which measured 19 clone groups / 494 duplicated lines / 1.25% duplication on its then-current main without freezing that into an allowance.
