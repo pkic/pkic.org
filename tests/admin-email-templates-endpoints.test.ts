@@ -67,6 +67,53 @@ describe("admin email template endpoints", () => {
     expect(payload.page.total).toBeGreaterThanOrEqual(2);
   });
 
+  it("bounds the list with limit/offset and computes hasMore/total from a real COUNT, not a limit+1 slice", async () => {
+    await setupAdminTemplates();
+
+    const page1 = await callAdmin("/api/v1/admin/email-templates?limit=1&offset=0&sort=template_key");
+    expect(page1.status).toBe(200);
+    const page1Payload = (await page1.json()) as {
+      templates: Array<{ template_key: string }>;
+      page: { limit: number; offset: number; hasMore: boolean; total: number };
+    };
+    expect(page1Payload.templates).toHaveLength(1);
+    expect(page1Payload.page.limit).toBe(1);
+    expect(page1Payload.page.offset).toBe(0);
+    expect(page1Payload.page.total).toBeGreaterThan(1);
+    expect(page1Payload.page.hasMore).toBe(true);
+
+    const page2 = await callAdmin("/api/v1/admin/email-templates?limit=1&offset=1&sort=template_key");
+    const page2Payload = (await page2.json()) as { templates: Array<{ template_key: string }> };
+    expect(page2Payload.templates).toHaveLength(1);
+    expect(page2Payload.templates[0].template_key).not.toBe(page1Payload.templates[0].template_key);
+
+    const lastPage = await callAdmin(
+      `/api/v1/admin/email-templates?limit=1&offset=${page1Payload.page.total - 1}&sort=template_key`,
+    );
+    const lastPagePayload = (await lastPage.json()) as { page: { hasMore: boolean } };
+    expect(lastPagePayload.page.hasMore).toBe(false);
+  });
+
+  it("filters the list by ?q= against template_key", async () => {
+    await setupAdminTemplates();
+
+    const response = await callAdmin("/api/v1/admin/email-templates?q=registration_confirm_email");
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as { templates: Array<{ template_key: string }>; page: { total: number } };
+    expect(payload.templates).toHaveLength(1);
+    expect(payload.templates[0].template_key).toBe("registration_confirm_email");
+    expect(payload.page.total).toBe(1);
+  });
+
+  it("rejects an unknown ?sort= column as a schema validation error", async () => {
+    await setupAdminTemplates();
+
+    const response = await callAdmin("/api/v1/admin/email-templates?sort=not_a_real_column");
+    expect(response.status).toBe(400);
+    const payload = (await response.json()) as { error: { code: string } };
+    expect(payload.error.code).toBe("VALIDATION_ERROR");
+  });
+
   it("renders preview HTML and text with seeded partials and layout", async () => {
     await setupAdminTemplates();
 
