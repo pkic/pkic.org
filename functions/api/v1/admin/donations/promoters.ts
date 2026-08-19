@@ -9,6 +9,9 @@ import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { all } from "../../../../_lib/db/queries";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
+import { openApiRoute } from "../../../../_lib/openapi/route";
+import { donationPromotersListRouteSchema } from "../../../../../assets/shared/schemas/admin-donations";
+import { buildPageInfo } from "../../../../../assets/shared/schemas/pagination";
 
 interface PromoterRow {
   code: string;
@@ -50,9 +53,10 @@ interface DominantCurrency {
   currency: string;
 }
 
-export async function onRequestGet(c: AdminContext): Promise<Response> {
+export const DonationPromotersList = openApiRoute(donationPromotersListRouteSchema, async (c: AdminContext, data) => {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const db = requestDb(c);
+  const { limit = 100, offset = 0 } = data.query;
 
   // Three simple queries instead of one complex CTE with window functions,
   // which causes CPU-budget issues in the D1 Workers binding.
@@ -126,12 +130,15 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
 
   promoters.sort((a, b) => b.clicks - a.clicks || b.attributed_completed - a.attributed_completed);
 
-  return json({ promoters });
-}
+  // Pagination is applied to the correctly-ordered merged result rather than
+  // to the `bases` query alone: the final sort's tiebreaker
+  // (attributed_completed) only exists after merging in the separate
+  // attribution-stats query, so a SQL-level LIMIT on `bases` before that
+  // merge could put a promoter on the wrong page relative to its real
+  // final rank. `donation_promoters` is one row per manually-created promo
+  // code (P6M-P2-12) — a small, admin-managed set, not user-generated growth.
+  const total = promoters.length;
+  const page = promoters.slice(offset, offset + limit);
 
-export async function onRequest(c: AdminContext): Promise<Response> {
-  if (c.req.raw.method !== "GET") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
-  return onRequestGet(c);
-}
+  return json({ promoters: page, page: buildPageInfo(limit, offset, total, page.length) });
+});

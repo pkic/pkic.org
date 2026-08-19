@@ -167,3 +167,56 @@ describe("GET /api/v1/admin/donations (P6M-P2-02)", () => {
     expect(response.status).toBe(400);
   });
 });
+
+describe("GET /api/v1/admin/donations/promoters (P6M-P2-12)", () => {
+  let adminToken: string;
+
+  async function insertPromoter(code: string, clicks: number): Promise<void> {
+    await env.DB.prepare(
+      `INSERT INTO donation_promoters (code, donation_id, checkout_session_id, name, clicks, created_at)
+       VALUES (?, NULL, NULL, ?, ?, datetime('now'))`,
+    )
+      .bind(code, `Promoter ${code}`, clicks)
+      .run();
+  }
+
+  beforeEach(async () => {
+    await resetDb();
+    await seedEventAndAdmin(env.DB);
+    const adminRow = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
+    )[0];
+    adminToken = await createAdminSession(env.DB, adminRow.id, "admin-donation-promoters-token");
+
+    await insertPromoter("promoA1", 30);
+    await insertPromoter("promoB2", 20);
+    await insertPromoter("promoC3", 10);
+  });
+
+  it("lists promoters ordered by clicks descending with a page envelope", async () => {
+    const response = await call(adminToken, "/api/v1/admin/donations/promoters");
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      promoters: Array<{ code: string; clicks: number }>;
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
+    expect(body.promoters.map((p) => p.code)).toEqual(["promoA1", "promoB2", "promoC3"]);
+    expect(body.page).toEqual({ limit: 100, offset: 0, total: 3, hasMore: false });
+  });
+
+  it("bounds results with limit/offset instead of returning every promoter unbounded", async () => {
+    const response = await call(adminToken, "/api/v1/admin/donations/promoters?limit=1&offset=1");
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      promoters: Array<{ code: string }>;
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
+    expect(body.promoters.map((p) => p.code)).toEqual(["promoB2"]);
+    expect(body.page).toEqual({ limit: 1, offset: 1, total: 3, hasMore: true });
+  });
+
+  it("rejects an invalid limit", async () => {
+    const response = await call(adminToken, "/api/v1/admin/donations/promoters?limit=0");
+    expect(response.status).toBe(400);
+  });
+});

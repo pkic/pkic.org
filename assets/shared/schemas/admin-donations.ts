@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { paginationQuerySchema, sortColumnSchema } from "./pagination";
+import { paginationQuerySchema, paginatedResponseSchema, sortColumnSchema } from "./pagination";
 
 /** Allowlisted sort columns for GET /api/v1/admin/donations — see functions/api/v1/admin/donations.ts. */
 export const ADMIN_DONATIONS_SORT_COLUMNS = ["name", "gross_amount", "status", "created_at"] as const;
@@ -66,6 +66,45 @@ export const donationsListRouteSchema = {
             total: z.number(),
           }),
         },
+      },
+    },
+  },
+};
+
+// GET /api/v1/admin/donations/promoters (P6M-P2-12) — dataset is inherently
+// small (one row per manually-created marketing promo code), but still
+// composes the shared pagination contract for consistency with every other
+// list endpoint per AGENTS.md.
+export const donationPromotersListQuerySchema = paginationQuerySchema;
+
+export const adminDonationPromoterSchema = z.object({
+  code: z.string(),
+  name: z.string().nullable(),
+  checkout_session_id: z.string().nullable(),
+  clicks: z.number(),
+  own_gross: z.number(),
+  own_gross_usd: z.number(),
+  own_currency: z.string().nullable(),
+  attributed_total: z.number(),
+  attributed_completed: z.number(),
+  attributed_gross: z.number(),
+  attributed_gross_usd: z.number(),
+  currency: z.string().nullable(),
+  created_at: z.string(),
+});
+
+export const donationPromotersListRouteSchema = {
+  tags: ["Donations"],
+  summary: "List donation promoter share links (admin)",
+  description:
+    "Paginated list of every donation promoter share link ordered by click count, with attribution stats " +
+    "(donated, pending, failed) derived from donations.source.",
+  request: { query: donationPromotersListQuerySchema },
+  responses: {
+    "200": {
+      description: "Promoters list.",
+      content: {
+        "application/json": { schema: paginatedResponseSchema("promoters", adminDonationPromoterSchema) },
       },
     },
   },
