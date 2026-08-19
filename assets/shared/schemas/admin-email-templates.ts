@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { emailTemplateKeyParamsSchema } from "./api";
 import { paginationQuerySchema, paginatedResponseSchema, sortColumnSchema } from "./pagination";
 
 /**
@@ -26,7 +27,7 @@ export const emailTemplatesListQuerySchema = paginationQuerySchema.extend({
 });
 
 export const emailTemplatesListRouteSchema = {
-  tags: ["Email templates"],
+  tags: ["Admin email templates"],
   summary: "List email templates (admin)",
   description:
     "Paginated, optionally key-filtered list of every email template, one row per template_key aggregating its versions.",
@@ -36,6 +37,46 @@ export const emailTemplatesListRouteSchema = {
       description: "Email templates list.",
       content: {
         "application/json": { schema: paginatedResponseSchema("templates", adminEmailTemplateSummarySchema) },
+      },
+    },
+  },
+};
+
+// ── Template version list ───────────────────────────────────────────────
+
+/**
+ * Mirrors every column of email_template_versions (migration 0000, plus
+ * message_type from migration 0029) — GET .../:key/versions does
+ * `SELECT * FROM email_template_versions WHERE template_key = ?`.
+ */
+export const adminEmailTemplateVersionRowSchema = z.object({
+  id: z.string(),
+  template_key: z.string(),
+  version: z.number(),
+  subject_template: z.string().nullable(),
+  body: z.string().nullable(),
+  content_type: z.string(),
+  r2_object_key: z.string().nullable(),
+  checksum_sha256: z.string(),
+  status: z.string(),
+  created_by_user_id: z.string().nullable(),
+  created_at: z.string(),
+  message_type: z.string(),
+});
+
+export const emailTemplateVersionsListRouteSchema = {
+  tags: ["Admin email templates"],
+  summary: "List a template's versions (admin)",
+  description: "Paginated list of every version of a single template, newest version first.",
+  request: {
+    params: emailTemplateKeyParamsSchema,
+    query: paginationQuerySchema,
+  },
+  responses: {
+    "200": {
+      description: "Template versions list.",
+      content: {
+        "application/json": { schema: paginatedResponseSchema("versions", adminEmailTemplateVersionRowSchema) },
       },
     },
   },

@@ -187,4 +187,43 @@ describe("admin email template endpoints", () => {
     const missingPayload = (await missingResponse.json()) as { error?: { code?: string } };
     expect(missingPayload.error?.code).toBe("EMAIL_TEMPLATE_VERSION_NOT_FOUND");
   });
+
+  it("bounds GET .../:key/versions with limit/offset, ordered newest version first", async () => {
+    await setupAdminTemplates();
+
+    await callAdmin("/api/v1/admin/email-templates/registration_confirm_email/versions", {
+      method: "POST",
+      body: JSON.stringify({
+        content: "Updated confirmation body for {{firstName}}",
+        subjectTemplate: "Updated confirmation",
+        contentType: "markdown",
+      }),
+    });
+
+    const unbounded = await callAdmin("/api/v1/admin/email-templates/registration_confirm_email/versions");
+    expect(unbounded.status).toBe(200);
+    const unboundedPayload = (await unbounded.json()) as {
+      versions: Array<{ version: number }>;
+      page: { limit: number; offset: number; hasMore: boolean; total: number };
+    };
+    expect(unboundedPayload.versions.map((v) => v.version)).toEqual([2, 1]);
+    expect(unboundedPayload.page.total).toBe(2);
+    expect(unboundedPayload.page.hasMore).toBe(false);
+
+    const page1 = await callAdmin("/api/v1/admin/email-templates/registration_confirm_email/versions?limit=1&offset=0");
+    const page1Payload = (await page1.json()) as {
+      versions: Array<{ version: number }>;
+      page: { hasMore: boolean; total: number };
+    };
+    expect(page1Payload.versions).toHaveLength(1);
+    expect(page1Payload.versions[0].version).toBe(2);
+    expect(page1Payload.page.hasMore).toBe(true);
+    expect(page1Payload.page.total).toBe(2);
+
+    const page2 = await callAdmin("/api/v1/admin/email-templates/registration_confirm_email/versions?limit=1&offset=1");
+    const page2Payload = (await page2.json()) as { versions: Array<{ version: number }>; page: { hasMore: boolean } };
+    expect(page2Payload.versions).toHaveLength(1);
+    expect(page2Payload.versions[0].version).toBe(1);
+    expect(page2Payload.page.hasMore).toBe(false);
+  });
 });
