@@ -1,0 +1,279 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pkic.org/assessment-package.schema-1.0.0.json",
+  "title": "PKI Consortium assessment package",
+  "description": "A model-neutral assessment credential draft and its evidence attachments.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "schemaVersion", "credential", "attachments"],
+  "properties": {
+    "format": { "const": "pkic-assessment-package" },
+    "schemaVersion": { "const": "1.0.0" },
+    "credential": { "$ref": "#/$defs/credential" },
+    "attachments": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/attachment" }
+    }
+  },
+  "$defs": {
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "credential": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "@context",
+        "id",
+        "type",
+        "issuer",
+        "validFrom",
+        "credentialSchema",
+        "credentialSubject",
+        "security"
+      ],
+      "properties": {
+        "@context": {
+          "const": [
+            "https://www.w3.org/ns/credentials/v2",
+            "https://pkic.org/ns/assessment/v1.jsonld"
+          ]
+        },
+        "id": { "type": "string", "format": "uri" },
+        "type": { "const": ["VerifiableCredential", "AssessmentCredential"] },
+        "issuer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "name"],
+          "properties": {
+            "id": { "type": "string", "format": "uri" },
+            "name": { "type": "string", "minLength": 1 }
+          }
+        },
+        "validFrom": { "type": "string", "format": "date-time" },
+        "credentialSchema": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "type"],
+          "properties": {
+            "id": {
+              "const": "https://pkic.org/assessment-package.schema-1.0.0.json#/$defs/subject"
+            },
+            "type": { "const": "JsonSchema" }
+          }
+        },
+        "credentialSubject": { "$ref": "#/$defs/subject" },
+        "security": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "notice"],
+          "properties": {
+            "status": { "const": "unsecured-draft" },
+            "notice": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "model",
+        "profile",
+        "assessment",
+        "identifiers",
+        "assurance",
+        "integrity",
+        "result",
+        "responses"
+      ],
+      "properties": {
+        "id": { "type": "string", "format": "uri" },
+        "model": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "version", "schemaVersion", "source"],
+          "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "version": { "$ref": "#/$defs/version" },
+            "schemaVersion": { "$ref": "#/$defs/version" },
+            "source": { "type": "string", "format": "uri" }
+          }
+        },
+        "profile": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "version", "schemaVersion"],
+          "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "version": { "$ref": "#/$defs/version" },
+            "schemaVersion": { "$ref": "#/$defs/version" }
+          }
+        },
+        "assessment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "name",
+            "subject",
+            "assuranceProfileId",
+            "createdAt",
+            "updatedAt"
+          ],
+          "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "name": { "type": "string" },
+            "subject": {
+              "type": "object",
+              "additionalProperties": { "type": "string" }
+            },
+            "assuranceProfileId": { "type": "string", "minLength": 1 },
+            "createdAt": { "type": "string", "format": "date-time" },
+            "updatedAt": { "type": "string", "format": "date-time" }
+          }
+        },
+        "identifiers": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "cpe": { "type": "string", "pattern": "^cpe:2\\.3:" },
+            "purl": { "type": "string", "pattern": "^pkg:" }
+          }
+        },
+        "assurance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "claimStatus",
+            "evidenceStatus",
+            "independentVerification",
+            "certificationStatus",
+            "notice"
+          ],
+          "properties": {
+            "claimStatus": { "const": "self-asserted" },
+            "evidenceStatus": { "enum": ["none", "provided-not-reviewed"] },
+            "independentVerification": { "const": false },
+            "certificationStatus": { "const": "not-certified" },
+            "notice": { "type": "string", "minLength": 1 },
+            "approvalPolicy": { "$ref": "#/$defs/reportSigningPolicy" }
+          }
+        },
+        "integrity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["algorithm", "payloadSha256"],
+          "properties": {
+            "algorithm": { "const": "SHA-256" },
+            "payloadSha256": { "$ref": "#/$defs/sha256" }
+          }
+        },
+        "result": { "type": "object" },
+        "responses": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/response" }
+        }
+      }
+    },
+    "reportSigningPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "format",
+        "fields",
+        "allowAdditionalSignatures",
+        "targetLevel",
+        "trustedTime",
+        "acceptedAuthorityEvidence"
+      ],
+      "properties": {
+        "format": { "const": "PAdES" },
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/reportSignatureFieldPolicy" }
+        },
+        "allowAdditionalSignatures": { "type": "boolean" },
+        "targetLevel": { "enum": ["B-T", "B-LT", "B-LTA"] },
+        "trustedTime": { "const": "signature-or-document-timestamp" },
+        "acceptedAuthorityEvidence": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z0-9-]+$" }
+        }
+      }
+    },
+    "reportSignatureFieldPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "label", "role", "required"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9._-]+$"
+        },
+        "label": { "type": "string", "minLength": 1 },
+        "role": { "type": "string", "minLength": 1 },
+        "required": { "type": "boolean" }
+      }
+    },
+    "response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "level",
+        "prompt",
+        "value",
+        "evidenceIds",
+        "evidenceReviewStatus"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["criterion", "question"] },
+        "level": { "type": "integer" },
+        "group": { "type": "string" },
+        "prompt": { "type": "string" },
+        "status": { "type": "string" },
+        "value": { "type": "string" },
+        "notes": { "type": "string" },
+        "evidenceIds": { "type": "array", "items": { "type": "string" } },
+        "evidenceReviewStatus": {
+          "enum": [
+            "not-provided",
+            "provided-not-reviewed",
+            "reviewed-supports",
+            "reviewed-inconclusive",
+            "reviewed-does-not-support"
+          ]
+        }
+      }
+    },
+    "attachment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "fileName",
+        "embeddedFileName",
+        "mediaType",
+        "size",
+        "sha256",
+        "addedAt"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "fileName": { "type": "string", "minLength": 1 },
+        "embeddedFileName": { "type": "string", "minLength": 1 },
+        "mediaType": { "type": "string", "minLength": 1 },
+        "size": { "type": "integer", "minimum": 0 },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "addedAt": { "type": "string", "format": "date-time" },
+        "dataBase64": { "type": "string" }
+      }
+    }
+  }
+}

@@ -7,7 +7,7 @@ summary: Review past releases and revisions of the PQC Maturity Model to ensure 
 weight: 90
 ---
 
-## Current Version: {{< param version >}}
+## Current Version: {{< pqcmm-version >}}
 
 ## PQCMM Version 1.0.0 - Initial Public Release
 

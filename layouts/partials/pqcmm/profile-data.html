@@ -1,0 +1,16 @@
+{{- $config := hugo.Data.pqcmm -}}
+{{- $profileVersion := $config.profileVersion -}}
+{{- $profileName := printf "pqcmm-self-assessment-profile-%s.yaml" $profileVersion -}}
+{{- $profileReleaseAsset := partial "pqcmm/release-asset.html" (dict "repository" $config.repository "releaseTag" $config.releaseTag "assetName" $profileName "expectedDigest" $config.digests.profile) -}}
+{{- $profileAsset := $profileReleaseAsset.resource -}}
+{{- $profileData := $profileAsset.Content | transform.Unmarshal -}}
+{{- $profileTargetPath := printf "wg/pqc/pqcmm/data/pqcmm-self-assessment-profile-%s.yaml" $profileVersion -}}
+{{- $profilePublished := $profileAsset | resources.Copy $profileTargetPath -}}
+{{- $profilePublished.Publish -}}
+{{- $profileSchemaName := printf "assessment-profile.schema-%s.json" $profileData.schemaVersion -}}
+{{- $profileSchemaReleaseAsset := partial "pqcmm/release-asset.html" (dict "repository" $config.repository "releaseTag" $config.releaseTag "assetName" $profileSchemaName "expectedDigest" $config.digests.profileSchema) -}}
+{{- $profileSchemaAsset := $profileSchemaReleaseAsset.resource -}}
+{{- $profileSchemaTargetPath := printf "wg/pqc/pqcmm/data/assessment-profile.schema-%s.json" $profileData.schemaVersion -}}
+{{- $profileSchemaPublished := $profileSchemaAsset | resources.Copy $profileSchemaTargetPath -}}
+{{- $profileSchemaPublished.Publish -}}
+{{- return (dict "data" $profileData "resource" $profilePublished "schemaResource" $profileSchemaPublished "version" $profileVersion "schemaVersion" $profileData.schemaVersion) -}}

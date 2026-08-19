@@ -1,0 +1,27 @@
+{{/*
+  Resolve the maturity-model adapter for a page or deliverable path, then use
+  the shared model-version-switcher renderer. Model-specific partials only
+  translate their source data into the shared version contract.
+
+  Receives:
+  - page: current Hugo page
+  - path: optional page or deliverable path used to select the adapter
+*/}}
+{{- $page := .page -}}
+{{- $path := .path | default $page.RelPermalink -}}
+{{- if strings.HasPrefix $path "/wg/pkimm/" -}}
+  {{- $data := index hugo.Data "pkimm-versions" -}}
+  {{- $onVersion := false -}}
+  {{- with $data.versions -}}
+    {{- range . -}}
+      {{- if strings.HasPrefix $path .path -}}
+        {{- $onVersion = true -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if $onVersion -}}
+    {{- partial "wg/pkimm-version-switcher.html" $page -}}
+  {{- end -}}
+{{- else if strings.HasPrefix $path "/wg/pqc/pqcmm/" -}}
+  {{- partial "wg/pqcmm-version-switcher.html" $page -}}
+{{- end -}}

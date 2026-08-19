@@ -1,0 +1,14 @@
+{{- $release := index hugo.Data "pqcmm" -}}
+{{- if $release -}}
+  {{- $versions := slice (dict
+    "id" $release.modelVersion
+    "label" $release.modelVersion
+    "path" "/wg/pqc/pqcmm/"
+    "isLatestRelease" true
+  ) -}}
+  {{- partial "wg/model-version-switcher.html" (dict
+    "page" .
+    "versions" $versions
+    "modelName" "PQCMM"
+  ) -}}
+{{- end -}}
