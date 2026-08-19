@@ -22,7 +22,7 @@ import {
   type VoteProposalStatus,
   type VoteSummary,
 } from "./shared";
-import type { AuthMember, DatabaseLike } from "../../types";
+import type { AuthMember, DatabaseLike, StatementLike } from "../../types";
 
 interface ProposalRow {
   id: string;
@@ -307,82 +307,195 @@ export async function getVoteProposalDetail(
   return { proposal: await toProposalSummary(db, row), endorserUserIds: endorsers.map((e) => e.endorser_user_id) };
 }
 
-async function convertProposalToVote(db: DatabaseLike, proposal: ProposalRow): Promise<VoteSummary> {
+interface ConversionFields {
+  id: string;
+  slug: string;
+  now: string;
+  opensAt: string;
+  closesAt: string;
+  thresholdType: ThresholdType;
+  status: VoteStatus;
+}
+
+async function buildConversionFields(db: DatabaseLike, proposal: ProposalRow): Promise<ConversionFields> {
   const now = nowIso();
   const opensAt = proposal.proposed_opens_at ?? now;
   const closesAt = proposal.proposed_closes_at ?? new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
   const thresholdType: ThresholdType = proposal.vote_type === "election" ? "successive_elimination" : "simple_majority";
-
   const id = uuid();
   const slug = await uniqueSlug(db, proposal.title);
   const status: VoteStatus = new Date(opensAt).getTime() <= Date.now() ? "open" : "scheduled";
+  return { id, slug, now, opensAt, closesAt, thresholdType, status };
+}
 
-  // Conversion is claimed and committed as one db.batch() (PR #1 review
-  // §5.4): concurrent endorsement (last-endorser-triggers-conversion) and
-  // admin approval both call this function, and both previously read the
-  // proposal's status, decided to convert, then wrote in two separate,
-  // unconditional statements — two concurrent callers could both insert a
-  // vote for the same proposal, or a failed second write could orphan a
-  // vote. Both statements below gate on the proposal's *own* current status
-  // (open_for_endorsement) — not on the value they write, which every
-  // racer would share and couldn't be used to tell winner from loser —
-  // so only the caller that still finds it open_for_endorsement at this
-  // batch's (fully serialized) execution time inserts anything.
-  // votes.source_proposal_id UNIQUE (migration 0047) structurally backstops
-  // this: it can't hold two votes even if this guard were ever bypassed.
-  const results = await db.batch([
-    db
-      .prepare(
-        `INSERT INTO votes
-           (id, slug, title, description, vote_type, scope_type, scope_id, created_by_user_id, proposed_by_user_id,
-            source_proposal_id, eligible_categories, threshold_type, opens_at, closes_at, current_round, status,
-            result_json, visibility, public_detail_level, created_at, updated_at)
-         SELECT ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 1, ?, NULL, 'private', 'aggregate', ?, ?
-         FROM vote_proposals
-         WHERE id = ? AND status = 'open_for_endorsement'`,
-      )
-      .bind(
-        id,
-        slug,
-        proposal.title,
-        proposal.description,
-        proposal.vote_type,
-        proposal.scope_type,
-        proposal.scope_id,
-        proposal.proposed_by_user_id,
-        proposal.id,
-        proposal.eligible_categories,
-        thresholdType,
-        opensAt,
-        closesAt,
-        status,
-        now,
-        now,
-        proposal.id,
-      ),
-    db
-      .prepare(
-        `UPDATE vote_proposals SET status = 'converted_to_vote', vote_id = ?, updated_at = ?
-         WHERE id = ? AND status = 'open_for_endorsement'`,
-      )
-      .bind(id, now, proposal.id),
-  ]);
+/**
+ * Builds (does not execute) the vote-insert + proposal-status-update
+ * statement pair that atomically converts a proposal to a vote (PR #1
+ * review §5.4). Both statements gate on the proposal's *own* current status
+ * (open_for_endorsement) — not on the value they write, which every racer
+ * would share and couldn't be used to tell winner from loser — so only the
+ * caller that still finds it open_for_endorsement at this batch's (fully
+ * serialized) execution time inserts anything. votes.source_proposal_id
+ * UNIQUE (migration 0047) structurally backstops this: it can't hold two
+ * votes even if this guard were ever bypassed.
+ *
+ * `extraGuard`, when given, is ANDed into both WHERE clauses. The
+ * endorsement path (PR #1 review §5-R01) uses this to additionally require
+ * the endorsement count — read via a subquery evaluated inside the same
+ * transaction as the endorsement insert that precedes these two statements
+ * in its batch — to have reached the threshold, so the insert and any
+ * conversion it triggers commit or fail together as one atomic unit.
+ */
+function buildConversionStatements(
+  db: DatabaseLike,
+  proposal: ProposalRow,
+  fields: ConversionFields,
+  extraGuard?: { sql: string; args: unknown[] },
+): [StatementLike, StatementLike] {
+  const guardSql = extraGuard ? ` AND ${extraGuard.sql}` : "";
+  const guardArgs = extraGuard?.args ?? [];
+  const voteInsert = db
+    .prepare(
+      `INSERT INTO votes
+         (id, slug, title, description, vote_type, scope_type, scope_id, created_by_user_id, proposed_by_user_id,
+          source_proposal_id, eligible_categories, threshold_type, opens_at, closes_at, current_round, status,
+          result_json, visibility, public_detail_level, created_at, updated_at)
+       SELECT ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 1, ?, NULL, 'private', 'aggregate', ?, ?
+       FROM vote_proposals
+       WHERE id = ? AND status = 'open_for_endorsement'${guardSql}`,
+    )
+    .bind(
+      fields.id,
+      fields.slug,
+      proposal.title,
+      proposal.description,
+      proposal.vote_type,
+      proposal.scope_type,
+      proposal.scope_id,
+      proposal.proposed_by_user_id,
+      proposal.id,
+      proposal.eligible_categories,
+      fields.thresholdType,
+      fields.opensAt,
+      fields.closesAt,
+      fields.status,
+      fields.now,
+      fields.now,
+      proposal.id,
+      ...guardArgs,
+    );
+  const updateStatus = db
+    .prepare(
+      `UPDATE vote_proposals SET status = 'converted_to_vote', vote_id = ?, updated_at = ?
+       WHERE id = ? AND status = 'open_for_endorsement'${guardSql}`,
+    )
+    .bind(fields.id, fields.now, proposal.id, ...guardArgs);
+  return [voteInsert, updateStatus];
+}
+
+/**
+ * Lost-race fallback shared by convertProposalToVote and
+ * insertEndorsementAndMaybeConvert: when a guarded conversion attempt
+ * affects 0 rows, some other caller (a concurrent admin approval, or
+ * another endorser's own atomic attempt) may have already converted the
+ * proposal first. Re-reads and returns that winner's vote instead of
+ * treating the no-op as an error; returns null if nothing converted it at
+ * all (e.g. rejected/withdrawn concurrently instead).
+ *
+ * PR #1 review §5-R02: this re-read is itself a narrow, infra-failure-only
+ * double-fault risk — if it throws (e.g. a transient D1 error immediately
+ * following the batch whose 0-row result triggered this call), a bare
+ * rethrow would surface only "the re-read failed," losing the fact that
+ * the actual event under investigation was a *lost race on proposal
+ * `proposalId`'s conversion*, not a re-read-unrelated failure. Wrapping
+ * preserves both: the caller (and logs) see the original re-read error's
+ * message/stack via `cause`, plus the proposal-scoped context needed to
+ * know a conversion outcome is now unconfirmed rather than assume it
+ * simply didn't happen.
+ */
+async function resolveLostRaceVote(db: DatabaseLike, proposalId: string): Promise<VoteSummary | null> {
+  try {
+    const current = await first<{ vote_id: string | null }>(db, `SELECT vote_id FROM vote_proposals WHERE id = ?`, [
+      proposalId,
+    ]);
+    return current?.vote_id ? toVoteSummary(await getVoteRowOrThrow(db, current.vote_id)) : null;
+  } catch (error) {
+    throw new AppError(
+      500,
+      "VOTE_CONVERSION_STATUS_UNKNOWN",
+      "A vote-proposal conversion attempt completed without inserting a vote, and the follow-up read to " +
+        "determine whether a concurrent caller won the race also failed — this proposal's conversion status " +
+        "could not be confirmed.",
+      { proposalId, cause: error instanceof Error ? error.message : String(error) },
+    );
+  }
+}
+
+async function convertProposalToVote(db: DatabaseLike, proposal: ProposalRow): Promise<VoteSummary> {
+  const fields = await buildConversionFields(db, proposal);
+  const [voteInsert, updateStatus] = buildConversionStatements(db, proposal, fields);
+  const results = await db.batch([voteInsert, updateStatus]);
 
   const voteInserted = (results[0]?.meta?.changes ?? 0) > 0;
   if (!voteInserted) {
-    // Lost the race — re-read and return the winner's vote rather than
-    // creating a duplicate. If nothing converted it (rejected/withdrawn
-    // concurrently instead), there is no vote to return.
-    const current = await first<{ vote_id: string | null }>(db, `SELECT vote_id FROM vote_proposals WHERE id = ?`, [
-      proposal.id,
-    ]);
-    if (current?.vote_id) {
-      return toVoteSummary(await getVoteRowOrThrow(db, current.vote_id));
-    }
+    const convertedVote = await resolveLostRaceVote(db, proposal.id);
+    if (convertedVote) return convertedVote;
     throw new AppError(409, "PROPOSAL_NOT_CONVERTIBLE", "This proposal is no longer open for endorsement");
   }
 
-  return toVoteSummary(await getVoteRowOrThrow(db, id));
+  return toVoteSummary(await getVoteRowOrThrow(db, fields.id));
+}
+
+/**
+ * Endorsement path only (PR #1 review §5-R01): inserts the endorser's row
+ * and attempts the guarded proposal-to-vote conversion in the SAME
+ * db.batch() so the two either both commit or both fail together — unlike
+ * the pre-fix code, which committed the endorsement insert as its own
+ * statement and only afterward, in a separate step, decided whether to
+ * convert.
+ *
+ * The conversion's extra guard checks `COUNT(*) >= minEndorsersRequired`
+ * via a subquery evaluated inside this same transaction, after the
+ * endorsement insert immediately above it in the batch has already applied
+ * — not a pre-insert count read in application code. A pre-insert JS-level
+ * count would be stale under genuine concurrency: two endorsers reading the
+ * count before either commits could each compute a predicted total under
+ * the threshold and neither would attempt conversion, even though the
+ * threshold is reached once both inserts land. Gating in SQL against the
+ * transaction's own post-insert state avoids that missed-conversion race
+ * the same way the existing open_for_endorsement status guard already does
+ * for concurrent conversion attempts (see buildConversionStatements). The
+ * conversion statements always run (as a no-op when the guard fails)
+ * rather than being conditionally included in the batch, since D1 batch
+ * statements can't branch on an earlier statement's result within the same
+ * call — this mirrors convertProposalToVote's own unconditional-statements
+ * pattern, just extended with one more guard clause.
+ */
+async function insertEndorsementAndMaybeConvert(
+  db: DatabaseLike,
+  proposal: ProposalRow,
+  endorserUserId: string,
+  minEndorsersRequired: number,
+): Promise<VoteSummary | null> {
+  const endorsementInsert = db
+    .prepare(`INSERT INTO vote_proposal_endorsements (id, proposal_id, endorser_user_id, endorsed_at) VALUES (?, ?, ?, ?)`)
+    .bind(uuid(), proposal.id, endorserUserId, nowIso());
+
+  const fields = await buildConversionFields(db, proposal);
+  const [voteInsert, updateStatus] = buildConversionStatements(db, proposal, fields, {
+    sql: `(SELECT COUNT(*) FROM vote_proposal_endorsements WHERE proposal_id = ?) >= ?`,
+    args: [proposal.id, minEndorsersRequired],
+  });
+
+  const results = await db.batch([endorsementInsert, voteInsert, updateStatus]);
+
+  const voteInserted = (results[1]?.meta?.changes ?? 0) > 0;
+  if (voteInserted) {
+    return toVoteSummary(await getVoteRowOrThrow(db, fields.id));
+  }
+  // Below threshold (the common case), or converted/rejected/withdrawn by a
+  // concurrent caller before this batch's guarded statements ran.
+  return resolveLostRaceVote(db, proposal.id);
 }
 
 export interface EndorseProposalResult {
@@ -414,23 +527,26 @@ export async function endorseVoteProposal(
     `SELECT id FROM vote_proposal_endorsements WHERE proposal_id = ? AND endorser_user_id = ?`,
     [proposalId, member.userId],
   );
-  if (!existing) {
-    await run(
-      db,
-      `INSERT INTO vote_proposal_endorsements (id, proposal_id, endorser_user_id, endorsed_at) VALUES (?, ?, ?, ?)`,
-      [uuid(), proposalId, member.userId, nowIso()],
-    );
+
+  let convertedVote: VoteSummary | null = null;
+  if (existing) {
+    // Already endorsed by this member: nothing to insert, so there is no
+    // endorsement write to fold into an atomic batch with a conversion
+    // (PR #1 review §5-R01 targets that pairing specifically). Still
+    // re-check the threshold in case it dropped below the current
+    // endorsement count since this member's earlier endorsement (e.g. an
+    // admin lowered min_endorsers for this scope in the meantime).
+    const refreshed = await toProposalSummary(db, row);
+    if (refreshed.endorsementCount >= refreshed.minEndorsersRequired) {
+      convertedVote = await convertProposalToVote(db, await getProposalRowOrThrow(db, proposalId));
+    }
+  } else {
+    const minEndorsersRequired = await minEndorsersFor(db, row.scope_type, row.scope_id);
+    convertedVote = await insertEndorsementAndMaybeConvert(db, row, member.userId, minEndorsersRequired);
   }
 
-  const refreshed = await toProposalSummary(db, await getProposalRowOrThrow(db, proposalId));
-
-  if (refreshed.endorsementCount >= refreshed.minEndorsersRequired) {
-    const convertedVote = await convertProposalToVote(db, await getProposalRowOrThrow(db, proposalId));
-    const finalProposal = await toProposalSummary(db, await getProposalRowOrThrow(db, proposalId));
-    return { proposal: finalProposal, convertedVote };
-  }
-
-  return { proposal: refreshed, convertedVote: null };
+  const finalProposal = await toProposalSummary(db, await getProposalRowOrThrow(db, proposalId));
+  return { proposal: finalProposal, convertedVote };
 }
 
 export async function withdrawEndorsement(db: DatabaseLike, member: AuthMember, proposalId: string): Promise<void> {
