@@ -13,6 +13,17 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { issueSponsorPortalSession, signSponsorPortalSessionToken } from "../functions/_lib/auth/sponsor-portal";
+
+/** Issues a real sponsor-portal session directly (bypassing the magic-link email round trip). */
+async function createSponsorPortalSession(sponsorshipId: string): Promise<string> {
+  const { sessionId, expiresAt } = await issueSponsorPortalSession(env.DB, sponsorshipId, 8);
+  return signSponsorPortalSessionToken(env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret", {
+    sponsorshipId,
+    sessionId,
+    expiresAt,
+  });
+}
 
 function jsonRequest(path: string, body: unknown, token?: string): Request {
   const headers = new Headers({ "content-type": "application/json" });
@@ -143,6 +154,33 @@ describe("Sponsor portal", () => {
     expect(attendeesResponse.status).toBe(200);
     const attendeesBody = (await attendeesResponse.json()) as { attendees: { email: string }[] };
     expect(attendeesBody.attendees.map((a) => a.email)).toEqual(["yes@attendee.test"]);
+  });
+
+  it("P6M-P2-11: bounds the attendee list with ?limit=/?offset= instead of returning every consenting attendee unbounded", async () => {
+    const sponsorshipId = await createActiveEventSponsorship("Leader", "leader-paged@sponsor.test");
+    await seedConsentingRegistration(eventId, "a1@attendee.test", "sponsor-data-sharing");
+    await seedConsentingRegistration(eventId, "a2@attendee.test", "sponsor-data-sharing");
+    await seedConsentingRegistration(eventId, "a3@attendee.test", "sponsor-data-sharing");
+
+    const sessionToken = await createSponsorPortalSession(sponsorshipId);
+
+    const firstPage = await call(
+      getRequest(`/api/v1/sponsor-portal/events/${eventId}/attendees?limit=2&offset=0`, sessionToken),
+    );
+    expect(firstPage.status).toBe(200);
+    const firstBody = (await firstPage.json()) as {
+      attendees: unknown[];
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
+    expect(firstBody.attendees).toHaveLength(2);
+    expect(firstBody.page).toEqual({ limit: 2, offset: 0, total: 3, hasMore: true });
+
+    const secondPage = await call(
+      getRequest(`/api/v1/sponsor-portal/events/${eventId}/attendees?limit=2&offset=2`, sessionToken),
+    );
+    const secondBody = (await secondPage.json()) as { attendees: unknown[]; page: { hasMore: boolean } };
+    expect(secondBody.attendees).toHaveLength(1);
+    expect(secondBody.page.hasMore).toBe(false);
   });
 
   it("403s attendee access when the sponsorship's tier is not configured for attendee data access", async () => {
