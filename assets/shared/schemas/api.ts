@@ -126,8 +126,15 @@ export const adminEventsListQuerySchema = paginationQuerySchema.extend({
 });
 
 /** Allowlisted sort columns for GET /api/v1/admin/events/:eventSlug/permissions (Team) — see functions/api/v1/admin/events/[eventSlug]/permissions.ts. */
-export const EVENT_TEAM_SORT_COLUMNS = ["user_email", "role_id", "created_at", "expires_at"] as const;
+// `created_at` is table-qualified (`ur.`) for the same reason as
+// EVENT_INVITES_SORT_COLUMNS above — the route joins `users`, which also has
+// its own `created_at`.
+export const EVENT_TEAM_SORT_COLUMNS = ["user_email", "role_id", "ur.created_at", "expires_at"] as const;
 export const eventTeamSortValueSchema = sortColumnSchema(EVENT_TEAM_SORT_COLUMNS);
+
+export const adminEventTeamListQuerySchema = paginationQuerySchema.extend({
+  sort: eventTeamSortValueSchema,
+});
 
 /**
  * Allowlisted sort columns for GET /api/v1/admin/events/:eventSlug/registrations
