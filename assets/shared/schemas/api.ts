@@ -157,8 +157,24 @@ export const adminEventRegistrationsQuerySchema = paginationQuerySchema.extend({
 });
 
 /** Allowlisted sort columns for GET /api/v1/admin/events/:eventSlug/invites — see functions/api/v1/admin/events/[eventSlug]/invites/index.ts. */
-export const EVENT_INVITES_SORT_COLUMNS = ["invitee_email", "status", "created_at", "accepted_at"] as const;
+// `created_at` is table-qualified (`i.`) because the route joins `users`,
+// which also has its own `created_at` — an unqualified ORDER BY created_at
+// is ambiguous and 500s (discovered by this pass's own pagination test;
+// pre-existing, not previously exercised by any test).
+export const EVENT_INVITES_SORT_COLUMNS = ["invitee_email", "status", "i.created_at", "accepted_at"] as const;
 export const eventInvitesSortValueSchema = sortColumnSchema(EVENT_INVITES_SORT_COLUMNS);
+
+// P6M-P2-05: `status`/`type` are validated leniently (an unrecognized value
+// is treated as "no filter", matching the pre-existing handler's own
+// `validStatuses.has(...)`/`validTypes.has(...)` tolerant behavior) rather
+// than a strict enum that would 400 — same "enforced-but-non-strict"
+// convention as adminEventRegistrationsQuerySchema.
+export const adminEventInvitesListQuerySchema = paginationQuerySchema.extend({
+  status: z.string().trim().max(20).optional(),
+  type: z.string().trim().max(20).optional(),
+  q: z.string().trim().max(200).optional(),
+  sort: eventInvitesSortValueSchema,
+});
 
 /**
  * Allowlisted sort columns for GET /api/v1/admin/forms/:formKey/submissions
