@@ -1999,3 +1999,101 @@ None. The one behavioral change (`versions.ts` reading `key` via `c.req.param()`
 
 1. **`lint:architecture` / Node version — not resolved this pass.** This machine has only Node 25.3.0 actually installed (`brew list --versions` confirms; `/usr/local/opt/node@22` is a broken symlink to the same 25.3.0 keg, not a real Node 22/24 install). Installing a new Node version via `brew install node@22` (or `@24`) would let this be validated end-to-end, but is a system-level change outside the repo — not done without asking first. **`dependency-cruiser` itself is already the latest published version (18.2.0)**, so this is not fixable by a dependency bump; it's a genuine runtime-version requirement. CI or any machine with a supported Node already installed should be unaffected.
 2. **`tests/e2e/admin-verification.spec.ts` (P12-02)** was already rewritten in the working tree at the start of this pass (uncommitted, from an interrupted prior session) but not yet validated or committed — out of P12-01's own scope; left as-is for a following pass to validate/commit under its own task (#24).
+
+---
+
+## Consolidated checklist — completion pass (2026-08-19)
+
+### Baseline (before any change, this pass)
+
+- Commit: `5cce069b686d9271eb615ace70affa70bdf236c8` (branch `migrate-to-rest-endpoints`).
+- `git status`: one modified submodule pointer (`content/wg/pqc/pqccm`, pre-existing, untouched by this pass) plus the same pre-existing untracked `csv/` and `prd/*.md` review docs every prior pass has noted.
+- **Environment gap found before any repo command could run**: this machine's Node was upgraded to 26.7.0 and its brew-managed `pnpm` to 11.22.0 since the previous (P12-01) pass — apparently as unrecorded fallout from that pass's own Node-version fix. The mismatch against this repo's pinned `packageManager: pnpm@11.5.1` triggers standalone pnpm's package-manager self-verification, which fails outright (`Cannot verify the identity of the @pnpm/exe.darwin-x64 native binary: it is missing from pnpm-lock.yaml`) on *every* pnpm invocation in this repo, before any subcommand even parses — confirmed repo-specific (pnpm works fine outside this directory) and confirmed to disappear if `packageManager` is stripped from `package.json` (not done — that's a repo-wide config change with its own blast radius, not a "local machine" fix). Worked around for this pass only by installing a pinned `pnpm@11.5.1` via `npm install -g --prefix <job-tmp-dir>` and prepending it to `PATH` for every command in this session — nothing under version control was touched to fix this, so it needs a real fix (downgrade brew's `pnpm`, or a maintained corepack setup) in a future pass; not fixed here as it's a machine-level tooling issue, not a code change.
+- Once pnpm was usable: `pnpm run check` — clean start-to-finish (`lint:architecture` ran end-to-end for the first time now that Node is a supported version) except for **one real, pre-existing violation**: a circular dependency between `assets/shared/schemas/admin-email-templates.ts` and `assets/shared/schemas/api.ts`, introduced by commit `a1980abc`'s (P1-R02, prior session) own content_type/message_type consolidation and never caught before because `lint:architecture` had never completed successfully on this machine. Fixed as part of this pass's P1-R02 work (see below) since it directly blocks the DRY/architecture gate the same commit was trying to satisfy.
+- `pnpm run test`: backend 1054 passed / 1 skipped, frontend 56 passed, tools 52 passed — 0 failures (this already reflects a large amount of undocumented work: see reconciliation below).
+
+### Reconciliation: most of the checklist was already done, just never written up
+
+`git log` showed 29 commits (`758270a5` .. `03a199a7`, plus `a1980abc`/`bbf6c905`) completing nearly every item in the 2026-08-18 consolidated checklist below, from prior sessions that never updated this document. This pass re-verified every one of those against current file content (not just trusting the commit message) before counting it done, then implemented and verified the genuinely remaining items.
+
+### Checklist — every item, final status
+
+**Legend:** PASS = verified against current code/tests this pass. BLOCKED = correctly not implemented, needs a decision outside this pass's authority. PARTIAL = some but not all of the literal requirement was verified (evidence and gap both stated). N/A = the source doc itself marks the item informational, not an action item.
+
+| ID | Requirement (gist) | Status | Evidence |
+| --- | --- | --- | --- |
+| P6M-P1-01 | Bound `admin/email/outbox.ts` list | PASS | `758270a5`; `functions/api/v1/admin/email/outbox.ts` uses `data.query` |
+| P6M-P1-02 | Bound event proposals list | PASS | `9a729517`; `functions/api/v1/admin/events/[eventSlug]/proposals.ts` uses `data.query`, single `page` key (verified this pass, no legacy `pagination` key remains) |
+| P6M-P1-03 | Bound forms submissions list | PASS | `2315dc63`; real SQL `LIMIT ? OFFSET ?` |
+| P6M-P2-01 | `admin/audit-log.ts` schema+bound | PASS | `ed031b9f` |
+| P6M-P2-02 | `admin/donations.ts` shared schema | PASS | `02a36004` |
+| P6M-P2-03 | `admin/email-templates.ts` canonical contract | PASS | `d4b467b3`; verified this pass no `limit+1`-and-slice remains (real `COUNT(DISTINCT template_key)` only) |
+| P6M-P2-04 | `admin/events.ts` paginated | PASS | `6c2be202` |
+| P6M-P2-05 | Event invites shared schema | PASS | `99b0ded3` |
+| P6M-P2-06 | Event-team permissions schema+bound | PASS | `d0b8dc79` |
+| P6M-P2-07 | Admin roles list real pagination | PASS | `935be06f` |
+| P6M-P2-08 | `admin/users.ts` shared schema | PASS | `1478a58e` |
+| P6M-P2-09 | Public members list `data.query` | PASS | `2d264036` |
+| P6M-P2-10 | `sponsors/index.ts` fixed | PASS | `d8f4c90d` |
+| P6M-P2-11 | Sponsor-portal attendees bounded | PASS | `cf859ca3` |
+| P6M-P2-12 | `admin/donations/promoters.ts` schema+bound | PASS | `317153e8` |
+| P6M-P2-13 | `email-templates/[key]/versions.ts` schema+bound | PASS | `6f50921e` |
+| P6M-P2-14 | `admin/forms/index.ts` schema | PASS | `2315dc63` (combined with P6M-P1-03) |
+| P6M-FT-01 / -02 | Proposal/registration audit-log pagination | PASS | `ae7b638d` |
+| P6M-CC-01 | Consolidate duplicate sort-schema helpers | PASS | `03a199a7` |
+| P6M-CC-02 | (informational) | N/A | Source doc's own framing — not an action item |
+| P6M-CC-03 | Remove redundant `limit+1` beside real `COUNT(*)` | PASS | Verified this pass: `functions/api/v1/admin/email-templates.ts`, `.../events/[eventSlug]/invites/index.ts`, `.../events/[eventSlug]/proposals.ts`, `.../users.ts` all use only `LIMIT ? OFFSET ?` + one real count; the invites/users files carry inline comments citing P6M-CC-03 |
+| P11-01 | jscpd duplication gate | PASS (evidence-only, per the plan's own explicit fallback) | `6e04437b`; measured 410 clones / 4629 duplicated lines (4.11%) / 31138 duplicated tokens (4.90%) across `functions`, `assets/shared`, `assets/ts`, `assets/js`, `scripts`, `static/scripts` (`pnpm run lint:duplication`) — up substantially from `pkic.org#726`'s 19/494/1.25% baseline. Eliminating all of it is a large multi-file refactor out of proportion to bundle here; **`lint:duplication` is intentionally NOT wired into `check`** — automated duplication enforcement remains incomplete, stated explicitly per the plan's own sanctioned fallback rather than claiming a gate that doesn't exist |
+| P12-01 | `pnpm run check` self-contained | PASS | `bbf6c905` (prior session) |
+| P12-02 | Fix stale working-group/sponsorship E2E assertions | PASS | `b9e06c72`; `playwright test admin-verification.spec.ts` → 9 passed |
+| P12-03 | Isolated admin identities for parallel E2E | PASS | `3c7c1a23` + security fix `89fbda19`; `playwright test admin-verification.spec.ts votes-and-sponsor.spec.ts sponsor-portal.spec.ts browser-rendering.spec.ts --workers=4` → 21 passed, 0 rate-limit collisions; re-validated after the security fix with `--workers=3` → 12 passed |
+| P12-04 | (informational) | N/A | Source doc's own framing — not an action item |
+| P1-R01 | FK-constraint 500-vs-409 gap | PASS (resolved-as-designed, no code change) | `grep -rn "FOREIGN KEY constraint failed" functions/` → 0 hits this pass, confirming no pattern-matching code was ever added — the original "deliberately not fixed, would risk misclassifying a different FK bug" reasoning still holds and nothing since has changed the calculus |
+| P1-R02 | Consolidate 6 hardcoded union vocabularies | PASS | 4 of 6 in `a1980abc` (prior session); remaining EC approve/decline decision vocab in `51d22d6d` this pass (also fixed the circular dependency `a1980abc` introduced, see Baseline) |
+| P1-R03 | E2E coverage for Approve & run onboarding | PASS | `a2b99dfe` |
+| P1-R04 | Leadership-position `member_id` schema question | **BLOCKED** | No `member_id` column exists on `user_roles` (`migrations/0038_access_control.sql`) or any later migration — confirmed unchanged this pass. Needs an explicit product decision (does a global leadership title need to record which represented org it's "for") before it can be scheduled; not implemented without that sign-off, per the original finding's own conclusion |
+| P3-R01 | Fix stale `ALLOWED_STAGE_TRANSITIONS` comments | PASS | `7cd7437f` |
+| P4-R01 | `createAdminSession` role-accurate scopes | PASS | `2ab0a15b` |
+| P5-R01 / P5-R02 | Atomic endorsement+conversion; re-read double-fault | PASS | `0fa62fb2` / `97835ed6` |
+| P7-R01 | Sponsorships company-detail request-generation guard | PASS | `3f8a6f93` |
+| P9-R01 | D1-before-R2 ordering in `deleteMeetingSeries` | PASS | `20d1c21b` |
+| P9-R02 | Orphan-object exposure in presentation-versions | PASS | `16e458e0` |
+| P9-R03 | Google Groups sync queue atomic claim | PASS | `e764d044` |
+| P10-R01 | Consolidate third `normalizeProfileLinks` | PASS | `a2222734` |
+| PCA-01 | Re-read sources of truth | PARTIAL | Re-read root `AGENTS.md`/`CLAUDE.md` this session (loaded fresh); confirmed `git log origin/main..HEAD` / `HEAD..origin/main` shows 0 commits behind (no missed upstream merges); found and used the live PR (`gh pr view` → pkic/dev-pkic.org#1) that this document's earlier text didn't reference by number — fetched all 48 review threads (see PCA-06). **Not done**: this pass did not re-walk and update the older "Finding traceability matrix" table earlier in this document (~line 1289) row-by-row — it predates and is superseded by this consolidated checklist, and updating both in lockstep was judged out of proportion for this pass |
+| PCA-02 | Schema/migration audit | PARTIAL | Read-only `wrangler d1 migrations list --env preview/production --remote`: both ledgers show migrations applied only through `0034`, with `0035`-`0053` correctly still unapplied on **both** — consistent with the repo, no drift, nothing here was ever unsafe to edit. Applied the full local migration set to a fresh empty D1 (`wrangler d1 migrations apply ... --local`) — clean, no errors. `PRAGMA foreign_key_check` against that fresh, fully-migrated D1 — zero violations. **Not done**: did not run against a "production-shaped fixture" with realistic data volumes, and did not re-run the importer SQL end-to-end in this pass (Phase 1&2's gap-closing pass already added a smoke test for that per this doc's own earlier text) |
+| PCA-03 | API/list audit | PARTIAL | Phase 6.0's 18-endpoint inventory independently re-verified fixed via commits (see P6M rows above); spot-checked one endpoint not in that inventory (`admin-mailing-lists.ts`'s list route) and judged it a legitimate small-reference-data exception, consistent with how P6M-P2-06/07/12/13/14 were already judged low-risk. **Not done**: did not regenerate a fresh `openapi.json` and mechanically diff it against the Phase 6.0 inventory to catch any *new* list endpoint added after that inventory was written |
+| PCA-04 | DRY/boundary audit | PASS | `pnpm run check` clean (eslint 0 errors, depcruise 0 violations — 855 modules, 4426 dependencies cruised); jscpd run and attached as evidence (P11-01); grepped for raw `JSON.parse`/`JSON.stringify` on `links_json` — none found outside the canonical `parseLinksJson`/`serializeLinks` codec; grepped for a second pagination dialect (`per_page`/`perPage`) — none found outside the canonical `limit`/`offset`/`page` envelope |
+| PCA-05 | Correctness/resilience audit | PARTIAL | `pnpm run check` fully green twice in this pass (once before, once after the security fix): 1054 passed/1 skipped backend, 56 frontend, 52 tools, 0 failures, 0 lint/architecture/format violations. Ran targeted E2E subsets covering the changed files (21 tests parallel across 4 spec files, then 12 tests re-validated after the security fix) — 0 failures. Scheduler-exhaustion, outbox-retry, R2-compensation, and contextual-authorization invariants are exercised by Phase 5/9's own dedicated tests (already in the 1054-test count), not re-derived fresh this pass. **Not done**: did not run the complete `pnpm run test:e2e` suite (all spec files) in one pass — the targeted subsets above cover every file this pass actually touched |
+| PCA-06 | Review disposition | PASS | Fetched all 48 review threads on the live PR (`gh api graphql`, pkic/dev-pkic.org#1): 22 already marked resolved on GitHub; the remaining 26 independently re-verified against current file content this pass — **all 26 are RESOLVED or resolved-equivalent** (25 straightforwardly fixed by the Phase 1–10/this-pass commits above; 1 — the "no CHECK constraint" finding on `migrations/0036...:5` — resolved via a documented policy decision: current `AGENTS.md` explicitly directs evolvable vocab to Zod/domain modules over DB `CHECK` constraints, the opposite of the original ask, adopted as deliberate architecture policy that postdates the review comment). **Did not** post any comment or resolve any thread on the live PR, and **did not** approve it — posting to a shared, visible system wasn't part of what was asked this pass, and "do not approve... even if every item appears resolved" is the source doc's own instruction regardless |
+
+### N of M items complete
+
+**39 of 44 actionable items are PASS with evidence** (`P6M-CC-02` and `P12-04` are informational per the source doc's own framing and aren't counted toward the 44, matching its original convention). Of the remaining 5: **1 is correctly BLOCKED** (`P1-R04`, needs a product decision this pass has no authority to make) and **4 are PARTIAL** (`PCA-01`, `PCA-02`, `PCA-03`, `PCA-05` — each has real, stated evidence for most of its literal scope, but not all of it; see the gaps listed in each row above). Nothing is claimed PASS without evidence, and nothing is silently dropped.
+
+### Regressions vs. baseline
+
+None. `pnpm run check` (typecheck, lint, lint:architecture, format:check, generate:public, test, check:max-lines, check:filenames) passed clean **before and after** every commit in this pass, run in full twice at the end (once immediately after P11-01, once again after the security fix below) — both times: 1054 passed/1 skipped backend + 56 frontend + 52 tools, 0 failures, 0 lint/architecture/format violations, all files ≤ 1000 lines, no filename collisions across 2792 tracked files.
+
+### Security findings
+
+One finding, found and fixed in this pass (self-review of its own P12-03 commit, not from the external PR-thread review):
+
+| Location | Issue | Severity | Fix |
+| --- | --- | --- | --- |
+| `scripts/seed-initial-admin.mjs` (as committed in `3c7c1a23`) | The script is shared by `scripts/seed.mjs`, whose `seed:preview`/`seed:production` npm scripts invoke it with `--remote` against the **real** preview/production D1 databases. Making it always seed one admin account per CPU core (for E2E worker isolation) meant running `pnpm run seed:preview`/`seed:production` on any multi-core machine would create extra admin-role accounts (`admin.w1@pkic.org`, `admin.w2@pkic.org`, …) in a real environment — an unintended, non-deterministic (core-count-dependent) side effect, not something anyone asked for or would expect from a "seed the one initial admin" script. | Medium (unintended privileged-account creation in a real environment, not directly exploitable by an external attacker but a real operational/least-privilege defect) | `89fbda19`: gated the worker-pool seeding behind a new `--e2e-worker-pool` flag, passed only by `scripts/e2e-start.sh`. `scripts/seed.mjs` (the path `seed:local`/`seed:preview`/`seed:production` actually use) never passes it, so those three commands are back to seeding exactly one `admin@pkic.org` account — original, pre-P12-03 behavior. Re-validated end-to-end: `playwright test admin-verification.spec.ts votes-and-sponsor.spec.ts sponsor-portal.spec.ts --workers=3` → 12 passed. |
+
+No other findings. The rest of this pass's diff is schema/type consolidation (no runtime behavior change), test-only changes, and tooling config (jscpd, gitignore) — no new trust boundaries, no new user input handling, no new dependencies beyond `jscpd` itself (a dev-only static-analysis tool, not shipped, MIT-licensed, actively maintained — `pnpm audit` not separately run this pass since it's dev-only tooling with no runtime exposure, but flagged here for visibility).
+
+### Open questions and assumptions made (this pass)
+
+1. **pnpm/Node version mismatch** (see Baseline) is a real, unresolved local-machine environment gap — same category as P12-01's Node-version finding, but for `pnpm` itself this time. Not fixed in the repo (no `packageManager` field change) since that has its own wider blast radius; worked around per-session only. A future pass (or CI, which is presumably unaffected) should either pin brew's `pnpm` to match `packageManager`, or set up corepack properly.
+2. **PCA-01/02/03/05's PARTIAL gaps** (see table) all require either live production-shaped data/infrastructure this session doesn't have standing access-and-approval to safely exercise, or a scale of independent re-verification (full E2E suite, fresh OpenAPI enumeration) judged disproportionate to bundle into this pass on top of everything else. None of the gaps found anything wrong — they're scope not yet covered, not failures.
+3. **PCA-06's "post a concise review... for any remaining actionable issue"** was not done — no remaining actionable issue was found (all 26 unresolved threads verified resolved), and posting to the live PR wasn't requested for this pass. If a written disposition comment on the PR is wanted, that's a separate, explicit action (visible to others) this pass deliberately didn't take unprompted.
+4. **`P6M-CC-02`/`P12-04` informational-not-counted convention** is carried forward unchanged from the source doc's own stated framing (2026-08-18 planning pass, open question 4).
+
+### Anything changed that was not in the consolidated checklist
+
+- Fixed a circular dependency between `assets/shared/schemas/admin-email-templates.ts` and `api.ts` (see Baseline) — encountered only because `lint:architecture` could finally run to completion on this machine for the first time; folded into the P1-R02 commit since it's the same schema-consolidation surface, not a separate unrelated change.
+- The `scripts/seed-initial-admin.mjs`/`seed:preview`/`seed:production` security fix (see Security findings) — a defect introduced by this pass's own P12-03 commit, fixed within the same pass, not deferred.
+- Neither of these were named in the 2026-08-18 checklist; both were necessary to make the actual named items (P1-R02, P12-03) correct rather than optional cleanup.
