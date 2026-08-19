@@ -15,7 +15,7 @@ import type { DatabaseSessionLike } from "../../../_lib/db/session";
 import { inferredScopesForOperation } from "../../../_lib/openapi/mcp";
 import { AdminAuditLogList } from "./audit-log";
 import { EmailTemplatesList } from "./email-templates";
-import { onRequestGet as AdminEventsGet_l } from "./events";
+import { AdminEventsListGet } from "./events";
 import { onRequestPost as AdminEventsPost_l } from "./events";
 import { onRequestGet as AdminStatsGet_l } from "./stats";
 import { UsersList } from "./users";
@@ -190,7 +190,7 @@ async function useRequestScopedD1Session(c: Context<RequestDbContext>, next: Nex
 app.use("*", useRequestScopedD1Session);
 
 openapi.get("/email-templates", EmailTemplatesList);
-app.get("/events", AdminEventsGet_l);
+openapi.get("/events", AdminEventsListGet);
 app.post("/events", AdminEventsPost_l);
 app.get("/stats", AdminStatsGet_l);
 openapi.get("/audit-log", AdminAuditLogList);
