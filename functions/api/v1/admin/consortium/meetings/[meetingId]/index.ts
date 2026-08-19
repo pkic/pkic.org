@@ -41,11 +41,7 @@ export const ConsortiumMeetingDelete = openApiRoute(
     requirePermission(admin, "working-groups:write");
 
     const meetingId = data.params.meetingId;
-    const { deletedIcsFileR2Keys } = await deleteMeetingSeries(db, meetingId, { scopeType: "consortium" });
-    const bucket = c.env.ASSETS_BUCKET;
-    if (bucket) {
-      await Promise.allSettled(deletedIcsFileR2Keys.map((key) => bucket.delete(key)));
-    }
+    await deleteMeetingSeries(db, c.env.ASSETS_BUCKET, meetingId, { scopeType: "consortium" });
     await writeAuditLog(db, "admin", admin.id, "meeting_series_deleted", "meeting_series", meetingId, {
       scopeType: "consortium",
     });
