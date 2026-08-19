@@ -12,6 +12,7 @@ import {
   organizationNameSchema,
   jobTitleSchema,
 } from "../../../../../../../assets/shared/schemas/api";
+import { linksSchema, parseLinksJson, serializeLinks } from "../../../../../../../assets/shared/schemas/links";
 import { requireInternalSecret } from "../../../../../../_lib/request";
 
 const speakerRoleSchema = z.enum(["proposer", "speaker", "co_speaker", "moderator", "panelist"]);
@@ -23,15 +24,7 @@ const speakerProfileSchema = z.object({
   organizationName: z.union([organizationNameSchema, z.literal(""), z.null()]).optional(),
   jobTitle: z.union([jobTitleSchema, z.literal(""), z.null()]).optional(),
   biography: z.union([z.string().trim().min(1).max(10_000), z.literal(""), z.null()]).optional(),
-  links: z
-    .array(
-      z.object({
-        label: z.string().trim().max(128),
-        url: z.url().max(2048),
-      }),
-    )
-    .max(10)
-    .optional(),
+  links: linksSchema.optional(),
 });
 
 async function loadSpeakerContext(db: D1Database, manageToken: string, userId: string, signingSecret: string) {
@@ -77,14 +70,14 @@ export async function onRequestPatch(c: any): Promise<Response> {
     requireInternalSecret(c.env),
   );
 
-  const previousLinks = speaker.links_json ? JSON.parse(speaker.links_json) : [];
+  const previousLinks = parseLinksJson(speaker.links_json);
   const nextValues = {
     firstName: body.firstName === undefined ? undefined : body.firstName || null,
     lastName: body.lastName === undefined ? undefined : body.lastName || null,
     organizationName: body.organizationName === undefined ? undefined : body.organizationName || null,
     jobTitle: body.jobTitle === undefined ? undefined : body.jobTitle || null,
     biography: body.biography === undefined ? undefined : body.biography || null,
-    linksJson: body.links ? JSON.stringify(body.links) : body.links === undefined ? undefined : null,
+    linksJson: body.links ? serializeLinks(body.links) : body.links === undefined ? undefined : null,
   };
 
   await updateSpeakerProfile(c.env.DB, speaker.user_id, nextValues);

@@ -8,6 +8,7 @@ import { resolveAppBaseUrl } from "../../../../_lib/config";
 import { writeAuditLog } from "../../../../_lib/services/audit";
 import { requireInternalSecret } from "../../../../_lib/request";
 import { omitCapabilitySecrets } from "../../../../_lib/services/capability-links";
+import { parseLinksJson } from "../../../../../assets/shared/schemas/links";
 
 export async function onRequestPatch(c: any): Promise<Response> {
   const body = await parseJsonBody(c.req, proposalManageSchema);
@@ -112,7 +113,7 @@ export async function onRequestGet(c: any): Promise<Response> {
       organizationName: entry.organization_name,
       jobTitle: entry.job_title,
       bio: entry.biography,
-      links: entry.links_json ? JSON.parse(entry.links_json) : [],
+      links: parseLinksJson(entry.links_json),
       headshotUploaded: Boolean(entry.headshot_r2_key),
       headshotUpdatedAt: entry.headshot_updated_at,
       headshotUrl: entry.headshot_r2_key

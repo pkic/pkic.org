@@ -27,12 +27,16 @@
  * the base URL, which callers already resolve from their own `env` before
  * calling in (see the two callers: admin/applications/[id]/approve.ts and
  * scheduled-jobs.ts's runEcWindowAutoApprove). Actually *sending* still
- * happens after this returns, via each caller's own
- * `c.executionCtx.waitUntil(processOutboxByIdBackground(...))` /
- * `processOutboxByIdBackground(...)` over the returned `outboxIds` — that
- * part needs `env`/`executionCtx` this module still doesn't have, and
- * doesn't need to: the outbox's own idempotent-retry machinery covers
- * delivery, only the *queueing* needed to be atomic with membership state.
+ * happens after this returns: the interactive admin route sends
+ * immediately via `c.executionCtx.waitUntil(processOutboxByIdBackground(...))`
+ * over the returned `outboxIds`; the unattended EC-window auto-approve job
+ * (potentially many approvals per pass) deliberately does not — it leaves
+ * the rows `queued` for the shared bounded outbox processor to pick up, so
+ * one job never fans out into N synchronous per-recipient sends within the
+ * scheduled-job budget (PR #1 review §9.1). Either way, this module needs
+ * no `env`/`executionCtx` of its own: the outbox's own idempotent-retry
+ * machinery covers delivery, only the *queueing* needed to be atomic with
+ * membership state.
  *
  * The audit-log insert is folded in only when `actorUserId` is set (the
  * interactive admin route always sets it; the unattended EC-window

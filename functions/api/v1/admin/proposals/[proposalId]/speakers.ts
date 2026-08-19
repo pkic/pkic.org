@@ -16,6 +16,7 @@ import { listProposalSpeakersWithStatus } from "../../../../../_lib/services/pro
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { first } from "../../../../../_lib/db/queries";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import { parseLinksJson } from "../../../../../../assets/shared/schemas/links";
 
 export async function onRequestGet(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
@@ -88,7 +89,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
       hasHeadshot: Boolean(s.headshot_r2_key),
       hasBio: Boolean(s.biography),
       biography: s.biography,
-      links: s.links_json ? JSON.parse(s.links_json) : [],
+      links: parseLinksJson(s.links_json),
       headshotUrl: s.headshot_r2_key
         ? (() => {
             const urlPath = s.headshot_r2_key.split("/").slice(1).join("/");

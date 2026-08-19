@@ -65,6 +65,10 @@ CREATE TABLE member_applications (
 CREATE INDEX idx_member_applications_email ON member_applications(applicant_email);
 CREATE INDEX idx_member_applications_domain_status ON member_applications(organization_domain, status);
 CREATE INDEX idx_member_applications_stage ON member_applications(stage);
+-- Supports the scheduled on-hold-reminder/EC-auto-approve due-work queries'
+-- ORDER BY stage_entered_at LIMIT ? (PR #1 review §9.1) with a direct index
+-- range scan instead of a full per-stage table scan.
+CREATE INDEX idx_member_applications_stage_entered_at ON member_applications(stage, stage_entered_at);
 
 CREATE TABLE member_application_events (
   id             TEXT NOT NULL PRIMARY KEY,
@@ -153,6 +157,10 @@ CREATE TABLE sponsorships (
 CREATE INDEX idx_sponsorships_stage ON sponsorships(pipeline_stage);
 CREATE INDEX idx_sponsorships_event ON sponsorships(event_id);
 CREATE INDEX idx_sponsorships_org ON sponsorships(organization_id);
+-- Supports the scheduled sponsorship renewal-reminder/auto-lapse due-work
+-- query's ORDER BY renewal_date LIMIT ? (PR #1 review §9.1) with a direct
+-- index range scan instead of an unbounded full-stage scan.
+CREATE INDEX idx_sponsorships_stage_renewal ON sponsorships(pipeline_stage, renewal_date);
 
 CREATE TABLE sponsorship_events (
   id             TEXT NOT NULL PRIMARY KEY,

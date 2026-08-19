@@ -118,11 +118,34 @@ describe("Membership scheduled jobs", () => {
     );
     expect(rows[0].stage).toBe("withdrawn");
 
-    const outbox = await queryAll(
+    const outbox = await queryAll<{ status: string }>(
       env.DB,
-      "SELECT id FROM email_outbox WHERE template_key = 'application-closed-no-response'",
+      "SELECT id, status FROM email_outbox WHERE template_key = 'application-closed-no-response'",
     );
     expect(outbox).toHaveLength(1);
+    // PR #1 review §9.1: the job enqueues only — it must not send
+    // synchronously per recipient. Delivery is the shared outbox
+    // processor's job (scheduled-due-work.ts's processPendingOutbox).
+    expect(outbox[0].status).toBe("queued");
+  });
+
+  it("PR #1 review §9.1: on-hold auto-close is bounded by a LIMIT instead of scanning every on_hold row", async () => {
+    await updateMembershipSettings(env.DB, { onHoldResponseDeadlineDays: 7 }, null);
+    for (let i = 0; i < 3; i++) {
+      await createApplication({
+        stage: "on_hold",
+        status: "on_hold",
+        on_hold_subtype: "request_information",
+        stage_entered_at: "datetime('now', '-8 days')",
+        applicant_email: `on-hold-${i}@example.test`,
+      });
+    }
+
+    const result = await runOnHoldReminders(env.DB, env as any, 2);
+    expect(result.autoClosed).toBe(2);
+
+    const stillOnHold = await queryAll(env.DB, "SELECT id FROM member_applications WHERE stage = 'on_hold'");
+    expect(stillOnHold).toHaveLength(1);
   });
 
   it("on-hold reminder fires within 3 days of the deadline, once", async () => {
@@ -181,6 +204,30 @@ describe("Membership scheduled jobs", () => {
       id,
     );
     expect(events[0].note).toBe("auto_approved_no_ec_objection");
+
+    // PR #1 review §9.1: enqueue-only — approveApplication's onboarding
+    // emails must not be sent synchronously inside this job's loop.
+    const outbox = await queryAll<{ status: string }>(env.DB, "SELECT status FROM email_outbox");
+    expect(outbox.length).toBeGreaterThan(0);
+    expect(outbox.every((row) => row.status === "queued")).toBe(true);
+  });
+
+  it("PR #1 review §9.1: EC-window auto-approve is bounded by a LIMIT instead of scanning every overdue application", async () => {
+    await updateMembershipSettings(env.DB, { ecReviewWindowDays: 7 }, null);
+    for (let i = 0; i < 3; i++) {
+      await createApplication({
+        stage: "ec_review",
+        status: "ec_review",
+        stage_entered_at: "datetime('now', '-8 days')",
+        applicant_email: `ec-overdue-${i}@example.test`,
+      });
+    }
+
+    const result = await runEcWindowAutoApprove(env.DB, env as any, 2);
+    expect(result.autoApproved).toBe(2);
+
+    const stillInReview = await queryAll(env.DB, "SELECT id FROM member_applications WHERE stage = 'ec_review'");
+    expect(stillInReview).toHaveLength(1);
   });
 
   it("EC-window auto-approve holds an overdue application with an EC decline for staff resolution", async () => {

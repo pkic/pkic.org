@@ -2,14 +2,17 @@
  * Voting due-work: opens scheduled votes, closes/
  * advances open votes past closes_at, and emails each forum vote's
  * eligible delegates (`forum-vote-delegate-notify`) on initial open and on
- * every round advance. Folded into the existing 15-minute due-work cron
- * (functions/router.ts) as a sibling call, same as
- * membership-scheduled-jobs.ts's runMembershipDueWork and
- * sponsorship-scheduled-jobs.ts's runSponsorshipDueWork — not woven into
- * scheduled-due-work.ts's own multi-pass budgeted loop, for the same "keep
- * this phase's additions isolated" reason documented there.
+ * every round advance. Dispatched as one job in the shared registry
+ * (scheduled-jobs/registry.ts) that functions/router.ts's REMINDER_CRON
+ * entrypoint runs alongside runScheduledDueWork, membership-scheduled-
+ * jobs.ts's runMembershipDueWork, and sponsorship-scheduled-jobs.ts's
+ * runSponsorshipDueWork — not woven into runScheduledDueWork's own
+ * multi-pass budgeted loop, for the same "keep this phase's additions
+ * isolated" reason documented there. closeDueVotes is already bounded by
+ * its own LIMIT, so no due-work-side change was needed for §9.1 here beyond
+ * the enqueue-only fix below.
  */
-import { queueEmail, processOutboxByIdBackground } from "../email/outbox";
+import { queueEmail } from "../email/outbox";
 import { closeDueVotes, resolveForumVoteDelegateRecipients } from "./votes";
 import type { DatabaseLike, Env } from "../types";
 
@@ -20,7 +23,7 @@ export interface VotesDueWorkResult {
   delegateNoticesQueued: number;
 }
 
-export async function runVotesDueWork(db: DatabaseLike, env: Env): Promise<VotesDueWorkResult> {
+export async function runVotesDueWork(db: DatabaseLike, _env: Env): Promise<VotesDueWorkResult> {
   const result = await closeDueVotes(db);
 
   let delegateNoticesQueued = 0;
@@ -29,7 +32,10 @@ export async function runVotesDueWork(db: DatabaseLike, env: Env): Promise<Votes
     if (!resolved) continue;
 
     for (const recipient of resolved.recipients) {
-      const outboxId = await queueEmail(db, {
+      // Enqueue only (PR #1 review §9.1) — no synchronous send per
+      // recipient; the shared bounded outbox processor (run earlier in the
+      // same registry pass by runScheduledDueWork) owns delivery/retry.
+      await queueEmail(db, {
         templateKey: "forum-vote-delegate-notify",
         recipientEmail: recipient.delegateEmail,
         messageType: "transactional",
@@ -42,7 +48,6 @@ export async function runVotesDueWork(db: DatabaseLike, env: Env): Promise<Votes
           voteUrl: `/portal/votes/${resolved.vote.id}`,
         },
       });
-      await processOutboxByIdBackground(db, env, outboxId);
       delegateNoticesQueued += 1;
     }
   }

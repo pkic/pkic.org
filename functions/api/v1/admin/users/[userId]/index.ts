@@ -13,6 +13,7 @@ import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { AppError } from "../../../../../_lib/errors";
 import { adminUserUpdateSchema } from "../../../../../../assets/shared/schemas/api";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import { parseLinksJson, serializeLinks } from "../../../../../../assets/shared/schemas/links";
 
 interface UserRow {
   id: string;
@@ -154,7 +155,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
       ...user,
       active: Boolean(user.active),
       isEcMember: Boolean(user.is_ec_member),
-      links: user.links_json ? JSON.parse(user.links_json) : [],
+      links: parseLinksJson(user.links_json),
       headshotUrl,
       membership,
     },
@@ -227,7 +228,7 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
   if (body.jobTitle !== undefined) piiUpdates.job_title = body.jobTitle || null;
   if (body.biography !== undefined) piiUpdates.biography = body.biography || null;
   if (body.links !== undefined)
-    piiUpdates.links_json = body.links && body.links.length > 0 ? JSON.stringify(body.links) : null;
+    piiUpdates.links_json = body.links && body.links.length > 0 ? serializeLinks(body.links) : null;
 
   const safeKeys = Object.keys(piiUpdates).filter((col) => ALLOWED_PII_COLUMNS.has(col));
   const hasPiiUpdates = safeKeys.length > 0;

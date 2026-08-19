@@ -37,7 +37,7 @@ interface SpeakerManageResponse {
     organizationName: string | null;
     jobTitle: string | null;
     biography: string | null;
-    links: Array<{ label?: string; url?: string } | string>;
+    links: string[];
     headshotUploaded: boolean;
     headshotUpdatedAt: string | null;
     headshotUrl: string | null;
@@ -50,11 +50,6 @@ interface TermsApiResponse {
 
 function normalizeLinks(raw: SpeakerManageResponse["profile"]["links"]): string[] {
   return raw
-    .map((entry) => {
-      if (typeof entry === "string") return entry;
-      if (entry && typeof entry === "object" && typeof entry.url === "string") return entry.url;
-      return "";
-    })
     .map((v) => v.trim())
     .filter(Boolean)
     .slice(0, 10);
@@ -284,7 +279,7 @@ async function main(): Promise<void> {
           organizationName: organizationField?.value.trim() || null,
           jobTitle: jobTitleField?.value.trim() || null,
           biography: bioField?.value.trim() || "",
-          links: (linksWidget?.getLinks() ?? []).map((url) => ({ label: url, url })),
+          links: linksWidget?.getLinks() ?? [],
         });
         setStatus(boot.statusEl, "Profile updated.");
         showProfileSavedState();

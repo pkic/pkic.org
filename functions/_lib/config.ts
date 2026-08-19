@@ -72,6 +72,16 @@ export function getConfig(env: Env, request?: Request) {
     scheduledDueWorkMaxPasses: parseIntOrDefault(env.SCHEDULED_DUE_WORK_MAX_PASSES, 50),
     scheduledDueWorkMaxMs: parseIntOrDefault(env.SCHEDULED_DUE_WORK_MAX_MS, 600_000),
     scheduledDueWorkMaxSubrequests: parseIntOrDefault(env.SCHEDULED_DUE_WORK_MAX_SUBREQUESTS, 9_000),
+    // Shared budget for the REMINDER_CRON job registry (functions/router.ts)
+    // that dispatches runScheduledDueWork + the sibling membership/
+    // sponsorship/votes due-work jobs — leaves headroom before the next
+    // 15-minute cron tick fires. Per-pass item limits below bound each
+    // individual job's own query so no single pass can scan an unbounded
+    // due-row set (PR #1 review §9.1).
+    reminderCronBudgetMs: parseIntOrDefault(env.REMINDER_CRON_BUDGET_MS, 780_000),
+    scheduledOnHoldReminderLimit: parseIntOrDefault(env.SCHEDULED_ON_HOLD_REMINDER_LIMIT, 100),
+    scheduledEcAutoApproveLimit: parseIntOrDefault(env.SCHEDULED_EC_AUTO_APPROVE_LIMIT, 100),
+    scheduledSponsorshipDueWorkLimit: parseIntOrDefault(env.SCHEDULED_SPONSORSHIP_DUE_WORK_LIMIT, 100),
     sendgridApiBase: env.SENDGRID_API_BASE ?? "https://api.sendgrid.com/v3/mail/send",
   };
 }

@@ -110,10 +110,17 @@ export async function runEcReviewBatch(db: DatabaseLike, env: Env): Promise<{ tr
 
 export async function runOnHoldReminders(
   db: DatabaseLike,
-  env: Env,
+  _env: Env,
+  limit = 100,
 ): Promise<{ remindersSent: number; autoClosed: number }> {
   const settings = await getMembershipSettings(db);
-  const onHold = await all<MemberApplicationRow>(db, `SELECT * FROM member_applications WHERE stage = 'on_hold'`);
+  // Indexed due predicate + stable ORDER BY + LIMIT (PR #1 review §9.1) —
+  // was an unbounded full-stage scan.
+  const onHold = await all<MemberApplicationRow>(
+    db,
+    `SELECT * FROM member_applications WHERE stage = 'on_hold' ORDER BY stage_entered_at ASC LIMIT ?`,
+    [limit],
+  );
   if (onHold.length === 0) {
     return { remindersSent: 0, autoClosed: 0 };
   }
@@ -132,7 +139,11 @@ export async function runOnHoldReminders(
         actorUserId: null,
         note: "Auto-closed — no response within the on-hold deadline",
       });
-      const outboxId = await queueEmail(
+      // Enqueue only — the shared bounded outbox processor (scheduled-due-work.ts's
+      // processPendingOutbox, run earlier in the same registry pass) owns
+      // delivery/retry, so this loop never sends synchronously per
+      // recipient (PR #1 review §9.1).
+      await queueEmail(
         db,
         buildApplicationClosedNoResponseEmail({
           recipientEmail: result.application.applicant_email,
@@ -140,7 +151,6 @@ export async function runOnHoldReminders(
           deadlineDays,
         }),
       );
-      await processOutboxByIdBackground(db, env, outboxId);
       autoClosed++;
       continue;
     }
@@ -160,7 +170,7 @@ export async function runOnHoldReminders(
       ON_HOLD_SUBTYPE_EMAIL_TEMPLATES[application.on_hold_subtype as keyof typeof ON_HOLD_SUBTYPE_EMAIL_TEMPLATES];
     if (!templateKey) continue;
 
-    const outboxId = await queueEmail(
+    await queueEmail(
       db,
       buildOnHoldReminderEmail({
         templateKey,
@@ -169,7 +179,6 @@ export async function runOnHoldReminders(
         deadlineDays,
       }),
     );
-    await processOutboxByIdBackground(db, env, outboxId);
 
     await run(
       db,
@@ -191,13 +200,16 @@ export async function runOnHoldReminders(
 export async function runEcWindowAutoApprove(
   db: DatabaseLike,
   env: Env,
+  limit = 100,
 ): Promise<{ autoApproved: number; heldForDecline: number }> {
   const settings = await getMembershipSettings(db);
   const cutoff = new Date(Date.now() - settings.ec_review_window_days * 86_400_000).toISOString();
+  // Indexed due predicate + stable ORDER BY + LIMIT (PR #1 review §9.1) —
+  // was an unbounded scan of every overdue application.
   const overdue = await all<MemberApplicationRow>(
     db,
-    `SELECT * FROM member_applications WHERE stage = 'ec_review' AND stage_entered_at <= ?`,
-    [cutoff],
+    `SELECT * FROM member_applications WHERE stage = 'ec_review' AND stage_entered_at <= ? ORDER BY stage_entered_at ASC LIMIT ?`,
+    [cutoff, limit],
   );
   if (overdue.length === 0) {
     return { autoApproved: 0, heldForDecline: 0 };
@@ -214,16 +226,16 @@ export async function runEcWindowAutoApprove(
     }
 
     const loginUrl = `${config.appBaseUrl}/portal/`;
-    const result = await approveApplication(db, {
+    // approveApplication already commits its outbox rows atomically inside
+    // its own db.batch() (P5-02) — enqueue only here, no per-recipient
+    // synchronous send loop (PR #1 review §9.1); the shared bounded outbox
+    // processor delivers them.
+    await approveApplication(db, {
       applicationId: application.id,
       actorUserId: null,
       eventNote: "auto_approved_no_ec_objection",
       loginUrl,
     });
-
-    for (const outboxId of result.outboxIds) {
-      await processOutboxByIdBackground(db, env, outboxId);
-    }
 
     autoApproved++;
   }
@@ -250,11 +262,8 @@ export async function runGoogleGroupsSyncPass(
 
     const memberName = [row.first_name, row.last_name].filter(Boolean).join(" ") || row.email;
 
-    const outboxId = await queueEmail(
-      db,
-      buildMailingListEnrolledEmail({ recipientEmail: row.email, memberName, lists: groupEmails }),
-    );
-    await processOutboxByIdBackground(db, env, outboxId);
+    // Enqueue only (PR #1 review §9.1) — no synchronous send per recipient.
+    await queueEmail(db, buildMailingListEnrolledEmail({ recipientEmail: row.email, memberName, lists: groupEmails }));
 
     // "Member joins a WG" trigger: attach that WG's active ICS
     // variants to a wg-calendar-invite email. groupEmails may include
@@ -265,7 +274,7 @@ export async function runGoogleGroupsSyncPass(
       const invite = await resolveWgJoinCalendarInviteByMailingListEmail(db, groupEmail);
       if (!invite) continue;
 
-      const calendarOutboxId = await queueEmail(
+      await queueEmail(
         db,
         buildWgCalendarInviteEmail({
           recipientEmail: row.email,
@@ -274,7 +283,6 @@ export async function runGoogleGroupsSyncPass(
           attachments: invite.attachments,
         }),
       );
-      await processOutboxByIdBackground(db, env, calendarOutboxId);
     }
   }
 
@@ -287,23 +295,27 @@ export async function runGoogleGroupsSyncPass(
 
 // ── Combined 15-minute due-work pass ──────────────────────────────────────
 //
-// Called as a sibling to runScheduledDueWork (scheduled-due-work.ts) from
-// the same REMINDER_CRON trigger, rather than woven into that function's
-// own multi-pass time/subrequest-budgeted loop — that loop's budgeting
-// logic is intricate and already covers a lot of surface area (registration
-// reminders, waitlist promotion, RSVP enforcement); adding membership work
-// as a second, independent top-level call keeps this phase's additions
-// isolated from that existing logic instead of risking it. See
-// functions/router.ts.
+// Dispatched as one job in the shared registry (scheduled-jobs/registry.ts)
+// that functions/router.ts's REMINDER_CRON entrypoint runs alongside
+// runScheduledDueWork (scheduled-due-work.ts) and the sponsorship/votes
+// due-work jobs — not woven into runScheduledDueWork's own multi-pass
+// time/subrequest-budgeted loop, since that loop's budgeting logic is
+// intricate and already covers a lot of surface area (registration
+// reminders, waitlist promotion, RSVP enforcement); each job here is
+// instead bounded by its own query LIMIT (PR #1 review §9.1).
 export interface MembershipDueWorkResult {
   onHoldReminders: Awaited<ReturnType<typeof runOnHoldReminders>>;
   ecAutoApprove: Awaited<ReturnType<typeof runEcWindowAutoApprove>>;
   googleGroupsSync: Awaited<ReturnType<typeof runGoogleGroupsSyncPass>>;
 }
 
-export async function runMembershipDueWork(db: DatabaseLike, env: Env): Promise<MembershipDueWorkResult> {
-  const onHoldReminders = await runOnHoldReminders(db, env);
-  const ecAutoApprove = await runEcWindowAutoApprove(db, env);
+export async function runMembershipDueWork(
+  db: DatabaseLike,
+  env: Env,
+  limits: { onHoldReminderLimit?: number; ecAutoApproveLimit?: number } = {},
+): Promise<MembershipDueWorkResult> {
+  const onHoldReminders = await runOnHoldReminders(db, env, limits.onHoldReminderLimit);
+  const ecAutoApprove = await runEcWindowAutoApprove(db, env, limits.ecAutoApproveLimit);
   const googleGroupsSync = await runGoogleGroupsSyncPass(db, env);
   return { onHoldReminders, ecAutoApprove, googleGroupsSync };
 }
