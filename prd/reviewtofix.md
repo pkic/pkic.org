@@ -1931,6 +1931,20 @@ Not applicable — no code changed this pass. Each future execution pass should 
 | --- | --- |
 | P12-01 | "A fresh `pnpm run check` is not self-contained because Worker tests require generated `public/` assets before the check script builds them." Plan: "either add a `public/`-generation step ahead of the test step inside `check` itself..., or make the Worker tests that depend on generated assets explicitly build what they need... a fresh checkout running only `pnpm install && pnpm run check` must succeed." |
 
+### Summary
+
+`P12-01` is complete and committed (`bbf6c905` on `migrate-to-rest-endpoints`). The task looked like a simple "add a `public/`-generation step" fix, but the real blocker to "a fresh `pnpm run check` must succeed" turned out to be much bigger.
+
+**Root cause found:** `pnpm run lint` was OOMing every single time (not just missing a build step). Bisecting confirmed it wasn't a code/config leak — `.claude/worktrees/` held 18 stale, fully-merged git worktrees totaling 34GB, leftover from prior background-agent runs that were never cleaned up. Since neither `.gitignore` nor ESLint's `ignores` excluded that path, `eslint .` was linting the codebase ~19× over in one process. Verified every worktree's branch was already merged into `HEAD`, confirmed the only uncommitted content was harmless (a stale submodule pointer, two scratch test files), removed all 18 via `git worktree remove`, and added `.venv/**` + `.claude/**` to ESLint's ignores as defense-in-depth.
+
+**Bonus find:** with lint finally completing, the full test suite ran to completion for the first time — surfacing a real, pre-existing 500 on `GET /api/v1/admin/email-templates/:key/versions` (chanfana's `data.params` came back empty for that one route; root cause not fully pinned to a specific chanfana internal, but fixed by reading the param via `c.req.param("key")`, the same pattern several other accepted routes already use). Also auto-fixed 17 real prettier-formatting violations that were invisible in every prior pass because lint always crashed first.
+
+**Final validation:** typecheck clean, lint 0 errors, `generate:public` succeeds, full test suite 1054+56+52 passed / 1 skipped / 0 failed, max-lines/filenames clean.
+
+**Left open, not in this task's scope:**
+- `lint:architecture` (dependency-cruiser) couldn't be validated locally — this machine only has Node 25.3.0 installed, and dependency-cruiser requires `^22||^24||>=26`. Added an `engines` field to `package.json` to surface this; didn't install a new Node version without checking first (`brew install node@22` would fix it).
+- `tests/e2e/admin-verification.spec.ts` has an uncommitted rewrite already sitting in the working tree from before this session (tracked separately as P12-02) — left as-is, not validated or committed by this pass.
+
 ### Baseline (before this pass)
 
 - Commit: `d0b8dc79` (branch `migrate-to-rest-endpoints`), 51 commits ahead of `origin/migrate-to-rest-endpoints`.
