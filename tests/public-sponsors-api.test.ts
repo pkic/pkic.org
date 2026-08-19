@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
+import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createContext } from "./helpers/context";
 import { handleError } from "../functions/_lib/http";
-import { onRequestGet as listSponsors } from "../functions/api/v1/sponsors/index";
 import { onRequestGet as getSponsorLogo } from "../functions/api/v1/sponsors/[id]/logo";
 
 async function callEndpoint(handler: (c: any) => Promise<Response>, ctx: any): Promise<Response> {
@@ -12,6 +12,13 @@ async function callEndpoint(handler: (c: any) => Promise<Response>, ctx: any): P
   } catch (error) {
     return handleError(error);
   }
+}
+
+// GET /api/v1/sponsors is validated by openApiRoute/chanfana (data.query),
+// so it must be exercised through the real router — not by calling its
+// onRequestGet handler directly, which would leave data.query unpopulated.
+async function callSponsorsList(url: string): Promise<Response> {
+  return app.fetch(new Request(url), env as any, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
 }
 
 function getRequest(url: string) {
@@ -86,14 +93,37 @@ describe("GET /api/v1/sponsors (public consortium + event sponsors)", () => {
     await seedOrganization({ id: crypto.randomUUID(), name: "Sponsoring Org", sponsorTier: "Diamond" });
     await seedOrganization({ id: crypto.randomUUID(), name: "Plain Member Org", sponsorTier: null });
 
-    const response = await callEndpoint(
-      listSponsors,
-      createContext(env, getRequest("https://pkic.org/api/v1/sponsors"), {}),
-    );
+    const response = await callSponsorsList("https://pkic.org/api/v1/sponsors");
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { sponsors: Array<{ name: string; tier: string | null }> };
+    const body = (await response.json()) as {
+      sponsors: Array<{ name: string; tier: string | null }>;
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
     expect(body.sponsors).toHaveLength(1);
     expect(body.sponsors[0]).toMatchObject({ name: "Sponsoring Org", tier: "Diamond" });
+    expect(body.page).toEqual({ limit: 200, offset: 0, total: 1, hasMore: false });
+  });
+
+  it("bounds the result set with ?limit=/?offset= instead of returning everything unbounded", async () => {
+    await seedOrganization({ id: crypto.randomUUID(), name: "Org Alpha", sponsorTier: "Gold" });
+    await seedOrganization({ id: crypto.randomUUID(), name: "Org Beta", sponsorTier: "Gold" });
+    await seedOrganization({ id: crypto.randomUUID(), name: "Org Gamma", sponsorTier: "Gold" });
+
+    const firstPage = await callSponsorsList("https://pkic.org/api/v1/sponsors?limit=2&offset=0");
+    const firstBody = (await firstPage.json()) as {
+      sponsors: Array<{ name: string }>;
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
+    expect(firstBody.sponsors).toHaveLength(2);
+    expect(firstBody.page).toEqual({ limit: 2, offset: 0, total: 3, hasMore: true });
+
+    const secondPage = await callSponsorsList("https://pkic.org/api/v1/sponsors?limit=2&offset=2");
+    const secondBody = (await secondPage.json()) as {
+      sponsors: Array<{ name: string }>;
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
+    expect(secondBody.sponsors).toHaveLength(1);
+    expect(secondBody.page).toEqual({ limit: 2, offset: 2, total: 3, hasMore: false });
   });
 
   it("includes active non-member consortium sponsorships but excludes non-active ones", async () => {
@@ -108,10 +138,7 @@ describe("GET /api/v1/sponsors (public consortium + event sponsors)", () => {
       pipelineStage: "lapsed",
     });
 
-    const response = await callEndpoint(
-      listSponsors,
-      createContext(env, getRequest("https://pkic.org/api/v1/sponsors"), {}),
-    );
+    const response = await callSponsorsList("https://pkic.org/api/v1/sponsors");
     const body = (await response.json()) as { sponsors: Array<{ name: string }> };
     expect(body.sponsors.map((s) => s.name)).toEqual(["Active Non-Member Sponsor"]);
   });
@@ -129,13 +156,8 @@ describe("GET /api/v1/sponsors (public consortium + event sponsors)", () => {
       .first<{ id: string }>();
     await seedEventSponsorship({ eventId: eventRow!.id, organizationId: orgId, tier: "Leader" });
 
-    const response = await callEndpoint(
-      listSponsors,
-      createContext(
-        env,
-        getRequest(`https://pkic.org/api/v1/sponsors?eventName=${encodeURIComponent(AUSTIN_EVENT_NAME)}`),
-        {},
-      ),
+    const response = await callSponsorsList(
+      `https://pkic.org/api/v1/sponsors?eventName=${encodeURIComponent(AUSTIN_EVENT_NAME)}`,
     );
     const body = (await response.json()) as {
       sponsors: Array<{ name: string; tier: string | null; eventTier: string | null }>;
@@ -161,13 +183,8 @@ describe("GET /api/v1/sponsors (public consortium + event sponsors)", () => {
       tier: "Ambassador",
     });
 
-    const response = await callEndpoint(
-      listSponsors,
-      createContext(
-        env,
-        getRequest(`https://pkic.org/api/v1/sponsors?eventName=${encodeURIComponent(AUSTIN_EVENT_NAME)}`),
-        {},
-      ),
+    const response = await callSponsorsList(
+      `https://pkic.org/api/v1/sponsors?eventName=${encodeURIComponent(AUSTIN_EVENT_NAME)}`,
     );
     const body = (await response.json()) as {
       sponsors: Array<{ name: string; tier: string | null; eventTier: string | null; website: string | null }>;
@@ -193,13 +210,8 @@ describe("GET /api/v1/sponsors (public consortium + event sponsors)", () => {
       pipelineStage: "lapsed",
     });
 
-    const response = await callEndpoint(
-      listSponsors,
-      createContext(
-        env,
-        getRequest(`https://pkic.org/api/v1/sponsors?eventName=${encodeURIComponent(AUSTIN_EVENT_NAME)}`),
-        {},
-      ),
+    const response = await callSponsorsList(
+      `https://pkic.org/api/v1/sponsors?eventName=${encodeURIComponent(AUSTIN_EVENT_NAME)}`,
     );
     const body = (await response.json()) as { sponsors: unknown[] };
     expect(body.sponsors).toHaveLength(0);
@@ -208,10 +220,7 @@ describe("GET /api/v1/sponsors (public consortium + event sponsors)", () => {
   it("falls back to the consortium-only list for an unrecognized eventName", async () => {
     await seedOrganization({ id: crypto.randomUUID(), name: "Consortium Only Sponsor", sponsorTier: "Silver" });
 
-    const response = await callEndpoint(
-      listSponsors,
-      createContext(env, getRequest("https://pkic.org/api/v1/sponsors?eventName=Some+Unmapped+Event"), {}),
-    );
+    const response = await callSponsorsList("https://pkic.org/api/v1/sponsors?eventName=Some+Unmapped+Event");
     expect(response.status).toBe(200);
     const body = (await response.json()) as { sponsors: Array<{ name: string }> };
     expect(body.sponsors.map((s) => s.name)).toEqual(["Consortium Only Sponsor"]);
@@ -224,10 +233,7 @@ describe("GET /api/v1/sponsors (public consortium + event sponsors)", () => {
       .bind("org-logos/logo-org/logo.png", orgId)
       .run();
 
-    const response = await callEndpoint(
-      listSponsors,
-      createContext(env, getRequest("https://pkic.org/api/v1/sponsors"), {}),
-    );
+    const response = await callSponsorsList("https://pkic.org/api/v1/sponsors");
     const body = (await response.json()) as { sponsors: Array<{ logoUrl: string | null }> };
     expect(body.sponsors[0].logoUrl).toBe(`/api/v1/members/${orgId}/logo`);
   });
