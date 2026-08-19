@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "preact/hooks";
 import { api } from "../../api";
 import { toast } from "../../ui";
 import type { AdminApplicationDetail, AdminWorkingGroupSummary } from "../../types";
+import type { EcDecisionValue } from "../../../../shared/schemas/ec-review";
 
 /**
  * Data + mutation commands for one application's detail view: transition,
@@ -83,11 +84,7 @@ export function useApplicationDetail(applicationId: string) {
     }
   }
 
-  async function recordEcDecision(params: {
-    ecMemberUserId: string;
-    decision: "approve" | "decline";
-    reason?: string;
-  }) {
+  async function recordEcDecision(params: { ecMemberUserId: string; decision: EcDecisionValue; reason?: string }) {
     try {
       await api(`/api/v1/admin/applications/${applicationId}/ec-decisions`, {
         method: "POST",

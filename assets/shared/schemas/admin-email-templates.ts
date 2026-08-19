@@ -1,6 +1,10 @@
 import { z } from "zod";
-import { emailTemplateKeyParamsSchema } from "./api";
+import { emailTemplateKeyParamsSchema, emailContentTypeSchema, emailMessageTypeSchema } from "./api";
+import type { EmailContentType, EmailMessageType } from "./api";
 import { paginationQuerySchema, paginatedResponseSchema, sortColumnSchema } from "./pagination";
+
+export { emailContentTypeSchema, emailMessageTypeSchema };
+export type { EmailContentType, EmailMessageType };
 
 /**
  * Allowlisted sort columns for GET /api/v1/admin/email-templates — see
@@ -11,14 +15,6 @@ import { paginationQuerySchema, paginatedResponseSchema, sortColumnSchema } from
 export const ADMIN_EMAIL_TEMPLATES_SORT_COLUMNS = ["template_key", "active_version", "version_count"] as const;
 
 export const emailTemplatesSortValueSchema = sortColumnSchema(ADMIN_EMAIL_TEMPLATES_SORT_COLUMNS);
-
-/** Body format of a rendered email template/message. Canonical vocabulary — see AGENTS.md DRY policy. */
-export const emailContentTypeSchema = z.enum(["markdown", "html", "text"]);
-export type EmailContentType = z.infer<typeof emailContentTypeSchema>;
-
-/** Delivery classification used for outbox rows and templates. Canonical vocabulary — see AGENTS.md DRY policy. */
-export const emailMessageTypeSchema = z.enum(["transactional", "promotional"]);
-export type EmailMessageType = z.infer<typeof emailMessageTypeSchema>;
 
 // ── Template list ────────────────────────────────────────────────────────
 

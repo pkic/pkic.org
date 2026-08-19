@@ -6,6 +6,7 @@ import { z } from "zod";
 import { normalizedEmailSchema } from "./api";
 import { membershipCategorySchema, applicationStageSchema, onHoldSubtypeSchema } from "./member-applications";
 import { paginationQuerySchema, paginatedResponseSchema, sortColumnSchema } from "./pagination";
+import { ecDecisionValueSchema } from "./ec-review";
 
 /** Allowlisted sort columns for GET /api/v1/admin/applications — see listAdminApplications. */
 export const ADMIN_APPLICATIONS_SORT_COLUMNS = [
@@ -127,7 +128,7 @@ export const applicationNoteCreateRouteSchema = {
 export const adminEcDecisionCreateSchema = z
   .object({
     ecMemberUserId: z.uuid(),
-    decision: z.enum(["approve", "decline"]),
+    decision: ecDecisionValueSchema,
     reason: z.string().trim().min(1).max(2000).optional(),
   })
   .superRefine((value, ctx) => {

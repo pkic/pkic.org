@@ -1,8 +1,11 @@
 import { z } from "zod";
 
+export const ecDecisionValueSchema = z.enum(["approve", "decline"]);
+export type EcDecisionValue = z.infer<typeof ecDecisionValueSchema>;
+
 export const ecDecisionCreateSchema = z
   .object({
-    decision: z.enum(["approve", "decline"]),
+    decision: ecDecisionValueSchema,
     reason: z.string().trim().min(1).max(2000).optional(),
   })
   .superRefine((value, ctx) => {
@@ -14,7 +17,7 @@ export const ecDecisionCreateSchema = z
 export const ecDecisionResponseSchema = z.object({
   id: z.string(),
   applicationId: z.string(),
-  decision: z.enum(["approve", "decline"]),
+  decision: ecDecisionValueSchema,
   reason: z.string().nullable(),
   createdAt: z.string(),
 });

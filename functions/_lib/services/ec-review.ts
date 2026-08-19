@@ -12,8 +12,9 @@ import { nowIso } from "../utils/time";
 import { AppError } from "../errors";
 import { getMemberApplicationById } from "./membership/applications/queries";
 import type { DatabaseLike } from "../types";
+import type { EcDecisionValue } from "../../../assets/shared/schemas/ec-review";
 
-export type EcDecisionValue = "approve" | "decline";
+export type { EcDecisionValue };
 
 export interface EcDecisionRow {
   id: string;

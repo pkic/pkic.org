@@ -1,6 +1,7 @@
 import { SPONSORSHIP_PIPELINE_STAGES, type SponsorshipPipelineStage } from "../../shared/schemas/admin-sponsorships";
 import { MAILING_LIST_TYPES } from "../../shared/schemas/admin-mailing-lists";
 import type { EmailContentType, EmailMessageType } from "../../shared/schemas/admin-email-templates";
+import type { EcDecisionValue } from "../../shared/schemas/ec-review";
 
 export { SPONSORSHIP_PIPELINE_STAGES };
 export type { SponsorshipPipelineStage };
@@ -909,7 +910,7 @@ export interface AdminApplicationEcDecision {
   id: string;
   application_id: string;
   ec_member_user_id: string;
-  decision: "approve" | "decline";
+  decision: EcDecisionValue;
   reason: string | null;
   created_at: string;
 }
