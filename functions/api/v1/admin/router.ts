@@ -14,7 +14,6 @@ import { primaryFirstDb, readReplicaDb } from "../../../_lib/db/session";
 import type { DatabaseSessionLike } from "../../../_lib/db/session";
 import { inferredScopesForOperation } from "../../../_lib/openapi/mcp";
 import { onRequestGet as AdminAuditLogGet_l } from "./audit-log";
-import { onRequestGet as AdminDonationsGet_l } from "./donations";
 import { EmailTemplatesList } from "./email-templates";
 import { onRequestGet as AdminEventsGet_l } from "./events";
 import { onRequestPost as AdminEventsPost_l } from "./events";
@@ -190,7 +189,6 @@ async function useRequestScopedD1Session(c: Context<RequestDbContext>, next: Nex
 
 app.use("*", useRequestScopedD1Session);
 
-app.get("/donations", AdminDonationsGet_l);
 app.get("/audit-log", AdminAuditLogGet_l);
 openapi.get("/email-templates", EmailTemplatesList);
 app.get("/events", AdminEventsGet_l);
