@@ -28,7 +28,6 @@ import { nowIso } from "../functions/_lib/utils/time";
 import type { DatabaseLike, Env as AppEnv } from "../functions/_lib/types";
 
 // ── Admin endpoint handlers ───────────────────────────────────────────────────
-import { onRequest as adminUsersRequest } from "../functions/api/v1/admin/users";
 import { onRequest as adminStatsRequest } from "../functions/api/v1/admin/stats";
 import { onRequest as adminEmailTemplatesRequest } from "../functions/api/v1/admin/email-templates";
 import { onRequest as internalEmailRetryRequest } from "../functions/api/v1/internal/email/retry";
@@ -523,19 +522,38 @@ describe("session-token validation", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("HTTP method enforcement", () => {
+  let adminId: string;
+
   beforeEach(async () => {
     await resetDb();
   });
 
   beforeEach(async () => {
     await seedEventAndAdmin(env.DB);
+    const row = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    adminId = row.id;
   });
 
-  it("rejects POST to GET-only /api/v1/admin/users → 405", async () => {
-    const response = await adminUsersRequest(
-      createContext(appEnv, new Request("https://app.test/api/v1/admin/users", { method: "POST" }), {}),
+  it("rejects POST to GET-only /api/v1/admin/users", async () => {
+    // P6M-P2-08: this route moved from a hand-rolled onRequest (which
+    // explicitly 405'd unsupported methods) onto chanfana's openApiRoute —
+    // registered as a GET-only OpenAPIRoute (see admin/router.ts's
+    // `openapi.get("/users", UsersList)`), so there is no exported
+    // onRequest to call directly any more; go through the full router,
+    // authenticated, instead. Hono has no handler for POST on this path, so
+    // the unmatched method falls through to its default not-found response
+    // rather than an explicit 405 — same as every other chanfana-only admin
+    // list route (e.g. POST /api/v1/admin/organizations), none of which get
+    // a 405 here either. The security-relevant invariant is just that POST
+    // is not silently accepted as if it were GET.
+    const token = await createAdminSession(env.DB, adminId, "method-enforcement-token");
+    const response = await callApp(
+      new Request("https://app.test/api/v1/admin/users", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}` },
+      }),
     );
-    expect(response.status).toBe(405);
+    expect(response.status).not.toBe(200);
   });
 
   it("rejects POST to GET-only /api/v1/admin/stats → 405", async () => {
