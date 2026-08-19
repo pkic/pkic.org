@@ -3,6 +3,7 @@ import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { first, all } from "../../../../../_lib/db/queries";
 import type { DatabaseLike } from "../../../../../_lib/types";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import { paginationQuerySchema, buildPageInfo } from "../../../../../../assets/shared/schemas/pagination";
 
 interface AuditLogRow {
   id: string;
@@ -16,7 +17,29 @@ interface AuditLogRow {
   created_at: string;
 }
 
-async function fetchAuditLog(db: DatabaseLike, proposalId: string): Promise<AuditLogRow[]> {
+const AUDIT_LOG_WHERE = `(al.entity_type = 'proposal' AND al.entity_id = ?)
+        OR (al.entity_type = 'proposal_review' AND pr.proposal_id = ?)
+        OR (al.entity_type = 'proposal_speaker' AND ps.proposal_id = ?)`;
+
+async function countAuditLog(db: DatabaseLike, proposalId: string): Promise<number> {
+  const row = await first<{ total: number }>(
+    db,
+    `SELECT COUNT(*) AS total
+     FROM audit_log al
+     LEFT JOIN proposal_reviews pr ON al.entity_type = 'proposal_review' AND pr.id = al.entity_id
+     LEFT JOIN proposal_speakers ps ON al.entity_type = 'proposal_speaker' AND ps.id = al.entity_id
+     WHERE ${AUDIT_LOG_WHERE}`,
+    [proposalId, proposalId, proposalId],
+  );
+  return row?.total ?? 0;
+}
+
+async function fetchAuditLog(
+  db: DatabaseLike,
+  proposalId: string,
+  limit: number,
+  offset: number,
+): Promise<AuditLogRow[]> {
   return all<AuditLogRow>(
     db,
     `SELECT
@@ -33,12 +56,10 @@ async function fetchAuditLog(db: DatabaseLike, proposalId: string): Promise<Audi
      LEFT JOIN users u ON al.actor_type = 'admin' AND u.id = al.actor_id
      LEFT JOIN proposal_reviews pr ON al.entity_type = 'proposal_review' AND pr.id = al.entity_id
      LEFT JOIN proposal_speakers ps ON al.entity_type = 'proposal_speaker' AND ps.id = al.entity_id
-     WHERE (al.entity_type = 'proposal' AND al.entity_id = ?)
-        OR (al.entity_type = 'proposal_review' AND pr.proposal_id = ?)
-        OR (al.entity_type = 'proposal_speaker' AND ps.proposal_id = ?)
+     WHERE ${AUDIT_LOG_WHERE}
      ORDER BY al.created_at DESC
-     LIMIT 200`,
-    [proposalId, proposalId, proposalId],
+     LIMIT ? OFFSET ?`,
+    [proposalId, proposalId, proposalId, limit, offset],
   );
 }
 
@@ -53,7 +74,14 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     return json({ error: { code: "PROPOSAL_NOT_FOUND", message: "Proposal not found" } }, 404);
   }
 
-  const entries = await fetchAuditLog(requestDb(c), proposalId);
+  const query = paginationQuerySchema.parse(Object.fromEntries(new URL(c.req.raw.url).searchParams));
+  const limit = query.limit ?? 50;
+  const offset = query.offset ?? 0;
+
+  const [entries, total] = await Promise.all([
+    fetchAuditLog(requestDb(c), proposalId, limit, offset),
+    countAuditLog(requestDb(c), proposalId),
+  ]);
 
   const parsed = entries.map((e) => ({
     ...e,
@@ -69,5 +97,5 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     details_json: undefined,
   }));
 
-  return json({ auditLog: parsed });
+  return json({ auditLog: parsed, page: buildPageInfo(limit, offset, total, parsed.length) });
 }
