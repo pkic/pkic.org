@@ -93,6 +93,51 @@ export async function listPendingGoogleGroupsSync(db: DatabaseLike, limit = 50):
   );
 }
 
+/**
+ * Atomically claims up to `limit` pending rows: a compare-and-set `UPDATE
+ * ... WHERE status = 'pending' ...` per candidate, checked via
+ * `result.changes`, not a bare `SELECT` — PR #1 review Phase 9 remediation
+ * pass, open question 4. Two overlapping invocations of
+ * processGoogleGroupsSyncQueue (it runs off the shared 15-minute due-work
+ * cron, so overlap is possible) previously both `SELECT`ed the same
+ * still-`pending` rows and could both process (and double-call the
+ * Directory API for) the same row before either flipped its status.
+ *
+ * Follows the same "UPDATE with a status guard, check `changes` to see who
+ * won" idiom already used for the event-day waitlist offer claim
+ * (registrations/day-waitlist.ts) rather than inventing a new
+ * claim-queue pattern: whichever caller's UPDATE lands first in D1 wins the
+ * row (flips it to 'processing'); the other's UPDATE matches zero rows and
+ * is silently skipped. No schema change needed — 'processing' is already a
+ * documented status value on this table (migrations/0041_membership_workflow.sql),
+ * it was just never written.
+ */
+export async function claimPendingGoogleGroupsSyncRows(
+  db: DatabaseLike,
+  limit = 50,
+): Promise<GoogleGroupsSyncQueueRow[]> {
+  const candidates = await listPendingGoogleGroupsSync(db, limit);
+  if (candidates.length === 0) {
+    return [];
+  }
+
+  const now = nowIso();
+  const claimed: GoogleGroupsSyncQueueRow[] = [];
+  for (const candidate of candidates) {
+    const result = await run(
+      db,
+      `UPDATE google_groups_sync_queue
+       SET status = 'processing'
+       WHERE id = ? AND status = 'pending' AND (next_attempt_at IS NULL OR next_attempt_at <= ?)`,
+      [candidate.id, now],
+    );
+    if (result.changes === 1) {
+      claimed.push({ ...candidate, status: "processing" });
+    }
+  }
+  return claimed;
+}
+
 // ── Service-account JWT + Directory API REST client ──────────────────────
 
 function base64UrlFromBytes(bytes: Uint8Array): string {
@@ -231,8 +276,8 @@ export async function processGoogleGroupsSyncQueue(
     return { processed: 0, succeeded: 0, failed: 0, skippedUnconfigured: true, completedAddsByUser: {} };
   }
 
-  const rows = await listPendingGoogleGroupsSync(db, limit);
-  if (rows.length === 0) {
+  const pendingCandidates = await listPendingGoogleGroupsSync(db, limit);
+  if (pendingCandidates.length === 0) {
     return { processed: 0, succeeded: 0, failed: 0, skippedUnconfigured: false, completedAddsByUser: {} };
   }
 
@@ -241,6 +286,17 @@ export async function processGoogleGroupsSyncQueue(
     accessToken = await getServiceAccountAccessToken(env);
   } catch (err) {
     logError("google_groups_sync_auth_failed", { error: err instanceof Error ? err.message : String(err) });
+    // Nothing was claimed yet on this path, so the candidate rows are
+    // untouched and still 'pending' — safe to just return.
+    return { processed: 0, succeeded: 0, failed: 0, skippedUnconfigured: false, completedAddsByUser: {} };
+  }
+
+  // Claim atomically only once we know we can actually act on the rows —
+  // a concurrent invocation may have already claimed some (or all) of the
+  // candidates we just peeked at; `rows` here is only what *this*
+  // invocation actually won.
+  const rows = await claimPendingGoogleGroupsSyncRows(db, limit);
+  if (rows.length === 0) {
     return { processed: 0, succeeded: 0, failed: 0, skippedUnconfigured: false, completedAddsByUser: {} };
   }
 
