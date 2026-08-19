@@ -61,7 +61,8 @@ interface ExistingPermRow {
 const adminEventTeamListRouteSchema = {
   tags: ["Admin events"],
   summary: "List event-level roles (admin)",
-  description: "Paginated, optionally sorted list of event-team role grants (organizer/program_committee/moderator/volunteer).",
+  description:
+    "Paginated, optionally sorted list of event-team role grants (organizer/program_committee/moderator/volunteer).",
   request: { params: eventSlugParamsSchema, query: adminEventTeamListQuerySchema },
   responses: {
     "200": { description: "Event-team permissions list." },
@@ -170,4 +171,3 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     201,
   );
 }
-

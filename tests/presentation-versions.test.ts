@@ -23,7 +23,10 @@ import {
   createPresentationVersion,
   presentationDownloadResponse,
 } from "../functions/_lib/services/presentation-versions";
-import { getPresentationUploader, recordPresentationUpload } from "../functions/_lib/services/proposals-speaker-profile";
+import {
+  getPresentationUploader,
+  recordPresentationUpload,
+} from "../functions/_lib/services/proposals-speaker-profile";
 import app from "../functions/router";
 import {
   MAX_PRESENTATION_BYTES,

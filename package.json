@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.5.1+sha512.93f7b57422ea7068257235b4c16eb60762eb68e1dc23723199cc739043ea9be2c4143274a399d8c6defa2b1176226d9ca1c4b63482d6200c1a8fbaa78c1d1485",
+  "engines": {
+    "node": "^22 || ^24 || >=26"
+  },
   "scripts": {
     "dev": "CLOUDFLARE_ENV=local vite dev --host 0.0.0.0 --port 8788",
     "dev:hugo": "hugo serve",
@@ -26,12 +29,13 @@
     "test:watch": "vitest",
     "check:max-lines": "node scripts/check-max-lines.mjs",
     "check:filenames": "node scripts/check-filename-collisions.mjs",
+    "generate:public": "node scripts/build-frontend.mjs --dev && hugo -e development --cleanDestinationDir",
     "lint": "eslint . --max-warnings 0",
     "lint:architecture": "depcruise functions assets/shared assets/ts assets/js scripts static/scripts --config .dependency-cruiser.cjs",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier --write \"functions/**/*.ts\" \"assets/ts/**/*.{ts,tsx}\" \"assets/shared/**/*.ts\" \"tests/**/*.ts\"",
     "format:check": "prettier --check \"functions/**/*.ts\" \"assets/ts/**/*.{ts,tsx}\" \"assets/shared/**/*.ts\" \"tests/**/*.ts\"",
-    "check": "pnpm run typecheck && pnpm run lint && pnpm run lint:architecture && pnpm run format:check && pnpm run test && pnpm run check:max-lines && pnpm run check:filenames",
+    "check": "pnpm run typecheck && pnpm run lint && pnpm run lint:architecture && pnpm run format:check && pnpm run generate:public && pnpm run test && pnpm run check:max-lines && pnpm run check:filenames",
     "migrate:local": "pnpm exec wrangler d1 migrations apply DB --env local --local",
     "migrate:preview": "pnpm exec wrangler d1 migrations apply DB --env preview --remote",
     "migrate:production": "pnpm exec wrangler d1 migrations apply DB --env production --remote",

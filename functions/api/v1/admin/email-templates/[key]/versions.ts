@@ -14,7 +14,7 @@ export const EmailTemplateVersionsList = openApiRoute(
   async (c: AdminContext, data) => {
     await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-    const { key } = data.params;
+    const key = c.req.param("key");
     const { limit = 50, offset = 0 } = data.query;
 
     const [versions, totalRow] = await Promise.all([

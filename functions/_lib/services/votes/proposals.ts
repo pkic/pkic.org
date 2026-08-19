@@ -478,7 +478,9 @@ async function insertEndorsementAndMaybeConvert(
   minEndorsersRequired: number,
 ): Promise<VoteSummary | null> {
   const endorsementInsert = db
-    .prepare(`INSERT INTO vote_proposal_endorsements (id, proposal_id, endorser_user_id, endorsed_at) VALUES (?, ?, ?, ?)`)
+    .prepare(
+      `INSERT INTO vote_proposal_endorsements (id, proposal_id, endorser_user_id, endorsed_at) VALUES (?, ?, ?, ?)`,
+    )
     .bind(uuid(), proposal.id, endorserUserId, nowIso());
 
   const fields = await buildConversionFields(db, proposal);

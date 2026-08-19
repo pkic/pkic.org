@@ -23,7 +23,11 @@ function request(token: string, path: string, init: RequestInit = {}): Request {
 }
 
 async function call(token: string, path: string, init: RequestInit = {}): Promise<Response> {
-  return app.fetch(request(token, path, init), env as any, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
+  return app.fetch(
+    request(token, path, init),
+    env as any,
+    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+  );
 }
 
 async function insertDonation(opts: {

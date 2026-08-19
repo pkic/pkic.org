@@ -36,11 +36,9 @@ export async function createAdminSession(
     .bind(sessionId, adminUserId, tokenHash, expiresAt, now)
     .run();
 
-  const userRow = await first<{ email: string; role: string }>(
-    db,
-    "SELECT email, role FROM users WHERE id = ?",
-    [adminUserId],
-  );
+  const userRow = await first<{ email: string; role: string }>(db, "SELECT email, role FROM users WHERE id = ?", [
+    adminUserId,
+  ]);
   const role = userRow?.role ?? "admin";
   const email = userRow?.email ?? "admin@example.test";
 

@@ -105,7 +105,13 @@ describe("GET /api/v1/admin/audit-log", () => {
   });
 
   it("filters by actorType", async () => {
-    await insertAuditLogRow({ actorType: "admin", actorId: adminUserId, action: "a1", entityType: "event", secondsAgo: 10 });
+    await insertAuditLogRow({
+      actorType: "admin",
+      actorId: adminUserId,
+      action: "a1",
+      entityType: "event",
+      secondsAgo: 10,
+    });
     await insertAuditLogRow({ actorType: "system", action: "a2", entityType: "event", secondsAgo: 5 });
 
     const response = await callAppGet("/api/v1/admin/audit-log?actorType=system", adminToken);
@@ -115,8 +121,18 @@ describe("GET /api/v1/admin/audit-log", () => {
   });
 
   it("filters by exact action", async () => {
-    await insertAuditLogRow({ actorType: "system", action: "force_status", entityType: "registration", secondsAgo: 10 });
-    await insertAuditLogRow({ actorType: "system", action: "force_status_extra", entityType: "registration", secondsAgo: 5 });
+    await insertAuditLogRow({
+      actorType: "system",
+      action: "force_status",
+      entityType: "registration",
+      secondsAgo: 10,
+    });
+    await insertAuditLogRow({
+      actorType: "system",
+      action: "force_status_extra",
+      entityType: "registration",
+      secondsAgo: 5,
+    });
 
     const response = await callAppGet("/api/v1/admin/audit-log?action=force_status", adminToken);
     const body = (await response.json()) as AuditLogListResponse;
@@ -126,7 +142,13 @@ describe("GET /api/v1/admin/audit-log", () => {
 
   it("filters by exact entityId", async () => {
     const targetId = crypto.randomUUID();
-    await insertAuditLogRow({ actorType: "system", action: "a1", entityType: "registration", entityId: targetId, secondsAgo: 10 });
+    await insertAuditLogRow({
+      actorType: "system",
+      action: "a1",
+      entityType: "registration",
+      entityId: targetId,
+      secondsAgo: 10,
+    });
     await insertAuditLogRow({
       actorType: "system",
       action: "a2",

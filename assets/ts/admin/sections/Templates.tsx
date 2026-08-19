@@ -286,9 +286,7 @@ function TemplateEditor({
                     <select
                       class="form-select form-select-sm"
                       value={contentType}
-                      onChange={(e) =>
-                        setContentType((e.target as HTMLSelectElement).value as EmailContentType)
-                      }
+                      onChange={(e) => setContentType((e.target as HTMLSelectElement).value as EmailContentType)}
                     >
                       <option value="markdown">Markdown</option>
                       <option value="html">HTML</option>

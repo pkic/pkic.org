@@ -460,14 +460,14 @@ export async function listFormSubmissions(
     first<{ total: number }>(db, `${cte} SELECT COUNT(*) AS total FROM merged`, args),
     // See file header — bounded stand-in for a true full-population scan.
     params.limit === 0
-      ? all<MergedSubmissionRow>(db, `${cte} SELECT * FROM merged ${orderBy} LIMIT ?`, [
-          ...args,
-          STATS_SCAN_ROW_LIMIT,
-        ])
+      ? all<MergedSubmissionRow>(db, `${cte} SELECT * FROM merged ${orderBy} LIMIT ?`, [...args, STATS_SCAN_ROW_LIMIT])
       : Promise.resolve([]),
   ]);
 
-  const [submissions, statsSubmissions] = await Promise.all([attachAnswers(db, pageRows), attachAnswers(db, statsRows)]);
+  const [submissions, statsSubmissions] = await Promise.all([
+    attachAnswers(db, pageRows),
+    attachAnswers(db, statsRows),
+  ]);
 
   return {
     form: { id: form.id, key: form.key, title: form.title, purpose: form.purpose },

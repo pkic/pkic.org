@@ -22,7 +22,10 @@ async function call(token: string, path: string): Promise<Response> {
   );
 }
 
-async function insertInvite(eventId: string, opts: { email: string; status?: string; createdAt: string }): Promise<void> {
+async function insertInvite(
+  eventId: string,
+  opts: { email: string; status?: string; createdAt: string },
+): Promise<void> {
   await env.DB.prepare(
     `INSERT INTO invites
        (id, event_id, invitee_email, invite_type, link_secret, status, source_type, created_at)

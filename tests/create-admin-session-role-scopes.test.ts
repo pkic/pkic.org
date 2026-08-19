@@ -52,7 +52,10 @@ describe("createAdminSession signs role-accurate scopes (P4-R01)", () => {
 
   it("grants full legacy AUTH_SCOPES for a real role='admin' user", async () => {
     const { eventId: _eventId } = await seedEventAndAdmin(env.DB);
-    const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1");
+    const [admin] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1",
+    );
     const token = await createAdminSession(env.DB, admin.id, "p4r01-admin-token");
 
     // /api/v1/admin/donations is legacy-scope-gated (requires admin:read).
