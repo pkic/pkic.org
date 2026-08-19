@@ -45,7 +45,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     parsed,
   );
 
-  await recordPresentationUpload(requestDb(c), proposalId, r2Key, admin.id, {
+  await recordPresentationUpload(requestDb(c), bucket, proposalId, r2Key, admin.id, {
     fileName: parsed.name ?? null,
     fileSize: parsed.size,
     mimeType: parsed.type,

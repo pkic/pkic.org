@@ -1,5 +1,6 @@
 import { SPONSORSHIP_PIPELINE_STAGES, type SponsorshipPipelineStage } from "../../shared/schemas/admin-sponsorships";
 import { MAILING_LIST_TYPES } from "../../shared/schemas/admin-mailing-lists";
+import type { EmailContentType, EmailMessageType } from "../../shared/schemas/admin-email-templates";
 
 export { SPONSORSHIP_PIPELINE_STAGES };
 export type { SponsorshipPipelineStage };
@@ -376,7 +377,7 @@ export interface AdminEmailOutboxRow {
   recipientEmail: string;
   recipientName: string | null;
   subject: string;
-  messageType: "transactional" | "promotional";
+  messageType: EmailMessageType;
   provider: string;
   providerMessageId: string | null;
   status: "queued" | "sending" | "sent" | "failed" | "retrying";
@@ -575,8 +576,8 @@ export interface EmailTemplateVersion {
   version: number;
   subject_template: string | null;
   body: string | null;
-  content_type: string;
-  message_type: "transactional" | "promotional";
+  content_type: EmailContentType;
+  message_type: EmailMessageType;
   r2_object_key: string | null;
   checksum_sha256: string;
   status: "draft" | "active";

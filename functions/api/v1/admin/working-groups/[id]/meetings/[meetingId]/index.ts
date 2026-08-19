@@ -46,14 +46,10 @@ export const WgMeetingDelete = openApiRoute(wgMeetingDeleteRouteSchema, async (c
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
 
   const meetingId = data.params.meetingId;
-  const { deletedIcsFileR2Keys } = await deleteMeetingSeries(db, meetingId, {
+  await deleteMeetingSeries(db, c.env.ASSETS_BUCKET, meetingId, {
     scopeType: "working_group",
     workingGroupId: wg.id,
   });
-  const bucket = c.env.ASSETS_BUCKET;
-  if (bucket) {
-    await Promise.allSettled(deletedIcsFileR2Keys.map((key) => bucket.delete(key)));
-  }
   await writeAuditLog(db, "admin", admin.id, "meeting_series_deleted", "meeting_series", meetingId, {
     scopeType: "working_group",
     workingGroupId: wg.id,

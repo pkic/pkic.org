@@ -9,6 +9,7 @@ import { bootstrap, setStatus } from "./boot";
 import { readField, setField, formatStatusLabel, statusBadgeClass, q, findSubmitButton } from "../shared/form/helpers";
 import { AdminHeadshotManager } from "../shared/headshot/AdminHeadshotManager";
 import { ProfileLinksInput, type ProfileLinksHandle } from "../components/ProfileLinksInput";
+import { normalizeProfileLinks } from "../shared/widgets/profile-links";
 import { showManageLinkRecoveryForm } from "../shared/widgets/link-recovery";
 
 function tokenFromRoot(root: HTMLElement, fallback: string | null): string | null {
@@ -35,13 +36,6 @@ function showResendProposalManageLinkForm(
       "If the details match an active proposal, you will receive an email shortly. Please check your inbox (and spam folder).",
     introMessage,
   });
-}
-
-function normalizeLinks(raw: ProposalManageResponse["speakers"][number]["links"]): string[] {
-  return raw
-    .map((value) => value.trim())
-    .filter(Boolean)
-    .slice(0, 10);
 }
 
 function displaySpeakerName(speaker: ProposalManageResponse["speakers"][number]): string {
@@ -90,7 +84,7 @@ function SpeakerCard({
     setHeadshotStatus(
       speaker.headshotUpdatedAt ? `Updated: ${new Date(speaker.headshotUpdatedAt).toLocaleString("en-GB")}` : "",
     );
-    linksRef.current?.setLinks(normalizeLinks(speaker.links));
+    linksRef.current?.setLinks(normalizeProfileLinks(speaker.links));
   }, [speaker]);
 
   const speakerName = displaySpeakerName(speaker);

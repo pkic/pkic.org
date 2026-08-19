@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
+import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createContext } from "./helpers/context";
 import { handleError } from "../functions/_lib/http";
-import { onRequestGet as listMembers } from "../functions/api/v1/members/index";
 import { onRequestGet as getMember } from "../functions/api/v1/members/[id]";
 import { onRequestGet as getMemberLogo } from "../functions/api/v1/members/[id]/logo";
 import { onRequestGet as listWorkingGroups } from "../functions/api/v1/working-groups/index";
@@ -17,6 +17,13 @@ async function callEndpoint(handler: (c: any) => Promise<Response>, ctx: any): P
   } catch (error) {
     return handleError(error);
   }
+}
+
+// GET /api/v1/members is validated by openApiRoute/chanfana (data.query),
+// so it must be exercised through the real router — not by calling its
+// onRequestGet handler directly, which would leave data.query unpopulated.
+async function callMembersList(url: string): Promise<Response> {
+  return app.fetch(new Request(url), env as any, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
 }
 
 function getRequest(url: string) {
@@ -94,10 +101,7 @@ describe("GET /api/v1/members (public directory)", () => {
     });
     await seedIndividualMember({ userId: crypto.randomUUID(), status: "inactive" });
 
-    const response = await callEndpoint(
-      listMembers,
-      createContext(env, getRequest("https://pkic.org/api/v1/members"), {}),
-    );
+    const response = await callMembersList("https://pkic.org/api/v1/members");
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
@@ -122,10 +126,7 @@ describe("GET /api/v1/members (public directory)", () => {
     const secondUserId = await insertUser(env.DB);
     await addRepresentativeRow(env.DB, memberId, secondUserId);
 
-    const response = await callEndpoint(
-      listMembers,
-      createContext(env, getRequest("https://pkic.org/api/v1/members"), {}),
-    );
+    const response = await callMembersList("https://pkic.org/api/v1/members");
     const body = (await response.json()) as { total: number };
     expect(body.total).toBe(1);
   });
@@ -143,10 +144,7 @@ describe("GET /api/v1/members (public directory)", () => {
       .bind("Real column description", "https://real-column.test", "Real slogan", organizationId)
       .run();
 
-    const response = await callEndpoint(
-      listMembers,
-      createContext(env, getRequest("https://pkic.org/api/v1/members"), {}),
-    );
+    const response = await callMembersList("https://pkic.org/api/v1/members");
     const body = (await response.json()) as {
       members: Array<{ website: string | null; description: string | null; slogan: string | null }>;
     };
@@ -169,10 +167,7 @@ describe("GET /api/v1/members (public directory)", () => {
       status: "active",
     });
 
-    const response = await callEndpoint(
-      listMembers,
-      createContext(env, getRequest("https://pkic.org/api/v1/members?q=acme"), {}),
-    );
+    const response = await callMembersList("https://pkic.org/api/v1/members?q=acme");
     const body = (await response.json()) as { members: Array<{ name: string }>; total: number };
     expect(body.total).toBe(1);
     expect(body.members[0].name).toBe("Acme Cryptography");
@@ -187,17 +182,11 @@ describe("GET /api/v1/members (public directory)", () => {
     });
     await seedIndividualMember({ userId: crypto.randomUUID(), status: "active", tier: "H6" });
 
-    const orgOnly = await callEndpoint(
-      listMembers,
-      createContext(env, getRequest("https://pkic.org/api/v1/members?group=organization"), {}),
-    );
+    const orgOnly = await callMembersList("https://pkic.org/api/v1/members?group=organization");
     const orgBody = (await orgOnly.json()) as { total: number };
     expect(orgBody.total).toBe(1);
 
-    const independentOnly = await callEndpoint(
-      listMembers,
-      createContext(env, getRequest("https://pkic.org/api/v1/members?group=independent"), {}),
-    );
+    const independentOnly = await callMembersList("https://pkic.org/api/v1/members?group=independent");
     const independentBody = (await independentOnly.json()) as { total: number };
     expect(independentBody.total).toBe(1);
   });
@@ -416,10 +405,7 @@ describe("GET /api/v1/members/:id/logo", () => {
       id: string;
     }>();
 
-    const listResponse = await callEndpoint(
-      listMembers,
-      createContext(env, getRequest("https://pkic.org/api/v1/members"), {}),
-    );
+    const listResponse = await callMembersList("https://pkic.org/api/v1/members");
     const listBody = (await listResponse.json()) as { members: Array<{ id: string; logoUrl: string | null }> };
     expect(listBody.members[0].logoUrl).toBe(`/api/v1/members/${memberRow!.id}/logo`);
 

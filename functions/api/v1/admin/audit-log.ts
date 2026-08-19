@@ -18,9 +18,11 @@ import { all, first } from "../../../_lib/db/queries";
 import { resolveOrderBy } from "../../../_lib/db/sort";
 import type { DatabaseLike } from "../../../_lib/types";
 import { requestDb, type AdminContext } from "../../../_lib/db/context";
+import { openApiRoute } from "../../../_lib/openapi/route";
+import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import {
   ADMIN_AUDIT_LOG_SORT_COLUMNS,
-  auditLogSortValueSchema,
+  auditLogListRouteSchema,
 } from "../../../../assets/shared/schemas/admin-audit-log";
 
 interface AuditLogRow {
@@ -40,11 +42,11 @@ interface CountRow {
 }
 
 function buildQuery(
-  q: string,
-  entityType: string,
-  actorType: string,
-  action: string,
-  entityId: string,
+  q: string | null | undefined,
+  entityType: string | null | undefined,
+  actorType: string | null | undefined,
+  action: string | null | undefined,
+  entityId: string | null | undefined,
 ): { where: string; params: unknown[] } {
   const clauses: string[] = [];
   const params: unknown[] = [];
@@ -77,22 +79,10 @@ function buildQuery(
   return { where, params };
 }
 
-export async function onRequestGet(c: AdminContext): Promise<Response> {
+export const AdminAuditLogList = openApiRoute(auditLogListRouteSchema, async (c: AdminContext, data) => {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  const url = new URL(c.req.raw.url);
-  const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50", 10) || 50, 200);
-  const offset = Math.max(0, parseInt(url.searchParams.get("offset") ?? "0", 10) || 0);
-  const q = (url.searchParams.get("q") ?? "").trim();
-  const entityType = (url.searchParams.get("entityType") ?? "").trim();
-  const actorType = (url.searchParams.get("actorType") ?? "").trim();
-  const action = (url.searchParams.get("action") ?? "").trim();
-  const entityId = (url.searchParams.get("entityId") ?? "").trim();
-  // An invalid sort value fails schema validation (unknown column), so we
-  // just fall back to the default order — same "quietly ignore" behavior
-  // admin-organizations.ts's route uses.
-  const sortParsed = auditLogSortValueSchema.safeParse(url.searchParams.get("sort") ?? undefined);
-  const sort = sortParsed.success ? sortParsed.data : undefined;
+  const { q, entityType, actorType, action, entityId, sort, limit = 50, offset = 0 } = data.query;
 
   const db: DatabaseLike = requestDb(c);
   const { where, params } = buildQuery(q, entityType, actorType, action, entityId);
@@ -139,6 +129,6 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
 
   return json({
     entries,
-    page: { limit, offset, total, hasMore: offset + rows.length < total },
+    page: buildPageInfo(limit, offset, total, rows.length),
   });
-}
+});

@@ -509,4 +509,36 @@ describe("admin users list — type filter", () => {
     const user = data.users.find((u) => u.email === "type-malformed-links@example.test");
     expect(user?.links).toEqual([]);
   });
+
+  it("P6M-P2-08: an unrecognized ?sort= value quietly falls back to the default order instead of 400ing", async () => {
+    await setup();
+    await seedUser(env.DB, "sort-fallback@example.test");
+
+    const response = await app.fetch(
+      adminRequest("/api/v1/admin/users?q=sort-fallback@example.test&sort=not_a_real_column", "GET"),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as { users: Array<{ email: string }> };
+    expect(data.users.some((u) => u.email === "sort-fallback@example.test")).toBe(true);
+  });
+
+  it("P6M-P2-08: a valid allowlisted ?sort= value is honored (ascending by email)", async () => {
+    await setup();
+    await seedUser(env.DB, "sort-a@example.test");
+    await seedUser(env.DB, "sort-b@example.test");
+
+    const response = await app.fetch(
+      adminRequest("/api/v1/admin/users?q=sort-&sort=email", "GET"),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as { users: Array<{ email: string }> };
+    const emails = data.users.map((u) => u.email).filter((e) => e.startsWith("sort-"));
+    expect(emails).toEqual(["sort-a@example.test", "sort-b@example.test"]);
+  });
 });

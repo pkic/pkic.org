@@ -8,6 +8,7 @@ import { renderEmail, renderSubject } from "../../../../../../../_lib/email/rend
 import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { requireInternalSecret } from "../../../../../../../_lib/request";
 import { applyCampaignCustomText } from "../../../../../../../_lib/email/campaign-custom";
+import type { EmailContentType } from "../../../../../../../../assets/shared/schemas/admin-email-templates";
 import { loadEmailLayout, loadEmailPartials } from "../../../../../../../_lib/email/partials";
 import {
   proposalPageUrl,
@@ -152,7 +153,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
       body.subjectOverride ?? `Update: ${event.name}`,
       dataWithPartials,
     );
-    const templateContentType = template.contentType as "markdown" | "html" | "text";
+    const templateContentType = template.contentType as EmailContentType;
     const content = applyCampaignCustomText(template.content, templateContentType, body.customText ?? null);
     rendered = await renderEmail(content, dataWithPartials, layoutHtml, templateContentType, appBaseUrl);
   }

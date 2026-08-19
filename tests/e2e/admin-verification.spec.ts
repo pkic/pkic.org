@@ -108,17 +108,23 @@ async function signInAsAdmin(page: Page): Promise<void> {
 
 /**
  * Walks a freshly-submitted membership application through its real stage
- * transitions (pending → in_review → in_consultation → ec_review) and
- * approves it — the only path that provisions a real organization + user,
- * exactly what member-applications.ts's ALLOWED_STAGE_TRANSITIONS requires.
- * `page` must already be signed in as admin for the stage/approve calls;
- * the initial application submission itself is the public, unauthenticated
- * endpoint.
+ * transitions (pending → in_review → in_consultation → ec_review) and, by
+ * default, approves it — the only path that provisions a real organization
+ * + user, exactly what member-applications.ts's ALLOWED_STAGE_TRANSITIONS
+ * requires. `page` must already be signed in as admin for the stage/approve
+ * calls; the initial application submission itself is the public,
+ * unauthenticated endpoint.
+ *
+ * `opts.stopBeforeApprove` leaves the application sitting at `ec_review`
+ * instead of calling its own `/approve` API — for tests (e.g. the
+ * "Approve & run onboarding" admin-UI click-through) that need to trigger
+ * the approval themselves, via the UI, rather than have this helper do it
+ * over the API first.
  */
 async function provisionApprovedMember(
   page: Page,
-  opts: { email: string; name: string; orgName?: string; category?: string },
-): Promise<{ applicationId: string; organizationId: string | null; userId: string }> {
+  opts: { email: string; name: string; orgName?: string; category?: string; stopBeforeApprove?: boolean },
+): Promise<{ applicationId: string; organizationId: string | null; userId: string | null }> {
   const category = opts.category ?? "F";
   const created = await page.evaluate(
     async ({ email, name, orgName, category }) => {
@@ -154,6 +160,10 @@ async function provisionApprovedMember(
       { applicationId, toStage },
     );
     expect(status, `stage transition to ${toStage}`).toBe(200);
+  }
+
+  if (opts.stopBeforeApprove) {
+    return { applicationId, organizationId: null, userId: null };
   }
 
   const approved = await page.evaluate(async (applicationId) => {
@@ -608,5 +618,99 @@ test.describe("Admin browser-verification pass", () => {
 
     await expect(emailPanel.getByText(duplicateEmail)).toBeVisible();
     expect(consoleErrors, consoleErrors.join("\n")).toEqual([]);
+  });
+
+  // P1-R03: closes the "Approve & run onboarding" click-through gap flagged
+  // in Phase 1 remediation ("not completed live in-browser") — the button
+  // only renders at stage ec_review and its handler gates on a real
+  // `window.confirm`, which this test dismisses programmatically the same
+  // way the "mailing lists" and "working groups" tests above dismiss theirs.
+  test("applications: Approve & run onboarding click-through runs full onboarding", async ({ page }) => {
+    page.on("dialog", (d) => d.accept());
+    await page.goto("/admin/");
+    await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
+
+    const stamp = Date.now();
+    const email = `e2e-approve-onboarding-${stamp}@e2e-approve-onboarding-${stamp}.test`;
+    const name = `Approve Onboarding E2E ${stamp}`;
+    const orgName = `E2E Approve Onboarding Org ${stamp}`;
+    const { applicationId } = await provisionApprovedMember(page, {
+      email,
+      name,
+      orgName,
+      stopBeforeApprove: true,
+    });
+
+    const since = await outboxLength();
+
+    await page.goto("/admin/#/membership/applications");
+    // The list's own text search box filters client-visible rows only (its
+    // "q" param isn't read by the backend list route) — the stage filter
+    // is a real, backend-applied query param, and by this point in the
+    // file every other fixture application has already been moved out of
+    // ec_review by its own test, so this reliably narrows to this test's
+    // one application without depending on page/sort order.
+    const stageFilter = page.locator("select").filter({ has: page.locator('option[value="ec_review"]') });
+    await stageFilter.selectOption("ec_review");
+    const row = page.locator("tr").filter({ hasText: email });
+    await expect(row).toBeVisible({ timeout: 10_000 });
+    await row.click();
+
+    const header = page.locator("div.d-flex.align-items-center.gap-2.mb-3").filter({ hasText: name });
+    await expect(header).toBeVisible({ timeout: 10_000 });
+    await expect(header.locator("span.badge", { hasText: "Ec Review" })).toBeVisible();
+
+    const approveButton = page.getByRole("button", { name: "Approve & run onboarding" });
+    await expect(approveButton).toBeVisible();
+    await approveButton.click();
+    await expect(page.locator(".my-toast", { hasText: "Application approved" })).toBeVisible({ timeout: 15_000 });
+
+    // The click-through's own UI state: the confirm() dialog was accepted
+    // (test would otherwise hang on it), the approve call landed (toast
+    // above), and the reloaded detail view now shows the post-approval
+    // stage with no further transitions available.
+    await expect(header.locator("span.badge", { hasText: "Approved" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Approve & run onboarding" })).toHaveCount(0);
+    await expect(page.getByText("No further transitions from this stage.")).toBeVisible();
+
+    // Independent confirmation 1/2: re-fetch the application from the admin
+    // API (not the same optimistic UI state the toast/badge above already
+    // reflect) — durably approved with an event recording the transition.
+    const refetched = await page.evaluate(async (id) => {
+      const res = await fetch(`/api/v1/admin/applications/${id}`, { credentials: "same-origin" });
+      const body = (await res.json()) as {
+        status: string;
+        stage: string;
+        events: Array<{ toStage: string }>;
+      };
+      return { status: res.status, body };
+    }, applicationId);
+    expect(refetched.status).toBe(200);
+    expect(refetched.body.status).toBe("approved");
+    expect(refetched.body.stage).toBe("approved");
+    expect(refetched.body.events.some((e) => e.toStage === "approved")).toBe(true);
+
+    // Independent confirmation 2/2: onboarding provisioning
+    // (approveApplication -> provisionOrganizationMembership) really ran —
+    // a real user now exists, linked to a real organization matching the
+    // application's organizationName, not just the application row's own
+    // status flag.
+    const usersLookup = await page.evaluate(async (q) => {
+      const res = await fetch(`/api/v1/admin/users?q=${encodeURIComponent(q)}`, { credentials: "same-origin" });
+      const body = (await res.json()) as {
+        users: Array<{ email: string; membership: { organizationName: string | null } | null }>;
+      };
+      return { status: res.status, body };
+    }, email);
+    expect(usersLookup.status).toBe(200);
+    const provisionedUser = usersLookup.body.users.find((u) => u.email === email);
+    expect(provisionedUser, JSON.stringify(usersLookup.body)).toBeTruthy();
+    expect(provisionedUser?.membership?.organizationName).toBe(orgName);
+
+    // Independent confirmation 3/3: the onboarding welcome email — one of
+    // approveApplication's own outbox side effects — actually landed,
+    // proving the background outbox delivery this route kicks off also ran,
+    // not just the synchronous D1 writes.
+    await waitForEmail(email, "Welcome to the PKI Consortium", { since });
   });
 });

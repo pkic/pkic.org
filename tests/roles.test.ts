@@ -282,6 +282,53 @@ describe("roles (Built-in and custom roles)", () => {
     }
   });
 
+  // ── P6M-P2-07: `data.query`-driven sort + real pagination ────────────────
+
+  it("GET /api/v1/admin/roles honors a valid ?sort= (resolved from data.query, not a second URL parse)", async () => {
+    const ascending = await call(adminToken, "/api/v1/admin/roles?sort=name");
+    expect(ascending.status).toBe(200);
+    const ascendingBody = (await ascending.json()) as { roles: Array<{ name: string }> };
+    const ascendingNames = ascendingBody.roles.map((r) => r.name);
+    expect(ascendingNames).toEqual([...ascendingNames].sort());
+
+    const descending = await call(adminToken, "/api/v1/admin/roles?sort=-name");
+    expect(descending.status).toBe(200);
+    const descendingBody = (await descending.json()) as { roles: Array<{ name: string }> };
+    const descendingNames = descendingBody.roles.map((r) => r.name);
+    expect(descendingNames).toEqual([...ascendingNames].reverse());
+  });
+
+  it("GET /api/v1/admin/roles rejects an unknown ?sort= column with 400 (rolesListQuerySchema's allowlist runs before the handler; nothing left in the handler quietly falls back)", async () => {
+    const response = await call(adminToken, "/api/v1/admin/roles?sort=not_a_real_column");
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("GET /api/v1/admin/roles paginates with real LIMIT/OFFSET and a page envelope", async () => {
+    const unpaged = await call(adminToken, "/api/v1/admin/roles?sort=name");
+    const unpagedBody = (await unpaged.json()) as { roles: Array<{ name: string }>; page: { total: number } };
+    const totalRoles = unpagedBody.page.total;
+    expect(totalRoles).toBeGreaterThan(2);
+    expect(unpagedBody.roles).toHaveLength(totalRoles);
+
+    const firstPage = await call(adminToken, "/api/v1/admin/roles?sort=name&limit=2&offset=0");
+    expect(firstPage.status).toBe(200);
+    const firstPageBody = (await firstPage.json()) as {
+      roles: Array<{ name: string }>;
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
+    expect(firstPageBody.roles).toHaveLength(2);
+    expect(firstPageBody.page).toEqual({ limit: 2, offset: 0, total: totalRoles, hasMore: true });
+    expect(firstPageBody.roles.map((r) => r.name)).toEqual(unpagedBody.roles.slice(0, 2).map((r) => r.name));
+
+    const secondPage = await call(adminToken, "/api/v1/admin/roles?sort=name&limit=2&offset=2");
+    expect(secondPage.status).toBe(200);
+    const secondPageBody = (await secondPage.json()) as { roles: Array<{ name: string }>; page: { offset: number } };
+    expect(secondPageBody.page.offset).toBe(2);
+    expect(secondPageBody.roles.map((r) => r.name)).toEqual(unpagedBody.roles.slice(2, 4).map((r) => r.name));
+  });
+
   it("GET /api/v1/admin/roles/:id/assignments reverse-looks-up who holds a role, across contexts", async () => {
     const forumChairRole = (
       await queryAll<{ id: string }>(env.DB, "SELECT id FROM roles WHERE name = 'forum_chair'")

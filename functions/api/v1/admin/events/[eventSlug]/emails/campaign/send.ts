@@ -26,6 +26,7 @@ import {
 import { adminEventCampaignSendSchema } from "../../../../../../../../assets/shared/schemas/api";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 import type { StatementLike } from "../../../../../../../_lib/types";
+import type { EmailMessageType } from "../../../../../../../../assets/shared/schemas/admin-email-templates";
 
 const CAMPAIGN_QUEUE_BATCH_SIZE = 250;
 const CAMPAIGN_IMMEDIATE_OUTBOX_LIMIT = 100;
@@ -136,7 +137,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     templateKey: string;
     recipientEmail: string;
     recipientUserId?: string | null;
-    messageType: "transactional" | "promotional";
+    messageType: EmailMessageType;
     subject: string;
     capabilityLinkValues?: unknown[];
     data: Record<string, unknown>;

@@ -127,21 +127,41 @@ export async function updateMeetingSeries(
 }
 
 /**
- * Deletes a meeting series and everything under it — the ICS file rows and
- * any member time-slot preferences pointing at either the series or one of
- * its files. FK constraints on meeting_ics_files/member_meeting_preferences
- * are enforced in this codebase's D1 (see migrations 0035/0036 PRAGMA
- * foreign_keys = ON), so children must go first. Returns the R2 keys of the
- * deleted ICS files so the route handler can also delete those objects —
- * this service stays R2-agnostic like the rest of this module (no env here).
+ * Deletes a meeting series and everything under it — the ICS file R2
+ * objects, their D1 rows, and any member time-slot preferences pointing at
+ * either the series or one of its files. FK constraints on
+ * meeting_ics_files/member_meeting_preferences are enforced in this
+ * codebase's D1 (see migrations 0035/0036 PRAGMA foreign_keys = ON), so
+ * children must go first there too.
+ *
+ * R2 objects are deleted BEFORE any D1 row is touched — the same ordering
+ * `deleteIcsFile` uses for a single file (PR #1 review §9.2), generalized
+ * here to a cascading *set* of files. `Promise.all` (not `allSettled`) is
+ * used deliberately: if any one object delete fails, this function throws
+ * before running any D1 DELETE, so the `meeting_ics_files` rows — and thus
+ * the record of exactly which R2 keys still need deleting — are never
+ * lost. `R2Bucket#delete` on an already-missing key is a no-op, not an
+ * error, so retrying this whole function after a partial R2 failure is
+ * always safe: previously-deleted objects are skipped harmlessly and the
+ * D1 rows are still there to find the rest. The old D1-first ordering
+ * deleted every `meeting_ics_files` row up front and let the route
+ * handler's `Promise.allSettled` swallow individual R2 failures afterward
+ * — any object whose delete failed there was orphaned permanently, since
+ * no row would ever reference it again for a retry to find.
  */
 export async function deleteMeetingSeries(
   db: DatabaseLike,
+  bucket: R2Bucket | undefined,
   seriesId: string,
   expected: { scopeType: MeetingSeriesScopeType; workingGroupId?: string },
 ): Promise<{ deletedIcsFileR2Keys: string[] }> {
   await getSeriesForAdminOrThrow(db, seriesId, expected);
   const icsRows = await all<IcsFileRow>(db, `SELECT * FROM meeting_ics_files WHERE series_id = ?`, [seriesId]);
+
+  if (bucket) {
+    await Promise.all(icsRows.map((row) => bucket.delete(row.r2_key)));
+  }
+
   await run(db, `DELETE FROM member_meeting_preferences WHERE series_id = ?`, [seriesId]);
   await run(db, `DELETE FROM meeting_ics_files WHERE series_id = ?`, [seriesId]);
   await run(db, `DELETE FROM meeting_series WHERE id = ?`, [seriesId]);

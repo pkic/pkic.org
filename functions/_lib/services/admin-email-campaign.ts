@@ -12,6 +12,7 @@ import {
 import type { EventRecord } from "./events";
 import type { DatabaseLike } from "../types";
 import type { FormFieldDefinition } from "./forms/read";
+import type { EmailMessageType } from "../../../assets/shared/schemas/admin-email-templates";
 
 export interface CampaignRecipient {
   registrationId?: string;
@@ -432,7 +433,7 @@ export async function computeCampaignDigest(payload: {
   subjectOverride?: string | null;
   customText?: string | null;
   bodyContent?: string | null;
-  messageType?: "transactional" | "promotional" | null;
+  messageType?: EmailMessageType | null;
   sendMode: "personal" | "bcc_batch";
   batchSize: number;
   filter: CampaignAudienceFilter;

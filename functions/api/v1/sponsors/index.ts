@@ -7,27 +7,23 @@
  */
 import { json } from "../../../_lib/http";
 import { listPublicSponsors } from "../../../_lib/services/public-sponsors";
-import { sponsorsListQuerySchema, sponsorsListRouteSchema } from "../../../../assets/shared/schemas/public-sponsors";
+import { sponsorsListRouteSchema } from "../../../../assets/shared/schemas/public-sponsors";
 import { openApiRoute } from "../../../_lib/openapi/route";
+import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 
 const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=60";
 
-export async function onRequestGet(c: any): Promise<Response> {
-  const url = new URL(c.req.raw.url);
-  const parsed = sponsorsListQuerySchema.safeParse({
-    eventName: url.searchParams.get("eventName") ?? undefined,
-  });
-  const eventName = parsed.success ? parsed.data.eventName : undefined;
+export const SponsorsGet = openApiRoute(sponsorsListRouteSchema, async (c: any, data) => {
+  // Default limit is the schema's max (200): today's sponsor-wall/strip/level
+  // pages (assets/ts/member-flows/sponsors-wall.tsx) call this with no
+  // ?limit=, expecting the full set, and the consortium's real sponsor count
+  // is well under that — this bounds the previously-unbounded query without
+  // truncating the existing public display.
+  const { eventName, limit = 200, offset = 0 } = data.query;
 
-  const sponsors = await listPublicSponsors(c.env.DB, { eventName });
+  const { sponsors, total } = await listPublicSponsors(c.env.DB, { eventName, limit, offset });
 
-  const response = json({ sponsors });
+  const response = json({ sponsors, page: buildPageInfo(limit, offset, total, sponsors.length) });
   response.headers.set("cache-control", PUBLIC_CACHE_CONTROL);
   return response;
-}
-
-// Thin openApiRoute wrap — onRequestGet is imported directly by
-// tests/public-sponsors-api.test.ts, so its lenient
-// safeParse-then-ignore-on-failure query handling stays untouched. GET has
-// no request body, so wrapping is safe (no double-body-read risk).
-export const SponsorsGet = openApiRoute(sponsorsListRouteSchema, (c: any) => onRequestGet(c));
+});

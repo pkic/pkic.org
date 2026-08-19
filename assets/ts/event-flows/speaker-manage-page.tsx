@@ -1,7 +1,7 @@
 import { render } from "preact";
 import { getJson, patchJson, postJson } from "../shared/api-client";
 import { normalizeValidation } from "../shared/form/validation-map";
-import { renderProfileLinks, type ProfileLinksWidget } from "../shared/widgets/profile-links";
+import { renderProfileLinks, normalizeProfileLinks, type ProfileLinksWidget } from "../shared/widgets/profile-links";
 import { renderConsentInputs, readConsentValues, syncConsentValidation } from "../shared/widgets/consents";
 import { showManageLinkRecoveryForm } from "../shared/widgets/link-recovery";
 import { withLoadingButton } from "../shared/form/submit";
@@ -46,13 +46,6 @@ interface SpeakerManageResponse {
 
 interface TermsApiResponse {
   terms: RequiredTerm[];
-}
-
-function normalizeLinks(raw: SpeakerManageResponse["profile"]["links"]): string[] {
-  return raw
-    .map((v) => v.trim())
-    .filter(Boolean)
-    .slice(0, 10);
 }
 
 function showResendSpeakerManageLinkForm(
@@ -266,7 +259,7 @@ async function main(): Promise<void> {
   if (bioField) bioField.value = data.profile.biography ?? "";
   if (linksContainer) {
     linksWidget = renderProfileLinks(linksContainer, "links", { max: 10 });
-    linksWidget.setLinks(normalizeLinks(data.profile.links));
+    linksWidget.setLinks(normalizeProfileLinks(data.profile.links));
   }
 
   profileForm?.addEventListener("submit", async (event) => {

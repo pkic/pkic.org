@@ -1,11 +1,11 @@
 /**
  * GET /api/v1/admin/donations
  *
- *
  * Query params:
- *   status  — filter by status: pending | completed | expired  (default: all)
+ *   status  — filter by status: pending | awaiting_payment | completed | expired | failed (default: all)
  *   limit   — max rows (default 100, max 500)
  *   offset  — pagination offset (default 0)
+ *   sort    — allowlisted column, optionally "-" prefixed for descending (default: created_at desc)
  */
 
 import { json } from "../../../_lib/http";
@@ -13,9 +13,10 @@ import { requireAdminFromRequest } from "../../../_lib/auth/admin";
 import { all } from "../../../_lib/db/queries";
 import { resolveOrderBy } from "../../../_lib/db/sort";
 import { requestDb, type AdminContext } from "../../../_lib/db/context";
+import { openApiRoute } from "../../../_lib/openapi/route";
 import {
   ADMIN_DONATIONS_SORT_COLUMNS,
-  donationsSortValueSchema,
+  donationsListRouteSchema,
 } from "../../../../assets/shared/schemas/admin-donations";
 
 interface DonationRow {
@@ -43,18 +44,10 @@ interface StatusCount {
   count: number;
 }
 
-export async function onRequestGet(c: AdminContext): Promise<Response> {
+export const DonationsList = openApiRoute(donationsListRouteSchema, async (c: AdminContext, data) => {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  const url = new URL(c.req.raw.url);
-  const status = url.searchParams.get("status") ?? "";
-  const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "100") || 100, 500);
-  const offset = parseInt(url.searchParams.get("offset") ?? "0") || 0;
-  // An invalid sort value fails schema validation (unknown column), so we
-  // just fall back to the default order — same "quietly ignore" behavior
-  // admin-organizations.ts's route uses.
-  const sortParsed = donationsSortValueSchema.safeParse(url.searchParams.get("sort") ?? undefined);
-  const sort = sortParsed.success ? sortParsed.data : undefined;
+  const { status, sort, limit = 100, offset = 0 } = data.query;
   const orderBy = resolveOrderBy(sort, ADMIN_DONATIONS_SORT_COLUMNS, "ORDER BY created_at DESC");
 
   const conditions: string[] = [];
@@ -89,11 +82,4 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const total = totalRow[0]?.total ?? 0;
 
   return json({ donations, summary, limit, offset, total });
-}
-
-export async function onRequest(c: AdminContext): Promise<Response> {
-  if (c.req.raw.method !== "GET") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
-  return onRequestGet(c);
-}
+});

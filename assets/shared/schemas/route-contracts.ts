@@ -2,6 +2,10 @@ import { z } from "zod";
 import {
   adminEmailOutboxQuerySchema,
   adminEmailTemplateActivateSchema,
+  adminFormsListQuerySchema,
+  adminFormsListResponseSchema,
+  adminFormSubmissionsQuerySchema,
+  adminFormSubmissionsResponseSchema,
   adminFormUpdateSchema,
   adminHeadshotUploadResponseSchema,
   adminProposalPatchSchema,
@@ -80,6 +84,41 @@ export const adminEmailTemplateActivateRouteSchema = {
     "400": { description: "Invalid activation payload." },
     "401": { description: "Admin authorization required." },
     "404": { description: "Template or version not found." },
+  },
+};
+
+export const adminFormsListRouteSchema = {
+  tags: ["Admin forms"],
+  summary: "List forms",
+  description: "Returns every admin-managed custom form across scopes, with field and submission counts.",
+  request: {
+    query: adminFormsListQuerySchema,
+  },
+  responses: {
+    "200": {
+      description: "Paginated forms list.",
+      content: { "application/json": { schema: adminFormsListResponseSchema } },
+    },
+    "401": { description: "Admin authorization required." },
+  },
+};
+
+export const adminFormSubmissionsListRouteSchema = {
+  tags: ["Admin forms"],
+  summary: "List form submissions",
+  description:
+    "Returns a paginated, sortable, filterable list of submissions for a form (including linked registration/proposal answers not yet backfilled into form_submissions), plus optional aggregate per-field answer statistics.",
+  request: {
+    params: formKeyParamsSchema,
+    query: adminFormSubmissionsQuerySchema,
+  },
+  responses: {
+    "200": {
+      description: "Paginated form submissions and (when `limit=0`) aggregate answer statistics.",
+      content: { "application/json": { schema: adminFormSubmissionsResponseSchema } },
+    },
+    "401": { description: "Admin authorization required." },
+    "404": { description: "Form not found." },
   },
 };
 

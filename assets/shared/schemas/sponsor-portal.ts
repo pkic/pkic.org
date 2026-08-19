@@ -7,6 +7,7 @@
  */
 import { z } from "zod";
 import { normalizedEmailSchema, tokenSchema } from "./api";
+import { paginationQuerySchema, paginatedResponseSchema } from "./pagination";
 
 export const sponsorPortalAuthRequestSchema = z.object({
   email: normalizedEmailSchema,
@@ -75,16 +76,20 @@ export const sponsorPortalAttendeeSchema = z.object({
 
 export const sponsorPortalAttendeesEventIdParamsSchema = z.object({ eventId: z.uuid() });
 
+// P6M-P2-11: this list was fully unbounded — could grow to thousands for a
+// large event. Bounded via the shared pagination contract.
+export const sponsorPortalAttendeesListQuerySchema = paginationQuerySchema;
+
 export const sponsorPortalAttendeesListRouteSchema = {
   tags: ["Sponsor Portal"],
   summary: "List consenting attendees for a sponsored event",
   description:
     "Only attendees who accepted the sponsor-data-sharing consent term at registration. 403 if this sponsorship's tier is not configured for attendee data access, or the sponsorship has lapsed.",
-  request: { params: sponsorPortalAttendeesEventIdParamsSchema },
+  request: { params: sponsorPortalAttendeesEventIdParamsSchema, query: sponsorPortalAttendeesListQuerySchema },
   responses: {
     "200": {
       description: "Consenting attendees.",
-      content: { "application/json": { schema: z.object({ attendees: z.array(sponsorPortalAttendeeSchema) }) } },
+      content: { "application/json": { schema: paginatedResponseSchema("attendees", sponsorPortalAttendeeSchema) } },
     },
     "403": {
       description:

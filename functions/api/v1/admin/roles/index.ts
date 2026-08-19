@@ -21,10 +21,10 @@ import { AppError } from "../../../../_lib/errors";
 import { resolveOrderBy } from "../../../../_lib/db/sort";
 import {
   rolesCreateRouteSchema,
-  rolesListQuerySchema,
   rolesListRouteSchema,
   ADMIN_ROLES_SORT_COLUMNS,
 } from "../../../../../assets/shared/schemas/access-control";
+import { buildPageInfo } from "../../../../../assets/shared/schemas/pagination";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 
@@ -52,24 +52,25 @@ async function serializeRoles(dbRoles: RoleRow[], permissionsByRole: Map<string,
   }));
 }
 
-export const RolesList = openApiRoute(rolesListRouteSchema, async (c: AdminContext, _data) => {
+export const RolesList = openApiRoute(rolesListRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "access:grant");
 
-  // The invalid-sort fallback below intentionally differs from strict
-  // schema rejection — same "quietly ignore" behavior admin-organizations.ts's
-  // route uses — so this stays a manual parse rather than `data.query`.
-  const url = new URL(c.req.raw.url);
-  // An invalid sort value fails schema validation (unknown column), so
-  // `parsed.success` is false and we just fall back to the default order —
-  // same "quietly ignore" behavior admin-organizations.ts's route uses.
-  const parsed = rolesListQuerySchema.safeParse({ sort: url.searchParams.get("sort") ?? undefined });
-  const sort = parsed.success ? parsed.data.sort : undefined;
+  // `data.query.sort` is already validated against ADMIN_ROLES_SORT_COLUMNS
+  // by rolesListQuerySchema before this handler runs (openApiRoute's
+  // getValidatedData); resolveOrderBy's own fallback-to-default handles an
+  // omitted sort, same as every other admin list endpoint.
+  const { sort, limit = 50, offset = 0 } = data.query;
   const orderBy = resolveOrderBy(sort, ADMIN_ROLES_SORT_COLUMNS, "ORDER BY name ASC");
 
-  const [roles, permissionRows] = await Promise.all([
-    all<RoleRow>(requestDb(c), `SELECT id, name, description, is_system_role, created_at FROM roles ${orderBy}`),
+  const [roles, permissionRows, totalRow] = await Promise.all([
+    all<RoleRow>(
+      requestDb(c),
+      `SELECT id, name, description, is_system_role, created_at FROM roles ${orderBy} LIMIT ? OFFSET ?`,
+      [limit, offset],
+    ),
     all<RolePermissionRow>(requestDb(c), "SELECT role_id, permission FROM role_permissions ORDER BY permission ASC"),
+    first<{ total: number }>(requestDb(c), "SELECT COUNT(*) AS total FROM roles"),
   ]);
 
   const permissionsByRole = new Map<string, string[]>();
@@ -79,7 +80,10 @@ export const RolesList = openApiRoute(rolesListRouteSchema, async (c: AdminConte
     permissionsByRole.set(row.role_id, list);
   }
 
-  return json({ roles: await serializeRoles(roles, permissionsByRole) });
+  return json({
+    roles: await serializeRoles(roles, permissionsByRole),
+    page: buildPageInfo(limit, offset, totalRow?.total ?? 0, roles.length),
+  });
 });
 
 export const RolesCreate = openApiRoute(rolesCreateRouteSchema, async (c: AdminContext, data) => {

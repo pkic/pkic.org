@@ -1,4 +1,5 @@
 import { marked } from "marked";
+import type { EmailContentType } from "../../../assets/shared/schemas/admin-email-templates";
 
 // ─── Conditional template helpers ────────────────────────────────────────────
 
@@ -390,7 +391,7 @@ export async function renderEmail(
   template: string,
   data: Record<string, unknown>,
   layoutHtml: string,
-  contentType: "markdown" | "html" | "text" = "markdown",
+  contentType: EmailContentType = "markdown",
   baseUrl = "https://pkic.org",
 ): Promise<{ html: string; text: string }> {
   // Inject baseUrl into template data so {{baseUrl}} resolves in body + partials.

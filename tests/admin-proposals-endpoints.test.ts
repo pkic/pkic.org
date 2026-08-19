@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { env } from "cloudflare:workers";
-import { onRequestGet as getEventProposals } from "../functions/api/v1/admin/events/[eventSlug]/proposals";
+import app from "../functions/router";
 import { onRequestGet as getProposalDetail } from "../functions/api/v1/admin/proposals/[proposalId]";
 import { onRequestPost as openProposalManage } from "../functions/api/v1/admin/proposals/[proposalId]/open-manage";
 import { onRequestGet as getProposalReviews } from "../functions/api/v1/admin/proposals/[proposalId]/reviews";
@@ -23,6 +23,15 @@ const proposalDetails = {
 };
 
 const proposalDetailsJson = JSON.stringify(proposalDetails);
+
+/** Exercises the real router (auth middleware + openApiRoute query validation) for the proposals list endpoint. */
+async function callAdminProposalsList(token: string, path: string): Promise<Response> {
+  return app.fetch(
+    new Request(`https://app.test${path}`, { headers: { authorization: `Bearer ${token}` } }),
+    env as any,
+    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+  );
+}
 
 async function seedProposalWithReviews(
   _db: DatabaseLike,
@@ -164,15 +173,7 @@ describe("admin proposal endpoints", () => {
 
     const adminToken = await createAdminSession(env.DB, adminId, "token-admin-list");
 
-    const response = await getEventProposals(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/admin/events/pqc-2026/proposals", {
-          headers: { authorization: `Bearer ${adminToken}` },
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const response = await callAdminProposalsList(adminToken, "/api/v1/admin/events/pqc-2026/proposals");
 
     expect(response.status).toBe(200);
     const payload = (await response.json()) as {
@@ -183,7 +184,7 @@ describe("admin proposal endpoints", () => {
         recommendation_accept_count: number;
         decision_status: string | null;
       }>;
-      pagination: { total: number; hasMore: boolean };
+      page: { total: number; hasMore: boolean; limit: number; offset: number };
       stats: {
         byStatus: Record<string, number>;
         byRecommendation: Record<string, number>;
@@ -199,7 +200,10 @@ describe("admin proposal endpoints", () => {
     expect(Number(payload.proposals[0].average_review_score)).toBe(9);
     expect(Number(payload.proposals[0].recommendation_accept_count)).toBe(1);
     expect(payload.proposals[0].decision_status).toBe("accepted");
-    expect(payload.pagination.total).toBe(1);
+    expect(payload.page.total).toBe(1);
+    expect(payload.page.hasMore).toBe(false);
+    expect(payload.page.limit).toBe(50);
+    expect(payload.page.offset).toBe(0);
     expect(payload.stats.byStatus.submitted).toBe(1);
     expect(payload.stats.byRecommendation.accept).toBe(1);
     expect(payload.stats.reviewedCount).toBe(1);
@@ -240,14 +244,9 @@ describe("admin proposal endpoints", () => {
     ]);
 
     const adminToken = await createAdminSession(env.DB, adminId, "token-admin-list-sort");
-    const scoreResponse = await getEventProposals(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/admin/events/pqc-2026/proposals?sort=score_asc", {
-          headers: { authorization: `Bearer ${adminToken}` },
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
+    const scoreResponse = await callAdminProposalsList(
+      adminToken,
+      "/api/v1/admin/events/pqc-2026/proposals?sort=score_asc",
     );
     const scorePayload = (await scoreResponse.json()) as { proposals: Array<{ title: string }> };
     expect(scorePayload.proposals.map((proposal) => proposal.title)).toEqual([
@@ -255,23 +254,67 @@ describe("admin proposal endpoints", () => {
       "Endpoint Proposal",
     ]);
 
-    const filterResponse = await getEventProposals(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/admin/events/pqc-2026/proposals?recommendation=reject", {
-          headers: { authorization: `Bearer ${adminToken}` },
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
+    const filterResponse = await callAdminProposalsList(
+      adminToken,
+      "/api/v1/admin/events/pqc-2026/proposals?recommendation=reject",
     );
     const filterPayload = (await filterResponse.json()) as {
       proposals: Array<{ title: string; recommendation_reject_count: number }>;
-      pagination: { total: number };
+      page: { total: number };
     };
     expect(filterPayload.proposals).toHaveLength(1);
     expect(filterPayload.proposals[0].title).toBe("Lower Score Proposal");
     expect(Number(filterPayload.proposals[0].recommendation_reject_count)).toBe(1);
-    expect(filterPayload.pagination.total).toBe(1);
+    expect(filterPayload.page.total).toBe(1);
+  });
+
+  it("bounds the proposal list with limit/offset and reports a real total via page", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const secondProposalId = crypto.randomUUID();
+    const secondProposerId = crypto.randomUUID();
+
+    await env.DB.batch([
+      env.DB.prepare(`
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, organization_name, job_title, data_json, created_at, updated_at)
+        VALUES ('${secondProposerId}', 'speaker-paged@pkic.org', 'speaker-paged@pkic.org', 'Speaker', 'Paged', 'Org', 'Role', NULL, datetime('now'), datetime('now'))
+      `),
+      env.DB.prepare(`
+        INSERT INTO session_proposals (
+          id, event_id, proposer_user_id, status, proposal_type, title, abstract,
+          details_json, referral_code, manage_link_secret, submitted_at, updated_at, withdrawn_at
+        ) VALUES (
+          '${secondProposalId}', '${eventId}', '${secondProposerId}', 'submitted', 'talk', 'Second Page Proposal',
+          'Another proposal abstract that is long enough to represent realistic content for testing.',
+          NULL, NULL, 'hash-paged', datetime('now', '-1 minute'), datetime('now'), NULL
+        )
+      `),
+    ]);
+
+    const adminToken = await createAdminSession(env.DB, adminId, "token-admin-list-paged");
+    const firstPageResponse = await callAdminProposalsList(
+      adminToken,
+      "/api/v1/admin/events/pqc-2026/proposals?limit=1&offset=0",
+    );
+    expect(firstPageResponse.status).toBe(200);
+    const firstPagePayload = (await firstPageResponse.json()) as {
+      proposals: Array<{ title: string }>;
+      page: { total: number; hasMore: boolean; limit: number; offset: number };
+    };
+    expect(firstPagePayload.proposals).toHaveLength(1);
+    expect(firstPagePayload.page).toEqual({ limit: 1, offset: 0, total: 2, hasMore: true });
+
+    const secondPageResponse = await callAdminProposalsList(
+      adminToken,
+      "/api/v1/admin/events/pqc-2026/proposals?limit=1&offset=1",
+    );
+    const secondPagePayload = (await secondPageResponse.json()) as {
+      proposals: Array<{ title: string }>;
+      page: { total: number; hasMore: boolean; limit: number; offset: number };
+    };
+    expect(secondPagePayload.proposals).toHaveLength(1);
+    expect(secondPagePayload.page).toEqual({ limit: 1, offset: 1, total: 2, hasMore: false });
+    expect(secondPagePayload.proposals[0].title).not.toBe(firstPagePayload.proposals[0].title);
   });
 
   it("updates a proposal speaker profile including links", async () => {
@@ -343,20 +386,12 @@ describe("admin proposal endpoints", () => {
     const { adminId } = await seedProposalWithReviews(env.DB, eventId);
     const adminToken = await createAdminSession(env.DB, adminId, "token-admin-list-search");
 
-    const response = await getEventProposals(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/admin/events/pqc-2026/proposals?q=relevance", {
-          headers: { authorization: `Bearer ${adminToken}` },
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const response = await callAdminProposalsList(adminToken, "/api/v1/admin/events/pqc-2026/proposals?q=relevance");
 
     expect(response.status).toBe(200);
-    const payload = (await response.json()) as { proposals: Array<{ title: string }>; pagination: { total: number } };
+    const payload = (await response.json()) as { proposals: Array<{ title: string }>; page: { total: number } };
     expect(payload.proposals.map((proposal) => proposal.title)).toEqual(["Endpoint Proposal"]);
-    expect(payload.pagination.total).toBe(1);
+    expect(payload.page.total).toBe(1);
   });
 
   it("returns proposal detail with parsed answers and active form fields", async () => {

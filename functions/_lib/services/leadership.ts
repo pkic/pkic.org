@@ -18,8 +18,9 @@ import { parseLinksJson, findLinkedinUrl } from "../../../assets/shared/schemas/
 import { deterministicRepresentativeJoinSql } from "./membership/representative-lookup";
 import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
+import type { LeadershipBody } from "../../../assets/shared/schemas/leadership";
 
-export type LeadershipBody = "board" | "executive_council";
+export type { LeadershipBody };
 
 export interface LeadershipPositionAdmin {
   id: string;

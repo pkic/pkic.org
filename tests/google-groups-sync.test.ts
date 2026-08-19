@@ -10,6 +10,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
 import {
+  claimPendingGoogleGroupsSyncRows,
   enqueueGoogleGroupsSync,
   isGoogleGroupsSyncConfigured,
   listPendingGoogleGroupsSync,
@@ -228,5 +229,97 @@ describe("Google Groups sync", () => {
       queueId,
     );
     expect(rows[0].status).toBe("completed");
+  });
+
+  it("P9-R03: two concurrent claim calls on the same pending rows never both claim the same row (compare-and-set)", async () => {
+    const userId = await insertUser("gg-concurrent-claim@example.test");
+    const queueIds = await Promise.all(
+      Array.from({ length: 6 }, (_, i) =>
+        enqueueGoogleGroupsSync(env.DB, {
+          userId,
+          googleGroupEmail: `group-${i}@lists.pkic.org`,
+          action: "add_to_list",
+        }),
+      ),
+    );
+
+    // Two overlapping "cron invocations" racing to claim from the same
+    // pending backlog — the pre-fix bare-SELECT claim step would let both
+    // of these see and return the same rows.
+    const [claimedA, claimedB] = await Promise.all([
+      claimPendingGoogleGroupsSyncRows(env.DB, 10),
+      claimPendingGoogleGroupsSyncRows(env.DB, 10),
+    ]);
+
+    const idsA = claimedA.map((r) => r.id);
+    const idsB = claimedB.map((r) => r.id);
+
+    // Disjoint: no row was handed to both callers.
+    const overlap = idsA.filter((id) => idsB.includes(id));
+    expect(overlap).toEqual([]);
+
+    // Every claimed row was flipped to 'processing' by whichever caller won it.
+    expect(claimedA.every((r) => r.status === "processing")).toBe(true);
+    expect(claimedB.every((r) => r.status === "processing")).toBe(true);
+
+    // Together, the two disjoint claim sets cover every pending row exactly once.
+    const combined = [...idsA, ...idsB].sort();
+    expect(combined).toEqual([...queueIds].sort());
+
+    // A third caller arriving after both have claimed gets nothing left to claim.
+    const claimedC = await claimPendingGoogleGroupsSyncRows(env.DB, 10);
+    expect(claimedC).toEqual([]);
+
+    const rows = await queryAll<{ status: string }>(
+      env.DB,
+      "SELECT status FROM google_groups_sync_queue WHERE user_id = ?",
+      userId,
+    );
+    expect(rows).toHaveLength(6);
+    expect(rows.every((r) => r.status === "processing")).toBe(true);
+  });
+
+  it("P9-R03: two concurrent processGoogleGroupsSyncQueue runs never double-process (double-call the Directory API for) the same row", async () => {
+    const userId = await insertUser("gg-concurrent-process@example.test");
+    const queueIds = await Promise.all(
+      Array.from({ length: 5 }, (_, i) =>
+        enqueueGoogleGroupsSync(env.DB, {
+          userId,
+          googleGroupEmail: `group-${i}@lists.pkic.org`,
+          action: "add_to_list",
+        }),
+      ),
+    );
+
+    const serviceAccountEnv = await fakeServiceAccountEnv();
+    const fetchMock = stubGoogleFetch(200);
+
+    const [resultA, resultB] = await Promise.all([
+      processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv, 10),
+      processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv, 10),
+    ]);
+
+    // Every enqueued row was processed exactly once in total across the two
+    // overlapping invocations — never lost, never double-processed.
+    expect(resultA.processed + resultB.processed).toBe(queueIds.length);
+    expect(resultA.succeeded + resultB.succeeded).toBe(queueIds.length);
+
+    const rows = await queryAll<{ id: string; status: string; attempts: number }>(
+      env.DB,
+      "SELECT id, status, attempts FROM google_groups_sync_queue WHERE user_id = ?",
+      userId,
+    );
+    expect(rows).toHaveLength(queueIds.length);
+    for (const row of rows) {
+      expect(row.status).toBe("completed");
+      // attempts is incremented via SQL `attempts + 1`, so a row that was
+      // double-claimed (the pre-fix bug) would show attempts === 2 here.
+      expect(row.attempts).toBe(1);
+    }
+
+    // The Directory API "add member" endpoint was called exactly once per
+    // row, not twice for any row — the direct symptom of the old race.
+    const addMemberCalls = fetchMock.mock.calls.filter(([url]) => typeof url === "string" && url.includes("/members"));
+    expect(addMemberCalls).toHaveLength(queueIds.length);
   });
 });

@@ -90,8 +90,38 @@ describe("admin event management endpoints", () => {
 
     const listResponse = await callAdmin("/api/v1/admin/events");
     expect(listResponse.status).toBe(200);
-    const listPayload = (await listResponse.json()) as { events: Array<{ slug: string }> };
+    const listPayload = (await listResponse.json()) as {
+      events: Array<{ slug: string }>;
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
     expect(listPayload.events.map((event) => event.slug)).toEqual(expect.arrayContaining(["pqc-2026", "pqc-2027"]));
+    expect(listPayload.page.total).toBeGreaterThanOrEqual(2);
+  });
+
+  it("P6M-P2-04: bounds the events list with ?limit=/?offset= via the query schema (data.query, not a fetch-everything scan)", async () => {
+    await setupAdmin();
+    await callAdmin("/api/v1/admin/events", {
+      method: "POST",
+      body: JSON.stringify({ slug: "bounded-a", name: "Bounded A", timezone: "UTC" }),
+    });
+    await callAdmin("/api/v1/admin/events", {
+      method: "POST",
+      body: JSON.stringify({ slug: "bounded-b", name: "Bounded B", timezone: "UTC" }),
+    });
+
+    const firstPage = await callAdmin("/api/v1/admin/events?limit=1&offset=0");
+    expect(firstPage.status).toBe(200);
+    const firstBody = (await firstPage.json()) as {
+      events: unknown[];
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
+    expect(firstBody.events).toHaveLength(1);
+    expect(firstBody.page.limit).toBe(1);
+    expect(firstBody.page.hasMore).toBe(true);
+    expect(firstBody.page.total).toBeGreaterThanOrEqual(3);
+
+    const invalidLimit = await callAdmin("/api/v1/admin/events?limit=0");
+    expect(invalidLimit.status).toBe(400);
   });
 
   it("returns details and persists settings updates", async () => {
@@ -226,6 +256,42 @@ describe("admin event management endpoints", () => {
         expect.objectContaining({ user_email: "organizer@example.test", permission: "organizer" }),
       ]),
     );
+  });
+
+  it("P6M-P2-06: bounds the event-team permissions list with ?limit=/?offset= and sorts via a table-qualified column", async () => {
+    await setupAdmin();
+
+    for (const [email, permission] of [
+      ["p1@example.test", "organizer"],
+      ["p2@example.test", "moderator"],
+      ["p3@example.test", "volunteer"],
+    ] as const) {
+      const res = await callAdmin("/api/v1/admin/events/pqc-2026/permissions", {
+        method: "POST",
+        body: JSON.stringify({ userEmail: email, permission }),
+      });
+      expect(res.status).toBe(201);
+    }
+
+    const firstPage = await callAdmin("/api/v1/admin/events/pqc-2026/permissions?limit=2&offset=0");
+    expect(firstPage.status).toBe(200);
+    const firstBody = (await firstPage.json()) as {
+      permissions: unknown[];
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
+    expect(firstBody.permissions).toHaveLength(2);
+    expect(firstBody.page).toEqual({ limit: 2, offset: 0, total: 3, hasMore: true });
+
+    // ur.created_at is table-qualified because the query joins `users` (also
+    // has created_at) — an unqualified ORDER BY created_at would 500 with
+    // "ambiguous column name".
+    const sorted = await callAdmin(
+      `/api/v1/admin/events/pqc-2026/permissions?sort=${encodeURIComponent("ur.created_at")}`,
+    );
+    expect(sorted.status).toBe(200);
+
+    const invalidLimit = await callAdmin("/api/v1/admin/events/pqc-2026/permissions?limit=0");
+    expect(invalidLimit.status).toBe(400);
   });
 
   it("allows admin to reinstate a cancelled registration and rejects double-cancel", async () => {

@@ -23,6 +23,7 @@ import { json } from "../../../../_lib/http";
 import { parseJsonSafe } from "../../../../_lib/utils/json";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { adminEmailOutboxGetRouteSchema } from "../../../../../assets/shared/schemas/route-contracts";
+import type { EmailMessageType } from "../../../../../assets/shared/schemas/admin-email-templates";
 interface OutboxListRow {
   id: string;
   event_id: string | null;
@@ -33,7 +34,7 @@ interface OutboxListRow {
   recipient_email: string;
   subject: string | null;
   payload_json: string;
-  message_type: "transactional" | "promotional";
+  message_type: EmailMessageType;
   provider: string;
   provider_message_id: string | null;
   status: "queued" | "sending" | "sent" | "failed" | "retrying" | "bounced";
@@ -46,6 +47,12 @@ interface OutboxListRow {
 }
 
 interface TemplateSubjectRow {
+  subject_template: string | null;
+}
+
+interface TemplateVersionSubjectRow {
+  template_key: string;
+  version: number;
   subject_template: string | null;
 }
 
@@ -115,6 +122,50 @@ function buildWhereClause(
   };
 }
 
+/**
+ * Warms `cache` with subject templates for every distinct (template_key,
+ * template_version) pair referenced by `rows` in a single query, instead of
+ * letting `resolveSubjectTemplate` fall back to one `email_template_versions`
+ * lookup per row. `resolveSubjectTemplate` still races per row (see below),
+ * so without this the per-row cache can be missed for every row that shares
+ * a (key, version) pair within the same page.
+ */
+async function preloadVersionedSubjectTemplates(
+  c: AdminContext,
+  rows: OutboxListRow[],
+  cache: Map<string, string | null>,
+): Promise<void> {
+  const versionedKeys = [
+    ...new Set(rows.filter((row) => row.template_version !== null).map((row) => row.template_key)),
+  ];
+  if (versionedKeys.length === 0) {
+    return;
+  }
+
+  const placeholders = versionedKeys.map(() => "?").join(", ");
+  const versionRows = await all<TemplateVersionSubjectRow>(
+    requestDb(c),
+    `SELECT template_key, version, subject_template
+     FROM email_template_versions
+     WHERE template_key IN (${placeholders})`,
+    versionedKeys,
+  );
+
+  for (const versionRow of versionRows) {
+    cache.set(`${versionRow.template_key}:${versionRow.version}`, versionRow.subject_template ?? null);
+  }
+
+  for (const row of rows) {
+    if (row.template_version === null) {
+      continue;
+    }
+    const cacheKey = `${row.template_key}:${row.template_version}`;
+    if (!cache.has(cacheKey)) {
+      cache.set(cacheKey, null);
+    }
+  }
+}
+
 async function resolveSubjectTemplate(
   c: AdminContext,
   row: OutboxListRow,
@@ -169,18 +220,18 @@ async function buildPreviewSubject(
   return renderSubject(subjectTemplate, fallbackSubject, payload);
 }
 
-export const AdminEmailOutboxGet = openApiRoute(adminEmailOutboxGetRouteSchema, async (c: AdminContext) => {
+export const AdminEmailOutboxGet = openApiRoute(adminEmailOutboxGetRouteSchema, async (c: AdminContext, data) => {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  const url = new URL(c.req.raw.url);
-  const status = (url.searchParams.get("status") ?? "").trim().toLowerCase();
-  const messageType = (url.searchParams.get("messageType") ?? "").trim().toLowerCase();
-  const dueNow = ["1", "true", "yes"].includes((url.searchParams.get("dueNow") ?? "").trim().toLowerCase());
-  const search = (url.searchParams.get("q") ?? "").trim();
-  const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50", 10) || 50, 200);
-  const offset = Math.max(0, parseInt(url.searchParams.get("offset") ?? "0", 10) || 0);
+  const { status, messageType, dueNow = false, q, limit = 50, offset = 0 } = data.query;
+  const search = q ?? "";
 
-  const { where, params } = buildWhereClause(status, messageType, search, dueNow);
+  const { where, params } = buildWhereClause(
+    (status ?? "").toLowerCase(),
+    (messageType ?? "").toLowerCase(),
+    search,
+    dueNow,
+  );
   const aggregateFrom = search ? "FROM email_outbox o LEFT JOIN events e ON e.id = o.event_id" : "FROM email_outbox o";
 
   const [rows, totalRow, statusCounts, messageTypeCounts, templateCounts, dueCounts, dueNextRow] = await Promise.all([
@@ -273,6 +324,7 @@ export const AdminEmailOutboxGet = openApiRoute(adminEmailOutboxGetRouteSchema, 
   ]);
 
   const subjectTemplateCache = new Map<string, string | null>();
+  await preloadVersionedSubjectTemplates(c, rows, subjectTemplateCache);
   const outbox = await Promise.all(
     rows.map(async (row) => {
       const payload = parseJsonSafe<Record<string, unknown>>(row.payload_json, {});

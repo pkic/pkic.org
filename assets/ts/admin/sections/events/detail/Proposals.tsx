@@ -15,8 +15,7 @@ interface ProposalsResponse {
   proposals: ProposalSummary[];
   access: ProposalAccess;
   stats?: ProposalStats;
-  page?: { offset: number; limit: number; total: number; hasMore: boolean };
-  pagination?: { offset: number; limit: number; total: number; hasMore: boolean };
+  page: { offset: number; limit: number; total: number; hasMore: boolean };
 }
 
 type RecommendationFilter = "" | "accept" | "needs-work" | "reject";
@@ -182,7 +181,7 @@ function ProposalsList({ slug }: { slug: string }) {
           if (resp.stats) setStats(resp.stats);
           return resp.proposals;
         }}
-        resolvePage={(d) => ((d as ProposalsResponse).pagination ?? (d as ProposalsResponse).page)!}
+        resolvePage={(d) => (d as ProposalsResponse).page}
         paginate
         initialSort="submitted_desc"
         searchPlaceholder="Search proposals / reviews…"

@@ -1,10 +1,12 @@
+import type { EmailContentType } from "../../../assets/shared/schemas/admin-email-templates";
+
 function escapeHtml(input: string): string {
   return input.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 export function applyCampaignCustomText(
   templateContent: string,
-  contentType: "markdown" | "html" | "text",
+  contentType: EmailContentType,
   customText: string | null | undefined,
 ): string {
   const text = (customText ?? "").trim();

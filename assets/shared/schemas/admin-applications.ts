@@ -63,9 +63,9 @@ export const adminApplicationDetailRouteSchema = {
 export const applicationStageTransitionSchema = z.object({
   // "pending" and "approved" are deliberately excluded: pending is only a
   // starting state, and reaching approved requires the full onboarding
-  // orchestration in approveApplication() (member-provisioning.ts), not a
-  // bare stage flip — see functions/_lib/services/member-applications.ts's
-  // ALLOWED_STAGE_TRANSITIONS header comment.
+  // orchestration in approveApplication() (approve.ts), not a bare stage
+  // flip — see isValidStageTransition() in
+  // functions/_lib/services/membership/applications/transition.ts.
   toStage: applicationStageSchema.exclude(["pending", "approved"]),
   onHoldSubtype: onHoldSubtypeSchema.optional(),
   note: z.string().trim().max(2000).optional(),

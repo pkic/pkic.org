@@ -20,21 +20,23 @@ import { uuid } from "../../../../../_lib/utils/ids";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import {
   adminEventPermissionSchema,
+  adminEventTeamListQuerySchema,
   EVENT_TEAM_SORT_COLUMNS,
-  eventTeamSortValueSchema,
+  eventSlugParamsSchema,
+  type EventTeamPermission,
 } from "../../../../../../assets/shared/schemas/api";
+import { buildPageInfo } from "../../../../../../assets/shared/schemas/pagination";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 
-type EventPermissionValue = "organizer" | "program_committee" | "moderator" | "volunteer";
-
-const PERMISSION_TO_ROLE_ID: Record<EventPermissionValue, string> = {
+const PERMISSION_TO_ROLE_ID: Record<EventTeamPermission, string> = {
   organizer: "role-event_organizer",
   program_committee: "role-program_committee",
   moderator: "role-event_moderator",
   volunteer: "role-event_volunteer",
 };
 
-const ROLE_ID_TO_PERMISSION: Record<string, EventPermissionValue> = {
+const ROLE_ID_TO_PERMISSION: Record<string, EventTeamPermission> = {
   "role-event_organizer": "organizer",
   "role-program_committee": "program_committee",
   "role-event_moderator": "moderator",
@@ -56,28 +58,48 @@ interface ExistingPermRow {
   id: string;
 }
 
-export async function onRequestGet(c: AdminContext): Promise<Response> {
+const adminEventTeamListRouteSchema = {
+  tags: ["Admin events"],
+  summary: "List event-level roles (admin)",
+  description:
+    "Paginated, optionally sorted list of event-team role grants (organizer/program_committee/moderator/volunteer).",
+  request: { params: eventSlugParamsSchema, query: adminEventTeamListQuerySchema },
+  responses: {
+    "200": { description: "Event-team permissions list." },
+  },
+};
+
+export const AdminEventTeamList = openApiRoute(adminEventTeamListRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
   requirePermission(admin, "events:manage", { type: "event", id: event.id });
 
-  const url = new URL(c.req.raw.url);
-  const parsedSort = eventTeamSortValueSchema.safeParse(url.searchParams.get("sort") ?? undefined);
-  const sort = parsedSort.success ? parsedSort.data : undefined;
+  const { sort, limit = 100, offset = 0 } = data.query;
   const orderBy = resolveOrderBy(sort, EVENT_TEAM_SORT_COLUMNS, "ORDER BY role_id ASC, user_email ASC");
 
-  const rows = await all<PermissionRow>(
-    requestDb(c),
-    `SELECT ur.id, ur.user_email, ur.user_id, ur.role_id,
-            ur.granted_by_user_id AS granted_by_id, ur.expires_at, ur.created_at,
-            u.email AS granter_email
-     FROM user_roles ur
-     LEFT JOIN users u ON u.id = ur.granted_by_user_id
-     WHERE ur.context_type = 'event' AND ur.context_id = ? AND ur.revoked_at IS NULL
-       AND ur.role_id IN ('role-event_organizer', 'role-program_committee', 'role-event_moderator', 'role-event_volunteer')
-     ${orderBy}`,
-    [event.id],
-  );
+  const [rows, totalRow] = await Promise.all([
+    all<PermissionRow>(
+      requestDb(c),
+      `SELECT ur.id, ur.user_email, ur.user_id, ur.role_id,
+              ur.granted_by_user_id AS granted_by_id, ur.expires_at, ur.created_at,
+              u.email AS granter_email
+       FROM user_roles ur
+       LEFT JOIN users u ON u.id = ur.granted_by_user_id
+       WHERE ur.context_type = 'event' AND ur.context_id = ? AND ur.revoked_at IS NULL
+         AND ur.role_id IN ('role-event_organizer', 'role-program_committee', 'role-event_moderator', 'role-event_volunteer')
+       ${orderBy}
+       LIMIT ? OFFSET ?`,
+      [event.id, limit, offset],
+    ),
+    first<{ total: number }>(
+      requestDb(c),
+      `SELECT COUNT(*) AS total
+       FROM user_roles ur
+       WHERE ur.context_type = 'event' AND ur.context_id = ? AND ur.revoked_at IS NULL
+         AND ur.role_id IN ('role-event_organizer', 'role-program_committee', 'role-event_moderator', 'role-event_volunteer')`,
+      [event.id],
+    ),
+  ]);
 
   const permissions = rows.map((row) => ({
     id: row.id,
@@ -90,8 +112,9 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     granter_email: row.granter_email,
   }));
 
-  return json({ permissions });
-}
+  const total = totalRow?.total ?? 0;
+  return json({ permissions, page: buildPageInfo(limit, offset, total, permissions.length) });
+});
 
 export async function onRequestPost(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
@@ -100,7 +123,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   requirePermission(admin, "events:manage", { type: "event", id: event.id });
 
   const normalizedEmail = normalizeEmail(body.userEmail);
-  const roleId = PERMISSION_TO_ROLE_ID[body.permission as EventPermissionValue];
+  const roleId = PERMISSION_TO_ROLE_ID[body.permission as EventTeamPermission];
 
   const existing = await first<ExistingPermRow>(
     requestDb(c),
@@ -147,10 +170,4 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     },
     201,
   );
-}
-
-export async function onRequest(c: AdminContext): Promise<Response> {
-  if (c.req.raw.method === "GET") return onRequestGet(c);
-  if (c.req.raw.method === "POST") return onRequestPost(c);
-  return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
 }

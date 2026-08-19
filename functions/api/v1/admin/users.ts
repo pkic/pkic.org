@@ -4,25 +4,25 @@
  * Returns a pageable list of users.  Designed for the admin console's user
  * management section; supports filtering by role and a simple email/name search.
  *
- * Query params:
+ * Query params (see usersListQuerySchema, assets/shared/schemas/admin-users.ts):
  *   role   — filter to a specific role (admin | user | guest)
  *   type   — filter by computed membership type (member | event_attendee | contact_only)
- *   search — partial match against email or name
- *   limit  — max rows (default 100, max 500)
+ *   q      — partial match against email or name (alias: search)
+ *   search — partial match against email or name (alias: q)
+ *   sort   — allowlisted column, optionally `-`-prefixed for descending
+ *   limit  — max rows (default 50, max 500 — largest table in the system, P6M-P2-08)
  *   offset — pagination offset (default 0)
  */
 import { json } from "../../../_lib/http";
 import { requireAdminFromRequest } from "../../../_lib/auth/admin";
 import { all, first } from "../../../_lib/db/queries";
 import { resolveOrderBy } from "../../../_lib/db/sort";
-import {
-  ADMIN_USERS_SORT_COLUMNS,
-  usersSortValueSchema,
-  usersTypeValueSchema,
-} from "../../../../assets/shared/schemas/admin-users";
+import { ADMIN_USERS_SORT_COLUMNS, usersListRouteSchema } from "../../../../assets/shared/schemas/admin-users";
+import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import { requestDb, type AdminContext } from "../../../_lib/db/context";
 import { deterministicRepresentativeJoinSql } from "../../../_lib/services/membership/representative-lookup";
 import { parseLinksJson } from "../../../../assets/shared/schemas/links";
+import { openApiRoute } from "../../../_lib/openapi/route";
 
 interface UserRow {
   id: string;
@@ -42,34 +42,17 @@ interface UserRow {
   event_participation_count: number;
 }
 
-export async function onRequestGet(c: AdminContext): Promise<Response> {
+export const UsersList = openApiRoute(usersListRouteSchema, async (c: AdminContext, data) => {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  const url = new URL(c.req.raw.url);
-  const role = url.searchParams.get("role") ?? "";
+  const { role, type, sort, limit = 50, offset = 0 } = data.query;
   // D1's SQLite enforces SQLITE_LIMIT_LIKE_PATTERN_LENGTH=50 on the whole
   // `%…%` pattern (found via browser-verification pass —
   // searching a real, moderately long email 500'd with "LIKE or GLOB
   // pattern too complex"), so anything over ~48 chars of raw input throws
   // before any row is even considered. Truncate well under that; a prefix
   // is still a valid (if less specific) substring match.
-  const search = (url.searchParams.get("q") ?? url.searchParams.get("search") ?? "").trim().slice(0, 40);
-  const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50") || 50, 500);
-  const offset = parseInt(url.searchParams.get("offset") ?? "0") || 0;
-  // An invalid sort value fails the refine (unknown column), so parsed.success
-  // is false and we just fall back to the default order — same "quietly
-  // ignore" behavior admin-organizations.ts's route uses.
-  const sortParsed = usersSortValueSchema.safeParse(url.searchParams.get("sort") ?? undefined);
-  const sort = sortParsed.success ? sortParsed.data : undefined;
-  // Unlike `sort`/`role`, an unrecognized `type` is rejected outright rather
-  // than silently ignored — it's a computed classification (member |
-  // event_attendee | contact_only), not a passthrough column value, so a
-  // typo would otherwise silently return the unfiltered list.
-  const typeParsed = usersTypeValueSchema.safeParse(url.searchParams.get("type") ?? undefined);
-  if (!typeParsed.success) {
-    return json({ error: { code: "VALIDATION_ERROR", message: "Invalid type filter" } }, 400);
-  }
-  const type = typeParsed.data;
+  const search = (data.query.q ?? data.query.search ?? "").slice(0, 40);
 
   const conditions: string[] = [];
   const params: unknown[] = [];
@@ -102,47 +85,51 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   // directly) and an organization representative (members.user_id is NULL
   // for org-tied aggregates — migration 0000's CHECK — so a representative
   // resolves only via their own organization_representatives row).
-  const users = await all<UserRow>(
-    requestDb(c),
-    `SELECT u.id, u.email, u.first_name, u.last_name, u.organization_name, u.role, u.active, u.created_at,
-            u.links_json,
-            COALESCE(rep.id, mi.id) AS member_id, mca.category_code AS member_category,
-            COALESCE(m.status, mi.status) AS member_status,
-            m.organization_id AS member_organization_id, o.name AS member_organization_name,
-            (SELECT COUNT(*) FROM event_participants ep WHERE ep.user_id = u.id) AS event_participation_count
-     FROM users u
-     -- A user can represent more than one organization at once (migration
-     -- 0037) — join to a single deterministic representative row (earliest
-     -- joined_at) instead of fanning out one result row (and one
-     -- duplicate/miscounted page entry) per represented organization.
-${deterministicRepresentativeJoinSql("u.id")}
-     LEFT JOIN members m ON m.id = rep.member_id
-     LEFT JOIN members mi ON mi.user_id = u.id
-     LEFT JOIN organizations o ON o.id = m.organization_id
-     LEFT JOIN member_category_assignments mca ON mca.member_id = COALESCE(m.id, mi.id)
-     ${where.replace(/\bm\.id\b/g, "COALESCE(m.id, mi.id)")}
-     ${orderBy}
-     LIMIT ? OFFSET ?`,
-    [...params, limit + 1, offset],
-  );
+  const listWhere = where.replace(/\bm\.id\b/g, "COALESCE(m.id, mi.id)");
 
-  const hasMore = users.length > limit;
-  const rows = hasMore ? users.slice(0, limit) : users;
-
-  const totalWhere = where.replace(/\bm\.id\b/g, "COALESCE(m.id, mi.id)");
-  const totalRow = await first<{ total: number }>(
-    requestDb(c),
-    `SELECT COUNT(*) AS total FROM users u
+  // The page query and the real COUNT(*) share the same WHERE filters (and
+  // joins wherever a filter references a joined column) and run
+  // concurrently — P6M-P2-08/P6M-CC-03: this replaced a `limit+1`-and-slice
+  // `hasMore` computed *in addition to* this same COUNT(*), which was
+  // redundant work now that the count already exists.
+  const [users, totalRow] = await Promise.all([
+    all<UserRow>(
+      requestDb(c),
+      `SELECT u.id, u.email, u.first_name, u.last_name, u.organization_name, u.role, u.active, u.created_at,
+              u.links_json,
+              COALESCE(rep.id, mi.id) AS member_id, mca.category_code AS member_category,
+              COALESCE(m.status, mi.status) AS member_status,
+              m.organization_id AS member_organization_id, o.name AS member_organization_name,
+              (SELECT COUNT(*) FROM event_participants ep WHERE ep.user_id = u.id) AS event_participation_count
+       FROM users u
+       -- A user can represent more than one organization at once (migration
+       -- 0037) — join to a single deterministic representative row (earliest
+       -- joined_at) instead of fanning out one result row (and one
+       -- duplicate/miscounted page entry) per represented organization.
 ${deterministicRepresentativeJoinSql("u.id")}
-     LEFT JOIN members m ON m.id = rep.member_id
-     LEFT JOIN members mi ON mi.user_id = u.id
-     ${totalWhere}`,
-    params,
-  );
+       LEFT JOIN members m ON m.id = rep.member_id
+       LEFT JOIN members mi ON mi.user_id = u.id
+       LEFT JOIN organizations o ON o.id = m.organization_id
+       LEFT JOIN member_category_assignments mca ON mca.member_id = COALESCE(m.id, mi.id)
+       ${listWhere}
+       ${orderBy}
+       LIMIT ? OFFSET ?`,
+      [...params, limit, offset],
+    ),
+    first<{ total: number }>(
+      requestDb(c),
+      `SELECT COUNT(*) AS total FROM users u
+${deterministicRepresentativeJoinSql("u.id")}
+       LEFT JOIN members m ON m.id = rep.member_id
+       LEFT JOIN members mi ON mi.user_id = u.id
+       ${listWhere}`,
+      params,
+    ),
+  ]);
   const total = Number(totalRow?.total ?? 0);
 
   return json({
-    users: rows.map(({ links_json, event_participation_count, ...row }) => ({
+    users: users.map(({ links_json, event_participation_count, ...row }) => ({
       ...row,
       links: parseLinksJson(links_json),
       membership: row.member_id
@@ -157,13 +144,6 @@ ${deterministicRepresentativeJoinSql("u.id")}
       type: row.member_id ? "member" : event_participation_count > 0 ? "event_attendee" : "contact_only",
       eventParticipationCount: event_participation_count,
     })),
-    page: { limit, offset, hasMore, total },
+    page: buildPageInfo(limit, offset, total, users.length),
   });
-}
-
-export async function onRequest(c: AdminContext): Promise<Response> {
-  if (c.req.raw.method !== "GET") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
-  return onRequestGet(c);
-}
+});

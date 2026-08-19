@@ -31,6 +31,39 @@ export interface SponsorPortalAttendeeRow {
   attendanceType: string | null;
 }
 
+const SPONSOR_PORTAL_ATTENDEES_FROM = `
+  FROM registrations r
+  JOIN users u ON u.id = r.user_id
+  JOIN consent_acceptances ca ON ca.registration_id = r.id AND ca.term_key = 'sponsor-data-sharing'
+  WHERE r.event_id = ? AND r.status = 'registered'
+`;
+
+function toAttendeeRow(r: {
+  registration_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  organization_name: string | null;
+  job_title: string | null;
+  attendance_type: string | null;
+}): SponsorPortalAttendeeRow {
+  return {
+    registrationId: r.registration_id,
+    firstName: r.first_name,
+    lastName: r.last_name,
+    email: r.email,
+    organizationName: r.organization_name,
+    jobTitle: r.job_title,
+    attendanceType: r.attendance_type,
+  };
+}
+
+/**
+ * Unbounded — for the CSV export endpoint (P6M-P2-11's finding is about the
+ * paginated JSON list endpoint specifically; a CSV export inherently needs
+ * every consenting row in one response, so it keeps the full unbounded
+ * fetch here rather than composing the pagination contract).
+ */
 export async function listSponsorPortalAttendees(
   db: DatabaseLike,
   eventId: string,
@@ -47,21 +80,40 @@ export async function listSponsorPortalAttendees(
     db,
     `SELECT r.id AS registration_id, u.first_name, u.last_name, u.email,
             u.organization_name, u.job_title, r.attendance_type
-     FROM registrations r
-     JOIN users u ON u.id = r.user_id
-     JOIN consent_acceptances ca ON ca.registration_id = r.id AND ca.term_key = 'sponsor-data-sharing'
-     WHERE r.event_id = ? AND r.status = 'registered'
+     ${SPONSOR_PORTAL_ATTENDEES_FROM}
      ORDER BY u.last_name ASC, u.first_name ASC`,
     [eventId],
   );
 
-  return rows.map((r) => ({
-    registrationId: r.registration_id,
-    firstName: r.first_name,
-    lastName: r.last_name,
-    email: r.email,
-    organizationName: r.organization_name,
-    jobTitle: r.job_title,
-    attendanceType: r.attendance_type,
-  }));
+  return rows.map(toAttendeeRow);
+}
+
+/** Bounded LIMIT/OFFSET + real COUNT(*) — used by the JSON list endpoint (P6M-P2-11). */
+export async function listSponsorPortalAttendeesPage(
+  db: DatabaseLike,
+  eventId: string,
+  params: { limit: number; offset: number },
+): Promise<{ attendees: SponsorPortalAttendeeRow[]; total: number }> {
+  const [rows, totalRow] = await Promise.all([
+    all<{
+      registration_id: string;
+      first_name: string | null;
+      last_name: string | null;
+      email: string | null;
+      organization_name: string | null;
+      job_title: string | null;
+      attendance_type: string | null;
+    }>(
+      db,
+      `SELECT r.id AS registration_id, u.first_name, u.last_name, u.email,
+              u.organization_name, u.job_title, r.attendance_type
+       ${SPONSOR_PORTAL_ATTENDEES_FROM}
+       ORDER BY u.last_name ASC, u.first_name ASC
+       LIMIT ? OFFSET ?`,
+      [eventId, params.limit, params.offset],
+    ),
+    first<{ total: number }>(db, `SELECT COUNT(*) AS total ${SPONSOR_PORTAL_ATTENDEES_FROM}`, [eventId]),
+  ]);
+
+  return { attendees: rows.map(toAttendeeRow), total: totalRow?.total ?? 0 };
 }

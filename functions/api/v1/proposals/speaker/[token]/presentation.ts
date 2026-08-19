@@ -79,7 +79,7 @@ export async function onRequestPut(c: any): Promise<Response> {
     parsed,
   );
 
-  await recordPresentationUpload(c.env.DB, proposal.id, r2Key, speaker.user_id, {
+  await recordPresentationUpload(c.env.DB, bucket, proposal.id, r2Key, speaker.user_id, {
     fileName: parsed.name ?? null,
     fileSize: parsed.size,
     mimeType: parsed.type,

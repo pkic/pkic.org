@@ -20,7 +20,7 @@ import type {
   AdminFormDetailField,
 } from "../../../types";
 import { FormAnswerTable } from "./FormResponses";
-import { normalizeProfileLinks } from "../../profile-links";
+import { normalizeProfileLinks } from "../../../../shared/widgets/profile-links";
 import { presentationUploadRequest } from "../../../../../shared/presentation-upload";
 
 // ─── Types ────────────────────────────────────────────────────────────────────

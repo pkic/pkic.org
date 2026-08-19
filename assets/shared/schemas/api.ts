@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { defaultedSourceTypeSchema, sourceTypeSchema } from "./source";
 import { linksSchema } from "./links";
-import { paginationQuerySchema } from "./pagination";
+import { paginationQuerySchema, paginatedResponseSchema, sortColumnSchema } from "./pagination";
+import { emailContentTypeSchema, emailMessageTypeSchema } from "./admin-email-templates";
 
 export { sourceTypeSchema };
 
@@ -66,16 +67,21 @@ export const registrationManageTokenParamsSchema = z.object({
 
 export const adminEmailOutboxQuerySchema = z.object({
   status: z.string().trim().optional(),
-  messageType: z.enum(["transactional", "promotional"]).optional(),
+  messageType: emailMessageTypeSchema.optional(),
   dueNow: z.coerce.boolean().optional(),
   q: z.string().trim().optional(),
   limit: z.coerce.number().int().min(1).max(200).optional(),
   offset: z.coerce.number().int().min(0).optional(),
 });
 
-export const adminEventProposalsQuerySchema = z.object({
+export const adminEventProposalsQuerySchema = paginationQuerySchema.extend({
   status: z.string().trim().optional(),
   recommendation: z.enum(["accept", "reject", "needs-work"]).optional(),
+  // Not the bare-column `sortColumnSchema` convention used elsewhere — each
+  // of these values resolves to a multi-column ORDER BY (e.g. score_desc
+  // sorts NULLs-last, then submitted_at as a tiebreaker), which a single
+  // allowlisted column name can't express. See orderByMap in
+  // functions/api/v1/admin/events/[eventSlug]/proposals.ts.
   sort: z
     .enum([
       "submitted_desc",
@@ -100,8 +106,9 @@ export const adminEventProposalsQuerySchema = z.object({
     .optional(),
   q: z.string().trim().optional(),
   search: z.string().trim().optional(),
-  limit: z.coerce.number().int().min(1).max(200).optional(),
-  offset: z.coerce.number().int().min(0).optional(),
+  // "1" shows the soft-deleted queue instead of live proposals; any other
+  // value (including omitted) keeps the default live view.
+  deleted: z.string().trim().optional(),
 });
 
 // ── `?sort=` allowlists for admin event-scoped list endpoints (B5) ─────────
@@ -110,29 +117,24 @@ export const adminEventProposalsQuerySchema = z.object({
 // DESC. An unrecognized value fails validation and callers fall back to the
 // endpoint's default order (see functions/_lib/db/sort.ts).
 
-function sortValueSchema(allowedColumns: readonly string[]) {
-  return z
-    .string()
-    .trim()
-    .min(1)
-    .max(40)
-    .refine(
-      (value) => {
-        const field = value.startsWith("-") ? value.slice(1) : value;
-        return allowedColumns.includes(field);
-      },
-      { message: "Unknown sort column" },
-    )
-    .optional();
-}
-
 /** Allowlisted sort columns for GET /api/v1/admin/events — see functions/api/v1/admin/events.ts. */
 export const EVENTS_LIST_SORT_COLUMNS = ["name", "starts_at", "registration_mode", "total_registrations"] as const;
-export const eventsListSortValueSchema = sortValueSchema(EVENTS_LIST_SORT_COLUMNS);
+export const eventsListSortValueSchema = sortColumnSchema(EVENTS_LIST_SORT_COLUMNS);
+
+export const adminEventsListQuerySchema = paginationQuerySchema.extend({
+  sort: eventsListSortValueSchema,
+});
 
 /** Allowlisted sort columns for GET /api/v1/admin/events/:eventSlug/permissions (Team) — see functions/api/v1/admin/events/[eventSlug]/permissions.ts. */
-export const EVENT_TEAM_SORT_COLUMNS = ["user_email", "role_id", "created_at", "expires_at"] as const;
-export const eventTeamSortValueSchema = sortValueSchema(EVENT_TEAM_SORT_COLUMNS);
+// `created_at` is table-qualified (`ur.`) for the same reason as
+// EVENT_INVITES_SORT_COLUMNS above — the route joins `users`, which also has
+// its own `created_at`.
+export const EVENT_TEAM_SORT_COLUMNS = ["user_email", "role_id", "ur.created_at", "expires_at"] as const;
+export const eventTeamSortValueSchema = sortColumnSchema(EVENT_TEAM_SORT_COLUMNS);
+
+export const adminEventTeamListQuerySchema = paginationQuerySchema.extend({
+  sort: eventTeamSortValueSchema,
+});
 
 /**
  * Allowlisted sort columns for GET /api/v1/admin/events/:eventSlug/registrations
@@ -162,19 +164,38 @@ export const adminEventRegistrationsQuerySchema = paginationQuerySchema.extend({
 });
 
 /** Allowlisted sort columns for GET /api/v1/admin/events/:eventSlug/invites — see functions/api/v1/admin/events/[eventSlug]/invites/index.ts. */
-export const EVENT_INVITES_SORT_COLUMNS = ["invitee_email", "status", "created_at", "accepted_at"] as const;
-export const eventInvitesSortValueSchema = sortValueSchema(EVENT_INVITES_SORT_COLUMNS);
+// `created_at` is table-qualified (`i.`) because the route joins `users`,
+// which also has its own `created_at` — an unqualified ORDER BY created_at
+// is ambiguous and 500s (discovered by this pass's own pagination test;
+// pre-existing, not previously exercised by any test).
+export const EVENT_INVITES_SORT_COLUMNS = ["invitee_email", "status", "i.created_at", "accepted_at"] as const;
+export const eventInvitesSortValueSchema = sortColumnSchema(EVENT_INVITES_SORT_COLUMNS);
+
+// P6M-P2-05: `status`/`type` are validated leniently (an unrecognized value
+// is treated as "no filter", matching the pre-existing handler's own
+// `validStatuses.has(...)`/`validTypes.has(...)` tolerant behavior) rather
+// than a strict enum that would 400 — same "enforced-but-non-strict"
+// convention as adminEventRegistrationsQuerySchema.
+export const adminEventInvitesListQuerySchema = paginationQuerySchema.extend({
+  status: z.string().trim().max(20).optional(),
+  type: z.string().trim().max(20).optional(),
+  q: z.string().trim().max(200).optional(),
+  sort: eventInvitesSortValueSchema,
+});
 
 /**
  * Allowlisted sort columns for GET /api/v1/admin/forms/:formKey/submissions
- * (FormResponses) — see functions/api/v1/admin/forms/[formKey]/submissions.ts.
- * That endpoint merges rows from multiple tables in JS rather than a single
- * SQL query, so these columns drive an in-memory comparator, not
- * `resolveOrderBy` — the "-column"/"column" convention is kept identical so
- * the frontend Column `sort` config works the same way as everywhere else.
+ * (FormResponses) — see functions/_lib/services/form-submissions.ts. That
+ * endpoint merges rows from three tables (form_submissions plus synthetic
+ * registrations/proposals rows) via a single `UNION ALL` SQL query (a
+ * `merged` CTE) rather than fetching each source unbounded and reconciling
+ * in JS, so these columns are the `merged` CTE's own output column names
+ * and drive `resolveOrderBy` like any other list endpoint — the
+ * "-column"/"column" convention is kept identical so the frontend Column
+ * `sort` config works the same way as everywhere else.
  */
 export const FORM_SUBMISSIONS_SORT_COLUMNS = ["submitter", "status", "submitted_at"] as const;
-export const formSubmissionsSortValueSchema = sortValueSchema(FORM_SUBMISSIONS_SORT_COLUMNS);
+export const formSubmissionsSortValueSchema = sortColumnSchema(FORM_SUBMISSIONS_SORT_COLUMNS);
 
 export const REGISTRATION_HEADSHOT_ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 export const REGISTRATION_HEADSHOT_MAX_BYTES = 2 * 1024 * 1024;
@@ -624,8 +645,8 @@ export const adminSpeakerBioPatchSchema = z.object({
 export const adminEmailTemplateVersionSchema = z.object({
   content: z.string().min(1).max(500_000),
   subjectTemplate: z.string().trim().min(1).max(512).optional(),
-  contentType: z.enum(["markdown", "html", "text"]).optional(),
-  messageType: z.enum(["transactional", "promotional"]).optional(),
+  contentType: emailContentTypeSchema.optional(),
+  messageType: emailMessageTypeSchema.optional(),
 });
 
 export const adminEmailTemplateActivateSchema = z.object({
@@ -635,7 +656,7 @@ export const adminEmailTemplateActivateSchema = z.object({
 export const adminEmailTemplatePreviewSchema = z.object({
   subjectTemplate: z.string().trim().min(1).max(512).optional(),
   content: z.string().min(1).max(500_000),
-  contentType: z.enum(["markdown", "html", "text"]).default("markdown"),
+  contentType: emailContentTypeSchema.default("markdown"),
   layoutHtml: z.string().min(1).max(500_000).optional(),
   data: z.record(z.string().trim().min(1).max(80), z.unknown()).optional(),
 });
@@ -894,6 +915,92 @@ export const adminFormUpdateSchema = z.object({
   fields: z.array(adminFormFieldInputSchema).max(50).optional(),
 });
 
+// GET /api/v1/admin/forms (P6M-P2-14) — dataset is inherently small (one row
+// per configured form), but still composes the shared pagination contract
+// rather than returning every row unbounded, for the same reason every other
+// list endpoint does: a fixed, predictable upper bound on rows materialized
+// per request.
+export const adminFormsListQuerySchema = paginationQuerySchema;
+
+export const adminFormSummarySchema = z.object({
+  id: z.string(),
+  key: z.string(),
+  scope_type: z.string(),
+  scope_ref: z.string().nullable(),
+  event_slug: z.string().nullable(),
+  event_name: z.string().nullable(),
+  purpose: z.string(),
+  status: z.string(),
+  title: z.string(),
+  description: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  field_count: z.number(),
+  submission_count: z.number(),
+});
+
+export const adminFormsListResponseSchema = paginatedResponseSchema("forms", adminFormSummarySchema);
+
+// GET /api/v1/admin/forms/:formKey/submissions (P6M-P1-03) — see
+// functions/_lib/services/form-submissions.ts for the bounded `merged` CTE
+// this schema drives.
+export const adminFormSubmissionsQuerySchema = paginationQuerySchema.extend({
+  // The admin Statistics tab (FormResponses.tsx) requests `limit=0` as a
+  // "stats only, no submission rows" sentinel, so — unlike every other list
+  // endpoint — 0 must stay a valid limit here rather than requiring >= 1.
+  limit: z.coerce.number().int().min(0).max(500).optional(),
+  status: z.string().trim().max(50).optional(),
+  attendanceType: z.string().trim().max(50).optional(),
+  eventSlug: z.string().trim().min(1).max(200).optional(),
+  sort: formSubmissionsSortValueSchema,
+});
+
+export const adminFormSubmissionSubmitterSchema = z.object({
+  id: z.string(),
+  email: z.string().nullable(),
+  firstName: z.string().nullable(),
+  lastName: z.string().nullable(),
+  organization: z.string().nullable(),
+});
+
+export const adminFormSubmissionSchema = z.object({
+  id: z.string(),
+  status: z.string(),
+  submittedAt: z.string(),
+  contextType: z.string().nullable(),
+  contextRef: z.string().nullable(),
+  submitter: adminFormSubmissionSubmitterSchema.nullable(),
+  answers: z.record(z.string(), z.unknown()),
+});
+
+export const adminFormSubmissionStatEntrySchema = z.object({
+  label: z.string(),
+  count: z.number(),
+  percent: z.number(),
+  weight: z.number(),
+});
+
+export const adminFormSubmissionStatSchema = z.object({
+  fieldKey: z.string(),
+  totalAnswers: z.number(),
+  uniqueAnswers: z.number(),
+  entries: z.array(adminFormSubmissionStatEntrySchema),
+});
+
+export const adminFormSubmissionsResponseSchema = paginatedResponseSchema(
+  "submissions",
+  adminFormSubmissionSchema,
+).extend({
+  form: z.object({ id: z.string(), key: z.string(), title: z.string(), purpose: z.string() }),
+  // Kept alongside `page` (duplicating page.total/limit/offset) since the
+  // admin Statistics tab already reads these top-level fields directly —
+  // changing the envelope shape is out of scope for the bounded-query fix.
+  total: z.number(),
+  offset: z.number(),
+  limit: z.number(),
+  stats: z.array(adminFormSubmissionStatSchema),
+});
+
 export const adminCreateEventSchema = z.object({
   slug: z.string().trim().regex(slugPattern),
   name: trimmedString(3, 180),
@@ -906,21 +1013,29 @@ export const adminCreateEventSchema = z.object({
   virtualUrl: z.string().trim().url().max(500).nullable().optional(),
 });
 
+/** Event-team permission grant. Canonical vocabulary — see AGENTS.md DRY policy (mirrors the `event_permissions.permission` CHECK constraint). */
+export const eventTeamPermissionSchema = z.enum(["organizer", "program_committee", "moderator", "volunteer"]);
+export type EventTeamPermission = z.infer<typeof eventTeamPermissionSchema>;
+
 export const adminEventPermissionSchema = z.object({
   userEmail: normalizedEmailSchema,
-  permission: z.enum(["organizer", "program_committee", "moderator", "volunteer"]),
+  permission: eventTeamPermissionSchema,
   //Grant time-bounded event reviewer access from the event detail screen.
   expiresAt: z.iso.datetime().nullable().optional(),
 });
 
+/** Staff account role. Canonical vocabulary — see AGENTS.md DRY policy (mirrors the `users.role` CHECK constraint). */
+export const adminRoleValueSchema = z.enum(["admin", "user", "guest"]);
+export type AdminRoleValue = z.infer<typeof adminRoleValueSchema>;
+
 export const adminUserRoleSchema = z.object({
-  role: z.enum(["admin", "user", "guest"]),
+  role: adminRoleValueSchema,
 });
 
 /** PATCH body for updating a user's role, active status, email, and/or PII fields. */
 export const adminUserUpdateSchema = z
   .object({
-    role: z.enum(["admin", "user", "guest"]).optional(),
+    role: adminRoleValueSchema.optional(),
     active: z.boolean().optional(),
     email: z.string().trim().toLowerCase().email().optional(),
     firstName: z.string().trim().max(80).nullable().optional(),
@@ -1015,7 +1130,7 @@ const campaignBaseSchema = z.object({
   subjectOverride: z.string().trim().min(1).max(500).optional(),
   customText: z.string().trim().max(100_000).optional(),
   bodyContent: z.string().trim().max(100_000).optional(),
-  messageType: z.enum(["transactional", "promotional"]).optional(),
+  messageType: emailMessageTypeSchema.optional(),
   sendMode: z.enum(["personal", "bcc_batch"]),
   batchSize: z.number().int().min(1).max(500).default(50),
   filter: campaignFilterSchema,

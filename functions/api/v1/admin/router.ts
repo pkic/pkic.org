@@ -13,13 +13,12 @@ import { REQUEST_DB_CONTEXT_KEY, type RequestDbContext } from "../../../_lib/db/
 import { primaryFirstDb, readReplicaDb } from "../../../_lib/db/session";
 import type { DatabaseSessionLike } from "../../../_lib/db/session";
 import { inferredScopesForOperation } from "../../../_lib/openapi/mcp";
-import { onRequestGet as AdminAuditLogGet_l } from "./audit-log";
-import { onRequestGet as AdminDonationsGet_l } from "./donations";
-import { onRequestGet as AdminEmailTemplatesGet_l } from "./email-templates";
-import { onRequestGet as AdminEventsGet_l } from "./events";
+import { AdminAuditLogList } from "./audit-log";
+import { EmailTemplatesList } from "./email-templates";
+import { AdminEventsListGet } from "./events";
 import { onRequestPost as AdminEventsPost_l } from "./events";
 import { onRequestGet as AdminStatsGet_l } from "./stats";
-import { onRequestGet as AdminUsersGet_l } from "./users";
+import { UsersList } from "./users";
 import access_grants_Router from "./access-grants/router";
 import auth_Router from "./auth/router";
 import donations_Router from "./donations/router";
@@ -190,13 +189,12 @@ async function useRequestScopedD1Session(c: Context<RequestDbContext>, next: Nex
 
 app.use("*", useRequestScopedD1Session);
 
-app.get("/donations", AdminDonationsGet_l);
-app.get("/audit-log", AdminAuditLogGet_l);
-app.get("/email-templates", AdminEmailTemplatesGet_l);
-app.get("/events", AdminEventsGet_l);
+openapi.get("/email-templates", EmailTemplatesList);
+openapi.get("/events", AdminEventsListGet);
 app.post("/events", AdminEventsPost_l);
 app.get("/stats", AdminStatsGet_l);
-app.get("/users", AdminUsersGet_l);
+openapi.get("/audit-log", AdminAuditLogList);
+openapi.get("/users", UsersList);
 openapi.route("/access-grants", access_grants_Router);
 openapi.route("/auth", auth_Router);
 openapi.route("/donations", donations_Router);
