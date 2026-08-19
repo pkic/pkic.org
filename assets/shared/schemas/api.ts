@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defaultedSourceTypeSchema, sourceTypeSchema } from "./source";
 import { linksSchema } from "./links";
-import { paginationQuerySchema, sortColumnSchema } from "./pagination";
+import { paginationQuerySchema, paginatedResponseSchema, sortColumnSchema } from "./pagination";
 
 export { sourceTypeSchema };
 
@@ -151,11 +151,14 @@ export const eventInvitesSortValueSchema = sortColumnSchema(EVENT_INVITES_SORT_C
 
 /**
  * Allowlisted sort columns for GET /api/v1/admin/forms/:formKey/submissions
- * (FormResponses) — see functions/api/v1/admin/forms/[formKey]/submissions.ts.
- * That endpoint merges rows from multiple tables in JS rather than a single
- * SQL query, so these columns drive an in-memory comparator, not
- * `resolveOrderBy` — the "-column"/"column" convention is kept identical so
- * the frontend Column `sort` config works the same way as everywhere else.
+ * (FormResponses) — see functions/_lib/services/form-submissions.ts. That
+ * endpoint merges rows from three tables (form_submissions plus synthetic
+ * registrations/proposals rows) via a single `UNION ALL` SQL query (a
+ * `merged` CTE) rather than fetching each source unbounded and reconciling
+ * in JS, so these columns are the `merged` CTE's own output column names
+ * and drive `resolveOrderBy` like any other list endpoint — the
+ * "-column"/"column" convention is kept identical so the frontend Column
+ * `sort` config works the same way as everywhere else.
  */
 export const FORM_SUBMISSIONS_SORT_COLUMNS = ["submitter", "status", "submitted_at"] as const;
 export const formSubmissionsSortValueSchema = sortColumnSchema(FORM_SUBMISSIONS_SORT_COLUMNS);
@@ -876,6 +879,92 @@ export const adminFormUpdateSchema = z.object({
   description: trimmedString(2, 1000).nullable().optional(),
   status: z.enum(["active", "inactive", "archived"]).optional(),
   fields: z.array(adminFormFieldInputSchema).max(50).optional(),
+});
+
+// GET /api/v1/admin/forms (P6M-P2-14) — dataset is inherently small (one row
+// per configured form), but still composes the shared pagination contract
+// rather than returning every row unbounded, for the same reason every other
+// list endpoint does: a fixed, predictable upper bound on rows materialized
+// per request.
+export const adminFormsListQuerySchema = paginationQuerySchema;
+
+export const adminFormSummarySchema = z.object({
+  id: z.string(),
+  key: z.string(),
+  scope_type: z.string(),
+  scope_ref: z.string().nullable(),
+  event_slug: z.string().nullable(),
+  event_name: z.string().nullable(),
+  purpose: z.string(),
+  status: z.string(),
+  title: z.string(),
+  description: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  field_count: z.number(),
+  submission_count: z.number(),
+});
+
+export const adminFormsListResponseSchema = paginatedResponseSchema("forms", adminFormSummarySchema);
+
+// GET /api/v1/admin/forms/:formKey/submissions (P6M-P1-03) — see
+// functions/_lib/services/form-submissions.ts for the bounded `merged` CTE
+// this schema drives.
+export const adminFormSubmissionsQuerySchema = paginationQuerySchema.extend({
+  // The admin Statistics tab (FormResponses.tsx) requests `limit=0` as a
+  // "stats only, no submission rows" sentinel, so — unlike every other list
+  // endpoint — 0 must stay a valid limit here rather than requiring >= 1.
+  limit: z.coerce.number().int().min(0).max(500).optional(),
+  status: z.string().trim().max(50).optional(),
+  attendanceType: z.string().trim().max(50).optional(),
+  eventSlug: z.string().trim().min(1).max(200).optional(),
+  sort: formSubmissionsSortValueSchema,
+});
+
+export const adminFormSubmissionSubmitterSchema = z.object({
+  id: z.string(),
+  email: z.string().nullable(),
+  firstName: z.string().nullable(),
+  lastName: z.string().nullable(),
+  organization: z.string().nullable(),
+});
+
+export const adminFormSubmissionSchema = z.object({
+  id: z.string(),
+  status: z.string(),
+  submittedAt: z.string(),
+  contextType: z.string().nullable(),
+  contextRef: z.string().nullable(),
+  submitter: adminFormSubmissionSubmitterSchema.nullable(),
+  answers: z.record(z.string(), z.unknown()),
+});
+
+export const adminFormSubmissionStatEntrySchema = z.object({
+  label: z.string(),
+  count: z.number(),
+  percent: z.number(),
+  weight: z.number(),
+});
+
+export const adminFormSubmissionStatSchema = z.object({
+  fieldKey: z.string(),
+  totalAnswers: z.number(),
+  uniqueAnswers: z.number(),
+  entries: z.array(adminFormSubmissionStatEntrySchema),
+});
+
+export const adminFormSubmissionsResponseSchema = paginatedResponseSchema(
+  "submissions",
+  adminFormSubmissionSchema,
+).extend({
+  form: z.object({ id: z.string(), key: z.string(), title: z.string(), purpose: z.string() }),
+  // Kept alongside `page` (duplicating page.total/limit/offset) since the
+  // admin Statistics tab already reads these top-level fields directly —
+  // changing the envelope shape is out of scope for the bounded-query fix.
+  total: z.number(),
+  offset: z.number(),
+  limit: z.number(),
+  stats: z.array(adminFormSubmissionStatSchema),
 });
 
 export const adminCreateEventSchema = z.object({

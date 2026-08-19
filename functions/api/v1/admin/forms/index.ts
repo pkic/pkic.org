@@ -8,68 +8,26 @@
 import { parseJsonBody } from "../../../../_lib/validation";
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
-import { all, run } from "../../../../_lib/db/queries";
+import { run } from "../../../../_lib/db/queries";
+import { listAdminForms } from "../../../../_lib/services/forms";
 import { nowIso } from "../../../../_lib/utils/time";
 import { uuid } from "../../../../_lib/utils/ids";
 import { stringifyJson } from "../../../../_lib/utils/json";
 import { writeAuditLog } from "../../../../_lib/services/audit";
 import { adminFormCreateSchema } from "../../../../../assets/shared/schemas/api";
+import { adminFormsListRouteSchema } from "../../../../../assets/shared/schemas/route-contracts";
+import { buildPageInfo } from "../../../../../assets/shared/schemas/pagination";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
+import { openApiRoute } from "../../../../_lib/openapi/route";
 
-interface FormRow {
-  id: string;
-  key: string;
-  scope_type: string;
-  scope_ref: string | null;
-  event_slug: string | null;
-  event_name: string | null;
-  purpose: string;
-  status: string;
-  title: string;
-  description: string | null;
-  created_at: string;
-  updated_at: string;
-  field_count: number;
-  submission_count: number;
-}
-
-export async function onRequestGet(c: AdminContext): Promise<Response> {
+export const AdminFormsList = openApiRoute(adminFormsListRouteSchema, async (c: AdminContext, data) => {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  const forms = await all<FormRow>(
-    requestDb(c),
-    `SELECT
-       f.*,
-       e.slug AS event_slug,
-       e.name AS event_name,
-       COUNT(DISTINCT ff.id) AS field_count,
-       COUNT(DISTINCT fs.id)
-         + CASE WHEN f.scope_type = 'event' AND f.purpose = 'event_registration' THEN (
-             SELECT COUNT(*) FROM registrations r
-             WHERE r.event_id = f.scope_ref AND r.custom_answers_json IS NOT NULL
-               AND NOT EXISTS (
-                 SELECT 1 FROM form_submissions fs2
-                 WHERE fs2.form_id = f.id AND fs2.context_type = 'registration' AND fs2.context_ref = r.id
-               )
-           ) ELSE 0 END
-         + CASE WHEN f.scope_type = 'event' AND f.purpose = 'proposal_submission' THEN (
-             SELECT COUNT(*) FROM session_proposals sp
-             WHERE sp.event_id = f.scope_ref AND sp.details_json IS NOT NULL
-               AND NOT EXISTS (
-                 SELECT 1 FROM form_submissions fs2
-                 WHERE fs2.form_id = f.id AND fs2.context_type = 'proposal' AND fs2.context_ref = sp.id
-               )
-           ) ELSE 0 END AS submission_count
-     FROM forms f
-    LEFT JOIN events e ON e.id = f.scope_ref AND f.scope_type = 'event'
-     LEFT JOIN form_fields ff ON ff.form_id = f.id
-     LEFT JOIN form_submissions fs ON fs.form_id = f.id
-     GROUP BY f.id
-     ORDER BY f.scope_type ASC, f.purpose ASC, f.updated_at DESC`,
-  );
+  const { limit = 200, offset = 0 } = data.query;
+  const { forms, total } = await listAdminForms(requestDb(c), { limit, offset });
 
-  return json({ forms });
-}
+  return json({ forms, page: buildPageInfo(limit, offset, total, forms.length) });
+});
 
 export async function onRequestPost(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
@@ -110,10 +68,4 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   });
 
   return json({ success: true, formId, key: body.key }, 201);
-}
-
-export async function onRequest(c: AdminContext): Promise<Response> {
-  if (c.req.raw.method === "GET") return onRequestGet(c);
-  if (c.req.raw.method === "POST") return onRequestPost(c);
-  return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
 }
