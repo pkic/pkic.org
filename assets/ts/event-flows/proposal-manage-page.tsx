@@ -39,13 +39,7 @@ function showResendProposalManageLinkForm(
 
 function normalizeLinks(raw: ProposalManageResponse["speakers"][number]["links"]): string[] {
   return raw
-    .map((value) => {
-      if (typeof value === "string") return value.trim();
-      if (value && typeof value === "object" && "url" in value && typeof value.url === "string") {
-        return value.url.trim();
-      }
-      return "";
-    })
+    .map((value) => value.trim())
     .filter(Boolean)
     .slice(0, 10);
 }
@@ -114,7 +108,7 @@ function SpeakerCard({
         organizationName: organizationName.trim() || null,
         jobTitle: jobTitle.trim() || null,
         biography: biography.trim() || null,
-        links: (linksRef.current?.getLinks() ?? []).map((url) => ({ label: url, url })),
+        links: linksRef.current?.getLinks() ?? [],
       });
       await onReload();
       onStatus(`Saved speaker details for ${speaker.email}.`);

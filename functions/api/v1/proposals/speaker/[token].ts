@@ -9,7 +9,7 @@
  *         { action: "decline", reason?: string }        — decline participation
  *
  * PATCH /api/v1/proposals/speaker/[token]
- *   Body: { biography?: string, links?: object[] }      — update speaker profile (bio / links)
+ *   Body: { biography?: string, links?: string[] }      — update speaker profile (bio / links)
  *
  * For headshot and presentation file uploads see:
  *   PUT /api/v1/proposals/speaker/[token]/headshot
@@ -38,6 +38,7 @@ import {
   organizationNameSchema,
   jobTitleSchema,
 } from "../../../../../assets/shared/schemas/api";
+import { linksSchema, parseLinksJson, serializeLinks } from "../../../../../assets/shared/schemas/links";
 
 function optionalNullableOrEmpty<T extends z.ZodTypeAny>(schema: T) {
   return z.union([schema, z.literal(""), z.null()]).optional();
@@ -68,15 +69,7 @@ const speakerProfileSchema = z.object({
   organizationName: optionalNullableOrEmpty(organizationNameSchema),
   jobTitle: optionalNullableOrEmpty(jobTitleSchema),
   biography: optionalNullableOrEmpty(z.string().trim().min(1).max(10_000)),
-  links: z
-    .array(
-      z.object({
-        label: z.string().trim().max(128),
-        url: z.url().max(2048),
-      }),
-    )
-    .max(10)
-    .optional(),
+  links: linksSchema.optional(),
 });
 
 export async function onRequestGet(c: any): Promise<Response> {
@@ -129,7 +122,7 @@ export async function onRequestGet(c: any): Promise<Response> {
         organizationName: user.organization_name,
         jobTitle: user.job_title,
         biography: user.biography,
-        links: user.links_json ? JSON.parse(user.links_json) : [],
+        links: parseLinksJson(user.links_json),
         headshotUploaded: Boolean(user.headshot_r2_key),
         headshotUpdatedAt: user.headshot_updated_at,
         headshotUrl: user.headshot_r2_key
@@ -201,7 +194,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
       organizationName: body.organizationName === undefined ? undefined : body.organizationName || null,
       jobTitle: body.jobTitle === undefined ? undefined : body.jobTitle || null,
       biography: body.biography === undefined ? undefined : body.biography || null,
-      linksJson: body.links ? JSON.stringify(body.links) : null,
+      linksJson: body.links ? serializeLinks(body.links) : null,
     });
 
     return json({ success: true });

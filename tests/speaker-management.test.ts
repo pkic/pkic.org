@@ -295,7 +295,7 @@ describe("speaker self-management endpoints", () => {
             organizationName: "Quantum Labs",
             jobTitle: "Principal Researcher",
             biography: "Updated bio with post-quantum expertise.",
-            links: [{ label: "LinkedIn", url: "https://linkedin.com/in/speaker" }],
+            links: ["https://linkedin.com/in/speaker"],
           }),
         }),
         { token: speakerManageToken },
@@ -317,6 +317,7 @@ describe("speaker self-management endpoints", () => {
         organizationName: string;
         jobTitle: string;
         biography: string;
+        links: string[];
       };
     };
     expect(profile.profile.firstName).toBe("Updated");
@@ -324,6 +325,7 @@ describe("speaker self-management endpoints", () => {
     expect(profile.profile.organizationName).toBe("Quantum Labs");
     expect(profile.profile.jobTitle).toBe("Principal Researcher");
     expect(profile.profile.biography).toBe("Updated bio with post-quantum expertise.");
+    expect(profile.profile.links).toEqual(["https://linkedin.com/in/speaker"]);
   });
 
   it("proposal manage token updates speaker profile fields", async () => {
@@ -340,7 +342,7 @@ describe("speaker self-management endpoints", () => {
           organizationName: "PKIC Labs",
           jobTitle: "Senior Engineer",
           biography: "Provided by the proposer.",
-          links: [{ label: "GitHub", url: "https://github.com/casey" }],
+          links: ["https://github.com/casey"],
         }),
       }),
       env,
@@ -369,6 +371,7 @@ describe("speaker self-management endpoints", () => {
         organizationName: string | null;
         jobTitle: string | null;
         bio: string | null;
+        links: string[];
       }>;
     };
     const speaker = payload.speakers.find((entry) => entry.userId === coSpeakerUserId);
@@ -378,6 +381,7 @@ describe("speaker self-management endpoints", () => {
       organizationName: "PKIC Labs",
       jobTitle: "Senior Engineer",
       bio: "Provided by the proposer.",
+      links: ["https://github.com/casey"],
     });
   });
 
