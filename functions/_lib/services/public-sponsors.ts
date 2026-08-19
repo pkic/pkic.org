@@ -77,24 +77,32 @@ interface EventSponsorRow {
  * D1 event via `EVENT_SLUG_BY_NAME`. Unrecognized/omitted names simply
  * return the consortium-only list, same as the old collect.html behaviour
  * when no sponsor happened to match the given `sponsoring` key.
+ *
+ * The consortium + event-tier rows are merged/deduplicated in memory (a
+ * sponsor can hold both a consortium tier and an event tier on the same
+ * record), so `limit`/`offset` are applied to the merged, deterministically
+ * ordered result rather than to any single underlying query — the merge
+ * itself still only reads bounded, indexed-filter rows (active sponsors),
+ * not an arbitrary full table scan.
  */
 export async function listPublicSponsors(
   db: DatabaseLike,
-  params: { eventName?: string } = {},
-): Promise<PublicSponsorItem[]> {
+  params: { eventName?: string; limit: number; offset: number },
+): Promise<{ sponsors: PublicSponsorItem[]; total: number }> {
   const items = new Map<string, PublicSponsorItem>();
 
   const [orgRows, nonMemberRows] = await Promise.all([
     all<ConsortiumOrgRow>(
       db,
-      `SELECT id, name, website, logo_r2_key, sponsor_tier FROM organizations WHERE sponsor_tier IS NOT NULL`,
+      `SELECT id, name, website, logo_r2_key, sponsor_tier FROM organizations WHERE sponsor_tier IS NOT NULL ORDER BY name ASC`,
     ),
     all<NonMemberConsortiumRow>(
       db,
       `SELECT id, non_member_name, non_member_website, non_member_logo_r2_key, tier
        FROM sponsorships
        WHERE sponsor_type = 'consortium' AND organization_id IS NULL
-         AND pipeline_stage = 'active' AND non_member_name IS NOT NULL`,
+         AND pipeline_stage = 'active' AND non_member_name IS NOT NULL
+       ORDER BY non_member_name ASC`,
     ),
   ]);
 
@@ -130,7 +138,8 @@ export async function listPublicSponsors(
                 sp.non_member_name, sp.non_member_website, sp.non_member_logo_r2_key, sp.tier
          FROM sponsorships sp
          LEFT JOIN organizations o ON o.id = sp.organization_id
-         WHERE sp.sponsor_type = 'event' AND sp.event_id = ? AND sp.pipeline_stage = 'active'`,
+         WHERE sp.sponsor_type = 'event' AND sp.event_id = ? AND sp.pipeline_stage = 'active'
+         ORDER BY COALESCE(o.name, sp.non_member_name) ASC`,
         [event.id],
       );
 
@@ -159,7 +168,8 @@ export async function listPublicSponsors(
     }
   }
 
-  return Array.from(items.values());
+  const merged = Array.from(items.values());
+  return { sponsors: merged.slice(params.offset, params.offset + params.limit), total: merged.length };
 }
 
 /** `id` is a `sponsorships.id` — org-tied sponsor logos are served via GET /api/v1/members/:id/logo instead. */
