@@ -26,7 +26,7 @@ const ONE_DAY_MS = 86_400_000;
 /**
  * Narrower than the admin pipeline's `AdminSponsorshipRow` — this due-work
  * pass only ever renders a reminder/lapse email, so it selects (and joins)
- * only the columns that requires, including `assigned_to_email` directly
+ * only the columns it requires, including `assigned_to_email` directly
  * from the same `users` join instead of a per-row follow-up lookup (PR #1
  * review §9.1's N+1 finding — the join was already there, just not
  * selecting the one column this file actually needs).
