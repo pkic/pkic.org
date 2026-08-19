@@ -6,9 +6,11 @@ export { membershipCategorySchema };
 
 // Canonical closed-state vocabulary for member_applications.status/stage
 // (kept as one column pair set to the same value — see
-// functions/_lib/services/member-applications.ts's ALLOWED_STAGE_TRANSITIONS,
-// which is the actual state-machine enforcement; this is its shared,
-// API-facing type, not a second source of truth) — PR #1 review §1.3.
+// isValidStageTransition() in
+// functions/_lib/services/membership/applications/transition.ts, which
+// calls this file's own allowedTransitions() below as the actual
+// state-machine enforcement; this is its shared, API-facing type, not a
+// second source of truth) — PR #1 review §1.3.
 export const APPLICATION_STAGES = [
   "pending",
   "in_review",
