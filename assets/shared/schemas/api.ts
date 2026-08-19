@@ -120,6 +120,10 @@ export const adminEventProposalsQuerySchema = paginationQuerySchema.extend({
 export const EVENTS_LIST_SORT_COLUMNS = ["name", "starts_at", "registration_mode", "total_registrations"] as const;
 export const eventsListSortValueSchema = sortColumnSchema(EVENTS_LIST_SORT_COLUMNS);
 
+export const adminEventsListQuerySchema = paginationQuerySchema.extend({
+  sort: eventsListSortValueSchema,
+});
+
 /** Allowlisted sort columns for GET /api/v1/admin/events/:eventSlug/permissions (Team) — see functions/api/v1/admin/events/[eventSlug]/permissions.ts. */
 export const EVENT_TEAM_SORT_COLUMNS = ["user_email", "role_id", "created_at", "expires_at"] as const;
 export const eventTeamSortValueSchema = sortColumnSchema(EVENT_TEAM_SORT_COLUMNS);
