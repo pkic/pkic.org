@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { cpus } from "node:os";
 
 function parseArgs(argv) {
   let mode = "local";
@@ -40,11 +41,26 @@ function parseArgs(argv) {
   return { mode, database, wranglerEnv, persistTo };
 }
 
+// Seeds one admin account per CPU core so parallel Playwright workers each
+// get their own magic-link identity instead of colliding on
+// EMAIL_RATE_LIMITER's shared 3-per-60s-per-address limit — see
+// tests/helpers/e2e-admin.ts, which derives the matching email per worker.
+// Worker 0 keeps the original "admin@pkic.org" address for backward
+// compatibility with every existing fixture/reference to it.
+function workerAdminEmails() {
+  const workerCount = Math.max(1, Math.min(cpus().length, 32));
+  return Array.from({ length: workerCount }, (_, index) =>
+    index === 0 ? "admin@pkic.org" : `admin.w${index}@pkic.org`,
+  );
+}
+
 function runSeed(mode, database, wranglerEnv, persistTo) {
-  const userId = randomUUID();
+  const values = workerAdminEmails()
+    .map((email) => `('${randomUUID()}', '${email}', '${email}', 'admin', 1, datetime('now'), datetime('now'))`)
+    .join(",\n       ");
   const sql =
     "INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at) " +
-    `VALUES ('${userId}', 'admin@pkic.org', 'admin@pkic.org', 'admin', 1, datetime('now'), datetime('now')) ` +
+    `VALUES ${values} ` +
     "ON CONFLICT(email) DO UPDATE SET normalized_email = excluded.normalized_email, role = 'admin', active = 1, updated_at = datetime('now');";
 
   const args = [

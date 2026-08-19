@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
+import { e2eAdminEmail } from "../helpers/e2e-admin";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 
@@ -373,14 +374,15 @@ async function fillProposal(
 }
 
 async function signInAsAdmin(page: Page): Promise<void> {
+  const adminEmail = e2eAdminEmail();
   await page.goto("/admin/");
   await expect(page.locator("#form-magic")).toBeVisible({ timeout: 10_000 });
 
-  await page.locator("#inp-email").fill("admin@pkic.org");
+  await page.locator("#inp-email").fill(adminEmail);
   await page.locator("#btn-send").click();
   await expect(page.locator("#magic-sent")).toBeVisible({ timeout: 10_000 });
 
-  const magicEmail = await waitForEmail("admin@pkic.org", "sign-in");
+  const magicEmail = await waitForEmail(adminEmail, "sign-in");
   const magicUrl = extractUrlFromEmail(magicEmail, "/admin/");
 
   await page.goto(magicUrl);
@@ -1049,19 +1051,21 @@ test.describe("browser workflows", () => {
     const errorMonitor = monitorErrors(page);
     const screenshot = createScreenshotter(page);
 
+    const adminEmail = e2eAdminEmail();
+
     // Admin page must display the login form (no active session)
     await page.goto("/admin/");
     await expect(page.locator("#form-magic")).toBeVisible({ timeout: 10_000 });
 
     // Request a magic link for the seeded admin account
-    await page.locator("#inp-email").fill("admin@pkic.org");
+    await page.locator("#inp-email").fill(adminEmail);
     await page.locator("#btn-send").click();
     // The form is hidden and the sent-confirmation panel is shown
     await expect(page.locator("#magic-sent")).toBeVisible({ timeout: 10_000 });
     await screenshot("01-magic-link-sent");
 
     // Wait for the email (subject: "Your PKI Consortium admin sign-in link")
-    const magicEmail = await waitForEmail("admin@pkic.org", "sign-in");
+    const magicEmail = await waitForEmail(adminEmail, "sign-in");
     // The email contains a link to /admin/?token=…
     const magicUrl = extractUrlFromEmail(magicEmail, "/admin/");
 

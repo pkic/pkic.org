@@ -20,6 +20,7 @@ import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
+import { e2eAdminEmail } from "../helpers/e2e-admin";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 
@@ -59,13 +60,14 @@ function extractUrlFromEmail(email: CapturedEmail, urlSubstring: string): string
 }
 
 async function signInAsAdmin(page: Page): Promise<void> {
+  const adminEmail = e2eAdminEmail();
   await page.goto("/admin/");
   await expect(page.locator("#form-magic")).toBeVisible({ timeout: 10_000 });
-  await page.locator("#inp-email").fill("admin@pkic.org");
+  await page.locator("#inp-email").fill(adminEmail);
   await page.locator("#btn-send").click();
   await expect(page.locator("#magic-sent")).toBeVisible({ timeout: 10_000 });
 
-  const magicEmail = await waitForEmail("admin@pkic.org", "sign-in");
+  const magicEmail = await waitForEmail(adminEmail, "sign-in");
   const magicUrl = extractUrlFromEmail(magicEmail, "/admin/");
   await page.goto(magicUrl);
   await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });

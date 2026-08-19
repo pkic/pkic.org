@@ -31,10 +31,12 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
+import { e2eAdminEmail } from "../helpers/e2e-admin";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 const EVENT_SLUG = "pqc-conference-amsterdam-nl";
 const ADMIN_AUTH_FILE = path.join("test-results", "admin-verification-auth.json");
+const ADMIN_EMAIL = e2eAdminEmail();
 
 function sendgridServer(): string {
   return process.env.E2E_SENDGRID_API_BASE ?? readFileSync(SENDGRID_URL_FILE, "utf8").trim();
@@ -95,12 +97,12 @@ function extractUrlFromEmail(email: CapturedEmail, urlSubstring: string): string
 async function signInAsAdmin(page: Page): Promise<void> {
   await page.goto("/admin/");
   await expect(page.locator("#form-magic")).toBeVisible({ timeout: 10_000 });
-  await page.locator("#inp-email").fill("admin@pkic.org");
+  await page.locator("#inp-email").fill(ADMIN_EMAIL);
   const since = await outboxLength();
   await page.locator("#btn-send").click();
   await expect(page.locator("#magic-sent")).toBeVisible({ timeout: 10_000 });
 
-  const magicEmail = await waitForEmail("admin@pkic.org", "sign-in", { since });
+  const magicEmail = await waitForEmail(ADMIN_EMAIL, "sign-in", { since });
   const magicUrl = extractUrlFromEmail(magicEmail, "/admin/");
   await page.goto(magicUrl);
   await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
@@ -279,25 +281,25 @@ test.describe("Admin browser-verification pass", () => {
       .locator("div.d-flex.align-items-center.gap-2.flex-wrap")
       .filter({ has: page.getByText("Chair", { exact: true }) });
     const chairPicker = chairSlot.getByPlaceholder("Search by email or name…");
-    await chairPicker.fill("admin@pkic.org");
-    await expect(chairSlot.getByText("admin@pkic.org")).toBeVisible({ timeout: 5_000 });
-    await chairSlot.getByText("admin@pkic.org").click();
+    await chairPicker.fill(ADMIN_EMAIL);
+    await expect(chairSlot.getByText(ADMIN_EMAIL)).toBeVisible({ timeout: 5_000 });
+    await chairSlot.getByText(ADMIN_EMAIL).click();
     await chairSlot.getByRole("button", { name: "Assign" }).click();
     await expect(page.locator(".my-toast", { hasText: "Chair assigned" })).toBeVisible();
-    await expect(chairSlot.getByText("admin@pkic.org")).toBeVisible();
+    await expect(chairSlot.getByText(ADMIN_EMAIL)).toBeVisible();
 
     // Back on the Working groups panel, the new chair now shows read-only.
     await page.goto("/admin/#/working-groups");
     await wgSelect.selectOption({ label: wgName });
-    await expect(panel.getByText("admin@pkic.org").first()).toBeVisible();
+    await expect(panel.getByText(ADMIN_EMAIL).first()).toBeVisible();
 
     // Add the same admin user to the roster (a distinct code path from
     // chair assignment — a plain working_group_members row).
     const memberForm = panel.locator("form").filter({ has: page.getByText("Add member") });
     const memberPicker = memberForm.getByPlaceholder("Search by email or name…");
-    await memberPicker.fill("admin@pkic.org");
-    await expect(memberForm.getByText("admin@pkic.org")).toBeVisible({ timeout: 5_000 });
-    await memberForm.getByText("admin@pkic.org").click();
+    await memberPicker.fill(ADMIN_EMAIL);
+    await expect(memberForm.getByText(ADMIN_EMAIL)).toBeVisible({ timeout: 5_000 });
+    await memberForm.getByText(ADMIN_EMAIL).click();
     await memberForm.getByRole("button", { name: "Add member" }).click();
     await expect(page.locator(".my-toast", { hasText: "Member added" })).toBeVisible();
     await expect(page.getByText("Roster (1)")).toBeVisible();
