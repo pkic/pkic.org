@@ -9,7 +9,7 @@ import type { AdminUser, AdminOrganizationSummary } from "../types";
 import { confirmHeadshotUsage } from "../../shared/headshot/controller";
 import { AdminHeadshotManager, ADMIN_HEADSHOT_DISCLAIMER } from "../../shared/headshot/AdminHeadshotManager";
 import { ProfileLinksInput, type ProfileLinksHandle } from "../../components/ProfileLinksInput";
-import { normalizeProfileLinks } from "./profile-links";
+import { normalizeProfileLinks } from "../../shared/widgets/profile-links";
 import { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../../shared/schemas/admin-members";
 import { MEMBER_STATUSES } from "../../../shared/schemas/admin-organizations";
 import { UserPicker, type PickedUser } from "./access-control/UserPicker";
