@@ -1,0 +1,10 @@
+{
+  "$schema": "https://raw.githubusercontent.com/kucherenko/jscpd/master/apps/jscpd/schema.json",
+  "path": ["functions", "assets/shared", "assets/ts", "assets/js", "scripts", "static/scripts"],
+  "minLines": 5,
+  "minTokens": 50,
+  "reporters": ["console", "json"],
+  "output": ".jscpd-report",
+  "gitignore": true,
+  "absolute": false
+}
