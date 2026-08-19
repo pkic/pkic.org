@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defaultedSourceTypeSchema, sourceTypeSchema } from "./source";
 import { linksSchema } from "./links";
-import { paginationQuerySchema } from "./pagination";
+import { paginationQuerySchema, sortColumnSchema } from "./pagination";
 
 export { sourceTypeSchema };
 
@@ -110,29 +110,13 @@ export const adminEventProposalsQuerySchema = z.object({
 // DESC. An unrecognized value fails validation and callers fall back to the
 // endpoint's default order (see functions/_lib/db/sort.ts).
 
-function sortValueSchema(allowedColumns: readonly string[]) {
-  return z
-    .string()
-    .trim()
-    .min(1)
-    .max(40)
-    .refine(
-      (value) => {
-        const field = value.startsWith("-") ? value.slice(1) : value;
-        return allowedColumns.includes(field);
-      },
-      { message: "Unknown sort column" },
-    )
-    .optional();
-}
-
 /** Allowlisted sort columns for GET /api/v1/admin/events — see functions/api/v1/admin/events.ts. */
 export const EVENTS_LIST_SORT_COLUMNS = ["name", "starts_at", "registration_mode", "total_registrations"] as const;
-export const eventsListSortValueSchema = sortValueSchema(EVENTS_LIST_SORT_COLUMNS);
+export const eventsListSortValueSchema = sortColumnSchema(EVENTS_LIST_SORT_COLUMNS);
 
 /** Allowlisted sort columns for GET /api/v1/admin/events/:eventSlug/permissions (Team) — see functions/api/v1/admin/events/[eventSlug]/permissions.ts. */
 export const EVENT_TEAM_SORT_COLUMNS = ["user_email", "role_id", "created_at", "expires_at"] as const;
-export const eventTeamSortValueSchema = sortValueSchema(EVENT_TEAM_SORT_COLUMNS);
+export const eventTeamSortValueSchema = sortColumnSchema(EVENT_TEAM_SORT_COLUMNS);
 
 /**
  * Allowlisted sort columns for GET /api/v1/admin/events/:eventSlug/registrations
@@ -163,7 +147,7 @@ export const adminEventRegistrationsQuerySchema = paginationQuerySchema.extend({
 
 /** Allowlisted sort columns for GET /api/v1/admin/events/:eventSlug/invites — see functions/api/v1/admin/events/[eventSlug]/invites/index.ts. */
 export const EVENT_INVITES_SORT_COLUMNS = ["invitee_email", "status", "created_at", "accepted_at"] as const;
-export const eventInvitesSortValueSchema = sortValueSchema(EVENT_INVITES_SORT_COLUMNS);
+export const eventInvitesSortValueSchema = sortColumnSchema(EVENT_INVITES_SORT_COLUMNS);
 
 /**
  * Allowlisted sort columns for GET /api/v1/admin/forms/:formKey/submissions
@@ -174,7 +158,7 @@ export const eventInvitesSortValueSchema = sortValueSchema(EVENT_INVITES_SORT_CO
  * the frontend Column `sort` config works the same way as everywhere else.
  */
 export const FORM_SUBMISSIONS_SORT_COLUMNS = ["submitter", "status", "submitted_at"] as const;
-export const formSubmissionsSortValueSchema = sortValueSchema(FORM_SUBMISSIONS_SORT_COLUMNS);
+export const formSubmissionsSortValueSchema = sortColumnSchema(FORM_SUBMISSIONS_SORT_COLUMNS);
 
 export const REGISTRATION_HEADSHOT_ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 export const REGISTRATION_HEADSHOT_MAX_BYTES = 2 * 1024 * 1024;

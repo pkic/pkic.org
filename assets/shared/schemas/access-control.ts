@@ -137,19 +137,7 @@ export const rolesCreateRouteSchema = {
 /** Allowlisted sort columns for GET /api/v1/admin/roles — see roles/index.ts. */
 export const ADMIN_ROLES_SORT_COLUMNS = ["name", "description"] as const;
 
-const rolesSortValueSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(41)
-  .refine(
-    (value) => {
-      const field = value.startsWith("-") ? value.slice(1) : value;
-      return (ADMIN_ROLES_SORT_COLUMNS as readonly string[]).includes(field);
-    },
-    { message: "Unknown sort column" },
-  )
-  .optional();
+const rolesSortValueSchema = sortColumnSchema(ADMIN_ROLES_SORT_COLUMNS);
 
 export const rolesListQuerySchema = z.object({
   sort: rolesSortValueSchema,

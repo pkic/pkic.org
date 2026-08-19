@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { sortColumnSchema } from "./pagination";
 
 /**
  * Allowlisted sort columns for GET /api/v1/admin/audit-log — see
@@ -8,16 +8,4 @@ import { z } from "zod";
  */
 export const ADMIN_AUDIT_LOG_SORT_COLUMNS = ["actor_display", "al.action", "al.entity_type", "al.created_at"] as const;
 
-export const auditLogSortValueSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(41)
-  .refine(
-    (value) => {
-      const field = value.startsWith("-") ? value.slice(1) : value;
-      return (ADMIN_AUDIT_LOG_SORT_COLUMNS as readonly string[]).includes(field);
-    },
-    { message: "Unknown sort column" },
-  )
-  .optional();
+export const auditLogSortValueSchema = sortColumnSchema(ADMIN_AUDIT_LOG_SORT_COLUMNS);

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { sortColumnSchema } from "./pagination";
 
 /**
  * Allowlisted sort columns for GET /api/v1/admin/email-templates — see
@@ -8,16 +8,4 @@ import { z } from "zod";
  */
 export const ADMIN_EMAIL_TEMPLATES_SORT_COLUMNS = ["template_key", "active_version", "version_count"] as const;
 
-export const emailTemplatesSortValueSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(41)
-  .refine(
-    (value) => {
-      const field = value.startsWith("-") ? value.slice(1) : value;
-      return (ADMIN_EMAIL_TEMPLATES_SORT_COLUMNS as readonly string[]).includes(field);
-    },
-    { message: "Unknown sort column" },
-  )
-  .optional();
+export const emailTemplatesSortValueSchema = sortColumnSchema(ADMIN_EMAIL_TEMPLATES_SORT_COLUMNS);
