@@ -19,6 +19,7 @@ import {
   resolveWgJoinCalendarInviteByMailingListEmail,
   uploadIcsFile,
   deleteIcsFile,
+  deleteMeetingSeries,
 } from "../functions/_lib/services/meeting-calendar";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { isIndividualMembershipCategory } from "../assets/shared/schemas/membership-categories";
@@ -325,6 +326,64 @@ describe("Meeting calendar management", () => {
     expect(r2Key).toBe("meeting-ics/retry.ics");
     expect(await queryAll(env.DB, "SELECT id FROM meeting_ics_files WHERE id = ?", fileId)).toHaveLength(0);
     expect(await env.ASSETS_BUCKET!.get("meeting-ics/retry.ics")).toBeNull();
+  });
+
+  it("cascading series delete atomicity (P9-R01, same pattern as PR #1 review §9.2): an R2 delete failure for any file in the series leaves every D1 row intact so the whole delete can be retried safely", async () => {
+    const wgId = await insertWorkingGroup("PQC Series Retry", "pqc-series-retry");
+    const seriesId = await insertMeetingSeries("working_group", "PQC WG Meeting", wgId);
+    const fileId1 = await insertIcsFile(seriesId, "09:00 CET", 2026, "meeting-ics/series-retry-1.ics");
+    await insertIcsFile(seriesId, "17:00 CET", 2026, "meeting-ics/series-retry-2.ics");
+    await env.ASSETS_BUCKET!.put("meeting-ics/series-retry-1.ics", "BEGIN:VCALENDAR\nEND:VCALENDAR");
+    await env.ASSETS_BUCKET!.put("meeting-ics/series-retry-2.ics", "BEGIN:VCALENDAR\nEND:VCALENDAR");
+    const memberUserId = await insertUser("wg-series-retry-pref@example.test");
+    await insertMember(memberUserId, "F");
+    await insertWgMembership(wgId, memberUserId);
+    await insertPreference(memberUserId, seriesId, fileId1);
+
+    // Simulates a mid-cascade R2 outage: the first delete in the batch
+    // succeeds, the second throws — mirroring a real partial R2 failure
+    // across a *set* of objects rather than deleteIcsFile's single object.
+    let calls = 0;
+    const failingBucket = {
+      delete: () => {
+        calls += 1;
+        if (calls > 1) throw new Error("simulated R2 outage");
+        return Promise.resolve();
+      },
+    } as unknown as R2Bucket;
+
+    await expect(
+      deleteMeetingSeries(env.DB, failingBucket, seriesId, { scopeType: "working_group", workingGroupId: wgId }),
+    ).rejects.toThrow("simulated R2 outage");
+
+    // Because R2 objects are deleted BEFORE any D1 row in this cascade, a
+    // failure partway through must leave every D1 row untouched — the
+    // series, both ICS file rows, and the member preference — so a retry
+    // can find the still-live rows and finish the job. The old D1-first
+    // ordering deleted all `meeting_ics_files` rows up front and let a
+    // partial R2 failure orphan whichever objects it missed, since no row
+    // would reference them again afterward.
+    expect(await queryAll(env.DB, "SELECT id FROM meeting_series WHERE id = ?", seriesId)).toHaveLength(1);
+    expect(await queryAll(env.DB, "SELECT id FROM meeting_ics_files WHERE series_id = ?", seriesId)).toHaveLength(2);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM member_meeting_preferences WHERE series_id = ?", seriesId),
+    ).toHaveLength(1);
+
+    // Retry with a healthy bucket: the whole cascade — both real R2
+    // objects and every D1 row — finishes cleanly, proving the retry is
+    // safe (R2Bucket#delete on an already-missing key is a no-op).
+    const { deletedIcsFileR2Keys } = await deleteMeetingSeries(env.DB, env.ASSETS_BUCKET!, seriesId, {
+      scopeType: "working_group",
+      workingGroupId: wgId,
+    });
+    expect(deletedIcsFileR2Keys.sort()).toEqual(["meeting-ics/series-retry-1.ics", "meeting-ics/series-retry-2.ics"]);
+    expect(await queryAll(env.DB, "SELECT id FROM meeting_series WHERE id = ?", seriesId)).toHaveLength(0);
+    expect(await queryAll(env.DB, "SELECT id FROM meeting_ics_files WHERE series_id = ?", seriesId)).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM member_meeting_preferences WHERE series_id = ?", seriesId),
+    ).toHaveLength(0);
+    expect(await env.ASSETS_BUCKET!.get("meeting-ics/series-retry-1.ics")).toBeNull();
+    expect(await env.ASSETS_BUCKET!.get("meeting-ics/series-retry-2.ics")).toBeNull();
   });
 
   it("deletes a whole meeting series — cascades to its ICS files, their R2 objects, and member preferences", async () => {
