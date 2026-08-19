@@ -235,6 +235,17 @@ export function presentationDownloadResponse(
   return new Response(object.body, { headers });
 }
 
+/**
+ * Records a new version row for an already-uploaded R2 object. R2 and D1 are
+ * not one transaction: `storePresentationFile` puts the object first, so a
+ * D1 batch failure here (FK/UNIQUE violation, outage) would otherwise leave
+ * that object orphaned — uploaded but never referenced by any committed row.
+ * When `bucket` is supplied, a batch failure is compensated by deleting the
+ * just-written object, the same principle §9.2 established for ICS file
+ * uploads (`meeting-calendar/admin-ics-files.ts`'s `uploadIcsFile`). `bucket`
+ * is optional because some call sites (tests, backfills) create a version
+ * row for an object they manage themselves and have no orphan to clean up.
+ */
 export async function createPresentationVersion(
   db: DatabaseLike,
   proposalId: string,
@@ -245,37 +256,43 @@ export async function createPresentationVersion(
     mimeType: string | null;
     uploadedByUserId: string;
   },
+  bucket?: R2Bucket,
 ): Promise<PresentationVersion> {
   const now = nowIso();
   const id = uuid();
 
-  await db.batch([
-    db
-      .prepare("UPDATE presentation_versions SET is_current = 0 WHERE proposal_id = ? AND is_current = 1")
-      .bind(proposalId),
-    db
-      .prepare(
-        `INSERT INTO presentation_versions
-       (id, proposal_id, version_number, r2_key, file_name, file_size, mime_type,
-        uploaded_by_user_id, uploaded_at, is_current)
-     VALUES (
-       ?, ?,
-       (SELECT COALESCE(MAX(version_number), 0) + 1 FROM presentation_versions WHERE proposal_id = ?),
-       ?, ?, ?, ?, ?, ?, 1
-     )`,
-      )
-      .bind(
-        id,
-        proposalId,
-        proposalId,
-        opts.r2Key,
-        opts.fileName,
-        opts.fileSize,
-        opts.mimeType,
-        opts.uploadedByUserId,
-        now,
-      ),
-  ]);
+  try {
+    await db.batch([
+      db
+        .prepare("UPDATE presentation_versions SET is_current = 0 WHERE proposal_id = ? AND is_current = 1")
+        .bind(proposalId),
+      db
+        .prepare(
+          `INSERT INTO presentation_versions
+         (id, proposal_id, version_number, r2_key, file_name, file_size, mime_type,
+          uploaded_by_user_id, uploaded_at, is_current)
+       VALUES (
+         ?, ?,
+         (SELECT COALESCE(MAX(version_number), 0) + 1 FROM presentation_versions WHERE proposal_id = ?),
+         ?, ?, ?, ?, ?, ?, 1
+       )`,
+        )
+        .bind(
+          id,
+          proposalId,
+          proposalId,
+          opts.r2Key,
+          opts.fileName,
+          opts.fileSize,
+          opts.mimeType,
+          opts.uploadedByUserId,
+          now,
+        ),
+    ]);
+  } catch (error) {
+    if (bucket) await bucket.delete(opts.r2Key).catch(() => {});
+    throw error;
+  }
 
   return getPresentationVersion(db, id);
 }

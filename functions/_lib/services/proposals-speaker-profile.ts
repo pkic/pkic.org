@@ -164,8 +164,15 @@ export async function updateSpeakerProfile(
   await run(db, `UPDATE users SET ${assignments.join(", ")} WHERE id = ?`, [...values, userId]);
 }
 
+/**
+ * Records D1 metadata for a presentation file the caller has already
+ * uploaded to R2. `bucket` is passed through to `createPresentationVersion`
+ * so a D1 failure compensates by deleting the just-written object instead of
+ * leaving it orphaned (PR #1 review §9.2 principle, applied to this feature).
+ */
 export async function recordPresentationUpload(
   db: DatabaseLike,
+  bucket: R2Bucket,
   proposalId: string,
   r2Key: string,
   uploadedByUserId: string,
@@ -174,11 +181,16 @@ export async function recordPresentationUpload(
   const now = nowIso();
   await run(db, "UPDATE session_proposals SET updated_at = ? WHERE id = ?", [now, proposalId]);
   const { createPresentationVersion } = await import("./presentation-versions");
-  await createPresentationVersion(db, proposalId, {
-    r2Key,
-    fileName: meta?.fileName ?? null,
-    fileSize: meta?.fileSize ?? null,
-    mimeType: meta?.mimeType ?? null,
-    uploadedByUserId,
-  });
+  await createPresentationVersion(
+    db,
+    proposalId,
+    {
+      r2Key,
+      fileName: meta?.fileName ?? null,
+      fileSize: meta?.fileSize ?? null,
+      mimeType: meta?.mimeType ?? null,
+      uploadedByUserId,
+    },
+    bucket,
+  );
 }
