@@ -7,7 +7,8 @@ import { api } from "../api";
 import { fmt, toast } from "../ui";
 import { useData } from "../../hooks/useData";
 import { asyncPaymentWindow } from "../../../shared/constants/async-payment-window";
-import { formatDonationAmount, type DonationRow, type DonationSyncResponse } from "./donations/model";
+import { formatDonationAmount, type DonationRow } from "./donations/model";
+import { donationSyncResponseSchema } from "../../../shared/schemas/admin-donations";
 
 function Field({ label, children }: { label: string; children: preact.ComponentChildren }) {
   return (
@@ -30,10 +31,12 @@ export function DonationDetailPage({ donationId }: { donationId: string }) {
   async function handleSync(sessionId: string) {
     setSyncing(true);
     try {
-      const res = await api<DonationSyncResponse>("/api/v1/admin/donations/sync", {
-        method: "POST",
-        body: JSON.stringify({ sessionIds: [sessionId] }),
-      });
+      const res = donationSyncResponseSchema.parse(
+        await api<unknown>("/api/v1/admin/donations/sync", {
+          method: "POST",
+          body: JSON.stringify({ sessionIds: [sessionId] }),
+        }),
+      );
       const result = res.results[0];
       if (result?.outcome === "completed") toast("Donation marked as completed.", "success");
       else if (result?.outcome === "awaiting_payment") toast("Payment initiated — awaiting bank settlement.", "info");

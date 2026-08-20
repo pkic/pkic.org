@@ -52,7 +52,11 @@ export interface WgChairDigestResult {
 
 export async function runWeeklyWgChairDigest(db: DatabaseLike, env: Env): Promise<WgChairDigestResult> {
   const cutoff = new Date(Date.now() - 7 * 86_400_000).toISOString();
-  const groups = await listAdminWorkingGroups(db);
+  const { workingGroups: groups } = await listAdminWorkingGroups(db, {
+    limit: 200,
+    offset: 0,
+    sort: "name",
+  });
 
   let workingGroupsWithChanges = 0;
   let emailsSent = 0;

@@ -65,4 +65,30 @@ describe("admin due-work read model", () => {
   it("rejects an unallowlisted sort instead of interpolating it", async () => {
     expect((await call("/api/v1/admin/due-work?sort=recipient_email")).status).toBe(400);
   });
+
+  it("fails closed for authenticated staff without admin:read", async () => {
+    const staffId = crypto.randomUUID();
+    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'"))[0];
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+         VALUES (?, 'staff@example.test', 'staff@example.test', 'user', 1, datetime('now'), datetime('now'))`,
+      ).bind(staffId),
+      env.DB.prepare(
+        `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+         VALUES (?, ?, 'donations:read', ?, datetime('now'))`,
+      ).bind(crypto.randomUUID(), staffId, admin.id),
+    ]);
+    token = await createAdminSession(env.DB, staffId, "staff-due-work-token");
+
+    expect((await call("/api/v1/admin/due-work")).status).toBe(403);
+
+    await env.DB.prepare(
+      `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+       VALUES (?, ?, 'admin:read', ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), staffId, admin.id)
+      .run();
+    expect((await call("/api/v1/admin/due-work")).status).toBe(200);
+  });
 });

@@ -1076,6 +1076,18 @@ describe("Voting system", () => {
         expect(byId.get(id)!.canCastBallot).toBe(true);
         expect(byId.get(id)!.candidates).toHaveLength(2);
       }
+
+      await env.DB.prepare("UPDATE votes SET status = 'scheduled' WHERE id = ?").bind(voteIds[1]).run();
+      const filteredResponse = await call(token, "/api/v1/portal/votes?status=open&limit=50");
+      expect(filteredResponse.status).toBe(200);
+      const filtered = (await filteredResponse.json()) as {
+        votes: Array<{ id: string; status: string }>;
+        page: { total: number };
+      };
+      expect(filtered.page.total).toBe(2);
+      expect(filtered.votes.every((vote) => vote.status === "open")).toBe(true);
+
+      expect((await call(token, "/api/v1/portal/votes?status=not-a-status")).status).toBe(400);
     } finally {
       (env.DB as unknown as { prepare: typeof env.DB.prepare }).prepare = originalPrepare;
     }

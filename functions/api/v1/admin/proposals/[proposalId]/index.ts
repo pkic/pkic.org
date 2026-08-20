@@ -12,20 +12,40 @@ import { first } from "../../../../../_lib/db/queries";
 import { getConfig } from "../../../../../_lib/config";
 import { getActiveFormByPurpose } from "../../../../../_lib/services/forms";
 import { parseJsonSafe } from "../../../../../_lib/utils/json";
-import type { ProposalListRecord } from "../../../../../_lib/services/proposals";
 import { resolveSessionTypes } from "../../../../../_lib/services/events";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
-import { omitCapabilitySecrets } from "../../../../../_lib/services/capability-links";
 import { proposalIdParamsSchema } from "../../../../../../assets/shared/schemas/api";
+import { adminProposalDetailResponseSchema } from "../../../../../../assets/shared/schemas/admin-event-proposals";
+
+interface ProposalDetailRow {
+  id: string;
+  event_id: string;
+  proposer_user_id: string;
+  status: string;
+  proposal_type: string;
+  title: string;
+  abstract: string;
+  details_json: string | null;
+  submitted_at: string;
+  updated_at: string;
+  proposer_email: string;
+  proposer_first_name: string | null;
+  proposer_last_name: string | null;
+  review_count: number;
+  decision_status: string | null;
+  decision_note: string | null;
+  decision_decided_at: string | null;
+}
 
 export async function onRequestGet(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const proposalId = c.req.param("proposalId");
 
-  const proposal = await first<ProposalListRecord>(
+  const proposal = await first<ProposalDetailRow>(
     requestDb(c),
     `SELECT
-       sp.*,
+       sp.id, sp.event_id, sp.proposer_user_id, sp.status, sp.proposal_type,
+       sp.title, sp.abstract, sp.details_json, sp.submitted_at, sp.updated_at,
        u.email      AS proposer_email,
        u.first_name AS proposer_first_name,
        u.last_name  AS proposer_last_name,
@@ -60,24 +80,41 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const eventSettings = parseJsonSafe<{ proposal?: { sessionTypes?: unknown[] } }>(eventRow?.settings_json ?? "{}", {});
   const sessionTypes = resolveSessionTypes(eventSettings);
 
-  return json({
-    proposal: {
-      ...omitCapabilitySecrets(proposal),
-      details: parseJsonSafe<Record<string, unknown> | null>(proposal.details_json, null),
-    },
-    access,
-    form:
-      proposalForm == null
-        ? null
-        : {
-            id: proposalForm.id,
-            title: proposalForm.title,
-            description: proposalForm.description,
-            fields: proposalForm.fields,
-          },
-    minReviewsRequired: config.minProposalReviews,
-    sessionTypes,
-  });
+  return json(
+    adminProposalDetailResponseSchema.parse({
+      proposal: {
+        id: proposal.id,
+        event_id: proposal.event_id,
+        proposer_user_id: proposal.proposer_user_id,
+        status: proposal.status,
+        proposal_type: proposal.proposal_type,
+        title: proposal.title,
+        abstract: proposal.abstract,
+        submitted_at: proposal.submitted_at,
+        updated_at: proposal.updated_at,
+        proposer_email: proposal.proposer_email,
+        proposer_first_name: proposal.proposer_first_name,
+        proposer_last_name: proposal.proposer_last_name,
+        review_count: proposal.review_count,
+        decision_status: proposal.decision_status,
+        decision_note: proposal.decision_note,
+        decision_decided_at: proposal.decision_decided_at,
+        details: parseJsonSafe<Record<string, unknown> | null>(proposal.details_json, null),
+      },
+      access,
+      form:
+        proposalForm == null
+          ? null
+          : {
+              id: proposalForm.id,
+              title: proposalForm.title,
+              description: proposalForm.description,
+              fields: proposalForm.fields,
+            },
+      minReviewsRequired: config.minProposalReviews,
+      sessionTypes,
+    }),
+  );
 }
 
 export const AdminProposalsProposalIdGet = openApiRoute(
@@ -88,7 +125,10 @@ export const AdminProposalsProposalIdGet = openApiRoute(
       params: proposalIdParamsSchema,
     },
     responses: {
-      "200": { description: "Proposal details visible to the authenticated actor." },
+      "200": {
+        description: "Proposal details visible to the authenticated actor.",
+        content: { "application/json": { schema: adminProposalDetailResponseSchema } },
+      },
       "401": { description: "Missing or invalid authentication." },
       "404": { description: "Proposal not found." },
     },

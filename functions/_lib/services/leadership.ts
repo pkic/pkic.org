@@ -17,6 +17,9 @@ import { deterministicRepresentativeJoinSql } from "./membership/representative-
 import { prepareAuditLog } from "./audit";
 import { resolveLeadershipAffiliation } from "./leadership-affiliations";
 import { AppError } from "../errors";
+import { queryPage } from "../db/pagination";
+import { buildD1TextSearchFilter } from "../db/search";
+import { resolveMappedOrderBy } from "../db/sort";
 import type { DatabaseLike } from "../types";
 import type { LeadershipBody } from "../../../assets/shared/schemas/leadership";
 
@@ -104,14 +107,61 @@ function toAdmin(row: LeadershipPositionRow): LeadershipPositionAdmin {
 
 export async function listLeadershipPositionsAdmin(
   db: DatabaseLike,
-  body: LeadershipBody,
-): Promise<LeadershipPositionAdmin[]> {
-  const rows = await all<LeadershipPositionRow>(
-    db,
-    `${ADMIN_POSITION_SELECT} WHERE lp.body = ? ORDER BY (lp.ends_at IS NOT NULL) ASC, lp.starts_at DESC`,
-    [body],
+  query: {
+    body: LeadershipBody;
+    status?: "current" | "past";
+    limit: number;
+    offset: number;
+    q?: string;
+    sort?: string;
+  },
+): Promise<{ positions: LeadershipPositionAdmin[]; total: number }> {
+  const conditions = ["lp.body = ?"];
+  const bindings: unknown[] = [query.body];
+  if (query.status === "current") conditions.push("(lp.ends_at IS NULL OR lp.ends_at >= date('now'))");
+  if (query.status === "past") conditions.push("lp.ends_at < date('now')");
+  if (query.q) {
+    const search = buildD1TextSearchFilter(query.q, [
+      "u.first_name",
+      "u.last_name",
+      "u.first_name || ' ' || u.last_name",
+      "u.email",
+      "lp.title",
+      "o.name",
+    ]);
+    conditions.push(search.sql);
+    bindings.push(...search.bindings);
+  }
+  const where = `WHERE ${conditions.join(" AND ")}`;
+  const orderBy = resolveMappedOrderBy(
+    query.sort,
+    {
+      name: "LOWER(COALESCE(u.last_name, ''))",
+      title: "LOWER(lp.title)",
+      starts_at: "lp.starts_at",
+      ends_at: "lp.ends_at",
+      created_at: "lp.created_at",
+    },
+    "(lp.ends_at IS NOT NULL) ASC, lp.starts_at DESC",
+    "lp.id ASC",
   );
-  return rows.map(toAdmin);
+  const { rows, total } = await queryPage<LeadershipPositionRow>(
+    db,
+    {
+      sql: `${ADMIN_POSITION_SELECT} ${where} ${orderBy} LIMIT ? OFFSET ?`,
+      bindings: [...bindings, query.limit, query.offset],
+    },
+    {
+      sql: `SELECT COUNT(*) AS total
+            FROM leadership_positions lp
+            JOIN users u ON u.id = lp.user_id
+            LEFT JOIN members m ON m.id = lp.member_id
+            LEFT JOIN organizations o ON o.id = m.organization_id
+            ${where}`,
+      bindings,
+    },
+  );
+  return { positions: rows.map(toAdmin), total };
 }
 
 export async function createLeadershipPosition(

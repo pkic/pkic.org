@@ -7,6 +7,7 @@ import type { AdminVoteSummary, AdminWorkingGroupSummary } from "../../types";
 import { statusBadge } from "./shared";
 import { CreateVoteForm } from "./CreateVoteForm";
 import { VoteDetail } from "./VoteDetail";
+import { getAdminWorkingGroupCatalogue } from "../../services/catalogues";
 
 export function VotesTab() {
   const [votes, setVotes] = useState<AdminVoteSummary[]>([]);
@@ -25,9 +26,9 @@ export function VotesTab() {
         // complete vote history unfiltered, not a paginated table; 200
         // comfortably covers realistic vote volume for a consortium.
         api<{ votes: AdminVoteSummary[] }>("/api/v1/admin/votes?limit=200"),
-        api<{ workingGroups: AdminWorkingGroupSummary[] }>("/api/v1/admin/working-groups"),
+        getAdminWorkingGroupCatalogue(),
       ]);
-      setWorkingGroups(wgData.workingGroups);
+      setWorkingGroups(wgData);
       setVotes(votesData.votes);
     } catch (e) {
       setError((e as Error).message);

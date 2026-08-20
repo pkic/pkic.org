@@ -16,6 +16,7 @@ import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { isIndividualMembershipCategory } from "../assets/shared/schemas/membership-categories";
 import { insertOrganization, seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
+import { workingGroupsListResponseSchema } from "../assets/shared/schemas/working-groups";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -105,10 +106,26 @@ describe("admin working groups", () => {
     expect(created.workingGroup.slug).toBe("test-working-group");
     expect(created.workingGroup.active).toBe(true);
 
+    const migrationSeededId = "8cf09d26de5d49f3b065d60e177d5451";
+    await env.DB.prepare(
+      `INSERT INTO working_groups (id, name, slug, description, mailing_list_email, active, created_at, updated_at)
+       VALUES (?, 'Migration Seeded Group', 'migration-seeded-group', NULL, NULL, 1, datetime('now'), datetime('now'))`,
+    )
+      .bind(migrationSeededId)
+      .run();
+
     const listResponse = await call(adminToken, "/api/v1/admin/working-groups");
     expect(listResponse.status).toBe(200);
-    const list = (await listResponse.json()) as { workingGroups: Array<{ id: string }> };
+    const list = workingGroupsListResponseSchema.parse(await listResponse.json());
     expect(list.workingGroups.some((g) => g.id === created.workingGroup.id)).toBe(true);
+    expect(list.workingGroups.some((g) => g.id === migrationSeededId)).toBe(true);
+    expect(list.page.total).toBeGreaterThanOrEqual(1);
+
+    const filtered = workingGroupsListResponseSchema.parse(
+      await (await call(adminToken, "/api/v1/admin/working-groups?q=Test%20Working&limit=1&sort=-name")).json(),
+    );
+    expect(filtered.workingGroups.map((group) => group.id)).toEqual([created.workingGroup.id]);
+    expect(filtered.page).toMatchObject({ limit: 1, offset: 0, total: 1, hasMore: false });
   });
 
   it("creating a working group with a duplicate name returns 409", async () => {

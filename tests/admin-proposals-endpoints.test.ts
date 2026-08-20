@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { env } from "cloudflare:workers";
+import { adminProposalDetailResponseSchema } from "../assets/shared/schemas/admin-event-proposals";
 import app from "../functions/router";
 import { onRequestGet as getProposalDetail } from "../functions/api/v1/admin/proposals/[proposalId]";
 import { onRequestPost as openProposalManage } from "../functions/api/v1/admin/proposals/[proposalId]/open-manage";
@@ -14,6 +15,7 @@ import {
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { getProposalByManageToken } from "../functions/_lib/services/proposals";
+import { adminEventProposalsResponseSchema } from "../assets/shared/schemas/admin-event-proposals";
 
 const proposalDetails = {
   audience: "Operators",
@@ -176,23 +178,10 @@ describe("admin proposal endpoints", () => {
     const response = await callAdminProposalsList(adminToken, "/api/v1/admin/events/pqc-2026/proposals");
 
     expect(response.status).toBe(200);
-    const payload = (await response.json()) as {
-      proposals: Array<{
-        proposer_email: string;
-        review_count: number;
-        average_review_score: number | null;
-        recommendation_accept_count: number;
-        decision_status: string | null;
-      }>;
-      page: { total: number; hasMore: boolean; limit: number; offset: number };
-      stats: {
-        byStatus: Record<string, number>;
-        byRecommendation: Record<string, number>;
-        reviewedCount: number;
-        unreviewedCount: number;
-        total: number;
-      };
-    };
+    const raw = (await response.json()) as { proposals: Array<Record<string, unknown>> };
+    expect(raw.proposals[0]).not.toHaveProperty("manage_link_secret");
+    expect(raw.proposals[0]).not.toHaveProperty("referral_code");
+    const payload = adminEventProposalsResponseSchema.parse(raw);
 
     expect(payload.proposals.length).toBe(1);
     expect(payload.proposals[0].proposer_email).toBe("speaker@pkic.org");
@@ -411,12 +400,13 @@ describe("admin proposal endpoints", () => {
     );
 
     expect(response.status).toBe(200);
-    const payload = (await response.json()) as {
-      proposal: { details: Record<string, unknown> | null };
-      form: { title: string; fields: Array<{ key: string; label: string; fieldType: string }> } | null;
-    };
+    const rawPayload = await response.json();
+    const payload = adminProposalDetailResponseSchema.parse(rawPayload);
 
     expect(payload.proposal.details).toEqual(proposalDetails);
+    expect(rawPayload).not.toHaveProperty("proposal.manage_link_secret");
+    expect(rawPayload).not.toHaveProperty("proposal.manage_token_hash");
+    expect(rawPayload).not.toHaveProperty("proposal.referral_code");
     expect(payload.form?.title).toBe("CFP Form");
     expect(payload.form?.fields.map((field) => [field.key, field.label, field.fieldType])).toEqual([
       ["audience", "Target audience", "text"],

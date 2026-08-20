@@ -3,6 +3,7 @@
  * transitions, communications/notes, EC decision staff override, approval.
  */
 import { z } from "zod";
+import { databaseIdSchema } from "./identifiers";
 import { normalizedEmailSchema } from "./api";
 import { membershipCategorySchema, applicationStageSchema, onHoldSubtypeSchema } from "./member-applications";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
@@ -131,7 +132,7 @@ export const applicationNoteCreateRouteSchema = {
 
 export const adminEcDecisionCreateSchema = z
   .object({
-    ecMemberUserId: z.uuid(),
+    ecMemberUserId: databaseIdSchema,
     decision: ecDecisionValueSchema,
     reason: z.string().trim().min(1).max(2000).optional(),
   })

@@ -13,13 +13,15 @@ import {
 } from "../../../../../assets/shared/schemas/working-groups";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
+import { buildPageInfo } from "../../../../../assets/shared/schemas/pagination";
 
-export const WorkingGroupsList = openApiRoute(workingGroupsListRouteSchema, async (c: AdminContext, _data) => {
+export const WorkingGroupsList = openApiRoute(workingGroupsListRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "working-groups:read");
 
-  const workingGroups = await listAdminWorkingGroups(requestDb(c));
-  return json({ workingGroups });
+  const { limit = 50, offset = 0, q, sort } = data.query;
+  const { workingGroups, total } = await listAdminWorkingGroups(requestDb(c), { limit, offset, q, sort });
+  return json({ workingGroups, page: buildPageInfo(limit, offset, total, workingGroups.length) });
 });
 
 export const WorkingGroupsCreate = openApiRoute(workingGroupCreateRouteSchema, async (c: AdminContext, data) => {

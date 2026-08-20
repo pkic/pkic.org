@@ -6,7 +6,8 @@
  * _lib/auth/sponsor-portal.ts's header comment).
  */
 import { z } from "zod";
-import { normalizedEmailSchema, tokenSchema } from "./api";
+import { databaseIdSchema } from "./identifiers";
+import { eventIdSchema, normalizedEmailSchema, tokenSchema } from "./api";
 import { paginationQuerySchema, paginatedResponseSchema } from "./pagination";
 
 export const sponsorPortalAuthRequestSchema = z.object({
@@ -23,12 +24,18 @@ export const sponsorPortalAuthVerifySchema = z.object({
 });
 
 export const sponsorPortalSessionSchema = z.object({
-  sponsorshipId: z.uuid(),
-  eventId: z.uuid(),
+  sponsorshipId: databaseIdSchema,
+  eventId: eventIdSchema,
   eventName: z.string().nullable(),
   tier: z.string(),
   contactEmail: z.string(),
 });
+export const sponsorPortalAuthVerifyResponseSchema = z.object({
+  success: z.boolean(),
+  expiresAt: z.string(),
+  sponsorship: sponsorPortalSessionSchema,
+});
+export type SponsorPortalAuthVerifyResponse = z.infer<typeof sponsorPortalAuthVerifyResponseSchema>;
 
 export const sponsorPortalAuthRequestRouteSchema = {
   tags: ["Sponsor Portal"],
@@ -57,7 +64,7 @@ export const sponsorPortalAuthVerifyRouteSchema = {
       description: "Session established.",
       content: {
         "application/json": {
-          schema: z.object({ success: z.boolean(), expiresAt: z.string(), sponsorship: sponsorPortalSessionSchema }),
+          schema: sponsorPortalAuthVerifyResponseSchema,
         },
       },
     },
@@ -65,7 +72,7 @@ export const sponsorPortalAuthVerifyRouteSchema = {
 };
 
 export const sponsorPortalAttendeeSchema = z.object({
-  registrationId: z.uuid(),
+  registrationId: databaseIdSchema,
   firstName: z.string().nullable(),
   lastName: z.string().nullable(),
   email: z.string().nullable(),
@@ -74,7 +81,7 @@ export const sponsorPortalAttendeeSchema = z.object({
   attendanceType: z.string().nullable(),
 });
 
-export const sponsorPortalAttendeesEventIdParamsSchema = z.object({ eventId: z.uuid() });
+export const sponsorPortalAttendeesEventIdParamsSchema = z.object({ eventId: eventIdSchema });
 
 // P6M-P2-11: this list was fully unbounded — could grow to thousands for a
 // large event. Bounded via the shared pagination contract.

@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { normalizedEmailSchema } from "./api";
+import { eventIdSchema, normalizedEmailSchema } from "./api";
+import { databaseIdSchema } from "./identifiers";
 
 /** Schemas for /api/v1/sponsorship/*. */
 
@@ -9,14 +10,14 @@ export const sponsorshipInquirySchema = z.object({
   organizationName: z.string().trim().min(1).max(200),
   organizationWebsite: z.url().optional(),
   desiredTier: z.string().trim().min(1).max(60),
-  eventId: z.string().trim().min(1).max(80).optional(),
+  eventId: eventIdSchema.optional(),
   comments: z.string().trim().max(4000).optional(),
 });
 
 export type SponsorshipInquiryInput = z.infer<typeof sponsorshipInquirySchema>;
 
 export const sponsorshipInquiryResponseSchema = z.object({
-  sponsorshipId: z.string(),
+  sponsorshipId: databaseIdSchema,
   pipelineStage: z.literal("new_inquiry"),
 });
 
@@ -42,7 +43,7 @@ export const sponsorshipCheckoutSchema = z.object({
   contactEmail: normalizedEmailSchema,
   organizationName: z.string().trim().min(1).max(200).optional(),
   tier: z.string().trim().min(1).max(60),
-  eventId: z.string().trim().min(1).max(80),
+  eventId: eventIdSchema,
   successPath: z
     .string()
     .trim()
@@ -69,7 +70,7 @@ export const sponsorshipCheckoutRouteSchema = {
   tags: ["Sponsorship"],
   summary: "Create a Stripe Checkout session for self-service event sponsorship (Path B)",
   description:
-    "Scoped to event sponsorship tiers (Leader/Inspirator/Innovator/Ambassador) with a fixed price list — see functions/_lib/services/sponsorship.ts. Consortium sponsorship remains staff-managed.",
+    "Uses the active event-tier price stored in D1 sponsorship configuration. Consortium sponsorship remains staff-managed.",
   request: {
     body: { content: { "application/json": { schema: sponsorshipCheckoutSchema } }, required: true },
   },

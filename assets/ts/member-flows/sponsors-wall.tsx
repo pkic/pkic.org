@@ -40,7 +40,14 @@ import { sponsorsListResponseSchema, type PublicSponsor } from "../../shared/sch
 
 const API_BASE_FALLBACK = "/api/v1";
 
-const MAX_TIER_WEIGHT = 6;
+export function sponsorWeightsDescending(sponsors: PublicSponsor[]): number[] {
+  return [...new Set(sponsors.map(({ weight }) => weight))].sort((a, b) => b - a);
+}
+
+/** Keep arbitrary data-backed weights ordered while bounding their visual scale. */
+export function sponsorWeightClass(weight: number): string {
+  return `sponsor-weight-${Math.min(8, Math.max(1, Math.trunc(weight)))}`;
+}
 
 function titleFor(s: PublicSponsor, level: string | null, eventName?: string): string {
   const context = eventName ?? "the PKI Consortium";
@@ -147,13 +154,13 @@ function GridMode({
 
   if (!buckets || buckets.size === 0) return null;
 
-  const weights = Array.from({ length: MAX_TIER_WEIGHT }, (_, i) => MAX_TIER_WEIGHT - i).filter((w) => buckets.has(w));
+  const weights = sponsorWeightsDescending(sponsors ?? []);
 
   const items = weights.map((w) => (
     <>
       {buckets.get(w)!.map((s) => {
         const sizeClasses = [
-          `sponsor-weight-${w}`,
+          sponsorWeightClass(w),
           height === 20 ? "sponsor-grid-height-20" : "",
           maxHeight === 20 ? "sponsor-grid-max-height-20" : "",
           maxWidth === 60 ? "sponsor-grid-max-width-60" : "",
@@ -210,7 +217,7 @@ function LevelMode({ apiBase, eventName, level }: { apiBase: string; eventName?:
                     level={group.tierName}
                     eventName={eventName}
                     logoClass="sponsor-logo"
-                    sizeClass={`sponsor-weight-${w}`}
+                    sizeClass={sponsorWeightClass(w)}
                   />
                 </div>
               ))}
@@ -280,7 +287,7 @@ function StripMode({
               title={title}
               target="_blank"
               rel="noopener noreferrer"
-              class={`${linkClass} sponsor-weight-${weight}`}
+              class={`${linkClass} ${sponsorWeightClass(weight)}`}
             >
               <img class={`${logoClass} sponsor-strip-default-logo`} alt={title} src={s.logoUrl} loading="lazy" />
             </a>

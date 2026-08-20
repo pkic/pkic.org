@@ -11,10 +11,12 @@
 import { uuid } from "../../../utils/ids";
 import { nowIso } from "../../../utils/time";
 import { AppError } from "../../../errors";
+import { prepareQueueEmailStatement, type QueueEmailPayload } from "../../../email/outbox";
+import { prepareAuditLog } from "../../audit";
 import { ON_HOLD_SUBTYPES, allowedTransitions } from "../../../../../assets/shared/schemas/member-applications";
 import { getMemberApplicationById, type MemberApplicationRow } from "./queries";
 import type { ApplicationStage } from "./create";
-import type { DatabaseLike } from "../../../types";
+import type { DatabaseLike, StatementLike } from "../../../types";
 
 export { ON_HOLD_SUBTYPES, allowedTransitions };
 export type OnHoldSubtype = (typeof ON_HOLD_SUBTYPES)[number];
@@ -42,32 +44,47 @@ export interface StageTransitionResult {
   application: MemberApplicationRow;
   fromStage: string;
   toStage: string;
-  /** Email template the caller should queue for the applicant, if any (route layer owns queueEmail — see functions/api/v1/members/applications/index.ts for the convention). */
+  /** Applicant template selected by the stage machine, if any. */
   suggestedEmailTemplateKey: string | null;
+  /** Outbox rows committed in the same batch as the transition. */
+  outboxIds: string[];
+}
+
+export interface StageTransitionNotification {
+  statusUrl: string;
+  deadlineDays: number;
+  consultationWindowDays: number;
+  requestDetails?: string;
+  reason?: string;
+}
+
+export interface StageTransitionParams {
+  applicationId: string;
+  toStage: string;
+  actorUserId: string | null;
+  onHoldSubtype?: string | null;
+  note?: string | null;
+  notification?: StageTransitionNotification;
+  email?: QueueEmailPayload;
+}
+
+export interface PreparedStageTransition {
+  statements: StatementLike[];
+  result: StageTransitionResult;
 }
 
 /**
- * Applies a stage transition: validates it against the state machine,
- * updates `status`/`stage`/`stage_entered_at` (kept in sync, matching
- * createMemberApplication's convention), writes a member_application_events
- * row, and returns the applicant-facing email template the caller should
- * queue (if any) — this function does not call queueEmail itself, since it
- * has no access to `env`/`executionCtx` (same DB-only/route-owns-email split
- * createMemberApplication's call site already uses).
+ * Builds the complete atomic write set for a previously loaded application.
+ * Batch jobs use this to combine several transitions with one aggregate
+ * notification without reimplementing the stage machine.
  */
-export async function transitionApplicationStage(
+export function prepareApplicationStageTransition(
   db: DatabaseLike,
-  params: {
-    applicationId: string;
-    toStage: string;
-    actorUserId: string | null;
-    onHoldSubtype?: string | null;
-    note?: string | null;
-  },
-): Promise<StageTransitionResult> {
-  const application = await getMemberApplicationById(db, params.applicationId);
-  if (!application) {
-    throw new AppError(404, "APPLICATION_NOT_FOUND", "Application not found");
+  application: MemberApplicationRow,
+  params: StageTransitionParams,
+): PreparedStageTransition {
+  if (application.id !== params.applicationId) {
+    throw new AppError(500, "APPLICATION_ID_MISMATCH", "Loaded application does not match transition request");
   }
 
   if (!isValidStageTransition(application.stage, params.toStage)) {
@@ -86,10 +103,30 @@ export async function transitionApplicationStage(
   const nextOnHoldSubtype = params.toStage === "on_hold" ? (params.onHoldSubtype as string) : null;
   const fromStage = application.stage;
 
-  const [updateResult] = await db.batch([
-    // Compare-and-set: only applies if the row is still in the stage we read.
-    // Two concurrent transitions reading the same fromStage can no longer
-    // both win — the loser's UPDATE affects 0 rows.
+  const suggestedEmailTemplateKey =
+    params.toStage === "on_hold"
+      ? ON_HOLD_SUBTYPE_EMAIL_TEMPLATES[params.onHoldSubtype as OnHoldSubtype]
+      : (STAGE_EMAIL_TEMPLATES[params.toStage] ?? null);
+
+  const stageEmail =
+    suggestedEmailTemplateKey && params.notification
+      ? {
+          templateKey: suggestedEmailTemplateKey,
+          recipientEmail: application.applicant_email,
+          messageType: "transactional" as const,
+          subject: "Update on your PKI Consortium membership application",
+          data: {
+            applicantName: application.applicant_name,
+            statusUrl: params.notification.statusUrl,
+            deadlineDays: params.notification.deadlineDays,
+            consultationWindowDays: params.notification.consultationWindowDays,
+            requestDetails: params.notification.requestDetails ?? "",
+            reason: params.notification.reason ?? "",
+          },
+        }
+      : null;
+  const email = params.email ?? stageEmail;
+  const statements: StatementLike[] = [
     db
       .prepare(
         `UPDATE member_applications
@@ -97,22 +134,88 @@ export async function transitionApplicationStage(
          WHERE id = ? AND stage = ?`,
       )
       .bind(params.toStage, params.toStage, now, nextOnHoldSubtype, now, application.id, fromStage),
-    // Conditioned on the UPDATE above having itself changed a row (SQLite's
-    // changes() reflects the immediately preceding statement within the same
-    // batch/transaction) — not merely on the row's current state, which a
-    // concurrent winner transitioning to the same toStage could satisfy even
-    // for the loser. A lost compare-and-set must not leave a history event
-    // for a transition that never happened.
     db
       .prepare(
         `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
-         SELECT ?, ?, ?, ?, ?, ?, ?
-         WHERE changes() = 1`,
+         VALUES (?, ?, ?, CASE WHEN changes() = 1 THEN ? ELSE NULL END, ?, ?, ?)`,
       )
       .bind(uuid(), application.id, fromStage, params.toStage, params.actorUserId, params.note ?? null, now),
-  ]);
+  ];
 
-  if ((updateResult.meta?.changes ?? 0) === 0) {
+  const outboxIds: string[] = [];
+  if (email) {
+    const preparedEmail = prepareQueueEmailStatement(db, email, now);
+    statements.push(preparedEmail.statement);
+    outboxIds.push(preparedEmail.id);
+  }
+  statements.push(
+    prepareAuditLog(
+      db,
+      params.actorUserId ? "admin" : "system",
+      params.actorUserId,
+      "application_stage_transitioned",
+      "member_application",
+      application.id,
+      { fromStage, toStage: params.toStage, onHoldSubtype: nextOnHoldSubtype },
+      now,
+    ),
+  );
+
+  return {
+    statements,
+    result: {
+      application: {
+        ...application,
+        status: params.toStage,
+        stage: params.toStage,
+        stage_entered_at: now,
+        on_hold_subtype: nextOnHoldSubtype,
+        updated_at: now,
+      },
+      fromStage,
+      toStage: params.toStage,
+      suggestedEmailTemplateKey,
+      outboxIds,
+    },
+  };
+}
+
+/**
+ * Applies a stage transition: validates it against the state machine,
+ * updates `status`/`stage`/`stage_entered_at` (kept in sync, matching
+ * createMemberApplication's convention), writes a member_application_events
+ * row, audit row, and any durable email intent in one D1 batch. Delivery is
+ * still owned by the caller after commit; this use case only owns the outbox
+ * insert required for atomicity.
+ */
+export async function transitionApplicationStage(
+  db: DatabaseLike,
+  params: StageTransitionParams,
+): Promise<StageTransitionResult> {
+  const application = await getMemberApplicationById(db, params.applicationId);
+  if (!application) {
+    throw new AppError(404, "APPLICATION_NOT_FOUND", "Application not found");
+  }
+
+  const fromStage = application.stage;
+  const prepared = prepareApplicationStageTransition(db, application, params);
+
+  let results: Awaited<ReturnType<DatabaseLike["batch"]>>;
+  try {
+    results = await db.batch(prepared.statements);
+  } catch (error) {
+    const current = await getMemberApplicationById(db, application.id);
+    if (current && current.stage !== fromStage) {
+      throw new AppError(
+        409,
+        "STAGE_TRANSITION_CONFLICT",
+        `Application stage changed concurrently; expected '${fromStage}'`,
+      );
+    }
+    throw error;
+  }
+
+  if ((results[0]?.meta?.changes ?? 0) === 0) {
     throw new AppError(
       409,
       "STAGE_TRANSITION_CONFLICT",
@@ -120,22 +223,5 @@ export async function transitionApplicationStage(
     );
   }
 
-  const suggestedEmailTemplateKey =
-    params.toStage === "on_hold"
-      ? ON_HOLD_SUBTYPE_EMAIL_TEMPLATES[params.onHoldSubtype as OnHoldSubtype]
-      : (STAGE_EMAIL_TEMPLATES[params.toStage] ?? null);
-
-  return {
-    application: {
-      ...application,
-      status: params.toStage,
-      stage: params.toStage,
-      stage_entered_at: now,
-      on_hold_subtype: nextOnHoldSubtype,
-      updated_at: now,
-    },
-    fromStage: application.stage,
-    toStage: params.toStage,
-    suggestedEmailTemplateKey,
-  };
+  return prepared.result;
 }

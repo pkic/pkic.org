@@ -13,6 +13,7 @@ import {
   getCandidates,
   getCandidatesForVotes,
   getVoteRowOrThrow,
+  VOTE_ROW_COLUMNS,
   eligibleCategoriesOf,
   type VoteRow,
   type VoteType,
@@ -128,7 +129,7 @@ async function loadCastBallotRounds(db: DatabaseLike, voteIds: string[], member:
 export async function listVisibleVotesForMember(
   db: DatabaseLike,
   member: AuthMember,
-  params: { limit: number; offset: number },
+  params: { limit: number; offset: number; status?: VoteStatus[] },
 ): Promise<{ votes: PortalVoteSummary[]; total: number }> {
   const wgRows = await all<{ working_group_id: string }>(
     db,
@@ -143,12 +144,17 @@ export async function listVisibleVotesForMember(
     conditions.push(`OR (scope_type = 'working_group' AND scope_id IN (${[...wgIds].map(() => "?").join(", ")}))`);
     args.push(...wgIds);
   }
-  const where = conditions.join(" ");
+  const filters = [`(${conditions.join(" ")})`];
+  if (params.status && params.status.length > 0) {
+    filters.push(`status IN (${params.status.map(() => "?").join(", ")})`);
+    args.push(...params.status);
+  }
+  const where = filters.join(" AND ");
 
   const { rows, total } = await queryPage<VoteRow>(
     db,
     {
-      sql: `SELECT * FROM votes WHERE ${where} ORDER BY closes_at DESC LIMIT ? OFFSET ?`,
+      sql: `SELECT ${VOTE_ROW_COLUMNS} FROM votes WHERE ${where} ORDER BY closes_at DESC LIMIT ? OFFSET ?`,
       bindings: [...args, params.limit, params.offset],
     },
     { sql: `SELECT COUNT(*) AS total FROM votes WHERE ${where}`, bindings: args },

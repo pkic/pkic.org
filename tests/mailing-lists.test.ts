@@ -16,6 +16,7 @@ import { resolveAutoSyncListEmails } from "../functions/_lib/services/mailing-li
 import { signAdminSessionToken } from "../functions/_lib/auth/admin";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { nowIso, addHours } from "../functions/_lib/utils/time";
+import { mailingListsListResponseSchema } from "../assets/shared/schemas/admin-mailing-lists";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -51,10 +52,24 @@ describe("Managed mailing list configuration", () => {
   it("GET /api/v1/admin/mailing-lists returns the seeded lists", async () => {
     const response = await call(adminToken, "/api/v1/admin/mailing-lists");
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { mailingLists: Array<{ email: string; listType: string }> };
+    const body = mailingListsListResponseSchema.parse(await response.json());
     const emails = body.mailingLists.map((l) => l.email);
     expect(emails).toContain("pkic@lists.pkic.org");
     expect(emails).toContain("consultation@lists.pkic.org");
+    expect(body.page.total).toBeGreaterThanOrEqual(body.mailingLists.length);
+
+    const filtered = mailingListsListResponseSchema.parse(
+      await (await call(adminToken, "/api/v1/admin/mailing-lists?q=consultation&limit=1&sort=-email")).json(),
+    );
+    expect(filtered.mailingLists.map((list) => list.email)).toEqual(["consultation@lists.pkic.org"]);
+    expect(filtered.page).toMatchObject({ limit: 1, offset: 0, total: 1, hasMore: false });
+
+    const seeded = body.mailingLists.find((list) => list.email === "consultation@lists.pkic.org")!;
+    const patchResponse = await call(adminToken, `/api/v1/admin/mailing-lists/${seeded.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ label: seeded.label }),
+    });
+    expect(patchResponse.status).toBe(200);
   });
 
   it("POST creates a new mailing list", async () => {

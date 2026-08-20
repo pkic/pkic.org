@@ -13,6 +13,7 @@ import { Tabs } from "../../components/Tabs";
 import { api } from "../api";
 import { toast } from "../ui";
 import type { AdminIcsFile, AdminMeetingSeries, AdminWorkingGroupSummary, MeetingResendResult } from "../types";
+import { getAdminWorkingGroupCatalogue } from "../services/catalogues";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -487,10 +488,10 @@ function WorkingGroupMeetingsTab() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api<{ workingGroups: AdminWorkingGroupSummary[] }>("/api/v1/admin/working-groups")
-      .then((d) => {
-        setGroups(d.workingGroups);
-        if (d.workingGroups.length) setSelectedId(d.workingGroups[0].id);
+    getAdminWorkingGroupCatalogue()
+      .then((workingGroups) => {
+        setGroups(workingGroups);
+        if (workingGroups.length) setSelectedId(workingGroups[0].id);
       })
       .catch((e) => setError((e as Error).message));
   }, []);

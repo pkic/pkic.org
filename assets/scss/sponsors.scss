@@ -31,7 +31,7 @@
   }
 }
 
-@for $weight from 0 through 6 {
+@for $weight from 0 through 8 {
   .sponsor-weight-#{$weight} {
     --sponsor-weight: #{$weight};
   }

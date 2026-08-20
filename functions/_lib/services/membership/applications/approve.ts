@@ -131,7 +131,7 @@ export async function approveApplication(
     (slug) => slug !== CA_WORKING_GROUP_SLUG || application.membership_category === CA_ONLY_CATEGORY,
   );
   const jobTitle = typeof answers.job_title === "string" && answers.job_title.trim() ? answers.job_title.trim() : null;
-  const linkedin = typeof answers.linkedin === "string" && answers.linkedin.trim() ? answers.linkedin.trim() : null;
+  const links = typeof answers.linkedin === "string" && answers.linkedin.trim() ? [answers.linkedin.trim()] : [];
 
   // Everything below is built (not executed) and committed exactly once
   // at the end of this function: the provisioning statements, the
@@ -147,7 +147,7 @@ export async function approveApplication(
     organizationName: isIndividual ? null : application.organization_name,
     organizationDomain: isIndividual ? null : application.organization_domain,
     membershipCategory: application.membership_category,
-    representatives: [{ name: application.applicant_name, email: application.applicant_email, jobTitle, linkedin }],
+    representatives: [{ name: application.applicant_name, email: application.applicant_email, jobTitle, links }],
     workingGroupSlugs,
   });
   // Pure/synchronous — safe to call before the batch below commits, since

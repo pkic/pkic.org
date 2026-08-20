@@ -1,17 +1,18 @@
 import { z } from "zod";
+import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 /** Schemas for the public sponsor display endpoints. */
 
 export const publicSponsorItemSchema = z.object({
-  id: z.string(),
+  id: databaseIdSchema,
   name: z.string(),
   website: z.string().nullable(),
   logoUrl: z.string().nullable(),
   tier: z.string().nullable(),
   eventTier: z.string().nullable(),
   effectiveTier: z.string(),
-  weight: z.number().int().min(1).max(8),
+  weight: z.number().int().positive(),
 });
 export type PublicSponsor = z.infer<typeof publicSponsorItemSchema>;
 
@@ -19,7 +20,7 @@ export const PUBLIC_SPONSOR_SORT_COLUMNS = ["name", "weight"] as const;
 export const sponsorsListQuerySchema = listQuerySchema(PUBLIC_SPONSOR_SORT_COLUMNS).extend({
   eventName: z.string().trim().min(1).max(200).optional(),
   level: z.string().trim().min(1).max(100).optional(),
-  minWeight: z.coerce.number().int().min(1).max(8).optional(),
+  minWeight: z.coerce.number().int().positive().optional(),
 });
 
 export const sponsorsListResponseSchema = paginatedResponseSchema("sponsors", publicSponsorItemSchema);
@@ -46,7 +47,7 @@ export const sponsorLogoRouteSchema = {
   summary: "Public non-member sponsor logo",
   description:
     "Logo for a non-member sponsor (sponsorships.non_member_logo_r2_key). Org-tied sponsors use GET /api/v1/members/:id/logo instead.",
-  request: { params: z.object({ id: z.string() }) },
+  request: { params: z.object({ id: databaseIdSchema }) },
   responses: {
     "200": { description: "Logo image bytes." },
     "404": { description: "No logo on file." },

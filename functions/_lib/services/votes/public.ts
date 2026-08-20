@@ -9,6 +9,7 @@ import { getWorkingGroupBySlugOrId } from "../working-groups";
 import {
   toVoteSummary,
   getCandidates,
+  VOTE_ROW_COLUMNS,
   type VoteRow,
   type VoteType,
   type VoteScopeType,
@@ -95,7 +96,7 @@ export async function listPublicVotes(
   const where = conditions.join(" AND ");
   const rows = await all<VoteRow>(
     db,
-    `SELECT * FROM votes WHERE ${where} ORDER BY ${sortColumn} DESC LIMIT ? OFFSET ?`,
+    `SELECT ${VOTE_ROW_COLUMNS} FROM votes WHERE ${where} ORDER BY ${sortColumn} DESC LIMIT ? OFFSET ?`,
     [...args, limit, offset],
   );
   const totalRow = await first<{ total: number }>(db, `SELECT COUNT(*) AS total FROM votes WHERE ${where}`, args);
@@ -105,7 +106,11 @@ export async function listPublicVotes(
 }
 
 export async function getPublicVoteBySlug(db: DatabaseLike, slug: string): Promise<PublicVoteSummary> {
-  const row = await first<VoteRow>(db, `SELECT * FROM votes WHERE slug = ? AND visibility = 'public'`, [slug]);
+  const row = await first<VoteRow>(
+    db,
+    `SELECT ${VOTE_ROW_COLUMNS} FROM votes WHERE slug = ? AND visibility = 'public'`,
+    [slug],
+  );
   if (!row) throw new AppError(404, "VOTE_NOT_FOUND", "Vote not found");
   return toPublicVoteSummary(db, row);
 }
@@ -113,7 +118,7 @@ export async function getPublicVoteBySlug(db: DatabaseLike, slug: string): Promi
 export async function listPublicVotesForFeed(db: DatabaseLike, limit = 50): Promise<PublicVoteSummary[]> {
   const rows = await all<VoteRow>(
     db,
-    `SELECT * FROM votes WHERE visibility = 'public' ORDER BY closes_at DESC LIMIT ?`,
+    `SELECT ${VOTE_ROW_COLUMNS} FROM votes WHERE visibility = 'public' ORDER BY closes_at DESC LIMIT ?`,
     [limit],
   );
   return Promise.all(rows.map((r) => toPublicVoteSummary(db, r)));

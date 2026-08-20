@@ -18,6 +18,7 @@ import { seedOrganizationAggregate, addRepresentative } from "./helpers/membersh
 import {
   leadershipAffiliationsResponseSchema,
   leadershipPositionResponseSchema,
+  leadershipPositionsListResponseSchema,
 } from "../assets/shared/schemas/leadership";
 
 function request(token: string | null, path: string, init: RequestInit = {}): Request {
@@ -201,15 +202,26 @@ describe("leadership positions (migration 0049) — Board / Executive Council ro
       body: JSON.stringify({ body: "executive_council", userId: ecMember, title: "EC Member", startsAt: "2022-06-01" }),
     });
 
-    const boardList = (await (await call(adminToken, "/api/v1/admin/leadership-positions?body=board")).json()) as {
-      positions: Array<{ name: string }>;
-    };
+    const boardList = leadershipPositionsListResponseSchema.parse(
+      await (await call(adminToken, "/api/v1/admin/leadership-positions?body=board")).json(),
+    );
     expect(boardList.positions.map((p) => p.name)).toEqual(["Board Only"]);
 
-    const ecList = (await (
-      await call(adminToken, "/api/v1/admin/leadership-positions?body=executive_council")
-    ).json()) as { positions: Array<{ name: string }> };
+    const ecList = leadershipPositionsListResponseSchema.parse(
+      await (await call(adminToken, "/api/v1/admin/leadership-positions?body=executive_council")).json(),
+    );
     expect(ecList.positions.map((p) => p.name)).toEqual(["Ec Only"]);
+
+    const filtered = leadershipPositionsListResponseSchema.parse(
+      await (
+        await call(
+          adminToken,
+          "/api/v1/admin/leadership-positions?body=board&status=current&q=Board&limit=1&sort=-starts_at",
+        )
+      ).json(),
+    );
+    expect(filtered.positions.map((position) => position.name)).toEqual(["Board Only"]);
+    expect(filtered.page).toMatchObject({ limit: 1, offset: 0, total: 1, hasMore: false });
   });
 
   it("rejects an unknown body value", async () => {

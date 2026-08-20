@@ -11,10 +11,11 @@ import { asyncPaymentWindow } from "../../../shared/constants/async-payment-wind
 import { Pager } from "../../components/Pager";
 import {
   donationPromotersListResponseSchema,
+  donationSyncResponseSchema,
   donationsListResponseSchema,
   type AdminDonationPromoter as PromoterRow,
 } from "../../../shared/schemas/admin-donations";
-import { formatDonationAmount, type DonationRow, type DonationSyncResponse } from "./donations/model";
+import { formatDonationAmount, type DonationRow } from "./donations/model";
 
 const FILTERS = ["", "pending", "awaiting_payment", "completed", "expired", "failed"] as const;
 
@@ -203,10 +204,12 @@ export function Donations({ subTab }: { subTab?: string }) {
   async function handleSync(pendingOnly: boolean) {
     setSyncingAll(true);
     try {
-      const res = await api<DonationSyncResponse>("/api/v1/admin/donations/sync", {
-        method: "POST",
-        ...(pendingOnly ? { body: JSON.stringify({ pendingOnly: true }) } : {}),
-      });
+      const res = donationSyncResponseSchema.parse(
+        await api<unknown>("/api/v1/admin/donations/sync", {
+          method: "POST",
+          ...(pendingOnly ? { body: JSON.stringify({ pendingOnly: true }) } : {}),
+        }),
+      );
       const parts = [
         res.completed ? `${res.completed} completed` : "",
         res.failed ? `${res.failed} failed` : "",

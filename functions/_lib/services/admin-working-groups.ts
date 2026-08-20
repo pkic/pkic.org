@@ -12,6 +12,10 @@ import { all, first, run } from "../db/queries";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { AppError } from "../errors";
+import { queryPage } from "../db/pagination";
+import { buildD1TextSearchFilter } from "../db/search";
+import { resolveOrderBy } from "../db/sort";
+import { ADMIN_WORKING_GROUP_SORT_COLUMNS } from "../../../assets/shared/schemas/working-groups";
 import {
   getWorkingGroupBySlugOrId,
   assertCaConstraint,
@@ -178,9 +182,28 @@ const SUMMARY_SELECT = `
   LEFT JOIN (${chairSubquery("role-wg_vice_chair")}) vice_chair ON vice_chair.wg_id = wg.id
 `;
 
-export async function listAdminWorkingGroups(db: DatabaseLike): Promise<AdminWorkingGroupSummary[]> {
-  const rows = await all<WorkingGroupSummaryRow>(db, `${SUMMARY_SELECT} ORDER BY wg.name ASC`);
-  return rows.map(toSummary);
+export async function listAdminWorkingGroups(
+  db: DatabaseLike,
+  query: { limit: number; offset: number; q?: string; sort?: string },
+): Promise<{ workingGroups: AdminWorkingGroupSummary[]; total: number }> {
+  const search = query.q
+    ? buildD1TextSearchFilter(query.q, ["wg.name", "wg.slug", "wg.description", "wg.mailing_list_email"])
+    : null;
+  const where = search ? `WHERE ${search.sql}` : "";
+  const bindings = search?.bindings ?? [];
+  const orderBy = resolveOrderBy(query.sort, ADMIN_WORKING_GROUP_SORT_COLUMNS, "ORDER BY wg.name ASC, wg.id ASC");
+  const { rows, total } = await queryPage<WorkingGroupSummaryRow>(
+    db,
+    {
+      sql: `${SUMMARY_SELECT} ${where} ${orderBy}, wg.id ASC LIMIT ? OFFSET ?`,
+      bindings: [...bindings, query.limit, query.offset],
+    },
+    {
+      sql: `SELECT COUNT(*) AS total FROM working_groups wg ${where}`,
+      bindings,
+    },
+  );
+  return { workingGroups: rows.map(toSummary), total };
 }
 
 export async function getAdminWorkingGroupDetail(

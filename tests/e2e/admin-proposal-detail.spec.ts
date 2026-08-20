@@ -1,6 +1,15 @@
 import { expect, test } from "@playwright/test";
 
 test("renders the admin proposal detail workflow with submission answers and operator actions", async ({ page }) => {
+  const proposalId = "11111111111111111111111111111111";
+  const proposerUserId = "22222222222222222222222222222222";
+  const formId = "33333333333333333333333333333333";
+  const fieldIds = {
+    audience: "44444444444444444444444444444444",
+    format: "55555555555555555555555555555555",
+    tracks: "66666666666666666666666666666666",
+    recording: "77777777777777777777777777777777",
+  };
   const openedUrls: string[] = [];
   const consoleErrors: string[] = [];
   let adminUpload:
@@ -46,7 +55,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
     });
   });
 
-  await page.route("**/api/v1/admin/proposals/proposal-1/open-manage", async (route) => {
+  await page.route(`**/api/v1/admin/proposals/${proposalId}/open-manage`, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -54,7 +63,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
     });
   });
 
-  await page.route("**/api/v1/admin/proposals/proposal-1/reviews", async (route) => {
+  await page.route(`**/api/v1/admin/proposals/${proposalId}/reviews`, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -77,7 +86,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
     });
   });
 
-  await page.route("**/api/v1/admin/proposals/proposal-1/comments", async (route) => {
+  await page.route(`**/api/v1/admin/proposals/${proposalId}/comments`, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -85,7 +94,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
     });
   });
 
-  await page.route("**/api/v1/admin/proposals/proposal-1/speakers", async (route) => {
+  await page.route(`**/api/v1/admin/proposals/${proposalId}/speakers`, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -113,7 +122,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
     });
   });
 
-  await page.route("**/api/v1/admin/proposals/proposal-1/presentation/versions", async (route) => {
+  await page.route(`**/api/v1/admin/proposals/${proposalId}/presentation/versions`, async (route) => {
     if (route.request().method() === "POST") {
       const headers = route.request().headers();
       adminUpload = {
@@ -136,15 +145,15 @@ test("renders the admin proposal detail workflow with submission answers and ope
     });
   });
 
-  await page.route("**/api/v1/admin/proposals/proposal-1", async (route) => {
+  await page.route(`**/api/v1/admin/proposals/${proposalId}`, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
         proposal: {
-          id: "proposal-1",
+          id: proposalId,
           event_id: "event-1",
-          proposer_user_id: "user-1",
+          proposer_user_id: proposerUserId,
           status: "accepted",
           proposal_type: "panel",
           title: "Operational PKI at Internet Scale",
@@ -171,12 +180,12 @@ test("renders the admin proposal detail workflow with submission answers and ope
           canFinalize: true,
         },
         form: {
-          id: "form-1",
+          id: formId,
           title: "CFP Form",
           description: "Structured submission answers for the review team.",
           fields: [
             {
-              id: "field-audience",
+              id: fieldIds.audience,
               key: "audience",
               label: "Target audience",
               fieldType: "text",
@@ -186,7 +195,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
               sortOrder: 1,
             },
             {
-              id: "field-format",
+              id: fieldIds.format,
               key: "format",
               label: "Preferred format",
               fieldType: "select",
@@ -199,7 +208,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
               sortOrder: 2,
             },
             {
-              id: "field-tracks",
+              id: fieldIds.tracks,
               key: "tracks",
               label: "Tracks",
               fieldType: "multi_select",
@@ -212,7 +221,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
               sortOrder: 3,
             },
             {
-              id: "field-recording",
+              id: fieldIds.recording,
               key: "recordingConsent",
               label: "Recording consent",
               fieldType: "boolean",
@@ -232,7 +241,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
     });
   });
 
-  await page.goto("/admin/#/events/pqc-2026/proposal/proposal-1");
+  await page.goto(`/admin/#/events/pqc-2026/proposal/${proposalId}`);
 
   await expect(page.getByRole("heading", { name: "Operational PKI at Internet Scale" })).toBeVisible();
 

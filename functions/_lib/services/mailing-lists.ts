@@ -18,7 +18,13 @@ import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { parseJsonSafe } from "../utils/json";
 import { AppError } from "../errors";
-import { MAILING_LIST_TYPES } from "../../../assets/shared/schemas/admin-mailing-lists";
+import { queryPage } from "../db/pagination";
+import { buildD1TextSearchFilter } from "../db/search";
+import { resolveOrderBy } from "../db/sort";
+import {
+  ADMIN_MAILING_LIST_SORT_COLUMNS,
+  MAILING_LIST_TYPES,
+} from "../../../assets/shared/schemas/admin-mailing-lists";
 import type { DatabaseLike } from "../types";
 
 export { MAILING_LIST_TYPES };
@@ -50,9 +56,30 @@ function toMailingList(row: MailingListRow) {
   };
 }
 
-export async function listMailingLists(db: DatabaseLike) {
-  const rows = await all<MailingListRow>(db, "SELECT * FROM mailing_lists ORDER BY list_type ASC, email ASC");
-  return rows.map(toMailingList);
+const MAILING_LIST_COLUMNS =
+  "id, email, label, list_type, working_group_id, auto_sync_categories_json, active, created_at, updated_at";
+
+export async function listMailingLists(
+  db: DatabaseLike,
+  query: { limit: number; offset: number; q?: string; sort?: string },
+) {
+  const search = query.q ? buildD1TextSearchFilter(query.q, ["email", "label", "list_type"]) : null;
+  const where = search ? `WHERE ${search.sql}` : "";
+  const bindings = search?.bindings ?? [];
+  const orderBy = resolveOrderBy(
+    query.sort,
+    ADMIN_MAILING_LIST_SORT_COLUMNS,
+    "ORDER BY list_type ASC, email ASC, id ASC",
+  );
+  const { rows, total } = await queryPage<MailingListRow>(
+    db,
+    {
+      sql: `SELECT ${MAILING_LIST_COLUMNS} FROM mailing_lists ${where} ${orderBy}, id ASC LIMIT ? OFFSET ?`,
+      bindings: [...bindings, query.limit, query.offset],
+    },
+    { sql: `SELECT COUNT(*) AS total FROM mailing_lists ${where}`, bindings },
+  );
+  return { mailingLists: rows.map(toMailingList), total };
 }
 
 export interface MailingListInput {

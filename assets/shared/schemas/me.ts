@@ -4,14 +4,16 @@
  * target-user path parameter.
  */
 import { z } from "zod";
+import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
 import { applicationStageSchema } from "./member-applications";
 import { voteTypeSchema, voteScopeTypeSchema, voteStatusSchema } from "./votes";
 import { contentReviewStatusSchema } from "./admin-organizations";
 import { paginationQuerySchema, paginatedResponseSchema } from "./pagination";
+import { workingGroupIdSchema, workingGroupReferenceSchema } from "./working-groups";
 
 export const myOrganizationRepresentativeSchema = z.object({
-  userId: z.uuid(),
+  userId: databaseIdSchema,
   name: z.string().nullable(),
   email: z.string(),
   isPrimaryContact: z.boolean(),
@@ -22,14 +24,14 @@ export const myOrganizationRepresentativeSchema = z.object({
 // actively represented) a member can act as. A person can hold more than
 // one at once — see functions/_lib/auth/member.ts.
 export const myActiveMembershipSchema = z.object({
-  memberId: z.uuid(),
-  organizationId: z.uuid().nullable(),
+  memberId: databaseIdSchema,
+  organizationId: databaseIdSchema.nullable(),
   organizationName: z.string().nullable(),
   membershipCategory: z.string(),
 });
 
 export const myProfileSchema = z.object({
-  userId: z.uuid(),
+  userId: databaseIdSchema,
   email: z.string(),
   firstName: z.string().nullable(),
   lastName: z.string().nullable(),
@@ -38,7 +40,7 @@ export const myProfileSchema = z.object({
   biography: z.string().nullable(),
   links: linksSchema,
   membershipCategory: z.string(),
-  organizationId: z.uuid().nullable(),
+  organizationId: databaseIdSchema.nullable(),
   organizationName: z.string().nullable(),
   memberSince: z.string(),
   showOnOrgProfile: z.boolean(),
@@ -68,7 +70,7 @@ export const myProfileGetRouteSchema = {
 };
 
 export const myActiveMembershipSwitchSchema = z.object({
-  memberId: z.uuid(),
+  memberId: databaseIdSchema,
 });
 
 export const myActiveMembershipSwitchRouteSchema = {
@@ -170,7 +172,7 @@ export const myApplicationDetailRouteSchema = {
 };
 
 export const myVoteHistoryEntrySchema = z.object({
-  voteId: z.uuid(),
+  voteId: databaseIdSchema,
   slug: z.string(),
   title: z.string(),
   voteType: voteTypeSchema,
@@ -209,7 +211,7 @@ export const myOrganizationVisibilityUpdateRouteSchema = {
 };
 
 export const myWorkingGroupSummarySchema = z.object({
-  workingGroupId: z.uuid(),
+  workingGroupId: workingGroupIdSchema,
   slug: z.string(),
   name: z.string(),
   joinedAt: z.string(),
@@ -229,7 +231,7 @@ export const myWorkingGroupsListRouteSchema = {
 export const myWorkingGroupJoinRouteSchema = {
   tags: ["Me"],
   summary: "Join a working group",
-  request: { params: z.object({ wgId: z.string() }) },
+  request: { params: z.object({ wgId: workingGroupReferenceSchema }) },
   responses: {
     "200": { description: "Joined." },
     "403": { description: "CA working group requires category A membership." },
@@ -240,7 +242,7 @@ export const myWorkingGroupJoinRouteSchema = {
 export const myWorkingGroupLeaveRouteSchema = {
   tags: ["Me"],
   summary: "Leave a working group",
-  request: { params: z.object({ wgId: z.string() }) },
+  request: { params: z.object({ wgId: workingGroupReferenceSchema }) },
   responses: {
     "200": { description: "Left." },
     "404": { description: "Working group not found." },
@@ -282,20 +284,20 @@ export const addCoworkerRouteSchema = {
 // ── Organization profile & content moderation ────────────────
 
 export const myOrganizationReviewSchema = z.object({
-  id: z.uuid(),
-  organizationId: z.uuid(),
-  submittedByUserId: z.uuid(),
+  id: databaseIdSchema,
+  organizationId: databaseIdSchema,
+  submittedByUserId: databaseIdSchema,
   proposedChanges: z.record(z.string(), z.unknown()),
   hasLogoChange: z.boolean(),
   status: contentReviewStatusSchema,
-  reviewerUserId: z.uuid().nullable(),
+  reviewerUserId: databaseIdSchema.nullable(),
   reviewerNote: z.string().nullable(),
   submittedAt: z.string(),
   reviewedAt: z.string().nullable(),
 });
 
 export const myOrganizationProfileSchema = z.object({
-  id: z.uuid(),
+  id: databaseIdSchema,
   name: z.string(),
   description: z.string().nullable(),
   website: z.string().nullable(),
@@ -310,8 +312,8 @@ export const myOrganizationProfileSchema = z.object({
   links: linksSchema,
   isOrgContact: z.boolean(),
   isPrimaryContact: z.boolean(),
-  pendingSecondaryContactUserId: z.uuid().nullable(),
-  votingDelegateUserId: z.uuid().nullable(),
+  pendingSecondaryContactUserId: databaseIdSchema.nullable(),
+  votingDelegateUserId: databaseIdSchema.nullable(),
   pendingReview: myOrganizationReviewSchema.nullable(),
 });
 
@@ -371,7 +373,7 @@ export const myOrganizationReviewsListRouteSchema = {
 export const myOrganizationReviewWithdrawRouteSchema = {
   tags: ["Me"],
   summary: "Withdraw a pending organization content submission",
-  request: { params: z.object({ id: z.uuid() }) },
+  request: { params: z.object({ id: databaseIdSchema }) },
   responses: {
     "200": { description: "Withdrawn." },
     "404": { description: "Review not found." },
@@ -393,7 +395,7 @@ export const myOrganizationLogoUploadRouteSchema = {
 };
 
 export const mySecondaryContactNominateSchema = z.object({
-  userId: z.uuid().nullable(),
+  userId: databaseIdSchema.nullable(),
 });
 
 export const mySecondaryContactNominateRouteSchema = {
@@ -414,7 +416,7 @@ export const mySecondaryContactNominateRouteSchema = {
 };
 
 export const myVotingDelegateUpdateSchema = z.object({
-  userId: z.uuid().nullable(),
+  userId: databaseIdSchema.nullable(),
 });
 
 export const myVotingDelegateUpdateRouteSchema = {

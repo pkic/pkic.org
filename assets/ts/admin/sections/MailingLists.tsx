@@ -5,42 +5,22 @@
  * Admin role required (
  * assets/shared/schemas/admin-mailing-lists.ts's header note).
  */
-import { useState, useEffect, useCallback } from "preact/hooks";
+import { useState } from "preact/hooks";
 import { Spinner } from "../../components/Spinner";
 import { ErrorAlert } from "../../components/ErrorAlert";
+import { Pager } from "../../components/Pager";
+import { useApiPage } from "../../hooks/useApiPage";
 import { api } from "../api";
 import { toast } from "../ui";
 import type { MailingList } from "../types";
-import { MAILING_LIST_TYPES as LIST_TYPES } from "../../../shared/schemas/admin-mailing-lists";
+import {
+  MAILING_LIST_TYPES as LIST_TYPES,
+  mailingListsListResponseSchema,
+  type MailingListsListResponse,
+} from "../../../shared/schemas/admin-mailing-lists";
 
-type SortKey = "email" | "label" | "listType" | "autoSyncCategories" | "active";
+type SortKey = "email" | "label" | "list_type" | "active";
 type SortDir = "asc" | "desc";
-
-function sortValue(list: MailingList, key: SortKey): string | number | null {
-  switch (key) {
-    case "email":
-      return list.email;
-    case "label":
-      return list.label;
-    case "listType":
-      return list.listType;
-    case "autoSyncCategories":
-      return list.autoSyncCategories?.join(", ") ?? null;
-    case "active":
-      return list.active ? 1 : 0;
-  }
-}
-
-// Nulls always sort last, regardless of direction.
-function compareSort(a: MailingList, b: MailingList, key: SortKey, dir: SortDir): number {
-  const av = sortValue(a, key);
-  const bv = sortValue(b, key);
-  if (av == null && bv == null) return 0;
-  if (av == null) return 1;
-  if (bv == null) return -1;
-  const cmp = typeof av === "number" && typeof bv === "number" ? av - bv : String(av).localeCompare(String(bv));
-  return dir === "asc" ? cmp : -cmp;
-}
 
 interface Draft {
   email: string;
@@ -140,9 +120,6 @@ function MailingListForm({ draft, onChange }: { draft: Draft; onChange: (patch: 
 }
 
 export function MailingLists() {
-  const [lists, setLists] = useState<MailingList[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<Draft>(emptyDraft());
   const [newDraft, setNewDraft] = useState<Draft>(emptyDraft());
@@ -151,6 +128,12 @@ export function MailingLists() {
   const [syncing, setSyncing] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const listing = useApiPage<MailingListsListResponse>(
+    "/api/v1/admin/mailing-lists",
+    sortKey ? { sort: `${sortDir === "desc" ? "-" : ""}${sortKey}` } : {},
+    mailingListsListResponseSchema,
+  );
+  const lists = listing.data?.mailingLists ?? [];
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
@@ -180,23 +163,6 @@ export function MailingLists() {
     );
   }
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await api<{ mailingLists: MailingList[] }>("/api/v1/admin/mailing-lists");
-      setLists(data.mailingLists);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
   async function createList(e: Event) {
     e.preventDefault();
     setSaving(true);
@@ -205,7 +171,7 @@ export function MailingLists() {
       toast("Mailing list added", "success");
       setNewDraft(emptyDraft());
       setShowAdd(false);
-      await load();
+      await listing.reload();
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {
@@ -222,7 +188,7 @@ export function MailingLists() {
       });
       toast("Saved", "success");
       setEditingId(null);
-      await load();
+      await listing.reload();
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {
@@ -239,7 +205,7 @@ export function MailingLists() {
     try {
       await api(`/api/v1/admin/mailing-lists/${id}`, { method: "DELETE" });
       toast("Deleted", "success");
-      await load();
+      await listing.reload();
     } catch (e) {
       toast((e as Error).message, "error");
     }
@@ -269,8 +235,10 @@ export function MailingLists() {
     }
   }
 
-  if (loading) return <Spinner />;
-  if (error) return <ErrorAlert error={error} />;
+  if (listing.loading && !listing.data) return <Spinner />;
+  if (listing.error) {
+    return <ErrorAlert error={listing.error instanceof Error ? listing.error : "Could not load mailing lists."} />;
+  }
 
   return (
     <div>
@@ -302,14 +270,14 @@ export function MailingLists() {
             <tr>
               {sortTh("Email", "email")}
               {sortTh("Label", "label")}
-              {sortTh("Type", "listType")}
-              {sortTh("Auto-sync categories", "autoSyncCategories")}
+              {sortTh("Type", "list_type")}
+              <th>Auto-sync categories</th>
               {sortTh("Active", "active")}
               <th></th>
             </tr>
           </thead>
           <tbody>
-            {(sortKey ? lists.slice().sort((a, b) => compareSort(a, b, sortKey, sortDir)) : lists).map((list) =>
+            {lists.map((list) =>
               editingId === list.id ? (
                 <tr key={list.id}>
                   <td colSpan={6}>
@@ -372,6 +340,7 @@ export function MailingLists() {
           </tbody>
         </table>
       </div>
+      {listing.pagerProps && <Pager {...listing.pagerProps} />}
     </div>
   );
 }

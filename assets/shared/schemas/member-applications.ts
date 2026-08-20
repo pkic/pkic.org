@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { formFieldDefinitionSchema } from "./forms";
 import { normalizedEmailSchema } from "./api";
 import { membershipCategorySchema, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "./membership-categories";
 
@@ -142,18 +143,7 @@ export const memberApplicationFormResponseSchema = z.object({
       key: z.string(),
       title: z.string(),
       description: z.string().nullable(),
-      fields: z.array(
-        z.object({
-          id: z.string(),
-          key: z.string(),
-          label: z.string(),
-          fieldType: z.string(),
-          required: z.boolean(),
-          options: z.unknown().nullable(),
-          validation: z.unknown().nullable(),
-          sortOrder: z.number(),
-        }),
-      ),
+      fields: z.array(formFieldDefinitionSchema),
     })
     .nullable(),
 });

@@ -13,7 +13,7 @@ export interface AdminMemberCreateRepresentative {
   name: string;
   email: string;
   role?: string;
-  linkedin?: string;
+  links?: string[];
 }
 
 export interface AdminMemberCreateInput {
@@ -61,7 +61,7 @@ export async function createAdminMember(
       name: rep.name,
       email: rep.email,
       jobTitle: rep.role,
-      linkedin: rep.linkedin,
+      links: rep.links,
     })),
     workingGroupSlugs: input.workingGroupSlugs,
   });

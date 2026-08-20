@@ -1,5 +1,5 @@
 import { SPONSORSHIP_PIPELINE_STAGES, type SponsorshipPipelineStage } from "../../shared/schemas/admin-sponsorships";
-import { MAILING_LIST_TYPES } from "../../shared/schemas/admin-mailing-lists";
+import type { MailingList as CanonicalMailingList } from "../../shared/schemas/admin-mailing-lists";
 import type { EmailContentType, EmailMessageType } from "../../shared/schemas/admin-email-templates";
 import type { EcDecisionValue } from "../../shared/schemas/ec-review";
 import type { LeadershipPosition as CanonicalLeadershipPosition } from "../../shared/schemas/leadership";
@@ -13,6 +13,21 @@ import type {
   AdminEventSummary as CanonicalEventSummary,
   AdminEventTeamListItem as CanonicalEventPermission,
 } from "../../shared/schemas/api";
+import type { AdminOrganizationRepresentative as CanonicalAdminOrganizationRepresentative } from "../../shared/schemas/admin-organizations";
+import type {
+  AdminEmailOutboxResponse as CanonicalAdminEmailOutboxResponse,
+  AdminEmailOutboxRow as CanonicalAdminEmailOutboxRow,
+} from "../../shared/schemas/admin-email-outbox";
+import type {
+  AdminEventProposalSummary as CanonicalAdminEventProposalSummary,
+  ProposalAccess as CanonicalProposalAccess,
+} from "../../shared/schemas/admin-event-proposals";
+import type { FormFieldDefinition as CanonicalFormFieldDefinition } from "../../shared/schemas/forms";
+import type {
+  AdminWorkingGroupDetail as CanonicalAdminWorkingGroupDetail,
+  AdminWorkingGroupMember as CanonicalAdminWorkingGroupMember,
+  AdminWorkingGroupSummary as CanonicalAdminWorkingGroupSummary,
+} from "../../shared/schemas/working-groups";
 
 export { SPONSORSHIP_PIPELINE_STAGES };
 export type { SponsorshipPipelineStage };
@@ -76,16 +91,7 @@ export interface AdminEventFormSummary {
   submission_count: number;
 }
 
-export interface AdminFormDetailField {
-  id: string;
-  key: string;
-  label: string;
-  fieldType: string;
-  required: boolean;
-  options: unknown;
-  validation: unknown;
-  sortOrder: number;
-}
+export type AdminFormDetailField = CanonicalFormFieldDefinition;
 
 export type ApiFn = <T = unknown>(
   path: string,
@@ -200,64 +206,11 @@ export interface WorkingGroupDetail extends WorkingGroupSummary {
 
 // ── Admin working-group CRUD (unfiltered by active, full roster w/ user ids) ──
 
-export interface ChairInfo {
-  userRoleId: string;
-  userId: string;
-  name: string;
-  email: string;
-  expiresAt: string | null;
-}
+export type AdminWorkingGroupSummary = CanonicalAdminWorkingGroupSummary;
+export type AdminWorkingGroupMember = CanonicalAdminWorkingGroupMember;
+export type AdminWorkingGroupDetail = CanonicalAdminWorkingGroupDetail;
 
-export interface AdminWorkingGroupSummary {
-  id: string;
-  name: string;
-  slug: string;
-  description: string | null;
-  mailingListEmail: string | null;
-  minEndorsersForBallot: number;
-  active: boolean;
-  chair: ChairInfo | null;
-  viceChair: ChairInfo | null;
-  memberCount: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface AdminWorkingGroupMember {
-  userId: string;
-  name: string;
-  email: string;
-  organizationName: string | null;
-  memberCategory: string | null;
-  joinedAt: string;
-}
-
-export interface AdminWorkingGroupDetail extends AdminWorkingGroupSummary {
-  members: AdminWorkingGroupMember[];
-}
-
-export interface ProposalSummary {
-  id: string;
-  event_id: string;
-  proposer_user_id: string;
-  status: string;
-  proposal_type: string;
-  title: string;
-  abstract: string;
-  submitted_at: string;
-  updated_at: string;
-  proposer_email: string;
-  proposer_first_name: string | null;
-  proposer_last_name: string | null;
-  review_count: number;
-  average_review_score: number | null;
-  recommendation_accept_count: number;
-  recommendation_needs_work_count: number;
-  recommendation_reject_count: number;
-  decision_status: string | null;
-  decision_note: string | null;
-  decision_decided_at: string | null;
-}
+export type ProposalSummary = CanonicalAdminEventProposalSummary;
 
 export interface ProposalReview {
   id: string;
@@ -291,11 +244,7 @@ export interface ProposalSpeaker {
   hasBio: boolean;
 }
 
-export interface ProposalAccess {
-  eventPermissions: string[];
-  canReview: boolean;
-  canFinalize: boolean;
-}
+export type ProposalAccess = CanonicalProposalAccess;
 
 export interface AdminInviteEntry {
   email: string;
@@ -323,45 +272,8 @@ export interface InviteRecord {
   inviter_last_name: string | null;
 }
 
-export interface AdminEmailOutboxRow {
-  id: string;
-  eventSlug: string | null;
-  eventName: string | null;
-  templateKey: string;
-  templateVersion: number | null;
-  recipientEmail: string;
-  recipientName: string | null;
-  subject: string;
-  messageType: EmailMessageType;
-  provider: string;
-  providerMessageId: string | null;
-  status: "queued" | "sending" | "sent" | "failed" | "retrying";
-  attempts: number;
-  sendAfter: string;
-  lastError: string | null;
-  createdAt: string;
-  updatedAt: string;
-  sentAt: string | null;
-  bccRecipientCount: number;
-  hasCalendarInvite: boolean;
-  hasBadgeAttachment: boolean;
-  usesDirectBody: boolean;
-  hasCustomText: boolean;
-}
-
-export interface AdminEmailOutboxResponse {
-  outbox: AdminEmailOutboxRow[];
-  summary: {
-    total: number;
-    byStatus: Record<string, number>;
-    byMessageType: Record<string, number>;
-    topTemplates: Array<{ template_key: string; count: number }>;
-    dueNow: number;
-    dueByStatus: Record<string, number>;
-    nextSendAfter: string | null;
-  };
-  page: { limit: number; offset: number; total: number; hasMore: boolean };
-}
+export type AdminEmailOutboxRow = CanonicalAdminEmailOutboxRow;
+export type AdminEmailOutboxResponse = CanonicalAdminEmailOutboxResponse;
 
 export interface AdminJobsRunResponse {
   dryRun: boolean;
@@ -657,19 +569,7 @@ export interface AdminOrganizationSummary {
   updatedAt: string;
 }
 
-export interface AdminOrganizationRepresentative {
-  representativeId: string;
-  membershipId: string | null;
-  userId: string;
-  name: string;
-  email: string;
-  jobTitle: string | null;
-  status: string;
-  showOnOrgProfile: boolean;
-  isPrimaryContact: boolean;
-  isSecondaryContact: boolean;
-  createdAt: string;
-}
+export type AdminOrganizationRepresentative = CanonicalAdminOrganizationRepresentative;
 
 export interface AdminOrganizationDetail extends AdminOrganizationSummary {
   contentMarkdown: string | null;
@@ -714,17 +614,7 @@ export interface OrganizationContentReviewDetail extends OrganizationContentRevi
 }
 
 // Managed mailing list configuration
-export interface MailingList {
-  id: string;
-  email: string;
-  label: string;
-  listType: (typeof MAILING_LIST_TYPES)[number];
-  workingGroupId: string | null;
-  autoSyncCategories: string[] | null;
-  active: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+export type MailingList = CanonicalMailingList;
 
 export interface Sponsorship {
   id: string;

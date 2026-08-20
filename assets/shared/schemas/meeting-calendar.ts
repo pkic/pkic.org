@@ -6,20 +6,22 @@
  * (`/me/calendar[/...]`).
  */
 import { z } from "zod";
+import { databaseIdSchema } from "./identifiers";
+import { workingGroupIdSchema, workingGroupReferenceSchema } from "./working-groups";
 
-export const meetingSeriesIdParamsSchema = z.object({ id: z.string().trim().min(1) });
+export const meetingSeriesIdParamsSchema = z.object({ id: workingGroupReferenceSchema });
 export const meetingSeriesWithMeetingIdParamsSchema = z.object({
-  id: z.string().trim().min(1),
-  meetingId: z.uuid(),
+  id: workingGroupReferenceSchema,
+  meetingId: databaseIdSchema,
 });
 export const meetingIcsFileParamsSchema = z.object({
-  id: z.string().trim().min(1),
-  meetingId: z.uuid(),
-  fileId: z.uuid(),
+  id: workingGroupReferenceSchema,
+  meetingId: databaseIdSchema,
+  fileId: databaseIdSchema,
 });
 
-export const consortiumMeetingIdParamsSchema = z.object({ meetingId: z.uuid() });
-export const consortiumIcsFileParamsSchema = z.object({ meetingId: z.uuid(), fileId: z.uuid() });
+export const consortiumMeetingIdParamsSchema = z.object({ meetingId: databaseIdSchema });
+export const consortiumIcsFileParamsSchema = z.object({ meetingId: databaseIdSchema, fileId: databaseIdSchema });
 
 export const meetingSeriesCreateSchema = z.object({ name: z.string().trim().min(1).max(200) });
 export const meetingSeriesUpdateSchema = z.object({
@@ -32,20 +34,20 @@ export const meetingIcsFileUpdateSchema = z.object({
 });
 
 export const adminIcsFileSummarySchema = z.object({
-  id: z.uuid(),
+  id: databaseIdSchema,
   label: z.string(),
   year: z.number(),
   r2Key: z.string(),
   active: z.boolean(),
-  uploadedByUserId: z.string().nullable(),
+  uploadedByUserId: databaseIdSchema.nullable(),
   createdAt: z.string(),
 });
 
 export const adminMeetingSeriesSummarySchema = z.object({
-  id: z.uuid(),
+  id: databaseIdSchema,
   name: z.string(),
   scopeType: z.enum(["consortium", "working_group"]),
-  workingGroupId: z.string().nullable(),
+  workingGroupId: workingGroupIdSchema.nullable(),
   active: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -285,12 +287,12 @@ export const consortiumMeetingResendRouteSchema = {
 
 // ── Public ───────────────────────────────────────────────────────────────
 
-export const publicMeetingSeriesSchema = z.object({ id: z.uuid(), name: z.string() });
+export const publicMeetingSeriesSchema = z.object({ id: databaseIdSchema, name: z.string() });
 
 export const publicWgMeetingsRouteSchema = {
   tags: ["Working Groups"],
   summary: "List a working group's active meeting series (public)",
-  request: { params: z.object({ wgId: z.string().trim().min(1) }) },
+  request: { params: z.object({ wgId: workingGroupReferenceSchema }) },
   responses: {
     "200": {
       description: "Active meeting series for this working group.",
@@ -302,14 +304,14 @@ export const publicWgMeetingsRouteSchema = {
 
 // ── Member self-service ─────────────────────────────────────────────────
 
-export const myMeetingSeriesIcsFileSchema = z.object({ id: z.uuid(), label: z.string(), year: z.number() });
+export const myMeetingSeriesIcsFileSchema = z.object({ id: databaseIdSchema, label: z.string(), year: z.number() });
 
 export const myMeetingSeriesSchema = z.object({
-  id: z.uuid(),
+  id: databaseIdSchema,
   name: z.string(),
   scopeType: z.enum(["consortium", "working_group"]),
   icsFiles: z.array(myMeetingSeriesIcsFileSchema),
-  preferenceIcsFileId: z.string().nullable(),
+  preferenceIcsFileId: databaseIdSchema.nullable(),
 });
 
 export const myCalendarListRouteSchema = {
@@ -323,13 +325,13 @@ export const myCalendarListRouteSchema = {
   },
 };
 
-export const myCalendarPreferenceSetSchema = z.object({ icsFileId: z.uuid().nullable() });
+export const myCalendarPreferenceSetSchema = z.object({ icsFileId: databaseIdSchema.nullable() });
 
 export const myCalendarPreferenceRouteSchema = {
   tags: ["Me"],
   summary: "Set or clear my time-slot preference for a meeting series",
   request: {
-    params: z.object({ seriesId: z.string().trim().min(1) }),
+    params: z.object({ seriesId: databaseIdSchema }),
     body: { content: { "application/json": { schema: myCalendarPreferenceSetSchema } }, required: true },
   },
   responses: {
@@ -342,7 +344,7 @@ export const myCalendarPreferenceRouteSchema = {
 export const myCalendarDownloadRouteSchema = {
   tags: ["Me"],
   summary: "Download a specific ICS file",
-  request: { params: z.object({ seriesId: z.string().trim().min(1), icsFileId: z.string().trim().min(1) }) },
+  request: { params: z.object({ seriesId: databaseIdSchema, icsFileId: databaseIdSchema }) },
   responses: {
     "200": { description: "The ICS file." },
     "403": { description: "Not a member of this series' working group." },

@@ -13,6 +13,7 @@ import { finalizeProposalSchema } from "../../../../../../assets/shared/schemas/
 import { buildProposalDecisionEmailPlan } from "./decision-emails";
 import type { AdminContext } from "../../../../../_lib/db/context";
 import type { z } from "zod";
+import { proposalDecisionPreviewResponseSchema } from "../../../../../../assets/shared/schemas/admin-event-proposals";
 
 /**
  * `data` is supplied when called through the `openApiRoute` factory (the
@@ -118,14 +119,16 @@ export async function onRequestPost(
 
   const missingTemplateKeys = [...new Set(messages.filter((m) => m.templateMissing).map((m) => m.templateKey))];
 
-  return json({
-    success: true,
-    recipientCount: new Set(messages.map((message) => message.recipientEmail)).size,
-    emailCount: messages.length,
-    layoutMissing,
-    missingTemplateKeys,
-    messages,
-  });
+  return json(
+    proposalDecisionPreviewResponseSchema.parse({
+      success: true,
+      recipientCount: new Set(messages.map((message) => message.recipientEmail)).size,
+      emailCount: messages.length,
+      layoutMissing,
+      missingTemplateKeys,
+      messages,
+    }),
+  );
 }
 
 export async function onRequest(c: AdminContext): Promise<Response> {

@@ -10,6 +10,7 @@ import {
   confirmRegistrationByToken,
   updateRegistrationById,
 } from "../functions/_lib/services/registrations";
+import { adminRegistrationDetailResponseSchema } from "../assets/shared/schemas/admin-registration-detail";
 
 let ADMIN_TOKEN = "event-admin-token";
 
@@ -305,15 +306,19 @@ describe("admin event management endpoints", () => {
   it("allows admin to reinstate a cancelled registration and rejects double-cancel", async () => {
     await setupAdmin();
 
+    const userId = crypto.randomUUID();
+
     await env.DB.prepare(
       `INSERT INTO users (id, email, normalized_email, created_at, updated_at)
-       VALUES ('user-reinstate', 'reinstate@example.test', 'reinstate@example.test', datetime('now'), datetime('now'))`,
-    ).run();
+       VALUES (?, 'reinstate@example.test', 'reinstate@example.test', datetime('now'), datetime('now'))`,
+    )
+      .bind(userId)
+      .run();
 
     const event = await getEventBySlug(env.DB, "pqc-2026");
     const created = await createRegistration(env.DB, {
       event,
-      userId: "user-reinstate",
+      userId,
       attendanceType: "virtual",
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -333,6 +338,14 @@ describe("admin event management endpoints", () => {
     );
     expect(cancelled.status).toBe("cancelled");
     expect(cancelled.cancelled_at).not.toBeNull();
+
+    const detailResponse = await callAdmin(`/api/v1/admin/events/pqc-2026/registrations/${created.registration.id}`);
+    expect(detailResponse.status).toBe(200);
+    const rawDetail = await detailResponse.json();
+    const detail = adminRegistrationDetailResponseSchema.parse(rawDetail);
+    expect(detail.registration.status).toBe("cancelled");
+    expect(rawDetail).not.toHaveProperty("registration.custom_answers_json");
+    expect(rawDetail).not.toHaveProperty("registration.manage_link_secret");
 
     // Double-cancel must still be rejected
     await expect(

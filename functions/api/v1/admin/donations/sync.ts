@@ -294,7 +294,15 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   }
 
   if (pending.length === 0) {
-    return json({ synced: 0, results: [] });
+    return json({
+      synced: 0,
+      completed: 0,
+      awaitingPayment: 0,
+      expired: 0,
+      failed: 0,
+      errors: 0,
+      results: [],
+    });
   }
 
   interface PendingDonationWithStatus extends PendingDonation {

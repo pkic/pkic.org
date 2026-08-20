@@ -9,8 +9,9 @@
  * fully modeled field-by-field.
  */
 import { z } from "zod";
+import { databaseIdSchema } from "./identifiers";
 
-export const passkeyIdParamsSchema = z.object({ id: z.uuid() });
+export const passkeyIdParamsSchema = z.object({ id: databaseIdSchema });
 
 const webauthnOptionsSchema = z.record(z.string(), z.unknown());
 
@@ -61,7 +62,7 @@ export const passkeyBeginResponseSchema = z.object({
 });
 
 export const passkeySummarySchema = z.object({
-  id: z.uuid(),
+  id: databaseIdSchema,
   deviceName: z.string().nullable(),
   aaguid: z.string().nullable(),
   lastUsedAt: z.string().nullable(),

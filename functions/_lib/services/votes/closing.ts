@@ -20,7 +20,7 @@
 import { all, run } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { parseJsonSafe, stringifyJson } from "../../utils/json";
-import { getVoteRowOrThrow, type VoteRow, type CandidateRow } from "./shared";
+import { getVoteRowOrThrow, VOTE_ROW_COLUMNS, type VoteRow, type CandidateRow } from "./shared";
 import { computeMotionResult, tallyElectionRound, type ElectionRoundTally } from "./tally";
 import type { DatabaseLike } from "../../types";
 
@@ -112,10 +112,11 @@ export async function closeDueVotes(db: DatabaseLike, limit = 50): Promise<Close
     await run(db, `UPDATE votes SET status = 'open', updated_at = ? WHERE id = ?`, [now, row.id]);
   }
 
-  const toClose = await all<VoteRow>(db, `SELECT * FROM votes WHERE status = 'open' AND closes_at <= ? LIMIT ?`, [
-    now,
-    limit,
-  ]);
+  const toClose = await all<VoteRow>(
+    db,
+    `SELECT ${VOTE_ROW_COLUMNS} FROM votes WHERE status = 'open' AND closes_at <= ? LIMIT ?`,
+    [now, limit],
+  );
 
   const closed: string[] = [];
   const roundsAdvanced: string[] = [];

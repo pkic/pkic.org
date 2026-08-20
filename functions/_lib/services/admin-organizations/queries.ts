@@ -136,6 +136,7 @@ interface RepresentativeRow {
   last_name: string | null;
   email: string;
   job_title: string | null;
+  links_json: string | null;
   show_on_org_profile: number;
   created_at: string;
 }
@@ -166,6 +167,7 @@ async function fetchRepresentatives(db: DatabaseLike, organizationId: string): P
   return all<RepresentativeRow>(
     db,
     `SELECT r.id AS representative_id, r.member_id, r.user_id, u.first_name, u.last_name, u.email, u.job_title,
+            u.links_json,
             r.show_on_org_profile, r.created_at
      FROM organization_representatives r
      JOIN members m ON m.id = r.member_id
@@ -209,6 +211,7 @@ async function toOrgDetail(
       name: [r.first_name, r.last_name].filter(Boolean).join(" ") || r.email,
       email: r.email,
       jobTitle: r.job_title,
+      links: parseLinksJson(r.links_json),
       status: "active",
       showOnOrgProfile: r.show_on_org_profile === 1,
       isPrimaryContact: r.user_id === holders.primaryContactUserId,

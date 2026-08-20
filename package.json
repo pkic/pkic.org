@@ -36,7 +36,7 @@
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier --write \"functions/**/*.ts\" \"assets/ts/**/*.{ts,tsx}\" \"assets/shared/**/*.ts\" \"tests/**/*.ts\"",
     "format:check": "prettier --check \"functions/**/*.ts\" \"assets/ts/**/*.{ts,tsx}\" \"assets/shared/**/*.ts\" \"tests/**/*.ts\"",
-    "check": "pnpm run typecheck && pnpm run lint && pnpm run lint:architecture && pnpm run format:check && pnpm run generate:public && pnpm run test && pnpm run check:max-lines && pnpm run check:filenames",
+    "check": "pnpm run typecheck && pnpm run lint && pnpm run lint:architecture && pnpm run lint:duplication && pnpm run format:check && pnpm run generate:public && pnpm run test && pnpm run check:max-lines && pnpm run check:filenames",
     "migrate:local": "pnpm exec wrangler d1 migrations apply DB --env local --local",
     "migrate:preview": "pnpm exec wrangler d1 migrations apply DB --env preview --remote",
     "migrate:production": "pnpm exec wrangler d1 migrations apply DB --env production --remote",

@@ -4,16 +4,17 @@
  * `DELETE .../:emailId`, and `POST /api/v1/admin/users/:userId/merge`.
  */
 import { z } from "zod";
+import { databaseIdSchema } from "./identifiers";
 import { normalizedEmailSchema } from "./api";
 
-export const userIdEmailsParamsSchema = z.object({ userId: z.uuid() });
-export const userEmailIdParamsSchema = z.object({ userId: z.uuid(), emailId: z.uuid() });
+export const userIdEmailsParamsSchema = z.object({ userId: databaseIdSchema });
+export const userEmailIdParamsSchema = z.object({ userId: databaseIdSchema, emailId: databaseIdSchema });
 
 export const userEmailAddSchema = z.object({ email: normalizedEmailSchema });
 
 export const userEmailResponseSchema = z.object({
-  id: z.uuid(),
-  userId: z.uuid(),
+  id: databaseIdSchema,
+  userId: databaseIdSchema,
   email: z.string(),
   createdAt: z.string(),
 });
@@ -57,11 +58,11 @@ export const userEmailRemoveRouteSchema = {
   },
 };
 
-export const userMergeSchema = z.object({ sourceUserId: z.uuid() });
+export const userMergeSchema = z.object({ sourceUserId: databaseIdSchema });
 
 export const userMergeResponseSchema = z.object({
-  survivorId: z.uuid(),
-  mergedFromUserId: z.uuid(),
+  survivorId: databaseIdSchema,
+  mergedFromUserId: databaseIdSchema,
   mergedFromEmail: z.string(),
 });
 
@@ -75,7 +76,7 @@ export const userMergeRouteSchema = {
     "entries are deliberately left pointing at the (now-anonymized) source account id, matching the precedent " +
     "already set by finalizeEmailChange's own registration-only reassignment.",
   request: {
-    params: z.object({ userId: z.uuid() }),
+    params: z.object({ userId: databaseIdSchema }),
     body: { content: { "application/json": { schema: userMergeSchema } }, required: true },
   },
   responses: {

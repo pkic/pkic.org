@@ -5,6 +5,7 @@ import { api } from "../../api";
 import { fmt, toast } from "../../ui";
 import type { AdminWorkingGroupDetail, AdminWorkingGroupMember, AdminWorkingGroupSummary } from "../../types";
 import { UserPicker, type PickedUser } from "./UserPicker";
+import { getAdminWorkingGroupCatalogue } from "../../services/catalogues";
 
 type MemberSortKey = "name" | "organizationName" | "memberCategory";
 type SortDir = "asc" | "desc";
@@ -176,10 +177,10 @@ export function WorkingGroups() {
 
   async function loadGroups(keepSelection = true) {
     try {
-      const d = await api<{ workingGroups: AdminWorkingGroupSummary[] }>("/api/v1/admin/working-groups");
-      setGroups(d.workingGroups);
-      if (!keepSelection || !d.workingGroups.some((g) => g.id === selectedId)) {
-        if (d.workingGroups.length) setSelectedId(d.workingGroups[0].id);
+      const workingGroups = await getAdminWorkingGroupCatalogue();
+      setGroups(workingGroups);
+      if (!keepSelection || !workingGroups.some((group) => group.id === selectedId)) {
+        if (workingGroups.length) setSelectedId(workingGroups[0].id);
       }
     } catch (e) {
       toast((e as Error).message, "error");

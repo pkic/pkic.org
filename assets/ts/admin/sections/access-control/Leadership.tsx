@@ -5,6 +5,7 @@ import { fmt, toast } from "../../ui";
 import type { AdminWorkingGroupSummary, Role, RoleAssignment } from "../../types";
 import { UserPicker, type PickedUser } from "./UserPicker";
 import { LeadershipPositions } from "./LeadershipPositions";
+import { getAdminWorkingGroupCatalogue } from "../../services/catalogues";
 
 /**
  * "Create a new tab under the Access Control for chairs to set the chairs
@@ -218,7 +219,7 @@ export function Leadership() {
       const forumViceChairRoleId = rolesData.roles.find((r) => r.name === "forum_vice_chair")?.id;
 
       const [groupsData, forumChairAssignments, forumViceChairAssignments] = await Promise.all([
-        api<{ workingGroups: AdminWorkingGroupSummary[] }>("/api/v1/admin/working-groups"),
+        getAdminWorkingGroupCatalogue(),
         forumChairRoleId
           ? api<{ assignments: RoleAssignment[] }>(`/api/v1/admin/roles/${forumChairRoleId}/assignments`)
           : Promise.resolve({ assignments: [] as RoleAssignment[] }),
@@ -227,7 +228,7 @@ export function Leadership() {
           : Promise.resolve({ assignments: [] as RoleAssignment[] }),
       ]);
 
-      setGroups(groupsData.workingGroups);
+      setGroups(groupsData);
       setForumChair(forumChairAssignments.assignments[0] ?? null);
       setForumViceChair(forumViceChairAssignments.assignments[0] ?? null);
     } catch (e) {

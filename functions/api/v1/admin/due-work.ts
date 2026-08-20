@@ -1,4 +1,5 @@
 import { requireAdminFromRequest } from "../../../_lib/auth/admin";
+import { requirePermission } from "../../../_lib/auth/permissions";
 import { resolveAppBaseUrl } from "../../../_lib/config";
 import { requestDb, type AdminContext } from "../../../_lib/db/context";
 import { json } from "../../../_lib/http";
@@ -7,7 +8,8 @@ import { listDueWork } from "../../../_lib/services/due-work-read-model";
 import { adminDueWorkListRouteSchema } from "../../../../assets/shared/schemas/admin-due-work";
 
 export const AdminDueWorkList = openApiRoute(adminDueWorkListRouteSchema, async (c: AdminContext, data) => {
-  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  requirePermission(admin, "admin:read");
   const {
     bucket = "all",
     includeRetention = false,

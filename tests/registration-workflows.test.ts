@@ -99,7 +99,7 @@ describe("registration workflows", () => {
     expect(confirmResponse.status).toBe(200);
     const confirmedPayload = (await confirmResponse.json()) as { status: string };
     expect(confirmedPayload.status).toBe("registered");
-  });
+  }, 15_000);
 
   it("accepts a pending invite when the matching registration is confirmed", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);

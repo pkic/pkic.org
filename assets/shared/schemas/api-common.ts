@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { databaseIdSchema } from "./identifiers";
 
 /** Body format of a rendered email template/message. */
 export const emailContentTypeSchema = z.enum(["markdown", "html", "text"]);
@@ -39,16 +40,19 @@ export const organizationNameSchema = trimmedString(2, 160);
 export const jobTitleSchema = trimmedString(2, 120);
 export const tokenSchema = z.string().trim().regex(tokenPattern, "Invalid token format");
 
+/** Events use stable natural ids (often their initial slug), not generated UUID ids. */
+export const eventIdSchema = trimmedString(1, 200);
+
 export const eventSlugParamsSchema = z.object({
   eventSlug: z.string().trim().regex(slugPattern),
 });
 
 export const proposalIdParamsSchema = z.object({
-  proposalId: z.uuid(),
+  proposalId: databaseIdSchema,
 });
 
 export const proposalReviewIdParamsSchema = proposalIdParamsSchema.extend({
-  reviewId: z.uuid(),
+  reviewId: databaseIdSchema,
 });
 
 export const formKeyParamsSchema = z.object({
@@ -56,7 +60,7 @@ export const formKeyParamsSchema = z.object({
 });
 
 export const adminUserIdParamsSchema = z.object({
-  userId: z.uuid(),
+  userId: databaseIdSchema,
 });
 
 export const emailTemplateKeyParamsSchema = z.object({

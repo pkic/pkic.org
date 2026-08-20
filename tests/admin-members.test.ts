@@ -65,7 +65,12 @@ function orgMemberBody(overrides: Record<string, unknown> = {}) {
     membershipCategory: "F",
     memberSince: "2026-01-15",
     representatives: [
-      { name: "Jane Doe", email: "jane@acme.test", role: "CTO", linkedin: "https://linkedin.com/in/janedoe" },
+      {
+        name: "Jane Doe",
+        email: "jane@acme.test",
+        role: "CTO",
+        links: ["https://linkedin.com/in/janedoe", "https://github.com/janedoe"],
+      },
     ],
     workingGroupSlugs: ["pqc"],
     ...overrides,
@@ -89,9 +94,10 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
   });
 
   it("creates an organization, representative, and member row for an org-tied category", async () => {
+    await seedWorkingGroup("future-wg", "Future Working Group");
     const response = await call(adminToken, "/api/v1/admin/members", {
       method: "POST",
-      body: JSON.stringify(orgMemberBody()),
+      body: JSON.stringify(orgMemberBody({ workingGroupSlugs: ["pqc", "future-wg"] })),
     });
     expect(response.status).toBe(201);
     const body = (await response.json()) as { organizationId: string; members: Array<{ id: string; userId: string }> };
@@ -142,12 +148,22 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
     expect(repRows[0].show_on_org_profile).toBe(1);
     expect(repRows[0].left_at).toBeNull();
 
-    const wgRows = await queryAll(
+    const [user] = await queryAll<{ links_json: string | null }>(
       env.DB,
-      "SELECT 1 FROM working_group_members wgm JOIN working_groups wg ON wg.id = wgm.working_group_id WHERE wgm.user_id = ? AND wg.slug = 'pqc'",
+      "SELECT links_json FROM users WHERE id = ?",
       body.members[0].userId,
     );
-    expect(wgRows).toHaveLength(1);
+    expect(JSON.parse(user.links_json as string)).toEqual([
+      "https://linkedin.com/in/janedoe",
+      "https://github.com/janedoe",
+    ]);
+
+    const wgRows = await queryAll<{ slug: string }>(
+      env.DB,
+      "SELECT wg.slug FROM working_group_members wgm JOIN working_groups wg ON wg.id = wgm.working_group_id WHERE wgm.user_id = ? ORDER BY wg.slug",
+      body.members[0].userId,
+    );
+    expect(wgRows.map(({ slug }) => slug)).toEqual(["future-wg", "pqc"]);
   });
 
   it("creates no organization row for an individual (H6) category", async () => {

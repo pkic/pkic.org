@@ -10,6 +10,7 @@
  * admin-members.ts rather than redefining it.
  */
 import { z } from "zod";
+import { databaseIdSchema } from "./identifiers";
 import { normalizedEmailSchema } from "./api";
 import { linksSchema } from "./links";
 import { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "./admin-members";
@@ -32,13 +33,13 @@ export const INDIVIDUAL_MEMBERSHIP_CATEGORIES_LIST = MEMBERSHIP_CATEGORIES.filte
 ) as [string, ...string[]];
 export const individualMembershipCategorySchema = z.enum(INDIVIDUAL_MEMBERSHIP_CATEGORIES_LIST);
 
-export const organizationIdParamsSchema = z.object({ id: z.uuid() });
-export const memberIdParamsSchema = z.object({ id: z.uuid() });
+export const organizationIdParamsSchema = z.object({ id: databaseIdSchema });
+export const memberIdParamsSchema = z.object({ id: databaseIdSchema });
 
 // ── Organization list/detail ────────────────────────────────────────────────
 
 export const adminOrganizationSummarySchema = z.object({
-  id: z.uuid(),
+  id: databaseIdSchema,
   name: z.string(),
   website: z.string().nullable(),
   description: z.string().nullable(),
@@ -66,12 +67,13 @@ export const adminOrganizationSummarySchema = z.object({
 // this organization has in common — never representative-specific, and
 // never the id to pass to edit/remove a single representative.
 export const adminOrganizationRepresentativeSchema = z.object({
-  representativeId: z.uuid(),
-  membershipId: z.uuid().nullable(),
-  userId: z.uuid(),
+  representativeId: databaseIdSchema,
+  membershipId: databaseIdSchema.nullable(),
+  userId: databaseIdSchema,
   name: z.string(),
   email: z.string(),
   jobTitle: z.string().nullable(),
+  links: linksSchema,
   status: memberStatusSchema,
   showOnOrgProfile: z.boolean(),
   isPrimaryContact: z.boolean(),
@@ -86,9 +88,9 @@ export const adminOrganizationDetailSchema = adminOrganizationSummarySchema.exte
   pressUrl: z.string().nullable(),
   pressFeedUrl: z.string().nullable(),
   careersUrl: z.string().nullable(),
-  links: z.array(z.string()),
-  primaryContactUserId: z.uuid().nullable(),
-  secondaryContactUserId: z.uuid().nullable(),
+  links: linksSchema,
+  primaryContactUserId: databaseIdSchema.nullable(),
+  secondaryContactUserId: databaseIdSchema.nullable(),
   representatives: z.array(adminOrganizationRepresentativeSchema),
 });
 
@@ -146,8 +148,8 @@ export const organizationUpdateSchema = z.object({
   pressFeedUrl: z.url().nullable().optional(),
   careersUrl: z.url().nullable().optional(),
   links: linksSchema.optional(),
-  primaryContactUserId: z.uuid().nullable().optional(),
-  secondaryContactUserId: z.uuid().nullable().optional(),
+  primaryContactUserId: databaseIdSchema.nullable().optional(),
+  secondaryContactUserId: databaseIdSchema.nullable().optional(),
 });
 
 export const organizationUpdateRouteSchema = {
@@ -182,8 +184,10 @@ export const organizationRepresentativeAddSchema = z.object({
   name: trimmedString(1, 200),
   email: normalizedEmailSchema,
   jobTitle: trimmedString(0, 200).optional(),
-  linkedin: z.url().optional(),
+  links: linksSchema.optional(),
 });
+
+export type AdminOrganizationRepresentative = z.infer<typeof adminOrganizationRepresentativeSchema>;
 
 export const organizationAddRepresentativeRouteSchema = {
   tags: ["Organizations"],
@@ -292,7 +296,7 @@ export const confirmSecondaryContactRouteSchema = {
       description: "Confirmed.",
       content: {
         "application/json": {
-          schema: z.object({ organizationId: z.uuid(), secondaryContactUserId: z.uuid() }),
+          schema: z.object({ organizationId: databaseIdSchema, secondaryContactUserId: databaseIdSchema }),
         },
       },
     },
@@ -307,13 +311,13 @@ export const CONTENT_REVIEW_STATUSES = ["pending", "approved", "rejected", "with
 export const contentReviewStatusSchema = z.enum(CONTENT_REVIEW_STATUSES);
 
 export const contentReviewSummarySchema = z.object({
-  id: z.uuid(),
-  organizationId: z.uuid(),
-  submittedByUserId: z.uuid(),
+  id: databaseIdSchema,
+  organizationId: databaseIdSchema,
+  submittedByUserId: databaseIdSchema,
   proposedChanges: z.record(z.string(), z.unknown()),
   hasLogoChange: z.boolean(),
   status: contentReviewStatusSchema,
-  reviewerUserId: z.uuid().nullable(),
+  reviewerUserId: databaseIdSchema.nullable(),
   reviewerNote: z.string().nullable(),
   submittedAt: z.string(),
   reviewedAt: z.string().nullable(),
@@ -353,7 +357,7 @@ export const contentReviewDetailSchema = contentReviewSummarySchema.extend({
   currentLogoR2Key: z.string().nullable(),
 });
 
-export const contentReviewIdParamsSchema = z.object({ id: z.uuid() });
+export const contentReviewIdParamsSchema = z.object({ id: databaseIdSchema });
 
 export const contentReviewGetRouteSchema = {
   tags: ["Organizations"],
@@ -399,7 +403,7 @@ export const contentReviewRejectRouteSchema = {
 
 // ── Grant an individual (org-less, H5/H6/H7) membership to an existing user ─
 
-export const userIdParamsSchema = z.object({ userId: z.uuid() });
+export const userIdParamsSchema = z.object({ userId: databaseIdSchema });
 
 export const individualMembershipGrantSchema = z.object({
   membershipCategory: individualMembershipCategorySchema,

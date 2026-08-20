@@ -16,6 +16,7 @@ import {
   toVoteSummary,
   getVoteRowOrThrow,
   getCandidatesForVotes,
+  VOTE_ROW_COLUMNS,
   type VoteRow,
   type VoteType,
   type VoteScopeType,
@@ -180,11 +181,6 @@ export interface AdminVoteSummary extends VoteSummary {
 }
 
 const ADMIN_VOTES_SORT_COLUMNS = ["title", "vote_type", "status", "opens_at", "closes_at", "created_at"] as const;
-const ADMIN_VOTES_COLUMNS =
-  "id, slug, title, description, vote_type, scope_type, scope_id, created_by_user_id, proposed_by_user_id, " +
-  "eligible_categories, threshold_type, opens_at, closes_at, current_round, status, result_json, visibility, " +
-  "public_detail_level, created_at, updated_at";
-
 export async function listVotesForAdmin(
   db: DatabaseLike,
   params: { status?: VoteStatus; limit: number; offset: number; sort?: string },
@@ -196,7 +192,7 @@ export async function listVotesForAdmin(
   const { rows, total } = await queryPage<VoteRow>(
     db,
     {
-      sql: `SELECT ${ADMIN_VOTES_COLUMNS} FROM votes ${where} ${orderBy} LIMIT ? OFFSET ?`,
+      sql: `SELECT ${VOTE_ROW_COLUMNS} FROM votes ${where} ${orderBy} LIMIT ? OFFSET ?`,
       bindings: [...whereArgs, params.limit, params.offset],
     },
     { sql: `SELECT COUNT(*) AS total FROM votes ${where}`, bindings: whereArgs },

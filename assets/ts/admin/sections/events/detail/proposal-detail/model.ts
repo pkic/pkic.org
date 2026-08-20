@@ -1,28 +1,11 @@
-import type { AdminFormDetailField, ProposalAccess, ProposalSummary } from "../../../../types";
+import type {
+  AdminProposalDetailResponse,
+  ProposalDecisionPreviewResponse,
+} from "../../../../../../shared/schemas/admin-event-proposals";
 
-export interface ProposalDetailRecord extends ProposalSummary {
-  details?: Record<string, unknown> | null;
-}
-
-export interface ProposalFormSummary {
-  id: string;
-  title: string;
-  description: string | null;
-  fields: AdminFormDetailField[];
-}
-
-export interface SessionTypeConfig {
-  label: string;
-  requiresPresentation: boolean;
-}
-
-export interface ProposalResponse {
-  proposal: ProposalDetailRecord;
-  access: ProposalAccess;
-  form: ProposalFormSummary | null;
-  minReviewsRequired: number;
-  sessionTypes: SessionTypeConfig[];
-}
+export type ProposalResponse = AdminProposalDetailResponse;
+export type ProposalDetailRecord = ProposalResponse["proposal"];
+export type DecisionPreviewResponse = ProposalDecisionPreviewResponse;
 
 export type DetailTab = "submission" | "speakers" | "reviews" | "presentation" | "audit-log" | "decision";
 
@@ -64,23 +47,4 @@ export interface ProposalInternalComment {
   author_email: string | null;
   author_first_name: string | null;
   author_last_name: string | null;
-}
-
-export interface DecisionPreviewMessage {
-  id: string;
-  templateKey: string;
-  recipientEmail: string;
-  recipientLabel: string;
-  subject: string;
-  html: string;
-  text: string;
-  templateMissing?: boolean;
-}
-
-export interface DecisionPreviewResponse {
-  recipientCount: number;
-  emailCount: number;
-  layoutMissing?: boolean;
-  missingTemplateKeys?: string[];
-  messages: DecisionPreviewMessage[];
 }

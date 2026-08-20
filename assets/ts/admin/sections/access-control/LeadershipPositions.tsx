@@ -1,5 +1,8 @@
 import { useEffect, useState } from "preact/hooks";
 import { Spinner } from "../../../components/Spinner";
+import { ErrorAlert } from "../../../components/ErrorAlert";
+import { Pager } from "../../../components/Pager";
+import { useApiPage } from "../../../hooks/useApiPage";
 import { api } from "../../api";
 import { toast } from "../../ui";
 import type { LeadershipPosition } from "../../types";
@@ -8,6 +11,7 @@ import {
   leadershipAffiliationsResponseSchema,
   leadershipPositionsListResponseSchema,
   type LeadershipAffiliation,
+  type LeadershipPositionsListResponse,
 } from "../../../../shared/schemas/leadership";
 
 /** ISO date -> "1 Jun 2022" for display (starts_at/ends_at are date-only, no time component). */
@@ -312,51 +316,54 @@ function PositionRow({ position, onChanged }: { position: LeadershipPosition; on
 }
 
 export function LeadershipPositions({ body, label }: { body: "board" | "executive_council"; label: string }) {
-  const [positions, setPositions] = useState<LeadershipPosition[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  async function load() {
-    setLoading(true);
-    try {
-      const raw = await api<unknown>(`/api/v1/admin/leadership-positions?body=${body}`);
-      setPositions(leadershipPositionsListResponseSchema.parse(raw).positions);
-    } catch (e) {
-      toast((e as Error).message, "error");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    void load();
-  }, [body]);
-
-  const current = positions.filter((p) => !p.endsAt);
-  const past = positions.filter((p) => p.endsAt);
+  const currentPage = useApiPage<LeadershipPositionsListResponse>(
+    "/api/v1/admin/leadership-positions",
+    {
+      body,
+      status: "current",
+    },
+    leadershipPositionsListResponseSchema,
+  );
+  const pastPage = useApiPage<LeadershipPositionsListResponse>(
+    "/api/v1/admin/leadership-positions",
+    {
+      body,
+      status: "past",
+    },
+    leadershipPositionsListResponseSchema,
+  );
+  const current = currentPage.data?.positions ?? [];
+  const past = pastPage.data?.positions ?? [];
+  const reload = () => Promise.all([currentPage.reload(), pastPage.reload()]);
+  const loadError = currentPage.error ?? pastPage.error;
 
   return (
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-header bg-white fw-semibold">{label}</div>
       <div class="card-body d-flex flex-column gap-3">
-        {loading ? (
+        {loadError ? (
+          <ErrorAlert error={loadError instanceof Error ? loadError : "Could not load leadership positions."} />
+        ) : !currentPage.data || !pastPage.data ? (
           <Spinner />
         ) : (
           <>
             <div class="d-flex flex-column gap-2">
               {current.length === 0 && <span class="text-muted fst-italic small">No current members</span>}
               {current.map((p) => (
-                <PositionRow key={p.id} position={p} onChanged={() => void load()} />
+                <PositionRow key={p.id} position={p} onChanged={() => void reload()} />
               ))}
             </div>
-            <AddPositionForm body={body} onAdded={() => void load()} />
+            {currentPage.pagerProps && <Pager {...currentPage.pagerProps} />}
+            <AddPositionForm body={body} onAdded={() => void reload()} />
             {past.length > 0 && (
               <div>
                 <div class="small fw-semibold text-muted mb-2">Past positions</div>
                 <div class="d-flex flex-column gap-2">
                   {past.map((p) => (
-                    <PositionRow key={p.id} position={p} onChanged={() => void load()} />
+                    <PositionRow key={p.id} position={p} onChanged={() => void reload()} />
                   ))}
                 </div>
+                {pastPage.pagerProps && <Pager {...pastPage.pagerProps} />}
               </div>
             )}
           </>

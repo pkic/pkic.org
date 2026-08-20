@@ -9,6 +9,7 @@ import { api } from "../../api";
 import { toast } from "../../ui";
 import type { AdminOrganizationRepresentative } from "../../types";
 import { MEMBER_STATUSES } from "../../../../shared/schemas/admin-organizations";
+import { ProfileLinksInput } from "../../../components/ProfileLinksInput";
 
 export function AddRepresentativeForm({
   organizationId,
@@ -25,7 +26,7 @@ export function AddRepresentativeForm({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [jobTitle, setJobTitle] = useState("");
-  const [linkedin, setLinkedin] = useState("");
+  const [links, setLinks] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -40,7 +41,7 @@ export function AddRepresentativeForm({
           name: name.trim(),
           email: email.trim(),
           ...(jobTitle.trim() ? { jobTitle: jobTitle.trim() } : {}),
-          ...(linkedin.trim() ? { linkedin: linkedin.trim() } : {}),
+          ...(links.length > 0 ? { links } : {}),
         }),
       });
       toast("Representative added", "success");
@@ -95,14 +96,8 @@ export function AddRepresentativeForm({
         />
       </div>
       <div class="col-md-2">
-        <label class="form-label small text-muted mb-1">LinkedIn</label>
-        <input
-          class="form-control form-control-sm"
-          type="url"
-          value={linkedin}
-          onInput={(e) => setLinkedin((e.target as HTMLInputElement).value)}
-          placeholder="https://linkedin.com/in/..."
-        />
+        <label class="form-label small text-muted mb-1">Profile links</label>
+        <ProfileLinksInput fieldName="representative.links" value={links} onChange={setLinks} max={15} />
       </div>
       <div class="col-md-1">
         <label class="form-label small text-muted mb-1">Category</label>

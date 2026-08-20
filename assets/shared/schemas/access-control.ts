@@ -3,6 +3,7 @@
  * ("access grants"), roles, and user_roles (role assignment).
  */
 import { z } from "zod";
+import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 const contextTypeSchema = z.enum(["event", "working_group", "organization"]);
@@ -11,22 +12,23 @@ function trimmedString(min: number, max: number): z.ZodString {
   return z.string().trim().min(min).max(max);
 }
 
-export const accessGrantIdParamsSchema = z.object({ id: z.uuid() });
+export const accessGrantIdParamsSchema = z.object({ id: databaseIdSchema });
 // Role ids are NOT always UUIDs — custom roles get a real uuid() (see
 // roles/index.ts's RolesCreate), but every built-in/system role ships with
 // a fixed human-readable id (role-admin, role-wg_chair, role-forum_chair,
-// ...; see migrations 0035/0040). z.uuid() here previously rejected every
+// ...; see migrations 0035/0040). UUID-only validation here previously
+// rejected every
 // attempt to reference a system role by id (assign it via POST .../roles,
 // or look up its holders via GET .../roles/:id/assignments) with a 400
 // before the handler ever ran — discovered while wiring up WG vice-chair
 // and forum chair/vice-chair assignment (Fix 2/3), which exclusively
 // assign system roles. Reused everywhere a role id appears — params,
 // request bodies, and response payloads alike — so none of them drift
-// back to z.uuid() individually.
+// back to UUID-only validation individually.
 export const roleIdSchema = trimmedString(1, 80);
 export const roleIdParamsSchema = z.object({ id: roleIdSchema });
-export const userIdRolesParamsSchema = z.object({ userId: z.uuid() });
-export const userRoleIdParamsSchema = z.object({ userId: z.uuid(), userRoleId: z.uuid() });
+export const userIdRolesParamsSchema = z.object({ userId: databaseIdSchema });
+export const userRoleIdParamsSchema = z.object({ userId: databaseIdSchema, userRoleId: databaseIdSchema });
 
 const scopedContextFields = {
   contextType: contextTypeSchema.nullable().optional(),
@@ -50,15 +52,15 @@ function validateScopedContext(
 
 export const accessGrantCreateSchema = z
   .object({
-    userId: z.uuid(),
+    userId: databaseIdSchema,
     permission: trimmedString(1, 80),
     ...scopedContextFields,
   })
   .superRefine(validateScopedContext);
 
 export const accessGrantResponseSchema = z.object({
-  id: z.uuid(),
-  userId: z.uuid(),
+  id: databaseIdSchema,
+  userId: databaseIdSchema,
   userEmail: z.email(),
   permission: z.string(),
   contextType: z.string().nullable(),
@@ -92,7 +94,7 @@ export const ADMIN_ACCESS_GRANTS_SORT_COLUMNS = [
 ] as const;
 
 export const accessGrantsListQuerySchema = listQuerySchema(ADMIN_ACCESS_GRANTS_SORT_COLUMNS).extend({
-  userId: z.uuid().optional(),
+  userId: databaseIdSchema.optional(),
 });
 export const accessGrantsListResponseSchema = paginatedResponseSchema("grants", accessGrantResponseSchema);
 
@@ -177,8 +179,8 @@ export const roleDeleteRouteSchema = {
 };
 
 export const roleAssignmentSchema = z.object({
-  userRoleId: z.uuid(),
-  userId: z.uuid(),
+  userRoleId: databaseIdSchema,
+  userId: databaseIdSchema,
   name: z.string(),
   email: z.string(),
   contextType: z.string().nullable(),
@@ -211,8 +213,8 @@ export const userRoleAssignSchema = z
   .superRefine(validateScopedContext);
 
 export const userRoleResponseSchema = z.object({
-  id: z.uuid(),
-  userId: z.uuid(),
+  id: databaseIdSchema,
+  userId: databaseIdSchema,
   roleId: roleIdSchema,
   roleName: z.string(),
   contextType: z.string().nullable(),

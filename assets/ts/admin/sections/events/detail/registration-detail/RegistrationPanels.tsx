@@ -1,0 +1,317 @@
+import { useState } from "preact/hooks";
+import { Spinner } from "../../../../../components/Spinner";
+import { DataTable } from "../../../../../components/Table";
+import { api } from "../../../../api";
+import { toast } from "../../../../ui";
+import type { BadgeRoleInfo } from "../../../../types";
+import { useData } from "../../../../../hooks/useData";
+
+const ROLE_BADGE_COLOUR: Record<string, string> = {
+  attendee: "primary",
+  speaker: "success",
+  moderator: "warning",
+  panelist: "warning",
+  organizer: "info",
+  staff: "secondary",
+};
+
+export function BadgeRolePanel({ slug, regId }: { slug: string; regId: string }) {
+  const [info, setInfo] = useState<BadgeRoleInfo | null>(null);
+  const [selectedRole, setSelectedRole] = useState<string>("");
+  const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState("");
+
+  const { loading } = useData(
+    () =>
+      api<BadgeRoleInfo>(`/api/v1/admin/events/${slug}/registrations/${regId}/badge-role`).then((d) => {
+        setInfo(d);
+        setSelectedRole(d.admin_override ?? "");
+        return d;
+      }),
+    [slug, regId],
+  );
+
+  async function handleSave() {
+    setSaving(true);
+    setSaveStatus("");
+    try {
+      const res = await api<BadgeRoleInfo>(`/api/v1/admin/events/${slug}/registrations/${regId}/badge-role`, {
+        method: "PATCH",
+        body: JSON.stringify({ role: selectedRole || null }),
+      });
+      setInfo(res);
+      setSelectedRole(res.admin_override ?? "");
+      toast("Badge role updated", "success");
+    } catch (e) {
+      setSaveStatus((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!info) return loading ? <Spinner /> : null;
+
+  const colour = ROLE_BADGE_COLOUR[info.effective_role] ?? "secondary";
+  return (
+    <div>
+      <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+        <span class="small text-muted">Effective:</span>
+        <span class={`badge text-bg-${colour}`}>{info.effective_role}</span>
+        {info.admin_override ? (
+          <span class="small text-muted ms-1">(forced; auto would be {info.auto_detected})</span>
+        ) : (
+          <span class="small text-muted fst-italic ms-1">(auto-detected)</span>
+        )}
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <select
+          class="form-select form-select-sm adm-filter-select"
+          value={selectedRole}
+          onChange={(e) => setSelectedRole((e.target as HTMLSelectElement).value)}
+        >
+          <option value="">Auto ({info.auto_detected})</option>
+          {info.available_roles.map((r) => (
+            <option key={r} value={r}>
+              {r.charAt(0).toUpperCase() + r.slice(1).replace("_", "-")}
+            </option>
+          ))}
+        </select>
+        <button class="btn btn-sm btn-primary" onClick={() => void handleSave()} disabled={saving}>
+          Save
+        </button>
+        {saveStatus && <span class="small text-danger">{saveStatus}</span>}
+      </div>
+    </div>
+  );
+}
+
+// ─── Audit log ────────────────────────────────────────────────────────────────
+
+export function RegistrationAuditLogSection({ slug, regId }: { slug: string; regId: string }) {
+  const { data: entries, loading } = useData(
+    () =>
+      api<{
+        auditLog: Array<{
+          created_at: string;
+          actor_type: string;
+          actor_display?: string;
+          actor_id?: string;
+          action: string;
+          details?: Record<string, unknown>;
+        }>;
+      }>(`/api/v1/admin/events/${slug}/registrations/${regId}/audit-log`).then((d) => d.auditLog ?? []),
+    [slug, regId],
+  );
+
+  if (loading) return <Spinner />;
+  if (!entries?.length) return <p class="small text-body-secondary mb-0">No audit log entries.</p>;
+
+  return (
+    <DataTable
+      columns={[
+        {
+          header: "When",
+          cell: (entry) =>
+            new Date(entry.created_at).toLocaleString("en-US", { dateStyle: "short", timeStyle: "medium" }),
+          className: "text-nowrap small text-muted",
+        },
+        {
+          header: "Actor",
+          cell: (entry) => {
+            const actor =
+              entry.actor_type === "system" ? (
+                <span class="text-muted">System</span>
+              ) : entry.actor_display ? (
+                <>{entry.actor_display}</>
+              ) : entry.actor_id ? (
+                <span class="text-muted small">{entry.actor_id}</span>
+              ) : (
+                <span class="text-muted">{entry.actor_type}</span>
+              );
+            return actor;
+          },
+          className: "small",
+        },
+        { header: "Action", cell: (entry) => <code class="small">{entry.action}</code> },
+        {
+          header: "Details",
+          cell: (entry) =>
+            entry.details ? (
+              <pre class="mb-0 small text-body-secondary">{JSON.stringify(entry.details, null, 2)}</pre>
+            ) : null,
+        },
+      ]}
+      data={entries}
+      className="align-middle"
+    />
+  );
+}
+
+// ─── Inline email editor ──────────────────────────────────────────────────────
+
+export function RegistrationEmailEditor({
+  email,
+  slug,
+  regId,
+  isCancelled,
+  onSaved,
+}: {
+  email: string;
+  slug: string;
+  regId: string;
+  isCancelled: boolean;
+  onSaved: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(email);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  if (!editing) {
+    return (
+      <div class="d-flex align-items-center gap-1">
+        <span>{email}</span>
+        <button
+          class="btn btn-link btn-sm p-0 ms-1"
+          title="Change email"
+          onClick={() => {
+            setValue(email);
+            setEditing(true);
+            setError("");
+          }}
+        >
+          ✏️
+        </button>
+      </div>
+    );
+  }
+
+  async function handleSave() {
+    const trimmed = value.trim().toLowerCase();
+    if (!trimmed || trimmed === email.toLowerCase()) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      await api(`/api/v1/admin/events/${slug}/registrations/${regId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "update", email: trimmed }),
+      });
+      toast("Email updated — confirmation sent to new address", "success");
+      setEditing(false);
+      onSaved();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div>
+      <div class="input-group input-group-sm">
+        <input
+          type="email"
+          class="form-control form-control-sm"
+          value={value}
+          onInput={(e) => setValue((e.target as HTMLInputElement).value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void handleSave();
+            }
+            if (e.key === "Escape") setEditing(false);
+          }}
+          disabled={saving}
+          autoFocus
+        />
+        <button class="btn btn-sm btn-success" onClick={() => void handleSave()} disabled={saving}>
+          {saving ? "…" : "Save"}
+        </button>
+        <button class="btn btn-sm btn-outline-secondary" onClick={() => setEditing(false)} disabled={saving}>
+          Cancel
+        </button>
+      </div>
+      <div class="form-text text-warning mt-1">
+        {isCancelled
+          ? "Changing the email will restore this cancelled registration and send a confirmation email to the new address."
+          : "Changing the email will require re-confirmation."}
+      </div>
+      {error && <div class="small text-danger mt-1">{error}</div>}
+    </div>
+  );
+}
+
+// ─── Force status panel ───────────────────────────────────────────────────────
+
+const FORCE_STATUS_OPTIONS = [
+  { value: "pending_email_confirmation", label: "Pending confirmation" },
+  { value: "registered", label: "Registered" },
+  { value: "waitlisted", label: "Waitlisted" },
+  { value: "cancelled", label: "Cancelled" },
+] as const;
+
+export function RegistrationForceStatusPanel({
+  currentStatus,
+  slug,
+  regId,
+  onSaved,
+}: {
+  currentStatus: string;
+  slug: string;
+  regId: string;
+  onSaved: () => void;
+}) {
+  const [selected, setSelected] = useState(currentStatus);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSave() {
+    if (selected === currentStatus) return;
+    setSaving(true);
+    setError("");
+    try {
+      await api(`/api/v1/admin/events/${slug}/registrations/${regId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "force_status", status: selected }),
+      });
+      toast(`Status changed to ${selected}`, "success");
+      onSaved();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div>
+      <p class="small text-muted mb-2">
+        Directly override the registration status. Use with care — this bypasses capacity and waitlist logic.
+      </p>
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <select
+          class="form-select form-select-sm adm-filter-select"
+          value={selected}
+          onChange={(e) => setSelected((e.target as HTMLSelectElement).value)}
+        >
+          {FORCE_STATUS_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <button
+          class="btn btn-sm btn-warning"
+          onClick={() => void handleSave()}
+          disabled={saving || selected === currentStatus}
+        >
+          {saving ? "Saving…" : "Apply"}
+        </button>
+      </div>
+      {error && <div class="small text-danger mt-1">{error}</div>}
+    </div>
+  );
+}

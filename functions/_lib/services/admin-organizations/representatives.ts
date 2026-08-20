@@ -43,7 +43,7 @@ export interface AddRepresentativeInput {
   name: string;
   email: string;
   jobTitle?: string;
-  linkedin?: string;
+  links?: string[];
 }
 
 export async function addOrganizationRepresentative(
@@ -91,7 +91,7 @@ export async function addOrganizationRepresentative(
     firstName: firstName ?? undefined,
     lastName: lastName ?? undefined,
     jobTitle: input.jobTitle,
-    linksJson: input.linkedin ? serializeLinks([input.linkedin]) : null,
+    linksJson: input.links && input.links.length > 0 ? serializeLinks(input.links) : null,
     allowProfileUpdate: true,
   });
 
@@ -131,6 +131,7 @@ export async function addOrganizationRepresentative(
     name: input.name,
     email: user.email,
     jobTitle: input.jobTitle ?? null,
+    links: input.links ?? [],
     status: "active",
     showOnOrgProfile: true,
     isPrimaryContact: assignedRole === "primary",

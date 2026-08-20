@@ -43,6 +43,10 @@ interface ProposalRow {
   updated_at: string;
 }
 
+const PROPOSAL_ROW_COLUMNS =
+  "id, title, description, vote_type, scope_type, scope_id, proposed_by_user_id, eligible_categories, " +
+  "proposed_opens_at, proposed_closes_at, status, vote_id, rejection_reason, created_at, updated_at";
+
 export interface ProposalSummary {
   id: string;
   title: string;
@@ -160,7 +164,7 @@ async function toProposalSummaries(db: DatabaseLike, rows: ProposalRow[]): Promi
 }
 
 async function getProposalRowOrThrow(db: DatabaseLike, id: string): Promise<ProposalRow> {
-  const row = await first<ProposalRow>(db, `SELECT * FROM vote_proposals WHERE id = ?`, [id]);
+  const row = await first<ProposalRow>(db, `SELECT ${PROPOSAL_ROW_COLUMNS} FROM vote_proposals WHERE id = ?`, [id]);
   if (!row) throw new AppError(404, "PROPOSAL_NOT_FOUND", "Vote proposal not found");
   return row;
 }
@@ -267,7 +271,7 @@ export async function listVoteProposals(
   const { rows, total } = await queryPage<ProposalRow>(
     db,
     {
-      sql: `SELECT * FROM vote_proposals WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      sql: `SELECT ${PROPOSAL_ROW_COLUMNS} FROM vote_proposals WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
       bindings: [...args, params.limit, params.offset],
     },
     { sql: `SELECT COUNT(*) AS total FROM vote_proposals WHERE ${where}`, bindings: args },
@@ -286,7 +290,7 @@ export async function listAllVoteProposalsForAdmin(
   const { rows, total } = await queryPage<ProposalRow>(
     db,
     {
-      sql: `SELECT * FROM vote_proposals ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      sql: `SELECT ${PROPOSAL_ROW_COLUMNS} FROM vote_proposals ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
       bindings: [...whereArgs, params.limit, params.offset],
     },
     { sql: `SELECT COUNT(*) AS total FROM vote_proposals ${where}`, bindings: whereArgs },

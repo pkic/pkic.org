@@ -1,19 +1,5 @@
 export type { AdminDonationSummary as DonationRow } from "../../../../shared/schemas/admin-donations";
-
-export interface DonationSyncResult {
-  sessionId: string;
-  outcome: "completed" | "expired" | "awaiting_payment" | "failed" | "still_pending" | "error";
-  error?: string;
-}
-
-export interface DonationSyncResponse {
-  synced: number;
-  completed: number;
-  expired: number;
-  failed: number;
-  errors: number;
-  results: DonationSyncResult[];
-}
+export type { DonationSyncResponse } from "../../../../shared/schemas/admin-donations";
 
 const ZERO_DECIMAL_CURRENCIES = new Set([
   "bif",

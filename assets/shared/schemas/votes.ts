@@ -5,8 +5,10 @@
  * `/api/v1/admin/votes*` and `/api/v1/admin/vote-proposals*` endpoints.
  */
 import { z } from "zod";
+import { databaseIdSchema } from "./identifiers";
 import { paginationQuerySchema, paginatedResponseSchema, sortColumnSchema } from "./pagination";
 import { VOTING_CATEGORY_LETTERS } from "./membership-categories";
+import { workingGroupIdSchema } from "./working-groups";
 
 export const VOTE_TYPES = ["election", "motion", "consultation"] as const;
 export const voteTypeSchema = z.enum(VOTE_TYPES);
@@ -88,13 +90,13 @@ export const voteOutcomeOnlyResultSchema = z.object({ outcome: z.string().nullab
  */
 export const voteResultSchema = z.union([voteOutcomeOnlyResultSchema, voteFullResultSchema]).nullable();
 
-export const voteIdParamsSchema = z.object({ id: z.string() });
+export const voteIdParamsSchema = z.object({ id: databaseIdSchema });
 export const voteSlugParamsSchema = z.object({ slug: z.string() });
-export const proposalIdParamsSchema = z.object({ id: z.uuid() });
+export const proposalIdParamsSchema = z.object({ id: databaseIdSchema });
 
 export const candidateSummarySchema = z.object({
-  id: z.uuid(),
-  userId: z.uuid().nullable(),
+  id: databaseIdSchema,
+  userId: databaseIdSchema.nullable(),
   candidateName: z.string(),
   candidateBio: z.string().nullable(),
   sortOrder: z.number(),
@@ -102,13 +104,13 @@ export const candidateSummarySchema = z.object({
 });
 
 export const voteSummaryFieldsSchema = {
-  id: z.uuid(),
+  id: databaseIdSchema,
   slug: z.string(),
   title: z.string(),
   description: z.string().nullable(),
   voteType: voteTypeSchema,
   scopeType: voteScopeTypeSchema,
-  scopeId: z.uuid().nullable(),
+  scopeId: workingGroupIdSchema.nullable(),
   thresholdType: thresholdTypeSchema,
   eligibleCategories: z.array(z.string()).nullable(),
   opensAt: z.string(),
@@ -135,6 +137,8 @@ export const portalVoteSchema = z.object({
   result: voteResultSchema,
 });
 
+export const portalVotesListResponseSchema = paginatedResponseSchema("votes", portalVoteSchema);
+
 // ── Public (no auth) — "Votes (public — no auth required)" ────────────
 
 /**
@@ -142,15 +146,17 @@ export const portalVoteSchema = z.object({
  * A bare single value (`?status=open`) still validates to a one-element
  * array, so this is a strict superset of the old single-value filter.
  */
-const publicVoteStatusListSchema = z
-  .string()
-  .transform((value) => value.split(",").map((entry) => entry.trim()))
-  .pipe(
-    z
-      .array(voteStatusSchema.extract(["scheduled", "open", "closed"]))
-      .min(1)
-      .max(3),
-  );
+function voteStatusListSchema<T extends [(typeof VOTE_STATUSES)[number], ...Array<(typeof VOTE_STATUSES)[number]>]>(
+  allowed: T,
+) {
+  return z
+    .string()
+    .transform((value) => value.split(",").map((entry) => entry.trim()))
+    .pipe(z.array(z.enum(allowed)).min(1).max(allowed.length));
+}
+
+const publicVoteStatusListSchema = voteStatusListSchema(["scheduled", "open", "closed"]);
+const portalVoteStatusListSchema = voteStatusListSchema([...VOTE_STATUSES]);
 
 export const publicVotesListQuerySchema = paginationQuerySchema.extend({
   type: voteTypeSchema.optional(),
@@ -202,11 +208,15 @@ export const portalVotesListRouteSchema = {
   tags: ["Portal Votes"],
   summary: "List all votes visible to the caller",
   description: "Every forum vote, every public vote, plus every vote scoped to a working group the caller belongs to.",
-  request: { query: paginationQuerySchema },
+  request: {
+    query: paginationQuerySchema.extend({
+      status: portalVoteStatusListSchema.optional(),
+    }),
+  },
   responses: {
     "200": {
       description: "Visible votes.",
-      content: { "application/json": { schema: paginatedResponseSchema("votes", portalVoteSchema) } },
+      content: { "application/json": { schema: portalVotesListResponseSchema } },
     },
   },
 };
@@ -261,15 +271,15 @@ export const voteResultsRouteSchema = {
 // ── Vote proposals (authenticated A–G members) ───────────────────────
 
 export const proposalSummarySchema = z.object({
-  id: z.uuid(),
+  id: databaseIdSchema,
   title: z.string(),
   description: z.string(),
   voteType: voteTypeSchema,
   scopeType: voteScopeTypeSchema,
-  scopeId: z.uuid().nullable(),
-  proposedByUserId: z.uuid(),
+  scopeId: workingGroupIdSchema.nullable(),
+  proposedByUserId: databaseIdSchema,
   status: voteProposalStatusSchema,
-  voteId: z.uuid().nullable(),
+  voteId: databaseIdSchema.nullable(),
   rejectionReason: z.string().nullable(),
   endorsementCount: z.number(),
   minEndorsersRequired: z.number(),
@@ -281,7 +291,7 @@ export const submitProposalSchema = z.object({
   description: z.string().trim().min(1).max(10000),
   voteType: voteTypeSchema,
   scopeType: voteScopeTypeSchema,
-  scopeId: z.string().nullable().optional(),
+  scopeId: workingGroupIdSchema.nullable().optional(),
   eligibleCategories: z.array(z.enum(VOTING_CATEGORY_LETTERS)).nullable().optional(),
   proposedOpensAt: z.iso.datetime({ offset: true }).nullable().optional(),
   proposedClosesAt: z.iso.datetime({ offset: true }).nullable().optional(),
@@ -309,8 +319,10 @@ export const submitProposalRouteSchema = {
 
 export const listProposalsQuerySchema = paginationQuerySchema.extend({
   scopeType: voteScopeTypeSchema.optional(),
-  scopeId: z.string().optional(),
+  scopeId: workingGroupIdSchema.optional(),
 });
+
+export const listProposalsResponseSchema = paginatedResponseSchema("proposals", proposalSummarySchema);
 
 export const listProposalsRouteSchema = {
   tags: ["Vote Proposals"],
@@ -319,7 +331,7 @@ export const listProposalsRouteSchema = {
   responses: {
     "200": {
       description: "Open proposals.",
-      content: { "application/json": { schema: paginatedResponseSchema("proposals", proposalSummarySchema) } },
+      content: { "application/json": { schema: listProposalsResponseSchema } },
     },
   },
 };
@@ -333,7 +345,7 @@ export const proposalDetailRouteSchema = {
       description: "Proposal detail.",
       content: {
         "application/json": {
-          schema: z.object({ proposal: proposalSummarySchema, endorserUserIds: z.array(z.uuid()) }),
+          schema: z.object({ proposal: proposalSummarySchema, endorserUserIds: z.array(databaseIdSchema) }),
         },
       },
     },
@@ -386,7 +398,7 @@ export const withdrawProposalRouteSchema = {
 export const adminCandidateInputSchema = z.object({
   name: z.string().trim().min(1).max(200),
   bio: z.string().trim().max(5000).optional(),
-  userId: z.uuid().nullable().optional(),
+  userId: databaseIdSchema.nullable().optional(),
 });
 
 /** Allowlisted sort columns for GET /api/v1/admin/votes — see listVotesForAdmin. */
@@ -426,7 +438,7 @@ export const adminVoteCreateSchema = z.object({
   description: z.string().trim().max(10000).optional(),
   voteType: voteTypeSchema,
   scopeType: voteScopeTypeSchema,
-  scopeId: z.string().nullable().optional(),
+  scopeId: workingGroupIdSchema.nullable().optional(),
   thresholdType: thresholdTypeSchema,
   eligibleCategories: z.array(z.enum(VOTING_CATEGORY_LETTERS)).nullable().optional(),
   opensAt: z.iso.datetime({ offset: true }).optional(),
@@ -498,9 +510,9 @@ export const adminVoteVisibilityUpdateRouteSchema = {
 };
 
 export const adminBallotSchema = z.object({
-  id: z.uuid(),
-  userId: z.uuid(),
-  organizationId: z.uuid().nullable(),
+  id: databaseIdSchema,
+  userId: databaseIdSchema,
+  organizationId: databaseIdSchema.nullable(),
   choice: z.string(),
   round: z.number(),
   submittedAt: z.string(),
@@ -546,7 +558,7 @@ export const adminProposalDetailRouteSchema = {
       description: "Proposal detail.",
       content: {
         "application/json": {
-          schema: z.object({ proposal: proposalSummarySchema, endorserUserIds: z.array(z.uuid()) }),
+          schema: z.object({ proposal: proposalSummarySchema, endorserUserIds: z.array(databaseIdSchema) }),
         },
       },
     },

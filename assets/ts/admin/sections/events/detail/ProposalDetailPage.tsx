@@ -3,7 +3,6 @@ import { useHashLocation } from "wouter/use-hash-location";
 import { Badge } from "../../../../components/Badge";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { Markdown } from "../../../../components/Markdown";
 import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
 import { authEmail } from "../../../state";
@@ -17,13 +16,13 @@ import { ProposalSidebar } from "./proposal-detail/ProposalSidebar";
 import { ReviewCard } from "./proposal-detail/ReviewCard";
 import { SpeakerCard } from "./proposal-detail/SpeakerCard";
 import type {
-  DecisionPreviewResponse,
   DetailTab,
   PresentationVersion,
   ProposalInternalComment,
   ProposalResponse,
 } from "./proposal-detail/model";
-import { isNeedsWorkDecision } from "./proposal-detail/model";
+import { adminProposalDetailResponseSchema } from "../../../../../shared/schemas/admin-event-proposals";
+import { ProposalDecisionPanel } from "./proposal-detail/ProposalDecisionPanel";
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
@@ -32,7 +31,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
   const [activeTab, setActiveTab] = useState<DetailTab>("submission");
 
   const { data, loading, error, reload } = useData<ProposalResponse>(
-    () => api<ProposalResponse>(`/api/v1/admin/proposals/${proposalId}`),
+    async () => adminProposalDetailResponseSchema.parse(await api<unknown>(`/api/v1/admin/proposals/${proposalId}`)),
     [proposalId],
   );
 
@@ -69,16 +68,6 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     }
   }, [reviews]);
 
-  // Decision form
-  const [decisionStatus, setDecisionStatus] = useState("");
-  const [decisionNote, setDecisionNote] = useState("");
-  const [savingDecision, setSavingDecision] = useState(false);
-  const [previewingDecision, setPreviewingDecision] = useState(false);
-  const [decisionPreview, setDecisionPreview] = useState<DecisionPreviewResponse | null>(null);
-  const [decisionPreviewConfirmed, setDecisionPreviewConfirmed] = useState(false);
-  const [decisionPreviewTab, setDecisionPreviewTab] = useState<"html" | "text">("html");
-  const [selectedDecisionPreviewId, setSelectedDecisionPreviewId] = useState("");
-
   const loadSubData = useCallback(async () => {
     setLoadingSub(true);
     try {
@@ -111,13 +100,9 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     void loadSubData();
   }, [loadSubData]);
 
-  // Sync decision/abstract form state when proposal data (re)loads
+  // Sync the editable abstract when proposal data (re)loads.
   useEffect(() => {
     if (data?.proposal) {
-      setDecisionStatus(
-        isNeedsWorkDecision(data.proposal.decision_status ?? "") ? "needs-work" : (data.proposal.decision_status ?? ""),
-      );
-      setDecisionNote(data.proposal.decision_note ?? "");
       setAbstractDraft(data.proposal.abstract);
     }
   }, [data]);
@@ -134,11 +119,6 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     false;
   const canManagePresentation = proposal.status === "accepted" || proposalRequiresPresentation || versions.length > 0;
   const quorumMet = reviews.length >= minReviewsRequired;
-  const needsWorkRequiresNote = isNeedsWorkDecision(decisionStatus) && !decisionNote.trim();
-  const selectedDecisionPreview =
-    decisionPreview?.messages.find((message) => message.id === selectedDecisionPreviewId) ??
-    decisionPreview?.messages[0] ??
-    null;
   const scoredReviews = reviews.filter((review) => review.score != null);
   const averageScore =
     scoredReviews.length > 0
@@ -153,22 +133,6 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     },
     { accept: 0, "needs-work": 0, reject: 0 } as Record<ProposalReview["recommendation"], number>,
   );
-
-  useEffect(() => {
-    setDecisionPreview(null);
-    setDecisionPreviewConfirmed(false);
-    setSelectedDecisionPreviewId("");
-    setDecisionPreviewTab("html");
-  }, [decisionStatus, decisionNote]);
-
-  useEffect(() => {
-    if (!decisionPreview?.messages.length) return;
-    setSelectedDecisionPreviewId((current) =>
-      current && decisionPreview.messages.some((message) => message.id === current)
-        ? current
-        : decisionPreview.messages[0].id,
-    );
-  }, [decisionPreview]);
 
   const tabItems = [
     { key: "submission", label: "Submission" },
@@ -275,58 +239,6 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
       toast((err as Error).message, "error");
     } finally {
       setSavingComment(false);
-    }
-  }
-
-  async function handleDecision(e: Event) {
-    e.preventDefault();
-    if (!decisionStatus) return;
-    if (!decisionPreview || !decisionPreviewConfirmed) {
-      toast("Preview and confirm the outgoing email first", "error");
-      return;
-    }
-    setSavingDecision(true);
-    try {
-      await api(`/api/v1/admin/proposals/${proposalId}/finalize`, {
-        method: "POST",
-        body: JSON.stringify({ finalStatus: decisionStatus, decisionNote: decisionNote.trim() || undefined }),
-      });
-      toast("Decision saved", "success");
-      void reload();
-    } catch (err) {
-      toast((err as Error).message, "error");
-    } finally {
-      setSavingDecision(false);
-    }
-  }
-
-  async function handlePreviewDecision() {
-    if (!decisionStatus) return;
-    setPreviewingDecision(true);
-    try {
-      const preview = await api<DecisionPreviewResponse>(`/api/v1/admin/proposals/${proposalId}/finalize-preview`, {
-        method: "POST",
-        body: JSON.stringify({ finalStatus: decisionStatus, decisionNote: decisionNote.trim() || undefined }),
-      });
-      setDecisionPreview(preview);
-      setDecisionPreviewConfirmed(false);
-    } catch (err) {
-      toast((err as Error).message, "error");
-    } finally {
-      setPreviewingDecision(false);
-    }
-  }
-
-  function decisionEmailLabel(templateKey: string): string {
-    switch (templateKey) {
-      case "proposal_decision":
-        return "Decision Email";
-      case "speaker_profile_request":
-        return "Profile Request";
-      case "presentation_upload_request":
-        return "Presentation Upload";
-      default:
-        return templateKey.replace(/_/g, " ");
     }
   }
 
@@ -615,209 +527,14 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
 
           {/* ── Decision tab (finalizers only) ── */}
           {activeTab === "decision" && access.canFinalize && (
-            <div class="card">
-              <div class="card-header">
-                <h6 class="mb-0">Final Decision</h6>
-              </div>
-              <div class="card-body">
-                {proposal.decision_status ? (
-                  <div class="alert alert-info mb-0">
-                    <div class="d-flex gap-2 align-items-center mb-1">
-                      <strong>Decision recorded:</strong>
-                      <Badge status={proposal.decision_status} />
-                    </div>
-                    {proposal.decision_note && (
-                      <Markdown markdown={proposal.decision_note} className="small mt-2 mb-0" />
-                    )}
-                    {proposal.decision_decided_at && (
-                      <div class="small text-muted mt-2">Recorded {fmt(proposal.decision_decided_at)}</div>
-                    )}
-                  </div>
-                ) : (
-                  <>
-                    {!quorumMet && !loadingSub && (
-                      <div class="alert alert-warning">
-                        <strong>Quorum not met.</strong> {reviews.length} of {minReviewsRequired} required review
-                        {minReviewsRequired !== 1 ? "s" : ""} completed. Add more reviews before finalizing.
-                      </div>
-                    )}
-                    <form onSubmit={(e) => void handleDecision(e)}>
-                      <div class="row g-3">
-                        <div class="col-md-4">
-                          <label class="form-label fw-semibold">Decision</label>
-                          <select
-                            class="form-select"
-                            value={decisionStatus}
-                            onChange={(e) => setDecisionStatus((e.target as HTMLSelectElement).value)}
-                          >
-                            <option value="">— select —</option>
-                            <option value="accepted">Accepted</option>
-                            <option value="needs-work">Needs Work</option>
-                            <option value="rejected">Rejected</option>
-                          </select>
-                        </div>
-                        <div class="col-12">
-                          <label class="form-label fw-semibold">
-                            Note to applicant
-                            {isNeedsWorkDecision(decisionStatus) && <span class="text-danger ms-1">* required</span>}
-                            <span class="text-muted fw-normal ms-2 small">
-                              Sent in decision email · Markdown supported
-                            </span>
-                          </label>
-                          <textarea
-                            class={`form-control${needsWorkRequiresNote ? " is-invalid" : ""}`}
-                            rows={4}
-                            value={decisionNote}
-                            onInput={(e) => setDecisionNote((e.target as HTMLTextAreaElement).value)}
-                            placeholder={
-                              isNeedsWorkDecision(decisionStatus)
-                                ? "Describe what changes or clarifications are needed…"
-                                : "Optional feedback for the proposer…"
-                            }
-                          />
-                          {needsWorkRequiresNote && (
-                            <div class="invalid-feedback">A note is required when requesting work.</div>
-                          )}
-                        </div>
-                        <div class="col-12">
-                          <div class="d-flex gap-2 align-items-center flex-wrap">
-                            <button
-                              type="button"
-                              class="btn btn-outline-primary"
-                              onClick={() => void handlePreviewDecision()}
-                              disabled={previewingDecision || !decisionStatus || needsWorkRequiresNote}
-                            >
-                              {previewingDecision ? "Previewing…" : "Preview Emails"}
-                            </button>
-                            {decisionPreview && (
-                              <span class="small text-muted">
-                                {decisionPreview.emailCount} email{decisionPreview.emailCount === 1 ? "" : "s"} to{" "}
-                                {decisionPreview.recipientCount} recipient
-                                {decisionPreview.recipientCount === 1 ? "" : "s"}
-                                {(decisionPreview.layoutMissing ||
-                                  (decisionPreview.missingTemplateKeys?.length ?? 0) > 0) && (
-                                  <span class="text-warning ms-2">⚠ Configuration issues — see preview</span>
-                                )}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        {decisionPreview && selectedDecisionPreview && (
-                          <div class="col-12">
-                            <div class="card border">
-                              <div class="card-header bg-light small fw-semibold">Email Preview</div>
-                              <div class="card-body">
-                                {decisionPreview.layoutMissing && (
-                                  <div class="alert alert-warning small py-2 mb-3">
-                                    <strong>Email layout template not configured.</strong> Emails will render without
-                                    your branded layout. Configure the <code>email_layout</code> template to fix this.
-                                  </div>
-                                )}
-                                {(decisionPreview.missingTemplateKeys?.length ?? 0) > 0 && (
-                                  <div class="alert alert-warning small py-2 mb-3">
-                                    <strong>
-                                      Missing email template
-                                      {(decisionPreview.missingTemplateKeys?.length ?? 0) > 1 ? "s" : ""}:
-                                    </strong>{" "}
-                                    <code>{decisionPreview.missingTemplateKeys?.join(", ")}</code>. These notifications
-                                    will not be sent until the templates are configured.
-                                  </div>
-                                )}
-                                <div class="row g-3">
-                                  <div class="col-lg-4">
-                                    <div class="small text-muted mb-2">Outgoing emails</div>
-                                    <div class="list-group">
-                                      {decisionPreview.messages.map((message) => (
-                                        <button
-                                          key={message.id}
-                                          type="button"
-                                          class={`list-group-item list-group-item-action${message.id === selectedDecisionPreview.id ? " active" : ""}`}
-                                          onClick={() => setSelectedDecisionPreviewId(message.id)}
-                                        >
-                                          <div class="fw-semibold small">{decisionEmailLabel(message.templateKey)}</div>
-                                          <div class="small">{message.recipientLabel}</div>
-                                          <div class="small text-break">{message.recipientEmail}</div>
-                                        </button>
-                                      ))}
-                                    </div>
-                                  </div>
-                                  <div class="col-lg-8">
-                                    <div class="small text-muted">To</div>
-                                    <div class="fw-semibold mb-2">
-                                      {selectedDecisionPreview.recipientLabel} &lt;
-                                      {selectedDecisionPreview.recipientEmail}&gt;
-                                    </div>
-                                    <div class="small text-muted">Subject</div>
-                                    <div class="fw-semibold mb-2">{selectedDecisionPreview.subject}</div>
-                                    <Tabs
-                                      items={[
-                                        { key: "html", label: "HTML" },
-                                        { key: "text", label: "Text" },
-                                      ]}
-                                      active={decisionPreviewTab}
-                                      onChange={(key) => setDecisionPreviewTab(key as "html" | "text")}
-                                      className="mb-2"
-                                    />
-                                    {decisionPreviewTab === "html" &&
-                                      (selectedDecisionPreview.templateMissing ? (
-                                        <div class="alert alert-warning small mb-0">
-                                          Email template <code>{selectedDecisionPreview.templateKey}</code> is not
-                                          configured. This notification will not be sent until the template is
-                                          activated.
-                                        </div>
-                                      ) : (
-                                        <iframe
-                                          srcdoc={selectedDecisionPreview.html}
-                                          sandbox=""
-                                          class="adm-email-preview-frame"
-                                        />
-                                      ))}
-                                    {decisionPreviewTab === "text" && (
-                                      <pre class="json-out adm-email-preview-text">{selectedDecisionPreview.text}</pre>
-                                    )}
-                                    <div class="form-check mt-2">
-                                      <input
-                                        class="form-check-input"
-                                        type="checkbox"
-                                        id="proposal-decision-preview-confirm"
-                                        checked={decisionPreviewConfirmed}
-                                        onChange={(e) =>
-                                          setDecisionPreviewConfirmed((e.target as HTMLInputElement).checked)
-                                        }
-                                      />
-                                      <label class="form-check-label small" for="proposal-decision-preview-confirm">
-                                        I reviewed the outgoing email preview and confirm this decision send.
-                                      </label>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        <div class="col-12">
-                          <button
-                            type="submit"
-                            class="btn btn-primary"
-                            disabled={
-                              savingDecision ||
-                              !decisionStatus ||
-                              !quorumMet ||
-                              needsWorkRequiresNote ||
-                              !decisionPreview ||
-                              !decisionPreviewConfirmed
-                            }
-                            title={!quorumMet ? `Requires ${minReviewsRequired} reviews` : undefined}
-                          >
-                            {savingDecision ? "Saving…" : "Record Decision"}
-                          </button>
-                        </div>
-                      </div>
-                    </form>
-                  </>
-                )}
-              </div>
-            </div>
+            <ProposalDecisionPanel
+              proposalId={proposalId}
+              proposal={proposal}
+              reviewCount={reviews.length}
+              minReviewsRequired={minReviewsRequired}
+              loading={loadingSub}
+              onSaved={() => void reload()}
+            />
           )}
         </div>
 

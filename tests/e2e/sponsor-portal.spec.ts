@@ -23,13 +23,22 @@ function sendgridServer(): string {
   return process.env.E2E_SENDGRID_API_BASE ?? readFileSync(SENDGRID_URL_FILE, "utf8").trim();
 }
 
-async function waitForEmail(to: string, subjectFragment: string, timeoutMs = 15_000): Promise<CapturedEmail> {
+async function readOutbox(): Promise<CapturedEmail[]> {
+  const response = await fetch(`${sendgridServer()}/outbox`);
+  return (await response.json()) as CapturedEmail[];
+}
+
+async function waitForEmail(
+  to: string,
+  subjectFragment: string,
+  timeoutMs = 15_000,
+  afterIndex = 0,
+): Promise<CapturedEmail> {
   const deadline = Date.now() + timeoutMs;
   let lastEmails: CapturedEmail[] = [];
   while (Date.now() < deadline) {
-    const resp = await fetch(`${sendgridServer()}/outbox`);
-    lastEmails = (await resp.json()) as CapturedEmail[];
-    for (let i = lastEmails.length - 1; i >= 0; i--) {
+    lastEmails = await readOutbox();
+    for (let i = lastEmails.length - 1; i >= afterIndex; i--) {
       const e = lastEmails[i];
       if (e.to === to && e.subject.toLowerCase().includes(subjectFragment.toLowerCase())) {
         return e;
@@ -207,12 +216,13 @@ test.describe("sponsor portal", () => {
     // ── Self-service "request a new link" flow, keyed by the event's public
     // slug rather than its internal id (a sponsor
     // contact only ever knows the slug) ────────────────────────────────────
+    const resendAfterIndex = (await readOutbox()).length;
     await page.locator("#sp-inp-email").fill(contactEmail);
     await page.locator("#sp-inp-event").fill(EVENT_SLUG);
     await page.getByRole("button", { name: "Send sign-in link" }).click();
     await expect(page.getByText(/you'll receive a sign-in link shortly/i)).toBeVisible();
 
-    const resendEmail = await waitForEmail(contactEmail, "sponsor portal");
+    const resendEmail = await waitForEmail(contactEmail, "sponsor portal", 15_000, resendAfterIndex);
     const resendUrl = extractUrlFromEmail(resendEmail, "/sponsor-portal/");
     expect(resendUrl).not.toBe(portalUrl);
 

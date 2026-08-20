@@ -49,6 +49,23 @@ export const donationsListResponseSchema = z.object({
   summary: z.record(z.string(), z.number()),
 });
 export type DonationsListResponse = z.infer<typeof donationsListResponseSchema>;
+
+export const donationSyncResultSchema = z.object({
+  sessionId: z.string(),
+  outcome: z.enum(["completed", "expired", "awaiting_payment", "failed", "still_pending", "error"]),
+  error: z.string().optional(),
+});
+
+export const donationSyncResponseSchema = z.object({
+  synced: z.number(),
+  completed: z.number(),
+  awaitingPayment: z.number(),
+  expired: z.number(),
+  failed: z.number(),
+  errors: z.number(),
+  results: z.array(donationSyncResultSchema),
+});
+export type DonationSyncResponse = z.infer<typeof donationSyncResponseSchema>;
 export type AdminDonationSummary = z.infer<typeof adminDonationSummarySchema>;
 
 export const donationsListRouteSchema = {

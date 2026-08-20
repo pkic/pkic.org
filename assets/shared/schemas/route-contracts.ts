@@ -29,6 +29,10 @@ import {
   successResponseSchema,
 } from "./api";
 import { paginationQuerySchema } from "./pagination";
+import { adminEmailOutboxResponseSchema } from "./admin-email-outbox";
+import { proposalDecisionPreviewResponseSchema } from "./admin-event-proposals";
+import { adminRegistrationDetailResponseSchema } from "./admin-registration-detail";
+import { databaseIdSchema } from "./identifiers";
 
 export const apiRootGetRouteSchema = {
   tags: ["System"],
@@ -60,7 +64,10 @@ export const adminEmailOutboxGetRouteSchema = {
     query: adminEmailOutboxQuerySchema,
   },
   responses: {
-    "200": { description: "Paginated email outbox rows and aggregate delivery summary." },
+    "200": {
+      description: "Paginated email outbox rows and aggregate delivery summary.",
+      content: { "application/json": { schema: adminEmailOutboxResponseSchema } },
+    },
     "401": { description: "Admin authorization required." },
   },
 };
@@ -322,7 +329,10 @@ export const adminProposalFinalizePreviewRouteSchema = {
     "Renders the emails that would be sent for a proposal decision without recording the decision or queueing mail.",
   request: adminProposalFinalizeRouteSchema.request,
   responses: {
-    "200": { description: "Rendered decision email preview messages." },
+    "200": {
+      description: "Rendered decision email preview messages.",
+      content: { "application/json": { schema: proposalDecisionPreviewResponseSchema } },
+    },
     "400": { description: "Invalid finalize payload." },
     "401": { description: "Admin authorization required." },
     "403": { description: "The admin lacks finalize permission for this proposal." },
@@ -350,11 +360,27 @@ export const adminRegistrationAuditLogRouteSchema = {
   summary: "List registration audit log",
   description: "Returns recent audit events attached to a registration in the requested event.",
   request: {
-    params: eventSlugParamsSchema.extend({ registrationId: z.string() }),
+    params: eventSlugParamsSchema.extend({ registrationId: databaseIdSchema }),
     query: paginationQuerySchema,
   },
   responses: {
     "200": { description: "Registration audit log entries." },
+    "401": { description: "Admin authorization required." },
+    "404": { description: "Event or registration not found." },
+  },
+};
+
+export const adminRegistrationDetailRouteSchema = {
+  tags: ["Admin registrations"],
+  summary: "Get registration details",
+  request: {
+    params: eventSlugParamsSchema.extend({ registrationId: databaseIdSchema }),
+  },
+  responses: {
+    "200": {
+      description: "Registration details and day-level attendance state.",
+      content: { "application/json": { schema: adminRegistrationDetailResponseSchema } },
+    },
     "401": { description: "Admin authorization required." },
     "404": { description: "Event or registration not found." },
   },

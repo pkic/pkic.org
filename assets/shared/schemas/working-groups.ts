@@ -6,13 +6,21 @@
  * the member self-service `POST/DELETE /api/v1/me/working-groups/:wgId`.
  */
 import { z } from "zod";
+import { slugPattern } from "./api-common";
+import { databaseIdSchema } from "./identifiers";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 function trimmedString(min: number, max: number): z.ZodString {
   return z.string().trim().min(min).max(max);
 }
 
-export const workingGroupIdParamsSchema = z.object({ id: z.string().trim().min(1) });
-export const workingGroupMemberParamsSchema = z.object({ id: z.string().trim().min(1), userId: z.uuid() });
+export const workingGroupIdSchema = databaseIdSchema;
+export const workingGroupSlugSchema = z.string().trim().min(1).max(200).regex(slugPattern);
+// Route references accept either a generated row id or a bounded public slug;
+// the service resolves the value against both columns.
+export const workingGroupReferenceSchema = z.union([workingGroupIdSchema, workingGroupSlugSchema]);
+export const workingGroupIdParamsSchema = z.object({ id: workingGroupReferenceSchema });
+export const workingGroupMemberParamsSchema = z.object({ id: workingGroupReferenceSchema, userId: databaseIdSchema });
 
 export const workingGroupCreateSchema = z.object({
   name: trimmedString(1, 200),
@@ -29,18 +37,18 @@ export const workingGroupUpdateSchema = z.object({
   active: z.boolean().optional(),
 });
 
-export const workingGroupMemberAddSchema = z.object({ userId: z.uuid() });
+export const workingGroupMemberAddSchema = z.object({ userId: databaseIdSchema });
 
 export const chairInfoSchema = z.object({
-  userRoleId: z.uuid(),
-  userId: z.uuid(),
+  userRoleId: databaseIdSchema,
+  userId: databaseIdSchema,
   name: z.string(),
   email: z.string(),
   expiresAt: z.string().nullable(),
 });
 
 export const adminWorkingGroupSummarySchema = z.object({
-  id: z.uuid(),
+  id: workingGroupIdSchema,
   name: z.string(),
   slug: z.string(),
   description: z.string().nullable(),
@@ -55,7 +63,7 @@ export const adminWorkingGroupSummarySchema = z.object({
 });
 
 export const adminWorkingGroupMemberSchema = z.object({
-  userId: z.uuid(),
+  userId: databaseIdSchema,
   name: z.string(),
   email: z.string(),
   organizationName: z.string().nullable(),
@@ -67,14 +75,23 @@ export const adminWorkingGroupDetailSchema = adminWorkingGroupSummarySchema.exte
   members: z.array(adminWorkingGroupMemberSchema),
 });
 
+export type AdminWorkingGroupSummary = z.infer<typeof adminWorkingGroupSummarySchema>;
+export type AdminWorkingGroupMember = z.infer<typeof adminWorkingGroupMemberSchema>;
+export type AdminWorkingGroupDetail = z.infer<typeof adminWorkingGroupDetailSchema>;
+
+export const ADMIN_WORKING_GROUP_SORT_COLUMNS = ["name", "slug", "member_count", "active", "created_at"] as const;
+export const workingGroupsListQuerySchema = listQuerySchema(ADMIN_WORKING_GROUP_SORT_COLUMNS);
+export const workingGroupsListResponseSchema = paginatedResponseSchema("workingGroups", adminWorkingGroupSummarySchema);
+
 export const workingGroupsListRouteSchema = {
   tags: ["Working Groups"],
   summary: "List all working groups (admin)",
   description: "Unlike the public GET /api/v1/working-groups, includes inactive working groups.",
+  request: { query: workingGroupsListQuerySchema },
   responses: {
     "200": {
       description: "All working groups.",
-      content: { "application/json": { schema: z.object({ workingGroups: z.array(adminWorkingGroupSummarySchema) }) } },
+      content: { "application/json": { schema: workingGroupsListResponseSchema } },
     },
   },
 };

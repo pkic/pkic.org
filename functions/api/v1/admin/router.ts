@@ -7,6 +7,7 @@ import {
   serializeAdminSessionCookie,
   signAdminSessionToken,
 } from "../../../_lib/auth/admin";
+import { requireReviewedAdminRouteInventory } from "../../../_lib/auth/admin-route-policy";
 import { handleError } from "../../../_lib/http";
 import { requireAuthScope } from "../../../_lib/auth/scopes";
 import { REQUEST_DB_CONTEXT_KEY, type RequestDbContext } from "../../../_lib/db/context";
@@ -167,6 +168,7 @@ async function useRequestScopedD1Session(c: Context<RequestDbContext>, next: Nex
     c.set(REQUEST_DB_CONTEXT_KEY, sessionDb);
     if (!isAdminAuthPath(c.req.path)) {
       await requireAdminFromRequest(primaryDb, c.req.raw, c.env);
+      requireReviewedAdminRouteInventory(openapi.routes);
       enforceAdminScopes(c);
     }
     await next();
@@ -178,6 +180,7 @@ async function useRequestScopedD1Session(c: Context<RequestDbContext>, next: Nex
 
   const admin = await requireAdminFromRequest(primaryDb, c.req.raw, c.env);
   if (!isAdminAuthPath(c.req.path)) {
+    requireReviewedAdminRouteInventory(openapi.routes);
     enforceAdminScopes(c);
   }
   // Validate state bookmark: must be a reasonable string (null is ok for default session)

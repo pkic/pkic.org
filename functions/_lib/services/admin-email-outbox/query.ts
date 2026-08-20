@@ -1,0 +1,157 @@
+import { batchFirst, batchRows } from "../../db/pagination";
+import { buildD1TextSearchFilter } from "../../db/search";
+import type { DatabaseLike } from "../../types";
+import type { EmailMessageType } from "../../../../assets/shared/schemas/admin-email-templates";
+
+export interface OutboxListRow {
+  id: string;
+  event_id: string | null;
+  event_slug: string | null;
+  event_name: string | null;
+  template_key: string;
+  template_version: number | null;
+  recipient_email: string;
+  subject: string | null;
+  payload_json: string;
+  message_type: EmailMessageType;
+  provider: string;
+  provider_message_id: string | null;
+  status: "queued" | "sending" | "sent" | "failed" | "retrying" | "bounced";
+  attempts: number;
+  send_after: string;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+  sent_at: string | null;
+}
+
+interface CountRow {
+  status: string;
+  count: number;
+}
+
+interface MessageTypeCountRow {
+  message_type: string;
+  count: number;
+}
+
+export interface TemplateCountRow {
+  template_key: string;
+  count: number;
+}
+
+export interface AdminEmailOutboxQueryResult {
+  rows: OutboxListRow[];
+  total: number;
+  statusCounts: CountRow[];
+  messageTypeCounts: MessageTypeCountRow[];
+  templateCounts: TemplateCountRow[];
+  dueCounts: CountRow[];
+  nextSendAfter: string | null;
+}
+
+function buildWhereClause(query: { status?: string; messageType?: string; q?: string; dueNow: boolean; now: string }): {
+  where: string;
+  bindings: unknown[];
+} {
+  const conditions: string[] = [];
+  const bindings: unknown[] = [];
+
+  if (query.dueNow) {
+    conditions.push("o.status IN ('queued', 'retrying')", "o.send_after <= ?");
+    bindings.push(query.now);
+  }
+  if (query.status) {
+    conditions.push("o.status = ?");
+    bindings.push(query.status);
+  }
+  if (query.messageType) {
+    conditions.push("o.message_type = ?");
+    bindings.push(query.messageType);
+  }
+  if (query.q) {
+    const search = buildD1TextSearchFilter(query.q, [
+      "o.recipient_email",
+      "o.template_key",
+      "o.subject",
+      "o.last_error",
+      "e.slug",
+      "e.name",
+    ]);
+    conditions.push(search.sql);
+    bindings.push(...search.bindings);
+  }
+
+  return { where: conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "", bindings };
+}
+
+export async function queryAdminEmailOutbox(
+  db: DatabaseLike,
+  query: {
+    status?: string;
+    messageType?: string;
+    dueNow: boolean;
+    q?: string;
+    limit: number;
+    offset: number;
+  },
+): Promise<AdminEmailOutboxQueryResult> {
+  const now = new Date().toISOString();
+  const { where, bindings } = buildWhereClause({ ...query, now });
+  const aggregateFrom = query.q ? "FROM email_outbox o LEFT JOIN events e ON e.id = o.event_id" : "FROM email_outbox o";
+  const [rowsResult, totalResult, statusResult, messageTypeResult, templateResult, dueResult, dueNextResult] =
+    await db.batch([
+      db
+        .prepare(
+          `SELECT o.id, o.event_id, e.slug AS event_slug, e.name AS event_name,
+                  o.template_key, o.template_version, o.recipient_email, o.subject, o.payload_json,
+                  o.message_type, o.provider, o.provider_message_id, o.status, o.attempts, o.send_after,
+                  o.last_error, o.created_at, o.updated_at, o.sent_at
+           FROM email_outbox o
+           LEFT JOIN events e ON e.id = o.event_id
+           ${where}
+           ORDER BY CASE o.status
+             WHEN 'failed' THEN 0 WHEN 'retrying' THEN 1 WHEN 'queued' THEN 2 WHEN 'sending' THEN 3 ELSE 4
+           END, COALESCE(o.sent_at, o.updated_at, o.created_at) DESC, o.id ASC
+           LIMIT ? OFFSET ?`,
+        )
+        .bind(...bindings, query.limit, query.offset),
+      db.prepare(`SELECT COUNT(*) AS total ${aggregateFrom} ${where}`).bind(...bindings),
+      db.prepare(`SELECT o.status, COUNT(*) AS count ${aggregateFrom} ${where} GROUP BY o.status`).bind(...bindings),
+      db
+        .prepare(`SELECT o.message_type, COUNT(*) AS count ${aggregateFrom} ${where} GROUP BY o.message_type`)
+        .bind(...bindings),
+      db
+        .prepare(
+          `SELECT o.template_key, COUNT(*) AS count
+           ${aggregateFrom} ${where}
+           GROUP BY o.template_key
+           ORDER BY count DESC, o.template_key ASC
+           LIMIT 5`,
+        )
+        .bind(...bindings),
+      db
+        .prepare(
+          `SELECT status, COUNT(*) AS count
+           FROM email_outbox
+           WHERE status IN ('queued', 'retrying') AND send_after <= ?
+           GROUP BY status`,
+        )
+        .bind(now),
+      db.prepare(
+        `SELECT MIN(send_after) AS send_after
+         FROM email_outbox
+         WHERE status IN ('queued', 'retrying')`,
+      ),
+    ]);
+
+  return {
+    rows: batchRows<OutboxListRow>(rowsResult),
+    total: Number(batchFirst<{ total: number }>(totalResult)?.total ?? 0),
+    statusCounts: batchRows<CountRow>(statusResult),
+    messageTypeCounts: batchRows<MessageTypeCountRow>(messageTypeResult),
+    templateCounts: batchRows<TemplateCountRow>(templateResult),
+    dueCounts: batchRows<CountRow>(dueResult),
+    nextSendAfter: batchFirst<{ send_after: string | null }>(dueNextResult)?.send_after ?? null,
+  };
+}

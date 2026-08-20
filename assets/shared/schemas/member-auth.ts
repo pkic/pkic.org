@@ -5,6 +5,7 @@
  * an AuthAdmin.
  */
 import { z } from "zod";
+import { databaseIdSchema } from "./identifiers";
 import { normalizedEmailSchema, tokenSchema } from "./api";
 
 export const memberAuthRequestSchema = z.object({
@@ -16,10 +17,10 @@ export const memberAuthVerifySchema = z.object({
 });
 
 export const authMemberSchema = z.object({
-  userId: z.uuid(),
+  userId: databaseIdSchema,
   email: z.string(),
-  memberId: z.uuid(),
-  organizationId: z.uuid().nullable(),
+  memberId: databaseIdSchema,
+  organizationId: databaseIdSchema.nullable(),
   membershipCategory: z.string(),
   isEcMember: z.boolean(),
 });

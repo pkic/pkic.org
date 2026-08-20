@@ -19,12 +19,10 @@ import { getConfig, resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { processOutboxByIdBackground, queueEmail } from "../../../../../../../_lib/email/outbox";
 import { writeAuditLog } from "../../../../../../../_lib/services/audit";
 import { updateRegistrationById, changeRegistrationEmail } from "../../../../../../../_lib/services/registrations";
-import { getActiveFormByPurpose, validateCustomAnswersByPurpose } from "../../../../../../../_lib/services/forms";
+import { validateCustomAnswersByPurpose } from "../../../../../../../_lib/services/forms";
 import { deriveEventAttendanceType, getRegistrationDayAttendance } from "../../../../../../../_lib/services/event-days";
 import { listDayWaitlistForRegistration } from "../../../../../../../_lib/services/registrations/day-waitlist";
 import { nowIso } from "../../../../../../../_lib/utils/time";
-import { parseJsonSafe } from "../../../../../../../_lib/utils/json";
-import type { DatabaseLike } from "../../../../../../../_lib/types";
 import { registrationManageSchema } from "../../../../../../../../assets/shared/schemas/api";
 import { z } from "zod";
 import { queueRegistrationStatusEmail } from "../../../../../../../_lib/services/registrations/status-notifications";
@@ -35,81 +33,23 @@ import {
   getAcceptedTermsTextForRegistration,
   getCustomAnswerRows,
 } from "../../../../../../../_lib/utils/registration-email";
-import { omitCapabilitySecrets, queuedCapabilityToken } from "../../../../../../../_lib/services/capability-links";
-
-// ── Shared query ──────────────────────────────────────────────────────────────
-
-interface RegistrationRow {
-  id: string;
-  event_id: string;
-  user_id: string;
-  status: string;
-  attendance_type: string;
-  source_type: string;
-  created_at: string;
-  updated_at: string;
-  user_email: string | null;
-  display_name: string | null;
-  referral_code: string | null;
-  rsvp_status: string | null;
-  custom_answers_json: string | null;
-}
-
-async function fetchRegistrationWithDetails(
-  db: DatabaseLike,
-  eventId: string,
-  registrationId: string,
-): Promise<RegistrationRow | null> {
-  return first<RegistrationRow>(
-    db,
-    `SELECT r.id, r.event_id, r.user_id, r.status, r.attendance_type, r.source_type,
-          r.custom_answers_json,
-            r.created_at, r.updated_at,
-            u.email AS user_email,
-            COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
-            rc.code AS referral_code,
-            (SELECT response_status FROM calendar_rsvp_events WHERE registration_id = r.id ORDER BY created_at DESC LIMIT 1) AS rsvp_status
-     FROM registrations r
-     LEFT JOIN users u ON u.id = r.user_id
-     LEFT JOIN referral_codes rc ON rc.owner_type = 'registration' AND rc.owner_id = r.id
-     WHERE r.id = ? AND r.event_id = ?`,
-    [registrationId, eventId],
-  );
-}
+import { queuedCapabilityToken } from "../../../../../../../_lib/services/capability-links";
+import {
+  fetchAdminRegistrationWithDetails,
+  getAdminRegistrationDetail,
+  toAdminRegistrationDetail,
+} from "../../../../../../../_lib/services/registrations/admin-detail";
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 
 export async function onRequestGet(c: AdminContext): Promise<Response> {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
-  const registration = await fetchRegistrationWithDetails(requestDb(c), event.id, c.req.param("registrationId"));
-  if (!registration) {
+  const detail = await getAdminRegistrationDetail(requestDb(c), event.id, c.req.param("registrationId"));
+  if (!detail) {
     return json({ error: { code: "REGISTRATION_NOT_FOUND", message: "Registration not found" } }, 404);
   }
-
-  const [dayAttendance, dayWaitlist] = await Promise.all([
-    getRegistrationDayAttendance(requestDb(c), registration.id),
-    listDayWaitlistForRegistration(requestDb(c), registration.id),
-  ]);
-  const registrationForm = await getActiveFormByPurpose(requestDb(c), event.id, "event_registration");
-
-  return json({
-    registration: {
-      ...omitCapabilitySecrets(registration),
-      customAnswers: parseJsonSafe<Record<string, unknown> | null>(registration.custom_answers_json, null),
-    },
-    form:
-      registrationForm == null
-        ? null
-        : {
-            id: registrationForm.id,
-            title: registrationForm.title,
-            description: registrationForm.description,
-            fields: registrationForm.fields,
-          },
-    dayAttendance,
-    dayWaitlist,
-  });
+  return json(detail);
 }
 
 // ── PATCH ─────────────────────────────────────────────────────────────────────
@@ -133,7 +73,7 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
     if (!body.status) {
       return json({ error: { code: "MISSING_STATUS", message: "status is required for force_status action" } }, 400);
     }
-    const current = await fetchRegistrationWithDetails(requestDb(c), event.id, registrationId);
+    const current = await fetchAdminRegistrationWithDetails(requestDb(c), event.id, registrationId);
     if (!current) {
       return json({ error: { code: "REGISTRATION_NOT_FOUND", message: "Registration not found" } }, 404);
     }
@@ -170,8 +110,8 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
       c.executionCtx.waitUntil(processOutboxByIdBackground(requestDb(c), c.env, outbox.outboxId));
     }
 
-    const updated = await fetchRegistrationWithDetails(requestDb(c), event.id, registrationId);
-    return json({ success: true, registration: updated ? omitCapabilitySecrets(updated) : null });
+    const updated = await fetchAdminRegistrationWithDetails(requestDb(c), event.id, registrationId);
+    return json({ success: true, registration: updated ? toAdminRegistrationDetail(updated) : null });
   }
 
   // ── update / cancel / report_unauthorized — full shared service logic ──────
@@ -359,8 +299,8 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
     action: body.action,
   });
 
-  const result = await fetchRegistrationWithDetails(requestDb(c), event.id, updated.id);
-  return json({ success: true, registration: result, emailChanged });
+  const result = await fetchAdminRegistrationWithDetails(requestDb(c), event.id, updated.id);
+  return json({ success: true, registration: result ? toAdminRegistrationDetail(result) : null, emailChanged });
 }
 
 // ── Router ────────────────────────────────────────────────────────────────────

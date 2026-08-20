@@ -147,6 +147,45 @@ describe("Application stage machine, communications, notes", () => {
     expect(outbox).toHaveLength(1);
   });
 
+  it("rolls back the transition, event, and audit when its outbox insert fails", async () => {
+    const { id } = await createApplication({ stage: "in_review", status: "in_review" });
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_stage_email
+       BEFORE INSERT ON email_outbox
+       WHEN NEW.template_key = 'application-hold-org-email'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced stage email failure');
+       END`,
+    ).run();
+
+    try {
+      const response = await call(adminToken, `/api/v1/admin/applications/${id}/stage`, {
+        method: "PATCH",
+        body: JSON.stringify({ toStage: "on_hold", onHoldSubtype: "request_org_email" }),
+      });
+      expect(response.status).toBe(500);
+
+      const [application] = await queryAll<{ stage: string; status: string }>(
+        env.DB,
+        "SELECT stage, status FROM member_applications WHERE id = ?",
+        id,
+      );
+      expect(application).toEqual({ stage: "in_review", status: "in_review" });
+      expect(
+        await queryAll(env.DB, "SELECT id FROM member_application_events WHERE application_id = ?", id),
+      ).toHaveLength(0);
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT id FROM audit_log WHERE entity_type = 'member_application' AND entity_id = ?",
+          id,
+        ),
+      ).toHaveLength(0);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_stage_email").run();
+    }
+  });
+
   it("supports the on_hold -> in_review back-transition and clears on_hold_subtype", async () => {
     const { id } = await createApplication({ stage: "on_hold", status: "on_hold" });
     await env.DB.prepare("UPDATE member_applications SET on_hold_subtype = 'request_authority' WHERE id = ?")

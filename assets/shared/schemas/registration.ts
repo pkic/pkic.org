@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { databaseIdSchema } from "./identifiers";
 import {
   firstNameSchema,
   jobTitleSchema,
@@ -195,7 +196,7 @@ export const registrationCreateSchema = z
     sourceRef: trimmedString(2, 200).optional(),
     customAnswers: customAnswersSchema.optional(),
     inviteToken: tokenSchema.optional(),
-    inviteId: z.uuid().optional(),
+    inviteId: databaseIdSchema.optional(),
     referralCode: z
       .string()
       .trim()
@@ -205,7 +206,7 @@ export const registrationCreateSchema = z
   })
   .superRefine(requireAttendance);
 
-export const registrationConfirmSchema = z.object({ id: z.uuid().optional(), token: tokenSchema });
+export const registrationConfirmSchema = z.object({ id: databaseIdSchema.optional(), token: tokenSchema });
 export const registrationConfirmQuerySchema = registrationConfirmSchema;
 
 export const registrationConfirmResponseSchema = z.object({
@@ -220,7 +221,7 @@ export const registrationConfirmResponseSchema = z.object({
 
 export const registrationResendConfirmationSchema = z
   .object({
-    id: z.uuid().optional(),
+    id: databaseIdSchema.optional(),
     token: z.string().min(1).optional(),
     email: normalizedEmailSchema.optional(),
   })

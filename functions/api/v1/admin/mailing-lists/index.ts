@@ -15,12 +15,14 @@ import {
 } from "../../../../../assets/shared/schemas/admin-mailing-lists";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
+import { buildPageInfo } from "../../../../../assets/shared/schemas/pagination";
 
-export const MailingListsList = openApiRoute(mailingListsListRouteSchema, async (c: AdminContext, _data) => {
+export const MailingListsList = openApiRoute(mailingListsListRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
   await requireAdminFromRequest(db, c.req.raw, c.env);
-  const mailingLists = await listMailingLists(db);
-  return json({ mailingLists });
+  const { limit = 50, offset = 0, q, sort } = data.query;
+  const { mailingLists, total } = await listMailingLists(db, { limit, offset, q, sort });
+  return json({ mailingLists, page: buildPageInfo(limit, offset, total, mailingLists.length) });
 });
 
 export const MailingListsCreate = openApiRoute(mailingListCreateRouteSchema, async (c: AdminContext, data) => {

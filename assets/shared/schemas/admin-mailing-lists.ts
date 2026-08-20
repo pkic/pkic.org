@@ -5,6 +5,8 @@
  * permission.
  */
 import { z } from "zod";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { workingGroupIdSchema } from "./working-groups";
 
 function trimmedString(min: number, max: number): z.ZodString {
   return z.string().trim().min(min).max(max);
@@ -14,24 +16,33 @@ export const MAILING_LIST_TYPES = ["all_members", "consultation", "ec", "working
 export const mailingListTypeSchema = z.enum(MAILING_LIST_TYPES);
 
 export const mailingListSchema = z.object({
-  id: z.uuid(),
+  // Seeded configuration rows use stable human-readable ids (for example
+  // ml-all-members); user-created rows use UUIDs. Both are canonical D1 ids.
+  id: z.string().trim().min(1).max(100),
   email: z.string(),
   label: z.string(),
   listType: mailingListTypeSchema,
-  workingGroupId: z.uuid().nullable(),
+  workingGroupId: workingGroupIdSchema.nullable(),
   autoSyncCategories: z.array(z.string()).nullable(),
   active: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
+export type MailingList = z.infer<typeof mailingListSchema>;
+
+export const ADMIN_MAILING_LIST_SORT_COLUMNS = ["email", "label", "list_type", "active", "created_at"] as const;
+export const mailingListsListQuerySchema = listQuerySchema(ADMIN_MAILING_LIST_SORT_COLUMNS);
+export const mailingListsListResponseSchema = paginatedResponseSchema("mailingLists", mailingListSchema);
+export type MailingListsListResponse = z.infer<typeof mailingListsListResponseSchema>;
 
 export const mailingListsListRouteSchema = {
   tags: ["Mailing Lists"],
   summary: "List all managed mailing lists",
+  request: { query: mailingListsListQuerySchema },
   responses: {
     "200": {
       description: "Mailing lists.",
-      content: { "application/json": { schema: z.object({ mailingLists: z.array(mailingListSchema) }) } },
+      content: { "application/json": { schema: mailingListsListResponseSchema } },
     },
   },
 };
@@ -40,7 +51,7 @@ export const mailingListCreateSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
   label: trimmedString(1, 200),
   listType: mailingListTypeSchema,
-  workingGroupId: z.uuid().nullable().optional(),
+  workingGroupId: workingGroupIdSchema.nullable().optional(),
   autoSyncCategories: z.array(z.string()).nullable().optional(),
   active: z.boolean().optional(),
 });
@@ -61,13 +72,13 @@ export const mailingListCreateRouteSchema = {
   },
 };
 
-export const mailingListIdParamsSchema = z.object({ id: z.uuid() });
+export const mailingListIdParamsSchema = z.object({ id: z.string().trim().min(1).max(100) });
 
 export const mailingListUpdateSchema = z.object({
   email: z.string().trim().toLowerCase().email().optional(),
   label: trimmedString(1, 200).optional(),
   listType: mailingListTypeSchema.optional(),
-  workingGroupId: z.uuid().nullable().optional(),
+  workingGroupId: workingGroupIdSchema.nullable().optional(),
   autoSyncCategories: z.array(z.string()).nullable().optional(),
   active: z.boolean().optional(),
 });

@@ -64,6 +64,12 @@ export interface VoteRow {
   updated_at: string;
 }
 
+/** Canonical explicit projection for every query that hydrates a complete VoteRow. */
+export const VOTE_ROW_COLUMNS =
+  "id, slug, title, description, vote_type, scope_type, scope_id, created_by_user_id, proposed_by_user_id, " +
+  "eligible_categories, threshold_type, opens_at, closes_at, current_round, status, result_json, visibility, " +
+  "public_detail_level, created_at, updated_at";
+
 export interface CandidateRow {
   id: string;
   vote_id: string;
@@ -195,7 +201,10 @@ export async function getCandidatesForVotes(
 }
 
 export async function getVoteRowOrThrow(db: DatabaseLike, idOrSlug: string): Promise<VoteRow> {
-  const row = await first<VoteRow>(db, `SELECT * FROM votes WHERE id = ? OR slug = ?`, [idOrSlug, idOrSlug]);
+  const row = await first<VoteRow>(db, `SELECT ${VOTE_ROW_COLUMNS} FROM votes WHERE id = ? OR slug = ?`, [
+    idOrSlug,
+    idOrSlug,
+  ]);
   if (!row) throw new AppError(404, "VOTE_NOT_FOUND", "Vote not found");
   return row;
 }

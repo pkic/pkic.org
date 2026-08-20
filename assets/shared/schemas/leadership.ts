@@ -1,5 +1,7 @@
 import { z } from "zod";
+import { databaseIdSchema } from "./identifiers";
 import { publicOrganizationPersonSchema } from "./public-person";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 /**
  * Leadership positions (migration 0049) — Board of Directors and Executive
@@ -16,13 +18,13 @@ function trimmedString(min: number, max: number): z.ZodString {
   return z.string().trim().min(min).max(max);
 }
 
-export const leadershipPositionIdParamsSchema = z.object({ id: z.uuid() });
+export const leadershipPositionIdParamsSchema = z.object({ id: databaseIdSchema });
 
 export const leadershipPositionCreateSchema = z
   .object({
     body: leadershipBodySchema,
-    userId: z.uuid(),
-    memberId: z.uuid().nullable().optional(),
+    userId: databaseIdSchema,
+    memberId: databaseIdSchema.nullable().optional(),
     title: trimmedString(1, 80),
     startsAt: z.iso.date(),
     endsAt: z.iso.date().nullable().optional(),
@@ -35,7 +37,7 @@ export const leadershipPositionCreateSchema = z
 
 export const leadershipPositionUpdateSchema = z
   .object({
-    memberId: z.uuid().nullable().optional(),
+    memberId: databaseIdSchema.nullable().optional(),
     title: trimmedString(1, 80).optional(),
     startsAt: z.iso.date().optional(),
     endsAt: z.iso.date().nullable().optional(),
@@ -59,7 +61,7 @@ export const leadershipPositionResponseSchema = z.object({
 export type LeadershipPosition = z.infer<typeof leadershipPositionResponseSchema>;
 
 export const leadershipAffiliationSchema = z.object({
-  memberId: z.uuid(),
+  memberId: databaseIdSchema,
   organizationName: z.string().nullable(),
   membershipCategory: z.string(),
 });
@@ -69,7 +71,7 @@ export const leadershipAffiliationsResponseSchema = z.object({
   affiliations: z.array(leadershipAffiliationSchema),
 });
 
-export const leadershipAffiliationsParamsSchema = z.object({ userId: z.uuid() });
+export const leadershipAffiliationsParamsSchema = z.object({ userId: databaseIdSchema });
 
 export const leadershipAffiliationsRouteSchema = {
   tags: ["Leadership"],
@@ -83,18 +85,22 @@ export const leadershipAffiliationsRouteSchema = {
   },
 };
 
-export const leadershipPositionsListQuerySchema = z.object({
+export const ADMIN_LEADERSHIP_POSITION_SORT_COLUMNS = ["name", "title", "starts_at", "ends_at", "created_at"] as const;
+export const leadershipPositionsListQuerySchema = listQuerySchema(ADMIN_LEADERSHIP_POSITION_SORT_COLUMNS).extend({
   body: leadershipBodySchema,
+  status: z.enum(["current", "past"]).optional(),
 });
 
-export const leadershipPositionsListResponseSchema = z.object({
-  positions: z.array(leadershipPositionResponseSchema),
-});
+export const leadershipPositionsListResponseSchema = paginatedResponseSchema(
+  "positions",
+  leadershipPositionResponseSchema,
+);
+export type LeadershipPositionsListResponse = z.infer<typeof leadershipPositionsListResponseSchema>;
 
 export const leadershipPositionsListRouteSchema = {
   tags: ["Leadership"],
   summary: "List Board / Executive Council positions (admin)",
-  description: "Every position (current and past) for the requested body, newest starts_at first.",
+  description: "A searchable, sortable, bounded page of positions for the requested body.",
   request: { query: leadershipPositionsListQuerySchema },
   responses: {
     "200": {

@@ -11,15 +11,12 @@ import { loadStoredSession, storeSession, clearStoredSession } from "./state";
 import { Login } from "./Login";
 import { Attendees } from "./Attendees";
 import type { SponsorPortalSession } from "./types";
-
-interface VerifyLinkResponse {
-  success: boolean;
-  expiresAt: string;
-  sponsorship: SponsorPortalSession;
-}
+import { sponsorPortalAuthVerifyResponseSchema } from "../../../shared/schemas/sponsor-portal";
 
 async function verifyMagicLink(token: string): Promise<SponsorPortalSession> {
-  const res = await postJson<VerifyLinkResponse>("/api/v1/auth/sponsor-portal/verify-link", { token });
+  const res = sponsorPortalAuthVerifyResponseSchema.parse(
+    await postJson<unknown>("/api/v1/auth/sponsor-portal/verify-link", { token }),
+  );
   return res.sponsorship;
 }
 

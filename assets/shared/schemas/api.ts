@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { databaseIdSchema } from "./identifiers";
 import { defaultedSourceTypeSchema, sourceTypeSchema } from "./source";
 import { linksSchema } from "./links";
 import {
@@ -12,6 +13,7 @@ import {
   boundedJsonObject,
   emailContentTypeSchema,
   emailMessageTypeSchema,
+  eventIdSchema,
   frontendPathPattern,
   normalizedEmailSchema,
   slugPattern,
@@ -81,8 +83,8 @@ export const adminEventProposalsQuerySchema = searchableListQuerySchema(eventPro
   // Not the bare-column `sortColumnSchema` convention used elsewhere — each
   // of these values resolves to a multi-column ORDER BY (e.g. score_desc
   // sorts NULLs-last, then submitted_at as a tiebreaker), which a single
-  // allowlisted column name can't express. See orderByMap in
-  // functions/api/v1/admin/events/[eventSlug]/proposals.ts.
+  // allowlisted column name can't express. See the trusted ORDER_BY map in
+  // functions/_lib/services/admin-event-proposals.ts.
   // "1" shows the soft-deleted queue instead of live proposals; any other
   // value is rejected instead of silently changing the query semantics.
   deleted: z.literal("1").optional(),
@@ -101,7 +103,7 @@ export const eventsListSortValueSchema = sortColumnSchema(EVENTS_LIST_SORT_COLUM
 export const adminEventsListQuerySchema = searchableListQuerySchema(eventsListSortValueSchema);
 
 export const adminEventSummarySchema = z.object({
-  id: z.string(),
+  id: eventIdSchema,
   slug: z.string(),
   name: z.string(),
   timezone: z.string(),
@@ -199,7 +201,7 @@ const proposalAbstractSchema = trimmedString(80, 8000);
 export const proposalCreateSchema = boundedJsonObject(
   {
     inviteToken: tokenSchema.optional(),
-    inviteId: z.uuid().optional(),
+    inviteId: databaseIdSchema.optional(),
     sourceType: defaultedSourceTypeSchema,
     sourceRef: trimmedString(2, 200).optional(),
     referralCode: z
@@ -240,7 +242,7 @@ export const proposalCreateSchema = boundedJsonObject(
 
 export const proposalCreateResponseSchema = z.object({
   success: z.boolean(),
-  proposalId: z.uuid(),
+  proposalId: databaseIdSchema,
   status: z.string(),
   manageToken: z.string(),
   manageUrl: z.string().url(),
@@ -348,11 +350,11 @@ export const adminAuthVerifySchema = z.object({
 
 export const adminRetryOutboxSchema = z.object({
   limit: z.number().int().positive().max(500).default(20),
-  ids: z.array(z.uuid()).max(100).optional(),
+  ids: z.array(databaseIdSchema).max(100).optional(),
 });
 
 export const adminResetFailedOutboxSchema = z.object({
-  ids: z.array(z.uuid()).max(100).optional(),
+  ids: z.array(databaseIdSchema).max(100).optional(),
 });
 
 export const adminRunRemindersSchema = z.object({

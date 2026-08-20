@@ -4,6 +4,7 @@ import { Pager, ADMIN_LIST_PAGE_SIZE_DEFAULT } from "./Pager";
 import { Spinner } from "./Spinner";
 import { ErrorAlert } from "./ErrorAlert";
 import { api } from "../admin/api";
+import type { z } from "zod";
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
@@ -182,6 +183,8 @@ export interface ApiDataTableProps<T> {
   endpoint: string;
   /** Extract the row array from the API response */
   resolve: (data: unknown) => T[];
+  /** Canonical response contract; validates transport data before rendering. */
+  responseSchema?: z.ZodType;
   /** Extract pagination info; omit for non-paginated tables */
   resolvePage?: (data: unknown) => PageInfo;
   /** Column definitions */
@@ -217,6 +220,7 @@ export interface ApiDataTableProps<T> {
 export function ApiDataTable<T>({
   endpoint,
   resolve,
+  responseSchema,
   resolvePage,
   columns,
   params,
@@ -274,14 +278,14 @@ export function ApiDataTable<T>({
       if (sort) qs.set("sort", sort);
       const qstr = qs.toString();
       const url = qstr ? `${endpoint}?${qstr}` : endpoint;
-      const result = await api(url);
-      setData(result);
+      const result = await api<unknown>(url);
+      setData(responseSchema ? responseSchema.parse(result) : result);
       setLoading(false);
     } catch (e) {
       setError((e as Error).message);
       setLoading(false);
     }
-  }, [endpoint, search, sort, pageSize, offset, JSON.stringify(params), ...deps]);
+  }, [endpoint, search, sort, pageSize, offset, responseSchema, JSON.stringify(params), ...deps]);
 
   useEffect(() => {
     void load();

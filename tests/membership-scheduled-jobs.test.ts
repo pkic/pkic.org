@@ -99,6 +99,51 @@ describe("Membership scheduled jobs", () => {
     expect(outbox).toHaveLength(1);
   });
 
+  it("rolls back every EC transition when the aggregate notification cannot be queued", async () => {
+    const first = await createApplication({
+      stage_entered_at: "datetime('now', '-10 days')",
+      applicant_email: "first-overdue@example.test",
+    });
+    const second = await createApplication({
+      stage_entered_at: "datetime('now', '-11 days')",
+      applicant_email: "second-overdue@example.test",
+    });
+    await env.DB.prepare(
+      `CREATE TRIGGER reject_ec_review_batch
+       BEFORE INSERT ON email_outbox
+       WHEN NEW.template_key = 'ec-review-batch'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced EC outbox failure');
+       END`,
+    ).run();
+
+    await expect(runEcReviewBatch(env.DB, env as any)).rejects.toThrow();
+
+    const applications = await queryAll<{ id: string; stage: string }>(
+      env.DB,
+      "SELECT id, stage FROM member_applications WHERE id IN (?, ?) ORDER BY id",
+      first.id,
+      second.id,
+    );
+    expect(applications.map((application) => application.stage)).toEqual(["in_consultation", "in_consultation"]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM member_application_events WHERE application_id IN (?, ?)",
+        first.id,
+        second.id,
+      ),
+    ).toEqual([]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM audit_log WHERE action = 'application_stage_transitioned' AND entity_id IN (?, ?)",
+        first.id,
+        second.id,
+      ),
+    ).toEqual([]);
+  });
+
   it("on-hold auto-close fires after the deadline and sends application-closed-no-response", async () => {
     await updateMembershipSettings(env.DB, { onHoldResponseDeadlineDays: 7 }, null);
     const { id } = await createApplication({

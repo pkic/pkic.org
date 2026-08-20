@@ -4,29 +4,19 @@ import { Badge } from "../../../../components/Badge";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/Table";
 import { Tabs } from "../../../../components/Tabs";
 import { fmt } from "../../../ui";
-import type { ProposalSummary, ProposalAccess } from "../../../types";
+import type { ProposalSummary } from "../../../types";
 import { EventEmail } from "./EventEmail";
 import { EventFormResponses } from "./Forms";
 import { Invites } from "./Invites";
+import {
+  adminEventProposalsResponseSchema,
+  type AdminEventProposalsResponse,
+  type ProposalStats,
+} from "../../../../../shared/schemas/admin-event-proposals";
 
 // ─── Proposals list ───────────────────────────────────────────────────────────
 
-interface ProposalsResponse {
-  proposals: ProposalSummary[];
-  access: ProposalAccess;
-  stats?: ProposalStats;
-  page: { offset: number; limit: number; total: number; hasMore: boolean };
-}
-
 type RecommendationFilter = "" | "accept" | "needs-work" | "reject";
-
-interface ProposalStats {
-  byStatus: Record<string, number>;
-  byRecommendation: Record<string, number>;
-  reviewedCount: number;
-  unreviewedCount: number;
-  total: number;
-}
 
 function formatAverageScore(score: number | null): string {
   if (score == null) return "—";
@@ -176,12 +166,13 @@ function ProposalsList({ slug }: { slug: string }) {
 
       <ApiDataTable<ProposalSummary>
         endpoint={`/api/v1/admin/events/${slug}/proposals`}
+        responseSchema={adminEventProposalsResponseSchema}
         resolve={(d) => {
-          const resp = d as ProposalsResponse;
-          if (resp.stats) setStats(resp.stats);
+          const resp = d as AdminEventProposalsResponse;
+          setStats(resp.stats);
           return resp.proposals;
         }}
-        resolvePage={(d) => (d as ProposalsResponse).page}
+        resolvePage={(d) => (d as AdminEventProposalsResponse).page}
         paginate
         initialSort="submitted_desc"
         searchPlaceholder="Search proposals / reviews…"

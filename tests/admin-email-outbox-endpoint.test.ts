@@ -6,6 +6,7 @@ import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { queueEmail } from "../functions/_lib/email/outbox";
 import { createTemplateVersion, activateTemplateVersion } from "../functions/_lib/email/templates";
+import { adminEmailOutboxResponseSchema } from "../assets/shared/schemas/admin-email-outbox";
 
 let ADMIN_TOKEN = "email-outbox-admin-token";
 
@@ -34,19 +35,6 @@ async function setupAdmin(): Promise<{ eventId: string; adminId: string }> {
   )[0];
   ADMIN_TOKEN = await createAdminSession(env.DB, adminRow.id, ADMIN_TOKEN);
   return { eventId, adminId: adminRow.id };
-}
-
-interface OutboxResponse {
-  outbox: Array<{
-    id: string;
-    recipientEmail: string;
-    status: string;
-    messageType: string;
-    subject: string;
-    templateKey: string;
-    templateVersion: number | null;
-  }>;
-  page: { limit: number; offset: number; total: number; hasMore: boolean };
 }
 
 describe("GET /api/v1/admin/email/outbox", () => {
@@ -92,32 +80,32 @@ describe("GET /api/v1/admin/email/outbox", () => {
     // status filter
     const statusRes = await callAdmin("/api/v1/admin/email/outbox?status=failed");
     expect(statusRes.status).toBe(200);
-    const statusPayload = (await statusRes.json()) as OutboxResponse;
+    const statusPayload = adminEmailOutboxResponseSchema.parse(await statusRes.json());
     expect(statusPayload.outbox.map((r) => r.id)).toEqual([failedId]);
 
     // messageType filter
     const typeRes = await callAdmin("/api/v1/admin/email/outbox?messageType=promotional");
     expect(typeRes.status).toBe(200);
-    const typePayload = (await typeRes.json()) as OutboxResponse;
+    const typePayload = adminEmailOutboxResponseSchema.parse(await typeRes.json());
     expect(typePayload.outbox.map((r) => r.id)).toEqual([promoId]);
 
     // dueNow filter — queued rows with send_after <= now are due; failed rows are not
     const dueRes = await callAdmin("/api/v1/admin/email/outbox?dueNow=true");
     expect(dueRes.status).toBe(200);
-    const duePayload = (await dueRes.json()) as OutboxResponse;
+    const duePayload = adminEmailOutboxResponseSchema.parse(await dueRes.json());
     const dueIds = duePayload.outbox.map((r) => r.id).sort();
     expect(dueIds).toEqual([promoId, queuedId].sort());
 
     // q filter — matches recipient email
     const qRes = await callAdmin("/api/v1/admin/email/outbox?q=alice");
     expect(qRes.status).toBe(200);
-    const qPayload = (await qRes.json()) as OutboxResponse;
+    const qPayload = adminEmailOutboxResponseSchema.parse(await qRes.json());
     expect(qPayload.outbox.map((r) => r.id)).toEqual([queuedId]);
 
     // limit/offset — total reflects all 3 rows regardless of page size
     const pageRes = await callAdmin("/api/v1/admin/email/outbox?limit=1&offset=0");
     expect(pageRes.status).toBe(200);
-    const pagePayload = (await pageRes.json()) as OutboxResponse;
+    const pagePayload = adminEmailOutboxResponseSchema.parse(await pageRes.json());
     expect(pagePayload.page).toEqual({ limit: 1, offset: 0, total: 3, hasMore: true });
     expect(pagePayload.outbox).toHaveLength(1);
   });
@@ -175,7 +163,7 @@ describe("GET /api/v1/admin/email/outbox", () => {
 
     const response = await callAdmin("/api/v1/admin/email/outbox?q=pinned&limit=10");
     expect(response.status).toBe(200);
-    const payload = (await response.json()) as OutboxResponse;
+    const payload = adminEmailOutboxResponseSchema.parse(await response.json());
 
     expect(payload.outbox).toHaveLength(5);
     const byId = new Map(payload.outbox.map((row) => [row.id, row]));

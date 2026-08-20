@@ -64,7 +64,7 @@ export interface ProvisionRepresentativeInput {
   name: string;
   email: string;
   jobTitle?: string | null;
-  linkedin?: string | null;
+  links?: string[] | null;
 }
 
 export interface ProvisionMembershipInput {
@@ -118,7 +118,7 @@ async function buildRepresentativeUserStatement(db: DatabaseLike, rep: Provision
     firstName: firstName ?? undefined,
     lastName: lastName ?? undefined,
     jobTitle: rep.jobTitle ?? undefined,
-    linksJson: rep.linkedin ? serializeLinks([rep.linkedin]) : null,
+    linksJson: rep.links && rep.links.length > 0 ? serializeLinks(rep.links) : null,
     allowProfileUpdate: true,
   });
 }

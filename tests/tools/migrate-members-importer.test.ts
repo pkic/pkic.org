@@ -186,6 +186,8 @@ memberType: H5
     // No `unmatched-bob@members.invalid`-style row lacks its sentinel user.
     const sentinelUser = queryD1(persistTo, "SELECT email FROM users WHERE email = 'unmatched-bob@members.invalid'");
     expect(sentinelUser).toHaveLength(1);
+
+    expect(queryD1(persistTo, "PRAGMA foreign_key_check")).toEqual([]);
   });
 
   it("rejects the entire import — no SQL generated at all — when any record has a missing or unknown category", () => {
@@ -332,5 +334,6 @@ sponsor:
     const second = snapshot();
 
     expect(second).toEqual(first);
+    expect(queryD1(persistTo, "PRAGMA foreign_key_check")).toEqual([]);
   });
 });

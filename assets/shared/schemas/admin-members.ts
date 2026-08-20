@@ -7,8 +7,11 @@
  * already produces.
  */
 import { z } from "zod";
+import { databaseIdSchema } from "./identifiers";
 import { normalizedEmailSchema } from "./api";
 import { paginationQuerySchema, paginatedResponseSchema } from "./pagination";
+import { linksSchema } from "./links";
+import { workingGroupSlugSchema } from "./working-groups";
 import {
   MEMBERSHIP_CATEGORIES,
   membershipCategorySchema,
@@ -22,14 +25,11 @@ function trimmedString(min: number, max: number): z.ZodString {
   return z.string().trim().min(min).max(max);
 }
 
-export const WORKING_GROUP_SLUGS = ["ca", "cbom", "cm", "pkimm", "pqc", "tcwg"] as const;
-export const workingGroupSlugSchema = z.enum(WORKING_GROUP_SLUGS);
-
 export const representativeCreateSchema = z.object({
   name: trimmedString(1, 200),
   email: normalizedEmailSchema,
   role: trimmedString(0, 200).optional(),
-  linkedin: z.url().optional(),
+  links: linksSchema.optional(),
 });
 
 export const memberCreateSchema = z
@@ -40,7 +40,7 @@ export const memberCreateSchema = z
     membershipCategory: membershipCategorySchema,
     memberSince: z.iso.date(),
     representatives: z.array(representativeCreateSchema).min(1).max(10),
-    workingGroupSlugs: z.array(workingGroupSlugSchema).max(WORKING_GROUP_SLUGS.length).default([]),
+    workingGroupSlugs: z.array(workingGroupSlugSchema).max(200).default([]),
   })
   .superRefine((value, ctx) => {
     const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(value.membershipCategory);
@@ -70,9 +70,9 @@ export const memberCreateSchema = z
   });
 
 export const adminMemberSummarySchema = z.object({
-  id: z.uuid(),
-  userId: z.uuid(),
-  organizationId: z.uuid().nullable(),
+  id: databaseIdSchema,
+  userId: databaseIdSchema,
+  organizationId: databaseIdSchema.nullable(),
   organizationName: z.string().nullable(),
   name: z.string(),
   email: z.string(),
@@ -83,7 +83,7 @@ export const adminMemberSummarySchema = z.object({
 });
 
 export const memberCreateResponseSchema = z.object({
-  organizationId: z.uuid().nullable(),
+  organizationId: databaseIdSchema.nullable(),
   members: z.array(adminMemberSummarySchema),
 });
 
