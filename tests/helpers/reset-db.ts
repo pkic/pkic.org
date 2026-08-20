@@ -36,6 +36,10 @@ interface TableNameRow {
 // migration 0037). Wiping membership_categories on every resetDb() would
 // fail every test's first insert of a categorized application/aggregate
 // with a FK constraint error.
+// `sponsorship_tier_catalog` and `sponsorship_tier_config` are likewise
+// migration-seeded reference/configuration rows. Public sponsor rendering and
+// self-service checkout must see the same canonical tier vocabulary in every
+// test unless a test explicitly updates it.
 const EXCLUDED_TABLES = new Set([
   "d1_migrations",
   "roles",
@@ -43,6 +47,8 @@ const EXCLUDED_TABLES = new Set([
   "membership_settings",
   "mailing_lists",
   "membership_categories",
+  "sponsorship_tier_catalog",
+  "sponsorship_tier_config",
 ]);
 
 async function listResettableTables(): Promise<string[]> {

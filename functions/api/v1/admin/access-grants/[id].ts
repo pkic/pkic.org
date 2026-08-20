@@ -7,9 +7,9 @@
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../_lib/auth/permissions";
-import { first, run } from "../../../../_lib/db/queries";
+import { first } from "../../../../_lib/db/queries";
 import { nowIso } from "../../../../_lib/utils/time";
-import { writeAuditLog } from "../../../../_lib/services/audit";
+import { prepareAuditLog } from "../../../../_lib/services/audit";
 import { accessGrantRevokeRouteSchema } from "../../../../../assets/shared/schemas/access-control";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
@@ -34,12 +34,20 @@ export const AccessGrantsRevoke = openApiRoute(accessGrantRevokeRouteSchema, asy
     return json({ error: { code: "NOT_FOUND", message: "Grant not found" } }, 404);
   }
 
-  await run(requestDb(c), "UPDATE permission_grants SET revoked_at = ? WHERE id = ?", [nowIso(), grant.id]);
-
-  await writeAuditLog(requestDb(c), "admin", admin.id, "access_grant_revoked", "permission_grant", grant.id, {
-    userId: grant.user_id,
-    permission: grant.permission,
-  });
+  const now = nowIso();
+  await requestDb(c).batch([
+    requestDb(c).prepare("UPDATE permission_grants SET revoked_at = ? WHERE id = ?").bind(now, grant.id),
+    prepareAuditLog(
+      requestDb(c),
+      "admin",
+      admin.id,
+      "access_grant_revoked",
+      "permission_grant",
+      grant.id,
+      { userId: grant.user_id, permission: grant.permission },
+      now,
+    ),
+  ]);
 
   return json({ success: true });
 });

@@ -1,7 +1,12 @@
 import { z } from "zod";
 import { emailTemplateKeyParamsSchema, emailContentTypeSchema, emailMessageTypeSchema } from "./api";
 import type { EmailContentType, EmailMessageType } from "./api";
-import { paginationQuerySchema, paginatedResponseSchema, sortColumnSchema } from "./pagination";
+import {
+  paginationQuerySchema,
+  paginatedResponseSchema,
+  searchableListQuerySchema,
+  sortColumnSchema,
+} from "./pagination";
 
 export { emailContentTypeSchema, emailMessageTypeSchema };
 export type { EmailContentType, EmailMessageType };
@@ -25,10 +30,7 @@ export const adminEmailTemplateSummarySchema = z.object({
   draft_count: z.number(),
 });
 
-export const emailTemplatesListQuerySchema = paginationQuerySchema.extend({
-  q: z.string().trim().min(1).max(200).optional(),
-  sort: emailTemplatesSortValueSchema,
-});
+export const emailTemplatesListQuerySchema = searchableListQuerySchema(emailTemplatesSortValueSchema);
 
 export const emailTemplatesListRouteSchema = {
   tags: ["Admin email templates"],

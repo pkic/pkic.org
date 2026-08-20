@@ -501,7 +501,7 @@ function TemplateEditor({
               },
               {
                 header: "Created",
-                cell: (v) => (v.created_at ? new Date(v.created_at).toLocaleString("en-GB") : "—"),
+                cell: (v) => (v.created_at ? new Date(v.created_at).toLocaleString("en-US") : "—"),
                 className: "mono",
               },
               {

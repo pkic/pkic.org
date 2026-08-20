@@ -9,9 +9,9 @@ import { json } from "../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../../_lib/auth/permissions";
 import { getEventBySlug } from "../../../../../../_lib/services/events";
-import { first, run } from "../../../../../../_lib/db/queries";
+import { first } from "../../../../../../_lib/db/queries";
 import { nowIso } from "../../../../../../_lib/utils/time";
-import { writeAuditLog } from "../../../../../../_lib/services/audit";
+import { prepareAuditLog } from "../../../../../../_lib/services/audit";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
 
 interface PermRow {
@@ -36,12 +36,20 @@ export async function onRequestDelete(c: AdminContext): Promise<Response> {
     return json({ error: { code: "NOT_FOUND", message: "Permission grant not found" } }, 404);
   }
 
-  await run(requestDb(c), "UPDATE user_roles SET revoked_at = ? WHERE id = ?", [nowIso(), perm.id]);
-
-  await writeAuditLog(requestDb(c), "admin", admin.id, "event_permission_revoked", "event", event.id, {
-    email: perm.user_email,
-    role_id: perm.role_id,
-  });
+  const now = nowIso();
+  await requestDb(c).batch([
+    requestDb(c).prepare("UPDATE user_roles SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL").bind(now, perm.id),
+    prepareAuditLog(
+      requestDb(c),
+      "admin",
+      admin.id,
+      "event_permission_revoked",
+      "event",
+      event.id,
+      { email: perm.user_email, role_id: perm.role_id },
+      now,
+    ),
+  ]);
 
   return json({ success: true });
 }

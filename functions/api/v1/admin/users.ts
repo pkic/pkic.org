@@ -7,15 +7,15 @@
  * Query params (see usersListQuerySchema, assets/shared/schemas/admin-users.ts):
  *   role   — filter to a specific role (admin | user | guest)
  *   type   — filter by computed membership type (member | event_attendee | contact_only)
- *   q      — partial match against email or name (alias: search)
- *   search — partial match against email or name (alias: q)
+ *   q      — partial match against email or name
  *   sort   — allowlisted column, optionally `-`-prefixed for descending
- *   limit  — max rows (default 50, max 500 — largest table in the system, P6M-P2-08)
+ *   limit  — max rows (default 50, shared maximum 200)
  *   offset — pagination offset (default 0)
  */
 import { json } from "../../../_lib/http";
 import { requireAdminFromRequest } from "../../../_lib/auth/admin";
-import { all, first } from "../../../_lib/db/queries";
+import { queryPage } from "../../../_lib/db/pagination";
+import { buildD1TextSearchFilter } from "../../../_lib/db/search";
 import { resolveOrderBy } from "../../../_lib/db/sort";
 import { ADMIN_USERS_SORT_COLUMNS, usersListRouteSchema } from "../../../../assets/shared/schemas/admin-users";
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
@@ -46,13 +46,7 @@ export const UsersList = openApiRoute(usersListRouteSchema, async (c: AdminConte
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
   const { role, type, sort, limit = 50, offset = 0 } = data.query;
-  // D1's SQLite enforces SQLITE_LIMIT_LIKE_PATTERN_LENGTH=50 on the whole
-  // `%…%` pattern (found via browser-verification pass —
-  // searching a real, moderately long email 500'd with "LIKE or GLOB
-  // pattern too complex"), so anything over ~48 chars of raw input throws
-  // before any row is even considered. Truncate well under that; a prefix
-  // is still a valid (if less specific) substring match.
-  const search = (data.query.q ?? data.query.search ?? "").slice(0, 40);
+  const search = data.query.q ?? "";
 
   const conditions: string[] = [];
   const params: unknown[] = [];
@@ -71,11 +65,17 @@ export const UsersList = openApiRoute(usersListRouteSchema, async (c: AdminConte
   }
 
   if (search) {
-    conditions.push(
-      "(u.email LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ? OR EXISTS (SELECT 1 FROM user_emails ue WHERE ue.user_id = u.id AND ue.email LIKE ?))",
-    );
-    const like = `%${search}%`;
-    params.push(like, like, like, like);
+    const primary = buildD1TextSearchFilter(search, [
+      "u.email",
+      "u.first_name",
+      "u.last_name",
+      "u.first_name || ' ' || u.last_name",
+    ]);
+    const alternate = buildD1TextSearchFilter(search, ["ue.email"]);
+    conditions.push(`(${primary.sql} OR EXISTS (
+      SELECT 1 FROM user_emails ue WHERE ue.user_id = u.id AND ${alternate.sql}
+    ))`);
+    params.push(...primary.bindings, ...alternate.bindings);
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -87,15 +87,10 @@ export const UsersList = openApiRoute(usersListRouteSchema, async (c: AdminConte
   // resolves only via their own organization_representatives row).
   const listWhere = where.replace(/\bm\.id\b/g, "COALESCE(m.id, mi.id)");
 
-  // The page query and the real COUNT(*) share the same WHERE filters (and
-  // joins wherever a filter references a joined column) and run
-  // concurrently — P6M-P2-08/P6M-CC-03: this replaced a `limit+1`-and-slice
-  // `hasMore` computed *in addition to* this same COUNT(*), which was
-  // redundant work now that the count already exists.
-  const [users, totalRow] = await Promise.all([
-    all<UserRow>(
-      requestDb(c),
-      `SELECT u.id, u.email, u.first_name, u.last_name, u.organization_name, u.role, u.active, u.created_at,
+  const { rows: users, total } = await queryPage<UserRow>(
+    requestDb(c),
+    {
+      sql: `SELECT u.id, u.email, u.first_name, u.last_name, u.organization_name, u.role, u.active, u.created_at,
               u.links_json,
               COALESCE(rep.id, mi.id) AS member_id, mca.category_code AS member_category,
               COALESCE(m.status, mi.status) AS member_status,
@@ -114,19 +109,17 @@ ${deterministicRepresentativeJoinSql("u.id")}
        ${listWhere}
        ${orderBy}
        LIMIT ? OFFSET ?`,
-      [...params, limit, offset],
-    ),
-    first<{ total: number }>(
-      requestDb(c),
-      `SELECT COUNT(*) AS total FROM users u
+      bindings: [...params, limit, offset],
+    },
+    {
+      sql: `SELECT COUNT(*) AS total FROM users u
 ${deterministicRepresentativeJoinSql("u.id")}
        LEFT JOIN members m ON m.id = rep.member_id
        LEFT JOIN members mi ON mi.user_id = u.id
        ${listWhere}`,
-      params,
-    ),
-  ]);
-  const total = Number(totalRow?.total ?? 0);
+      bindings: params,
+    },
+  );
 
   return json({
     users: users.map(({ links_json, event_participation_count, ...row }) => ({

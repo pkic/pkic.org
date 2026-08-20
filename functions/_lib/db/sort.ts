@@ -15,3 +15,22 @@ export function resolveOrderBy(sort: string | undefined, allowedColumns: readonl
   if (!allowedColumns.includes(column)) return fallback;
   return `ORDER BY ${column} ${desc ? "DESC" : "ASC"}`;
 }
+
+/**
+ * Resolves a public sort key to a trusted SQL expression. The mapping is
+ * defined by the service, so neither a request value nor a schema-facing key
+ * is interpolated as SQL. `tieBreaker` keeps offset pagination deterministic.
+ */
+export function resolveMappedOrderBy(
+  sort: string | undefined,
+  columns: Readonly<Record<string, string>>,
+  fallback: string,
+  tieBreaker: string,
+): string {
+  if (!sort) return `ORDER BY ${fallback}, ${tieBreaker}`;
+  const desc = sort.startsWith("-");
+  const key = desc ? sort.slice(1) : sort;
+  const expression = columns[key];
+  if (!expression) return `ORDER BY ${fallback}, ${tieBreaker}`;
+  return `ORDER BY ${expression} ${desc ? "DESC" : "ASC"}, ${tieBreaker}`;
+}

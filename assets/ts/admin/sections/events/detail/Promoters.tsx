@@ -6,41 +6,12 @@ import { DataTable } from "../../../../components/Table";
 import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
 import { useData } from "../../../../hooks/useData";
-
-interface PromoterEntry {
-  user_id: string;
-  email: string;
-  first_name: string | null;
-  last_name: string | null;
-  organization: string | null;
-  job_title: string | null;
-  headshot_url: string | null;
-  invites_sent: number;
-  invites_accepted: number;
-  invites_declined: number;
-  invites_expired: number;
-  invite_conversion_rate: number | null;
-  last_invite_at: string | null;
-  referral_codes_issued: number;
-  referral_clicks: number;
-  referral_conversions: number;
-  impact_score: number;
-}
-
-interface ReferralCodeEntry {
-  code: string;
-  user_email: string;
-  clicks: number;
-  conversions: number;
-  created_at: string;
-}
-
-interface PromotersResponse {
-  eventSlug: string;
-  promoters: PromoterEntry[];
-  referralCodes: ReferralCodeEntry[];
-  clickTimeline: unknown;
-}
+import { Pager } from "../../../../components/Pager";
+import { useEffect, useState } from "preact/hooks";
+import {
+  eventPromotersListResponseSchema,
+  type EventPromoter as PromoterEntry,
+} from "../../../../../shared/schemas/admin-event-promoters";
 
 const RANK_CLASS: Record<number, string> = { 1: "gold", 2: "silver", 3: "bronze" };
 const RANK_CARD: Record<number, string> = { 1: "top-1", 2: "top-2", 3: "top-3" };
@@ -63,18 +34,8 @@ function impactColor(score: number): string {
   return "";
 }
 
-/** True if this person actually did something (sent invites or generated clicks). */
-function isActivePromoter(p: PromoterEntry): boolean {
-  return p.invites_sent > 0 || p.referral_clicks > 0;
-}
-
-/** True if this person brought in at least one registration. */
-function hasImpact(p: PromoterEntry): boolean {
-  return p.invites_accepted > 0 || p.referral_conversions > 0;
-}
-
 function PromoterCard({ p, rank }: { p: PromoterEntry; rank: number }) {
-  const name = [p.first_name, p.last_name].filter(Boolean).join(" ") || p.email;
+  const name = [p.first_name, p.last_name].filter(Boolean).join(" ") || p.email || "Unknown promoter";
   const subtitle = [p.job_title, p.organization].filter(Boolean).join(" · ");
   const conversion = p.invite_conversion_rate ?? 0;
   const initials = [p.first_name?.[0], p.last_name?.[0]].filter(Boolean).join("").toUpperCase() || "?";
@@ -83,7 +44,7 @@ function PromoterCard({ p, rank }: { p: PromoterEntry; rank: number }) {
     <div class={`adm-promoter-card ${RANK_CARD[rank] ?? (rank <= 10 ? "top-ten" : "")}`}>
       <div class="adm-promoter-avatar-wrap">
         {p.headshot_url ? (
-          <img class="adm-promoter-avatar" src={p.headshot_url} alt={name} />
+          <img class="adm-promoter-avatar" src={p.headshot_url ?? undefined} alt={name} />
         ) : (
           <div class="adm-promoter-avatar adm-promoter-avatar-initials">{initials}</div>
         )}
@@ -91,9 +52,13 @@ function PromoterCard({ p, rank }: { p: PromoterEntry; rank: number }) {
       </div>
 
       <div class="adm-promoter-info">
-        <a href={`mailto:${p.email}`} class="name text-decoration-none" title={p.email}>
-          {name}
-        </a>
+        {p.email ? (
+          <a href={`mailto:${p.email}`} class="name text-decoration-none" title={p.email}>
+            {name}
+          </a>
+        ) : (
+          <span class="name">{name}</span>
+        )}
         {subtitle && <div class="subtitle">{subtitle}</div>}
       </div>
 
@@ -113,9 +78,12 @@ function PromoterCard({ p, rank }: { p: PromoterEntry; rank: number }) {
               <div class="adm-promoter-stat">
                 <div class="val">{conversion}%</div>
                 <div class="lbl">Rate</div>
-                <div class={`adm-promoter-conversion ${conversionColor(conversion)}`}>
-                  <div class="fill" style={{ width: `${Math.min(conversion, 100)}%` }} />
-                </div>
+                <progress
+                  class={`adm-promoter-conversion ${conversionColor(conversion)}`}
+                  value={Math.min(conversion, 100)}
+                  max={100}
+                  aria-label={`${conversion}% invite conversion`}
+                />
               </div>
             </div>
           </div>
@@ -154,53 +122,59 @@ function PromoterCard({ p, rank }: { p: PromoterEntry; rank: number }) {
 }
 
 export function Promoters({ slug, subTab }: { slug: string; subTab?: string }) {
-  const { data, loading, error } = useData<PromotersResponse>(
-    () => api<PromotersResponse>(`/api/v1/admin/events/${slug}/promoters`),
-    [slug],
-  );
   const [, navigate] = useHashLocation();
   const tab = subTab === "codes" ? "codes" : "promoters";
+  const [offset, setOffset] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
+  const { data, loading, error } = useData(async () => {
+    const query = new URLSearchParams({
+      view: tab,
+      limit: String(pageSize),
+      offset: String(offset),
+      sort: tab === "promoters" ? "-impact" : "-conversions",
+    });
+    return eventPromotersListResponseSchema.parse(
+      await api<unknown>(`/api/v1/admin/events/${slug}/promoters?${query.toString()}`),
+    );
+  }, [slug, tab, offset, pageSize]);
+
+  useEffect(() => setOffset(0), [tab]);
 
   if (loading) return <Spinner />;
   if (error) return <ErrorAlert error={error} />;
   if (!data) return null;
 
-  const { promoters: allPromoters, referralCodes } = data;
-
-  // Only show people who actually promoted (sent invites or generated link clicks)
-  const promoters = allPromoters.filter(isActivePromoter);
-  const withImpact = promoters.filter(hasImpact).length;
-
-  // Summary stats (over active promoters)
-  const totalSent = promoters.reduce((s, p) => s + p.invites_sent, 0);
-  const totalAccepted = promoters.reduce((s, p) => s + p.invites_accepted, 0);
-  const totalClicks = promoters.reduce((s, p) => s + p.referral_clicks, 0);
-  const totalConversions = promoters.reduce((s, p) => s + p.referral_conversions, 0);
+  const { promoters, referralCodes, summary, page } = data;
+  const pageNumber = Math.floor(page.offset / page.limit) + 1;
 
   return (
     <div>
-      {tab === "promoters" && promoters.length > 0 && (
+      {tab === "promoters" && summary.activePromoters > 0 && (
         <div class="stat-grid mb-3">
           <div class="stat-card ok">
-            <div class="val">{promoters.length}</div>
+            <div class="val">{summary.activePromoters}</div>
             <div class="lbl">Active Promoters</div>
-            <div class="note">{withImpact} with registrations</div>
+            <div class="note">{summary.promotersWithRegistrations} with registrations</div>
           </div>
           <div class="stat-card">
-            <div class="val">{totalSent}</div>
+            <div class="val">{summary.totalInvitesSent}</div>
             <div class="lbl">Invites Sent</div>
           </div>
           <div class="stat-card ok">
-            <div class="val">{totalAccepted}</div>
+            <div class="val">{summary.totalInvitesAccepted}</div>
             <div class="lbl">Invite Accepted</div>
-            {totalSent > 0 && <div class="note">{((totalAccepted / totalSent) * 100).toFixed(0)}% conversion</div>}
+            {summary.totalInvitesSent > 0 && (
+              <div class="note">
+                {((summary.totalInvitesAccepted / summary.totalInvitesSent) * 100).toFixed(0)}% conversion
+              </div>
+            )}
           </div>
           <div class="stat-card">
-            <div class="val">{totalClicks}</div>
+            <div class="val">{summary.totalReferralClicks}</div>
             <div class="lbl">Link Clicks</div>
           </div>
           <div class="stat-card ok">
-            <div class="val">{totalConversions}</div>
+            <div class="val">{summary.totalReferralConversions}</div>
             <div class="lbl">Link Registrations</div>
           </div>
         </div>
@@ -208,8 +182,8 @@ export function Promoters({ slug, subTab }: { slug: string; subTab?: string }) {
 
       <Tabs
         items={[
-          { key: "promoters", label: `Active Promoters (${promoters.length})` },
-          { key: "codes", label: `Referral Codes (${referralCodes.length})` },
+          { key: "promoters", label: `Active Promoters (${summary.activePromoters})` },
+          { key: "codes", label: `Referral Codes (${summary.referralCodeCount})` },
         ]}
         active={tab}
         onChange={(key) => navigate(`/events/${slug}/promoters/${key === "promoters" ? "" : key}`)}
@@ -220,14 +194,9 @@ export function Promoters({ slug, subTab }: { slug: string; subTab?: string }) {
           <div class="text-muted text-center py-4">No promoter activity yet</div>
         ) : (
           <div class="d-flex flex-column gap-2 mt-2">
-            {promoters.slice(0, 100).map((p, i) => (
-              <PromoterCard key={p.user_id} p={p} rank={i + 1} />
+            {promoters.map((p, i) => (
+              <PromoterCard key={p.user_id} p={p} rank={page.offset + i + 1} />
             ))}
-            {promoters.length > 100 && (
-              <div class="text-muted text-center small py-2">
-                Showing top 100 of {promoters.length} promoters — stats above reflect all.
-              </div>
-            )}
           </div>
         ))}
 
@@ -235,7 +204,10 @@ export function Promoters({ slug, subTab }: { slug: string; subTab?: string }) {
         <DataTable
           columns={[
             { header: "Code", cell: (c) => <span class="adm-referral-code">{c.code}</span> },
-            { header: "Owner", cell: (c) => c.user_email },
+            {
+              header: "Owner",
+              cell: (c) => [c.owner_first_name, c.owner_last_name].filter(Boolean).join(" ") || c.owner_email || "—",
+            },
             { header: { label: "Clicks", className: "text-end" }, cell: (c) => c.clicks, className: "mono text-end" },
             {
               header: { label: "Conversions", className: "text-end" },
@@ -253,6 +225,22 @@ export function Promoters({ slug, subTab }: { slug: string; subTab?: string }) {
           rowKey={(c) => c.code}
         />
       )}
+
+      <Pager
+        page={pageNumber}
+        hasMore={page.hasMore}
+        pageSize={pageSize}
+        offset={page.offset}
+        rowCount={promoters.length + referralCodes.length}
+        total={page.total}
+        onPrev={() => setOffset(Math.max(0, offset - pageSize))}
+        onNext={() => setOffset(offset + pageSize)}
+        onJump={(nextPage) => setOffset((nextPage - 1) * pageSize)}
+        onPageSizeChange={(size) => {
+          setPageSize(size);
+          setOffset(0);
+        }}
+      />
     </div>
   );
 }

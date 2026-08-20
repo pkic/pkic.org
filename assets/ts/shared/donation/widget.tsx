@@ -55,14 +55,14 @@ function IdentityFields() {
       </div>
       <div class="mb-3">
         <label for="donation-donor-org" class="form-label donation-form-label">
-          Organisation <span class="text-muted small">(optional)</span>
+          Organization <span class="text-muted small">(optional)</span>
         </label>
         <input
           type="text"
           id="donation-donor-org"
           class="form-control form-control-sm"
           data-donation-org-input
-          placeholder="Your company or organisation"
+          placeholder="Your company or organization"
           autocomplete="organization"
         />
       </div>

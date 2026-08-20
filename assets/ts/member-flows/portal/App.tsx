@@ -82,7 +82,7 @@ export function App() {
   return (
     <>
       {verifyError && (
-        <div class="container" style="max-width: 420px;">
+        <div class="container content-width-sm">
           <div class="alert alert-danger mt-4">✕ Sign-in failed: {verifyError}</div>
         </div>
       )}

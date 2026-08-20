@@ -40,6 +40,7 @@ export function buildAssignRepresentativeRoleStatementsForNewRepresentative(
     userId: string;
     roleId: RepresentativeRoleId;
     grantedByUserId?: string | null;
+    assignmentId?: string;
     now?: string;
   },
 ): StatementLike[] {
@@ -57,7 +58,14 @@ export function buildAssignRepresentativeRoleStatementsForNewRepresentative(
            (id, user_id, role_id, context_type, context_id, granted_by_user_id, single_holder_per_context, created_at)
          VALUES (?, ?, ?, 'organization', ?, ?, 1, ?)`,
       )
-      .bind(uuid(), input.userId, input.roleId, input.memberId, input.grantedByUserId ?? null, now),
+      .bind(
+        input.assignmentId ?? uuid(),
+        input.userId,
+        input.roleId,
+        input.memberId,
+        input.grantedByUserId ?? null,
+        now,
+      ),
   ];
 }
 
@@ -79,6 +87,7 @@ export async function buildAssignRepresentativeRoleStatements(
     userId: string;
     roleId: RepresentativeRoleId;
     grantedByUserId?: string | null;
+    assignmentId?: string;
     now?: string;
   },
 ): Promise<StatementLike[]> {

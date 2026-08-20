@@ -2,10 +2,9 @@ import { useState, useEffect, useCallback, useRef } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Spinner } from "../../components/Spinner";
 import { ErrorAlert } from "../../components/ErrorAlert";
-import { ApiDataTable, type ApiTableActions } from "../../components/Table";
 import { api } from "../api";
 import { fmt, toast } from "../ui";
-import type { AdminUser, AdminOrganizationSummary } from "../types";
+import type { AdminOrganizationSummary } from "../types";
 import { confirmHeadshotUsage } from "../../shared/headshot/controller";
 import { AdminHeadshotManager, ADMIN_HEADSHOT_DISCLAIMER } from "../../shared/headshot/AdminHeadshotManager";
 import { ProfileLinksInput, type ProfileLinksHandle } from "../../components/ProfileLinksInput";
@@ -14,6 +13,7 @@ import { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../.
 import { MEMBER_STATUSES } from "../../../shared/schemas/admin-organizations";
 import { adminRoleValueSchema } from "../../../shared/schemas/api";
 import { UserPicker, type PickedUser } from "./access-control/UserPicker";
+import { UserList } from "./users/UserList";
 
 // ────────────────────────────────────────────────────────
 // Types
@@ -471,8 +471,7 @@ function EmailAddressesPanel({ userId, primaryEmail }: { userId: string; primary
           <form onSubmit={handleAdd} class="d-flex gap-2">
             <input
               type="email"
-              class="form-control form-control-sm"
-              style={{ maxWidth: "280px" }}
+              class="form-control form-control-sm adm-email-input"
               placeholder="another@example.com"
               value={newEmail}
               onInput={(e) => setNewEmail((e.target as HTMLInputElement).value)}
@@ -531,7 +530,7 @@ function MergeAccountPanel({ userId, onMerged }: { userId: string; onMerged: () 
           transfer here, and its email is kept as a secondary email above.
         </div>
         <div class="d-flex gap-2 align-items-end">
-          <div style={{ maxWidth: "320px", flex: 1 }}>
+          <div class="adm-user-merge-picker">
             <UserPicker
               value={sourceUser}
               onChange={setSourceUser}
@@ -594,7 +593,7 @@ export function UserDetailView({ userId, onBack }: { userId: string; onBack: () 
   useEffect(() => {
     if (!user) return;
     setHeadshotStatus(
-      user.headshot_updated_at ? `Updated: ${new Date(user.headshot_updated_at).toLocaleString("en-GB")}` : "",
+      user.headshot_updated_at ? `Updated: ${new Date(user.headshot_updated_at).toLocaleString("en-US")}` : "",
     );
   }, [user]);
 
@@ -740,7 +739,7 @@ export function UserDetailView({ userId, onBack }: { userId: string; onBack: () 
                           ["First name", user.first_name],
                           ["Last name", user.last_name],
                           ["Preferred name", user.preferred_name],
-                          ["Organisation", user.organization_name],
+                          ["Organization", user.organization_name],
                           ["Job title", user.job_title],
                         ] as Array<[string, string | null | undefined]>
                       ).map(([label, value]) => (
@@ -777,11 +776,11 @@ export function UserDetailView({ userId, onBack }: { userId: string; onBack: () 
                       </tr>
                       <tr>
                         <th class="text-muted small adm-user-info-label">Created</th>
-                        <td>{user.created_at ? new Date(user.created_at).toLocaleString("en-GB") : "—"}</td>
+                        <td>{user.created_at ? new Date(user.created_at).toLocaleString("en-US") : "—"}</td>
                       </tr>
                       <tr>
                         <th class="text-muted small adm-user-info-label">Updated</th>
-                        <td>{user.updated_at ? new Date(user.updated_at).toLocaleString("en-GB") : "—"}</td>
+                        <td>{user.updated_at ? new Date(user.updated_at).toLocaleString("en-US") : "—"}</td>
                       </tr>
                       {user.biography && (
                         <tr>
@@ -806,7 +805,7 @@ export function UserDetailView({ userId, onBack }: { userId: string; onBack: () 
                       {user.pii_redacted_at && (
                         <tr>
                           <th class="text-muted small adm-user-info-label">PII redacted</th>
-                          <td class="text-danger">{new Date(user.pii_redacted_at).toLocaleString("en-GB")}</td>
+                          <td class="text-danger">{new Date(user.pii_redacted_at).toLocaleString("en-US")}</td>
                         </tr>
                       )}
                     </tbody>
@@ -828,7 +827,7 @@ export function UserDetailView({ userId, onBack }: { userId: string; onBack: () 
                           ["First name", "firstName"],
                           ["Last name", "lastName"],
                           ["Preferred name", "preferredName"],
-                          ["Organisation", "organizationName"],
+                          ["Organization", "organizationName"],
                           ["Job title", "jobTitle"],
                         ] as Array<[string, keyof typeof editForm]>
                       ).map(([label, field]) => (
@@ -958,166 +957,6 @@ export function UserDetailView({ userId, onBack }: { userId: string; onBack: () 
       <EmailAddressesPanel userId={user.id} primaryEmail={user.email} />
       <MergeAccountPanel userId={user.id} onMerged={load} />
     </div>
-  );
-}
-
-// ────────────────────────────────────────────────────────
-// User list component
-// ────────────────────────────────────────────────────────
-
-function UserList({ onViewUser }: { onViewUser: (id: string) => void }) {
-  const [roleFilter, setRoleFilter] = useState("");
-  const [typeFilter, setTypeFilter] = useState("");
-  const tableRef = useRef<ApiTableActions | null>(null);
-
-  async function updateRole(userId: string, newRole: string, select: HTMLSelectElement) {
-    const prev = select.dataset.currentRole ?? select.value;
-    try {
-      await api(`/api/v1/admin/users/${userId}`, { method: "PATCH", body: JSON.stringify({ role: newRole }) });
-      select.dataset.currentRole = newRole;
-      toast(`Role updated to '${newRole}'`, "success");
-    } catch (e) {
-      toast((e as Error).message, "error");
-      select.value = prev;
-    }
-  }
-
-  return (
-    <ApiDataTable<AdminUser>
-      endpoint="/api/v1/admin/users"
-      resolve={(d) => (d as { users: AdminUser[] }).users}
-      resolvePage={(d) => (d as { page: { total: number; hasMore: boolean } }).page}
-      paginate
-      actionsRef={tableRef}
-      searchPlaceholder="email or name"
-      params={{ ...(roleFilter ? { role: roleFilter } : {}), ...(typeFilter ? { type: typeFilter } : {}) }}
-      deps={[roleFilter, typeFilter]}
-      toolbar={({ resetPage }) => (
-        <>
-          <select
-            class="form-select form-select-sm w-auto"
-            value={roleFilter}
-            onChange={(e) => {
-              setRoleFilter((e.target as HTMLSelectElement).value);
-              resetPage();
-            }}
-          >
-            <option value="">All roles</option>
-            <option value="admin">Admin</option>
-            <option value="user">User</option>
-            <option value="guest">Guest</option>
-          </select>
-          <select
-            class="form-select form-select-sm w-auto"
-            value={typeFilter}
-            onChange={(e) => {
-              setTypeFilter((e.target as HTMLSelectElement).value);
-              resetPage();
-            }}
-          >
-            <option value="">All types</option>
-            <option value="member">Members</option>
-            <option value="event_attendee">Event attendees</option>
-            <option value="contact_only">Contacts only</option>
-          </select>
-        </>
-      )}
-      columns={[
-        {
-          header: "Email",
-          cell: (user) => <span>{user.email}</span>,
-          className: "mono adm-user-email",
-          sort: { asc: "email", desc: "-email" },
-        },
-        {
-          header: "Name",
-          cell: (user) => [user.first_name, user.last_name].filter(Boolean).join(" ") || "—",
-          className: "fw-semibold",
-          sort: { asc: "last_name", desc: "-last_name" },
-        },
-        {
-          header: "Organisation",
-          cell: (user) => user.organization_name ?? "—",
-          className: "small text-muted",
-          sort: { asc: "organization_name", desc: "-organization_name" },
-        },
-        {
-          header: "Type",
-          cell: (user) => {
-            if (user.membership) {
-              return (
-                <>
-                  <span class="badge text-bg-success mono">{user.membership.membershipCategory}</span>
-                  {user.membership.organizationName && (
-                    <>
-                      {" "}
-                      <span class="small text-muted">{user.membership.organizationName}</span>
-                    </>
-                  )}
-                </>
-              );
-            }
-            if (user.type === "event_attendee") {
-              return (
-                <span class="badge text-bg-info">
-                  Event attendee · {user.eventParticipationCount} event{user.eventParticipationCount === 1 ? "" : "s"}
-                </span>
-              );
-            }
-            return <span class="text-muted small fst-italic">Contact</span>;
-          },
-        },
-        {
-          header: "Links",
-          cell: (user) => {
-            const count = normalizeProfileLinks(user.links).length;
-            return count > 0 ? (
-              <span class="badge text-bg-info" title={`${count} profile link${count === 1 ? "" : "s"}`}>
-                {count}
-              </span>
-            ) : (
-              <span class="text-muted small">—</span>
-            );
-          },
-          className: "text-center",
-        },
-        {
-          header: "Role",
-          cell: (user) => <span class={`badge text-bg-${ROLE_COLOR[user.role] ?? "secondary"}`}>{user.role}</span>,
-          sort: { asc: "role", desc: "-role" },
-        },
-        {
-          header: "Since",
-          cell: (user) => fmt(user.created_at),
-          className: "mono",
-          sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
-        },
-        {
-          header: "",
-          cell: (user) => (
-            <div onClick={(e) => e.stopPropagation()}>
-              <select
-                class="form-select form-select-sm d-inline-block adm-user-role-select"
-                value={user.role}
-                data-current-role={user.role}
-                onChange={(e) => {
-                  e.stopPropagation();
-                  void updateRole(user.id, (e.target as HTMLSelectElement).value, e.target as HTMLSelectElement);
-                }}
-              >
-                <option value="admin">admin</option>
-                <option value="user">user</option>
-                <option value="guest">guest</option>
-              </select>
-            </div>
-          ),
-        },
-      ]}
-      empty="No users found"
-      rowKey={(user) => user.id}
-      rowClass={() => "adm-user-row"}
-      onRowClick={(user) => onViewUser(user.id)}
-    />
   );
 }
 

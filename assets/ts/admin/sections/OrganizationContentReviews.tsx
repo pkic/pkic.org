@@ -122,14 +122,14 @@ function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: ()
                 {detail.diff.map((d) => (
                   <tr key={d.field}>
                     <td class="fw-semibold">{fieldLabel(d.field)}</td>
-                    <td class="text-muted" style={{ whiteSpace: "pre-wrap", maxWidth: "320px" }}>
+                    <td class="text-muted adm-diff-cell">
                       {d.current == null || d.current === "" || (Array.isArray(d.current) && d.current.length === 0) ? (
                         <em>(empty)</em>
                       ) : (
                         formatDiffValue(d.current)
                       )}
                     </td>
-                    <td style={{ whiteSpace: "pre-wrap", maxWidth: "320px" }}>{formatDiffValue(d.proposed)}</td>
+                    <td class="adm-diff-cell">{formatDiffValue(d.proposed)}</td>
                   </tr>
                 ))}
               </tbody>

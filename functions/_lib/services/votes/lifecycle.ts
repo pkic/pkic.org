@@ -3,7 +3,8 @@
  * visibility updates, and the admin list/ballot-audit queries. Split out of
  * votes.ts.
  */
-import { all, first, run } from "../../db/queries";
+import { all, run } from "../../db/queries";
+import { queryPage } from "../../db/pagination";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import { stringifyJson } from "../../utils/json";
@@ -192,14 +193,14 @@ export async function listVotesForAdmin(
   const whereArgs = params.status ? [params.status] : [];
   const orderBy = resolveOrderBy(params.sort, ADMIN_VOTES_SORT_COLUMNS, "ORDER BY created_at DESC");
 
-  const [rows, totalRow] = await Promise.all([
-    all<VoteRow>(db, `SELECT ${ADMIN_VOTES_COLUMNS} FROM votes ${where} ${orderBy} LIMIT ? OFFSET ?`, [
-      ...whereArgs,
-      params.limit,
-      params.offset,
-    ]),
-    first<{ total: number }>(db, `SELECT COUNT(*) AS total FROM votes ${where}`, whereArgs),
-  ]);
+  const { rows, total } = await queryPage<VoteRow>(
+    db,
+    {
+      sql: `SELECT ${ADMIN_VOTES_COLUMNS} FROM votes ${where} ${orderBy} LIMIT ? OFFSET ?`,
+      bindings: [...whereArgs, params.limit, params.offset],
+    },
+    { sql: `SELECT COUNT(*) AS total FROM votes ${where}`, bindings: whereArgs },
+  );
 
   const electionVoteIds = rows.filter((row) => row.vote_type === "election").map((row) => row.id);
   const candidatesByVoteId = await getCandidatesForVotes(db, electionVoteIds);
@@ -209,7 +210,7 @@ export async function listVotesForAdmin(
     candidates: row.vote_type === "election" ? (candidatesByVoteId.get(row.id) ?? []) : null,
   }));
 
-  return { votes, total: totalRow?.total ?? 0 };
+  return { votes, total };
 }
 
 // ── Admin: raw ballot audit ("Full ballot breakdown (staff only)") ────

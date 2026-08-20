@@ -6,7 +6,9 @@
  * concerns/EC-decision timelines the applicant-facing status endpoint never
  * returns.
  */
-import { all, first } from "../db/queries";
+import { all } from "../db/queries";
+import { queryPage } from "../db/pagination";
+import { buildD1TextSearchFilter } from "../db/search";
 import { AppError } from "../errors";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
@@ -26,6 +28,7 @@ import {
 import { getGlobalFormByKey } from "./forms";
 import { listEcDecisions } from "./ec-review";
 import { ADMIN_APPLICATIONS_SORT_COLUMNS } from "../../../assets/shared/schemas/admin-applications";
+import { resolveOrderBy } from "../db/sort";
 import type { DatabaseLike, StatementLike } from "../types";
 
 export interface AdminApplicationSummary {
@@ -58,27 +61,9 @@ function toSummary(row: MemberApplicationRow): AdminApplicationSummary {
   };
 }
 
-const SORT_COLUMN_SET = new Set<string>(ADMIN_APPLICATIONS_SORT_COLUMNS);
-
-/**
- * Resolves a `sort` query value (e.g. "created_at" or "-created_at", the
- * leading "-" meaning descending — see Table.tsx's ColumnSort convention)
- * into a safe `ORDER BY` clause. Only columns in ADMIN_APPLICATIONS_SORT_COLUMNS
- * are ever interpolated — anything else (including attempted SQL injection
- * via the query param) falls back to the default `created_at DESC`, matching
- * today's behavior exactly when no/invalid `sort` is supplied.
- */
-function resolveApplicationsOrderBy(sort?: string): string {
-  if (!sort) return "ORDER BY created_at DESC";
-  const desc = sort.startsWith("-");
-  const column = desc ? sort.slice(1) : sort;
-  if (!SORT_COLUMN_SET.has(column)) return "ORDER BY created_at DESC";
-  return `ORDER BY ${column} ${desc ? "DESC" : "ASC"}`;
-}
-
 export async function listAdminApplications(
   db: DatabaseLike,
-  params: { limit: number; offset: number; stage?: string; status?: string; sort?: string },
+  params: { limit: number; offset: number; stage?: string; status?: string; q?: string; sort?: string },
 ): Promise<{ applications: AdminApplicationSummary[]; total: number }> {
   const conditions: string[] = [];
   const values: unknown[] = [];
@@ -90,19 +75,30 @@ export async function listAdminApplications(
     conditions.push("status = ?");
     values.push(params.status);
   }
+  if (params.q) {
+    const search = buildD1TextSearchFilter(params.q, [
+      "applicant_name",
+      "applicant_email",
+      "organization_name",
+      "membership_category",
+      "applicant_name || ' ' || applicant_email || ' ' || COALESCE(organization_name, '') || ' ' || membership_category",
+    ]);
+    conditions.push(search.sql);
+    values.push(...search.bindings);
+  }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-  const orderBy = resolveApplicationsOrderBy(params.sort);
+  const orderBy = resolveOrderBy(params.sort, ADMIN_APPLICATIONS_SORT_COLUMNS, "ORDER BY created_at DESC");
 
-  const [rows, totalRow] = await Promise.all([
-    all<MemberApplicationRow>(db, `SELECT * FROM member_applications ${where} ${orderBy} LIMIT ? OFFSET ?`, [
-      ...values,
-      params.limit,
-      params.offset,
-    ]),
-    first<{ total: number }>(db, `SELECT COUNT(*) AS total FROM member_applications ${where}`, values),
-  ]);
+  const { rows, total } = await queryPage<MemberApplicationRow>(
+    db,
+    {
+      sql: `SELECT * FROM member_applications ${where} ${orderBy} LIMIT ? OFFSET ?`,
+      bindings: [...values, params.limit, params.offset],
+    },
+    { sql: `SELECT COUNT(*) AS total FROM member_applications ${where}`, bindings: values },
+  );
 
-  return { applications: rows.map(toSummary), total: totalRow?.total ?? 0 };
+  return { applications: rows.map(toSummary), total };
 }
 
 export interface AdminApplicationDetail extends AdminApplicationSummary {

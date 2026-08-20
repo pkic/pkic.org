@@ -499,7 +499,7 @@ function WorkingGroupMeetingsTab() {
 
   return (
     <div>
-      <div class="mb-3" style={{ maxWidth: "320px" }}>
+      <div class="mb-3 adm-filter-control">
         <label class="form-label small fw-semibold">Working group</label>
         <select
           class="form-select form-select-sm"

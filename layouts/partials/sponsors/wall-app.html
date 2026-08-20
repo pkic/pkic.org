@@ -13,7 +13,7 @@
     .rows          — grid mode: wrap each tier band in its own row (bool)
     .class         — grid mode: extra class on each logo <img>
     .minWeight     — strip mode minimum tier weight (default 5 = Titanium/Leader)
-    .containerClass / .linkClass / .logoClass / .logoStyle / .label — strip mode styling
+    .containerClass / .linkClass / .logoClass / .label — strip mode styling
     .memberLimit   — wall mode: cap on random non-sponsor member logos shown (sponsors always all show)
 */}}
 <div
@@ -32,7 +32,6 @@
   {{ with .containerClass }}data-container-class="{{ . }}"{{ end }}
   {{ with .linkClass }}data-link-class="{{ . }}"{{ end }}
   {{ with .logoClass }}data-logo-class="{{ . }}"{{ end }}
-  {{ with .logoStyle }}data-logo-style="{{ . }}"{{ end }}
   {{ with .label }}data-label="{{ . }}"{{ end }}
   {{ with .labelClass }}data-label-class="{{ . }}"{{ end }}
   {{ with .maxItems }}data-max-items="{{ . }}"{{ end }}

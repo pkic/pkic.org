@@ -11,6 +11,10 @@ import { env } from "cloudflare:workers";
 import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
+import {
+  donationPromotersListResponseSchema,
+  donationsListResponseSchema,
+} from "../assets/shared/schemas/admin-donations";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
@@ -93,30 +97,18 @@ describe("GET /api/v1/admin/donations (P6M-P2-02)", () => {
   it("lists every donation with a status-count summary, default sort newest-first", async () => {
     const response = await call(adminToken, "/api/v1/admin/donations");
     expect(response.status).toBe(200);
-    const body = (await response.json()) as {
-      donations: Array<{ checkout_session_id: string; status: string }>;
-      summary: Record<string, number>;
-      limit: number;
-      offset: number;
-      total: number;
-    };
+    const body = donationsListResponseSchema.parse(await response.json());
     expect(body.donations.map((d) => d.checkout_session_id)).toEqual(["cs_3", "cs_2", "cs_1"]);
-    expect(body.total).toBe(3);
-    expect(body.limit).toBe(100);
-    expect(body.offset).toBe(0);
+    expect(body.page).toEqual({ limit: 100, offset: 0, total: 3, hasMore: false });
     expect(body.summary).toEqual({ completed: 1, pending: 1, expired: 1 });
   });
 
   it("filters by status", async () => {
     const response = await call(adminToken, "/api/v1/admin/donations?status=pending");
     expect(response.status).toBe(200);
-    const body = (await response.json()) as {
-      donations: Array<{ checkout_session_id: string }>;
-      summary: Record<string, number>;
-      total: number;
-    };
+    const body = donationsListResponseSchema.parse(await response.json());
     expect(body.donations.map((d) => d.checkout_session_id)).toEqual(["cs_2"]);
-    expect(body.total).toBe(1);
+    expect(body.page.total).toBe(1);
     // summary is unaffected by the status filter — still every status's count.
     expect(body.summary).toEqual({ completed: 1, pending: 1, expired: 1 });
   });
@@ -154,16 +146,17 @@ describe("GET /api/v1/admin/donations (P6M-P2-02)", () => {
   it("bounds results with limit/offset", async () => {
     const response = await call(adminToken, "/api/v1/admin/donations?limit=1&offset=1&sort=created_at");
     expect(response.status).toBe(200);
-    const body = (await response.json()) as {
-      donations: Array<{ checkout_session_id: string }>;
-      limit: number;
-      offset: number;
-      total: number;
-    };
+    const body = donationsListResponseSchema.parse(await response.json());
     expect(body.donations.map((d) => d.checkout_session_id)).toEqual(["cs_2"]);
-    expect(body.limit).toBe(1);
-    expect(body.offset).toBe(1);
-    expect(body.total).toBe(3);
+    expect(body.page).toEqual({ limit: 1, offset: 1, total: 3, hasMore: true });
+  });
+
+  it("applies free-text search in D1 through the shared list contract", async () => {
+    const response = await call(adminToken, "/api/v1/admin/donations?q=zed");
+    expect(response.status).toBe(200);
+    const body = donationsListResponseSchema.parse(await response.json());
+    expect(body.donations.map((donation) => donation.checkout_session_id)).toEqual(["cs_2"]);
+    expect(body.page.total).toBe(1);
   });
 
   it("rejects a limit above the historical 500 cap", async () => {
@@ -200,21 +193,22 @@ describe("GET /api/v1/admin/donations/promoters (P6M-P2-12)", () => {
   it("lists promoters ordered by clicks descending with a page envelope", async () => {
     const response = await call(adminToken, "/api/v1/admin/donations/promoters");
     expect(response.status).toBe(200);
-    const body = (await response.json()) as {
-      promoters: Array<{ code: string; clicks: number }>;
-      page: { limit: number; offset: number; total: number; hasMore: boolean };
-    };
+    const body = donationPromotersListResponseSchema.parse(await response.json());
     expect(body.promoters.map((p) => p.code)).toEqual(["promoA1", "promoB2", "promoC3"]);
-    expect(body.page).toEqual({ limit: 100, offset: 0, total: 3, hasMore: false });
+    expect(body.page).toEqual({ limit: 50, offset: 0, total: 3, hasMore: false });
+    expect(body.summary).toEqual({
+      promoterCount: 3,
+      totalOwnGrossUsd: 0,
+      totalAttributedGrossUsd: 0,
+      totalClicks: 60,
+      totalAttributedCompleted: 0,
+    });
   });
 
   it("bounds results with limit/offset instead of returning every promoter unbounded", async () => {
     const response = await call(adminToken, "/api/v1/admin/donations/promoters?limit=1&offset=1");
     expect(response.status).toBe(200);
-    const body = (await response.json()) as {
-      promoters: Array<{ code: string }>;
-      page: { limit: number; offset: number; total: number; hasMore: boolean };
-    };
+    const body = donationPromotersListResponseSchema.parse(await response.json());
     expect(body.promoters.map((p) => p.code)).toEqual(["promoB2"]);
     expect(body.page).toEqual({ limit: 1, offset: 1, total: 3, hasMore: true });
   });

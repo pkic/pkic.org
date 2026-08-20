@@ -14,8 +14,9 @@
  */
 import { json } from "../../../_lib/http";
 import { requireAdminFromRequest } from "../../../_lib/auth/admin";
-import { all, first } from "../../../_lib/db/queries";
-import { resolveOrderBy } from "../../../_lib/db/sort";
+import { queryPage } from "../../../_lib/db/pagination";
+import { buildD1TextSearchFilter } from "../../../_lib/db/search";
+import { resolveMappedOrderBy } from "../../../_lib/db/sort";
 import type { DatabaseLike } from "../../../_lib/types";
 import { requestDb, type AdminContext } from "../../../_lib/db/context";
 import { openApiRoute } from "../../../_lib/openapi/route";
@@ -35,10 +36,6 @@ interface AuditLogRow {
   entity_id: string | null;
   details_json: string | null;
   created_at: string;
-}
-
-interface CountRow {
-  total: number;
 }
 
 function buildQuery(
@@ -68,11 +65,18 @@ function buildQuery(
     params.push(entityId);
   }
   if (q) {
-    clauses.push(
-      "(al.action LIKE ? OR al.entity_id LIKE ? OR al.entity_type LIKE ? OR al.details_json LIKE ? OR COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) LIKE ?)",
-    );
-    const pattern = `%${q}%`;
-    params.push(pattern, pattern, pattern, pattern, pattern);
+    const search = buildD1TextSearchFilter(q, [
+      "al.action",
+      "al.entity_id",
+      "al.entity_type",
+      "al.details_json",
+      "u.email",
+      "u.first_name",
+      "u.last_name",
+      "u.first_name || ' ' || u.last_name",
+    ]);
+    clauses.push(search.sql);
+    params.push(...search.bindings);
   }
 
   const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
@@ -86,15 +90,24 @@ export const AdminAuditLogList = openApiRoute(auditLogListRouteSchema, async (c:
 
   const db: DatabaseLike = requestDb(c);
   const { where, params } = buildQuery(q, entityType, actorType, action, entityId);
-  const orderBy = resolveOrderBy(sort, ADMIN_AUDIT_LOG_SORT_COLUMNS, "ORDER BY al.created_at DESC");
+  const orderBy = resolveMappedOrderBy(
+    sort,
+    {
+      actor: "actor_display",
+      action: "al.action",
+      entity_type: "al.entity_type",
+      created_at: "al.created_at",
+    } satisfies Record<(typeof ADMIN_AUDIT_LOG_SORT_COLUMNS)[number], string>,
+    "al.created_at DESC",
+    "al.id ASC",
+  );
 
   const baseJoin = `FROM audit_log al LEFT JOIN users u ON al.actor_type = 'admin' AND u.id = al.actor_id`;
 
-  const [countRow, rows] = await Promise.all([
-    first<CountRow>(db, `SELECT COUNT(*) AS total ${baseJoin} ${where}`, params),
-    all<AuditLogRow>(
-      db,
-      `SELECT
+  const { rows, total } = await queryPage<AuditLogRow>(
+    db,
+    {
+      sql: `SELECT
          al.id,
          al.actor_type,
          al.actor_id,
@@ -108,11 +121,10 @@ export const AdminAuditLogList = openApiRoute(auditLogListRouteSchema, async (c:
        ${where}
        ${orderBy}
        LIMIT ? OFFSET ?`,
-      [...params, limit, offset],
-    ),
-  ]);
-
-  const total = countRow?.total ?? 0;
+      bindings: [...params, limit, offset],
+    },
+    { sql: `SELECT COUNT(*) AS total ${baseJoin} ${where}`, bindings: params },
+  );
   const entries = rows.map((e) => ({
     ...e,
     details: e.details_json

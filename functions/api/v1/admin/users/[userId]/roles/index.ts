@@ -11,7 +11,7 @@ import { hasPermission, requirePermission } from "../../../../../../_lib/auth/pe
 import { all, first } from "../../../../../../_lib/db/queries";
 import { nowIso } from "../../../../../../_lib/utils/time";
 import { uuid } from "../../../../../../_lib/utils/ids";
-import { writeAuditLog } from "../../../../../../_lib/services/audit";
+import { prepareAuditLog } from "../../../../../../_lib/services/audit";
 import { AppError } from "../../../../../../_lib/errors";
 import {
   userRolesAssignRouteSchema,
@@ -136,40 +136,33 @@ export const UserRolesAssign = openApiRoute(userRolesAssignRouteSchema, async (c
       );
     }
 
+    const id = uuid();
     const statements = await buildAssignRepresentativeRoleStatements(requestDb(c), {
       memberId: contextId,
       userId,
       roleId: body.roleId,
       grantedByUserId: admin.id,
+      assignmentId: id,
       now,
     });
-    // buildAssignRepresentativeRoleStatements mints its own id for the
-    // insert internally, so re-read the row it created to report an
-    // accurate id back to the caller.
-    await requestDb(c).batch(statements);
-    const inserted = await first<{ id: string }>(
-      requestDb(c),
-      `SELECT id FROM user_roles
-       WHERE context_type = 'organization' AND context_id = ? AND role_id = ? AND user_id = ? AND revoked_at IS NULL`,
-      [contextId, body.roleId, userId],
-    );
-    if (!inserted) {
-      throw new AppError(500, "ROLE_GRANT_NOT_FOUND", "Representative role grant did not persist as expected");
-    }
-
-    await writeAuditLog(requestDb(c), "admin", admin.id, "user_role_assigned", "user_roles", inserted.id, {
-      userId,
-      roleId: body.roleId,
-      roleName: role.name,
-      contextType,
-      contextId,
-      expiresAt: null,
-    });
+    await requestDb(c).batch([
+      ...statements,
+      prepareAuditLog(
+        requestDb(c),
+        "admin",
+        admin.id,
+        "user_role_assigned",
+        "user_roles",
+        id,
+        { userId, roleId: body.roleId, roleName: role.name, contextType, contextId, expiresAt: null },
+        now,
+      ),
+    ]);
 
     return json(
       {
         role: {
-          id: inserted.id,
+          id,
           userId,
           roleId: body.roleId,
           roleName: role.name,
@@ -207,17 +200,18 @@ export const UserRolesAssign = openApiRoute(userRolesAssignRouteSchema, async (c
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(id, userId, body.roleId, contextType, contextId, admin.id, role.single_holder_per_context, expiresAt, now),
+    prepareAuditLog(
+      requestDb(c),
+      "admin",
+      admin.id,
+      "user_role_assigned",
+      "user_roles",
+      id,
+      { userId, roleId: body.roleId, roleName: role.name, contextType, contextId, expiresAt },
+      now,
+    ),
   );
   await requestDb(c).batch(statements);
-
-  await writeAuditLog(requestDb(c), "admin", admin.id, "user_role_assigned", "user_roles", id, {
-    userId,
-    roleId: body.roleId,
-    roleName: role.name,
-    contextType,
-    contextId,
-    expiresAt,
-  });
 
   return json(
     {

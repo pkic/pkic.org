@@ -5,7 +5,7 @@
 import { z } from "zod";
 import { normalizedEmailSchema } from "./api";
 import { membershipCategorySchema, applicationStageSchema, onHoldSubtypeSchema } from "./member-applications";
-import { paginationQuerySchema, paginatedResponseSchema, sortColumnSchema } from "./pagination";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { ecDecisionValueSchema } from "./ec-review";
 
 /** Allowlisted sort columns for GET /api/v1/admin/applications — see listAdminApplications. */
@@ -17,10 +17,9 @@ export const ADMIN_APPLICATIONS_SORT_COLUMNS = [
   "created_at",
 ] as const;
 
-export const adminApplicationsListQuerySchema = paginationQuerySchema.extend({
+export const adminApplicationsListQuerySchema = listQuerySchema(ADMIN_APPLICATIONS_SORT_COLUMNS).extend({
   stage: applicationStageSchema.optional(),
   status: applicationStageSchema.optional(),
-  sort: sortColumnSchema(ADMIN_APPLICATIONS_SORT_COLUMNS),
 });
 
 export const adminApplicationSummarySchema = z.object({
@@ -36,6 +35,11 @@ export const adminApplicationSummarySchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
 });
+export type AdminApplicationSummary = z.infer<typeof adminApplicationSummarySchema>;
+export const adminApplicationsListResponseSchema = paginatedResponseSchema(
+  "applications",
+  adminApplicationSummarySchema,
+);
 
 export const adminApplicationsListRouteSchema = {
   tags: ["Membership"],
@@ -45,7 +49,7 @@ export const adminApplicationsListRouteSchema = {
     "200": {
       description: "Applications list.",
       content: {
-        "application/json": { schema: paginatedResponseSchema("applications", adminApplicationSummarySchema) },
+        "application/json": { schema: adminApplicationsListResponseSchema },
       },
     },
   },

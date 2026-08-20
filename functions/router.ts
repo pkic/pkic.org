@@ -107,7 +107,11 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
       // LIMIT) bounds a single pass instead of relying on time/subrequest
       // budgeting mid-job.
       const jobs: ScheduledJobDefinition<unknown>[] = [
-        { name: "due_work", minRemainingMsToRun: 5_000, run: (jobEnv) => runScheduledDueWork(jobEnv) },
+        {
+          name: "due_work",
+          minRemainingMsToRun: 5_000,
+          run: (jobEnv, budget) => runScheduledDueWork(jobEnv, budget),
+        },
         {
           name: "membership_due_work",
           minRemainingMsToRun: 2_000,

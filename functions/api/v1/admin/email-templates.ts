@@ -1,6 +1,7 @@
 import { json } from "../../../_lib/http";
 import { requireAdminFromRequest } from "../../../_lib/auth/admin";
-import { all, first } from "../../../_lib/db/queries";
+import { queryPage } from "../../../_lib/db/pagination";
+import { buildD1TextSearchFilter } from "../../../_lib/db/search";
 import { resolveOrderBy } from "../../../_lib/db/sort";
 import { requestDb, type AdminContext } from "../../../_lib/db/context";
 import { openApiRoute } from "../../../_lib/openapi/route";
@@ -20,21 +21,22 @@ export const EmailTemplatesList = openApiRoute(emailTemplatesListRouteSchema, as
   const bindings: unknown[] = [];
 
   if (q) {
-    conditions.push("template_key LIKE ?");
-    bindings.push(`%${q}%`);
+    const search = buildD1TextSearchFilter(q, ["template_key"]);
+    conditions.push(search.sql);
+    bindings.push(...search.bindings);
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
-  const [templates, totalRow] = await Promise.all([
-    all<{
-      template_key: string;
-      active_version: number | null;
-      version_count: number;
-      draft_count: number;
-    }>(
-      requestDb(c),
-      `SELECT
+  const { rows: templates, total } = await queryPage<{
+    template_key: string;
+    active_version: number | null;
+    version_count: number;
+    draft_count: number;
+  }>(
+    requestDb(c),
+    {
+      sql: `SELECT
          template_key,
          MAX(CASE WHEN status = 'active' THEN version END) AS active_version,
          COUNT(*) AS version_count,
@@ -44,16 +46,13 @@ export const EmailTemplatesList = openApiRoute(emailTemplatesListRouteSchema, as
        GROUP BY template_key
        ${orderBy}
        LIMIT ? OFFSET ?`,
-      [...bindings, limit, offset],
-    ),
-    first<{ total: number }>(
-      requestDb(c),
-      `SELECT COUNT(DISTINCT template_key) AS total FROM email_template_versions ${where}`,
+      bindings: [...bindings, limit, offset],
+    },
+    {
+      sql: `SELECT COUNT(DISTINCT template_key) AS total FROM email_template_versions ${where}`,
       bindings,
-    ),
-  ]);
-
-  const total = Number(totalRow?.total ?? 0);
+    },
+  );
 
   return json({
     templates,

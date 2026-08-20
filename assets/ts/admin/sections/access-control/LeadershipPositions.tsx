@@ -4,11 +4,16 @@ import { api } from "../../api";
 import { toast } from "../../ui";
 import type { LeadershipPosition } from "../../types";
 import { UserPicker, type PickedUser } from "./UserPicker";
+import {
+  leadershipAffiliationsResponseSchema,
+  leadershipPositionsListResponseSchema,
+  type LeadershipAffiliation,
+} from "../../../../shared/schemas/leadership";
 
 /** ISO date -> "1 Jun 2022" for display (starts_at/ends_at are date-only, no time component). */
 function fmtDate(value: string | null): string {
   if (!value) return "—";
-  return new Date(`${value}T00:00:00Z`).toLocaleDateString("en-GB", {
+  return new Date(`${value}T00:00:00Z`).toLocaleDateString("en-US", {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -16,8 +21,87 @@ function fmtDate(value: string | null): string {
   });
 }
 
+function AffiliationPicker({
+  userId,
+  initialValue,
+  value,
+  onChange,
+  disabled,
+}: {
+  userId: string | null;
+  initialValue: string | null | undefined;
+  value: string | null | undefined;
+  onChange: (memberId: string | null | undefined) => void;
+  disabled: boolean;
+}) {
+  const [affiliations, setAffiliations] = useState<LeadershipAffiliation[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setAffiliations([]);
+    if (!userId) {
+      onChange(undefined);
+      return;
+    }
+
+    setLoading(true);
+    onChange(undefined);
+    void api<unknown>(`/api/v1/admin/leadership-positions/users/${userId}/affiliations`)
+      .then((raw) => leadershipAffiliationsResponseSchema.parse(raw).affiliations)
+      .then((next) => {
+        if (cancelled) return;
+        setAffiliations(next);
+        if (
+          initialValue === null ||
+          (initialValue !== undefined && next.some((item) => item.memberId === initialValue))
+        ) {
+          onChange(initialValue);
+        } else if (next.length === 1) {
+          onChange(next[0].memberId);
+        } else if (next.length === 0) {
+          onChange(null);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) toast((error as Error).message, "error");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, initialValue, onChange]);
+
+  if (!userId) return null;
+
+  return (
+    <select
+      class="form-select form-select-sm adm-leadership-affiliation"
+      aria-label="Membership affiliation"
+      value={value === undefined ? "" : (value ?? "none")}
+      onChange={(event) => {
+        const next = (event.target as HTMLSelectElement).value;
+        onChange(next === "none" ? null : next || undefined);
+      }}
+      disabled={disabled || loading}
+    >
+      {value === undefined && <option value="">Select affiliation…</option>}
+      <option value="none">No affiliation</option>
+      {affiliations.map((affiliation) => (
+        <option key={affiliation.memberId} value={affiliation.memberId}>
+          {affiliation.organizationName ?? "Individual membership"} ({affiliation.membershipCategory})
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function AddPositionForm({ onAdded, body }: { onAdded: () => void; body: "board" | "executive_council" }) {
   const [picked, setPicked] = useState<PickedUser | null>(null);
+  const [memberId, setMemberId] = useState<string | null | undefined>(undefined);
   const [title, setTitle] = useState("");
   const [startsAt, setStartsAt] = useState("");
   const [endsAt, setEndsAt] = useState("");
@@ -25,7 +109,7 @@ function AddPositionForm({ onAdded, body }: { onAdded: () => void; body: "board"
 
   async function submit(e: Event) {
     e.preventDefault();
-    if (!picked || !title.trim() || !startsAt) return;
+    if (!picked || memberId === undefined || !title.trim() || !startsAt) return;
     setBusy(true);
     try {
       await api("/api/v1/admin/leadership-positions", {
@@ -33,6 +117,7 @@ function AddPositionForm({ onAdded, body }: { onAdded: () => void; body: "board"
         body: JSON.stringify({
           body,
           userId: picked.id,
+          memberId,
           title: title.trim(),
           startsAt,
           endsAt: endsAt || null,
@@ -40,6 +125,7 @@ function AddPositionForm({ onAdded, body }: { onAdded: () => void; body: "board"
       });
       toast("Position added", "success");
       setPicked(null);
+      setMemberId(undefined);
       setTitle("");
       setStartsAt("");
       setEndsAt("");
@@ -53,12 +139,25 @@ function AddPositionForm({ onAdded, body }: { onAdded: () => void; body: "board"
 
   return (
     <form onSubmit={submit} class="d-flex gap-2 align-items-center flex-wrap border rounded p-2 bg-light">
-      <div style={{ minWidth: "220px" }}>
-        <UserPicker value={picked} onChange={setPicked} disabled={busy} />
+      <div class="adm-leadership-user">
+        <UserPicker
+          value={picked}
+          onChange={(user) => {
+            setPicked(user);
+            setMemberId(undefined);
+          }}
+          disabled={busy}
+        />
       </div>
+      <AffiliationPicker
+        userId={picked?.id ?? null}
+        initialValue={undefined}
+        value={memberId}
+        onChange={setMemberId}
+        disabled={busy}
+      />
       <input
-        class="form-control form-control-sm"
-        style={{ width: "180px" }}
+        class="form-control form-control-sm adm-leadership-title"
         type="text"
         placeholder="Title (e.g. Board Member)"
         value={title}
@@ -66,8 +165,7 @@ function AddPositionForm({ onAdded, body }: { onAdded: () => void; body: "board"
         disabled={busy}
       />
       <input
-        class="form-control form-control-sm"
-        style={{ width: "160px" }}
+        class="form-control form-control-sm adm-leadership-date"
         type="date"
         title="From"
         value={startsAt}
@@ -75,8 +173,7 @@ function AddPositionForm({ onAdded, body }: { onAdded: () => void; body: "board"
         disabled={busy}
       />
       <input
-        class="form-control form-control-sm"
-        style={{ width: "160px" }}
+        class="form-control form-control-sm adm-leadership-date"
         type="date"
         title="Till (optional — leave blank for a current position)"
         placeholder="Till (optional)"
@@ -84,7 +181,11 @@ function AddPositionForm({ onAdded, body }: { onAdded: () => void; body: "board"
         onInput={(e) => setEndsAt((e.target as HTMLInputElement).value)}
         disabled={busy}
       />
-      <button type="submit" class="btn btn-sm btn-success" disabled={busy || !picked || !title.trim() || !startsAt}>
+      <button
+        type="submit"
+        class="btn btn-sm btn-success"
+        disabled={busy || !picked || memberId === undefined || !title.trim() || !startsAt}
+      >
         Add
       </button>
     </form>
@@ -94,12 +195,14 @@ function AddPositionForm({ onAdded, body }: { onAdded: () => void; body: "board"
 function PositionRow({ position, onChanged }: { position: LeadershipPosition; onChanged: () => void }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(position.title);
+  const [memberId, setMemberId] = useState<string | null | undefined>(position.memberId);
   const [startsAt, setStartsAt] = useState(position.startsAt);
   const [endsAt, setEndsAt] = useState(position.endsAt ?? "");
   const [busy, setBusy] = useState(false);
 
   function startEdit() {
     setTitle(position.title);
+    setMemberId(position.memberId);
     setStartsAt(position.startsAt);
     setEndsAt(position.endsAt ?? "");
     setEditing(true);
@@ -111,7 +214,7 @@ function PositionRow({ position, onChanged }: { position: LeadershipPosition; on
     try {
       await api(`/api/v1/admin/leadership-positions/${position.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ title: title.trim(), startsAt, endsAt: endsAt || null }),
+        body: JSON.stringify({ memberId, title: title.trim(), startsAt, endsAt: endsAt || null }),
       });
       toast("Position updated", "success");
       setEditing(false);
@@ -140,20 +243,23 @@ function PositionRow({ position, onChanged }: { position: LeadershipPosition; on
   if (editing) {
     return (
       <form onSubmit={save} class="d-flex gap-2 align-items-center flex-wrap border rounded p-2">
-        <span class="small fw-semibold" style={{ minWidth: "160px" }}>
-          {position.name}
-        </span>
+        <span class="small fw-semibold adm-leadership-name">{position.name}</span>
+        <AffiliationPicker
+          userId={position.userId}
+          initialValue={position.memberId}
+          value={memberId}
+          onChange={setMemberId}
+          disabled={busy}
+        />
         <input
-          class="form-control form-control-sm"
-          style={{ width: "180px" }}
+          class="form-control form-control-sm adm-leadership-title"
           type="text"
           value={title}
           onInput={(e) => setTitle((e.target as HTMLInputElement).value)}
           disabled={busy}
         />
         <input
-          class="form-control form-control-sm"
-          style={{ width: "160px" }}
+          class="form-control form-control-sm adm-leadership-date"
           type="date"
           title="From"
           value={startsAt}
@@ -161,15 +267,18 @@ function PositionRow({ position, onChanged }: { position: LeadershipPosition; on
           disabled={busy}
         />
         <input
-          class="form-control form-control-sm"
-          style={{ width: "160px" }}
+          class="form-control form-control-sm adm-leadership-date"
           type="date"
           title="Till (optional)"
           value={endsAt}
           onInput={(e) => setEndsAt((e.target as HTMLInputElement).value)}
           disabled={busy}
         />
-        <button type="submit" class="btn btn-sm btn-success" disabled={busy || !title.trim() || !startsAt}>
+        <button
+          type="submit"
+          class="btn btn-sm btn-success"
+          disabled={busy || memberId === undefined || !title.trim() || !startsAt}
+        >
           Save
         </button>
         <button
@@ -186,8 +295,9 @@ function PositionRow({ position, onChanged }: { position: LeadershipPosition; on
 
   return (
     <div class="d-flex align-items-center gap-2 flex-wrap">
-      <span style={{ minWidth: "160px" }}>{position.name}</span>
+      <span class="adm-leadership-name">{position.name}</span>
       <span class="text-muted small">{position.title}</span>
+      {position.organizationName && <span class="text-muted small">{position.organizationName}</span>}
       <span class="text-muted small">
         {fmtDate(position.startsAt)} – {position.endsAt ? fmtDate(position.endsAt) : "present"}
       </span>
@@ -208,8 +318,8 @@ export function LeadershipPositions({ body, label }: { body: "board" | "executiv
   async function load() {
     setLoading(true);
     try {
-      const data = await api<{ positions: LeadershipPosition[] }>(`/api/v1/admin/leadership-positions?body=${body}`);
-      setPositions(data.positions);
+      const raw = await api<unknown>(`/api/v1/admin/leadership-positions?body=${body}`);
+      setPositions(leadershipPositionsListResponseSchema.parse(raw).positions);
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {

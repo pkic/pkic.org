@@ -4,6 +4,7 @@ import { runReminderCycle } from "./reminders";
 import { runRsvpEnforcer } from "./rsvp-enforcer";
 import { runWaitlistPromotionCycle } from "./registrations/waitlist-promotions";
 import type { Env } from "../types";
+import type { ScheduledJobBudget } from "./scheduled-job-registry";
 
 type ReminderCycleResult = Awaited<ReturnType<typeof runReminderCycle>>;
 type OutboxResult = Awaited<ReturnType<typeof processPendingOutbox>>;
@@ -194,10 +195,20 @@ function hasSubrequestBudgetForAnotherPass(
   return remainingBudget > estimatedNextPassSubrequests + safetyBuffer;
 }
 
-export async function runScheduledDueWork(env: Env): Promise<ScheduledDueWorkResult> {
+export async function runScheduledDueWork(
+  env: Env,
+  invocationBudget?: ScheduledJobBudget,
+): Promise<ScheduledDueWorkResult> {
   const config = getConfig(env);
   const startedAt = Date.now();
-  const deadline = startedAt + config.scheduledDueWorkMaxMs;
+  // The local cap protects direct/manual callers. When dispatched by the
+  // shared cron registry, its invocation-wide deadline is authoritative so
+  // this first (and largest) job cannot consume time reserved for every
+  // sibling that follows it.
+  const deadline = Math.min(
+    startedAt + config.scheduledDueWorkMaxMs,
+    invocationBudget?.deadlineAt ?? Number.POSITIVE_INFINITY,
+  );
   const reminders = emptyReminderCycleTotals();
   const waitlistPromotions = emptyWaitlistPromotionTotals();
   const rsvpEnforcement: RsvpEnforcementResult = { bouncesProcessed: 0, warningsSent: 0, downgradesProcessed: 0 };

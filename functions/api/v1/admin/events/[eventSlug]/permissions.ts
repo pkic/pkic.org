@@ -13,14 +13,17 @@ import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { getEventBySlug } from "../../../../../_lib/services/events";
-import { all, first, run } from "../../../../../_lib/db/queries";
-import { resolveOrderBy } from "../../../../../_lib/db/sort";
+import { first } from "../../../../../_lib/db/queries";
+import { queryPage } from "../../../../../_lib/db/pagination";
+import { buildD1TextSearchFilter } from "../../../../../_lib/db/search";
+import { resolveMappedOrderBy } from "../../../../../_lib/db/sort";
 import { nowIso } from "../../../../../_lib/utils/time";
 import { uuid } from "../../../../../_lib/utils/ids";
-import { writeAuditLog } from "../../../../../_lib/services/audit";
+import { prepareAuditLog } from "../../../../../_lib/services/audit";
 import {
   adminEventPermissionSchema,
   adminEventTeamListQuerySchema,
+  adminEventTeamListResponseSchema,
   EVENT_TEAM_SORT_COLUMNS,
   eventSlugParamsSchema,
   type EventTeamPermission,
@@ -65,7 +68,10 @@ const adminEventTeamListRouteSchema = {
     "Paginated, optionally sorted list of event-team role grants (organizer/program_committee/moderator/volunteer).",
   request: { params: eventSlugParamsSchema, query: adminEventTeamListQuerySchema },
   responses: {
-    "200": { description: "Event-team permissions list." },
+    "200": {
+      description: "Event-team permissions list.",
+      content: { "application/json": { schema: adminEventTeamListResponseSchema } },
+    },
   },
 };
 
@@ -74,32 +80,46 @@ export const AdminEventTeamList = openApiRoute(adminEventTeamListRouteSchema, as
   const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
   requirePermission(admin, "events:manage", { type: "event", id: event.id });
 
-  const { sort, limit = 100, offset = 0 } = data.query;
-  const orderBy = resolveOrderBy(sort, EVENT_TEAM_SORT_COLUMNS, "ORDER BY role_id ASC, user_email ASC");
+  const { q, sort, limit = 100, offset = 0 } = data.query;
+  const orderBy = resolveMappedOrderBy(
+    sort,
+    {
+      user_email: "ur.user_email",
+      role_id: "ur.role_id",
+      created_at: "ur.created_at",
+      expires_at: "ur.expires_at",
+    } satisfies Record<(typeof EVENT_TEAM_SORT_COLUMNS)[number], string>,
+    "ur.role_id ASC, ur.user_email ASC",
+    "ur.id ASC",
+  );
+  const search = q ? buildD1TextSearchFilter(q, ["ur.user_email", "ur.role_id"]) : null;
+  const searchSql = search ? `AND ${search.sql}` : "";
+  const searchBindings = search?.bindings ?? [];
 
-  const [rows, totalRow] = await Promise.all([
-    all<PermissionRow>(
-      requestDb(c),
-      `SELECT ur.id, ur.user_email, ur.user_id, ur.role_id,
+  const { rows, total } = await queryPage<PermissionRow>(
+    requestDb(c),
+    {
+      sql: `SELECT ur.id, ur.user_email, ur.user_id, ur.role_id,
               ur.granted_by_user_id AS granted_by_id, ur.expires_at, ur.created_at,
               u.email AS granter_email
        FROM user_roles ur
        LEFT JOIN users u ON u.id = ur.granted_by_user_id
        WHERE ur.context_type = 'event' AND ur.context_id = ? AND ur.revoked_at IS NULL
          AND ur.role_id IN ('role-event_organizer', 'role-program_committee', 'role-event_moderator', 'role-event_volunteer')
+       ${searchSql}
        ${orderBy}
        LIMIT ? OFFSET ?`,
-      [event.id, limit, offset],
-    ),
-    first<{ total: number }>(
-      requestDb(c),
-      `SELECT COUNT(*) AS total
+      bindings: [event.id, ...searchBindings, limit, offset],
+    },
+    {
+      sql: `SELECT COUNT(*) AS total
        FROM user_roles ur
        WHERE ur.context_type = 'event' AND ur.context_id = ? AND ur.revoked_at IS NULL
-         AND ur.role_id IN ('role-event_organizer', 'role-program_committee', 'role-event_moderator', 'role-event_volunteer')`,
-      [event.id],
-    ),
-  ]);
+         AND ur.role_id IN ('role-event_organizer', 'role-program_committee', 'role-event_moderator', 'role-event_volunteer')
+       ${searchSql}`,
+      bindings: [event.id, ...searchBindings],
+    },
+  );
 
   const permissions = rows.map((row) => ({
     id: row.id,
@@ -112,7 +132,6 @@ export const AdminEventTeamList = openApiRoute(adminEventTeamListRouteSchema, as
     granter_email: row.granter_email,
   }));
 
-  const total = totalRow?.total ?? 0;
   return json({ permissions, page: buildPageInfo(limit, offset, total, permissions.length) });
 });
 
@@ -145,18 +164,24 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   const now = nowIso();
   const expiresAt = body.expiresAt ?? null;
 
-  await run(
-    requestDb(c),
-    `INSERT INTO user_roles (id, user_id, user_email, role_id, context_type, context_id, granted_by_user_id, expires_at, created_at)
-     VALUES (?, ?, ?, ?, 'event', ?, ?, ?, ?)`,
-    [id, userRow?.id ?? null, normalizedEmail, roleId, event.id, admin.id, expiresAt, now],
-  );
-
-  await writeAuditLog(requestDb(c), "admin", admin.id, "event_permission_granted", "event", event.id, {
-    email: normalizedEmail,
-    permission: body.permission,
-    expiresAt,
-  });
+  await requestDb(c).batch([
+    requestDb(c)
+      .prepare(
+        `INSERT INTO user_roles (id, user_id, user_email, role_id, context_type, context_id, granted_by_user_id, expires_at, created_at)
+         VALUES (?, ?, ?, ?, 'event', ?, ?, ?, ?)`,
+      )
+      .bind(id, userRow?.id ?? null, normalizedEmail, roleId, event.id, admin.id, expiresAt, now),
+    prepareAuditLog(
+      requestDb(c),
+      "admin",
+      admin.id,
+      "event_permission_granted",
+      "event",
+      event.id,
+      { email: normalizedEmail, permission: body.permission, expiresAt },
+      now,
+    ),
+  ]);
 
   return json(
     {

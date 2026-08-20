@@ -104,7 +104,7 @@ export function Calendar() {
   }
 
   return (
-    <div class="d-flex flex-column gap-3" style="max-width: 700px;">
+    <div class="d-flex flex-column gap-3 content-width-schedule">
       <p class="text-muted small">
         Choose a time slot for each meeting series, or download any variant directly. Series you're not subscribed to
         (e.g. from a working group you haven't joined) won't appear here.

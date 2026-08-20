@@ -6,12 +6,10 @@
  * list endpoint uses, e.g. `admin-organizations.ts`).
  */
 import { z } from "zod";
-import { paginationQuerySchema, paginatedResponseSchema, sortColumnSchema } from "./pagination";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 /** Allowlisted sort columns for GET /api/v1/admin/users — unqualified, matching the route's SELECT-list aliases. */
 export const ADMIN_USERS_SORT_COLUMNS = ["last_name", "email", "organization_name", "role", "created_at"] as const;
-
-export const usersSortValueSchema = sortColumnSchema(ADMIN_USERS_SORT_COLUMNS);
 
 /**
  * GET /api/v1/admin/users `type` filter — computed from the existing
@@ -26,31 +24,13 @@ function trimmedString(min: number, max: number): z.ZodString {
   return z.string().trim().min(min).max(max);
 }
 
-export const usersListQuerySchema = paginationQuerySchema.extend({
+export const usersListQuerySchema = listQuerySchema(ADMIN_USERS_SORT_COLUMNS).extend({
   // `role` is a passthrough filter against users.role — never validated
   // against a fixed vocabulary by the pre-chanfana handler (unlike `type`
   // below), so an unrecognized value simply matches zero rows rather than
   // 400ing; preserved as-is rather than tightened into an enum here.
   role: trimmedString(1, 100).optional(),
   type: usersTypeValueSchema,
-  // `q` and `search` are accepted as aliases for the same free-text filter
-  // (the route combines them with `q ?? search`) — both kept for backward
-  // compatibility with existing callers of either name.
-  q: trimmedString(1, 200).optional(),
-  search: trimmedString(1, 200).optional(),
-  // Deliberately lenient, not `usersSortValueSchema`: the pre-chanfana
-  // handler quietly ignored an unrecognized `?sort=` value and fell back to
-  // the default order (resolveOrderBy does the real allowlist check
-  // downstream) rather than rejecting the request — same intentional,
-  // repeated "enforced-but-non-strict" convention documented for
-  // adminEventRegistrationsQuerySchema in api.ts. A strict `sortColumnSchema`
-  // here would turn that into a 400 for admin/users.ts specifically, since
-  // (unlike roles.ts/organizations.ts) this route never validated sort via
-  // chanfana before this pass.
-  sort: z.string().trim().max(41).optional(),
-  // Largest table in the system (P6M-P2-08) — keep the existing higher
-  // ceiling (500) rather than the shared pagination default's 200-row cap.
-  limit: z.coerce.number().int().min(1).max(500).optional(),
 });
 
 export const adminUserMembershipSchema = z.object({
@@ -60,6 +40,7 @@ export const adminUserMembershipSchema = z.object({
   organizationId: z.string().nullable(),
   organizationName: z.string().nullable(),
 });
+export type AdminUserMembership = z.infer<typeof adminUserMembershipSchema>;
 
 export const adminUserListItemSchema = z.object({
   id: z.string(),
@@ -80,6 +61,9 @@ export const adminUserListItemSchema = z.object({
   type: z.enum(ADMIN_USERS_TYPE_VALUES),
   eventParticipationCount: z.number(),
 });
+export type AdminUserListItem = z.infer<typeof adminUserListItemSchema>;
+
+export const usersListResponseSchema = paginatedResponseSchema("users", adminUserListItemSchema);
 
 export const usersListRouteSchema = {
   tags: ["Users"],
@@ -90,7 +74,7 @@ export const usersListRouteSchema = {
   responses: {
     "200": {
       description: "Users list.",
-      content: { "application/json": { schema: paginatedResponseSchema("users", adminUserListItemSchema) } },
+      content: { "application/json": { schema: usersListResponseSchema } },
     },
   },
 };

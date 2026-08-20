@@ -6,10 +6,10 @@
  * that each consolidated export still validates its real allowlist.
  */
 import { describe, expect, it } from "vitest";
-import { sortColumnSchema } from "../assets/shared/schemas/pagination";
-import { donationsSortValueSchema } from "../assets/shared/schemas/admin-donations";
-import { usersSortValueSchema } from "../assets/shared/schemas/admin-users";
-import { auditLogSortValueSchema } from "../assets/shared/schemas/admin-audit-log";
+import { listQuerySchema, searchQuerySchema, sortColumnSchema } from "../assets/shared/schemas/pagination";
+import { donationsListQuerySchema } from "../assets/shared/schemas/admin-donations";
+import { usersListQuerySchema } from "../assets/shared/schemas/admin-users";
+import { auditLogListQuerySchema } from "../assets/shared/schemas/admin-audit-log";
 import { emailTemplatesSortValueSchema } from "../assets/shared/schemas/admin-email-templates";
 import {
   eventsListSortValueSchema,
@@ -42,21 +42,48 @@ describe("sortColumnSchema (canonical)", () => {
   });
 });
 
+describe("shared list/search contract", () => {
+  const schema = listQuerySchema(["name", "created_at"] as const);
+
+  it("normalizes pagination and trims search once for every list endpoint", () => {
+    expect(schema.parse({ limit: "25", offset: "50", q: "  alice  ", sort: "-created_at" })).toEqual({
+      limit: 25,
+      offset: 50,
+      q: "alice",
+      sort: "-created_at",
+    });
+  });
+
+  it("rejects collection limits above the shared D1-safe maximum", () => {
+    expect(schema.safeParse({ limit: 201 }).success).toBe(false);
+  });
+
+  it("rejects empty search and values over the bounded search budget", () => {
+    expect(searchQuerySchema.safeParse({ q: "   " }).success).toBe(false);
+    expect(searchQuerySchema.safeParse({ q: "a".repeat(255) }).success).toBe(false);
+    expect(searchQuerySchema.safeParse({ q: "é".repeat(128) }).success).toBe(false);
+  });
+
+  it("accepts the exact UTF-8 search boundary", () => {
+    expect(searchQuerySchema.parse({ q: `a${"é".repeat(126)}b` }).q).toBe(`a${"é".repeat(126)}b`);
+  });
+});
+
 describe("consolidated per-endpoint sort schemas still validate their own allowlist", () => {
-  it("donationsSortValueSchema", () => {
-    expect(donationsSortValueSchema.safeParse("gross_amount").success).toBe(true);
-    expect(donationsSortValueSchema.safeParse("-gross_amount").success).toBe(true);
-    expect(donationsSortValueSchema.safeParse("bogus").success).toBe(false);
+  it("donationsListQuerySchema sort", () => {
+    expect(donationsListQuerySchema.safeParse({ sort: "gross_amount" }).success).toBe(true);
+    expect(donationsListQuerySchema.safeParse({ sort: "-gross_amount" }).success).toBe(true);
+    expect(donationsListQuerySchema.safeParse({ sort: "bogus" }).success).toBe(false);
   });
 
-  it("usersSortValueSchema", () => {
-    expect(usersSortValueSchema.safeParse("last_name").success).toBe(true);
-    expect(usersSortValueSchema.safeParse("bogus").success).toBe(false);
+  it("usersListQuerySchema sort", () => {
+    expect(usersListQuerySchema.safeParse({ sort: "last_name" }).success).toBe(true);
+    expect(usersListQuerySchema.safeParse({ sort: "bogus" }).success).toBe(false);
   });
 
-  it("auditLogSortValueSchema", () => {
-    expect(auditLogSortValueSchema.safeParse("al.action").success).toBe(true);
-    expect(auditLogSortValueSchema.safeParse("bogus").success).toBe(false);
+  it("auditLogListQuerySchema sort", () => {
+    expect(auditLogListQuerySchema.safeParse({ sort: "action" }).success).toBe(true);
+    expect(auditLogListQuerySchema.safeParse({ sort: "bogus" }).success).toBe(false);
   });
 
   it("emailTemplatesSortValueSchema", () => {

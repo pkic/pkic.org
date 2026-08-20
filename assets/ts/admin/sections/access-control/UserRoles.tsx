@@ -88,7 +88,7 @@ export function UserRoles() {
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-header bg-white fw-semibold">Staff management — assign roles</div>
       <div class="card-body">
-        <div class="mb-3" style={{ maxWidth: "400px" }}>
+        <div class="mb-3 adm-role-user-picker">
           <label class="form-label small fw-semibold">User</label>
           <UserPicker value={user} onChange={setUser} />
         </div>

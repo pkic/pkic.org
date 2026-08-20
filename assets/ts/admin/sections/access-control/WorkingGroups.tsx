@@ -303,7 +303,7 @@ export function WorkingGroups() {
       <div class="card-body">
         <CreateWorkingGroupForm onCreated={() => void loadGroups(false)} />
 
-        <div class="mb-3" style={{ maxWidth: "320px" }}>
+        <div class="mb-3 adm-filter-control">
           <label class="form-label small fw-semibold">Working group</label>
           <select
             class="form-select form-select-sm"
@@ -391,7 +391,7 @@ export function WorkingGroups() {
               <thead class="table-dark">
                 <tr>
                   {memberSortTh("Name", "name")}
-                  {memberSortTh("Organisation", "organizationName")}
+                  {memberSortTh("Organization", "organizationName")}
                   {memberSortTh("Category", "memberCategory")}
                   <th></th>
                 </tr>

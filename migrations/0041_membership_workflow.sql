@@ -123,6 +123,9 @@ CREATE TABLE google_groups_sync_queue (
 );
 
 CREATE INDEX idx_google_groups_sync_queue_status ON google_groups_sync_queue(status, created_at);
+CREATE UNIQUE INDEX uq_google_groups_sync_queue_active_action
+  ON google_groups_sync_queue(user_id, google_group_email, action)
+  WHERE status IN ('pending', 'processing');
 
 -- ── Membership workflow settings ───────────────────────────────────
 -- Single configurable row (id is always 'default') rather than a generic

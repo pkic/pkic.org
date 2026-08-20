@@ -19,6 +19,16 @@ describe("scheduled due work waitlist promotions", () => {
     await resetDb();
   });
 
+  it("honors the registry's invocation-wide deadline before starting a pass", async () => {
+    const result = await runScheduledDueWork(
+      { ...baseEnv, APP_BASE_URL: "https://app.test", SCHEDULED_DUE_WORK_MAX_MS: "120000" },
+      { deadlineAt: Date.now() - 1, remainingMs: () => 0 },
+    );
+
+    expect(result.stoppedReason).toBe("time_limit");
+    expect(result.passes).toHaveLength(0);
+  });
+
   it("includes waitlist promotions in scheduled due-work runs", async () => {
     const { eventId } = await seedEventAndAdmin(baseEnv.DB);
 

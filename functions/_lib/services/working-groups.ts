@@ -7,11 +7,11 @@
  * Google Groups sync enqueue is identical either way, only the caller's
  * authorization differs.
  */
-import { first, run } from "../db/queries";
+import { first } from "../db/queries";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { AppError } from "../errors";
-import { enqueueGoogleGroupsSync } from "./google-groups";
+import { buildEnqueueGoogleGroupsSyncStatement } from "./google-groups";
 import type { DatabaseLike, StatementLike } from "../types";
 
 export const CA_WORKING_GROUP_SLUG = "ca";
@@ -88,12 +88,11 @@ export async function buildAddWorkingGroupMemberStatements(
 
   if (wg.mailing_list_email) {
     statements.push(
-      db
-        .prepare(
-          `INSERT INTO google_groups_sync_queue (id, user_id, action, google_group_email, status, attempts, last_error, created_at, processed_at)
-           VALUES (?, ?, 'add_to_list', ?, 'pending', 0, NULL, ?, NULL)`,
-        )
-        .bind(uuid(), targetUserId, wg.mailing_list_email, nowIso()),
+      buildEnqueueGoogleGroupsSyncStatement(db, {
+        userId: targetUserId,
+        googleGroupEmail: wg.mailing_list_email,
+        action: "add_to_list",
+      }).statement,
     );
   }
 
@@ -117,18 +116,28 @@ export async function removeWorkingGroupMember(
   wg: WorkingGroupRow,
   targetUserId: string,
 ): Promise<void> {
-  const result = await run(
+  const existing = await first<{ id: string }>(
     db,
-    `UPDATE working_group_members SET left_at = ? WHERE working_group_id = ? AND user_id = ? AND left_at IS NULL`,
-    [nowIso(), wg.id, targetUserId],
+    "SELECT id FROM working_group_members WHERE working_group_id = ? AND user_id = ? AND left_at IS NULL",
+    [wg.id, targetUserId],
   );
-  if (result.changes === 0) return;
+  if (!existing) return;
 
+  const statements: StatementLike[] = [
+    db
+      .prepare(
+        "UPDATE working_group_members SET left_at = ? WHERE working_group_id = ? AND user_id = ? AND left_at IS NULL",
+      )
+      .bind(nowIso(), wg.id, targetUserId),
+  ];
   if (wg.mailing_list_email) {
-    await enqueueGoogleGroupsSync(db, {
-      userId: targetUserId,
-      googleGroupEmail: wg.mailing_list_email,
-      action: "remove_from_list",
-    });
+    statements.push(
+      buildEnqueueGoogleGroupsSyncStatement(db, {
+        userId: targetUserId,
+        googleGroupEmail: wg.mailing_list_email,
+        action: "remove_from_list",
+      }).statement,
+    );
   }
+  await db.batch(statements);
 }

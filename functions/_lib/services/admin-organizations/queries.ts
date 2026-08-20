@@ -8,6 +8,8 @@
  * provisioning; this file owns only reads.
  */
 import { all, first } from "../../db/queries";
+import { queryPage } from "../../db/pagination";
+import { buildD1TextSearchFilter } from "../../db/search";
 import { AppError } from "../../errors";
 import { resolveOrderBy } from "../../db/sort";
 import { parseLinksJson } from "../../../../assets/shared/schemas/links";
@@ -97,20 +99,21 @@ export async function listAdminOrganizations(
   db: DatabaseLike,
   params: { limit: number; offset: number; q?: string; sort?: string },
 ): Promise<{ organizations: ReturnType<typeof toOrgSummary>[]; total: number }> {
-  const where = params.q ? "WHERE o.name LIKE ?" : "";
-  const whereArgs = params.q ? [`%${params.q}%`] : [];
+  const search = params.q ? buildD1TextSearchFilter(params.q, ["o.name"]) : null;
+  const where = search ? `WHERE ${search.sql}` : "";
+  const whereArgs = search?.bindings ?? [];
   const orderBy = resolveOrderBy(params.sort, ORG_SORT_COLUMNS, "ORDER BY o.name ASC");
 
-  const [rows, totalRow] = await Promise.all([
-    all<OrgSummaryRow>(db, `${ORG_SUMMARY_SELECT} ${where} ${orderBy} LIMIT ? OFFSET ?`, [
-      ...whereArgs,
-      params.limit,
-      params.offset,
-    ]),
-    first<{ total: number }>(db, `SELECT COUNT(*) AS total FROM organizations o ${where}`, whereArgs),
-  ]);
+  const { rows, total } = await queryPage<OrgSummaryRow>(
+    db,
+    {
+      sql: `${ORG_SUMMARY_SELECT} ${where} ${orderBy} LIMIT ? OFFSET ?`,
+      bindings: [...whereArgs, params.limit, params.offset],
+    },
+    { sql: `SELECT COUNT(*) AS total FROM organizations o ${where}`, bindings: whereArgs },
+  );
 
-  return { organizations: rows.map(toOrgSummary), total: totalRow?.total ?? 0 };
+  return { organizations: rows.map(toOrgSummary), total };
 }
 
 // ── Detail ───────────────────────────────────────────────────────────────

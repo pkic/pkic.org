@@ -85,7 +85,7 @@ export function App() {
   if (session) {
     return (
       <>
-        <div class="d-flex justify-content-end container py-2" style="max-width: 960px;">
+        <div class="d-flex justify-content-end container py-2 content-width-xl">
           <button
             class="btn btn-sm btn-outline-secondary"
             onClick={() => {
@@ -103,7 +103,7 @@ export function App() {
   return (
     <>
       {verifyError && (
-        <div class="container" style="max-width: 440px;">
+        <div class="container content-width-sm">
           <div class="alert alert-danger mt-4">✕ Sign-in failed: {verifyError}</div>
         </div>
       )}

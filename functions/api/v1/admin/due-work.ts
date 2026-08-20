@@ -1,0 +1,34 @@
+import { requireAdminFromRequest } from "../../../_lib/auth/admin";
+import { resolveAppBaseUrl } from "../../../_lib/config";
+import { requestDb, type AdminContext } from "../../../_lib/db/context";
+import { json } from "../../../_lib/http";
+import { openApiRoute } from "../../../_lib/openapi/route";
+import { listDueWork } from "../../../_lib/services/due-work-read-model";
+import { adminDueWorkListRouteSchema } from "../../../../assets/shared/schemas/admin-due-work";
+
+export const AdminDueWorkList = openApiRoute(adminDueWorkListRouteSchema, async (c: AdminContext, data) => {
+  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  const {
+    bucket = "all",
+    includeRetention = false,
+    reminderLimit = 120,
+    outboxLimit = 120,
+    limit = 25,
+    offset = 0,
+    q,
+    sort,
+  } = data.query;
+
+  return json(
+    await listDueWork(requestDb(c), c.env, resolveAppBaseUrl(c.env, c.req.raw), {
+      bucket,
+      includeRetention,
+      reminderLimit,
+      outboxLimit,
+      limit,
+      offset,
+      q,
+      sort,
+    }),
+  );
+});

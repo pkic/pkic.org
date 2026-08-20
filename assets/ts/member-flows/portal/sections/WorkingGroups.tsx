@@ -131,7 +131,7 @@ export function WorkingGroups() {
   const membershipByWgId = new Map(memberships.map((m) => [m.workingGroupId, m]));
 
   return (
-    <div class="d-flex flex-column gap-3" style="max-width: 700px;">
+    <div class="d-flex flex-column gap-3 content-width-schedule">
       <p class="text-muted small">
         Join or leave working groups at any time. Joining adds you to the group's mailing list and meeting calendar;
         leaving removes both.

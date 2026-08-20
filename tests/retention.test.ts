@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { queryAll } from "./helpers/context";
-import { runRetentionJob } from "../functions/_lib/services/retention";
+import { runRetentionJob, summarizeRetentionJob } from "../functions/_lib/services/retention";
+import type { DatabaseLike } from "../functions/_lib/types";
 
 describe("retention job", () => {
   beforeEach(async () => {
@@ -90,5 +91,35 @@ describe("retention job", () => {
     )[0];
 
     expect(Number(consent.total)).toBe(1);
+  });
+
+  it("summarizes every due policy with one set-based D1 query", async () => {
+    const eventId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO events
+             (id, slug, name, timezone, starts_at, ends_at, registration_mode, invite_limit_attendee,
+              settings_json, created_at, updated_at)
+           VALUES (?, 'set-based-retention', 'Set Based', 'UTC', '2020-01-01', '2020-01-02',
+                   'invite_or_open', 5, '{}', datetime('now'), datetime('now'))`,
+      ).bind(eventId),
+      env.DB.prepare(
+        "INSERT INTO retention_policies (event_id, user_retention_days, updated_at) VALUES (?, 30, datetime('now'))",
+      ).bind(eventId),
+    ]);
+
+    let prepareCount = 0;
+    const countingDb: DatabaseLike = {
+      prepare(query) {
+        prepareCount += 1;
+        return env.DB.prepare(query);
+      },
+      batch: (statements) => env.DB.batch(statements as D1PreparedStatement[]),
+    };
+    const result = await summarizeRetentionJob(countingDb);
+
+    expect(result.totalEvents).toBe(1);
+    expect(result.dueEvents[0].eventId).toBe(eventId);
+    expect(prepareCount).toBe(1);
   });
 });

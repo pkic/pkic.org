@@ -3,7 +3,8 @@ import { all, first, run } from "../db/queries";
 import { nowIso } from "../utils/time";
 import { parseJsonSafe, stringifyJson } from "../utils/json";
 import { uuid } from "../utils/ids";
-import type { DatabaseLike } from "../types";
+import { prepareAuditLog } from "./audit";
+import type { DatabaseLike, StatementLike } from "../types";
 
 export interface EventRecord {
   id: string;
@@ -387,20 +388,35 @@ export async function getRequiredTerms(
   );
 }
 
-export async function upsertEventFromHugo(
+export interface EventUpsertPayload {
+  slug: string;
+  name: string;
+  timezone: string;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  registrationMode?: string;
+  inviteLimitAttendee?: number;
+  inviteLimitSpeakerNomination?: number;
+  settings?: Record<string, unknown>;
+}
+
+export interface EventSyncTerms {
+  attendee: EventTermInput[];
+  speaker: EventTermInput[];
+}
+
+interface EventTermInput {
+  termKey: string;
+  version: string;
+  required?: boolean;
+  contentRef?: string;
+  displayText?: string;
+}
+
+async function buildEventUpsertStatement(
   db: DatabaseLike,
-  payload: {
-    slug: string;
-    name: string;
-    timezone: string;
-    startsAt?: string | null;
-    endsAt?: string | null;
-    registrationMode?: string;
-    inviteLimitAttendee?: number;
-    inviteLimitSpeakerNomination?: number;
-    settings?: Record<string, unknown>;
-  },
-): Promise<EventRecord> {
+  payload: EventUpsertPayload,
+): Promise<{ eventId: string; statement: StatementLike }> {
   const existing = await first<EventRecord>(db, "SELECT * FROM events WHERE slug = ?", [payload.slug]);
   const now = nowIso();
 
@@ -421,58 +437,67 @@ export async function upsertEventFromHugo(
       settings_json: stringifyJson(payload.settings ?? {}),
     };
 
-    await run(
-      db,
-      `INSERT INTO events (
-        id, slug, name, timezone, starts_at, ends_at, source_path, base_path, capacity_in_person,
-        registration_mode, invite_limit_attendee, invite_limit_speaker_nomination, settings_json, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        event.id,
-        event.slug,
-        event.name,
-        event.timezone,
-        event.starts_at,
-        event.ends_at,
-        event.source_path,
-        event.base_path,
-        event.capacity_in_person,
-        event.registration_mode,
-        event.invite_limit_attendee,
-        event.invite_limit_speaker_nomination,
-        event.settings_json,
-        now,
-        now,
-      ],
-    );
-
-    return event;
+    return {
+      eventId: event.id,
+      statement: db
+        .prepare(
+          `INSERT INTO events (
+            id, slug, name, timezone, starts_at, ends_at, source_path, base_path, capacity_in_person,
+            registration_mode, invite_limit_attendee, invite_limit_speaker_nomination, settings_json, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(
+          event.id,
+          event.slug,
+          event.name,
+          event.timezone,
+          event.starts_at,
+          event.ends_at,
+          event.source_path,
+          event.base_path,
+          event.capacity_in_person,
+          event.registration_mode,
+          event.invite_limit_attendee,
+          event.invite_limit_speaker_nomination,
+          event.settings_json,
+          now,
+          now,
+        ),
+    };
   }
 
-  await run(
-    db,
-    `UPDATE events
-     SET name = ?, timezone = ?, starts_at = ?, ends_at = ?,
-         capacity_in_person = ?, registration_mode = ?, invite_limit_attendee = ?,
-         invite_limit_speaker_nomination = ?, settings_json = ?, updated_at = ?
-     WHERE id = ?`,
-    [
-      payload.name,
-      payload.timezone,
-      payload.startsAt ?? existing.starts_at,
-      payload.endsAt ?? existing.ends_at,
-      null,
-      payload.registrationMode ?? existing.registration_mode,
-      payload.inviteLimitAttendee ?? existing.invite_limit_attendee,
-      payload.inviteLimitSpeakerNomination ?? existing.invite_limit_speaker_nomination,
-      stringifyJson({
-        ...parseJsonSafe<Record<string, unknown>>(existing.settings_json, {}),
-        ...(payload.settings ?? {}),
-      }),
-      now,
-      existing.id,
-    ],
-  );
+  return {
+    eventId: existing.id,
+    statement: db
+      .prepare(
+        `UPDATE events
+         SET name = ?, timezone = ?, starts_at = ?, ends_at = ?,
+             capacity_in_person = ?, registration_mode = ?, invite_limit_attendee = ?,
+             invite_limit_speaker_nomination = ?, settings_json = ?, updated_at = ?
+         WHERE id = ?`,
+      )
+      .bind(
+        payload.name,
+        payload.timezone,
+        payload.startsAt ?? existing.starts_at,
+        payload.endsAt ?? existing.ends_at,
+        null,
+        payload.registrationMode ?? existing.registration_mode,
+        payload.inviteLimitAttendee ?? existing.invite_limit_attendee,
+        payload.inviteLimitSpeakerNomination ?? existing.invite_limit_speaker_nomination,
+        stringifyJson({
+          ...parseJsonSafe<Record<string, unknown>>(existing.settings_json, {}),
+          ...(payload.settings ?? {}),
+        }),
+        now,
+        existing.id,
+      ),
+  };
+}
+
+export async function upsertEventFromHugo(db: DatabaseLike, payload: EventUpsertPayload): Promise<EventRecord> {
+  const mutation = await buildEventUpsertStatement(db, payload);
+  await mutation.statement.run();
 
   return getEventBySlug(db, payload.slug);
 }
@@ -500,34 +525,69 @@ export async function updateEventBasePath(
   await run(db, "UPDATE events SET base_path = ? WHERE id = ? AND base_path IS NULL", [path, eventId]);
 }
 
+function buildReplaceEventTermsStatements(
+  db: DatabaseLike,
+  eventId: string,
+  audienceType: "attendee" | "speaker",
+  terms: EventTermInput[],
+): StatementLike[] {
+  const now = nowIso();
+  return [
+    db
+      .prepare("UPDATE event_terms SET active = 0 WHERE event_id = ? AND audience_type = ?")
+      .bind(eventId, audienceType),
+    ...terms.map((term) =>
+      db
+        .prepare(
+          `INSERT INTO event_terms (
+            id, event_id, audience_type, term_key, version, required, content_ref, display_text, active, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+          ON CONFLICT(event_id, audience_type, term_key, version)
+          DO UPDATE SET required = excluded.required, content_ref = excluded.content_ref, display_text = excluded.display_text, active = 1`,
+        )
+        .bind(
+          uuid(),
+          eventId,
+          audienceType,
+          term.termKey,
+          term.version,
+          term.required === false ? 0 : 1,
+          term.contentRef ?? null,
+          term.displayText ?? null,
+          now,
+        ),
+    ),
+  ];
+}
+
 export async function replaceEventTerms(
   db: DatabaseLike,
   eventId: string,
   audienceType: "attendee" | "speaker",
-  terms: Array<{ termKey: string; version: string; required?: boolean; contentRef?: string; displayText?: string }>,
+  terms: EventTermInput[],
 ): Promise<void> {
-  await run(db, "UPDATE event_terms SET active = 0 WHERE event_id = ? AND audience_type = ?", [eventId, audienceType]);
+  await db.batch(buildReplaceEventTermsStatements(db, eventId, audienceType, terms));
+}
 
-  const now = nowIso();
-  for (const term of terms) {
-    await run(
-      db,
-      `INSERT INTO event_terms (
-        id, event_id, audience_type, term_key, version, required, content_ref, display_text, active, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-      ON CONFLICT(event_id, audience_type, term_key, version)
-      DO UPDATE SET required = excluded.required, content_ref = excluded.content_ref, display_text = excluded.display_text, active = 1`,
-      [
-        uuid(),
-        eventId,
-        audienceType,
-        term.termKey,
-        term.version,
-        term.required === false ? 0 : 1,
-        term.contentRef ?? null,
-        term.displayText ?? null,
-        now,
-      ],
+export async function syncEventFromHugo(
+  db: DatabaseLike,
+  payload: EventUpsertPayload,
+  terms: EventSyncTerms | undefined,
+  actorUserId: string,
+): Promise<EventRecord> {
+  const mutation = await buildEventUpsertStatement(db, payload);
+  const statements: StatementLike[] = [mutation.statement];
+  if (terms) {
+    statements.push(
+      ...buildReplaceEventTermsStatements(db, mutation.eventId, "attendee", terms.attendee),
+      ...buildReplaceEventTermsStatements(db, mutation.eventId, "speaker", terms.speaker),
     );
   }
+  statements.push(
+    prepareAuditLog(db, "admin", actorUserId, "event_synced_from_hugo", "event", mutation.eventId, {
+      slug: payload.slug,
+    }),
+  );
+  await db.batch(statements);
+  return getEventBySlug(db, payload.slug);
 }

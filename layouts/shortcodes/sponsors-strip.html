@@ -1,10 +1,6 @@
-{{/* {{< sponsors-strip sponsoring="<event name>" minWeight="5" class="..." linkClass="..." logoClass="..." logoStyle="..." >}} */}}
-{{ partial "sponsors/wall-app.html" (dict
-  "mode" "strip"
-  "eventName" (.Get "sponsoring")
-  "minWeight" (.Get "minWeight" | default 5)
-  "containerClass" (.Get "class" | default "d-flex justify-content-center align-items-center flex-wrap gap-4 my-4")
-  "linkClass" (.Get "linkClass" | default "sponsor-link")
-  "logoClass" (.Get "logoClass" | default "sponsor-logo")
-  "logoStyle" (.Get "logoStyle" | default "max-height: 40px; width: auto;")
-) }}
+{{/* {{< sponsors-strip sponsoring="<event name
+  >" minWeight="5" class="..." linkClass="..." logoClass="..." >}} */}} {{ partial "sponsors/wall-app.html" (dict "mode"
+  "strip" "eventName" (.Get "sponsoring") "minWeight" (.Get "minWeight" | default 5) "containerClass" (.Get "class" |
+  default "d-flex justify-content-center align-items-center flex-wrap gap-4 my-4") "linkClass" (.Get "linkClass" |
+  default "sponsor-link") "logoClass" (.Get "logoClass" | default "sponsor-logo") ) }}
+</event>

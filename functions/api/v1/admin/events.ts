@@ -2,7 +2,9 @@ import { parseJsonBody } from "../../../_lib/validation";
 import { json } from "../../../_lib/http";
 import { requireAdminFromRequest } from "../../../_lib/auth/admin";
 import { requirePermission } from "../../../_lib/auth/permissions";
-import { all, first } from "../../../_lib/db/queries";
+import { first } from "../../../_lib/db/queries";
+import { queryPage } from "../../../_lib/db/pagination";
+import { buildD1TextSearchFilter } from "../../../_lib/db/search";
 import { resolveOrderBy } from "../../../_lib/db/sort";
 import { openApiRoute } from "../../../_lib/openapi/route";
 import { upsertEventFromHugo } from "../../../_lib/services/events";
@@ -11,6 +13,7 @@ import { parseJsonSafe } from "../../../_lib/utils/json";
 import {
   adminCreateEventSchema,
   adminEventsListQuerySchema,
+  adminEventsListResponseSchema,
   EVENTS_LIST_SORT_COLUMNS,
 } from "../../../../assets/shared/schemas/api";
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
@@ -48,20 +51,26 @@ export const AdminEventsListGet = openApiRoute(
     description: "Paginated, optionally sorted list of every event, with aggregate registration and invite counts.",
     request: { query: adminEventsListQuerySchema },
     responses: {
-      "200": { description: "Events list." },
+      "200": {
+        description: "Events list.",
+        content: { "application/json": { schema: adminEventsListResponseSchema } },
+      },
     },
   },
   async (c: AdminContext, data) => {
     const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
     requirePermission(admin, "events:read");
 
-    const { sort, limit = 50, offset = 0 } = data.query;
+    const { q, sort, limit = 50, offset = 0 } = data.query;
     const orderBy = resolveOrderBy(sort, EVENTS_LIST_SORT_COLUMNS, "ORDER BY COALESCE(e.starts_at, '9999') DESC");
+    const search = q ? buildD1TextSearchFilter(q, ["e.name", "e.slug"]) : null;
+    const where = search ? `WHERE ${search.sql}` : "";
+    const bindings = search?.bindings ?? [];
 
-    const [events, totalRow] = await Promise.all([
-      all<EventWithStats>(
-        requestDb(c),
-        `WITH registration_counts AS (
+    const { rows: events, total } = await queryPage<EventWithStats>(
+      requestDb(c),
+      {
+        sql: `WITH registration_counts AS (
            SELECT event_id,
                   COUNT(*) AS total_registrations,
                   SUM(CASE WHEN status = 'registered' THEN 1 ELSE 0 END) AS confirmed_registrations
@@ -94,14 +103,14 @@ export const AdminEventsListGet = openApiRoute(
          FROM events e
          LEFT JOIN registration_counts ON registration_counts.event_id = e.id
          LEFT JOIN invite_counts ON invite_counts.event_id = e.id
+         ${where}
          ${orderBy}
          LIMIT ? OFFSET ?`,
-        [limit, offset],
-      ),
-      first<{ total: number }>(requestDb(c), `SELECT COUNT(*) AS total FROM events`, []),
-    ]);
+        bindings: [...bindings, limit, offset],
+      },
+      { sql: `SELECT COUNT(*) AS total FROM events e ${where}`, bindings },
+    );
 
-    const total = Number(totalRow?.total ?? 0);
     return json({ events, page: buildPageInfo(limit, offset, total, events.length) });
   },
 );

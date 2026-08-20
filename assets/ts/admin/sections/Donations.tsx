@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "preact/hooks";
+import { useState, useEffect, useRef, useCallback } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Badge } from "../../components/Badge";
 import { Spinner } from "../../components/Spinner";
@@ -8,99 +8,15 @@ import { Tabs } from "../../components/Tabs";
 import { api } from "../api";
 import { fmt, toast } from "../ui";
 import { asyncPaymentWindow } from "../../../shared/constants/async-payment-window";
+import { Pager } from "../../components/Pager";
+import {
+  donationPromotersListResponseSchema,
+  donationsListResponseSchema,
+  type AdminDonationPromoter as PromoterRow,
+} from "../../../shared/schemas/admin-donations";
+import { formatDonationAmount, type DonationRow, type DonationSyncResponse } from "./donations/model";
 
-interface DonationRow {
-  id: string;
-  checkout_session_id: string;
-  payment_intent_id: string | null;
-  name: string;
-  email: string;
-  organization: string | null;
-  currency: string;
-  gross_amount: number;
-  net_amount: number | null;
-  source: string | null;
-  status: string;
-  payment_method_type: string | null;
-  session_expires_at: number | null;
-  settled_amount: number | null;
-  settled_currency: string | null;
-  created_at: string;
-  completed_at: string | null;
-}
-
-interface DonationsResponse {
-  donations: DonationRow[];
-  summary: Record<string, number>;
-  limit: number;
-  offset: number;
-  total: number;
-}
-
-interface DonationSyncResult {
-  sessionId: string;
-  outcome: "completed" | "expired" | "awaiting_payment" | "failed" | "still_pending" | "error";
-  error?: string;
-}
-
-interface DonationSyncResponse {
-  synced: number;
-  completed: number;
-  expired: number;
-  failed: number;
-  errors: number;
-  results: DonationSyncResult[];
-}
-
-interface PromoterRow {
-  code: string;
-  name: string | null;
-  checkout_session_id: string | null;
-  clicks: number;
-  own_gross: number;
-  own_gross_usd: number;
-  own_currency: string | null;
-  attributed_total: number;
-  attributed_completed: number;
-  attributed_gross: number;
-  attributed_gross_usd: number;
-  currency: string | null;
-  created_at: string;
-}
-
-const ZERO_DECIMAL_CURRENCIES = new Set([
-  "bif",
-  "clp",
-  "gnf",
-  "jpy",
-  "kmf",
-  "krw",
-  "mga",
-  "pyg",
-  "rwf",
-  "ugx",
-  "vnd",
-  "vuv",
-  "xaf",
-  "xof",
-  "xpf",
-]);
 const FILTERS = ["", "pending", "awaiting_payment", "completed", "expired", "failed"] as const;
-
-function fmtAmount(smallestUnit: number, currency: string): string {
-  const code = currency.toLowerCase();
-  const major = ZERO_DECIMAL_CURRENCIES.has(code) ? smallestUnit : smallestUnit / 100;
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: currency.toUpperCase(),
-      minimumFractionDigits: 0,
-      maximumFractionDigits: ZERO_DECIMAL_CURRENCIES.has(code) ? 0 : 2,
-    }).format(major);
-  } catch {
-    return `${major} ${currency.toUpperCase()}`;
-  }
-}
 
 const RANK_CLASS: Record<number, string> = { 1: "gold", 2: "silver", 3: "bronze" };
 const RANK_CARD: Record<number, string> = { 1: "top-1", 2: "top-2", 3: "top-3" };
@@ -112,10 +28,10 @@ function rankTier(rank: number): string {
 }
 
 function DonorPromoterCard({ p, rank }: { p: PromoterRow; rank: number }) {
-  const ownAmt = p.own_gross > 0 && p.own_currency ? fmtAmount(p.own_gross, p.own_currency) : null;
-  const refAmt = p.attributed_gross > 0 && p.currency ? fmtAmount(p.attributed_gross, p.currency) : null;
+  const ownAmt = p.own_gross > 0 && p.own_currency ? formatDonationAmount(p.own_gross, p.own_currency) : null;
+  const refAmt = p.attributed_gross > 0 && p.currency ? formatDonationAmount(p.attributed_gross, p.currency) : null;
   const totalUsd = p.own_gross_usd + p.attributed_gross_usd;
-  const totalAmt = totalUsd > 0 ? fmtAmount(totalUsd, "usd") : "—";
+  const totalAmt = totalUsd > 0 ? formatDonationAmount(totalUsd, "usd") : "—";
   const appBase = window.location.origin;
 
   return (
@@ -170,64 +86,74 @@ function PromotersTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [promoters, setPromoters] = useState<PromoterRow[]>([]);
+  const [summary, setSummary] = useState({
+    promoterCount: 0,
+    totalOwnGrossUsd: 0,
+    totalAttributedGrossUsd: 0,
+    totalClicks: 0,
+    totalAttributedCompleted: 0,
+  });
+  const [offset, setOffset] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
+  const [hasMore, setHasMore] = useState(false);
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await api<{ promoters: PromoterRow[] }>("/api/v1/admin/donations/promoters");
+      const query = new URLSearchParams({
+        limit: String(pageSize),
+        offset: String(offset),
+        sort: "-impact",
+      });
+      const data = donationPromotersListResponseSchema.parse(
+        await api<unknown>(`/api/v1/admin/donations/promoters?${query.toString()}`),
+      );
       setPromoters(data.promoters);
+      setSummary(data.summary);
+      setHasMore(data.page.hasMore);
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setLoading(false);
     }
-  }
+  }, [offset, pageSize]);
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
 
-  // Sort by total USD impact (own + attributed)
-  const sorted = [...promoters].sort(
-    (a, b) => b.own_gross_usd + b.attributed_gross_usd - (a.own_gross_usd + a.attributed_gross_usd),
-  );
-
-  // Summary stats (USD-normalised)
-  const totalOwn = sorted.reduce((s, p) => s + p.own_gross_usd, 0);
-  const totalReferred = sorted.reduce((s, p) => s + p.attributed_gross_usd, 0);
-  const totalClicks = sorted.reduce((s, p) => s + p.clicks, 0);
-  const totalDonated = sorted.reduce((s, p) => s + p.attributed_completed, 0);
+  const page = Math.floor(offset / pageSize) + 1;
 
   return (
     <div>
-      {sorted.length > 0 && (
+      {summary.promoterCount > 0 && (
         <div class="stat-grid mb-3">
           <div class="stat-card ok">
-            <div class="val">{sorted.length}</div>
+            <div class="val">{summary.promoterCount}</div>
             <div class="lbl">Share Links</div>
           </div>
           <div class="stat-card ok">
-            <div class="val">{fmtAmount(totalOwn, "usd")}</div>
+            <div class="val">{formatDonationAmount(summary.totalOwnGrossUsd, "usd")}</div>
             <div class="lbl">Own Donations</div>
           </div>
           <div class="stat-card">
-            <div class="val">{totalClicks}</div>
+            <div class="val">{summary.totalClicks}</div>
             <div class="lbl">Link Clicks</div>
           </div>
           <div class="stat-card ok">
-            <div class="val">{totalDonated}</div>
+            <div class="val">{summary.totalAttributedCompleted}</div>
             <div class="lbl">Referred Donors</div>
           </div>
           <div class="stat-card ok">
-            <div class="val">{fmtAmount(totalReferred, "usd")}</div>
+            <div class="val">{formatDonationAmount(summary.totalAttributedGrossUsd, "usd")}</div>
             <div class="lbl">Referred Amount</div>
           </div>
         </div>
       )}
 
       <div class="d-flex justify-content-end mb-2">
-        <button class="btn btn-sm btn-outline-secondary" onClick={load}>
+        <button class="btn btn-sm btn-outline-secondary" onClick={() => void load()}>
           ↺ Refresh
         </button>
       </div>
@@ -235,15 +161,32 @@ function PromotersTab() {
       {!loading && <ErrorAlert error={error} />}
       {!loading &&
         !error &&
-        (sorted.length === 0 ? (
+        (promoters.length === 0 ? (
           <div class="text-muted text-center py-4">No promoter links yet</div>
         ) : (
           <div class="d-flex flex-column gap-2">
-            {sorted.map((p, i) => (
-              <DonorPromoterCard key={p.code} p={p} rank={i + 1} />
+            {promoters.map((p, i) => (
+              <DonorPromoterCard key={p.code} p={p} rank={offset + i + 1} />
             ))}
           </div>
         ))}
+      {!loading && !error && (
+        <Pager
+          page={page}
+          hasMore={hasMore}
+          pageSize={pageSize}
+          offset={offset}
+          rowCount={promoters.length}
+          total={summary.promoterCount}
+          onPrev={() => setOffset(Math.max(0, offset - pageSize))}
+          onNext={() => setOffset(offset + pageSize)}
+          onJump={(nextPage) => setOffset((nextPage - 1) * pageSize)}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setOffset(0);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -257,37 +200,13 @@ export function Donations({ subTab }: { subTab?: string }) {
   const [donations, setDonations] = useState<DonationRow[]>([]);
   const actionsRef = useRef<ApiTableActions | null>(null);
 
-  async function handleSyncPending() {
+  async function handleSync(pendingOnly: boolean) {
     setSyncingAll(true);
     try {
       const res = await api<DonationSyncResponse>("/api/v1/admin/donations/sync", {
         method: "POST",
-        body: JSON.stringify({ pendingOnly: true }),
+        ...(pendingOnly ? { body: JSON.stringify({ pendingOnly: true }) } : {}),
       });
-      const parts = [
-        res.completed ? `${res.completed} completed` : "",
-        res.failed ? `${res.failed} failed` : "",
-        res.expired ? `${res.expired} expired` : "",
-        res.errors ? `${res.errors} errors` : "",
-      ]
-        .filter(Boolean)
-        .join(", ");
-      toast(
-        `Synced ${res.synced}${parts ? `: ${parts}` : "."}`,
-        res.errors > 0 || res.failed > 0 ? "error" : "success",
-      );
-      actionsRef.current?.reload();
-    } catch (e) {
-      toast((e as Error).message, "error");
-    } finally {
-      setSyncingAll(false);
-    }
-  }
-
-  async function handleSyncAll() {
-    setSyncingAll(true);
-    try {
-      const res = await api<DonationSyncResponse>("/api/v1/admin/donations/sync", { method: "POST" });
       const parts = [
         res.completed ? `${res.completed} completed` : "",
         res.failed ? `${res.failed} failed` : "",
@@ -330,9 +249,9 @@ export function Donations({ subTab }: { subTab?: string }) {
     {
       header: { label: "Amount", className: "text-end" },
       cell: (d) => {
-        const gross = fmtAmount(d.gross_amount, d.currency);
+        const gross = formatDonationAmount(d.gross_amount, d.currency);
         const netCurrency = d.settled_currency ?? d.currency;
-        const net = d.net_amount !== null ? fmtAmount(d.net_amount, netCurrency) : null;
+        const net = d.net_amount !== null ? formatDonationAmount(d.net_amount, netCurrency) : null;
         return (
           <>
             <span class="fw-semibold">{gross}</span>
@@ -378,14 +297,13 @@ export function Donations({ subTab }: { subTab?: string }) {
           <ApiDataTable<DonationRow>
             endpoint="/api/v1/admin/donations"
             resolve={(d) => {
-              const resp = d as DonationsResponse;
+              const resp = donationsListResponseSchema.parse(d);
               setSummary(resp.summary);
               setDonations(resp.donations);
               return resp.donations;
             }}
             resolvePage={(d) => {
-              const resp = d as DonationsResponse;
-              return { total: resp.total, hasMore: resp.offset + resp.limit < resp.total };
+              return donationsListResponseSchema.parse(d).page;
             }}
             paginate
             params={{
@@ -415,11 +333,19 @@ export function Donations({ subTab }: { subTab?: string }) {
                   })}
                 </div>
                 {pending > 0 && (
-                  <button class="btn btn-sm btn-outline-success" disabled={syncingAll} onClick={handleSyncPending}>
+                  <button
+                    class="btn btn-sm btn-outline-success"
+                    disabled={syncingAll}
+                    onClick={() => void handleSync(true)}
+                  >
                     {syncingAll ? "Syncing…" : `↺ Sync pending (${pending})`}
                   </button>
                 )}
-                <button class="btn btn-sm btn-success" disabled={syncingAll || syncable === 0} onClick={handleSyncAll}>
+                <button
+                  class="btn btn-sm btn-success"
+                  disabled={syncingAll || syncable === 0}
+                  onClick={() => void handleSync(false)}
+                >
                   {syncingAll ? "Syncing…" : `↺ Sync all (${syncable})`}
                 </button>
                 {failed > 0 && (

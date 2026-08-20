@@ -73,9 +73,7 @@ export function ProposalDetail({ proposalId, onDecided }: { proposalId: string; 
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-body">
         <h6 class="mb-1">{proposal.title}</h6>
-        <p class="small mb-2" style={{ whiteSpace: "pre-wrap" }}>
-          {proposal.description}
-        </p>
+        <p class="small mb-2 text-pre-wrap">{proposal.description}</p>
         <p class="small text-muted mb-3">
           <span class="badge text-bg-light me-1 text-capitalize">{proposal.voteType}</span>
           <span class="badge text-bg-light me-1 text-capitalize">{proposal.scopeType.replace("_", " ")}</span>

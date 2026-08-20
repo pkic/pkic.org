@@ -32,6 +32,7 @@
  * unbounded matching set, and is called out explicitly wherever it's used.
  */
 import { all, first } from "../db/queries";
+import { batchFirst, batchRows, queryPage } from "../db/pagination";
 import { resolveOrderBy } from "../db/sort";
 import { parseJsonSafe } from "../utils/json";
 import { AppError } from "../errors";
@@ -449,29 +450,37 @@ export async function listFormSubmissions(
   });
   const orderBy = resolveOrderBy(params.sort, FORM_SUBMISSIONS_SORT_COLUMNS, "ORDER BY submitted_at DESC");
 
-  const [pageRows, totalRow, statsRows] = await Promise.all([
-    params.limit > 0
-      ? all<MergedSubmissionRow>(db, `${cte} SELECT * FROM merged ${orderBy} LIMIT ? OFFSET ?`, [
-          ...args,
-          params.limit,
-          params.offset,
-        ])
-      : Promise.resolve([]),
-    first<{ total: number }>(db, `${cte} SELECT COUNT(*) AS total FROM merged`, args),
-    // See file header — bounded stand-in for a true full-population scan.
-    params.limit === 0
-      ? all<MergedSubmissionRow>(db, `${cte} SELECT * FROM merged ${orderBy} LIMIT ?`, [...args, STATS_SCAN_ROW_LIMIT])
-      : Promise.resolve([]),
-  ]);
+  let pageRows: MergedSubmissionRow[] = [];
+  let statsRows: MergedSubmissionRow[] = [];
+  let total: number;
 
-  const [submissions, statsSubmissions] = await Promise.all([
-    attachAnswers(db, pageRows),
-    attachAnswers(db, statsRows),
-  ]);
+  if (params.limit > 0) {
+    const page = await queryPage<MergedSubmissionRow>(
+      db,
+      {
+        sql: `${cte} SELECT * FROM merged ${orderBy} LIMIT ? OFFSET ?`,
+        bindings: [...args, params.limit, params.offset],
+      },
+      { sql: `${cte} SELECT COUNT(*) AS total FROM merged`, bindings: args },
+    );
+    pageRows = page.rows;
+    total = page.total;
+  } else {
+    const [countResult, statsResult] = await db.batch([
+      db.prepare(`${cte} SELECT COUNT(*) AS total FROM merged`).bind(...args),
+      // See file header — bounded stand-in for a true full-population scan.
+      db.prepare(`${cte} SELECT * FROM merged ${orderBy} LIMIT ?`).bind(...args, STATS_SCAN_ROW_LIMIT),
+    ]);
+    total = Number(batchFirst<{ total: number }>(countResult)?.total ?? 0);
+    statsRows = batchRows<MergedSubmissionRow>(statsResult);
+  }
+
+  const submissions = pageRows.length > 0 ? await attachAnswers(db, pageRows) : [];
+  const statsSubmissions = statsRows.length > 0 ? await attachAnswers(db, statsRows) : [];
 
   return {
     form: { id: form.id, key: form.key, title: form.title, purpose: form.purpose },
-    total: totalRow?.total ?? 0,
+    total,
     offset: params.offset,
     limit: params.limit,
     submissions,

@@ -82,7 +82,7 @@ function SpeakerCard({
     setBiography(speaker.bio ?? "");
     setRole(speaker.role);
     setHeadshotStatus(
-      speaker.headshotUpdatedAt ? `Updated: ${new Date(speaker.headshotUpdatedAt).toLocaleString("en-GB")}` : "",
+      speaker.headshotUpdatedAt ? `Updated: ${new Date(speaker.headshotUpdatedAt).toLocaleString("en-US")}` : "",
     );
     linksRef.current?.setLinks(normalizeProfileLinks(speaker.links));
   }, [speaker]);

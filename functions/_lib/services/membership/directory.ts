@@ -1,8 +1,12 @@
 import { all, first } from "../../db/queries";
+import { queryPage } from "../../db/pagination";
+import { buildD1TextSearchFilter } from "../../db/search";
 import { parseJsonSafe } from "../../utils/json";
 import { parseLinksJson, findLinkedinUrl } from "../../../../assets/shared/schemas/links";
 import { deterministicRepresentativeJoinSql } from "./representative-lookup";
+import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
+import type { PublicMemberDetail, PublicMemberSummary } from "../../../../assets/shared/schemas/members-directory";
 
 /**
  * Public member directory. D1 is the source of truth,
@@ -27,38 +31,12 @@ interface OrgDataJson {
   slogan?: string;
 }
 
-export interface PublicMemberSummary {
-  id: string;
-  slug: string | null;
-  name: string;
-  memberType: string;
-  tier: string | null;
-  website: string | null;
-  description: string | null;
-  slogan: string | null;
-  logoUrl: string | null;
-  memberSince: string;
-}
-
 export interface PublicMemberRepresentative {
   name: string;
   jobTitle: string | null;
   bio: string | null;
   linkedin: string | null;
   photoUrl: string | null;
-}
-
-export interface PublicMemberDetail extends PublicMemberSummary {
-  content: string | null;
-  blogUrl: string | null;
-  blogFeedUrl: string | null;
-  pressUrl: string | null;
-  pressFeedUrl: string | null;
-  careersUrl: string | null;
-  links: string[];
-  representatives: PublicMemberRepresentative[];
-  jobTitle: string | null;
-  linkedin: string | null;
 }
 
 interface DirectoryRow {
@@ -132,7 +110,13 @@ const DIRECTORY_SELECT = `
 /** group: "organization" = org-tied categories; "independent" = org-less H5/H6/H7 */
 export async function listPublicMembers(
   db: DatabaseLike,
-  params: { limit: number; offset: number; q?: string; group?: "all" | "organization" | "independent" },
+  params: {
+    limit: number;
+    offset: number;
+    q?: string;
+    sort?: string;
+    group?: "all" | "organization" | "independent";
+  },
 ): Promise<{ members: PublicMemberSummary[]; total: number }> {
   const conditions: string[] = [];
   const args: unknown[] = [];
@@ -144,23 +128,37 @@ export async function listPublicMembers(
   }
 
   if (params.q) {
-    conditions.push("COALESCE(o.name, u.first_name || ' ' || u.last_name, '') LIKE ? ESCAPE '\\'");
-    const escaped = params.q.replace(/[\\%_]/g, (c) => `\\${c}`);
-    args.push(`%${escaped}%`);
+    const search = buildD1TextSearchFilter(params.q, [
+      "o.name",
+      "u.first_name",
+      "u.last_name",
+      "u.first_name || ' ' || u.last_name",
+    ]);
+    conditions.push(search.sql);
+    args.push(...search.bindings);
   }
 
   const extraWhere = conditions.length ? ` AND ${conditions.join(" AND ")}` : "";
+  const orderBy = resolveMappedOrderBy(
+    params.sort,
+    {
+      name: "COALESCE(o.name, u.last_name, u.first_name)",
+      memberSince: "COALESCE(m.member_since, m.created_at)",
+    },
+    "COALESCE(o.name, u.last_name, u.first_name) ASC",
+    "m.id ASC",
+  );
 
-  const [rows, totalRow] = await Promise.all([
-    all<DirectoryRow>(
-      db,
-      `${DIRECTORY_SELECT}${extraWhere} ORDER BY COALESCE(o.name, u.last_name, u.first_name) ASC LIMIT ? OFFSET ?`,
-      [...args, params.limit, params.offset],
-    ),
-    first<{ total: number }>(db, `SELECT COUNT(*) AS total FROM (${DIRECTORY_SELECT}${extraWhere})`, args),
-  ]);
+  const { rows, total } = await queryPage<DirectoryRow>(
+    db,
+    {
+      sql: `${DIRECTORY_SELECT}${extraWhere} ${orderBy} LIMIT ? OFFSET ?`,
+      bindings: [...args, params.limit, params.offset],
+    },
+    { sql: `SELECT COUNT(*) AS total FROM (${DIRECTORY_SELECT}${extraWhere})`, bindings: args },
+  );
 
-  return { members: rows.map(toSummary), total: totalRow?.total ?? 0 };
+  return { members: rows.map(toSummary), total };
 }
 
 async function loadRepresentatives(db: DatabaseLike, organizationId: string): Promise<PublicMemberRepresentative[]> {

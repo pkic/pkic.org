@@ -23,8 +23,8 @@
  * Adding a second subscription for preview would cause every event to invoke
  * two Workers, doubling cost, so avoid it unless temporarily debugging.
  *
- * When SENDGRID_WEBHOOK_VERIFICATION_KEY is not set, signature verification
- * is skipped (useful for local dev / testing).
+ * SENDGRID_WEBHOOK_VERIFICATION_KEY is mandatory outside loopback local
+ * development. Deployed environments fail closed when it is absent.
  *
  * Required SendGrid Event Webhook events to enable:
  *   Bounce, Deferred, Dropped, Spam Report, Delivered,
@@ -130,6 +130,21 @@ async function verifySendgridSignature(
   }
 }
 
+function normalizeOrigin(value: string | undefined): string | null {
+  if (!value) return null;
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+}
+
+function isLoopbackOrigin(origin: string | null): boolean {
+  if (!origin) return false;
+  const hostname = new URL(origin).hostname;
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+}
+
 /**
  * SendGrid appends a filter suffix to the base message ID in event payloads
  * (e.g. "abc123.filter0"). Strip it so we can match against provider_message_id.
@@ -171,8 +186,11 @@ async function processSendgridEvent(env: Env, event: SendgridEvent): Promise<voi
   const { event: eventType, sg_message_id, env_url } = event;
   if (!sg_message_id) return;
 
-  // Only process events that were sent by this environment
-  if (env.APP_BASE_URL && env_url && env_url !== env.APP_BASE_URL) {
+  // Only process events carrying this exact deployed environment's origin.
+  // Local development is allowed to omit custom_args.env_url.
+  const expectedOrigin = normalizeOrigin(env.APP_BASE_URL);
+  const eventOrigin = normalizeOrigin(env_url);
+  if (expectedOrigin && !isLoopbackOrigin(expectedOrigin) && eventOrigin !== expectedOrigin) {
     logInfo("SENDGRID_EVENT_SKIPPED_ENV", { eventType, env_url, expected: env.APP_BASE_URL });
     return;
   }
@@ -303,6 +321,13 @@ async function onRequestPost(c: any): Promise<Response> {
   const request = c.req.raw as Request;
 
   const rawBody = await request.text();
+  const configuredOrigin = normalizeOrigin(env.APP_BASE_URL) ?? new URL(request.url).origin;
+  const isLocalDevelopment = isLoopbackOrigin(configuredOrigin);
+
+  if (!env.SENDGRID_WEBHOOK_VERIFICATION_KEY && !isLocalDevelopment) {
+    logError("SENDGRID_WEBHOOK_VERIFICATION_NOT_CONFIGURED", { configuredOrigin });
+    return json({ error: "Webhook not configured" }, 503);
+  }
 
   if (env.SENDGRID_WEBHOOK_VERIFICATION_KEY) {
     const sig = request.headers.get("X-Twilio-Email-Event-Webhook-Signature") ?? "";

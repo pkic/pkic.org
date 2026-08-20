@@ -5,9 +5,9 @@
 import { json } from "../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../../_lib/auth/permissions";
-import { first, run } from "../../../../../../_lib/db/queries";
+import { first } from "../../../../../../_lib/db/queries";
 import { nowIso } from "../../../../../../_lib/utils/time";
-import { writeAuditLog } from "../../../../../../_lib/services/audit";
+import { prepareAuditLog } from "../../../../../../_lib/services/audit";
 import {
   userRoleRevokeRouteSchema,
   userRoleUpdateExpiryRouteSchema,
@@ -43,12 +43,20 @@ export const UserRolesRevoke = openApiRoute(userRoleRevokeRouteSchema, async (c:
     return json({ error: { code: "NOT_FOUND", message: "Role assignment not found" } }, 404);
   }
 
-  await run(requestDb(c), "UPDATE user_roles SET revoked_at = ? WHERE id = ?", [nowIso(), row.id]);
-
-  await writeAuditLog(requestDb(c), "admin", admin.id, "user_role_revoked", "user_roles", row.id, {
-    userId: row.user_id,
-    roleId: row.role_id,
-  });
+  const now = nowIso();
+  await requestDb(c).batch([
+    requestDb(c).prepare("UPDATE user_roles SET revoked_at = ? WHERE id = ?").bind(now, row.id),
+    prepareAuditLog(
+      requestDb(c),
+      "admin",
+      admin.id,
+      "user_role_revoked",
+      "user_roles",
+      row.id,
+      { userId: row.user_id, roleId: row.role_id },
+      now,
+    ),
+  ]);
 
   return json({ success: true });
 });
@@ -69,13 +77,20 @@ export const UserRolesUpdateExpiry = openApiRoute(userRoleUpdateExpiryRouteSchem
     return json({ error: { code: "NOT_FOUND", message: "Role assignment not found" } }, 404);
   }
 
-  await run(requestDb(c), "UPDATE user_roles SET expires_at = ? WHERE id = ?", [body.expiresAt, row.id]);
-
-  await writeAuditLog(requestDb(c), "admin", admin.id, "user_role_expiry_updated", "user_roles", row.id, {
-    userId: row.user_id,
-    roleId: row.role_id,
-    expiresAt: body.expiresAt,
-  });
+  const now = nowIso();
+  await requestDb(c).batch([
+    requestDb(c).prepare("UPDATE user_roles SET expires_at = ? WHERE id = ?").bind(body.expiresAt, row.id),
+    prepareAuditLog(
+      requestDb(c),
+      "admin",
+      admin.id,
+      "user_role_expiry_updated",
+      "user_roles",
+      row.id,
+      { userId: row.user_id, roleId: row.role_id, expiresAt: body.expiresAt },
+      now,
+    ),
+  ]);
 
   const updated = await first<UserRoleWithRoleRow>(
     requestDb(c),

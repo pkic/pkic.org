@@ -1,8 +1,9 @@
 import { json } from "../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../../_lib/services/events";
-import { all, first } from "../../../../../../_lib/db/queries";
-import { resolveOrderBy } from "../../../../../../_lib/db/sort";
+import { queryPage } from "../../../../../../_lib/db/pagination";
+import { buildD1TextSearchFilter } from "../../../../../../_lib/db/search";
+import { resolveMappedOrderBy } from "../../../../../../_lib/db/sort";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../../_lib/openapi/route";
 import {
@@ -40,40 +41,49 @@ export const AdminEventInvitesList = openApiRoute(adminEventInvitesListRouteSche
   const typeFilter = data.query.type;
   const search = data.query.q ?? "";
 
-  const validStatuses = new Set(["sent", "accepted", "declined", "expired", "revoked"]);
-  const validTypes = new Set(["attendee", "speaker"]);
-
   const conditions: string[] = ["i.event_id = ?"];
   const bindings: unknown[] = [event.id];
 
-  if (statusFilter && validStatuses.has(statusFilter)) {
+  if (statusFilter) {
     conditions.push("i.status = ?");
     bindings.push(statusFilter);
   }
 
-  if (typeFilter && validTypes.has(typeFilter)) {
+  if (typeFilter) {
     conditions.push("i.invite_type = ?");
     bindings.push(typeFilter);
   }
 
   if (search) {
-    conditions.push(
-      "(i.invitee_email LIKE ? OR COALESCE(i.invitee_first_name || ' ' || i.invitee_last_name, i.invitee_first_name, i.invitee_email) LIKE ?)",
-    );
-    const pattern = `%${search}%`;
-    bindings.push(pattern, pattern);
+    const filter = buildD1TextSearchFilter(search, [
+      "i.invitee_email",
+      "i.invitee_first_name",
+      "i.invitee_last_name",
+      "i.invitee_first_name || ' ' || i.invitee_last_name",
+    ]);
+    conditions.push(filter.sql);
+    bindings.push(...filter.bindings);
   }
 
-  const orderBy = resolveOrderBy(sort, EVENT_INVITES_SORT_COLUMNS, "ORDER BY i.created_at DESC");
+  const orderBy = resolveMappedOrderBy(
+    sort,
+    {
+      invitee_email: "i.invitee_email",
+      status: "i.status",
+      created_at: "i.created_at",
+      accepted_at: "i.accepted_at",
+    } satisfies Record<(typeof EVENT_INVITES_SORT_COLUMNS)[number], string>,
+    "i.created_at DESC",
+    "i.id ASC",
+  );
 
   // The page query and the real COUNT(*) share the same WHERE filters and
-  // run concurrently (P6M-P2-05/P6M-CC-03: this replaced a `limit+1`-and-
-  // slice `hasMore` computed *in addition to* this same COUNT(*), which was
-  // redundant work now that the count already exists).
-  const [invites, totalRow] = await Promise.all([
-    all(
-      requestDb(c),
-      `SELECT
+  // execute in one D1 batch. This replaces a `limit+1`-and-slice `hasMore`
+  // calculation performed in addition to the same COUNT(*).
+  const { rows: invites, total } = await queryPage(
+    requestDb(c),
+    {
+      sql: `SELECT
          i.id,
          i.invitee_email,
          i.invitee_first_name,
@@ -98,17 +108,15 @@ export const AdminEventInvitesList = openApiRoute(adminEventInvitesListRouteSche
        WHERE ${conditions.join(" AND ")}
        ${orderBy}
        LIMIT ? OFFSET ?`,
-      [...bindings, limit, offset],
-    ),
-    first<{ total: number }>(
-      requestDb(c),
-      `SELECT COUNT(*) AS total
+      bindings: [...bindings, limit, offset],
+    },
+    {
+      sql: `SELECT COUNT(*) AS total
        FROM invites i
        WHERE ${conditions.join(" AND ")}`,
       bindings,
-    ),
-  ]);
-  const total = Number(totalRow?.total ?? 0);
+    },
+  );
 
   return json({
     invites,

@@ -4,6 +4,7 @@ import { ApiDataTable, type ApiTableActions } from "../../../components/Table";
 import { api } from "../../api";
 import { toast } from "../../ui";
 import type { EventSummary } from "../../types";
+import { adminEventsListResponseSchema } from "../../../../shared/schemas/api";
 import { useHashLocation } from "wouter/use-hash-location";
 
 // ────────────────────────────────────────────────────────
@@ -227,8 +228,11 @@ export function EventList() {
 
       <ApiDataTable<EventSummary>
         endpoint="/api/v1/admin/events"
-        resolve={(d) => (d as { events: EventSummary[] }).events}
+        resolve={(data) => adminEventsListResponseSchema.parse(data).events}
+        resolvePage={(data) => adminEventsListResponseSchema.parse(data).page}
+        paginate
         actionsRef={tableRef}
+        searchPlaceholder="Search event name or slug…"
         columns={[
           {
             header: "Event",

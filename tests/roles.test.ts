@@ -305,6 +305,29 @@ describe("roles (Built-in and custom roles)", () => {
     expect(body.error.code).toBe("VALIDATION_ERROR");
   });
 
+  it("GET /api/v1/admin/roles applies shared search and returns the page role's permissions", async () => {
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO roles (id, name, description, is_system_role, created_at, updated_at)
+         VALUES ('role-search-target', 'search_target', 'Unique catalogue description', 0, datetime('now'), datetime('now'))`,
+      ),
+      env.DB.prepare(
+        `INSERT INTO role_permissions (id, role_id, permission, created_at)
+         VALUES (?, 'role-search-target', 'events:read', datetime('now'))`,
+      ).bind(crypto.randomUUID()),
+    ]);
+
+    const response = await call(adminToken, "/api/v1/admin/roles?q=catalogue&limit=1");
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      roles: Array<{ name: string; permissions: string[] }>;
+      page: { total: number };
+    };
+    expect(body.roles).toHaveLength(1);
+    expect(body.roles[0]).toMatchObject({ name: "search_target", permissions: ["events:read"] });
+    expect(body.page.total).toBe(1);
+  });
+
   it("GET /api/v1/admin/roles paginates with real LIMIT/OFFSET and a page envelope", async () => {
     const unpaged = await call(adminToken, "/api/v1/admin/roles?sort=name");
     const unpagedBody = (await unpaged.json()) as { roles: Array<{ name: string }>; page: { total: number } };

@@ -104,8 +104,8 @@ const REASON_LABELS: CopyVariants = {
     speaker: "This call for proposals is not a fit for what I would present",
   },
   organization_policy: {
-    attendee: "Organisation policy prevents me from attending",
-    speaker: "Organisation policy prevents me from speaking or submitting",
+    attendee: "Organization policy prevents me from attending",
+    speaker: "Organization policy prevents me from speaking or submitting",
   },
   not_interested: {
     attendee: "This event doesn't match my current focus",

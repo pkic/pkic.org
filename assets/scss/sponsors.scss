@@ -30,3 +30,32 @@
     margin-left: 30px;
   }
 }
+
+@for $weight from 0 through 6 {
+  .sponsor-weight-#{$weight} {
+    --sponsor-weight: #{$weight};
+  }
+}
+
+.sponsor-grid-height-20 {
+  height: calc(20px * var(--sponsor-weight, 1));
+}
+
+.sponsor-grid-max-height-20 {
+  max-height: calc(20px * var(--sponsor-weight, 1));
+}
+
+.sponsor-grid-max-width-60 {
+  max-width: calc(60px * var(--sponsor-weight, 1));
+}
+
+.sponsor-strip-default-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  opacity: 0.6;
+}
+
+.sponsor-strip-default-logo {
+  width: auto;
+  max-height: 40px;
+}

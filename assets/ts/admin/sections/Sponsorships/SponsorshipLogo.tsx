@@ -54,14 +54,10 @@ export function SponsorshipLogo({ sponsorship, onChanged }: { sponsorship: Spons
         <img
           src={sponsorship.nonMemberLogoUrl}
           alt={`${sponsorship.nonMemberName ?? "Sponsor"} logo`}
-          class="border rounded p-1 bg-white"
-          style="max-height: 60px; max-width: 120px;"
+          class="border rounded p-1 bg-white adm-sponsorship-logo"
         />
       ) : (
-        <div
-          class="d-flex align-items-center justify-content-center border rounded bg-light text-muted small"
-          style="height: 60px; width: 120px;"
-        >
+        <div class="d-flex align-items-center justify-content-center border rounded bg-light text-muted small adm-sponsorship-logo-placeholder">
           No logo
         </div>
       )}

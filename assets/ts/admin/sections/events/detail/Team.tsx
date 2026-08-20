@@ -3,6 +3,7 @@ import { ApiDataTable, type ApiTableActions } from "../../../../components/Table
 import { api } from "../../../api";
 import { fmt, toast } from "../../../ui";
 import type { EventPermission } from "../../../types";
+import { adminEventTeamListResponseSchema } from "../../../../../shared/schemas/api";
 
 const PERM_LABELS: Record<string, string> = {
   organizer: "Organizer",
@@ -108,7 +109,10 @@ export function Team({ slug }: { slug: string }) {
 
       <ApiDataTable<EventPermission>
         endpoint={`/api/v1/admin/events/${slug}/permissions`}
-        resolve={(d) => (d as { permissions: EventPermission[] }).permissions}
+        resolve={(data) => adminEventTeamListResponseSchema.parse(data).permissions}
+        resolvePage={(data) => adminEventTeamListResponseSchema.parse(data).page}
+        paginate
+        searchPlaceholder="Search email or role…"
         actionsRef={tableRef}
         deps={[slug]}
         columns={[

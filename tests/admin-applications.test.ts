@@ -323,6 +323,17 @@ describe("GET /api/v1/admin/applications?sort=... (Fix 4 — sortable columns)",
     expect(body.applications.map((a) => a.applicantName)).toEqual(["Zed Applicant", "Amy Applicant"]);
   });
 
+  it("applies the shared search contract in D1 and returns the matching page total", async () => {
+    const response = await call(adminToken, "/api/v1/admin/applications?q=amy%40example.test");
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      applications: Array<{ applicantName: string }>;
+      page: { total: number };
+    };
+    expect(body.applications.map(({ applicantName }) => applicantName)).toEqual(["Amy Applicant"]);
+    expect(body.page.total).toBe(1);
+  });
+
   it("rejects an unknown/unsafe sort column with a 400 instead of silently ignoring it", async () => {
     const response = await call(
       adminToken,

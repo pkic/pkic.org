@@ -126,6 +126,48 @@ describe("GET /api/v1/sponsors (public consortium + event sponsors)", () => {
     expect(secondBody.page).toEqual({ limit: 2, offset: 2, total: 3, hasMore: false });
   });
 
+  it("applies search, tier, minimum weight, and allowlisted sorting in the read model", async () => {
+    await seedOrganization({ id: crypto.randomUUID(), name: "Alpha Diamond", sponsorTier: "Diamond" });
+    await seedOrganization({ id: crypto.randomUUID(), name: "Beta Gold", sponsorTier: "Gold" });
+    await seedOrganization({ id: crypto.randomUUID(), name: "Gamma Diamond", sponsorTier: "Diamond" });
+
+    const filtered = await callSponsorsList(
+      "https://pkic.org/api/v1/sponsors?q=diamond&level=Diamond&minWeight=5&sort=name",
+    );
+    expect(filtered.status).toBe(200);
+    const body = (await filtered.json()) as {
+      sponsors: Array<{ name: string; effectiveTier: string; weight: number }>;
+      page: { total: number };
+    };
+    expect(body.sponsors.map(({ name, effectiveTier, weight }) => ({ name, effectiveTier, weight }))).toEqual([
+      { name: "Alpha Diamond", effectiveTier: "Diamond", weight: 6 },
+      { name: "Gamma Diamond", effectiveTier: "Diamond", weight: 6 },
+    ]);
+    expect(body.page.total).toBe(2);
+
+    const invalidSort = await callSponsorsList("https://pkic.org/api/v1/sponsors?sort=raw_sql");
+    expect(invalidSort.status).toBe(400);
+  });
+
+  it("reads public display weights from D1 configuration rather than a browser constant", async () => {
+    await seedOrganization({ id: crypto.randomUUID(), name: "Configured Bronze", sponsorTier: "Bronze" });
+    try {
+      await env.DB.prepare(
+        `UPDATE sponsorship_tier_catalog SET display_weight = 7 WHERE sponsor_type = 'consortium' AND tier = 'Bronze'`,
+      ).run();
+
+      const response = await callSponsorsList("https://pkic.org/api/v1/sponsors?sort=-weight");
+      const body = (await response.json()) as { sponsors: Array<{ name: string; weight: number }> };
+      expect(body.sponsors.map(({ name, weight }) => ({ name, weight }))).toEqual([
+        { name: "Configured Bronze", weight: 7 },
+      ]);
+    } finally {
+      await env.DB.prepare(
+        `UPDATE sponsorship_tier_catalog SET display_weight = 1 WHERE sponsor_type = 'consortium' AND tier = 'Bronze'`,
+      ).run();
+    }
+  });
+
   it("includes active non-member consortium sponsorships but excludes non-active ones", async () => {
     await seedNonMemberConsortiumSponsorship({
       name: "Active Non-Member Sponsor",

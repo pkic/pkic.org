@@ -7,74 +7,7 @@ import { api } from "../api";
 import { fmt, toast } from "../ui";
 import { useData } from "../../hooks/useData";
 import { asyncPaymentWindow } from "../../../shared/constants/async-payment-window";
-
-interface DonationRow {
-  id: string;
-  checkout_session_id: string;
-  payment_intent_id: string | null;
-  name: string;
-  email: string;
-  organization: string | null;
-  currency: string;
-  gross_amount: number;
-  net_amount: number | null;
-  source: string | null;
-  status: string;
-  payment_method_type: string | null;
-  session_expires_at: number | null;
-  settled_amount: number | null;
-  settled_currency: string | null;
-  created_at: string;
-  completed_at: string | null;
-}
-
-interface DonationSyncResult {
-  sessionId: string;
-  outcome: "completed" | "expired" | "awaiting_payment" | "failed" | "still_pending" | "error";
-  error?: string;
-}
-
-interface DonationSyncResponse {
-  synced: number;
-  completed: number;
-  expired: number;
-  failed: number;
-  errors: number;
-  results: DonationSyncResult[];
-}
-
-const ZERO_DECIMAL_CURRENCIES = new Set([
-  "bif",
-  "clp",
-  "gnf",
-  "jpy",
-  "kmf",
-  "krw",
-  "mga",
-  "pyg",
-  "rwf",
-  "ugx",
-  "vnd",
-  "vuv",
-  "xaf",
-  "xof",
-  "xpf",
-]);
-
-function fmtAmount(smallestUnit: number, currency: string): string {
-  const code = currency.toLowerCase();
-  const major = ZERO_DECIMAL_CURRENCIES.has(code) ? smallestUnit : smallestUnit / 100;
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: currency.toUpperCase(),
-      minimumFractionDigits: 0,
-      maximumFractionDigits: ZERO_DECIMAL_CURRENCIES.has(code) ? 0 : 2,
-    }).format(major);
-  } catch {
-    return `${major} ${currency.toUpperCase()}`;
-  }
-}
+import { formatDonationAmount, type DonationRow, type DonationSyncResponse } from "./donations/model";
 
 function Field({ label, children }: { label: string; children: preact.ComponentChildren }) {
   return (
@@ -120,9 +53,9 @@ export function DonationDetailPage({ donationId }: { donationId: string }) {
   if (error) return <ErrorAlert error={error} />;
 
   const d = data!.donation;
-  const gross = fmtAmount(d.gross_amount, d.currency);
+  const gross = formatDonationAmount(d.gross_amount, d.currency);
   const netCurrency = d.settled_currency ?? d.currency;
-  const net = d.net_amount !== null ? fmtAmount(d.net_amount, netCurrency) : "—";
+  const net = d.net_amount !== null ? formatDonationAmount(d.net_amount, netCurrency) : "—";
   const methodLabel = d.payment_method_type ? asyncPaymentWindow(d.payment_method_type).label : "—";
   const showSettled =
     d.settled_amount !== null && d.settled_currency && d.settled_currency.toLowerCase() !== d.currency.toLowerCase();
@@ -160,7 +93,9 @@ export function DonationDetailPage({ donationId }: { donationId: string }) {
           {d.organization && <Field label="Organization">{d.organization}</Field>}
           <Field label="Gross">
             {gross}
-            {showSettled && <span class="text-muted"> ({fmtAmount(d.settled_amount!, d.settled_currency!)})</span>}
+            {showSettled && (
+              <span class="text-muted"> ({formatDonationAmount(d.settled_amount!, d.settled_currency!)})</span>
+            )}
           </Field>
           <Field label="Net">{net}</Field>
           <Field label="Method">

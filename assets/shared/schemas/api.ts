@@ -1,121 +1,91 @@
 import { z } from "zod";
 import { defaultedSourceTypeSchema, sourceTypeSchema } from "./source";
 import { linksSchema } from "./links";
-import { paginationQuerySchema, paginatedResponseSchema, sortColumnSchema } from "./pagination";
-
-/** Body format of a rendered email template/message. Canonical vocabulary — see AGENTS.md DRY policy. */
-export const emailContentTypeSchema = z.enum(["markdown", "html", "text"]);
-export type EmailContentType = z.infer<typeof emailContentTypeSchema>;
-
-/** Delivery classification used for outbox rows and templates. Canonical vocabulary — see AGENTS.md DRY policy. */
-export const emailMessageTypeSchema = z.enum(["transactional", "promotional"]);
-export type EmailMessageType = z.infer<typeof emailMessageTypeSchema>;
+import {
+  paginationQuerySchema,
+  paginatedResponseSchema,
+  searchableListQuerySchema,
+  searchableQuerySchema,
+  sortColumnSchema,
+} from "./pagination";
+import {
+  boundedJsonObject,
+  emailContentTypeSchema,
+  emailMessageTypeSchema,
+  frontendPathPattern,
+  normalizedEmailSchema,
+  slugPattern,
+  termKeyPattern,
+  tokenSchema,
+  trimmedString,
+  versionPattern,
+} from "./api-common";
+import {
+  consentItemSchema,
+  dayDateSchema,
+  inviteeSchema,
+  participantProfileSchema,
+  proposerProfileSchema,
+  speakerRoleSchema,
+} from "./registration";
 
 export { sourceTypeSchema };
+export * from "./api-common";
+export * from "./registration";
 
-const namePattern = /^[\p{L}\p{N} .,'’\-()&/]+$/u;
-const slugPattern = /^[a-z0-9]+(?:[a-z0-9-]*[a-z0-9])?$/;
-const termKeyPattern = /^[a-z0-9][a-z0-9._-]{1,127}$/;
-const versionPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
-const tokenPattern = /^[A-Za-z0-9_.-]{16,512}$/;
-const frontendPathPattern = /^\/[A-Za-z0-9\-._~!$&'()*+,;=:@/%]*$/;
-
-function trimmedString(min: number, max: number): z.ZodString {
-  return z.string().trim().min(min).max(max);
-}
-
-function boundedJsonObject<T extends z.ZodRawShape>(shape: T, maxLength: number) {
-  return z.object(shape).superRefine((value, ctx) => {
-    if (JSON.stringify(value).length > maxLength) {
-      ctx.addIssue({
-        code: "custom",
-        message: `JSON payload exceeds ${maxLength} characters`,
-      });
-    }
-  });
-}
-
-export const normalizedEmailSchema = z
-  .email({ error: "Please enter a valid email address (for example: name@example.com)." })
-  .transform((value) => value.trim().toLowerCase());
-export const firstNameSchema = trimmedString(1, 80).regex(namePattern, "Contains unsupported characters");
-export const lastNameSchema = trimmedString(1, 120).regex(namePattern, "Contains unsupported characters");
-export const organizationNameSchema = trimmedString(2, 160);
-export const jobTitleSchema = trimmedString(2, 120);
-export const tokenSchema = z.string().trim().regex(tokenPattern, "Invalid token format");
-
-export const eventSlugParamsSchema = z.object({
-  eventSlug: z.string().trim().regex(slugPattern),
-});
-
-export const proposalIdParamsSchema = z.object({
-  proposalId: z.uuid(),
-});
-
-export const proposalReviewIdParamsSchema = proposalIdParamsSchema.extend({
-  reviewId: z.uuid(),
-});
-
-export const formKeyParamsSchema = z.object({
-  formKey: z.string().trim().min(1).max(120),
-});
-
-export const adminUserIdParamsSchema = z.object({
-  userId: z.uuid(),
-});
-
-export const emailTemplateKeyParamsSchema = z.object({
-  key: z.string().trim().min(1).max(200),
-});
-
-export const registrationManageTokenParamsSchema = z.object({
-  token: z.string().trim().min(1).max(4096).describe("Attendee self-service registration manage token"),
-});
-
-export const adminEmailOutboxQuerySchema = z.object({
-  status: z.string().trim().optional(),
+export const adminEmailOutboxQuerySchema = searchableQuerySchema.extend({
+  status: z.enum(["queued", "sending", "sent", "failed", "retrying", "bounced"]).optional(),
   messageType: emailMessageTypeSchema.optional(),
   dueNow: z.coerce.boolean().optional(),
-  q: z.string().trim().optional(),
-  limit: z.coerce.number().int().min(1).max(200).optional(),
-  offset: z.coerce.number().int().min(0).optional(),
 });
 
-export const adminEventProposalsQuerySchema = paginationQuerySchema.extend({
-  status: z.string().trim().optional(),
+const eventProposalsSortSchema = z
+  .enum([
+    "submitted_desc",
+    "submitted_asc",
+    "score_desc",
+    "score_asc",
+    "reviews_desc",
+    "reviews_asc",
+    "title_desc",
+    "title_asc",
+    "proposer_desc",
+    "proposer_asc",
+    "type_desc",
+    "type_asc",
+    "status_desc",
+    "status_asc",
+    "decision_desc",
+    "decision_asc",
+    "recommendations_desc",
+    "recommendations_asc",
+  ])
+  .optional();
+
+export const adminEventProposalsQuerySchema = searchableListQuerySchema(eventProposalsSortSchema).extend({
+  status: z
+    .enum([
+      "active",
+      "submitted",
+      "resubmitted",
+      "under_review",
+      "accepted",
+      "rejected",
+      "needs-work",
+      "withdrawn",
+      "spam",
+      "duplicate",
+    ])
+    .optional(),
   recommendation: z.enum(["accept", "reject", "needs-work"]).optional(),
   // Not the bare-column `sortColumnSchema` convention used elsewhere — each
   // of these values resolves to a multi-column ORDER BY (e.g. score_desc
   // sorts NULLs-last, then submitted_at as a tiebreaker), which a single
   // allowlisted column name can't express. See orderByMap in
   // functions/api/v1/admin/events/[eventSlug]/proposals.ts.
-  sort: z
-    .enum([
-      "submitted_desc",
-      "submitted_asc",
-      "score_desc",
-      "score_asc",
-      "reviews_desc",
-      "reviews_asc",
-      "title_desc",
-      "title_asc",
-      "proposer_desc",
-      "proposer_asc",
-      "type_desc",
-      "type_asc",
-      "status_desc",
-      "status_asc",
-      "decision_desc",
-      "decision_asc",
-      "recommendations_desc",
-      "recommendations_asc",
-    ])
-    .optional(),
-  q: z.string().trim().optional(),
-  search: z.string().trim().optional(),
   // "1" shows the soft-deleted queue instead of live proposals; any other
-  // value (including omitted) keeps the default live view.
-  deleted: z.string().trim().optional(),
+  // value is rejected instead of silently changing the query semantics.
+  deleted: z.literal("1").optional(),
 });
 
 // ── `?sort=` allowlists for admin event-scoped list endpoints (B5) ─────────
@@ -128,67 +98,73 @@ export const adminEventProposalsQuerySchema = paginationQuerySchema.extend({
 export const EVENTS_LIST_SORT_COLUMNS = ["name", "starts_at", "registration_mode", "total_registrations"] as const;
 export const eventsListSortValueSchema = sortColumnSchema(EVENTS_LIST_SORT_COLUMNS);
 
-export const adminEventsListQuerySchema = paginationQuerySchema.extend({
-  sort: eventsListSortValueSchema,
-});
+export const adminEventsListQuerySchema = searchableListQuerySchema(eventsListSortValueSchema);
 
-/** Allowlisted sort columns for GET /api/v1/admin/events/:eventSlug/permissions (Team) — see functions/api/v1/admin/events/[eventSlug]/permissions.ts. */
-// `created_at` is table-qualified (`ur.`) for the same reason as
-// EVENT_INVITES_SORT_COLUMNS above — the route joins `users`, which also has
-// its own `created_at`.
-export const EVENT_TEAM_SORT_COLUMNS = ["user_email", "role_id", "ur.created_at", "expires_at"] as const;
+export const adminEventSummarySchema = z.object({
+  id: z.string(),
+  slug: z.string(),
+  name: z.string(),
+  timezone: z.string(),
+  starts_at: z.string().nullable(),
+  ends_at: z.string().nullable(),
+  registration_mode: z.string(),
+  invite_limit_attendee: z.number(),
+  confirmed_registrations: z.number(),
+  total_registrations: z.number(),
+  pending_invites: z.number(),
+});
+export type AdminEventSummary = z.infer<typeof adminEventSummarySchema>;
+export const adminEventsListResponseSchema = paginatedResponseSchema("events", adminEventSummarySchema);
+
+/** Allowlisted API sort keys for GET /api/v1/admin/events/:eventSlug/permissions (Team). */
+export const EVENT_TEAM_SORT_COLUMNS = ["user_email", "role_id", "created_at", "expires_at"] as const;
 export const eventTeamSortValueSchema = sortColumnSchema(EVENT_TEAM_SORT_COLUMNS);
 
-export const adminEventTeamListQuerySchema = paginationQuerySchema.extend({
-  sort: eventTeamSortValueSchema,
+export const adminEventTeamListQuerySchema = searchableListQuerySchema(eventTeamSortValueSchema);
+export const eventTeamPermissionSchema = z.enum(["organizer", "program_committee", "moderator", "volunteer"]);
+export type EventTeamPermission = z.infer<typeof eventTeamPermissionSchema>;
+export const adminEventTeamListItemSchema = z.object({
+  id: z.string(),
+  user_email: z.string().nullable(),
+  user_id: z.string().nullable(),
+  permission: eventTeamPermissionSchema,
+  granted_by_id: z.string().nullable(),
+  expires_at: z.string().nullable(),
+  created_at: z.string(),
+  granter_email: z.string().nullable(),
 });
+export type AdminEventTeamListItem = z.infer<typeof adminEventTeamListItemSchema>;
+export const adminEventTeamListResponseSchema = paginatedResponseSchema("permissions", adminEventTeamListItemSchema);
 
 /**
  * Allowlisted sort columns for GET /api/v1/admin/events/:eventSlug/registrations
- * — see functions/_lib/services/registrations/admin-list.ts. Unlike the
- * other `*SortValueSchema` allowlists above, this one isn't wrapped in a
- * strict refine()-validated schema: an invalid `?sort=` value here falls
- * back to the default order via resolveOrderBy rather than a 400, matching
- * this endpoint's pre-existing tolerant behavior for its other filters.
+ * — see functions/_lib/services/registrations/admin-list.ts.
  */
 export const EVENT_REGISTRATIONS_SORT_COLUMNS = ["display_name", "status", "attendance_type", "created_at"] as const;
 
-// status/bounced/consent/attendance_change/sort intentionally accept any
-// string here and are validated leniently in listAdminEventRegistrations /
-// resolveOrderBy (an unrecognized value is treated as "no filter" / "default
-// order", not a 400) — the pre-Phase-6 route had this exact "quietly ignore
-// an unknown value" behavior for all of them (see
-// tests/admin-event-management.test.ts's "?attendance_change=unexpected"
-// coverage), so real enum/refine validation here would be a behavior
-// change, not a refactor.
-export const adminEventRegistrationsQuerySchema = paginationQuerySchema.extend({
-  q: z.string().trim().max(200).optional(),
-  status: z.string().trim().optional(),
-  bounced: z.string().trim().optional(),
-  consent: z.string().trim().optional(),
-  attendance_change: z.string().trim().optional(),
-  sort: z.string().trim().max(41).optional(),
+export const adminEventRegistrationStatusSchema = z.enum(["registered", "pending_email_confirmation", "cancelled"]);
+export const adminEventAttendanceChangeSchema = z.enum(["any", "left_in_person", "joined_in_person"]);
+export const booleanQueryValueSchema = z.enum(["true", "false"]);
+
+export const adminEventRegistrationsQuerySchema = searchableListQuerySchema(
+  sortColumnSchema(EVENT_REGISTRATIONS_SORT_COLUMNS),
+).extend({
+  status: adminEventRegistrationStatusSchema.optional(),
+  bounced: booleanQueryValueSchema.optional(),
+  consent: booleanQueryValueSchema.optional(),
+  attendance_change: adminEventAttendanceChangeSchema.optional(),
 });
 
-/** Allowlisted sort columns for GET /api/v1/admin/events/:eventSlug/invites — see functions/api/v1/admin/events/[eventSlug]/invites/index.ts. */
-// `created_at` is table-qualified (`i.`) because the route joins `users`,
-// which also has its own `created_at` — an unqualified ORDER BY created_at
-// is ambiguous and 500s (discovered by this pass's own pagination test;
-// pre-existing, not previously exercised by any test).
-export const EVENT_INVITES_SORT_COLUMNS = ["invitee_email", "status", "i.created_at", "accepted_at"] as const;
+/** Allowlisted API sort keys for GET /api/v1/admin/events/:eventSlug/invites. */
+export const EVENT_INVITES_SORT_COLUMNS = ["invitee_email", "status", "created_at", "accepted_at"] as const;
 export const eventInvitesSortValueSchema = sortColumnSchema(EVENT_INVITES_SORT_COLUMNS);
 
-// P6M-P2-05: `status`/`type` are validated leniently (an unrecognized value
-// is treated as "no filter", matching the pre-existing handler's own
-// `validStatuses.has(...)`/`validTypes.has(...)` tolerant behavior) rather
-// than a strict enum that would 400 — same "enforced-but-non-strict"
-// convention as adminEventRegistrationsQuerySchema.
-export const adminEventInvitesListQuerySchema = paginationQuerySchema.extend({
-  status: z.string().trim().max(20).optional(),
-  type: z.string().trim().max(20).optional(),
-  q: z.string().trim().max(200).optional(),
-  sort: eventInvitesSortValueSchema,
+export const adminEventInvitesListQuerySchema = searchableListQuerySchema(eventInvitesSortValueSchema).extend({
+  status: z.enum(["sent", "accepted", "declined", "expired", "revoked"]).optional(),
+  type: z.enum(["attendee", "speaker"]).optional(),
 });
+
+export type AdminEventRegistrationsQuery = z.infer<typeof adminEventRegistrationsQuerySchema>;
 
 /**
  * Allowlisted sort columns for GET /api/v1/admin/forms/:formKey/submissions
@@ -203,312 +179,6 @@ export const adminEventInvitesListQuerySchema = paginationQuerySchema.extend({
  */
 export const FORM_SUBMISSIONS_SORT_COLUMNS = ["submitter", "status", "submitted_at"] as const;
 export const formSubmissionsSortValueSchema = sortColumnSchema(FORM_SUBMISSIONS_SORT_COLUMNS);
-
-export const REGISTRATION_HEADSHOT_ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
-export const REGISTRATION_HEADSHOT_MAX_BYTES = 2 * 1024 * 1024;
-
-export const registrationHeadshotUploadFormSchema = z.object({
-  consent: z
-    .enum(["true"])
-    .describe("Consent declaring the attendee owns/has rights to the uploaded photo of themselves"),
-  file: z
-    .any()
-    .describe(
-      `Headshot image binary file (accepted MIME types: ${REGISTRATION_HEADSHOT_ALLOWED_MIME_TYPES.join(", ")})`,
-    ),
-});
-
-export const registrationHeadshotUploadResponseSchema = z.object({
-  success: z.boolean(),
-  headshotUrl: z.string().url().describe("The permanent URL pointing to the new uploaded headshot profile asset"),
-});
-
-export const successResponseSchema = z.object({
-  success: z.boolean(),
-});
-
-export const registrationHeadshotUploadRouteSchema = {
-  tags: ["Registrations", "Headshots"],
-  summary: "Upload or replace registration headshot",
-  description:
-    "Uploads or replaces the attendee's profile headshot image which is dynamically rendered in social badge images. Requires a valid registration management token as path parameter.",
-  request: {
-    params: registrationManageTokenParamsSchema,
-    body: {
-      content: {
-        "multipart/form-data": {
-          schema: registrationHeadshotUploadFormSchema,
-        },
-      },
-      required: true,
-    },
-  },
-  responses: {
-    "200": {
-      description: "Headshot image uploaded and processed successfully.",
-      content: {
-        "application/json": {
-          schema: registrationHeadshotUploadResponseSchema,
-        },
-      },
-    },
-    "400": {
-      description: "Invalid request payload format, or file parameter is missing.",
-    },
-    "413": {
-      description: "Uploaded file exceeds the maximum allowed size.",
-    },
-    "503": {
-      description: "R2 upload buckets are not configured/reachable.",
-    },
-  },
-};
-
-export const registrationHeadshotDeleteRouteSchema = {
-  tags: ["Registrations", "Headshots"],
-  summary: "Delete registration headshot",
-  description:
-    "Deletes the attendee's profile headshot image from active storage and clears references. Requires a valid registration management token.",
-  request: {
-    params: registrationManageTokenParamsSchema,
-  },
-  responses: {
-    "200": {
-      description: "Headshot removed successfully.",
-      content: {
-        "application/json": {
-          schema: successResponseSchema,
-        },
-      },
-    },
-    "404": {
-      description: "User details matching parent token were not found.",
-    },
-  },
-};
-
-export const adminHeadshotUploadResponseSchema = z.object({
-  success: z.boolean(),
-  r2Key: z.string().describe("R2 object key for the uploaded headshot"),
-});
-
-export const attendanceTypeSchema = z.enum(["in_person", "virtual", "on_demand"]);
-// dayAttendanceTypeSchema accepts any non-empty string because attendance options
-// are now configurable per event day (e.g. 'in_person', 'on_demand', 'virtual').
-// Application-layer validation in enforceDayCapacity checks the value against
-// the event's configured options.
-export const dayAttendanceTypeSchema = z
-  .string()
-  .min(1)
-  .max(64)
-  .regex(/^[a-z_][a-z0-9_]*$/, "Invalid attendance type");
-export const inviteTypeSchema = z.enum(["attendee", "speaker"]);
-export const declineReasonCodeSchema = z.enum([
-  "not_interested",
-  "schedule_conflict",
-  "travel_not_possible",
-  "organization_policy",
-  "content_not_relevant",
-  "already_registered",
-  "other",
-]);
-
-export const consentItemSchema = z.object({
-  termKey: z.string().trim().regex(termKeyPattern),
-  version: z.string().trim().regex(versionPattern),
-});
-
-const dayDateSchema = z
-  .string()
-  .trim()
-  .regex(/^\d{4}-\d{2}-\d{2}$/);
-export const dayAttendanceItemSchema = z.object({
-  dayDate: dayDateSchema,
-  attendanceType: dayAttendanceTypeSchema,
-});
-
-export const dayWaitlistItemSchema = z.object({
-  dayDate: dayDateSchema,
-  status: z.enum(["waiting", "offered", "accepted"]),
-  priorityLane: z.enum(["continuity", "general"]),
-  offerExpiresAt: z.string().trim().nullable(),
-});
-
-const customAnswerScalarSchema = z.union([z.string().trim().max(500), z.number().finite(), z.boolean()]);
-const customAnswerDateRangeSchema = z
-  .object({
-    start: dayDateSchema,
-    end: dayDateSchema,
-  })
-  .superRefine((value, ctx) => {
-    if (value.start > value.end) {
-      ctx.addIssue({
-        code: "custom",
-        message: "start must be less than or equal to end",
-        path: ["start"],
-      });
-    }
-  });
-const customAnswerValueSchema = z.union([
-  customAnswerScalarSchema,
-  z.array(customAnswerScalarSchema).max(25),
-  customAnswerDateRangeSchema,
-]);
-export const customAnswersSchema = z.record(z.string().trim().min(1).max(64), customAnswerValueSchema);
-
-export const userProfileSchema = z.object({
-  firstName: firstNameSchema,
-  lastName: lastNameSchema,
-  email: normalizedEmailSchema,
-  organizationName: organizationNameSchema.optional(),
-  jobTitle: jobTitleSchema.optional(),
-});
-
-const speakerBioSchema = trimmedString(40, 5000);
-const speakerRoleSchema = z.enum(["proposer", "speaker", "co_speaker", "moderator", "panelist"]);
-
-export const participantProfileSchema = userProfileSchema.extend({
-  bio: speakerBioSchema,
-  links: linksSchema.default([]),
-});
-
-/**
- * Profile schema for the proposal contact/proposer.
- * Bio is optional — the proposer may be a non-presenting contact.
- * If the proposer is also presenting, their bio is captured here and stored
- * on their user record; they appear in proposal_speakers with role "proposer".
- */
-export const proposerProfileSchema = userProfileSchema.extend({
-  bio: speakerBioSchema.optional(),
-  links: linksSchema.default([]),
-  role: speakerRoleSchema.default("proposer"),
-});
-
-export const inviteeSchema = z.object({
-  email: normalizedEmailSchema,
-  firstName: firstNameSchema.optional(),
-  lastName: lastNameSchema.optional(),
-});
-
-export const registrationCreateSchema = z
-  .object({
-    firstName: firstNameSchema,
-    lastName: lastNameSchema,
-    email: normalizedEmailSchema,
-    organizationName: organizationNameSchema.optional(),
-    jobTitle: jobTitleSchema.optional(),
-    attendanceType: attendanceTypeSchema.optional(),
-    dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
-    sourceType: defaultedSourceTypeSchema,
-    sourceRef: trimmedString(2, 200).optional(),
-    customAnswers: customAnswersSchema.optional(),
-    inviteToken: tokenSchema.optional(),
-    inviteId: z.uuid().optional(),
-    referralCode: z
-      .string()
-      .trim()
-      .regex(/^[A-Za-z0-9]{6,12}$/)
-      .optional(),
-    consents: z.array(consentItemSchema).min(1).max(20),
-  })
-  .superRefine((value, ctx) => {
-    if (!value.attendanceType && (!value.dayAttendance || value.dayAttendance.length === 0)) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["attendanceType"],
-        message: "attendanceType or dayAttendance is required",
-      });
-    }
-  });
-
-export const registrationConfirmSchema = z.object({
-  id: z.uuid().optional(),
-  token: tokenSchema,
-});
-
-export const registrationConfirmQuerySchema = registrationConfirmSchema;
-
-export const registrationConfirmResponseSchema = z.object({
-  success: z.boolean(),
-  status: z.string(),
-  shareUrl: z.string().url().nullable(),
-  manageUrl: z.string().url(),
-  manageToken: z.string(),
-  dayAttendance: z.array(dayAttendanceItemSchema),
-  dayWaitlist: z.array(dayWaitlistItemSchema),
-});
-
-export const registrationResendConfirmationSchema = z
-  .object({
-    id: z.uuid().optional(),
-    token: z.string().min(1).optional(),
-    email: normalizedEmailSchema.optional(),
-  })
-  .refine((value) => Boolean(value.token || value.email), {
-    message: "token or email is required",
-  });
-
-export const okResponseSchema = z.object({
-  ok: z.boolean(),
-});
-
-export const registrationManageSchema = z.object({
-  action: z.enum(["update", "cancel", "report_unauthorized"]),
-  attendanceType: attendanceTypeSchema.optional(),
-  dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
-  customAnswers: customAnswersSchema.optional(),
-  sourceRef: trimmedString(2, 200).optional(),
-  // PII fields — only used with action "update"
-  email: normalizedEmailSchema.optional(),
-  firstName: firstNameSchema.optional(),
-  lastName: lastNameSchema.optional(),
-  organizationName: organizationNameSchema.optional(),
-  jobTitle: jobTitleSchema.optional(),
-});
-
-export const registrationInviteCreateSchema = z.object({
-  invites: z.array(inviteeSchema).min(1).max(10),
-});
-
-export const inviteDeclineSchema = z
-  .object({
-    reasonCode: declineReasonCodeSchema,
-    reasonNote: trimmedString(3, 2000).optional(),
-    unsubscribeFuture: z.boolean().optional(),
-    npsScore: z.number().int().min(1).max(10).optional(),
-    forwards: z.array(inviteeSchema).max(5).optional(),
-  })
-  .superRefine((value, ctx) => {
-    if (value.reasonCode === "other" && !value.reasonNote) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["reasonNote"],
-        message: "reasonNote is required when reasonCode is 'other'",
-      });
-    }
-  });
-
-export const inviteAcceptAttendeeSchema = z
-  .object({
-    firstName: firstNameSchema,
-    lastName: lastNameSchema,
-    email: normalizedEmailSchema,
-    organizationName: organizationNameSchema.optional(),
-    jobTitle: jobTitleSchema.optional(),
-    attendanceType: attendanceTypeSchema.optional(),
-    dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
-    customAnswers: customAnswersSchema.optional(),
-    consents: z.array(consentItemSchema).min(1).max(20),
-  })
-  .superRefine((value, ctx) => {
-    if (!value.attendanceType && (!value.dayAttendance || value.dayAttendance.length === 0)) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["attendanceType"],
-        message: "attendanceType or dayAttendance is required",
-      });
-    }
-  });
 
 export const proposalTypeSchema = z.enum([
   "keynote",
@@ -1019,10 +689,6 @@ export const adminCreateEventSchema = z.object({
   venue: trimmedString(2, 500).nullable().optional(),
   virtualUrl: z.string().trim().url().max(500).nullable().optional(),
 });
-
-/** Event-team permission grant. Canonical vocabulary — see AGENTS.md DRY policy (mirrors the `event_permissions.permission` CHECK constraint). */
-export const eventTeamPermissionSchema = z.enum(["organizer", "program_committee", "moderator", "volunteer"]);
-export type EventTeamPermission = z.infer<typeof eventTeamPermissionSchema>;
 
 export const adminEventPermissionSchema = z.object({
   userEmail: normalizedEmailSchema,

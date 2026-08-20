@@ -179,14 +179,15 @@ describe("GET /api/v1/admin/audit-log", () => {
     expect(body.entries[0].details).toEqual({ note: "needle-in-details" });
   });
 
-  it("an empty filter value behaves the same as an omitted one (no 400, no filtering)", async () => {
+  it("rejects an empty shared search value instead of silently returning unfiltered data", async () => {
     await insertAuditLogRow({ actorType: "system", action: "a1", entityType: "event", secondsAgo: 10 });
     await insertAuditLogRow({ actorType: "system", action: "a2", entityType: "user", secondsAgo: 5 });
 
     const response = await callAppGet("/api/v1/admin/audit-log?entityType=&q=&action=", adminToken);
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as AuditLogListResponse;
-    expect(body.entries).toHaveLength(2);
+    expect(response.status).toBe(400);
+    expect((await response.json()) as { error: { code: string } }).toMatchObject({
+      error: { code: "VALIDATION_ERROR" },
+    });
   });
 
   it("paginates with limit/offset and reports hasMore, and supports ?sort=", async () => {
@@ -194,14 +195,14 @@ describe("GET /api/v1/admin/audit-log", () => {
       await insertAuditLogRow({ actorType: "system", action: `bulk_${i}`, entityType: "event", secondsAgo: 5 - i });
     }
 
-    const firstPage = await callAppGet("/api/v1/admin/audit-log?limit=2&offset=0&sort=al.action", adminToken);
+    const firstPage = await callAppGet("/api/v1/admin/audit-log?limit=2&offset=0&sort=action", adminToken);
     const firstBody = (await firstPage.json()) as AuditLogListResponse;
     expect(firstBody.entries).toHaveLength(2);
     expect(firstBody.page.total).toBe(5);
     expect(firstBody.page.hasMore).toBe(true);
     expect(firstBody.entries.map((e) => e.action)).toEqual(["bulk_0", "bulk_1"]);
 
-    const lastPage = await callAppGet("/api/v1/admin/audit-log?limit=2&offset=4&sort=al.action", adminToken);
+    const lastPage = await callAppGet("/api/v1/admin/audit-log?limit=2&offset=4&sort=action", adminToken);
     const lastBody = (await lastPage.json()) as AuditLogListResponse;
     expect(lastBody.entries).toHaveLength(1);
     expect(lastBody.page.hasMore).toBe(false);

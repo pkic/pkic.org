@@ -52,14 +52,10 @@ export function OrganizationLogo({ org, onChanged }: { org: AdminOrganizationDet
         <img
           src={org.logoUrl}
           alt={`${org.name} logo`}
-          class="img-fluid mb-2 border rounded p-2 bg-white"
-          style="max-height: 160px;"
+          class="img-fluid mb-2 border rounded p-2 bg-white adm-organization-logo"
         />
       ) : (
-        <div
-          class="d-flex align-items-center justify-content-center mb-2 border rounded bg-light text-muted"
-          style="height: 120px;"
-        >
+        <div class="d-flex align-items-center justify-content-center mb-2 border rounded bg-light text-muted adm-organization-logo-placeholder">
           No logo
         </div>
       )}

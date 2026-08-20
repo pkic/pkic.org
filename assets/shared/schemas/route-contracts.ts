@@ -28,6 +28,7 @@ import {
   registrationResendConfirmationSchema,
   successResponseSchema,
 } from "./api";
+import { paginationQuerySchema } from "./pagination";
 
 export const apiRootGetRouteSchema = {
   tags: ["System"],
@@ -335,11 +336,27 @@ export const adminProposalAuditLogRouteSchema = {
   description: "Returns recent audit events attached to a proposal, its reviews, and its speaker records.",
   request: {
     params: proposalIdParamsSchema,
+    query: paginationQuerySchema,
   },
   responses: {
     "200": { description: "Proposal audit log entries." },
     "401": { description: "Admin authorization required." },
     "404": { description: "Proposal not found." },
+  },
+};
+
+export const adminRegistrationAuditLogRouteSchema = {
+  tags: ["Admin events"],
+  summary: "List registration audit log",
+  description: "Returns recent audit events attached to a registration in the requested event.",
+  request: {
+    params: eventSlugParamsSchema.extend({ registrationId: z.string() }),
+    query: paginationQuerySchema,
+  },
+  responses: {
+    "200": { description: "Registration audit log entries." },
+    "401": { description: "Admin authorization required." },
+    "404": { description: "Event or registration not found." },
   },
 };
 
@@ -603,7 +620,9 @@ export const sendgridWebhookPostRouteSchema = {
   },
   responses: {
     "200": { description: "Events accepted and processed." },
-    "400": { description: "Invalid JSON or non-array payload." },
+    "400": { description: "Missing signature headers, invalid JSON, or non-array payload." },
+    "403": { description: "The SendGrid signature is invalid." },
     "500": { description: "Database binding is not configured." },
+    "503": { description: "Webhook signature verification is not configured outside local development." },
   },
 };

@@ -5,7 +5,7 @@
  * still composes a real `LIMIT`/`OFFSET` + `COUNT(*)` bound rather than
  * returning every row unbounded, matching every other admin list endpoint.
  */
-import { all, first } from "../../db/queries";
+import { queryPage } from "../../db/pagination";
 import type { DatabaseLike } from "../../types";
 
 export interface AdminFormSummaryRow {
@@ -36,10 +36,10 @@ export async function listAdminForms(
   db: DatabaseLike,
   params: { limit: number; offset: number },
 ): Promise<{ forms: AdminFormSummaryRow[]; total: number }> {
-  const [forms, totalRow] = await Promise.all([
-    all<AdminFormSummaryRow>(
-      db,
-      `SELECT
+  const { rows: forms, total } = await queryPage<AdminFormSummaryRow>(
+    db,
+    {
+      sql: `SELECT
          f.*,
          e.slug AS event_slug,
          e.name AS event_name,
@@ -65,10 +65,10 @@ export async function listAdminForms(
        GROUP BY f.id
        ORDER BY f.scope_type ASC, f.purpose ASC, f.updated_at DESC
        LIMIT ? OFFSET ?`,
-      [params.limit, params.offset],
-    ),
-    first<{ total: number }>(db, `SELECT COUNT(*) AS total FROM forms f`),
-  ]);
+      bindings: [params.limit, params.offset],
+    },
+    { sql: `SELECT COUNT(*) AS total FROM forms f`, bindings: [] },
+  );
 
-  return { forms, total: totalRow?.total ?? 0 };
+  return { forms, total };
 }

@@ -17,7 +17,7 @@ export const donationCheckoutSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(200),
   /** Donor's email — pre-fills Stripe Checkout and stored for tax reporting. */
   email: z.email().trim().toLowerCase().optional(),
-  /** Donor's organisation name (optional). */
+  /** Donor's organization name (optional). */
   organizationName: z.string().trim().max(200).optional(),
   /** Relative path to redirect to after successful donation (must start with /). */
   successPath: z

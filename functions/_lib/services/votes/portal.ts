@@ -3,6 +3,7 @@
  * Split out of votes.ts.
  */
 import { all, first } from "../../db/queries";
+import { queryPage } from "../../db/pagination";
 import { parseJsonSafe } from "../../utils/json";
 import { AppError } from "../../errors";
 import { VOTING_CATEGORIES } from "../membership/applications/create";
@@ -144,16 +145,16 @@ export async function listVisibleVotesForMember(
   }
   const where = conditions.join(" ");
 
-  const [rows, totalRow] = await Promise.all([
-    all<VoteRow>(db, `SELECT * FROM votes WHERE ${where} ORDER BY closes_at DESC LIMIT ? OFFSET ?`, [
-      ...args,
-      params.limit,
-      params.offset,
-    ]),
-    first<{ total: number }>(db, `SELECT COUNT(*) AS total FROM votes WHERE ${where}`, args),
-  ]);
+  const { rows, total } = await queryPage<VoteRow>(
+    db,
+    {
+      sql: `SELECT * FROM votes WHERE ${where} ORDER BY closes_at DESC LIMIT ? OFFSET ?`,
+      bindings: [...args, params.limit, params.offset],
+    },
+    { sql: `SELECT COUNT(*) AS total FROM votes WHERE ${where}`, bindings: args },
+  );
 
-  if (rows.length === 0) return { votes: [], total: totalRow?.total ?? 0 };
+  if (rows.length === 0) return { votes: [], total };
 
   const voteIds = rows.map((r) => r.id);
   const electionVoteIds = rows.filter((r) => r.vote_type === "election").map((r) => r.id);
@@ -179,7 +180,7 @@ export async function listVisibleVotesForMember(
     };
   });
 
-  return { votes, total: totalRow?.total ?? 0 };
+  return { votes, total };
 }
 
 export async function getVoteDetailForMember(
@@ -225,25 +226,25 @@ export async function listMyVoteHistory(
   member: AuthMember,
   params: { limit: number; offset: number },
 ): Promise<{ votes: MyVoteHistoryEntry[]; total: number }> {
-  const [rows, totalRow] = await Promise.all([
-    all<{
-      vote_id: string;
-      slug: string;
-      title: string;
-      vote_type: VoteType;
-      scope_type: VoteScopeType;
-      status: VoteStatus;
-      choice: string;
-      submitted_at: string;
-    }>(
-      db,
-      `SELECT b.vote_id, v.slug, v.title, v.vote_type, v.scope_type, v.status, b.choice, b.submitted_at
+  const { rows, total } = await queryPage<{
+    vote_id: string;
+    slug: string;
+    title: string;
+    vote_type: VoteType;
+    scope_type: VoteScopeType;
+    status: VoteStatus;
+    choice: string;
+    submitted_at: string;
+  }>(
+    db,
+    {
+      sql: `SELECT b.vote_id, v.slug, v.title, v.vote_type, v.scope_type, v.status, b.choice, b.submitted_at
        FROM vote_ballots b JOIN votes v ON v.id = b.vote_id
        WHERE b.user_id = ? ORDER BY b.submitted_at DESC LIMIT ? OFFSET ?`,
-      [member.userId, params.limit, params.offset],
-    ),
-    first<{ total: number }>(db, `SELECT COUNT(*) AS total FROM vote_ballots WHERE user_id = ?`, [member.userId]),
-  ]);
+      bindings: [member.userId, params.limit, params.offset],
+    },
+    { sql: `SELECT COUNT(*) AS total FROM vote_ballots WHERE user_id = ?`, bindings: [member.userId] },
+  );
   const votes = rows.map((r) => ({
     voteId: r.vote_id,
     slug: r.slug,
@@ -254,5 +255,5 @@ export async function listMyVoteHistory(
     choice: r.choice,
     submittedAt: r.submitted_at,
   }));
-  return { votes, total: totalRow?.total ?? 0 };
+  return { votes, total };
 }

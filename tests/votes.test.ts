@@ -649,6 +649,12 @@ describe("Voting system", () => {
       (env.DB as unknown as { prepare: typeof env.DB.prepare }).prepare = originalPrepare;
     }
 
+    const invalidQueryResponse = await call(proposerToken, "/api/v1/portal/vote-proposals?scopeType=not-a-scope");
+    expect(invalidQueryResponse.status).toBe(400);
+    expect((await invalidQueryResponse.json()) as { error: { code: string } }).toMatchObject({
+      error: { code: "VALIDATION_ERROR" },
+    });
+
     const wgListRes = await call(
       proposerToken,
       "/api/v1/portal/vote-proposals?scopeType=working_group&limit=1&offset=0",

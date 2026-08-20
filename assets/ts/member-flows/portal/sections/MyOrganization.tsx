@@ -107,14 +107,10 @@ function OrganizationProfileCard({ org, reload }: { org: MyOrganizationProfile; 
               <img
                 src={org.logoUrl}
                 alt={`${org.name} logo`}
-                class="img-fluid border rounded p-2 bg-white mb-2"
-                style="max-height: 140px;"
+                class="img-fluid border rounded p-2 bg-white mb-2 portal-organization-logo"
               />
             ) : (
-              <div
-                class="d-flex align-items-center justify-content-center border rounded bg-light text-muted mb-2"
-                style="height: 100px;"
-              >
+              <div class="d-flex align-items-center justify-content-center border rounded bg-light text-muted mb-2 portal-organization-logo-placeholder">
                 No logo
               </div>
             )}
@@ -401,8 +397,7 @@ function VotingDelegateSection({ org, reload }: { org: MyOrganizationProfile; re
       </p>
       {org.isOrgContact ? (
         <select
-          class="form-select form-select-sm"
-          style="max-width: 360px;"
+          class="form-select form-select-sm portal-category-select"
           value={value}
           disabled={saving}
           onChange={(e) => void handleChange((e.target as HTMLSelectElement).value)}
@@ -454,8 +449,7 @@ function SecondaryContactSection({ org, reload }: { org: MyOrganizationProfile; 
       </p>
       {org.isPrimaryContact ? (
         <select
-          class="form-select form-select-sm"
-          style="max-width: 320px;"
+          class="form-select form-select-sm portal-representative-select"
           value={value}
           disabled={saving}
           onChange={(e) => void handleChange((e.target as HTMLSelectElement).value)}
@@ -556,7 +550,7 @@ export function MyOrganization() {
   if (!org) return null;
 
   return (
-    <div class="d-flex flex-column gap-3" style="max-width: 900px;">
+    <div class="d-flex flex-column gap-3 content-width-lg">
       <OrganizationProfileCard org={org} reload={reload} />
       {org.isOrgContact && <ContentEditorCard org={org} reload={reload} />}
       {org.isOrgContact && <ReviewHistoryCard reviews={reviews} />}

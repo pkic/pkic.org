@@ -13,7 +13,6 @@ import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../_lib/auth/permissions";
 import { listLeadershipPositionsAdmin, createLeadershipPosition } from "../../../../_lib/services/leadership";
-import { writeAuditLog } from "../../../../_lib/services/audit";
 import {
   leadershipPositionsListRouteSchema,
   leadershipPositionsCreateRouteSchema,
@@ -39,21 +38,7 @@ export const LeadershipPositionsCreate = openApiRoute(
     requirePermission(admin, "access:grant");
 
     const body = data.body;
-    const position = await createLeadershipPosition(requestDb(c), body);
-
-    await writeAuditLog(
-      requestDb(c),
-      "admin",
-      admin.id,
-      "leadership_position_created",
-      "leadership_position",
-      position.id,
-      {
-        body: position.body,
-        userId: position.userId,
-        title: position.title,
-      },
-    );
+    const position = await createLeadershipPosition(requestDb(c), body, admin.id);
 
     return json(position, 201);
   },

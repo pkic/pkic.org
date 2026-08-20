@@ -357,7 +357,7 @@ function AuditLogSection({ slug, regId }: { slug: string; regId: string }) {
         {
           header: "When",
           cell: (entry) =>
-            new Date(entry.created_at).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "medium" }),
+            new Date(entry.created_at).toLocaleString("en-US", { dateStyle: "short", timeStyle: "medium" }),
           className: "text-nowrap small text-muted",
         },
         {

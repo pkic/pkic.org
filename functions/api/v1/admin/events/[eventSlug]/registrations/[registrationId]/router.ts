@@ -1,5 +1,7 @@
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
+import { openApiRoute } from "../../../../../../../_lib/openapi/route";
+import { adminRegistrationAuditLogRouteSchema } from "../../../../../../../../assets/shared/schemas/route-contracts";
 import { onRequestPost as AdminEventsEventSlugRegistrationsRegistrationIdAdmitPost_l } from "./admit";
 import { onRequestGet as AdminEventsEventSlugRegistrationsRegistrationIdAuditLogGet_l } from "./audit-log";
 import { onRequestGet as AdminEventsEventSlugRegistrationsRegistrationIdBadgeRoleGet_l } from "./badge-role";
@@ -16,7 +18,10 @@ const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
 app.post("/admit", AdminEventsEventSlugRegistrationsRegistrationIdAdmitPost_l);
-app.get("/audit-log", AdminEventsEventSlugRegistrationsRegistrationIdAuditLogGet_l);
+openapi.get(
+  "/audit-log",
+  openApiRoute(adminRegistrationAuditLogRouteSchema, AdminEventsEventSlugRegistrationsRegistrationIdAuditLogGet_l),
+);
 app.get("/badge-role", AdminEventsEventSlugRegistrationsRegistrationIdBadgeRoleGet_l);
 app.patch("/badge-role", AdminEventsEventSlugRegistrationsRegistrationIdBadgeRolePatch_l);
 app.patch("/day-attendance", AdminEventsEventSlugRegistrationsRegistrationIdDayAttendancePatch_l);

@@ -8,8 +8,8 @@
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../_lib/auth/permissions";
-import { first, run } from "../../../../_lib/db/queries";
-import { writeAuditLog } from "../../../../_lib/services/audit";
+import { first } from "../../../../_lib/db/queries";
+import { prepareAuditLog } from "../../../../_lib/services/audit";
 import { roleDeleteRouteSchema } from "../../../../../assets/shared/schemas/access-control";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
@@ -46,10 +46,11 @@ export const RolesDelete = openApiRoute(roleDeleteRouteSchema, async (c: AdminCo
     return json({ error: { code: "ROLE_IN_USE", message: "Role is still assigned to a user" } }, 409);
   }
 
-  await run(requestDb(c), "DELETE FROM role_permissions WHERE role_id = ?", [role.id]);
-  await run(requestDb(c), "DELETE FROM roles WHERE id = ?", [role.id]);
-
-  await writeAuditLog(requestDb(c), "admin", admin.id, "role_deleted", "role", role.id, { name: role.name });
+  await requestDb(c).batch([
+    requestDb(c).prepare("DELETE FROM role_permissions WHERE role_id = ?").bind(role.id),
+    requestDb(c).prepare("DELETE FROM roles WHERE id = ?").bind(role.id),
+    prepareAuditLog(requestDb(c), "admin", admin.id, "role_deleted", "role", role.id, { name: role.name }),
+  ]);
 
   return json({ success: true });
 });

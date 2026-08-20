@@ -5,12 +5,17 @@
  * (PR #1 review, Phase 6).
  */
 import { all, first } from "../../db/queries";
+import { queryPage } from "../../db/pagination";
+import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveOrderBy } from "../../db/sort";
 import { parseJsonSafe } from "../../utils/json";
 import { extractDietarySelections } from "../../utils/registration-dietary";
 import { getActiveFormByPurpose } from "../forms";
 import { getAttendanceStatusByType, type AttendanceStatusCount } from "./admin-statistics";
-import { EVENT_REGISTRATIONS_SORT_COLUMNS } from "../../../../assets/shared/schemas/api";
+import {
+  EVENT_REGISTRATIONS_SORT_COLUMNS,
+  type AdminEventRegistrationsQuery,
+} from "../../../../assets/shared/schemas/api";
 import type { DatabaseLike } from "../../types";
 
 interface RegistrationRow {
@@ -48,17 +53,13 @@ interface AttendanceChangeRow {
 export interface AdminEventRegistrationsListParams {
   limit: number;
   offset: number;
-  q?: string;
-  /** Unrecognized values are treated as "no filter" — see the schema comment in assets/shared/schemas/api.ts. */
-  status?: string;
-  bounced?: string;
-  consent?: string;
-  attendanceChange?: string;
-  sort?: string;
+  q?: AdminEventRegistrationsQuery["q"];
+  status?: AdminEventRegistrationsQuery["status"];
+  bounced?: AdminEventRegistrationsQuery["bounced"];
+  consent?: AdminEventRegistrationsQuery["consent"];
+  attendanceChange?: AdminEventRegistrationsQuery["attendance_change"];
+  sort?: AdminEventRegistrationsQuery["sort"];
 }
-
-const VALID_REGISTRATION_STATUSES = new Set(["registered", "pending_email_confirmation", "cancelled"]);
-const VALID_ATTENDANCE_CHANGE_FILTERS = new Set(["any", "left_in_person", "joined_in_person"]);
 
 export interface AdminEventRegistrationSummary {
   id: string;
@@ -115,15 +116,12 @@ export async function listAdminEventRegistrations(
 ): Promise<AdminEventRegistrationsListResult> {
   const search = (params.q ?? "").trim();
   const orderBy = resolveOrderBy(params.sort, EVENT_REGISTRATIONS_SORT_COLUMNS, "ORDER BY r.created_at DESC");
-  const attendanceChangeFilter =
-    params.attendanceChange && VALID_ATTENDANCE_CHANGE_FILTERS.has(params.attendanceChange)
-      ? params.attendanceChange
-      : "";
+  const attendanceChangeFilter = params.attendanceChange;
 
   const conditions: string[] = ["r.event_id = ?"];
   const bindings: unknown[] = [eventId];
 
-  if (params.status && VALID_REGISTRATION_STATUSES.has(params.status)) {
+  if (params.status) {
     conditions.push("r.status = ?");
     bindings.push(params.status);
   }
@@ -168,9 +166,14 @@ export async function listAdminEventRegistrations(
   }
 
   if (search) {
-    conditions.push("(u.email LIKE ? OR COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) LIKE ?)");
-    const pattern = `%${search}%`;
-    bindings.push(pattern, pattern);
+    const filter = buildD1TextSearchFilter(search, [
+      "u.email",
+      "u.first_name",
+      "u.last_name",
+      "u.first_name || ' ' || u.last_name",
+    ]);
+    conditions.push(filter.sql);
+    bindings.push(...filter.bindings);
   }
 
   const whereClause = conditions.join(" AND ");
@@ -186,10 +189,10 @@ export async function listAdminEventRegistrations(
     : "r.created_at DESC, r.id DESC";
   const registrationForm = await getActiveFormByPurpose(db, eventId, "event_registration");
 
-  const [registrationRows, totalRow] = await Promise.all([
-    all<RegistrationRow>(
-      db,
-      `SELECT r.id, r.user_id, r.status, r.attendance_type, r.source_type, r.created_at, r.updated_at,
+  const { rows: registrationRows, total } = await queryPage<RegistrationRow>(
+    db,
+    {
+      sql: `SELECT r.id, r.user_id, r.status, r.attendance_type, r.source_type, r.created_at, r.updated_at,
               u.email AS user_email,
               COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
               rc.code AS referral_code,
@@ -219,14 +222,13 @@ export async function listAdminEventRegistrations(
        WHERE ${whereClause}
        ${attendanceChangeFilter ? `ORDER BY ${orderBySql}` : orderBy}
        LIMIT ? OFFSET ?`,
-      [...bindings, params.limit, params.offset],
-    ),
-    first<{ total: number }>(
-      db,
-      `SELECT COUNT(*) AS total FROM registrations r LEFT JOIN users u ON u.id = r.user_id WHERE ${whereClause}`,
+      bindings: [...bindings, params.limit, params.offset],
+    },
+    {
+      sql: `SELECT COUNT(*) AS total FROM registrations r LEFT JOIN users u ON u.id = r.user_id WHERE ${whereClause}`,
       bindings,
-    ),
-  ]);
+    },
+  );
 
   const registrationIds = registrationRows.map((row) => row.id);
   const [waitlistSummaries, attendanceChangeRows] =
@@ -365,7 +367,7 @@ export async function listAdminEventRegistrations(
 
   return {
     registrations,
-    total: Number(totalRow?.total ?? 0),
+    total,
     stats: {
       byAttendanceType,
       attendanceStatusByType,

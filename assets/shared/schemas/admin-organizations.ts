@@ -14,7 +14,7 @@ import { normalizedEmailSchema } from "./api";
 import { linksSchema } from "./links";
 import { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "./admin-members";
 import { MEMBER_STATUSES, memberStatusSchema } from "./membership-categories";
-import { paginationQuerySchema, paginatedResponseSchema, sortColumnSchema } from "./pagination";
+import { listQuerySchema, paginationQuerySchema, paginatedResponseSchema } from "./pagination";
 
 export { MEMBER_STATUSES, memberStatusSchema };
 
@@ -95,10 +95,7 @@ export const adminOrganizationDetailSchema = adminOrganizationSummarySchema.exte
 /** Allowlisted sort columns for GET /api/v1/admin/organizations — see listAdminOrganizations. */
 export const ADMIN_ORGANIZATIONS_SORT_COLUMNS = ["name", "membership_category", "created_at", "member_count"] as const;
 
-export const organizationsListQuerySchema = paginationQuerySchema.extend({
-  q: trimmedString(1, 200).optional(),
-  sort: sortColumnSchema(ADMIN_ORGANIZATIONS_SORT_COLUMNS),
-});
+export const organizationsListQuerySchema = listQuerySchema(ADMIN_ORGANIZATIONS_SORT_COLUMNS);
 
 export const organizationsListRouteSchema = {
   tags: ["Organizations"],

@@ -5,7 +5,8 @@ import { getProposalAccessForEvent } from "../../../../../_lib/auth/proposal-acc
 import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { getEventBySlug } from "../../../../../_lib/services/events";
-import { all, first } from "../../../../../_lib/db/queries";
+import { batchFirst, batchRows } from "../../../../../_lib/db/pagination";
+import { buildD1TextSearchFilter } from "../../../../../_lib/db/search";
 import type { ProposalListRecord } from "../../../../../_lib/services/proposals";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { adminEventProposalsQuerySchema, eventSlugParamsSchema } from "../../../../../../assets/shared/schemas/api";
@@ -68,7 +69,7 @@ export const AdminEventsEventSlugProposalsGet = openApiRoute(
     const access = await getProposalAccessForEvent(requestDb(c), event.id, admin);
 
     const { status, recommendation, sort = "submitted_desc", limit = 50, offset = 0, deleted } = data.query;
-    const search = (data.query.q ?? data.query.search ?? "").trim().toLowerCase();
+    const search = (data.query.q ?? "").trim();
 
     const showDeleted = deleted === "1";
     const conditions: string[] = [
@@ -94,40 +95,51 @@ export const AdminEventsEventSlugProposalsGet = openApiRoute(
     }
 
     if (search) {
+      const proposalSearch = buildD1TextSearchFilter(search, [
+        "sp.title",
+        "sp.abstract",
+        "sp.proposal_type",
+        "u.email",
+        "u.first_name",
+        "u.last_name",
+        "u.first_name || ' ' || u.last_name",
+      ]);
+      const reviewSearch = buildD1TextSearchFilter(search, [
+        "pr_search.reviewer_comment",
+        "pr_search.applicant_note",
+        "pr_search.recommendation",
+        "ru.email",
+        "ru.first_name",
+        "ru.last_name",
+        "ru.first_name || ' ' || ru.last_name",
+      ]);
+      const decisionSearch = buildD1TextSearchFilter(search, ["pd_search.decision_note", "pd_search.final_status"]);
       conditions.push(
-        `(LOWER(sp.title) LIKE ?
-          OR LOWER(sp.abstract) LIKE ?
-          OR LOWER(sp.proposal_type) LIKE ?
-          OR LOWER(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '') || ' ' || u.email) LIKE ?
+        `(${proposalSearch.sql}
           OR EXISTS (
             SELECT 1
             FROM proposal_reviews pr_search
             LEFT JOIN users ru ON ru.id = pr_search.reviewer_user_id
             WHERE pr_search.proposal_id = sp.id
-              AND (
-                LOWER(COALESCE(pr_search.reviewer_comment, '')) LIKE ?
-                OR LOWER(COALESCE(pr_search.applicant_note, '')) LIKE ?
-                OR LOWER(pr_search.recommendation) LIKE ?
-                OR LOWER(COALESCE(ru.first_name, '') || ' ' || COALESCE(ru.last_name, '') || ' ' || COALESCE(ru.email, '')) LIKE ?
-              )
+              AND ${reviewSearch.sql}
           )
           OR EXISTS (
             SELECT 1
             FROM proposal_decisions pd_search
             WHERE pd_search.proposal_id = sp.id
-              AND LOWER(COALESCE(pd_search.decision_note, '') || ' ' || COALESCE(pd_search.final_status, '')) LIKE ?
+              AND ${decisionSearch.sql}
           ))`,
       );
-      const pattern = `%${search}%`;
-      params.push(pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern);
+      params.push(...proposalSearch.bindings, ...reviewSearch.bindings, ...decisionSearch.bindings);
     }
 
     const orderBy = orderByMap[sort] ?? orderByMap.submitted_desc;
 
-    const [rows, totalRow, statusRows, recommendationRows, reviewedRow] = await Promise.all([
-      all<ProposalListRecord>(
-        requestDb(c),
-        `SELECT
+    const db = requestDb(c);
+    const [rowsResult, totalResult, statusResult, recommendationResult, reviewedResult] = await db.batch([
+      db
+        .prepare(
+          `SELECT
            sp.*,
            u.email      AS proposer_email,
            u.first_name AS proposer_first_name,
@@ -157,45 +169,48 @@ export const AdminEventsEventSlugProposalsGet = openApiRoute(
          WHERE ${conditions.join(" AND ")}
          ORDER BY ${orderBy}
          LIMIT ? OFFSET ?`,
-        [...params, limit, offset],
-      ),
-      first<{ total: number }>(
-        requestDb(c),
-        `SELECT COUNT(*) AS total
+        )
+        .bind(...params, limit, offset),
+      db
+        .prepare(
+          `SELECT COUNT(*) AS total
        FROM session_proposals sp
        JOIN users u ON u.id = sp.proposer_user_id
        WHERE ${conditions.join(" AND ")}`,
-        params,
-      ),
-      all<{ status: string; count: number }>(
-        requestDb(c),
-        `SELECT status, COUNT(*) AS count
+        )
+        .bind(...params),
+      db
+        .prepare(
+          `SELECT status, COUNT(*) AS count
          FROM session_proposals
          WHERE event_id = ?
          GROUP BY status`,
-        [event.id],
-      ),
-      all<{ recommendation: string; count: number }>(
-        requestDb(c),
-        `SELECT pr.recommendation, COUNT(*) AS count
+        )
+        .bind(event.id),
+      db
+        .prepare(
+          `SELECT pr.recommendation, COUNT(*) AS count
          FROM proposal_reviews pr
          JOIN session_proposals sp ON sp.id = pr.proposal_id
          WHERE sp.event_id = ?
          GROUP BY pr.recommendation`,
-        [event.id],
-      ),
-      first<{ reviewed_count: number }>(
-        requestDb(c),
-        `SELECT COUNT(DISTINCT sp.id) AS reviewed_count
+        )
+        .bind(event.id),
+      db
+        .prepare(
+          `SELECT COUNT(DISTINCT sp.id) AS reviewed_count
          FROM session_proposals sp
          JOIN proposal_reviews pr ON pr.proposal_id = sp.id
          WHERE sp.event_id = ?`,
-        [event.id],
-      ),
+        )
+        .bind(event.id),
     ]);
 
-    const proposals = rows;
-    const total = Number(totalRow?.total ?? 0);
+    const proposals = batchRows<ProposalListRecord>(rowsResult);
+    const total = Number(batchFirst<{ total: number }>(totalResult)?.total ?? 0);
+    const statusRows = batchRows<{ status: string; count: number }>(statusResult);
+    const recommendationRows = batchRows<{ recommendation: string; count: number }>(recommendationResult);
+    const reviewedRow = batchFirst<{ reviewed_count: number }>(reviewedResult);
     const byStatus: Record<string, number> = {};
     const byRecommendation: Record<string, number> = {};
     for (const row of statusRows) byStatus[row.status] = Number(row.count);

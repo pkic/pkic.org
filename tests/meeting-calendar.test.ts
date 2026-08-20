@@ -205,6 +205,24 @@ describe("Meeting calendar management", () => {
     expect(series?.icsFiles.some((f) => f.id === uploaded.icsFile.id)).toBe(true);
   });
 
+  it("rejects a file whose bytes are not an iCalendar document", async () => {
+    const wgId = await insertWorkingGroup("Unsafe ICS", "unsafe-ics");
+    const seriesId = await insertMeetingSeries("working_group", "Unsafe Upload", wgId);
+    const formData = new FormData();
+    formData.append("file", new File(["<script>alert(1)</script>"], "calendar.ics", { type: "text/calendar" }));
+    formData.append("label", "Unsafe");
+    formData.append("year", "2026");
+
+    const response = await callMultipart(
+      adminToken,
+      `/api/v1/admin/working-groups/${wgId}/meetings/${seriesId}/ics-files`,
+      formData,
+    );
+    expect(response.status).toBe(400);
+    expect(await env.ASSETS_BUCKET!.list({ prefix: `meeting-ics/${seriesId}/` })).toMatchObject({ objects: [] });
+    expect(await queryAll(env.DB, "SELECT id FROM meeting_ics_files WHERE series_id = ?", seriesId)).toHaveLength(0);
+  });
+
   it("deactivating an ICS file is non-destructive and clears any member preference pointing at it", async () => {
     const wgId = await insertWorkingGroup("PQC", "pqc");
     const seriesId = await insertMeetingSeries("working_group", "PQC WG Meeting", wgId);

@@ -19,15 +19,24 @@
 -- widening `user_roles` for a shape it wasn't designed for.
 CREATE TABLE leadership_positions (
   id         TEXT NOT NULL PRIMARY KEY,
-  body       TEXT NOT NULL CHECK (body IN ('board', 'executive_council')),
+  -- The canonical vocabulary is validated by leadershipBodySchema. Keep
+  -- this evolvable in application code: D1 cannot alter a CHECK without a
+  -- table rebuild when a future consortium body is added.
+  body       TEXT NOT NULL,
   user_id    TEXT NOT NULL,
+  -- Explicitly records which membership the person represents for this
+  -- position. NULL is an intentional "no affiliation" choice; never infer
+  -- one from an arbitrary first organization at read time.
+  member_id  TEXT,
   title      TEXT NOT NULL,
   starts_at  TEXT NOT NULL,
   ends_at    TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
-  FOREIGN KEY(user_id) REFERENCES users(id)
+  FOREIGN KEY(user_id) REFERENCES users(id),
+  FOREIGN KEY(member_id) REFERENCES members(id)
 );
 
 CREATE INDEX idx_leadership_positions_body ON leadership_positions(body, ends_at);
 CREATE INDEX idx_leadership_positions_user ON leadership_positions(user_id);
+CREATE INDEX idx_leadership_positions_member ON leadership_positions(member_id);

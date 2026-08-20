@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { publicOrganizationPersonSchema } from "./public-person";
 
 /**
  * Leadership positions (migration 0049) — Board of Directors and Executive
@@ -21,6 +22,7 @@ export const leadershipPositionCreateSchema = z
   .object({
     body: leadershipBodySchema,
     userId: z.uuid(),
+    memberId: z.uuid().nullable().optional(),
     title: trimmedString(1, 80),
     startsAt: z.iso.date(),
     endsAt: z.iso.date().nullable().optional(),
@@ -33,6 +35,7 @@ export const leadershipPositionCreateSchema = z
 
 export const leadershipPositionUpdateSchema = z
   .object({
+    memberId: z.uuid().nullable().optional(),
     title: trimmedString(1, 80).optional(),
     startsAt: z.iso.date().optional(),
     endsAt: z.iso.date().nullable().optional(),
@@ -43,6 +46,8 @@ export const leadershipPositionResponseSchema = z.object({
   id: z.string(),
   body: leadershipBodySchema,
   userId: z.string(),
+  memberId: z.string().nullable(),
+  organizationName: z.string().nullable(),
   name: z.string(),
   email: z.string(),
   title: z.string(),
@@ -51,9 +56,39 @@ export const leadershipPositionResponseSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
 });
+export type LeadershipPosition = z.infer<typeof leadershipPositionResponseSchema>;
+
+export const leadershipAffiliationSchema = z.object({
+  memberId: z.uuid(),
+  organizationName: z.string().nullable(),
+  membershipCategory: z.string(),
+});
+export type LeadershipAffiliation = z.infer<typeof leadershipAffiliationSchema>;
+
+export const leadershipAffiliationsResponseSchema = z.object({
+  affiliations: z.array(leadershipAffiliationSchema),
+});
+
+export const leadershipAffiliationsParamsSchema = z.object({ userId: z.uuid() });
+
+export const leadershipAffiliationsRouteSchema = {
+  tags: ["Leadership"],
+  summary: "List a user's eligible leadership affiliations",
+  request: { params: leadershipAffiliationsParamsSchema },
+  responses: {
+    "200": {
+      description: "Active individual and organization memberships the user can explicitly represent.",
+      content: { "application/json": { schema: leadershipAffiliationsResponseSchema } },
+    },
+  },
+};
 
 export const leadershipPositionsListQuerySchema = z.object({
   body: leadershipBodySchema,
+});
+
+export const leadershipPositionsListResponseSchema = z.object({
+  positions: z.array(leadershipPositionResponseSchema),
 });
 
 export const leadershipPositionsListRouteSchema = {
@@ -64,7 +99,7 @@ export const leadershipPositionsListRouteSchema = {
   responses: {
     "200": {
       description: "Positions for the requested body.",
-      content: { "application/json": { schema: z.object({ positions: z.array(leadershipPositionResponseSchema) }) } },
+      content: { "application/json": { schema: leadershipPositionsListResponseSchema } },
     },
   },
 };
@@ -81,6 +116,7 @@ export const leadershipPositionsCreateRouteSchema = {
       content: { "application/json": { schema: leadershipPositionResponseSchema } },
     },
     "404": { description: "User not found." },
+    "422": { description: "The affiliation is invalid or ambiguous." },
   },
 };
 
@@ -98,6 +134,7 @@ export const leadershipPositionUpdateRouteSchema = {
       content: { "application/json": { schema: leadershipPositionResponseSchema } },
     },
     "404": { description: "Position not found." },
+    "422": { description: "The affiliation is not active for this user." },
   },
 };
 
@@ -113,14 +150,8 @@ export const leadershipPositionDeleteRouteSchema = {
 
 /* ── Public response shapes ──────────────────────────────────────────────── */
 
-export const leadershipPublicPersonSchema = z.object({
-  name: z.string(),
+export const leadershipPublicPersonSchema = publicOrganizationPersonSchema.extend({
   title: z.string(),
-  organizationName: z.string().nullable(),
-  organizationLogoUrl: z.string().nullable(),
-  organizationWebsite: z.string().nullable(),
-  photoUrl: z.string().nullable(),
-  linkedin: z.string().nullable(),
   startsAt: z.string(),
   endsAt: z.string().nullable(),
 });
@@ -129,6 +160,8 @@ export const leadershipPublicResponseSchema = z.object({
   current: z.array(leadershipPublicPersonSchema),
   past: z.array(leadershipPublicPersonSchema),
 });
+export type LeadershipPublicPerson = z.infer<typeof leadershipPublicPersonSchema>;
+export type LeadershipPublicResponse = z.infer<typeof leadershipPublicResponseSchema>;
 
 export const leadershipPublicRouteSchema = {
   tags: ["Leadership"],
@@ -147,6 +180,7 @@ export const forumChairsPublicResponseSchema = z.object({
   chair: leadershipPublicPersonSchema.omit({ title: true, endsAt: true }).nullable(),
   viceChair: leadershipPublicPersonSchema.omit({ title: true, endsAt: true }).nullable(),
 });
+export type ForumChairsPublicResponse = z.infer<typeof forumChairsPublicResponseSchema>;
 
 export const forumChairsPublicRouteSchema = {
   tags: ["Leadership"],

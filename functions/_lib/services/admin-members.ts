@@ -5,7 +5,7 @@
  * for the admin UI (unfiltered by status, unlike the public directory in
  * members-directory.ts which only surfaces active members).
  */
-import { all, first } from "../db/queries";
+import { queryPage } from "../db/pagination";
 import { provisionOrganizationMembership } from "./membership/provisioning";
 import type { DatabaseLike } from "../types";
 
@@ -147,14 +147,14 @@ export async function listAdminMembers(
   db: DatabaseLike,
   params: { limit: number; offset: number },
 ): Promise<{ members: AdminMemberSummary[]; total: number }> {
-  const [rows, totalRow] = await Promise.all([
-    all<AdminMemberRow>(
-      db,
-      `SELECT * FROM (${ADMIN_MEMBERS_SELECT}) combined ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-      [params.limit, params.offset],
-    ),
-    first<{ total: number }>(db, `SELECT COUNT(*) AS total FROM (${ADMIN_MEMBERS_SELECT}) combined`),
-  ]);
+  const { rows, total } = await queryPage<AdminMemberRow>(
+    db,
+    {
+      sql: `SELECT * FROM (${ADMIN_MEMBERS_SELECT}) combined ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      bindings: [params.limit, params.offset],
+    },
+    { sql: `SELECT COUNT(*) AS total FROM (${ADMIN_MEMBERS_SELECT}) combined`, bindings: [] },
+  );
 
-  return { members: rows.map(toAdminMemberSummary), total: totalRow?.total ?? 0 };
+  return { members: rows.map(toAdminMemberSummary), total };
 }

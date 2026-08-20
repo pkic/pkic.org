@@ -4,6 +4,7 @@
  * out of votes.ts.
  */
 import { all, first, run } from "../../db/queries";
+import { queryPage } from "../../db/pagination";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import { stringifyJson } from "../../utils/json";
@@ -263,16 +264,16 @@ export async function listVoteProposals(
   args.push(params.status ?? "open_for_endorsement");
   const where = conditions.join(" AND ");
 
-  const [rows, totalRow] = await Promise.all([
-    all<ProposalRow>(db, `SELECT * FROM vote_proposals WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`, [
-      ...args,
-      params.limit,
-      params.offset,
-    ]),
-    first<{ total: number }>(db, `SELECT COUNT(*) AS total FROM vote_proposals WHERE ${where}`, args),
-  ]);
+  const { rows, total } = await queryPage<ProposalRow>(
+    db,
+    {
+      sql: `SELECT * FROM vote_proposals WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      bindings: [...args, params.limit, params.offset],
+    },
+    { sql: `SELECT COUNT(*) AS total FROM vote_proposals WHERE ${where}`, bindings: args },
+  );
 
-  return { proposals: await toProposalSummaries(db, rows), total: totalRow?.total ?? 0 };
+  return { proposals: await toProposalSummaries(db, rows), total };
 }
 
 export async function listAllVoteProposalsForAdmin(
@@ -282,16 +283,16 @@ export async function listAllVoteProposalsForAdmin(
   const where = params.status ? "WHERE status = ?" : "";
   const whereArgs = params.status ? [params.status] : [];
 
-  const [rows, totalRow] = await Promise.all([
-    all<ProposalRow>(db, `SELECT * FROM vote_proposals ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`, [
-      ...whereArgs,
-      params.limit,
-      params.offset,
-    ]),
-    first<{ total: number }>(db, `SELECT COUNT(*) AS total FROM vote_proposals ${where}`, whereArgs),
-  ]);
+  const { rows, total } = await queryPage<ProposalRow>(
+    db,
+    {
+      sql: `SELECT * FROM vote_proposals ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      bindings: [...whereArgs, params.limit, params.offset],
+    },
+    { sql: `SELECT COUNT(*) AS total FROM vote_proposals ${where}`, bindings: whereArgs },
+  );
 
-  return { proposals: await toProposalSummaries(db, rows), total: totalRow?.total ?? 0 };
+  return { proposals: await toProposalSummaries(db, rows), total };
 }
 
 export async function getVoteProposalDetail(

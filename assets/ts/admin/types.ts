@@ -2,23 +2,22 @@ import { SPONSORSHIP_PIPELINE_STAGES, type SponsorshipPipelineStage } from "../.
 import { MAILING_LIST_TYPES } from "../../shared/schemas/admin-mailing-lists";
 import type { EmailContentType, EmailMessageType } from "../../shared/schemas/admin-email-templates";
 import type { EcDecisionValue } from "../../shared/schemas/ec-review";
+import type { LeadershipPosition as CanonicalLeadershipPosition } from "../../shared/schemas/leadership";
+import type {
+  AdminUserListItem as CanonicalAdminUser,
+  AdminUserMembership as CanonicalAdminUserMembership,
+} from "../../shared/schemas/admin-users";
+import type { AccessGrant as CanonicalAccessGrant, Role as CanonicalRole } from "../../shared/schemas/access-control";
+import type { AdminApplicationSummary as CanonicalAdminApplicationSummary } from "../../shared/schemas/admin-applications";
+import type {
+  AdminEventSummary as CanonicalEventSummary,
+  AdminEventTeamListItem as CanonicalEventPermission,
+} from "../../shared/schemas/api";
 
 export { SPONSORSHIP_PIPELINE_STAGES };
 export type { SponsorshipPipelineStage };
 
-export interface EventSummary {
-  id: string;
-  slug: string;
-  name: string;
-  timezone: string;
-  starts_at: string | null;
-  ends_at: string | null;
-  registration_mode: string;
-  invite_limit_attendee: number;
-  confirmed_registrations: number;
-  total_registrations: number;
-  pending_invites: number;
-}
+export type EventSummary = CanonicalEventSummary;
 
 export interface EventDetail extends EventSummary {
   id: string;
@@ -152,37 +151,13 @@ export interface AdminFormSubmission {
   answers: Record<string, unknown>;
 }
 
-export interface EventPermission {
-  id: string;
-  user_email: string;
-  user_id: string | null;
-  permission: string;
-  granted_by_id: string;
-  expires_at: string | null;
-  created_at: string;
-  granter_email: string | null;
-}
+export type EventPermission = CanonicalEventPermission;
 
 // ── Access control ─────────────────────────────────────────────────
 
-export interface Role {
-  id: string;
-  name: string;
-  description: string | null;
-  isSystemRole: boolean;
-  permissions: string[];
-  createdAt: string;
-}
+export type Role = CanonicalRole;
 
-export interface AccessGrant {
-  id: string;
-  userId: string;
-  permission: string;
-  contextType: string | null;
-  contextId: string | null;
-  expiresAt: string | null;
-  createdAt: string;
-}
+export type AccessGrant = CanonicalAccessGrant;
 
 export interface UserRoleAssignment {
   id: string;
@@ -208,18 +183,7 @@ export interface RoleAssignment {
 }
 
 /** GET/POST/PATCH /api/v1/admin/leadership-positions — Board / Executive Council roster (migration 0049). */
-export interface LeadershipPosition {
-  id: string;
-  body: "board" | "executive_council";
-  userId: string;
-  name: string;
-  email: string;
-  title: string;
-  startsAt: string;
-  endsAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
+export type LeadershipPosition = CanonicalLeadershipPosition;
 
 export interface WorkingGroupSummary {
   id: string;
@@ -270,16 +234,6 @@ export interface AdminWorkingGroupMember {
 
 export interface AdminWorkingGroupDetail extends AdminWorkingGroupSummary {
   members: AdminWorkingGroupMember[];
-}
-
-// ── Passkeys ────────────────────────────────────────────────────────
-
-export interface Passkey {
-  id: string;
-  deviceName: string | null;
-  aaguid: string | null;
-  lastUsedAt: string | null;
-  createdAt: string;
 }
 
 export interface ProposalSummary {
@@ -530,44 +484,10 @@ export type AdminReminderPreviewRow = {
   subject: string;
 };
 
-export type AdminDueWorkTab = "all" | "outbox" | "reminders" | "cleanup";
-
-export interface AdminDueWorkRow {
-  bucket: Exclude<AdminDueWorkTab, "all">;
-  typeLabel: string;
-  title: string;
-  subtitle: string | null;
-  context: string;
-  detail: string | null;
-  dueAt: string | null;
-  statusKey: string;
-  statusLabel: string;
-}
-
 // ── Users ─────────────────────────────────────────────────────────────────────
 
-export interface AdminUserMembership {
-  memberId: string;
-  membershipCategory: string;
-  status: string;
-  organizationId: string | null;
-  organizationName: string | null;
-}
-
-export interface AdminUser {
-  id: string;
-  email: string;
-  first_name: string | null;
-  last_name: string | null;
-  organization_name: string | null;
-  role: string;
-  active: number;
-  created_at: string;
-  links: Array<string | { label?: string | null; url?: string | null }>;
-  membership: AdminUserMembership | null;
-  type: "member" | "event_attendee" | "contact_only";
-  eventParticipationCount: number;
-}
+export type AdminUserMembership = CanonicalAdminUserMembership;
+export type AdminUser = CanonicalAdminUser;
 
 // ── Email templates ───────────────────────────────────────────────────────────
 
@@ -864,19 +784,7 @@ export interface AdminMemberSummary {
 }
 
 // GET /api/v1/admin/applications
-export interface AdminApplicationSummary {
-  id: string;
-  applicantEmail: string;
-  applicantName: string;
-  organizationName: string | null;
-  membershipCategory: string;
-  status: string;
-  stage: string;
-  onHoldSubtype: string | null;
-  assignedToUserId: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
+export type AdminApplicationSummary = CanonicalAdminApplicationSummary;
 
 export interface AdminApplicationEvent {
   fromStage: string | null;

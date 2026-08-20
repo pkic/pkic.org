@@ -1,0 +1,45 @@
+// Reusable content-width constraints for application shells. These replace
+// inline style attributes, which are blocked by the site's strict CSP.
+
+.content-width-sm {
+  width: 100%;
+  max-width: 440px;
+}
+
+.content-width-form {
+  width: 100%;
+  max-width: 640px;
+}
+
+.content-width-schedule {
+  width: 100%;
+  max-width: 700px;
+}
+
+.content-width-md {
+  width: 100%;
+  max-width: 720px;
+}
+
+.content-width-reading {
+  width: 100%;
+  max-width: 800px;
+}
+
+.content-width-lg {
+  width: 100%;
+  max-width: 900px;
+}
+
+.content-width-xl {
+  width: 100%;
+  max-width: 960px;
+}
+
+.is-clickable {
+  cursor: pointer;
+}
+
+.text-pre-wrap {
+  white-space: pre-wrap;
+}

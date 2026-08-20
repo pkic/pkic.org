@@ -419,6 +419,18 @@ describe("admin users list — type filter", () => {
     expect(data.users[0].eventParticipationCount).toBe(0);
   });
 
+  it("finds a long partial email without invoking D1's LIKE-pattern limit", async () => {
+    await setup();
+    const email = "e2e-duplicate-1787220512185@e2e-users-dup-1787220512185.test";
+    await seedUser(env.DB, email);
+
+    const longSubstring = email.slice(4);
+    expect(new TextEncoder().encode(longSubstring).byteLength).toBeGreaterThan(50);
+
+    const data = await listUsers(`q=${encodeURIComponent(longSubstring)}`);
+    expect(data.users.map((user) => user.email)).toEqual([email]);
+  });
+
   it("a member who also has event_participants rows is still classified as 'member', not 'event_attendee'", async () => {
     const { eventId } = await setup();
     const userId = await seedMember("type-member-and-attendee@example.test");
@@ -510,7 +522,7 @@ describe("admin users list — type filter", () => {
     expect(user?.links).toEqual([]);
   });
 
-  it("P6M-P2-08: an unrecognized ?sort= value quietly falls back to the default order instead of 400ing", async () => {
+  it("rejects an unrecognized sort value through the shared list contract", async () => {
     await setup();
     await seedUser(env.DB, "sort-fallback@example.test");
 
@@ -520,9 +532,9 @@ describe("admin users list — type filter", () => {
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
 
-    expect(response.status).toBe(200);
-    const data = (await response.json()) as { users: Array<{ email: string }> };
-    expect(data.users.some((u) => u.email === "sort-fallback@example.test")).toBe(true);
+    expect(response.status).toBe(400);
+    const data = (await response.json()) as { error: { code: string } };
+    expect(data.error.code).toBe("VALIDATION_ERROR");
   });
 
   it("P6M-P2-08: a valid allowlisted ?sort= value is honored (ascending by email)", async () => {

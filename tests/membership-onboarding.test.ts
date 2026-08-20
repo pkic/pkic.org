@@ -14,6 +14,8 @@ import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createApplicationFormSubmission } from "./helpers/member-applications";
 import { insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
+import { approveApplication } from "../functions/_lib/services/membership/applications/approve";
+import type { DatabaseLike } from "../functions/_lib/types";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -403,6 +405,71 @@ describe("Post-approval onboarding", () => {
     // flagged in the Phase 5 write-up rather than fixed here.
     const groupEmails = new Set(syncRows.map((r) => r.google_group_email));
     expect(groupEmails).toEqual(new Set(["pkic@lists.pkic.org", "consultation@lists.pkic.org", "pqc@lists.pkic.org"]));
+  });
+
+  it("rolls back every approval side effect when a concurrent transition to a different stage wins", async () => {
+    const { id } = await createEcReviewApplication();
+    const baseDb: DatabaseLike = env.DB;
+    let injectedWinningTransition = false;
+    const racingDb: DatabaseLike = {
+      prepare: (query) => baseDb.prepare(query),
+      async batch(statements) {
+        if (!injectedWinningTransition) {
+          injectedWinningTransition = true;
+          await baseDb.batch([
+            baseDb
+              .prepare(
+                `UPDATE member_applications
+                 SET status = 'declined', stage = 'declined', stage_entered_at = datetime('now'), updated_at = datetime('now')
+                 WHERE id = ? AND stage = 'ec_review'`,
+              )
+              .bind(id),
+            baseDb
+              .prepare(
+                `INSERT INTO member_application_events
+                   (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
+                 VALUES (?, ?, 'ec_review', 'declined', NULL, 'Concurrent decline', datetime('now'))`,
+              )
+              .bind(crypto.randomUUID(), id),
+          ]);
+        }
+        return baseDb.batch(statements);
+      },
+    };
+
+    await expect(
+      approveApplication(racingDb, {
+        applicationId: id,
+        actorUserId: "admin-user-id",
+        loginUrl: "https://pkic.org/members/login/",
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+
+    expect(
+      await queryAll<{ status: string; stage: string }>(
+        env.DB,
+        "SELECT status, stage FROM member_applications WHERE id = ?",
+        id,
+      ),
+    ).toEqual([{ status: "declined", stage: "declined" }]);
+    expect(await queryAll(env.DB, "SELECT id FROM organizations WHERE normalized_name = 'acme corp'")).toHaveLength(0);
+    expect(await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = 'newmember@acme.test'")).toHaveLength(
+      0,
+    );
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM member_application_events WHERE application_id = ? AND to_stage = 'approved'",
+        id,
+      ),
+    ).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'application_approved' AND entity_id = ?", id),
+    ).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE recipient_email = 'newmember@acme.test'"),
+    ).toHaveLength(0);
+    expect(await queryAll(env.DB, "SELECT id FROM google_groups_sync_queue")).toHaveLength(0);
   });
 
   it("atomicity (PR #1 review blocker 4): a provisioning failure leaves the application in ec_review, with no partial event/queue rows", async () => {

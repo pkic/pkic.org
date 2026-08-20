@@ -2,7 +2,7 @@ import { parseJsonBody } from "../../../../../_lib/validation";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { createTemplateVersion } from "../../../../../_lib/email/templates";
-import { all, first } from "../../../../../_lib/db/queries";
+import { queryPage } from "../../../../../_lib/db/pagination";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { buildPageInfo } from "../../../../../../assets/shared/schemas/pagination";
 import { adminEmailTemplateVersionSchema } from "../../../../../../assets/shared/schemas/api";
@@ -17,22 +17,20 @@ export const EmailTemplateVersionsList = openApiRoute(
     const key = c.req.param("key");
     const { limit = 50, offset = 0 } = data.query;
 
-    const [versions, totalRow] = await Promise.all([
-      all(
-        requestDb(c),
-        `SELECT * FROM email_template_versions
+    const { rows: versions, total } = await queryPage(
+      requestDb(c),
+      {
+        sql: `SELECT * FROM email_template_versions
          WHERE template_key = ?
          ORDER BY version DESC
          LIMIT ? OFFSET ?`,
-        [key, limit, offset],
-      ),
-      first<{ total: number }>(
-        requestDb(c),
-        `SELECT COUNT(*) AS total FROM email_template_versions WHERE template_key = ?`,
-        [key],
-      ),
-    ]);
-    const total = Number(totalRow?.total ?? 0);
+        bindings: [key, limit, offset],
+      },
+      {
+        sql: `SELECT COUNT(*) AS total FROM email_template_versions WHERE template_key = ?`,
+        bindings: [key],
+      },
+    );
 
     return json({ versions, page: buildPageInfo(limit, offset, total, versions.length) });
   },

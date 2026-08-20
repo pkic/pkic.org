@@ -34,7 +34,7 @@ export function ProposalsList({ wgNames }: { wgNames: Map<string, string> }) {
   if (!proposals) return <Spinner />;
 
   return (
-    <div class="d-flex flex-column gap-3" style="max-width: 800px;">
+    <div class="d-flex flex-column gap-3 content-width-reading">
       {isVotingCategory() && <ProposalForm myWorkingGroups={myWorkingGroups} onCreated={reload} />}
       {proposals.length === 0 ? (
         <p class="text-muted">No proposals are currently open for endorsement.</p>

@@ -53,10 +53,7 @@ describe("GET /api/v1/admin/events/:eventSlug/invites (P6M-P2-05)", () => {
   });
 
   it("bounds results with limit/offset via data.query and returns a real page envelope", async () => {
-    const response = await call(
-      adminToken,
-      `/api/v1/admin/events/pqc-2026/invites?limit=2&offset=0&sort=${encodeURIComponent("i.created_at")}`,
-    );
+    const response = await call(adminToken, "/api/v1/admin/events/pqc-2026/invites?limit=2&offset=0&sort=created_at");
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
       invites: Array<{ invitee_email: string }>;
@@ -77,5 +74,12 @@ describe("GET /api/v1/admin/events/:eventSlug/invites (P6M-P2-05)", () => {
   it("rejects an invalid limit", async () => {
     const response = await call(adminToken, "/api/v1/admin/events/pqc-2026/invites?limit=0");
     expect(response.status).toBe(400);
+  });
+
+  it("rejects unknown filters instead of silently returning unfiltered data", async () => {
+    const response = await call(adminToken, "/api/v1/admin/events/pqc-2026/invites?status=unexpected");
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("VALIDATION_ERROR");
   });
 });

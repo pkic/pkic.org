@@ -64,7 +64,7 @@ export function MembershipSettings() {
   if (!settings) return null;
 
   return (
-    <form onSubmit={save} class="card border-0 shadow-sm" style={{ maxWidth: "640px" }}>
+    <form onSubmit={save} class="card border-0 shadow-sm adm-settings-card">
       <div class="card-body">
         <div class="row g-3">
           <div class="col-sm-6">

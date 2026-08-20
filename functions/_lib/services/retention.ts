@@ -1,95 +1,94 @@
-import { all, run } from "../db/queries";
+import { all } from "../db/queries";
 import { nowIso } from "../utils/time";
 import type { DatabaseLike } from "../types";
-
-interface RetentionPolicyRow {
-  event_id: string;
-  user_retention_days: number;
-}
-
-interface EventEndRow {
-  id: string;
-  name: string;
-  slug: string;
-  ends_at: string | null;
-}
 
 export interface RetentionPreviewEvent {
   eventId: string;
   eventName: string;
   eventSlug: string;
-  endsAt: string | null;
+  endsAt: string;
   retentionDays: number;
   eligibleRegistrations: number;
   eligibleUsers: number;
 }
 
-function olderThanDays(isoDate: string, days: number): boolean {
-  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-  return new Date(isoDate).getTime() < cutoff;
+interface RetentionPreviewRow {
+  event_id: string;
+  event_name: string;
+  event_slug: string;
+  ends_at: string;
+  retention_days: number;
+  eligible_registrations: number;
+  eligible_users: number;
+  total_events: number;
+  total_registrations: number;
+  total_users: number;
+}
+
+const DUE_RETENTION_PREDICATE = `
+  e.ends_at IS NOT NULL
+  AND datetime(e.ends_at) < datetime('now', '-' || rp.user_retention_days || ' days')
+`;
+
+/**
+ * One set-based D1 read replaces the former policy loop (event lookup plus
+ * count query per policy). Window aggregates return the summary from the
+ * same snapshot without a second scan or Worker-side reduction.
+ */
+async function getRetentionPreviewRows(db: DatabaseLike): Promise<RetentionPreviewRow[]> {
+  return all<RetentionPreviewRow>(
+    db,
+    `WITH due_events AS (
+       SELECT rp.event_id, e.name AS event_name, e.slug AS event_slug, e.ends_at,
+              rp.user_retention_days AS retention_days,
+              COUNT(r.id) AS eligible_registrations,
+              COUNT(DISTINCT r.user_id) AS eligible_users
+       FROM retention_policies rp
+       JOIN events e ON e.id = rp.event_id
+       LEFT JOIN registrations r ON r.event_id = e.id
+       WHERE ${DUE_RETENTION_PREDICATE}
+       GROUP BY rp.event_id, e.name, e.slug, e.ends_at, rp.user_retention_days
+     )
+     SELECT *,
+            COUNT(*) OVER () AS total_events,
+            SUM(eligible_registrations) OVER () AS total_registrations,
+            SUM(eligible_users) OVER () AS total_users
+     FROM due_events
+     ORDER BY ends_at ASC, event_id ASC`,
+  );
+}
+
+function toPreview(row: RetentionPreviewRow): RetentionPreviewEvent {
+  return {
+    eventId: row.event_id,
+    eventName: row.event_name,
+    eventSlug: row.event_slug,
+    endsAt: row.ends_at,
+    retentionDays: Number(row.retention_days),
+    eligibleRegistrations: Number(row.eligible_registrations),
+    eligibleUsers: Number(row.eligible_users),
+  };
 }
 
 /**
  * Retention scope: events/registrations/users ONLY.
  *
- * The `donations` table is explicitly excluded from all retention processing.
- * Donor PII and financial data must be retained for ≥7 years per IRS §6001.
+ * The `donations` table is explicitly excluded. Donor PII and financial data
+ * must be retained for at least seven years per IRS section 6001.
  */
-async function getRetentionPreviewEvents(db: DatabaseLike): Promise<RetentionPreviewEvent[]> {
-  const policies = await all<RetentionPolicyRow>(db, "SELECT * FROM retention_policies");
-  if (policies.length === 0) {
-    return [];
-  }
-
-  const dueEvents: RetentionPreviewEvent[] = [];
-  for (const policy of policies) {
-    const event = await all<EventEndRow>(db, "SELECT id, name, slug, ends_at FROM events WHERE id = ?", [
-      policy.event_id,
-    ]);
-    if (event.length === 0 || !event[0].ends_at) {
-      continue;
-    }
-
-    if (!olderThanDays(event[0].ends_at, policy.user_retention_days)) {
-      continue;
-    }
-
-    const counts = await all<{ registrations: number; users: number }>(
-      db,
-      `SELECT
-         COUNT(*) AS registrations,
-         COUNT(DISTINCT user_id) AS users
-       FROM registrations
-       WHERE event_id = ?`,
-      [policy.event_id],
-    );
-
-    dueEvents.push({
-      eventId: policy.event_id,
-      eventName: event[0].name,
-      eventSlug: event[0].slug,
-      endsAt: event[0].ends_at,
-      retentionDays: policy.user_retention_days,
-      eligibleRegistrations: Number(counts[0]?.registrations ?? 0),
-      eligibleUsers: Number(counts[0]?.users ?? 0),
-    });
-  }
-
-  return dueEvents;
-}
-
 export async function summarizeRetentionJob(db: DatabaseLike): Promise<{
   dueEvents: RetentionPreviewEvent[];
   totalEvents: number;
   totalRegistrations: number;
   totalUsers: number;
 }> {
-  const dueEvents = await getRetentionPreviewEvents(db);
+  const rows = await getRetentionPreviewRows(db);
+  const totals = rows[0];
   return {
-    dueEvents,
-    totalEvents: dueEvents.length,
-    totalRegistrations: dueEvents.reduce((sum, item) => sum + item.eligibleRegistrations, 0),
-    totalUsers: dueEvents.reduce((sum, item) => sum + item.eligibleUsers, 0),
+    dueEvents: rows.map(toPreview),
+    totalEvents: Number(totals?.total_events ?? 0),
+    totalRegistrations: Number(totals?.total_registrations ?? 0),
+    totalUsers: Number(totals?.total_users ?? 0),
   };
 }
 
@@ -98,50 +97,48 @@ export async function runRetentionJob(db: DatabaseLike): Promise<{
   redactedUsers: number;
   affectedEvents: number;
 }> {
-  const dueEvents = await getRetentionPreviewEvents(db);
-  if (dueEvents.length === 0) {
+  const previewRows = await getRetentionPreviewRows(db);
+  const totals = previewRows[0];
+  if (!totals) {
     return { redactedRegistrations: 0, redactedUsers: 0, affectedEvents: 0 };
   }
 
-  let redactedRegistrations = 0;
-  let redactedUsers = 0;
-  let affectedEvents = 0;
+  const now = nowIso();
+  await db.batch([
+    db
+      .prepare(
+        `UPDATE registrations
+         SET custom_answers_json = NULL, source_ref = NULL, updated_at = ?
+         WHERE EXISTS (
+           SELECT 1
+           FROM retention_policies rp
+           JOIN events e ON e.id = rp.event_id
+           WHERE rp.event_id = registrations.event_id
+             AND ${DUE_RETENTION_PREDICATE}
+         )`,
+      )
+      .bind(now),
+    db
+      .prepare(
+        `UPDATE users
+         SET first_name = NULL, last_name = NULL, preferred_name = NULL,
+             organization_name = NULL, job_title = NULL, biography = NULL,
+             links_json = NULL, data_json = NULL, pii_redacted_at = ?, updated_at = ?
+         WHERE EXISTS (
+           SELECT 1
+           FROM registrations r
+           JOIN retention_policies rp ON rp.event_id = r.event_id
+           JOIN events e ON e.id = rp.event_id
+           WHERE r.user_id = users.id
+             AND ${DUE_RETENTION_PREDICATE}
+         )`,
+      )
+      .bind(now, now),
+  ]);
 
-  for (const dueEvent of dueEvents) {
-    affectedEvents += 1;
-
-    await run(
-      db,
-      `UPDATE registrations
-       SET custom_answers_json = NULL,
-           source_ref = NULL,
-           updated_at = ?
-       WHERE event_id = ?`,
-      [nowIso(), dueEvent.eventId],
-    );
-
-    await run(
-      db,
-      `UPDATE users
-       SET first_name = NULL,
-           last_name = NULL,
-           preferred_name = NULL,
-           organization_name = NULL,
-           job_title = NULL,
-           biography = NULL,
-           links_json = NULL,
-           data_json = NULL,
-           pii_redacted_at = ?,
-           updated_at = ?
-       WHERE id IN (
-         SELECT user_id FROM registrations WHERE event_id = ?
-       )`,
-      [nowIso(), nowIso(), dueEvent.eventId],
-    );
-
-    redactedRegistrations += dueEvent.eligibleRegistrations;
-    redactedUsers += dueEvent.eligibleUsers;
-  }
-
-  return { redactedRegistrations, redactedUsers, affectedEvents };
+  return {
+    redactedRegistrations: Number(totals.total_registrations),
+    redactedUsers: Number(totals.total_users),
+    affectedEvents: Number(totals.total_events),
+  };
 }

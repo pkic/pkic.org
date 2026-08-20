@@ -38,7 +38,7 @@ export function VotesList({ wgNames }: { wgNames: Map<string, string> }) {
   ];
 
   return (
-    <div class="d-flex flex-column gap-4" style="max-width: 800px;">
+    <div class="d-flex flex-column gap-4 content-width-reading">
       {groups
         .filter((g) => g.items.length > 0)
         .map((g) => (

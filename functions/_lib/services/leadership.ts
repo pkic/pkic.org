@@ -5,17 +5,17 @@
  * role-forum_vice_chair, migration 0040 — the same source the admin
  * Leadership tab's "Forum" card already manages via user_roles).
  *
- * Organization/photo/LinkedIn enrichment mirrors
- * members-directory.ts's getWorkingGroupChairsPublic: resolved live from
- * the person's current active `members`/`organizations` row, not from a
- * value captured at the time the position was created — so a Board
- * member's displayed affiliation always reflects who they work for today.
+ * Board/EC positions store the membership they explicitly represent. This
+ * avoids assigning an arbitrary organization to people who concurrently
+ * represent more than one member.
  */
-import { all, first, run } from "../db/queries";
+import { all, first } from "../db/queries";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { parseLinksJson, findLinkedinUrl } from "../../../assets/shared/schemas/links";
 import { deterministicRepresentativeJoinSql } from "./membership/representative-lookup";
+import { prepareAuditLog } from "./audit";
+import { resolveLeadershipAffiliation } from "./leadership-affiliations";
 import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
 import type { LeadershipBody } from "../../../assets/shared/schemas/leadership";
@@ -26,6 +26,8 @@ export interface LeadershipPositionAdmin {
   id: string;
   body: LeadershipBody;
   userId: string;
+  memberId: string | null;
+  organizationName: string | null;
   name: string;
   email: string;
   title: string;
@@ -61,6 +63,8 @@ interface LeadershipPositionRow {
   id: string;
   body: LeadershipBody;
   user_id: string;
+  member_id: string | null;
+  organization_name: string | null;
   first_name: string | null;
   last_name: string | null;
   email: string;
@@ -72,10 +76,13 @@ interface LeadershipPositionRow {
 }
 
 const ADMIN_POSITION_SELECT = `
-  SELECT lp.id, lp.body, lp.user_id, u.first_name, u.last_name, u.email,
+  SELECT lp.id, lp.body, lp.user_id, lp.member_id, o.name AS organization_name,
+         u.first_name, u.last_name, u.email,
          lp.title, lp.starts_at, lp.ends_at, lp.created_at, lp.updated_at
   FROM leadership_positions lp
   JOIN users u ON u.id = lp.user_id
+  LEFT JOIN members m ON m.id = lp.member_id
+  LEFT JOIN organizations o ON o.id = m.organization_id
 `;
 
 function toAdmin(row: LeadershipPositionRow): LeadershipPositionAdmin {
@@ -83,6 +90,8 @@ function toAdmin(row: LeadershipPositionRow): LeadershipPositionAdmin {
     id: row.id,
     body: row.body,
     userId: row.user_id,
+    memberId: row.member_id,
+    organizationName: row.organization_name,
     name: [row.first_name, row.last_name].filter(Boolean).join(" ") || row.email,
     email: row.email,
     title: row.title,
@@ -107,21 +116,43 @@ export async function listLeadershipPositionsAdmin(
 
 export async function createLeadershipPosition(
   db: DatabaseLike,
-  input: { body: LeadershipBody; userId: string; title: string; startsAt: string; endsAt?: string | null },
+  input: {
+    body: LeadershipBody;
+    userId: string;
+    memberId?: string | null;
+    title: string;
+    startsAt: string;
+    endsAt?: string | null;
+  },
+  actorUserId: string,
 ): Promise<LeadershipPositionAdmin> {
   const user = await first<{ id: string }>(db, "SELECT id FROM users WHERE id = ?", [input.userId]);
   if (!user) {
     throw new AppError(404, "USER_NOT_FOUND", "User not found");
   }
 
+  const memberId = await resolveLeadershipAffiliation(db, input.userId, input.memberId);
   const id = uuid();
   const now = nowIso();
-  await run(
-    db,
-    `INSERT INTO leadership_positions (id, body, user_id, title, starts_at, ends_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, input.body, input.userId, input.title, input.startsAt, input.endsAt ?? null, now, now],
-  );
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO leadership_positions
+           (id, body, user_id, member_id, title, starts_at, ends_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(id, input.body, input.userId, memberId, input.title, input.startsAt, input.endsAt ?? null, now, now),
+    prepareAuditLog(
+      db,
+      "admin",
+      actorUserId,
+      "leadership_position_created",
+      "leadership_position",
+      id,
+      { body: input.body, userId: input.userId, memberId, title: input.title },
+      now,
+    ),
+  ]);
 
   const row = await first<LeadershipPositionRow>(db, `${ADMIN_POSITION_SELECT} WHERE lp.id = ?`, [id]);
   return toAdmin(row!);
@@ -130,15 +161,30 @@ export async function createLeadershipPosition(
 export async function updateLeadershipPosition(
   db: DatabaseLike,
   id: string,
-  patch: { title?: string; startsAt?: string; endsAt?: string | null },
+  patch: { memberId?: string | null; title?: string; startsAt?: string; endsAt?: string | null },
+  actorUserId: string,
 ): Promise<LeadershipPositionAdmin> {
-  const existing = await first<{ id: string }>(db, "SELECT id FROM leadership_positions WHERE id = ?", [id]);
+  const existing = await first<{ id: string; user_id: string; starts_at: string; ends_at: string | null }>(
+    db,
+    "SELECT id, user_id, starts_at, ends_at FROM leadership_positions WHERE id = ?",
+    [id],
+  );
   if (!existing) {
     throw new AppError(404, "NOT_FOUND", "Position not found");
   }
 
+  const nextStartsAt = patch.startsAt ?? existing.starts_at;
+  const nextEndsAt = patch.endsAt === undefined ? existing.ends_at : patch.endsAt;
+  if (nextEndsAt && nextEndsAt < nextStartsAt) {
+    throw new AppError(422, "INVALID_DATE_RANGE", "endsAt cannot be before startsAt");
+  }
+
   const setClauses: string[] = [];
   const values: unknown[] = [];
+  if (patch.memberId !== undefined) {
+    setClauses.push("member_id = ?");
+    values.push(await resolveLeadershipAffiliation(db, existing.user_id, patch.memberId));
+  }
   if (patch.title !== undefined) {
     setClauses.push("title = ?");
     values.push(patch.title);
@@ -152,21 +198,29 @@ export async function updateLeadershipPosition(
     values.push(patch.endsAt);
   }
 
+  const now = nowIso();
   setClauses.push("updated_at = ?");
-  values.push(nowIso());
+  values.push(now);
   values.push(id);
-  await run(db, `UPDATE leadership_positions SET ${setClauses.join(", ")} WHERE id = ?`, values);
+  await db.batch([
+    db.prepare(`UPDATE leadership_positions SET ${setClauses.join(", ")} WHERE id = ?`).bind(...values),
+    prepareAuditLog(db, "admin", actorUserId, "leadership_position_updated", "leadership_position", id, patch, now),
+  ]);
 
   const row = await first<LeadershipPositionRow>(db, `${ADMIN_POSITION_SELECT} WHERE lp.id = ?`, [id]);
   return toAdmin(row!);
 }
 
-export async function deleteLeadershipPosition(db: DatabaseLike, id: string): Promise<void> {
+export async function deleteLeadershipPosition(db: DatabaseLike, id: string, actorUserId: string): Promise<void> {
   const existing = await first<{ id: string }>(db, "SELECT id FROM leadership_positions WHERE id = ?", [id]);
   if (!existing) {
     throw new AppError(404, "NOT_FOUND", "Position not found");
   }
-  await run(db, "DELETE FROM leadership_positions WHERE id = ?", [id]);
+  const now = nowIso();
+  await db.batch([
+    db.prepare("DELETE FROM leadership_positions WHERE id = ?").bind(id),
+    prepareAuditLog(db, "admin", actorUserId, "leadership_position_deleted", "leadership_position", id, {}, now),
+  ]);
 }
 
 interface PublicPositionRow extends LeadershipPositionRow {
@@ -174,7 +228,7 @@ interface PublicPositionRow extends LeadershipPositionRow {
   org_name: string | null;
   org_logo_r2_key: string | null;
   org_website: string | null;
-  member_id: string | null;
+  photo_member_id: string | null;
   headshot_r2_key: string | null;
   links_json: string | null;
 }
@@ -186,18 +240,20 @@ export async function getLeadershipPublic(
   const rows = await all<PublicPositionRow>(
     db,
     `SELECT lp.id, lp.body, lp.user_id, u.first_name, u.last_name, u.email,
-            lp.title, lp.starts_at, lp.ends_at, lp.created_at, lp.updated_at,
+            lp.member_id, lp.title, lp.starts_at, lp.ends_at, lp.created_at, lp.updated_at,
             o.id AS org_id, o.name AS org_name, o.logo_r2_key AS org_logo_r2_key, o.website AS org_website,
-            COALESCE(rep.id, mi.id) AS member_id, u.headshot_r2_key, u.links_json
+            COALESCE(rep.id, individual.id) AS photo_member_id, u.headshot_r2_key, u.links_json
      FROM leadership_positions lp
      JOIN users u ON u.id = lp.user_id
-     -- A leadership holder can represent more than one organization at once
-     -- (migration 0037) — join to a single deterministic representative
-     -- row (earliest joined_at) instead of fanning out one result row per
-     -- represented organization.
-${deterministicRepresentativeJoinSql("u.id")}
-     LEFT JOIN members m ON m.id = rep.member_id
-     LEFT JOIN members mi ON mi.user_id = u.id AND mi.status = 'active'
+     LEFT JOIN members m ON m.id = lp.member_id
+     LEFT JOIN organization_representatives rep ON rep.id = (
+       SELECT r.id
+       FROM organization_representatives r
+       WHERE r.member_id = lp.member_id AND r.user_id = lp.user_id
+       ORDER BY (r.left_at IS NULL) DESC, r.joined_at DESC
+       LIMIT 1
+     )
+     LEFT JOIN members individual ON individual.id = lp.member_id AND individual.user_id = lp.user_id
      LEFT JOIN organizations o ON o.id = m.organization_id
      WHERE lp.body = ?
      ORDER BY lp.starts_at ASC`,
@@ -210,7 +266,7 @@ ${deterministicRepresentativeJoinSql("u.id")}
     organizationName: row.org_name,
     organizationLogoUrl: row.org_logo_r2_key && row.org_id ? `/api/v1/members/${row.org_id}/logo` : null,
     organizationWebsite: row.org_website,
-    photoUrl: row.headshot_r2_key && row.member_id ? `/api/v1/members/${row.member_id}/logo` : null,
+    photoUrl: row.headshot_r2_key && row.photo_member_id ? `/api/v1/members/${row.photo_member_id}/logo` : null,
     linkedin: findLinkedinUrl(parseLinksJson(row.links_json)),
     startsAt: row.starts_at,
     endsAt: row.ends_at,

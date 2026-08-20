@@ -4,6 +4,7 @@
  * data. Split out of sponsorship.ts.
  */
 import { first, all } from "../../db/queries";
+import { queryPage } from "../../db/pagination";
 import type { AuthMember, DatabaseLike } from "../../types";
 
 export async function getMyOrganizationSponsorship(
@@ -94,26 +95,26 @@ export async function listSponsorPortalAttendeesPage(
   eventId: string,
   params: { limit: number; offset: number },
 ): Promise<{ attendees: SponsorPortalAttendeeRow[]; total: number }> {
-  const [rows, totalRow] = await Promise.all([
-    all<{
-      registration_id: string;
-      first_name: string | null;
-      last_name: string | null;
-      email: string | null;
-      organization_name: string | null;
-      job_title: string | null;
-      attendance_type: string | null;
-    }>(
-      db,
-      `SELECT r.id AS registration_id, u.first_name, u.last_name, u.email,
+  const { rows, total } = await queryPage<{
+    registration_id: string;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+    organization_name: string | null;
+    job_title: string | null;
+    attendance_type: string | null;
+  }>(
+    db,
+    {
+      sql: `SELECT r.id AS registration_id, u.first_name, u.last_name, u.email,
               u.organization_name, u.job_title, r.attendance_type
        ${SPONSOR_PORTAL_ATTENDEES_FROM}
        ORDER BY u.last_name ASC, u.first_name ASC
        LIMIT ? OFFSET ?`,
-      [eventId, params.limit, params.offset],
-    ),
-    first<{ total: number }>(db, `SELECT COUNT(*) AS total ${SPONSOR_PORTAL_ATTENDEES_FROM}`, [eventId]),
-  ]);
+      bindings: [eventId, params.limit, params.offset],
+    },
+    { sql: `SELECT COUNT(*) AS total ${SPONSOR_PORTAL_ATTENDEES_FROM}`, bindings: [eventId] },
+  );
 
-  return { attendees: rows.map(toAttendeeRow), total: totalRow?.total ?? 0 };
+  return { attendees: rows.map(toAttendeeRow), total };
 }

@@ -162,16 +162,13 @@ export async function approveApplication(
 
   // Compare-and-set: only applies if the application is still in ec_review,
   // guarding against a stale read racing a concurrent decline/on-hold/
-  // second-approval transition. The 0-affected-rows outcome alone doesn't
-  // stop the batch (D1 batch doesn't short-circuit on a WHERE match miss),
-  // so a lost race is caught two ways below: the event insert is
-  // conditioned on this UPDATE's own success (changes() = 1, not on the
-  // row's post-write state, which a concurrent winner transitioning to the
-  // same 'approved' target could also satisfy), and
-  // uq_member_application_events_approved (migration 0036) makes a second
-  // concurrent approval's event insert fail outright, aborting this whole
-  // db.batch() — including the provisioning/notification/audit statements
-  // below — rather than leaving them committed alongside a rejected guard.
+  // second-approval transition. D1 does not treat an UPDATE that affects
+  // zero rows as a failed statement, so the immediately following history
+  // insert deliberately violates the NOT NULL constraint on to_stage when
+  // changes() is not 1. That makes every lost compare-and-set a real SQL
+  // failure and rolls back this entire batch, including all provisioning,
+  // outbox, sync-queue, and audit statements. The partial unique approved
+  // event index remains a second structural defense for same-target races.
   const guardIndex = statements.length;
   statements.push(
     db
@@ -182,8 +179,7 @@ export async function approveApplication(
     db
       .prepare(
         `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
-         SELECT ?, ?, ?, 'approved', ?, ?, ?
-         WHERE changes() = 1`,
+         VALUES (?, ?, ?, CASE WHEN changes() = 1 THEN 'approved' ELSE NULL END, ?, ?, ?)`,
       )
       .bind(uuid(), application.id, fromStage, params.actorUserId, params.eventNote ?? "Application approved", now),
   );
@@ -287,13 +283,11 @@ export async function approveApplication(
   try {
     results = await db.batch(statements);
   } catch (err) {
-    // A concurrent second approval of this same application is the one
-    // failure this batch is expected to hit via a natural constraint
-    // (uq_member_application_events_approved, or a representative/role
-    // uniqueness constraint inside provisioning.statements) rather than a
-    // silent 0-row guard update. Confirm that's actually what happened
-    // before reporting it as a clean 409 — any other batch failure (a real
-    // DB error, an unrelated constraint) is rethrown unchanged.
+    // A lost compare-and-set fails through the event row's NOT NULL
+    // constraint; a same-target approval race can also fail through the
+    // partial unique index. Confirm the application actually moved before
+    // translating either expected race to 409. Unrelated database failures
+    // are rethrown unchanged.
     const current = await getMemberApplicationById(db, application.id);
     if (current && current.stage !== "ec_review") {
       throw new AppError(

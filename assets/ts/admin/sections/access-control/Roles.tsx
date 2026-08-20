@@ -4,6 +4,7 @@ import { api } from "../../api";
 import { toast } from "../../ui";
 import type { Role } from "../../types";
 import { PERMISSIONS } from "../../permissions";
+import { rolesListResponseSchema } from "../../../../shared/schemas/access-control";
 
 /** Built-in roles ship system-locked; custom roles are admin-creatable. */
 export function Roles() {
@@ -89,10 +90,7 @@ export function Roles() {
               </div>
             </div>
             <label class="form-label small fw-semibold">Permissions</label>
-            <div
-              class="d-flex flex-wrap gap-2 mb-2 p-2 border rounded"
-              style={{ maxHeight: "180px", overflowY: "auto" }}
-            >
+            <div class="d-flex flex-wrap gap-2 mb-2 p-2 border rounded adm-role-permissions">
               {PERMISSIONS.map((permission) => (
                 <div key={permission} class="form-check">
                   <input
@@ -118,7 +116,9 @@ export function Roles() {
 
       <ApiDataTable<Role>
         endpoint="/api/v1/admin/roles"
-        resolve={(d) => (d as { roles: Role[] }).roles}
+        resolve={(data) => rolesListResponseSchema.parse(data).roles}
+        resolvePage={(data) => rolesListResponseSchema.parse(data).page}
+        paginate
         actionsRef={tableRef}
         columns={[
           {

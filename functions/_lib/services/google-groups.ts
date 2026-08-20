@@ -62,7 +62,7 @@ export function buildEnqueueGoogleGroupsSyncStatement(
   const id = uuid();
   const statement = db
     .prepare(
-      `INSERT INTO google_groups_sync_queue (id, user_id, action, google_group_email, status, attempts, last_error, created_at, processed_at)
+      `INSERT OR IGNORE INTO google_groups_sync_queue (id, user_id, action, google_group_email, status, attempts, last_error, created_at, processed_at)
        VALUES (?, ?, ?, ?, 'pending', 0, NULL, ?, NULL)`,
     )
     .bind(id, params.userId, params.action, params.googleGroupEmail, nowIso());
@@ -74,12 +74,22 @@ export async function enqueueGoogleGroupsSync(
   params: { userId: string; googleGroupEmail: string; action: GoogleGroupsSyncAction },
 ): Promise<string> {
   const id = uuid();
-  await run(
+  const result = await run(
     db,
-    `INSERT INTO google_groups_sync_queue (id, user_id, action, google_group_email, status, attempts, last_error, created_at, processed_at)
+    `INSERT OR IGNORE INTO google_groups_sync_queue (id, user_id, action, google_group_email, status, attempts, last_error, created_at, processed_at)
      VALUES (?, ?, ?, ?, 'pending', 0, NULL, ?, NULL)`,
     [id, params.userId, params.action, params.googleGroupEmail, nowIso()],
   );
+  if (result.changes === 0) {
+    const existing = await first<{ id: string }>(
+      db,
+      `SELECT id FROM google_groups_sync_queue
+       WHERE user_id = ? AND google_group_email = ? AND action = ? AND status IN ('pending', 'processing')
+       LIMIT 1`,
+      [params.userId, params.googleGroupEmail, params.action],
+    );
+    if (existing) return existing.id;
+  }
   return id;
 }
 

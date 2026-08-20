@@ -48,4 +48,17 @@ describe("access-control contextTypeSchema", () => {
       expect(result.success, `expected ${contextType} to validate`).toBe(true);
     }
   });
+
+  it.each([userRoleAssignSchema, accessGrantCreateSchema])(
+    "requires contextType and contextId to be supplied together",
+    (schema) => {
+      const common =
+        schema === userRoleAssignSchema
+          ? { roleId: "role-wg_chair" }
+          : { userId: crypto.randomUUID(), permission: "membership:write" };
+
+      expect(schema.safeParse({ ...common, contextType: "working_group" }).success).toBe(false);
+      expect(schema.safeParse({ ...common, contextId: crypto.randomUUID() }).success).toBe(false);
+    },
+  );
 });

@@ -21,86 +21,26 @@
  *               center-out via CSS `order` (used by the sitewide hero banner
  *               and the compact event-hero sponsor row).
  *   - "wall"  — members/wall.html: the combined homepage/footer member +
- *               sponsor logo wall Fetches both GET /api/v1/members
- *               and GET /api/v1/sponsors and merges them client-side, same as
- *               the old build-time version did across hugo.Data.members +
- *               hugo.Data.sponsors. Unlike the old version, there's no
+ *               sponsor logo wall returned by GET /api/v1/members/wall.
+ *               Unlike the old version, there's no
  *               "as of a past date" snapshot support (the `date` shortcode
  *               param) — D1 only has current state; the one blog post that
  *               used it (2021-07-12-casc-to-pkic.md) now just shows current
  *               members, a low-stakes simplification for a years-old post.
  *
- * `sponsorlevels.yaml`'s tier-ordinal table is kept as a static import here
- * (TIER_WEIGHTS below) rather than fetched — it's a stable ranking, not
- * sponsor data, the same reasoning that already kept it out of the member
- * directory migration.
+ * Filtering, tier weighting, sorting, counting, and pagination are owned by
+ * the D1 read model. This component only arranges the returned page for each
+ * visual mode.
  */
 import { render } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
 import { getJson } from "../shared/api-client";
-import type { DirectoryMember } from "./member-directory-page";
+import { memberWallResponseSchema, type MemberWallEntry } from "../../shared/schemas/members-directory";
+import { sponsorsListResponseSchema, type PublicSponsor } from "../../shared/schemas/public-sponsors";
 
 const API_BASE_FALLBACK = "/api/v1";
 
-/** Mirrors data/sponsorlevels.yaml — one shared weight space across both the
- * consortium and event tier vocabularies (each name is unique across both). */
-const TIER_WEIGHTS: Record<string, number> = {
-  Bronze: 1,
-  Silver: 2,
-  Gold: 3,
-  Platinum: 4,
-  Titanium: 5,
-  Diamond: 6,
-  Ambassador: 1,
-  Innovator: 2,
-  Inspirator: 3,
-  Leader: 4,
-};
 const MAX_TIER_WEIGHT = 6;
-
-export interface PublicSponsor {
-  id: string;
-  name: string;
-  website: string | null;
-  logoUrl: string | null;
-  tier: string | null;
-  eventTier: string | null;
-}
-
-function weightOf(tier: string | null): number {
-  return tier ? (TIER_WEIGHTS[tier] ?? 0) : 0;
-}
-
-/** The event-specific tier overrides the general one when both are present and
- * an event context is active — matches the old collect.html/grid.html's
- * `with (index .sponsor.sponsoring $sponsoring) { $level = .level }`. */
-function effectiveTier(s: PublicSponsor, hasEventContext: boolean): string | null {
-  return hasEventContext && s.eventTier ? s.eventTier : s.tier;
-}
-
-/** Highest of the two weights, regardless of context — used only for the
- * minWeight cutoff (strip mode), matching collect.html's `or (ge genWeight
- * minWeight) (ge evtWeight minWeight)`. */
-function maxWeight(s: PublicSponsor): number {
-  return Math.max(weightOf(s.tier), weightOf(s.eventTier));
-}
-
-function matchesLevel(s: PublicSponsor, level: string, hasEventContext: boolean): boolean {
-  if (level === "all") {
-    return s.tier !== null || (hasEventContext && s.eventTier !== null);
-  }
-  return s.tier === level || (hasEventContext && s.eventTier === level);
-}
-
-/** Deterministic-enough shuffle for display variety; re-run once per fetch, not per render. */
-function shuffled<T>(items: T[]): T[] {
-  const copy = [...items];
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
-}
 
 function titleFor(s: PublicSponsor, level: string | null, eventName?: string): string {
   const context = eventName ?? "the PKI Consortium";
@@ -112,24 +52,33 @@ function SponsorLogo({
   level,
   eventName,
   logoClass,
-  style,
+  sizeClass,
 }: {
   s: PublicSponsor;
   level: string | null;
   eventName?: string;
   logoClass?: string;
-  style?: string;
+  sizeClass?: string;
 }) {
   if (!s.logoUrl) return null;
   const title = titleFor(s, level, eventName);
   return (
     <a href={s.website ?? "#"} title={title} target="_blank" rel="noopener noreferrer" class="sponsor-link">
-      <img src={s.logoUrl} alt={title} title={title} class={logoClass ?? "sponsor-logo"} style={style} loading="lazy" />
+      <img
+        src={s.logoUrl}
+        alt={title}
+        title={title}
+        class={[logoClass ?? "sponsor-logo", sizeClass].filter(Boolean).join(" ")}
+        loading="lazy"
+      />
     </a>
   );
 }
 
-function useSponsors(apiBase: string, eventName?: string): { sponsors: PublicSponsor[] | null; error: string | null } {
+function useSponsors(
+  apiBase: string,
+  options: { eventName?: string; level?: string; minWeight?: number; limit?: number; sort?: "name" | "-weight" },
+): { sponsors: PublicSponsor[] | null; error: string | null } {
   const [sponsors, setSponsors] = useState<PublicSponsor[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -137,8 +86,14 @@ function useSponsors(apiBase: string, eventName?: string): { sponsors: PublicSpo
     let cancelled = false;
     async function load() {
       try {
-        const qs = eventName ? `?eventName=${encodeURIComponent(eventName)}` : "";
-        const data = await getJson<{ sponsors: PublicSponsor[] }>(`${apiBase}/sponsors${qs}`);
+        const query = new URLSearchParams({
+          limit: String(options.limit ?? 200),
+          sort: options.sort ?? "-weight",
+        });
+        if (options.eventName) query.set("eventName", options.eventName);
+        if (options.level) query.set("level", options.level);
+        if (options.minWeight !== undefined) query.set("minWeight", String(options.minWeight));
+        const data = sponsorsListResponseSchema.parse(await getJson<unknown>(`${apiBase}/sponsors?${query}`));
         if (!cancelled) setSponsors(data.sponsors);
       } catch (e) {
         if (!cancelled) {
@@ -151,7 +106,7 @@ function useSponsors(apiBase: string, eventName?: string): { sponsors: PublicSpo
     return () => {
       cancelled = true;
     };
-  }, [apiBase, eventName]);
+  }, [apiBase, options.eventName, options.level, options.minWeight, options.limit, options.sort]);
 
   return { sponsors, error };
 }
@@ -177,21 +132,18 @@ function GridMode({
   rows: boolean;
   logoClass?: string;
 }) {
-  const { sponsors } = useSponsors(apiBase, eventName);
-  const hasEventContext = Boolean(eventName);
+  const { sponsors } = useSponsors(apiBase, { eventName, level, sort: "-weight" });
 
   const buckets = useMemo(() => {
     if (!sponsors) return null;
-    const matched = sponsors.filter((s) => matchesLevel(s, level, hasEventContext));
     const byWeight = new Map<number, PublicSponsor[]>();
-    for (const s of shuffled(matched)) {
-      const tier = effectiveTier(s, hasEventContext);
-      const w = weightOf(tier);
+    for (const s of sponsors) {
+      const w = s.weight;
       if (!byWeight.has(w)) byWeight.set(w, []);
       byWeight.get(w)!.push(s);
     }
     return byWeight;
-  }, [sponsors, level, hasEventContext]);
+  }, [sponsors]);
 
   if (!buckets || buckets.size === 0) return null;
 
@@ -200,19 +152,20 @@ function GridMode({
   const items = weights.map((w) => (
     <>
       {buckets.get(w)!.map((s) => {
-        const style = [
-          maxHeight ? `max-height: ${Math.round(maxHeight * w)}px;` : "",
-          maxWidth ? `max-width: ${Math.round(maxWidth * w)}px;` : "",
-          height ? `height: ${Math.round(height * w)}px;` : "",
-        ].join(" ");
+        const sizeClasses = [
+          `sponsor-weight-${w}`,
+          height === 20 ? "sponsor-grid-height-20" : "",
+          maxHeight === 20 ? "sponsor-grid-max-height-20" : "",
+          maxWidth === 60 ? "sponsor-grid-max-width-60" : "",
+        ];
         return (
           <SponsorLogo
             key={s.id}
             s={s}
-            level={effectiveTier(s, hasEventContext)}
+            level={s.effectiveTier}
             eventName={eventName}
             logoClass={logoClass ? `sponsor-logo ${logoClass}` : "sponsor-logo"}
-            style={style}
+            sizeClass={sizeClasses.filter(Boolean).join(" ")}
           />
         );
       })}
@@ -225,22 +178,19 @@ function GridMode({
 // ── Level mode (sponsors-level.html) ───────────────────────────────────────
 
 function LevelMode({ apiBase, eventName, level }: { apiBase: string; eventName?: string; level: string }) {
-  const { sponsors } = useSponsors(apiBase, eventName);
-  const hasEventContext = Boolean(eventName);
+  const { sponsors } = useSponsors(apiBase, { eventName, level, sort: "-weight" });
 
   const groups = useMemo(() => {
     if (!sponsors) return null;
-    const matched = sponsors.filter((s) => matchesLevel(s, level, hasEventContext));
     const byWeight = new Map<number, { tierName: string; sponsors: PublicSponsor[] }>();
-    for (const s of matched) {
-      const tier = effectiveTier(s, hasEventContext);
-      const w = weightOf(tier);
-      if (!tier || w === 0) continue;
+    for (const s of sponsors) {
+      const tier = s.effectiveTier;
+      const w = s.weight;
       if (!byWeight.has(w)) byWeight.set(w, { tierName: tier, sponsors: [] });
       byWeight.get(w)!.sponsors.push(s);
     }
     return Array.from(byWeight.entries()).sort((a, b) => b[0] - a[0]);
-  }, [sponsors, level, hasEventContext]);
+  }, [sponsors]);
 
   if (!groups || groups.length === 0) return null;
 
@@ -260,7 +210,7 @@ function LevelMode({ apiBase, eventName, level }: { apiBase: string; eventName?:
                     level={group.tierName}
                     eventName={eventName}
                     logoClass="sponsor-logo"
-                    style={`--sponsor-weight: ${w};`}
+                    sizeClass={`sponsor-weight-${w}`}
                   />
                 </div>
               ))}
@@ -281,7 +231,6 @@ function StripMode({
   containerClass,
   linkClass,
   logoClass,
-  logoStyle,
   label,
   labelClass,
   maxItems,
@@ -292,39 +241,36 @@ function StripMode({
   containerClass: string;
   linkClass: string;
   logoClass: string;
-  logoStyle?: string;
   label?: string;
   labelClass?: string;
   maxItems?: number;
 }) {
-  const { sponsors } = useSponsors(apiBase, eventName);
-  const hasEventContext = Boolean(eventName);
-
-  const sorted = useMemo(() => {
-    if (!sponsors) return null;
-    const matched = shuffled(sponsors.filter((s) => maxWeight(s) >= minWeight));
-    const ranked = matched
-      .map((s) => ({ s, weight: weightOf(effectiveTier(s, hasEventContext)) }))
-      .sort((a, b) => b.weight - a.weight);
-    return maxItems ? ranked.slice(0, maxItems) : ranked;
-  }, [sponsors, minWeight, hasEventContext, maxItems]);
+  const { sponsors } = useSponsors(apiBase, {
+    eventName,
+    minWeight,
+    limit: maxItems,
+    sort: "-weight",
+  });
+  const sorted = sponsors?.map((s) => ({ s, weight: s.weight })) ?? null;
 
   if (!sorted || sorted.length === 0) return null;
+  const centered = sorted
+    .map((entry, index) => ({
+      ...entry,
+      order: index % 2 === 0 ? -Math.floor(index / 2) : Math.floor((index + 1) / 2),
+    }))
+    .sort((left, right) => left.order - right.order);
 
   return (
     <>
       {label && (
-        <div
-          class={labelClass ?? "w-100 text-center mb-3 text-white text-uppercase"}
-          style={labelClass ? undefined : "font-size: 0.7rem; letter-spacing: 0.1em; opacity: 0.6;"}
-        >
+        <div class={labelClass ?? "w-100 text-center mb-3 text-white text-uppercase sponsor-strip-default-label"}>
           {label}
         </div>
       )}
       <div class={containerClass}>
-        {sorted.map(({ s, weight }, i) => {
-          const order = i % 2 === 0 ? -Math.floor(i / 2) : Math.floor((i + 1) / 2);
-          const tier = effectiveTier(s, hasEventContext);
+        {centered.map(({ s, weight }) => {
+          const tier = s.effectiveTier;
           const title = titleFor(s, tier, eventName);
           if (!s.logoUrl) return null;
           return (
@@ -334,10 +280,9 @@ function StripMode({
               title={title}
               target="_blank"
               rel="noopener noreferrer"
-              class={linkClass}
-              style={`--sponsor-weight: ${weight}; order: ${order};`}
+              class={`${linkClass} sponsor-weight-${weight}`}
             >
-              <img class={logoClass} alt={title} src={s.logoUrl} style={logoStyle} loading="lazy" />
+              <img class={`${logoClass} sponsor-strip-default-logo`} alt={title} src={s.logoUrl} loading="lazy" />
             </a>
           );
         })}
@@ -348,31 +293,16 @@ function StripMode({
 
 // ── Wall mode (members/wall.html) ──────────────────────────────────────────
 
-interface WallEntry {
-  key: string;
-  href: string;
-  logoUrl: string;
-  name: string;
-  slogan: string | null;
-  sponsorLevel: number;
-  sponsorLevelName: string | null;
-}
-
-function useWallData(apiBase: string): { members: DirectoryMember[] | null; sponsors: PublicSponsor[] | null } {
-  const [members, setMembers] = useState<DirectoryMember[] | null>(null);
-  const [sponsors, setSponsors] = useState<PublicSponsor[] | null>(null);
+function useWallEntries(apiBase: string, memberLimit: number): MemberWallEntry[] | null {
+  const [entries, setEntries] = useState<MemberWallEntry[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const [m, s] = await Promise.all([
-          getJson<{ members: DirectoryMember[] }>(`${apiBase}/members?group=organization&limit=500`),
-          getJson<{ sponsors: PublicSponsor[] }>(`${apiBase}/sponsors`),
-        ]);
+        const response = await getJson<unknown>(`${apiBase}/members/wall?memberLimit=${memberLimit}`);
         if (!cancelled) {
-          setMembers(m.members);
-          setSponsors(s.sponsors);
+          setEntries(memberWallResponseSchema.parse(response).entries);
         }
       } catch (e) {
         console.error("[sponsors-wall]", e);
@@ -382,58 +312,13 @@ function useWallData(apiBase: string): { members: DirectoryMember[] | null; spon
     return () => {
       cancelled = true;
     };
-  }, [apiBase]);
+  }, [apiBase, memberLimit]);
 
-  return { members, sponsors };
+  return entries;
 }
 
 function WallMode({ apiBase, memberLimit }: { apiBase: string; memberLimit: number }) {
-  const { members, sponsors } = useWallData(apiBase);
-
-  const entries = useMemo(() => {
-    if (!members || !sponsors) return null;
-
-    const sponsorByOrgId = new Map(sponsors.map((s) => [s.id, s]));
-    const withLogo = members.filter((m) => m.logoUrl);
-
-    const sponsorMembers: WallEntry[] = [];
-    const nonSponsorMembers: WallEntry[] = [];
-    for (const m of withLogo) {
-      const sponsor = sponsorByOrgId.get(m.id);
-      const href = m.slug
-        ? `/members/${encodeURIComponent(m.slug)}/`
-        : `/members/profile/?id=${encodeURIComponent(m.id)}`;
-      const entry: WallEntry = {
-        key: `member:${m.id}`,
-        href,
-        logoUrl: m.logoUrl!,
-        name: m.name,
-        slogan: m.slogan,
-        sponsorLevel: sponsor ? weightOf(sponsor.tier) : 0,
-        sponsorLevelName: sponsor?.tier ?? null,
-      };
-      (entry.sponsorLevel > 0 ? sponsorMembers : nonSponsorMembers).push(entry);
-    }
-
-    // Non-member sponsors (and any org-tied sponsor not otherwise rendered as
-    // a member above, e.g. no active membership representative) are always
-    // shown, same as the old wall.html's separate hugo.Data.sponsors loop.
-    const memberOrgIds = new Set(withLogo.map((m) => m.id));
-    const nonMemberSponsors: WallEntry[] = sponsors
-      .filter((s) => !memberOrgIds.has(s.id) && s.logoUrl && s.tier)
-      .map((s) => ({
-        key: `sponsor:${s.id}`,
-        href: s.website ?? "#",
-        logoUrl: s.logoUrl!,
-        name: s.name,
-        slogan: null,
-        sponsorLevel: weightOf(s.tier),
-        sponsorLevelName: s.tier,
-      }));
-
-    const selectedNonSponsors = shuffled(nonSponsorMembers).slice(0, memberLimit);
-    return shuffled([...sponsorMembers, ...nonMemberSponsors, ...selectedNonSponsors]);
-  }, [members, sponsors, memberLimit]);
+  const entries = useWallEntries(apiBase, memberLimit);
 
   // The marquee/scroll effects (sponsor-banner-marquee.js, members-overview-effects.js)
   // build their tracks by scanning the DOM once — they need to run after these anchors
@@ -482,7 +367,7 @@ function main(): void {
     }
 
     if (mode === "wall") {
-      render(<WallMode apiBase={apiBase} memberLimit={Number(root.dataset.memberLimit ?? 999999)} />, root);
+      render(<WallMode apiBase={apiBase} memberLimit={Math.min(200, Number(root.dataset.memberLimit ?? 200))} />, root);
       return;
     }
 
@@ -497,7 +382,6 @@ function main(): void {
           }
           linkClass={root.dataset.linkClass ?? "sponsor-link"}
           logoClass={root.dataset.logoClass ?? "sponsor-logo"}
-          logoStyle={root.dataset.logoStyle}
           label={root.dataset.label}
           labelClass={root.dataset.labelClass}
           maxItems={root.dataset.maxItems ? Number(root.dataset.maxItems) : undefined}

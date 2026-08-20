@@ -89,19 +89,19 @@ export async function updateIcsFile(
 ): Promise<AdminIcsFileSummary> {
   const existing = await getIcsFileForAdmin(db, seriesId, fileId, expected);
   const now = nowIso();
-  await run(db, `UPDATE meeting_ics_files SET label = COALESCE(?, label), active = COALESCE(?, active) WHERE id = ?`, [
-    input.label ?? null,
-    input.active === undefined ? null : input.active ? 1 : 0,
-    fileId,
-  ]);
-
   const becameInactive = input.active === false && existing.active === 1;
-  if (becameInactive) {
-    await run(db, `UPDATE member_meeting_preferences SET ics_file_id = NULL, updated_at = ? WHERE ics_file_id = ?`, [
-      now,
-      fileId,
-    ]);
-  }
+  await db.batch([
+    db
+      .prepare(`UPDATE meeting_ics_files SET label = COALESCE(?, label), active = COALESCE(?, active) WHERE id = ?`)
+      .bind(input.label ?? null, input.active === undefined ? null : input.active ? 1 : 0, fileId),
+    ...(becameInactive
+      ? [
+          db
+            .prepare(`UPDATE member_meeting_preferences SET ics_file_id = NULL, updated_at = ? WHERE ics_file_id = ?`)
+            .bind(now, fileId),
+        ]
+      : []),
+  ]);
 
   return toIcsFileSummary({
     ...existing,
@@ -136,10 +136,11 @@ export async function deleteIcsFile(
   }
 
   const now = nowIso();
-  await run(db, `UPDATE member_meeting_preferences SET ics_file_id = NULL, updated_at = ? WHERE ics_file_id = ?`, [
-    now,
-    fileId,
+  await db.batch([
+    db
+      .prepare(`UPDATE member_meeting_preferences SET ics_file_id = NULL, updated_at = ? WHERE ics_file_id = ?`)
+      .bind(now, fileId),
+    db.prepare(`DELETE FROM meeting_ics_files WHERE id = ?`).bind(fileId),
   ]);
-  await run(db, `DELETE FROM meeting_ics_files WHERE id = ?`, [fileId]);
   return { r2Key: existing.r2_key };
 }

@@ -123,7 +123,7 @@ export function MyApplications() {
   }
 
   return (
-    <div class="card border-0 shadow-sm" style="max-width: 720px;">
+    <div class="card border-0 shadow-sm content-width-md">
       <table class="table table-hover mb-0">
         <thead>
           <tr>
@@ -135,7 +135,7 @@ export function MyApplications() {
         </thead>
         <tbody>
           {applications.map((app) => (
-            <tr key={app.id} class="cursor-pointer" onClick={() => setSelectedId(app.id)} style="cursor: pointer;">
+            <tr key={app.id} class="is-clickable" onClick={() => setSelectedId(app.id)}>
               <td>{app.membershipCategory}</td>
               <td>
                 <span class={`badge ${stageBadgeClass(app.stage)}`}>{formatStageLabel(app.stage)}</span>

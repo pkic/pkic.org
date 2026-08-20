@@ -1,0 +1,55 @@
+import { z } from "zod";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+
+export const ADMIN_DUE_WORK_SORT_COLUMNS = ["dueAt", "title", "typeLabel"] as const;
+export const adminDueWorkBucketSchema = z.enum(["all", "outbox", "reminders", "cleanup"]);
+
+export const adminDueWorkListQuerySchema = listQuerySchema(ADMIN_DUE_WORK_SORT_COLUMNS).extend({
+  bucket: adminDueWorkBucketSchema.optional(),
+  includeRetention: z.coerce.boolean().optional(),
+  reminderLimit: z.coerce.number().int().min(1).max(500).optional(),
+  outboxLimit: z.coerce.number().int().min(1).max(500).optional(),
+});
+
+export const adminDueWorkRowSchema = z.object({
+  bucket: adminDueWorkBucketSchema.exclude(["all"]),
+  typeLabel: z.string(),
+  title: z.string(),
+  subtitle: z.string().nullable(),
+  context: z.string(),
+  detail: z.string().nullable(),
+  dueAt: z.string().nullable(),
+  statusKey: z.string(),
+  statusLabel: z.string(),
+});
+
+export type AdminDueWorkRow = z.infer<typeof adminDueWorkRowSchema>;
+export type AdminDueWorkTab = z.infer<typeof adminDueWorkBucketSchema>;
+
+export const adminDueWorkCountsSchema = z.object({
+  all: z.number(),
+  outbox: z.number(),
+  reminders: z.number(),
+  cleanup: z.number(),
+});
+
+export const adminDueWorkListResponseSchema = paginatedResponseSchema("items", adminDueWorkRowSchema).extend({
+  counts: adminDueWorkCountsSchema,
+});
+
+export type AdminDueWorkListResponse = z.infer<typeof adminDueWorkListResponseSchema>;
+
+export const adminDueWorkListRouteSchema = {
+  tags: ["Admin due work"],
+  summary: "List the bounded due-work batch",
+  description:
+    "Returns one server-owned, filterable/sortable/pageable projection of due outbox, reminder, and optional retention work. Candidate limits match the manual job controls.",
+  request: { query: adminDueWorkListQuerySchema },
+  responses: {
+    "200": {
+      description: "Bounded due-work page and server-computed bucket counts.",
+      content: { "application/json": { schema: adminDueWorkListResponseSchema } },
+    },
+    "401": { description: "Admin authorization required." },
+  },
+};

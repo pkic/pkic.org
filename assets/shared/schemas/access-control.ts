@@ -3,7 +3,7 @@
  * ("access grants"), roles, and user_roles (role assignment).
  */
 import { z } from "zod";
-import { paginationQuerySchema, paginatedResponseSchema, sortColumnSchema } from "./pagination";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 const contextTypeSchema = z.enum(["event", "working_group", "organization"]);
 
@@ -28,33 +28,45 @@ export const roleIdParamsSchema = z.object({ id: roleIdSchema });
 export const userIdRolesParamsSchema = z.object({ userId: z.uuid() });
 export const userRoleIdParamsSchema = z.object({ userId: z.uuid(), userRoleId: z.uuid() });
 
+const scopedContextFields = {
+  contextType: contextTypeSchema.nullable().optional(),
+  contextId: trimmedString(1, 80).nullable().optional(),
+  expiresAt: z.iso.datetime().nullable().optional(),
+};
+
+function validateScopedContext(
+  value: { contextType?: string | null; contextId?: string | null },
+  ctx: z.core.$RefinementCtx,
+): void {
+  if (Boolean(value.contextType) !== Boolean(value.contextId)) {
+    ctx.addIssue({
+      code: "custom",
+      message: "contextType and contextId must both be set, or both omitted",
+      path: ["contextId"],
+      input: value,
+    });
+  }
+}
+
 export const accessGrantCreateSchema = z
   .object({
     userId: z.uuid(),
     permission: trimmedString(1, 80),
-    contextType: contextTypeSchema.nullable().optional(),
-    contextId: trimmedString(1, 80).nullable().optional(),
-    expiresAt: z.iso.datetime().nullable().optional(),
+    ...scopedContextFields,
   })
-  .superRefine((value, ctx) => {
-    if (Boolean(value.contextType) !== Boolean(value.contextId)) {
-      ctx.addIssue({
-        code: "custom",
-        message: "contextType and contextId must both be set, or both omitted",
-        path: ["contextId"],
-      });
-    }
-  });
+  .superRefine(validateScopedContext);
 
 export const accessGrantResponseSchema = z.object({
   id: z.uuid(),
   userId: z.uuid(),
+  userEmail: z.email(),
   permission: z.string(),
   contextType: z.string().nullable(),
   contextId: z.string().nullable(),
   expiresAt: z.string().nullable(),
   createdAt: z.string(),
 });
+export type AccessGrant = z.infer<typeof accessGrantResponseSchema>;
 
 // Implements permission_grants.
 export const accessGrantsCreateRouteSchema = {
@@ -79,10 +91,10 @@ export const ADMIN_ACCESS_GRANTS_SORT_COLUMNS = [
   "created_at",
 ] as const;
 
-export const accessGrantsListQuerySchema = paginationQuerySchema.extend({
+export const accessGrantsListQuerySchema = listQuerySchema(ADMIN_ACCESS_GRANTS_SORT_COLUMNS).extend({
   userId: z.uuid().optional(),
-  sort: sortColumnSchema(ADMIN_ACCESS_GRANTS_SORT_COLUMNS),
 });
+export const accessGrantsListResponseSchema = paginatedResponseSchema("grants", accessGrantResponseSchema);
 
 export const accessGrantsListRouteSchema = {
   tags: ["Access Control"],
@@ -91,7 +103,7 @@ export const accessGrantsListRouteSchema = {
   responses: {
     "200": {
       description: "Active grants.",
-      content: { "application/json": { schema: paginatedResponseSchema("grants", accessGrantResponseSchema) } },
+      content: { "application/json": { schema: accessGrantsListResponseSchema } },
     },
   },
 };
@@ -120,6 +132,7 @@ export const roleResponseSchema = z.object({
   permissions: z.array(z.string()),
   createdAt: z.string(),
 });
+export type Role = z.infer<typeof roleResponseSchema>;
 
 export const rolesCreateRouteSchema = {
   tags: ["Access Control"],
@@ -137,11 +150,8 @@ export const rolesCreateRouteSchema = {
 /** Allowlisted sort columns for GET /api/v1/admin/roles — see roles/index.ts. */
 export const ADMIN_ROLES_SORT_COLUMNS = ["name", "description"] as const;
 
-const rolesSortValueSchema = sortColumnSchema(ADMIN_ROLES_SORT_COLUMNS);
-
-export const rolesListQuerySchema = paginationQuerySchema.extend({
-  sort: rolesSortValueSchema,
-});
+export const rolesListQuerySchema = listQuerySchema(ADMIN_ROLES_SORT_COLUMNS);
+export const rolesListResponseSchema = paginatedResponseSchema("roles", roleResponseSchema);
 
 export const rolesListRouteSchema = {
   tags: ["Access Control"],
@@ -150,7 +160,7 @@ export const rolesListRouteSchema = {
   responses: {
     "200": {
       description: "All roles with their permission bundles.",
-      content: { "application/json": { schema: paginatedResponseSchema("roles", roleResponseSchema) } },
+      content: { "application/json": { schema: rolesListResponseSchema } },
     },
   },
 };
@@ -196,19 +206,9 @@ export const roleAssignmentsListRouteSchema = {
 export const userRoleAssignSchema = z
   .object({
     roleId: roleIdSchema,
-    contextType: contextTypeSchema.nullable().optional(),
-    contextId: trimmedString(1, 80).nullable().optional(),
-    expiresAt: z.iso.datetime().nullable().optional(),
+    ...scopedContextFields,
   })
-  .superRefine((value, ctx) => {
-    if (Boolean(value.contextType) !== Boolean(value.contextId)) {
-      ctx.addIssue({
-        code: "custom",
-        message: "contextType and contextId must both be set, or both omitted",
-        path: ["contextId"],
-      });
-    }
-  });
+  .superRefine(validateScopedContext);
 
 export const userRoleResponseSchema = z.object({
   id: z.uuid(),

@@ -16,6 +16,8 @@
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { all, first } from "../../../../_lib/db/queries";
+import { batchFirst, batchRows } from "../../../../_lib/db/pagination";
+import { buildD1TextSearchFilter } from "../../../../_lib/db/search";
 import { parseQueuedEmailAttachments } from "../../../../_lib/email/attachments";
 import { renderSubject } from "../../../../_lib/email/render";
 import { resolveTemplate } from "../../../../_lib/email/templates";
@@ -102,18 +104,16 @@ function buildWhereClause(
   }
 
   if (search) {
-    conditions.push(
-      `(
-        o.recipient_email LIKE ?
-        OR o.template_key LIKE ?
-        OR COALESCE(o.subject, '') LIKE ?
-        OR COALESCE(o.last_error, '') LIKE ?
-        OR COALESCE(e.slug, '') LIKE ?
-        OR COALESCE(e.name, '') LIKE ?
-      )`,
-    );
-    const like = `%${search}%`;
-    params.push(like, like, like, like, like, like);
+    const filter = buildD1TextSearchFilter(search, [
+      "o.recipient_email",
+      "o.template_key",
+      "o.subject",
+      "o.last_error",
+      "e.slug",
+      "e.name",
+    ]);
+    conditions.push(filter.sql);
+    params.push(...filter.bindings);
   }
 
   return {
@@ -234,10 +234,12 @@ export const AdminEmailOutboxGet = openApiRoute(adminEmailOutboxGetRouteSchema, 
   );
   const aggregateFrom = search ? "FROM email_outbox o LEFT JOIN events e ON e.id = o.event_id" : "FROM email_outbox o";
 
-  const [rows, totalRow, statusCounts, messageTypeCounts, templateCounts, dueCounts, dueNextRow] = await Promise.all([
-    all<OutboxListRow>(
-      requestDb(c),
-      `SELECT
+  const db = requestDb(c);
+  const [rowsResult, totalResult, statusResult, messageTypeResult, templateResult, dueResult, dueNextResult] =
+    await db.batch([
+      db
+        .prepare(
+          `SELECT
          o.id,
          o.event_id,
          e.slug AS event_slug,
@@ -270,58 +272,64 @@ export const AdminEmailOutboxGet = openApiRoute(adminEmailOutboxGetRouteSchema, 
          END,
          COALESCE(o.sent_at, o.updated_at, o.created_at) DESC
        LIMIT ? OFFSET ?`,
-      [...params, limit, offset],
-    ),
-    first<{ total: number }>(
-      requestDb(c),
-      `SELECT COUNT(*) AS total
+        )
+        .bind(...params, limit, offset),
+      db
+        .prepare(
+          `SELECT COUNT(*) AS total
        ${aggregateFrom}
        ${where}`,
-      params,
-    ),
-    all<CountRow>(
-      requestDb(c),
-      `SELECT o.status, COUNT(*) AS count
+        )
+        .bind(...params),
+      db
+        .prepare(
+          `SELECT o.status, COUNT(*) AS count
        ${aggregateFrom}
        ${where}
        GROUP BY o.status`,
-      params,
-    ),
-    all<MessageTypeCountRow>(
-      requestDb(c),
-      `SELECT o.message_type, COUNT(*) AS count
+        )
+        .bind(...params),
+      db
+        .prepare(
+          `SELECT o.message_type, COUNT(*) AS count
        ${aggregateFrom}
        ${where}
        GROUP BY o.message_type`,
-      params,
-    ),
-    all<TemplateCountRow>(
-      requestDb(c),
-      `SELECT o.template_key, COUNT(*) AS count
+        )
+        .bind(...params),
+      db
+        .prepare(
+          `SELECT o.template_key, COUNT(*) AS count
        ${aggregateFrom}
        ${where}
        GROUP BY o.template_key
        ORDER BY count DESC, o.template_key ASC
        LIMIT 5`,
-      params,
-    ),
-    all<DueCountRow>(
-      requestDb(c),
-      `SELECT status, COUNT(*) AS count
+        )
+        .bind(...params),
+      db
+        .prepare(
+          `SELECT status, COUNT(*) AS count
        FROM email_outbox
        WHERE status IN ('queued', 'retrying')
          AND send_after <= ?
        GROUP BY status`,
-      [new Date().toISOString()],
-    ),
-    first<{ send_after: string | null }>(
-      requestDb(c),
-      `SELECT MIN(send_after) AS send_after
+        )
+        .bind(new Date().toISOString()),
+      db.prepare(
+        `SELECT MIN(send_after) AS send_after
        FROM email_outbox
        WHERE status IN ('queued', 'retrying')`,
-      [],
-    ),
-  ]);
+      ),
+    ]);
+
+  const rows = batchRows<OutboxListRow>(rowsResult);
+  const totalRow = batchFirst<{ total: number }>(totalResult);
+  const statusCounts = batchRows<CountRow>(statusResult);
+  const messageTypeCounts = batchRows<MessageTypeCountRow>(messageTypeResult);
+  const templateCounts = batchRows<TemplateCountRow>(templateResult);
+  const dueCounts = batchRows<DueCountRow>(dueResult);
+  const dueNextRow = batchFirst<{ send_after: string | null }>(dueNextResult);
 
   const subjectTemplateCache = new Map<string, string | null>();
   await preloadVersionedSubjectTemplates(c, rows, subjectTemplateCache);

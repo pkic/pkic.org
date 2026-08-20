@@ -13,10 +13,12 @@
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { hasPermission, requirePermission, isPermission } from "../../../../_lib/auth/permissions";
-import { all, first, run } from "../../../../_lib/db/queries";
+import { first } from "../../../../_lib/db/queries";
+import { queryPage } from "../../../../_lib/db/pagination";
+import { buildD1TextSearchFilter } from "../../../../_lib/db/search";
 import { nowIso } from "../../../../_lib/utils/time";
 import { uuid } from "../../../../_lib/utils/ids";
-import { writeAuditLog } from "../../../../_lib/services/audit";
+import { prepareAuditLog } from "../../../../_lib/services/audit";
 import { AppError } from "../../../../_lib/errors";
 import { resolveOrderBy } from "../../../../_lib/db/sort";
 import {
@@ -34,22 +36,7 @@ interface RoleRow {
   description: string | null;
   is_system_role: number;
   created_at: string;
-}
-
-interface RolePermissionRow {
-  role_id: string;
-  permission: string;
-}
-
-async function serializeRoles(dbRoles: RoleRow[], permissionsByRole: Map<string, string[]>) {
-  return dbRoles.map((role) => ({
-    id: role.id,
-    name: role.name,
-    description: role.description,
-    isSystemRole: role.is_system_role === 1,
-    permissions: permissionsByRole.get(role.id) ?? [],
-    createdAt: role.created_at,
-  }));
+  permissions_json: string;
 }
 
 export const RolesList = openApiRoute(rolesListRouteSchema, async (c: AdminContext, data) => {
@@ -60,29 +47,45 @@ export const RolesList = openApiRoute(rolesListRouteSchema, async (c: AdminConte
   // by rolesListQuerySchema before this handler runs (openApiRoute's
   // getValidatedData); resolveOrderBy's own fallback-to-default handles an
   // omitted sort, same as every other admin list endpoint.
-  const { sort, limit = 50, offset = 0 } = data.query;
+  const { q, sort, limit = 50, offset = 0 } = data.query;
   const orderBy = resolveOrderBy(sort, ADMIN_ROLES_SORT_COLUMNS, "ORDER BY name ASC");
+  const search = q ? buildD1TextSearchFilter(q, ["name", "description"]) : null;
+  const where = search ? `WHERE ${search.sql}` : "";
+  const whereArgs = search?.bindings ?? [];
 
-  const [roles, permissionRows, totalRow] = await Promise.all([
-    all<RoleRow>(
-      requestDb(c),
-      `SELECT id, name, description, is_system_role, created_at FROM roles ${orderBy} LIMIT ? OFFSET ?`,
-      [limit, offset],
-    ),
-    all<RolePermissionRow>(requestDb(c), "SELECT role_id, permission FROM role_permissions ORDER BY permission ASC"),
-    first<{ total: number }>(requestDb(c), "SELECT COUNT(*) AS total FROM roles"),
-  ]);
+  const { rows, total } = await queryPage<RoleRow>(
+    requestDb(c),
+    {
+      sql: `SELECT r.id, r.name, r.description, r.is_system_role, r.created_at,
+                   COALESCE(
+                     (SELECT json_group_array(permission)
+                        FROM (SELECT permission
+                                FROM role_permissions
+                               WHERE role_id = r.id
+                               ORDER BY permission ASC)),
+                     '[]'
+                   ) AS permissions_json
+              FROM roles r
+              ${where}
+              ${orderBy}
+             LIMIT ? OFFSET ?`,
+      bindings: [...whereArgs, limit, offset],
+    },
+    { sql: `SELECT COUNT(*) AS total FROM roles ${where}`, bindings: whereArgs },
+  );
 
-  const permissionsByRole = new Map<string, string[]>();
-  for (const row of permissionRows) {
-    const list = permissionsByRole.get(row.role_id) ?? [];
-    list.push(row.permission);
-    permissionsByRole.set(row.role_id, list);
-  }
+  const roles = rows.map((role) => ({
+    id: role.id,
+    name: role.name,
+    description: role.description,
+    isSystemRole: role.is_system_role === 1,
+    permissions: JSON.parse(role.permissions_json) as string[],
+    createdAt: role.created_at,
+  }));
 
   return json({
-    roles: await serializeRoles(roles, permissionsByRole),
-    page: buildPageInfo(limit, offset, totalRow?.total ?? 0, roles.length),
+    roles,
+    page: buildPageInfo(limit, offset, total, roles.length),
   });
 });
 
@@ -109,25 +112,28 @@ export const RolesCreate = openApiRoute(rolesCreateRouteSchema, async (c: AdminC
   const id = uuid();
   const now = nowIso();
 
-  await run(
-    requestDb(c),
-    "INSERT INTO roles (id, name, description, is_system_role, created_at, updated_at) VALUES (?, ?, ?, 0, ?, ?)",
-    [id, body.name, body.description ?? null, now, now],
-  );
-
-  for (const permission of body.permissions) {
-    await run(requestDb(c), "INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES (?, ?, ?, ?)", [
-      uuid(),
+  await requestDb(c).batch([
+    requestDb(c)
+      .prepare(
+        "INSERT INTO roles (id, name, description, is_system_role, created_at, updated_at) VALUES (?, ?, ?, 0, ?, ?)",
+      )
+      .bind(id, body.name, body.description ?? null, now, now),
+    ...body.permissions.map((permission) =>
+      requestDb(c)
+        .prepare("INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES (?, ?, ?, ?)")
+        .bind(uuid(), id, permission, now),
+    ),
+    prepareAuditLog(
+      requestDb(c),
+      "admin",
+      admin.id,
+      "role_created",
+      "role",
       id,
-      permission,
+      { name: body.name, permissions: body.permissions },
       now,
-    ]);
-  }
-
-  await writeAuditLog(requestDb(c), "admin", admin.id, "role_created", "role", id, {
-    name: body.name,
-    permissions: body.permissions,
-  });
+    ),
+  ]);
 
   return json(
     {

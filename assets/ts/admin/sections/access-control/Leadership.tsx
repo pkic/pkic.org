@@ -129,9 +129,7 @@ function ChairSlot({
 
   return (
     <div class="d-flex align-items-center gap-2 flex-wrap">
-      <span class="small fw-semibold" style={{ minWidth: "90px" }}>
-        {label}
-      </span>
+      <span class="small fw-semibold adm-leadership-slot-label">{label}</span>
       {current ? (
         <>
           <span>
@@ -140,8 +138,7 @@ function ChairSlot({
           {editingExpiry ? (
             <form onSubmit={saveExpiry} class="d-flex gap-2 align-items-center flex-wrap">
               <input
-                class="form-control form-control-sm"
-                style={{ width: "200px" }}
+                class="form-control form-control-sm adm-leadership-date"
                 type="datetime-local"
                 title="Term expires (leave blank for no expiry)"
                 placeholder="Term expires (optional)"
@@ -179,12 +176,11 @@ function ChairSlot({
         <span class="small text-danger">{roleMissingLabel}</span>
       ) : (
         <form onSubmit={assign} class="d-flex gap-2 align-items-center flex-wrap">
-          <div style={{ minWidth: "220px" }}>
+          <div class="adm-leadership-user">
             <UserPicker value={picked} onChange={setPicked} disabled={busy} />
           </div>
           <input
-            class="form-control form-control-sm"
-            style={{ width: "200px" }}
+            class="form-control form-control-sm adm-leadership-date"
             type="datetime-local"
             title="Term expires (optional)"
             placeholder="Term expires (optional)"

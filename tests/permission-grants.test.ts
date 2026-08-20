@@ -98,6 +98,34 @@ describe("permission_grants (Access grants)", () => {
     expect(rows[0].expires_at).toBe(expiresAt);
   });
 
+  it("rolls back an access grant when its required audit record cannot be written", async () => {
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_access_grant_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'access_grant_created'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced audit failure');
+       END`,
+    ).run();
+
+    try {
+      const response = await call(adminToken, "/api/v1/admin/access-grants", {
+        method: "POST",
+        body: JSON.stringify({ userId: staffUserId, permission: "donations:read" }),
+      });
+      expect(response.status).toBe(500);
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT id FROM permission_grants WHERE user_id = ? AND permission = 'donations:read'",
+          staffUserId,
+        ),
+      ).toHaveLength(0);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_access_grant_audit").run();
+    }
+  });
+
   it("GET /api/v1/admin/access-grants returns a bounded page envelope and filters by userId", async () => {
     const otherUserId = await insertUser("other@example.test");
     for (let i = 0; i < 3; i += 1) {
@@ -138,6 +166,25 @@ describe("permission_grants (Access grants)", () => {
   it("GET /api/v1/admin/access-grants rejects a non-UUID userId filter", async () => {
     const response = await call(adminToken, "/api/v1/admin/access-grants?userId=not-a-uuid");
     expect(response.status).toBe(400);
+  });
+
+  it("GET /api/v1/admin/access-grants applies shared search in D1", async () => {
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO permission_grants (id, user_id, permission, context_type, context_id, granted_by_user_id, created_at)
+         VALUES (?, ?, 'events:read', 'event', 'searchable-event', ?, datetime('now'))`,
+      ).bind(crypto.randomUUID(), staffUserId, adminId),
+      env.DB.prepare(
+        `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+         VALUES (?, ?, 'donations:read', ?, datetime('now'))`,
+      ).bind(crypto.randomUUID(), staffUserId, adminId),
+    ]);
+
+    const response = await call(adminToken, "/api/v1/admin/access-grants?q=searchable-event");
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as { grants: Array<{ permission: string }>; page: { total: number } };
+    expect(payload.grants.map(({ permission }) => permission)).toEqual(["events:read"]);
+    expect(payload.page.total).toBe(1);
   });
 
   it("expired grants are not honored", async () => {

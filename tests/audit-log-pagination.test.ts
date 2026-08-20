@@ -64,6 +64,9 @@ describe("proposal audit-log pagination (P6M-FT-01)", () => {
     const lastBody = (await lastPage.json()) as { auditLog: unknown[]; page: { hasMore: boolean } };
     expect(lastBody.auditLog).toHaveLength(1);
     expect(lastBody.page.hasMore).toBe(false);
+
+    const invalid = await callAppGet(`/api/v1/admin/proposals/${proposalId}/audit-log?limit=0`, staffToken);
+    expect(invalid.status).toBe(400);
   });
 });
 
@@ -105,5 +108,11 @@ describe("registration audit-log pagination (P6M-FT-02)", () => {
     expect(body.auditLog).toHaveLength(2);
     expect(body.page.total).toBe(5);
     expect(body.page.hasMore).toBe(true);
+
+    const invalid = await callAppGet(
+      `/api/v1/admin/events/${eventSlugRow!.slug}/registrations/${registrationId}/audit-log?offset=-1`,
+      staffToken,
+    );
+    expect(invalid.status).toBe(400);
   });
 });
