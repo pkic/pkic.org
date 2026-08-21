@@ -499,6 +499,9 @@ CREATE TABLE member_applications (
   stage                TEXT NOT NULL DEFAULT 'pending',
   -- allowed: pending | in_review | on_hold | in_consultation | ec_review | approved | declined | withdrawn
   stage_entered_at     TEXT NOT NULL,
+  -- Monotonic stage-entry token. Timestamps remain useful for scheduling and
+  -- display, but are not unique enough to guard a concurrent stage cycle.
+  transition_revision  INTEGER NOT NULL DEFAULT 0,
   -- Set atomically with the durable consultation-batch outbox record. A
   -- transition back into in_consultation clears it so each consultation
   -- stage entry is announced exactly once without an unbounded batch scan.
@@ -512,6 +515,9 @@ CREATE TABLE member_applications (
   -- allowed: request_authority | request_org_email | request_pki_experience
   --        | request_org_application | request_information
   -- distinguishes *why* an application is on_hold; NULL when not on_hold.
+  -- Reset on every transition into on_hold. The scheduled reminder claims
+  -- this marker atomically with its event, audit, and outbox intent.
+  on_hold_reminder_sent_at TEXT,
   created_at           TEXT NOT NULL,
   updated_at           TEXT NOT NULL,
   FOREIGN KEY(form_submission_id) REFERENCES form_submissions(id),
@@ -525,10 +531,18 @@ CREATE INDEX idx_member_applications_stage ON member_applications(stage);
 -- Supports the scheduled on-hold-reminder/EC-auto-approve due-work queries'
 -- ORDER BY stage_entered_at LIMIT ? (PR #1 review §9.1) with a direct index
 -- range scan instead of a full per-stage table scan.
-CREATE INDEX idx_member_applications_stage_entered_at ON member_applications(stage, stage_entered_at);
+CREATE INDEX idx_member_applications_stage_entered_at ON member_applications(stage, stage_entered_at, id);
 CREATE INDEX idx_member_applications_consultation_due
   ON member_applications(stage, consultation_notified_at, stage_entered_at, id)
   WHERE stage = 'in_consultation' AND consultation_notified_at IS NULL;
+CREATE INDEX idx_member_applications_on_hold_closure_due
+  ON member_applications(stage_entered_at, id)
+  WHERE stage = 'on_hold';
+CREATE INDEX idx_member_applications_on_hold_reminder_due
+  ON member_applications(stage_entered_at, id)
+  WHERE stage = 'on_hold'
+    AND on_hold_reminder_sent_at IS NULL
+    AND on_hold_subtype IS NOT NULL;
 
 CREATE TABLE member_application_events (
   id             TEXT NOT NULL PRIMARY KEY,
@@ -573,7 +587,8 @@ CREATE TABLE application_documents (
   FOREIGN KEY(application_id) REFERENCES member_applications(id)
 );
 
-CREATE INDEX idx_application_documents_app ON application_documents(application_id);
+CREATE INDEX idx_application_documents_app
+  ON application_documents(application_id, uploaded_at, id);
 
 -- ── Sponsorships ──────────────────────────────────────────────
 
@@ -596,6 +611,9 @@ CREATE TABLE sponsorships (
   --        | Leader | Inspirator | Innovator | Ambassador (event)
   pipeline_stage         TEXT NOT NULL DEFAULT 'new_inquiry',
   -- allowed: new_inquiry | contacted | proposal_sent | negotiating | payment_pending | active | lapsed
+  transition_revision    INTEGER NOT NULL DEFAULT 0,
+  -- Incremented by every pipeline/renewal mutation and used as the compare-and-set
+  -- boundary for staff transitions and scheduled automation.
   checkout_session_id    TEXT UNIQUE,
   -- Stripe Checkout session id, for Path B self-service; idempotency key
   -- for the webhook that creates/updates this row (see migration header).
@@ -606,6 +624,9 @@ CREATE TABLE sponsorships (
   start_date             TEXT,
   renewal_date           TEXT,
   assigned_to_user_id    TEXT,
+  -- Materialized next scheduler action. This keeps due-work reads bounded by
+  -- an actionable partial index instead of scanning historical effect rows.
+  renewal_action_due_at  TEXT,
   notes                  TEXT,
   price_amount_cents     INTEGER,
   price_currency         TEXT,
@@ -621,10 +642,15 @@ CREATE TABLE sponsorships (
 CREATE INDEX idx_sponsorships_stage ON sponsorships(pipeline_stage);
 CREATE INDEX idx_sponsorships_event ON sponsorships(event_id);
 CREATE INDEX idx_sponsorships_org ON sponsorships(organization_id);
+CREATE INDEX idx_sponsorships_active_consortium_org_projection
+  ON sponsorships(organization_id, start_date DESC, id)
+  WHERE sponsor_type = 'consortium' AND pipeline_stage = 'active';
 -- Supports the scheduled sponsorship renewal-reminder/auto-lapse due-work
--- query's ORDER BY renewal_date LIMIT ? (PR #1 review §9.1) with a direct
+-- query's ORDER BY renewal_action_due_at LIMIT ? (PR #1 review §9.1) with a direct
 -- index range scan instead of an unbounded full-stage scan.
-CREATE INDEX idx_sponsorships_stage_renewal ON sponsorships(pipeline_stage, renewal_date);
+CREATE INDEX idx_sponsorships_active_renewal_action_due
+  ON sponsorships(renewal_action_due_at, id)
+  WHERE pipeline_stage = 'active' AND renewal_action_due_at IS NOT NULL;
 
 CREATE TABLE sponsorship_events (
   id             TEXT NOT NULL PRIMARY KEY,
@@ -644,8 +670,8 @@ CREATE INDEX idx_sponsorship_events_sponsorship
 CREATE TABLE sponsorship_automation_effects (
   sponsorship_id TEXT NOT NULL REFERENCES sponsorships(id),
   effect_key     TEXT NOT NULL,
-  -- Evolvable application-owned vocabulary (for example renewal-reminder-60
-  -- or auto-lapse); deliberately not constrained by a D1 CHECK.
+  -- Evolvable, date-scoped application-owned vocabulary (for example
+  -- renewal-reminder-60:2027-01-01); deliberately not constrained by a D1 CHECK.
   created_at     TEXT NOT NULL,
   PRIMARY KEY (sponsorship_id, effect_key)
 );
@@ -1299,7 +1325,7 @@ CREATE TABLE ec_decisions (
   FOREIGN KEY(ec_member_user_id) REFERENCES users(id)
 );
 
-CREATE INDEX idx_ec_decisions_application ON ec_decisions(application_id);
+CREATE INDEX idx_ec_decisions_application_decision ON ec_decisions(application_id, decision);
 
 -- ── Application concerns ────────────────────────────────────
 -- Visible only to staff/processors, never to the applicant — enforced at
@@ -1314,7 +1340,8 @@ CREATE TABLE application_concerns (
   FOREIGN KEY(submitted_by_user_id) REFERENCES users(id)
 );
 
-CREATE INDEX idx_application_concerns_application ON application_concerns(application_id);
+CREATE INDEX idx_application_concerns_application
+  ON application_concerns(application_id, created_at, id);
 
 -- ── Application communications & notes ────────────────────────────
 -- The table distinguishes two write operations: a templated/free-form
@@ -1341,7 +1368,8 @@ CREATE TABLE application_communications (
   FOREIGN KEY(actor_user_id) REFERENCES users(id)
 );
 
-CREATE INDEX idx_application_communications_application ON application_communications(application_id, created_at);
+CREATE INDEX idx_application_communications_application
+  ON application_communications(application_id, created_at, id);
 
 -- ── Google Groups desired state + sync queue ─────────────────
 -- Zero existing code for Google Groups sync prior to this migration. Every

@@ -1,14 +1,13 @@
 /**
  * Scheduled membership-workflow jobs. Two run on
- * dedicated Mon/Wed cron triggers (see functions/router.ts); the rest
- * (on-hold reminders/auto-close, EC-window auto-approve, Google Groups
- * queue processing) are folded into the existing 15-minute due-work cron
- * (scheduled-due-work.ts) since they're not time-window-sensitive the way
- * the twice-weekly batches are.
+ * dedicated Mon/Wed cron triggers (see functions/router.ts). On-hold
+ * reminders/auto-close, EC-window auto-approve, and Google Groups queue
+ * processing each have a separate 15-minute cron invocation so one lane
+ * cannot consume another lane's D1 statement budget.
  */
 import { all } from "../../db/queries";
-import { buildD1JsonMembershipFilter } from "../../db/json-membership";
-import { uuid } from "../../utils/ids";
+import { hasD1QueryCapacity, type D1QueryBudget } from "../../db/query-budget";
+import { isAppError } from "../../errors";
 import { nowIso } from "../../utils/time";
 import { getConfig } from "../../config";
 import {
@@ -18,21 +17,15 @@ import {
   queueEmail,
 } from "../../email/outbox";
 import { getMembershipSettings } from "../membership-settings";
-import {
-  prepareApplicationStageTransition,
-  transitionApplicationStage,
-  ON_HOLD_SUBTYPE_EMAIL_TEMPLATES,
-} from "./applications/transition";
+import { prepareApplicationStageTransition } from "./applications/transition";
+import { runOnHoldReminders } from "./on-hold-reminders";
 import type { MemberApplicationRow } from "./applications/queries";
-import { hasEcDecline } from "../ec-review";
 import { approveApplication } from "./applications/approve";
 import { processGoogleGroupsSyncQueue } from "../google-groups";
 import { resolveWgJoinCalendarInviteByMailingListEmail } from "../meeting-calendar";
 import {
   buildConsultationBatchEmail,
   buildEcReviewBatchEmail,
-  buildApplicationClosedNoResponseEmail,
-  buildOnHoldReminderEmail,
   buildMailingListEnrolledEmail,
   buildWgCalendarInviteEmail,
 } from "./notifications";
@@ -40,19 +33,28 @@ import { logInfo } from "../../logging";
 import type { DatabaseLike, Env } from "../../types";
 import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
 
-function daysSince(iso: string): number {
-  return (Date.now() - new Date(iso).getTime()) / 86_400_000;
-}
-
 // ── Consultation batch (Mon/Wed 07:15 UTC) ─────────────────────
 
 type ConsultationApplicationRow = Pick<
   MemberApplicationRow,
-  "id" | "applicant_email" | "applicant_name" | "organization_name" | "membership_category"
+  "id" | "applicant_email" | "applicant_name" | "organization_name" | "membership_category" | "transition_revision"
+>;
+
+type EcReviewCandidateRow = Pick<
+  MemberApplicationRow,
+  | "id"
+  | "applicant_email"
+  | "applicant_name"
+  | "organization_name"
+  | "membership_category"
+  | "stage"
+  | "stage_entered_at"
+  | "transition_revision"
+  | "on_hold_reminder_sent_at"
 >;
 
 export const CONSULTATION_BATCH_DUE_QUERY = `
-  SELECT id, applicant_email, applicant_name, organization_name, membership_category
+  SELECT id, applicant_email, applicant_name, organization_name, membership_category, transition_revision
   FROM member_applications
   WHERE stage = 'in_consultation' AND consultation_notified_at IS NULL
   ORDER BY stage_entered_at ASC, id ASC
@@ -70,17 +72,30 @@ export async function runConsultationBatch(
   }
 
   const now = nowIso();
+  // Claim precisely the snapshot that supplied the email content. An admin
+  // edit increments transition_revision; without this predicate a queued
+  // batch could mark an edited application notified while emailing stale
+  // applicant, organization, or category details. One JSON binding avoids
+  // D1's 100-parameter limit while preserving the all-or-nothing changes()
+  // guard below.
   const applicationIds = applications.map((application) => application.id);
-  const selectedApplications = buildD1JsonMembershipFilter("id", applicationIds);
+  const selectedApplications = JSON.stringify(
+    applications.map(({ id, transition_revision }) => ({ id, transitionRevision: transition_revision })),
+  );
   const markNotified = db
     .prepare(
       `UPDATE member_applications
        SET consultation_notified_at = ?, updated_at = ?
-       WHERE ${selectedApplications.sql}
-         AND stage = 'in_consultation'
-         AND consultation_notified_at IS NULL`,
+       WHERE stage = 'in_consultation'
+         AND consultation_notified_at IS NULL
+         AND EXISTS (
+           SELECT 1
+           FROM json_each(?) AS selected
+           WHERE json_extract(selected.value, '$.id') = member_applications.id
+             AND json_extract(selected.value, '$.transitionRevision') = member_applications.transition_revision
+         )`,
     )
-    .bind(now, now, ...selectedApplications.bindings);
+    .bind(now, now, selectedApplications);
   const queued = prepareQueueEmailStatementWhen(
     db,
     buildConsultationBatchEmail({
@@ -131,9 +146,11 @@ export async function runConsultationBatch(
 export async function runEcReviewBatch(db: DatabaseLike, env: Env, limit = 100): Promise<{ transitioned: number }> {
   const settings = await getMembershipSettings(db);
   const cutoff = new Date(Date.now() - settings.consultation_window_days * 86_400_000).toISOString();
-  const candidates = await all<MemberApplicationRow>(
+  const candidates = await all<EcReviewCandidateRow>(
     db,
-    `SELECT * FROM member_applications
+    `SELECT id, applicant_email, applicant_name, organization_name, membership_category,
+            stage, stage_entered_at, transition_revision, on_hold_reminder_sent_at
+     FROM member_applications
      WHERE stage = 'in_consultation' AND stage_entered_at <= ?
      ORDER BY stage_entered_at ASC, id ASC
      LIMIT ?`,
@@ -174,121 +191,80 @@ export async function runEcReviewBatch(db: DatabaseLike, env: Env, limit = 100):
   return { transitioned: candidates.length };
 }
 
-// ── On-hold reminders & auto-close (folded into the 15-min due-work cron) ─
+export { ON_HOLD_CLOSURE_DUE_QUERY, ON_HOLD_REMINDER_DUE_QUERY } from "./on-hold-reminders";
+export { runOnHoldReminders };
 
-export async function runOnHoldReminders(
-  db: DatabaseLike,
-  _env: Env,
-  limit = 100,
-): Promise<{ remindersSent: number; autoClosed: number }> {
-  const settings = await getMembershipSettings(db);
-  // Indexed due predicate + stable ORDER BY + LIMIT (PR #1 review §9.1) —
-  // was an unbounded full-stage scan.
-  const onHold = await all<MemberApplicationRow>(
-    db,
-    `SELECT * FROM member_applications WHERE stage = 'on_hold' ORDER BY stage_entered_at ASC LIMIT ?`,
-    [limit],
-  );
-  if (onHold.length === 0) {
-    return { remindersSent: 0, autoClosed: 0 };
-  }
-
-  let remindersSent = 0;
-  let autoClosed = 0;
-  const deadlineDays = settings.on_hold_response_deadline_days;
-
-  for (const application of onHold) {
-    const elapsed = daysSince(application.stage_entered_at);
-
-    if (elapsed >= deadlineDays) {
-      await transitionApplicationStage(db, {
-        applicationId: application.id,
-        toStage: "withdrawn",
-        actorUserId: null,
-        note: "Auto-closed — no response within the on-hold deadline",
-        email: buildApplicationClosedNoResponseEmail({
-          recipientEmail: application.applicant_email,
-          applicantName: application.applicant_name,
-          deadlineDays,
-        }),
-      });
-      autoClosed++;
-      continue;
-    }
-
-    if (!settings.auto_reminder_on_holds) continue;
-    if (elapsed < deadlineDays - 3) continue;
-    if (!application.on_hold_subtype) continue;
-
-    const alreadyReminded = await all<{ id: string }>(
-      db,
-      `SELECT id FROM member_application_events WHERE application_id = ? AND note = 'Hold reminder sent' LIMIT 1`,
-      [application.id],
-    );
-    if (alreadyReminded.length > 0) continue;
-
-    const templateKey =
-      ON_HOLD_SUBTYPE_EMAIL_TEMPLATES[application.on_hold_subtype as keyof typeof ON_HOLD_SUBTYPE_EMAIL_TEMPLATES];
-    if (!templateKey) continue;
-
-    const now = nowIso();
-    const reminderEmail = prepareQueueEmailStatement(
-      db,
-      buildOnHoldReminderEmail({
-        templateKey,
-        recipientEmail: application.applicant_email,
-        applicantName: application.applicant_name,
-        deadlineDays,
-      }),
-      now,
-    );
-    await db.batch([
-      reminderEmail.statement,
-      db
-        .prepare(
-          `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
-           VALUES (?, ?, ?, ?, NULL, 'Hold reminder sent', ?)`,
-        )
-        .bind(uuid(), application.id, application.stage, application.stage, now),
-    ]);
-    remindersSent++;
-  }
-
-  return { remindersSent, autoClosed };
-}
-
-// ── EC window auto-approve (folded into the 15-min due-work cron) ──
+// ── EC window auto-approve (dedicated 15-min cron) ────────────────
 // "If the EC window expires with no portal action from any EC member, the
 // system auto-approves and logs the reason as auto_approved_no_ec_objection."
 // A decline from any EC member halts this — the application stays in
 // ec_review, surfaced for staff resolution via the admin endpoints.
 
+interface EcAutoApproveCandidate {
+  id: string;
+  has_ec_decline: number;
+}
+
+export const EC_AUTO_APPROVE_DUE_QUERY = `
+  SELECT application.id,
+         EXISTS (
+           SELECT 1
+           FROM ec_decisions decision
+           WHERE decision.application_id = application.id
+             AND decision.decision = 'decline'
+         ) AS has_ec_decline
+  FROM member_applications application INDEXED BY idx_member_applications_stage_entered_at
+  WHERE application.stage = 'ec_review' AND application.stage_entered_at <= ?
+  ORDER BY application.stage_entered_at ASC, application.id ASC
+  LIMIT ?`;
+
+const MAX_EC_AUTO_APPROVE_PER_PASS = 25;
+const EC_AUTO_APPROVE_SELECTION_STATEMENTS = 2;
+/*
+ * One approval reads the application/form/provisioning inputs and writes the
+ * resulting membership, queue, event, and outbox command. The application
+ * pipeline caps and deduplicates requested working groups, making 160 a
+ * conservative whole-operation reserve. Do not start an approval unless the
+ * reserve is available: deferral leaves the application untouched for this
+ * lane's next independent cron invocation.
+ */
+const EC_AUTO_APPROVE_RESERVE_STATEMENTS = 160;
+
 export async function runEcWindowAutoApprove(
   db: DatabaseLike,
   env: Env,
   limit = 100,
-): Promise<{ autoApproved: number; heldForDecline: number }> {
+  d1QueryBudget?: D1QueryBudget,
+): Promise<{ autoApproved: number; heldForDecline: number; deferredForBudget: boolean }> {
+  const emptyResult = { autoApproved: 0, heldForDecline: 0, deferredForBudget: false };
+  const boundedLimit = Math.max(0, Math.min(MAX_EC_AUTO_APPROVE_PER_PASS, Math.floor(limit)));
+  if (boundedLimit === 0) return emptyResult;
+  if (!hasD1QueryCapacity(d1QueryBudget, EC_AUTO_APPROVE_SELECTION_STATEMENTS)) {
+    return { ...emptyResult, deferredForBudget: true };
+  }
   const settings = await getMembershipSettings(db);
   const cutoff = new Date(Date.now() - settings.ec_review_window_days * 86_400_000).toISOString();
-  // Indexed due predicate + stable ORDER BY + LIMIT (PR #1 review §9.1) —
-  // was an unbounded scan of every overdue application.
-  const overdue = await all<MemberApplicationRow>(
-    db,
-    `SELECT * FROM member_applications WHERE stage = 'ec_review' AND stage_entered_at <= ? ORDER BY stage_entered_at ASC LIMIT ?`,
-    [cutoff, limit],
-  );
+  // The correlated EXISTS is served by idx_ec_decisions_application_decision,
+  // avoiding one Worker-to-D1 query per overdue application.
+  const overdue = await all<EcAutoApproveCandidate>(db, EC_AUTO_APPROVE_DUE_QUERY, [cutoff, boundedLimit]);
   if (overdue.length === 0) {
-    return { autoApproved: 0, heldForDecline: 0 };
+    return emptyResult;
   }
 
   let autoApproved = 0;
   let heldForDecline = 0;
+  let deferredForBudget = false;
   const config = getConfig(env);
 
   for (const application of overdue) {
-    if (await hasEcDecline(db, application.id)) {
+    if (application.has_ec_decline === 1) {
       heldForDecline++;
       continue;
+    }
+
+    if (!hasD1QueryCapacity(d1QueryBudget, EC_AUTO_APPROVE_RESERVE_STATEMENTS)) {
+      deferredForBudget = true;
+      break;
     }
 
     const loginUrl = `${config.appBaseUrl}/portal/`;
@@ -296,26 +272,58 @@ export async function runEcWindowAutoApprove(
     // its own db.batch() (P5-02) — enqueue only here, no per-recipient
     // synchronous send loop (PR #1 review §9.1); the shared bounded outbox
     // processor delivers them.
-    await approveApplication(db, {
-      applicationId: application.id,
-      actorUserId: null,
-      eventNote: "auto_approved_no_ec_objection",
-      loginUrl,
-    });
+    try {
+      await approveApplication(db, {
+        applicationId: application.id,
+        actorUserId: null,
+        eventNote: "auto_approved_no_ec_objection",
+        loginUrl,
+      });
+    } catch (error) {
+      // A staff edit after the due-row read increments transition_revision.
+      // The approval command rolls back fully, and the next independent cron
+      // invocation re-evaluates the current application snapshot.
+      if (isAppError(error) && error.code === "APPLICATION_ALREADY_APPROVED") continue;
+      throw error;
+    }
 
     autoApproved++;
   }
 
-  return { autoApproved, heldForDecline };
+  return { autoApproved, heldForDecline, deferredForBudget };
 }
 
 // ── Google Groups queue processing + mailing-list-enrolled ─
 
+const MAX_GOOGLE_GROUPS_SYNC_PER_PASS = 25;
+const GOOGLE_GROUPS_SYNC_RESERVE_HEADROOM_STATEMENTS = 20;
+
+/**
+ * The queue processor's D1 upper bound for N claimed rows is 3 + 4N:
+ * due-list, re-list-and-claim batch (1 + N), actionable-claim load, and a
+ * three-statement finalization batch for every successfully applied row.
+ * The missing-user/failure paths use fewer statements. The notification
+ * follow-up is at most 6N: user read + enrollment outbox row per completed
+ * add, then at most three calendar reads and one invite outbox row for that
+ * add's group. The durable desired-state queue admits at most one completed
+ * add per claimed row, so those bounds compose.
+ */
+function googleGroupsSyncReserveStatements(limit: number): number {
+  return 3 + 4 * limit + 6 * limit + GOOGLE_GROUPS_SYNC_RESERVE_HEADROOM_STATEMENTS;
+}
+
 export async function runGoogleGroupsSyncPass(
   db: DatabaseLike,
   env: Env,
-): Promise<{ succeeded: number; failed: number }> {
-  const result = await processGoogleGroupsSyncQueue(db, env);
+  limit = MAX_GOOGLE_GROUPS_SYNC_PER_PASS,
+  d1QueryBudget?: D1QueryBudget,
+): Promise<{ succeeded: number; failed: number; deferredForBudget: boolean }> {
+  const boundedLimit = Math.max(0, Math.min(MAX_GOOGLE_GROUPS_SYNC_PER_PASS, Math.floor(limit)));
+  const reserveStatements = googleGroupsSyncReserveStatements(boundedLimit);
+  if (boundedLimit === 0 || !hasD1QueryCapacity(d1QueryBudget, reserveStatements)) {
+    return { succeeded: 0, failed: 0, deferredForBudget: boundedLimit > 0 };
+  }
+  const result = await processGoogleGroupsSyncQueue(db, env, boundedLimit);
 
   for (const [userId, groupEmails] of Object.entries(result.completedAddsByUser)) {
     const user = await all<{ email: string; first_name: string | null; last_name: string | null }>(
@@ -356,32 +364,5 @@ export async function runGoogleGroupsSyncPass(
     logInfo("membership_scheduled_jobs_google_groups_unconfigured", {});
   }
 
-  return { succeeded: result.succeeded, failed: result.failed };
-}
-
-// ── Combined 15-minute due-work pass ──────────────────────────────────────
-//
-// Dispatched as one job in the shared registry (scheduled-jobs/registry.ts)
-// that functions/router.ts's REMINDER_CRON entrypoint runs alongside
-// runScheduledDueWork (scheduled-due-work.ts) and the sponsorship/votes
-// due-work jobs — not woven into runScheduledDueWork's own multi-pass
-// time/subrequest-budgeted loop, since that loop's budgeting logic is
-// intricate and already covers a lot of surface area (registration
-// reminders, waitlist promotion, RSVP enforcement); each job here is
-// instead bounded by its own query LIMIT (PR #1 review §9.1).
-export interface MembershipDueWorkResult {
-  onHoldReminders: Awaited<ReturnType<typeof runOnHoldReminders>>;
-  ecAutoApprove: Awaited<ReturnType<typeof runEcWindowAutoApprove>>;
-  googleGroupsSync: Awaited<ReturnType<typeof runGoogleGroupsSyncPass>>;
-}
-
-export async function runMembershipDueWork(
-  db: DatabaseLike,
-  env: Env,
-  limits: { onHoldReminderLimit?: number; ecAutoApproveLimit?: number } = {},
-): Promise<MembershipDueWorkResult> {
-  const onHoldReminders = await runOnHoldReminders(db, env, limits.onHoldReminderLimit);
-  const ecAutoApprove = await runEcWindowAutoApprove(db, env, limits.ecAutoApproveLimit);
-  const googleGroupsSync = await runGoogleGroupsSyncPass(db, env);
-  return { onHoldReminders, ecAutoApprove, googleGroupsSync };
+  return { succeeded: result.succeeded, failed: result.failed, deferredForBudget: false };
 }

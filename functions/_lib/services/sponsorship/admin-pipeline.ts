@@ -6,9 +6,11 @@ import { nowIso } from "../../utils/time";
 import { AppError } from "../../errors";
 import { eventSponsorTierHasAttendeeAccess } from "./event-tiers";
 import { getAdminSponsorship, type AdminSponsorshipRow } from "./admin-read-model";
-import { prepareAuditLog } from "../audit";
+import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
 import { prepareQueueEmailStatement } from "../../email/outbox";
 import { prepareSponsorPortalMagicLinkForSponsorship } from "../../auth/sponsor-portal";
+import { prepareRefreshOrganizationSponsorshipProjection, prepareSponsorshipStageTransition } from "./stage-transition";
+import { hasFutureRenewalDate, initialRenewalActionDueAt, utcDate } from "./renewal-policy";
 import {
   SPONSORSHIP_PIPELINE_STAGES,
   type SponsorshipPipelineStage,
@@ -94,6 +96,10 @@ export interface UpdateAdminSponsorshipInput {
   notes?: string | null;
 }
 
+function sponsorshipChangedError(): AppError {
+  return new AppError(409, "SPONSORSHIP_CHANGED", "Sponsorship changed concurrently; reload it and try again");
+}
+
 export async function updateAdminSponsorship(
   db: DatabaseLike,
   actorUserId: string,
@@ -103,6 +109,13 @@ export async function updateAdminSponsorship(
   const existing = await getAdminSponsorship(db, id);
   if (!existing) {
     throw new AppError(404, "SPONSORSHIP_NOT_FOUND", "Sponsorship not found");
+  }
+  if (existing.pipeline_stage === "active" && patch.renewalDate === null) {
+    throw new AppError(
+      409,
+      "ACTIVE_RENEWAL_DATE_REQUIRED",
+      "An active sponsorship must retain a renewal date; lapse it before clearing the date",
+    );
   }
 
   const fields: string[] = [];
@@ -124,13 +137,44 @@ export async function updateAdminSponsorship(
     values.push(patch.notes);
   }
 
+  if (
+    existing.pipeline_stage === "active" &&
+    (patch.renewalDate !== undefined || patch.assignedToUserId !== undefined)
+  ) {
+    fields.push("renewal_action_due_at = ?");
+    values.push(
+      initialRenewalActionDueAt({
+        pipelineStage: existing.pipeline_stage,
+        renewalDate: patch.renewalDate !== undefined ? patch.renewalDate : existing.renewal_date,
+        assignedToUserId: patch.assignedToUserId !== undefined ? patch.assignedToUserId : existing.assigned_to_user_id,
+      }),
+    );
+  }
+
   if (fields.length > 0) {
-    fields.push("updated_at = ?");
-    values.push(nowIso());
-    await db.batch([
-      db.prepare(`UPDATE sponsorships SET ${fields.join(", ")} WHERE id = ?`).bind(...values, id),
-      prepareAuditLog(db, "admin", actorUserId, "sponsorship_updated", "sponsorship", id, patch),
-    ]);
+    const now = nowIso();
+    fields.push("updated_at = ?", "transition_revision = transition_revision + 1");
+    values.push(now);
+    try {
+      const statements: StatementLike[] = [
+        db
+          .prepare(`UPDATE sponsorships SET ${fields.join(", ")} WHERE id = ? AND transition_revision = ?`)
+          .bind(...values, id, existing.transition_revision),
+        prepareAuditLogAfterOneChange(db, "admin", actorUserId, "sponsorship_updated", "sponsorship", id, patch, now),
+      ];
+      if (
+        patch.tier !== undefined &&
+        existing.sponsor_type === "consortium" &&
+        existing.organization_id &&
+        existing.pipeline_stage === "active"
+      ) {
+        statements.push(prepareRefreshOrganizationSponsorshipProjection(db, existing.organization_id));
+      }
+      await db.batch(statements);
+    } catch (error) {
+      if (isAuditOneChangeGuardFailure(error)) throw sponsorshipChangedError();
+      throw error;
+    }
   }
 
   return (await getAdminSponsorship(db, id)) as AdminSponsorshipRow;
@@ -177,57 +221,44 @@ export async function advanceSponsorshipStage(
   }
 
   const fromStage = existing.pipeline_stage;
+  if (params.toStage === fromStage) {
+    return {
+      sponsorship: existing,
+      becameActive: false,
+      becameLapsed: false,
+      qualifiesForAttendeeDataAccess: false,
+      outboxIds: [],
+    };
+  }
+  if (
+    params.toStage === "active" &&
+    fromStage !== "active" &&
+    !hasFutureRenewalDate(existing.renewal_date, utcDate())
+  ) {
+    throw new AppError(
+      409,
+      "FUTURE_RENEWAL_DATE_REQUIRED",
+      "Set a future renewal date before activating a sponsorship",
+    );
+  }
   const now = nowIso();
-  const becameActive = params.toStage === "active" && fromStage !== "active";
-  const becameLapsed = params.toStage === "lapsed" && fromStage !== "lapsed";
+  const preparedTransition = prepareSponsorshipStageTransition(db, existing, {
+    toStage: params.toStage,
+    actorType: "admin",
+    actorUserId: params.actorUserId,
+    note: params.note,
+    auditAction: "sponsorship_stage_advanced",
+    now,
+  });
+  const { becameActive, becameLapsed } = preparedTransition;
 
   let qualifiesForAttendeeDataAccess = false;
   if (becameActive && existing.sponsor_type === "event" && existing.event_id && existing.tier) {
     qualifiesForAttendeeDataAccess = await eventSponsorTierHasAttendeeAccess(db, existing.event_id, existing.tier);
   }
 
-  const statements: StatementLike[] = [
-    db
-      .prepare(
-        `UPDATE sponsorships SET pipeline_stage = ?, start_date = COALESCE(start_date, CASE WHEN ? = 'active' THEN ? ELSE start_date END), updated_at = ? WHERE id = ?`,
-      )
-      .bind(params.toStage, params.toStage, now, now, params.id),
-    db
-      .prepare(
-        `INSERT INTO sponsorship_events (id, sponsorship_id, from_stage, to_stage, actor_user_id, note, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .bind(uuid(), params.id, fromStage, params.toStage, params.actorUserId, params.note, now),
-    prepareAuditLog(
-      db,
-      "admin",
-      params.actorUserId,
-      "sponsorship_stage_advanced",
-      "sponsorship",
-      params.id,
-      {
-        toStage: params.toStage,
-      },
-      now,
-    ),
-  ];
+  const statements: StatementLike[] = [...preparedTransition.statements];
   const outboxIds: string[] = [];
-
-  if (existing.sponsor_type === "consortium" && existing.organization_id) {
-    if (becameActive) {
-      statements.push(
-        db
-          .prepare(`UPDATE organizations SET sponsor_tier = ?, sponsor_start_date = ? WHERE id = ?`)
-          .bind(existing.tier, existing.start_date ?? now, existing.organization_id),
-      );
-    } else if (becameLapsed) {
-      statements.push(
-        db
-          .prepare(`UPDATE organizations SET sponsor_tier = NULL, sponsor_start_date = NULL WHERE id = ?`)
-          .bind(existing.organization_id),
-      );
-    }
-  }
 
   if (becameActive && existing.sponsor_type === "consortium" && existing.contact_email) {
     const queued = prepareQueueEmailStatement(
@@ -276,7 +307,12 @@ export async function advanceSponsorshipStage(
     outboxIds.push(queued.id);
   }
 
-  await db.batch(statements);
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    if (isAuditOneChangeGuardFailure(error)) throw sponsorshipChangedError();
+    throw error;
+  }
 
   return {
     sponsorship: (await getAdminSponsorship(db, params.id)) as AdminSponsorshipRow,

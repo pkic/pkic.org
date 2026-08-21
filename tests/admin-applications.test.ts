@@ -19,6 +19,10 @@ import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createApplicationFormSubmission, seedMemberApplication } from "./helpers/member-applications";
+import { gateBatchGroup, gateNextBatch } from "./helpers/d1-batch-gate";
+import { updateMembershipSettings } from "../functions/_lib/services/membership-settings";
+import { runOnHoldReminders } from "../functions/_lib/services/membership/scheduled-jobs";
+import { updateAdminApplication } from "../functions/_lib/services/admin-applications";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -129,6 +133,68 @@ describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application field
     // duplicate-application detection (Fix 1's subject) doesn't desync.
     expect(rows[0].organization_domain).toBe("newdomain.test");
     expect(rows[0].stage).toBe("pending");
+  });
+
+  it("serializes concurrent edits with the application transition revision", async () => {
+    const { id } = await createApplication();
+    const concurrentDb = gateBatchGroup(env.DB, 2);
+
+    const outcomes = await Promise.allSettled([
+      updateAdminApplication(concurrentDb, id, adminId, { applicantName: "First Correction" }),
+      updateAdminApplication(concurrentDb, id, adminId, { applicantName: "Second Correction" }),
+    ]);
+
+    expect(outcomes.filter((outcome) => outcome.status === "fulfilled")).toHaveLength(1);
+    const rejected = outcomes.find((outcome) => outcome.status === "rejected");
+    expect(rejected?.reason).toMatchObject({ status: 409, code: "APPLICATION_CHANGED" });
+    expect(
+      await queryAll<{ applicant_name: string; transition_revision: number }>(
+        env.DB,
+        "SELECT applicant_name, transition_revision FROM member_applications WHERE id = ?",
+        id,
+      ),
+    ).toEqual([{ applicant_name: expect.stringMatching(/^(First|Second) Correction$/), transition_revision: 1 }]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM member_application_events WHERE application_id = ?", id),
+    ).toHaveLength(1);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'application_edited' AND entity_id = ?", id),
+    ).toHaveLength(1);
+  });
+
+  it("rejects a scheduler email built from a stale application edit", async () => {
+    await updateMembershipSettings(env.DB, { onHoldResponseDeadlineDays: 7, autoReminderOnHolds: true }, null);
+    const { id } = await createApplication({ stage: "on_hold" });
+    await env.DB.prepare(
+      `UPDATE member_applications
+       SET on_hold_subtype = 'request_org_email', stage_entered_at = datetime('now', '-5 days')
+       WHERE id = ?`,
+    )
+      .bind(id)
+      .run();
+
+    const gate = gateNextBatch(env.DB);
+    const staleReminder = runOnHoldReminders(gate.db, env as any);
+    await gate.reached;
+
+    const edit = await call(adminToken, `/api/v1/admin/applications/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ applicantEmail: "updated@example.test" }),
+    });
+    expect(edit.status).toBe(200);
+
+    gate.release();
+    expect(await staleReminder).toEqual({ remindersSent: 0, autoClosed: 0 });
+    expect(
+      await queryAll<{ applicant_email: string; transition_revision: number }>(
+        env.DB,
+        "SELECT applicant_email, transition_revision FROM member_applications WHERE id = ?",
+        id,
+      ),
+    ).toEqual([{ applicant_email: "updated@example.test", transition_revision: 1 }]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'application-hold-org-email'"),
+    ).toHaveLength(0);
   });
 
   it("resolves only the requested working-group labels in the backend", async () => {

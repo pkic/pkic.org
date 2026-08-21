@@ -11,7 +11,13 @@ import {
   RSVP_BOUNCE_DUE_QUERY,
   RSVP_WARNING_DUE_QUERY,
 } from "../functions/_lib/services/rsvp-enforcement/candidates";
-import { CONSULTATION_BATCH_DUE_QUERY } from "../functions/_lib/services/membership/scheduled-jobs";
+import {
+  CONSULTATION_BATCH_DUE_QUERY,
+  EC_AUTO_APPROVE_DUE_QUERY,
+  ON_HOLD_CLOSURE_DUE_QUERY,
+  ON_HOLD_REMINDER_DUE_QUERY,
+} from "../functions/_lib/services/membership/scheduled-jobs";
+import { SPONSORSHIP_DUE_WORK_QUERY } from "../functions/_lib/services/sponsorship-scheduled-jobs";
 
 async function explain(
   sql: string,
@@ -80,6 +86,33 @@ describe("durable external-effect due query plans", () => {
       ["idx_member_applications_consultation_due"],
       "member_applications",
     );
+  });
+
+  it("uses the materialized partial index for bounded sponsorship renewal work", async () => {
+    expectBoundedDuePlan(
+      await explain(SPONSORSHIP_DUE_WORK_QUERY, ["2026-08-21", 20]),
+      ["idx_sponsorships_active_renewal_action_due"],
+      "sp",
+    );
+  });
+
+  it("uses separate partial indexes for bounded on-hold closure and reminder lanes", async () => {
+    expectBoundedDuePlan(
+      await explain(ON_HOLD_CLOSURE_DUE_QUERY, ["2026-08-14T00:00:00.000Z", 20]),
+      ["idx_member_applications_on_hold_closure_due"],
+      "member_applications",
+    );
+    expectBoundedDuePlan(
+      await explain(ON_HOLD_REMINDER_DUE_QUERY, ["2026-08-14T00:00:00.000Z", "2026-08-18T00:00:00.000Z", 20]),
+      ["idx_member_applications_on_hold_reminder_due"],
+      "member_applications",
+    );
+  });
+
+  it("uses indexed due and decline predicates for EC auto-approval", async () => {
+    const plan = await explain(EC_AUTO_APPROVE_DUE_QUERY, ["2026-08-14T00:00:00.000Z", 20]);
+    expectBoundedDuePlan(plan, ["idx_member_applications_stage_entered_at"], "application");
+    expect(plan).toContain("idx_ec_decisions_application_decision");
   });
 
   it("uses branch-specific indexes for bounded RSVP enforcement", async () => {

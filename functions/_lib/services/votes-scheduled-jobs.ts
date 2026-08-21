@@ -2,15 +2,11 @@
  * Voting due-work: opens scheduled votes, closes/
  * advances open votes past closes_at, and emails each forum vote's
  * eligible delegates (`forum-vote-delegate-notify`) on initial open and on
- * every round advance. Dispatched as one job in the shared registry
- * (scheduled-jobs/registry.ts) that functions/router.ts's REMINDER_CRON
- * entrypoint runs alongside runScheduledDueWork, membership-scheduled-
- * jobs.ts's runMembershipDueWork, and sponsorship-scheduled-jobs.ts's
- * runSponsorshipDueWork — not woven into runScheduledDueWork's own
- * multi-pass budgeted loop, for the same "keep this phase's additions
- * isolated" reason documented there. closeDueVotes is already bounded by
- * its own LIMIT, so no due-work-side change was needed for §9.1 here beyond
- * the enqueue-only fix below.
+ * every round advance. The router gives this lane its own cron invocation
+ * and D1 statement budget, separate from registration, membership, and
+ * sponsorship due-work. closeDueVotes is already bounded by its own LIMIT,
+ * so no due-work-side change was needed for §9.1 here beyond the
+ * enqueue-only fix below.
  */
 import { prepareQueueEmailStatement } from "../email/outbox";
 import { nowIso } from "../utils/time";

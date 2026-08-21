@@ -275,6 +275,7 @@ export const applicationUpdateRouteSchema = {
   responses: {
     "200": { description: "Application updated." },
     "404": { description: "Application not found." },
+    "409": { description: "The application changed concurrently or the corrected organization domain is unavailable." },
     "422": { description: "Invalid field values." },
   },
 };

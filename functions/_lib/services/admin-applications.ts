@@ -27,7 +27,7 @@ import {
 } from "./membership/applications/queries";
 import { getGlobalFormByKey } from "./forms";
 import { validateCustomAnswersAgainstForm } from "./forms";
-import { prepareAuditLog } from "./audit";
+import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
 import {
   getOrganizationDomainClaim,
   prepareClaimDomainForApplication,
@@ -44,7 +44,21 @@ import {
 import { resolveOrderBy } from "../db/sort";
 import type { DatabaseLike, StatementLike } from "../types";
 
-function toSummary(row: MemberApplicationRow): AdminApplicationSummary {
+type AdminApplicationSummaryRow = Pick<
+  MemberApplicationRow,
+  | "id"
+  | "applicant_email"
+  | "applicant_name"
+  | "organization_name"
+  | "membership_category"
+  | "stage"
+  | "on_hold_subtype"
+  | "assigned_to_user_id"
+  | "created_at"
+  | "updated_at"
+>;
+
+function toSummary(row: AdminApplicationSummaryRow): AdminApplicationSummary {
   return adminApplicationSummarySchema.parse({
     id: row.id,
     applicantEmail: row.applicant_email,
@@ -83,12 +97,11 @@ export async function listAdminApplications(
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   const orderBy = resolveOrderBy(params.sort, ADMIN_APPLICATIONS_SORT_COLUMNS, "ORDER BY created_at DESC", "id ASC");
 
-  const { rows, total } = await queryPage<MemberApplicationRow>(
+  const { rows, total } = await queryPage<AdminApplicationSummaryRow>(
     db,
     {
-      sql: `SELECT id, applicant_email, applicant_name, organization_name, organization_domain,
-                   membership_category, form_submission_id, stage, stage_entered_at,
-                   on_hold_subtype, review_notes, assigned_to_user_id, manage_token_hash,
+      sql: `SELECT id, applicant_email, applicant_name, organization_name,
+                   membership_category, stage, on_hold_subtype, assigned_to_user_id,
                    created_at, updated_at
             FROM member_applications ${where} ${orderBy} LIMIT ? OFFSET ?`,
       bindings: [...values, params.limit, params.offset],
@@ -242,7 +255,11 @@ export async function updateAdminApplication(
   const changedFields: string[] = [];
   const setClauses: string[] = [];
   const values: unknown[] = [];
-  const preStatements: StatementLike[] = [];
+  // A new form submission is the only prerequisite that may precede the
+  // application CAS: member_applications.form_submission_id has a foreign
+  // key, so the parent row must exist before the guarded update can commit.
+  const foreignKeyPrerequisites: StatementLike[] = [];
+  const dependentStatements: StatementLike[] = [];
 
   if (input.applicantName !== undefined && input.applicantName !== application.applicant_name) {
     setClauses.push("applicant_name = ?");
@@ -289,9 +306,9 @@ export async function updateAdminApplication(
     setClauses.push("organization_domain = ?");
     values.push(nextOrganizationDomain);
     if (application.stage !== "declined" && application.stage !== "withdrawn") {
-      preStatements.push(prepareReleaseApplicationDomainClaim(db, application.id));
+      dependentStatements.push(prepareReleaseApplicationDomainClaim(db, application.id));
       if (nextOrganizationDomain) {
-        preStatements.push(prepareClaimDomainForApplication(db, nextOrganizationDomain, application.id, now));
+        dependentStatements.push(prepareClaimDomainForApplication(db, nextOrganizationDomain, application.id, now));
       }
     }
   }
@@ -338,7 +355,7 @@ export async function updateAdminApplication(
       let formSubmissionId = application.form_submission_id;
       if (!formSubmissionId) {
         formSubmissionId = uuid();
-        preStatements.push(
+        foreignKeyPrerequisites.push(
           db
             .prepare(
               `INSERT INTO form_submissions (id, form_id, submitted_by_user_id, context_type, context_ref, status, submitted_at)
@@ -354,13 +371,13 @@ export async function updateAdminApplication(
         if (input.answers[key] === undefined) continue;
         const value = normalizedAnswers[key];
         if (value === undefined) {
-          preStatements.push(
+          dependentStatements.push(
             db
               .prepare("DELETE FROM form_submission_answers WHERE submission_id = ? AND field_key = ?")
               .bind(formSubmissionId, key),
           );
         } else {
-          preStatements.push(
+          dependentStatements.push(
             db
               .prepare(
                 `INSERT INTO form_submission_answers (id, submission_id, field_key, data_json, created_at)
@@ -382,12 +399,32 @@ export async function updateAdminApplication(
 
   setClauses.push("updated_at = ?");
   values.push(now);
-  values.push(applicationId);
+  values.push(applicationId, application.transition_revision);
 
   try {
     await db.batch([
-      ...preStatements,
-      db.prepare(`UPDATE member_applications SET ${setClauses.join(", ")} WHERE id = ?`).bind(...values),
+      ...foreignKeyPrerequisites,
+      db
+        .prepare(
+          `UPDATE member_applications
+           SET ${setClauses.join(", ")}, transition_revision = transition_revision + 1
+           WHERE id = ? AND transition_revision = ?`,
+        )
+        .bind(...values),
+      // Keep the shared one-change guard immediately after the CAS. A stale
+      // revision aborts the complete batch before domain, answer, history, or
+      // outbox fallout can commit; the same statement is the canonical audit
+      // record, so this command does not invent another guard dialect.
+      prepareAuditLogAfterOneChange(
+        db,
+        "admin",
+        actorUserId,
+        "application_edited",
+        "member_application",
+        applicationId,
+        input,
+        now,
+      ),
       db
         .prepare(
           `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
@@ -402,9 +439,12 @@ export async function updateAdminApplication(
           `Application details edited: ${changedFields.join(", ")}`,
           now,
         ),
-      prepareAuditLog(db, "admin", actorUserId, "application_edited", "member_application", applicationId, input, now),
+      ...dependentStatements,
     ]);
   } catch (error) {
+    if (isAuditOneChangeGuardFailure(error)) {
+      throw new AppError(409, "APPLICATION_CHANGED", "Application changed while this edit was being prepared");
+    }
     if (organizationDomainChanged && nextOrganizationDomain) {
       const claim = await getOrganizationDomainClaim(db, nextOrganizationDomain);
       if (claim && claim.applicationId !== applicationId) {

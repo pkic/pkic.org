@@ -99,7 +99,14 @@ describe("Sponsor portal", () => {
   async function createActiveEventSponsorship(tier: string, contactEmail: string): Promise<string> {
     const createResponse = await callAdmin(adminToken, "/api/v1/admin/sponsorships", {
       method: "POST",
-      body: JSON.stringify({ sponsorType: "event", eventId, tier, contactEmail, contactName: "Sponsor Contact" }),
+      body: JSON.stringify({
+        sponsorType: "event",
+        eventId,
+        tier,
+        contactEmail,
+        contactName: "Sponsor Contact",
+        renewalDate: new Date(Date.now() + 180 * 86_400_000).toISOString().slice(0, 10),
+      }),
     });
     const created = (await createResponse.json()) as { sponsorship: { id: string } };
     await callAdmin(adminToken, `/api/v1/admin/sponsorships/${created.sponsorship.id}/stage`, {

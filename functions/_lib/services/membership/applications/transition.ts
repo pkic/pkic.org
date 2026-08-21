@@ -45,7 +45,15 @@ export function isValidStageTransition(fromStage: string, toStage: string): bool
 }
 
 export interface StageTransitionResult {
-  application: MemberApplicationRow;
+  application: {
+    id: string;
+    stage: string;
+    stage_entered_at: string;
+    transition_revision: number;
+    on_hold_subtype: string | null;
+    on_hold_reminder_sent_at: string | null;
+    updated_at: string;
+  };
   fromStage: string;
   toStage: string;
   /** Applicant template selected by the stage machine, if any. */
@@ -77,6 +85,17 @@ export interface PreparedStageTransition {
   result: StageTransitionResult;
 }
 
+export type ApplicationStageTransitionSubject = Pick<
+  MemberApplicationRow,
+  | "id"
+  | "applicant_email"
+  | "applicant_name"
+  | "stage"
+  | "stage_entered_at"
+  | "transition_revision"
+  | "on_hold_reminder_sent_at"
+>;
+
 /**
  * Builds the complete atomic write set for a previously loaded application.
  * Batch jobs use this to combine several transitions with one aggregate
@@ -84,7 +103,7 @@ export interface PreparedStageTransition {
  */
 export function prepareApplicationStageTransition(
   db: DatabaseLike,
-  application: MemberApplicationRow,
+  application: ApplicationStageTransitionSubject,
   params: StageTransitionParams,
 ): PreparedStageTransition {
   if (application.id !== params.applicationId) {
@@ -134,14 +153,25 @@ export function prepareApplicationStageTransition(
     db
       .prepare(
         `UPDATE member_applications
-         SET stage = ?, stage_entered_at = ?, on_hold_subtype = ?, updated_at = ?,
+         SET stage = ?, stage_entered_at = ?, transition_revision = transition_revision + 1,
+             on_hold_subtype = ?, updated_at = ?,
+             on_hold_reminder_sent_at = NULL,
              consultation_notified_at = CASE
                WHEN ? = 'in_consultation' THEN NULL
                ELSE consultation_notified_at
              END
-         WHERE id = ? AND stage = ?`,
+         WHERE id = ? AND stage = ? AND transition_revision = ?`,
       )
-      .bind(params.toStage, now, nextOnHoldSubtype, now, params.toStage, application.id, fromStage),
+      .bind(
+        params.toStage,
+        now,
+        nextOnHoldSubtype,
+        now,
+        params.toStage,
+        application.id,
+        fromStage,
+        application.transition_revision,
+      ),
     db
       .prepare(
         `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
@@ -176,10 +206,12 @@ export function prepareApplicationStageTransition(
     statements,
     result: {
       application: {
-        ...application,
+        id: application.id,
         stage: params.toStage,
         stage_entered_at: now,
+        transition_revision: application.transition_revision + 1,
         on_hold_subtype: nextOnHoldSubtype,
+        on_hold_reminder_sent_at: null,
         updated_at: now,
       },
       fromStage,
@@ -190,31 +222,28 @@ export function prepareApplicationStageTransition(
   };
 }
 
-/**
- * Applies a stage transition: validates it against the state machine,
- * updates the canonical `stage`/`stage_entered_at`, writes a member_application_events
- * row, audit row, and any durable email intent in one D1 batch. Delivery is
- * still owned by the caller after commit; this use case only owns the outbox
- * insert required for atomicity.
- */
-export async function transitionApplicationStage(
+export async function transitionLoadedApplicationStage(
   db: DatabaseLike,
+  application: ApplicationStageTransitionSubject,
   params: StageTransitionParams,
 ): Promise<StageTransitionResult> {
-  const application = await getMemberApplicationById(db, params.applicationId);
-  if (!application) {
-    throw new AppError(404, "APPLICATION_NOT_FOUND", "Application not found");
-  }
-
-  const fromStage = application.stage;
   const prepared = prepareApplicationStageTransition(db, application, params);
+  return executePreparedApplicationStageTransition(db, application, prepared);
+}
 
+/** Executes a previously built canonical transition without rebuilding it. */
+export async function executePreparedApplicationStageTransition(
+  db: DatabaseLike,
+  application: ApplicationStageTransitionSubject,
+  prepared: PreparedStageTransition,
+): Promise<StageTransitionResult> {
+  const fromStage = application.stage;
   let results: Awaited<ReturnType<DatabaseLike["batch"]>>;
   try {
     results = await db.batch(prepared.statements);
   } catch (error) {
     const current = await getMemberApplicationById(db, application.id);
-    if (current && current.stage !== fromStage) {
+    if (current && (current.stage !== fromStage || current.transition_revision !== application.transition_revision)) {
       throw new AppError(
         409,
         "STAGE_TRANSITION_CONFLICT",
@@ -233,4 +262,23 @@ export async function transitionApplicationStage(
   }
 
   return prepared.result;
+}
+
+/**
+ * Applies a stage transition: validates it against the state machine,
+ * updates the canonical `stage`/`stage_entered_at`, writes a member_application_events
+ * row, audit row, and any durable email intent in one D1 batch. Delivery is
+ * still owned by the caller after commit; this use case only owns the outbox
+ * insert required for atomicity.
+ */
+export async function transitionApplicationStage(
+  db: DatabaseLike,
+  params: StageTransitionParams,
+): Promise<StageTransitionResult> {
+  const application = await getMemberApplicationById(db, params.applicationId);
+  if (!application) {
+    throw new AppError(404, "APPLICATION_NOT_FOUND", "Application not found");
+  }
+
+  return transitionLoadedApplicationStage(db, application, params);
 }

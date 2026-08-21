@@ -89,10 +89,20 @@ export interface ApproveApplicationResult {
   outboxIds: string[];
 }
 
+const MAX_APPLICATION_WORKING_GROUPS = 20;
+
 function applicationWorkingGroupSlugs(answers: Record<string, unknown>): string[] {
   const raw = answers.working_groups ?? answers.workingGroups;
   if (!Array.isArray(raw)) return [];
-  return raw.filter((value): value is string => typeof value === "string");
+  const slugs = [...new Set(raw.filter((value): value is string => typeof value === "string"))];
+  if (slugs.length > MAX_APPLICATION_WORKING_GROUPS) {
+    throw new AppError(
+      422,
+      "TOO_MANY_WORKING_GROUPS",
+      `An application may request at most ${MAX_APPLICATION_WORKING_GROUPS} working groups`,
+    );
+  }
+  return slugs;
 }
 
 export async function approveApplication(
@@ -174,9 +184,12 @@ export async function approveApplication(
   statements.push(
     db
       .prepare(
-        `UPDATE member_applications SET stage = 'approved', stage_entered_at = ?, updated_at = ? WHERE id = ? AND stage = ?`,
+        `UPDATE member_applications
+         SET stage = 'approved', stage_entered_at = ?, transition_revision = transition_revision + 1,
+             on_hold_reminder_sent_at = NULL, updated_at = ?
+         WHERE id = ? AND stage = ? AND transition_revision = ?`,
       )
-      .bind(now, now, application.id, fromStage),
+      .bind(now, now, application.id, fromStage, application.transition_revision),
     db
       .prepare(
         `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
@@ -290,11 +303,11 @@ export async function approveApplication(
     // translating either expected race to 409. Unrelated database failures
     // are rethrown unchanged.
     const current = await getMemberApplicationById(db, application.id);
-    if (current && current.stage !== "ec_review") {
+    if (current && (current.stage !== "ec_review" || current.transition_revision !== application.transition_revision)) {
       throw new AppError(
         409,
         "APPLICATION_ALREADY_APPROVED",
-        "Application was already approved or moved to a different stage",
+        "Application was already approved, edited, or moved to a different stage",
       );
     }
     throw err;

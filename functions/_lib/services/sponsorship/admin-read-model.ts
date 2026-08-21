@@ -18,9 +18,11 @@ export interface AdminSponsorshipRow {
   event_name: string | null;
   tier: string | null;
   pipeline_stage: string;
+  transition_revision: number;
   start_date: string | null;
   renewal_date: string | null;
   assigned_to_user_id: string | null;
+  renewal_action_due_at: string | null;
   assigned_to_name: string | null;
   notes: string | null;
   price_amount_cents: number | null;
@@ -32,8 +34,8 @@ export interface AdminSponsorshipRow {
 const ADMIN_SPONSORSHIP_SELECT = `
   SELECT sp.id, sp.sponsor_type, sp.organization_id, o.name AS organization_name,
          sp.non_member_name, sp.non_member_website, sp.non_member_logo_r2_key, sp.contact_name, sp.contact_email,
-         sp.event_id, e.name AS event_name, sp.tier, sp.pipeline_stage,
-         sp.start_date, sp.renewal_date, sp.assigned_to_user_id,
+         sp.event_id, e.name AS event_name, sp.tier, sp.pipeline_stage, sp.transition_revision,
+         sp.start_date, sp.renewal_date, sp.assigned_to_user_id, sp.renewal_action_due_at,
          COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS assigned_to_name,
          sp.notes, sp.price_amount_cents, sp.price_currency, sp.created_at, sp.updated_at
   FROM sponsorships sp

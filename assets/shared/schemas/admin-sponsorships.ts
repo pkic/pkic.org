@@ -274,6 +274,7 @@ export const sponsorshipUpdateRouteSchema = {
       content: { "application/json": { schema: z.object({ sponsorship: adminSponsorshipSchema }) } },
     },
     "404": { description: "Sponsorship not found." },
+    "409": { description: "The sponsorship changed concurrently or the requested update violates its active state." },
   },
 };
 
@@ -300,6 +301,7 @@ export const sponsorshipStageUpdateRouteSchema = {
     },
     "400": { description: "Unknown pipeline stage." },
     "404": { description: "Sponsorship not found." },
+    "409": { description: "The sponsorship changed concurrently or cannot enter the requested stage." },
   },
 };
 

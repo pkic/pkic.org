@@ -119,8 +119,15 @@ export function getConfig(env: Env, request?: Request) {
       1_000,
       Math.max(1, parseIntOrDefault(env.SCHEDULED_CONSULTATION_BATCH_LIMIT, 100)),
     ),
-    scheduledOnHoldReminderLimit: parseIntOrDefault(env.SCHEDULED_ON_HOLD_REMINDER_LIMIT, 100),
-    scheduledEcAutoApproveLimit: parseIntOrDefault(env.SCHEDULED_EC_AUTO_APPROVE_LIMIT, 100),
+    scheduledOnHoldReminderLimit: Math.min(
+      500,
+      Math.max(0, parseIntOrDefault(env.SCHEDULED_ON_HOLD_REMINDER_LIMIT, 100)),
+    ),
+    scheduledEcAutoApproveLimit: Math.min(25, Math.max(0, parseIntOrDefault(env.SCHEDULED_EC_AUTO_APPROVE_LIMIT, 25))),
+    scheduledGoogleGroupsSyncLimit: Math.min(
+      25,
+      Math.max(0, parseIntOrDefault(env.SCHEDULED_GOOGLE_GROUPS_SYNC_LIMIT, 25)),
+    ),
     scheduledSponsorshipDueWorkLimit: parseIntOrDefault(env.SCHEDULED_SPONSORSHIP_DUE_WORK_LIMIT, 100),
     scheduledVoteNotificationLimit: parseIntOrDefault(env.SCHEDULED_VOTE_NOTIFICATION_LIMIT, 100),
     adminCampaignMaxRecipients: Math.min(

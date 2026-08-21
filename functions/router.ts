@@ -8,10 +8,13 @@ import { runScheduledJobWithD1Budget } from "./_lib/services/scheduled-job-runne
 import {
   runConsultationBatch,
   runEcReviewBatch,
-  runMembershipDueWork,
+  runEcWindowAutoApprove,
+  runGoogleGroupsSyncPass,
+  runOnHoldReminders,
 } from "./_lib/services/membership/scheduled-jobs";
 import { runSponsorshipDueWork } from "./_lib/services/sponsorship-scheduled-jobs";
 import { runVotesDueWork } from "./_lib/services/votes-scheduled-jobs";
+import { SCHEDULED_CRONS } from "./_lib/scheduled-crons";
 import { runWeeklyWgChairDigest } from "./_lib/services/wg-chair-digest";
 import api_Router from "./api/router";
 import donate_Router from "./donate/router";
@@ -70,18 +73,6 @@ function mcpOpenApiSpecResponse(): Response {
   });
 }
 
-const REMINDER_CRON = "*/15 * * * *";
-const MEMBERSHIP_DUE_WORK_CRON = "2,17,32,47 * * * *";
-const SPONSORSHIP_DUE_WORK_CRON = "5,20,35,50 * * * *";
-const VOTES_DUE_WORK_CRON = "8,23,38,53 * * * *";
-const RETENTION_CRON = "0 3 * * *";
-// defaults: consultation batch Mon/Wed 07:15 UTC, EC review batch Mon/Wed 08:15 UTC.
-const CONSULTATION_BATCH_CRON = "15 7 * * 1,3";
-const EC_REVIEW_BATCH_CRON = "15 8 * * 1,3";
-// Weekly WG chair membership-change digest (2026-07-31 manual-testing
-// feedback) — Monday 08:00 UTC, ahead of the EC review batch's 08:15 slot.
-const WG_CHAIR_DIGEST_CRON = "0 8 * * 1";
-
 app.get("/og/*", OgCardGet);
 app.get(OPENAPI_JSON_PATH, openApiSpecResponse);
 app.get(MCP_OPENAPI_JSON_PATH, mcpOpenApiSpecResponse);
@@ -99,7 +90,7 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
   logInfo("SCHEDULED_JOB_STARTED", { cron: controller.cron, scheduledTime: controller.scheduledTime });
 
   try {
-    if (controller.cron === REMINDER_CRON) {
+    if (controller.cron === SCHEDULED_CRONS.reminders) {
       const config = getConfig(env);
       const outcome = await runScheduledJobWithD1Budget(
         env,
@@ -111,35 +102,59 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
       return;
     }
 
-    if (controller.cron === MEMBERSHIP_DUE_WORK_CRON) {
+    if (controller.cron === SCHEDULED_CRONS.onHoldDueWork) {
       const config = getConfig(env);
       const outcome = await runScheduledJobWithD1Budget(
         env,
-        "membership_due_work",
+        "on_hold_due_work",
         config.scheduledD1QueryBudget,
-        (jobEnv) =>
-          runMembershipDueWork(jobEnv.DB, jobEnv, {
-            onHoldReminderLimit: config.scheduledOnHoldReminderLimit,
-            ecAutoApproveLimit: config.scheduledEcAutoApproveLimit,
-          }),
+        (jobEnv, d1QueryBudget) =>
+          runOnHoldReminders(jobEnv.DB, jobEnv, config.scheduledOnHoldReminderLimit, d1QueryBudget),
       );
-      logInfo("SCHEDULED_MEMBERSHIP_DUE_WORK_COMPLETED", { cron: controller.cron, outcome });
+      logInfo("SCHEDULED_ON_HOLD_DUE_WORK_COMPLETED", { cron: controller.cron, outcome });
       return;
     }
 
-    if (controller.cron === SPONSORSHIP_DUE_WORK_CRON) {
+    if (controller.cron === SCHEDULED_CRONS.ecAutoApprove) {
+      const config = getConfig(env);
+      const outcome = await runScheduledJobWithD1Budget(
+        env,
+        "ec_auto_approve",
+        config.scheduledD1QueryBudget,
+        (jobEnv, d1QueryBudget) =>
+          runEcWindowAutoApprove(jobEnv.DB, jobEnv, config.scheduledEcAutoApproveLimit, d1QueryBudget),
+      );
+      logInfo("SCHEDULED_EC_AUTO_APPROVE_COMPLETED", { cron: controller.cron, outcome });
+      return;
+    }
+
+    if (controller.cron === SCHEDULED_CRONS.googleGroupsSync) {
+      const config = getConfig(env);
+      const outcome = await runScheduledJobWithD1Budget(
+        env,
+        "google_groups_sync",
+        config.scheduledD1QueryBudget,
+        (jobEnv, d1QueryBudget) =>
+          runGoogleGroupsSyncPass(jobEnv.DB, jobEnv, config.scheduledGoogleGroupsSyncLimit, d1QueryBudget),
+      );
+      logInfo("SCHEDULED_GOOGLE_GROUPS_SYNC_COMPLETED", { cron: controller.cron, outcome });
+      return;
+    }
+
+    if (controller.cron === SCHEDULED_CRONS.sponsorshipDueWork) {
       const config = getConfig(env);
       const outcome = await runScheduledJobWithD1Budget(
         env,
         "sponsorship_due_work",
         config.scheduledD1QueryBudget,
-        (jobEnv) => runSponsorshipDueWork(jobEnv.DB, jobEnv, config.scheduledSponsorshipDueWorkLimit),
+        (jobEnv, d1QueryBudget) =>
+          runSponsorshipDueWork(jobEnv.DB, jobEnv, config.scheduledSponsorshipDueWorkLimit, d1QueryBudget),
       );
       logInfo("SCHEDULED_SPONSORSHIP_DUE_WORK_COMPLETED", { cron: controller.cron, outcome });
       return;
     }
 
-    if (controller.cron === VOTES_DUE_WORK_CRON) {
+    if (controller.cron === SCHEDULED_CRONS.votesDueWork) {
       const config = getConfig(env);
       const outcome = await runScheduledJobWithD1Budget(
         env,
@@ -155,7 +170,7 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
       return;
     }
 
-    if (controller.cron === RETENTION_CRON) {
+    if (controller.cron === SCHEDULED_CRONS.retention) {
       const config = getConfig(env);
       const retention = await runScheduledJobWithD1Budget(env, "retention", config.scheduledD1QueryBudget, (jobEnv) =>
         runRetentionJob(jobEnv.DB),
@@ -167,7 +182,7 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
       return;
     }
 
-    if (controller.cron === CONSULTATION_BATCH_CRON) {
+    if (controller.cron === SCHEDULED_CRONS.consultationBatch) {
       const config = getConfig(env);
       const consultationBatch = await runScheduledJobWithD1Budget(
         env,
@@ -179,7 +194,7 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
       return;
     }
 
-    if (controller.cron === EC_REVIEW_BATCH_CRON) {
+    if (controller.cron === SCHEDULED_CRONS.ecReviewBatch) {
       const config = getConfig(env);
       const ecReviewBatch = await runScheduledJobWithD1Budget(
         env,
@@ -191,7 +206,7 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
       return;
     }
 
-    if (controller.cron === WG_CHAIR_DIGEST_CRON) {
+    if (controller.cron === SCHEDULED_CRONS.workingGroupChairDigest) {
       const config = getConfig(env);
       const wgChairDigest = await runScheduledJobWithD1Budget(
         env,
