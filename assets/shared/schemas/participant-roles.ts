@@ -1,15 +1,10 @@
 import { z } from "zod";
 
-export const EVENT_PARTICIPANT_ROLES = [
-  "attendee",
-  "speaker",
-  "co_speaker",
-  "moderator",
-  "panelist",
-  "organizer",
-  "staff",
-  "proposer",
-] as const;
+export const PROPOSAL_SPEAKER_ROLES = ["proposer", "speaker", "co_speaker", "moderator", "panelist"] as const;
+export const proposalSpeakerRoleSchema = z.enum(PROPOSAL_SPEAKER_ROLES);
+export type ProposalSpeakerRole = z.infer<typeof proposalSpeakerRoleSchema>;
+
+export const EVENT_PARTICIPANT_ROLES = ["attendee", ...PROPOSAL_SPEAKER_ROLES, "organizer", "staff"] as const;
 
 export const eventParticipantRoleSchema = z.enum(EVENT_PARTICIPANT_ROLES);
 export type EventParticipantRole = z.infer<typeof eventParticipantRoleSchema>;

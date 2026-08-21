@@ -11,6 +11,8 @@ import { AdminHeadshotManager } from "../shared/headshot/AdminHeadshotManager";
 import { ProfileLinksInput, type ProfileLinksHandle } from "../components/ProfileLinksInput";
 import { normalizeProfileLinks } from "../shared/widgets/profile-links";
 import { showManageLinkRecoveryForm } from "../shared/widgets/link-recovery";
+import { speakerRoleSchema } from "../../shared/schemas/registration";
+import { SPEAKER_ROLE_OPTIONS } from "../shared/speaker-roles";
 
 function tokenFromRoot(root: HTMLElement, fallback: string | null): string | null {
   const token = root.dataset.manageToken?.trim();
@@ -41,14 +43,6 @@ function showResendProposalManageLinkForm(
 function displaySpeakerName(speaker: ProposalManageResponse["speakers"][number]): string {
   return [speaker.firstName, speaker.lastName].filter(Boolean).join(" ") || speaker.email;
 }
-
-const SPEAKER_ROLES = [
-  { value: "proposer", label: "Proposer" },
-  { value: "speaker", label: "Speaker" },
-  { value: "co_speaker", label: "Co-speaker" },
-  { value: "moderator", label: "Moderator" },
-  { value: "panelist", label: "Panelist" },
-] as const;
 
 function SpeakerCard({
   speaker,
@@ -234,9 +228,9 @@ function SpeakerCard({
                   id={`speaker-role-${speaker.userId}`}
                   class="form-select"
                   value={role}
-                  onChange={(event) => setRole((event.target as HTMLSelectElement).value)}
+                  onChange={(event) => setRole(speakerRoleSchema.parse((event.target as HTMLSelectElement).value))}
                 >
-                  {SPEAKER_ROLES.map((option) => (
+                  {SPEAKER_ROLE_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>

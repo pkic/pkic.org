@@ -3,6 +3,10 @@ import {
   inviteResendLinkSchema,
   proposalCreateResponseSchema,
   proposalCreateSchema,
+  proposalManageReadResponseSchema,
+  proposalManageSchema,
+  proposalManageTokenParamsSchema,
+  proposalManageUpdateResponseSchema,
   proposalResendManageLinkSchema,
   proposalResendSpeakerManageLinkSchema,
 } from "./proposal-management";
@@ -72,5 +76,32 @@ export const inviteResendLinkRouteSchema = {
     "200": genericAcceptedResponse,
     "400": { description: "Invalid email payload." },
     "429": { description: "Rate limit exceeded." },
+  },
+};
+
+export const proposalManageReadRouteSchema = {
+  tags: ["Proposals"],
+  summary: "Read a proposal through its management capability",
+  request: { params: proposalManageTokenParamsSchema },
+  responses: {
+    "200": jsonResponse("Proposal management view.", proposalManageReadResponseSchema),
+    "404": { description: "Proposal management capability not found." },
+    "410": { description: "Proposal management capability expired." },
+  },
+};
+
+export const proposalManageUpdateRouteSchema = {
+  tags: ["Proposals"],
+  summary: "Update or withdraw a proposal through its management capability",
+  request: {
+    params: proposalManageTokenParamsSchema,
+    body: requiredJsonBody(proposalManageSchema),
+  },
+  responses: {
+    "200": jsonResponse("Proposal updated.", proposalManageUpdateResponseSchema),
+    "400": { description: "Invalid proposal update." },
+    "404": { description: "Proposal management capability not found." },
+    "409": { description: "Proposal is not editable or changed concurrently." },
+    "410": { description: "Proposal management capability expired." },
   },
 };

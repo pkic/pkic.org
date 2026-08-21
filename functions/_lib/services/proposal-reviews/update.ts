@@ -1,21 +1,15 @@
 import type { ProposalReview, ProposalReviewPatch } from "../../../../assets/shared/schemas/proposal-reviews";
-import { batchFirst } from "../../db/pagination";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike } from "../../types";
-import { nowIso } from "../../utils/time";
-import { prepareAuditLogWhen } from "../audit";
 import {
   assertReviewWritable,
   auditState,
   buildProposalReviewAuditDetails,
-  currentReviewOrConflict,
   getReviewContext,
-  prepareReviewById,
   REVIEW_COLUMNS,
   REVIEW_FROM,
-  REVIEW_WRITABLE_PROPOSAL_SQL,
-  reviewWritableProposalBindings,
+  saveExistingProposalReview,
 } from "./shared";
 
 export async function updateProposalReview(
@@ -29,8 +23,9 @@ export async function updateProposalReview(
   assertReviewWritable(context);
   const existing = await first<ProposalReview>(
     db,
-    `SELECT ${REVIEW_COLUMNS} ${REVIEW_FROM} WHERE pr.id = ? AND pr.proposal_id = ?`,
-    [reviewId, proposalId],
+    `SELECT ${REVIEW_COLUMNS} ${REVIEW_FROM}
+     WHERE pr.id = ? AND pr.proposal_id = ? AND pr.review_round = ?`,
+    [reviewId, proposalId, context.reviewRound],
   );
   if (!existing) throw new AppError(404, "PROPOSAL_REVIEW_NOT_FOUND", "Proposal review not found");
   if (existing.reviewer_user_id !== actor.id && !context.access.canFinalize) {
@@ -38,6 +33,7 @@ export async function updateProposalReview(
   }
 
   const next = {
+    reviewRound: context.reviewRound,
     recommendation: patch.recommendation ?? existing.recommendation,
     score: patch.score !== undefined ? patch.score : existing.score,
     reviewerComment: patch.reviewerComment !== undefined ? patch.reviewerComment : existing.reviewer_comment,
@@ -46,55 +42,5 @@ export async function updateProposalReview(
   const changes = buildProposalReviewAuditDetails(auditState(existing), next);
   if (Object.keys(changes).length === 0) return existing;
 
-  const now = nowIso();
-  const [updated, , selected] = await db.batch([
-    db
-      .prepare(
-        `UPDATE proposal_reviews
-         SET recommendation = ?, score = ?, reviewer_comment = ?, applicant_note = ?, updated_at = ?
-         WHERE id = ? AND proposal_id = ? AND recommendation = ? AND score IS ?
-           AND reviewer_comment IS ? AND applicant_note IS ? AND updated_at = ?
-           AND EXISTS ${REVIEW_WRITABLE_PROPOSAL_SQL}`,
-      )
-      .bind(
-        next.recommendation,
-        next.score,
-        next.reviewerComment,
-        next.applicantNote,
-        now,
-        existing.id,
-        proposalId,
-        existing.recommendation,
-        existing.score,
-        existing.reviewer_comment,
-        existing.applicant_note,
-        existing.updated_at,
-        ...reviewWritableProposalBindings(proposalId),
-      ),
-    prepareAuditLogWhen(db, {
-      actorType: "admin",
-      actorId: actor.id,
-      action: "proposal_review_upserted",
-      entityType: "proposal_review",
-      entityId: existing.id,
-      details: changes,
-      createdAt: now,
-      conditionSql:
-        "SELECT 1 FROM proposal_reviews WHERE id = ? AND proposal_id = ? AND recommendation = ? AND score IS ? AND reviewer_comment IS ? AND applicant_note IS ? AND updated_at = ? AND changes() = 1",
-      conditionBindings: [
-        existing.id,
-        proposalId,
-        next.recommendation,
-        next.score,
-        next.reviewerComment,
-        next.applicantNote,
-        now,
-      ],
-    }),
-    prepareReviewById(db, existing.id),
-  ]);
-  if ((updated.meta?.changes ?? 0) !== 1) return currentReviewOrConflict(db, actor, proposalId, existing.id);
-  const review = batchFirst<ProposalReview>(selected);
-  if (!review) throw new AppError(500, "PROPOSAL_REVIEW_UPDATE_FAILED", "Unable to load the updated review");
-  return review;
+  return saveExistingProposalReview(db, actor, proposalId, context, existing, next, changes);
 }

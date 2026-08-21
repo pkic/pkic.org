@@ -1,12 +1,11 @@
 import { json } from "../../../../_lib/http";
 import { getActiveFormByPurpose } from "../../../../_lib/services/forms";
-import { getEventBySlug, getRequiredTerms, resolveSessionTypes } from "../../../../_lib/services/events";
+import { getEventBySlug, getRequiredTerms, resolveEventSessionTypes } from "../../../../_lib/services/events";
 import {
   countRegisteredByEventDay,
   listEventDays,
   resolveAttendanceOptions,
 } from "../../../../_lib/services/event-days";
-import { parseJsonSafe } from "../../../../_lib/utils/json";
 import { logError } from "../../../../_lib/logging";
 import { eventFormsGetRouteSchema, eventFormsResponseSchema } from "../../../../../assets/shared/schemas/forms";
 import { openApiRoute } from "../../../../_lib/openapi/route";
@@ -80,8 +79,7 @@ async function getEventForm(c: any, purpose: "event_registration" | "proposal_su
 
   const registeredCounts = await countRegisteredByEventDay(c.env.DB, event.id);
 
-  const eventSettings = parseJsonSafe<{ proposal?: { sessionTypes?: unknown[] } }>(event.settings_json, {});
-  const allowedSessionTypes: string[] = resolveSessionTypes(eventSettings).map((t) => t.label);
+  const allowedSessionTypes = resolveEventSessionTypes(event.settings_json).map((sessionType) => sessionType.label);
 
   return json(
     eventFormsResponseSchema.parse({

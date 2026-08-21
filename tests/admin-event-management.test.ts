@@ -189,6 +189,22 @@ describe("admin event management endpoints", () => {
     });
   });
 
+  it("rejects duplicate configurable session types case-insensitively", async () => {
+    await setupAdmin();
+
+    const response = await callAdmin("/api/v1/admin/events/pqc-2026/settings", {
+      method: "PATCH",
+      body: JSON.stringify({
+        sessionTypes: [
+          { label: "Ask Me Anything", requiresPresentation: false },
+          { label: "ask me anything", requiresPresentation: true },
+        ],
+      }),
+    });
+
+    expect(response.status).toBe(400);
+  });
+
   it("replaces event days and exposes permission grants", async () => {
     await setupAdmin();
 

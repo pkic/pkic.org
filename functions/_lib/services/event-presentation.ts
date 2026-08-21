@@ -1,4 +1,6 @@
 import { parseJsonSafe } from "../utils/json";
+import { proposalSessionTypeSchema } from "../../../assets/shared/schemas/proposal-management";
+import { AppError } from "../errors";
 import type { EventRecord } from "./event-types";
 
 interface EventSettingsRoutes {
@@ -24,7 +26,7 @@ export interface SessionTypeConfig {
   requiresPresentation: boolean;
 }
 
-const DEFAULT_SESSION_TYPES: SessionTypeConfig[] = [
+const DEFAULT_SESSION_TYPES: readonly SessionTypeConfig[] = [
   { label: "talk", requiresPresentation: true },
   { label: "keynote", requiresPresentation: true },
   { label: "panel", requiresPresentation: true },
@@ -33,11 +35,38 @@ const DEFAULT_SESSION_TYPES: SessionTypeConfig[] = [
 /** Normalizes both current session-type objects and legacy string entries. */
 export function resolveSessionTypes(settings: { proposal?: { sessionTypes?: unknown[] } }): SessionTypeConfig[] {
   const raw = settings.proposal?.sessionTypes;
-  if (!Array.isArray(raw) || raw.length === 0) return DEFAULT_SESSION_TYPES;
-  return raw.map((entry) => {
-    if (typeof entry === "string") return { label: entry, requiresPresentation: true };
-    return entry as SessionTypeConfig;
-  });
+  if (!Array.isArray(raw) || raw.length === 0) return [...DEFAULT_SESSION_TYPES];
+
+  const sessionTypes: SessionTypeConfig[] = [];
+  const labels = new Set<string>();
+  for (const entry of raw) {
+    const parsed = proposalSessionTypeSchema.safeParse(
+      typeof entry === "string" ? { label: entry, requiresPresentation: true } : entry,
+    );
+    if (!parsed.success) continue;
+    const normalizedLabel = parsed.data.label.toLocaleLowerCase("en-US");
+    if (labels.has(normalizedLabel)) continue;
+    labels.add(normalizedLabel);
+    sessionTypes.push(parsed.data);
+  }
+  return sessionTypes.length > 0 ? sessionTypes : [...DEFAULT_SESSION_TYPES];
+}
+
+export function resolveEventSessionTypes(settingsJson: string): SessionTypeConfig[] {
+  return resolveSessionTypes(parseJsonSafe<{ proposal?: { sessionTypes?: unknown[] } }>(settingsJson, {}));
+}
+
+/** Returns the canonical configured label and rejects labels not enabled for this event. */
+export function requireConfiguredSessionType(settingsJson: string, requestedType: string): string {
+  const sessionTypes = resolveEventSessionTypes(settingsJson);
+  const requested = requestedType.toLocaleLowerCase("en-US");
+  const configured = sessionTypes.find((sessionType) => sessionType.label.toLocaleLowerCase("en-US") === requested);
+  if (!configured) {
+    throw new AppError(400, "PROPOSAL_TYPE_NOT_ALLOWED", "This session type is not enabled for the event", {
+      allowedSessionTypes: sessionTypes.map((sessionType) => sessionType.label),
+    });
+  }
+  return configured.label;
 }
 
 export interface EventFrontendRoutes {

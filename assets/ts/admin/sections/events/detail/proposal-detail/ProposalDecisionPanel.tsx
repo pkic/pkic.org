@@ -6,6 +6,8 @@ import { Tabs } from "../../../../../components/Tabs";
 import { api } from "../../../../api";
 import { fmt, toast } from "../../../../ui";
 import { isNeedsWorkDecision, type DecisionPreviewResponse, type ProposalDetailRecord } from "./model";
+import { isProposalDecidableStatus } from "../../../../../../shared/schemas/proposal-status";
+import { EMAIL_PREVIEW_TABS, type EmailPreviewTab } from "../../../../email-preview-tabs";
 
 function decisionEmailLabel(templateKey: string): string {
   switch (templateKey) {
@@ -41,10 +43,11 @@ export function ProposalDecisionPanel({
   const [previewing, setPreviewing] = useState(false);
   const [preview, setPreview] = useState<DecisionPreviewResponse | null>(null);
   const [previewConfirmed, setPreviewConfirmed] = useState(false);
-  const [previewTab, setPreviewTab] = useState<"html" | "text">("html");
+  const [previewTab, setPreviewTab] = useState<EmailPreviewTab>("html");
   const [selectedPreviewId, setSelectedPreviewId] = useState("");
 
   const quorumMet = reviewCount >= minReviewsRequired;
+  const proposalDecidable = isProposalDecidableStatus(proposal.status);
   const needsWorkRequiresNote = isNeedsWorkDecision(decisionStatus) && !decisionNote.trim();
   const selectedPreview =
     preview?.messages.find((message) => message.id === selectedPreviewId) ?? preview?.messages[0] ?? null;
@@ -129,6 +132,8 @@ export function ProposalDecisionPanel({
               <div class="small text-muted mt-2">Recorded {fmt(proposal.decision_decided_at)}</div>
             )}
           </div>
+        ) : !proposalDecidable ? (
+          <div class="alert alert-warning mb-0">This proposal is not in a state that can receive a decision.</div>
         ) : (
           <>
             {!quorumMet && !loading && (
@@ -238,12 +243,9 @@ export function ProposalDecisionPanel({
                             <div class="small text-muted">Subject</div>
                             <div class="fw-semibold mb-2">{selectedPreview.subject}</div>
                             <Tabs
-                              items={[
-                                { key: "html", label: "HTML" },
-                                { key: "text", label: "Text" },
-                              ]}
+                              items={EMAIL_PREVIEW_TABS}
                               active={previewTab}
-                              onChange={(key) => setPreviewTab(key as "html" | "text")}
+                              onChange={(key) => setPreviewTab(key as EmailPreviewTab)}
                               className="mb-2"
                             />
                             {previewTab === "html" &&
@@ -281,7 +283,13 @@ export function ProposalDecisionPanel({
                     type="submit"
                     class="btn btn-primary"
                     disabled={
-                      saving || !decisionStatus || !quorumMet || needsWorkRequiresNote || !preview || !previewConfirmed
+                      saving ||
+                      !proposalDecidable ||
+                      !decisionStatus ||
+                      !quorumMet ||
+                      needsWorkRequiresNote ||
+                      !preview ||
+                      !previewConfirmed
                     }
                     title={!quorumMet ? `Requires ${minReviewsRequired} reviews` : undefined}
                   >

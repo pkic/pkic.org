@@ -13,6 +13,7 @@ import {
   type TemplateHelperCategory,
 } from "../email-template-helpers";
 import type { EmailContentType, EmailMessageType } from "../../../shared/schemas/admin-email-templates";
+import { EMAIL_PREVIEW_TABS, type EmailPreviewTab } from "../email-preview-tabs";
 
 const EMAIL_LAYOUT_TEMPLATE_KEY = "email_layout";
 const HELPER_CATEGORIES: TemplateHelperCategory[] = ["Variables", "Conditions", "CTAs"];
@@ -41,7 +42,7 @@ export function TemplateEditor({
   const [subject, setSubject] = useState(current?.subject_template ?? "");
   const [body, setBody] = useState(current?.body ?? "");
   const [previewData, setPreviewData] = useState(JSON.stringify(PREVIEW_DEFAULTS, null, 2));
-  const [previewTab, setPreviewTab] = useState<"html" | "text">("html");
+  const [previewTab, setPreviewTab] = useState<EmailPreviewTab>("html");
   const [previewSubject, setPreviewSubject] = useState("");
   const [previewHtml, setPreviewHtml] = useState("");
   const [previewText, setPreviewText] = useState("");
@@ -416,12 +417,9 @@ export function TemplateEditor({
                     <div class="fw-semibold">{previewSubject}</div>
                   </div>
                   <Tabs
-                    items={[
-                      { key: "html", label: "HTML" },
-                      { key: "text", label: "Text" },
-                    ]}
+                    items={EMAIL_PREVIEW_TABS}
                     active={previewTab}
-                    onChange={(key) => setPreviewTab(key as "html" | "text")}
+                    onChange={(key) => setPreviewTab(key as EmailPreviewTab)}
                     className="mb-2"
                   />
                   {previewTab === "html" ? (

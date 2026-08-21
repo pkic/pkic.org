@@ -17,6 +17,7 @@ import {
 import { linksSchema } from "./links";
 import { defaultedSourceTypeSchema } from "./source";
 import { IMAGE_UPLOAD_ALLOWED_MIME_TYPES } from "./images";
+import { proposalSpeakerRoleSchema } from "./participant-roles";
 
 export { REGISTRATION_HEADSHOT_MAX_BYTES } from "./images";
 export const REGISTRATION_HEADSHOT_ALLOWED_MIME_TYPES = IMAGE_UPLOAD_ALLOWED_MIME_TYPES;
@@ -137,7 +138,8 @@ export const userProfileSchema = z.object({
 });
 
 const speakerBioSchema = trimmedString(40, 5000);
-export const speakerRoleSchema = z.enum(["proposer", "speaker", "co_speaker", "moderator", "panelist"]);
+export const speakerRoleSchema = proposalSpeakerRoleSchema;
+export type SpeakerRole = z.infer<typeof speakerRoleSchema>;
 
 export const participantProfileSchema = userProfileSchema.extend({
   bio: speakerBioSchema,

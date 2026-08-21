@@ -3,15 +3,17 @@ import { all, first } from "../db/queries";
 import { nowIso } from "../utils/time";
 import { sha256Hex } from "../utils/crypto";
 import { newCapabilityLinkSecret, queuedCapabilityToken, signCapabilityToken } from "./capability-links";
-import { prepareDeactivateProposalParticipantRoles, prepareUpsertProposalParticipant } from "./proposal-participants";
+import { prepareSyncProposalParticipantRole } from "./proposal-participants";
 import type { DatabaseLike, StatementLike } from "../types";
+import type { ProposalManageSpeakerStatus } from "../../../assets/shared/schemas/proposal-management";
+import type { SpeakerRole } from "../../../assets/shared/schemas/registration";
 
 export interface ProposalSpeakerRecord {
   id: string;
   proposal_id: string;
   user_id: string;
-  role: string;
-  status: string;
+  role: SpeakerRole;
+  status: ProposalManageSpeakerStatus;
   manage_link_secret: string | null;
   terms_accepted_at: string | null;
   confirmed_at: string | null;
@@ -106,12 +108,7 @@ export async function buildAddProposalSpeaker(
   ];
   if (proposal) {
     statements.push(
-      prepareDeactivateProposalParticipantRoles(db, {
-        eventId: proposal.event_id,
-        userId: payload.userId,
-        sourceRef: payload.proposalId,
-      }),
-      prepareUpsertProposalParticipant(db, {
+      ...prepareSyncProposalParticipantRole(db, {
         eventId: proposal.event_id,
         userId: payload.userId,
         proposalRole: payload.role,
@@ -193,12 +190,7 @@ export async function buildUpdateProposalSpeakerRoleStatements(
     db
       .prepare("UPDATE proposal_speakers SET role = ? WHERE proposal_id = ? AND user_id = ?")
       .bind(payload.role, payload.proposalId, payload.userId),
-    prepareDeactivateProposalParticipantRoles(db, {
-      eventId: proposal.event_id,
-      userId: payload.userId,
-      sourceRef: payload.proposalId,
-    }),
-    prepareUpsertProposalParticipant(db, {
+    ...prepareSyncProposalParticipantRole(db, {
       eventId: proposal.event_id,
       userId: payload.userId,
       proposalRole: payload.role,
@@ -218,17 +210,7 @@ export async function refreshSpeakerManageToken(db: DatabaseLike, proposalId: st
   return queuedCapabilityToken("speaker_manage", speaker.id);
 }
 
-export interface ProposalSpeakerWithUser {
-  speaker_id: string;
-  user_id: string;
-  role: string;
-  status: string;
-  manage_link_secret: string | null;
-  confirmed_at: string | null;
-  declined_at: string | null;
-  terms_accepted_at: string | null;
-  decline_reason: string | null;
-  created_at: string;
+export interface ProposalSpeakerUserProfile {
   email: string;
   first_name: string | null;
   last_name: string | null;
@@ -238,6 +220,19 @@ export interface ProposalSpeakerWithUser {
   links_json: string | null;
   headshot_r2_key: string | null;
   headshot_updated_at: string | null;
+}
+
+export interface ProposalSpeakerWithUser extends ProposalSpeakerUserProfile {
+  speaker_id: string;
+  user_id: string;
+  role: SpeakerRole;
+  status: ProposalManageSpeakerStatus;
+  manage_link_secret: string | null;
+  confirmed_at: string | null;
+  declined_at: string | null;
+  terms_accepted_at: string | null;
+  decline_reason: string | null;
+  created_at: string;
 }
 
 export function formatInvitePerson(

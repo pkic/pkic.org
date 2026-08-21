@@ -225,6 +225,23 @@ export async function requireAdminFromRequest(
   return admin;
 }
 
+/** Require an attributable database user for writes whose audit/history rows reference users(id). */
+export async function requireUserBackedAdminFromRequest(
+  db: DatabaseLike,
+  request: Request,
+  env?: Pick<Env, "ADMIN_API_KEY" | "INTERNAL_SIGNING_SECRET">,
+): Promise<AuthAdmin> {
+  const admin = await requireAdminFromRequest(db, request, env);
+  if (getCachedAdminAuthTransport(request) === "api-key") {
+    throw new AppError(
+      403,
+      "USER_BACKED_ADMIN_REQUIRED",
+      "This action requires an attributable admin session rather than the shared API key",
+    );
+  }
+  return admin;
+}
+
 export async function revokeAdminSession(db: DatabaseLike, sessionId: string): Promise<void> {
   await revokeSessionRow(db, SESSIONS_TABLE.table, sessionId);
 }

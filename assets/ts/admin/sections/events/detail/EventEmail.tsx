@@ -5,6 +5,7 @@ import { TEMPLATE_HELPERS, TEMPLATE_PARTIALS, type TemplateHelperItem } from "..
 import { toast } from "../../../ui";
 import type { EmailTemplateVersion } from "../../../types";
 import type { EmailMessageType } from "../../../../../shared/schemas/admin-email-templates";
+import { EMAIL_PREVIEW_TABS, type EmailPreviewTab } from "../../../email-preview-tabs";
 import {
   HELPER_CATEGORIES,
   PERSONAL_ONLY_HELPERS,
@@ -54,7 +55,7 @@ export function EventEmail({
     recipientCount?: number;
     previewToken?: string;
   } | null>(null);
-  const [previewTab, setPreviewTab] = useState<"html" | "text">("html");
+  const [previewTab, setPreviewTab] = useState<EmailPreviewTab>("html");
   const [previewConfirmed, setPreviewConfirmed] = useState(false);
   const [status, setStatus] = useState("Preview required before sending.");
   const [sending, setSending] = useState(false);
@@ -454,12 +455,9 @@ export function EventEmail({
               <div class="small text-muted mb-1">{preview.recipientCount} recipients</div>
             )}
             <Tabs
-              items={[
-                { key: "html", label: "HTML" },
-                { key: "text", label: "Text" },
-              ]}
+              items={EMAIL_PREVIEW_TABS}
               active={previewTab}
-              onChange={(key) => setPreviewTab(key as "html" | "text")}
+              onChange={(key) => setPreviewTab(key as EmailPreviewTab)}
               className="mb-2"
             />
             {previewTab === "html" && <iframe srcdoc={preview.html} sandbox="" class="adm-email-preview-frame" />}

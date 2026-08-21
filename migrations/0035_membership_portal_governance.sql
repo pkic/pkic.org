@@ -2508,4 +2508,73 @@ CREATE INDEX IF NOT EXISTS idx_consent_acceptances_registration_term
 CREATE INDEX IF NOT EXISTS idx_registrations_event_status_created
   ON registrations(event_id, status, created_at);
 
+-- Proposal review decisions may request changes and then be followed by a
+-- revised submission. Keep the current round on the existing rows so the
+-- established proposal/reviewer uniqueness constraints remain useful, while
+-- retaining every decision in an append-only history table. This avoids
+-- rebuilding any deployed proposal table merely to remove its original
+-- one-current-decision UNIQUE constraint.
+ALTER TABLE session_proposals ADD COLUMN review_round INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE proposal_reviews ADD COLUMN review_round INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE proposal_decisions ADD COLUMN review_round INTEGER NOT NULL DEFAULT 1;
+
+CREATE TABLE proposal_decision_history (
+  id                   TEXT    NOT NULL PRIMARY KEY,
+  proposal_id          TEXT    NOT NULL,
+  review_round         INTEGER NOT NULL,
+  decided_by_user_id   TEXT    NOT NULL,
+  final_status         TEXT    NOT NULL,
+  decision_note        TEXT,
+  min_reviews_required INTEGER NOT NULL,
+  review_count         INTEGER NOT NULL,
+  decided_at           TEXT    NOT NULL,
+  UNIQUE(proposal_id, review_round),
+  FOREIGN KEY(proposal_id) REFERENCES session_proposals(id),
+  FOREIGN KEY(decided_by_user_id) REFERENCES users(id)
+);
+
+CREATE TABLE proposal_review_history (
+  decision_id       TEXT    NOT NULL,
+  proposal_id       TEXT    NOT NULL,
+  review_round      INTEGER NOT NULL,
+  review_id         TEXT    NOT NULL,
+  reviewer_user_id  TEXT    NOT NULL,
+  recommendation   TEXT    NOT NULL,
+  score             INTEGER,
+  reviewer_comment  TEXT,
+  applicant_note    TEXT,
+  reviewed_at       TEXT    NOT NULL,
+  captured_at       TEXT    NOT NULL,
+  PRIMARY KEY(decision_id, review_id),
+  UNIQUE(proposal_id, review_round, reviewer_user_id),
+  FOREIGN KEY(decision_id) REFERENCES proposal_decision_history(id),
+  FOREIGN KEY(proposal_id) REFERENCES session_proposals(id),
+  FOREIGN KEY(reviewer_user_id) REFERENCES users(id)
+);
+
+INSERT INTO proposal_decision_history (
+  id, proposal_id, review_round, decided_by_user_id, final_status,
+  decision_note, min_reviews_required, review_count, decided_at
+)
+SELECT id, proposal_id, review_round, decided_by_user_id, final_status,
+       decision_note, min_reviews_required, review_count, decided_at
+FROM proposal_decisions;
+
+INSERT INTO proposal_review_history (
+  decision_id, proposal_id, review_round, review_id, reviewer_user_id,
+  recommendation, score, reviewer_comment, applicant_note, reviewed_at, captured_at
+)
+SELECT pdh.id, pr.proposal_id, pr.review_round, pr.id, pr.reviewer_user_id,
+       pr.recommendation, pr.score, pr.reviewer_comment, pr.applicant_note,
+       pr.updated_at, pdh.decided_at
+FROM proposal_decision_history pdh
+JOIN proposal_reviews pr
+  ON pr.proposal_id = pdh.proposal_id AND pr.review_round = pdh.review_round;
+
+CREATE INDEX idx_proposal_reviews_proposal_round
+  ON proposal_reviews(proposal_id, review_round);
+
+CREATE INDEX idx_proposal_decision_history_proposal_round
+  ON proposal_decision_history(proposal_id, review_round DESC);
+
 PRAGMA foreign_keys = ON;

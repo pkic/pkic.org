@@ -21,7 +21,7 @@ export async function listProposalReviews(
   query: ProposalReviewsListQuery & { limit: number; offset: number },
   minReviewsRequired: number,
 ) {
-  await getReviewContext(db, actor, proposalId);
+  const context = await getReviewContext(db, actor, proposalId);
   const search = query.q
     ? buildD1TextSearchFilter(query.q, [
         "u.email",
@@ -32,8 +32,8 @@ export async function listProposalReviews(
         "pr.applicant_note",
       ])
     : null;
-  const filters = ["pr.proposal_id = ?"];
-  const bindings: unknown[] = [proposalId];
+  const filters = ["pr.proposal_id = ?", "pr.review_round = ?"];
+  const bindings: unknown[] = [proposalId, context.reviewRound];
   if (query.recommendation) {
     filters.push("pr.recommendation = ?");
     bindings.push(query.recommendation);
@@ -67,12 +67,15 @@ export async function listProposalReviews(
                 SUM(CASE WHEN recommendation = 'accept' THEN 1 ELSE 0 END) AS accept_count,
                 SUM(CASE WHEN recommendation = 'needs-work' THEN 1 ELSE 0 END) AS needs_work_count,
                 SUM(CASE WHEN recommendation = 'reject' THEN 1 ELSE 0 END) AS reject_count
-         FROM proposal_reviews WHERE proposal_id = ?`,
+         FROM proposal_reviews WHERE proposal_id = ? AND review_round = ?`,
       )
-      .bind(proposalId),
+      .bind(proposalId, context.reviewRound),
     db
-      .prepare(`SELECT ${REVIEW_COLUMNS} ${REVIEW_FROM} WHERE pr.proposal_id = ? AND pr.reviewer_user_id = ?`)
-      .bind(proposalId, actor.id),
+      .prepare(
+        `SELECT ${REVIEW_COLUMNS} ${REVIEW_FROM}
+         WHERE pr.proposal_id = ? AND pr.review_round = ? AND pr.reviewer_user_id = ?`,
+      )
+      .bind(proposalId, context.reviewRound, actor.id),
   ]);
 
   const reviews = batchRows<ProposalReview>(pageResult);

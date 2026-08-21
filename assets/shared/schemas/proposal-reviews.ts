@@ -45,6 +45,7 @@ export const proposalReviewSchema = z.object({
   id: databaseIdSchema,
   proposal_id: databaseIdSchema,
   reviewer_user_id: databaseIdSchema,
+  review_round: z.number().int().positive(),
   recommendation: proposalRecommendationSchema,
   score: z.number().nullable(),
   reviewer_comment: z.string().nullable(),

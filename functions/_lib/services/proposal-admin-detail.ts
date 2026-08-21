@@ -1,7 +1,7 @@
 import { first } from "../db/queries";
 import type { DatabaseLike } from "../types";
 import { parseJsonSafe } from "../utils/json";
-import { resolveSessionTypes } from "./events";
+import { resolveEventSessionTypes } from "./events";
 import { getActiveFormByPurpose } from "./forms";
 
 interface ProposalDetailRow {
@@ -12,6 +12,7 @@ interface ProposalDetailRow {
   proposal_type: string;
   title: string;
   abstract: string;
+  review_round: number;
   details_json: string | null;
   submitted_at: string;
   updated_at: string;
@@ -30,10 +31,11 @@ export async function getAdminProposalDetailData(db: DatabaseLike, proposalId: s
     db,
     `SELECT
        sp.id, sp.event_id, sp.proposer_user_id, sp.status, sp.proposal_type,
-       sp.title, sp.abstract, sp.details_json, sp.submitted_at, sp.updated_at,
+       sp.title, sp.abstract, sp.details_json, sp.review_round, sp.submitted_at, sp.updated_at,
        u.email AS proposer_email, u.first_name AS proposer_first_name,
        u.last_name AS proposer_last_name, e.settings_json AS event_settings_json,
-       (SELECT COUNT(*) FROM proposal_reviews pr WHERE pr.proposal_id = sp.id) AS review_count,
+       (SELECT COUNT(*) FROM proposal_reviews pr
+        WHERE pr.proposal_id = sp.id AND pr.review_round = sp.review_round) AS review_count,
        pd.final_status AS decision_status, pd.decision_note,
        pd.decided_at AS decision_decided_at
      FROM session_proposals sp
@@ -46,7 +48,6 @@ export async function getAdminProposalDetailData(db: DatabaseLike, proposalId: s
   if (!proposal) return null;
 
   const proposalForm = await getActiveFormByPurpose(db, proposal.event_id, "proposal_submission");
-  const eventSettings = parseJsonSafe<{ proposal?: { sessionTypes?: unknown[] } }>(proposal.event_settings_json, {});
   return {
     eventId: proposal.event_id,
     proposal: {
@@ -57,6 +58,7 @@ export async function getAdminProposalDetailData(db: DatabaseLike, proposalId: s
       proposal_type: proposal.proposal_type,
       title: proposal.title,
       abstract: proposal.abstract,
+      review_round: proposal.review_round,
       submitted_at: proposal.submitted_at,
       updated_at: proposal.updated_at,
       proposer_email: proposal.proposer_email,
@@ -77,6 +79,6 @@ export async function getAdminProposalDetailData(db: DatabaseLike, proposalId: s
             description: proposalForm.description,
             fields: proposalForm.fields,
           },
-    sessionTypes: resolveSessionTypes(eventSettings),
+    sessionTypes: resolveEventSessionTypes(proposal.event_settings_json),
   };
 }

@@ -17,6 +17,7 @@ import { useProposalSubresources } from "./proposal-detail/useProposalSubresourc
 import type { DetailTab, ProposalResponse } from "./proposal-detail/model";
 import { adminProposalDetailResponseSchema } from "../../../../../shared/schemas/admin-event-proposals";
 import { ProposalDecisionPanel } from "./proposal-detail/ProposalDecisionPanel";
+import { isProposalDecidableStatus } from "../../../../../shared/schemas/proposal-status";
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
@@ -65,6 +66,17 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     }
   }, [data]);
 
+  useEffect(() => {
+    if (
+      activeTab === "decision" &&
+      data?.proposal &&
+      !data.proposal.decision_status &&
+      !isProposalDecidableStatus(data.proposal.status)
+    ) {
+      setActiveTab("submission");
+    }
+  }, [activeTab, data?.proposal]);
+
   if (loading) return <Spinner />;
   if (error) return <ErrorAlert error={error} />;
   if (!data) return null;
@@ -76,6 +88,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     sessionTypes.find((t) => t.label.toLowerCase() === proposal.proposal_type.toLowerCase())?.requiresPresentation ??
     false;
   const canManagePresentation = proposal.status === "accepted" || proposalRequiresPresentation || versions.length > 0;
+  const proposalDecidable = isProposalDecidableStatus(proposal.status);
   const reviewCount = reviewSummary.totalReviews;
   const quorumMet = reviewSummary.quorumMet;
   const recommendationCounts = {
@@ -97,7 +110,9 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
         ]
       : []),
     { key: "audit-log", label: "Audit Log" },
-    ...(access.canFinalize ? [{ key: "decision", label: "Decision" }] : []),
+    ...(access.canFinalize && (proposalDecidable || proposal.decision_status)
+      ? [{ key: "decision", label: "Decision" }]
+      : []),
   ];
 
   async function handleFlag(action: "spam" | "duplicate" | "delete") {
@@ -329,7 +344,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
               summary={reviewSummary}
               minReviewsRequired={minReviewsRequired}
               canReview={access.canReview}
-              reviewLocked={Boolean(proposal.decision_status)}
+              reviewLocked={!proposalDecidable}
               myReview={myReview}
               loadingMore={loadingMoreReviews}
               onLoadMore={handleLoadMoreReviews}
@@ -350,7 +365,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
           )}
 
           {/* ── Decision tab (finalizers only) ── */}
-          {activeTab === "decision" && access.canFinalize && (
+          {activeTab === "decision" && access.canFinalize && (proposalDecidable || proposal.decision_status) && (
             <ProposalDecisionPanel
               proposalId={proposalId}
               proposal={proposal}

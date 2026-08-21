@@ -37,12 +37,14 @@ export interface QueueEmailPayload {
   sendAfterSeconds?: number;
 }
 
-const EMAIL_OUTBOX_INSERT_SQL = `INSERT INTO email_outbox (
-      id, event_id, template_key, template_version, recipient_user_id, recipient_email,
-      subject, payload_json, message_type, provider, provider_message_id, status, attempts,
-      send_after, last_error, created_at, updated_at, sent_at, idempotency_key
-    ) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, 'sendgrid', NULL, 'queued', 0, ?, NULL, ?, ?, NULL, ?)
-    ON CONFLICT(idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`;
+const EMAIL_OUTBOX_COLUMNS = `id, event_id, template_key, template_version, recipient_user_id, recipient_email,
+  subject, payload_json, message_type, provider, provider_message_id, status, attempts,
+  send_after, last_error, created_at, updated_at, sent_at, idempotency_key`;
+const EMAIL_OUTBOX_VALUE_EXPRESSIONS =
+  "?, ?, ?, NULL, ?, ?, ?, ?, ?, 'sendgrid', NULL, 'queued', 0, ?, NULL, ?, ?, NULL, ?";
+const EMAIL_OUTBOX_CONFLICT_SQL = "ON CONFLICT(idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING";
+const EMAIL_OUTBOX_INSERT_SQL = `INSERT INTO email_outbox (${EMAIL_OUTBOX_COLUMNS})
+  VALUES (${EMAIL_OUTBOX_VALUE_EXPRESSIONS}) ${EMAIL_OUTBOX_CONFLICT_SQL}`;
 
 const BULK_EMAIL_OUTBOX_INSERT_SQL = `INSERT INTO email_outbox (
       id, event_id, template_key, template_version, recipient_user_id, recipient_email,
@@ -120,6 +122,28 @@ export function prepareQueueEmailStatement(
 ): { id: string; statement: StatementLike } {
   const id = resolveOutboxId(payload);
   return { id, statement: db.prepare(EMAIL_OUTBOX_INSERT_SQL).bind(...buildEmailOutboxValues(payload, id, queuedAt)) };
+}
+
+/** Builds an outbox INSERT guarded by a fixed caller-owned database predicate. */
+export function prepareQueueEmailStatementWhen(
+  db: DatabaseLike,
+  payload: QueueEmailPayload,
+  condition: { sql: string; bindings: unknown[] },
+  queuedAt = nowIso(),
+): { id: string; statement: StatementLike } {
+  const id = resolveOutboxId(payload);
+  const values = buildEmailOutboxValues(payload, id, queuedAt);
+  return {
+    id,
+    statement: db
+      .prepare(
+        `INSERT INTO email_outbox (${EMAIL_OUTBOX_COLUMNS})
+         SELECT ${EMAIL_OUTBOX_VALUE_EXPRESSIONS}
+         WHERE EXISTS (${condition.sql})
+         ${EMAIL_OUTBOX_CONFLICT_SQL}`,
+      )
+      .bind(...values, ...condition.bindings),
+  };
 }
 
 export interface BulkEmailQueueRow {

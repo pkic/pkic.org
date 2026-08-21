@@ -1,7 +1,7 @@
 import { first } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
-import { getEventBySlug, resolveSessionTypes } from "../events";
+import { getEventBySlug, resolveEventSessionTypes } from "../events";
 
 export async function getAdminEventDetail(db: DatabaseLike, eventSlug: string) {
   const event = await getEventBySlug(db, eventSlug);
@@ -26,7 +26,7 @@ export async function getAdminEventDetail(db: DatabaseLike, eventSlug: string) {
     virtual_url: (settings.virtualUrl as string | null) ?? null,
     hero_image_url: (settings.heroImageUrl as string | null) ?? null,
     location: (settings.location as string | null) ?? null,
-    session_types: resolveSessionTypes(settings as { proposal?: { sessionTypes?: unknown[] } }),
+    session_types: resolveEventSessionTypes(event.settings_json),
     settings,
   };
 }

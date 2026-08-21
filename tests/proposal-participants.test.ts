@@ -12,6 +12,61 @@ describe("proposal participants", () => {
   beforeEach(async () => {
     await resetDb();
   });
+
+  it("accepts event-configured session types and rejects unconfigured values", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    await env.DB.prepare("UPDATE events SET settings_json = ? WHERE id = ?")
+      .bind(
+        JSON.stringify({
+          proposal: { sessionTypes: [{ label: "Ask Me Anything", requiresPresentation: false }] },
+        }),
+        eventId,
+      )
+      .run();
+
+    const proposalBody = (email: string, type: string) => ({
+      sourceType: "direct",
+      proposer: {
+        firstName: "Session",
+        lastName: "Speaker",
+        email,
+        organizationName: "Example Organization",
+        jobTitle: "Engineer",
+        bio: "Experienced speaker with sufficient biography text for proposal validation.",
+      },
+      proposal: {
+        type,
+        title: "Configurable Session Type Architecture",
+        abstract:
+          "A sufficiently detailed proposal explaining how event-configured session types flow through shared schemas and backend validation.",
+      },
+      consents: [{ termKey: "speaker-terms", version: "v1" }],
+    });
+    const request = (email: string, type: string) =>
+      app.fetch(
+        new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(proposalBody(email, type)),
+        }),
+        env as any,
+        { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+      );
+
+    const accepted = await request("configured-type@example.test", "ask me anything");
+    expect(accepted.status).toBe(200);
+    const acceptedBody = (await accepted.json()) as { proposalId: string };
+    await expect(
+      queryAll<{ proposal_type: string }>(env.DB, "SELECT proposal_type FROM session_proposals WHERE id = ?", [
+        acceptedBody.proposalId,
+      ]),
+    ).resolves.toEqual([{ proposal_type: "Ask Me Anything" }]);
+
+    const rejected = await request("unconfigured-type@example.test", "Workshop");
+    expect(rejected.status).toBe(400);
+    await expect(rejected.json()).resolves.toMatchObject({ error: { code: "PROPOSAL_TYPE_NOT_ALLOWED" } });
+  });
+
   it("supports panel participants and stores user links", async () => {
     await seedEventAndAdmin(env.DB);
 
@@ -336,7 +391,7 @@ describe("proposal participants", () => {
 
     await finalizeProposalDecision(env.DB, {
       proposalId: proposal.id,
-      decidedByUserId: adminRow.id,
+      actor: { id: adminRow.id, email: "admin@pkic.org", role: "admin" },
       finalStatus: "accepted",
       minReviewsRequired: 0,
     });

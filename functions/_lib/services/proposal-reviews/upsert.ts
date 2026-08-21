@@ -10,7 +10,6 @@ import {
   assertReviewWritable,
   auditState,
   buildProposalReviewAuditDetails,
-  currentReviewOrConflict,
   getReviewContext,
   isReviewOwnerConflict,
   prepareReviewById,
@@ -18,6 +17,7 @@ import {
   REVIEW_FROM,
   REVIEW_WRITABLE_PROPOSAL_SQL,
   reviewWritableProposalBindings,
+  saveExistingProposalReview,
   type ReviewAuditState,
 } from "./shared";
 
@@ -35,6 +35,7 @@ export async function upsertProposalReview(
     [proposalId, actor.id],
   );
   const nextState: ReviewAuditState = {
+    reviewRound: context.reviewRound,
     recommendation: payload.recommendation,
     score: payload.score,
     reviewerComment: payload.reviewerComment ?? null,
@@ -51,23 +52,24 @@ export async function upsertProposalReview(
         db
           .prepare(
             `INSERT INTO proposal_reviews (
-               id, proposal_id, reviewer_user_id, recommendation, score,
+               id, proposal_id, reviewer_user_id, review_round, recommendation, score,
                reviewer_comment, applicant_note, created_at, updated_at
              )
-             SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+             SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
              WHERE EXISTS ${REVIEW_WRITABLE_PROPOSAL_SQL}`,
           )
           .bind(
             reviewId,
             proposalId,
             actor.id,
+            context.reviewRound,
             payload.recommendation,
             payload.score,
             payload.reviewerComment ?? null,
             payload.applicantNote ?? null,
             now,
             now,
-            ...reviewWritableProposalBindings(proposalId),
+            ...reviewWritableProposalBindings(proposalId, context.reviewRound),
           ),
         prepareAuditLogWhen(db, {
           actorType: "admin",
@@ -95,52 +97,5 @@ export async function upsertProposalReview(
     }
   }
 
-  const [updated, , selected] = await db.batch([
-    db
-      .prepare(
-        `UPDATE proposal_reviews
-         SET recommendation = ?, score = ?, reviewer_comment = ?, applicant_note = ?, updated_at = ?
-         WHERE id = ? AND recommendation = ? AND score IS ?
-           AND reviewer_comment IS ? AND applicant_note IS ? AND updated_at = ?
-           AND EXISTS ${REVIEW_WRITABLE_PROPOSAL_SQL}`,
-      )
-      .bind(
-        payload.recommendation,
-        payload.score,
-        payload.reviewerComment ?? null,
-        payload.applicantNote ?? null,
-        now,
-        existing.id,
-        existing.recommendation,
-        existing.score,
-        existing.reviewer_comment,
-        existing.applicant_note,
-        existing.updated_at,
-        ...reviewWritableProposalBindings(proposalId),
-      ),
-    prepareAuditLogWhen(db, {
-      actorType: "admin",
-      actorId: actor.id,
-      action: "proposal_review_upserted",
-      entityType: "proposal_review",
-      entityId: existing.id,
-      details: changes,
-      createdAt: now,
-      conditionSql:
-        "SELECT 1 FROM proposal_reviews WHERE id = ? AND recommendation = ? AND score IS ? AND reviewer_comment IS ? AND applicant_note IS ? AND updated_at = ? AND changes() = 1",
-      conditionBindings: [
-        existing.id,
-        payload.recommendation,
-        payload.score,
-        payload.reviewerComment ?? null,
-        payload.applicantNote ?? null,
-        now,
-      ],
-    }),
-    prepareReviewById(db, existing.id),
-  ]);
-  if ((updated.meta?.changes ?? 0) !== 1) return currentReviewOrConflict(db, actor, proposalId, existing.id);
-  const review = batchFirst<ProposalReview>(selected);
-  if (!review) throw new AppError(500, "PROPOSAL_REVIEW_UPDATE_FAILED", "Unable to load the updated review");
-  return review;
+  return saveExistingProposalReview(db, actor, proposalId, context, existing, nextState, changes);
 }

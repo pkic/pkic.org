@@ -5,17 +5,18 @@ import { createContext, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { onRequestGet as getRegistration } from "../functions/api/v1/registrations/manage/[token]";
-import {
-  onRequestGet as getProposal,
-  onRequestPatch as updateProposal,
-} from "../functions/api/v1/proposals/manage/[token]";
 import { onRequestPatch as updateProposalSpeaker } from "../functions/api/v1/proposals/manage/[token]/speakers/[userId]";
 import { onRequestPost as openRegistrationManage } from "../functions/api/v1/admin/events/[eventSlug]/registrations/[registrationId]/open-manage";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { createRegistration, confirmRegistrationByToken } from "../functions/_lib/services/registrations";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
+import app from "../functions/router";
 
 const signingSecret = "test-signing-secret";
+
+function callApp(request: Request): Promise<Response> {
+  return app.fetch(request, env as any, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
+}
 
 describe("manage read endpoints", () => {
   beforeEach(async () => {
@@ -321,9 +322,7 @@ describe("manage read endpoints", () => {
       resourceId: proposalId,
     });
 
-    const response = await getProposal(
-      createContext(env, new Request(`https://app.test/api/v1/proposals/manage/${token}`), { token }),
-    );
+    const response = await callApp(new Request(`https://app.test/api/v1/proposals/manage/${token}`));
 
     expect(response.status).toBe(200);
     const payload = (await response.json()) as {
@@ -338,6 +337,20 @@ describe("manage read endpoints", () => {
   it("lets proposers update session type and speaker roles from the manage flow", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
+    await env.DB.prepare("UPDATE events SET settings_json = ? WHERE id = ?")
+      .bind(
+        JSON.stringify({
+          proposal: {
+            sessionTypes: [
+              { label: "talk", requiresPresentation: true },
+              { label: "Ask Me Anything", requiresPresentation: false },
+            ],
+          },
+        }),
+        eventId,
+      )
+      .run();
+
     const userId = crypto.randomUUID();
     const proposalId = crypto.randomUUID();
     const linkSecret = "proposal-update-link-secret";
@@ -350,11 +363,11 @@ describe("manage read endpoints", () => {
       env.DB.prepare(`
         INSERT INTO session_proposals (
           id, event_id, proposer_user_id, status, proposal_type, title, abstract,
-          manage_link_secret, submitted_at, updated_at
+          details_json, manage_link_secret, submitted_at, updated_at
         ) VALUES (
           '${proposalId}', '${eventId}', '${userId}', 'submitted', 'talk', 'Proposal title',
           'Proposal abstract text that is sufficiently long for test payload validation.',
-          '${linkSecret}', datetime('now'), datetime('now')
+          '{"existing":"preserved"}', '${linkSecret}', datetime('now'), datetime('now')
         )
       `),
       env.DB.prepare(`
@@ -369,18 +382,45 @@ describe("manage read endpoints", () => {
       resourceId: proposalId,
     });
 
-    const updateResponse = await updateProposal(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/proposals/manage/${token}`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ action: "update", proposalType: "panel" }),
-        }),
-        { token },
-      ),
+    const updateResponse = await callApp(
+      new Request(`https://app.test/api/v1/proposals/manage/${token}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "update", proposalType: "ask me anything" }),
+      }),
     );
     expect(updateResponse.status).toBe(200);
+    await expect(updateResponse.json()).resolves.toMatchObject({
+      proposal: { proposal_type: "Ask Me Anything", details: { existing: "preserved" } },
+    });
+
+    const unsupportedType = await callApp(
+      new Request(`https://app.test/api/v1/proposals/manage/${token}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "update", proposalType: "unconfigured session" }),
+      }),
+    );
+    expect(unsupportedType.status).toBe(400);
+    await expect(unsupportedType.json()).resolves.toMatchObject({ error: { code: "PROPOSAL_TYPE_NOT_ALLOWED" } });
+
+    const emptyUpdate = await callApp(
+      new Request(`https://app.test/api/v1/proposals/manage/${token}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "update" }),
+      }),
+    );
+    expect(emptyUpdate.status).toBe(400);
+
+    const ambiguousWithdrawal = await callApp(
+      new Request(`https://app.test/api/v1/proposals/manage/${token}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "withdraw", title: "Do not apply this title" }),
+      }),
+    );
+    expect(ambiguousWithdrawal.status).toBe(400);
 
     const speakerResponse = await updateProposalSpeaker(
       createContext(
@@ -403,6 +443,6 @@ describe("manage read endpoints", () => {
        WHERE sp.id = ? AND ps.user_id = ?`,
       [proposalId, userId],
     );
-    expect(rows[0]).toEqual({ proposal_type: "panel", role: "moderator" });
+    expect(rows[0]).toEqual({ proposal_type: "Ask Me Anything", role: "moderator" });
   });
 });

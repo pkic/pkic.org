@@ -160,7 +160,7 @@ async function seed() {
   // Accept the proposal so uploads are allowed.
   await finalizeProposalDecision(env.DB, {
     proposalId: proposal.id,
-    decidedByUserId: adminRow.id,
+    actor: { id: adminRow.id, email: "admin@pkic.org", role: "admin" },
     finalStatus: "accepted",
     minReviewsRequired: 0,
   });
@@ -393,7 +393,7 @@ describe("presentation versioning", () => {
     });
     await finalizeProposalDecision(env.DB, {
       proposalId: secondProposal.id,
-      decidedByUserId: adminUserId,
+      actor: { id: adminUserId, email: "admin@pkic.org", role: "admin" },
       finalStatus: "accepted",
       minReviewsRequired: 0,
     });

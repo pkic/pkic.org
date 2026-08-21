@@ -1,5 +1,6 @@
 import type { Ref } from "preact";
 import { ProfileLinksInput, type ProfileLinksHandle } from "./ProfileLinksInput";
+import { SPEAKER_ROLE_OPTIONS } from "../shared/speaker-roles";
 
 export interface SpeakerFieldNames {
   firstName: string;
@@ -24,14 +25,6 @@ interface SpeakerFormCardProps {
   errorPaths?: Partial<Record<"firstName" | "lastName" | "email" | "bio", string>>;
   onRemove?: () => void;
 }
-
-const ROLES = [
-  { value: "proposer", label: "Proposer" },
-  { value: "speaker", label: "Speaker" },
-  { value: "co_speaker", label: "Co-speaker" },
-  { value: "moderator", label: "Moderator" },
-  { value: "panelist", label: "Panelist" },
-] as const;
 
 function FieldError({ path }: { path: string }) {
   return <div data-field-error={path} class="invalid-feedback d-block" />;
@@ -152,7 +145,7 @@ export function SpeakerFormCard({
           <div class="col-12">
             <label class="form-label">Role</label>
             <div class="event-flow-role-options" role="group" aria-label="Speaker role">
-              {ROLES.map((role, i) => (
+              {SPEAKER_ROLE_OPTIONS.map((role, i) => (
                 <>
                   <input
                     class="btn-check"

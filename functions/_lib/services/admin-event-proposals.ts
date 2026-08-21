@@ -5,6 +5,7 @@ import type { DatabaseLike } from "../types";
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
 import type { AdminEventProposalSummary, ProposalStats } from "../../../assets/shared/schemas/admin-event-proposals";
 import { adminEventProposalsQuerySchema } from "../../../assets/shared/schemas/api";
+import { PROPOSAL_INACTIVE_STATUSES } from "../../../assets/shared/schemas/proposal-status";
 
 type ProposalSort = NonNullable<z.infer<typeof adminEventProposalsQuerySchema>["sort"]>;
 
@@ -33,8 +34,6 @@ const ORDER_BY: Record<ProposalSort, string> = {
     "(COALESCE(rv.accept_count, 0) - COALESCE(rv.reject_count, 0)) ASC, COALESCE(rv.needs_work_count, 0) ASC, sp.submitted_at DESC",
 };
 
-const INACTIVE_STATUSES = ["withdrawn", "rejected", "spam", "duplicate", "deleted"];
-
 export async function listAdminEventProposals(
   db: DatabaseLike,
   query: {
@@ -52,15 +51,15 @@ export async function listAdminEventProposals(
   const bindings: unknown[] = [query.eventId];
 
   if (query.status === "active") {
-    conditions.push(`sp.status NOT IN (${INACTIVE_STATUSES.map(() => "?").join(", ")})`);
-    bindings.push(...INACTIVE_STATUSES);
+    conditions.push(`sp.status NOT IN (${PROPOSAL_INACTIVE_STATUSES.map(() => "?").join(", ")})`);
+    bindings.push(...PROPOSAL_INACTIVE_STATUSES);
   } else if (query.status) {
     conditions.push("sp.status = ?");
     bindings.push(query.status);
   }
   if (query.recommendation) {
     conditions.push(
-      "EXISTS (SELECT 1 FROM proposal_reviews pr_filter WHERE pr_filter.proposal_id = sp.id AND pr_filter.recommendation = ?)",
+      "EXISTS (SELECT 1 FROM proposal_reviews pr_filter WHERE pr_filter.proposal_id = sp.id AND pr_filter.review_round = sp.review_round AND pr_filter.recommendation = ?)",
     );
     bindings.push(query.recommendation);
   }
@@ -88,7 +87,7 @@ export async function listAdminEventProposals(
       OR EXISTS (
         SELECT 1 FROM proposal_reviews pr_search
         LEFT JOIN users ru ON ru.id = pr_search.reviewer_user_id
-        WHERE pr_search.proposal_id = sp.id AND ${review.sql}
+        WHERE pr_search.proposal_id = sp.id AND pr_search.review_round = sp.review_round AND ${review.sql}
       )
       OR EXISTS (
         SELECT 1 FROM proposal_decisions pd_search
@@ -98,10 +97,12 @@ export async function listAdminEventProposals(
   }
 
   const where = conditions.join(" AND ");
+  const deletedScope = query.deleted === "1" ? "sp.deleted_at IS NOT NULL" : "sp.deleted_at IS NULL";
   const [rowsResult, totalResult, statusResult, recommendationResult, reviewedResult] = await db.batch([
     db
       .prepare(
         `SELECT sp.id, sp.event_id, sp.proposer_user_id, sp.status, sp.proposal_type, sp.title, sp.abstract,
+                sp.review_round,
                 sp.submitted_at, sp.updated_at,
                 u.email AS proposer_email, u.first_name AS proposer_first_name, u.last_name AS proposer_last_name,
                 COALESCE(rv.review_count, 0) AS review_count,
@@ -113,12 +114,12 @@ export async function listAdminEventProposals(
          FROM session_proposals sp
          JOIN users u ON u.id = sp.proposer_user_id
          LEFT JOIN (
-           SELECT proposal_id, COUNT(*) AS review_count, AVG(score) AS average_review_score,
+           SELECT proposal_id, review_round, COUNT(*) AS review_count, AVG(score) AS average_review_score,
                   SUM(CASE WHEN recommendation = 'accept' THEN 1 ELSE 0 END) AS accept_count,
                   SUM(CASE WHEN recommendation = 'needs-work' THEN 1 ELSE 0 END) AS needs_work_count,
                   SUM(CASE WHEN recommendation = 'reject' THEN 1 ELSE 0 END) AS reject_count
-           FROM proposal_reviews GROUP BY proposal_id
-         ) rv ON rv.proposal_id = sp.id
+           FROM proposal_reviews GROUP BY proposal_id, review_round
+         ) rv ON rv.proposal_id = sp.id AND rv.review_round = sp.review_round
          LEFT JOIN proposal_decisions pd ON pd.proposal_id = sp.id
          WHERE ${where}
          ORDER BY ${ORDER_BY[query.sort]}, sp.id ASC
@@ -133,20 +134,27 @@ export async function listAdminEventProposals(
       )
       .bind(...bindings),
     db
-      .prepare("SELECT status, COUNT(*) AS count FROM session_proposals WHERE event_id = ? GROUP BY status")
+      .prepare(
+        `SELECT status, COUNT(*) AS count
+         FROM session_proposals sp
+         WHERE sp.event_id = ? AND ${deletedScope}
+         GROUP BY status`,
+      )
       .bind(query.eventId),
     db
       .prepare(
         `SELECT pr.recommendation, COUNT(*) AS count
          FROM proposal_reviews pr JOIN session_proposals sp ON sp.id = pr.proposal_id
-         WHERE sp.event_id = ? GROUP BY pr.recommendation`,
+         WHERE sp.event_id = ? AND ${deletedScope} AND pr.review_round = sp.review_round
+         GROUP BY pr.recommendation`,
       )
       .bind(query.eventId),
     db
       .prepare(
         `SELECT COUNT(DISTINCT sp.id) AS reviewed_count
-         FROM session_proposals sp JOIN proposal_reviews pr ON pr.proposal_id = sp.id
-         WHERE sp.event_id = ?`,
+         FROM session_proposals sp JOIN proposal_reviews pr
+           ON pr.proposal_id = sp.id AND pr.review_round = sp.review_round
+         WHERE sp.event_id = ? AND ${deletedScope}`,
       )
       .bind(query.eventId),
   ]);

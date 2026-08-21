@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:test";
 import { onRequestPost as resendProposalManageLink } from "../functions/api/v1/events/[eventSlug]/proposals/resend-manage-link";
-import { onRequestGet as getProposalManage } from "../functions/api/v1/proposals/manage/[token]";
+import app from "../functions/router";
 import {
   issueDatabaseCapability,
   materializeQueuedCapabilityLinks,
@@ -149,14 +149,12 @@ describe("proposal resend-manage-link endpoint", () => {
       nowSeconds: Math.floor(Date.now() / 1000) - 2,
     });
 
-    await expect(
-      getProposalManage(
-        createContext(
-          { ...env, INTERNAL_SIGNING_SECRET: signingSecret },
-          new Request(`https://app.test/api/v1/proposals/manage/${encodeURIComponent(token)}`),
-          { token },
-        ),
-      ),
-    ).rejects.toMatchObject({ status: 410, code: "PROPOSAL_TOKEN_EXPIRED" });
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/manage/${encodeURIComponent(token)}`),
+      { ...env, INTERNAL_SIGNING_SECRET: signingSecret } as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(response.status).toBe(410);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "PROPOSAL_TOKEN_EXPIRED" } });
   });
 });

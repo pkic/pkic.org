@@ -7,7 +7,6 @@ import { onRequestPost as requestAdminLink } from "../functions/api/v1/admin/aut
 import { onRequestPost as verifyAdminLink } from "../functions/api/v1/admin/auth/verify-link";
 import { onRequestPost as inviteSpeakersBulk } from "../functions/api/v1/admin/events/[eventSlug]/invites/speakers/bulk";
 import { onRequestPost as previewSpeakerInvites } from "../functions/api/v1/admin/events/[eventSlug]/invites/speakers/preview";
-import { onRequestPost as finalizeProposal } from "../functions/api/v1/admin/proposals/[proposalId]/finalize";
 import { onRequestPost as submitProposal } from "../functions/api/v1/events/[eventSlug]/proposals";
 import { onRequestPost as createRegistration } from "../functions/api/v1/events/[eventSlug]/registrations";
 import { onRequest as confirmRegistrationEmail } from "../functions/api/v1/events/[eventSlug]/registrations/confirm-email";
@@ -288,23 +287,18 @@ describe("full workflow", () => {
       );
       expect(reviewTwoResponse.status).toBe(200);
 
-      const finalizeResponse = await finalizeProposal(
-        createContext(
-          env,
-          new Request(`https://app.test/api/v1/admin/proposals/${createdProposal.proposalId}/finalize`, {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              cookie: adminSessionCookie,
-            },
-            body: JSON.stringify({
-              finalStatus: "accepted",
-              decisionNote: "Approved by committee",
-              minReviewsRequired: 2,
-            }),
+      const finalizeResponse = await callMountedApp(
+        new Request(`https://app.test/api/v1/admin/proposals/${createdProposal.proposalId}/finalize`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            cookie: adminSessionCookie,
+          },
+          body: JSON.stringify({
+            finalStatus: "accepted",
+            decisionNote: "Approved by committee",
           }),
-          { proposalId: createdProposal.proposalId },
-        ),
+        }),
       );
       expect(finalizeResponse.status).toBe(200);
 

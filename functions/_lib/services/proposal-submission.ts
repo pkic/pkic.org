@@ -13,6 +13,7 @@ import { prepareQueueEmailStatement } from "../email/outbox";
 import { buildEventEmailVariables } from "./events";
 import { proposalManagePageUrl, speakerManagePageUrl } from "./frontend-links";
 import { queuedCapabilityToken } from "./capability-links";
+import { requireConfiguredSessionType } from "./events";
 
 type ProposalCreateInput = z.infer<typeof proposalCreateSchema>;
 
@@ -68,7 +69,7 @@ export async function submitProposal(
   const created = await buildCreateProposal(db, {
     eventId: input.event.id,
     proposerUserId: proposer.id,
-    proposalType: input.body.proposal.type,
+    proposalType: requireConfiguredSessionType(input.event.settings_json, input.body.proposal.type),
     title: input.body.proposal.title,
     abstract: input.body.proposal.abstract,
     detailsJson: Object.keys(input.proposalDetails).length > 0 ? JSON.stringify(input.proposalDetails) : null,

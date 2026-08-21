@@ -2,6 +2,7 @@ import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { eventSlugParamsSchema } from "./api-common";
 import { formFieldOptionsSchema, formFieldRulesSchema } from "./form-field-rules";
+import { proposalTypeSchema } from "./proposal-management";
 
 /** Canonical form-field read model shared by API responses and frontends. */
 export const formFieldDefinitionSchema = z.object({
@@ -57,7 +58,7 @@ export const eventFormsResponseSchema = z.object({
   purpose: eventFormsPurposeSchema,
   form: activeFormSummarySchema.extend({ key: z.string() }).nullable(),
   requiredTerms: z.array(requiredTermSchema),
-  allowedSessionTypes: z.array(z.string()),
+  allowedSessionTypes: z.array(proposalTypeSchema).max(20),
   eventDays: z.array(
     z.object({
       dayDate: z.string(),

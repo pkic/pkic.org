@@ -2,9 +2,8 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import type { AuthAdmin, DatabaseLike } from "../functions/_lib/types";
 import { env } from "cloudflare:workers";
-import { onRequestPost as finalizeProposal } from "../functions/api/v1/admin/proposals/[proposalId]/finalize";
 import { upsertProposalReview } from "../functions/_lib/services/proposal-reviews";
-import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
+import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import app from "../functions/router";
 
@@ -364,41 +363,33 @@ describe("proposal review and finalize", () => {
       body: JSON.stringify({ recommendation: "accept", score: 9, reviewerComment: "Good" }),
     });
 
-    await expect(
-      finalizeProposal(
-        createContext(
-          env,
-          new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/finalize`, {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              authorization: `Bearer ${admin1Token}`,
-            },
-            body: JSON.stringify({ finalStatus: "accepted", minReviewsRequired: 2 }),
-          }),
-          { proposalId },
-        ),
-      ),
-    ).rejects.toMatchObject({ code: "PROPOSAL_REVIEW_THRESHOLD_NOT_MET" });
+    const belowQuorum = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/finalize`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${admin1Token}` },
+        body: JSON.stringify({ finalStatus: "accepted" }),
+      }),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(belowQuorum.status).toBe(409);
+    await expect(belowQuorum.json()).resolves.toMatchObject({
+      error: { code: "PROPOSAL_REVIEW_THRESHOLD_NOT_MET" },
+    });
 
     await callProposalReview(admin2Token, proposalId, "", {
       method: "POST",
       body: JSON.stringify({ recommendation: "accept", score: 8, reviewerComment: "Also good" }),
     });
 
-    const finalizeResponse = await finalizeProposal(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/finalize`, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            authorization: `Bearer ${admin1Token}`,
-          },
-          body: JSON.stringify({ finalStatus: "accepted", minReviewsRequired: 2 }),
-        }),
-        { proposalId },
-      ),
+    const finalizeResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/finalize`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${admin1Token}` },
+        body: JSON.stringify({ finalStatus: "accepted" }),
+      }),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
 
     expect(finalizeResponse.status).toBe(200);

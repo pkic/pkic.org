@@ -1,0 +1,254 @@
+import { prepareQueueEmailStatementWhen } from "../../email/outbox";
+import { batchFirst } from "../../db/pagination";
+import { AppError } from "../../errors";
+import type { DatabaseLike, StatementLike } from "../../types";
+import { uuid } from "../../utils/ids";
+import { nowIso } from "../../utils/time";
+import { prepareAuditLogWhen } from "../audit";
+import {
+  assertProposalDecisionAllowed,
+  assertProposalFinalizeAccess,
+  getProposalDecisionContext,
+  isCurrentProposalDecisionConflict,
+  isProposalDecisionHistoryConflict,
+  throwProposalDecisionConflict,
+} from "./context";
+import type { RecordProposalDecisionInput, RecordedProposalDecision } from "./types";
+
+interface RecordedDecisionSnapshot {
+  review_round: number;
+  review_count: number;
+}
+
+export async function recordProposalDecision(
+  db: DatabaseLike,
+  input: RecordProposalDecisionInput,
+): Promise<RecordedProposalDecision> {
+  if (input.finalStatus === "needs-work" && !input.decisionNote?.trim()) {
+    throw new AppError(
+      400,
+      "DECISION_NOTE_REQUIRED",
+      "A proposal decision requesting changes requires a decision note",
+    );
+  }
+  if (input.finalStatus !== "accepted" && input.presentationDeadline) {
+    throw new AppError(
+      400,
+      "PRESENTATION_DEADLINE_NOT_ALLOWED",
+      "A presentation deadline is only valid for accepted proposals",
+    );
+  }
+  const context = await getProposalDecisionContext(db, input.proposalId);
+  assertProposalDecisionAllowed(context, input.minReviewsRequired, input.expectedProposalUpdatedAt);
+  await assertProposalFinalizeAccess(db, context.event_id, input.actor);
+  const decisionId = uuid();
+  const now = nowIso();
+  const condition = {
+    sql: "SELECT 1 FROM proposal_decisions WHERE id = ? AND proposal_id = ? AND review_round = ?",
+    bindings: [decisionId, input.proposalId, context.review_round],
+  };
+  const preparedEmails = (input.notifications ?? []).map((notification) =>
+    prepareQueueEmailStatementWhen(
+      db,
+      {
+        outboxId: uuid(),
+        idempotencyKey: `proposal-decision:${decisionId}:${notification.id}`,
+        eventId: context.event_id,
+        templateKey: notification.templateKey,
+        recipientEmail: notification.recipientEmail,
+        recipientUserId: notification.recipientUserId,
+        subject: notification.fallbackSubject,
+        messageType: "transactional",
+        capabilityLinkValues: [notification.data.manageUrl, notification.data.profileUrl, notification.data.uploadUrl],
+        data: notification.data,
+      },
+      condition,
+      now,
+    ),
+  );
+
+  const statements: StatementLike[] = [
+    db
+      .prepare(
+        `INSERT INTO proposal_decisions (
+           id, proposal_id, review_round, decided_by_user_id, final_status,
+           decision_note, min_reviews_required, review_count, decided_at
+         )
+         SELECT ?, sp.id, sp.review_round, ?, ?, ?, ?,
+                (SELECT COUNT(*) FROM proposal_reviews pr
+                 WHERE pr.proposal_id = sp.id AND pr.review_round = sp.review_round), ?
+         FROM session_proposals sp
+         WHERE sp.id = ? AND sp.deleted_at IS NULL AND sp.status = ? AND sp.review_round = ? AND sp.updated_at = ?
+           AND NOT EXISTS (SELECT 1 FROM proposal_decisions pd WHERE pd.proposal_id = sp.id)
+           AND (SELECT COUNT(*) FROM proposal_reviews pr
+                WHERE pr.proposal_id = sp.id AND pr.review_round = sp.review_round) >= ?`,
+      )
+      .bind(
+        decisionId,
+        input.actor.id,
+        input.finalStatus,
+        input.decisionNote ?? null,
+        input.minReviewsRequired,
+        now,
+        input.proposalId,
+        context.status,
+        context.review_round,
+        context.updated_at,
+        input.minReviewsRequired,
+      ),
+    db
+      .prepare(
+        `INSERT INTO proposal_decision_history (
+           id, proposal_id, review_round, decided_by_user_id, final_status,
+           decision_note, min_reviews_required, review_count, decided_at
+         )
+         SELECT id, proposal_id, review_round, decided_by_user_id, final_status,
+                decision_note, min_reviews_required, review_count, decided_at
+         FROM proposal_decisions
+         WHERE id = ? AND proposal_id = ? AND review_round = ?`,
+      )
+      .bind(decisionId, input.proposalId, context.review_round),
+    db
+      .prepare(
+        `INSERT INTO proposal_review_history (
+           decision_id, proposal_id, review_round, review_id, reviewer_user_id,
+           recommendation, score, reviewer_comment, applicant_note, reviewed_at, captured_at
+         )
+         SELECT ?, pr.proposal_id, pr.review_round, pr.id, pr.reviewer_user_id,
+                pr.recommendation, pr.score, pr.reviewer_comment, pr.applicant_note,
+                pr.updated_at, ?
+         FROM proposal_reviews pr
+         WHERE pr.proposal_id = ? AND pr.review_round = ?
+           AND EXISTS (${condition.sql})`,
+      )
+      .bind(decisionId, now, input.proposalId, context.review_round, ...condition.bindings),
+    db
+      .prepare(
+        `UPDATE session_proposals
+         SET status = ?, presentation_deadline = CASE WHEN ? = 'accepted' AND ? IS NOT NULL THEN ? ELSE presentation_deadline END,
+             updated_at = ?
+         WHERE id = ? AND status = ? AND review_round = ? AND updated_at = ?
+           AND EXISTS (${condition.sql})`,
+      )
+      .bind(
+        input.finalStatus,
+        input.finalStatus,
+        input.presentationDeadline ?? null,
+        input.presentationDeadline ?? null,
+        now,
+        input.proposalId,
+        context.status,
+        context.review_round,
+        context.updated_at,
+        ...condition.bindings,
+      ),
+    db
+      .prepare(
+        `UPDATE event_participants
+         SET status = ?, updated_at = ?
+         WHERE event_id = ? AND source_type = 'proposal' AND source_ref = ?
+           AND user_id IN (
+             SELECT user_id FROM proposal_speakers
+             WHERE proposal_id = ? AND status != 'declined'
+           )
+           AND EXISTS (${condition.sql})`,
+      )
+      .bind(
+        input.finalStatus === "accepted" ? "active" : "inactive",
+        now,
+        context.event_id,
+        input.proposalId,
+        input.proposalId,
+        ...condition.bindings,
+      ),
+  ];
+
+  for (const userId of input.presentationReminderUserIds ?? []) {
+    statements.push(
+      db
+        .prepare(
+          `UPDATE proposal_speakers
+           SET presentation_last_communication_at = ?, presentation_reminders_paused_until = NULL
+           WHERE proposal_id = ? AND user_id = ? AND EXISTS (${condition.sql})`,
+        )
+        .bind(now, input.proposalId, userId, ...condition.bindings),
+    );
+  }
+  for (const [index, prepared] of preparedEmails.entries()) {
+    const notification = (input.notifications ?? [])[index];
+    statements.push(
+      prepared.statement,
+      prepareAuditLogWhen(db, {
+        actorType: "admin",
+        actorId: input.actor.id,
+        action: "proposal_decision_email_queued",
+        entityType: "proposal",
+        entityId: input.proposalId,
+        details: {
+          templateKey: { from: null, to: notification.templateKey },
+          recipientEmail: { from: null, to: notification.recipientEmail },
+          recipientUserId: { from: null, to: notification.recipientUserId },
+        },
+        createdAt: now,
+        conditionSql: condition.sql,
+        conditionBindings: condition.bindings,
+      }),
+    );
+  }
+  statements.push(
+    prepareAuditLogWhen(db, {
+      actorType: "admin",
+      actorId: input.actor.id,
+      action: "proposal_decision_recorded",
+      entityType: "proposal",
+      entityId: input.proposalId,
+      details: {
+        adminEmail: { from: null, to: input.actor.email },
+        finalStatus: { from: context.previous_status, to: input.finalStatus },
+        decisionNote: { from: context.previous_note, to: input.decisionNote ?? null },
+        reviewRound: { from: context.previous_status ? context.review_round - 1 : null, to: context.review_round },
+        queuedEmailCount: { from: 0, to: preparedEmails.length },
+        manageLinkPolicy: { from: null, to: "expiring_capability" },
+      },
+      createdAt: now,
+      conditionSql: condition.sql,
+      conditionBindings: condition.bindings,
+    }),
+    db
+      .prepare("SELECT review_round, review_count FROM proposal_decisions WHERE id = ? AND proposal_id = ?")
+      .bind(decisionId, input.proposalId),
+  );
+
+  try {
+    const results = await db.batch(statements);
+    if ((results[0].meta?.changes ?? 0) !== 1) {
+      return throwProposalDecisionConflict(
+        db,
+        input.proposalId,
+        input.minReviewsRequired,
+        input.expectedProposalUpdatedAt,
+      );
+    }
+    const selected = results.at(-1);
+    if (!selected) throw new Error("Recorded proposal decision result is missing");
+    const snapshot = batchFirst<RecordedDecisionSnapshot>(selected);
+    if (!snapshot) throw new Error("Recorded proposal decision could not be reloaded");
+    return {
+      decisionId,
+      reviewRound: Number(snapshot.review_round),
+      reviewCount: Number(snapshot.review_count),
+      outboxIds: preparedEmails.map(({ id }) => id),
+    };
+  } catch (error) {
+    if (isProposalDecisionHistoryConflict(error)) {
+      throw new Error("Proposal decision history already contains the current review round", { cause: error });
+    }
+    if (!isCurrentProposalDecisionConflict(error)) throw error;
+    return throwProposalDecisionConflict(
+      db,
+      input.proposalId,
+      input.minReviewsRequired,
+      input.expectedProposalUpdatedAt,
+    );
+  }
+}

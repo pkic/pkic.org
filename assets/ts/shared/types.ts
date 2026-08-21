@@ -1,6 +1,7 @@
 import type { FormFieldDefinition } from "../../shared/schemas/forms";
 
 export type { EventFormsResponse, RequiredTerm } from "../../shared/schemas/forms";
+export type { ProposalManageResponse } from "../../shared/schemas/proposal-management";
 
 export interface ApiErrorPayload {
   error: {
@@ -69,33 +70,4 @@ export interface RegistrationManageResponse {
   manageToken?: string | null;
   headshotUrl?: string | null;
   userId?: string | null;
-}
-
-export interface ProposalManageResponse {
-  success: true;
-  proposal: {
-    id: string;
-    status: string;
-    proposal_type: string;
-    title: string;
-    abstract: string;
-    details: Record<string, unknown> | null;
-  };
-  speakers: Array<{
-    userId: string;
-    role: string;
-    status: string;
-    confirmedAt: string | null;
-    declinedAt: string | null;
-    email: string;
-    firstName: string | null;
-    lastName: string | null;
-    organizationName: string | null;
-    jobTitle: string | null;
-    bio: string | null;
-    links: string[];
-    headshotUploaded: boolean;
-    headshotUpdatedAt: string | null;
-    headshotUrl: string | null;
-  }>;
 }

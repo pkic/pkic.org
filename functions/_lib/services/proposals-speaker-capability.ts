@@ -3,21 +3,13 @@ import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
 import { verifyDatabaseCapability } from "./capability-links";
 import type { ProposalRecord, ProposalSpeakerRecord } from "./proposals";
+import type { ProposalSpeakerUserProfile } from "./proposal-speakers";
 
 export interface SpeakerWithContext {
   speaker: ProposalSpeakerRecord;
   proposal: ProposalRecord;
-  user: {
+  user: ProposalSpeakerUserProfile & {
     id: string;
-    email: string;
-    first_name: string | null;
-    last_name: string | null;
-    organization_name: string | null;
-    job_title: string | null;
-    biography: string | null;
-    links_json: string | null;
-    headshot_r2_key: string | null;
-    headshot_updated_at: string | null;
   };
 }
 
@@ -39,8 +31,8 @@ export async function getSpeakerByManageToken(
     ps_id: string;
     ps_proposal_id: string;
     ps_user_id: string;
-    ps_role: string;
-    ps_status: string;
+    ps_role: ProposalSpeakerRecord["role"];
+    ps_status: ProposalSpeakerRecord["status"];
     ps_manage_link_secret: string | null;
     ps_terms_accepted_at: string | null;
     ps_confirmed_at: string | null;
@@ -51,13 +43,14 @@ export async function getSpeakerByManageToken(
     sp_id: string;
     sp_event_id: string;
     sp_proposer_user_id: string;
-    sp_status: string;
-    sp_proposal_type: string;
+    sp_status: ProposalRecord["status"];
+    sp_proposal_type: ProposalRecord["proposal_type"];
     sp_title: string;
     sp_abstract: string;
     sp_details_json: string | null;
     sp_referral_code: string | null;
     sp_manage_link_secret: string;
+    sp_review_round: number;
     sp_submitted_at: string;
     sp_updated_at: string;
     sp_withdrawn_at: string | null;
@@ -97,6 +90,7 @@ export async function getSpeakerByManageToken(
        sp.details_json    AS sp_details_json,
        sp.referral_code   AS sp_referral_code,
        sp.manage_link_secret AS sp_manage_link_secret,
+       sp.review_round    AS sp_review_round,
        sp.submitted_at    AS sp_submitted_at,
        sp.updated_at      AS sp_updated_at,
        sp.withdrawn_at    AS sp_withdrawn_at,
@@ -148,6 +142,7 @@ export async function getSpeakerByManageToken(
       details_json: row.sp_details_json,
       referral_code: row.sp_referral_code,
       manage_link_secret: row.sp_manage_link_secret,
+      review_round: row.sp_review_round,
       submitted_at: row.sp_submitted_at,
       updated_at: row.sp_updated_at,
       withdrawn_at: row.sp_withdrawn_at,

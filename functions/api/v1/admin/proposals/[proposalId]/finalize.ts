@@ -1,68 +1,33 @@
-import { parseJsonBody } from "../../../../../_lib/validation";
-import { json } from "../../../../../_lib/http";
-import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
-import { getProposalAccessForEvent } from "../../../../../_lib/auth/proposal-access";
-import { finalizeProposalDecision } from "../../../../../_lib/services/proposals";
+import type { ValidatedData } from "chanfana";
+import { finalizeProposalResponseSchema } from "../../../../../../assets/shared/schemas/api";
+import { adminProposalFinalizeRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts";
+import { requireUserBackedAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getConfig, resolveAppBaseUrl } from "../../../../../_lib/config";
-import { prepareQueueEmailStatement, processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
-import { first } from "../../../../../_lib/db/queries";
-import { proposalManagePageUrl, speakerManagePageUrl } from "../../../../../_lib/services/frontend-links";
-import { prepareAuditLog } from "../../../../../_lib/services/audit";
-import { finalizeProposalSchema } from "../../../../../../assets/shared/schemas/api";
-import { buildProposalDecisionEmailPlan } from "./decision-emails";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
+import { json } from "../../../../../_lib/http";
 import { queuedCapabilityToken } from "../../../../../_lib/services/capability-links";
-import type { z } from "zod";
+import { proposalManagePageUrl, speakerManagePageUrl } from "../../../../../_lib/services/frontend-links";
+import { finalizeProposalWithNotifications } from "../../../../../_lib/services/proposal-decisions";
 
-/**
- * `data` is supplied when called through the `openApiRoute` factory (the
- * real HTTP path — the body is already validated there, and re-reading it
- * here would throw since chanfana already consumed the request stream).
- * Falls back to parsing the body itself when called directly, as several
- * tests do, bypassing the factory entirely.
- */
 export async function onRequestPost(
   c: AdminContext,
-  data?: { body: z.infer<typeof finalizeProposalSchema> },
+  data: ValidatedData<typeof adminProposalFinalizeRouteSchema>,
 ): Promise<Response> {
-  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const proposalId = c.req.param("proposalId");
-
-  const accessCheckProposal = await first<{ event_id: string }>(
-    requestDb(c),
-    "SELECT event_id FROM session_proposals WHERE id = ?",
-    [proposalId],
-  );
-  if (!accessCheckProposal) {
-    return json({ error: { code: "PROPOSAL_NOT_FOUND", message: "Proposal not found" } }, 404);
-  }
-
-  const access = await getProposalAccessForEvent(requestDb(c), accessCheckProposal.event_id, admin);
-  if (!access.canFinalize) {
-    return json({ error: { code: "FORBIDDEN", message: "Missing permission to finalize proposals" } }, 403);
-  }
-
-  const body = data?.body ?? (await parseJsonBody(c.req, finalizeProposalSchema));
-  const config = getConfig(c.env, c.req.raw);
-  const previousDecision = await first<{ final_status: string | null; decision_note: string | null }>(
-    requestDb(c),
-    `SELECT final_status, decision_note
-     FROM proposal_decisions
-     WHERE proposal_id = ?
-     ORDER BY decided_at DESC
-     LIMIT 1`,
-    [proposalId],
-  );
-
-  const minReviewsRequired = config.minProposalReviews;
-
+  const db = requestDb(c);
+  const admin = await requireUserBackedAdminFromRequest(db, c.req.raw, c.env);
+  const proposalId = data.params.proposalId;
+  const body = data.body;
+  const minReviewsRequired = getConfig(c.env, c.req.raw).minProposalReviews;
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-  const plan = await buildProposalDecisionEmailPlan(
-    requestDb(c),
+  const finalized = await finalizeProposalWithNotifications(
+    db,
     {
       proposalId,
+      actor: admin,
       finalStatus: body.finalStatus,
       decisionNote: body.decisionNote,
+      minReviewsRequired,
       presentationDeadline: body.presentationDeadline,
     },
     {
@@ -73,58 +38,9 @@ export async function onRequestPost(
         proposalManagePageUrl(appBaseUrl, event, queuedCapabilityToken("proposal_manage", resourceId)),
     },
   );
-
-  const preparedEmails = plan.messages.map((message) => ({
-    message,
-    prepared: prepareQueueEmailStatement(requestDb(c), {
-      eventId: plan.proposal.event_id,
-      templateKey: message.templateKey,
-      recipientEmail: message.recipientEmail,
-      recipientUserId: message.recipientUserId,
-      subject: message.fallbackSubject,
-      messageType: "transactional",
-      capabilityLinkValues: [message.data.manageUrl, message.data.profileUrl, message.data.uploadUrl],
-      data: message.data,
-    }),
-  }));
-  const sideEffects = preparedEmails.flatMap(({ message, prepared }) => [
-    prepared.statement,
-    prepareAuditLog(requestDb(c), "admin", admin.id, "proposal_decision_email_queued", "proposal", proposalId, {
-      templateKey: { from: null, to: message.templateKey },
-      recipientEmail: { from: null, to: message.recipientEmail },
-      recipientUserId: { from: null, to: message.recipientUserId },
-    }),
-  ]);
-  sideEffects.push(
-    prepareAuditLog(requestDb(c), "admin", admin.id, "proposal_decision_recorded", "proposal", proposalId, {
-      adminEmail: { from: null, to: admin.email },
-      finalStatus: { from: previousDecision?.final_status ?? null, to: body.finalStatus },
-      decisionNote: { from: previousDecision?.decision_note ?? null, to: body.decisionNote ?? null },
-      queuedEmailCount: { from: 0, to: plan.messages.length },
-      manageLinkPolicy: { from: null, to: "expiring_capability" },
-    }),
-  );
-
-  const finalized = await finalizeProposalDecision(requestDb(c), {
-    proposalId,
-    decidedByUserId: admin.id,
-    finalStatus: body.finalStatus,
-    decisionNote: body.decisionNote,
-    minReviewsRequired,
-    presentationDeadline: body.presentationDeadline,
-    presentationReminderUserIds: plan.presentationReminderUserIds,
-    additionalStatements: sideEffects,
-  });
-  for (const { prepared } of preparedEmails) {
-    c.executionCtx.waitUntil(processOutboxByIdBackground(requestDb(c), c.env, prepared.id));
+  for (const outboxId of finalized.outboxIds) {
+    c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, outboxId));
   }
 
-  return json({ success: true, ...finalized, minReviewsRequired });
-}
-
-export async function onRequest(c: AdminContext): Promise<Response> {
-  if (c.req.raw.method !== "POST") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
-  return onRequestPost(c);
+  return json(finalizeProposalResponseSchema.parse({ success: true, ...finalized, minReviewsRequired }));
 }

@@ -37,6 +37,24 @@ function seedRepresentativePre0035State(db: DatabaseSync): void {
     INSERT INTO members (id, member_type, organization_id, status, created_at, updated_at)
     VALUES ('member-1', 'organization', 'org-1', 'active', '2025-01-01', '2025-01-01');
 
+    INSERT INTO session_proposals
+      (id, event_id, proposer_user_id, status, proposal_type, title, abstract,
+       manage_link_secret, submitted_at, updated_at)
+    VALUES
+      ('proposal-1', 'event-1', 'organizer-1', 'accepted', 'talk', 'Existing proposal',
+       'An existing proposal decision that must survive the consolidated migration.',
+       'proposal-secret', '2025-01-01', '2025-01-02');
+
+    INSERT INTO proposal_reviews
+      (id, proposal_id, reviewer_user_id, recommendation, score, created_at, updated_at)
+    VALUES ('review-1', 'proposal-1', 'admin-1', 'accept', 9, '2025-01-01', '2025-01-01');
+
+    INSERT INTO proposal_decisions
+      (id, proposal_id, decided_by_user_id, final_status, decision_note,
+       min_reviews_required, review_count, decided_at)
+    VALUES
+      ('decision-1', 'proposal-1', 'admin-1', 'accepted', 'Accepted before upgrade', 1, 1, '2025-01-02');
+
     INSERT INTO event_permissions
       (id, event_id, user_email, user_id, permission, granted_by_id, created_at)
     VALUES
@@ -182,5 +200,34 @@ describe("consolidated pending migration upgrade", () => {
       { name: "uq_user_roles_active_email_role_context" },
       { name: "uq_user_roles_active_user_role_context" },
     ]);
+    expect(db.prepare("SELECT review_round FROM session_proposals WHERE id = 'proposal-1'").get()).toEqual({
+      review_round: 1,
+    });
+    expect(db.prepare("SELECT review_round FROM proposal_reviews WHERE id = 'review-1'").get()).toEqual({
+      review_round: 1,
+    });
+    expect(db.prepare("SELECT review_round FROM proposal_decisions WHERE id = 'decision-1'").get()).toEqual({
+      review_round: 1,
+    });
+    expect(
+      db
+        .prepare(
+          "SELECT id, proposal_id, review_round, final_status FROM proposal_decision_history WHERE proposal_id = 'proposal-1'",
+        )
+        .get(),
+    ).toEqual({ id: "decision-1", proposal_id: "proposal-1", review_round: 1, final_status: "accepted" });
+    expect(
+      db
+        .prepare(
+          "SELECT decision_id, proposal_id, review_round, review_id, score FROM proposal_review_history WHERE proposal_id = 'proposal-1'",
+        )
+        .get(),
+    ).toEqual({
+      decision_id: "decision-1",
+      proposal_id: "proposal-1",
+      review_round: 1,
+      review_id: "review-1",
+      score: 9,
+    });
   });
 });

@@ -3,6 +3,8 @@ import { eventIdSchema } from "./api-common";
 import { paginatedResponseSchema } from "./pagination";
 import { activeFormSummarySchema } from "./forms";
 import { databaseIdSchema } from "./identifiers";
+import { proposalDecisionStatusSchema, proposalStatusSchema } from "./proposal-status";
+import { proposalSessionTypesSchema } from "./proposal-management";
 
 export const proposalAccessSchema = z.object({
   eventPermissions: z.array(z.string()),
@@ -14,10 +16,11 @@ const adminEventProposalCoreSchema = z.object({
   id: databaseIdSchema,
   event_id: eventIdSchema,
   proposer_user_id: databaseIdSchema,
-  status: z.string(),
+  status: proposalStatusSchema,
   proposal_type: z.string(),
   title: z.string(),
   abstract: z.string(),
+  review_round: z.number().int().positive(),
   submitted_at: z.string(),
   updated_at: z.string(),
 });
@@ -29,7 +32,7 @@ const proposalProposerSchema = z.object({
 });
 
 const proposalDecisionSchema = z.object({
-  decision_status: z.string().nullable(),
+  decision_status: proposalDecisionStatusSchema.nullable(),
   decision_note: z.string().nullable(),
   decision_decided_at: z.string().nullable(),
 });
@@ -53,18 +56,15 @@ export const adminProposalDetailSchema = adminEventProposalCoreSchema
     details: z.record(z.string(), z.unknown()).nullable(),
   });
 
-export const proposalSessionTypeSchema = z.object({
-  label: z.string(),
-  requiresPresentation: z.boolean(),
-});
-
 export const adminProposalDetailResponseSchema = z.object({
   proposal: adminProposalDetailSchema,
   access: proposalAccessSchema,
   form: activeFormSummarySchema.nullable(),
   minReviewsRequired: z.number().int().nonnegative(),
-  sessionTypes: z.array(proposalSessionTypeSchema),
+  sessionTypes: proposalSessionTypesSchema,
 });
+
+export { proposalSessionTypeSchema } from "./proposal-management";
 
 export const proposalDecisionPreviewMessageSchema = z.object({
   id: z.string(),

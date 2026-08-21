@@ -3,6 +3,7 @@ import { proposalIdParamsSchema, proposalReviewIdParamsSchema } from "./api-comm
 import {
   adminProposalPatchResponseSchema,
   adminProposalPatchSchema,
+  finalizeProposalResponseSchema,
   finalizeProposalSchema,
 } from "./proposal-management";
 import { listQuerySchema } from "./pagination";
@@ -180,11 +181,15 @@ export const adminProposalFinalizeRouteSchema = {
     },
   },
   responses: {
-    "200": { description: "Proposal decision recorded and notifications queued." },
-    "400": { description: "Invalid finalize payload or insufficient reviews." },
+    "200": {
+      description: "Proposal decision recorded and notifications queued.",
+      content: { "application/json": { schema: finalizeProposalResponseSchema } },
+    },
+    "400": { description: "Invalid finalize payload." },
     "401": { description: "Admin authorization required." },
-    "403": { description: "The admin lacks finalize permission for this proposal." },
+    "403": { description: "The admin lacks finalize permission or is not an attributable user-backed actor." },
     "404": { description: "Proposal not found." },
+    "409": { description: "The proposal is not decidable, lacks review quorum, or changed concurrently." },
   },
 };
 
@@ -203,6 +208,7 @@ export const adminProposalFinalizePreviewRouteSchema = {
     "401": { description: "Admin authorization required." },
     "403": { description: "The admin lacks finalize permission for this proposal." },
     "404": { description: "Proposal not found." },
+    "409": { description: "The proposal is not in a state that can receive a decision." },
   },
 };
 

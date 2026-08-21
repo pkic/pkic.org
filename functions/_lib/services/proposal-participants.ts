@@ -53,3 +53,16 @@ export function prepareDeactivateProposalParticipantRoles(
     )
     .bind(nowIso(), payload.eventId, payload.userId, payload.sourceRef);
 }
+
+export function prepareSyncProposalParticipantRole(
+  db: DatabaseLike,
+  payload: {
+    eventId: string;
+    userId: string;
+    proposalRole: string;
+    sourceRef: string;
+    status: "active" | "inactive";
+  },
+): StatementLike[] {
+  return [prepareDeactivateProposalParticipantRoles(db, payload), prepareUpsertProposalParticipant(db, payload)];
+}

@@ -14,6 +14,8 @@ import { dayDateSchema, inviteeSchema } from "./registration";
 import { sourceTypeSchema } from "./source";
 import { addDuplicateStringIssues } from "./refinements";
 import { proposalRecommendationSchema } from "./proposal-reviews";
+import { proposalAdminStatusFilterSchema } from "./proposal-status";
+import { proposalSessionTypesSchema } from "./proposal-management";
 
 const eventProposalsSortSchema = z
   .enum([
@@ -39,20 +41,7 @@ const eventProposalsSortSchema = z
   .optional();
 
 export const adminEventProposalsQuerySchema = searchableListQuerySchema(eventProposalsSortSchema).extend({
-  status: z
-    .enum([
-      "active",
-      "submitted",
-      "resubmitted",
-      "under_review",
-      "accepted",
-      "rejected",
-      "needs-work",
-      "withdrawn",
-      "spam",
-      "duplicate",
-    ])
-    .optional(),
+  status: proposalAdminStatusFilterSchema.optional(),
   recommendation: proposalRecommendationSchema.optional(),
   deleted: z.literal("1").optional(),
 });
@@ -177,11 +166,7 @@ export const adminEventSettingsSchema = z.object({
   virtualUrl: z.string().trim().url().max(500).nullable().optional(),
   heroImageUrl: trimmedString(2, 500).nullable().optional(),
   location: trimmedString(2, 200).nullable().optional(),
-  sessionTypes: z
-    .array(z.object({ label: z.string().trim().min(1).max(80), requiresPresentation: z.boolean() }))
-    .max(20)
-    .nullable()
-    .optional(),
+  sessionTypes: proposalSessionTypesSchema.nullable().optional(),
   registrationFormKey: z
     .string()
     .trim()

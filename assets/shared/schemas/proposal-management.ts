@@ -13,20 +13,26 @@ import {
   trimmedString,
 } from "./api-common";
 import { consentItemSchema, participantProfileSchema, proposerProfileSchema, speakerRoleSchema } from "./registration";
-import { proposalDecisionStatusSchema } from "./proposal-status";
+import { proposalDecisionStatusSchema, proposalStatusSchema } from "./proposal-status";
+import { addDuplicateStringIssues } from "./refinements";
 
-export const proposalTypeSchema = z.enum([
-  "keynote",
-  "talk",
-  "workshop",
-  "panel",
-  "tutorial",
-  "lightning_talk",
-  "roundtable",
-  "birds_of_a_feather",
-  "fireside_chat",
-  "demo",
-]);
+/** Event-defined session-type label; allowed values are checked against the event in the service layer. */
+export const proposalTypeSchema = trimmedString(2, 64);
+export type ProposalType = z.infer<typeof proposalTypeSchema>;
+export const proposalSessionTypeSchema = z.object({
+  label: proposalTypeSchema,
+  requiresPresentation: z.boolean(),
+});
+export const proposalSessionTypesSchema = z
+  .array(proposalSessionTypeSchema)
+  .max(20)
+  .superRefine((sessionTypes, context) =>
+    addDuplicateStringIssues(sessionTypes, context, {
+      value: (sessionType) => sessionType.label.toLocaleLowerCase("en-US"),
+      path: (index) => [index, "label"],
+      label: "Session type",
+    }),
+  );
 
 const proposalTitleSchema = trimmedString(8, 180);
 const proposalAbstractSchema = trimmedString(80, 8000);
@@ -82,9 +88,9 @@ export const proposalCreateSchema = boundedJsonObject(
 });
 
 export const proposalCreateResponseSchema = z.object({
-  success: z.boolean(),
+  success: z.literal(true),
   proposalId: databaseIdSchema,
-  status: z.string(),
+  status: proposalStatusSchema,
   manageToken: z.string(),
   manageUrl: z.string().url(),
   shareUrl: z.string().url(),
@@ -107,12 +113,89 @@ export const proposalManageSchema = boundedJsonObject(
     details: z.record(z.string().trim().min(1).max(80), z.unknown()).optional(),
   },
   30_000,
-);
+).superRefine((value, context) => {
+  const updateFields = [value.proposalType, value.title, value.abstract, value.details];
+  if (value.action === "update" && updateFields.every((field) => field === undefined)) {
+    context.addIssue({ code: "custom", message: "Provide at least one proposal field to update" });
+  }
+  if (value.action === "withdraw" && updateFields.some((field) => field !== undefined)) {
+    context.addIssue({ code: "custom", message: "A withdrawal cannot include proposal field updates" });
+  }
+});
 
-export const finalizeProposalSchema = z.object({
-  finalStatus: proposalDecisionStatusSchema,
-  decisionNote: trimmedString(3, 10_000).optional(),
-  presentationDeadline: z.iso.datetime().optional(),
+export const proposalManageTokenParamsSchema = z.object({ token: tokenSchema });
+
+export const proposalManageRecordSchema = z.object({
+  id: databaseIdSchema,
+  status: proposalStatusSchema,
+  proposal_type: proposalTypeSchema,
+  title: z.string(),
+  abstract: z.string(),
+  details: z.record(z.string(), z.unknown()).nullable(),
+});
+
+export const proposalManageSpeakerStatusSchema = z.enum(["pending", "invited", "confirmed", "declined"]);
+export type ProposalManageSpeakerStatus = z.infer<typeof proposalManageSpeakerStatusSchema>;
+export const proposalManageSpeakerSchema = z.object({
+  userId: databaseIdSchema,
+  role: speakerRoleSchema,
+  status: proposalManageSpeakerStatusSchema,
+  confirmedAt: z.string().nullable(),
+  declinedAt: z.string().nullable(),
+  email: normalizedEmailSchema,
+  firstName: z.string().nullable(),
+  lastName: z.string().nullable(),
+  organizationName: z.string().nullable(),
+  jobTitle: z.string().nullable(),
+  bio: z.string().nullable(),
+  links: linksSchema,
+  headshotUploaded: z.boolean(),
+  headshotUpdatedAt: z.string().nullable(),
+  headshotUrl: z.string().url().nullable(),
+});
+
+export const proposalManageReadResponseSchema = z.object({
+  success: z.literal(true),
+  proposal: proposalManageRecordSchema,
+  speakers: z.array(proposalManageSpeakerSchema).max(8),
+});
+
+export const proposalManageUpdateResponseSchema = z.object({
+  success: z.literal(true),
+  proposal: proposalManageRecordSchema,
+});
+
+export type ProposalManageResponse = z.infer<typeof proposalManageReadResponseSchema>;
+
+export const finalizeProposalSchema = z
+  .object({
+    finalStatus: proposalDecisionStatusSchema,
+    decisionNote: trimmedString(3, 10_000).optional(),
+    presentationDeadline: z.iso.datetime().optional(),
+  })
+  .superRefine((value, context) => {
+    if (value.finalStatus === "needs-work" && !value.decisionNote) {
+      context.addIssue({
+        code: "custom",
+        path: ["decisionNote"],
+        message: "A decision note is required when requesting changes",
+      });
+    }
+    if (value.finalStatus !== "accepted" && value.presentationDeadline) {
+      context.addIssue({
+        code: "custom",
+        path: ["presentationDeadline"],
+        message: "A presentation deadline is only valid for accepted proposals",
+      });
+    }
+  });
+
+export const finalizeProposalResponseSchema = z.object({
+  success: z.literal(true),
+  decisionId: databaseIdSchema,
+  reviewRound: z.number().int().positive(),
+  reviewCount: z.number().int().nonnegative(),
+  minReviewsRequired: z.number().int().nonnegative(),
 });
 
 export const adminProposalPatchSchema = z
