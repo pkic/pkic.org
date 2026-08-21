@@ -5,11 +5,22 @@ import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import app from "../functions/router";
 import { onRequestPost as finalizeProposal } from "../functions/api/v1/admin/proposals/[proposalId]/finalize";
-import { onRequestPost as upsertReview } from "../functions/api/v1/admin/proposals/[proposalId]/reviews";
 import { createProposal, addProposalSpeaker, finalizeProposalDecision } from "../functions/_lib/services/proposals";
 import { activateTemplateVersion, createTemplateVersion } from "../functions/_lib/email/templates";
 import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 import { proposalFlagResponseSchema } from "../assets/shared/schemas/proposal-status";
+
+async function postProposalReview(proposalId: string, token: string, body: unknown): Promise<Response> {
+  return app.fetch(
+    new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/reviews`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    }),
+    env as any,
+    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+  );
+}
 
 async function seedProposalWithSpeaker(
   eventId: string,
@@ -57,17 +68,7 @@ async function addReviews(eventId: string, proposalId: string, adminId: string, 
     `,
     ).run();
     const token = await createAdminSession(env.DB, id, `reviewer-token-${i}`);
-    await upsertReview(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/reviews`, {
-          method: "POST",
-          headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-          body: JSON.stringify({ recommendation: "accept", score: 8 }),
-        }),
-        { proposalId },
-      ),
-    );
+    await postProposalReview(proposalId, token, { recommendation: "accept", score: 8 });
     extraAdminIds.push(id);
   }
   return extraAdminIds;

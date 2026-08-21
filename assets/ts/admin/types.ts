@@ -74,6 +74,7 @@ import type {
   AdminWorkingGroupMember as CanonicalAdminWorkingGroupMember,
   AdminWorkingGroupSummary as CanonicalAdminWorkingGroupSummary,
 } from "../../shared/schemas/working-groups";
+import type { ProposalReview as CanonicalProposalReview } from "../../shared/schemas/proposal-reviews";
 
 export { SPONSORSHIP_PIPELINE_STAGES };
 export type { SponsorshipPipelineStage };
@@ -226,18 +227,7 @@ export type AdminWorkingGroupDetail = CanonicalAdminWorkingGroupDetail;
 
 export type ProposalSummary = CanonicalAdminEventProposalSummary;
 
-export interface ProposalReview {
-  id: string;
-  reviewer_user_id: string;
-  recommendation: "accept" | "reject" | "needs-work";
-  score: number | null;
-  reviewer_comment: string | null;
-  applicant_note: string | null;
-  updated_at: string;
-  reviewer_email?: string;
-  reviewer_first_name?: string | null;
-  reviewer_last_name?: string | null;
-}
+export type ProposalReview = CanonicalProposalReview;
 
 export interface ProposalSpeaker {
   userId: string;

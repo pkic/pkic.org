@@ -6,7 +6,6 @@ import { adminProposalDetailResponseSchema } from "../assets/shared/schemas/admi
 import app from "../functions/router";
 import { onRequestGet as getProposalDetail } from "../functions/api/v1/admin/proposals/[proposalId]";
 import { onRequestPost as openProposalManage } from "../functions/api/v1/admin/proposals/[proposalId]/open-manage";
-import { onRequestGet as getProposalReviews } from "../functions/api/v1/admin/proposals/[proposalId]/reviews";
 import { onRequestPatch as updateProposalSpeaker } from "../functions/api/v1/admin/proposals/[proposalId]/speakers/[userId]";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
@@ -17,6 +16,7 @@ import {
   proposalCommentsListResponseSchema,
 } from "../assets/shared/schemas/proposal-comments";
 import { adminProposalPatchResponseSchema } from "../assets/shared/schemas/proposal-management";
+import { proposalReviewsListResponseSchema } from "../assets/shared/schemas/proposal-reviews";
 
 const proposalDetails = {
   audience: "Operators",
@@ -58,6 +58,16 @@ async function callAdminProposalPatch(token: string, proposalId: string, body: u
       method: "PATCH",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       body: JSON.stringify(body),
+    }),
+    env as any,
+    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+  );
+}
+
+async function callAdminProposalReviews(token: string, proposalId: string, suffix = ""): Promise<Response> {
+  return app.fetch(
+    new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/reviews${suffix}`, {
+      headers: { authorization: `Bearer ${token}` },
     }),
     env as any,
     { passThroughOnException: () => {}, waitUntil: () => {} } as any,
@@ -451,24 +461,52 @@ describe("admin proposal endpoints", () => {
 
     const adminToken = await createAdminSession(env.DB, adminId, "token-admin-reviews");
 
-    const response = await getProposalReviews(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/reviews`, {
-          headers: { authorization: `Bearer ${adminToken}` },
-        }),
-        { proposalId },
-      ),
-    );
+    const response = await callAdminProposalReviews(adminToken, proposalId);
 
     expect(response.status).toBe(200);
-    const payload = (await response.json()) as {
-      reviews: Array<{ reviewer_email?: string; reviewer_first_name?: string | null }>;
-    };
+    const payload = proposalReviewsListResponseSchema.parse(await response.json());
 
     expect(payload.reviews.length).toBe(1);
     expect(payload.reviews[0].reviewer_email).toBe("admin@pkic.org");
     expect(payload.reviews[0].reviewer_first_name ?? null).toBeNull();
+    expect(payload.summary).toMatchObject({ totalReviews: 1, acceptCount: 1, quorumMet: false });
+    expect(payload.page).toEqual({ limit: 25, offset: 0, total: 1, hasMore: false });
+  });
+
+  it("searches and paginates reviews in D1 while returning unfiltered proposal aggregates", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const secondReviewerId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO users (id, email, normalized_email, first_name, role, active, created_at, updated_at)
+           VALUES (?, 'second-reviewer@pkic.org', 'second-reviewer@pkic.org', 'Second', 'admin', 1, datetime('now'), datetime('now'))`,
+      ).bind(secondReviewerId),
+      env.DB.prepare(
+        `INSERT INTO proposal_reviews (
+             id, proposal_id, reviewer_user_id, recommendation, score,
+             reviewer_comment, applicant_note, created_at, updated_at
+           ) VALUES (?, ?, ?, 'reject', 7, 'Different deployment concern', NULL, datetime('now'), datetime('now'))`,
+      ).bind(crypto.randomUUID(), proposalId, secondReviewerId),
+    ]);
+    const adminToken = await createAdminSession(env.DB, adminId, "token-admin-review-query");
+
+    const response = await callAdminProposalReviews(adminToken, proposalId, "?limit=1&q=deployment&sort=-score");
+
+    expect(response.status).toBe(200);
+    const payload = proposalReviewsListResponseSchema.parse(await response.json());
+    expect(payload.reviews.map((review) => review.reviewer_email)).toEqual(["second-reviewer@pkic.org"]);
+    expect(payload.page).toEqual({ limit: 1, offset: 0, total: 1, hasMore: false });
+    expect(payload.myReview?.reviewer_user_id).toBe(adminId);
+    expect(payload.summary).toEqual({
+      totalReviews: 2,
+      averageScore: 8,
+      acceptCount: 1,
+      needsWorkCount: 0,
+      rejectCount: 1,
+      minReviewsRequired: 2,
+      quorumMet: true,
+    });
   });
 
   it("stores and returns internal proposal comments", async () => {

@@ -7,7 +7,6 @@ import { onRequestPost as requestAdminLink } from "../functions/api/v1/admin/aut
 import { onRequestPost as verifyAdminLink } from "../functions/api/v1/admin/auth/verify-link";
 import { onRequestPost as inviteSpeakersBulk } from "../functions/api/v1/admin/events/[eventSlug]/invites/speakers/bulk";
 import { onRequestPost as previewSpeakerInvites } from "../functions/api/v1/admin/events/[eventSlug]/invites/speakers/preview";
-import { onRequestPost as addProposalReview } from "../functions/api/v1/admin/proposals/[proposalId]/reviews";
 import { onRequestPost as finalizeProposal } from "../functions/api/v1/admin/proposals/[proposalId]/finalize";
 import { onRequestPost as submitProposal } from "../functions/api/v1/events/[eventSlug]/proposals";
 import { onRequestPost as createRegistration } from "../functions/api/v1/events/[eventSlug]/registrations";
@@ -18,6 +17,7 @@ import { onRequestGet as referralRedirect } from "../functions/r/[code]";
 import { onRequestPost as retryPendingEmail } from "../functions/api/v1/internal/email/retry";
 import { queueEmail } from "../functions/_lib/email/outbox";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
+import app from "../functions/router";
 
 interface VerifyAdminPayload {
   token: string;
@@ -102,6 +102,10 @@ async function extractTokenFromOutboxUrl(payloadJson: string, fieldName: string)
     throw new Error(`Missing token in ${fieldName}`);
   }
   return token;
+}
+
+async function callMountedApp(request: Request): Promise<Response> {
+  return app.fetch(request, env as any, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
 }
 
 describe("full workflow", () => {
@@ -252,43 +256,35 @@ describe("full workflow", () => {
       expect(proposalResponse.status).toBe(200);
       const createdProposal = (await proposalResponse.json()) as ProposalPayload;
 
-      const reviewOneResponse = await addProposalReview(
-        createContext(
-          env,
-          new Request(`https://app.test/api/v1/admin/proposals/${createdProposal.proposalId}/reviews`, {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              cookie: adminSessionCookie,
-            },
-            body: JSON.stringify({
-              recommendation: "accept",
-              score: 9,
-              reviewerComment: "Strong proposal",
-            }),
+      const reviewOneResponse = await callMountedApp(
+        new Request(`https://app.test/api/v1/admin/proposals/${createdProposal.proposalId}/reviews`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            cookie: adminSessionCookie,
+          },
+          body: JSON.stringify({
+            recommendation: "accept",
+            score: 9,
+            reviewerComment: "Strong proposal",
           }),
-          { proposalId: createdProposal.proposalId },
-        ),
+        }),
       );
       expect(reviewOneResponse.status).toBe(200);
 
-      const reviewTwoResponse = await addProposalReview(
-        createContext(
-          env,
-          new Request(`https://app.test/api/v1/admin/proposals/${createdProposal.proposalId}/reviews`, {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              authorization: `Bearer ${reviewerToken}`,
-            },
-            body: JSON.stringify({
-              recommendation: "accept",
-              score: 8,
-              reviewerComment: "Also strong",
-            }),
+      const reviewTwoResponse = await callMountedApp(
+        new Request(`https://app.test/api/v1/admin/proposals/${createdProposal.proposalId}/reviews`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${reviewerToken}`,
+          },
+          body: JSON.stringify({
+            recommendation: "accept",
+            score: 8,
+            reviewerComment: "Also strong",
           }),
-          { proposalId: createdProposal.proposalId },
-        ),
+        }),
       );
       expect(reviewTwoResponse.status).toBe(200);
 

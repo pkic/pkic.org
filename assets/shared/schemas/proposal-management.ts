@@ -109,32 +109,6 @@ export const proposalManageSchema = boundedJsonObject(
   30_000,
 );
 
-export const reviewUpsertSchema = z.object({
-  recommendation: z.enum(["accept", "reject", "needs-work"]),
-  score: z.number().int().min(1).max(10),
-  reviewerComment: z.preprocess(
-    (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
-    trimmedString(3, 10_000).optional(),
-  ),
-  applicantNote: z.preprocess(
-    (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
-    trimmedString(3, 10_000).optional(),
-  ),
-});
-
-export const reviewPatchSchema = z.object({
-  recommendation: z.enum(["accept", "reject", "needs-work"]).optional(),
-  score: z.number().int().min(1).max(10).nullable().optional(),
-  reviewerComment: z.preprocess(
-    (value) => (typeof value === "string" && value.trim() === "" ? null : value),
-    trimmedString(3, 10_000).nullable().optional(),
-  ),
-  applicantNote: z.preprocess(
-    (value) => (typeof value === "string" && value.trim() === "" ? null : value),
-    trimmedString(3, 10_000).nullable().optional(),
-  ),
-});
-
 export const finalizeProposalSchema = z.object({
   finalStatus: proposalDecisionStatusSchema,
   decisionNote: trimmedString(3, 10_000).optional(),

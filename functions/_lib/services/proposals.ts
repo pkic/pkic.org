@@ -380,10 +380,4 @@ export {
   updateProposalSpeakerRole,
 } from "./proposal-speakers";
 export type { ProposalInviteEmailContext, ProposalSpeakerRecord, ProposalSpeakerWithUser } from "./proposal-speakers";
-export {
-  buildProposalReviewAuditDetails,
-  listProposalReviews,
-  updateReviewById,
-  upsertProposalReview,
-} from "./proposal-reviews";
-export type { ProposalReviewRecord } from "./proposal-reviews";
+export { listProposalReviews, updateProposalReview, upsertProposalReview } from "./proposal-reviews";

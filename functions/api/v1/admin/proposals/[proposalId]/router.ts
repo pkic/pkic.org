@@ -17,6 +17,8 @@ import {
   adminProposalFlagRouteSchema,
   adminProposalOpenManageRouteSchema,
   adminProposalPatchRouteSchema,
+  adminProposalReviewsListRouteSchema,
+  adminProposalReviewUpsertRouteSchema,
   adminProposalSpeakersRouteSchema,
 } from "../../../../../../assets/shared/schemas/route-contracts";
 import { AdminProposalsProposalIdGet } from "./index";
@@ -30,7 +32,10 @@ import {
   onRequestGet as AdminProposalsProposalIdCommentsGet_l,
   onRequestPost as AdminProposalsProposalIdCommentsPost_l,
 } from "./comments";
-import { AdminProposalsProposalIdReviewsGet, AdminProposalsProposalIdReviewsPost } from "./reviews";
+import {
+  onRequestGet as AdminProposalsProposalIdReviewsGet_l,
+  onRequestPost as AdminProposalsProposalIdReviewsPost_l,
+} from "./reviews";
 import { onRequestGet as AdminProposalsProposalIdSpeakersGet_l } from "./speakers";
 import { onRequestPost as AdminProposalsProposalIdRemindSpeakersPost_l } from "./remind-speakers";
 import { onRequestPost as AdminProposalsProposalIdRemindPresentationPost_l } from "./remind-presentation";
@@ -116,6 +121,14 @@ const AdminProposalsProposalIdCommentsPost = openApiRoute(
 const AdminProposalsProposalIdSpeakersGet = openApiRoute(
   adminProposalSpeakersRouteSchema,
   AdminProposalsProposalIdSpeakersGet_l,
+);
+const AdminProposalsProposalIdReviewsGet = openApiRoute(
+  adminProposalReviewsListRouteSchema,
+  AdminProposalsProposalIdReviewsGet_l,
+);
+const AdminProposalsProposalIdReviewsPost = openApiRoute(
+  adminProposalReviewUpsertRouteSchema,
+  AdminProposalsProposalIdReviewsPost_l,
 );
 
 openapi.get("/", AdminProposalsProposalIdGet);

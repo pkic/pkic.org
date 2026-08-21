@@ -12,7 +12,7 @@ export function ProposalSidebar({
   access,
   proposalRequiresPresentation,
   loading,
-  reviews,
+  reviewCount,
   minReviewsRequired,
   quorumMet,
   averageScore,
@@ -33,7 +33,7 @@ export function ProposalSidebar({
   access: ProposalAccess;
   proposalRequiresPresentation: boolean;
   loading: boolean;
-  reviews: ProposalReview[];
+  reviewCount: number;
   minReviewsRequired: number;
   quorumMet: boolean;
   averageScore: number | null;
@@ -141,16 +141,16 @@ export function ProposalSidebar({
             </dd>
             <dt>Reviews</dt>
             <dd class="mb-2">
-              {loading ? "…" : reviews.length} / {minReviewsRequired} required
+              {loading ? "…" : reviewCount} / {minReviewsRequired} required
               <div class={`small ${quorumMet ? "text-success" : "text-warning"}`}>
                 {quorumMet ? "Quorum met" : "Quorum not met"}
               </div>
-              {!loading && reviews.length > 0 && (
+              {!loading && reviewCount > 0 && (
                 <div class="small text-muted mt-1">
                   Avg score {averageScore == null || Number.isNaN(averageScore) ? "—" : averageScore.toFixed(1)}
                 </div>
               )}
-              {!loading && reviews.length > 0 && (
+              {!loading && reviewCount > 0 && (
                 <div class="d-flex gap-1 flex-wrap mt-1">
                   {recommendationCounts.accept > 0 && (
                     <Badge status="accept" label={`Accept ${recommendationCounts.accept}`} />

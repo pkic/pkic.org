@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { proposalIdParamsSchema } from "./api-common";
+import { proposalIdParamsSchema, proposalReviewIdParamsSchema } from "./api-common";
 import {
   adminProposalPatchResponseSchema,
   adminProposalPatchSchema,
@@ -14,6 +14,13 @@ import {
   proposalCommentsListResponseSchema,
 } from "./proposal-comments";
 import { proposalFlagRequestSchema, proposalFlagResponseSchema } from "./proposal-status";
+import {
+  proposalReviewPatchSchema,
+  proposalReviewsListQuerySchema,
+  proposalReviewsListResponseSchema,
+  proposalReviewUpsertSchema,
+  proposalReviewWriteResponseSchema,
+} from "./proposal-reviews";
 
 export const adminProposalOpenManageRouteSchema = {
   tags: ["Admin proposals"],
@@ -87,6 +94,73 @@ export const adminProposalFlagRouteSchema = {
     "404": { description: "Proposal not found." },
     "409": { description: "Proposal was finalized or changed concurrently." },
   },
+};
+
+export const adminProposalReviewsListRouteSchema = {
+  tags: ["Admin proposal reviews"],
+  summary: "List proposal reviews",
+  description: "Searches, filters, sorts, and paginates reviews in D1 and returns proposal-level review aggregates.",
+  request: {
+    params: proposalIdParamsSchema,
+    query: proposalReviewsListQuerySchema,
+  },
+  responses: {
+    "200": {
+      description: "Proposal reviews and server-computed review statistics.",
+      content: { "application/json": { schema: proposalReviewsListResponseSchema } },
+    },
+    "401": { description: "Missing or invalid authentication." },
+    "403": { description: "The actor lacks review access for this proposal." },
+    "404": { description: "Proposal not found." },
+  },
+};
+
+export const adminProposalReviewUpsertRouteSchema = {
+  tags: ["Admin proposal reviews"],
+  summary: "Create or update my proposal review",
+  request: {
+    params: proposalIdParamsSchema,
+    body: {
+      content: { "application/json": { schema: proposalReviewUpsertSchema } },
+      required: true,
+    },
+  },
+  responses: {
+    "200": {
+      description: "The proposal review and its audit event were saved atomically.",
+      content: { "application/json": { schema: proposalReviewWriteResponseSchema } },
+    },
+    "400": { description: "Invalid review payload." },
+    "401": { description: "Missing or invalid authentication." },
+    "403": { description: "The actor lacks review access for this proposal." },
+    "404": { description: "Proposal not found." },
+    "409": { description: "The proposal was finalized or the review changed concurrently." },
+  },
+  "x-pkic-mcp": { expose: true },
+};
+
+export const adminProposalReviewPatchRouteSchema = {
+  tags: ["Admin proposal reviews"],
+  summary: "Update a proposal review",
+  request: {
+    params: proposalReviewIdParamsSchema,
+    body: {
+      content: { "application/json": { schema: proposalReviewPatchSchema } },
+      required: true,
+    },
+  },
+  responses: {
+    "200": {
+      description: "The proposal review and its audit event were updated atomically.",
+      content: { "application/json": { schema: proposalReviewWriteResponseSchema } },
+    },
+    "400": { description: "Invalid review payload." },
+    "401": { description: "Missing or invalid authentication." },
+    "403": { description: "The actor may not edit this review." },
+    "404": { description: "Proposal or review not found." },
+    "409": { description: "The proposal was finalized or the review changed concurrently." },
+  },
+  "x-pkic-mcp": { expose: true },
 };
 
 export const adminProposalFinalizeRouteSchema = {

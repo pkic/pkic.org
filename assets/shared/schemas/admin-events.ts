@@ -13,6 +13,7 @@ import { paginatedResponseSchema, searchableListQuerySchema, sortColumnSchema } 
 import { dayDateSchema, inviteeSchema } from "./registration";
 import { sourceTypeSchema } from "./source";
 import { addDuplicateStringIssues } from "./refinements";
+import { proposalRecommendationSchema } from "./proposal-reviews";
 
 const eventProposalsSortSchema = z
   .enum([
@@ -52,7 +53,7 @@ export const adminEventProposalsQuerySchema = searchableListQuerySchema(eventPro
       "duplicate",
     ])
     .optional(),
-  recommendation: z.enum(["accept", "reject", "needs-work"]).optional(),
+  recommendation: proposalRecommendationSchema.optional(),
   deleted: z.literal("1").optional(),
 });
 

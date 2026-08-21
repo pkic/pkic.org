@@ -63,15 +63,17 @@ test("renders the admin proposal detail workflow with submission answers and ope
     });
   });
 
-  await page.route(`**/api/v1/admin/proposals/${proposalId}/reviews`, async (route) => {
+  await page.route(`**/api/v1/admin/proposals/${proposalId}/reviews**`, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
+        proposalId,
         reviews: [
           {
-            id: "review-1",
-            reviewer_user_id: "reviewer-1",
+            id: "88888888888888888888888888888881",
+            proposal_id: proposalId,
+            reviewer_user_id: "88888888888888888888888888888882",
             reviewer_email: "reviewer@pkic.org",
             reviewer_first_name: "Ada",
             reviewer_last_name: "Reviewer",
@@ -79,9 +81,21 @@ test("renders the admin proposal detail workflow with submission answers and ope
             score: 9,
             reviewer_comment: "Strong operational framing and practical guidance.",
             applicant_note: "Please keep the examples grounded in deployment constraints.",
+            created_at: "2025-02-01T10:30:00.000Z",
             updated_at: "2025-02-01T10:30:00.000Z",
           },
         ],
+        myReview: null,
+        summary: {
+          totalReviews: 1,
+          averageScore: 9,
+          acceptCount: 1,
+          needsWorkCount: 0,
+          rejectCount: 0,
+          minReviewsRequired: 2,
+          quorumMet: false,
+        },
+        page: { limit: 25, offset: 0, total: 1, hasMore: false },
       }),
     });
   });
@@ -298,6 +312,8 @@ test("renders the admin proposal detail workflow with submission answers and ope
   // Navigate to Reviews tab to see reviewer details
   await page.getByRole("tab", { name: /Reviews/ }).click();
   await expect(page.getByText("Ada Reviewer").first()).toBeVisible();
+  await expect(page.getByText("Reviews are read-only after a proposal decision.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Submit Review" })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Open Proposer Manage Page ↗" }).click();
   await expect
