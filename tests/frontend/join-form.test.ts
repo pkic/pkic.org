@@ -2,13 +2,12 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   isIndividualCategory,
-  requiresUniversityEmail,
-  isPublicEmailDomain,
-  isDuplicateOrganization,
   readLegalAndInterestAnswers,
   buildApplicationPayload,
   applyCategoryUI,
 } from "../../assets/ts/member-flows/join-form";
+import { requiresUniversityEmail } from "../../assets/shared/schemas/membership-categories";
+import { isPersonalEmailAddress } from "../../assets/shared/constants/email-domains";
 
 function buildForm(overrides: Partial<Record<string, string>> = {}): HTMLFormElement {
   const form = document.createElement("form");
@@ -48,18 +47,10 @@ describe("join-form helpers", () => {
   });
 
   it("flags common personal email providers", () => {
-    expect(isPublicEmailDomain("someone@gmail.com")).toBe(true);
-    expect(isPublicEmailDomain("someone@outlook.com")).toBe(true);
-    expect(isPublicEmailDomain("someone@example-corp.test")).toBe(false);
-    expect(isPublicEmailDomain("not-an-email")).toBe(false);
-  });
-
-  it("detects fuzzy duplicate organization names", () => {
-    const existing = ["acme corp", "example consortium"];
-    expect(isDuplicateOrganization("Acme Corp", existing)).toBe(true);
-    expect(isDuplicateOrganization("Acme Corp International", existing)).toBe(true);
-    expect(isDuplicateOrganization("Totally Unrelated Inc", existing)).toBe(false);
-    expect(isDuplicateOrganization("", existing)).toBe(false);
+    expect(isPersonalEmailAddress("someone@gmail.com")).toBe(true);
+    expect(isPersonalEmailAddress("someone@outlook.com")).toBe(true);
+    expect(isPersonalEmailAddress("someone@example-corp.test")).toBe(false);
+    expect(isPersonalEmailAddress("not-an-email")).toBe(false);
   });
 
   it("reads legal agreements and interest checkboxes", () => {

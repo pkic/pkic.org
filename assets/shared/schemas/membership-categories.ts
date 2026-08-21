@@ -35,6 +35,14 @@ export function isIndividualMembershipCategory(category: string): boolean {
   return INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(category);
 }
 
+/** Individual academic category that must use an institutional address. */
+export const UNIVERSITY_EMAIL_MEMBERSHIP_CATEGORIES = ["H5"] as const;
+const UNIVERSITY_EMAIL_MEMBERSHIP_CATEGORY_SET = new Set<string>(UNIVERSITY_EMAIL_MEMBERSHIP_CATEGORIES);
+
+export function requiresUniversityEmail(category: string): boolean {
+  return UNIVERSITY_EMAIL_MEMBERSHIP_CATEGORY_SET.has(category);
+}
+
 /** Categories with voting rights (forum + WG) — H categories never vote. */
 export const VOTING_CATEGORY_LETTERS = ["A", "B", "C", "D", "E", "F", "G"] as const;
 export const VOTING_CATEGORIES = new Set<string>(VOTING_CATEGORY_LETTERS);

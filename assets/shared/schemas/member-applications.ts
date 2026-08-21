@@ -1,9 +1,14 @@
 import { z } from "zod";
 import { formFieldDefinitionSchema } from "./forms";
 import { normalizedEmailSchema } from "./api-common";
-import { membershipCategorySchema, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "./membership-categories";
+import {
+  membershipCategorySchema,
+  INDIVIDUAL_MEMBERSHIP_CATEGORIES,
+  requiresUniversityEmail,
+} from "./membership-categories";
 import { formAnswersSchema } from "./form-answers";
 import { databaseIdSchema } from "./identifiers";
+import { isPersonalEmailAddress } from "../constants/email-domains";
 
 export { membershipCategorySchema };
 
@@ -80,6 +85,13 @@ export const memberApplicationCreateSchema = z
         code: "custom",
         path: ["organizationName"],
         message: "Organization name is required for this membership category",
+      });
+    }
+    if (requiresUniversityEmail(value.membershipCategory) && isPersonalEmailAddress(value.applicantEmail)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["applicantEmail"],
+        message: "Category H5 requires a university email address; personal email providers are not accepted",
       });
     }
   });

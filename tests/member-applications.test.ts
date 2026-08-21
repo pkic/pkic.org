@@ -10,6 +10,7 @@ import {
   onRequestGet as listApplicationDocuments,
 } from "../functions/api/v1/members/applications/[id]/documents";
 import { seedMembershipApplicationForm } from "./helpers/member-applications";
+import { callApi } from "./helpers/app";
 
 function makeEnv(overrides: Partial<typeof env> = {}) {
   return { ...env, IP_RATE_LIMITER: createTestRateLimiter(100), ...overrides } as typeof env;
@@ -65,6 +66,42 @@ describe("POST /api/v1/members/applications", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].stage).toBe("pending");
     expect(rows[0].applicant_email).toBe("alice@example-corp.test");
+  });
+
+  it("enforces H5 university-email eligibility through the mounted route", async () => {
+    const testEnv = makeEnv();
+    const response = await callApi(testEnv, "/api/v1/members/applications", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        applicantEmail: "student@gmail.com",
+        applicantName: "Student Example",
+        membershipCategory: "H5",
+      }),
+    });
+
+    expect(response.status).toBe(422);
+    const body = (await response.json()) as { error: { details?: { fieldErrors?: Record<string, string[]> } } };
+    expect(body.error.details?.fieldErrors?.applicantEmail).toEqual([
+      "Category H5 requires a university email address; personal email providers are not accepted",
+    ]);
+    expect(await queryAll(testEnv.DB, "SELECT id FROM member_applications")).toHaveLength(0);
+  });
+
+  it("does not apply the H5 university-email rule to other individual categories", async () => {
+    const testEnv = makeEnv();
+    const response = await callApi(testEnv, "/api/v1/members/applications", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        applicantEmail: "individual@gmail.com",
+        applicantName: "Individual Example",
+        membershipCategory: "H6",
+        answers: { reason: "I want to contribute to the PKI community." },
+      }),
+    });
+
+    expect(response.status).toBe(201);
   });
 
   it("returns 409 when an active application already exists for the same organization domain", async () => {
