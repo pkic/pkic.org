@@ -2497,4 +2497,14 @@ CREATE TABLE storage_deletion_outbox (
 CREATE INDEX idx_storage_deletion_outbox_due
   ON storage_deletion_outbox(status, next_attempt_at, created_at);
 
+-- Both attendee exports filter consent by registration and term. Without this
+-- index, the correlated lookup scans the complete consent table per row.
+CREATE INDEX IF NOT EXISTS idx_consent_acceptances_registration_term
+  ON consent_acceptances(registration_id, term_key)
+  WHERE registration_id IS NOT NULL;
+
+-- Admin attendee export filters by event/status and emits chronological rows.
+CREATE INDEX IF NOT EXISTS idx_registrations_event_status_created
+  ON registrations(event_id, status, created_at);
+
 PRAGMA foreign_keys = ON;

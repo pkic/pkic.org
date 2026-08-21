@@ -8,11 +8,10 @@
  * checks below.
  */
 import { json } from "../../../../../../_lib/http";
-import { AppError } from "../../../../../../_lib/errors";
 import { requireSponsorPortalFromRequest } from "../../../../../../_lib/auth/sponsor-portal";
 import {
-  eventSponsorTierHasAttendeeAccess,
   listSponsorPortalAttendeesPage,
+  requireSponsorPortalAttendeeAccess,
 } from "../../../../../../_lib/services/sponsorship";
 import { writeAuditLog } from "../../../../../../_lib/services/audit";
 import { sponsorPortalAttendeesListRouteSchema } from "../../../../../../../assets/shared/schemas/sponsor-portal";
@@ -27,17 +26,7 @@ export async function requireEligibleSponsorPortalSession(c: AdminContext) {
   const db = requestDb(c);
   const session = await requireSponsorPortalFromRequest(db, c.req.raw, c.env);
   const eventId = c.req.param("eventId");
-  if (eventId !== session.eventId) {
-    throw new AppError(403, "SPONSOR_PORTAL_EVENT_MISMATCH", "This session is not scoped to that event");
-  }
-  const eligible = await eventSponsorTierHasAttendeeAccess(db, session.eventId, session.tier);
-  if (!eligible) {
-    throw new AppError(
-      403,
-      "SPONSOR_PORTAL_TIER_INELIGIBLE",
-      "This sponsorship's tier does not have attendee data access",
-    );
-  }
+  await requireSponsorPortalAttendeeAccess(db, session, eventId);
   return { db, session };
 }
 

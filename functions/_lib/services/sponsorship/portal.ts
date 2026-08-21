@@ -7,7 +7,27 @@ import { first, all } from "../../db/queries";
 import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
+import { AppError } from "../../errors";
 import type { AuthMember, DatabaseLike } from "../../types";
+import type { SponsorPortalSession } from "../../auth/sponsor-portal";
+import { eventSponsorTierHasAttendeeAccess } from "./event-tiers";
+
+export async function requireSponsorPortalAttendeeAccess(
+  db: DatabaseLike,
+  session: SponsorPortalSession,
+  eventId: string,
+): Promise<void> {
+  if (eventId !== session.eventId) {
+    throw new AppError(403, "SPONSOR_PORTAL_EVENT_MISMATCH", "This session is not scoped to that event");
+  }
+  if (!(await eventSponsorTierHasAttendeeAccess(db, session.eventId, session.tier))) {
+    throw new AppError(
+      403,
+      "SPONSOR_PORTAL_TIER_INELIGIBLE",
+      "This sponsorship's tier does not have attendee data access",
+    );
+  }
+}
 
 export async function getMyOrganizationSponsorship(
   db: DatabaseLike,
@@ -61,15 +81,11 @@ function toAttendeeRow(r: {
   };
 }
 
-/**
- * Unbounded — for the CSV export endpoint (P6M-P2-11's finding is about the
- * paginated JSON list endpoint specifically; a CSV export inherently needs
- * every consenting row in one response, so it keeps the full unbounded
- * fetch here rather than composing the pagination contract).
- */
-export async function listSponsorPortalAttendees(
+/** Bounded export read; callers fail instead of silently returning a partial CSV. */
+export async function listSponsorPortalAttendeesForExport(
   db: DatabaseLike,
   eventId: string,
+  maxRows: number,
 ): Promise<SponsorPortalAttendeeRow[]> {
   const rows = await all<{
     registration_id: string;
@@ -84,9 +100,14 @@ export async function listSponsorPortalAttendees(
     `SELECT r.id AS registration_id, u.first_name, u.last_name, u.email,
             u.organization_name, u.job_title, r.attendance_type
      ${SPONSOR_PORTAL_ATTENDEES_FROM}
-     ORDER BY u.last_name ASC, u.first_name ASC`,
-    [eventId],
+     ORDER BY u.last_name ASC, u.first_name ASC
+     LIMIT ?`,
+    [eventId, maxRows + 1],
   );
+
+  if (rows.length > maxRows) {
+    throw new AppError(413, "CSV_EXPORT_ROW_LIMIT_EXCEEDED", `CSV export is limited to ${maxRows} records`);
+  }
 
   return rows.map(toAttendeeRow);
 }

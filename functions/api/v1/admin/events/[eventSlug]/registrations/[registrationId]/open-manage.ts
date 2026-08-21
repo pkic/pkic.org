@@ -55,7 +55,6 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   });
 
   await writeAuditLog(requestDb(c), "admin", admin.id, "admin_opened_manage_page", "registration", registrationId, {
-    adminEmail: admin.email,
     eventSlug: event.slug,
   });
 

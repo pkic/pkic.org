@@ -138,6 +138,20 @@ describe("consolidated pending migration upgrade", () => {
     ).toEqual({ name: "storage_deletion_outbox" });
     expect(
       db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_consent_acceptances_registration_term'",
+        )
+        .get(),
+    ).toEqual({ name: "idx_consent_acceptances_registration_term" });
+    expect(
+      db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_registrations_event_status_created'",
+        )
+        .get(),
+    ).toEqual({ name: "idx_registrations_event_status_created" });
+    expect(
+      db
         .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'registration_badge_role_overrides'")
         .get(),
     ).toEqual({ name: "registration_badge_role_overrides" });

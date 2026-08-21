@@ -103,6 +103,8 @@ export interface Env {
   SCHEDULED_VOTE_NOTIFICATION_LIMIT?: string;
   /** Maximum distinct recipients resolved for a synchronous admin campaign. */
   ADMIN_CAMPAIGN_MAX_RECIPIENTS?: string;
+  CSV_EXPORT_MAX_ROWS?: string;
+  CSV_EXPORT_MAX_BYTES?: string;
   SENDGRID_API_KEY?: string;
   SENDGRID_API_BASE?: string;
   FROM_EMAIL?: string;

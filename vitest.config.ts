@@ -4,7 +4,9 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig(async () => {
   const migrationsPath = path.join(__dirname, "migrations");
-  const migrations = await readD1Migrations(migrationsPath);
+  const migrations = (await readD1Migrations(migrationsPath)).filter(
+    (migration) => !path.basename(migration.name).startsWith("._"),
+  );
 
   return {
     plugins: [

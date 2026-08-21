@@ -6,12 +6,24 @@ function parseIntOrDefault(value: string | undefined, defaultValue: number): num
 }
 
 export const DEFAULT_RSVP_INBOUND_EMAIL_MAX_BYTES = 5 * 1024 * 1024;
+export const DEFAULT_CSV_EXPORT_MAX_ROWS = 5_000;
+export const DEFAULT_CSV_EXPORT_MAX_BYTES = 8 * 1024 * 1024;
 
 export function getRsvpInboundEmailMaxBytes(env: Pick<Env, "RSVP_INBOUND_EMAIL_MAX_BYTES">): number {
   return Math.min(
     25 * 1024 * 1024,
     Math.max(64 * 1024, parseIntOrDefault(env.RSVP_INBOUND_EMAIL_MAX_BYTES, DEFAULT_RSVP_INBOUND_EMAIL_MAX_BYTES)),
   );
+}
+
+export function getCsvExportLimits(env: Pick<Env, "CSV_EXPORT_MAX_ROWS" | "CSV_EXPORT_MAX_BYTES">) {
+  return {
+    maxRows: Math.min(25_000, Math.max(1, parseIntOrDefault(env.CSV_EXPORT_MAX_ROWS, DEFAULT_CSV_EXPORT_MAX_ROWS))),
+    maxBytes: Math.min(
+      32 * 1024 * 1024,
+      Math.max(64 * 1024, parseIntOrDefault(env.CSV_EXPORT_MAX_BYTES, DEFAULT_CSV_EXPORT_MAX_BYTES)),
+    ),
+  };
 }
 
 function toOrigin(value: string | undefined): string | null {
