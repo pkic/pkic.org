@@ -1,28 +1,20 @@
 import { json } from "../../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
 import {
+  getPresentationProposalContext,
   parsePresentationUpload,
   storePresentationFile,
 } from "../../../../../../../_lib/services/presentation-versions";
 import { recordPresentationUpload } from "../../../../../../../_lib/services/proposals-speaker-profile";
 import { writeAuditLog } from "../../../../../../../_lib/services/audit";
 import { AppError } from "../../../../../../../_lib/errors";
-import { first } from "../../../../../../../_lib/db/queries";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 
 export async function onRequestPost(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const proposalId = c.req.param("proposalId");
 
-  const proposal = await first<{ id: string; status: string; title: string; event_slug: string }>(
-    requestDb(c),
-    `SELECT sp.id, sp.status, sp.title, e.slug AS event_slug
-     FROM session_proposals sp
-     JOIN events e ON e.id = sp.event_id
-     WHERE sp.id = ? AND sp.deleted_at IS NULL`,
-    [proposalId],
-  );
-  if (!proposal) return json({ error: { code: "PROPOSAL_NOT_FOUND", message: "Proposal not found" } }, 404);
+  const proposal = await getPresentationProposalContext(requestDb(c), proposalId);
 
   if (proposal.status !== "accepted") {
     return json(

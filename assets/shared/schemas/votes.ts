@@ -327,6 +327,11 @@ export const listProposalsQuerySchema = listQuerySchema(VOTE_PROPOSALS_LIST_SORT
 
 export const listProposalsResponseSchema = paginatedResponseSchema("proposals", proposalSummarySchema);
 
+export const proposalDetailResponseSchema = z.object({
+  proposal: proposalSummarySchema,
+  endorserUserIds: z.array(databaseIdSchema),
+});
+
 export const listProposalsRouteSchema = {
   tags: ["Vote Proposals"],
   summary: "List open proposals in scope",
@@ -347,9 +352,7 @@ export const proposalDetailRouteSchema = {
     "200": {
       description: "Proposal detail.",
       content: {
-        "application/json": {
-          schema: z.object({ proposal: proposalSummarySchema, endorserUserIds: z.array(databaseIdSchema) }),
-        },
+        "application/json": { schema: proposalDetailResponseSchema },
       },
     },
     "404": { description: "Proposal not found." },

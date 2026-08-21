@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eventIdSchema, normalizedEmailSchema } from "./api";
+import { eventIdSchema, normalizedEmailSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { stripeCurrencySchema, stripeEventEnvelopeSchema, stripeIdentifierSchema } from "./stripe";
 import { relativeRedirectPathSchema } from "./urls";

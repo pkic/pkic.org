@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { emailMessageTypeSchema } from "./api";
+import { emailMessageTypeSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { paginatedResponseSchema } from "./pagination";
 

@@ -3,15 +3,12 @@
  * ("access grants"), roles, and user_roles (role assignment).
  */
 import { z } from "zod";
+import { trimmedString } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { permissionSchema } from "./permissions";
 
 const contextTypeSchema = z.enum(["event", "working_group", "organization"]);
-
-function trimmedString(min: number, max: number): z.ZodString {
-  return z.string().trim().min(min).max(max);
-}
 
 export const accessGrantIdParamsSchema = z.object({ id: databaseIdSchema });
 // Role ids are NOT always UUIDs — custom roles get a real uuid() (see

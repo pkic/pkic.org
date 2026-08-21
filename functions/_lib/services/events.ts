@@ -19,6 +19,10 @@ export async function getEventBySlug(db: DatabaseLike, slug: string): Promise<Ev
   return event;
 }
 
+export async function eventSlugExists(db: DatabaseLike, slug: string): Promise<boolean> {
+  return (await first<{ id: string }>(db, "SELECT id FROM events WHERE slug = ?", [slug])) !== null;
+}
+
 export async function getEventById(db: DatabaseLike, eventId: string): Promise<EventRecord> {
   const event = await first<EventRecord>(db, `SELECT ${EVENT_COLUMNS} FROM events WHERE id = ?`, [eventId]);
   if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");

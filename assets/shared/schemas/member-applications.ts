@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { formFieldDefinitionSchema } from "./forms";
-import { normalizedEmailSchema } from "./api";
+import { normalizedEmailSchema } from "./api-common";
 import { membershipCategorySchema, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "./membership-categories";
 import { formAnswersSchema } from "./form-answers";
 

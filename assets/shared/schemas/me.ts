@@ -8,11 +8,15 @@ import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
 import { applicationStageSchema } from "./member-applications";
 import { voteTypeSchema, voteScopeTypeSchema, voteStatusSchema } from "./votes";
-import { contentReviewStatusSchema } from "./admin-organizations";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { workingGroupIdSchema, workingGroupReferenceSchema } from "./working-groups";
 import { workingGroupSummarySchema } from "./members-directory";
-import { organizationEditableContentSchema, organizationProfileContentFieldsSchema } from "./organization-profile";
+import {
+  contentReviewStatusSchema,
+  organizationContentReviewSchema,
+  organizationEditableContentSchema,
+  organizationProfileContentFieldsSchema,
+} from "./organization-profile";
 
 export const myOrganizationRepresentativeSchema = z.object({
   userId: databaseIdSchema,
@@ -295,18 +299,7 @@ export const addCoworkerRouteSchema = {
 
 // ── Organization profile & content moderation ────────────────
 
-export const myOrganizationReviewSchema = z.object({
-  id: databaseIdSchema,
-  organizationId: databaseIdSchema,
-  submittedByUserId: databaseIdSchema,
-  proposedChanges: z.record(z.string(), z.unknown()),
-  hasLogoChange: z.boolean(),
-  status: contentReviewStatusSchema,
-  reviewerUserId: databaseIdSchema.nullable(),
-  reviewerNote: z.string().nullable(),
-  submittedAt: z.string(),
-  reviewedAt: z.string().nullable(),
-});
+export const myOrganizationReviewSchema = organizationContentReviewSchema;
 
 export const myOrganizationProfileSchema = z
   .object({

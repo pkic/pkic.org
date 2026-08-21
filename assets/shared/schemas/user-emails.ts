@@ -5,7 +5,7 @@
  */
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
-import { normalizedEmailSchema } from "./api";
+import { normalizedEmailSchema } from "./api-common";
 
 export const userIdEmailsParamsSchema = z.object({ userId: databaseIdSchema });
 export const userEmailIdParamsSchema = z.object({ userId: databaseIdSchema, emailId: databaseIdSchema });

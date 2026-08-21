@@ -5,12 +5,9 @@
  * permission.
  */
 import { z } from "zod";
+import { trimmedString } from "./api-common";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { workingGroupIdSchema } from "./working-groups";
-
-function trimmedString(min: number, max: number): z.ZodString {
-  return z.string().trim().min(min).max(max);
-}
 
 export const MAILING_LIST_TYPES = ["all_members", "consultation", "ec", "working_group", "custom"] as const;
 export const mailingListTypeSchema = z.enum(MAILING_LIST_TYPES);

@@ -1,5 +1,23 @@
 import { z } from "zod";
+import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
+
+export const CONTENT_REVIEW_STATUSES = ["pending", "approved", "rejected", "withdrawn"] as const;
+export const contentReviewStatusSchema = z.enum(CONTENT_REVIEW_STATUSES);
+
+/** Canonical review fields shared by member and staff response surfaces. */
+export const organizationContentReviewSchema = z.object({
+  id: databaseIdSchema,
+  organizationId: databaseIdSchema,
+  submittedByUserId: databaseIdSchema,
+  proposedChanges: z.record(z.string(), z.unknown()),
+  hasLogoChange: z.boolean(),
+  status: contentReviewStatusSchema,
+  reviewerUserId: databaseIdSchema.nullable(),
+  reviewerNote: z.string().nullable(),
+  submittedAt: z.string(),
+  reviewedAt: z.string().nullable(),
+});
 
 /** Shared response contract for organization cards and list rows. */
 export const organizationProfileSummaryFieldsSchema = z.object({

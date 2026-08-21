@@ -11,9 +11,11 @@
  */
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
-import { normalizedEmailSchema } from "./api";
+import { normalizedEmailSchema, trimmedString } from "./api-common";
 import { linksSchema } from "./links";
 import {
+  contentReviewStatusSchema,
+  organizationContentReviewSchema,
   organizationEditableContentSchema,
   organizationProfileExtendedFieldsSchema,
   organizationProfileSummaryFieldsSchema,
@@ -23,10 +25,6 @@ import { MEMBER_STATUSES, memberStatusSchema } from "./membership-categories";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 export { MEMBER_STATUSES, memberStatusSchema };
-
-function trimmedString(min: number, max: number): z.ZodString {
-  return z.string().trim().min(min).max(max);
-}
 
 export const ORG_TIED_MEMBERSHIP_CATEGORIES = MEMBERSHIP_CATEGORIES.filter(
   (c) => !INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(c),
@@ -298,20 +296,9 @@ export const confirmSecondaryContactRouteSchema = {
 
 // ── Organization content moderation queue ──────────────────────────
 
-export const CONTENT_REVIEW_STATUSES = ["pending", "approved", "rejected", "withdrawn"] as const;
-export const contentReviewStatusSchema = z.enum(CONTENT_REVIEW_STATUSES);
+export { CONTENT_REVIEW_STATUSES, contentReviewStatusSchema } from "./organization-profile";
 
-export const contentReviewSummarySchema = z.object({
-  id: databaseIdSchema,
-  organizationId: databaseIdSchema,
-  submittedByUserId: databaseIdSchema,
-  proposedChanges: z.record(z.string(), z.unknown()),
-  hasLogoChange: z.boolean(),
-  status: contentReviewStatusSchema,
-  reviewerUserId: databaseIdSchema.nullable(),
-  reviewerNote: z.string().nullable(),
-  submittedAt: z.string(),
-  reviewedAt: z.string().nullable(),
+export const contentReviewSummarySchema = organizationContentReviewSchema.extend({
   organizationName: z.string(),
   submitterName: z.string(),
   submitterEmail: z.string(),

@@ -1,6 +1,11 @@
 import { z } from "zod";
-import { emailTemplateKeyParamsSchema, emailContentTypeSchema, emailMessageTypeSchema } from "./api";
-import type { EmailContentType, EmailMessageType } from "./api";
+import {
+  emailTemplateKeyParamsSchema,
+  emailContentTypeSchema,
+  emailMessageTypeSchema,
+  type EmailContentType,
+  type EmailMessageType,
+} from "./api-common";
 import { listQuerySchema, paginatedResponseSchema, searchableListQuerySchema, sortColumnSchema } from "./pagination";
 
 export { emailContentTypeSchema, emailMessageTypeSchema };

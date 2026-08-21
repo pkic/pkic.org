@@ -1,0 +1,114 @@
+import { ADMIN_USERS_SORT_COLUMNS } from "../../../assets/shared/schemas/admin-users";
+import { parseLinksJson } from "../../../assets/shared/schemas/links";
+import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
+import { queryPage } from "../db/pagination";
+import { buildD1TextSearchFilter } from "../db/search";
+import { resolveOrderBy } from "../db/sort";
+import type { DatabaseLike } from "../types";
+import { deterministicRepresentativeJoinSql } from "./membership/representative-lookup";
+
+interface UserRow {
+  id: string;
+  email: string;
+  first_name: string | null;
+  last_name: string | null;
+  organization_name: string | null;
+  role: string;
+  active: number;
+  created_at: string;
+  links_json: string | null;
+  member_id: string | null;
+  member_category: string | null;
+  member_status: string | null;
+  member_organization_id: string | null;
+  member_organization_name: string | null;
+  event_participation_count: number;
+}
+
+export interface AdminUsersListQuery {
+  role?: string;
+  type?: "member" | "event_attendee" | "contact_only";
+  q?: string;
+  sort?: string;
+  limit: number;
+  offset: number;
+}
+
+export async function listAdminUsers(db: DatabaseLike, query: AdminUsersListQuery) {
+  const conditions: string[] = [];
+  const bindings: unknown[] = [];
+  if (query.role) {
+    conditions.push("u.role = ?");
+    bindings.push(query.role);
+  }
+  if (query.type === "member") {
+    conditions.push("m.id IS NOT NULL");
+  } else if (query.type === "event_attendee") {
+    conditions.push("m.id IS NULL AND EXISTS (SELECT 1 FROM event_participants ep WHERE ep.user_id = u.id)");
+  } else if (query.type === "contact_only") {
+    conditions.push("m.id IS NULL AND NOT EXISTS (SELECT 1 FROM event_participants ep WHERE ep.user_id = u.id)");
+  }
+  if (query.q) {
+    const primary = buildD1TextSearchFilter(query.q, [
+      "u.email",
+      "u.first_name",
+      "u.last_name",
+      "u.first_name || ' ' || u.last_name",
+    ]);
+    const alternate = buildD1TextSearchFilter(query.q, ["ue.email"]);
+    conditions.push(`(${primary.sql} OR EXISTS (
+      SELECT 1 FROM user_emails ue WHERE ue.user_id = u.id AND ${alternate.sql}
+    ))`);
+    bindings.push(...primary.bindings, ...alternate.bindings);
+  }
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  const listWhere = where.replace(/\bm\.id\b/g, "COALESCE(m.id, mi.id)");
+  const representativeJoin = deterministicRepresentativeJoinSql("u.id");
+  const orderBy = resolveOrderBy(query.sort, ADMIN_USERS_SORT_COLUMNS, "ORDER BY u.role ASC, u.email ASC", "u.id ASC");
+  const { rows: users, total } = await queryPage<UserRow>(
+    db,
+    {
+      sql: `SELECT u.id, u.email, u.first_name, u.last_name, u.organization_name, u.role, u.active, u.created_at,
+              u.links_json,
+              COALESCE(rep.id, mi.id) AS member_id, mca.category_code AS member_category,
+              COALESCE(m.status, mi.status) AS member_status,
+              m.organization_id AS member_organization_id, o.name AS member_organization_name,
+              (SELECT COUNT(*) FROM event_participants ep WHERE ep.user_id = u.id) AS event_participation_count
+       FROM users u
+       ${representativeJoin}
+       LEFT JOIN members m ON m.id = rep.member_id
+       LEFT JOIN members mi ON mi.user_id = u.id
+       LEFT JOIN organizations o ON o.id = m.organization_id
+       LEFT JOIN member_category_assignments mca ON mca.member_id = COALESCE(m.id, mi.id)
+       ${listWhere}
+       ${orderBy}
+       LIMIT ? OFFSET ?`,
+      bindings: [...bindings, query.limit, query.offset],
+    },
+    {
+      sql: `SELECT COUNT(*) AS total FROM users u
+       ${representativeJoin}
+       LEFT JOIN members m ON m.id = rep.member_id
+       LEFT JOIN members mi ON mi.user_id = u.id
+       ${listWhere}`,
+      bindings,
+    },
+  );
+
+  const results = users.map(({ links_json: linksJson, event_participation_count: participationCount, ...row }) => ({
+    ...row,
+    links: parseLinksJson(linksJson),
+    membership: row.member_id
+      ? {
+          memberId: row.member_id,
+          membershipCategory: row.member_category,
+          status: row.member_status,
+          organizationId: row.member_organization_id,
+          organizationName: row.member_organization_name,
+        }
+      : null,
+    type: row.member_id ? "member" : participationCount > 0 ? "event_attendee" : "contact_only",
+    eventParticipationCount: participationCount,
+  }));
+  return { users: results, page: buildPageInfo(query.limit, query.offset, total, results.length) };
+}

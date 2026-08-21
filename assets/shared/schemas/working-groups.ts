@@ -6,13 +6,9 @@
  * the member self-service `POST/DELETE /api/v1/me/working-groups/:wgId`.
  */
 import { z } from "zod";
-import { slugPattern } from "./api-common";
+import { slugPattern, trimmedString } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
-
-function trimmedString(min: number, max: number): z.ZodString {
-  return z.string().trim().min(min).max(max);
-}
 
 export const workingGroupIdSchema = databaseIdSchema;
 export const workingGroupSlugSchema = z.string().trim().min(1).max(200).regex(slugPattern);

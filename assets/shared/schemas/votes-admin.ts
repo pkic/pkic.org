@@ -7,6 +7,7 @@ import {
   VOTE_PROPOSALS_LIST_SORT_COLUMNS,
   candidateSummarySchema,
   proposalIdParamsSchema,
+  proposalDetailResponseSchema,
   proposalSummarySchema,
   publicDetailLevelSchema,
   voteIdParamsSchema,
@@ -183,9 +184,7 @@ export const adminProposalDetailRouteSchema = {
     "200": {
       description: "Proposal detail.",
       content: {
-        "application/json": {
-          schema: z.object({ proposal: proposalSummarySchema, endorserUserIds: z.array(databaseIdSchema) }),
-        },
+        "application/json": { schema: proposalDetailResponseSchema },
       },
     },
     "404": { description: "Proposal not found." },

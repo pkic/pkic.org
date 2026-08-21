@@ -4,10 +4,10 @@
  */
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
-import { normalizedEmailSchema } from "./api";
+import { normalizedEmailSchema } from "./api-common";
 import { membershipCategorySchema, applicationStageSchema, onHoldSubtypeSchema } from "./member-applications";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
-import { ecDecisionValueSchema } from "./ec-review";
+import { ecDecisionCreateSchema, ecDecisionValueSchema } from "./ec-review";
 
 /** Allowlisted sort columns for GET /api/v1/admin/applications — see listAdminApplications. */
 export const ADMIN_APPLICATIONS_SORT_COLUMNS = [
@@ -193,17 +193,9 @@ export const applicationNoteCreateRouteSchema = {
   },
 };
 
-export const adminEcDecisionCreateSchema = z
-  .object({
-    ecMemberUserId: databaseIdSchema,
-    decision: ecDecisionValueSchema,
-    reason: z.string().trim().min(1).max(2000).optional(),
-  })
-  .superRefine((value, ctx) => {
-    if (value.decision === "decline" && !value.reason) {
-      ctx.addIssue({ code: "custom", path: ["reason"], message: "A reason is required when declining" });
-    }
-  });
+export const adminEcDecisionCreateSchema = ecDecisionCreateSchema.safeExtend({
+  ecMemberUserId: databaseIdSchema,
+});
 
 export const adminEcDecisionCreateRouteSchema = {
   tags: ["Membership"],

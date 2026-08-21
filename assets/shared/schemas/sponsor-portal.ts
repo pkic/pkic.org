@@ -7,7 +7,7 @@
  */
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
-import { eventIdSchema, normalizedEmailSchema, tokenSchema } from "./api";
+import { eventIdSchema, normalizedEmailSchema, tokenSchema } from "./api-common";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 export const sponsorPortalAuthRequestSchema = z.object({

@@ -6,13 +6,9 @@
  */
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
-import { eventIdSchema, normalizedEmailSchema } from "./api";
+import { eventIdSchema, normalizedEmailSchema, trimmedString } from "./api-common";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { addDuplicateStringIssues } from "./refinements";
-
-function trimmedString(min: number, max: number): z.ZodString {
-  return z.string().trim().min(min).max(max);
-}
 
 export const SPONSOR_TYPES = ["consortium", "event"] as const;
 export const sponsorTypeSchema = z.enum(SPONSOR_TYPES);

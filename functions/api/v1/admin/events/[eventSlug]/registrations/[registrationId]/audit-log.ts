@@ -8,13 +8,8 @@
 import { json } from "../../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../../../_lib/services/events";
-import { first } from "../../../../../../../_lib/db/queries";
-import { queryPage } from "../../../../../../../_lib/db/pagination";
-import { buildD1TextSearchFilter } from "../../../../../../../_lib/db/search";
-import { resolveMappedOrderBy } from "../../../../../../../_lib/db/sort";
-import { toAuditLogResponseRows, type AuditLogReadRow } from "../../../../../../../_lib/services/audit";
+import { listRegistrationAuditLog } from "../../../../../../../_lib/services/audit-log-read";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
-import { buildPageInfo } from "../../../../../../../../assets/shared/schemas/pagination";
 import { adminRegistrationAuditLogRouteSchema } from "../../../../../../../../assets/shared/schemas/route-contracts";
 import type { ValidatedData } from "chanfana";
 
@@ -25,63 +20,12 @@ export async function onRequestGet(
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
   const registrationId = c.req.param("registrationId");
-
-  // Verify the registration belongs to this event
-  const reg = await first<{ id: string }>(requestDb(c), "SELECT id FROM registrations WHERE id = ? AND event_id = ?", [
-    registrationId,
-    event.id,
-  ]);
-  if (!reg) {
-    return json({ error: { code: "REGISTRATION_NOT_FOUND", message: "Registration not found" } }, 404);
-  }
-
-  const limit = data.query.limit ?? 50;
-  const offset = data.query.offset ?? 0;
-  const search = data.query.q
-    ? buildD1TextSearchFilter(data.query.q, ["al.action", "al.actor_type", "u.email", "u.first_name", "u.last_name"])
-    : null;
-  const searchSql = search ? `AND ${search.sql}` : "";
-  const bindings = [registrationId, ...(search?.bindings ?? [])];
-  const orderBy = resolveMappedOrderBy(
-    data.query.sort,
-    {
-      createdAt: "al.created_at",
-      action: "al.action COLLATE NOCASE",
-      actor: "actor_display COLLATE NOCASE",
-    },
-    "al.created_at DESC",
-    "al.id ASC",
+  return json(
+    await listRegistrationAuditLog(requestDb(c), event.id, registrationId, {
+      q: data.query.q,
+      sort: data.query.sort,
+      limit: data.query.limit ?? 50,
+      offset: data.query.offset ?? 0,
+    }),
   );
-  const { rows: entries, total } = await queryPage<AuditLogReadRow>(
-    requestDb(c),
-    {
-      sql: `SELECT
-              al.id,
-              al.actor_type,
-              al.actor_id,
-              COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS actor_display,
-              al.action,
-              al.entity_type,
-              al.entity_id,
-              al.details_json,
-              al.created_at
-            FROM audit_log al
-            LEFT JOIN users u ON al.actor_type = 'admin' AND u.id = al.actor_id
-            WHERE al.entity_type = 'registration' AND al.entity_id = ?
-            ${searchSql}
-            ${orderBy}
-            LIMIT ? OFFSET ?`,
-      bindings: [...bindings, limit, offset],
-    },
-    {
-      sql: `SELECT COUNT(*) AS total
-            FROM audit_log al
-            LEFT JOIN users u ON al.actor_type = 'admin' AND u.id = al.actor_id
-            WHERE al.entity_type = 'registration' AND al.entity_id = ? ${searchSql}`,
-      bindings,
-    },
-  );
-  const parsed = toAuditLogResponseRows(entries);
-
-  return json({ auditLog: parsed, page: buildPageInfo(limit, offset, total, parsed.length) });
 }

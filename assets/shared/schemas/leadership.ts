@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { trimmedString } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { publicOrganizationPersonSchema } from "./public-person";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
@@ -13,10 +14,6 @@ import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 export const leadershipBodySchema = z.enum(["board", "executive_council"]);
 export type LeadershipBody = z.infer<typeof leadershipBodySchema>;
-
-function trimmedString(min: number, max: number): z.ZodString {
-  return z.string().trim().min(min).max(max);
-}
 
 export const leadershipPositionIdParamsSchema = z.object({ id: databaseIdSchema });
 

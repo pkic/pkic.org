@@ -6,6 +6,7 @@
  * list endpoint uses, e.g. `admin-organizations.ts`).
  */
 import { z } from "zod";
+import { trimmedString } from "./api-common";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { membershipCategorySchema } from "./membership-categories";
 import { linksSchema } from "./links";
@@ -21,10 +22,6 @@ export const ADMIN_USERS_SORT_COLUMNS = ["last_name", "email", "organization_nam
 export const ADMIN_USERS_TYPE_VALUES = ["member", "event_attendee", "contact_only"] as const;
 
 export const usersTypeValueSchema = z.enum(ADMIN_USERS_TYPE_VALUES).optional();
-
-function trimmedString(min: number, max: number): z.ZodString {
-  return z.string().trim().min(min).max(max);
-}
 
 export const usersListQuerySchema = listQuerySchema(ADMIN_USERS_SORT_COLUMNS).extend({
   // `role` is a passthrough filter against users.role — never validated

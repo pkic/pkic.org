@@ -25,6 +25,13 @@ export interface PresentationStorageContext {
   proposalTitle: string;
 }
 
+export interface PresentationProposalContext {
+  id: string;
+  status: string;
+  title: string;
+  event_slug: string;
+}
+
 type PresentationUploadError = { error: { code: string; message: string }; status: number };
 
 /**
@@ -186,6 +193,27 @@ const VERSION_SELECT = `
     WHERE version_id = pv.id
     ORDER BY reviewed_at DESC LIMIT 1
   )`;
+
+export async function getPresentationProposalContext(
+  db: DatabaseLike,
+  proposalId: string,
+): Promise<PresentationProposalContext> {
+  const proposal = await first<PresentationProposalContext>(
+    db,
+    `SELECT sp.id, sp.status, sp.title, e.slug AS event_slug
+     FROM session_proposals sp
+     JOIN events e ON e.id = sp.event_id
+     WHERE sp.id = ? AND sp.deleted_at IS NULL`,
+    [proposalId],
+  );
+  if (!proposal) throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found");
+  return proposal;
+}
+
+export async function listProposalPresentationVersions(db: DatabaseLike, proposalId: string) {
+  await getPresentationProposalContext(db, proposalId);
+  return listPresentationVersions(db, proposalId);
+}
 
 export async function listPresentationVersions(db: DatabaseLike, proposalId: string): Promise<PresentationVersion[]> {
   const rows = await all<PresentationVersionRow>(

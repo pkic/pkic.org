@@ -24,6 +24,18 @@ interface UserRoleRow {
   created_at: string;
 }
 
+interface RoleAssignmentHolderRow {
+  user_role_id: string;
+  user_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string;
+  context_type: string | null;
+  context_id: string | null;
+  expires_at: string | null;
+  created_at: string;
+}
+
 function serialize(row: UserRoleRow): UserRoleAssignment {
   return userRoleResponseSchema.parse({
     id: row.id,
@@ -67,6 +79,35 @@ export async function listUserRoleAssignments(
     [userId],
   );
   return rows.map(serialize);
+}
+
+export async function listActiveRoleAssignmentHolders(db: DatabaseLike, actor: AuthAdmin, roleId: string) {
+  requirePermission(actor, "access:grant");
+  if (!(await first<{ id: string }>(db, "SELECT id FROM roles WHERE id = ?", [roleId]))) {
+    throw new AppError(404, "NOT_FOUND", "Role not found");
+  }
+  const rows = await all<RoleAssignmentHolderRow>(
+    db,
+    `SELECT ur.id AS user_role_id, u.id AS user_id, u.first_name, u.last_name, u.email,
+            ur.context_type, ur.context_id, ur.expires_at, ur.created_at
+     FROM user_roles ur
+     JOIN users u ON u.id = ur.user_id
+     WHERE ur.role_id = ?
+       AND ur.revoked_at IS NULL
+       AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+     ORDER BY ur.created_at DESC`,
+    [roleId],
+  );
+  return rows.map((row) => ({
+    userRoleId: row.user_role_id,
+    userId: row.user_id,
+    name: [row.first_name, row.last_name].filter(Boolean).join(" ") || row.email,
+    email: row.email,
+    contextType: row.context_type,
+    contextId: row.context_id,
+    expiresAt: row.expires_at,
+    createdAt: row.created_at,
+  }));
 }
 
 export async function assignUserRole(

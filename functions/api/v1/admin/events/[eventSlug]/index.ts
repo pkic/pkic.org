@@ -6,47 +6,12 @@
  */
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
-import { getEventBySlug, resolveSessionTypes } from "../../../../../_lib/services/events";
-import { first } from "../../../../../_lib/db/queries";
-import { parseJsonSafe } from "../../../../../_lib/utils/json";
+import { getAdminEventDetail } from "../../../../../_lib/services/events/admin-detail";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
-
-interface RetentionPolicyRow {
-  user_retention_days: number;
-}
 
 export async function onRequestGet(c: AdminContext): Promise<Response> {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
-
-  const retention = await first<RetentionPolicyRow>(
-    requestDb(c),
-    "SELECT user_retention_days FROM retention_policies WHERE event_id = ?",
-    [event.id],
-  );
-
-  const settings = parseJsonSafe<Record<string, unknown>>(event.settings_json, {});
-
-  return json({
-    event: {
-      id: event.id,
-      slug: event.slug,
-      name: event.name,
-      timezone: event.timezone,
-      starts_at: event.starts_at,
-      ends_at: event.ends_at,
-      base_path: event.base_path,
-      registration_mode: event.registration_mode,
-      invite_limit_attendee: event.invite_limit_attendee,
-      user_retention_days: retention?.user_retention_days ?? null,
-      venue: (settings.venue as string | null) ?? null,
-      virtual_url: (settings.virtualUrl as string | null) ?? null,
-      hero_image_url: (settings.heroImageUrl as string | null) ?? null,
-      location: (settings.location as string | null) ?? null,
-      session_types: resolveSessionTypes(settings as { proposal?: { sessionTypes?: unknown[] } }),
-      settings,
-    },
-  });
+  return json({ event: await getAdminEventDetail(requestDb(c), c.req.param("eventSlug")) });
 }
 
 export async function onRequest(c: AdminContext): Promise<Response> {

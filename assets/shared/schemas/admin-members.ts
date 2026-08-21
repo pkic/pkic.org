@@ -8,7 +8,7 @@
  */
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
-import { normalizedEmailSchema } from "./api";
+import { normalizedEmailSchema, trimmedString } from "./api-common";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { linksSchema } from "./links";
 import { workingGroupSlugSchema } from "./working-groups";
@@ -20,10 +20,6 @@ import {
 } from "./membership-categories";
 
 export { MEMBERSHIP_CATEGORIES, membershipCategorySchema, INDIVIDUAL_MEMBERSHIP_CATEGORIES };
-
-function trimmedString(min: number, max: number): z.ZodString {
-  return z.string().trim().min(min).max(max);
-}
 
 export const representativeCreateSchema = z.object({
   name: trimmedString(1, 200),

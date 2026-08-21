@@ -70,6 +70,38 @@ export async function listEventDays(db: DatabaseLike, eventId: string): Promise<
   );
 }
 
+/** Admin projection with registered attendance counts grouped in D1, not in the browser. */
+export async function listAdminEventDaysWithCounts(db: DatabaseLike, eventId: string) {
+  const [days, counts] = await Promise.all([
+    listEventDays(db, eventId),
+    all<{ event_day_id: string; attendance_type: string; count: number }>(
+      db,
+      `SELECT rda.event_day_id, rda.attendance_type, COUNT(*) AS count
+       FROM registration_day_attendance rda
+       JOIN registrations r ON r.id = rda.registration_id
+       WHERE r.event_id = ? AND r.status = 'registered'
+       GROUP BY rda.event_day_id, rda.attendance_type`,
+      [eventId],
+    ),
+  ]);
+  const countByDay = new Map<string, Record<string, number>>();
+  for (const row of counts) {
+    const attendanceCounts = countByDay.get(row.event_day_id) ?? {};
+    attendanceCounts[row.attendance_type] = row.count;
+    countByDay.set(row.event_day_id, attendanceCounts);
+  }
+  return days.map((day) => ({
+    id: day.id,
+    date: day.day_date,
+    label: day.label,
+    startsAt: day.starts_at,
+    endsAt: day.ends_at,
+    sortOrder: day.sort_order,
+    attendanceOptions: resolveAttendanceOptions(day),
+    attendanceCounts: countByDay.get(day.id) ?? {},
+  }));
+}
+
 export async function getRegistrationDayAttendance(
   db: DatabaseLike,
   registrationId: string,
