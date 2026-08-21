@@ -14,6 +14,7 @@
 - Sponsorship uses `sponsors` (core sponsor identity) + `sponsor_events` (event-specific sponsorship details).
 - Short referral links with click/conversion tracking.
 - Calendar ICS generation in transactional emails with delivery tracked in `email_outbox`.
+- Signed calendar replies are persisted and enforced per event day through bounded D1 work; delivery bounces are communication signals only. RSVP enforcement never cancels the registration-wide aggregate, including when the final selected day has no fallback.
 - Event-specific Hugo flow pages are integrated via shortcodes + TypeScript islands (registration, proposal, confirm, manage).
 - Backend outbound links now resolve to event-specific frontend routes from `events.settings_json.frontend.routes`.
 - Multi-day attendance is modeled as first-class operational data with day-level in-person capacity controls (`event_days`, `registration_day_attendance`).
@@ -22,6 +23,5 @@
 ## Later (planned, schema-ready)
 - **Social graph image generation** for referral share links: each `/r/:code` redirect response should include custom Open Graph / Twitter Card meta tags with the attendee's first name and a call-to-action image, so shared links render as rich previews on LinkedIn, X, Slack, etc. Cloudflare Workers + R2 can generate or cache per-attendee images. Schema-ready via `referral_codes.owner_id` → `users.first_name`.
 - Public/anonymous proposal feedback with unique hashed identity per email.
-- Automated RSVP accept/decline/ignore processing and reconfirmation workflows.
-- Client behavior differs by mailbox/calendar provider, so final RSVP truth will combine provider signals with explicit reconfirm links.
+- Cross-provider RSVP truth reconciliation and reconfirmation workflows. Client behavior differs by mailbox/calendar provider, so any broader truth model must combine authenticated provider signals with explicit attendee actions.
 - Vanity referral codes and advanced attribution dashboards.

@@ -6,6 +6,12 @@ import { GOOGLE_GROUPS_DUE_QUERY } from "../functions/_lib/services/google-group
 import { STORAGE_DELETION_DUE_QUERY } from "../functions/_lib/services/storage-deletion-outbox";
 import { BADGE_RENDER_DUE_QUERY } from "../functions/_lib/services/registration-badge-regeneration";
 import { WG_CHAIR_DIGEST_CHANGE_EVENTS_QUERY } from "../functions/_lib/services/wg-chair-digest";
+import {
+  RSVP_ACTION_DUE_QUERY,
+  RSVP_BOUNCE_DUE_QUERY,
+  RSVP_WARNING_DUE_QUERY,
+} from "../functions/_lib/services/rsvp-enforcement/candidates";
+import { CONSULTATION_BATCH_DUE_QUERY } from "../functions/_lib/services/membership/scheduled-jobs";
 
 async function explain(
   sql: string,
@@ -66,5 +72,27 @@ describe("durable external-effect due query plans", () => {
     expect(plan).toContain("idx_wg_members_joined_window");
     expect(plan).toContain("idx_wg_members_left_window");
     expect(plan).not.toMatch(/(?:^|\n)SCAN wgm(?:$|\s)/);
+  });
+
+  it("uses the partial index for bounded unnotified consultation entries", async () => {
+    expectBoundedDuePlan(
+      await explain(CONSULTATION_BATCH_DUE_QUERY, [100]),
+      ["idx_member_applications_consultation_due"],
+      "member_applications",
+    );
+  });
+
+  it("uses branch-specific indexes for bounded RSVP enforcement", async () => {
+    const now = new Date("2026-08-21T12:00:00.000Z");
+    const hours = (amount: number) => new Date(now.getTime() + amount * 60 * 60 * 1000).toISOString();
+    const plans = [
+      await explain(RSVP_BOUNCE_DUE_QUERY, [20]),
+      await explain(RSVP_WARNING_DUE_QUERY, [hours(-1), 20]),
+      await explain(RSVP_ACTION_DUE_QUERY, [hours(0), 20]),
+    ];
+    expect(plans[0]).toContain("idx_calendar_rsvp_pending_bounce");
+    expect(plans[1]).toContain("idx_calendar_rsvp_pending_warning");
+    expect(plans[2]).toContain("idx_calendar_rsvp_pending_action");
+    for (const plan of plans) expect(plan).not.toMatch(/(?:^|\n)SCAN rsvp(?:$|\n)/);
   });
 });

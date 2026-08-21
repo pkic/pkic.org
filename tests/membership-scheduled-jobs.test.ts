@@ -60,6 +60,48 @@ describe("Membership scheduled jobs", () => {
     expect(outbox).toHaveLength(1);
   });
 
+  it("advances through bounded consultation batches without repeating or starving applications", async () => {
+    for (let i = 0; i < 3; i++) {
+      await createApplication({
+        stage: "in_consultation",
+        applicant_email: `consultation-${i}@example.test`,
+      });
+    }
+
+    const configuredEnv = { ...env, SCHEDULED_CONSULTATION_BATCH_LIMIT: "2" } as any;
+    const first = await runConsultationBatch(env.DB, configuredEnv);
+    const second = await runConsultationBatch(env.DB, configuredEnv);
+    const complete = await runConsultationBatch(env.DB, configuredEnv);
+
+    expect(first.applicationsNotified).toBe(2);
+    expect(second.applicationsNotified).toBe(1);
+    expect(complete.applicationsNotified).toBe(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'consultation-batch'"),
+    ).toHaveLength(2);
+    expect(
+      await queryAll(
+        env.DB,
+        `SELECT id FROM member_applications
+         WHERE stage = 'in_consultation' AND consultation_notified_at IS NULL`,
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("queues a consultation stage entry at most once under concurrent runners", async () => {
+    await createApplication({ stage: "in_consultation" });
+
+    const results = await Promise.all([
+      runConsultationBatch(env.DB, env as any),
+      runConsultationBatch(env.DB, env as any),
+    ]);
+
+    expect(results.reduce((total, result) => total + result.applicationsNotified, 0)).toBe(1);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'consultation-batch'"),
+    ).toHaveLength(1);
+  });
+
   it("EC review batch only transitions applications past the consultation window", async () => {
     await updateMembershipSettings(env.DB, { consultationWindowDays: 7 }, null);
 

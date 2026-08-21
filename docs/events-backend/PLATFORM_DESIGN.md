@@ -34,7 +34,7 @@
 
 5. Communication
 - `email_template_versions`, `email_outbox`, `unsubscribes`.
-- Calendar handling: ICS in email attachments; delivery tracked in outbox, not a dedicated calendar table.
+- Calendar handling: ICS attachments plus day-scoped inbound reply events; provider delivery status remains in the outbox.
 
 6. Growth and Gamification
 - `referral_codes`, `referral_clicks`: attribution and invite loops.
@@ -48,7 +48,7 @@
 ## Why This Is Simpler Than Before
 - No `users` vs `profiles` vs `identities` split.
 - No event-only question table; one generic forms subsystem.
-- No per-invite calendar status table; reuse email outbox delivery state.
+- Calendar reply state is normalized by registration and event day; provider delivery state remains in the shared outbox.
 - Sponsorship is modeled as a reusable sponsor entity linked to events when applicable.
 
 ## Gamification Roadmap (Without Overengineering)
@@ -65,7 +65,7 @@ Later:
 ## Deferred (Deliberately)
 - Complex RBAC permission matrix.
 - Multi-identity account linking UX.
-- Automated RSVP truth reconciliation across calendar providers.
+- Cross-provider RSVP truth reconciliation beyond signed inbound calendar replies.
 - Real-time scoring engine.
 
 ## Security and Compliance Notes

@@ -86,6 +86,7 @@ export const passkeyRegisterBeginRouteSchema = {
       content: { "application/json": { schema: passkeyBeginResponseSchema } },
     },
     "401": { description: "Authentication required." },
+    "409": { description: "The account has reached its active passkey limit." },
   },
 };
 
@@ -100,7 +101,7 @@ export const passkeyRegisterCompleteRouteSchema = {
     "201": { description: "Passkey registered.", content: { "application/json": { schema: passkeySummarySchema } } },
     "400": { description: "Invalid credential or challenge." },
     "401": { description: "Authentication required." },
-    "409": { description: "This passkey is already registered." },
+    "409": { description: "This passkey is already registered or the account has reached its active passkey limit." },
   },
 };
 

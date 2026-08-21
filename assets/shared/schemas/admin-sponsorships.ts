@@ -7,7 +7,12 @@
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { eventIdSchema, normalizedEmailSchema, trimmedString } from "./api-common";
-import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import {
+  listQuerySchema,
+  paginatedResponseSchema,
+  searchableListQuerySchema,
+  sortColumnSchemaWithDefault,
+} from "./pagination";
 import { addDuplicateStringIssues } from "./refinements";
 import { httpOrSameOriginUrlSchema, httpUrlSchema } from "./urls";
 import { logoUploadResponseSchema } from "./images";
@@ -60,8 +65,8 @@ export const adminSponsorshipSchema = z.object({
 
 export const sponsorshipEventSchema = z.object({
   id: databaseIdSchema,
-  fromStage: z.string().nullable(),
-  toStage: z.string(),
+  fromStage: sponsorshipPipelineStageSchema.nullable(),
+  toStage: sponsorshipPipelineStageSchema,
   actorUserId: databaseIdSchema.nullable(),
   actorName: z.string().nullable(),
   note: z.string().nullable(),
@@ -70,6 +75,15 @@ export const sponsorshipEventSchema = z.object({
 
 export type AdminSponsorship = z.infer<typeof adminSponsorshipSchema>;
 export type SponsorshipEvent = z.infer<typeof sponsorshipEventSchema>;
+
+export const SPONSORSHIP_EVENTS_SORT_COLUMNS = ["createdAt"] as const;
+export const sponsorshipEventsListQuerySchema = searchableListQuerySchema(
+  sortColumnSchemaWithDefault(SPONSORSHIP_EVENTS_SORT_COLUMNS, "-createdAt"),
+  { limit: 25 },
+);
+export type SponsorshipEventsListQuery = z.infer<typeof sponsorshipEventsListQuerySchema>;
+export const sponsorshipEventsListResponseSchema = paginatedResponseSchema("events", sponsorshipEventSchema);
+export type SponsorshipEventsListResponse = z.infer<typeof sponsorshipEventsListResponseSchema>;
 
 // ── List ─────────────────────────────────────────────────────────────────
 
@@ -293,12 +307,12 @@ export const sponsorshipStageUpdateRouteSchema = {
 
 export const sponsorshipEventsRouteSchema = {
   tags: ["Sponsorships"],
-  summary: "Full pipeline audit trail for a sponsorship",
-  request: { params: sponsorshipIdParamsSchema },
+  summary: "Paginated pipeline audit trail for a sponsorship",
+  request: { params: sponsorshipIdParamsSchema, query: sponsorshipEventsListQuerySchema },
   responses: {
     "200": {
       description: "Sponsorship events.",
-      content: { "application/json": { schema: z.object({ events: z.array(sponsorshipEventSchema) }) } },
+      content: { "application/json": { schema: sponsorshipEventsListResponseSchema } },
     },
   },
 };

@@ -13,6 +13,8 @@ import { resetDb } from "./helpers/reset-db";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
+import { MAX_PASSKEY_CREDENTIALS_PER_USER } from "../assets/shared/constants/passkeys";
+import { persistVerifiedPasskeyCredential } from "../functions/_lib/services/passkeys";
 import {
   buildAuthenticationResponse,
   buildRegistrationResponse,
@@ -128,6 +130,65 @@ describe("passkeys (WebAuthn)", () => {
     expect(body.options.challenge).toBeTruthy();
     expect(body.options.rp?.id).toBe(RP_ID);
     expect(body.challengeToken).toBeTruthy();
+  });
+
+  it("bounds active credentials consistently at registration and listing", async () => {
+    for (let index = 0; index < MAX_PASSKEY_CREDENTIALS_PER_USER; index++) {
+      await env.DB.prepare(
+        `INSERT INTO passkey_credentials
+           (id, user_id, credential_id, public_key, sign_count, device_name, created_at)
+         VALUES (?, ?, ?, ?, 0, ?, datetime('now', ?))`,
+      )
+        .bind(crypto.randomUUID(), userId, `credential-${index}`, "AQ", `Device ${index}`, `-${index} seconds`)
+        .run();
+    }
+
+    const beginResponse = await call("/api/v1/auth/passkeys/register/begin", { method: "POST" }, token);
+    expect(beginResponse.status).toBe(409);
+    const beginBody = (await beginResponse.json()) as { error: { code: string } };
+    expect(beginBody.error.code).toBe("PASSKEY_LIMIT_REACHED");
+
+    const listResponse = await call("/api/v1/auth/passkeys", {}, token);
+    expect(listResponse.status).toBe(200);
+    const list = (await listResponse.json()) as { passkeys: Array<{ id: string }> };
+    expect(list.passkeys).toHaveLength(MAX_PASSKEY_CREDENTIALS_PER_USER);
+  });
+
+  it("atomically allows only one concurrent credential to claim the final active slot", async () => {
+    for (let index = 0; index < MAX_PASSKEY_CREDENTIALS_PER_USER - 1; index++) {
+      await env.DB.prepare(
+        `INSERT INTO passkey_credentials
+           (id, user_id, credential_id, public_key, sign_count, device_name, created_at)
+         VALUES (?, ?, ?, ?, 0, ?, datetime('now', ?))`,
+      )
+        .bind(crypto.randomUUID(), userId, `existing-${index}`, "AQ", `Existing ${index}`, `-${index} seconds`)
+        .run();
+    }
+
+    const persist = (suffix: string) =>
+      persistVerifiedPasskeyCredential(
+        env.DB,
+        { id: userId, kind: "admin" },
+        {
+          credentialId: `final-slot-${suffix}`,
+          publicKey: "AQ",
+          signCount: 0,
+          aaguid: null,
+          deviceName: `Final ${suffix}`,
+        },
+      );
+    const results = await Promise.allSettled([persist("one"), persist("two")]);
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.find((result) => result.status === "rejected")).toMatchObject({
+      reason: expect.objectContaining({ code: "PASSKEY_LIMIT_REACHED" }),
+    });
+    const active = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM passkey_credentials WHERE user_id = ? AND revoked_at IS NULL",
+      userId,
+    );
+    expect(active).toHaveLength(MAX_PASSKEY_CREDENTIALS_PER_USER);
   });
 
   it("POST register/complete with a valid mock credential creates a passkey_credentials record; invalid credential -> 400", async () => {

@@ -137,6 +137,7 @@ describe("canonical shared schema composition", () => {
       attendance_type: "in_person",
       source_type: "direct",
       rsvp_status: null,
+      rsvpByDay: [],
       customAnswers: null,
     });
     expect(detail.referral_code).toBeNull();

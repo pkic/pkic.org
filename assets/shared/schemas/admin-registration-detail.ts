@@ -12,6 +12,15 @@ export const adminRegistrationRecordContextSchema = z.object({
   referral_code: z.string().nullable(),
 });
 
+export const adminRegistrationRsvpDaySchema = z.object({
+  event_day_id: databaseIdSchema.nullable(),
+  day_date: z.string().nullable(),
+  status: z.string(),
+  received_at: z.string(),
+  ics_uid: z.string(),
+  action_taken: z.string().nullable(),
+});
+
 export const adminRegistrationDetailSchema = adminRegistrationRecordContextSchema.extend({
   id: databaseIdSchema,
   event_id: eventIdSchema,
@@ -21,6 +30,7 @@ export const adminRegistrationDetailSchema = adminRegistrationRecordContextSchem
   attendance_type: z.string(),
   source_type: z.string(),
   rsvp_status: z.string().nullable(),
+  rsvpByDay: z.array(adminRegistrationRsvpDaySchema),
   customAnswers: z.record(z.string(), z.unknown()).nullable(),
 });
 

@@ -173,7 +173,7 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
         env,
         "consultation_batch",
         config.scheduledD1QueryBudget,
-        (jobEnv) => runConsultationBatch(jobEnv.DB, jobEnv),
+        (jobEnv) => runConsultationBatch(jobEnv.DB, jobEnv, config.scheduledConsultationBatchLimit),
       );
       logInfo("SCHEDULED_CONSULTATION_BATCH_COMPLETED", { cron: controller.cron, consultationBatch });
       return;

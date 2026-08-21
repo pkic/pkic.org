@@ -134,10 +134,14 @@ export function prepareApplicationStageTransition(
     db
       .prepare(
         `UPDATE member_applications
-         SET stage = ?, stage_entered_at = ?, on_hold_subtype = ?, updated_at = ?
+         SET stage = ?, stage_entered_at = ?, on_hold_subtype = ?, updated_at = ?,
+             consultation_notified_at = CASE
+               WHEN ? = 'in_consultation' THEN NULL
+               ELSE consultation_notified_at
+             END
          WHERE id = ? AND stage = ?`,
       )
-      .bind(params.toStage, now, nextOnHoldSubtype, now, application.id, fromStage),
+      .bind(params.toStage, now, nextOnHoldSubtype, now, params.toStage, application.id, fromStage),
     db
       .prepare(
         `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)

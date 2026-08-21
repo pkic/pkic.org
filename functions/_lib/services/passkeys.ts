@@ -24,7 +24,8 @@ import { findEligibleMemberById } from "../auth/member";
 import { prepareSessionRow } from "../auth/session-engine";
 import { resolveMemberSessionTtlHours } from "../auth/session-policy";
 import { AUTH_SCOPES } from "../auth/scopes";
-import { prepareAuditLog } from "./audit";
+import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "./audit";
+import { MAX_PASSKEY_CREDENTIALS_PER_USER } from "../../../assets/shared/constants/passkeys";
 import type { authenticationResponseSchema, registrationResponseSchema } from "../../../assets/shared/schemas/passkeys";
 import type { AuthAdmin, AuthMember, DatabaseLike, Env } from "../types";
 
@@ -39,6 +40,8 @@ type AuthenticationResponseInput = z.infer<typeof authenticationResponseSchema>;
 const CHALLENGE_TTL_SECONDS = 300;
 const PASSKEY_SESSION_TTL_HOURS = 8;
 const CHALLENGE_TOKEN_TYPE = "passkey-challenge";
+const PASSKEY_CREDENTIAL_COLUMNS =
+  "id, user_id, credential_id, public_key, sign_count, aaguid, device_name, last_used_at, created_at, revoked_at";
 
 type ChallengePurpose = "registration" | "authentication";
 
@@ -123,6 +126,14 @@ export interface PasskeySummary {
   createdAt: string;
 }
 
+export interface VerifiedPasskeyCredentialInput {
+  credentialId: string;
+  publicKey: string;
+  signCount: number;
+  aaguid: string | null;
+  deviceName: string | null;
+}
+
 function toSummary(row: PasskeyCredentialRow): PasskeySummary {
   return {
     id: row.id,
@@ -146,9 +157,16 @@ export async function beginPasskeyRegistration(
 
   const existing = await all<{ credential_id: string }>(
     db,
-    "SELECT credential_id FROM passkey_credentials WHERE user_id = ? AND revoked_at IS NULL",
-    [actor.id],
+    "SELECT credential_id FROM passkey_credentials WHERE user_id = ? AND revoked_at IS NULL ORDER BY created_at ASC, id ASC LIMIT ?",
+    [actor.id, MAX_PASSKEY_CREDENTIALS_PER_USER],
   );
+  if (existing.length >= MAX_PASSKEY_CREDENTIALS_PER_USER) {
+    throw new AppError(
+      409,
+      "PASSKEY_LIMIT_REACHED",
+      `Each account can have at most ${MAX_PASSKEY_CREDENTIALS_PER_USER} active passkeys`,
+    );
+  }
 
   const options = await generateRegistrationOptions({
     rpName,
@@ -198,39 +216,103 @@ export async function completePasskeyRegistration(
   }
 
   const { credential, aaguid } = verification.registrationInfo;
+  return persistVerifiedPasskeyCredential(db, actor, {
+    credentialId: credential.id,
+    publicKey: isoBase64URL.fromBuffer(credential.publicKey),
+    signCount: credential.counter,
+    aaguid,
+    deviceName: payload.deviceName ?? null,
+  });
+}
 
-  const duplicate = await first<{ id: string }>(db, "SELECT id FROM passkey_credentials WHERE credential_id = ?", [
-    credential.id,
-  ]);
-  if (duplicate) {
+/**
+ * Persists an already verified WebAuthn credential. The cap predicate and
+ * insert execute as one SQLite statement, so concurrent ceremonies cannot
+ * both claim the final slot. The OFFSET probe touches at most the configured
+ * cap through the partial active-credential index, including for legacy
+ * overfull accounts.
+ */
+export async function persistVerifiedPasskeyCredential(
+  db: DatabaseLike,
+  actor: { id: string; kind: "admin" | "member" },
+  credential: VerifiedPasskeyCredentialInput,
+): Promise<PasskeySummary> {
+  const findDuplicate = () =>
+    first<{ id: string }>(db, "SELECT id FROM passkey_credentials WHERE credential_id = ? LIMIT 1", [
+      credential.credentialId,
+    ]);
+  if (await findDuplicate()) {
     throw new AppError(409, "PASSKEY_ALREADY_REGISTERED", "This passkey is already registered");
   }
 
   const id = uuid();
   const now = nowIso();
-  const deviceName = payload.deviceName ?? null;
 
-  await db.batch([
-    db
-      .prepare(
-        `INSERT INTO passkey_credentials (
-          id, user_id, credential_id, public_key, sign_count, aaguid, device_name, last_used_at, created_at, revoked_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL)`,
-      )
-      .bind(
-        id,
+  try {
+    await db.batch([
+      db
+        .prepare(
+          `INSERT INTO passkey_credentials (
+             id, user_id, credential_id, public_key, sign_count, aaguid, device_name,
+             last_used_at, created_at, revoked_at
+           )
+           SELECT ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL
+           WHERE NOT EXISTS (
+             SELECT 1 FROM passkey_credentials
+             WHERE user_id = ? AND revoked_at IS NULL
+             ORDER BY created_at ASC, id ASC
+             LIMIT 1 OFFSET ?
+           )`,
+        )
+        .bind(
+          id,
+          actor.id,
+          credential.credentialId,
+          credential.publicKey,
+          credential.signCount,
+          credential.aaguid,
+          credential.deviceName,
+          now,
+          actor.id,
+          MAX_PASSKEY_CREDENTIALS_PER_USER - 1,
+        ),
+      prepareAuditLogAfterOneChange(
+        db,
+        actor.kind,
         actor.id,
-        credential.id,
-        isoBase64URL.fromBuffer(credential.publicKey),
-        credential.counter,
-        aaguid,
-        deviceName,
+        "passkey_registered",
+        "passkey_credential",
+        id,
+        { deviceName: credential.deviceName },
         now,
       ),
-    prepareAuditLog(db, actor.kind, actor.id, "passkey_registered", "passkey_credential", id, { deviceName }),
-  ]);
+    ]);
+  } catch (error) {
+    if (isAuditOneChangeGuardFailure(error)) {
+      if (await findDuplicate()) {
+        throw new AppError(409, "PASSKEY_ALREADY_REGISTERED", "This passkey is already registered");
+      }
+      throw new AppError(
+        409,
+        "PASSKEY_LIMIT_REACHED",
+        `Each account can have at most ${MAX_PASSKEY_CREDENTIALS_PER_USER} active passkeys`,
+      );
+    }
+    // A different registration can win the unique credential-id race after
+    // the preflight lookup but before this transaction commits.
+    if (await findDuplicate()) {
+      throw new AppError(409, "PASSKEY_ALREADY_REGISTERED", "This passkey is already registered");
+    }
+    throw error;
+  }
 
-  return { id, deviceName, aaguid, lastUsedAt: null, createdAt: now };
+  return {
+    id,
+    deviceName: credential.deviceName,
+    aaguid: credential.aaguid,
+    lastUsedAt: null,
+    createdAt: now,
+  };
 }
 
 export async function beginPasskeyAuthentication(
@@ -272,7 +354,7 @@ export async function completePasskeyAuthentication(
 
   const credentialRow = await first<PasskeyCredentialRow>(
     db,
-    "SELECT * FROM passkey_credentials WHERE credential_id = ?",
+    `SELECT ${PASSKEY_CREDENTIAL_COLUMNS} FROM passkey_credentials WHERE credential_id = ?`,
     [payload.response.id],
   );
 
@@ -375,8 +457,12 @@ export async function completePasskeyAuthentication(
 export async function listPasskeysForUser(db: DatabaseLike, userId: string): Promise<PasskeySummary[]> {
   const rows = await all<PasskeyCredentialRow>(
     db,
-    "SELECT * FROM passkey_credentials WHERE user_id = ? AND revoked_at IS NULL ORDER BY created_at ASC",
-    [userId],
+    `SELECT ${PASSKEY_CREDENTIAL_COLUMNS}
+     FROM passkey_credentials
+     WHERE user_id = ? AND revoked_at IS NULL
+     ORDER BY created_at ASC, id ASC
+     LIMIT ?`,
+    [userId, MAX_PASSKEY_CREDENTIALS_PER_USER],
   );
   return rows.map(toSummary);
 }

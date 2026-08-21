@@ -70,7 +70,9 @@ export function CompanyDetailPanel({
               </div>
             )}
           </div>
-          <div class="col-md-7">{selectedId && <SponsorshipDetail id={selectedId} onChanged={reload} />}</div>
+          <div class="col-md-7">
+            {selectedId && <SponsorshipDetail key={selectedId} id={selectedId} onChanged={reload} />}
+          </div>
         </div>
       )}
     </div>

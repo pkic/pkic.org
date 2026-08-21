@@ -402,14 +402,14 @@ This is a friendly reminder that your registration for **{{eventName}}** is not 
 
   // ─────────────────────────────────────────────────────────────────────────
   // 12. RSVP warning / follow-up
-  // Variables: firstName, event_name, manage_url
+  // Variables: firstName, event_name, event_day, manage_url
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "rsvp_warning",
-    subjectTemplate: "Action required: Your in-person registration for {{event_name}} is at risk",
+    subjectTemplate: "Action required: Your in-person attendance for {{event_name}} on {{event_day}} is at risk",
     content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
 
-We noticed that the calendar invitation for **{{event_name}}** was recently declined or removed from your calendar.
+We noticed that the calendar invitation for **{{event_name}} on {{event_day}}** was recently declined or removed from your calendar.
 
 As a nonprofit, the PKI Consortium covers significant costs for catering and venue space ($150–$300 per attendee, per day) to keep this event fully funded by sponsors and free for attendees. Because in-person capacity is strictly limited, it's incredibly important that we know exactly who will be attending.
 
@@ -417,27 +417,27 @@ If you are still planning to join us in person, please confirm your attendance u
 
 <div class="cta"><a href="{{manage_url}}">Re-confirm my in-person attendance &rarr;</a></div>
 
-If your plans have changed and you intended to decline, you do not need to do anything. We will adjust your registration automatically so you can still participate virtually, and your seat will be given to someone else. Thank you for your understanding and cooperation!
+If your plans have changed and you intended to decline, you do not need to do anything. We will update this event day only, and your other selected days will remain unchanged. Thank you for your understanding and cooperation!
 `,
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // 13. RSVP downgrade / cancellation notice
-  // Variables: firstName, event_name, action_taken, new_attendance_type, new_status, manage_url
+  // 13. RSVP day-attendance update notice
+  // Variables: firstName, event_name, event_day, action_taken, new_attendance_type, manage_url
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "rsvp_downgraded",
-    subjectTemplate: "Update: Your registration for {{event_name}} has been changed",
+    subjectTemplate: "Update: Your attendance for {{event_name}} on {{event_day}} has been changed",
     content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
 
-Following up on our previous email regarding your declined calendar invitation, your registration for **{{event_name}}** has now been automatically updated.
+Following up on our previous email regarding your declined calendar invitation, your attendance for **{{event_name}} on {{event_day}}** has now been automatically updated.
 
 Because we did not receive an in-person confirmation, we have released your seat to another community member on the waitlist.
 
-{{#if eq new_status "cancelled"}}
-<div class="notice notice-warning"><strong>Your registration has been cancelled.</strong> Because there is no virtual option available for this event, we had to cancel your registration completely to allow another community member to attend.</div>
+{{#if eq new_attendance_type "not_attending"}}
+<div class="notice notice-warning"><strong>You are no longer registered to attend this event day.</strong> Your registration and selections for any other event days remain unchanged.</div>
 {{else}}
-<div class="notice notice-info"><strong>Your attendance type has been updated to {{new_attendance_type}}.</strong> Your registration remains active and you will receive access details closer to the event.</div>
+<div class="notice notice-info"><strong>Your attendance type for this event day has been updated to {{new_attendance_type}}.</strong> Your registration and other event-day selections remain unchanged.</div>
 {{/if}}
 
 If this was done in error and you still wish to attend in person, please use your [registration management link]({{manage_url}}) to review and update your registration, subject to remaining availability.

@@ -207,18 +207,30 @@ export async function listAdminEventRegistrations(
                      WHERE ca.registration_id = r.id AND ca.term_key = 'sponsor-data-sharing') AS sponsor_consent,
                    r.custom_answers_json,
               (SELECT JSON_GROUP_ARRAY(JSON_OBJECT(
+                  'event_day_id', event_day_id,
+                  'day_date', day_date,
                   'uid', ics_uid,
                   'status', response_status,
+                  'received_at', received_at,
                   'warning_sent_at', warning_sent_at,
                   'action_executed_at', action_executed_at,
                   'action_taken', action_taken,
                   'raw_payload_json', raw_payload_json
               ))
                FROM (
-                 SELECT ics_uid, response_status, warning_sent_at, action_executed_at, action_taken, raw_payload_json,
-                        ROW_NUMBER() OVER (PARTITION BY ics_uid ORDER BY created_at DESC) AS rn
-                 FROM calendar_rsvp_events
-                 WHERE registration_id = r.id
+                 SELECT event_day_id, day_date, ics_uid, response_status, received_at, warning_sent_at,
+                        action_executed_at, action_taken, raw_payload_json,
+                        ROW_NUMBER() OVER (
+                          PARTITION BY event_day_id
+                          ORDER BY julianday(received_at) DESC, id DESC
+                        ) AS rn
+                 FROM (
+                   SELECT cre.event_day_id, ed.day_date, cre.ics_uid, cre.response_status, cre.received_at,
+                          cre.warning_sent_at, cre.action_executed_at, cre.action_taken, cre.raw_payload_json, cre.id
+                   FROM calendar_rsvp_events cre
+                   LEFT JOIN event_days ed ON ed.id = cre.event_day_id
+                   WHERE cre.registration_id = r.id
+                 )
                )
                WHERE rn = 1
               ) AS rsvp_events_json

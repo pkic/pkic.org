@@ -128,9 +128,22 @@ describe("Sponsorship sales pipeline", () => {
     expect(orgRows[0].sponsor_tier).toBe("Platinum");
     expect(orgRows[0].sponsor_start_date).not.toBeNull();
 
-    const eventsResponse = await call(adminToken, `/api/v1/admin/sponsorships/${id}/events`);
-    const eventsBody = (await eventsResponse.json()) as { events: { toStage: string }[] };
-    expect(eventsBody.events.map((e) => e.toStage)).toEqual(["new_inquiry", "active"]);
+    const eventsResponse = await call(adminToken, `/api/v1/admin/sponsorships/${id}/events?limit=1&offset=0`);
+    const eventsBody = (await eventsResponse.json()) as {
+      events: { toStage: string }[];
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
+    expect(eventsResponse.status).toBe(200);
+    expect(eventsBody.events.map((e) => e.toStage)).toEqual(["active"]);
+    expect(eventsBody.page).toEqual({ limit: 1, offset: 0, total: 2, hasMore: true });
+
+    const secondEventsResponse = await call(adminToken, `/api/v1/admin/sponsorships/${id}/events?limit=1&offset=1`);
+    const secondEventsBody = (await secondEventsResponse.json()) as {
+      events: { toStage: string }[];
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
+    expect(secondEventsBody.events.map((e) => e.toStage)).toEqual(["new_inquiry"]);
+    expect(secondEventsBody.page).toEqual({ limit: 1, offset: 1, total: 2, hasMore: false });
 
     const lapseResponse = await call(adminToken, `/api/v1/admin/sponsorships/${id}/stage`, {
       method: "PATCH",
@@ -143,6 +156,83 @@ describe("Sponsorship sales pipeline", () => {
       [organizationId],
     );
     expect(orgRowsAfterLapse[0].sponsor_tier).toBeNull();
+  });
+
+  it("searches both event rows and the count, validates list parameters, and requires authorization", async () => {
+    const { organizationId, userId } = await seedOrganization("History Search");
+    const createResponse = await call(adminToken, "/api/v1/admin/sponsorships", {
+      method: "POST",
+      body: JSON.stringify({ sponsorType: "consortium", organizationId, tier: "Gold" }),
+    });
+    const created = (await createResponse.json()) as { sponsorship: { id: string } };
+    const id = created.sponsorship.id;
+    await call(adminToken, `/api/v1/admin/sponsorships/${id}/stage`, {
+      method: "PATCH",
+      body: JSON.stringify({ toStage: "active", note: "Payment cleared" }),
+    });
+
+    const searchResponse = await call(adminToken, `/api/v1/admin/sponsorships/${id}/events?q=payment`);
+    const searchBody = (await searchResponse.json()) as {
+      events: { toStage: string; note: string | null }[];
+      page: { total: number };
+    };
+    expect(searchResponse.status).toBe(200);
+    expect(searchBody.events).toEqual([expect.objectContaining({ toStage: "active", note: "Payment cleared" })]);
+    expect(searchBody.page.total).toBe(1);
+
+    expect((await call(adminToken, `/api/v1/admin/sponsorships/${id}/events?limit=0`)).status).toBe(400);
+    expect((await call(adminToken, `/api/v1/admin/sponsorships/${id}/events?sort=note`)).status).toBe(400);
+    expect((await call(adminToken, `/api/v1/admin/sponsorships/${crypto.randomUUID()}/events`)).status).toBe(404);
+
+    const memberToken = await createMemberSession(env.DB, userId, "sponsorship-history-member-token");
+    expect((await call(memberToken, `/api/v1/admin/sponsorships/${id}/events`)).status).toBe(401);
+  });
+
+  it("paginates equal-timestamp history deterministically in either schema-allowed order", async () => {
+    const { organizationId } = await seedOrganization("Stable History");
+    const createResponse = await call(adminToken, "/api/v1/admin/sponsorships", {
+      method: "POST",
+      body: JSON.stringify({ sponsorType: "consortium", organizationId, tier: "Gold" }),
+    });
+    const created = (await createResponse.json()) as { sponsorship: { id: string } };
+    const id = created.sponsorship.id;
+    await call(adminToken, `/api/v1/admin/sponsorships/${id}/stage`, {
+      method: "PATCH",
+      body: JSON.stringify({ toStage: "active" }),
+    });
+    await env.DB.prepare(
+      `UPDATE sponsorship_events
+       SET id = CASE to_stage
+         WHEN 'new_inquiry' THEN '00000000000000000000000000000001'
+         ELSE '00000000000000000000000000000002'
+       END,
+       created_at = '2026-08-21T12:00:00.000Z'
+       WHERE sponsorship_id = ?`,
+    )
+      .bind(id)
+      .run();
+
+    const newestFirst = await Promise.all([
+      call(adminToken, `/api/v1/admin/sponsorships/${id}/events?limit=1&offset=0`),
+      call(adminToken, `/api/v1/admin/sponsorships/${id}/events?limit=1&offset=1`),
+    ]);
+    const newestStages = await Promise.all(
+      newestFirst.map(
+        async (response) => ((await response.json()) as { events: { toStage: string }[] }).events[0].toStage,
+      ),
+    );
+    expect(newestStages).toEqual(["active", "new_inquiry"]);
+
+    const oldestFirst = await Promise.all([
+      call(adminToken, `/api/v1/admin/sponsorships/${id}/events?sort=createdAt&limit=1&offset=0`),
+      call(adminToken, `/api/v1/admin/sponsorships/${id}/events?sort=createdAt&limit=1&offset=1`),
+    ]);
+    const oldestStages = await Promise.all(
+      oldestFirst.map(
+        async (response) => ((await response.json()) as { events: { toStage: string }[] }).events[0].toStage,
+      ),
+    );
+    expect(oldestStages).toEqual(["new_inquiry", "active"]);
   });
 
   it("advancing a consortium sponsorship to active queues sponsorship-active-confirmation to the contact email", async () => {

@@ -172,6 +172,78 @@ CREATE INDEX idx_proposal_speakers_user_active
   ON proposal_speakers(user_id, created_at DESC, proposal_id)
   WHERE role <> 'proposer' AND status IN ('invited', 'confirmed');
 
+-- Calendar replies describe one event day, not the entire registration. Keep
+-- that identity normalized so enforcement never infers a registration-wide
+-- cancellation from a day-level response. Nullable legacy/ambiguous rows are
+-- retained for audit but fail closed in the enforcement job.
+ALTER TABLE calendar_rsvp_events ADD COLUMN event_day_id TEXT REFERENCES event_days(id);
+ALTER TABLE calendar_rsvp_events ADD COLUMN action_due_at TEXT;
+
+-- Older dedupe keys predate provider namespacing. Preserve their original
+-- tuple shape while preventing two calendar transports from suppressing each
+-- other's events after deployment.
+UPDATE calendar_rsvp_events
+SET dedupe_key = CASE json_array_length(dedupe_key)
+  WHEN 2 THEN json_array(
+    provider,
+    json_extract(dedupe_key, '$[0]'),
+    json_extract(dedupe_key, '$[1]')
+  )
+  WHEN 3 THEN json_array(
+    provider,
+    json_extract(dedupe_key, '$[0]'),
+    json_extract(dedupe_key, '$[1]'),
+    json_extract(dedupe_key, '$[2]')
+  )
+  ELSE dedupe_key
+END;
+
+UPDATE calendar_rsvp_events AS rsvp
+SET event_day_id = (
+  SELECT ed.id
+  FROM registrations r
+  JOIN event_days ed ON ed.event_id = r.event_id
+  WHERE r.id = rsvp.registration_id
+    AND ed.day_date = substr(rsvp.ics_uid, length(rsvp.registration_id) + 2, 10)
+  LIMIT 1
+)
+WHERE event_day_id IS NULL
+  AND rsvp.ics_uid LIKE rsvp.registration_id || '-____-__-__@%';
+
+-- Preserve already-issued warnings while making their next action directly
+-- indexable. New warnings calculate this timestamp in the application layer.
+UPDATE calendar_rsvp_events AS rsvp
+SET action_due_at = CASE
+  WHEN rsvp.event_day_id IS NULL THEN rsvp.warning_sent_at
+  WHEN julianday((SELECT starts_at FROM event_days WHERE id = rsvp.event_day_id)) > julianday('now', '+14 days')
+    THEN strftime('%Y-%m-%dT%H:%M:%fZ', rsvp.warning_sent_at, '+48 hours')
+  WHEN julianday((SELECT starts_at FROM event_days WHERE id = rsvp.event_day_id)) > julianday('now', '+7 days')
+    THEN strftime('%Y-%m-%dT%H:%M:%fZ', rsvp.warning_sent_at, '+24 hours')
+  ELSE strftime('%Y-%m-%dT%H:%M:%fZ', rsvp.warning_sent_at, '+2 hours')
+END
+WHERE rsvp.action_executed_at IS NULL
+  AND rsvp.warning_sent_at IS NOT NULL
+  AND rsvp.response_status IN ('declined', 'tentative');
+
+CREATE INDEX idx_calendar_rsvp_registration_day_received
+  ON calendar_rsvp_events(registration_id, event_day_id, response_status, received_at DESC, id DESC);
+
+CREATE INDEX idx_calendar_rsvp_pending_warning
+  ON calendar_rsvp_events(received_at, id)
+  WHERE action_executed_at IS NULL
+    AND warning_sent_at IS NULL
+    AND response_status IN ('declined', 'tentative');
+
+CREATE INDEX idx_calendar_rsvp_pending_action
+  ON calendar_rsvp_events(action_due_at, received_at, id)
+  WHERE action_executed_at IS NULL
+    AND action_due_at IS NOT NULL
+    AND response_status IN ('declined', 'tentative');
+
+CREATE INDEX idx_calendar_rsvp_pending_bounce
+  ON calendar_rsvp_events(received_at, id)
+  WHERE action_executed_at IS NULL AND response_status = 'bounced';
+
 -- Registration status is constrained by the already-deployed base schema.
 -- Keep that durable lifecycle vocabulary small and store the extensible reason
 -- separately so adding a new cancellation reason never requires rebuilding the
@@ -427,6 +499,10 @@ CREATE TABLE member_applications (
   stage                TEXT NOT NULL DEFAULT 'pending',
   -- allowed: pending | in_review | on_hold | in_consultation | ec_review | approved | declined | withdrawn
   stage_entered_at     TEXT NOT NULL,
+  -- Set atomically with the durable consultation-batch outbox record. A
+  -- transition back into in_consultation clears it so each consultation
+  -- stage entry is announced exactly once without an unbounded batch scan.
+  consultation_notified_at TEXT,
   review_notes         TEXT,
   assigned_to_user_id  TEXT,
   manage_token_hash    TEXT NOT NULL UNIQUE,
@@ -450,6 +526,9 @@ CREATE INDEX idx_member_applications_stage ON member_applications(stage);
 -- ORDER BY stage_entered_at LIMIT ? (PR #1 review §9.1) with a direct index
 -- range scan instead of a full per-stage table scan.
 CREATE INDEX idx_member_applications_stage_entered_at ON member_applications(stage, stage_entered_at);
+CREATE INDEX idx_member_applications_consultation_due
+  ON member_applications(stage, consultation_notified_at, stage_entered_at, id)
+  WHERE stage = 'in_consultation' AND consultation_notified_at IS NULL;
 
 CREATE TABLE member_application_events (
   id             TEXT NOT NULL PRIMARY KEY,
@@ -559,7 +638,8 @@ CREATE TABLE sponsorship_events (
   FOREIGN KEY(actor_user_id) REFERENCES users(id)
 );
 
-CREATE INDEX idx_sponsorship_events_sponsorship ON sponsorship_events(sponsorship_id, created_at);
+CREATE INDEX idx_sponsorship_events_sponsorship
+  ON sponsorship_events(sponsorship_id, created_at DESC, id DESC);
 
 CREATE TABLE sponsorship_automation_effects (
   sponsorship_id TEXT NOT NULL REFERENCES sponsorships(id),
@@ -1110,6 +1190,9 @@ CREATE TABLE passkey_credentials (
 );
 
 CREATE INDEX idx_passkey_credentials_user ON passkey_credentials(user_id);
+CREATE INDEX idx_passkey_credentials_active_user_order
+  ON passkey_credentials(user_id, created_at, id)
+  WHERE revoked_at IS NULL;
 
 
 

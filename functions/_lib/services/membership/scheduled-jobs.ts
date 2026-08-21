@@ -7,10 +7,16 @@
  * the twice-weekly batches are.
  */
 import { all } from "../../db/queries";
+import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { getConfig } from "../../config";
-import { prepareQueueEmailStatement, queueEmail, processOutboxByIdBackground } from "../../email/outbox";
+import {
+  prepareQueueEmailStatement,
+  prepareQueueEmailStatementWhen,
+  processOutboxByIdBackground,
+  queueEmail,
+} from "../../email/outbox";
 import { getMembershipSettings } from "../membership-settings";
 import {
   prepareApplicationStageTransition,
@@ -32,6 +38,7 @@ import {
 } from "./notifications";
 import { logInfo } from "../../logging";
 import type { DatabaseLike, Env } from "../../types";
+import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
 
 function daysSince(iso: string): number {
   return (Date.now() - new Date(iso).getTime()) / 86_400_000;
@@ -39,17 +46,42 @@ function daysSince(iso: string): number {
 
 // ── Consultation batch (Mon/Wed 07:15 UTC) ─────────────────────
 
-export async function runConsultationBatch(db: DatabaseLike, env: Env): Promise<{ applicationsNotified: number }> {
+type ConsultationApplicationRow = Pick<
+  MemberApplicationRow,
+  "id" | "applicant_email" | "applicant_name" | "organization_name" | "membership_category"
+>;
+
+export const CONSULTATION_BATCH_DUE_QUERY = `
+  SELECT id, applicant_email, applicant_name, organization_name, membership_category
+  FROM member_applications
+  WHERE stage = 'in_consultation' AND consultation_notified_at IS NULL
+  ORDER BY stage_entered_at ASC, id ASC
+  LIMIT ?`;
+
+export async function runConsultationBatch(
+  db: DatabaseLike,
+  env: Env,
+  limit = getConfig(env).scheduledConsultationBatchLimit,
+): Promise<{ applicationsNotified: number }> {
   const settings = await getMembershipSettings(db);
-  const applications = await all<MemberApplicationRow>(
-    db,
-    `SELECT * FROM member_applications WHERE stage = 'in_consultation' ORDER BY stage_entered_at ASC`,
-  );
+  const applications = await all<ConsultationApplicationRow>(db, CONSULTATION_BATCH_DUE_QUERY, [limit]);
   if (applications.length === 0) {
     return { applicationsNotified: 0 };
   }
 
-  const outboxId = await queueEmail(
+  const now = nowIso();
+  const applicationIds = applications.map((application) => application.id);
+  const selectedApplications = buildD1JsonMembershipFilter("id", applicationIds);
+  const markNotified = db
+    .prepare(
+      `UPDATE member_applications
+       SET consultation_notified_at = ?, updated_at = ?
+       WHERE ${selectedApplications.sql}
+         AND stage = 'in_consultation'
+         AND consultation_notified_at IS NULL`,
+    )
+    .bind(now, now, ...selectedApplications.bindings);
+  const queued = prepareQueueEmailStatementWhen(
     db,
     buildConsultationBatchEmail({
       recipientEmail: settings.consultation_email_recipients,
@@ -59,8 +91,35 @@ export async function runConsultationBatch(db: DatabaseLike, env: Env): Promise<
         membershipCategory: a.membership_category,
       })),
     }),
+    { sql: "SELECT 1 WHERE changes() = ?", bindings: [applications.length] },
+    now,
   );
-  await processOutboxByIdBackground(db, env, outboxId);
+
+  try {
+    await db.batch([
+      markNotified,
+      queued.statement,
+      prepareAuditLogAfterOneChange(
+        db,
+        "system",
+        null,
+        "consultation_batch_queued",
+        "member_application_batch",
+        null,
+        { applicationIds },
+        now,
+      ),
+    ]);
+  } catch (error) {
+    // Another scheduled/manual invocation claimed at least one of the same
+    // stage entries. The guard rolls the partial marker update back, so the
+    // next bounded pass can safely retry the remaining entries.
+    if (isAuditOneChangeGuardFailure(error)) {
+      return { applicationsNotified: 0 };
+    }
+    throw error;
+  }
+  await processOutboxByIdBackground(db, env, queued.id);
 
   return { applicationsNotified: applications.length };
 }

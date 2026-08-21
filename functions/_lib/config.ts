@@ -1,4 +1,9 @@
 import type { Env } from "./types";
+import {
+  RSVP_ENFORCEMENT_D1_SAFETY_MARGIN,
+  RSVP_ENFORCEMENT_MAX_ACTION_STATEMENTS,
+  RSVP_ENFORCEMENT_SELECTION_STATEMENTS,
+} from "../../assets/shared/constants/rsvp-enforcement";
 
 function parseIntOrDefault(value: string | undefined, defaultValue: number): number {
   const parsed = Number.parseInt(value ?? "", 10);
@@ -69,6 +74,16 @@ export function resolveAppBaseUrl(env: Pick<Env, "APP_BASE_URL">, request?: Requ
 }
 
 export function getConfig(env: Env, request?: Request) {
+  const scheduledD1QueryBudget = Math.min(950, Math.max(1, parseIntOrDefault(env.SCHEDULED_D1_QUERY_BUDGET, 900)));
+  const requestedRsvpLimit = Math.min(250, Math.max(0, parseIntOrDefault(env.SCHEDULED_RSVP_ENFORCEMENT_LIMIT, 25)));
+  const rsvpStatementCeiling = Math.max(
+    0,
+    Math.floor(
+      (scheduledD1QueryBudget - RSVP_ENFORCEMENT_D1_SAFETY_MARGIN - RSVP_ENFORCEMENT_SELECTION_STATEMENTS) /
+        RSVP_ENFORCEMENT_MAX_ACTION_STATEMENTS,
+    ),
+  );
+
   return {
     appBaseUrl: resolveAppBaseUrl(env, request),
     minProposalReviews: parseIntOrDefault(env.DEFAULT_MIN_PROPOSAL_REVIEWS, 2),
@@ -92,13 +107,18 @@ export function getConfig(env: Env, request?: Request) {
     scheduledBadgeRenderLimit: Math.min(25, Math.max(0, parseIntOrDefault(env.SCHEDULED_BADGE_RENDER_LIMIT, 5))),
     scheduledStorageDeletionLimit: parseIntOrDefault(env.SCHEDULED_STORAGE_DELETION_LIMIT, 25),
     scheduledWaitlistPromotionLimit: parseIntOrDefault(env.SCHEDULED_WAITLIST_PROMOTION_LIMIT, 120),
+    scheduledRsvpEnforcementLimit: Math.min(requestedRsvpLimit, rsvpStatementCeiling),
     scheduledDueWorkMaxPasses: parseIntOrDefault(env.SCHEDULED_DUE_WORK_MAX_PASSES, 50),
     scheduledDueWorkMaxMs: parseIntOrDefault(env.SCHEDULED_DUE_WORK_MAX_MS, 600_000),
     // D1 allows a finite number of statements per Worker invocation and
     // counts each statement in batch(). Keep explicit headroom for logging
     // and platform/runtime behavior rather than attempting to infer this
     // from row counts or HTTP subrequests.
-    scheduledD1QueryBudget: Math.min(950, Math.max(1, parseIntOrDefault(env.SCHEDULED_D1_QUERY_BUDGET, 900))),
+    scheduledD1QueryBudget,
+    scheduledConsultationBatchLimit: Math.min(
+      1_000,
+      Math.max(1, parseIntOrDefault(env.SCHEDULED_CONSULTATION_BATCH_LIMIT, 100)),
+    ),
     scheduledOnHoldReminderLimit: parseIntOrDefault(env.SCHEDULED_ON_HOLD_REMINDER_LIMIT, 100),
     scheduledEcAutoApproveLimit: parseIntOrDefault(env.SCHEDULED_EC_AUTO_APPROVE_LIMIT, 100),
     scheduledSponsorshipDueWorkLimit: parseIntOrDefault(env.SCHEDULED_SPONSORSHIP_DUE_WORK_LIMIT, 100),

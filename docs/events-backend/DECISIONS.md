@@ -4,7 +4,7 @@
 - Proposal decisions use multi-review plus explicit finalize action.
 - Email templates are private (R2 object store) with D1 metadata.
 - Referral links use short base62 codes (default length 7).
-- Calendar phase 1 sends ICS; delivery status is tracked in `email_outbox` (no dedicated calendar table); RSVP state automation is deferred.
+- Calendar replies received through signed RSVP addresses are recorded per event day. Decline/tentative automation is bounded, day-scoped, and atomic with its audit/outbox effects; delivery bounces never change attendance. A day without a configured fallback is removed without changing or cancelling the registration-wide aggregate, even when it is the final selected day.
 - Admin authentication uses allowlisted email magic links.
 - User and session persistence use generic `users`/`sessions` tables (admin auth is a role policy, not a schema fork).
 - Global user role is intentionally minimal: `admin|user|guest`; event-specific roles are modeled in `event_participants`.
@@ -27,7 +27,7 @@
 ## Trade-offs
 - Opaque DB-backed session tokens are used for admin API auth to keep implementation simple and revocable.
 - D1 stores template metadata for versioning and audit, while large template content stays in R2.
-- Deferred RSVP automation requires extra provider integrations; current model keeps only outbox delivery evidence and explicit reconfirm-link support.
+- Cross-provider RSVP truth reconciliation remains deferred. The current workflow trusts only signed inbound routing context, fails closed for ambiguous legacy replies, and keeps explicit registration management as the attendee override.
 - Public, cacheable responses are limited to explicit anonymous read endpoints; authenticated and tokenized routes are `no-store`.
 - Markdown rendering uses `marked` (actively maintained and widely adopted); ICS generation uses `ics`.
 - Outbox processing in `waitUntil` uses background-safe wrappers to avoid uncaught worker errors while preserving failure state in `email_outbox`.
