@@ -14,6 +14,7 @@ import {
   throwProposalDecisionConflict,
 } from "./context";
 import type { RecordProposalDecisionInput, RecordedProposalDecision } from "./types";
+import { proposalDecisionSnapshotPredicate } from "./snapshot";
 
 interface RecordedDecisionSnapshot {
   review_round: number;
@@ -43,6 +44,18 @@ export async function recordProposalDecision(
   await assertProposalFinalizeAccess(db, context.event_id, input.actor);
   const decisionId = uuid();
   const now = nowIso();
+  const hasEventSnapshot = input.expectedEventSnapshot !== undefined;
+  const hasSpeakerSnapshot = input.expectedSpeakerSnapshot !== undefined;
+  if ((input.notifications?.length ?? 0) > 0 && (!hasEventSnapshot || !hasSpeakerSnapshot)) {
+    throw new Error("Proposal decision notifications require matching event and speaker snapshots");
+  }
+  if (hasEventSnapshot !== hasSpeakerSnapshot) {
+    throw new Error("Proposal decision event and speaker snapshots must be supplied together");
+  }
+  const snapshotPredicate =
+    input.expectedEventSnapshot && input.expectedSpeakerSnapshot
+      ? proposalDecisionSnapshotPredicate(input.expectedEventSnapshot, input.expectedSpeakerSnapshot)
+      : { sql: "", bindings: [] };
   const condition = {
     sql: "SELECT 1 FROM proposal_decisions WHERE id = ? AND proposal_id = ? AND review_round = ?",
     bindings: [decisionId, input.proposalId, context.review_round],
@@ -79,6 +92,7 @@ export async function recordProposalDecision(
                  WHERE pr.proposal_id = sp.id AND pr.review_round = sp.review_round), ?
          FROM session_proposals sp
          WHERE sp.id = ? AND sp.deleted_at IS NULL AND sp.status = ? AND sp.review_round = ? AND sp.updated_at = ?
+           ${snapshotPredicate.sql}
            AND NOT EXISTS (SELECT 1 FROM proposal_decisions pd WHERE pd.proposal_id = sp.id)
            AND (SELECT COUNT(*) FROM proposal_reviews pr
                 WHERE pr.proposal_id = sp.id AND pr.review_round = sp.review_round) >= ?`,
@@ -94,6 +108,7 @@ export async function recordProposalDecision(
         context.status,
         context.review_round,
         context.updated_at,
+        ...snapshotPredicate.bindings,
         input.minReviewsRequired,
       ),
     db

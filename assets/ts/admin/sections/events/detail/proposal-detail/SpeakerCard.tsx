@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
+import { speakerRoleSchema } from "../../../../../../shared/schemas/registration";
 import { Badge } from "../../../../../components/Badge";
 import { ProfileLinksInput, type ProfileLinksHandle } from "../../../../../components/ProfileLinksInput";
 import { AdminHeadshotManager, ADMIN_HEADSHOT_DISCLAIMER } from "../../../../../shared/headshot/AdminHeadshotManager";
@@ -251,7 +252,7 @@ export function SpeakerCard({
                 <select
                   class="form-select"
                   value={role}
-                  onChange={(event) => setRole((event.target as HTMLSelectElement).value)}
+                  onChange={(event) => setRole(speakerRoleSchema.parse((event.target as HTMLSelectElement).value))}
                 >
                   <option value="proposer">Proposer</option>
                   <option value="speaker">Speaker</option>

@@ -17,6 +17,7 @@ export * from "./invites";
 export * from "./images";
 export * from "./participant-roles";
 export * from "./calendar-rsvp";
+export * from "./presentation-versions";
 
 export const ADMIN_EMAIL_OUTBOX_SORT_COLUMNS = ["recipient", "template", "status", "sendAfter", "createdAt"] as const;
 
@@ -78,6 +79,11 @@ export const adminRunJobsSchema = z.object({
 
 export const speakerReminderPreferenceSchema = z.object({
   action: z.enum(["postpone_7d", "pause_30d", "resume"]),
+});
+export const speakerReminderPreferenceResponseSchema = z.object({
+  success: z.boolean(),
+  state: z.enum(["active", "postponed", "paused"]),
+  pausedUntil: z.string().nullable(),
 });
 
 export const adminRoleValueSchema = z.enum(["admin", "user", "guest"]);

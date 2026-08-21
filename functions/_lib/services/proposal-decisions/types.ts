@@ -1,5 +1,6 @@
 import type { ProposalDecisionStatus } from "../../../../assets/shared/schemas/proposal-status";
 import type { AuthAdmin } from "../../types";
+import type { ProposalDecisionEventSnapshot, ProposalDecisionSpeakerSnapshot } from "./snapshot";
 
 export interface ProposalDecisionNotification {
   id: string;
@@ -20,6 +21,8 @@ export interface RecordProposalDecisionInput {
   presentationReminderUserIds?: string[];
   notifications?: ProposalDecisionNotification[];
   expectedProposalUpdatedAt?: string;
+  expectedEventSnapshot?: ProposalDecisionEventSnapshot;
+  expectedSpeakerSnapshot?: ProposalDecisionSpeakerSnapshot[];
 }
 
 export interface RecordedProposalDecision {
@@ -46,6 +49,8 @@ export interface ProposalDecisionEmailPlan {
     has_current_decision: number;
     updated_at: string;
   };
+  eventSnapshot: ProposalDecisionEventSnapshot;
+  speakerSnapshot: ProposalDecisionSpeakerSnapshot[];
   messages: ProposalDecisionEmailMessage[];
   presentationReminderUserIds: string[];
 }

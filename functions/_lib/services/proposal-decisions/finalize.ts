@@ -19,6 +19,8 @@ export async function finalizeProposalWithNotifications(
   return recordProposalDecision(db, {
     ...input,
     expectedProposalUpdatedAt: plan.proposal.updated_at,
+    expectedEventSnapshot: plan.eventSnapshot,
+    expectedSpeakerSnapshot: plan.speakerSnapshot,
     presentationReminderUserIds: plan.presentationReminderUserIds,
     notifications: plan.messages,
   });

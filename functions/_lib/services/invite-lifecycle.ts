@@ -1,5 +1,6 @@
 import { AppError } from "../errors";
 import { all, first } from "../db/queries";
+import { chunkJsonRows } from "../db/json-bulk";
 import { normalizeEmail } from "../validation";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
@@ -12,12 +13,35 @@ export function prepareInviteTransitionGuard(
   db: DatabaseLike,
   invite: Pick<InviteRecord, "id" | "transition_revision">,
 ): StatementLike {
-  return db
-    .prepare(
-      `INSERT INTO invite_transition_guards (id, invite_id, expected_revision)
-       VALUES (?, ?, ?)`,
-    )
-    .bind(uuid(), invite.id, invite.transition_revision);
+  return prepareInviteTransitionGuardStatements(db, [invite])[0];
+}
+
+/**
+ * Prepares bounded, set-based optimistic-lock guards. The validation trigger
+ * aborts the surrounding D1 batch when any aggregate changed after planning.
+ */
+export function prepareInviteTransitionGuardStatements(
+  db: DatabaseLike,
+  invites: ReadonlyArray<Pick<InviteRecord, "id" | "transition_revision">>,
+): StatementLike[] {
+  return chunkJsonRows(
+    invites.map((invite) => ({
+      guardId: uuid(),
+      inviteId: invite.id,
+      expectedRevision: invite.transition_revision,
+    })),
+  ).map((chunk) =>
+    db
+      .prepare(
+        `INSERT INTO invite_transition_guards (id, invite_id, expected_revision)
+         SELECT
+           json_extract(value, '$.guardId'),
+           json_extract(value, '$.inviteId'),
+           json_extract(value, '$.expectedRevision')
+         FROM json_each(?)`,
+      )
+      .bind(chunk.json),
+  );
 }
 
 export function isStaleInviteTransition(error: unknown): boolean {

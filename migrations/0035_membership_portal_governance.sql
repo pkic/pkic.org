@@ -151,6 +151,17 @@ BEGIN
   WHERE id = NEW.id;
 END;
 
+-- Public invitation-link recovery is bounded and ordered by recency. Keep the
+-- lookup on normalized email/status inside D1 instead of scanning invitations
+-- in Worker memory.
+CREATE INDEX idx_invites_recovery_email_created
+  ON invites(invitee_email, event_id, invite_type, created_at DESC)
+  WHERE status IN ('sent', 'expired');
+
+CREATE INDEX idx_proposal_speakers_user_active
+  ON proposal_speakers(user_id, created_at DESC, proposal_id)
+  WHERE role <> 'proposer' AND status IN ('invited', 'confirmed');
+
 -- Registration status is constrained by the already-deployed base schema.
 -- Keep that durable lifecycle vocabulary small and store the extensible reason
 -- separately so adding a new cancellation reason never requires rebuilding the
@@ -2498,6 +2509,26 @@ CREATE TABLE storage_deletion_outbox (
 CREATE INDEX idx_storage_deletion_outbox_due
   ON storage_deletion_outbox(status, next_attempt_at, created_at);
 
+-- Badge rendering writes to R2 and therefore cannot be committed atomically
+-- with its admin audit record. Persist the render intent in D1 first, then let
+-- the request and scheduled worker retry the idempotent R2 overwrite.
+CREATE TABLE badge_render_jobs (
+  id              TEXT NOT NULL PRIMARY KEY,
+  referral_code   TEXT NOT NULL UNIQUE,
+  origin          TEXT NOT NULL,
+  status          TEXT NOT NULL,
+  attempts        INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at TEXT NOT NULL,
+  last_error      TEXT,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL,
+  rendered_at     TEXT,
+  FOREIGN KEY(referral_code) REFERENCES referral_codes(code)
+);
+
+CREATE INDEX idx_badge_render_jobs_due
+  ON badge_render_jobs(status, next_attempt_at, created_at);
+
 -- Both attendee exports filter consent by registration and term. Without this
 -- index, the correlated lookup scans the complete consent table per row.
 CREATE INDEX IF NOT EXISTS idx_consent_acceptances_registration_term
@@ -2573,6 +2604,16 @@ JOIN proposal_reviews pr
 
 CREATE INDEX idx_proposal_reviews_proposal_round
   ON proposal_reviews(proposal_id, review_round);
+
+-- Keep the common live/deleted event proposal pages index-backed without
+-- forcing D1 to sort or scan proposals from unrelated events.
+CREATE INDEX idx_session_proposals_event_live_submitted
+  ON session_proposals(event_id, submitted_at DESC, id)
+  WHERE deleted_at IS NULL;
+
+CREATE INDEX idx_session_proposals_event_deleted_submitted
+  ON session_proposals(event_id, submitted_at DESC, id)
+  WHERE deleted_at IS NOT NULL;
 
 CREATE INDEX idx_proposal_decision_history_proposal_round
   ON proposal_decision_history(proposal_id, review_round DESC);

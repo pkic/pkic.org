@@ -2,6 +2,7 @@ import { z } from "zod";
 import { formAnswersSchema } from "./form-answers";
 import { databaseIdSchema } from "./identifiers";
 import {
+  emailRecoveryRequestSchema,
   firstNameSchema,
   eventSlugParamsSchema,
   jobTitleSchema,
@@ -22,10 +23,7 @@ import { proposalSpeakerRoleSchema } from "./participant-roles";
 export { REGISTRATION_HEADSHOT_MAX_BYTES } from "./images";
 export const REGISTRATION_HEADSHOT_ALLOWED_MIME_TYPES = IMAGE_UPLOAD_ALLOWED_MIME_TYPES;
 
-export const registrationHeadshotUploadFormSchema = z.object({
-  consent: z
-    .enum(["true"])
-    .describe("Consent declaring the attendee owns/has rights to the uploaded photo of themselves"),
+export const headshotImageUploadFormSchema = z.object({
   file: z
     .any()
     .describe(
@@ -33,12 +31,23 @@ export const registrationHeadshotUploadFormSchema = z.object({
     ),
 });
 
-export const registrationHeadshotUploadResponseSchema = z.object({
+export const registrationHeadshotUploadFormSchema = headshotImageUploadFormSchema.extend({
+  consent: z
+    .enum(["true"])
+    .describe("Consent declaring the attendee owns/has rights to the uploaded photo of themselves"),
+});
+
+export const successResponseSchema = z.object({ success: z.boolean() });
+export const headshotUploadResponseSchema = successResponseSchema.extend({
+  r2Key: z.string().describe("R2 object key for the uploaded headshot"),
+  headshotUrl: z.string().url().describe("URL pointing to the uploaded headshot"),
+});
+export const registrationHeadshotUploadResponseSchema = headshotUploadResponseSchema.omit({ r2Key: true }).extend({
   success: z.boolean(),
   headshotUrl: z.string().url().describe("The permanent URL pointing to the new uploaded headshot profile asset"),
 });
 
-export const successResponseSchema = z.object({ success: z.boolean() });
+export const registrationResendManageLinkSchema = emailRecoveryRequestSchema;
 
 export const registrationHeadshotUploadRouteSchema = {
   tags: ["Registrations", "Headshots"],
@@ -78,10 +87,7 @@ export const registrationHeadshotDeleteRouteSchema = {
   },
 };
 
-export const adminHeadshotUploadResponseSchema = z.object({
-  success: z.boolean(),
-  r2Key: z.string().describe("R2 object key for the uploaded headshot"),
-});
+export const adminHeadshotUploadResponseSchema = headshotUploadResponseSchema.omit({ headshotUrl: true });
 
 export const attendanceTypeSchema = z.enum(["in_person", "virtual", "on_demand"]);
 

@@ -4,6 +4,7 @@ import { defaultedSourceTypeSchema } from "./source";
 import { linksSchema } from "./links";
 import {
   boundedJsonObject,
+  emailRecoveryRequestSchema,
   firstNameSchema,
   jobTitleSchema,
   lastNameSchema,
@@ -36,6 +37,8 @@ export const proposalSessionTypesSchema = z
 
 const proposalTitleSchema = trimmedString(8, 180);
 const proposalAbstractSchema = trimmedString(80, 8000);
+export const MAX_PROPOSAL_ADDITIONAL_SPEAKERS = 8;
+export const MAX_PROPOSAL_PARTICIPANTS = MAX_PROPOSAL_ADDITIONAL_SPEAKERS + 1;
 
 export const proposalCreateSchema = boundedJsonObject(
   {
@@ -61,7 +64,7 @@ export const proposalCreateSchema = boundedJsonObject(
           role: speakerRoleSchema.default("speaker"),
         }),
       )
-      .max(8)
+      .max(MAX_PROPOSAL_ADDITIONAL_SPEAKERS)
       .default([]),
     consents: z.array(consentItemSchema).min(1).max(20),
   },
@@ -96,9 +99,7 @@ export const proposalCreateResponseSchema = z.object({
   shareUrl: z.string().url(),
 });
 
-export const proposalResendManageLinkSchema = z.object({
-  email: normalizedEmailSchema,
-});
+export const proposalResendManageLinkSchema = emailRecoveryRequestSchema;
 
 export const proposalResendSpeakerManageLinkSchema = proposalResendManageLinkSchema;
 
@@ -136,28 +137,32 @@ export const proposalManageRecordSchema = z.object({
 
 export const proposalManageSpeakerStatusSchema = z.enum(["pending", "invited", "confirmed", "declined"]);
 export type ProposalManageSpeakerStatus = z.infer<typeof proposalManageSpeakerStatusSchema>;
-export const proposalManageSpeakerSchema = z.object({
+/** Canonical transport fields shared by proposer and admin speaker views. */
+export const proposalSpeakerProfileSchema = z.object({
   userId: databaseIdSchema,
   role: speakerRoleSchema,
   status: proposalManageSpeakerStatusSchema,
-  confirmedAt: z.string().nullable(),
-  declinedAt: z.string().nullable(),
   email: normalizedEmailSchema,
   firstName: z.string().nullable(),
   lastName: z.string().nullable(),
   organizationName: z.string().nullable(),
   jobTitle: z.string().nullable(),
-  bio: z.string().nullable(),
   links: linksSchema,
-  headshotUploaded: z.boolean(),
   headshotUpdatedAt: z.string().nullable(),
   headshotUrl: z.string().url().nullable(),
+});
+
+export const proposalManageSpeakerSchema = proposalSpeakerProfileSchema.extend({
+  confirmedAt: z.string().nullable(),
+  declinedAt: z.string().nullable(),
+  bio: z.string().nullable(),
+  headshotUploaded: z.boolean(),
 });
 
 export const proposalManageReadResponseSchema = z.object({
   success: z.literal(true),
   proposal: proposalManageRecordSchema,
-  speakers: z.array(proposalManageSpeakerSchema).max(8),
+  speakers: z.array(proposalManageSpeakerSchema).max(MAX_PROPOSAL_PARTICIPANTS),
 });
 
 export const proposalManageUpdateResponseSchema = z.object({

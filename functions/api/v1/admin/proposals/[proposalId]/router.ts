@@ -3,8 +3,7 @@ import { fromHono } from "chanfana";
 import { handleError } from "../../../../../_lib/http";
 import { getCachedAdminForRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
-import { proposalPermissionForRequest } from "../../../../../_lib/auth/proposal-route-policy";
-import { first } from "../../../../../_lib/db/queries";
+import { getProposalEventScope, proposalPermissionForRequest } from "../../../../../_lib/auth/proposal-route-policy";
 import { requestDb } from "../../../../../_lib/db/context";
 import { AppError } from "../../../../../_lib/errors";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
@@ -73,18 +72,11 @@ async function requireProposalAccess(c: Context<RequestDbContext>, next: Next): 
   }
 
   const proposalId = c.req.param("proposalId") ?? "";
-  const proposal = await first<{ event_id: string }>(
-    requestDb(c),
-    "SELECT event_id FROM session_proposals WHERE id = ?",
-    [proposalId],
-  );
-  if (!proposal) {
-    throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found");
-  }
+  const eventId = await getProposalEventScope(requestDb(c), proposalId);
 
   requirePermission(admin, proposalPermissionForRequest(c.req.path, c.req.method), {
     type: "event",
-    id: proposal.event_id,
+    id: eventId,
   });
 
   await next();

@@ -26,13 +26,14 @@ import {
 } from "../../../../_lib/services/proposals-speaker-profile";
 import { getRequiredTerms } from "../../../../_lib/services/events";
 import { speakerPresentationPageUrl } from "../../../../_lib/services/frontend-links";
-import { first } from "../../../../_lib/db/queries";
 import { parseJsonBody } from "../../../../_lib/validation";
 import { requireInternalSecret } from "../../../../_lib/request";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
 import { z } from "zod";
 import { speakerProfilePatchSchema } from "../../../../../assets/shared/schemas/proposal-management";
 import { parseLinksJson, serializeLinks } from "../../../../../assets/shared/schemas/links";
+import { getEventById } from "../../../../_lib/services/events";
+import { requestDb } from "../../../../_lib/db/context";
 
 const speakerActionSchema = z.discriminatedUnion("action", [
   z.object({
@@ -56,21 +57,18 @@ const speakerActionSchema = z.discriminatedUnion("action", [
 export async function onRequestGet(c: any): Promise<Response> {
   try {
     const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
+    const db = requestDb(c);
     const { speaker, proposal, user } = await getSpeakerByManageToken(
-      c.env.DB,
+      db,
       c.req.param("token"),
       requireInternalSecret(c.env),
     );
 
     const [coSpeakers, presentationUploader, presentationTerms, event] = await Promise.all([
-      getProposalCoSpeakers(c.env.DB, proposal.id, speaker.user_id),
-      getPresentationUploader(c.env.DB, proposal.id),
-      getRequiredTerms(c.env.DB, proposal.event_id, "presentation"),
-      first<{ slug: string; base_path: string | null; starts_at: string; settings_json: string }>(
-        c.env.DB,
-        "SELECT slug, base_path, starts_at, settings_json FROM events WHERE id = ?",
-        [proposal.event_id],
-      ),
+      getProposalCoSpeakers(db, proposal.id, speaker.user_id),
+      getPresentationUploader(db, proposal.id),
+      getRequiredTerms(db, proposal.event_id, "presentation"),
+      getEventById(db, proposal.event_id),
     ]);
 
     const presentationUrl = event ? speakerPresentationPageUrl(appBaseUrl, event, c.req.param("token")) : null;
@@ -121,7 +119,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     const body = await parseJsonBody(c.req, speakerActionSchema);
 
     if (body.action === "confirm") {
-      await confirmSpeakerParticipation(c.env.DB, c.req.param("token"), requireInternalSecret(c.env), {
+      await confirmSpeakerParticipation(requestDb(c), c.req.param("token"), requireInternalSecret(c.env), {
         consents: body.consents,
         ip: c.req.raw.headers.get("cf-connecting-ip"),
         userAgent: c.req.raw.headers.get("user-agent"),
@@ -129,7 +127,7 @@ export async function onRequestPost(c: any): Promise<Response> {
       return json({ success: true, status: "confirmed" });
     }
 
-    await declineSpeakerParticipation(c.env.DB, c.req.param("token"), requireInternalSecret(c.env), {
+    await declineSpeakerParticipation(requestDb(c), c.req.param("token"), requireInternalSecret(c.env), {
       reason: body.reason ?? null,
     });
     return json({ success: true, status: "declined" });
@@ -142,7 +140,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
   try {
     const body = await parseJsonBody(c.req, speakerProfilePatchSchema);
     const { speaker, user } = await getSpeakerByManageToken(
-      c.env.DB,
+      requestDb(c),
       c.req.param("token"),
       requireInternalSecret(c.env),
     );
@@ -151,7 +149,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
       return json({ error: { code: "SPEAKER_DECLINED", message: "You have declined participation." } }, 403);
     }
 
-    await updateSpeakerProfile(c.env.DB, user.id, {
+    await updateSpeakerProfile(requestDb(c), user.id, {
       firstName: body.firstName === undefined ? undefined : body.firstName || null,
       lastName: body.lastName === undefined ? undefined : body.lastName || null,
       organizationName: body.organizationName === undefined ? undefined : body.organizationName || null,

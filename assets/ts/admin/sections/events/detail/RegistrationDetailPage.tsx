@@ -88,7 +88,7 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
     setRegenerating(true);
     try {
       await api(`/api/v1/admin/events/${slug}/registrations/${regId}/regenerate-badge`, { method: "POST", body: "{}" });
-      toast("Badge regenerated", "success");
+      toast("Badge regeneration queued", "success");
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {

@@ -2,12 +2,9 @@ import { json } from "../../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
 import {
   getPresentationProposalContext,
-  parsePresentationUpload,
-  storePresentationFile,
-} from "../../../../../../../_lib/services/presentation-versions";
-import { recordPresentationUpload } from "../../../../../../../_lib/services/proposals-speaker-profile";
-import { writeAuditLog } from "../../../../../../../_lib/services/audit";
-import { AppError } from "../../../../../../../_lib/errors";
+  requirePresentationBucket,
+  uploadProposalPresentation,
+} from "../../../../../../../_lib/services/presentation-upload";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 
 export async function onRequestPost(c: AdminContext): Promise<Response> {
@@ -16,38 +13,10 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 
   const proposal = await getPresentationProposalContext(requestDb(c), proposalId);
 
-  if (proposal.status !== "accepted") {
-    return json(
-      {
-        error: { code: "PROPOSAL_NOT_ACCEPTED", message: "Presentations can only be uploaded for accepted proposals." },
-      },
-      409,
-    );
-  }
-
-  const bucket = c.env.SPEAKER_UPLOADS_BUCKET;
-  if (!bucket) throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "File uploads are not configured on this instance.");
-
-  const parsed = await parsePresentationUpload(c.req.raw);
-  if ("error" in parsed) return json({ error: parsed.error }, parsed.status);
-
-  const r2Key = await storePresentationFile(
-    bucket,
-    { eventSlug: proposal.event_slug, proposalId, proposalTitle: proposal.title },
-    parsed,
-  );
-
-  await recordPresentationUpload(requestDb(c), bucket, proposalId, r2Key, admin.id, {
-    fileName: parsed.name ?? null,
-    fileSize: parsed.size,
-    mimeType: parsed.type,
-  });
-
-  await writeAuditLog(requestDb(c), "admin", admin.id, "presentation_uploaded", "session_proposal", proposalId, {
-    r2Key,
-    fileName: parsed.name ?? null,
-    fileSize: parsed.size,
-    mimeType: parsed.type,
+  await uploadProposalPresentation(requestDb(c), requirePresentationBucket(c.env), c.req.raw, proposal, {
+    uploadedByUserId: admin.id,
+    actorType: "admin",
+    enforceDeadline: false,
   });
 
   return json({ success: true });

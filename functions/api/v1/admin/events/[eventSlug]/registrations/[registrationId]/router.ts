@@ -3,6 +3,7 @@ import { fromHono } from "chanfana";
 import { openApiRoute } from "../../../../../../../_lib/openapi/route";
 import {
   adminRegistrationAuditLogRouteSchema,
+  adminRegistrationBadgeRegenerationRouteSchema,
   adminRegistrationDetailRouteSchema,
 } from "../../../../../../../../assets/shared/schemas/route-contracts";
 import { onRequestPost as AdminEventsEventSlugRegistrationsRegistrationIdAdmitPost_l } from "./admit";
@@ -34,7 +35,13 @@ openapi.get(
 );
 app.patch("/", AdminEventsEventSlugRegistrationsRegistrationIdPatch_l);
 app.post("/open-manage", AdminEventsEventSlugRegistrationsRegistrationIdOpenManagePost_l);
-app.post("/regenerate-badge", AdminEventsEventSlugRegistrationsRegistrationIdRegenerateBadgePost_l);
+openapi.post(
+  "/regenerate-badge",
+  openApiRoute(
+    adminRegistrationBadgeRegenerationRouteSchema,
+    AdminEventsEventSlugRegistrationsRegistrationIdRegenerateBadgePost_l,
+  ),
+);
 app.post("/resend-confirmation", AdminEventsEventSlugRegistrationsRegistrationIdResendConfirmationPost_l);
 
 export default openapi;

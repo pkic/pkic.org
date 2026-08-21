@@ -89,6 +89,7 @@ export function getConfig(env: Env, request?: Request) {
     ),
     scheduledReminderLimit: parseIntOrDefault(env.SCHEDULED_REMINDER_LIMIT, 120),
     scheduledOutboxLimit: parseIntOrDefault(env.SCHEDULED_OUTBOX_LIMIT, 120),
+    scheduledBadgeRenderLimit: Math.min(25, Math.max(0, parseIntOrDefault(env.SCHEDULED_BADGE_RENDER_LIMIT, 5))),
     scheduledStorageDeletionLimit: parseIntOrDefault(env.SCHEDULED_STORAGE_DELETION_LIMIT, 25),
     scheduledWaitlistPromotionLimit: parseIntOrDefault(env.SCHEDULED_WAITLIST_PROMOTION_LIMIT, 120),
     scheduledDueWorkMaxPasses: parseIntOrDefault(env.SCHEDULED_DUE_WORK_MAX_PASSES, 50),

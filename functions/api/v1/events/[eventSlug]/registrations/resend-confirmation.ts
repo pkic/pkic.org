@@ -9,7 +9,7 @@ import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
 import { registrationResendConfirmationSchema } from "../../../../../../assets/shared/schemas/api";
 import { registrationResendConfirmationRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts";
 import { getClientIp, requireInternalSecret } from "../../../../../_lib/request";
-import { enforceRateLimit } from "../../../../../_lib/rate-limit";
+import { enforceEmailTriggerRateLimits } from "../../../../../_lib/rate-limit";
 
 export async function onRequestPost(
   c: any,
@@ -17,17 +17,12 @@ export async function onRequestPost(
 ): Promise<Response> {
   c.set("sensitive", true);
   const body = data?.body ?? (await parseJsonBody(c.req, registrationResendConfirmationSchema));
-  if (body.email) {
-    await enforceRateLimit({
-      binding: c.env.EMAIL_RATE_LIMITER,
-      namespace: "registration-resend-confirmation:email",
-      key: body.email,
-    });
-  }
-  await enforceRateLimit({
-    binding: c.env.IP_RATE_LIMITER,
-    namespace: "registration-resend-confirmation:ip",
-    key: getClientIp(c.req.raw),
+  await enforceEmailTriggerRateLimits({
+    emailBinding: c.env.EMAIL_RATE_LIMITER,
+    ipBinding: c.env.IP_RATE_LIMITER,
+    namespace: "registration-resend-confirmation",
+    email: body.email,
+    clientIp: getClientIp(c.req.raw),
   });
   const config = getConfig(c.env, c.req.raw);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));

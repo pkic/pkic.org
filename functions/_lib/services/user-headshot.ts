@@ -6,14 +6,16 @@ import { imageExtension, putUploadedImage } from "../utils/image-upload";
 import { first } from "../db/queries";
 import { prepareAuditLogWhen } from "./audit";
 import { storedImageResponse } from "./image-response";
+import { invalidateAndRerender } from "./og-badge-prerender";
 import {
   enqueueStorageDeletion,
   prepareStorageDeletion,
   processStorageDeletionForKey,
 } from "./storage-deletion-outbox";
 import type { Env, StatementLike } from "../types";
+import { resolveAppBaseUrl } from "../config";
 
-interface HeadshotAudit {
+export interface HeadshotAudit {
   actorType: string;
   actorId: string | null;
   action: string;
@@ -22,7 +24,7 @@ interface HeadshotAudit {
   details?: Record<string, unknown>;
 }
 
-interface UserHeadshotContext {
+export interface UserHeadshotContext {
   db: DatabaseLike;
   bucket: R2Bucket;
   userId: string;
@@ -34,6 +36,38 @@ export interface UserHeadshotRecord {
   id: string;
   email: string;
   headshot_r2_key: string | null;
+}
+
+export function requireUserHeadshotBucket(env: Pick<Env, "SPEAKER_UPLOADS_BUCKET">): R2Bucket {
+  const bucket = env.SPEAKER_UPLOADS_BUCKET;
+  if (!bucket) throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "File uploads are not configured");
+  return bucket;
+}
+
+export function privateUserHeadshotResponse(bucket: R2Bucket, key: string): Promise<Response> {
+  return storedImageResponse(bucket, key, {
+    notFoundCode: "NOT_FOUND",
+    notFoundMessage: "Headshot file missing from storage",
+    cacheControl: "private, max-age=3600",
+  });
+}
+
+export function publicUserHeadshotUrl(
+  appBaseUrl: string,
+  storageKey: string | null,
+  updatedAt?: string | null,
+): string | null {
+  if (!storageKey) return null;
+  const segments = storageKey.split("/").filter(Boolean);
+  if (segments[0] === "headshots") segments.shift();
+  if (segments.length < 2) return null;
+
+  const url = new URL(
+    `/api/v1/headshots/${segments.map((segment) => encodeURIComponent(segment)).join("/")}`,
+    appBaseUrl,
+  );
+  if (updatedAt) url.searchParams.set("v", updatedAt);
+  return url.toString();
 }
 
 export async function getUserHeadshotRecord(db: DatabaseLike, userId: string): Promise<UserHeadshotRecord> {
@@ -51,11 +85,7 @@ export async function getUserHeadshotPointer(db: DatabaseLike, userId: string): 
 export async function adminUserHeadshotResponse(db: DatabaseLike, bucket: R2Bucket, userId: string) {
   const user = await getUserHeadshotRecord(db, userId);
   if (!user.headshot_r2_key) throw new AppError(404, "NOT_FOUND", "No headshot on file");
-  return storedImageResponse(bucket, user.headshot_r2_key, {
-    notFoundCode: "NOT_FOUND",
-    notFoundMessage: "Headshot file missing from storage",
-    cacheControl: "private, max-age=3600",
-  });
+  return privateUserHeadshotResponse(bucket, user.headshot_r2_key);
 }
 
 function conditionalHeadshotAuditStatement(
@@ -179,6 +209,79 @@ export function removePreviousHeadshot(
   previousKey: string | null,
 ): Promise<boolean> {
   return processStorageDeletionForKey(db, env, previousKey);
+}
+
+/** Runs derived rendering and opportunistic durable-deletion processing after a committed pointer change. */
+export function finalizeUserHeadshotChange(
+  context: {
+    db: DatabaseLike;
+    env: Env;
+    origin: string;
+    userId: string;
+    previousKey: string | null;
+  },
+  waitUntil: (promise: Promise<unknown>) => void,
+): void {
+  waitUntil(removePreviousHeadshot(context.db, context.env, context.previousKey));
+  waitUntil(invalidateAndRerender(context.userId, context.env, context.origin));
+}
+
+export async function commitUserHeadshotUpload(
+  context: Omit<UserHeadshotContext, "bucket"> & {
+    env: Env;
+    origin: string;
+    image: { buffer: ArrayBuffer; contentType: string };
+    source?: string;
+  },
+  waitUntil: (promise: Promise<unknown>) => void,
+): Promise<string> {
+  const r2Key = await replaceUserHeadshot({
+    db: context.db,
+    bucket: requireUserHeadshotBucket(context.env),
+    userId: context.userId,
+    previousKey: context.previousKey,
+    image: context.image,
+    source: context.source,
+    audit: context.audit,
+  });
+  finalizeUserHeadshotChange(context, waitUntil);
+  return r2Key;
+}
+
+export async function commitUserHeadshotRemoval(
+  context: Omit<UserHeadshotContext, "bucket"> & { env: Env; origin: string },
+  waitUntil: (promise: Promise<unknown>) => void,
+): Promise<void> {
+  await removeUserHeadshot(context);
+  finalizeUserHeadshotChange(context, waitUntil);
+}
+
+export async function uploadUserHeadshotForRequest(
+  db: DatabaseLike,
+  env: Env,
+  request: Request,
+  waitUntil: (promise: Promise<unknown>) => void,
+  payload: {
+    userId: string;
+    previousKey: string | null;
+    image: { buffer: ArrayBuffer; contentType: string };
+    source?: string;
+    audit: HeadshotAudit;
+  },
+): Promise<{ r2Key: string; origin: string }> {
+  const origin = resolveAppBaseUrl(env, request);
+  const r2Key = await commitUserHeadshotUpload({ db, env, origin, ...payload }, waitUntil);
+  return { r2Key, origin };
+}
+
+export function removeUserHeadshotForRequest(
+  db: DatabaseLike,
+  env: Env,
+  request: Request,
+  waitUntil: (promise: Promise<unknown>) => void,
+  payload: { userId: string; previousKey: string | null; audit: HeadshotAudit },
+): Promise<void> {
+  return commitUserHeadshotRemoval({ db, env, origin: resolveAppBaseUrl(env, request), ...payload }, waitUntil);
 }
 
 export async function currentUserHeadshotResponse(

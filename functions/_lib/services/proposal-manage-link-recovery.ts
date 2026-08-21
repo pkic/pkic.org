@@ -4,7 +4,7 @@ import type { DatabaseLike } from "../types";
 import { queuedCapabilityToken } from "./capability-links";
 import { buildEventEmailVariables, type EventRecord } from "./events";
 import { proposalManagePageUrl } from "./frontend-links";
-import { bulkBuildProposalInviteEmailContexts } from "./reminders/shared";
+import { buildProposalInviteEmailContextMap } from "./proposal-invite-email-context";
 
 interface ProposalMatch {
   proposal_id: string;
@@ -40,7 +40,7 @@ export async function queueProposalManageLinkRecovery(
 
   const proposalIds = proposals.map((proposal) => proposal.proposal_id);
   const [inviteContexts, referralRows] = await Promise.all([
-    bulkBuildProposalInviteEmailContexts(db, proposalIds),
+    buildProposalInviteEmailContextMap(db, proposalIds),
     all<{ owner_id: string; code: string }>(
       db,
       `SELECT owner_id, code

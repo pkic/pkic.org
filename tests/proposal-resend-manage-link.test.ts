@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:test";
-import { onRequestPost as resendProposalManageLink } from "../functions/api/v1/events/[eventSlug]/proposals/resend-manage-link";
-import app from "../functions/router";
 import {
   issueDatabaseCapability,
   materializeQueuedCapabilityLinks,
@@ -10,9 +8,10 @@ import {
 import { run } from "../functions/_lib/db/queries";
 import { getProposalByManageToken } from "../functions/_lib/services/proposals";
 import { nowIso } from "../functions/_lib/utils/time";
-import { createContext, queryAll, seedEventAndAdmin } from "./helpers/context";
+import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 import { resetDb } from "./helpers/reset-db";
+import { callApi } from "./helpers/app";
 
 const signingSecret = "proposal-resend-test-signing-secret";
 
@@ -64,17 +63,11 @@ describe("proposal resend-manage-link endpoint", () => {
     });
     const testEnv = { ...env, INTERNAL_SIGNING_SECRET: signingSecret };
 
-    const response = await resendProposalManageLink(
-      createContext(
-        testEnv,
-        new Request("https://app.test/api/v1/events/pqc-2026/proposals/resend-manage-link", {
-          method: "POST",
-          headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.40" },
-          body: JSON.stringify({ email: "proposal-owner@example.test" }),
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const response = await callApi(testEnv, "/api/v1/events/pqc-2026/proposals/resend-manage-link", {
+      method: "POST",
+      headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.40" },
+      body: JSON.stringify({ email: "proposal-owner@example.test" }),
+    });
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ success: true });
@@ -103,16 +96,14 @@ describe("proposal resend-manage-link endpoint", () => {
 
   it("returns the same success response when no proposal matches", async () => {
     await seedEventAndAdmin(env.DB);
-    const response = await resendProposalManageLink(
-      createContext(
-        { ...env, INTERNAL_SIGNING_SECRET: signingSecret },
-        new Request("https://app.test/api/v1/events/pqc-2026/proposals/resend-manage-link", {
-          method: "POST",
-          headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.41" },
-          body: JSON.stringify({ email: "missing@example.test" }),
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
+    const response = await callApi(
+      { ...env, INTERNAL_SIGNING_SECRET: signingSecret },
+      "/api/v1/events/pqc-2026/proposals/resend-manage-link",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.41" },
+        body: JSON.stringify({ email: "missing@example.test" }),
+      },
     );
 
     expect(response.status).toBe(200);
@@ -149,10 +140,9 @@ describe("proposal resend-manage-link endpoint", () => {
       nowSeconds: Math.floor(Date.now() / 1000) - 2,
     });
 
-    const response = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/manage/${encodeURIComponent(token)}`),
-      { ...env, INTERNAL_SIGNING_SECRET: signingSecret } as any,
-      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    const response = await callApi(
+      { ...env, INTERNAL_SIGNING_SECRET: signingSecret },
+      `/api/v1/proposals/manage/${encodeURIComponent(token)}`,
     );
     expect(response.status).toBe(410);
     await expect(response.json()).resolves.toMatchObject({ error: { code: "PROPOSAL_TOKEN_EXPIRED" } });

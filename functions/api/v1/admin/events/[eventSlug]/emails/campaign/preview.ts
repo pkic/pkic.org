@@ -8,7 +8,7 @@ import { getConfig, resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { requireInternalSecret } from "../../../../../../../_lib/request";
 import { applyCampaignCustomText } from "../../../../../../../_lib/email/campaign-custom";
 import type { EmailContentType } from "../../../../../../../../assets/shared/schemas/admin-email-templates";
-import { loadEmailLayout, loadEmailPartials } from "../../../../../../../_lib/email/partials";
+import { loadEmailRenderResources } from "../../../../../../../_lib/email/partials";
 import {
   proposalPageUrl,
   registrationManagePageUrl,
@@ -70,8 +70,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 
   let subject: string;
   let rendered: { html: string; text: string };
-  const partials = await loadEmailPartials(requestDb(c));
-  const layoutHtml = await loadEmailLayout(requestDb(c));
+  const { partials, layoutHtml } = await loadEmailRenderResources(requestDb(c));
   const sample = uniqueRecipients[0];
   const routeVars =
     body.filter.audience === "attendees"

@@ -4,7 +4,12 @@ import { paginatedResponseSchema } from "./pagination";
 import { activeFormSummarySchema } from "./forms";
 import { databaseIdSchema } from "./identifiers";
 import { proposalDecisionStatusSchema, proposalStatusSchema } from "./proposal-status";
-import { proposalSessionTypesSchema } from "./proposal-management";
+import {
+  adminSpeakerBioPatchSchema,
+  MAX_PROPOSAL_PARTICIPANTS,
+  proposalSessionTypesSchema,
+  proposalSpeakerProfileSchema,
+} from "./proposal-management";
 
 export const proposalAccessSchema = z.object({
   eventPermissions: z.array(z.string()),
@@ -63,6 +68,48 @@ export const adminProposalDetailResponseSchema = z.object({
   minReviewsRequired: z.number().int().nonnegative(),
   sessionTypes: proposalSessionTypesSchema,
 });
+
+export const adminProposalSpeakerSchema = proposalSpeakerProfileSchema.extend({
+  confirmedAt: z.string().nullable(),
+  declinedAt: z.string().nullable(),
+  declineReason: z.string().nullable(),
+  termsAcceptedAt: z.string().nullable(),
+  addedAt: z.string(),
+  biography: z.string().nullable(),
+  profileComplete: z.boolean(),
+  hasHeadshot: z.boolean(),
+  hasBio: z.boolean(),
+});
+
+export const adminProposalSpeakersResponseSchema = z.object({
+  proposal: z.object({
+    id: databaseIdSchema,
+    title: z.string(),
+    status: proposalStatusSchema,
+    presentationDeadline: z.string().nullable(),
+    presentationUploaded: z.boolean(),
+    presentationUploadedAt: z.string().nullable(),
+  }),
+  summary: z.object({
+    total: z.number().int().nonnegative(),
+    confirmed: z.number().int().nonnegative(),
+    pending: z.number().int().nonnegative(),
+    declined: z.number().int().nonnegative(),
+    profileComplete: z.number().int().nonnegative(),
+    presentationUploaded: z.number().int().min(0).max(1),
+  }),
+  speakers: z.array(adminProposalSpeakerSchema).max(MAX_PROPOSAL_PARTICIPANTS),
+});
+
+export const adminProposalSpeakerPatchResponseSchema = z.object({
+  success: z.literal(true),
+  speaker: adminProposalSpeakerSchema,
+});
+
+export type AdminProposalSpeakerPatch = z.infer<typeof adminSpeakerBioPatchSchema>;
+export type AdminProposalSpeaker = z.infer<typeof adminProposalSpeakerSchema>;
+export type AdminProposalSpeakersResponse = z.infer<typeof adminProposalSpeakersResponseSchema>;
+export type AdminProposalSpeakerPatchResponse = z.infer<typeof adminProposalSpeakerPatchResponseSchema>;
 
 export { proposalSessionTypeSchema } from "./proposal-management";
 

@@ -22,11 +22,9 @@ import { createProposal, addProposalSpeaker, finalizeProposalDecision } from "..
 import {
   createPresentationVersion,
   presentationDownloadResponse,
-} from "../functions/_lib/services/presentation-versions";
-import {
-  getPresentationUploader,
   recordPresentationUpload,
-} from "../functions/_lib/services/proposals-speaker-profile";
+} from "../functions/_lib/services/presentation-versions";
+import { getPresentationUploader } from "../functions/_lib/services/proposals-speaker-profile";
 import app from "../functions/router";
 import {
   MAX_PRESENTATION_BYTES,
@@ -529,6 +527,7 @@ describe("presentation versioning", () => {
         r2Key,
         "00000000-0000-4000-8000-000000000000",
         { fileName: "orphan.pdf", fileSize: 4, mimeType: "application/pdf" },
+        { actorType: "user", action: "presentation_uploaded" },
       ),
     ).rejects.toThrow();
 
@@ -561,8 +560,12 @@ describe("presentation versioning", () => {
       execCtx,
     );
     expect(listRes.status).toBe(200);
-    const listBody = (await listRes.json()) as { versions: Array<{ id: string; versionNumber: number }> };
+    const listBody = (await listRes.json()) as {
+      versions: Array<{ id: string; versionNumber: number }>;
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
     expect(listBody.versions).toHaveLength(1);
+    expect(listBody.page).toEqual({ limit: 25, offset: 0, total: 1, hasMore: false });
     const versionId = listBody.versions[0].id;
     expect(listBody.versions[0].versionNumber).toBe(1);
 
@@ -593,6 +596,100 @@ describe("presentation versioning", () => {
     const reviewBody = (await reviewRes.json()) as { version: { latestReview: { status: string; note: string } } };
     expect(reviewBody.version.latestReview.status).toBe("needs_revision");
     expect(reviewBody.version.latestReview.note).toBe("Please add speaker notes.");
+  });
+
+  it("filters, sorts, and paginates presentation versions in D1", async () => {
+    const { proposalId, speakerUserId, adminToken } = await seed();
+    await createPresentationVersion(env.DB, proposalId, {
+      r2Key: "presentations/first.pdf",
+      fileName: "first.pdf",
+      fileSize: 4,
+      mimeType: "application/pdf",
+      uploadedByUserId: speakerUserId,
+    });
+    await createPresentationVersion(env.DB, proposalId, {
+      r2Key: "presentations/second.pptx",
+      fileName: "second.pptx",
+      fileSize: 4,
+      mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      uploadedByUserId: speakerUserId,
+    });
+
+    const response = await app.fetch(
+      new Request(
+        `https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions?q=second&sort=versionNumber&limit=1`,
+        { headers: { authorization: `Bearer ${adminToken}` } },
+      ),
+      env,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      versions: Array<{ fileName: string }>;
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
+    expect(body.versions.map((version) => version.fileName)).toEqual(["second.pptx"]);
+    expect(body.page).toEqual({ limit: 1, offset: 0, total: 1, hasMore: false });
+  });
+
+  it("rolls back presentation review and deletion when their audit write fails", async () => {
+    const { proposalId, speakerUserId, adminToken } = await seed();
+    const version = await createPresentationVersion(env.DB, proposalId, {
+      r2Key: "presentations/audit-rollback.pdf",
+      fileName: "audit-rollback.pdf",
+      fileSize: 4,
+      mimeType: "application/pdf",
+      uploadedByUserId: speakerUserId,
+    });
+    const requestContext = { passThroughOnException: () => {}, waitUntil: () => {} } as any;
+
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_presentation_review_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'presentation_version_reviewed'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced presentation review audit failure');
+       END`,
+    ).run();
+    const reviewResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions/${version.id}/review`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ status: "needs_revision", note: "Must roll back" }),
+      }),
+      env,
+      requestContext,
+    );
+    await env.DB.prepare("DROP TRIGGER fail_presentation_review_audit").run();
+    expect(reviewResponse.status).toBe(500);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM presentation_version_reviews WHERE version_id = ?", version.id),
+    ).toHaveLength(0);
+
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_presentation_delete_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'presentation_version_deleted'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced presentation delete audit failure');
+       END`,
+    ).run();
+    const deleteResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions/${version.id}`, {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${adminToken}` },
+      }),
+      env,
+      requestContext,
+    );
+    await env.DB.prepare("DROP TRIGGER fail_presentation_delete_audit").run();
+    expect(deleteResponse.status).toBe(500);
+    const [stored] = await queryAll<{ deleted_at: string | null; is_current: number }>(
+      env.DB,
+      "SELECT deleted_at, is_current FROM presentation_versions WHERE id = ?",
+      version.id,
+    );
+    expect(stored).toEqual({ deleted_at: null, is_current: 1 });
   });
 
   it("admin cannot delete the only approved version — returns 409", async () => {

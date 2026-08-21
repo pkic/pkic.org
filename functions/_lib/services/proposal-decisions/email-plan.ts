@@ -7,6 +7,7 @@ import { buildEventEmailVariables, resolveEventSessionTypes } from "../events";
 import { listProposalSpeakersWithStatus, type ProposalSpeakerWithUser } from "../proposal-speakers";
 import type { ProposalDecisionEmailMessage, ProposalDecisionEmailPlan } from "./types";
 import { assertProposalFinalizeAccess } from "./context";
+import { snapshotProposalDecisionSpeaker } from "./snapshot";
 
 interface EventEmailSource {
   id: string;
@@ -62,12 +63,13 @@ export async function buildProposalDecisionEmailPlan(
     "SELECT id, name, slug, base_path, starts_at, settings_json FROM events WHERE id = ?",
     [proposal.event_id],
   );
+  if (!event) throw new AppError(409, "PROPOSAL_EVENT_NOT_FOUND", "The proposal event no longer exists");
   const speakers = await listProposalSpeakersWithStatus(db, payload.proposalId);
 
   const messages: ProposalDecisionEmailMessage[] = [];
   const presentationReminderUserIds = new Set<string>();
-  const proposalManageUrl = event ? await options.resolveProposalManageUrl(event, proposal.id) : "";
-  const sessionTypeConfig = resolveEventSessionTypes(event?.settings_json ?? "{}").find(
+  const proposalManageUrl = await options.resolveProposalManageUrl(event, proposal.id);
+  const sessionTypeConfig = resolveEventSessionTypes(event.settings_json).find(
     (sessionType) => sessionType.label.toLowerCase() === proposal.proposal_type.toLowerCase(),
   );
 
@@ -81,8 +83,8 @@ export async function buildProposalDecisionEmailPlan(
         recipientLabel: recipientLabel(speaker),
         fallbackSubject: `Proposal update: ${proposal.title}`,
         data: {
-          ...(event ? buildEventEmailVariables(event, options.appBaseUrl) : {}),
-          eventName: event?.name ?? "",
+          ...buildEventEmailVariables(event, options.appBaseUrl),
+          eventName: event.name,
           firstName: speaker.first_name ?? "",
           lastName: speaker.last_name ?? "",
           proposalTitle: proposal.title,
@@ -93,7 +95,7 @@ export async function buildProposalDecisionEmailPlan(
       });
     }
 
-    if (payload.finalStatus !== "accepted" || !event || speaker.status === "declined") continue;
+    if (payload.finalStatus !== "accepted" || speaker.status === "declined") continue;
     const manageUrl = await options.resolveSpeakerManageUrl(speaker, event);
     const eventVariables = buildEventEmailVariables(event, options.appBaseUrl);
     messages.push({
@@ -132,5 +134,17 @@ export async function buildProposalDecisionEmailPlan(
     presentationReminderUserIds.add(speaker.user_id);
   }
 
-  return { proposal, messages, presentationReminderUserIds: [...presentationReminderUserIds] };
+  return {
+    proposal,
+    eventSnapshot: {
+      name: event.name,
+      slug: event.slug,
+      basePath: event.base_path,
+      startsAt: event.starts_at,
+      settingsJson: event.settings_json,
+    },
+    speakerSnapshot: speakers.map(snapshotProposalDecisionSpeaker),
+    messages,
+    presentationReminderUserIds: [...presentationReminderUserIds],
+  };
 }

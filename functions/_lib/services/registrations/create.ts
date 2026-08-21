@@ -23,6 +23,21 @@ import type { RegistrationRecord } from "./types";
 
 const DEFAULT_PENDING_CONFIRMATION_DEADLINE_HOURS = 14 * 24;
 
+export interface CreateRegistrationPayload {
+  event: { id: string };
+  userId: string;
+  attendanceType: "in_person" | "virtual" | "on_demand";
+  dayAttendance?: DayAttendanceSelection[];
+  sourceType: string;
+  sourceRef?: string | null;
+  customAnswersJson?: string | null;
+  inviteId?: string | null;
+  referredByCode?: string | null;
+  pendingConfirmationDeadlineHours?: number;
+  confirmationTtlHours?: number;
+  signingSecret?: string;
+}
+
 function initialRegistrationStatus(inviteId: string | null): "pending_email_confirmation" | "registered" {
   if (!inviteId) {
     return "pending_email_confirmation";
@@ -32,20 +47,7 @@ function initialRegistrationStatus(inviteId: string | null): "pending_email_conf
 
 export async function createRegistration(
   db: DatabaseLike,
-  payload: {
-    event: { id: string };
-    userId: string;
-    attendanceType: "in_person" | "virtual" | "on_demand";
-    dayAttendance?: DayAttendanceSelection[];
-    sourceType: string;
-    sourceRef?: string | null;
-    customAnswersJson?: string | null;
-    inviteId?: string | null;
-    referredByCode?: string | null;
-    pendingConfirmationDeadlineHours?: number;
-    confirmationTtlHours?: number;
-    signingSecret?: string;
-  },
+  payload: CreateRegistrationPayload,
 ): Promise<{
   registration: RegistrationRecord;
   manageToken: string;
@@ -71,20 +73,7 @@ export async function createRegistration(
 
 export async function buildCreateRegistration(
   db: DatabaseLike,
-  payload: {
-    event: { id: string };
-    userId: string;
-    attendanceType: "in_person" | "virtual" | "on_demand";
-    dayAttendance?: DayAttendanceSelection[];
-    sourceType: string;
-    sourceRef?: string | null;
-    customAnswersJson?: string | null;
-    inviteId?: string | null;
-    referredByCode?: string | null;
-    pendingConfirmationDeadlineHours?: number;
-    confirmationTtlHours?: number;
-    signingSecret?: string;
-  },
+  payload: CreateRegistrationPayload,
 ): Promise<{
   registration: RegistrationRecord;
   manageToken: string;

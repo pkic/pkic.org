@@ -105,6 +105,20 @@ describe("consolidated pending migration upgrade", () => {
 
     expect(db.prepare("PRAGMA integrity_check").get()).toEqual({ integrity_check: "ok" });
     expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    expect(
+      db
+        .prepare(
+          `SELECT name FROM sqlite_master
+           WHERE type = 'index' AND name IN (
+             'idx_session_proposals_event_live_submitted',
+             'idx_session_proposals_event_deleted_submitted'
+           ) ORDER BY name`,
+        )
+        .all(),
+    ).toEqual([
+      { name: "idx_session_proposals_event_deleted_submitted" },
+      { name: "idx_session_proposals_event_live_submitted" },
+    ]);
     expect(db.prepare("SELECT id, organization_id FROM members").all()).toEqual([
       { id: "member-1", organization_id: "org-1" },
     ]);
@@ -165,6 +179,9 @@ describe("consolidated pending migration upgrade", () => {
     expect(
       db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'storage_deletion_outbox'").get(),
     ).toEqual({ name: "storage_deletion_outbox" });
+    expect(
+      db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'badge_render_jobs'").get(),
+    ).toEqual({ name: "badge_render_jobs" });
     expect(
       db
         .prepare(

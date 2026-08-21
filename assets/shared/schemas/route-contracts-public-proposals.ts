@@ -12,6 +12,7 @@ import {
 } from "./proposal-management";
 import { successResponseSchema } from "./registration";
 import { jsonResponse, requiredJsonBody } from "./openapi";
+import { speakerReminderPreferenceResponseSchema, speakerReminderPreferenceSchema } from "./api";
 
 const genericAcceptedResponse = jsonResponse(
   "Request accepted. The response is intentionally generic to prevent account enumeration.",
@@ -103,5 +104,19 @@ export const proposalManageUpdateRouteSchema = {
     "404": { description: "Proposal management capability not found." },
     "409": { description: "Proposal is not editable or changed concurrently." },
     "410": { description: "Proposal management capability expired." },
+  },
+};
+
+export const proposalSpeakerReminderPreferenceRouteSchema = {
+  tags: ["Proposals", "Reminders"],
+  summary: "Update presentation reminder preference",
+  request: {
+    params: proposalManageTokenParamsSchema,
+    body: requiredJsonBody(speakerReminderPreferenceSchema),
+  },
+  responses: {
+    "200": jsonResponse("Reminder preference updated.", speakerReminderPreferenceResponseSchema),
+    "404": { description: "Speaker management capability not found." },
+    "410": { description: "Speaker management capability expired." },
   },
 };

@@ -8,6 +8,8 @@ import { prepareRegistrationStatusEmail, type RegistrationStatusEmailParams } fr
 import type { RegistrationRecord } from "./types";
 import { buildRegistrationUpdate, type RegistrationUpdatePayload } from "./update-plan";
 
+type RegistrationUpdatePlan = Awaited<ReturnType<typeof buildRegistrationUpdate>>;
+
 type UpdateNotification = Omit<
   RegistrationStatusEmailParams,
   "registrationId" | "registration" | "profilePatch" | "dayAttendance" | "dayWaitlist"
@@ -26,16 +28,72 @@ async function withCapacityRetry<T>(operation: () => Promise<T>): Promise<T> {
   throw new AppError(409, "DAY_CAPACITY_CHANGED", "Day capacity changed; please retry");
 }
 
+async function executeRegistrationUpdate<T>(
+  db: DatabaseLike,
+  payload: RegistrationUpdatePayload,
+  load: () => Promise<RegistrationRecord>,
+  changedBy: string | undefined,
+  commit: (built: RegistrationUpdatePlan) => Promise<T>,
+): Promise<T> {
+  return withCapacityRetry(async () => {
+    const registration = await load();
+    return commit(await buildRegistrationUpdate(db, registration, payload, changedBy));
+  });
+}
+
+async function commitUpdateWithNotification(
+  db: DatabaseLike,
+  built: RegistrationUpdatePlan,
+  payload: RegistrationUpdatePayload & { notification: UpdateNotification },
+): Promise<{ registration: RegistrationRecord; outboxId: string }> {
+  const email = await prepareRegistrationStatusEmail(db, {
+    ...payload.notification,
+    registrationId: built.registration.id,
+    registration: built.registration,
+    profilePatch: payload.profilePatch,
+    dayAttendance: built.dayAttendance,
+    dayWaitlist: built.dayWaitlist,
+  });
+  await db.batch([...built.statements, email.statement]);
+  return { registration: built.registration, outboxId: email.outboxId };
+}
+
+async function commitUpdateWithEmailChange(
+  db: DatabaseLike,
+  built: RegistrationUpdatePlan,
+  payload: RegistrationUpdatePayload & { emailChange: UpdateEmailChange },
+): Promise<{ registration: RegistrationRecord; outboxId: string | null }> {
+  const emailChange = await prepareRegistrationEmailChange(db, {
+    ...payload.emailChange,
+    registrationId: built.registration.id,
+    registrationOverride: built.registration,
+    confirmationEmail: payload.emailChange.confirmationEmail
+      ? {
+          ...payload.emailChange.confirmationEmail,
+          profilePatch: payload.profilePatch,
+          dayAttendance: built.dayAttendance,
+          dayWaitlist: built.dayWaitlist,
+        }
+      : undefined,
+  });
+  await db.batch([...built.statements, ...emailChange.statements]);
+  return { registration: emailChange.registration, outboxId: emailChange.outboxId };
+}
+
 export async function updateRegistrationByManageToken(
   db: DatabaseLike,
   payload: { manageToken: string; signingSecret: string } & RegistrationUpdatePayload,
 ): Promise<RegistrationRecord> {
-  return withCapacityRetry(async () => {
-    const registration = await getRegistrationByManageToken(db, payload.manageToken, payload.signingSecret);
-    const built = await buildRegistrationUpdate(db, registration, payload);
-    await db.batch(built.statements);
-    return built.registration;
-  });
+  return executeRegistrationUpdate(
+    db,
+    payload,
+    () => getRegistrationByManageToken(db, payload.manageToken, payload.signingSecret),
+    undefined,
+    async (built) => {
+      await db.batch(built.statements);
+      return built.registration;
+    },
+  );
 }
 
 export async function updateRegistrationByManageTokenWithNotification(
@@ -46,20 +104,13 @@ export async function updateRegistrationByManageTokenWithNotification(
     notification: UpdateNotification;
   } & RegistrationUpdatePayload,
 ): Promise<{ registration: RegistrationRecord; outboxId: string }> {
-  return withCapacityRetry(async () => {
-    const registration = await getRegistrationByManageToken(db, payload.manageToken, payload.signingSecret);
-    const built = await buildRegistrationUpdate(db, registration, payload);
-    const email = await prepareRegistrationStatusEmail(db, {
-      ...payload.notification,
-      registrationId: built.registration.id,
-      registration: built.registration,
-      profilePatch: payload.profilePatch,
-      dayAttendance: built.dayAttendance,
-      dayWaitlist: built.dayWaitlist,
-    });
-    await db.batch([...built.statements, email.statement]);
-    return { registration: built.registration, outboxId: email.outboxId };
-  });
+  return executeRegistrationUpdate(
+    db,
+    payload,
+    () => getRegistrationByManageToken(db, payload.manageToken, payload.signingSecret),
+    undefined,
+    (built) => commitUpdateWithNotification(db, built, payload),
+  );
 }
 
 export async function updateRegistrationByManageTokenWithEmailChange(
@@ -70,25 +121,13 @@ export async function updateRegistrationByManageTokenWithEmailChange(
     emailChange: UpdateEmailChange;
   } & RegistrationUpdatePayload,
 ): Promise<{ registration: RegistrationRecord; outboxId: string | null }> {
-  return withCapacityRetry(async () => {
-    const registration = await getRegistrationByManageToken(db, payload.manageToken, payload.signingSecret);
-    const built = await buildRegistrationUpdate(db, registration, payload);
-    const emailChange = await prepareRegistrationEmailChange(db, {
-      ...payload.emailChange,
-      registrationId: built.registration.id,
-      registrationOverride: built.registration,
-      confirmationEmail: payload.emailChange.confirmationEmail
-        ? {
-            ...payload.emailChange.confirmationEmail,
-            profilePatch: payload.profilePatch,
-            dayAttendance: built.dayAttendance,
-            dayWaitlist: built.dayWaitlist,
-          }
-        : undefined,
-    });
-    await db.batch([...built.statements, ...emailChange.statements]);
-    return { registration: emailChange.registration, outboxId: emailChange.outboxId };
-  });
+  return executeRegistrationUpdate(
+    db,
+    payload,
+    () => getRegistrationByManageToken(db, payload.manageToken, payload.signingSecret),
+    undefined,
+    (built) => commitUpdateWithEmailChange(db, built, payload),
+  );
 }
 
 export async function updateRegistrationById(
@@ -96,12 +135,16 @@ export async function updateRegistrationById(
   payload: { registrationId: string } & RegistrationUpdatePayload,
   changedBy: string,
 ): Promise<RegistrationRecord> {
-  return withCapacityRetry(async () => {
-    const registration = await getRegistrationById(db, payload.registrationId);
-    const built = await buildRegistrationUpdate(db, registration, payload, changedBy);
-    await db.batch(built.statements);
-    return built.registration;
-  });
+  return executeRegistrationUpdate(
+    db,
+    payload,
+    () => getRegistrationById(db, payload.registrationId),
+    changedBy,
+    async (built) => {
+      await db.batch(built.statements);
+      return built.registration;
+    },
+  );
 }
 
 export async function updateRegistrationByIdWithNotification(
@@ -109,20 +152,13 @@ export async function updateRegistrationByIdWithNotification(
   payload: { registrationId: string; notification: UpdateNotification } & RegistrationUpdatePayload,
   changedBy: string,
 ): Promise<{ registration: RegistrationRecord; outboxId: string }> {
-  return withCapacityRetry(async () => {
-    const registration = await getRegistrationById(db, payload.registrationId);
-    const built = await buildRegistrationUpdate(db, registration, payload, changedBy);
-    const email = await prepareRegistrationStatusEmail(db, {
-      ...payload.notification,
-      registrationId: built.registration.id,
-      registration: built.registration,
-      profilePatch: payload.profilePatch,
-      dayAttendance: built.dayAttendance,
-      dayWaitlist: built.dayWaitlist,
-    });
-    await db.batch([...built.statements, email.statement]);
-    return { registration: built.registration, outboxId: email.outboxId };
-  });
+  return executeRegistrationUpdate(
+    db,
+    payload,
+    () => getRegistrationById(db, payload.registrationId),
+    changedBy,
+    (built) => commitUpdateWithNotification(db, built, payload),
+  );
 }
 
 export async function updateRegistrationByIdWithEmailChange(
@@ -130,23 +166,11 @@ export async function updateRegistrationByIdWithEmailChange(
   payload: { registrationId: string; emailChange: UpdateEmailChange } & RegistrationUpdatePayload,
   changedBy: string,
 ): Promise<{ registration: RegistrationRecord; outboxId: string | null }> {
-  return withCapacityRetry(async () => {
-    const registration = await getRegistrationById(db, payload.registrationId);
-    const built = await buildRegistrationUpdate(db, registration, payload, changedBy);
-    const emailChange = await prepareRegistrationEmailChange(db, {
-      ...payload.emailChange,
-      registrationId: built.registration.id,
-      registrationOverride: built.registration,
-      confirmationEmail: payload.emailChange.confirmationEmail
-        ? {
-            ...payload.emailChange.confirmationEmail,
-            profilePatch: payload.profilePatch,
-            dayAttendance: built.dayAttendance,
-            dayWaitlist: built.dayWaitlist,
-          }
-        : undefined,
-    });
-    await db.batch([...built.statements, ...emailChange.statements]);
-    return { registration: emailChange.registration, outboxId: emailChange.outboxId };
-  });
+  return executeRegistrationUpdate(
+    db,
+    payload,
+    () => getRegistrationById(db, payload.registrationId),
+    changedBy,
+    (built) => commitUpdateWithEmailChange(db, built, payload),
+  );
 }

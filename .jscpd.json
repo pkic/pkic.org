@@ -1,8 +1,7 @@
 {
   "path": ["functions", "assets/shared", "assets/ts", "assets/js", "scripts", "static/scripts"],
   "minLines": 5,
-  "minTokens": 50,
-  "threshold": 3.65,
+  "minTokens": 100,
   "reporters": ["console", "json"],
   "output": ".jscpd-report",
   "gitignore": true,

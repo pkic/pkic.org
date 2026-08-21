@@ -11,6 +11,7 @@ import { getEventById } from "../events";
 import { listDayWaitlistForRegistration } from "./day-waitlist";
 import type { RegistrationRecord } from "./types";
 import { omitCapabilitySecrets } from "../capability-links";
+import { publicUserHeadshotUrl } from "../user-headshot";
 
 interface ManageUserRow {
   id: string;
@@ -52,9 +53,7 @@ export async function buildRegistrationManageView(
   ]);
   const user = batchFirst<ManageUserRow>(identityResults[0]);
   const referral = batchFirst<{ code: string }>(identityResults[1]);
-  const headshotUrl = user?.headshot_r2_key
-    ? `${appBaseUrl}/api/v1/headshots/${user.id}/${user.headshot_r2_key.split("/").slice(2).join("/")}`
-    : null;
+  const headshotUrl = publicUserHeadshotUrl(appBaseUrl, user?.headshot_r2_key ?? null);
 
   return {
     success: true,

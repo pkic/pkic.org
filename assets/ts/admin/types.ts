@@ -44,6 +44,7 @@ import type {
 } from "../../shared/schemas/admin-email-outbox";
 import type {
   AdminEventProposalSummary as CanonicalAdminEventProposalSummary,
+  AdminProposalSpeaker as CanonicalAdminProposalSpeaker,
   ProposalAccess as CanonicalProposalAccess,
 } from "../../shared/schemas/admin-event-proposals";
 import type { FormFieldDefinition as CanonicalFormFieldDefinition } from "../../shared/schemas/forms";
@@ -229,24 +230,7 @@ export type ProposalSummary = CanonicalAdminEventProposalSummary;
 
 export type ProposalReview = CanonicalProposalReview;
 
-export interface ProposalSpeaker {
-  userId: string;
-  role: string;
-  status: string;
-  email: string;
-  firstName: string | null;
-  lastName: string | null;
-  organizationName: string | null;
-  jobTitle: string | null;
-  biography: string | null;
-  links?: Array<string | { label?: string | null; url?: string | null }>;
-  headshotUrl: string | null;
-  confirmedAt: string | null;
-  declinedAt: string | null;
-  declineReason: string | null;
-  hasHeadshot: boolean;
-  hasBio: boolean;
-}
+export type ProposalSpeaker = CanonicalAdminProposalSpeaker;
 
 export type ProposalAccess = CanonicalProposalAccess;
 

@@ -9,9 +9,6 @@
  */
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
-import { resolveAppBaseUrl } from "../../../../../_lib/config";
-import { invalidateAndRerender } from "../../../../../_lib/services/og-badge-prerender";
-import { AppError } from "../../../../../_lib/errors";
 import { readValidatedUploadedImage, resizeHeadshot } from "../../../../../_lib/utils/image-upload";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import {
@@ -23,9 +20,9 @@ import { openApiRoute } from "../../../../../_lib/openapi/route";
 import {
   adminUserHeadshotResponse,
   getUserHeadshotRecord,
-  removePreviousHeadshot,
-  removeUserHeadshot,
-  replaceUserHeadshot,
+  removeUserHeadshotForRequest,
+  requireUserHeadshotBucket,
+  uploadUserHeadshotForRequest,
 } from "../../../../../_lib/services/user-headshot";
 
 // ── GET — serve the headshot image ──────────────────────────────────────────
@@ -33,9 +30,7 @@ import {
 async function onGet(c: AdminContext): Promise<Response> {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  const bucket = c.env.SPEAKER_UPLOADS_BUCKET;
-  if (!bucket) throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "File uploads are not configured");
-  return adminUserHeadshotResponse(requestDb(c), bucket, c.req.param("userId"));
+  return adminUserHeadshotResponse(requestDb(c), requireUserHeadshotBucket(c.env), c.req.param("userId"));
 }
 
 // ── PUT — upload / replace headshot ─────────────────────────────────────────
@@ -45,29 +40,26 @@ async function onPut(c: AdminContext): Promise<Response> {
 
   const user = await getUserHeadshotRecord(requestDb(c), c.req.param("userId"));
 
-  const bucket = c.env.SPEAKER_UPLOADS_BUCKET;
-  if (!bucket) throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "File uploads are not configured");
-
   const uploaded = await readValidatedUploadedImage(c.req.raw, "Headshot");
   const resized = await resizeHeadshot(uploaded.buffer, uploaded.contentType, c.env.IMAGES);
-  const r2Key = await replaceUserHeadshot({
-    db: requestDb(c),
-    bucket,
-    userId: user.id,
-    previousKey: user.headshot_r2_key,
-    image: resized,
-    source: "admin_upload",
-    audit: {
-      actorType: "admin",
-      actorId: admin.id,
-      action: "headshot_uploaded",
-      details: { uploadedBy: "admin" },
+  const { r2Key } = await uploadUserHeadshotForRequest(
+    requestDb(c),
+    c.env,
+    c.req.raw,
+    c.executionCtx.waitUntil.bind(c.executionCtx),
+    {
+      userId: user.id,
+      previousKey: user.headshot_r2_key,
+      image: resized,
+      source: "admin_upload",
+      audit: {
+        actorType: "admin",
+        actorId: admin.id,
+        action: "headshot_uploaded",
+        details: { uploadedBy: "admin" },
+      },
     },
-  });
-  c.executionCtx.waitUntil(removePreviousHeadshot(requestDb(c), c.env, user.headshot_r2_key));
-
-  const origin = resolveAppBaseUrl(c.env, c.req.raw);
-  c.executionCtx.waitUntil(invalidateAndRerender(user.id, c.env, origin));
+  );
 
   return json({ success: true, r2Key });
 }
@@ -79,13 +71,11 @@ async function onDelete(c: AdminContext): Promise<Response> {
 
   const user = await getUserHeadshotRecord(requestDb(c), c.req.param("userId"));
 
-  await removeUserHeadshot({
-    db: requestDb(c),
+  await removeUserHeadshotForRequest(requestDb(c), c.env, c.req.raw, c.executionCtx.waitUntil.bind(c.executionCtx), {
     userId: user.id,
     previousKey: user.headshot_r2_key,
     audit: { actorType: "admin", actorId: admin.id, action: "headshot_removed" },
   });
-  c.executionCtx.waitUntil(removePreviousHeadshot(requestDb(c), c.env, user.headshot_r2_key));
 
   return json({ success: true });
 }

@@ -3,136 +3,28 @@ import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
-import {
-  ALLOWED_PRESENTATION_MIME_TYPES,
-  MAX_PRESENTATION_BYTES,
-  PRESENTATION_FILE_NAME_HEADER,
-  PRESENTATION_FILE_SIZE_HEADER,
-} from "../../../assets/shared/presentation-upload";
-
-const ALLOWED_PRESENTATION_TYPES = new Set<string>(ALLOWED_PRESENTATION_MIME_TYPES);
-
-export interface PresentationUpload {
-  body: ReadableStream;
-  name: string;
-  size: number;
-  type: string;
-}
-
-export interface PresentationStorageContext {
-  eventSlug: string;
-  proposalId: string;
-  proposalTitle: string;
-}
+import { prepareAuditLog } from "./audit";
+import { prepareAuditLogAfterOneChange } from "./audit";
+import type {
+  PresentationVersion,
+  PresentationVersionReview,
+  PresentationVersionReviewRequest,
+  PresentationVersionsListQuery,
+} from "../../../assets/shared/schemas/presentation-versions";
+import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
+import { batchFirst, batchRows } from "../db/pagination";
+import { buildD1TextSearchFilter } from "../db/search";
+import { resolveMappedOrderBy } from "../db/sort";
 
 export interface PresentationProposalContext {
   id: string;
   status: string;
   title: string;
   event_slug: string;
+  presentation_deadline: string | null;
 }
 
-type PresentationUploadError = { error: { code: string; message: string }; status: number };
-
-/**
- * Validate the metadata for a raw streaming upload without consuming its body.
- */
-export function parsePresentationUpload(request: Request): PresentationUpload | PresentationUploadError {
-  const type = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() ?? "";
-  if (!ALLOWED_PRESENTATION_TYPES.has(type))
-    return {
-      error: { code: "INVALID_FILE_TYPE", message: "Only PDF and PowerPoint (PPTX/PPT/PPTM/ODP) files are accepted." },
-      status: 415,
-    };
-
-  const encodedName = request.headers.get(PRESENTATION_FILE_NAME_HEADER);
-  let name: string;
-  try {
-    name = encodedName ? decodeURIComponent(encodedName) : "";
-  } catch {
-    return { error: { code: "INVALID_FILE_NAME", message: "Presentation file name is invalid." }, status: 400 };
-  }
-  if (!name || name.length > 255) {
-    return { error: { code: "INVALID_FILE_NAME", message: "Presentation file name is invalid." }, status: 400 };
-  }
-
-  const declaredSize = Number(request.headers.get(PRESENTATION_FILE_SIZE_HEADER));
-  if (!Number.isSafeInteger(declaredSize) || declaredSize <= 0) {
-    return { error: { code: "INVALID_FILE_SIZE", message: "Presentation file size is invalid." }, status: 400 };
-  }
-  if (declaredSize > MAX_PRESENTATION_BYTES) {
-    return { error: { code: "FILE_TOO_LARGE", message: "Presentation must be 100 MB or smaller." }, status: 413 };
-  }
-
-  const contentLength = request.headers.get("content-length");
-  if (contentLength !== null && Number(contentLength) !== declaredSize) {
-    return {
-      error: { code: "FILE_SIZE_MISMATCH", message: "Presentation file size does not match the request." },
-      status: 400,
-    };
-  }
-  if (!request.body) {
-    return { error: { code: "MISSING_FILE", message: "A presentation file is required." }, status: 400 };
-  }
-
-  return { body: request.body, name, size: declaredSize, type };
-}
-
-function storagePathSegment(value: string, fallback: string, maxLength = 100): string {
-  return (
-    value
-      .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, maxLength)
-      .replace(/-+$/g, "") || fallback
-  );
-}
-
-/** Stream a validated upload to a human-searchable R2 key and return that key. */
-export async function storePresentationFile(
-  bucket: R2Bucket,
-  context: PresentationStorageContext,
-  upload: PresentationUpload,
-): Promise<string> {
-  const eventSlug = storagePathSegment(context.eventSlug, "event");
-  const proposalTitle = storagePathSegment(context.proposalTitle, "proposal");
-  const proposalId = storagePathSegment(context.proposalId, "unknown", 64);
-  const safeName = upload.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100) || "presentation";
-  const r2Key = `presentations/${eventSlug}/${proposalTitle}--${proposalId}/${Date.now()}-${uuid()}-${safeName}`;
-  const stored = await bucket.put(r2Key, upload.body, { httpMetadata: { contentType: upload.type } });
-  if (stored.size !== upload.size) {
-    await bucket.delete(r2Key);
-    throw new AppError(400, "FILE_SIZE_MISMATCH", "Presentation file size does not match the request.");
-  }
-  return r2Key;
-}
-
-export interface PresentationVersion {
-  id: string;
-  proposalId: string;
-  versionNumber: number;
-  r2Key: string;
-  fileName: string | null;
-  fileSize: number | null;
-  mimeType: string | null;
-  uploadedByUserId: string | null;
-  uploadedAt: string;
-  isCurrent: boolean;
-  deletedAt: string | null;
-  latestReview: PresentationVersionReview | null;
-}
-
-export interface PresentationVersionReview {
-  id: string;
-  versionId: string;
-  reviewedByUserId: string;
-  reviewedAt: string;
-  status: "approved" | "rejected" | "needs_revision";
-  note: string | null;
-}
+export type { PresentationVersion, PresentationVersionReview };
 
 type PresentationVersionRow = {
   id: string;
@@ -200,7 +92,7 @@ export async function getPresentationProposalContext(
 ): Promise<PresentationProposalContext> {
   const proposal = await first<PresentationProposalContext>(
     db,
-    `SELECT sp.id, sp.status, sp.title, e.slug AS event_slug
+    `SELECT sp.id, sp.status, sp.title, sp.presentation_deadline, e.slug AS event_slug
      FROM session_proposals sp
      JOIN events e ON e.id = sp.event_id
      WHERE sp.id = ? AND sp.deleted_at IS NULL`,
@@ -210,9 +102,33 @@ export async function getPresentationProposalContext(
   return proposal;
 }
 
-export async function listProposalPresentationVersions(db: DatabaseLike, proposalId: string) {
+export async function listProposalPresentationVersions(
+  db: DatabaseLike,
+  proposalId: string,
+  query: PresentationVersionsListQuery & { limit: number; offset: number },
+) {
   await getPresentationProposalContext(db, proposalId);
-  return listPresentationVersions(db, proposalId);
+  const search = query.q ? buildD1TextSearchFilter(query.q, ["pv.file_name", "pv.mime_type"]) : null;
+  const filters = ["pv.proposal_id = ?", "pv.deleted_at IS NULL"];
+  const bindings: unknown[] = [proposalId];
+  if (search) {
+    filters.push(search.sql);
+    bindings.push(...search.bindings);
+  }
+  const where = `WHERE ${filters.join(" AND ")}`;
+  const orderBy = resolveMappedOrderBy(
+    query.sort,
+    { versionNumber: "pv.version_number", fileName: "pv.file_name COLLATE NOCASE", uploadedAt: "pv.uploaded_at" },
+    "pv.version_number DESC",
+    "pv.id ASC",
+  );
+  const [versionsResult, countResult] = await db.batch([
+    db.prepare(`${VERSION_SELECT} ${where} ${orderBy} LIMIT ? OFFSET ?`).bind(...bindings, query.limit, query.offset),
+    db.prepare(`SELECT COUNT(*) AS total FROM presentation_versions pv ${where}`).bind(...bindings),
+  ]);
+  const versions = batchRows<PresentationVersionRow>(versionsResult).map(rowToVersion);
+  const total = Number(batchFirst<{ total: number }>(countResult)?.total ?? 0);
+  return { versions, page: buildPageInfo(query.limit, query.offset, total, versions.length) };
 }
 
 export async function listPresentationVersions(db: DatabaseLike, proposalId: string): Promise<PresentationVersion[]> {
@@ -285,12 +201,14 @@ export async function createPresentationVersion(
     uploadedByUserId: string;
   },
   bucket?: R2Bucket,
+  audit?: { actorType: "admin" | "user"; actorId: string; action: string },
 ): Promise<PresentationVersion> {
   const now = nowIso();
   const id = uuid();
 
   try {
-    await db.batch([
+    const statements = [
+      db.prepare("UPDATE session_proposals SET updated_at = ? WHERE id = ?").bind(now, proposalId),
       db
         .prepare("UPDATE presentation_versions SET is_current = 0 WHERE proposal_id = ? AND is_current = 1")
         .bind(proposalId),
@@ -316,7 +234,18 @@ export async function createPresentationVersion(
           opts.uploadedByUserId,
           now,
         ),
-    ]);
+    ];
+    if (audit) {
+      statements.push(
+        prepareAuditLog(db, audit.actorType, audit.actorId, audit.action, "session_proposal", proposalId, {
+          r2Key: opts.r2Key,
+          fileName: opts.fileName,
+          fileSize: opts.fileSize,
+          mimeType: opts.mimeType,
+        }),
+      );
+    }
+    await db.batch(statements);
   } catch (error) {
     if (bucket) await bucket.delete(opts.r2Key).catch(() => {});
     throw error;
@@ -325,26 +254,63 @@ export async function createPresentationVersion(
   return getPresentationVersion(db, id);
 }
 
-export async function addVersionReview(
+/** Commits the proposal timestamp, version transition, and upload audit as one D1 transaction. */
+export async function recordPresentationUpload(
   db: DatabaseLike,
-  versionId: string,
-  opts: {
-    reviewedByUserId: string;
-    status: PresentationVersionReview["status"];
-    note: string | null;
-  },
+  bucket: R2Bucket,
+  proposalId: string,
+  r2Key: string,
+  uploadedByUserId: string,
+  meta: { fileName: string | null; fileSize: number | null; mimeType: string | null },
+  audit: { actorType: "admin" | "user"; action: string },
 ): Promise<void> {
-  const now = nowIso();
-  await run(
-    db,
-    `INSERT INTO presentation_version_reviews (id, version_id, reviewed_by_user_id, reviewed_at, status, note)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [uuid(), versionId, opts.reviewedByUserId, now, opts.status, opts.note],
-  );
+  await createPresentationVersion(db, proposalId, { r2Key, uploadedByUserId, ...meta }, bucket, {
+    ...audit,
+    actorId: uploadedByUserId,
+  });
 }
 
-export async function deletePresentationVersion(db: DatabaseLike, versionId: string): Promise<void> {
+export async function reviewPresentationVersion(
+  db: DatabaseLike,
+  proposalId: string,
+  versionId: string,
+  actorId: string,
+  review: PresentationVersionReviewRequest,
+): Promise<PresentationVersion> {
   const version = await getPresentationVersion(db, versionId);
+  if (version.proposalId !== proposalId) {
+    throw new AppError(404, "VERSION_NOT_FOUND", "Presentation version not found");
+  }
+  const now = nowIso();
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO presentation_version_reviews (id, version_id, reviewed_by_user_id, reviewed_at, status, note)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(uuid(), versionId, actorId, now, review.status, review.note?.trim() || null),
+    prepareAuditLog(db, "admin", actorId, "presentation_version_reviewed", "presentation_version", versionId, {
+      proposalId,
+      status: review.status,
+    }),
+  ]);
+  return getPresentationVersion(db, versionId);
+}
+
+function isPresentationDeleteGuardFailure(error: unknown): boolean {
+  return error instanceof Error && error.message.includes("NOT NULL constraint failed: audit_log.action");
+}
+
+export async function deletePresentationVersion(
+  db: DatabaseLike,
+  proposalId: string,
+  versionId: string,
+  actorId: string,
+): Promise<void> {
+  const version = await getPresentationVersion(db, versionId);
+  if (version.proposalId !== proposalId) {
+    throw new AppError(404, "VERSION_NOT_FOUND", "Presentation version not found");
+  }
 
   if (version.isCurrent) {
     const latestReview = version.latestReview;
@@ -354,16 +320,50 @@ export async function deletePresentationVersion(db: DatabaseLike, versionId: str
   }
 
   const now = nowIso();
-  await run(db, "UPDATE presentation_versions SET deleted_at = ?, is_current = 0 WHERE id = ?", [now, versionId]);
-
-  if (version.isCurrent) {
-    await run(
-      db,
-      `UPDATE presentation_versions SET is_current = 1
-       WHERE proposal_id = ? AND deleted_at IS NULL
-       ORDER BY version_number DESC LIMIT 1`,
-      [version.proposalId],
-    );
+  try {
+    await db.batch([
+      db
+        .prepare(
+          `UPDATE presentation_versions
+           SET deleted_at = ?, is_current = 0
+           WHERE id = ? AND proposal_id = ? AND deleted_at IS NULL
+             AND COALESCE((
+               SELECT status FROM presentation_version_reviews
+               WHERE version_id = presentation_versions.id
+               ORDER BY reviewed_at DESC LIMIT 1
+             ), '') <> 'approved'`,
+        )
+        .bind(now, versionId, proposalId),
+      prepareAuditLogAfterOneChange(
+        db,
+        "admin",
+        actorId,
+        "presentation_version_deleted",
+        "presentation_version",
+        versionId,
+        { proposalId, r2Key: version.r2Key },
+        now,
+      ),
+      db
+        .prepare(
+          `UPDATE presentation_versions SET is_current = 1
+           WHERE id = (
+             SELECT id FROM presentation_versions
+             WHERE proposal_id = ? AND deleted_at IS NULL
+             ORDER BY version_number DESC LIMIT 1
+           ) AND ? = 1`,
+        )
+        .bind(proposalId, version.isCurrent ? 1 : 0),
+    ]);
+  } catch (error) {
+    if (isPresentationDeleteGuardFailure(error)) {
+      const current = await getPresentationVersion(db, versionId);
+      if (current.latestReview?.status === "approved") {
+        throw new AppError(409, "CANNOT_DELETE_APPROVED", "Cannot delete the currently approved presentation version");
+      }
+      throw new AppError(409, "PRESENTATION_VERSION_CONFLICT", "Presentation version changed concurrently");
+    }
+    throw error;
   }
 }
 

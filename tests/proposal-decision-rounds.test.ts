@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import app from "../functions/router";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { createProposal, addProposalSpeaker, updateProposalByManageToken } from "../functions/_lib/services/proposals";
-import { recordProposalDecision } from "../functions/_lib/services/proposal-decisions";
+import { buildProposalDecisionEmailPlan, recordProposalDecision } from "../functions/_lib/services/proposal-decisions";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
@@ -92,6 +92,22 @@ async function finalize(proposalId: string, token: string, finalStatus: "accepte
     finalStatus,
     decisionNote: finalStatus === "needs-work" ? "Please revise the proposal." : undefined,
   });
+}
+
+async function buildAcceptedDecisionPlan(seeded: SeededDecisionWorkflow) {
+  return buildProposalDecisionEmailPlan(
+    env.DB,
+    {
+      proposalId: seeded.proposalId,
+      actor: decisionActor(seeded.adminId),
+      finalStatus: "accepted",
+    },
+    {
+      appBaseUrl: "https://app.test",
+      resolveSpeakerManageUrl: async (speaker) => `https://app.test/speakers/${speaker.speaker_id}`,
+      resolveProposalManageUrl: async (_event, proposalId) => `https://app.test/proposals/${proposalId}`,
+    },
+  );
 }
 
 describe("proposal decision review rounds", () => {
@@ -242,6 +258,7 @@ describe("proposal decision review rounds", () => {
   it("does not record decision fallout when withdrawal wins the compare-and-set race", async () => {
     const seeded = await seedDecisionWorkflow();
     const baseDb: DatabaseLike = env.DB;
+    const plan = await buildAcceptedDecisionPlan(seeded);
     let injectedWithdrawal = false;
     const racingDb: DatabaseLike = {
       prepare: (query) => baseDb.prepare(query),
@@ -263,16 +280,10 @@ describe("proposal decision review rounds", () => {
         actor: decisionActor(seeded.adminId),
         finalStatus: "accepted",
         minReviewsRequired: 0,
-        notifications: [
-          {
-            id: "race-email",
-            templateKey: "proposal_decision",
-            recipientEmail: "round-proposer@pkic.org",
-            recipientUserId: seeded.adminId,
-            fallbackSubject: "Decision",
-            data: {},
-          },
-        ],
+        expectedProposalUpdatedAt: plan.proposal.updated_at,
+        expectedEventSnapshot: plan.eventSnapshot,
+        expectedSpeakerSnapshot: plan.speakerSnapshot,
+        notifications: plan.messages,
       }),
     ).rejects.toMatchObject({ code: "PROPOSAL_NOT_DECIDABLE" });
     await expect(
@@ -291,6 +302,46 @@ describe("proposal decision review rounds", () => {
       queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_id = ? AND action LIKE 'proposal_decision%'", [
         seeded.proposalId,
       ]),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("does not queue stale decision emails when the speaker set changes before the atomic write", async () => {
+    const seeded = await seedDecisionWorkflow();
+    const plan = await buildAcceptedDecisionPlan(seeded);
+    const baseDb: DatabaseLike = env.DB;
+    let injectedSpeakerChange = false;
+    const racingDb: DatabaseLike = {
+      prepare: (query) => baseDb.prepare(query),
+      async batch(statements) {
+        if (!injectedSpeakerChange) {
+          injectedSpeakerChange = true;
+          await baseDb
+            .prepare("UPDATE proposal_speakers SET status = 'declined' WHERE proposal_id = ?")
+            .bind(seeded.proposalId)
+            .run();
+        }
+        return baseDb.batch(statements);
+      },
+    };
+
+    await expect(
+      recordProposalDecision(racingDb, {
+        proposalId: seeded.proposalId,
+        actor: decisionActor(seeded.adminId),
+        finalStatus: "accepted",
+        minReviewsRequired: 0,
+        expectedProposalUpdatedAt: plan.proposal.updated_at,
+        expectedEventSnapshot: plan.eventSnapshot,
+        expectedSpeakerSnapshot: plan.speakerSnapshot,
+        presentationReminderUserIds: plan.presentationReminderUserIds,
+        notifications: plan.messages,
+      }),
+    ).rejects.toMatchObject({ code: "PROPOSAL_DECISION_CONFLICT" });
+    await expect(
+      queryAll(env.DB, "SELECT id FROM proposal_decisions WHERE proposal_id = ?", [seeded.proposalId]),
+    ).resolves.toHaveLength(0);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM email_outbox WHERE idempotency_key LIKE 'proposal-decision:%'"),
     ).resolves.toHaveLength(0);
   });
 

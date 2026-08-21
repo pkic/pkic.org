@@ -1,8 +1,6 @@
 import { json } from "../../../../_lib/http";
-import { resolveAppBaseUrl } from "../../../../_lib/config";
 import { proposalPageUrl, registrationPageUrl } from "../../../../_lib/services/frontend-links";
-import { resolvePublicInvite } from "../../../../_lib/services/invite-public-info";
-import { requireInternalSecret } from "../../../../_lib/request";
+import { loadPublicInviteView } from "../../../../_lib/routes/public-invite-view";
 import {
   inviteCapabilityQuerySchema,
   inviteDeclineInfoRouteSchema,
@@ -17,13 +15,11 @@ import type { AdminContext } from "../../../../_lib/db/context";
  * the correct UI without ever serving raw HTML from the backend.
  */
 async function getInviteDeclineInfo(c: AdminContext, token: string, inviteId?: string): Promise<Response> {
-  c.set?.("sensitive", true);
-  const resolved = await resolvePublicInvite(c.env.DB, requireInternalSecret(c.env), token, inviteId);
-  if (resolved.status !== "valid") return json({ status: resolved.status });
-  const { invite, event } = resolved;
+  const resolved = await loadPublicInviteView(c, token, inviteId);
+  if (resolved instanceof Response) return resolved;
+  const { invite, event, appBaseUrl } = resolved;
 
   // Valid invite — fetch event details to build the registration URL
-  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const registrationUrl =
     invite.invite_type === "attendee"
       ? registrationPageUrl(appBaseUrl, event, { source: "decline-virtual-pivot" })
@@ -34,10 +30,7 @@ async function getInviteDeclineInfo(c: AdminContext, token: string, inviteId?: s
       : null;
 
   return json({
-    status: "valid",
-    eventName: event.name,
-    inviteeFirstName: invite.invitee_first_name ?? null,
-    inviteType: invite.invite_type,
+    ...resolved.summary,
     registrationUrl,
     proposalUrl,
   });

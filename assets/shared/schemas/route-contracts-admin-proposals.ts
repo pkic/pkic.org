@@ -1,13 +1,23 @@
 import { z } from "zod";
-import { proposalIdParamsSchema, proposalReviewIdParamsSchema } from "./api-common";
 import {
+  presentationVersionIdParamsSchema,
+  proposalIdParamsSchema,
+  proposalReviewIdParamsSchema,
+  proposalSpeakerIdParamsSchema,
+} from "./api-common";
+import {
+  adminSpeakerBioPatchSchema,
   adminProposalPatchResponseSchema,
   adminProposalPatchSchema,
   finalizeProposalResponseSchema,
   finalizeProposalSchema,
 } from "./proposal-management";
 import { listQuerySchema } from "./pagination";
-import { proposalDecisionPreviewResponseSchema } from "./admin-event-proposals";
+import {
+  adminProposalSpeakerPatchResponseSchema,
+  adminProposalSpeakersResponseSchema,
+  proposalDecisionPreviewResponseSchema,
+} from "./admin-event-proposals";
 import {
   proposalCommentCreateResponseSchema,
   proposalCommentCreateSchema,
@@ -22,6 +32,12 @@ import {
   proposalReviewUpsertSchema,
   proposalReviewWriteResponseSchema,
 } from "./proposal-reviews";
+import {
+  presentationVersionResponseSchema,
+  presentationVersionReviewRequestSchema,
+  presentationVersionsListQuerySchema,
+  presentationVersionsResponseSchema,
+} from "./presentation-versions";
 
 export const adminProposalOpenManageRouteSchema = {
   tags: ["Admin proposals"],
@@ -278,9 +294,126 @@ export const adminProposalSpeakersRouteSchema = {
     params: proposalIdParamsSchema,
   },
   responses: {
-    "200": { description: "Proposal speaker roster with completeness summary." },
+    "200": {
+      description: "Proposal speaker roster with completeness summary.",
+      content: { "application/json": { schema: adminProposalSpeakersResponseSchema } },
+    },
     "401": { description: "Admin authorization required." },
     "403": { description: "The admin lacks review permission for this proposal." },
     "404": { description: "Proposal not found." },
+  },
+};
+
+export const adminProposalSpeakerPatchRouteSchema = {
+  tags: ["Admin proposal speakers"],
+  summary: "Update a proposal speaker",
+  description:
+    "Atomically updates the shared speaker profile, proposal role, participant projection, and audit record.",
+  request: {
+    params: proposalSpeakerIdParamsSchema,
+    body: {
+      content: { "application/json": { schema: adminSpeakerBioPatchSchema } },
+      required: true,
+    },
+  },
+  responses: {
+    "200": {
+      description: "Updated proposal speaker.",
+      content: { "application/json": { schema: adminProposalSpeakerPatchResponseSchema } },
+    },
+    "400": { description: "Invalid speaker patch." },
+    "401": { description: "Admin authorization required." },
+    "403": { description: "The admin lacks proposal management permission." },
+    "404": { description: "Proposal or speaker not found." },
+    "409": { description: "The proposal or speaker changed concurrently." },
+  },
+};
+
+export const adminPresentationVersionsListRouteSchema = {
+  tags: ["Admin proposal presentations"],
+  summary: "List presentation versions",
+  request: { params: proposalIdParamsSchema, query: presentationVersionsListQuerySchema },
+  responses: {
+    "200": {
+      description: "Presentation versions for the proposal.",
+      content: { "application/json": { schema: presentationVersionsResponseSchema } },
+    },
+    "401": { description: "Admin authorization required." },
+    "403": { description: "The admin lacks proposal access." },
+    "404": { description: "Proposal not found." },
+  },
+};
+
+export const adminPresentationUploadRouteSchema = {
+  tags: ["Admin proposal presentations"],
+  summary: "Upload a presentation version",
+  description: "Streams a validated presentation to R2 and atomically records the version and audit event in D1.",
+  request: { params: proposalIdParamsSchema },
+  responses: {
+    "200": {
+      description: "Presentation uploaded.",
+      content: { "application/json": { schema: z.object({ success: z.literal(true) }) } },
+    },
+    "400": { description: "Invalid upload metadata or size." },
+    "401": { description: "Admin authorization required." },
+    "403": { description: "The admin lacks proposal access." },
+    "404": { description: "Proposal not found." },
+    "409": { description: "The proposal is not accepted." },
+    "413": { description: "The presentation is too large." },
+    "415": { description: "Unsupported presentation type." },
+    "503": { description: "Presentation storage is unavailable." },
+  },
+};
+
+export const adminPresentationVersionReviewRouteSchema = {
+  tags: ["Admin proposal presentations"],
+  summary: "Review a presentation version",
+  description: "Atomically records the review and audit event.",
+  request: {
+    params: presentationVersionIdParamsSchema,
+    body: {
+      content: { "application/json": { schema: presentationVersionReviewRequestSchema } },
+      required: true,
+    },
+  },
+  responses: {
+    "200": {
+      description: "Reviewed presentation version.",
+      content: { "application/json": { schema: presentationVersionResponseSchema } },
+    },
+    "400": { description: "Invalid review payload." },
+    "401": { description: "Admin authorization required." },
+    "403": { description: "The admin lacks proposal access." },
+    "404": { description: "Proposal or presentation version not found." },
+  },
+};
+
+export const adminPresentationVersionDeleteRouteSchema = {
+  tags: ["Admin proposal presentations"],
+  summary: "Delete a presentation version",
+  description: "Atomically soft-deletes the version, selects its replacement, and records the audit event.",
+  request: { params: presentationVersionIdParamsSchema },
+  responses: {
+    "200": {
+      description: "Presentation version deleted.",
+      content: { "application/json": { schema: z.object({ success: z.literal(true) }) } },
+    },
+    "401": { description: "Admin authorization required." },
+    "403": { description: "The admin lacks proposal access." },
+    "404": { description: "Proposal or presentation version not found." },
+    "409": { description: "The version is approved or changed concurrently." },
+  },
+};
+
+export const adminPresentationVersionDownloadRouteSchema = {
+  tags: ["Admin proposal presentations"],
+  summary: "Download a presentation version",
+  request: { params: presentationVersionIdParamsSchema },
+  responses: {
+    "200": { description: "Presentation file stream." },
+    "401": { description: "Admin authorization required." },
+    "403": { description: "The admin lacks proposal access." },
+    "404": { description: "Proposal, version, or stored object not found." },
+    "503": { description: "Presentation storage is unavailable." },
   },
 };

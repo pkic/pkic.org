@@ -6,102 +6,32 @@
  *
  * Always responds with { success: true } to prevent account enumeration.
  */
-import type { z } from "zod";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
-import { parseJsonBody } from "../../../../../_lib/validation";
 import { json } from "../../../../../_lib/http";
-import { buildEventEmailVariables, getEventBySlug } from "../../../../../_lib/services/events";
-import { first } from "../../../../../_lib/db/queries";
-import { queueEmail, processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
+import { getEventBySlug } from "../../../../../_lib/services/events";
+import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { getClientIp } from "../../../../../_lib/request";
-import { enforceRateLimit } from "../../../../../_lib/rate-limit";
-import { speakerManagePageUrl } from "../../../../../_lib/services/frontend-links";
-import { buildProposalInviteEmailContext, refreshSpeakerManageToken } from "../../../../../_lib/services/proposals";
-import { proposalResendSpeakerManageLinkSchema } from "../../../../../../assets/shared/schemas/api";
+import { enforceEmailTriggerRateLimits } from "../../../../../_lib/rate-limit";
+import { queueProposalSpeakerManageLinkRecovery } from "../../../../../_lib/services/proposal-speaker-link-recovery";
 import { proposalResendSpeakerManageLinkRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
-export async function onRequestPost(
-  c: any,
-  data?: { body: z.infer<typeof proposalResendSpeakerManageLinkSchema> },
-): Promise<Response> {
-  c.set("sensitive", true);
-
-  const body = data?.body ?? (await parseJsonBody(c.req, proposalResendSpeakerManageLinkSchema));
-  await enforceRateLimit({
-    binding: c.env.EMAIL_RATE_LIMITER,
-    namespace: "proposal-resend-speaker-manage-link:email",
-    key: body.email,
-  });
-  await enforceRateLimit({
-    binding: c.env.IP_RATE_LIMITER,
-    namespace: "proposal-resend-speaker-manage-link:ip",
-    key: getClientIp(c.req.raw),
+async function resendSpeakerManageLink(c: AdminContext, eventSlug: string, email: string): Promise<Response> {
+  await enforceEmailTriggerRateLimits({
+    emailBinding: c.env.EMAIL_RATE_LIMITER,
+    ipBinding: c.env.IP_RATE_LIMITER,
+    namespace: "proposal-resend-speaker-manage-link",
+    email,
+    clientIp: getClientIp(c.req.raw),
   });
 
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const db = requestDb(c);
+  const event = await getEventBySlug(db, eventSlug);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-
-  const row = await first<{
-    proposal_id: string;
-    user_id: string;
-    proposer_user_id: string;
-    email: string;
-    first_name: string | null;
-    last_name: string | null;
-  }>(
-    c.env.DB,
-    `SELECT
-       ps.proposal_id,
-       ps.user_id,
-       sp.proposer_user_id,
-       u.email,
-       u.first_name,
-       u.last_name
-     FROM proposal_speakers ps
-     JOIN session_proposals sp ON sp.id = ps.proposal_id
-     JOIN users u ON u.id = ps.user_id
-     WHERE sp.event_id = ?
-       AND lower(u.email) = lower(?)
-       AND ps.role <> 'proposer'
-       AND ps.status IN ('invited', 'confirmed')
-       AND sp.status NOT IN ('rejected', 'withdrawn')
-     ORDER BY ps.created_at DESC
-     LIMIT 1`,
-    [event.id, body.email],
-  );
-
-  if (row) {
-    const token = await refreshSpeakerManageToken(c.env.DB, row.proposal_id, row.user_id);
-    const manageUrl = speakerManagePageUrl(appBaseUrl, event, token);
-
-    const inviteContext = await buildProposalInviteEmailContext(c.env.DB, {
-      proposalId: row.proposal_id,
-      inviterUserId: row.proposer_user_id,
-    });
-
-    const outboxId = await queueEmail(c.env.DB, {
-      eventId: event.id,
-      templateKey: "co_speaker_invite",
-      recipientEmail: row.email,
-      recipientUserId: row.user_id,
-      messageType: "transactional",
-      subject: `Your speaker management link for ${event.name}`,
-      capabilityLinkValues: [manageUrl],
-      data: {
-        ...buildEventEmailVariables(event, appBaseUrl),
-        firstName: row.first_name ?? "",
-        lastName: row.last_name ?? "",
-        invitedByDisplay: inviteContext.invitedByDisplay,
-        proposalTitle: inviteContext.proposalTitle,
-        proposalAbstract: inviteContext.proposalAbstract,
-        speakerLineupText: inviteContext.speakerLineupText,
-        manageUrl,
-        isReminder: true,
-      },
-    });
-
-    c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
+  const outboxId = await queueProposalSpeakerManageLinkRecovery(db, event, email, appBaseUrl);
+  if (outboxId) {
+    c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, outboxId));
   }
 
   return json({ success: true });
@@ -109,5 +39,6 @@ export async function onRequestPost(
 
 export const EventsEventSlugProposalsResendSpeakerManageLinkPost = openApiRoute(
   proposalResendSpeakerManageLinkRouteSchema,
-  onRequestPost,
+  (c: AdminContext, data) => resendSpeakerManageLink(c, data.params.eventSlug, data.body.email),
+  (c: AdminContext) => c.set?.("sensitive", true),
 );

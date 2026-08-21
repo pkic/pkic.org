@@ -32,7 +32,6 @@ node scripts/build-frontend.mjs --dev
 hugo -e development --cleanDestinationDir
 
 # ── 2. Seed a fresh database ────────────────────────────────────────────────
-node scripts/remove-appledouble.mjs migrations
 printf 'y\n' | pnpm exec wrangler d1 migrations apply pkic-db-local --env local --local --persist-to="$STATE_DIR"
 node scripts/seed-initial-admin.mjs  --env local --local --db pkic-db-local --persist-to "$STATE_DIR" --e2e-worker-pool
 node scripts/seed-event.mjs          --env local --local --db pkic-db-local --persist-to "$STATE_DIR" --skip-email-templates

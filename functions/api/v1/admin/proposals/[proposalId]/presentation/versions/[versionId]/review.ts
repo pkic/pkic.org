@@ -1,44 +1,24 @@
 import { json } from "../../../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../../../_lib/auth/admin";
-import { getPresentationVersion, addVersionReview } from "../../../../../../../../_lib/services/presentation-versions";
-import { writeAuditLog } from "../../../../../../../../_lib/services/audit";
-import { parseJsonBody } from "../../../../../../../../_lib/validation";
+import { reviewPresentationVersion } from "../../../../../../../../_lib/services/presentation-versions";
 import { requestDb, type AdminContext } from "../../../../../../../../_lib/db/context";
-import { z } from "zod";
+import type { PresentationVersionReviewRequest } from "../../../../../../../../../assets/shared/schemas/presentation-versions";
+import type { ValidatedData } from "chanfana";
+import { adminPresentationVersionReviewRouteSchema } from "../../../../../../../../../assets/shared/schemas/route-contracts";
 
-const reviewSchema = z.object({
-  status: z.enum(["approved", "rejected", "needs_revision"]),
-  note: z.string().trim().max(4000).nullable().optional(),
-});
-
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+export async function onRequestPost(
+  c: AdminContext,
+  data: ValidatedData<typeof adminPresentationVersionReviewRouteSchema>,
+): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  const proposalId = c.req.param("proposalId");
-  const versionId = c.req.param("versionId");
-  const body = await parseJsonBody(c.req, reviewSchema);
-
-  const version = await getPresentationVersion(requestDb(c), versionId);
-  if (version.proposalId !== proposalId) {
-    return json({ error: { message: "Presentation version not found" } }, 404);
-  }
-
-  await addVersionReview(requestDb(c), versionId, {
-    reviewedByUserId: admin.id,
-    status: body.status,
-    note: body.note?.trim() || null,
-  });
-
-  await writeAuditLog(
+  const { proposalId, versionId } = data.params;
+  const updated = await reviewPresentationVersion(
     requestDb(c),
-    "admin",
-    admin.id,
-    "presentation_version_reviewed",
-    "presentation_version",
+    proposalId,
     versionId,
-    { proposalId: version.proposalId, status: body.status },
+    admin.id,
+    data.body as PresentationVersionReviewRequest,
   );
-
-  const updated = await getPresentationVersion(requestDb(c), versionId);
   return json({ version: updated });
 }

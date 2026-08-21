@@ -9,7 +9,7 @@ import {
   trimmedString,
   versionPattern,
 } from "./api-common";
-import { paginatedResponseSchema, searchableListQuerySchema, sortColumnSchema } from "./pagination";
+import { listQuerySchema, paginatedResponseSchema, searchableListQuerySchema, sortColumnSchema } from "./pagination";
 import { dayDateSchema, inviteeSchema } from "./registration";
 import { sourceTypeSchema } from "./source";
 import { addDuplicateStringIssues } from "./refinements";
@@ -17,30 +17,19 @@ import { proposalRecommendationSchema } from "./proposal-reviews";
 import { proposalAdminStatusFilterSchema } from "./proposal-status";
 import { proposalSessionTypesSchema } from "./proposal-management";
 
-const eventProposalsSortSchema = z
-  .enum([
-    "submitted_desc",
-    "submitted_asc",
-    "score_desc",
-    "score_asc",
-    "reviews_desc",
-    "reviews_asc",
-    "title_desc",
-    "title_asc",
-    "proposer_desc",
-    "proposer_asc",
-    "type_desc",
-    "type_asc",
-    "status_desc",
-    "status_asc",
-    "decision_desc",
-    "decision_asc",
-    "recommendations_desc",
-    "recommendations_asc",
-  ])
-  .optional();
+export const EVENT_PROPOSALS_SORT_COLUMNS = [
+  "submittedAt",
+  "score",
+  "reviews",
+  "title",
+  "proposer",
+  "type",
+  "status",
+  "decision",
+  "recommendations",
+] as const;
 
-export const adminEventProposalsQuerySchema = searchableListQuerySchema(eventProposalsSortSchema).extend({
+export const adminEventProposalsQuerySchema = listQuerySchema(EVENT_PROPOSALS_SORT_COLUMNS).extend({
   status: proposalAdminStatusFilterSchema.optional(),
   recommendation: proposalRecommendationSchema.optional(),
   deleted: z.literal("1").optional(),

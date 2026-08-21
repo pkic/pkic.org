@@ -1,9 +1,10 @@
 import { AppError } from "../errors";
-import { all, first } from "../db/queries";
+import { first } from "../db/queries";
 import { nowIso } from "../utils/time";
 import { sha256Hex } from "../utils/crypto";
 import { newCapabilityLinkSecret, queuedCapabilityToken, signCapabilityToken } from "./capability-links";
-import { prepareSyncProposalParticipantRole } from "./proposal-participants";
+import { prepareSyncProposalParticipantRole, proposalParticipantStatus } from "./proposal-participants";
+import { formatInvitePerson as formatInvitePersonRecord } from "./proposal-invite-email-context";
 import type { DatabaseLike, StatementLike } from "../types";
 import type { ProposalManageSpeakerStatus } from "../../../assets/shared/schemas/proposal-management";
 import type { SpeakerRole } from "../../../assets/shared/schemas/registration";
@@ -113,7 +114,7 @@ export async function buildAddProposalSpeaker(
         userId: payload.userId,
         proposalRole: payload.role,
         sourceRef: payload.proposalId,
-        status: proposal.status === "accepted" ? "active" : "inactive",
+        status: proposalParticipantStatus(proposal.status, status),
       }),
     );
   }
@@ -179,9 +180,9 @@ export async function buildUpdateProposalSpeakerRoleStatements(
     [payload.proposalId],
   );
   if (!proposal) throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found");
-  const speaker = await first<{ id: string }>(
+  const speaker = await first<{ id: string; status: string }>(
     db,
-    "SELECT id FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+    "SELECT id, status FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
     [payload.proposalId, payload.userId],
   );
   if (!speaker) throw new AppError(404, "SPEAKER_NOT_FOUND", "Speaker not found on this proposal");
@@ -195,7 +196,7 @@ export async function buildUpdateProposalSpeakerRoleStatements(
       userId: payload.userId,
       proposalRole: payload.role,
       sourceRef: payload.proposalId,
-      status: proposal.status === "accepted" ? "active" : "inactive",
+      status: proposalParticipantStatus(proposal.status, speaker.status),
     }),
   ];
 }
@@ -235,82 +236,54 @@ export interface ProposalSpeakerWithUser extends ProposalSpeakerUserProfile {
   created_at: string;
 }
 
+export const PROPOSAL_SPEAKER_WITH_USER_COLUMNS = `ps.id AS speaker_id, ps.user_id, ps.role, ps.status,
+  ps.manage_link_secret, ps.confirmed_at, ps.declined_at, ps.terms_accepted_at, ps.decline_reason, ps.created_at,
+  u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
+  u.biography, u.links_json, u.headshot_r2_key, u.headshot_updated_at`;
+
+export function prepareProposalSpeakerWithUserById(db: DatabaseLike, speakerId: string): StatementLike {
+  return db
+    .prepare(
+      `SELECT ${PROPOSAL_SPEAKER_WITH_USER_COLUMNS}
+       FROM proposal_speakers ps
+       JOIN users u ON u.id = ps.user_id
+       WHERE ps.id = ?`,
+    )
+    .bind(speakerId);
+}
+
+export function prepareProposalSpeakersWithStatus(db: DatabaseLike, proposalId: string): StatementLike {
+  return db
+    .prepare(
+      `SELECT ${PROPOSAL_SPEAKER_WITH_USER_COLUMNS}
+       FROM proposal_speakers ps
+       JOIN users u ON u.id = ps.user_id
+       WHERE ps.proposal_id = ?
+       ORDER BY ps.created_at ASC`,
+    )
+    .bind(proposalId);
+}
+
+export { buildProposalInviteEmailContext, type ProposalInviteEmailContext } from "./proposal-invite-email-context";
+
 export function formatInvitePerson(
   firstName: string | null,
   lastName: string | null,
   organizationName: string | null,
   fallback: string,
 ): string {
-  const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
-  if (fullName && organizationName?.trim()) return `${fullName} (${organizationName.trim()})`;
-  return fullName || fallback;
-}
-
-export interface ProposalInviteEmailContext {
-  invitedByDisplay: string;
-  inviterFirstName?: string;
-  proposalTitle: string;
-  proposalAbstract: string;
-  speakerLineupText: string;
-}
-
-export async function buildProposalInviteEmailContext(
-  db: DatabaseLike,
-  payload: { proposalId: string; inviterUserId?: string | null },
-): Promise<ProposalInviteEmailContext> {
-  const proposal = await first<{ id: string; title: string; abstract: string; proposer_user_id: string }>(
-    db,
-    "SELECT id, title, abstract, proposer_user_id FROM session_proposals WHERE id = ?",
-    [payload.proposalId],
-  );
-  if (!proposal) throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found");
-
-  const inviterUserId = payload.inviterUserId ?? proposal.proposer_user_id;
-  const inviter = await first<{
-    email: string;
-    first_name: string | null;
-    last_name: string | null;
-    organization_name: string | null;
-  }>(db, "SELECT email, first_name, last_name, organization_name FROM users WHERE id = ?", [inviterUserId]);
-  const speakers = await all<{
-    email: string;
-    first_name: string | null;
-    last_name: string | null;
-    organization_name: string | null;
-  }>(
-    db,
-    `SELECT u.email, u.first_name, u.last_name, u.organization_name
-     FROM proposal_speakers ps JOIN users u ON u.id = ps.user_id
-     WHERE ps.proposal_id = ? ORDER BY ps.created_at ASC`,
-    [proposal.id],
-  );
-  return {
-    invitedByDisplay: inviter
-      ? formatInvitePerson(inviter.first_name, inviter.last_name, inviter.organization_name, inviter.email)
-      : "The proposer",
-    inviterFirstName: inviter?.first_name ?? "",
-    proposalTitle: proposal.title,
-    proposalAbstract: proposal.abstract,
-    speakerLineupText: speakers
-      .map(
-        (entry) => `- ${formatInvitePerson(entry.first_name, entry.last_name, entry.organization_name, entry.email)}`,
-      )
-      .join("\n"),
-  };
+  return formatInvitePersonRecord({
+    email: fallback,
+    first_name: firstName,
+    last_name: lastName,
+    organization_name: organizationName,
+  });
 }
 
 export async function listProposalSpeakersWithStatus(
   db: DatabaseLike,
   proposalId: string,
 ): Promise<ProposalSpeakerWithUser[]> {
-  return all<ProposalSpeakerWithUser>(
-    db,
-    `SELECT ps.id AS speaker_id, ps.user_id, ps.role, ps.status, ps.manage_link_secret,
-            ps.confirmed_at, ps.declined_at, ps.terms_accepted_at, ps.decline_reason, ps.created_at,
-            u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
-            u.biography, u.links_json, u.headshot_r2_key, u.headshot_updated_at
-     FROM proposal_speakers ps JOIN users u ON u.id = ps.user_id
-     WHERE ps.proposal_id = ? ORDER BY ps.created_at ASC`,
-    [proposalId],
-  );
+  const result = await prepareProposalSpeakersWithStatus(db, proposalId).all<ProposalSpeakerWithUser>();
+  return result.results ?? [];
 }

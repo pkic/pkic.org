@@ -29,7 +29,7 @@ export const AdminEventsEventSlugProposalsGet = openApiRoute(
     const event = await getEventBySlug(db, c.req.param("eventSlug"));
     requirePermission(admin, "proposals:read", { type: "event", id: event.id });
     const access = await getProposalAccessForEvent(db, event.id, admin);
-    const { status, recommendation, sort = "submitted_desc", q, deleted, limit = 50, offset = 0 } = data.query;
+    const { status, recommendation, sort = "-submittedAt", q, deleted, limit = 50, offset = 0 } = data.query;
     const result = await listAdminEventProposals(db, {
       eventId: event.id,
       status,

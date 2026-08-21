@@ -13,16 +13,17 @@
  */
 import { json } from "../../../../../_lib/http";
 import { getSpeakerByManageToken } from "../../../../../_lib/services/proposals";
-import { recordPresentationUpload } from "../../../../../_lib/services/proposals-speaker-profile";
-import { parsePresentationUpload, storePresentationFile } from "../../../../../_lib/services/presentation-versions";
-import { writeAuditLog } from "../../../../../_lib/services/audit";
-import { AppError } from "../../../../../_lib/errors";
-import { first } from "../../../../../_lib/db/queries";
+import {
+  getPresentationProposalContext,
+  requirePresentationBucket,
+  uploadProposalPresentation,
+} from "../../../../../_lib/services/presentation-upload";
 import { requireInternalSecret } from "../../../../../_lib/request";
+import { requestDb } from "../../../../../_lib/db/context";
 
 export async function onRequestPut(c: any): Promise<Response> {
   const { speaker, proposal } = await getSpeakerByManageToken(
-    c.env.DB,
+    requestDb(c),
     c.req.param("token"),
     requireInternalSecret(c.env),
   );
@@ -31,66 +32,14 @@ export async function onRequestPut(c: any): Promise<Response> {
     return json({ error: { code: "SPEAKER_DECLINED", message: "You have declined participation." } }, 403);
   }
 
-  if (proposal.status !== "accepted") {
-    return json(
-      {
-        error: {
-          code: "PROPOSAL_NOT_ACCEPTED",
-          message: "Presentations can only be uploaded after the proposal has been accepted.",
-        },
-      },
-      409,
-    );
-  }
-
-  const deadlineRow = await first<{ presentation_deadline: string | null; title: string; event_slug: string }>(
-    c.env.DB,
-    `SELECT sp.presentation_deadline, sp.title, e.slug AS event_slug
-     FROM session_proposals sp
-     JOIN events e ON e.id = sp.event_id
-     WHERE sp.id = ?`,
-    [proposal.id],
+  const uploadContext = await getPresentationProposalContext(requestDb(c), proposal.id);
+  const r2Key = await uploadProposalPresentation(
+    requestDb(c),
+    requirePresentationBucket(c.env),
+    c.req.raw,
+    uploadContext,
+    { uploadedByUserId: speaker.user_id, actorType: "user", enforceDeadline: true },
   );
-  if (deadlineRow?.presentation_deadline && new Date(deadlineRow.presentation_deadline) < new Date()) {
-    return json(
-      {
-        error: {
-          code: "DEADLINE_PASSED",
-          message: "The presentation upload deadline has passed. Please contact the organiser.",
-        },
-      },
-      409,
-    );
-  }
-
-  const bucket = c.env.SPEAKER_UPLOADS_BUCKET;
-  if (!bucket) throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "File uploads are not configured on this instance.");
-
-  const parsed = await parsePresentationUpload(c.req.raw);
-  if ("error" in parsed) return json({ error: parsed.error }, parsed.status);
-
-  const r2Key = await storePresentationFile(
-    bucket,
-    {
-      eventSlug: deadlineRow?.event_slug ?? "event",
-      proposalId: proposal.id,
-      proposalTitle: deadlineRow?.title ?? "proposal",
-    },
-    parsed,
-  );
-
-  await recordPresentationUpload(c.env.DB, bucket, proposal.id, r2Key, speaker.user_id, {
-    fileName: parsed.name ?? null,
-    fileSize: parsed.size,
-    mimeType: parsed.type,
-  });
-
-  await writeAuditLog(c.env.DB, "user", speaker.user_id, "presentation_uploaded", "session_proposal", proposal.id, {
-    r2Key,
-    fileName: parsed.name ?? null,
-    fileSize: parsed.size,
-    mimeType: parsed.type,
-  });
 
   return json({ success: true, r2Key });
 }

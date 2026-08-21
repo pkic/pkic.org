@@ -34,6 +34,7 @@ export function boundedJsonObject<T extends z.ZodRawShape>(shape: T, maxLength: 
 export const normalizedEmailSchema = z
   .email({ error: "Please enter a valid email address (for example: name@example.com)." })
   .transform((value) => value.trim().toLowerCase());
+export const emailRecoveryRequestSchema = z.object({ email: normalizedEmailSchema });
 export const firstNameSchema = trimmedString(1, 80).regex(namePattern, "Contains unsupported characters");
 export const lastNameSchema = trimmedString(1, 120).regex(namePattern, "Contains unsupported characters");
 export const organizationNameSchema = trimmedString(2, 160);
@@ -51,8 +52,16 @@ export const proposalIdParamsSchema = z.object({
   proposalId: databaseIdSchema,
 });
 
+export const proposalSpeakerIdParamsSchema = proposalIdParamsSchema.extend({
+  userId: databaseIdSchema,
+});
+
 export const proposalReviewIdParamsSchema = proposalIdParamsSchema.extend({
   reviewId: databaseIdSchema,
+});
+
+export const presentationVersionIdParamsSchema = proposalIdParamsSchema.extend({
+  versionId: databaseIdSchema,
 });
 
 export const formKeyParamsSchema = z.object({

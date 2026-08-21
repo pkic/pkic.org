@@ -116,6 +116,33 @@ export default tseslint.config(
       "@typescript-eslint/unbound-method": "off",
     },
   },
+  {
+    files: ["functions/api/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/_lib/db/queries", "**/_lib/db/pagination"],
+              message: "API adapters must call a focused service instead of importing SQL execution helpers.",
+            },
+          ],
+        },
+      ],
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "CallExpression[callee.property.name='prepare']",
+          message: "API adapters must not prepare SQL; move the query or mutation into a focused service.",
+        },
+        {
+          selector: "CallExpression[callee.property.name='batch']",
+          message: "API adapters must not execute D1 batches; the service must own the complete atomic unit of work.",
+        },
+      ],
+    },
+  },
   eslintConfigPrettier,
   {
     ...eslintPluginPrettier,

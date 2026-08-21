@@ -1,7 +1,6 @@
 import { parseJsonBody } from "../../../../_lib/validation";
 import { json } from "../../../../_lib/http";
 import { findInviteByToken, acceptInvite } from "../../../../_lib/services/invites";
-import { first } from "../../../../_lib/db/queries";
 import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
 import { commitRegistrationSubmission } from "../../../../_lib/services/registration-submission";
 import { prepareValidatedAttendeeRegistration } from "../../../../_lib/services/attendee-registration";
@@ -14,6 +13,8 @@ import { openApiRoute } from "../../../../_lib/openapi/route";
 import type { AdminContext } from "../../../../_lib/db/context";
 import { AppError } from "../../../../_lib/errors";
 import type { z } from "zod";
+import { getEventById } from "../../../../_lib/services/events";
+import { requestDb } from "../../../../_lib/db/context";
 
 type InviteAcceptAttendee = z.infer<typeof inviteAcceptAttendeeSchema>;
 
@@ -27,24 +28,12 @@ async function acceptInviteRequest(
   const config = getConfig(c.env, c.req.raw);
   const signingSecret = requireInternalSecret(c.env);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-  const invite = await findInviteByToken(c.env.DB, token, signingSecret, inviteId ?? null);
-  const event = await first<{
-    id: string;
-    slug: string;
-    base_path: string | null;
-    starts_at: string | null;
-    name: string;
-    settings_json: string;
-  }>(c.env.DB, "SELECT id, slug, base_path, starts_at, name, settings_json FROM events WHERE id = ?", [
-    invite.event_id,
-  ]);
-
-  if (!event) {
-    return json({ error: { code: "EVENT_NOT_FOUND", message: "Invite event not found" } }, 404);
-  }
+  const db = requestDb(c);
+  const invite = await findInviteByToken(db, token, signingSecret, inviteId ?? null);
+  const event = await getEventById(db, invite.event_id);
 
   if (invite.invite_type === "speaker") {
-    await acceptInvite(c.env.DB, invite.id);
+    await acceptInvite(db, invite.id);
     return json({
       success: true,
       inviteType: "speaker",
@@ -58,7 +47,7 @@ async function acceptInviteRequest(
     return json({ error: { code: "EMAIL_MISMATCH", message: "Invite email must match registration email" } }, 400);
   }
 
-  const { prepared } = await prepareValidatedAttendeeRegistration(c.env.DB, body, {
+  const { prepared } = await prepareValidatedAttendeeRegistration(db, body, {
     eventId: event.id,
     sourceType: "invite",
     invite,
@@ -70,7 +59,7 @@ async function acceptInviteRequest(
     confirmationTtlHours: config.confirmationLinkTtlHours,
     referralCodeLength: config.referralCodeLength,
   });
-  await commitRegistrationSubmission(c.env.DB, prepared);
+  await commitRegistrationSubmission(db, prepared);
   c.executionCtx.waitUntil(
     trySeedGravatarThenPrerender(prepared.user.id, prepared.user.email, prepared.referralCode, c.env, appBaseUrl),
   );

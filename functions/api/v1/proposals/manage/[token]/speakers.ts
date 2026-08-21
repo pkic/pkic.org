@@ -16,7 +16,7 @@ import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { getEventById } from "../../../../../_lib/services/events";
 import { coSpeakerInviteSchema } from "../../../../../../assets/shared/schemas/proposal-management";
 import { requireInternalSecret } from "../../../../../_lib/request";
-import { inviteProposalSpeaker } from "../../../../../_lib/services/proposal-speaker-management";
+import { inviteProposalSpeaker } from "../../../../../_lib/services/proposal-speaker-invitations";
 
 export async function onRequestPost(c: any): Promise<Response> {
   const body = await parseJsonBody(c.req, coSpeakerInviteSchema);

@@ -4,47 +4,39 @@
  * Sends fresh proposer-management links for active proposals matching the
  * provided email. The generic response prevents account enumeration.
  */
-import { OpenAPIRoute } from "chanfana";
 import { processSelectedOutboxBackground } from "../../../../../_lib/email/outbox";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { json } from "../../../../../_lib/http";
 import { getClientIp } from "../../../../../_lib/request";
-import { enforceRateLimit } from "../../../../../_lib/rate-limit";
+import { enforceEmailTriggerRateLimits } from "../../../../../_lib/rate-limit";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { queueProposalManageLinkRecovery } from "../../../../../_lib/services/proposal-manage-link-recovery";
-import { parseJsonBody } from "../../../../../_lib/validation";
-import { proposalResendManageLinkSchema } from "../../../../../../assets/shared/schemas/api";
 import { proposalResendManageLinkRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
-export async function onRequestPost(c: any): Promise<Response> {
-  c.set("sensitive", true);
-
-  const body = await parseJsonBody(c.req, proposalResendManageLinkSchema);
-  await enforceRateLimit({
-    binding: c.env.EMAIL_RATE_LIMITER,
-    namespace: "proposal-resend-manage-link:email",
-    key: body.email,
-  });
-  await enforceRateLimit({
-    binding: c.env.IP_RATE_LIMITER,
-    namespace: "proposal-resend-manage-link:ip",
-    key: getClientIp(c.req.raw),
+async function resendProposalManageLinks(c: AdminContext, eventSlug: string, email: string): Promise<Response> {
+  await enforceEmailTriggerRateLimits({
+    emailBinding: c.env.EMAIL_RATE_LIMITER,
+    ipBinding: c.env.IP_RATE_LIMITER,
+    namespace: "proposal-resend-manage-link",
+    email,
+    clientIp: getClientIp(c.req.raw),
   });
 
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const db = requestDb(c);
+  const event = await getEventBySlug(db, eventSlug);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-  const outboxIds = await queueProposalManageLinkRecovery(c.env.DB, event, body.email, appBaseUrl);
+  const outboxIds = await queueProposalManageLinkRecovery(db, event, email, appBaseUrl);
   if (outboxIds.length > 0) {
-    c.executionCtx.waitUntil(processSelectedOutboxBackground(c.env.DB, c.env, outboxIds));
+    c.executionCtx.waitUntil(processSelectedOutboxBackground(db, c.env, outboxIds));
   }
 
   return json({ success: true });
 }
 
-export class EventsEventSlugProposalsResendManageLinkPost extends OpenAPIRoute {
-  schema = proposalResendManageLinkRouteSchema;
-
-  async handle(c: any) {
-    return onRequestPost(c);
-  }
-}
+export const EventsEventSlugProposalsResendManageLinkPost = openApiRoute(
+  proposalResendManageLinkRouteSchema,
+  (c: AdminContext, data) => resendProposalManageLinks(c, data.params.eventSlug, data.body.email),
+  (c: AdminContext) => c.set?.("sensitive", true),
+);

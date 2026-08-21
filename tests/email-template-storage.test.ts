@@ -1,7 +1,14 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
-import { createTemplateVersion, activateTemplateVersion, resolveTemplate } from "../functions/_lib/email/templates";
+import {
+  createTemplateVersion,
+  activateTemplateVersion,
+  resolveTemplate,
+  resolveTemplateSet,
+} from "../functions/_lib/email/templates";
+import type { DatabaseLike } from "../functions/_lib/types";
+import { loadEmailRenderBundle } from "../functions/_lib/email/partials";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
 
 describe("email template storage", () => {
@@ -52,5 +59,77 @@ describe("email template storage", () => {
 
     const fallback = await resolveTemplate(env.DB, "custom_email_template");
     expect(fallback.version).toBe(v2.version);
+  });
+
+  it("resolves a deduplicated template set with one D1 query", async () => {
+    await seedEventAndAdmin(env.DB);
+    const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'");
+    for (const templateKey of ["batch_template_one", "batch_template_two"]) {
+      const version = await createTemplateVersion(env.DB, {
+        templateKey,
+        content: `Body for ${templateKey}`,
+        createdByUserId: admin.id,
+      });
+      await activateTemplateVersion(env.DB, { templateKey, version: version.version });
+    }
+
+    let prepareCount = 0;
+    const countedDb: DatabaseLike = {
+      prepare(query) {
+        prepareCount += 1;
+        return env.DB.prepare(query);
+      },
+      batch(statements) {
+        return env.DB.batch(statements);
+      },
+    };
+    const resolutions = await resolveTemplateSet(countedDb, [
+      "batch_template_one",
+      "batch_template_two",
+      "batch_template_one",
+      "batch_template_missing",
+    ]);
+
+    expect(prepareCount).toBe(1);
+    expect(resolutions.get("batch_template_one")).toMatchObject({ ok: true });
+    expect(resolutions.get("batch_template_two")).toMatchObject({ ok: true });
+    expect(resolutions.get("batch_template_missing")).toMatchObject({
+      ok: false,
+      code: "EMAIL_TEMPLATE_NOT_FOUND",
+    });
+  });
+
+  it("loads required render templates in one query without requiring unrelated partials", async () => {
+    await seedEventAndAdmin(env.DB);
+    const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'");
+    for (const [templateKey, content] of [
+      ["email_layout", "<main>{{{body_html}}}</main>"],
+      ["render_bundle_body", "Bundle body"],
+    ]) {
+      const version = await createTemplateVersion(env.DB, {
+        templateKey,
+        content,
+        createdByUserId: admin.id,
+      });
+      await activateTemplateVersion(env.DB, { templateKey, version: version.version });
+    }
+
+    let prepareCount = 0;
+    const countedDb: DatabaseLike = {
+      prepare(query) {
+        prepareCount += 1;
+        return env.DB.prepare(query);
+      },
+      batch(statements) {
+        return env.DB.batch(statements);
+      },
+    };
+
+    const bundle = await loadEmailRenderBundle(countedDb, ["render_bundle_body"]);
+
+    expect(prepareCount).toBe(1);
+    expect(bundle.layoutHtml).toBe("<main>{{{body_html}}}</main>");
+    expect(bundle.templates.get("render_bundle_body")?.content).toBe("Bundle body");
+    expect(bundle.partials).toEqual({});
   });
 });

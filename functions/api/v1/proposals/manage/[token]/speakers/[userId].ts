@@ -3,7 +3,7 @@ import { parseJsonBody } from "../../../../../../_lib/validation";
 import {
   getProposerManagedSpeakerContext,
   updateProposalSpeakerByProposer,
-} from "../../../../../../_lib/services/proposal-speaker-management";
+} from "../../../../../../_lib/services/proposer-speaker-profile";
 import { proposerSpeakerPatchSchema } from "../../../../../../../assets/shared/schemas/proposal-management";
 import { requireInternalSecret } from "../../../../../../_lib/request";
 

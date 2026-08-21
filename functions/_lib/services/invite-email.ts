@@ -54,7 +54,6 @@ export function buildInviteEmailQueueRow(payload: {
       isReminder: true,
       reminderCount: payload.reminderCount,
       daysUntilExpiry: payload.daysUntilExpiry ?? "",
-      __subjectOverride: payload.subject,
     },
   };
 }

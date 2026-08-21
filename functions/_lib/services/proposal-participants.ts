@@ -8,6 +8,10 @@ function participantRoleForProposalRole(role: string): { role: string; subrole: 
   return { role: "speaker", subrole: role };
 }
 
+export function proposalParticipantStatus(proposalStatus: string, speakerStatus: string): "active" | "inactive" {
+  return proposalStatus === "accepted" && speakerStatus !== "declined" ? "active" : "inactive";
+}
+
 export function prepareUpsertProposalParticipant(
   db: DatabaseLike,
   payload: {

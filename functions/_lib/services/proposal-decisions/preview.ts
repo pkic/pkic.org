@@ -1,9 +1,13 @@
 import type { ProposalDecisionPreviewResponse } from "../../../../assets/shared/schemas/admin-event-proposals";
 import type { ProposalDecisionStatus } from "../../../../assets/shared/schemas/proposal-status";
 import type { EmailContentType } from "../../../../assets/shared/schemas/admin-email-templates";
-import { loadEmailLayout, loadEmailPartials } from "../../email/partials";
+import {
+  EMAIL_LAYOUT_TEMPLATE_KEY,
+  EMAIL_PARTIAL_TEMPLATE_KEYS,
+  emailPartialsFromResolutions,
+} from "../../email/partials";
 import { renderEmail, renderSubject } from "../../email/render";
-import { resolveTemplate } from "../../email/templates";
+import { resolveTemplateSet } from "../../email/templates";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 import { buildProposalDecisionEmailPlan } from "./email-plan";
 
@@ -19,31 +23,19 @@ export async function previewProposalDecisionEmails(
   options: Parameters<typeof buildProposalDecisionEmailPlan>[2],
 ): Promise<ProposalDecisionPreviewResponse> {
   const plan = await buildProposalDecisionEmailPlan(db, input, options);
-  let layoutMissing = false;
-  const [layoutHtml, partials] = await Promise.all([
-    loadEmailLayout(db).catch(() => {
-      layoutMissing = true;
-      return "";
-    }),
-    loadEmailPartials(db).catch(() => ({}) as Record<string, string>),
+  const resolutions = await resolveTemplateSet(db, [
+    EMAIL_LAYOUT_TEMPLATE_KEY,
+    ...EMAIL_PARTIAL_TEMPLATE_KEYS,
+    ...plan.messages.map((message) => message.templateKey),
   ]);
+  const layoutResolution = resolutions.get(EMAIL_LAYOUT_TEMPLATE_KEY);
+  const layoutMissing = !layoutResolution?.ok;
+  const layoutHtml = layoutResolution?.ok ? layoutResolution.template.content : "";
+  const partials = emailPartialsFromResolutions(resolutions);
   const messages = await Promise.all(
     plan.messages.map(async (message) => {
-      try {
-        const template = await resolveTemplate(db, message.templateKey);
-        const data = { ...message.data, _partials: partials };
-        const subject = renderSubject(template.subjectTemplate, message.fallbackSubject, data);
-        const rendered = await renderEmail(
-          template.content,
-          data,
-          layoutHtml,
-          template.contentType as EmailContentType,
-          options.appBaseUrl,
-        );
-        return { ...message, subject, html: rendered.html, text: rendered.text, templateMissing: false as const };
-      } catch (error: unknown) {
-        const code = (error as { code?: string }).code;
-        if (code !== "EMAIL_TEMPLATE_NOT_FOUND" && code !== "EMAIL_TEMPLATE_MISSING_BODY") throw error;
+      const resolution = resolutions.get(message.templateKey);
+      if (!resolution?.ok) {
         return {
           ...message,
           subject: message.fallbackSubject,
@@ -52,6 +44,17 @@ export async function previewProposalDecisionEmails(
           templateMissing: true as const,
         };
       }
+      const template = resolution.template;
+      const data = { ...message.data, _partials: partials };
+      const subject = renderSubject(template.subjectTemplate, message.fallbackSubject, data);
+      const rendered = await renderEmail(
+        template.content,
+        data,
+        layoutHtml,
+        template.contentType as EmailContentType,
+        options.appBaseUrl,
+      );
+      return { ...message, subject, html: rendered.html, text: rendered.text, templateMissing: false as const };
     }),
   );
 

@@ -8,15 +8,21 @@ import type { EmailContentType, EmailMessageType } from "../../../assets/shared/
 
 const TEMPLATE_CACHE_TTL_MS = 60_000;
 
+export interface ResolvedEmailTemplate {
+  version: number;
+  content: string;
+  contentType: string;
+  subjectTemplate: string | null;
+  messageType: EmailMessageType;
+}
+
+export type EmailTemplateResolution =
+  | { ok: true; template: ResolvedEmailTemplate }
+  | { ok: false; code: "EMAIL_TEMPLATE_NOT_FOUND" | "EMAIL_TEMPLATE_MISSING_BODY"; message: string };
+
 interface CachedTemplateResolution {
   expiresAt: number;
-  value: {
-    version: number;
-    content: string;
-    contentType: string;
-    subjectTemplate: string | null;
-    messageType: EmailMessageType;
-  } | null;
+  value: ResolvedEmailTemplate | null;
 }
 
 const activeTemplateCache = new Map<string, CachedTemplateResolution>();
@@ -155,57 +161,111 @@ export async function activateTemplateVersion(
   invalidateTemplateCache(payload.templateKey);
 }
 
-export async function resolveTemplate(
+export async function resolveTemplateSet(
   db: DatabaseLike,
-  templateKey: string,
-): Promise<{
-  version: number;
-  content: string;
-  contentType: string;
-  subjectTemplate: string | null;
-  messageType: EmailMessageType;
-}> {
-  const cached = activeTemplateCache.get(templateKey);
-  if (cached && cached.expiresAt > Date.now()) {
-    if (cached.value) {
-      return cached.value;
+  requestedTemplateKeys: readonly string[],
+): Promise<Map<string, EmailTemplateResolution>> {
+  const templateKeys = [...new Set(requestedTemplateKeys)];
+  const resolutions = new Map<string, EmailTemplateResolution>();
+  const unresolvedKeys: string[] = [];
+  const now = Date.now();
+
+  for (const templateKey of templateKeys) {
+    const cached = activeTemplateCache.get(templateKey);
+    if (!cached || cached.expiresAt <= now) {
+      unresolvedKeys.push(templateKey);
+    } else if (cached.value) {
+      resolutions.set(templateKey, { ok: true, template: cached.value });
+    } else {
+      resolutions.set(templateKey, {
+        ok: false,
+        code: "EMAIL_TEMPLATE_NOT_FOUND",
+        message: `No template configured for key '${templateKey}'`,
+      });
     }
-
-    throw new AppError(404, "EMAIL_TEMPLATE_NOT_FOUND", `No template configured for key '${templateKey}'`);
   }
 
-  const active = await first<TemplateVersionRow>(
-    db,
-    `SELECT * FROM email_template_versions
-     WHERE template_key = ? AND status = 'active'
-     ORDER BY version DESC LIMIT 1`,
-    [templateKey],
-  );
-
-  if (!active) {
-    throw new AppError(404, "EMAIL_TEMPLATE_NOT_FOUND", `No template configured for key '${templateKey}'`);
-  }
-
-  if (!active.body) {
-    throw new AppError(
-      500,
-      "EMAIL_TEMPLATE_MISSING_BODY",
-      `Template '${templateKey}' v${active.version} has no body content`,
+  if (unresolvedKeys.length > 0) {
+    const activeRows = await all<TemplateVersionRow>(
+      db,
+      `WITH requested AS (
+         SELECT CAST(value AS TEXT) AS template_key FROM json_each(?)
+       ),
+       ranked AS (
+         SELECT etv.*,
+                ROW_NUMBER() OVER (PARTITION BY etv.template_key ORDER BY etv.version DESC) AS active_rank
+         FROM email_template_versions etv
+         JOIN requested r ON r.template_key = etv.template_key
+         WHERE etv.status = 'active'
+       )
+       SELECT id, template_key, version, subject_template, body, content_type, message_type,
+              r2_object_key, checksum_sha256, status, created_by_user_id, created_at
+       FROM ranked WHERE active_rank = 1`,
+      [JSON.stringify(unresolvedKeys)],
     );
+    const activeByKey = new Map(activeRows.map((row) => [row.template_key, row]));
+
+    for (const templateKey of unresolvedKeys) {
+      const active = activeByKey.get(templateKey);
+      if (!active) {
+        activeTemplateCache.set(templateKey, { expiresAt: now + TEMPLATE_CACHE_TTL_MS, value: null });
+        resolutions.set(templateKey, {
+          ok: false,
+          code: "EMAIL_TEMPLATE_NOT_FOUND",
+          message: `No template configured for key '${templateKey}'`,
+        });
+      } else if (!active.body) {
+        resolutions.set(templateKey, {
+          ok: false,
+          code: "EMAIL_TEMPLATE_MISSING_BODY",
+          message: `Template '${templateKey}' v${active.version} has no body content`,
+        });
+      } else {
+        const template: ResolvedEmailTemplate = {
+          version: active.version,
+          content: active.body,
+          contentType: active.content_type ?? "markdown",
+          subjectTemplate: active.subject_template,
+          messageType: active.message_type ?? "transactional",
+        };
+        activeTemplateCache.set(templateKey, { expiresAt: now + TEMPLATE_CACHE_TTL_MS, value: template });
+        resolutions.set(templateKey, { ok: true, template });
+      }
+    }
   }
 
-  const resolved = {
-    version: active.version,
-    content: active.body,
-    contentType: active.content_type ?? "markdown",
-    subjectTemplate: active.subject_template,
-    messageType: active.message_type ?? "transactional",
-  };
+  return resolutions;
+}
 
-  activeTemplateCache.set(templateKey, {
-    expiresAt: Date.now() + TEMPLATE_CACHE_TTL_MS,
-    value: resolved,
-  });
+export async function resolveTemplates(
+  db: DatabaseLike,
+  templateKeys: readonly string[],
+): Promise<Map<string, ResolvedEmailTemplate>> {
+  const resolutions = await resolveTemplateSet(db, templateKeys);
+  return requireResolvedTemplates(resolutions, templateKeys);
+}
 
-  return resolved;
+export function requireResolvedTemplates(
+  resolutions: ReadonlyMap<string, EmailTemplateResolution>,
+  templateKeys: readonly string[],
+): Map<string, ResolvedEmailTemplate> {
+  const templates = new Map<string, ResolvedEmailTemplate>();
+  for (const templateKey of new Set(templateKeys)) {
+    const resolution = resolutions.get(templateKey);
+    if (!resolution || !resolution.ok) {
+      const code = resolution?.code ?? "EMAIL_TEMPLATE_NOT_FOUND";
+      throw new AppError(
+        code === "EMAIL_TEMPLATE_NOT_FOUND" ? 404 : 500,
+        code,
+        resolution?.message ?? "Template missing",
+      );
+    }
+    templates.set(templateKey, resolution.template);
+  }
+  return templates;
+}
+
+export async function resolveTemplate(db: DatabaseLike, templateKey: string): Promise<ResolvedEmailTemplate> {
+  const templates = await resolveTemplates(db, [templateKey]);
+  return templates.get(templateKey)!;
 }

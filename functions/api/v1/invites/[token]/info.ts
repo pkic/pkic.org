@@ -1,9 +1,7 @@
 import { json } from "../../../../_lib/http";
-import { resolveAppBaseUrl } from "../../../../_lib/config";
 import { getInviteInviterSummary } from "../../../../_lib/services/invites";
 import { proposalPageUrl, registrationPageUrl } from "../../../../_lib/services/frontend-links";
-import { resolvePublicInvite } from "../../../../_lib/services/invite-public-info";
-import { requireInternalSecret } from "../../../../_lib/request";
+import { loadPublicInviteView } from "../../../../_lib/routes/public-invite-view";
 import { inviteCapabilityQuerySchema, inviteInfoRouteSchema } from "../../../../../assets/shared/schemas/invites";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import type { AdminContext } from "../../../../_lib/db/context";
@@ -20,13 +18,11 @@ import type { AdminContext } from "../../../../_lib/db/context";
  * Only first/last names are returned – no email addresses or internal IDs.
  */
 async function getInviteInfo(c: AdminContext, token: string, inviteId?: string): Promise<Response> {
-  c.set?.("sensitive", true);
-  const resolved = await resolvePublicInvite(c.env.DB, requireInternalSecret(c.env), token, inviteId);
-  if (resolved.status !== "valid") return json({ status: resolved.status });
-  const { invite, event } = resolved;
+  const resolved = await loadPublicInviteView(c, token, inviteId);
+  if (resolved instanceof Response) return resolved;
+  const { invite, event, appBaseUrl } = resolved;
 
   // Valid invite — build URLs and social-proof inviter list.
-  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const registrationUrl =
     invite.invite_type === "attendee"
       ? registrationPageUrl(appBaseUrl, event, { invite: token, inviteId: invite.id, source: "invite" })
@@ -49,10 +45,7 @@ async function getInviteInfo(c: AdminContext, token: string, inviteId?: string):
   }));
 
   return json({
-    status: "valid",
-    eventName: event.name,
-    inviteeFirstName: invite.invitee_first_name ?? null,
-    inviteType: invite.invite_type,
+    ...resolved.summary,
     registrationUrl,
     proposalUrl,
     inviters,

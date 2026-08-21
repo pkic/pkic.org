@@ -1,17 +1,6 @@
-import { json } from "../../../../../_lib/http";
-import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
-import { resolveAppBaseUrl } from "../../../../../_lib/config";
-import { sendAdminProposalSpeakerReminders } from "../../../../../_lib/services/proposal-reminders";
-import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import type { AdminContext } from "../../../../../_lib/db/context";
+import { sendAdminProposalReminder } from "../../../../../_lib/routes/admin-proposal-reminders";
 
 export async function onRequestPost(c: AdminContext): Promise<Response> {
-  const db = requestDb(c);
-  const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
-  const result = await sendAdminProposalSpeakerReminders(db, {
-    proposalId: c.req.param("proposalId"),
-    kind: "profile",
-    actorUserId: admin.id,
-    appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
-  });
-  return json({ success: true, queued: result.outboxIds.length });
+  return sendAdminProposalReminder(c, "profile");
 }

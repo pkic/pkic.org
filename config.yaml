@@ -159,6 +159,15 @@ markup:
 module:
   imports:
     - path: github.com/gohugoio/hugo-mod-bootstrap-scss/v5
+  # ignoreFiles does not apply to static files, so filter macOS metadata here.
+  mounts:
+    - source: static
+      target: static
+      files:
+        - "! ._*"
+        - "! **/._*"
+        - "! .AppleDouble/**"
+        - "! **/.AppleDouble/**"
 
 outputFormats:
   rss:

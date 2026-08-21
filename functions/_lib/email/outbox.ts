@@ -7,7 +7,7 @@ import { logError } from "../logging";
 import { resolveAppBaseUrl } from "../config";
 import { resolveTemplate } from "./templates";
 import { renderEmail, renderSubject } from "./render";
-import { loadEmailLayout, loadEmailPartials } from "./partials";
+import { loadEmailRenderResources } from "./partials";
 import { sendViaSendgrid } from "./sendgrid";
 import { applyCampaignCustomText } from "./campaign-custom";
 import { parseQueuedEmailAttachments } from "./attachments";
@@ -68,9 +68,7 @@ function loadRenderResources(
   db: DatabaseLike,
   context: OutboxProcessingContext,
 ): Promise<{ partials: Record<string, string>; layoutHtml: string }> {
-  context.renderResources ??= Promise.all([loadEmailPartials(db), loadEmailLayout(db)]).then(
-    ([partials, layoutHtml]) => ({ partials, layoutHtml }),
-  );
+  context.renderResources ??= loadEmailRenderResources(db);
   return context.renderResources;
 }
 

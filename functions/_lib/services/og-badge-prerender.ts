@@ -5,12 +5,13 @@
  * isolate) and exposes:
  *
  *   generateBadgePng      — fetch data + render SVG → PNG bytes
- *   prerenderAndCache     — generateBadgePng + write to R2 (silent on error)
+ *   renderAndCacheBadge   — generateBadgePng + write to R2 (throws on error)
+ *   prerenderAndCache     — background-safe wrapper around renderAndCacheBadge
  *   invalidateAndRerender — overwrite R2 for every badge owned by a user
  *   trySeedGravatarThenPrerender — try Gravatar on first-time users, then prerender
  *
- * All exported functions are safe to call via context.waitUntil() — they
- * swallow errors so a badge failure never breaks the primary request flow.
+ * Background helpers are safe to call via context.waitUntil(). Durable job
+ * processors use renderAndCacheBadge so failures remain observable/retryable.
  */
 
 import { renderBadgeSvg, renderDonationBadgeSvg, type BadgeRole } from "./og-badge";
@@ -385,7 +386,7 @@ async function pngToR2(
   customMetadata: Record<string, string>,
   env: Pick<Env, "ASSETS_BUCKET" | "IMAGES">,
 ): Promise<void> {
-  if (!env.ASSETS_BUCKET) return;
+  if (!env.ASSETS_BUCKET) throw new Error("ASSETS_BUCKET is required to cache an OG badge");
 
   if (env.IMAGES) {
     const pngStream = new ReadableStream<Uint8Array>({
@@ -410,6 +411,16 @@ async function pngToR2(
 }
 
 /**
+ * Render and atomically overwrite one cached badge. The previous R2 object is
+ * left in place until the replacement bytes have been generated successfully.
+ */
+export async function renderAndCacheBadge(code: string, env: BadgeCacheEnv, origin: string): Promise<void> {
+  const png = await generateBadgePng(code, env, origin);
+  if (!png) throw new Error(`Badge source not found for referral code ${code}`);
+  await pngToR2(png, `${R2_KEY_PREFIX}${code}`, { referralCode: code }, env);
+}
+
+/**
  * Generate the badge PNG, convert it to JPEG via the Cloudflare Images binding,
  * and store the JPEG at og-badges/{code}. Silently swallows errors so it is
  * always safe to call via context.waitUntil().
@@ -419,9 +430,7 @@ async function pngToR2(
  */
 export async function prerenderAndCache(code: string, env: BadgeCacheEnv, origin: string): Promise<void> {
   try {
-    const png = await generateBadgePng(code, env, origin);
-    if (!png || !env.ASSETS_BUCKET) return;
-    await pngToR2(png, `${R2_KEY_PREFIX}${code}`, { referralCode: code }, env);
+    await renderAndCacheBadge(code, env, origin);
   } catch {
     /* silent — badge pre-render must never break the primary flow */
   }

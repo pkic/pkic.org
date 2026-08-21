@@ -15,6 +15,20 @@ export type ResolvedPublicInvite =
   | { status: "already_processed" | "expired" | "invalid" }
   | { status: "valid"; invite: PublicInviteRecord; event: EventRecord };
 
+export type PublicInviteView =
+  | Exclude<ResolvedPublicInvite, { status: "valid" }>
+  | {
+      status: "valid";
+      invite: PublicInviteRecord;
+      event: EventRecord;
+      summary: {
+        status: "valid";
+        eventName: string;
+        inviteeFirstName: string | null;
+        inviteType: PublicInviteRecord["invite_type"];
+      };
+    };
+
 /** Shared capability and lifecycle resolution for every public invite-info view. */
 export async function resolvePublicInvite(
   db: DatabaseLike,
@@ -37,4 +51,23 @@ export async function resolvePublicInvite(
   if (invite.status === "declined" || invite.status === "accepted") return { status: "already_processed" };
   if (invite.status === "expired" || invite.status === "revoked") return { status: "expired" };
   return { status: "valid", invite, event: await getEventById(db, invite.event_id) };
+}
+
+export async function resolvePublicInviteView(
+  db: DatabaseLike,
+  signingSecret: string,
+  token: string,
+  inviteId?: string,
+): Promise<PublicInviteView> {
+  const resolved = await resolvePublicInvite(db, signingSecret, token, inviteId);
+  if (resolved.status !== "valid") return resolved;
+  return {
+    ...resolved,
+    summary: {
+      status: "valid",
+      eventName: resolved.event.name,
+      inviteeFirstName: resolved.invite.invitee_first_name ?? null,
+      inviteType: resolved.invite.invite_type,
+    },
+  };
 }

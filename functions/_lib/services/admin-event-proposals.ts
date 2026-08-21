@@ -9,30 +9,45 @@ import { PROPOSAL_INACTIVE_STATUSES } from "../../../assets/shared/schemas/propo
 
 type ProposalSort = NonNullable<z.infer<typeof adminEventProposalsQuerySchema>["sort"]>;
 
-const ORDER_BY: Record<ProposalSort, string> = {
-  submitted_desc: "sp.submitted_at DESC",
-  submitted_asc: "sp.submitted_at ASC",
-  score_desc: "rv.average_review_score IS NULL ASC, rv.average_review_score DESC, sp.submitted_at DESC",
-  score_asc: "rv.average_review_score IS NULL ASC, rv.average_review_score ASC, sp.submitted_at DESC",
-  reviews_desc: "COALESCE(rv.review_count, 0) DESC, sp.submitted_at DESC",
-  reviews_asc: "COALESCE(rv.review_count, 0) ASC, sp.submitted_at DESC",
-  title_desc: "LOWER(sp.title) DESC, sp.submitted_at DESC",
-  title_asc: "LOWER(sp.title) ASC, sp.submitted_at DESC",
-  proposer_desc:
-    "LOWER(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '') || ' ' || u.email) DESC, sp.submitted_at DESC",
-  proposer_asc:
-    "LOWER(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '') || ' ' || u.email) ASC, sp.submitted_at DESC",
-  type_desc: "LOWER(sp.proposal_type) DESC, sp.submitted_at DESC",
-  type_asc: "LOWER(sp.proposal_type) ASC, sp.submitted_at DESC",
-  status_desc: "LOWER(sp.status) DESC, sp.submitted_at DESC",
-  status_asc: "LOWER(sp.status) ASC, sp.submitted_at DESC",
-  decision_desc: "LOWER(COALESCE(pd.final_status, '')) DESC, sp.submitted_at DESC",
-  decision_asc: "LOWER(COALESCE(pd.final_status, '')) ASC, sp.submitted_at DESC",
-  recommendations_desc:
-    "(COALESCE(rv.accept_count, 0) - COALESCE(rv.reject_count, 0)) DESC, COALESCE(rv.needs_work_count, 0) DESC, sp.submitted_at DESC",
-  recommendations_asc:
-    "(COALESCE(rv.accept_count, 0) - COALESCE(rv.reject_count, 0)) ASC, COALESCE(rv.needs_work_count, 0) ASC, sp.submitted_at DESC",
+const SORT_EXPRESSIONS: Readonly<Record<string, string>> = {
+  submittedAt: "sp.submitted_at",
+  score: "rv.average_review_score",
+  reviews: "COALESCE(rv.review_count, 0)",
+  title: "LOWER(sp.title)",
+  proposer: "LOWER(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '') || ' ' || u.email)",
+  type: "LOWER(sp.proposal_type)",
+  status: "LOWER(sp.status)",
+  decision: "LOWER(COALESCE(pd.final_status, ''))",
+  recommendations: "(COALESCE(rv.accept_count, 0) - COALESCE(rv.reject_count, 0))",
 };
+
+function proposalOrderBy(sort: ProposalSort): string {
+  const descending = sort.startsWith("-");
+  const key = descending ? sort.slice(1) : sort;
+  const expression = SORT_EXPRESSIONS[key] ?? SORT_EXPRESSIONS.submittedAt;
+  const direction = descending ? "DESC" : "ASC";
+  const nullsLast = key === "score" ? "rv.average_review_score IS NULL ASC, " : "";
+  const recommendationTie = key === "recommendations" ? `, COALESCE(rv.needs_work_count, 0) ${direction}` : "";
+  return `${nullsLast}${expression} ${direction}${recommendationTie}, sp.submitted_at DESC, sp.id ASC`;
+}
+
+interface ProposalStatsRow {
+  by_status_json: string;
+  by_recommendation_json: string;
+  reviewed_count: number;
+  total: number;
+}
+
+function parseCountRecord(value: string): Record<string, number> {
+  const parsed: unknown = JSON.parse(value);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+  return Object.fromEntries(
+    Object.entries(parsed).flatMap(([key, count]) => {
+      const numericCount = Number(count);
+      return Number.isFinite(numericCount) && numericCount >= 0 ? [[key, numericCount]] : [];
+    }),
+  );
+}
 
 export async function listAdminEventProposals(
   db: DatabaseLike,
@@ -98,7 +113,9 @@ export async function listAdminEventProposals(
 
   const where = conditions.join(" AND ");
   const deletedScope = query.deleted === "1" ? "sp.deleted_at IS NOT NULL" : "sp.deleted_at IS NULL";
-  const [rowsResult, totalResult, statusResult, recommendationResult, reviewedResult] = await db.batch([
+  const reviewDeletedScope =
+    query.deleted === "1" ? "review_sp.deleted_at IS NOT NULL" : "review_sp.deleted_at IS NULL";
+  const [rowsResult, totalResult, statsResult] = await db.batch([
     db
       .prepare(
         `SELECT sp.id, sp.event_id, sp.proposer_user_id, sp.status, sp.proposal_type, sp.title, sp.abstract,
@@ -114,18 +131,21 @@ export async function listAdminEventProposals(
          FROM session_proposals sp
          JOIN users u ON u.id = sp.proposer_user_id
          LEFT JOIN (
-           SELECT proposal_id, review_round, COUNT(*) AS review_count, AVG(score) AS average_review_score,
+           SELECT pr.proposal_id, pr.review_round, COUNT(*) AS review_count, AVG(pr.score) AS average_review_score,
                   SUM(CASE WHEN recommendation = 'accept' THEN 1 ELSE 0 END) AS accept_count,
                   SUM(CASE WHEN recommendation = 'needs-work' THEN 1 ELSE 0 END) AS needs_work_count,
                   SUM(CASE WHEN recommendation = 'reject' THEN 1 ELSE 0 END) AS reject_count
-           FROM proposal_reviews GROUP BY proposal_id, review_round
+           FROM proposal_reviews pr
+           JOIN session_proposals review_sp ON review_sp.id = pr.proposal_id
+           WHERE review_sp.event_id = ? AND ${reviewDeletedScope} AND pr.review_round = review_sp.review_round
+           GROUP BY pr.proposal_id, pr.review_round
          ) rv ON rv.proposal_id = sp.id AND rv.review_round = sp.review_round
          LEFT JOIN proposal_decisions pd ON pd.proposal_id = sp.id
          WHERE ${where}
-         ORDER BY ${ORDER_BY[query.sort]}, sp.id ASC
+         ORDER BY ${proposalOrderBy(query.sort)}
          LIMIT ? OFFSET ?`,
       )
-      .bind(...bindings, query.limit, query.offset),
+      .bind(query.eventId, ...bindings, query.limit, query.offset),
     db
       .prepare(
         `SELECT COUNT(*) AS total
@@ -135,43 +155,42 @@ export async function listAdminEventProposals(
       .bind(...bindings),
     db
       .prepare(
-        `SELECT status, COUNT(*) AS count
-         FROM session_proposals sp
-         WHERE sp.event_id = ? AND ${deletedScope}
-         GROUP BY status`,
-      )
-      .bind(query.eventId),
-    db
-      .prepare(
-        `SELECT pr.recommendation, COUNT(*) AS count
-         FROM proposal_reviews pr JOIN session_proposals sp ON sp.id = pr.proposal_id
-         WHERE sp.event_id = ? AND ${deletedScope} AND pr.review_round = sp.review_round
-         GROUP BY pr.recommendation`,
-      )
-      .bind(query.eventId),
-    db
-      .prepare(
-        `SELECT COUNT(DISTINCT sp.id) AS reviewed_count
-         FROM session_proposals sp JOIN proposal_reviews pr
-           ON pr.proposal_id = sp.id AND pr.review_round = sp.review_round
-         WHERE sp.event_id = ? AND ${deletedScope}`,
+        `WITH scoped_proposals AS MATERIALIZED (
+           SELECT sp.id, sp.status, sp.review_round
+           FROM session_proposals sp
+           WHERE sp.event_id = ? AND ${deletedScope}
+         ),
+         current_reviews AS MATERIALIZED (
+           SELECT pr.proposal_id, pr.recommendation
+           FROM scoped_proposals sp
+           CROSS JOIN proposal_reviews pr INDEXED BY idx_proposal_reviews_proposal_round
+           WHERE pr.proposal_id = sp.id AND pr.review_round = sp.review_round
+         ),
+         status_counts AS (
+           SELECT status, COUNT(*) AS count FROM scoped_proposals GROUP BY status
+         ),
+         recommendation_counts AS (
+           SELECT recommendation, COUNT(*) AS count FROM current_reviews GROUP BY recommendation
+         )
+         SELECT
+           COALESCE((SELECT json_group_object(status, count) FROM status_counts), '{}') AS by_status_json,
+           COALESCE(
+             (SELECT json_group_object(recommendation, count) FROM recommendation_counts),
+             '{}'
+           ) AS by_recommendation_json,
+           (SELECT COUNT(DISTINCT proposal_id) FROM current_reviews) AS reviewed_count,
+           (SELECT COUNT(*) FROM scoped_proposals) AS total`,
       )
       .bind(query.eventId),
   ]);
 
   const proposals = batchRows<AdminEventProposalSummary>(rowsResult);
   const total = Number(batchFirst<{ total: number }>(totalResult)?.total ?? 0);
-  const byStatus = Object.fromEntries(
-    batchRows<{ status: string; count: number }>(statusResult).map((row) => [row.status, Number(row.count)]),
-  );
-  const byRecommendation = Object.fromEntries(
-    batchRows<{ recommendation: string; count: number }>(recommendationResult).map((row) => [
-      row.recommendation,
-      Number(row.count),
-    ]),
-  );
-  const statsTotal = Object.values(byStatus).reduce((sum, count) => sum + count, 0);
-  const reviewedCount = Number(batchFirst<{ reviewed_count: number }>(reviewedResult)?.reviewed_count ?? 0);
+  const statsRow = batchFirst<ProposalStatsRow>(statsResult);
+  const byStatus = parseCountRecord(statsRow?.by_status_json ?? "{}");
+  const byRecommendation = parseCountRecord(statsRow?.by_recommendation_json ?? "{}");
+  const statsTotal = Number(statsRow?.total ?? 0);
+  const reviewedCount = Number(statsRow?.reviewed_count ?? 0);
 
   return {
     proposals,

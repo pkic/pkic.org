@@ -19,7 +19,7 @@ import { onRequestPost as previewSpeakerInvites } from "../functions/api/v1/admi
 import { onRequestPost as adminRemindSpeaker } from "../functions/api/v1/admin/proposals/[proposalId]/speakers/[userId]/remind";
 import { onRequestPost as submitProposal } from "../functions/api/v1/events/[eventSlug]/proposals";
 import { addProposalSpeaker, getProposalByManageToken } from "../functions/_lib/services/proposals";
-import { inviteProposalSpeaker } from "../functions/_lib/services/proposal-speaker-management";
+import { inviteProposalSpeaker } from "../functions/_lib/services/proposal-speaker-invitations";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { onRequestGet as speakerGet } from "../functions/api/v1/proposals/speaker/[token]";
 import { onRequestPost as speakerPost } from "../functions/api/v1/proposals/speaker/[token]";

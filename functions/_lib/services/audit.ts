@@ -104,6 +104,33 @@ export function prepareAuditLog(
 }
 
 /**
+ * Builds an audit INSERT that also turns a lost compare-and-set into a real
+ * SQL failure. `audit_log.action` is NOT NULL, so a preceding statement that
+ * changed anything other than one row aborts the surrounding D1 batch and
+ * rolls every statement back instead of allowing partial fallout to commit.
+ * Keep this immediately after the guarded write because SQLite's `changes()`
+ * reports the most recently executed statement.
+ */
+export function prepareAuditLogAfterOneChange(
+  db: DatabaseLike,
+  actorType: string,
+  actorId: string | null,
+  action: string,
+  entityType: string,
+  entityId: string | null,
+  details: unknown,
+  createdAt = nowIso(),
+): StatementLike {
+  return db
+    .prepare(
+      `INSERT INTO audit_log (
+        id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at
+      ) VALUES (?, ?, ?, CASE WHEN changes() = 1 THEN ? ELSE NULL END, ?, ?, ?, ?)`,
+    )
+    .bind(uuid(), actorType, actorId, action, entityType, entityId, serializeAuditDetails(details), createdAt);
+}
+
+/**
  * Builds an audit INSERT guarded by a static caller-owned EXISTS predicate.
  * This lets compare-and-set command batches avoid recording a losing write.
  * The SQL fragment must be a fixed internal string; values remain bound.

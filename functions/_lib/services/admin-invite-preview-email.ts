@@ -1,7 +1,6 @@
 import { AppError } from "../errors";
 import { renderEmail, renderSubject } from "../email/render";
-import { loadEmailLayout } from "../email/partials";
-import { resolveTemplate } from "../email/templates";
+import { loadEmailRenderBundle } from "../email/partials";
 import { buildEventEmailVariables, type EventRecord } from "./events";
 import { inviteDeclineUrl, proposalPageUrl, registrationPageUrl } from "./frontend-links";
 import {
@@ -48,11 +47,11 @@ export async function buildAdminInvitePreview(params: {
           source: "speaker_invite",
         });
   const declineUrl = inviteDeclineUrl(params.appBaseUrl, params.event, "preview-token");
-  const [template, layoutHtml, digest] = await Promise.all([
-    resolveTemplate(params.db, templateKey),
-    loadEmailLayout(params.db),
+  const [renderBundle, digest] = await Promise.all([
+    loadEmailRenderBundle(params.db, [templateKey]),
     computeAdminInviteDigest(params.invites),
   ]);
+  const template = renderBundle.templates.get(templateKey)!;
   const preview = await signAdminInvitePreviewToken({
     secret: params.signingSecret,
     eventId: params.event.id,
@@ -69,12 +68,13 @@ export async function buildAdminInvitePreview(params: {
     ...(params.inviteType === "attendee" ? { registrationUrl: primaryUrl } : { proposalUrl: primaryUrl }),
     declineUrl,
     inviteCount: params.invites.length,
+    _partials: renderBundle.partials,
   };
   const subject = renderSubject(template.subjectTemplate, defaultSubject, data);
   const rendered = await renderEmail(
     template.content,
     data,
-    layoutHtml,
+    renderBundle.layoutHtml,
     template.contentType as EmailContentType,
     params.appBaseUrl,
   );
