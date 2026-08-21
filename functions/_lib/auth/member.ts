@@ -26,6 +26,7 @@ import { normalizeEmail } from "../validation";
 import { signJwt, verifyJwt, type JwtVerifyResult } from "../utils/jwt";
 import type { AuthMember, EligibleMembership, DatabaseLike, Env } from "../types";
 import {
+  AUTH_MAGIC_LINK_PURPOSES,
   getBearerToken,
   getSessionCookieToken,
   serializeSessionCookie,
@@ -119,7 +120,11 @@ export const MEMBER_SESSION_COOKIE_NAME = "pkic_member_session";
 export const MEMBER_SESSION_COOKIE_PATH = "/api/v1";
 
 const SESSIONS_TABLE: SessionTableConfig = { table: "sessions", subjectColumn: "user_id" };
-const MAGIC_LINKS_TABLE: MagicLinkTableConfig = { table: "auth_magic_links", subjectColumn: "user_id" };
+const MAGIC_LINKS_TABLE: MagicLinkTableConfig = {
+  table: "auth_magic_links",
+  subjectColumn: "user_id",
+  purpose: AUTH_MAGIC_LINK_PURPOSES.member,
+};
 
 const memberByRequest = new WeakMap<Request, AuthMember>();
 

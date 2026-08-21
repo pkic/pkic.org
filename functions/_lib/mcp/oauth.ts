@@ -13,6 +13,7 @@ import {
   verifyAdminMagicLink,
   verifyAdminSessionToken,
 } from "../auth/admin";
+import { AUTH_MAGIC_LINK_PURPOSES, isSecureRequest, parseCookieHeader } from "../auth/session-engine";
 import { first, run } from "../db/queries";
 import { AUTH_SCOPES, grantableScopesForActor, type AuthScope } from "../auth/scopes";
 import { getConfig, resolveAppBaseUrl } from "../config";
@@ -60,25 +61,6 @@ function jsonResponse(data: unknown, status = 200): Response {
   });
 }
 
-function parseCookieHeader(cookieHeader: string): Map<string, string> {
-  const values = new Map<string, string>();
-  for (const part of cookieHeader.split(";")) {
-    const trimmed = part.trim();
-    if (!trimmed) continue;
-    const separatorIndex = trimmed.indexOf("=");
-    if (separatorIndex <= 0) continue;
-    const name = trimmed.slice(0, separatorIndex).trim();
-    const value = trimmed.slice(separatorIndex + 1).trim();
-    if (!name) continue;
-    values.set(name, decodeURIComponent(value));
-  }
-  return values;
-}
-
-function isSecureRequest(request: Request): boolean {
-  return new URL(request.url).protocol === "https:";
-}
-
 function getMcpOauthLoginToken(request: Request): string | null {
   const cookieHeader = request.headers.get("cookie") ?? "";
   if (!cookieHeader) return null;
@@ -88,7 +70,14 @@ function getMcpOauthLoginToken(request: Request): string | null {
 async function storeMcpOauthReturnTo(env: Env, magicLinkToken: string, returnTo: string): Promise<void> {
   const tokenHash = await sha256Hex(magicLinkToken);
   const storedReturnTo = sanitizeAuthorizeReturnTo(returnTo);
-  await run(env.DB, "UPDATE auth_magic_links SET return_to = ? WHERE token_hash = ?", [storedReturnTo, tokenHash]);
+  const updated = await run(env.DB, "UPDATE auth_magic_links SET return_to = ? WHERE token_hash = ? AND purpose = ?", [
+    storedReturnTo,
+    tokenHash,
+    AUTH_MAGIC_LINK_PURPOSES.mcpOauth,
+  ]);
+  if (updated.changes !== 1) {
+    throw new AppError(404, "MAGIC_LINK_INVALID", "Invalid MCP OAuth magic link token");
+  }
 }
 
 async function consumeMcpOauthReturnTo(env: Env, magicLinkToken: string): Promise<string> {
@@ -97,8 +86,8 @@ async function consumeMcpOauthReturnTo(env: Env, magicLinkToken: string): Promis
     env.DB,
     `SELECT return_to
      FROM auth_magic_links
-     WHERE token_hash = ?`,
-    [tokenHash],
+     WHERE token_hash = ? AND purpose = ?`,
+    [tokenHash, AUTH_MAGIC_LINK_PURPOSES.mcpOauth],
   );
 
   if (!row?.return_to) {
@@ -338,6 +327,7 @@ export async function sendMcpAuthorizeMagicLink(options: {
     ipHash,
     userAgentHash,
     ttlMinutes: config.magicLinkTtlMinutes,
+    purpose: AUTH_MAGIC_LINK_PURPOSES.mcpOauth,
   });
 
   if (!magic.token || !magic.admin) {
@@ -395,6 +385,7 @@ export async function verifyMcpAuthorizeMagicLink(
     sessionTtlHours: 8,
     ipHash,
     userAgentHash,
+    purpose: AUTH_MAGIC_LINK_PURPOSES.mcpOauth,
   });
 
   const admin: AuthAdmin = {

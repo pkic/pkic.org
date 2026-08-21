@@ -20,6 +20,14 @@
 -- assignments) can declare the FK in its own initial CREATE TABLE — no
 -- rebuild required anywhere in this schema.
 
+-- Admin, member, and MCP OAuth magic links share auth_magic_links. Bind every
+-- newly issued link to one verifier context so a user eligible for multiple
+-- surfaces cannot exchange one flow's token through another. This remains an
+-- open TEXT vocabulary rather than a CHECK constraint so adding another auth
+-- flow never requires rebuilding the table. Existing NULL-purpose links fail
+-- closed in the application and naturally expire.
+ALTER TABLE auth_magic_links ADD COLUMN purpose TEXT;
+
 CREATE TABLE membership_categories (
   code         TEXT NOT NULL PRIMARY KEY,
   is_individual INTEGER NOT NULL DEFAULT 0 CHECK (is_individual IN (0, 1)),

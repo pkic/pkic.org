@@ -7,6 +7,7 @@ import { AUTH_SCOPES } from "./scopes";
 import { computeGrantsForUser } from "./permissions";
 import type { AuthAdmin, DatabaseLike, Env } from "../types";
 import {
+  AUTH_MAGIC_LINK_PURPOSES,
   getBearerToken,
   getSessionCookieToken,
   serializeSessionCookie,
@@ -20,6 +21,7 @@ import {
   validateAndConsumeMagicLinkRow,
   type SessionTableConfig,
   type MagicLinkTableConfig,
+  type AuthMagicLinkPurpose,
 } from "./session-engine";
 
 /**
@@ -84,7 +86,13 @@ export const ADMIN_SESSION_COOKIE_NAME = "pkic_admin_session";
 export const ADMIN_SESSION_COOKIE_PATH = "/api/v1";
 
 const SESSIONS_TABLE: SessionTableConfig = { table: "sessions", subjectColumn: "user_id" };
-const MAGIC_LINKS_TABLE: MagicLinkTableConfig = { table: "auth_magic_links", subjectColumn: "user_id" };
+const MAGIC_LINKS_TABLE = { table: "auth_magic_links", subjectColumn: "user_id" } satisfies MagicLinkTableConfig;
+
+export type AdminMagicLinkPurpose = Extract<AuthMagicLinkPurpose, "admin" | "mcp_oauth">;
+
+function adminMagicLinkTable(purpose: AdminMagicLinkPurpose): MagicLinkTableConfig {
+  return { ...MAGIC_LINKS_TABLE, purpose };
+}
 
 const adminByRequest = new WeakMap<Request, AuthAdmin>();
 const adminAuthTransportByRequest = new WeakMap<Request, AdminAuthTransport>();
@@ -313,6 +321,7 @@ export async function requestAdminMagicLink(
     ipHash?: string | null;
     userAgentHash?: string | null;
     ttlMinutes: number;
+    purpose?: AdminMagicLinkPurpose;
   },
 ): Promise<{ token: string | null; admin: AuthAdmin | null }> {
   const email = normalizeEmail(payload.email);
@@ -326,7 +335,8 @@ export async function requestAdminMagicLink(
     return { token: null, admin: null };
   }
 
-  const token = await insertMagicLinkRow(db, MAGIC_LINKS_TABLE, admin.id, payload);
+  const purpose = payload.purpose ?? AUTH_MAGIC_LINK_PURPOSES.admin;
+  const token = await insertMagicLinkRow(db, adminMagicLinkTable(purpose), admin.id, payload);
 
   return {
     token,
@@ -340,9 +350,16 @@ export async function requestAdminMagicLink(
 
 export async function verifyAdminMagicLink(
   db: DatabaseLike,
-  payload: { token: string; sessionTtlHours: number; ipHash?: string | null; userAgentHash?: string | null },
+  payload: {
+    token: string;
+    sessionTtlHours: number;
+    ipHash?: string | null;
+    userAgentHash?: string | null;
+    purpose?: AdminMagicLinkPurpose;
+  },
 ): Promise<{ admin: AuthAdmin; sessionId: string; expiresAt: string }> {
   const tokenHash = await sha256Hex(payload.token);
+  const purpose = payload.purpose ?? AUTH_MAGIC_LINK_PURPOSES.admin;
   const row = await first<{
     id: string;
     user_id: string;
@@ -357,8 +374,8 @@ export async function verifyAdminMagicLink(
     `SELECT m.id, m.user_id, m.expires_at, m.used_at, m.request_ip_hash, m.user_agent_hash, u.email, u.role
      FROM auth_magic_links m
      JOIN users u ON u.id = m.user_id
-     WHERE m.token_hash = ? AND u.active = 1 AND ${STAFF_ACCESS_CONDITION}`,
-    [tokenHash],
+     WHERE m.token_hash = ? AND m.purpose = ? AND u.active = 1 AND ${STAFF_ACCESS_CONDITION}`,
+    [tokenHash, purpose],
   );
 
   if (!row) {

@@ -189,9 +189,19 @@ export async function revokeSessionRow(db: DatabaseLike, table: string, sessionI
 
 // ── Magic-link rows (`auth_magic_links` for admin/member, `sponsor_portal_magic_links`) ──
 
+export const AUTH_MAGIC_LINK_PURPOSES = {
+  admin: "admin",
+  member: "member",
+  mcpOauth: "mcp_oauth",
+} as const;
+
+export type AuthMagicLinkPurpose = (typeof AUTH_MAGIC_LINK_PURPOSES)[keyof typeof AUTH_MAGIC_LINK_PURPOSES];
+
 export interface MagicLinkTableConfig {
   table: string;
   subjectColumn: string;
+  /** Static verifier context for tables shared by multiple auth surfaces. */
+  purpose?: string;
 }
 
 export async function prepareMagicLinkRow(
@@ -203,18 +213,21 @@ export async function prepareMagicLinkRow(
   const token = randomToken(24);
   const tokenHash = await sha256Hex(token);
   const now = nowIso();
+  const purposeColumn = config.purpose === undefined ? "" : ", purpose";
+  const purposeValue = config.purpose === undefined ? [] : [config.purpose];
   return {
     token,
     statement: db
       .prepare(
         `INSERT INTO ${config.table} (
-          id, ${config.subjectColumn}, token_hash, expires_at, used_at, request_ip_hash, user_agent_hash, created_at
-        ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?)`,
+          id, ${config.subjectColumn}, token_hash${purposeColumn}, expires_at, used_at, request_ip_hash, user_agent_hash, created_at
+        ) VALUES (?, ?, ?${config.purpose === undefined ? "" : ", ?"}, ?, NULL, ?, ?, ?)`,
       )
       .bind(
         uuid(),
         subjectId,
         tokenHash,
+        ...purposeValue,
         addMinutes(now, payload.ttlMinutes),
         payload.ipHash ?? null,
         payload.userAgentHash ?? null,
@@ -251,6 +264,8 @@ export async function fetchMagicLinkRowByToken(
   token: string,
 ): Promise<PlainMagicLinkRow | null> {
   const tokenHash = await sha256Hex(token);
+  const purposeCondition = config.purpose === undefined ? "" : " AND purpose = ?";
+  const bindings = config.purpose === undefined ? [tokenHash] : [tokenHash, config.purpose];
   const row = await first<{
     id: string;
     subject_id: string;
@@ -261,8 +276,8 @@ export async function fetchMagicLinkRowByToken(
   }>(
     db,
     `SELECT id, ${config.subjectColumn} AS subject_id, expires_at, used_at, request_ip_hash, user_agent_hash
-     FROM ${config.table} WHERE token_hash = ?`,
-    [tokenHash],
+     FROM ${config.table} WHERE token_hash = ?${purposeCondition}`,
+    bindings,
   );
   if (!row) return null;
   return {
