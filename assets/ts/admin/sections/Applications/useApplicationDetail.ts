@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { api } from "../../api";
 import { toast } from "../../ui";
-import type { AdminApplicationDetail, AdminWorkingGroupSummary } from "../../types";
+import type { AdminApplicationDetail } from "../../types";
+import type { EcDecisionValue } from "../../../../shared/schemas/ec-review";
+import { adminApplicationDetailSchema } from "../../../../shared/schemas/admin-applications";
+import { getAdminWorkingGroupCatalogue } from "../../services/catalogues";
 
 /**
  * Data + mutation commands for one application's detail view: transition,
@@ -19,8 +22,8 @@ export function useApplicationDetail(applicationId: string) {
     setLoading(true);
     setError(null);
     try {
-      const data = await api<AdminApplicationDetail>(`/api/v1/admin/applications/${applicationId}`);
-      setDetail(data);
+      const data = await api<unknown>(`/api/v1/admin/applications/${applicationId}`);
+      setDetail(adminApplicationDetailSchema.parse(data));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -35,8 +38,8 @@ export function useApplicationDetail(applicationId: string) {
   useEffect(() => {
     // Labels for the working_groups answer (array of slugs) — read from the
     // managed working_groups table instead of a hand-typed slug->name copy.
-    api<{ workingGroups: AdminWorkingGroupSummary[] }>("/api/v1/admin/working-groups")
-      .then((d) => setWorkingGroupLabels(Object.fromEntries(d.workingGroups.map((g) => [g.slug, g.name]))))
+    getAdminWorkingGroupCatalogue()
+      .then((groups) => setWorkingGroupLabels(Object.fromEntries(groups.map((group) => [group.slug, group.name]))))
       .catch(() => setWorkingGroupLabels({}));
   }, []);
 
@@ -83,11 +86,7 @@ export function useApplicationDetail(applicationId: string) {
     }
   }
 
-  async function recordEcDecision(params: {
-    ecMemberUserId: string;
-    decision: "approve" | "decline";
-    reason?: string;
-  }) {
+  async function recordEcDecision(params: { ecMemberUserId: string; decision: EcDecisionValue; reason?: string }) {
     try {
       await api(`/api/v1/admin/applications/${applicationId}/ec-decisions`, {
         method: "POST",

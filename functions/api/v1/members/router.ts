@@ -3,6 +3,7 @@ import { fromHono } from "chanfana";
 import { MembersGet } from "./index";
 import { MembersIdGet } from "./[id]";
 import { MembersIdLogoGet } from "./[id]/logo";
+import { MembersWallGet } from "./wall";
 import applications_Router from "./applications/router";
 
 const app = new Hono();
@@ -10,6 +11,7 @@ export const openapi = fromHono(app);
 
 openapi.route("/applications", applications_Router);
 openapi.get("/", MembersGet);
+openapi.get("/wall", MembersWallGet);
 openapi.get("/:id/logo", MembersIdLogoGet);
 openapi.get("/:id", MembersIdGet);
 

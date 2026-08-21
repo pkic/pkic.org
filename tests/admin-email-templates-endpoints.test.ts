@@ -226,4 +226,33 @@ describe("admin email template endpoints", () => {
     expect(page2Payload.versions[0].version).toBe(1);
     expect(page2Payload.page.hasMore).toBe(false);
   });
+
+  it("searches and sorts template versions in D1 through the shared list contract", async () => {
+    await setupAdminTemplates();
+
+    await callAdmin("/api/v1/admin/email-templates/registration_confirm_email/versions", {
+      method: "POST",
+      body: JSON.stringify({
+        content: "Updated confirmation body",
+        subjectTemplate: "Distinct draft subject",
+        contentType: "markdown",
+      }),
+    });
+
+    const search = await callAdmin(
+      "/api/v1/admin/email-templates/registration_confirm_email/versions?q=distinct&sort=version",
+    );
+    expect(search.status).toBe(200);
+    const payload = (await search.json()) as {
+      versions: Array<{ version: number; subject_template: string | null }>;
+      page: { total: number };
+    };
+    expect(payload.versions).toEqual([
+      expect.objectContaining({ version: 2, subject_template: "Distinct draft subject" }),
+    ]);
+    expect(payload.page.total).toBe(1);
+
+    const invalidSort = await callAdmin("/api/v1/admin/email-templates/registration_confirm_email/versions?sort=body");
+    expect(invalidSort.status).toBe(400);
+  });
 });

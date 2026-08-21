@@ -149,7 +149,7 @@ describe("invite info endpoint", () => {
       .bind(inviterUserId)
       .run();
 
-    const { token } = await createInvite(env.DB, {
+    const { token, invite } = await createInvite(env.DB, {
       eventId,
       inviterUserId,
       inviteeEmail: "invitee@example.test",
@@ -158,6 +158,21 @@ describe("invite info endpoint", () => {
       ttlHours: 48,
       signingSecret: "test-signing-secret",
     });
+
+    for (let index = 0; index < 6; index += 1) {
+      const extraUserId = crypto.randomUUID();
+      await env.DB.batch([
+        env.DB.prepare(
+          `INSERT INTO users (id, email, normalized_email, first_name, last_name, role, active, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 'Inviter', 'user', 1, datetime('now'), datetime('now'))`,
+        ).bind(extraUserId, `inviter-${index}@example.test`, `inviter-${index}@example.test`, `Extra ${index}`),
+        env.DB.prepare(
+          `INSERT INTO invite_inviters
+             (id, invite_id, inviter_user_id, source_type, invited_at)
+           VALUES (?, ?, ?, 'test', ?)`,
+        ).bind(crypto.randomUUID(), invite.id, extraUserId, new Date(Date.now() + (index + 1) * 1_000).toISOString()),
+      ]);
+    }
 
     const response = await inviteInfo(
       createContext(env, new Request(`https://app.test/api/v1/invites/${token}/info`), { token }),
@@ -168,7 +183,8 @@ describe("invite info endpoint", () => {
       inviters: Array<{ firstName: string; lastName: string }>;
       totalInviters: number;
     };
-    expect(body.totalInviters).toBeGreaterThanOrEqual(1);
+    expect(body.totalInviters).toBe(7);
+    expect(body.inviters).toHaveLength(5);
     expect(body.inviters[0].firstName).toBe("Jane");
     expect(body.inviters[0].lastName).toBe("Smith");
   });

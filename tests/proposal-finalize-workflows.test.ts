@@ -1,21 +1,29 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
-import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
+import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import app from "../functions/router";
-import { onRequestPost as finalizeProposal } from "../functions/api/v1/admin/proposals/[proposalId]/finalize";
-import { onRequestPost as upsertReview } from "../functions/api/v1/admin/proposals/[proposalId]/reviews";
-import { onRequestPost as flagProposal } from "../functions/api/v1/admin/proposals/[proposalId]/flag";
-import {
-  createProposal,
-  addProposalSpeaker,
-  finalizeProposalDecision,
-  markProposalStatus,
-  softDeleteProposal,
-} from "../functions/_lib/services/proposals";
+import { createProposal, addProposalSpeaker, finalizeProposalDecision } from "../functions/_lib/services/proposals";
 import { activateTemplateVersion, createTemplateVersion } from "../functions/_lib/email/templates";
 import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
+import { proposalFlagResponseSchema } from "../assets/shared/schemas/proposal-status";
+
+function decisionActor(id: string) {
+  return { id, email: "admin@pkic.org", role: "admin" };
+}
+
+async function postProposalReview(proposalId: string, token: string, body: unknown): Promise<Response> {
+  return app.fetch(
+    new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/reviews`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    }),
+    env as any,
+    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+  );
+}
 
 async function seedProposalWithSpeaker(
   eventId: string,
@@ -63,17 +71,7 @@ async function addReviews(eventId: string, proposalId: string, adminId: string, 
     `,
     ).run();
     const token = await createAdminSession(env.DB, id, `reviewer-token-${i}`);
-    await upsertReview(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/reviews`, {
-          method: "POST",
-          headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-          body: JSON.stringify({ recommendation: "accept", score: 8 }),
-        }),
-        { proposalId },
-      ),
-    );
+    await postProposalReview(proposalId, token, { recommendation: "accept", score: 8 });
     extraAdminIds.push(id);
   }
   return extraAdminIds;
@@ -90,7 +88,7 @@ describe("proposal finalize workflows", () => {
 
     await finalizeProposalDecision(env.DB, {
       proposalId,
-      decidedByUserId: adminUserId,
+      actor: decisionActor(adminUserId),
       finalStatus: "accepted",
       minReviewsRequired: 0,
     });
@@ -118,7 +116,7 @@ describe("proposal finalize workflows", () => {
 
     await finalizeProposalDecision(env.DB, {
       proposalId,
-      decidedByUserId: adminUserId,
+      actor: decisionActor(adminUserId),
       finalStatus: "rejected",
       minReviewsRequired: 0,
     });
@@ -146,8 +144,9 @@ describe("proposal finalize workflows", () => {
 
     await finalizeProposalDecision(env.DB, {
       proposalId,
-      decidedByUserId: adminUserId,
+      actor: decisionActor(adminUserId),
       finalStatus: "needs-work",
+      decisionNote: "Please revise the proposal before resubmitting.",
       minReviewsRequired: 0,
     });
 
@@ -165,7 +164,7 @@ describe("proposal finalize workflows", () => {
 
     await finalizeProposalDecision(env.DB, {
       proposalId,
-      decidedByUserId: adminUserId,
+      actor: decisionActor(adminUserId),
       finalStatus: "rejected",
       minReviewsRequired: 0,
     });
@@ -173,7 +172,7 @@ describe("proposal finalize workflows", () => {
     await expect(
       finalizeProposalDecision(env.DB, {
         proposalId,
-        decidedByUserId: adminUserId,
+        actor: decisionActor(adminUserId),
         finalStatus: "accepted",
         minReviewsRequired: 0,
       }),
@@ -187,17 +186,10 @@ describe("proposal finalize workflows", () => {
     const adminToken = await createAdminSession(env.DB, adminUserId, "finalize-test-token");
     await addReviews(eventId, proposalId, adminUserId);
 
-    const response = await finalizeProposal(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/finalize`, {
-          method: "POST",
-          headers: { "content-type": "application/json", authorization: `Bearer ${adminToken}` },
-          body: JSON.stringify({ finalStatus: "rejected", decisionNote: "Not a fit for this event." }),
-        }),
-        { proposalId },
-      ),
-    );
+    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/finalize`, adminToken, {
+      finalStatus: "rejected",
+      decisionNote: "Not a fit for this event.",
+    });
 
     expect(response.status).toBe(200);
 
@@ -219,6 +211,51 @@ describe("proposal finalize workflows", () => {
     expect(outbox.map((r) => r.template_key)).toContain("proposal_decision");
   });
 
+  it("rolls back the decision, participant state, outbox, and deadline when audit insertion fails", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const adminToken = await createAdminSession(env.DB, adminUserId, "finalize-rollback-token");
+    await addReviews(eventId, proposalId, adminUserId);
+    await env.DB.prepare(
+      `CREATE TRIGGER reject_proposal_decision_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'proposal_decision_recorded'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced audit failure');
+       END`,
+    ).run();
+
+    try {
+      const response = await callApp(`/api/v1/admin/proposals/${proposalId}/finalize`, adminToken, {
+        finalStatus: "accepted",
+        presentationDeadline: "2027-03-01T00:00:00.000Z",
+      });
+      expect(response.status).toBe(500);
+
+      const [proposal] = await queryAll<{ status: string; presentation_deadline: string | null }>(
+        env.DB,
+        "SELECT status, presentation_deadline FROM session_proposals WHERE id = ?",
+        [proposalId],
+      );
+      expect(proposal).toMatchObject({ status: "submitted", presentation_deadline: null });
+      expect(
+        await queryAll(env.DB, "SELECT id FROM proposal_decisions WHERE proposal_id = ?", [proposalId]),
+      ).toHaveLength(0);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM proposal_decision_history WHERE proposal_id = ?", [proposalId]),
+      ).toHaveLength(0);
+      expect(await queryAll(env.DB, "SELECT id FROM email_outbox WHERE event_id = ?", [eventId])).toHaveLength(0);
+      const participants = await queryAll<{ status: string }>(
+        env.DB,
+        "SELECT status FROM event_participants WHERE source_type = 'proposal' AND source_ref = ?",
+        [proposalId],
+      );
+      expect(participants.every(({ status }) => status === "inactive")).toBe(true);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER IF EXISTS reject_proposal_decision_audit").run();
+    }
+  });
+
   it("finalize HTTP handler: accepted proposal queues speaker_profile_request emails", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
@@ -226,17 +263,9 @@ describe("proposal finalize workflows", () => {
     const adminToken = await createAdminSession(env.DB, adminUserId, "finalize-accept-token");
     await addReviews(eventId, proposalId, adminUserId);
 
-    const response = await finalizeProposal(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/finalize`, {
-          method: "POST",
-          headers: { "content-type": "application/json", authorization: `Bearer ${adminToken}` },
-          body: JSON.stringify({ finalStatus: "accepted" }),
-        }),
-        { proposalId },
-      ),
-    );
+    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/finalize`, adminToken, {
+      finalStatus: "accepted",
+    });
 
     expect(response.status).toBe(200);
 
@@ -258,9 +287,12 @@ describe("proposal spam/duplicate/delete", () => {
 
   it("marks a proposal as spam", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const { proposalId } = await seedProposalWithSpeaker(eventId);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const adminToken = await createAdminSession(env.DB, adminUserId, "flag-spam-service-token");
 
-    await markProposalStatus(env.DB, { proposalId, status: "spam" });
+    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "spam" });
+    expect(response.status).toBe(200);
+    expect(proposalFlagResponseSchema.parse(await response.json())).toEqual({ success: true, action: "spam" });
 
     const [row] = await queryAll<{ status: string }>(env.DB, "SELECT status FROM session_proposals WHERE id = ?", [
       proposalId,
@@ -270,9 +302,11 @@ describe("proposal spam/duplicate/delete", () => {
 
   it("marks a proposal as duplicate", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const { proposalId } = await seedProposalWithSpeaker(eventId);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const adminToken = await createAdminSession(env.DB, adminUserId, "flag-duplicate-token");
 
-    await markProposalStatus(env.DB, { proposalId, status: "duplicate" });
+    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "duplicate" });
+    expect(response.status).toBe(200);
 
     const [row] = await queryAll<{ status: string }>(env.DB, "SELECT status FROM session_proposals WHERE id = ?", [
       proposalId,
@@ -282,9 +316,11 @@ describe("proposal spam/duplicate/delete", () => {
 
   it("soft-delete: sets deleted_at and deactivates participants", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const { proposalId } = await seedProposalWithSpeaker(eventId);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const adminToken = await createAdminSession(env.DB, adminUserId, "flag-delete-service-token");
 
-    await softDeleteProposal(env.DB, { proposalId });
+    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "delete" });
+    expect(response.status).toBe(200);
 
     const [row] = await queryAll<{ status: string; deleted_at: string | null }>(
       env.DB,
@@ -306,9 +342,11 @@ describe("proposal spam/duplicate/delete", () => {
 
   it("soft-delete: proposal excluded from default list query", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const { proposalId } = await seedProposalWithSpeaker(eventId);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const adminToken = await createAdminSession(env.DB, adminUserId, "flag-delete-list-token");
 
-    await softDeleteProposal(env.DB, { proposalId });
+    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "delete" });
+    expect(response.status).toBe(200);
 
     const remaining = await queryAll<{ id: string }>(
       env.DB,
@@ -323,17 +361,7 @@ describe("proposal spam/duplicate/delete", () => {
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
     const adminToken = await createAdminSession(env.DB, adminUserId, "flag-spam-token");
 
-    const response = await flagProposal(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/flag`, {
-          method: "POST",
-          headers: { "content-type": "application/json", authorization: `Bearer ${adminToken}` },
-          body: JSON.stringify({ action: "spam" }),
-        }),
-        { proposalId },
-      ),
-    );
+    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "spam" });
 
     expect(response.status).toBe(200);
 
@@ -355,17 +383,7 @@ describe("proposal spam/duplicate/delete", () => {
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
     const adminToken = await createAdminSession(env.DB, adminUserId, "flag-delete-token");
 
-    const response = await flagProposal(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/flag`, {
-          method: "POST",
-          headers: { "content-type": "application/json", authorization: `Bearer ${adminToken}` },
-          body: JSON.stringify({ action: "delete" }),
-        }),
-        { proposalId },
-      ),
-    );
+    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "delete" });
 
     expect(response.status).toBe(200);
 
@@ -382,6 +400,65 @@ describe("proposal spam/duplicate/delete", () => {
       [proposalId],
     );
     expect(auditRows[0]?.action).toBe("proposal_deleted");
+  });
+
+  it("rolls back proposal deletion and participant changes when its audit write fails", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const adminToken = await createAdminSession(env.DB, adminUserId, "flag-delete-rollback-token");
+    await env.DB.prepare(
+      "UPDATE event_participants SET status = 'active' WHERE source_type = 'proposal' AND source_ref = ?",
+    )
+      .bind(proposalId)
+      .run();
+    await env.DB.prepare(
+      `CREATE TRIGGER reject_proposal_delete_audit
+         BEFORE INSERT ON audit_log
+         WHEN NEW.action = 'proposal_deleted'
+         BEGIN
+           SELECT RAISE(ABORT, 'forced audit failure');
+         END`,
+    ).run();
+
+    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "delete" });
+    expect(response.status).toBe(500);
+
+    const [proposal] = await queryAll<{ status: string; deleted_at: string | null }>(
+      env.DB,
+      "SELECT status, deleted_at FROM session_proposals WHERE id = ?",
+      [proposalId],
+    );
+    expect(proposal).toEqual({ status: "submitted", deleted_at: null });
+    const participants = await queryAll<{ status: string }>(
+      env.DB,
+      "SELECT status FROM event_participants WHERE source_type = 'proposal' AND source_ref = ?",
+      [proposalId],
+    );
+    expect(participants.every(({ status }) => status === "active")).toBe(true);
+  });
+
+  it("does not audit a moderation compare-and-set that loses", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const adminToken = await createAdminSession(env.DB, adminUserId, "flag-conflict-token");
+    await env.DB.prepare(
+      `CREATE TRIGGER ignore_proposal_spam_update
+         BEFORE UPDATE OF status ON session_proposals
+         WHEN NEW.id = '${proposalId}' AND NEW.status = 'spam'
+         BEGIN
+           SELECT RAISE(IGNORE);
+         END`,
+    ).run();
+
+    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "spam" });
+    expect(response.status).toBe(409);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_id = ? AND action = 'proposal_flagged'", [proposalId]),
+    ).resolves.toHaveLength(0);
+    const [proposal] = await queryAll<{ status: string }>(env.DB, "SELECT status FROM session_proposals WHERE id = ?", [
+      proposalId,
+    ]);
+    expect(proposal.status).toBe("submitted");
   });
 });
 
@@ -441,6 +518,70 @@ describe("proposal HTTP error responses (full router stack)", () => {
     expect(body.error?.code).toBe("PROPOSAL_REVIEW_THRESHOLD_NOT_MET");
   });
 
+  it("finalize: shared API-key authentication cannot record an unattributed governance decision", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId } = await seedProposalWithSpeaker(eventId);
+    const apiKey = "proposal-finalize-api-key";
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/finalize`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ finalStatus: "accepted" }),
+      }),
+      { ...env, ADMIN_API_KEY: apiKey } as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "USER_BACKED_ADMIN_REQUIRED" } });
+    await expect(
+      queryAll(env.DB, "SELECT id FROM proposal_decisions WHERE proposal_id = ?", [proposalId]),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("finalize: shared validation requires a note for needs-work and rejects ignored deadlines", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const adminToken = await createAdminSession(env.DB, adminUserId, "invalid-decision-policy-token");
+
+    const missingNote = await callApp(`/api/v1/admin/proposals/${proposalId}/finalize`, adminToken, {
+      finalStatus: "needs-work",
+    });
+    expect(missingNote.status).toBe(400);
+    const ignoredDeadline = await callApp(`/api/v1/admin/proposals/${proposalId}/finalize`, adminToken, {
+      finalStatus: "rejected",
+      presentationDeadline: "2027-03-01T00:00:00.000Z",
+    });
+    expect(ignoredDeadline.status).toBe(400);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM proposal_decisions WHERE proposal_id = ?", [proposalId]),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("finalize and preview reject a moderated proposal before producing decision fallout", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const adminToken = await createAdminSession(env.DB, adminUserId, "moderated-decision-token");
+    expect((await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "spam" })).status).toBe(
+      200,
+    );
+
+    for (const path of ["finalize-preview", "finalize"]) {
+      const response = await callApp(`/api/v1/admin/proposals/${proposalId}/${path}`, adminToken, {
+        finalStatus: "rejected",
+      });
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toMatchObject({ error: { code: "PROPOSAL_NOT_DECIDABLE" } });
+    }
+    await expect(
+      queryAll(env.DB, "SELECT id FROM proposal_decisions WHERE proposal_id = ?", [proposalId]),
+    ).resolves.toHaveLength(0);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM proposal_decision_history WHERE proposal_id = ?", [proposalId]),
+    ).resolves.toHaveLength(0);
+    await expect(queryAll(env.DB, "SELECT id FROM email_outbox")).resolves.toHaveLength(0);
+  });
+
   it("flag: flagging a finalized proposal returns JSON 409 with PROPOSAL_ALREADY_FINALIZED", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
@@ -449,7 +590,7 @@ describe("proposal HTTP error responses (full router stack)", () => {
     // Finalize the proposal first
     await finalizeProposalDecision(env.DB, {
       proposalId,
-      decidedByUserId: adminUserId,
+      actor: decisionActor(adminUserId),
       finalStatus: "accepted",
       minReviewsRequired: 0,
     });
@@ -459,6 +600,15 @@ describe("proposal HTTP error responses (full router stack)", () => {
     expect(response.status).toBe(409);
     const body = (await response.json()) as { error?: { code?: string } };
     expect(body.error?.code).toBe("PROPOSAL_ALREADY_FINALIZED");
+  });
+
+  it("flag: rejects an unknown action through the mounted shared schema", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const adminToken = await createAdminSession(env.DB, adminUserId, "flag-invalid-action-token");
+
+    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "archive" });
+    expect(response.status).toBe(400);
   });
 
   it("finalize: unknown proposal returns JSON 404", async () => {
@@ -665,6 +815,24 @@ describe("proposal subtree access gate (full router stack)", () => {
 
     const response = await callAppGet(`/api/v1/admin/proposals/${proposalId}/audit-log`, staffToken);
     expect(response.status).toBe(200);
+  });
+
+  it("decision endpoints require proposals:manage, not only proposal read/score access", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const moderatorId = await insertStaffUser("moderator-decision@wf.test");
+    await assignEventModerator(moderatorId, eventId, adminUserId);
+    const moderatorToken = await createAdminSession(env.DB, moderatorId, "moderator-decision-token");
+
+    for (const endpoint of ["finalize-preview", "finalize"]) {
+      const response = await callApp(`/api/v1/admin/proposals/${proposalId}/${endpoint}`, moderatorToken, {
+        finalStatus: "accepted",
+      });
+      expect(response.status).toBe(403);
+    }
+    await expect(
+      queryAll(env.DB, "SELECT id FROM proposal_decisions WHERE proposal_id = ?", [proposalId]),
+    ).resolves.toHaveLength(0);
   });
 
   it("audit-log: a moderator scoped to a different event cannot view this event's proposal audit log", async () => {

@@ -65,7 +65,7 @@ export function Attendees({ session, onUnauthorized }: { session: SponsorPortalS
 
   if (ineligible) {
     return (
-      <div class="container py-4" style="max-width: 720px;">
+      <div class="container py-4 content-width-md">
         <div class="alert alert-warning">
           This sponsorship no longer has attendee data access — either your tier isn't configured for it, or the
           sponsorship is no longer active. Contact your PKIC representative if you believe this is a mistake.
@@ -75,7 +75,7 @@ export function Attendees({ session, onUnauthorized }: { session: SponsorPortalS
   }
 
   return (
-    <div class="container py-4" style="max-width: 960px;">
+    <div class="container py-4 content-width-xl">
       <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
         <div>
           <h1 class="h4 mb-1">Attendees — {eventLabel}</h1>

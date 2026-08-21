@@ -14,15 +14,8 @@ import { AppError } from "../../../../_lib/errors";
 import { json } from "../../../../_lib/http";
 import { enforceRateLimit } from "../../../../_lib/rate-limit";
 import { getClientIp } from "../../../../_lib/request";
-import { queueEmail, processOutboxByIdBackground } from "../../../../_lib/email/outbox";
-import { writeAuditLog } from "../../../../_lib/services/audit";
-import {
-  createMemberApplication,
-  emailDomain,
-  hasActiveApplicationForDomain,
-  hasConflictingOrganizationDomain,
-  INDIVIDUAL_MEMBERSHIP_CATEGORIES,
-} from "../../../../_lib/services/membership/applications/create";
+import { processOutboxByIdBackground } from "../../../../_lib/email/outbox";
+import { createMemberApplication } from "../../../../_lib/services/membership/applications/create";
 import {
   memberApplicationCreateRouteSchema,
   memberApplicationCreateSchema,
@@ -54,44 +47,17 @@ export async function onRequestPost(c: any): Promise<Response> {
   }
   const body = parsed.data;
 
-  const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(body.membershipCategory);
-  if (!isIndividual) {
-    const domain = emailDomain(body.applicantEmail);
-    if ((await hasActiveApplicationForDomain(db, domain)) || (await hasConflictingOrganizationDomain(db, domain))) {
-      throw new AppError(409, "DUPLICATE_APPLICATION", "An active application already exists for this organization");
-    }
-  }
-
   const created = await createMemberApplication(db, {
     applicantEmail: body.applicantEmail,
     applicantName: body.applicantName,
     membershipCategory: body.membershipCategory,
     organizationName: body.organizationName ?? null,
     answers: body.answers,
+    appBaseUrl: config.appBaseUrl,
   });
+  c.executionCtx.waitUntil(processOutboxByIdBackground(db, env, created.outboxId));
 
-  const statusUrl = `${config.appBaseUrl}/application-status/?id=${created.id}&token=${created.manageToken}`;
-  const outboxId = await queueEmail(db, {
-    templateKey: "application-received",
-    recipientEmail: body.applicantEmail,
-    messageType: "transactional",
-    subject: "We received your PKI Consortium membership application",
-    data: {
-      applicantName: body.applicantName,
-      statusUrl,
-    },
-  });
-  c.executionCtx.waitUntil(processOutboxByIdBackground(db, env, outboxId));
-
-  await writeAuditLog(db, "public", null, "member_application_submitted", "member_application", created.id, {
-    applicantEmail: body.applicantEmail,
-    membershipCategory: body.membershipCategory,
-  });
-
-  return json(
-    { applicationId: created.id, status: created.status, stage: created.stage, manageToken: created.manageToken },
-    201,
-  );
+  return json({ applicationId: created.id, stage: created.stage, manageToken: created.manageToken }, 201);
 }
 
 export class MembersApplicationsPost extends OpenAPIRoute {

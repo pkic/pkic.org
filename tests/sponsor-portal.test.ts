@@ -14,6 +14,7 @@ import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { issueSponsorPortalSession, signSponsorPortalSessionToken } from "../functions/_lib/auth/sponsor-portal";
+import { listSponsorPortalAttendeesForExport } from "../functions/_lib/services/sponsorship";
 
 /** Issues a real sponsor-portal session directly (bypassing the magic-link email round trip). */
 async function createSponsorPortalSession(sponsorshipId: string): Promise<string> {
@@ -253,6 +254,16 @@ describe("Sponsor portal", () => {
       "SELECT action FROM audit_log WHERE action = 'sponsor_portal_attendee_export'",
     );
     expect(auditRows).toHaveLength(1);
+  });
+
+  it("fails a sponsor export that exceeds its configured row bound", async () => {
+    await seedConsentingRegistration(eventId, "one@attendee.test", "sponsor-data-sharing");
+    await seedConsentingRegistration(eventId, "two@attendee.test", "sponsor-data-sharing");
+
+    await expect(listSponsorPortalAttendeesForExport(env.DB, eventId, 1)).rejects.toMatchObject({
+      status: 413,
+      code: "CSV_EXPORT_ROW_LIMIT_EXCEEDED",
+    });
   });
 
   it("resolves eventId by public slug (not just internal id) and returns eventName in the session", async () => {

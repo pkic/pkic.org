@@ -8,96 +8,24 @@
 import { json } from "../../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../../../_lib/services/events";
-import { first, all } from "../../../../../../../_lib/db/queries";
-import type { DatabaseLike } from "../../../../../../../_lib/types";
+import { listRegistrationAuditLog } from "../../../../../../../_lib/services/audit-log-read";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
-import { paginationQuerySchema, buildPageInfo } from "../../../../../../../../assets/shared/schemas/pagination";
+import { adminRegistrationAuditLogRouteSchema } from "../../../../../../../../assets/shared/schemas/route-contracts";
+import type { ValidatedData } from "chanfana";
 
-interface AuditLogRow {
-  id: string;
-  actor_type: string;
-  actor_id: string | null;
-  actor_display: string | null;
-  action: string;
-  entity_type: string;
-  entity_id: string | null;
-  details_json: string | null;
-  created_at: string;
-}
-
-async function countAuditLog(db: DatabaseLike, registrationId: string): Promise<number> {
-  const row = await first<{ total: number }>(
-    db,
-    `SELECT COUNT(*) AS total FROM audit_log al WHERE al.entity_type = 'registration' AND al.entity_id = ?`,
-    [registrationId],
-  );
-  return row?.total ?? 0;
-}
-
-async function fetchAuditLog(
-  db: DatabaseLike,
-  registrationId: string,
-  limit: number,
-  offset: number,
-): Promise<AuditLogRow[]> {
-  return all<AuditLogRow>(
-    db,
-    `SELECT
-       al.id,
-       al.actor_type,
-       al.actor_id,
-       COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS actor_display,
-       al.action,
-       al.entity_type,
-       al.entity_id,
-       al.details_json,
-       al.created_at
-     FROM audit_log al
-     LEFT JOIN users u ON al.actor_type = 'admin' AND u.id = al.actor_id
-     WHERE al.entity_type = 'registration' AND al.entity_id = ?
-     ORDER BY al.created_at DESC
-     LIMIT ? OFFSET ?`,
-    [registrationId, limit, offset],
-  );
-}
-
-export async function onRequestGet(c: AdminContext): Promise<Response> {
+export async function onRequestGet(
+  c: AdminContext,
+  data: ValidatedData<typeof adminRegistrationAuditLogRouteSchema>,
+): Promise<Response> {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
   const registrationId = c.req.param("registrationId");
-
-  // Verify the registration belongs to this event
-  const reg = await first<{ id: string }>(requestDb(c), "SELECT id FROM registrations WHERE id = ? AND event_id = ?", [
-    registrationId,
-    event.id,
-  ]);
-  if (!reg) {
-    return json({ error: { code: "REGISTRATION_NOT_FOUND", message: "Registration not found" } }, 404);
-  }
-
-  const query = paginationQuerySchema.parse(Object.fromEntries(new URL(c.req.raw.url).searchParams));
-  const limit = query.limit ?? 50;
-  const offset = query.offset ?? 0;
-
-  const [entries, total] = await Promise.all([
-    fetchAuditLog(requestDb(c), registrationId, limit, offset),
-    countAuditLog(requestDb(c), registrationId),
-  ]);
-
-  // Parse details_json for the caller so it does not have to JSON.parse each row
-  const parsed = entries.map((e) => ({
-    ...e,
-    details: e.details_json
-      ? (() => {
-          try {
-            return JSON.parse(e.details_json);
-          } catch {
-            return null;
-          }
-        })()
-      : null,
-    details_json: undefined,
-  }));
-
-  return json({ auditLog: parsed, page: buildPageInfo(limit, offset, total, parsed.length) });
+  return json(
+    await listRegistrationAuditLog(requestDb(c), event.id, registrationId, {
+      q: data.query.q,
+      sort: data.query.sort,
+      limit: data.query.limit ?? 50,
+      offset: data.query.offset ?? 0,
+    }),
+  );
 }

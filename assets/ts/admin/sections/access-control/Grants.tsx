@@ -2,13 +2,14 @@ import { useRef, useState } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../components/Table";
 import { api } from "../../api";
 import { fmt, toast } from "../../ui";
-import type { AccessGrant, AdminUser } from "../../types";
+import type { AccessGrant } from "../../types";
 import { PERMISSIONS } from "../../permissions";
 import { UserPicker, type PickedUser } from "./UserPicker";
 import { ContextPicker, type PickedContext } from "./ContextPicker";
+import { accessGrantsListResponseSchema } from "../../../../shared/schemas/access-control";
 
 /** Access Control section: grant/revoke permissions per user, with context and expiry pickers. */
-export function Grants({ userLabels }: { userLabels: Map<string, AdminUser> }) {
+export function Grants() {
   const tableRef = useRef<ApiTableActions | null>(null);
   const [user, setUser] = useState<PickedUser | null>(null);
   const [permission, setPermission] = useState<string>(PERMISSIONS[0]);
@@ -111,14 +112,14 @@ export function Grants({ userLabels }: { userLabels: Map<string, AdminUser> }) {
 
       <ApiDataTable<AccessGrant>
         endpoint="/api/v1/admin/access-grants"
-        resolve={(d) => (d as { grants: AccessGrant[] }).grants}
-        resolvePage={(d) => (d as { page: { total: number; hasMore: boolean } }).page}
+        resolve={(data) => accessGrantsListResponseSchema.parse(data).grants}
+        resolvePage={(data) => accessGrantsListResponseSchema.parse(data).page}
         paginate
         actionsRef={tableRef}
         columns={[
           {
             header: "User",
-            cell: (g) => userLabels.get(g.userId)?.email ?? g.userId,
+            cell: (g) => g.userEmail,
             className: "small mono",
             sort: { asc: "user_id", desc: "-user_id" },
           },

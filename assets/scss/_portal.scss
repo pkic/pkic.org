@@ -8,6 +8,22 @@ $portal-surface: #fff;
 $portal-border: #dee2e6;
 $portal-green: #198754;
 
+.portal-organization-logo {
+  max-height: 140px;
+}
+
+.portal-organization-logo-placeholder {
+  height: 100px;
+}
+
+.portal-category-select {
+  max-width: 360px;
+}
+
+.portal-representative-select {
+  max-width: 320px;
+}
+
 #portal-root {
   display: flex;
   min-height: calc(100vh - 56px);

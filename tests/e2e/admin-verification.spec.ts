@@ -26,15 +26,18 @@
  * address (wrangler.jsonc), and 8 independent sign-ins for the same
  * admin@pkic.org within that window reliably tripped it.
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
+import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { adminApplicationDetailSchema } from "../../assets/shared/schemas/admin-applications";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 const EVENT_SLUG = "pqc-conference-amsterdam-nl";
 const ADMIN_AUTH_FILE = path.join("test-results", "admin-verification-auth.json");
+const ADMIN_EMAIL = e2eAdminEmail("admin-verification");
 
 function sendgridServer(): string {
   return process.env.E2E_SENDGRID_API_BASE ?? readFileSync(SENDGRID_URL_FILE, "utf8").trim();
@@ -95,12 +98,12 @@ function extractUrlFromEmail(email: CapturedEmail, urlSubstring: string): string
 async function signInAsAdmin(page: Page): Promise<void> {
   await page.goto("/admin/");
   await expect(page.locator("#form-magic")).toBeVisible({ timeout: 10_000 });
-  await page.locator("#inp-email").fill("admin@pkic.org");
+  await page.locator("#inp-email").fill(ADMIN_EMAIL);
   const since = await outboxLength();
   await page.locator("#btn-send").click();
   await expect(page.locator("#magic-sent")).toBeVisible({ timeout: 10_000 });
 
-  const magicEmail = await waitForEmail("admin@pkic.org", "sign-in", { since });
+  const magicEmail = await waitForEmail(ADMIN_EMAIL, "sign-in", { since });
   const magicUrl = extractUrlFromEmail(magicEmail, "/admin/");
   await page.goto(magicUrl);
   await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
@@ -136,6 +139,7 @@ async function provisionApprovedMember(
           applicantName: name,
           membershipCategory: category,
           organizationName: orgName,
+          answers: { reason: "This E2E member wants to contribute to the PKI community." },
         }),
       });
       const body = (await res.json()) as { applicationId?: string };
@@ -196,6 +200,7 @@ async function memberLogin(page: Page, email: string): Promise<void> {
 
 test.describe("Admin browser-verification pass", () => {
   test.beforeAll(async ({ browser }) => {
+    if (existsSync(ADMIN_AUTH_FILE)) return;
     // `browser.newContext()` inside a test file inherits this describe's
     // `test.use({ storageState: ADMIN_AUTH_FILE })` below (applied even
     // though this call is manual, not the `context`/`page` fixtures) — so
@@ -243,7 +248,7 @@ test.describe("Admin browser-verification pass", () => {
     await expect(page.locator("tr").filter({ hasText: email })).toHaveCount(0);
   });
 
-  test("working groups: create, assign chair/vice chair, add/remove member, deactivate/reactivate", async ({
+  test("working groups: create, assign chair/vice chair via Leadership, add/remove member, deactivate/reactivate", async ({
     page,
   }) => {
     page.on("dialog", (d) => d.accept());
@@ -264,27 +269,40 @@ test.describe("Admin browser-verification pass", () => {
     const wgSelect = panel.locator("select");
     await wgSelect.selectOption({ label: wgName });
     await expect(page.getByText("Roster (0)")).toBeVisible();
+    await expect(panel.getByText('Chair and vice chair are assigned from the "Leadership" section.')).toBeVisible();
 
-    // Assign the seeded admin as chair and vice chair — a real user row,
-    // no separate fixture needed for the UserPicker search. Each form also
-    // has a datetime-local "expires" input, so scope by placeholder rather
-    // than a bare `input` locator to avoid a strict-mode multi-match.
-    const chairForm = panel.locator("form").filter({ has: page.getByText("Assign chair") });
-    const chairPicker = chairForm.getByPlaceholder("Search by email or name…");
-    await chairPicker.fill("admin@pkic.org");
-    await expect(chairForm.getByText("admin@pkic.org")).toBeVisible({ timeout: 5_000 });
-    await chairForm.getByText("admin@pkic.org").click();
-    await chairForm.getByRole("button", { name: "Assign as chair" }).click();
+    // Chair/vice-chair assignment lives on the dedicated Leadership admin
+    // page, not this panel (moved there per git history's "Move chair
+    // configuration to admin UI" — this panel only displays the current
+    // holders read-only). Assign the seeded admin as chair — a real user
+    // row, no separate fixture needed for the UserPicker search.
+    await page.goto("/admin/#/leadership");
+    const wgBlock = page.locator("div.border.rounded").filter({ hasText: wgName });
+    await expect(wgBlock).toBeVisible();
+
+    const chairSlot = wgBlock
+      .locator("div.d-flex.align-items-center.gap-2.flex-wrap")
+      .filter({ has: page.getByText("Chair", { exact: true }) });
+    const chairPicker = chairSlot.getByPlaceholder("Search by email or name…");
+    await chairPicker.fill(ADMIN_EMAIL);
+    await expect(chairSlot.getByText(ADMIN_EMAIL)).toBeVisible({ timeout: 5_000 });
+    await chairSlot.getByText(ADMIN_EMAIL).click();
+    await chairSlot.getByRole("button", { name: "Assign" }).click();
     await expect(page.locator(".my-toast", { hasText: "Chair assigned" })).toBeVisible();
-    await expect(panel.getByText("admin@pkic.org").first()).toBeVisible();
+    await expect(chairSlot.getByText(ADMIN_EMAIL)).toBeVisible();
+
+    // Back on the Working groups panel, the new chair now shows read-only.
+    await page.goto("/admin/#/working-groups");
+    await wgSelect.selectOption({ label: wgName });
+    await expect(panel.getByText(ADMIN_EMAIL).first()).toBeVisible();
 
     // Add the same admin user to the roster (a distinct code path from
     // chair assignment — a plain working_group_members row).
     const memberForm = panel.locator("form").filter({ has: page.getByText("Add member") });
     const memberPicker = memberForm.getByPlaceholder("Search by email or name…");
-    await memberPicker.fill("admin@pkic.org");
-    await expect(memberForm.getByText("admin@pkic.org")).toBeVisible({ timeout: 5_000 });
-    await memberForm.getByText("admin@pkic.org").click();
+    await memberPicker.fill(ADMIN_EMAIL);
+    await expect(memberForm.getByText(ADMIN_EMAIL)).toBeVisible({ timeout: 5_000 });
+    await memberForm.getByText(ADMIN_EMAIL).click();
     await memberForm.getByRole("button", { name: "Add member" }).click();
     await expect(page.locator(".my-toast", { hasText: "Member added" })).toBeVisible();
     await expect(page.getByText("Roster (1)")).toBeVisible();
@@ -427,7 +445,12 @@ test.describe("Admin browser-verification pass", () => {
     await form.getByRole("button", { name: "Create", exact: true }).click();
     await expect(page.locator(".my-toast", { hasText: "Sponsorship created" })).toBeVisible();
 
-    await page.locator(".list-group-item").filter({ hasText: contactName }).click();
+    // The top-level list now groups sponsorships by company (a table, one
+    // row per company); this sponsorship has no organization or non-member
+    // name, so it groups under its contact name. Drill into that company,
+    // then pick its (only) sponsorship from the resulting list.
+    await page.locator("tr").filter({ hasText: contactName }).click();
+    await page.locator(".list-group-item").first().click();
     const detail = page.locator(".card").filter({ has: page.getByRole("heading", { name: contactName }) });
     await expect(detail).toBeVisible();
     // New sponsorships default to pipeline_stage='new_inquiry' (migration
@@ -594,6 +617,7 @@ test.describe("Admin browser-verification pass", () => {
 
     await page.goto("/admin/#/users");
     await page.getByPlaceholder("email or name").fill(primaryEmail);
+    await page.getByPlaceholder("email or name").press("Enter");
     const primaryRow = page.locator("tr").filter({ hasText: primaryEmail });
     await expect(primaryRow).toBeVisible({ timeout: 10_000 });
     await primaryRow.click();
@@ -644,12 +668,9 @@ test.describe("Admin browser-verification pass", () => {
     const since = await outboxLength();
 
     await page.goto("/admin/#/membership/applications");
-    // The list's own text search box filters client-visible rows only (its
-    // "q" param isn't read by the backend list route) — the stage filter
-    // is a real, backend-applied query param, and by this point in the
-    // file every other fixture application has already been moved out of
-    // ec_review by its own test, so this reliably narrows to this test's
-    // one application without depending on page/sort order.
+    // The shared table sends search/filter/pagination to the backend. The
+    // stage filter is sufficient here because every earlier fixture has
+    // already moved out of ec_review.
     const stageFilter = page.locator("select").filter({ has: page.locator('option[value="ec_review"]') });
     await stageFilter.selectOption("ec_review");
     const row = page.locator("tr").filter({ hasText: email });
@@ -678,17 +699,13 @@ test.describe("Admin browser-verification pass", () => {
     // reflect) — durably approved with an event recording the transition.
     const refetched = await page.evaluate(async (id) => {
       const res = await fetch(`/api/v1/admin/applications/${id}`, { credentials: "same-origin" });
-      const body = (await res.json()) as {
-        status: string;
-        stage: string;
-        events: Array<{ toStage: string }>;
-      };
+      const body = await res.json();
       return { status: res.status, body };
     }, applicationId);
     expect(refetched.status).toBe(200);
-    expect(refetched.body.status).toBe("approved");
-    expect(refetched.body.stage).toBe("approved");
-    expect(refetched.body.events.some((e) => e.toStage === "approved")).toBe(true);
+    const refetchedBody = adminApplicationDetailSchema.parse(refetched.body);
+    expect(refetchedBody.stage).toBe("approved");
+    expect(refetchedBody.events.some((e) => e.toStage === "approved")).toBe(true);
 
     // Independent confirmation 2/2: onboarding provisioning
     // (approveApplication -> provisionOrganizationMembership) really ran —

@@ -4,6 +4,7 @@ import { AdminFormsFormKeyGet } from "./index";
 import { AdminFormsFormKeyPatch } from "./index";
 import { AdminFormsFormKeyDelete } from "./index";
 import { AdminFormsFormKeySubmissionsGet } from "./submissions";
+import { AdminFormsFormKeySubmissionStatsGet } from "./submission-stats";
 import type { RequestDbContext } from "../../../../../_lib/db/context";
 
 const app = new Hono<RequestDbContext>();
@@ -13,5 +14,6 @@ openapi.get("/", AdminFormsFormKeyGet);
 openapi.patch("/", AdminFormsFormKeyPatch);
 openapi.delete("/", AdminFormsFormKeyDelete);
 openapi.get("/submissions", AdminFormsFormKeySubmissionsGet);
+openapi.get("/submissions/stats", AdminFormsFormKeySubmissionStatsGet);
 
 export default openapi;

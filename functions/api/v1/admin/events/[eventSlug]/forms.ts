@@ -10,114 +10,39 @@ import { parseJsonBody } from "../../../../../_lib/validation";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../_lib/services/events";
-import { all, run } from "../../../../../_lib/db/queries";
-import { nowIso } from "../../../../../_lib/utils/time";
-import { uuid } from "../../../../../_lib/utils/ids";
-import { stringifyJson } from "../../../../../_lib/utils/json";
-import { writeAuditLog } from "../../../../../_lib/services/audit";
+import { createManagedForm, listAdminForms } from "../../../../../_lib/services/forms";
 import { adminFormCreateSchema } from "../../../../../../assets/shared/schemas/api";
+import { adminEventFormsListRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
+import { buildPageInfo } from "../../../../../../assets/shared/schemas/pagination";
 
-interface FormRow {
-  id: string;
-  key: string;
-  scope_type: string;
-  scope_ref: string | null;
-  purpose: string;
-  status: string;
-  title: string;
-  description: string | null;
-  created_at: string;
-  updated_at: string;
-  field_count: number;
-  submission_count: number;
-}
-
-export async function onRequestGet(c: AdminContext): Promise<Response> {
+export const onRequestGet = openApiRoute(adminEventFormsListRouteSchema, async (c: AdminContext, data) => {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
-
-  const forms = await all<FormRow>(
-    requestDb(c),
-    `SELECT
-       f.*,
-       COUNT(DISTINCT ff.id) AS field_count,
-       COUNT(DISTINCT fs.id)
-         + CASE WHEN f.purpose = 'event_registration' THEN (
-             SELECT COUNT(*) FROM registrations r
-             WHERE r.event_id = ? AND r.custom_answers_json IS NOT NULL
-               AND NOT EXISTS (
-                 SELECT 1 FROM form_submissions fs2
-                 WHERE fs2.form_id = f.id AND fs2.context_type = 'registration' AND fs2.context_ref = r.id
-               )
-           ) ELSE 0 END
-         + CASE WHEN f.purpose = 'proposal_submission' THEN (
-             SELECT COUNT(*) FROM session_proposals sp
-             WHERE sp.event_id = ? AND sp.details_json IS NOT NULL
-               AND NOT EXISTS (
-                 SELECT 1 FROM form_submissions fs2
-                 WHERE fs2.form_id = f.id AND fs2.context_type = 'proposal' AND fs2.context_ref = sp.id
-               )
-           ) ELSE 0 END AS submission_count
-     FROM forms f
-     LEFT JOIN form_fields ff ON ff.form_id = f.id
-     LEFT JOIN form_submissions fs ON fs.form_id = f.id
-     WHERE (f.scope_type = 'event' AND f.scope_ref = ?)
-        OR f.scope_type = 'global'
-     GROUP BY f.id
-     ORDER BY f.scope_type DESC, f.purpose ASC, f.updated_at DESC`,
-    [event.id, event.id, event.id],
-  );
-
-  return json({ forms });
-}
+  const event = await getEventBySlug(requestDb(c), data.params.eventSlug);
+  const { limit = 200, offset = 0, q, sort, purpose } = data.query;
+  const { forms, total } = await listAdminForms(requestDb(c), {
+    eventId: event.id,
+    includeGlobal: true,
+    limit,
+    offset,
+    q,
+    sort,
+    purpose,
+  });
+  return json({ forms, page: buildPageInfo(limit, offset, total, forms.length) });
+});
 
 export async function onRequestPost(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminFormCreateSchema);
   const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
 
-  const now = nowIso();
-  const formId = uuid();
-
-  await run(
+  const form = await createManagedForm(
     requestDb(c),
-    `INSERT INTO forms (id, key, scope_type, scope_ref, purpose, status, title, description, created_at, updated_at)
-     VALUES (?, ?, 'event', ?, ?, ?, ?, ?, ?, ?)`,
-    [formId, body.key, event.id, body.purpose, body.status, body.title, body.description ?? null, now, now],
+    admin.id,
+    { type: "event", ref: event.id, eventSlug: event.slug },
+    body,
   );
-
-  for (const field of body.fields) {
-    await run(
-      requestDb(c),
-      `INSERT INTO form_fields (id, form_id, key, label, field_type, required, options_json, validation_json, sort_order, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        uuid(),
-        formId,
-        field.key,
-        field.label,
-        field.fieldType,
-        field.required ? 1 : 0,
-        field.options ? stringifyJson(field.options) : null,
-        field.validation ? stringifyJson(field.validation) : null,
-        field.sortOrder,
-        now,
-      ],
-    );
-  }
-
-  await writeAuditLog(requestDb(c), "admin", admin.id, "event_form_created", "form", formId, {
-    eventSlug: event.slug,
-    key: body.key,
-    purpose: body.purpose,
-  });
-
-  return json({ success: true, formId, key: body.key }, 201);
-}
-
-export async function onRequest(c: AdminContext): Promise<Response> {
-  if (c.req.raw.method === "GET") return onRequestGet(c);
-  if (c.req.raw.method === "POST") return onRequestPost(c);
-  return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
+  return json({ success: true, formId: form.id, key: form.key }, 201);
 }

@@ -1,18 +1,7 @@
 import { useState } from "preact/hooks";
 import { Badge } from "../../components/Badge";
 import { ApiDataTable } from "../../components/Table";
-
-export interface AuditLogEntry {
-  id: string;
-  actor_type: string;
-  actor_id: string | null;
-  actor_display: string | null;
-  action: string;
-  entity_type: string;
-  entity_id: string | null;
-  details: Record<string, unknown> | null;
-  created_at: string;
-}
+import { auditLogListResponseSchema, type AuditLogEntry } from "../../../shared/schemas/admin-audit-log";
 
 const ENTITY_TYPES = [
   "registration",
@@ -35,8 +24,8 @@ export function AuditLog() {
   return (
     <ApiDataTable<AuditLogEntry>
       endpoint="/api/v1/admin/audit-log"
-      resolve={(d) => (d as { entries: AuditLogEntry[] }).entries}
-      resolvePage={(d) => (d as { page: { total: number; hasMore: boolean } }).page}
+      resolve={(data) => auditLogListResponseSchema.parse(data).entries}
+      resolvePage={(data) => auditLogListResponseSchema.parse(data).page}
       paginate
       searchPlaceholder="action, entity, details…"
       params={{
@@ -102,9 +91,9 @@ export function AuditLog() {
         {
           header: "When",
           cell: (entry) =>
-            new Date(entry.created_at).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "medium" }),
+            new Date(entry.created_at).toLocaleString("en-US", { dateStyle: "short", timeStyle: "medium" }),
           className: "text-nowrap small text-muted",
-          sort: { asc: "al.created_at", desc: "-al.created_at", defaultDirection: "desc" },
+          sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
         },
         {
           header: "Actor",
@@ -123,18 +112,18 @@ export function AuditLog() {
             </>
           ),
           className: "small",
-          sort: { asc: "actor_display", desc: "-actor_display" },
+          sort: { asc: "actor", desc: "-actor" },
         },
         {
           header: "Action",
           cell: (entry) => <code class="small">{entry.action}</code>,
-          sort: { asc: "al.action", desc: "-al.action" },
+          sort: { asc: "action", desc: "-action" },
         },
         {
           header: "Entity",
           cell: (entry) => <Badge status={entry.entity_type} label={entry.entity_type} />,
           className: "small text-muted",
-          sort: { asc: "al.entity_type", desc: "-al.entity_type" },
+          sort: { asc: "entity_type", desc: "-entity_type" },
         },
         { header: "Entity ID", cell: (entry) => entry.entity_id ?? "—", className: "mono small text-muted" },
         {

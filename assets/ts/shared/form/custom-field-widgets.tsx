@@ -2,34 +2,9 @@ import { useState, useCallback, useEffect, useRef, useMemo } from "preact/hooks"
 import type { FormField } from "../types";
 import { optionsFor, readRules, type FieldRules } from "./custom-field-rules";
 import { COUNTRIES } from "../countries";
+import { isAllowedProfileUrl } from "../../../shared/schemas/form-field-rules";
 
 // ── Validation helpers ────────────────────────────────────────────────────
-
-const PROFESSIONAL_DOMAINS = [
-  "linkedin.com",
-  "www.linkedin.com",
-  "xing.com",
-  "www.xing.com",
-  "x.com",
-  "www.x.com",
-  "twitter.com",
-  "www.twitter.com",
-  "github.com",
-  "www.github.com",
-  "gitlab.com",
-  "www.gitlab.com",
-];
-
-function professionalUrlAllowed(value: string, allowedDomains: string[]): boolean {
-  try {
-    const url = new URL(value);
-    if (url.protocol !== "http:" && url.protocol !== "https:") return false;
-    const host = url.hostname.toLowerCase();
-    return allowedDomains.some((d) => host === d || host.endsWith(`.${d}`));
-  } catch {
-    return false;
-  }
-}
 
 /** Attaches custom validity logic for phone / professional_profile / pattern formats. */
 function useStringValidation(rules: FieldRules) {
@@ -52,8 +27,7 @@ function useStringValidation(rules: FieldRules) {
         return;
       }
       if (rules.format === "professional_profile") {
-        const allowed = rules.allowedDomains?.length ? rules.allowedDomains : PROFESSIONAL_DOMAINS;
-        if (!professionalUrlAllowed(value, allowed)) {
+        if (!isAllowedProfileUrl(value, rules.allowedDomains)) {
           el.setCustomValidity("Please provide a supported professional profile URL.");
           return;
         }

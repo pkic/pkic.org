@@ -6,11 +6,67 @@ import { createAdminSession } from "./helpers/auth";
 import { onRequestPost as submitProposal } from "../functions/api/v1/events/[eventSlug]/proposals";
 import { onRequestGet as getBadgeRole } from "../functions/api/v1/admin/events/[eventSlug]/registrations/[registrationId]/badge-role";
 import { addProposalSpeaker, createProposal, finalizeProposalDecision } from "../functions/_lib/services/proposals";
+import app from "../functions/router";
 
 describe("proposal participants", () => {
   beforeEach(async () => {
     await resetDb();
   });
+
+  it("accepts event-configured session types and rejects unconfigured values", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    await env.DB.prepare("UPDATE events SET settings_json = ? WHERE id = ?")
+      .bind(
+        JSON.stringify({
+          proposal: { sessionTypes: [{ label: "Ask Me Anything", requiresPresentation: false }] },
+        }),
+        eventId,
+      )
+      .run();
+
+    const proposalBody = (email: string, type: string) => ({
+      sourceType: "direct",
+      proposer: {
+        firstName: "Session",
+        lastName: "Speaker",
+        email,
+        organizationName: "Example Organization",
+        jobTitle: "Engineer",
+        bio: "Experienced speaker with sufficient biography text for proposal validation.",
+      },
+      proposal: {
+        type,
+        title: "Configurable Session Type Architecture",
+        abstract:
+          "A sufficiently detailed proposal explaining how event-configured session types flow through shared schemas and backend validation.",
+      },
+      consents: [{ termKey: "speaker-terms", version: "v1" }],
+    });
+    const request = (email: string, type: string) =>
+      app.fetch(
+        new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(proposalBody(email, type)),
+        }),
+        env as any,
+        { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+      );
+
+    const accepted = await request("configured-type@example.test", "ask me anything");
+    expect(accepted.status).toBe(200);
+    const acceptedBody = (await accepted.json()) as { proposalId: string };
+    await expect(
+      queryAll<{ proposal_type: string }>(env.DB, "SELECT proposal_type FROM session_proposals WHERE id = ?", [
+        acceptedBody.proposalId,
+      ]),
+    ).resolves.toEqual([{ proposal_type: "Ask Me Anything" }]);
+
+    const rejected = await request("unconfigured-type@example.test", "Workshop");
+    expect(rejected.status).toBe(400);
+    await expect(rejected.json()).resolves.toMatchObject({ error: { code: "PROPOSAL_TYPE_NOT_ALLOWED" } });
+  });
+
   it("supports panel participants and stores user links", async () => {
     await seedEventAndAdmin(env.DB);
 
@@ -161,6 +217,104 @@ describe("proposal participants", () => {
     ]);
   });
 
+  it("rolls back the complete proposal submission when the final outbox insert fails", async () => {
+    await seedEventAndAdmin(env.DB);
+    await env.DB.prepare(
+      `CREATE TRIGGER reject_proposal_submission_email
+       BEFORE INSERT ON email_outbox
+       WHEN NEW.template_key = 'proposal_submitted'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced outbox failure');
+       END`,
+    ).run();
+
+    try {
+      await expect(
+        submitProposal(
+          createContext(
+            env,
+            new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                sourceType: "direct",
+                proposer: {
+                  firstName: "Atomic",
+                  lastName: "Proposer",
+                  email: "atomic-proposer@example.test",
+                  role: "proposer",
+                },
+                proposal: {
+                  type: "talk",
+                  title: "Atomic Proposal Submission Test",
+                  abstract:
+                    "This valid proposal deliberately fails at the final outbox statement to prove that users, consent, participants, referral state, and proposal data all roll back together.",
+                },
+                consents: [{ termKey: "speaker-terms", version: "v1" }],
+              }),
+            }),
+            { eventSlug: "pqc-2026" },
+          ),
+        ),
+      ).rejects.toThrow("forced outbox failure");
+      expect(
+        await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = 'atomic-proposer@example.test'"),
+      ).toHaveLength(0);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM session_proposals WHERE title = 'Atomic Proposal Submission Test'"),
+      ).toHaveLength(0);
+      expect(await queryAll(env.DB, "SELECT id FROM consent_acceptances")).toHaveLength(0);
+      expect(await queryAll(env.DB, "SELECT code FROM referral_codes")).toHaveLength(0);
+      expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER IF EXISTS reject_proposal_submission_email").run();
+    }
+  });
+
+  it("rejects duplicate participant emails before creating any proposal state", async () => {
+    await seedEventAndAdmin(env.DB);
+    await expect(
+      submitProposal(
+        createContext(
+          env,
+          new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              sourceType: "direct",
+              proposer: {
+                firstName: "Duplicate",
+                lastName: "Person",
+                email: "duplicate-person@example.test",
+                role: "proposer",
+              },
+              proposal: {
+                type: "talk",
+                title: "Duplicate Participant Integrity Test",
+                abstract:
+                  "This proposal payload is otherwise valid but repeats the proposer email as a co-speaker and must be rejected before any database records are created.",
+              },
+              speakers: [
+                {
+                  firstName: "Duplicate",
+                  lastName: "Person",
+                  email: "DUPLICATE-PERSON@example.test",
+                  role: "speaker",
+                  bio: "A sufficiently detailed biography for validating the duplicate participant contract behavior.",
+                },
+              ],
+              consents: [{ termKey: "speaker-terms", version: "v1" }],
+            }),
+          }),
+          { eventSlug: "pqc-2026" },
+        ),
+      ),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM session_proposals WHERE title = 'Duplicate Participant Integrity Test'"),
+    ).toHaveLength(0);
+  });
+
   it("keeps pending proposal speakers off the badge until acceptance", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
@@ -237,7 +391,7 @@ describe("proposal participants", () => {
 
     await finalizeProposalDecision(env.DB, {
       proposalId: proposal.id,
-      decidedByUserId: adminRow.id,
+      actor: { id: adminRow.id, email: "admin@pkic.org", role: "admin" },
       finalStatus: "accepted",
       minReviewsRequired: 0,
     });
@@ -268,5 +422,35 @@ describe("proposal participants", () => {
     };
     expect(acceptedPayload.auto_detected).toBe("speaker");
     expect(acceptedPayload.effective_role).toBe("speaker");
+
+    const overrideResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/events/pqc-2026/registrations/${registrationId}/badge-role`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ role: "staff" }),
+      }),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(overrideResponse.status).toBe(200);
+    expect(await overrideResponse.json()).toMatchObject({
+      admin_override: "staff",
+      auto_detected: "speaker",
+      effective_role: "staff",
+    });
+    expect(
+      await queryAll<{ role: string }>(
+        env.DB,
+        "SELECT role FROM registration_badge_role_overrides WHERE registration_id = ?",
+        [registrationId],
+      ),
+    ).toEqual([{ role: "staff" }]);
+    expect(
+      await queryAll<{ status: string }>(
+        env.DB,
+        "SELECT status FROM event_participants WHERE event_id = ? AND user_id = ? AND source_type = 'proposal' AND role = 'speaker'",
+        [eventId, speakerId],
+      ),
+    ).toEqual([{ status: "active" }]);
   });
 });

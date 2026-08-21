@@ -1,0 +1,71 @@
+import type { MemberWallEntry } from "../../../../assets/shared/schemas/members-directory";
+import { all } from "../../db/queries";
+import type { DatabaseLike } from "../../types";
+import { PUBLIC_SPONSOR_READ_MODEL_SQL } from "../public-sponsors";
+
+/**
+ * Unified public wall read model. Membership eligibility, logo presence,
+ * sponsor attribution, non-member sponsor inclusion, and the non-sponsor cap
+ * are all resolved in D1; the browser receives display-ready entries.
+ */
+export async function listMemberWall(db: DatabaseLike, memberLimit: number): Promise<MemberWallEntry[]> {
+  return all<MemberWallEntry>(
+    db,
+    `${PUBLIC_SPONSOR_READ_MODEL_SQL},
+     active_member_organizations AS (
+       SELECT DISTINCT o.id, o.slug, o.name, o.website, o.slogan, o.logo_r2_key
+         FROM members m
+         JOIN organizations o ON o.id = m.organization_id
+        WHERE m.status = 'active'
+          AND o.logo_r2_key IS NOT NULL
+     ), member_entries AS (
+       SELECT 'member:' || member.id AS key,
+              CASE WHEN member.slug IS NOT NULL
+                   THEN '/members/' || member.slug || '/'
+                   ELSE '/members/profile/?id=' || member.id END AS href,
+              '/api/v1/members/' || member.id || '/logo' AS logoUrl,
+              member.name,
+              member.slogan,
+              COALESCE(sponsor.effective_weight, 0) AS sponsorLevel,
+              sponsor.effective_tier AS sponsorLevelName
+         FROM active_member_organizations member
+         LEFT JOIN enriched_sponsors sponsor ON sponsor.id = member.id
+     ), sponsor_only_entries AS (
+       SELECT 'sponsor:' || sponsor.id AS key,
+              COALESCE(sponsor.website, '#') AS href,
+              CASE WHEN sponsor.logo_r2_key IS NOT NULL
+                   THEN '/api/v1/members/' || sponsor.id || '/logo'
+                   ELSE '/api/v1/sponsors/' || sponsor.id || '/logo' END AS logoUrl,
+              sponsor.name,
+              NULL AS slogan,
+              sponsor.effective_weight AS sponsorLevel,
+              sponsor.effective_tier AS sponsorLevelName
+         FROM enriched_sponsors sponsor
+        WHERE sponsor.effective_weight > 0
+          AND (sponsor.logo_r2_key IS NOT NULL OR sponsor.sponsorship_logo_r2_key IS NOT NULL)
+          AND NOT EXISTS (SELECT 1 FROM active_member_organizations member WHERE member.id = sponsor.id)
+     ), ranked_non_sponsors AS (
+       SELECT member_entries.*,
+              ROW_NUMBER() OVER (
+                ORDER BY ((length(key) * 31 + unicode(substr(key, -1)) * 17 + unicode(substr(key, 8, 1))) % 997), key
+              ) AS display_rank
+         FROM member_entries
+        WHERE sponsorLevel = 0
+     ), selected_entries AS (
+       SELECT key, href, logoUrl, name, slogan, sponsorLevel, sponsorLevelName
+         FROM member_entries
+        WHERE sponsorLevel > 0
+       UNION ALL
+       SELECT key, href, logoUrl, name, slogan, sponsorLevel, sponsorLevelName
+         FROM sponsor_only_entries
+       UNION ALL
+       SELECT key, href, logoUrl, name, slogan, sponsorLevel, sponsorLevelName
+         FROM ranked_non_sponsors
+        WHERE display_rank <= ?
+     )
+     SELECT key, href, logoUrl, name, slogan, sponsorLevel, sponsorLevelName
+       FROM selected_entries
+      ORDER BY ((length(key) * 31 + unicode(substr(key, -1)) * 17 + unicode(substr(key, 8, 1))) % 997), key`,
+    ["", memberLimit],
+  );
+}

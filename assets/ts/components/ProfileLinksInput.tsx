@@ -65,23 +65,35 @@ export interface ProfileLinksHandle {
 interface ProfileLinksInputProps {
   fieldName: string;
   max?: number;
+  value?: string[];
+  onChange?: (links: string[]) => void;
 }
 
 export const ProfileLinksInput = forwardRef(function ProfileLinksInput(
-  { fieldName, max = 10 }: ProfileLinksInputProps,
+  { fieldName, max = 10, value, onChange }: ProfileLinksInputProps,
   ref: Ref<ProfileLinksHandle>,
 ) {
-  const [links, setLinksState] = useState<string[]>([]);
+  const [internalLinks, setInternalLinks] = useState<string[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [error, setError] = useState("");
+  const links = value ?? internalLinks;
+
+  const setLinks = useCallback(
+    (next: string[]) => {
+      const bounded = next.slice(0, max);
+      if (value === undefined) setInternalLinks(bounded);
+      onChange?.(bounded);
+    },
+    [max, onChange, value],
+  );
 
   useImperativeHandle(
     ref,
     () => ({
       getLinks: () => [...links],
-      setLinks: (urls: string[]) => setLinksState(urls.slice(0, max)),
+      setLinks,
     }),
-    [links, max],
+    [links, setLinks],
   );
 
   const atMax = links.length >= max;
@@ -104,15 +116,15 @@ export const ProfileLinksInput = forwardRef(function ProfileLinksInput(
       return;
     }
 
-    setLinksState([...links, raw]);
+    setLinks([...links, raw]);
     setInputValue("");
-  }, [inputValue, links, max]);
+  }, [inputValue, links, max, setLinks]);
 
   const remove = useCallback(
     (index: number) => {
-      setLinksState(links.filter((_, i) => i !== index));
+      setLinks(links.filter((_, i) => i !== index));
     },
-    [links],
+    [links, setLinks],
   );
 
   const handleKeyDown = useCallback(

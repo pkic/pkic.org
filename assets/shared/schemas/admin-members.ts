@@ -7,8 +7,11 @@
  * already produces.
  */
 import { z } from "zod";
-import { normalizedEmailSchema } from "./api";
-import { paginationQuerySchema, paginatedResponseSchema } from "./pagination";
+import { databaseIdSchema } from "./identifiers";
+import { normalizedEmailSchema, trimmedString } from "./api-common";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { linksSchema } from "./links";
+import { workingGroupSlugSchema } from "./working-groups";
 import {
   MEMBERSHIP_CATEGORIES,
   membershipCategorySchema,
@@ -18,18 +21,11 @@ import {
 
 export { MEMBERSHIP_CATEGORIES, membershipCategorySchema, INDIVIDUAL_MEMBERSHIP_CATEGORIES };
 
-function trimmedString(min: number, max: number): z.ZodString {
-  return z.string().trim().min(min).max(max);
-}
-
-export const WORKING_GROUP_SLUGS = ["ca", "cbom", "cm", "pkimm", "pqc", "tcwg"] as const;
-export const workingGroupSlugSchema = z.enum(WORKING_GROUP_SLUGS);
-
 export const representativeCreateSchema = z.object({
   name: trimmedString(1, 200),
   email: normalizedEmailSchema,
   role: trimmedString(0, 200).optional(),
-  linkedin: z.url().optional(),
+  links: linksSchema.optional(),
 });
 
 export const memberCreateSchema = z
@@ -40,7 +36,7 @@ export const memberCreateSchema = z
     membershipCategory: membershipCategorySchema,
     memberSince: z.iso.date(),
     representatives: z.array(representativeCreateSchema).min(1).max(10),
-    workingGroupSlugs: z.array(workingGroupSlugSchema).max(WORKING_GROUP_SLUGS.length).default([]),
+    workingGroupSlugs: z.array(workingGroupSlugSchema).max(200).default([]),
   })
   .superRefine((value, ctx) => {
     const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(value.membershipCategory);
@@ -70,9 +66,9 @@ export const memberCreateSchema = z
   });
 
 export const adminMemberSummarySchema = z.object({
-  id: z.uuid(),
-  userId: z.uuid(),
-  organizationId: z.uuid().nullable(),
+  id: databaseIdSchema,
+  userId: databaseIdSchema,
+  organizationId: databaseIdSchema.nullable(),
   organizationName: z.string().nullable(),
   name: z.string(),
   email: z.string(),
@@ -82,18 +78,32 @@ export const adminMemberSummarySchema = z.object({
   createdAt: z.string(),
 });
 
+export type AdminMemberSummary = z.infer<typeof adminMemberSummarySchema>;
+
 export const memberCreateResponseSchema = z.object({
-  organizationId: z.uuid().nullable(),
+  organizationId: databaseIdSchema.nullable(),
   members: z.array(adminMemberSummarySchema),
 });
 
-export const adminMembersListQuerySchema = paginationQuerySchema;
+export const ADMIN_MEMBERS_SORT_COLUMNS = [
+  "name",
+  "email",
+  "organizationName",
+  "membershipCategory",
+  "status",
+  "createdAt",
+] as const;
+
+export const adminMembersListQuerySchema = listQuerySchema(ADMIN_MEMBERS_SORT_COLUMNS).extend({
+  membershipCategory: membershipCategorySchema.optional(),
+  status: memberStatusSchema.optional(),
+});
 
 export const membersListRouteSchema = {
   tags: ["Membership"],
   summary: "List members (Interim Admin Tool)",
   description:
-    "Interim Admin Tool — unfiltered-by-status admin listing of every members row, one row per representative.",
+    "Interim Admin Tool — searchable, sortable, filterable admin listing of every member, one row per representative.",
   request: {
     query: adminMembersListQuerySchema,
   },

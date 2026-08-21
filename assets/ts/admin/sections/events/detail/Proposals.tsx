@@ -4,29 +4,19 @@ import { Badge } from "../../../../components/Badge";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/Table";
 import { Tabs } from "../../../../components/Tabs";
 import { fmt } from "../../../ui";
-import type { ProposalSummary, ProposalAccess } from "../../../types";
+import type { ProposalSummary } from "../../../types";
 import { EventEmail } from "./EventEmail";
 import { EventFormResponses } from "./Forms";
 import { Invites } from "./Invites";
+import {
+  adminEventProposalsResponseSchema,
+  type AdminEventProposalsResponse,
+  type ProposalStats,
+} from "../../../../../shared/schemas/admin-event-proposals";
 
 // ─── Proposals list ───────────────────────────────────────────────────────────
 
-interface ProposalsResponse {
-  proposals: ProposalSummary[];
-  access: ProposalAccess;
-  stats?: ProposalStats;
-  page: { offset: number; limit: number; total: number; hasMore: boolean };
-}
-
 type RecommendationFilter = "" | "accept" | "needs-work" | "reject";
-
-interface ProposalStats {
-  byStatus: Record<string, number>;
-  byRecommendation: Record<string, number>;
-  reviewedCount: number;
-  unreviewedCount: number;
-  total: number;
-}
 
 function formatAverageScore(score: number | null): string {
   if (score == null) return "—";
@@ -176,14 +166,15 @@ function ProposalsList({ slug }: { slug: string }) {
 
       <ApiDataTable<ProposalSummary>
         endpoint={`/api/v1/admin/events/${slug}/proposals`}
+        responseSchema={adminEventProposalsResponseSchema}
         resolve={(d) => {
-          const resp = d as ProposalsResponse;
-          if (resp.stats) setStats(resp.stats);
+          const resp = d as AdminEventProposalsResponse;
+          setStats(resp.stats);
           return resp.proposals;
         }}
-        resolvePage={(d) => (d as ProposalsResponse).page}
+        resolvePage={(d) => (d as AdminEventProposalsResponse).page}
         paginate
-        initialSort="submitted_desc"
+        initialSort="-submittedAt"
         searchPlaceholder="Search proposals / reviews…"
         params={{
           ...(statusFilter && { status: statusFilter }),
@@ -249,7 +240,7 @@ function ProposalsList({ slug }: { slug: string }) {
             header: "Title",
             cell: (p) => <span class="small">{p.title}</span>,
             className: "adm-cell-title",
-            sort: { asc: "title_asc", desc: "title_desc", defaultDirection: "asc" },
+            sort: { asc: "title", desc: "-title", defaultDirection: "asc" },
           },
           {
             header: "Proposer",
@@ -268,50 +259,50 @@ function ProposalsList({ slug }: { slug: string }) {
                 </>
               );
             },
-            sort: { asc: "proposer_asc", desc: "proposer_desc", defaultDirection: "asc" },
+            sort: { asc: "proposer", desc: "-proposer", defaultDirection: "asc" },
           },
           {
             header: { label: "Type", className: "text-center" },
             cell: (p) => p.proposal_type,
             className: "small text-center",
-            sort: { asc: "type_asc", desc: "type_desc", defaultDirection: "asc" },
+            sort: { asc: "type", desc: "-type", defaultDirection: "asc" },
           },
           {
             header: { label: "Status", className: "text-center" },
             cell: (p) => <Badge status={p.status} />,
             className: "text-center",
-            sort: { asc: "status_asc", desc: "status_desc", defaultDirection: "asc" },
+            sort: { asc: "status", desc: "-status", defaultDirection: "asc" },
           },
           {
             header: { label: "Decision", className: "text-center" },
             cell: (p) =>
               p.decision_status ? <Badge status={p.decision_status} /> : <span class="text-muted small">—</span>,
             className: "text-center",
-            sort: { asc: "decision_asc", desc: "decision_desc", defaultDirection: "asc" },
+            sort: { asc: "decision", desc: "-decision", defaultDirection: "asc" },
           },
           {
             header: { label: "Avg Score", className: "text-end" },
             cell: (p) => formatAverageScore(p.average_review_score),
             className: "mono text-end",
-            sort: { asc: "score_asc", desc: "score_desc" },
+            sort: { asc: "score", desc: "-score" },
           },
           {
             header: { label: "Recommendations", className: "text-center" },
             cell: (p) => recommendationSummary(p),
             className: "text-center",
-            sort: { asc: "recommendations_asc", desc: "recommendations_desc" },
+            sort: { asc: "recommendations", desc: "-recommendations" },
           },
           {
             header: { label: "Reviews", className: "text-end" },
             cell: (p) => p.review_count,
             className: "mono text-end",
-            sort: { asc: "reviews_asc", desc: "reviews_desc" },
+            sort: { asc: "reviews", desc: "-reviews" },
           },
           {
             header: "Submitted",
             cell: (p) => fmt(p.submitted_at),
             className: "mono small",
-            sort: { asc: "submitted_asc", desc: "submitted_desc" },
+            sort: { asc: "submittedAt", desc: "-submittedAt" },
           },
           {
             header: "",

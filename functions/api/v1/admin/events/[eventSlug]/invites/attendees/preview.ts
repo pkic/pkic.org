@@ -1,23 +1,12 @@
 import { parseJsonBody } from "../../../../../../../_lib/validation";
 import { json } from "../../../../../../../_lib/http";
-import { AppError } from "../../../../../../../_lib/errors";
 import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
-import { buildEventEmailVariables, getEventBySlug } from "../../../../../../../_lib/services/events";
+import { getEventBySlug } from "../../../../../../../_lib/services/events";
 import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
-import { renderEmail, renderSubject } from "../../../../../../../_lib/email/render";
-import { resolveTemplate } from "../../../../../../../_lib/email/templates";
-import { loadEmailLayout } from "../../../../../../../_lib/email/partials";
-import { registrationPageUrl, inviteDeclineUrl } from "../../../../../../../_lib/services/frontend-links";
-import type { EmailContentType } from "../../../../../../../../assets/shared/schemas/admin-email-templates";
 import { requireInternalSecret } from "../../../../../../../_lib/request";
-import {
-  computeAttendeeInviteDigest,
-  signAttendeeInvitePreviewToken,
-} from "../../../../../../../_lib/services/admin-invite-preview";
+import { buildAdminInvitePreview } from "../../../../../../../_lib/services/admin-invite-preview-email";
 import { adminBulkAttendeeInvitesPreviewSchema } from "../../../../../../../../assets/shared/schemas/api";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
-
-const PREVIEW_TTL_SECONDS = 10 * 60;
 
 export async function onRequestPost(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
@@ -26,55 +15,19 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const secret = requireInternalSecret(c.env);
 
-  const firstInvite = body.invites[0];
-  if (!firstInvite) {
-    throw new AppError(400, "INVITE_PREVIEW_EMPTY", "At least one invite recipient is required");
-  }
-
-  const registrationUrl = registrationPageUrl(appBaseUrl, event, {
-    invite: "preview-token",
-    source: "invite",
-  });
-  const declineUrl = inviteDeclineUrl(appBaseUrl, event, "preview-token");
-
-  const template = await resolveTemplate(requestDb(c), "attendee_invite");
-  const layoutHtml = await loadEmailLayout(requestDb(c));
-  const digest = await computeAttendeeInviteDigest(body.invites);
-  const preview = await signAttendeeInvitePreviewToken({
-    secret,
-    eventId: event.id,
-    adminId: admin.id,
-    inviteDigest: digest,
-    ttlSeconds: PREVIEW_TTL_SECONDS,
-  });
-
-  const data = {
-    ...buildEventEmailVariables(event, appBaseUrl),
-    firstName: firstInvite.firstName ?? "Attendee",
-    lastName: firstInvite.lastName ?? "",
-    registrationUrl,
-    declineUrl,
-    inviteCount: body.invites.length,
-  };
-
-  const subject = renderSubject(template.subjectTemplate, `Invitation: ${event.name}`, data);
-  const rendered = await renderEmail(
-    template.content,
-    data,
-    layoutHtml,
-    template.contentType as EmailContentType,
+  const preview = await buildAdminInvitePreview({
+    db: requestDb(c),
+    event,
     appBaseUrl,
-  );
+    signingSecret: secret,
+    adminId: admin.id,
+    inviteType: "attendee",
+    invites: body.invites,
+  });
 
   return json({
     success: true,
-    previewToken: preview.token,
-    previewExpiresAt: preview.expiresAt,
-    inviteDigest: digest,
-    recipientCount: body.invites.length,
-    subject,
-    html: rendered.html,
-    text: rendered.text,
+    ...preview,
   });
 }
 

@@ -49,7 +49,7 @@ export function Login() {
 
   return (
     <div class="d-flex justify-content-center py-5">
-      <div class="card shadow-sm" style="max-width: 440px; width: 100%;">
+      <div class="card shadow-sm content-width-sm">
         <div class="card-body p-4">
           <h2 class="h4 mb-3">Sponsor Portal</h2>
           <p class="text-muted">

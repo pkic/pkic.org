@@ -1,9 +1,12 @@
 /**
- * Member profile & working-group self-service. All
+ * Member profile, applications, and notification self-service. All
  * functions here operate on the caller's own AuthMember identity —
  * `/api/v1/me/*` never accepts a target user/member id, by design.
  */
 import { all, first, run } from "../db/queries";
+import { queryPage } from "../db/pagination";
+import { buildD1TextSearchFilter } from "../db/search";
+import { resolveMappedOrderBy } from "../db/sort";
 import { nowIso } from "../utils/time";
 import { stringifyJson, parseJsonSafe } from "../utils/json";
 import { parseLinksJson, serializeLinks } from "../../../assets/shared/schemas/links";
@@ -11,12 +14,6 @@ import { AppError } from "../errors";
 import { normalizeEmail } from "../validation";
 import { VOTING_CATEGORIES } from "./membership/applications/create";
 import { getMemberApplicationById } from "./membership/applications/queries";
-import {
-  getWorkingGroupBySlugOrId,
-  assertCaConstraint,
-  addWorkingGroupMember,
-  removeWorkingGroupMember,
-} from "./working-groups";
 import { resolveRepresentativeRoleHolders } from "./membership/representative-roles";
 import type { AuthMember, DatabaseLike, EligibleMembership } from "../types";
 
@@ -241,31 +238,54 @@ export async function updateOrganizationVisibility(
 
 export interface MyApplicationSummary {
   id: string;
-  status: string;
   stage: string;
   membershipCategory: string;
   createdAt: string;
 }
 
-export async function listMyApplications(db: DatabaseLike, member: AuthMember): Promise<MyApplicationSummary[]> {
-  const rows = await all<{
+export async function listMyApplications(
+  db: DatabaseLike,
+  member: AuthMember,
+  params: { q?: string; sort?: string; limit: number; offset: number },
+): Promise<{ applications: MyApplicationSummary[]; total: number }> {
+  const search = params.q
+    ? buildD1TextSearchFilter(params.q, ["membership_category", "stage", "organization_name"])
+    : null;
+  const where = search ? ` AND ${search.sql}` : "";
+  const bindings = [member.email, ...(search?.bindings ?? [])];
+  const orderBy = resolveMappedOrderBy(
+    params.sort,
+    { createdAt: "created_at", stage: "stage" },
+    "created_at DESC",
+    "id ASC",
+  );
+  const result = await queryPage<{
     id: string;
-    status: string;
     stage: string;
     membership_category: string;
     created_at: string;
   }>(
     db,
-    `SELECT id, status, stage, membership_category, created_at FROM member_applications WHERE applicant_email = ? ORDER BY created_at DESC`,
-    [member.email],
+    {
+      sql: `SELECT id, stage, membership_category, created_at
+            FROM member_applications
+            WHERE applicant_email = ?${where} ${orderBy} LIMIT ? OFFSET ?`,
+      bindings: [...bindings, params.limit, params.offset],
+    },
+    {
+      sql: `SELECT COUNT(*) AS total FROM member_applications WHERE applicant_email = ?${where}`,
+      bindings,
+    },
   );
-  return rows.map((r) => ({
-    id: r.id,
-    status: r.status,
-    stage: r.stage,
-    membershipCategory: r.membership_category,
-    createdAt: r.created_at,
-  }));
+  return {
+    applications: result.rows.map((row) => ({
+      id: row.id,
+      stage: row.stage,
+      membershipCategory: row.membership_category,
+      createdAt: row.created_at,
+    })),
+    total: result.total,
+  };
 }
 
 export interface MyApplicationTimelineEntry {
@@ -287,7 +307,6 @@ export interface MyApplicationDetail {
   applicantEmail: string;
   organizationName: string | null;
   membershipCategory: string;
-  status: string;
   stage: string;
   stageEnteredAt: string;
   createdAt: string;
@@ -334,7 +353,6 @@ export async function getMyApplicationDetail(
     applicantEmail: application.applicant_email,
     organizationName: application.organization_name,
     membershipCategory: application.membership_category,
-    status: application.status,
     stage: application.stage,
     stageEnteredAt: application.stage_entered_at,
     createdAt: application.created_at,
@@ -349,47 +367,6 @@ export async function getMyApplicationDetail(
 }
 
 // ── Working group self-service ────────────────────────────────────
-
-export interface MyWorkingGroupMembership {
-  workingGroupId: string;
-  slug: string;
-  name: string;
-  joinedAt: string;
-}
-
-export async function listMyWorkingGroups(db: DatabaseLike, member: AuthMember): Promise<MyWorkingGroupMembership[]> {
-  const rows = await all<{ id: string; slug: string; name: string; joined_at: string }>(
-    db,
-    `SELECT wg.id, wg.slug, wg.name, wgm.joined_at
-     FROM working_group_members wgm
-     JOIN working_groups wg ON wg.id = wgm.working_group_id
-     WHERE wgm.user_id = ? AND wgm.left_at IS NULL
-     ORDER BY wgm.joined_at ASC`,
-    [member.userId],
-  );
-  return rows.map((r) => ({ workingGroupId: r.id, slug: r.slug, name: r.name, joinedAt: r.joined_at }));
-}
-
-export async function joinMyWorkingGroup(db: DatabaseLike, member: AuthMember, wgIdOrSlug: string): Promise<void> {
-  const wg = await getWorkingGroupBySlugOrId(db, wgIdOrSlug);
-  if (!wg) {
-    throw new AppError(404, "WORKING_GROUP_NOT_FOUND", "Working group not found");
-  }
-  // Gated on the member's currently-active "acting as" context only (not
-  // every organization they represent) — self-service join is an action
-  // taken through a specific, explicitly-chosen membership context, unlike
-  // the admin add-member path below.
-  assertCaConstraint(wg, [member.membershipCategory]);
-  await addWorkingGroupMember(db, wg, member.userId, member.memberId);
-}
-
-export async function leaveMyWorkingGroup(db: DatabaseLike, member: AuthMember, wgIdOrSlug: string): Promise<void> {
-  const wg = await getWorkingGroupBySlugOrId(db, wgIdOrSlug);
-  if (!wg) {
-    throw new AppError(404, "WORKING_GROUP_NOT_FOUND", "Working group not found");
-  }
-  await removeWorkingGroupMember(db, wg, member.userId);
-}
 
 /** True for A-G members — used by /api/v1/me/votes (currently a stub, see route) to at least gate on category shape. */
 export function isVotingCategory(category: string): boolean {

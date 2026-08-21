@@ -5,8 +5,10 @@
  * `/api/v1/admin/votes*` and `/api/v1/admin/vote-proposals*` endpoints.
  */
 import { z } from "zod";
-import { paginationQuerySchema, paginatedResponseSchema, sortColumnSchema } from "./pagination";
+import { databaseIdSchema } from "./identifiers";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { VOTING_CATEGORY_LETTERS } from "./membership-categories";
+import { workingGroupIdSchema } from "./working-groups";
 
 export const VOTE_TYPES = ["election", "motion", "consultation"] as const;
 export const voteTypeSchema = z.enum(VOTE_TYPES);
@@ -88,13 +90,13 @@ export const voteOutcomeOnlyResultSchema = z.object({ outcome: z.string().nullab
  */
 export const voteResultSchema = z.union([voteOutcomeOnlyResultSchema, voteFullResultSchema]).nullable();
 
-export const voteIdParamsSchema = z.object({ id: z.string() });
+export const voteIdParamsSchema = z.object({ id: databaseIdSchema });
 export const voteSlugParamsSchema = z.object({ slug: z.string() });
-export const proposalIdParamsSchema = z.object({ id: z.uuid() });
+export const proposalIdParamsSchema = z.object({ id: databaseIdSchema });
 
 export const candidateSummarySchema = z.object({
-  id: z.uuid(),
-  userId: z.uuid().nullable(),
+  id: databaseIdSchema,
+  userId: databaseIdSchema.nullable(),
   candidateName: z.string(),
   candidateBio: z.string().nullable(),
   sortOrder: z.number(),
@@ -102,13 +104,13 @@ export const candidateSummarySchema = z.object({
 });
 
 export const voteSummaryFieldsSchema = {
-  id: z.uuid(),
+  id: databaseIdSchema,
   slug: z.string(),
   title: z.string(),
   description: z.string().nullable(),
   voteType: voteTypeSchema,
   scopeType: voteScopeTypeSchema,
-  scopeId: z.uuid().nullable(),
+  scopeId: workingGroupIdSchema.nullable(),
   thresholdType: thresholdTypeSchema,
   eligibleCategories: z.array(z.string()).nullable(),
   opensAt: z.string(),
@@ -135,6 +137,8 @@ export const portalVoteSchema = z.object({
   result: voteResultSchema,
 });
 
+export const portalVotesListResponseSchema = paginatedResponseSchema("votes", portalVoteSchema);
+
 // ── Public (no auth) — "Votes (public — no auth required)" ────────────
 
 /**
@@ -142,24 +146,27 @@ export const portalVoteSchema = z.object({
  * A bare single value (`?status=open`) still validates to a one-element
  * array, so this is a strict superset of the old single-value filter.
  */
-const publicVoteStatusListSchema = z
-  .string()
-  .transform((value) => value.split(",").map((entry) => entry.trim()))
-  .pipe(
-    z
-      .array(voteStatusSchema.extract(["scheduled", "open", "closed"]))
-      .min(1)
-      .max(3),
-  );
+function voteStatusListSchema<T extends [(typeof VOTE_STATUSES)[number], ...Array<(typeof VOTE_STATUSES)[number]>]>(
+  allowed: T,
+) {
+  return z
+    .string()
+    .transform((value) => value.split(",").map((entry) => entry.trim()))
+    .pipe(z.array(z.enum(allowed)).min(1).max(allowed.length));
+}
 
-export const publicVotesListQuerySchema = paginationQuerySchema.extend({
+const publicVoteStatusListSchema = voteStatusListSchema(["scheduled", "open", "closed"]);
+const portalVoteStatusListSchema = voteStatusListSchema([...VOTE_STATUSES]);
+
+export const VOTES_LIST_SORT_COLUMNS = ["title", "status", "closes_at", "created_at"] as const;
+
+export const publicVotesListQuerySchema = listQuerySchema(VOTES_LIST_SORT_COLUMNS).extend({
   type: voteTypeSchema.optional(),
   scope: voteScopeTypeSchema.optional(),
   wg: z.string().optional(),
   status: publicVoteStatusListSchema.optional(),
   from: z.iso.date().optional(),
   to: z.iso.date().optional(),
-  sort: z.enum(["closes_at", "created_at"]).optional(),
 });
 
 export const publicVotesListRouteSchema = {
@@ -202,11 +209,15 @@ export const portalVotesListRouteSchema = {
   tags: ["Portal Votes"],
   summary: "List all votes visible to the caller",
   description: "Every forum vote, every public vote, plus every vote scoped to a working group the caller belongs to.",
-  request: { query: paginationQuerySchema },
+  request: {
+    query: listQuerySchema(VOTES_LIST_SORT_COLUMNS).extend({
+      status: portalVoteStatusListSchema.optional(),
+    }),
+  },
   responses: {
     "200": {
       description: "Visible votes.",
-      content: { "application/json": { schema: paginatedResponseSchema("votes", portalVoteSchema) } },
+      content: { "application/json": { schema: portalVotesListResponseSchema } },
     },
   },
 };
@@ -261,15 +272,15 @@ export const voteResultsRouteSchema = {
 // ── Vote proposals (authenticated A–G members) ───────────────────────
 
 export const proposalSummarySchema = z.object({
-  id: z.uuid(),
+  id: databaseIdSchema,
   title: z.string(),
   description: z.string(),
   voteType: voteTypeSchema,
   scopeType: voteScopeTypeSchema,
-  scopeId: z.uuid().nullable(),
-  proposedByUserId: z.uuid(),
+  scopeId: workingGroupIdSchema.nullable(),
+  proposedByUserId: databaseIdSchema,
   status: voteProposalStatusSchema,
-  voteId: z.uuid().nullable(),
+  voteId: databaseIdSchema.nullable(),
   rejectionReason: z.string().nullable(),
   endorsementCount: z.number(),
   minEndorsersRequired: z.number(),
@@ -281,7 +292,7 @@ export const submitProposalSchema = z.object({
   description: z.string().trim().min(1).max(10000),
   voteType: voteTypeSchema,
   scopeType: voteScopeTypeSchema,
-  scopeId: z.string().nullable().optional(),
+  scopeId: workingGroupIdSchema.nullable().optional(),
   eligibleCategories: z.array(z.enum(VOTING_CATEGORY_LETTERS)).nullable().optional(),
   proposedOpensAt: z.iso.datetime({ offset: true }).nullable().optional(),
   proposedClosesAt: z.iso.datetime({ offset: true }).nullable().optional(),
@@ -307,9 +318,18 @@ export const submitProposalRouteSchema = {
   },
 };
 
-export const listProposalsQuerySchema = paginationQuerySchema.extend({
+export const VOTE_PROPOSALS_LIST_SORT_COLUMNS = ["title", "status", "endorsement_count", "created_at"] as const;
+
+export const listProposalsQuerySchema = listQuerySchema(VOTE_PROPOSALS_LIST_SORT_COLUMNS).extend({
   scopeType: voteScopeTypeSchema.optional(),
-  scopeId: z.string().optional(),
+  scopeId: workingGroupIdSchema.optional(),
+});
+
+export const listProposalsResponseSchema = paginatedResponseSchema("proposals", proposalSummarySchema);
+
+export const proposalDetailResponseSchema = z.object({
+  proposal: proposalSummarySchema,
+  endorserUserIds: z.array(databaseIdSchema),
 });
 
 export const listProposalsRouteSchema = {
@@ -319,7 +339,7 @@ export const listProposalsRouteSchema = {
   responses: {
     "200": {
       description: "Open proposals.",
-      content: { "application/json": { schema: paginatedResponseSchema("proposals", proposalSummarySchema) } },
+      content: { "application/json": { schema: listProposalsResponseSchema } },
     },
   },
 };
@@ -332,9 +352,7 @@ export const proposalDetailRouteSchema = {
     "200": {
       description: "Proposal detail.",
       content: {
-        "application/json": {
-          schema: z.object({ proposal: proposalSummarySchema, endorserUserIds: z.array(z.uuid()) }),
-        },
+        "application/json": { schema: proposalDetailResponseSchema },
       },
     },
     "404": { description: "Proposal not found." },
@@ -378,215 +396,5 @@ export const withdrawProposalRouteSchema = {
     "200": { description: "Proposal withdrawn." },
     "403": { description: "Not the proposer." },
     "409": { description: "Only an open proposal can be withdrawn." },
-  },
-};
-
-// ── Admin (staff admin / WG chair in context) ────────────────────────
-
-export const adminCandidateInputSchema = z.object({
-  name: z.string().trim().min(1).max(200),
-  bio: z.string().trim().max(5000).optional(),
-  userId: z.uuid().nullable().optional(),
-});
-
-/** Allowlisted sort columns for GET /api/v1/admin/votes — see listVotesForAdmin. */
-export const ADMIN_VOTES_SORT_COLUMNS = [
-  "title",
-  "vote_type",
-  "status",
-  "opens_at",
-  "closes_at",
-  "created_at",
-] as const;
-
-export const adminVotesListQuerySchema = paginationQuerySchema.extend({
-  status: voteStatusSchema.optional(),
-  sort: sortColumnSchema(ADMIN_VOTES_SORT_COLUMNS),
-});
-
-export const adminVoteSchema = z.object({
-  ...voteSummaryFieldsSchema,
-  candidates: z.array(candidateSummarySchema).nullable(),
-});
-
-export const adminVotesListRouteSchema = {
-  tags: ["Admin Votes"],
-  summary: "List all votes, optionally filtered by status",
-  request: { query: adminVotesListQuerySchema },
-  responses: {
-    "200": {
-      description: "Votes.",
-      content: { "application/json": { schema: paginatedResponseSchema("votes", adminVoteSchema) } },
-    },
-  },
-};
-
-export const adminVoteCreateSchema = z.object({
-  title: z.string().trim().min(1).max(300),
-  description: z.string().trim().max(10000).optional(),
-  voteType: voteTypeSchema,
-  scopeType: voteScopeTypeSchema,
-  scopeId: z.string().nullable().optional(),
-  thresholdType: thresholdTypeSchema,
-  eligibleCategories: z.array(z.enum(VOTING_CATEGORY_LETTERS)).nullable().optional(),
-  opensAt: z.iso.datetime({ offset: true }).optional(),
-  closesAt: z.iso.datetime({ offset: true }),
-  candidates: z.array(adminCandidateInputSchema).max(50).optional(),
-});
-
-export const adminVoteCreateRouteSchema = {
-  tags: ["Admin Votes"],
-  summary: "Create a vote directly (bypasses endorsement)",
-  description: "Staff admin (any scope) or WG chair/vice-chair (their own WG only, enforced via votes:create).",
-  request: {
-    body: { content: { "application/json": { schema: adminVoteCreateSchema } }, required: true },
-  },
-  responses: {
-    "200": {
-      description: "Vote created.",
-      content: { "application/json": { schema: z.object({ vote: z.object(voteSummaryFieldsSchema) }) } },
-    },
-    "403": { description: "Missing votes:create permission for this scope." },
-    "422": { description: "Invalid candidates/threshold combination for the vote type." },
-  },
-};
-
-export const adminVoteUpdateSchema = z.object({
-  title: z.string().trim().min(1).max(300).optional(),
-  description: z.string().trim().max(10000).nullable().optional(),
-  opensAt: z.iso.datetime({ offset: true }).optional(),
-  closesAt: z.iso.datetime({ offset: true }).optional(),
-});
-
-export const adminVoteUpdateRouteSchema = {
-  tags: ["Admin Votes"],
-  summary: "Update a vote's settings",
-  request: {
-    params: voteIdParamsSchema,
-    body: { content: { "application/json": { schema: adminVoteUpdateSchema } }, required: true },
-  },
-  responses: {
-    "200": {
-      description: "Vote updated.",
-      content: { "application/json": { schema: z.object({ vote: z.object(voteSummaryFieldsSchema) }) } },
-    },
-    "404": { description: "Vote not found." },
-    "409": { description: "Vote is already closed." },
-  },
-};
-
-export const adminVoteVisibilityUpdateSchema = z.object({
-  visibility: voteVisibilitySchema.optional(),
-  publicDetailLevel: publicDetailLevelSchema.optional(),
-});
-
-export const adminVoteVisibilityUpdateRouteSchema = {
-  tags: ["Admin Votes"],
-  summary: "Set a vote's public visibility and detail level",
-  description: "Reversible at any time. Every change is written to audit_log.",
-  request: {
-    params: voteIdParamsSchema,
-    body: { content: { "application/json": { schema: adminVoteVisibilityUpdateSchema } }, required: true },
-  },
-  responses: {
-    "200": {
-      description: "Visibility updated.",
-      content: { "application/json": { schema: z.object({ vote: z.object(voteSummaryFieldsSchema) }) } },
-    },
-    "404": { description: "Vote not found." },
-  },
-};
-
-export const adminBallotSchema = z.object({
-  id: z.uuid(),
-  userId: z.uuid(),
-  organizationId: z.uuid().nullable(),
-  choice: z.string(),
-  round: z.number(),
-  submittedAt: z.string(),
-});
-
-export const adminVoteBallotsRouteSchema = {
-  tags: ["Admin Votes"],
-  summary: "Full ballot breakdown (staff only)",
-  request: { params: voteIdParamsSchema },
-  responses: {
-    "200": {
-      description: "Raw ballots, including voter identity.",
-      content: { "application/json": { schema: z.object({ ballots: z.array(adminBallotSchema) }) } },
-    },
-    "404": { description: "Vote not found." },
-  },
-};
-
-// ── Admin proposal moderation ────────────────────────────────────────
-
-export const adminListProposalsQuerySchema = paginationQuerySchema.extend({
-  status: voteProposalStatusSchema.optional(),
-});
-
-export const adminListProposalsRouteSchema = {
-  tags: ["Admin Vote Proposals"],
-  summary: "List all proposals, filterable by status/scope",
-  request: { query: adminListProposalsQuerySchema },
-  responses: {
-    "200": {
-      description: "Proposals.",
-      content: { "application/json": { schema: paginatedResponseSchema("proposals", proposalSummarySchema) } },
-    },
-  },
-};
-
-export const adminProposalDetailRouteSchema = {
-  tags: ["Admin Vote Proposals"],
-  summary: "Proposal detail + endorsers",
-  request: { params: proposalIdParamsSchema },
-  responses: {
-    "200": {
-      description: "Proposal detail.",
-      content: {
-        "application/json": {
-          schema: z.object({ proposal: proposalSummarySchema, endorserUserIds: z.array(z.uuid()) }),
-        },
-      },
-    },
-    "404": { description: "Proposal not found." },
-  },
-};
-
-export const adminApproveProposalRouteSchema = {
-  tags: ["Admin Vote Proposals"],
-  summary: "Convert a proposal to an active vote, bypassing the endorsement count",
-  request: { params: proposalIdParamsSchema },
-  responses: {
-    "200": {
-      description: "Converted.",
-      content: {
-        "application/json": {
-          schema: z.object({ proposal: proposalSummarySchema, convertedVote: z.object(voteSummaryFieldsSchema) }),
-        },
-      },
-    },
-    "409": { description: "Proposal is not open for endorsement." },
-  },
-};
-
-export const adminRejectProposalSchema = z.object({
-  reason: z.string().trim().min(1).max(2000),
-});
-
-export const adminRejectProposalRouteSchema = {
-  tags: ["Admin Vote Proposals"],
-  summary: "Reject a proposal with a reason; notifies the proposer",
-  request: {
-    params: proposalIdParamsSchema,
-    body: { content: { "application/json": { schema: adminRejectProposalSchema } }, required: true },
-  },
-  responses: {
-    "200": {
-      description: "Rejected.",
-      content: { "application/json": { schema: z.object({ proposal: proposalSummarySchema }) } },
-    },
-    "409": { description: "Proposal is not open for endorsement." },
   },
 };

@@ -254,7 +254,7 @@ describe("roles (Built-in and custom roles)", () => {
     expect(deleteResponse.status).toBe(409);
   });
 
-  // ── Migration 0040: WG vice chair + forum chair/vice chair roles ─────────
+  // ── Consolidated migration 0035: WG vice chair + forum chair/vice chair roles ─────────
 
   it("seeds role-wg_vice_chair with the same permission bundle as role-wg_chair", async () => {
     const response = await call(adminToken, "/api/v1/admin/roles");
@@ -303,6 +303,29 @@ describe("roles (Built-in and custom roles)", () => {
     expect(response.status).toBe(400);
     const body = (await response.json()) as { error: { code: string } };
     expect(body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("GET /api/v1/admin/roles applies shared search and returns the page role's permissions", async () => {
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO roles (id, name, description, is_system_role, created_at, updated_at)
+         VALUES ('role-search-target', 'search_target', 'Unique catalogue description', 0, datetime('now'), datetime('now'))`,
+      ),
+      env.DB.prepare(
+        `INSERT INTO role_permissions (id, role_id, permission, created_at)
+         VALUES (?, 'role-search-target', 'events:read', datetime('now'))`,
+      ).bind(crypto.randomUUID()),
+    ]);
+
+    const response = await call(adminToken, "/api/v1/admin/roles?q=catalogue&limit=1");
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      roles: Array<{ name: string; permissions: string[] }>;
+      page: { total: number };
+    };
+    expect(body.roles).toHaveLength(1);
+    expect(body.roles[0]).toMatchObject({ name: "search_target", permissions: ["events:read"] });
+    expect(body.page.total).toBe(1);
   });
 
   it("GET /api/v1/admin/roles paginates with real LIMIT/OFFSET and a page envelope", async () => {

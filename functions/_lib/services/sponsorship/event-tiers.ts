@@ -5,6 +5,7 @@
 import { first, all } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
+import { prepareAuditLog } from "../audit";
 import type { DatabaseLike } from "../../types";
 
 export interface EventSponsorTierRow {
@@ -23,6 +24,7 @@ export async function listEventSponsorTiers(db: DatabaseLike, eventId: string): 
 
 export async function replaceEventSponsorTiers(
   db: DatabaseLike,
+  actorId: string,
   eventId: string,
   tiers: EventSponsorTierRow[],
 ): Promise<void> {
@@ -38,6 +40,18 @@ export async function replaceEventSponsorTiers(
         .bind(uuid(), eventId, tier.tierName, tier.hasAttendeeDataAccess ? 1 : 0, now, now),
     );
   }
+  statements.push(
+    prepareAuditLog(
+      db,
+      "admin",
+      actorId,
+      "event_sponsor_tiers_updated",
+      "event",
+      eventId,
+      { tierCount: tiers.length },
+      now,
+    ),
+  );
   await db.batch(statements);
 }
 

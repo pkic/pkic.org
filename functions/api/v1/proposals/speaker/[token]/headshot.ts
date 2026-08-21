@@ -1,152 +1,94 @@
-/**
- * Headshot upload endpoint (token-authenticated).
- *
- * PUT /api/v1/proposals/speaker/[token]/headshot
- *   Content-Type: multipart/form-data
- *   Field: "file" — JPEG / PNG / WebP image
- *
- * The image is stored in the SPEAKER_UPLOADS_BUCKET R2 bucket under:
- *   headshots/{userId}/{timestamp}-{originalFilename}
- *
- * The user's headshot_r2_key and headshot_updated_at are updated in the DB.
- * Speakers can re-upload at any time to replace their headshot.
- */
+import { OpenAPIRoute } from "chanfana";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { json } from "../../../../../_lib/http";
-import { resolveAppBaseUrl } from "../../../../../_lib/config";
-import { invalidateAndRerender } from "../../../../../_lib/services/og-badge-prerender";
-import { getSpeakerByManageToken } from "../../../../../_lib/services/proposals";
-import { updateSpeakerProfile } from "../../../../../_lib/services/proposals-speaker-profile";
-import { writeAuditLog } from "../../../../../_lib/services/audit";
-import { AppError } from "../../../../../_lib/errors";
-import { nowIso } from "../../../../../_lib/utils/time";
-import { run } from "../../../../../_lib/db/queries";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { requireInternalSecret } from "../../../../../_lib/request";
+import { getSpeakerByManageToken } from "../../../../../_lib/services/proposals";
+import {
+  privateUserHeadshotResponse,
+  requireUserHeadshotBucket,
+  removeUserHeadshotForRequest,
+  uploadUserHeadshotForRequest,
+} from "../../../../../_lib/services/user-headshot";
+import { readValidatedUploadedImage } from "../../../../../_lib/utils/image-upload";
+import { SPEAKER_HEADSHOT_MAX_BYTES } from "../../../../../../assets/shared/schemas/images";
+import {
+  proposalSpeakerHeadshotDeleteRouteSchema,
+  proposalSpeakerHeadshotGetRouteSchema,
+  proposalSpeakerHeadshotPutRouteSchema,
+} from "../../../../../../assets/shared/schemas/route-contracts";
 
-const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
-const MAX_HEADSHOT_BYTES = 20 * 1024 * 1024; // 20 MB
+interface HeadshotParams {
+  token: string;
+}
 
-export async function onRequestGet(c: any): Promise<Response> {
-  const { user } = await getSpeakerByManageToken(c.env.DB, c.req.param("token"), requireInternalSecret(c.env));
+async function loadContext(c: AdminContext, token: string) {
+  c.set?.("sensitive", true);
+  return getSpeakerByManageToken(requestDb(c), token, requireInternalSecret(c.env));
+}
 
+async function onGet(c: AdminContext, token: string): Promise<Response> {
+  const { user } = await loadContext(c, token);
   if (!user.headshot_r2_key) {
     return json({ error: { code: "NOT_FOUND", message: "No headshot on file" } }, 404);
   }
-
-  const bucket = c.env.SPEAKER_UPLOADS_BUCKET;
-  if (!bucket) {
-    throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "File uploads are not configured on this instance.");
-  }
-
-  const obj = await bucket.get(user.headshot_r2_key);
-  if (!obj) {
-    return json({ error: { code: "NOT_FOUND", message: "Headshot file missing from storage" } }, 404);
-  }
-
-  const ext = user.headshot_r2_key.split(".").pop()?.toLowerCase() ?? "";
-  const mime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
-
-  return new Response(await obj.arrayBuffer(), {
-    headers: {
-      "Content-Type": mime,
-      "Cache-Control": "private, max-age=3600",
-    },
-  });
+  return privateUserHeadshotResponse(requireUserHeadshotBucket(c.env), user.headshot_r2_key);
 }
 
-export async function onRequestPut(c: any): Promise<Response> {
-  const { speaker, user } = await getSpeakerByManageToken(c.env.DB, c.req.param("token"), requireInternalSecret(c.env));
-
+async function onPut(c: AdminContext, token: string): Promise<Response> {
+  const { speaker, user } = await loadContext(c, token);
   if (speaker.status === "declined") {
     return json({ error: { code: "SPEAKER_DECLINED", message: "You have declined participation." } }, 403);
   }
 
-  const bucket = c.env.SPEAKER_UPLOADS_BUCKET;
-
-  if (!bucket) {
-    throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "File uploads are not configured on this instance.");
-  }
-
-  const contentType = c.req.raw.headers.get("content-type") ?? "";
-  if (!contentType.includes("multipart/form-data")) {
-    return json({ error: { code: "INVALID_CONTENT_TYPE", message: "Request must be multipart/form-data" } }, 400);
-  }
-
-  const formData = await c.req.raw.formData();
-  const file = formData.get("file");
-
-  if (!file || typeof file === "string") {
-    return json({ error: { code: "MISSING_FILE", message: 'A "file" field is required.' } }, 400);
-  }
-
-  const blob = file as File;
-
-  if (!ALLOWED_MIME_TYPES.has(blob.type)) {
-    return json(
-      {
-        error: {
-          code: "INVALID_FILE_TYPE",
-          message: "Only JPEG, PNG, and WebP images are accepted.",
-        },
-      },
-      415,
-    );
-  }
-
-  if (blob.size > MAX_HEADSHOT_BYTES) {
-    return json({ error: { code: "FILE_TOO_LARGE", message: "Headshot must be under 20 MB." } }, 413);
-  }
-
-  const ext = blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg";
-  const r2Key = `headshots/${user.id}/${Date.now()}.${ext}`;
-
-  await bucket.put(r2Key, await blob.arrayBuffer(), {
-    httpMetadata: { contentType: blob.type },
-  });
-
-  await updateSpeakerProfile(c.env.DB, user.id, { headshotR2Key: r2Key });
-
-  const origin = resolveAppBaseUrl(c.env, c.req.raw);
-  await invalidateAndRerender(user.id, c.env, origin);
-
+  const image = await readValidatedUploadedImage(c.req.raw, "Headshot", SPEAKER_HEADSHOT_MAX_BYTES);
+  const { r2Key, origin } = await uploadUserHeadshotForRequest(
+    requestDb(c),
+    c.env,
+    c.req.raw,
+    c.executionCtx.waitUntil.bind(c.executionCtx),
+    {
+      userId: user.id,
+      previousKey: user.headshot_r2_key,
+      image,
+      source: "speaker_self_upload",
+      audit: { actorType: "user", actorId: user.id, action: "headshot_uploaded_by_speaker" },
+    },
+  );
   return json({
     success: true,
     r2Key,
-    headshotUrl: `${origin}/api/v1/proposals/speaker/${encodeURIComponent(c.req.param("token"))}/headshot?v=${encodeURIComponent(String(Date.now()))}`,
+    headshotUrl: `${origin}/api/v1/proposals/speaker/${encodeURIComponent(token)}/headshot?v=${encodeURIComponent(String(Date.now()))}`,
   });
 }
 
-export async function onRequestDelete(c: any): Promise<Response> {
-  const { user } = await getSpeakerByManageToken(c.env.DB, c.req.param("token"), requireInternalSecret(c.env));
-
-  const bucket = c.env.SPEAKER_UPLOADS_BUCKET;
-  if (bucket && user.headshot_r2_key) {
-    try {
-      await (bucket as unknown as { delete(key: string): Promise<void> }).delete(user.headshot_r2_key);
-    } catch {
-      // Non-fatal
-    }
-  }
-
-  await run(
-    c.env.DB,
-    "UPDATE users SET headshot_r2_key = NULL, headshot_updated_at = NULL, updated_at = ? WHERE id = ?",
-    [nowIso(), user.id],
-  );
-
-  await writeAuditLog(c.env.DB, "user", user.id, "headshot_deleted_by_speaker", "user", user.id, {
-    speakerUserId: user.id,
+async function onDelete(c: AdminContext, token: string): Promise<Response> {
+  const { user } = await loadContext(c, token);
+  await removeUserHeadshotForRequest(requestDb(c), c.env, c.req.raw, c.executionCtx.waitUntil.bind(c.executionCtx), {
+    userId: user.id,
+    previousKey: user.headshot_r2_key,
+    audit: {
+      actorType: "user",
+      actorId: user.id,
+      action: "headshot_deleted_by_speaker",
+      details: { speakerUserId: user.id },
+    },
   });
-
-  const origin = resolveAppBaseUrl(c.env, c.req.raw);
-  await invalidateAndRerender(user.id, c.env, origin);
-
   return json({ success: true });
 }
 
-export async function onRequest(c: any): Promise<Response> {
-  c.set("sensitive", true);
-  if (c.req.raw.method === "GET") return onRequestGet(c);
-  if (c.req.raw.method === "PUT") return onRequestPut(c);
-  if (c.req.raw.method === "DELETE") return onRequestDelete(c);
-  return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
+export const ProposalSpeakerHeadshotGet = openApiRoute(proposalSpeakerHeadshotGetRouteSchema, (c, data) =>
+  onGet(c, data.params.token),
+);
+
+export class ProposalSpeakerHeadshotPut extends OpenAPIRoute {
+  schema = proposalSpeakerHeadshotPutRouteSchema;
+
+  async handle(c: AdminContext) {
+    return onPut(c, (c.req.param() as unknown as HeadshotParams).token);
+  }
 }
+
+export const ProposalSpeakerHeadshotDelete = openApiRoute(proposalSpeakerHeadshotDeleteRouteSchema, (c, data) =>
+  onDelete(c, data.params.token),
+);

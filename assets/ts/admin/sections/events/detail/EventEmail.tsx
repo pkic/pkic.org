@@ -1,199 +1,22 @@
 import { useState, useEffect, useRef } from "preact/hooks";
 import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
-import {
-  TEMPLATE_HELPERS,
-  TEMPLATE_PARTIALS,
-  type TemplateHelperCategory,
-  type TemplateHelperItem,
-} from "../../../email-template-helpers";
+import { TEMPLATE_HELPERS, TEMPLATE_PARTIALS, type TemplateHelperItem } from "../../../email-template-helpers";
 import { toast } from "../../../ui";
 import type { EmailTemplateVersion } from "../../../types";
 import type { EmailMessageType } from "../../../../../shared/schemas/admin-email-templates";
-
-const HELPER_CATEGORIES: TemplateHelperCategory[] = ["Variables", "Conditions", "CTAs"];
-const PERSONAL_ONLY_HELPERS = new Set([
-  "firstName",
-  "lastName",
-  "email",
-  "organizationName",
-  "jobTitle",
-  "status",
-  "statusLabel",
-  "registrationStatus",
-  "registrationStatusLabel",
-  "isWaitlisted",
-  "hasActiveDayWaitlist",
-  "waitlistedDayCount",
-  "if isWaitlisted",
-  "if hasActiveDayWaitlist",
-  "attendanceType",
-  "attendanceLabel",
-  "manageUrl",
-  "proposalTitle",
-  "proposalAbstract",
-  "speakerStatus",
-  "acceptedTermsText",
-  "if firstName",
-  "if eq status",
-  "if acceptedTermsText",
-  "each customAnswerRows",
-  "each dayAttendance",
-]);
-
-// ─── Highlight helpers ────────────────────────────────────────────────────────
-
-function highlightBody(src: string): string {
-  return src
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/({{[^}]*}})/g, '<mark class="adm-template-token-mark">$1</mark>');
-}
-
-// ─── Variable snippet button ──────────────────────────────────────────────────
-
-function SnippetBtn({
-  snippet,
-  label,
-  personal,
-  personalOnly,
-  onInsert,
-}: {
-  snippet: string;
-  label: string;
-  personal: boolean;
-  personalOnly?: boolean;
-  onInsert: (s: string) => void;
-}) {
-  const disabled = personalOnly && !personal;
-  return (
-    <button
-      type="button"
-      class={`btn btn-sm btn-outline-secondary${disabled ? " adm-snippet-disabled" : ""}`}
-      title={disabled ? "Only available in Personal mode" : snippet}
-      onClick={() => !disabled && onInsert(snippet)}
-    >
-      {label}
-    </button>
-  );
-}
-
-// ─── Template selector ────────────────────────────────────────────────────────
-
-interface TemplateOption {
-  key: string;
-  label: string;
-}
-
-interface CampaignPayload {
-  templateKey?: string;
-  subjectOverride: string;
-  bodyContent: string;
-  messageType?: EmailMessageType;
-  sendMode: "personal" | "bcc_batch";
-  batchSize: number;
-  filter: {
-    audience: "attendees" | "speakers";
-    attendeeStatus?: "all" | "registered" | "pending_email_confirmation" | "waitlisted" | "cancelled";
-    attendanceType?: "all" | "in_person" | "virtual" | "on_demand";
-    dayDate?: string;
-    dayWaitlistStatus?: "all" | "active" | "waiting" | "offered" | "accepted" | "none";
-    speakerStatus?: "all" | "confirmed" | "invited" | "pending";
-  };
-  previewToken?: string;
-}
-
-function useTemplates(): { templates: TemplateOption[]; loading: boolean } {
-  const [templates, setTemplates] = useState<TemplateOption[]>([]);
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    api<{ templates: Array<{ template_key: string }> }>("/api/v1/admin/email-templates")
-      .then((d) => {
-        const opts: TemplateOption[] = (d.templates ?? [])
-          .filter((t) => t.template_key.startsWith("msg_"))
-          .map((t) => ({ key: t.template_key, label: t.template_key }));
-        setTemplates(opts);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-  return { templates, loading };
-}
-
-// ─── Day selector helper ──────────────────────────────────────────────────────
-
-function useDays(slug: string) {
-  const [days, setDays] = useState<Array<{ day_date?: string; date?: string; label?: string | null }>>([]);
-  useEffect(() => {
-    api<{ days: Array<{ day_date?: string; date?: string; label?: string | null }> }>(
-      `/api/v1/admin/events/${slug}/days`,
-    )
-      .then((d) => setDays(d.days ?? []))
-      .catch(() => {});
-  }, [slug]);
-  return days;
-}
-
-function availableHelperLabelsForAudience(audience: "attendees" | "speakers"): Set<string> {
-  if (audience === "attendees") {
-    return new Set([
-      "eventName",
-      "eventUrl",
-      "eventTimezone",
-      "firstName",
-      "lastName",
-      "email",
-      "organizationName",
-      "jobTitle",
-      "status",
-      "statusLabel",
-      "registrationStatus",
-      "registrationStatusLabel",
-      "isWaitlisted",
-      "hasActiveDayWaitlist",
-      "waitlistedDayCount",
-      "attendanceType",
-      "attendanceLabel",
-      "manageUrl",
-      "registrationUrl",
-      "if firstName",
-      "if eq status",
-      "if isWaitlisted",
-      "if hasActiveDayWaitlist",
-      "else block",
-      "unless",
-      "each customAnswerRows",
-      "CTA button",
-    ]);
-  }
-
-  return new Set([
-    "eventName",
-    "eventUrl",
-    "eventTimezone",
-    "firstName",
-    "lastName",
-    "email",
-    "organizationName",
-    "jobTitle",
-    "proposalTitle",
-    "proposalAbstract",
-    "speakerStatus",
-    "proposalUrl",
-    "if firstName",
-    "else block",
-    "unless",
-    "each customAnswerRows",
-    "CTA button",
-  ]);
-}
-
-function availablePartialsForAudience(audience: "attendees" | "speakers"): Set<string> {
-  return audience === "attendees"
-    ? new Set(["reg_details", "sponsors_block", "about_pkic", "donation_request"])
-    : new Set(["sponsors_block", "about_pkic", "donation_request"]);
-}
+import { EMAIL_PREVIEW_TABS, type EmailPreviewTab } from "../../../email-preview-tabs";
+import {
+  HELPER_CATEGORIES,
+  PERSONAL_ONLY_HELPERS,
+  SnippetBtn,
+  availableHelperLabelsForAudience,
+  availablePartialsForAudience,
+  highlightBody,
+  type CampaignPayload,
+  useDays,
+  useTemplates,
+} from "./event-email-support";
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -232,7 +55,7 @@ export function EventEmail({
     recipientCount?: number;
     previewToken?: string;
   } | null>(null);
-  const [previewTab, setPreviewTab] = useState<"html" | "text">("html");
+  const [previewTab, setPreviewTab] = useState<EmailPreviewTab>("html");
   const [previewConfirmed, setPreviewConfirmed] = useState(false);
   const [status, setStatus] = useState("Preview required before sending.");
   const [sending, setSending] = useState(false);
@@ -632,12 +455,9 @@ export function EventEmail({
               <div class="small text-muted mb-1">{preview.recipientCount} recipients</div>
             )}
             <Tabs
-              items={[
-                { key: "html", label: "HTML" },
-                { key: "text", label: "Text" },
-              ]}
+              items={EMAIL_PREVIEW_TABS}
               active={previewTab}
-              onChange={(key) => setPreviewTab(key as "html" | "text")}
+              onChange={(key) => setPreviewTab(key as EmailPreviewTab)}
               className="mb-2"
             />
             {previewTab === "html" && <iframe srcdoc={preview.html} sandbox="" class="adm-email-preview-frame" />}

@@ -9,8 +9,9 @@
  * fully modeled field-by-field.
  */
 import { z } from "zod";
+import { databaseIdSchema } from "./identifiers";
 
-export const passkeyIdParamsSchema = z.object({ id: z.uuid() });
+export const passkeyIdParamsSchema = z.object({ id: databaseIdSchema });
 
 const webauthnOptionsSchema = z.record(z.string(), z.unknown());
 
@@ -61,12 +62,14 @@ export const passkeyBeginResponseSchema = z.object({
 });
 
 export const passkeySummarySchema = z.object({
-  id: z.uuid(),
+  id: databaseIdSchema,
   deviceName: z.string().nullable(),
   aaguid: z.string().nullable(),
   lastUsedAt: z.string().nullable(),
   createdAt: z.string(),
 });
+export type PasskeySummary = z.infer<typeof passkeySummarySchema>;
+export const passkeysListResponseSchema = z.object({ passkeys: z.array(passkeySummarySchema) });
 
 export const passkeyAuthenticateCompleteResponseSchema = z.object({
   success: z.literal(true),
@@ -137,7 +140,7 @@ export const passkeysListRouteSchema = {
   responses: {
     "200": {
       description: "Registered passkeys (no key material).",
-      content: { "application/json": { schema: z.object({ passkeys: z.array(passkeySummarySchema) }) } },
+      content: { "application/json": { schema: passkeysListResponseSchema } },
     },
     "401": { description: "Authentication required." },
   },

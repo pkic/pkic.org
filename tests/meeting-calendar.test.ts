@@ -14,7 +14,7 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
-import { createApplicationFormSubmission } from "./helpers/member-applications";
+import { createApplicationFormSubmission, seedMemberApplication } from "./helpers/member-applications";
 import {
   resolveWgJoinCalendarInviteByMailingListEmail,
   uploadIcsFile,
@@ -203,6 +203,24 @@ describe("Meeting calendar management", () => {
     };
     const series = list.meetingSeries.find((s) => s.id === created.meetingSeries.id);
     expect(series?.icsFiles.some((f) => f.id === uploaded.icsFile.id)).toBe(true);
+  });
+
+  it("rejects a file whose bytes are not an iCalendar document", async () => {
+    const wgId = await insertWorkingGroup("Unsafe ICS", "unsafe-ics");
+    const seriesId = await insertMeetingSeries("working_group", "Unsafe Upload", wgId);
+    const formData = new FormData();
+    formData.append("file", new File(["<script>alert(1)</script>"], "calendar.ics", { type: "text/calendar" }));
+    formData.append("label", "Unsafe");
+    formData.append("year", "2026");
+
+    const response = await callMultipart(
+      adminToken,
+      `/api/v1/admin/working-groups/${wgId}/meetings/${seriesId}/ics-files`,
+      formData,
+    );
+    expect(response.status).toBe(400);
+    expect(await env.ASSETS_BUCKET!.list({ prefix: `meeting-ics/${seriesId}/` })).toMatchObject({ objects: [] });
+    expect(await queryAll(env.DB, "SELECT id FROM meeting_ics_files WHERE series_id = ?", seriesId)).toHaveLength(0);
   });
 
   it("deactivating an ICS file is non-destructive and clears any member preference pointing at it", async () => {
@@ -704,24 +722,16 @@ describe("Meeting calendar management", () => {
     const wgSeriesId = await insertMeetingSeries("working_group", "PQC WG Meeting", wgId);
     await insertIcsFile(wgSeriesId, "17:00 CET", 2026, "meeting-ics/approve-w.ics");
 
-    const applicationId = crypto.randomUUID();
     const formSubmissionId = await createApplicationFormSubmission({ working_groups: ["pqc"] });
-    await env.DB.prepare(
-      `INSERT INTO member_applications
-         (id, applicant_email, applicant_name, organization_name, organization_domain, membership_category,
-          form_submission_id, status, stage, stage_entered_at, manage_token_hash, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'F', ?, 'ec_review', 'ec_review', datetime('now'), ?, datetime('now'), datetime('now'))`,
-    )
-      .bind(
-        applicationId,
-        "ics-approve@acme.test",
-        "ICS Approve",
-        "Acme ICS Corp",
-        "acme-ics.test",
-        formSubmissionId,
-        crypto.randomUUID(),
-      )
-      .run();
+    const applicationId = await seedMemberApplication({
+      applicantEmail: "ics-approve@acme.test",
+      applicantName: "ICS Approve",
+      organizationName: "Acme ICS Corp",
+      organizationDomain: "acme-ics.test",
+      membershipCategory: "F",
+      formSubmissionId,
+      stage: "ec_review",
+    });
 
     const response = await call(adminToken, `/api/v1/admin/applications/${applicationId}/approve`, {
       method: "POST",

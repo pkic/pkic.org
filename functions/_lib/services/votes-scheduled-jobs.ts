@@ -12,8 +12,9 @@
  * its own LIMIT, so no due-work-side change was needed for §9.1 here beyond
  * the enqueue-only fix below.
  */
-import { queueEmail } from "../email/outbox";
-import { closeDueVotes, resolveForumVoteDelegateRecipients } from "./votes";
+import { prepareQueueEmailStatement } from "../email/outbox";
+import { nowIso } from "../utils/time";
+import { closeDueVotes, listPendingForumVoteNotifications } from "./votes";
 import type { DatabaseLike, Env } from "../types";
 
 export interface VotesDueWorkResult {
@@ -23,39 +24,47 @@ export interface VotesDueWorkResult {
   delegateNoticesQueued: number;
 }
 
-export async function runVotesDueWork(db: DatabaseLike, _env: Env): Promise<VotesDueWorkResult> {
+export async function runVotesDueWork(db: DatabaseLike, env: Env): Promise<VotesDueWorkResult> {
   const result = await closeDueVotes(db);
-
-  let delegateNoticesQueued = 0;
-  for (const voteId of [...result.opened, ...result.roundsAdvanced]) {
-    const resolved = await resolveForumVoteDelegateRecipients(db, voteId);
-    if (!resolved) continue;
-
-    for (const recipient of resolved.recipients) {
-      // Enqueue only (PR #1 review §9.1) — no synchronous send per
-      // recipient; the shared bounded outbox processor (run earlier in the
-      // same registry pass by runScheduledDueWork) owns delivery/retry.
-      await queueEmail(db, {
+  const notificationLimit = Math.max(1, Number.parseInt(env.SCHEDULED_VOTE_NOTIFICATION_LIMIT ?? "100", 10) || 100);
+  const pending = await listPendingForumVoteNotifications(db, notificationLimit);
+  const queuedAt = nowIso();
+  const statements = pending.flatMap((recipient) => {
+    const email = prepareQueueEmailStatement(
+      db,
+      {
         templateKey: "forum-vote-delegate-notify",
+        recipientUserId: recipient.delegateUserId,
         recipientEmail: recipient.delegateEmail,
         messageType: "transactional",
-        subject: `Forum vote open: ${resolved.vote.title}`,
+        subject: `Forum vote open: ${recipient.voteTitle}`,
         data: {
           delegateName: recipient.delegateName,
           organizationName: recipient.organizationName,
-          voteTitle: resolved.vote.title,
-          closesAt: resolved.vote.closesAt,
-          voteUrl: `/portal/votes/${resolved.vote.id}`,
+          voteTitle: recipient.voteTitle,
+          closesAt: recipient.closesAt,
+          voteUrl: `/portal/votes/${recipient.voteId}`,
         },
-      });
-      delegateNoticesQueued += 1;
-    }
-  }
+      },
+      queuedAt,
+    );
+    return [
+      email.statement,
+      db
+        .prepare(
+          `INSERT INTO vote_notification_deliveries
+             (vote_id, round, organization_id, delegate_user_id, queued_at)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .bind(recipient.voteId, recipient.round, recipient.organizationId, recipient.delegateUserId, queuedAt),
+    ];
+  });
+  if (statements.length > 0) await db.batch(statements);
 
   return {
     opened: result.opened.length,
     closed: result.closed.length,
     roundsAdvanced: result.roundsAdvanced.length,
-    delegateNoticesQueued,
+    delegateNoticesQueued: pending.length,
   };
 }

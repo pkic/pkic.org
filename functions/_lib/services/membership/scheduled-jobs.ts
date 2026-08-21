@@ -6,13 +6,17 @@
  * (scheduled-due-work.ts) since they're not time-window-sensitive the way
  * the twice-weekly batches are.
  */
-import { all, run } from "../../db/queries";
+import { all } from "../../db/queries";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { getConfig } from "../../config";
-import { queueEmail, processOutboxByIdBackground } from "../../email/outbox";
+import { prepareQueueEmailStatement, queueEmail, processOutboxByIdBackground } from "../../email/outbox";
 import { getMembershipSettings } from "../membership-settings";
-import { transitionApplicationStage, ON_HOLD_SUBTYPE_EMAIL_TEMPLATES } from "./applications/transition";
+import {
+  prepareApplicationStageTransition,
+  transitionApplicationStage,
+  ON_HOLD_SUBTYPE_EMAIL_TEMPLATES,
+} from "./applications/transition";
 import type { MemberApplicationRow } from "./applications/queries";
 import { hasEcDecline } from "../ec-review";
 import { approveApplication } from "./applications/approve";
@@ -65,45 +69,50 @@ export async function runConsultationBatch(db: DatabaseLike, env: Env): Promise<
 // Collects applications that have been in_consultation for 7+ days
 // (configurable), transitions them to ec_review, and notifies the EC.
 
-export async function runEcReviewBatch(db: DatabaseLike, env: Env): Promise<{ transitioned: number }> {
+export async function runEcReviewBatch(db: DatabaseLike, env: Env, limit = 100): Promise<{ transitioned: number }> {
   const settings = await getMembershipSettings(db);
   const cutoff = new Date(Date.now() - settings.consultation_window_days * 86_400_000).toISOString();
   const candidates = await all<MemberApplicationRow>(
     db,
-    `SELECT * FROM member_applications WHERE stage = 'in_consultation' AND stage_entered_at <= ? ORDER BY stage_entered_at ASC`,
-    [cutoff],
+    `SELECT * FROM member_applications
+     WHERE stage = 'in_consultation' AND stage_entered_at <= ?
+     ORDER BY stage_entered_at ASC, id ASC
+     LIMIT ?`,
+    [cutoff, limit],
   );
   if (candidates.length === 0) {
     return { transitioned: 0 };
   }
 
-  const transitioned: MemberApplicationRow[] = [];
-  for (const application of candidates) {
-    const result = await transitionApplicationStage(db, {
+  const preparedTransitions = candidates.map((application) =>
+    prepareApplicationStageTransition(db, application, {
       applicationId: application.id,
       toStage: "ec_review",
       actorUserId: null,
       note: "Consultation window elapsed",
-    });
-    transitioned.push(result.application);
-  }
+    }),
+  );
 
   const config = getConfig(env);
-  const outboxId = await queueEmail(
+  const preparedEmail = prepareQueueEmailStatement(
     db,
     buildEcReviewBatchEmail({
       recipientEmail: settings.ec_email_recipients,
       ecReviewWindowDays: settings.ec_review_window_days,
-      applications: transitioned.map((a) => ({
+      applications: candidates.map((a) => ({
         organizationName: a.organization_name ?? a.applicant_name,
         membershipCategory: a.membership_category,
         reviewUrl: `${config.appBaseUrl}/admin/#/applications/${a.id}`,
       })),
     }),
   );
-  await processOutboxByIdBackground(db, env, outboxId);
+  // Every stage transition, event, audit entry, and the aggregate EC email
+  // intent commits together. If any compare-and-set or outbox write fails,
+  // D1 rolls back the complete batch and the cron can retry safely.
+  await db.batch([...preparedTransitions.flatMap((transition) => transition.statements), preparedEmail.statement]);
+  await processOutboxByIdBackground(db, env, preparedEmail.id);
 
-  return { transitioned: transitioned.length };
+  return { transitioned: candidates.length };
 }
 
 // ── On-hold reminders & auto-close (folded into the 15-min due-work cron) ─
@@ -133,24 +142,17 @@ export async function runOnHoldReminders(
     const elapsed = daysSince(application.stage_entered_at);
 
     if (elapsed >= deadlineDays) {
-      const result = await transitionApplicationStage(db, {
+      await transitionApplicationStage(db, {
         applicationId: application.id,
         toStage: "withdrawn",
         actorUserId: null,
         note: "Auto-closed — no response within the on-hold deadline",
-      });
-      // Enqueue only — the shared bounded outbox processor (scheduled-due-work.ts's
-      // processPendingOutbox, run earlier in the same registry pass) owns
-      // delivery/retry, so this loop never sends synchronously per
-      // recipient (PR #1 review §9.1).
-      await queueEmail(
-        db,
-        buildApplicationClosedNoResponseEmail({
-          recipientEmail: result.application.applicant_email,
-          applicantName: result.application.applicant_name,
+        email: buildApplicationClosedNoResponseEmail({
+          recipientEmail: application.applicant_email,
+          applicantName: application.applicant_name,
           deadlineDays,
         }),
-      );
+      });
       autoClosed++;
       continue;
     }
@@ -170,7 +172,8 @@ export async function runOnHoldReminders(
       ON_HOLD_SUBTYPE_EMAIL_TEMPLATES[application.on_hold_subtype as keyof typeof ON_HOLD_SUBTYPE_EMAIL_TEMPLATES];
     if (!templateKey) continue;
 
-    await queueEmail(
+    const now = nowIso();
+    const reminderEmail = prepareQueueEmailStatement(
       db,
       buildOnHoldReminderEmail({
         templateKey,
@@ -178,13 +181,17 @@ export async function runOnHoldReminders(
         applicantName: application.applicant_name,
         deadlineDays,
       }),
+      now,
     );
-
-    await run(
-      db,
-      `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at) VALUES (?, ?, ?, ?, NULL, 'Hold reminder sent', ?)`,
-      [uuid(), application.id, application.stage, application.stage, nowIso()],
-    );
+    await db.batch([
+      reminderEmail.statement,
+      db
+        .prepare(
+          `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
+           VALUES (?, ?, ?, ?, NULL, 'Hold reminder sent', ?)`,
+        )
+        .bind(uuid(), application.id, application.stage, application.stage, now),
+    ]);
     remindersSent++;
   }
 

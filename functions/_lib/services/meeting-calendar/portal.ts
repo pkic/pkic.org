@@ -3,6 +3,7 @@
  * meeting-calendar.ts.
  */
 import { all, first, run } from "../../db/queries";
+import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import { AppError } from "../../errors";
@@ -40,11 +41,11 @@ async function myApplicableSeriesRows(db: DatabaseLike, member: AuthMember): Pro
 
   let wgSeries: SeriesRow[] = [];
   if (wgIds.length > 0) {
-    const placeholders = wgIds.map(() => "?").join(", ");
+    const workingGroupFilter = buildD1JsonMembershipFilter("working_group_id", wgIds);
     wgSeries = await all<SeriesRow>(
       db,
-      `SELECT * FROM meeting_series WHERE scope_type = 'working_group' AND active = 1 AND working_group_id IN (${placeholders})`,
-      wgIds,
+      `SELECT * FROM meeting_series WHERE scope_type = 'working_group' AND active = 1 AND ${workingGroupFilter.sql}`,
+      workingGroupFilter.bindings,
     );
   }
 
@@ -55,13 +56,13 @@ export async function listMyMeetingSeries(db: DatabaseLike, member: AuthMember):
   const seriesRows = await myApplicableSeriesRows(db, member);
   if (seriesRows.length === 0) return [];
 
-  const placeholders = seriesRows.map(() => "?").join(", ");
   const seriesIds = seriesRows.map((s) => s.id);
+  const seriesFilter = buildD1JsonMembershipFilter("series_id", seriesIds);
 
   const icsRows = await all<IcsFileRow>(
     db,
-    `SELECT * FROM meeting_ics_files WHERE active = 1 AND series_id IN (${placeholders}) ORDER BY year DESC, label ASC`,
-    seriesIds,
+    `SELECT * FROM meeting_ics_files WHERE active = 1 AND ${seriesFilter.sql} ORDER BY year DESC, label ASC`,
+    seriesFilter.bindings,
   );
   const icsBySeriesId = new Map<string, MyMeetingSeriesIcsFile[]>();
   for (const row of icsRows) {
@@ -72,8 +73,8 @@ export async function listMyMeetingSeries(db: DatabaseLike, member: AuthMember):
 
   const prefRows = await all<PreferenceRow>(
     db,
-    `SELECT * FROM member_meeting_preferences WHERE user_id = ? AND series_id IN (${placeholders})`,
-    [member.userId, ...seriesIds],
+    `SELECT * FROM member_meeting_preferences WHERE user_id = ? AND ${seriesFilter.sql}`,
+    [member.userId, ...seriesFilter.bindings],
   );
   const prefBySeriesId = new Map(prefRows.map((p) => [p.series_id, p.ics_file_id]));
 

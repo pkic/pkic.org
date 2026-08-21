@@ -11,15 +11,12 @@ import { loadStoredSession, storeSession, clearStoredSession } from "./state";
 import { Login } from "./Login";
 import { Attendees } from "./Attendees";
 import type { SponsorPortalSession } from "./types";
-
-interface VerifyLinkResponse {
-  success: boolean;
-  expiresAt: string;
-  sponsorship: SponsorPortalSession;
-}
+import { sponsorPortalAuthVerifyResponseSchema } from "../../../shared/schemas/sponsor-portal";
 
 async function verifyMagicLink(token: string): Promise<SponsorPortalSession> {
-  const res = await postJson<VerifyLinkResponse>("/api/v1/auth/sponsor-portal/verify-link", { token });
+  const res = sponsorPortalAuthVerifyResponseSchema.parse(
+    await postJson<unknown>("/api/v1/auth/sponsor-portal/verify-link", { token }),
+  );
   return res.sponsorship;
 }
 
@@ -85,7 +82,7 @@ export function App() {
   if (session) {
     return (
       <>
-        <div class="d-flex justify-content-end container py-2" style="max-width: 960px;">
+        <div class="d-flex justify-content-end container py-2 content-width-xl">
           <button
             class="btn btn-sm btn-outline-secondary"
             onClick={() => {
@@ -103,7 +100,7 @@ export function App() {
   return (
     <>
       {verifyError && (
-        <div class="container" style="max-width: 440px;">
+        <div class="container content-width-sm">
           <div class="alert alert-danger mt-4">✕ Sign-in failed: {verifyError}</div>
         </div>
       )}

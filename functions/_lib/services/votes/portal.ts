@@ -3,6 +3,10 @@
  * Split out of votes.ts.
  */
 import { all, first } from "../../db/queries";
+import { queryPage } from "../../db/pagination";
+import { buildD1JsonMembershipFilter } from "../../db/json-membership";
+import { buildD1TextSearchFilter } from "../../db/search";
+import { resolveMappedOrderBy, resolveOrderBy } from "../../db/sort";
 import { parseJsonSafe } from "../../utils/json";
 import { AppError } from "../../errors";
 import { VOTING_CATEGORIES } from "../membership/applications/create";
@@ -12,6 +16,7 @@ import {
   getCandidates,
   getCandidatesForVotes,
   getVoteRowOrThrow,
+  VOTE_ROW_COLUMNS,
   eligibleCategoriesOf,
   type VoteRow,
   type VoteType,
@@ -108,7 +113,7 @@ function canCastBallotForList(
 /** Bulk-loads which (vote, round) pairs the member has already cast a ballot for, in one query instead of one per vote. */
 async function loadCastBallotRounds(db: DatabaseLike, voteIds: string[], member: AuthMember): Promise<Set<string>> {
   if (voteIds.length === 0) return new Set();
-  const placeholders = voteIds.map(() => "?").join(", ");
+  const voteFilter = buildD1JsonMembershipFilter("vote_id", voteIds);
   const memberConditions = ["(user_id = ? AND organization_id IS NULL)"];
   const memberArgs: unknown[] = [member.userId];
   if (member.organizationId) {
@@ -117,8 +122,8 @@ async function loadCastBallotRounds(db: DatabaseLike, voteIds: string[], member:
   }
   const rows = await all<{ vote_id: string; round: number }>(
     db,
-    `SELECT vote_id, round FROM vote_ballots WHERE vote_id IN (${placeholders}) AND (${memberConditions.join(" OR ")})`,
-    [...voteIds, ...memberArgs],
+    `SELECT vote_id, round FROM vote_ballots WHERE ${voteFilter.sql} AND (${memberConditions.join(" OR ")})`,
+    [...voteFilter.bindings, ...memberArgs],
   );
   return new Set(rows.map((r) => `${r.vote_id}:${r.round}`));
 }
@@ -127,7 +132,7 @@ async function loadCastBallotRounds(db: DatabaseLike, voteIds: string[], member:
 export async function listVisibleVotesForMember(
   db: DatabaseLike,
   member: AuthMember,
-  params: { limit: number; offset: number },
+  params: { limit: number; offset: number; status?: VoteStatus[]; q?: string; sort?: string },
 ): Promise<{ votes: PortalVoteSummary[]; total: number }> {
   const wgRows = await all<{ working_group_id: string }>(
     db,
@@ -139,21 +144,39 @@ export async function listVisibleVotesForMember(
   const conditions = ["(scope_type = 'forum' OR visibility = 'public')"];
   const args: unknown[] = [];
   if (wgIds.size > 0) {
-    conditions.push(`OR (scope_type = 'working_group' AND scope_id IN (${[...wgIds].map(() => "?").join(", ")}))`);
-    args.push(...wgIds);
+    const workingGroupFilter = buildD1JsonMembershipFilter("scope_id", [...wgIds]);
+    conditions.push(`OR (scope_type = 'working_group' AND ${workingGroupFilter.sql})`);
+    args.push(...workingGroupFilter.bindings);
   }
-  const where = conditions.join(" ");
+  const filters = [`(${conditions.join(" ")})`];
+  if (params.status && params.status.length > 0) {
+    const statusFilter = buildD1JsonMembershipFilter("status", params.status);
+    filters.push(statusFilter.sql);
+    args.push(...statusFilter.bindings);
+  }
+  if (params.q) {
+    const search = buildD1TextSearchFilter(params.q, ["title", "description", "status", "vote_type", "scope_type"]);
+    filters.push(search.sql);
+    args.push(...search.bindings);
+  }
+  const where = filters.join(" AND ");
+  const orderBy = resolveOrderBy(
+    params.sort,
+    ["title", "status", "closes_at", "created_at"],
+    "ORDER BY closes_at DESC",
+    "id ASC",
+  );
 
-  const [rows, totalRow] = await Promise.all([
-    all<VoteRow>(db, `SELECT * FROM votes WHERE ${where} ORDER BY closes_at DESC LIMIT ? OFFSET ?`, [
-      ...args,
-      params.limit,
-      params.offset,
-    ]),
-    first<{ total: number }>(db, `SELECT COUNT(*) AS total FROM votes WHERE ${where}`, args),
-  ]);
+  const { rows, total } = await queryPage<VoteRow>(
+    db,
+    {
+      sql: `SELECT ${VOTE_ROW_COLUMNS} FROM votes WHERE ${where} ${orderBy} LIMIT ? OFFSET ?`,
+      bindings: [...args, params.limit, params.offset],
+    },
+    { sql: `SELECT COUNT(*) AS total FROM votes WHERE ${where}`, bindings: args },
+  );
 
-  if (rows.length === 0) return { votes: [], total: totalRow?.total ?? 0 };
+  if (rows.length === 0) return { votes: [], total };
 
   const voteIds = rows.map((r) => r.id);
   const electionVoteIds = rows.filter((r) => r.vote_type === "election").map((r) => r.id);
@@ -179,7 +202,7 @@ export async function listVisibleVotesForMember(
     };
   });
 
-  return { votes, total: totalRow?.total ?? 0 };
+  return { votes, total };
 }
 
 export async function getVoteDetailForMember(
@@ -223,27 +246,50 @@ export interface MyVoteHistoryEntry {
 export async function listMyVoteHistory(
   db: DatabaseLike,
   member: AuthMember,
-  params: { limit: number; offset: number },
+  params: { limit: number; offset: number; q?: string; sort?: string },
 ): Promise<{ votes: MyVoteHistoryEntry[]; total: number }> {
-  const [rows, totalRow] = await Promise.all([
-    all<{
-      vote_id: string;
-      slug: string;
-      title: string;
-      vote_type: VoteType;
-      scope_type: VoteScopeType;
-      status: VoteStatus;
-      choice: string;
-      submitted_at: string;
-    }>(
-      db,
-      `SELECT b.vote_id, v.slug, v.title, v.vote_type, v.scope_type, v.status, b.choice, b.submitted_at
+  const conditions = ["b.user_id = ?"];
+  const bindings: unknown[] = [member.userId];
+  if (params.q) {
+    const search = buildD1TextSearchFilter(params.q, [
+      "v.title",
+      "v.status",
+      "v.vote_type",
+      "v.scope_type",
+      "b.choice",
+    ]);
+    conditions.push(search.sql);
+    bindings.push(...search.bindings);
+  }
+  const where = conditions.join(" AND ");
+  const orderBy = resolveMappedOrderBy(
+    params.sort,
+    { title: "v.title COLLATE NOCASE", status: "v.status", submittedAt: "b.submitted_at" },
+    "b.submitted_at DESC",
+    "b.id ASC",
+  );
+  const { rows, total } = await queryPage<{
+    vote_id: string;
+    slug: string;
+    title: string;
+    vote_type: VoteType;
+    scope_type: VoteScopeType;
+    status: VoteStatus;
+    choice: string;
+    submitted_at: string;
+  }>(
+    db,
+    {
+      sql: `SELECT b.vote_id, v.slug, v.title, v.vote_type, v.scope_type, v.status, b.choice, b.submitted_at
        FROM vote_ballots b JOIN votes v ON v.id = b.vote_id
-       WHERE b.user_id = ? ORDER BY b.submitted_at DESC LIMIT ? OFFSET ?`,
-      [member.userId, params.limit, params.offset],
-    ),
-    first<{ total: number }>(db, `SELECT COUNT(*) AS total FROM vote_ballots WHERE user_id = ?`, [member.userId]),
-  ]);
+       WHERE ${where} ${orderBy} LIMIT ? OFFSET ?`,
+      bindings: [...bindings, params.limit, params.offset],
+    },
+    {
+      sql: `SELECT COUNT(*) AS total FROM vote_ballots b JOIN votes v ON v.id = b.vote_id WHERE ${where}`,
+      bindings,
+    },
+  );
   const votes = rows.map((r) => ({
     voteId: r.vote_id,
     slug: r.slug,
@@ -254,5 +300,5 @@ export async function listMyVoteHistory(
     choice: r.choice,
     submittedAt: r.submitted_at,
   }));
-  return { votes, total: totalRow?.total ?? 0 };
+  return { votes, total };
 }

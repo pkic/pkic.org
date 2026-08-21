@@ -5,6 +5,7 @@ import { api } from "../../api";
 import { fmt } from "../../ui";
 import { APPLICATION_STAGES } from "../../../../shared/schemas/member-applications";
 import type { AdminApplicationSummary } from "../../types";
+import { adminApplicationsListResponseSchema } from "../../../../shared/schemas/admin-applications";
 
 /**
  * Consultation queue visibility (Fix 5a): shown above the table only when
@@ -18,9 +19,9 @@ function ConsultationQueueBanner() {
 
   useEffect(() => {
     let cancelled = false;
-    void api<{ page: { total: number } }>("/api/v1/admin/applications?stage=in_consultation&limit=1&offset=0")
+    void api<unknown>("/api/v1/admin/applications?stage=in_consultation&limit=1&offset=0")
       .then((data) => {
-        if (!cancelled) setCount(data.page.total);
+        if (!cancelled) setCount(adminApplicationsListResponseSchema.parse(data).page.total);
       })
       .catch(() => {
         if (!cancelled) setCount(null);
@@ -49,8 +50,8 @@ export function ApplicationsList({ onViewApplication }: { onViewApplication: (id
       {stageFilter === "in_consultation" && <ConsultationQueueBanner />}
       <ApiDataTable<AdminApplicationSummary>
         endpoint="/api/v1/admin/applications"
-        resolve={(d) => (d as { applications: AdminApplicationSummary[] }).applications}
-        resolvePage={(d) => (d as { page: { total: number; hasMore: boolean } }).page}
+        resolve={(data) => adminApplicationsListResponseSchema.parse(data).applications}
+        resolvePage={(data) => adminApplicationsListResponseSchema.parse(data).page}
         paginate
         actionsRef={tableRef}
         searchPlaceholder="applicant email or name"

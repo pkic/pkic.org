@@ -1,22 +1,21 @@
 /**
  * Admin Organizations read model — list/detail projections over the
  * post-approval organization profile (data-bearing columns, pulled forward
- * by migration 0040) plus its representative roster
- * (`organization_representatives`, migration 0037). Split from the combined
+ * by consolidated migration 0035) plus its representative roster
+ * (`organization_representatives`, consolidated migration 0035). Split from the combined
  * admin-organizations.ts (PR #1 review, Phase 8) — see profile.ts for the
  * profile-update use case and representatives.ts for representative/member
  * provisioning; this file owns only reads.
  */
 import { all, first } from "../../db/queries";
+import { queryPage } from "../../db/pagination";
+import { buildD1TextSearchFilter } from "../../db/search";
 import { AppError } from "../../errors";
 import { resolveOrderBy } from "../../db/sort";
 import { parseLinksJson } from "../../../../assets/shared/schemas/links";
 import { REPRESENTATIVE_ROLE_IDS, resolveRepresentativeRoleHolders } from "../membership/representative-roles";
+import { toOrganizationExtendedContent, toOrganizationSummaryContent } from "../organization-content/fields";
 import type { DatabaseLike } from "../../types";
-
-export function logoUrlFor(id: string, logoR2Key: string | null): string | null {
-  return logoR2Key ? `/api/v1/members/${id}/logo` : null;
-}
 
 export async function getOrgAggregate(
   db: DatabaseLike,
@@ -70,13 +69,10 @@ function toOrgSummary(row: OrgSummaryRow) {
   return {
     id: row.id,
     name: row.name,
-    website: row.website,
-    description: row.description,
-    slogan: row.slogan,
-    logoUrl: logoUrlFor(row.id, row.logo_r2_key),
+    ...toOrganizationSummaryContent(row),
     membershipCategory: row.membership_category,
     // Falls back to the row's own creation time for organizations created
-    // before migration 0049 added this column (or via a path that never set
+    // before consolidated migration 0035 added this column (or via a path that never set
     // it) — matches the same fallback members-directory.ts/member-self-service.ts use.
     memberSince: row.member_since ?? row.created_at,
     memberCount: row.member_count,
@@ -97,20 +93,21 @@ export async function listAdminOrganizations(
   db: DatabaseLike,
   params: { limit: number; offset: number; q?: string; sort?: string },
 ): Promise<{ organizations: ReturnType<typeof toOrgSummary>[]; total: number }> {
-  const where = params.q ? "WHERE o.name LIKE ?" : "";
-  const whereArgs = params.q ? [`%${params.q}%`] : [];
-  const orderBy = resolveOrderBy(params.sort, ORG_SORT_COLUMNS, "ORDER BY o.name ASC");
+  const search = params.q ? buildD1TextSearchFilter(params.q, ["o.name"]) : null;
+  const where = search ? `WHERE ${search.sql}` : "";
+  const whereArgs = search?.bindings ?? [];
+  const orderBy = resolveOrderBy(params.sort, ORG_SORT_COLUMNS, "ORDER BY o.name ASC", "o.id ASC");
 
-  const [rows, totalRow] = await Promise.all([
-    all<OrgSummaryRow>(db, `${ORG_SUMMARY_SELECT} ${where} ${orderBy} LIMIT ? OFFSET ?`, [
-      ...whereArgs,
-      params.limit,
-      params.offset,
-    ]),
-    first<{ total: number }>(db, `SELECT COUNT(*) AS total FROM organizations o ${where}`, whereArgs),
-  ]);
+  const { rows, total } = await queryPage<OrgSummaryRow>(
+    db,
+    {
+      sql: `${ORG_SUMMARY_SELECT} ${where} ${orderBy} LIMIT ? OFFSET ?`,
+      bindings: [...whereArgs, params.limit, params.offset],
+    },
+    { sql: `SELECT COUNT(*) AS total FROM organizations o ${where}`, bindings: whereArgs },
+  );
 
-  return { organizations: rows.map(toOrgSummary), total: totalRow?.total ?? 0 };
+  return { organizations: rows.map(toOrgSummary), total };
 }
 
 // ── Detail ───────────────────────────────────────────────────────────────
@@ -133,6 +130,7 @@ interface RepresentativeRow {
   last_name: string | null;
   email: string;
   job_title: string | null;
+  links_json: string | null;
   show_on_org_profile: number;
   created_at: string;
 }
@@ -163,6 +161,7 @@ async function fetchRepresentatives(db: DatabaseLike, organizationId: string): P
   return all<RepresentativeRow>(
     db,
     `SELECT r.id AS representative_id, r.member_id, r.user_id, u.first_name, u.last_name, u.email, u.job_title,
+            u.links_json,
             r.show_on_org_profile, r.created_at
      FROM organization_representatives r
      JOIN members m ON m.id = r.member_id
@@ -184,13 +183,7 @@ async function toOrgDetail(
     : { primaryContactUserId: null, secondaryContactUserId: null, votingDelegateUserId: null };
   return {
     ...toOrgSummary(row),
-    contentMarkdown: row.content_markdown,
-    blogUrl: row.blog_url,
-    blogFeedUrl: row.blog_feed_url,
-    pressUrl: row.press_url,
-    pressFeedUrl: row.press_feed_url,
-    careersUrl: row.careers_url,
-    links: parseLinksJson(row.links_json),
+    ...toOrganizationExtendedContent(row),
     primaryContactUserId: holders.primaryContactUserId,
     secondaryContactUserId: holders.secondaryContactUserId,
     votingDelegateUserId: holders.votingDelegateUserId,
@@ -206,6 +199,7 @@ async function toOrgDetail(
       name: [r.first_name, r.last_name].filter(Boolean).join(" ") || r.email,
       email: r.email,
       jobTitle: r.job_title,
+      links: parseLinksJson(r.links_json),
       status: "active",
       showOnOrgProfile: r.show_on_org_profile === 1,
       isPrimaryContact: r.user_id === holders.primaryContactUserId,

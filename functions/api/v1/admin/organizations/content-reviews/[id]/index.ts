@@ -5,7 +5,7 @@
 import { json } from "../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../../_lib/auth/permissions";
-import { getContentReviewDetail } from "../../../../../../_lib/services/organization-content-reviews";
+import { getContentReviewDetail } from "../../../../../../_lib/services/organization-content";
 import { contentReviewGetRouteSchema } from "../../../../../../../assets/shared/schemas/admin-organizations";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../../_lib/openapi/route";

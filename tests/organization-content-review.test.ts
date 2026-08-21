@@ -5,10 +5,10 @@
  * moderation queue -> staff approve/reject, plus secondary contact
  * nomination -> staff confirmation, plus voting delegate self-service. The
  * data-bearing columns/admin profile-edit surface these build on were
- * pulled forward in migration 0040 (see admin-organizations.test.ts); this
+ * pulled forward in consolidated migration 0035 (see admin-organizations.test.ts); this
  * file covers what's new. Primary/secondary contact and voting delegate are
  * role-primary_contact/role-secondary_contact/role-voting_delegate grants
- * (user_roles, migration 0038) — see functions/_lib/services/membership/
+ * (user_roles, consolidated migration 0035) — see functions/_lib/services/membership/
  * representative-roles.ts — not columns on `organizations`.
  */
 import { describe, expect, it, beforeEach } from "vitest";
@@ -133,6 +133,30 @@ describe("Organization content moderation", () => {
     expect(body.error.code).toBe("REVIEW_ALREADY_PENDING");
   });
 
+  it("enforces one pending review under concurrent submissions", async () => {
+    const { organizationId, userId } = await seedOrgWithContact("concurrent-submit@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "concurrent-content-submit-token");
+
+    const responses = await Promise.all([
+      call(token, "/api/v1/me/organization", {
+        method: "PATCH",
+        body: JSON.stringify({ slogan: "First concurrent version" }),
+      }),
+      call(token, "/api/v1/me/organization", {
+        method: "PATCH",
+        body: JSON.stringify({ slogan: "Second concurrent version" }),
+      }),
+    ]);
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 409]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM organization_content_reviews WHERE organization_id = ? AND status = 'pending'",
+        organizationId,
+      ),
+    ).toHaveLength(1);
+  });
+
   it("lets the submitter withdraw a pending review, freeing them to resubmit", async () => {
     const { userId } = await seedOrgWithContact("primary4@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "withdraw-token");
@@ -234,6 +258,99 @@ describe("Organization content moderation", () => {
     );
     expect(reviewRows[0].status).toBe("rejected");
     expect(reviewRows[0].reviewer_note).toBe("Too promotional");
+  });
+
+  it("rolls back approval state, live content, and email when audit fails", async () => {
+    const { organizationId, userId } = await seedOrgWithContact("approve-rollback@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "approve-rollback-token");
+    const submitResponse = await call(token, "/api/v1/me/organization", {
+      method: "PATCH",
+      body: JSON.stringify({ description: "Must roll back" }),
+    });
+    const { review } = (await submitResponse.json()) as { review: { id: string } };
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_content_review_approval_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'organization_content_review_approved'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced content review audit failure');
+       END`,
+    ).run();
+
+    const response = await call(adminToken, `/api/v1/admin/organizations/content-reviews/${review.id}/approve`, {
+      method: "POST",
+    });
+    expect(response.status).toBe(500);
+    expect(
+      (
+        await queryAll<{ description: string }>(
+          env.DB,
+          "SELECT description FROM organizations WHERE id = ?",
+          organizationId,
+        )
+      )[0].description,
+    ).toBe("Old description");
+    expect(
+      (
+        await queryAll<{ status: string }>(
+          env.DB,
+          "SELECT status FROM organization_content_reviews WHERE id = ?",
+          review.id,
+        )
+      )[0].status,
+    ).toBe("pending");
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE recipient_email = ?", "approve-rollback@example.test"),
+    ).toHaveLength(0);
+    await env.DB.prepare("DROP TRIGGER fail_content_review_approval_audit").run();
+  });
+
+  it("allows exactly one concurrent approval or rejection with matching fallout", async () => {
+    const { userId } = await seedOrgWithContact("decision-race@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "decision-race-token");
+    const submitResponse = await call(token, "/api/v1/me/organization", {
+      method: "PATCH",
+      body: JSON.stringify({ description: "Race decision" }),
+    });
+    const { review } = (await submitResponse.json()) as { review: { id: string } };
+
+    const responses = await Promise.all([
+      call(adminToken, `/api/v1/admin/organizations/content-reviews/${review.id}/approve`, { method: "POST" }),
+      call(adminToken, `/api/v1/admin/organizations/content-reviews/${review.id}/reject`, {
+        method: "POST",
+        body: JSON.stringify({ reviewerNote: "Race rejection" }),
+      }),
+    ]);
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 409]);
+    const [stored] = await queryAll<{ status: string }>(
+      env.DB,
+      "SELECT status FROM organization_content_reviews WHERE id = ?",
+      review.id,
+    );
+    const outbox = await queryAll<{ template_key: string }>(
+      env.DB,
+      "SELECT template_key FROM email_outbox WHERE recipient_email = ?",
+      "decision-race@example.test",
+    );
+    expect(outbox).toHaveLength(1);
+    expect(outbox[0].template_key).toBe(stored.status === "approved" ? "org-content-approved" : "org-content-rejected");
+    const audits = await queryAll<{ action: string }>(
+      env.DB,
+      "SELECT action FROM audit_log WHERE entity_id IN (?, ?)",
+      review.id,
+      (
+        await queryAll<{ organization_id: string }>(
+          env.DB,
+          "SELECT organization_id FROM organization_content_reviews WHERE id = ?",
+          review.id,
+        )
+      )[0].organization_id,
+    );
+    expect(
+      audits.filter((row) =>
+        ["organization_content_review_approved", "organization_content_review_rejected"].includes(row.action),
+      ),
+    ).toHaveLength(1);
   });
 
   it("a non-privileged staff user is rejected from the moderation queue with 403", async () => {

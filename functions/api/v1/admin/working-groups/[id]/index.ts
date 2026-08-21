@@ -4,7 +4,6 @@
  */
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
-import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { getAdminWorkingGroupDetail, updateWorkingGroup } from "../../../../../_lib/services/admin-working-groups";
 import { AppError } from "../../../../../_lib/errors";
 import {
@@ -30,9 +29,7 @@ export const WorkingGroupUpdate = openApiRoute(workingGroupUpdateRouteSchema, as
 
   const id = data.params.id;
   const body = data.body;
-  const workingGroup = await updateWorkingGroup(requestDb(c), id, body);
-
-  await writeAuditLog(requestDb(c), "admin", admin.id, "working_group_updated", "working_group", id, body);
+  const workingGroup = await updateWorkingGroup(requestDb(c), admin.id, id, body);
 
   return json({ workingGroup });
 });

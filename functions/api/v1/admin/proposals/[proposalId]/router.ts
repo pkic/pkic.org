@@ -3,17 +3,21 @@ import { fromHono } from "chanfana";
 import { handleError } from "../../../../../_lib/http";
 import { getCachedAdminForRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
-import { first } from "../../../../../_lib/db/queries";
+import { getProposalEventScope, proposalPermissionForRequest } from "../../../../../_lib/auth/proposal-route-policy";
 import { requestDb } from "../../../../../_lib/db/context";
 import { AppError } from "../../../../../_lib/errors";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import {
   adminProposalAuditLogRouteSchema,
-  adminProposalCommentsRouteSchema,
+  adminProposalCommentCreateRouteSchema,
+  adminProposalCommentsListRouteSchema,
   adminProposalFinalizePreviewRouteSchema,
   adminProposalFinalizeRouteSchema,
+  adminProposalFlagRouteSchema,
   adminProposalOpenManageRouteSchema,
   adminProposalPatchRouteSchema,
+  adminProposalReviewsListRouteSchema,
+  adminProposalReviewUpsertRouteSchema,
   adminProposalSpeakersRouteSchema,
 } from "../../../../../../assets/shared/schemas/route-contracts";
 import { AdminProposalsProposalIdGet } from "./index";
@@ -27,7 +31,10 @@ import {
   onRequestGet as AdminProposalsProposalIdCommentsGet_l,
   onRequestPost as AdminProposalsProposalIdCommentsPost_l,
 } from "./comments";
-import { AdminProposalsProposalIdReviewsGet, AdminProposalsProposalIdReviewsPost } from "./reviews";
+import {
+  onRequestGet as AdminProposalsProposalIdReviewsGet_l,
+  onRequestPost as AdminProposalsProposalIdReviewsPost_l,
+} from "./reviews";
 import { onRequestGet as AdminProposalsProposalIdSpeakersGet_l } from "./speakers";
 import { onRequestPost as AdminProposalsProposalIdRemindSpeakersPost_l } from "./remind-speakers";
 import { onRequestPost as AdminProposalsProposalIdRemindPresentationPost_l } from "./remind-presentation";
@@ -65,16 +72,12 @@ async function requireProposalAccess(c: Context<RequestDbContext>, next: Next): 
   }
 
   const proposalId = c.req.param("proposalId") ?? "";
-  const proposal = await first<{ event_id: string }>(
-    requestDb(c),
-    "SELECT event_id FROM session_proposals WHERE id = ?",
-    [proposalId],
-  );
-  if (!proposal) {
-    throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found");
-  }
+  const eventId = await getProposalEventScope(requestDb(c), proposalId);
 
-  requirePermission(admin, "proposals:read", { type: "event", id: proposal.event_id });
+  requirePermission(admin, proposalPermissionForRequest(c.req.path, c.req.method), {
+    type: "event",
+    id: eventId,
+  });
 
   await next();
 }
@@ -86,6 +89,7 @@ const AdminProposalsProposalIdOpenManagePost = openApiRoute(
   AdminProposalsProposalIdOpenManagePost_l,
 );
 const AdminProposalsProposalIdPatch = openApiRoute(adminProposalPatchRouteSchema, AdminProposalsProposalIdPatch_l);
+const AdminProposalsProposalIdFlagPost = openApiRoute(adminProposalFlagRouteSchema, AdminProposalsProposalIdFlagPost_l);
 const AdminProposalsProposalIdFinalizePost = openApiRoute(
   adminProposalFinalizeRouteSchema,
   AdminProposalsProposalIdFinalizePost_l,
@@ -99,21 +103,29 @@ const AdminProposalsProposalIdAuditLogGet = openApiRoute(
   AdminProposalsProposalIdAuditLogGet_l,
 );
 const AdminProposalsProposalIdCommentsGet = openApiRoute(
-  adminProposalCommentsRouteSchema,
+  adminProposalCommentsListRouteSchema,
   AdminProposalsProposalIdCommentsGet_l,
 );
 const AdminProposalsProposalIdCommentsPost = openApiRoute(
-  adminProposalCommentsRouteSchema,
+  adminProposalCommentCreateRouteSchema,
   AdminProposalsProposalIdCommentsPost_l,
 );
 const AdminProposalsProposalIdSpeakersGet = openApiRoute(
   adminProposalSpeakersRouteSchema,
   AdminProposalsProposalIdSpeakersGet_l,
 );
+const AdminProposalsProposalIdReviewsGet = openApiRoute(
+  adminProposalReviewsListRouteSchema,
+  AdminProposalsProposalIdReviewsGet_l,
+);
+const AdminProposalsProposalIdReviewsPost = openApiRoute(
+  adminProposalReviewUpsertRouteSchema,
+  AdminProposalsProposalIdReviewsPost_l,
+);
 
 openapi.get("/", AdminProposalsProposalIdGet);
 openapi.post("/open-manage", AdminProposalsProposalIdOpenManagePost);
-openapi.post("/flag", AdminProposalsProposalIdFlagPost_l);
+openapi.post("/flag", AdminProposalsProposalIdFlagPost);
 openapi.patch("/", AdminProposalsProposalIdPatch);
 openapi.post("/finalize", AdminProposalsProposalIdFinalizePost);
 openapi.post("/finalize-preview", AdminProposalsProposalIdFinalizePreviewPost);

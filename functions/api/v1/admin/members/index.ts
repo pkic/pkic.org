@@ -11,7 +11,6 @@
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../_lib/auth/permissions";
-import { writeAuditLog } from "../../../../_lib/services/audit";
 import { createAdminMember, listAdminMembers } from "../../../../_lib/services/admin-members";
 import { membersCreateRouteSchema, membersListRouteSchema } from "../../../../../assets/shared/schemas/admin-members";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
@@ -20,11 +19,18 @@ import { buildPageInfo } from "../../../../../assets/shared/schemas/pagination";
 
 export const MembersList = openApiRoute(membersListRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  requirePermission(admin, "membership:write");
+  requirePermission(admin, "membership:read");
 
-  const { limit = 50, offset = 0 } = data.query;
+  const { limit = 50, offset = 0, q, sort, membershipCategory, status } = data.query;
 
-  const { members, total } = await listAdminMembers(requestDb(c), { limit, offset });
+  const { members, total } = await listAdminMembers(requestDb(c), {
+    limit,
+    offset,
+    q,
+    sort,
+    membershipCategory,
+    status,
+  });
   return json({ members, page: buildPageInfo(limit, offset, total, members.length) });
 });
 
@@ -33,13 +39,7 @@ export const MembersCreate = openApiRoute(membersCreateRouteSchema, async (c: Ad
   requirePermission(admin, "membership:write");
 
   const body = data.body;
-  const result = await createAdminMember(requestDb(c), body);
-
-  await writeAuditLog(requestDb(c), "admin", admin.id, "member_created", "organization", result.organizationId, {
-    membershipCategory: body.membershipCategory,
-    organizationName: body.organizationName ?? null,
-    representativeEmails: body.representatives.map((r) => r.email),
-  });
+  const result = await createAdminMember(requestDb(c), admin.id, body);
 
   return json(result, 201);
 });

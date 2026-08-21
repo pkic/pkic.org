@@ -9,7 +9,6 @@ import { openApiRoute } from "../../../../_lib/openapi/route";
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../_lib/auth/permissions";
-import { writeAuditLog } from "../../../../_lib/services/audit";
 import { removeAdminMember, updateAdminMember } from "../../../../_lib/services/admin-organizations";
 import {
   memberDeleteRouteSchema,
@@ -23,9 +22,7 @@ export const MemberUpdate = openApiRoute(memberUpdateRouteSchema, async (c: Admi
 
   const id = data.params.id;
   const body = data.body;
-  const member = await updateAdminMember(requestDb(c), id, body);
-
-  await writeAuditLog(requestDb(c), "admin", admin.id, "member_updated", "member", id, body);
+  const member = await updateAdminMember(requestDb(c), admin.id, id, body);
 
   return json({ member });
 });
@@ -35,12 +32,7 @@ export const MemberDelete = openApiRoute(memberDeleteRouteSchema, async (c: Admi
   requirePermission(admin, "membership:write");
 
   const id = data.params.id;
-  const removed = await removeAdminMember(requestDb(c), id);
-
-  await writeAuditLog(requestDb(c), "admin", admin.id, "member_removed", "member", id, {
-    userId: removed.user_id,
-    organizationId: removed.organization_id,
-  });
+  await removeAdminMember(requestDb(c), admin.id, id);
 
   return json({ success: true });
 });

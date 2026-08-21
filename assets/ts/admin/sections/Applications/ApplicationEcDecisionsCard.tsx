@@ -1,20 +1,17 @@
 import { useState } from "preact/hooks";
 import { Badge } from "../../../components/Badge";
 import type { AdminApplicationDetail } from "../../types";
+import type { EcDecisionValue } from "../../../../shared/schemas/ec-review";
 
 export function ApplicationEcDecisionsCard({
   detail,
   onRecordEcDecision,
 }: {
   detail: AdminApplicationDetail;
-  onRecordEcDecision: (params: {
-    ecMemberUserId: string;
-    decision: "approve" | "decline";
-    reason?: string;
-  }) => Promise<void>;
+  onRecordEcDecision: (params: { ecMemberUserId: string; decision: EcDecisionValue; reason?: string }) => Promise<void>;
 }) {
   const [ecMemberUserId, setEcMemberUserId] = useState("");
-  const [ecDecision, setEcDecision] = useState<"approve" | "decline">("approve");
+  const [ecDecision, setEcDecision] = useState<EcDecisionValue>("approve");
   const [ecReason, setEcReason] = useState("");
 
   async function submitEcDecision(e: Event) {
@@ -49,7 +46,7 @@ export function ApplicationEcDecisionsCard({
             <select
               class="form-select form-select-sm w-auto"
               value={ecDecision}
-              onChange={(e) => setEcDecision((e.target as HTMLSelectElement).value as "approve" | "decline")}
+              onChange={(e) => setEcDecision((e.target as HTMLSelectElement).value as EcDecisionValue)}
             >
               <option value="approve">approve</option>
               <option value="decline">decline</option>

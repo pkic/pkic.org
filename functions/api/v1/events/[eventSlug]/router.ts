@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
-import { onRequestGet as FormsGet_l } from "./forms";
+import { EventFormsGet } from "./forms";
 import { EventsEventSlugInvitesPost } from "./invites";
 import { EventsEventSlugProposalsPost } from "./proposals";
 import { onRequestPost as EventsEventSlugRegistrationsPost_l } from "./registrations";
@@ -12,7 +12,7 @@ import registrations_Router from "./registrations/router";
 const app = new Hono();
 export const openapi = fromHono(app);
 
-app.get("/forms", FormsGet_l);
+openapi.get("/forms", EventFormsGet);
 openapi.post("/invites", EventsEventSlugInvitesPost);
 openapi.post("/proposals", EventsEventSlugProposalsPost);
 app.post("/registrations", EventsEventSlugRegistrationsPost_l);

@@ -16,6 +16,10 @@ import { Spinner } from "../components/Spinner";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { Markdown } from "../components/Markdown";
 import { findLinkedinUrl } from "../../shared/schemas/links";
+import {
+  publicMemberDetailSchema,
+  type PublicMemberDetail as MemberDetail,
+} from "../../shared/schemas/members-directory";
 
 const API_BASE_FALLBACK = "/api/v1";
 
@@ -30,35 +34,7 @@ function slugFromPathname(pathname: string): string | null {
   return match[1] === "profile" ? null : match[1];
 }
 
-interface Representative {
-  name: string;
-  jobTitle: string | null;
-  bio: string | null;
-  linkedin: string | null;
-  photoUrl: string | null;
-}
-
-interface MemberDetail {
-  id: string;
-  name: string;
-  memberType: string;
-  tier: string | null;
-  website: string | null;
-  description: string | null;
-  slogan: string | null;
-  logoUrl: string | null;
-  memberSince: string;
-  content: string | null;
-  blogUrl: string | null;
-  blogFeedUrl: string | null;
-  pressUrl: string | null;
-  pressFeedUrl: string | null;
-  careersUrl: string | null;
-  links: string[];
-  representatives: Representative[];
-  jobTitle: string | null;
-  linkedin: string | null;
-}
+type Representative = MemberDetail["representatives"][number];
 
 function LinkedInIcon() {
   return (
@@ -137,10 +113,7 @@ function RepresentativeCard({ rep }: { rep: Representative }) {
         {rep.photoUrl ? (
           <img class="img-thumbnail" alt={rep.name} title={rep.name} src={rep.photoUrl} />
         ) : (
-          <div
-            class={`standalone-initials initial-color-${rep.name.length % 6}`}
-            style="width:100px;height:100px;font-size:1.5rem;"
-          >
+          <div class={`standalone-initials standalone-initials--representative initial-color-${rep.name.length % 6}`}>
             {initialsFor(rep.name)}
           </div>
         )}
@@ -161,12 +134,9 @@ function MemberDetailView({ member, directoryHref }: { member: MemberDetail; dir
         <div class="row py-lg-2">
           <div class="col-10 mx-auto">
             {member.logoUrl ? (
-              <img style="height:150px;max-width:60%" class="py-3" alt={member.name} src={member.logoUrl} />
+              <img class="member-profile-logo py-3" alt={member.name} src={member.logoUrl} />
             ) : (
-              <div
-                class={`standalone-initials initial-color-${colorIdx} mx-auto`}
-                style="width:120px;height:120px;font-size:2rem;"
-              >
+              <div class={`standalone-initials standalone-initials--hero initial-color-${colorIdx} mx-auto`}>
                 {initialsFor(member.name)}
               </div>
             )}
@@ -265,8 +235,8 @@ function MemberDetailPage({ apiBase, directoryHref }: { apiBase: string; directo
       setNotFound(true);
       return;
     }
-    getJson<MemberDetail>(`${apiBase}/members/${encodeURIComponent(id)}`)
-      .then(setMember)
+    getJson<unknown>(`${apiBase}/members/${encodeURIComponent(id)}`)
+      .then((data) => setMember(publicMemberDetailSchema.parse(data)))
       .catch((e) => {
         if ((e as { status?: number }).status === 404) setNotFound(true);
         else setError((e as Error).message);

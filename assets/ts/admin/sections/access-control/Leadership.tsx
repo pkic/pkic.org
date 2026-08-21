@@ -5,12 +5,13 @@ import { fmt, toast } from "../../ui";
 import type { AdminWorkingGroupSummary, Role, RoleAssignment } from "../../types";
 import { UserPicker, type PickedUser } from "./UserPicker";
 import { LeadershipPositions } from "./LeadershipPositions";
+import { getAdminWorkingGroupCatalogue } from "../../services/catalogues";
 
 /**
  * "Create a new tab under the Access Control for chairs to set the chairs
  * for each working group and the forum" — one screen for both the
  * PKIC-wide (forum) chair/vice-chair (role-forum_chair/role-forum_vice_chair,
- * global — contextType/contextId both null, migration 0040) and every
+ * global — contextType/contextId both null, consolidated migration 0035) and every
  * working group's chair/vice-chair (role-wg_chair/role-wg_vice_chair,
  * context_type='working_group'). All of it is the same user_roles
  * assign/revoke mechanism the "Staff" and "Working Groups" tabs already use
@@ -18,7 +19,7 @@ import { LeadershipPositions } from "./LeadershipPositions";
  * requiring staff to already know which user to look up.
  *
  * Renamed from "Chairs" to "Leadership" when Board of Directors and
- * Executive Council roster management (migration 0049) were added here —
+ * Executive Council roster management (consolidated migration 0035) were added here —
  * "Chairs" no longer described the page once it covered the full
  * leadership picture, not just chair/vice-chair designations.
  */
@@ -129,9 +130,7 @@ function ChairSlot({
 
   return (
     <div class="d-flex align-items-center gap-2 flex-wrap">
-      <span class="small fw-semibold" style={{ minWidth: "90px" }}>
-        {label}
-      </span>
+      <span class="small fw-semibold adm-leadership-slot-label">{label}</span>
       {current ? (
         <>
           <span>
@@ -140,8 +139,7 @@ function ChairSlot({
           {editingExpiry ? (
             <form onSubmit={saveExpiry} class="d-flex gap-2 align-items-center flex-wrap">
               <input
-                class="form-control form-control-sm"
-                style={{ width: "200px" }}
+                class="form-control form-control-sm adm-leadership-date"
                 type="datetime-local"
                 title="Term expires (leave blank for no expiry)"
                 placeholder="Term expires (optional)"
@@ -179,12 +177,11 @@ function ChairSlot({
         <span class="small text-danger">{roleMissingLabel}</span>
       ) : (
         <form onSubmit={assign} class="d-flex gap-2 align-items-center flex-wrap">
-          <div style={{ minWidth: "220px" }}>
+          <div class="adm-leadership-user">
             <UserPicker value={picked} onChange={setPicked} disabled={busy} />
           </div>
           <input
-            class="form-control form-control-sm"
-            style={{ width: "200px" }}
+            class="form-control form-control-sm adm-leadership-date"
             type="datetime-local"
             title="Term expires (optional)"
             placeholder="Term expires (optional)"
@@ -222,7 +219,7 @@ export function Leadership() {
       const forumViceChairRoleId = rolesData.roles.find((r) => r.name === "forum_vice_chair")?.id;
 
       const [groupsData, forumChairAssignments, forumViceChairAssignments] = await Promise.all([
-        api<{ workingGroups: AdminWorkingGroupSummary[] }>("/api/v1/admin/working-groups"),
+        getAdminWorkingGroupCatalogue(),
         forumChairRoleId
           ? api<{ assignments: RoleAssignment[] }>(`/api/v1/admin/roles/${forumChairRoleId}/assignments`)
           : Promise.resolve({ assignments: [] as RoleAssignment[] }),
@@ -231,7 +228,7 @@ export function Leadership() {
           : Promise.resolve({ assignments: [] as RoleAssignment[] }),
       ]);
 
-      setGroups(groupsData.workingGroups);
+      setGroups(groupsData);
       setForumChair(forumChairAssignments.assignments[0] ?? null);
       setForumViceChair(forumViceChairAssignments.assignments[0] ?? null);
     } catch (e) {

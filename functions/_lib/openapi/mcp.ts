@@ -1,4 +1,5 @@
 import type { AuthScope } from "../auth/scopes";
+import { proposalPermissionForRequest } from "../auth/proposal-route-policy";
 
 export const AUTH_EXTENSION = "x-pkic-auth";
 export const MCP_EXTENSION = "x-pkic-mcp";
@@ -70,10 +71,8 @@ function withRequiredScopesDescription(operation: JsonObject, scopes: AuthScope[
 }
 
 export function inferredScopesForOperation(path: string, method: string): AuthScope[] {
-  const scopes: AuthScope[] = [];
-
   if (!isBearerAuthPath(path)) {
-    return scopes;
+    return [];
   }
 
   if (isInternalPath(path)) {
@@ -81,20 +80,24 @@ export function inferredScopesForOperation(path: string, method: string): AuthSc
   }
 
   if (path.includes("/proposal") || path.includes("/proposals")) {
-    if (path.includes("/reviews")) {
-      scopes.push(WRITE_METHODS.has(method) ? "proposal-reviews:write" : "proposal-reviews:read");
-    } else if (path.includes("/finalize")) {
-      scopes.push("proposal-finalization:write");
-    } else {
-      scopes.push("proposals:read");
-    }
+    return [proposalPermissionForRequest(path, method)];
   }
 
   if (path.includes("/events")) {
-    scopes.push("events:read");
+    return [WRITE_METHODS.has(method) ? "events:write" : "events:read"];
   }
 
-  return uniqueScopes(scopes.length > 0 ? scopes : ["admin:read"]);
+  const module = path.replace(/^\/api\/v1\/admin\//, "").split("/")[0] ?? "";
+  if (module === "audit-log") return ["audit:read"];
+  if (module === "donations") return [WRITE_METHODS.has(method) ? "donations:sync" : "donations:read"];
+  if (module === "email-templates") {
+    return [WRITE_METHODS.has(method) ? "email-templates:write" : "email-templates:read"];
+  }
+  if (module === "users") {
+    if (path.endsWith("/anonymize")) return ["users:anonymize"];
+    return [WRITE_METHODS.has(method) ? "users:write" : "users:read"];
+  }
+  return [WRITE_METHODS.has(method) ? "admin:write" : "admin:read"];
 }
 
 function operationAuthMetadata(path: string, method: string, operation: JsonObject): AuthOperationMetadata | undefined {

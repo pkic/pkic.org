@@ -6,12 +6,11 @@
  * review, Phase 8) — see queries.ts for reads and representatives.ts for
  * representative/member provisioning.
  */
-import { first, run } from "../../db/queries";
+import { first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { AppError } from "../../errors";
 import { normalizeOrgName } from "../sponsorship";
-import { serializeLinks } from "../../../../assets/shared/schemas/links";
-import { getOrCreateOrganizationMemberAggregate } from "../membership/memberships";
+import { buildGetOrCreateOrganizationMemberAggregateStatements } from "../membership/memberships";
 import { isActiveRepresentative } from "../membership/representatives";
 import {
   REPRESENTATIVE_ROLE_IDS,
@@ -20,39 +19,32 @@ import {
 } from "../membership/representative-roles";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { getOrgAggregate, fetchOrgDetailRow, getAdminOrganization } from "./queries";
+import { prepareAuditLog } from "../audit";
+import {
+  ORGANIZATION_SCALAR_CONTENT_COLUMN_BY_FIELD,
+  serializeOrganizationContentValue,
+} from "../organization-content/fields";
+import type { OrganizationEditableContent } from "../../../../assets/shared/schemas/organization-profile";
 
 const UPDATABLE_COLUMNS: Record<string, string> = {
   name: "name",
-  description: "description",
-  website: "website",
-  contentMarkdown: "content_markdown",
-  slogan: "slogan",
-  blogUrl: "blog_url",
-  blogFeedUrl: "blog_feed_url",
-  pressUrl: "press_url",
-  pressFeedUrl: "press_feed_url",
-  careersUrl: "careers_url",
+  ...ORGANIZATION_SCALAR_CONTENT_COLUMN_BY_FIELD,
 };
 
-export interface OrganizationUpdateInput {
+export interface OrganizationUpdateInput extends OrganizationEditableContent {
   name?: string;
   membershipCategory?: string;
   memberSince?: string | null;
-  description?: string | null;
-  website?: string | null;
-  contentMarkdown?: string | null;
-  slogan?: string | null;
-  blogUrl?: string | null;
-  blogFeedUrl?: string | null;
-  pressUrl?: string | null;
-  pressFeedUrl?: string | null;
-  careersUrl?: string | null;
-  links?: string[];
   primaryContactUserId?: string | null;
   secondaryContactUserId?: string | null;
 }
 
-export async function updateAdminOrganization(db: DatabaseLike, id: string, input: OrganizationUpdateInput) {
+export async function updateAdminOrganization(
+  db: DatabaseLike,
+  actorUserId: string,
+  id: string,
+  input: OrganizationUpdateInput,
+) {
   const existing = await fetchOrgDetailRow(db, id);
   if (!existing) throw new AppError(404, "NOT_FOUND", "Organization not found");
 
@@ -65,7 +57,10 @@ export async function updateAdminOrganization(db: DatabaseLike, id: string, inpu
     if (conflict) throw new AppError(409, "DUPLICATE", "Another organization already uses that name");
   }
 
-  let aggregateId: string | null;
+  const statements: StatementLike[] = [];
+  const now = nowIso();
+  const existingAggregate = await getOrgAggregate(db, id);
+  let aggregateId: string | null = existingAggregate?.id ?? null;
   if (input.membershipCategory !== undefined) {
     // Explicit staff-driven change, not the create-time race — always
     // apply the requested category rather than routing through
@@ -73,21 +68,18 @@ export async function updateAdminOrganization(db: DatabaseLike, id: string, inpu
     // primitive that rejects a differing category as a conflict (that
     // conflict guard exists for concurrent first-time creation, not for
     // an admin legitimately changing an already-assigned category here).
-    const existingAggregate = await getOrgAggregate(db, id);
     if (existingAggregate) {
       aggregateId = existingAggregate.id;
-      await run(db, "UPDATE member_category_assignments SET category_code = ?, updated_at = ? WHERE member_id = ?", [
-        input.membershipCategory,
-        nowIso(),
-        aggregateId,
-      ]);
+      statements.push(
+        db
+          .prepare("UPDATE member_category_assignments SET category_code = ?, updated_at = ? WHERE member_id = ?")
+          .bind(input.membershipCategory, now, aggregateId),
+      );
     } else {
-      const aggregate = await getOrCreateOrganizationMemberAggregate(db, id, input.membershipCategory);
-      aggregateId = aggregate.id;
+      const aggregate = buildGetOrCreateOrganizationMemberAggregateStatements(db, id, input.membershipCategory, now);
+      aggregateId = aggregate.proposedId;
+      statements.push(...aggregate.statements);
     }
-  } else {
-    const aggregate = await getOrgAggregate(db, id);
-    aggregateId = aggregate?.id ?? null;
   }
 
   for (const [field, userId] of [
@@ -120,18 +112,16 @@ export async function updateAdminOrganization(db: DatabaseLike, id: string, inpu
   }
   if (input.links !== undefined) {
     setClauses.push("links_json = ?");
-    values.push(serializeLinks(input.links));
+    values.push(serializeOrganizationContentValue("links", input.links));
   }
 
-  const statements: StatementLike[] = [];
   if (setClauses.length > 0) {
     setClauses.push("updated_at = ?");
-    values.push(nowIso());
+    values.push(now);
     values.push(id);
     statements.push(db.prepare(`UPDATE organizations SET ${setClauses.join(", ")} WHERE id = ?`).bind(...values));
   }
 
-  const now = nowIso();
   if (aggregateId && input.memberSince !== undefined) {
     statements.push(
       db
@@ -180,9 +170,9 @@ export async function updateAdminOrganization(db: DatabaseLike, id: string, inpu
     }
   }
 
-  if (statements.length > 0) {
-    await db.batch(statements);
-  }
+  statements.push(prepareAuditLog(db, "admin", actorUserId, "organization_updated", "organization", id, input));
+
+  await db.batch(statements);
 
   return getAdminOrganization(db, id);
 }

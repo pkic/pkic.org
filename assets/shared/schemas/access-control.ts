@@ -3,58 +3,71 @@
  * ("access grants"), roles, and user_roles (role assignment).
  */
 import { z } from "zod";
-import { paginationQuerySchema, paginatedResponseSchema, sortColumnSchema } from "./pagination";
+import { trimmedString } from "./api-common";
+import { databaseIdSchema } from "./identifiers";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { permissionSchema } from "./permissions";
 
 const contextTypeSchema = z.enum(["event", "working_group", "organization"]);
 
-function trimmedString(min: number, max: number): z.ZodString {
-  return z.string().trim().min(min).max(max);
-}
-
-export const accessGrantIdParamsSchema = z.object({ id: z.uuid() });
+export const accessGrantIdParamsSchema = z.object({ id: databaseIdSchema });
 // Role ids are NOT always UUIDs — custom roles get a real uuid() (see
 // roles/index.ts's RolesCreate), but every built-in/system role ships with
 // a fixed human-readable id (role-admin, role-wg_chair, role-forum_chair,
-// ...; see migrations 0035/0040). z.uuid() here previously rejected every
+// ...; see consolidated migration 0035). UUID-only validation here previously
+// rejected every
 // attempt to reference a system role by id (assign it via POST .../roles,
 // or look up its holders via GET .../roles/:id/assignments) with a 400
 // before the handler ever ran — discovered while wiring up WG vice-chair
 // and forum chair/vice-chair assignment (Fix 2/3), which exclusively
 // assign system roles. Reused everywhere a role id appears — params,
 // request bodies, and response payloads alike — so none of them drift
-// back to z.uuid() individually.
+// back to UUID-only validation individually.
 export const roleIdSchema = trimmedString(1, 80);
 export const roleIdParamsSchema = z.object({ id: roleIdSchema });
-export const userIdRolesParamsSchema = z.object({ userId: z.uuid() });
-export const userRoleIdParamsSchema = z.object({ userId: z.uuid(), userRoleId: z.uuid() });
+export const userIdRolesParamsSchema = z.object({ userId: databaseIdSchema });
+export const userRoleIdParamsSchema = z.object({ userId: databaseIdSchema, userRoleId: databaseIdSchema });
+
+const scopedContextFields = {
+  contextType: contextTypeSchema.nullable().optional(),
+  contextId: trimmedString(1, 80).nullable().optional(),
+  expiresAt: z.iso.datetime().nullable().optional(),
+};
+
+function validateScopedContext(
+  value: { contextType?: string | null; contextId?: string | null },
+  ctx: z.core.$RefinementCtx,
+): void {
+  if (Boolean(value.contextType) !== Boolean(value.contextId)) {
+    ctx.addIssue({
+      code: "custom",
+      message: "contextType and contextId must both be set, or both omitted",
+      path: ["contextId"],
+      input: value,
+    });
+  }
+}
 
 export const accessGrantCreateSchema = z
   .object({
-    userId: z.uuid(),
-    permission: trimmedString(1, 80),
-    contextType: contextTypeSchema.nullable().optional(),
-    contextId: trimmedString(1, 80).nullable().optional(),
-    expiresAt: z.iso.datetime().nullable().optional(),
+    userId: databaseIdSchema,
+    permission: permissionSchema,
+    ...scopedContextFields,
   })
-  .superRefine((value, ctx) => {
-    if (Boolean(value.contextType) !== Boolean(value.contextId)) {
-      ctx.addIssue({
-        code: "custom",
-        message: "contextType and contextId must both be set, or both omitted",
-        path: ["contextId"],
-      });
-    }
-  });
+  .superRefine(validateScopedContext);
+export type AccessGrantCreateInput = z.infer<typeof accessGrantCreateSchema>;
 
 export const accessGrantResponseSchema = z.object({
-  id: z.uuid(),
-  userId: z.uuid(),
-  permission: z.string(),
-  contextType: z.string().nullable(),
+  id: databaseIdSchema,
+  userId: databaseIdSchema,
+  userEmail: z.email(),
+  permission: permissionSchema,
+  contextType: contextTypeSchema.nullable(),
   contextId: z.string().nullable(),
   expiresAt: z.string().nullable(),
   createdAt: z.string(),
 });
+export type AccessGrant = z.infer<typeof accessGrantResponseSchema>;
 
 // Implements permission_grants.
 export const accessGrantsCreateRouteSchema = {
@@ -79,10 +92,11 @@ export const ADMIN_ACCESS_GRANTS_SORT_COLUMNS = [
   "created_at",
 ] as const;
 
-export const accessGrantsListQuerySchema = paginationQuerySchema.extend({
-  userId: z.uuid().optional(),
-  sort: sortColumnSchema(ADMIN_ACCESS_GRANTS_SORT_COLUMNS),
+export const accessGrantsListQuerySchema = listQuerySchema(ADMIN_ACCESS_GRANTS_SORT_COLUMNS).extend({
+  userId: databaseIdSchema.optional(),
 });
+export type AccessGrantsListQuery = z.infer<typeof accessGrantsListQuerySchema>;
+export const accessGrantsListResponseSchema = paginatedResponseSchema("grants", accessGrantResponseSchema);
 
 export const accessGrantsListRouteSchema = {
   tags: ["Access Control"],
@@ -91,7 +105,7 @@ export const accessGrantsListRouteSchema = {
   responses: {
     "200": {
       description: "Active grants.",
-      content: { "application/json": { schema: paginatedResponseSchema("grants", accessGrantResponseSchema) } },
+      content: { "application/json": { schema: accessGrantsListResponseSchema } },
     },
   },
 };
@@ -109,17 +123,19 @@ export const accessGrantRevokeRouteSchema = {
 export const roleCreateSchema = z.object({
   name: trimmedString(1, 80).regex(/^[a-z][a-z0-9_]*$/, "Use lowercase letters, numbers, and underscores only"),
   description: trimmedString(0, 400).optional(),
-  permissions: z.array(trimmedString(1, 80)).max(64).default([]),
+  permissions: z.array(permissionSchema).max(64).default([]),
 });
+export type RoleCreateInput = z.infer<typeof roleCreateSchema>;
 
 export const roleResponseSchema = z.object({
   id: roleIdSchema,
   name: z.string(),
   description: z.string().nullable(),
   isSystemRole: z.boolean(),
-  permissions: z.array(z.string()),
+  permissions: z.array(permissionSchema),
   createdAt: z.string(),
 });
+export type Role = z.infer<typeof roleResponseSchema>;
 
 export const rolesCreateRouteSchema = {
   tags: ["Access Control"],
@@ -137,11 +153,9 @@ export const rolesCreateRouteSchema = {
 /** Allowlisted sort columns for GET /api/v1/admin/roles — see roles/index.ts. */
 export const ADMIN_ROLES_SORT_COLUMNS = ["name", "description"] as const;
 
-const rolesSortValueSchema = sortColumnSchema(ADMIN_ROLES_SORT_COLUMNS);
-
-export const rolesListQuerySchema = paginationQuerySchema.extend({
-  sort: rolesSortValueSchema,
-});
+export const rolesListQuerySchema = listQuerySchema(ADMIN_ROLES_SORT_COLUMNS);
+export type RolesListQuery = z.infer<typeof rolesListQuerySchema>;
+export const rolesListResponseSchema = paginatedResponseSchema("roles", roleResponseSchema);
 
 export const rolesListRouteSchema = {
   tags: ["Access Control"],
@@ -150,7 +164,7 @@ export const rolesListRouteSchema = {
   responses: {
     "200": {
       description: "All roles with their permission bundles.",
-      content: { "application/json": { schema: paginatedResponseSchema("roles", roleResponseSchema) } },
+      content: { "application/json": { schema: rolesListResponseSchema } },
     },
   },
 };
@@ -167,15 +181,17 @@ export const roleDeleteRouteSchema = {
 };
 
 export const roleAssignmentSchema = z.object({
-  userRoleId: z.uuid(),
-  userId: z.uuid(),
+  userRoleId: databaseIdSchema,
+  userId: databaseIdSchema,
   name: z.string(),
   email: z.string(),
-  contextType: z.string().nullable(),
+  contextType: contextTypeSchema.nullable(),
   contextId: z.string().nullable(),
   expiresAt: z.string().nullable(),
   createdAt: z.string(),
 });
+
+export type RoleAssignment = z.infer<typeof roleAssignmentSchema>;
 
 export const roleAssignmentsListRouteSchema = {
   tags: ["Access Control"],
@@ -196,30 +212,23 @@ export const roleAssignmentsListRouteSchema = {
 export const userRoleAssignSchema = z
   .object({
     roleId: roleIdSchema,
-    contextType: contextTypeSchema.nullable().optional(),
-    contextId: trimmedString(1, 80).nullable().optional(),
-    expiresAt: z.iso.datetime().nullable().optional(),
+    ...scopedContextFields,
   })
-  .superRefine((value, ctx) => {
-    if (Boolean(value.contextType) !== Boolean(value.contextId)) {
-      ctx.addIssue({
-        code: "custom",
-        message: "contextType and contextId must both be set, or both omitted",
-        path: ["contextId"],
-      });
-    }
-  });
+  .superRefine(validateScopedContext);
+export type UserRoleAssignInput = z.infer<typeof userRoleAssignSchema>;
 
 export const userRoleResponseSchema = z.object({
-  id: z.uuid(),
-  userId: z.uuid(),
+  id: databaseIdSchema,
+  userId: databaseIdSchema,
   roleId: roleIdSchema,
   roleName: z.string(),
-  contextType: z.string().nullable(),
+  contextType: contextTypeSchema.nullable(),
   contextId: z.string().nullable(),
   expiresAt: z.string().nullable(),
   createdAt: z.string(),
 });
+
+export type UserRoleAssignment = z.infer<typeof userRoleResponseSchema>;
 
 export const userRolesAssignRouteSchema = {
   tags: ["Access Control"],
@@ -261,6 +270,7 @@ export const userRoleUpdateExpirySchema = z.object({
   // not allowed — PATCH always states the intended value.
   expiresAt: z.iso.datetime().nullable(),
 });
+export type UserRoleUpdateExpiryInput = z.infer<typeof userRoleUpdateExpirySchema>;
 
 export const userRoleUpdateExpiryRouteSchema = {
   tags: ["Access Control"],

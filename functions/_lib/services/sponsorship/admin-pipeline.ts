@@ -1,16 +1,22 @@
 /**
  * Admin sales pipeline. Split out of sponsorship.ts.
  */
-import { first, all, run } from "../../db/queries";
+import { first, all } from "../../db/queries";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { AppError } from "../../errors";
+import { queryPage } from "../../db/pagination";
+import { buildD1TextSearchFilter } from "../../db/search";
+import { resolveMappedOrderBy } from "../../db/sort";
 import { eventSponsorTierHasAttendeeAccess } from "./event-tiers";
+import { prepareAuditLog } from "../audit";
+import { prepareQueueEmailStatement } from "../../email/outbox";
+import { prepareSponsorPortalMagicLinkForSponsorship } from "../../auth/sponsor-portal";
 import {
   SPONSORSHIP_PIPELINE_STAGES,
   type SponsorshipPipelineStage,
 } from "../../../../assets/shared/schemas/admin-sponsorships";
-import type { DatabaseLike } from "../../types";
+import type { DatabaseLike, StatementLike } from "../../types";
 
 export { SPONSORSHIP_PIPELINE_STAGES };
 export type { SponsorshipPipelineStage };
@@ -62,6 +68,8 @@ export interface AdminSponsorshipsFilters {
   organizationId?: string;
   nonMemberName?: string;
   contactName?: string;
+  q?: string;
+  sort?: string;
   limit: number;
   offset: number;
 }
@@ -93,6 +101,23 @@ function buildAdminSponsorshipsWhere(filters: AdminSponsorshipsFilters): { where
     conditions.push("sp.organization_id IS NULL AND sp.non_member_name IS NULL AND sp.contact_name = ?");
     values.push(filters.contactName);
   }
+  if (filters.q) {
+    const search = buildD1TextSearchFilter(filters.q, [
+      "o.name",
+      "sp.non_member_name",
+      "sp.non_member_website",
+      "sp.contact_name",
+      "sp.contact_email",
+      "e.name",
+      "sp.tier",
+      "sp.pipeline_stage",
+      "u.email",
+      "u.first_name",
+      "u.last_name",
+    ]);
+    conditions.push(search.sql);
+    values.push(...search.bindings);
+  }
   return { where: conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "", values };
 }
 
@@ -102,14 +127,36 @@ export async function listAdminSponsorships(
 ): Promise<{ sponsorships: AdminSponsorshipRow[]; total: number }> {
   const { where, values } = buildAdminSponsorshipsWhere(filters);
 
-  const sponsorships = await all<AdminSponsorshipRow>(
-    db,
-    `${ADMIN_SPONSORSHIP_SELECT} ${where} ORDER BY sp.updated_at DESC LIMIT ? OFFSET ?`,
-    [...values, filters.limit, filters.offset],
+  const orderBy = resolveMappedOrderBy(
+    filters.sort,
+    {
+      company: "COALESCE(o.name, sp.non_member_name, sp.contact_name) COLLATE NOCASE",
+      eventName: "e.name COLLATE NOCASE",
+      tier: "sp.tier COLLATE NOCASE",
+      pipelineStage: "sp.pipeline_stage",
+      renewalDate: "sp.renewal_date",
+      updatedAt: "sp.updated_at",
+    },
+    "sp.updated_at DESC",
+    "sp.id ASC",
   );
-  const totalRow = await first<{ n: number }>(db, `SELECT COUNT(*) AS n FROM sponsorships sp ${where}`, values);
-
-  return { sponsorships, total: totalRow?.n ?? 0 };
+  const { rows: sponsorships, total } = await queryPage<AdminSponsorshipRow>(
+    db,
+    {
+      sql: `${ADMIN_SPONSORSHIP_SELECT} ${where} ${orderBy} LIMIT ? OFFSET ?`,
+      bindings: [...values, filters.limit, filters.offset],
+    },
+    {
+      sql: `SELECT COUNT(*) AS total
+            FROM sponsorships sp
+            LEFT JOIN organizations o ON o.id = sp.organization_id
+            LEFT JOIN events e ON e.id = sp.event_id
+            LEFT JOIN users u ON u.id = sp.assigned_to_user_id
+            ${where}`,
+      bindings: values,
+    },
+  );
+  return { sponsorships, total };
 }
 
 export interface AdminSponsorshipCompanyRow {
@@ -132,7 +179,7 @@ export interface AdminSponsorshipCompanyRow {
  */
 export async function listSponsorshipCompanies(
   db: DatabaseLike,
-  filters: { type?: string; stage?: string; tier?: string; limit: number; offset: number },
+  filters: { type?: string; stage?: string; tier?: string; q?: string; sort?: string; limit: number; offset: number },
 ): Promise<{ companies: AdminSponsorshipCompanyRow[]; total: number }> {
   const { where, values } = buildAdminSponsorshipsWhere(filters);
 
@@ -150,28 +197,35 @@ export async function listSponsorshipCompanies(
         sp.pipeline_stage AS stage
       FROM sponsorships sp
       LEFT JOIN organizations o ON o.id = sp.organization_id
+      LEFT JOIN events e ON e.id = sp.event_id
+      LEFT JOIN users u ON u.id = sp.assigned_to_user_id
       ${where}
     )
   `;
-
-  const companies = await all<AdminSponsorshipCompanyRow>(
-    db,
-    `${groupedCte}
-     SELECT key, label, MAX(website) AS website, COUNT(*) AS sponsorshipCount,
-            GROUP_CONCAT(DISTINCT stage) AS stages
-     FROM grouped
-     GROUP BY key
-     ORDER BY label
-     LIMIT ? OFFSET ?`,
-    [...values, filters.limit, filters.offset],
+  const orderBy = resolveMappedOrderBy(
+    filters.sort,
+    { label: "label COLLATE NOCASE", sponsorshipCount: "sponsorshipCount" },
+    "label COLLATE NOCASE ASC",
+    "key ASC",
   );
-  const totalRow = await first<{ n: number }>(
+  const { rows: companies, total } = await queryPage<AdminSponsorshipCompanyRow>(
     db,
-    `${groupedCte} SELECT COUNT(*) AS n FROM (SELECT key FROM grouped GROUP BY key)`,
-    values,
+    {
+      sql: `${groupedCte}
+            SELECT key, label, MAX(website) AS website, COUNT(*) AS sponsorshipCount,
+                   GROUP_CONCAT(DISTINCT stage) AS stages
+            FROM grouped
+            GROUP BY key
+            ${orderBy}
+            LIMIT ? OFFSET ?`,
+      bindings: [...values, filters.limit, filters.offset],
+    },
+    {
+      sql: `${groupedCte} SELECT COUNT(*) AS total FROM (SELECT key FROM grouped GROUP BY key)`,
+      bindings: values,
+    },
   );
-
-  return { companies, total: totalRow?.n ?? 0 };
+  return { companies, total };
 }
 
 export async function getAdminSponsorship(db: DatabaseLike, id: string): Promise<AdminSponsorshipRow | null> {
@@ -245,6 +299,7 @@ export interface CreateAdminSponsorshipInput {
 
 export async function createAdminSponsorship(
   db: DatabaseLike,
+  actorUserId: string,
   input: CreateAdminSponsorshipInput,
 ): Promise<{ id: string }> {
   const id = uuid();
@@ -277,9 +332,21 @@ export async function createAdminSponsorship(
     db
       .prepare(
         `INSERT INTO sponsorship_events (id, sponsorship_id, from_stage, to_stage, actor_user_id, note, created_at)
-         VALUES (?, ?, NULL, 'new_inquiry', NULL, 'Created by staff', ?)`,
+         VALUES (?, ?, NULL, 'new_inquiry', ?, 'Created by staff', ?)`,
       )
-      .bind(uuid(), id, now),
+      .bind(uuid(), id, actorUserId, now),
+    prepareAuditLog(
+      db,
+      "admin",
+      actorUserId,
+      "sponsorship_created",
+      "sponsorship",
+      id,
+      {
+        sponsorType: input.sponsorType,
+      },
+      now,
+    ),
   ]);
 
   return { id };
@@ -294,6 +361,7 @@ export interface UpdateAdminSponsorshipInput {
 
 export async function updateAdminSponsorship(
   db: DatabaseLike,
+  actorUserId: string,
   id: string,
   patch: UpdateAdminSponsorshipInput,
 ): Promise<AdminSponsorshipRow> {
@@ -324,7 +392,10 @@ export async function updateAdminSponsorship(
   if (fields.length > 0) {
     fields.push("updated_at = ?");
     values.push(nowIso());
-    await run(db, `UPDATE sponsorships SET ${fields.join(", ")} WHERE id = ?`, [...values, id]);
+    await db.batch([
+      db.prepare(`UPDATE sponsorships SET ${fields.join(", ")} WHERE id = ?`).bind(...values, id),
+      prepareAuditLog(db, "admin", actorUserId, "sponsorship_updated", "sponsorship", id, patch),
+    ]);
   }
 
   return (await getAdminSponsorship(db, id)) as AdminSponsorshipRow;
@@ -335,6 +406,7 @@ export interface AdvanceSponsorshipStageResult {
   becameActive: boolean;
   becameLapsed: boolean;
   qualifiesForAttendeeDataAccess: boolean;
+  outboxIds: string[];
 }
 
 /**
@@ -352,7 +424,13 @@ export interface AdvanceSponsorshipStageResult {
  */
 export async function advanceSponsorshipStage(
   db: DatabaseLike,
-  params: { id: string; toStage: string; actorUserId: string | null; note: string | null },
+  params: {
+    id: string;
+    toStage: string;
+    actorUserId: string;
+    note: string | null;
+    notifications: { appBaseUrl: string; magicLinkTtlMinutes: number };
+  },
 ): Promise<AdvanceSponsorshipStageResult> {
   if (!SPONSORSHIP_PIPELINE_STAGES.includes(params.toStage as SponsorshipPipelineStage)) {
     throw new AppError(400, "INVALID_STAGE", `Unknown pipeline stage: ${params.toStage}`);
@@ -368,7 +446,12 @@ export async function advanceSponsorshipStage(
   const becameActive = params.toStage === "active" && fromStage !== "active";
   const becameLapsed = params.toStage === "lapsed" && fromStage !== "lapsed";
 
-  const statements = [
+  let qualifiesForAttendeeDataAccess = false;
+  if (becameActive && existing.sponsor_type === "event" && existing.event_id && existing.tier) {
+    qualifiesForAttendeeDataAccess = await eventSponsorTierHasAttendeeAccess(db, existing.event_id, existing.tier);
+  }
+
+  const statements: StatementLike[] = [
     db
       .prepare(
         `UPDATE sponsorships SET pipeline_stage = ?, start_date = COALESCE(start_date, CASE WHEN ? = 'active' THEN ? ELSE start_date END), updated_at = ? WHERE id = ?`,
@@ -380,7 +463,20 @@ export async function advanceSponsorshipStage(
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(uuid(), params.id, fromStage, params.toStage, params.actorUserId, params.note, now),
+    prepareAuditLog(
+      db,
+      "admin",
+      params.actorUserId,
+      "sponsorship_stage_advanced",
+      "sponsorship",
+      params.id,
+      {
+        toStage: params.toStage,
+      },
+      now,
+    ),
   ];
+  const outboxIds: string[] = [];
 
   if (existing.sponsor_type === "consortium" && existing.organization_id) {
     if (becameActive) {
@@ -398,17 +494,60 @@ export async function advanceSponsorshipStage(
     }
   }
 
-  await db.batch(statements);
-
-  let qualifiesForAttendeeDataAccess = false;
-  if (becameActive && existing.sponsor_type === "event" && existing.event_id && existing.tier) {
-    qualifiesForAttendeeDataAccess = await eventSponsorTierHasAttendeeAccess(db, existing.event_id, existing.tier);
+  if (becameActive && existing.sponsor_type === "consortium" && existing.contact_email) {
+    const queued = prepareQueueEmailStatement(
+      db,
+      {
+        templateKey: "sponsorship-active-confirmation",
+        recipientEmail: existing.contact_email,
+        messageType: "transactional",
+        subject: "Your PKI Consortium sponsorship is now active",
+        data: {
+          contactName: existing.contact_name ?? existing.organization_name ?? "there",
+          organizationName: existing.organization_name,
+          tier: existing.tier,
+          startDate: existing.start_date ?? now,
+        },
+      },
+      now,
+    );
+    statements.push(queued.statement);
+    outboxIds.push(queued.id);
   }
+
+  if (becameActive && qualifiesForAttendeeDataAccess && existing.contact_email) {
+    const magicLink = await prepareSponsorPortalMagicLinkForSponsorship(db, params.id, {
+      ttlMinutes: params.notifications.magicLinkTtlMinutes,
+    });
+    const portalUrl = `${params.notifications.appBaseUrl}/sponsor-portal/?token=${encodeURIComponent(magicLink.token)}`;
+    const queued = prepareQueueEmailStatement(
+      db,
+      {
+        templateKey: "sponsor-portal-access",
+        recipientEmail: existing.contact_email,
+        messageType: "transactional",
+        subject: "Access your sponsor portal",
+        data: {
+          contactName: existing.contact_name ?? "there",
+          tier: existing.tier,
+          eventName: existing.event_name,
+          portalUrl,
+          expiresInMinutes: params.notifications.magicLinkTtlMinutes,
+        },
+      },
+      now,
+    );
+    statements.push(magicLink.statement, queued.statement);
+    outboxIds.push(queued.id);
+  }
+
+  await db.batch(statements);
 
   return {
     sponsorship: (await getAdminSponsorship(db, params.id)) as AdminSponsorshipRow,
     becameActive,
     becameLapsed,
     qualifiesForAttendeeDataAccess,
+    outboxIds,
   };
 }

@@ -1,8 +1,12 @@
 import { all, first } from "../../db/queries";
 import { parseJsonSafe } from "../../utils/json";
-import type { DatabaseLike, JsonValue } from "../../types";
+import type { DatabaseLike } from "../../types";
+import type { FormFieldDefinition } from "../../../../assets/shared/schemas/forms";
+import { parseFormFieldOptions, parseFormFieldRules } from "../../../../assets/shared/schemas/form-field-rules";
 
-interface FormRow {
+export type { FormFieldDefinition } from "../../../../assets/shared/schemas/forms";
+
+export interface FormRow {
   id: string;
   key: string;
   scope_type: string;
@@ -11,6 +15,8 @@ interface FormRow {
   status: string;
   title: string;
   description: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface EventSettings {
@@ -20,7 +26,7 @@ interface EventSettings {
   };
 }
 
-interface FormFieldRow {
+export interface FormFieldRow {
   id: string;
   key: string;
   label: string;
@@ -31,18 +37,12 @@ interface FormFieldRow {
   sort_order: number;
 }
 
-export type FormPurpose = "event_registration" | "proposal_submission" | "application";
-
-export interface FormFieldDefinition {
-  id: string;
-  key: string;
-  label: string;
-  fieldType: string;
-  required: boolean;
-  options: JsonValue | null;
-  validation: JsonValue | null;
-  sortOrder: number;
+export interface ManagedFormWithFields {
+  form: FormRow & { created_at: string; updated_at: string };
+  fields: FormFieldRow[];
 }
+
+export type FormPurpose = "event_registration" | "proposal_submission" | "application";
 
 export interface ActiveFormDefinition {
   id: string;
@@ -53,6 +53,46 @@ export interface ActiveFormDefinition {
   title: string;
   description: string | null;
   fields: FormFieldDefinition[];
+}
+
+const FORM_COLUMNS = "id, key, scope_type, scope_ref, purpose, status, title, description";
+const FORM_FIELD_COLUMNS = "id, key, label, field_type, required, options_json, validation_json, sort_order";
+
+async function loadFormFieldRows(db: DatabaseLike, formId: string): Promise<FormFieldRow[]> {
+  return all<FormFieldRow>(
+    db,
+    `SELECT ${FORM_FIELD_COLUMNS}
+     FROM form_fields
+     WHERE form_id = ?
+     ORDER BY sort_order ASC, key ASC`,
+    [formId],
+  );
+}
+
+export function mapManagedFormFields(fields: FormFieldRow[]) {
+  return fields.map((entry) => ({
+    id: entry.id,
+    key: entry.key,
+    label: entry.label,
+    fieldType: entry.field_type,
+    required: entry.required === 1,
+    options: parseFormFieldOptions(parseJsonSafe<unknown>(entry.options_json, null)),
+    validation: parseFormFieldRules(parseJsonSafe<unknown>(entry.validation_json, null)),
+    sortOrder: entry.sort_order,
+  }));
+}
+
+export async function getManagedFormWithFields(
+  db: DatabaseLike,
+  formKey: string,
+): Promise<ManagedFormWithFields | null> {
+  const form = await first<ManagedFormWithFields["form"]>(
+    db,
+    `SELECT ${FORM_COLUMNS}, created_at, updated_at FROM forms WHERE key = ?`,
+    [formKey],
+  );
+  if (!form) return null;
+  return { form, fields: await loadFormFieldRows(db, form.id) };
 }
 
 async function findActiveForm(db: DatabaseLike, eventId: string, purpose: string): Promise<FormRow | null> {
@@ -66,7 +106,7 @@ async function findActiveForm(db: DatabaseLike, eventId: string, purpose: string
     if (typeof linkedKey === "string" && linkedKey) {
       const linked = await first<FormRow>(
         db,
-        `SELECT *
+        `SELECT ${FORM_COLUMNS}
          FROM forms
          WHERE status = 'active' AND purpose = ? AND key = ?
          LIMIT 1`,
@@ -80,7 +120,7 @@ async function findActiveForm(db: DatabaseLike, eventId: string, purpose: string
 
   const eventScoped = await first<FormRow>(
     db,
-    `SELECT *
+    `SELECT ${FORM_COLUMNS}
      FROM forms
      WHERE status = 'active' AND purpose = ? AND scope_type = 'event' AND scope_ref = ?
      ORDER BY updated_at DESC
@@ -93,7 +133,7 @@ async function findActiveForm(db: DatabaseLike, eventId: string, purpose: string
 
   return first<FormRow>(
     db,
-    `SELECT *
+    `SELECT ${FORM_COLUMNS}
      FROM forms
      WHERE status = 'active' AND purpose = ? AND scope_type = 'global'
      ORDER BY updated_at DESC
@@ -102,24 +142,9 @@ async function findActiveForm(db: DatabaseLike, eventId: string, purpose: string
   );
 }
 
-export async function getActiveFormByPurpose(
-  db: DatabaseLike,
-  eventId: string,
-  purpose: FormPurpose,
-): Promise<ActiveFormDefinition | null> {
-  const form = await findActiveForm(db, eventId, purpose);
-  if (!form) {
-    return null;
-  }
-
-  const fields = await all<FormFieldRow>(
-    db,
-    `SELECT id, key, label, field_type, required, options_json, validation_json, sort_order
-     FROM form_fields
-     WHERE form_id = ?
-     ORDER BY sort_order ASC, key ASC`,
-    [form.id],
-  );
+async function loadFormDefinition(db: DatabaseLike, form: FormRow | null): Promise<ActiveFormDefinition | null> {
+  if (!form) return null;
+  const fields = await loadFormFieldRows(db, form.id);
 
   return {
     id: form.id,
@@ -129,17 +154,16 @@ export async function getActiveFormByPurpose(
     purpose: form.purpose,
     title: form.title,
     description: form.description,
-    fields: fields.map((entry) => ({
-      id: entry.id,
-      key: entry.key,
-      label: entry.label,
-      fieldType: entry.field_type,
-      required: entry.required === 1,
-      options: parseJsonSafe<JsonValue | null>(entry.options_json, null),
-      validation: parseJsonSafe<JsonValue | null>(entry.validation_json, null),
-      sortOrder: entry.sort_order,
-    })),
+    fields: mapManagedFormFields(fields),
   };
+}
+
+export async function getActiveFormByPurpose(
+  db: DatabaseLike,
+  eventId: string,
+  purpose: FormPurpose,
+): Promise<ActiveFormDefinition | null> {
+  return loadFormDefinition(db, await findActiveForm(db, eventId, purpose));
 }
 
 /**
@@ -150,37 +174,8 @@ export async function getActiveFormByPurpose(
 export async function getGlobalFormByKey(db: DatabaseLike, key: string): Promise<ActiveFormDefinition | null> {
   const form = await first<FormRow>(
     db,
-    `SELECT * FROM forms WHERE status = 'active' AND scope_type = 'global' AND key = ? LIMIT 1`,
+    `SELECT ${FORM_COLUMNS} FROM forms WHERE status = 'active' AND scope_type = 'global' AND key = ? LIMIT 1`,
     [key],
   );
-  if (!form) return null;
-
-  const fields = await all<FormFieldRow>(
-    db,
-    `SELECT id, key, label, field_type, required, options_json, validation_json, sort_order
-     FROM form_fields
-     WHERE form_id = ?
-     ORDER BY sort_order ASC, key ASC`,
-    [form.id],
-  );
-
-  return {
-    id: form.id,
-    key: form.key,
-    scopeType: form.scope_type,
-    scopeRef: form.scope_ref,
-    purpose: form.purpose,
-    title: form.title,
-    description: form.description,
-    fields: fields.map((entry) => ({
-      id: entry.id,
-      key: entry.key,
-      label: entry.label,
-      fieldType: entry.field_type,
-      required: entry.required === 1,
-      options: parseJsonSafe<JsonValue | null>(entry.options_json, null),
-      validation: parseJsonSafe<JsonValue | null>(entry.validation_json, null),
-      sortOrder: entry.sort_order,
-    })),
-  };
+  return loadFormDefinition(db, form);
 }

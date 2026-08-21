@@ -29,3 +29,24 @@ export async function enforceRateLimit(options: RateLimitOptions): Promise<void>
     });
   }
 }
+
+export async function enforceEmailTriggerRateLimits(options: {
+  emailBinding: RateLimitBinding | null | undefined;
+  ipBinding: RateLimitBinding | null | undefined;
+  namespace: string;
+  email?: string | null;
+  clientIp: string | null | undefined;
+}): Promise<void> {
+  if (options.email) {
+    await enforceRateLimit({
+      binding: options.emailBinding,
+      namespace: `${options.namespace}:email`,
+      key: options.email,
+    });
+  }
+  await enforceRateLimit({
+    binding: options.ipBinding,
+    namespace: `${options.namespace}:ip`,
+    key: options.clientIp,
+  });
+}

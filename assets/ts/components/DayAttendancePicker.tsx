@@ -6,31 +6,31 @@ type EventDay = EventFormsResponse["eventDays"][number];
 
 interface OptionConfig {
   Icon: ComponentType<Omit<JSX.SVGAttributes<SVGSVGElement>, "xmlns" | "viewBox" | "fill">>;
-  color: string;
+  themeClass: string;
   description: string;
 }
 
 const OPTION_CONFIG: Record<string, OptionConfig> = {
   in_person: {
     Icon: IconInPerson,
-    color: "#e05c3b",
+    themeClass: "event-flow-attendance-card--in-person",
     description: "Join us at the venue in person",
   },
   virtual: {
     Icon: IconVirtual,
-    color: "#2b7de8",
+    themeClass: "event-flow-attendance-card--virtual",
     description: "Watch the live stream remotely",
   },
   on_demand: {
     Icon: IconOnDemand,
-    color: "#7b2be8",
+    themeClass: "event-flow-attendance-card--on-demand",
     description: "Watch the recording at your convenience",
   },
 };
 
 const FALLBACK_CONFIG: OptionConfig = {
   Icon: IconCalendarCheck,
-  color: "#198754",
+  themeClass: "event-flow-attendance-card--default",
   description: "Select your attendance preference",
 };
 
@@ -64,7 +64,7 @@ function AttendanceOption({ day, option, index, lowCapacityThreshold }: Attendan
         id={inputId}
         required={index === 0}
       />
-      <label class="event-flow-attendance-card" htmlFor={inputId} style={`--option-color: ${config.color}`}>
+      <label class={`event-flow-attendance-card ${config.themeClass}`} htmlFor={inputId}>
         <span class="event-flow-attendance-icon">
           <Icon />
         </span>

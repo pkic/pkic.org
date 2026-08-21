@@ -7,6 +7,7 @@ import {
   MCP_EXTENSION,
 } from "../functions/_lib/openapi/mcp";
 import type { AuthAdmin } from "../functions/_lib/types";
+import { normalizeMcpOauthScopes } from "../functions/_lib/mcp/oauth";
 
 const mcpWriteMetadata = {
   expose: true,
@@ -46,10 +47,10 @@ describe("MCP OpenAPI filtering", () => {
     ]);
     expect(filtered.paths["/api/v1/admin/proposals/{proposalId}/finalize"]).toBeUndefined();
     expect(filtered.paths["/api/v1/admin/proposals/{proposalId}/reviews"].post.security).toEqual([
-      { McpSession: ["proposal-reviews:write"] },
+      { McpSession: ["proposals:score"] },
     ]);
     expect(filtered.paths["/api/v1/admin/events/{eventSlug}/proposals"].get.security).toEqual([
-      { McpSession: ["proposals:read", "events:read"] },
+      { McpSession: ["proposals:read"] },
     ]);
     expect(filtered.components.securitySchemes.McpSession.scheme).toBe("bearer");
   });
@@ -75,14 +76,14 @@ describe("OpenAPI auth decoration", () => {
     });
 
     const operation = decorated.paths["/api/v1/admin/proposals/{proposalId}/reviews"].post;
-    expect(operation.security).toEqual([{ BearerAuth: ["proposal-reviews:write"] }]);
+    expect(operation.security).toEqual([{ BearerAuth: ["proposals:score"] }]);
     expect(operation[AUTH_EXTENSION]).toEqual({
       required: true,
       scheme: "BearerAuth",
-      scopes: ["proposal-reviews:write"],
+      scopes: ["proposals:score"],
     });
-    expect(operation["x-pkic-required-scopes"]).toEqual(["proposal-reviews:write"]);
-    expect(operation.description).toContain("Required scopes: `proposal-reviews:write`.");
+    expect(operation["x-pkic-required-scopes"]).toEqual(["proposals:score"]);
+    expect(operation.description).toContain("Required scopes: `proposals:score`.");
     expect(decorated.paths["/api/v1/events/{eventSlug}/terms"].get.security).toBeUndefined();
   });
 
@@ -98,11 +99,11 @@ describe("OpenAPI auth decoration", () => {
             [AUTH_EXTENSION]: {
               required: true,
               scheme: "BearerAuth",
-              scopes: ["proposal-reviews:read", "proposal-reviews:write"],
+              scopes: ["proposals:read", "proposals:score"],
             },
             [MCP_EXTENSION]: {
               expose: true,
-              scopes: ["proposal-reviews:write"],
+              scopes: ["proposals:score"],
             },
           },
         },
@@ -110,7 +111,7 @@ describe("OpenAPI auth decoration", () => {
     });
 
     expect(filtered.paths["/api/v1/admin/proposals/{proposalId}/reviews"].post.description).toBe(
-      "Existing operation summary.\n\nRequired scopes: `proposal-reviews:write`.",
+      "Existing operation summary.\n\nRequired scopes: `proposals:score`.",
     );
   });
 
@@ -152,14 +153,19 @@ describe("OpenAPI auth decoration", () => {
 });
 
 describe("MCP scope delegation", () => {
+  it("does not turn an explicitly invalid scope list into full access", () => {
+    expect(normalizeMcpOauthScopes(["not-a-real-permission"])).toEqual([]);
+    expect(normalizeMcpOauthScopes([], ["proposals:read"])).toEqual(["proposals:read"]);
+  });
+
   it("only grants scopes already held by a scoped actor", () => {
     const actor: AuthAdmin = {
       id: "user-1",
       email: "reviewer@example.test",
-      role: "admin",
-      scopes: ["proposals:read", "proposal-reviews:read"],
+      role: "user",
+      grants: [{ permission: "proposals:read", contextType: null, contextId: null }],
     };
-    const requested: AuthScope[] = ["proposals:read", "proposal-reviews:write", "proposal-finalization:write"];
+    const requested: AuthScope[] = ["proposals:read", "proposals:score", "proposals:manage"];
 
     expect(grantableScopesForActor(actor, requested)).toEqual(["proposals:read"]);
   });
@@ -170,7 +176,7 @@ describe("MCP scope delegation", () => {
       email: "admin@example.test",
       role: "admin",
     };
-    const requested: AuthScope[] = ["proposals:read", "proposal-reviews:write"];
+    const requested: AuthScope[] = ["proposals:read", "proposals:score"];
 
     expect(grantableScopesForActor(actor, requested)).toEqual(requested);
   });

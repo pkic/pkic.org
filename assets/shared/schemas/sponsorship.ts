@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { normalizedEmailSchema } from "./api";
+import { eventIdSchema, normalizedEmailSchema } from "./api-common";
+import { databaseIdSchema } from "./identifiers";
+import { stripeCurrencySchema, stripeEventEnvelopeSchema, stripeIdentifierSchema } from "./stripe";
+import { relativeRedirectPathSchema } from "./urls";
 
 /** Schemas for /api/v1/sponsorship/*. */
 
@@ -9,14 +12,14 @@ export const sponsorshipInquirySchema = z.object({
   organizationName: z.string().trim().min(1).max(200),
   organizationWebsite: z.url().optional(),
   desiredTier: z.string().trim().min(1).max(60),
-  eventId: z.string().trim().min(1).max(80).optional(),
+  eventId: eventIdSchema.optional(),
   comments: z.string().trim().max(4000).optional(),
 });
 
 export type SponsorshipInquiryInput = z.infer<typeof sponsorshipInquirySchema>;
 
 export const sponsorshipInquiryResponseSchema = z.object({
-  sponsorshipId: z.string(),
+  sponsorshipId: databaseIdSchema,
   pipelineStage: z.literal("new_inquiry"),
 });
 
@@ -38,28 +41,53 @@ export const sponsorshipInquiryRouteSchema = {
 };
 
 export const sponsorshipCheckoutSchema = z.object({
+  /** Stable for one browser checkout attempt so retries reuse one Stripe session. */
+  checkoutAttemptId: z.uuid(),
   contactName: z.string().trim().min(1).max(160),
   contactEmail: normalizedEmailSchema,
   organizationName: z.string().trim().min(1).max(200).optional(),
   tier: z.string().trim().min(1).max(60),
-  eventId: z.string().trim().min(1).max(80),
-  successPath: z
-    .string()
-    .trim()
-    .max(500)
-    .refine((p) => p.startsWith("/"), "Must be a relative path starting with /")
-    .refine((p) => !p.includes("//"), "Must not contain //")
-    .optional(),
-  cancelPath: z
-    .string()
-    .trim()
-    .max(500)
-    .refine((p) => p.startsWith("/"), "Must be a relative path starting with /")
-    .refine((p) => !p.includes("//"), "Must not contain //")
-    .optional(),
+  eventId: eventIdSchema,
+  successPath: relativeRedirectPathSchema.optional(),
+  cancelPath: relativeRedirectPathSchema.optional(),
 });
 
 export type SponsorshipCheckoutInput = z.infer<typeof sponsorshipCheckoutSchema>;
+
+export const sponsorshipCheckoutWebhookEnvelopeSchema = stripeEventEnvelopeSchema.extend({
+  id: stripeIdentifierSchema,
+});
+
+export const sponsorshipCheckoutSessionStatusSchema = z
+  .object({
+    id: stripeIdentifierSchema,
+    object: z.literal("checkout.session"),
+    payment_status: z.string().trim().min(1).max(80).nullable().optional(),
+  })
+  .passthrough();
+
+export const paidSponsorshipCheckoutSessionSchema = z
+  .object({
+    id: stripeIdentifierSchema,
+    object: z.literal("checkout.session"),
+    payment_status: z.literal("paid"),
+    amount_total: z.number().int().positive(),
+    currency: stripeCurrencySchema,
+    metadata: z.object({
+      checkout_attempt_id: z.uuid(),
+      tier: z.string().trim().min(1).max(60),
+      contact_name: z.string().trim().min(1).max(160),
+      contact_email: normalizedEmailSchema,
+      organization_name: z.string().trim().min(1).max(200).optional(),
+      event_id: databaseIdSchema,
+      event_slug: eventIdSchema,
+      price_amount_cents: z.coerce.number().int().positive(),
+      price_currency: stripeCurrencySchema,
+    }),
+  })
+  .passthrough();
+
+export type PaidSponsorshipCheckoutSession = z.infer<typeof paidSponsorshipCheckoutSessionSchema>;
 
 export const sponsorshipCheckoutResponseSchema = z.object({
   url: z.string(),
@@ -69,7 +97,7 @@ export const sponsorshipCheckoutRouteSchema = {
   tags: ["Sponsorship"],
   summary: "Create a Stripe Checkout session for self-service event sponsorship (Path B)",
   description:
-    "Scoped to event sponsorship tiers (Leader/Inspirator/Innovator/Ambassador) with a fixed price list — see functions/_lib/services/sponsorship.ts. Consortium sponsorship remains staff-managed.",
+    "Uses the active event-tier price stored in D1 sponsorship configuration. Consortium sponsorship remains staff-managed.",
   request: {
     body: { content: { "application/json": { schema: sponsorshipCheckoutSchema } }, required: true },
   },
@@ -91,6 +119,7 @@ export const sponsorshipCheckoutWebhookRouteSchema = {
   responses: {
     "200": { description: "Event processed or acknowledged." },
     "400": { description: "Invalid signature or payload." },
+    "413": { description: "Webhook body exceeds the accepted byte limit." },
     "503": { description: "Webhook secret not configured." },
   },
 };

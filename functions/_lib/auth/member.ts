@@ -26,6 +26,7 @@ import { normalizeEmail } from "../validation";
 import { signJwt, verifyJwt, type JwtVerifyResult } from "../utils/jwt";
 import type { AuthMember, EligibleMembership, DatabaseLike, Env } from "../types";
 import {
+  AUTH_MAGIC_LINK_PURPOSES,
   getBearerToken,
   getSessionCookieToken,
   serializeSessionCookie,
@@ -68,7 +69,7 @@ interface MemberEligibleUserRow {
 // A person can be simultaneously an org-less individual member AND an
 // active representative of one or more organizations, and can represent
 // more than one organization at once (confirmed product decision — see
-// migration 0037's header). This UNION can therefore return multiple rows
+// consolidated migration 0035's header). This UNION can therefore return multiple rows
 // for one user id. `sort_key` gives every consumer a single, deterministic
 // ordering (individual row first, then organizations by earliest
 // joined_at) instead of relying on whichever row D1 happens to return
@@ -119,7 +120,11 @@ export const MEMBER_SESSION_COOKIE_NAME = "pkic_member_session";
 export const MEMBER_SESSION_COOKIE_PATH = "/api/v1";
 
 const SESSIONS_TABLE: SessionTableConfig = { table: "sessions", subjectColumn: "user_id" };
-const MAGIC_LINKS_TABLE: MagicLinkTableConfig = { table: "auth_magic_links", subjectColumn: "user_id" };
+const MAGIC_LINKS_TABLE: MagicLinkTableConfig = {
+  table: "auth_magic_links",
+  subjectColumn: "user_id",
+  purpose: AUTH_MAGIC_LINK_PURPOSES.member,
+};
 
 const memberByRequest = new WeakMap<Request, AuthMember>();
 

@@ -121,6 +121,45 @@ describe("Sponsorship renewal reminders & auto-lapse", () => {
     expect(outboxRows[0].recipient_email).toBe("admin@pkic.org");
   });
 
+  it("rolls the lapse, organization projection, event, email, effect marker, and audit back together", async () => {
+    const sponsorshipId = await seedActiveConsortiumSponsorship({
+      organizationId,
+      assignedToUserId: staffUserId,
+      renewalDate: isoDaysFromNow(-2),
+    });
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_sponsorship_auto_lapse_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'sponsorship_auto_lapsed'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced sponsorship auto-lapse audit failure');
+       END`,
+    ).run();
+
+    try {
+      await expect(runSponsorshipDueWork(env.DB, env as any)).rejects.toThrow();
+      expect(
+        await queryAll<{ pipeline_stage: string }>(env.DB, "SELECT pipeline_stage FROM sponsorships WHERE id = ?", [
+          sponsorshipId,
+        ]),
+      ).toEqual([{ pipeline_stage: "active" }]);
+      expect(
+        await queryAll<{ sponsor_tier: string | null }>(env.DB, "SELECT sponsor_tier FROM organizations WHERE id = ?", [
+          organizationId,
+        ]),
+      ).toEqual([{ sponsor_tier: "Gold" }]);
+      expect(await queryAll(env.DB, "SELECT sponsorship_id FROM sponsorship_automation_effects")).toHaveLength(0);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM sponsorship_events WHERE sponsorship_id = ?", [sponsorshipId]),
+      ).toHaveLength(0);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'sponsorship-lapsed-staff'"),
+      ).toHaveLength(0);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_sponsorship_auto_lapse_audit").run();
+    }
+  });
+
   it("ignores sponsorships with no renewal_date set", async () => {
     await seedActiveConsortiumSponsorship({ organizationId, assignedToUserId: staffUserId, renewalDate: null });
 

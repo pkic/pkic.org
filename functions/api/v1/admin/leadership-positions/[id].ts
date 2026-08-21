@@ -9,7 +9,6 @@ import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../_lib/auth/permissions";
 import { updateLeadershipPosition, deleteLeadershipPosition } from "../../../../_lib/services/leadership";
-import { writeAuditLog } from "../../../../_lib/services/audit";
 import {
   leadershipPositionUpdateRouteSchema,
   leadershipPositionDeleteRouteSchema,
@@ -24,17 +23,7 @@ export const LeadershipPositionUpdate = openApiRoute(
     requirePermission(admin, "access:grant");
 
     const patch = data.body;
-    const position = await updateLeadershipPosition(requestDb(c), data.params.id, patch);
-
-    await writeAuditLog(
-      requestDb(c),
-      "admin",
-      admin.id,
-      "leadership_position_updated",
-      "leadership_position",
-      position.id,
-      patch,
-    );
+    const position = await updateLeadershipPosition(requestDb(c), data.params.id, patch, admin.id);
 
     return json(position);
   },
@@ -47,8 +36,7 @@ export const LeadershipPositionDelete = openApiRoute(
     requirePermission(admin, "access:revoke");
 
     const id = data.params.id;
-    await deleteLeadershipPosition(requestDb(c), id);
-    await writeAuditLog(requestDb(c), "admin", admin.id, "leadership_position_deleted", "leadership_position", id, {});
+    await deleteLeadershipPosition(requestDb(c), id, admin.id);
 
     return json({ success: true });
   },

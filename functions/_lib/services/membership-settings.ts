@@ -1,6 +1,6 @@
 /**
  * Membership workflow settings — a single configurable row
- * (migration 0038 seeds `id = 'default'`), read by the consultation/EC
+ * (consolidated migration 0035 seeds `id = 'default'`), read by the consultation/EC
  * batch jobs (membership-scheduled-jobs.ts) and the admin settings screen.
  */
 import { first, run } from "../db/queries";
@@ -28,7 +28,7 @@ export async function getMembershipSettings(db: DatabaseLike): Promise<Membershi
     throw new AppError(
       500,
       "MEMBERSHIP_SETTINGS_MISSING",
-      "membership_settings row is missing — expected migration 0038 to have seeded it",
+      "membership_settings row is missing — expected consolidated migration 0035 to have seeded it",
     );
   }
   return row;

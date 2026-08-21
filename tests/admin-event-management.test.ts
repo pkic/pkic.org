@@ -10,6 +10,7 @@ import {
   confirmRegistrationByToken,
   updateRegistrationById,
 } from "../functions/_lib/services/registrations";
+import { adminRegistrationDetailResponseSchema } from "../assets/shared/schemas/admin-registration-detail";
 
 let ADMIN_TOKEN = "event-admin-token";
 
@@ -120,6 +121,11 @@ describe("admin event management endpoints", () => {
     expect(firstBody.page.hasMore).toBe(true);
     expect(firstBody.page.total).toBeGreaterThanOrEqual(3);
 
+    const searched = await callAdmin("/api/v1/admin/events?q=bounded-b");
+    const searchedBody = (await searched.json()) as { events: Array<{ slug: string }>; page: { total: number } };
+    expect(searchedBody.events.map(({ slug }) => slug)).toEqual(["bounded-b"]);
+    expect(searchedBody.page.total).toBe(1);
+
     const invalidLimit = await callAdmin("/api/v1/admin/events?limit=0");
     expect(invalidLimit.status).toBe(400);
   });
@@ -183,6 +189,22 @@ describe("admin event management endpoints", () => {
     });
   });
 
+  it("rejects duplicate configurable session types case-insensitively", async () => {
+    await setupAdmin();
+
+    const response = await callAdmin("/api/v1/admin/events/pqc-2026/settings", {
+      method: "PATCH",
+      body: JSON.stringify({
+        sessionTypes: [
+          { label: "Ask Me Anything", requiresPresentation: false },
+          { label: "ask me anything", requiresPresentation: true },
+        ],
+      }),
+    });
+
+    expect(response.status).toBe(400);
+  });
+
   it("replaces event days and exposes permission grants", async () => {
     await setupAdmin();
 
@@ -221,6 +243,36 @@ describe("admin event management endpoints", () => {
     expect(daysPayload.success).toBe(true);
     expect(daysPayload.days.map((day) => day.date)).toEqual(["2026-12-01", "2026-12-02"]);
 
+    const invalidRange = await callAdmin("/api/v1/admin/events/pqc-2026/days", {
+      method: "PUT",
+      body: JSON.stringify({
+        days: [
+          {
+            date: "2026-12-03",
+            startTime: "17:00",
+            endTime: "09:00",
+            attendanceOptions: [{ value: "virtual", label: "Virtual" }],
+          },
+        ],
+      }),
+    });
+    expect(invalidRange.status).toBe(400);
+    const preservedDays = (await (await callAdmin("/api/v1/admin/events/pqc-2026/days")).json()) as {
+      days: Array<{ date: string }>;
+    };
+    expect(preservedDays.days.map((day) => day.date)).toEqual(["2026-12-01", "2026-12-02"]);
+
+    const duplicateDates = await callAdmin("/api/v1/admin/events/pqc-2026/days", {
+      method: "PUT",
+      body: JSON.stringify({
+        days: [
+          { date: "2026-12-01", attendanceOptions: [] },
+          { date: "2026-12-01", attendanceOptions: [] },
+        ],
+      }),
+    });
+    expect(duplicateDates.status).toBe(400);
+
     const permissionResponse = await callAdmin("/api/v1/admin/events/pqc-2026/permissions", {
       method: "POST",
       body: JSON.stringify({
@@ -258,7 +310,58 @@ describe("admin event management endpoints", () => {
     );
   });
 
-  it("P6M-P2-06: bounds the event-team permissions list with ?limit=/?offset= and sorts via a table-qualified column", async () => {
+  it("atomically replaces event terms and rejects duplicate audience term versions", async () => {
+    const { baseEventId } = await setupAdmin();
+    const replacement = {
+      attendee: [
+        {
+          termKey: "privacy-policy",
+          version: "v2",
+          required: true,
+          displayText: "I accept the privacy policy.",
+        },
+      ],
+      speaker: [],
+      presentation: [],
+    };
+    const response = await callAdmin("/api/v1/admin/events/pqc-2026/terms", {
+      method: "PUT",
+      body: JSON.stringify(replacement),
+    });
+    expect(response.status).toBe(200);
+    expect(
+      await queryAll<{ term_key: string; version: string }>(
+        env.DB,
+        "SELECT term_key, version FROM event_terms WHERE event_id = ? AND active = 1 ORDER BY term_key",
+        [baseEventId],
+      ),
+    ).toEqual([{ term_key: "privacy-policy", version: "v2" }]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM audit_log WHERE entity_type = 'event' AND entity_id = ? AND action = 'event_terms_replaced'",
+        [baseEventId],
+      ),
+    ).toHaveLength(1);
+
+    const duplicate = await callAdmin("/api/v1/admin/events/pqc-2026/terms", {
+      method: "PUT",
+      body: JSON.stringify({
+        ...replacement,
+        attendee: [replacement.attendee[0], replacement.attendee[0]],
+      }),
+    });
+    expect(duplicate.status).toBe(400);
+    expect(
+      await queryAll<{ term_key: string; version: string }>(
+        env.DB,
+        "SELECT term_key, version FROM event_terms WHERE event_id = ? AND active = 1",
+        [baseEventId],
+      ),
+    ).toEqual([{ term_key: "privacy-policy", version: "v2" }]);
+  });
+
+  it("P6M-P2-06: searches, bounds, and sorts the event-team permissions list", async () => {
     await setupAdmin();
 
     for (const [email, permission] of [
@@ -282,12 +385,15 @@ describe("admin event management endpoints", () => {
     expect(firstBody.permissions).toHaveLength(2);
     expect(firstBody.page).toEqual({ limit: 2, offset: 0, total: 3, hasMore: true });
 
-    // ur.created_at is table-qualified because the query joins `users` (also
-    // has created_at) — an unqualified ORDER BY created_at would 500 with
-    // "ambiguous column name".
-    const sorted = await callAdmin(
-      `/api/v1/admin/events/pqc-2026/permissions?sort=${encodeURIComponent("ur.created_at")}`,
-    );
+    const searched = await callAdmin("/api/v1/admin/events/pqc-2026/permissions?q=p2%40example.test");
+    const searchedBody = (await searched.json()) as {
+      permissions: Array<{ user_email: string }>;
+      page: { total: number };
+    };
+    expect(searchedBody.permissions.map(({ user_email }) => user_email)).toEqual(["p2@example.test"]);
+    expect(searchedBody.page.total).toBe(1);
+
+    const sorted = await callAdmin("/api/v1/admin/events/pqc-2026/permissions?sort=created_at");
     expect(sorted.status).toBe(200);
 
     const invalidLimit = await callAdmin("/api/v1/admin/events/pqc-2026/permissions?limit=0");
@@ -297,15 +403,19 @@ describe("admin event management endpoints", () => {
   it("allows admin to reinstate a cancelled registration and rejects double-cancel", async () => {
     await setupAdmin();
 
+    const userId = crypto.randomUUID();
+
     await env.DB.prepare(
       `INSERT INTO users (id, email, normalized_email, created_at, updated_at)
-       VALUES ('user-reinstate', 'reinstate@example.test', 'reinstate@example.test', datetime('now'), datetime('now'))`,
-    ).run();
+       VALUES (?, 'reinstate@example.test', 'reinstate@example.test', datetime('now'), datetime('now'))`,
+    )
+      .bind(userId)
+      .run();
 
     const event = await getEventBySlug(env.DB, "pqc-2026");
     const created = await createRegistration(env.DB, {
       event,
-      userId: "user-reinstate",
+      userId,
       attendanceType: "virtual",
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -325,6 +435,14 @@ describe("admin event management endpoints", () => {
     );
     expect(cancelled.status).toBe("cancelled");
     expect(cancelled.cancelled_at).not.toBeNull();
+
+    const detailResponse = await callAdmin(`/api/v1/admin/events/pqc-2026/registrations/${created.registration.id}`);
+    expect(detailResponse.status).toBe(200);
+    const rawDetail = await detailResponse.json();
+    const detail = adminRegistrationDetailResponseSchema.parse(rawDetail);
+    expect(detail.registration.status).toBe("cancelled");
+    expect(rawDetail).not.toHaveProperty("registration.custom_answers_json");
+    expect(rawDetail).not.toHaveProperty("registration.manage_link_secret");
 
     // Double-cancel must still be rejected
     await expect(
@@ -448,6 +566,15 @@ describe("admin event management endpoints", () => {
         expect.objectContaining({ attendance_type: "in_person", attendance_status: "accepted", count: 1 }),
         expect.objectContaining({ attendance_type: "in_person", attendance_status: "waitlisted", count: 1 }),
       ]),
+    );
+
+    const platformStatsResponse = await callAdmin("/api/v1/admin/stats");
+    expect(platformStatsResponse.status).toBe(200);
+    const platformStats = (await platformStatsResponse.json()) as {
+      topEvents: Array<{ slug: string; confirmed: number; total: number }>;
+    };
+    expect(platformStats.topEvents).toContainEqual(
+      expect.objectContaining({ slug: "pqc-2026", confirmed: 3, total: 3 }),
     );
   });
 
@@ -781,15 +908,12 @@ describe("admin event management endpoints", () => {
     ).toEqual([["in_person->virtual"], ["virtual->on_demand"]]);
     expect(recentlyChanged.registrations[0].lastAttendanceChange.changedAt).toBe("2030-01-01T00:00:00.000Z");
 
-    const unfilteredResponse = await callAdmin("/api/v1/admin/events/pqc-2026/registrations");
     const invalidFilterResponse = await callAdmin(
       "/api/v1/admin/events/pqc-2026/registrations?attendance_change=unexpected",
     );
-    expect(unfilteredResponse.status).toBe(200);
-    expect(invalidFilterResponse.status).toBe(200);
-    const unfiltered = (await unfilteredResponse.json()) as { registrations: Array<{ id: string }> };
-    const invalidFilter = (await invalidFilterResponse.json()) as { registrations: Array<{ id: string }> };
-    expect(invalidFilter.registrations.map(({ id }) => id)).toEqual(unfiltered.registrations.map(({ id }) => id));
+    expect(invalidFilterResponse.status).toBe(400);
+    const invalidFilter = (await invalidFilterResponse.json()) as { error: { code: string } };
+    expect(invalidFilter.error.code).toBe("VALIDATION_ERROR");
   });
 
   it("bounds the registrations list via limit/offset with a real COUNT-based hasMore, not a limit+1 slice", async () => {

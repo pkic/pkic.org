@@ -1,7 +1,7 @@
 /**
  * Phase 1 §1.4 required tests, part 3: representative-role grants
  * (role-primary_contact/role-secondary_contact/role-voting_delegate,
- * migration 0038) — singleton-per-organization uniqueness, that a
+ * consolidated migration 0035) — singleton-per-organization uniqueness, that a
  * non-singleton context-scoped role is unaffected by the same index, and
  * the service-layer invariant that replaces the dropped composite FK.
  */

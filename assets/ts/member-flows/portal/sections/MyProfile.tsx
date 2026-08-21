@@ -82,7 +82,7 @@ export function MyProfile() {
   }
 
   return (
-    <div class="row g-4" style="max-width: 900px;">
+    <div class="row g-4 content-width-lg">
       <div class="col-md-4">
         <div class="card border-0 shadow-sm">
           <div class="card-body">

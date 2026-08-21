@@ -5,12 +5,10 @@
  * `GET/PUT /api/v1/admin/events/:eventSlug/sponsor-tiers`.
  */
 import { z } from "zod";
-import { normalizedEmailSchema } from "./api";
-import { paginationQuerySchema, paginatedResponseSchema } from "./pagination";
-
-function trimmedString(min: number, max: number): z.ZodString {
-  return z.string().trim().min(min).max(max);
-}
+import { databaseIdSchema } from "./identifiers";
+import { eventIdSchema, normalizedEmailSchema, trimmedString } from "./api-common";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { addDuplicateStringIssues } from "./refinements";
 
 export const SPONSOR_TYPES = ["consortium", "event"] as const;
 export const sponsorTypeSchema = z.enum(SPONSOR_TYPES);
@@ -27,29 +25,29 @@ export const SPONSORSHIP_PIPELINE_STAGES = [
 export const sponsorshipPipelineStageSchema = z.enum(SPONSORSHIP_PIPELINE_STAGES);
 export type SponsorshipPipelineStage = (typeof SPONSORSHIP_PIPELINE_STAGES)[number];
 
-export const sponsorshipIdParamsSchema = z.object({ id: z.uuid() });
+export const sponsorshipIdParamsSchema = z.object({ id: databaseIdSchema });
 
 export const adminSponsorshipSchema = z.object({
-  id: z.uuid(),
+  id: databaseIdSchema,
   sponsorType: sponsorTypeSchema,
-  organizationId: z.uuid().nullable(),
+  organizationId: databaseIdSchema.nullable(),
   organizationName: z.string().nullable(),
   nonMemberName: z.string().nullable(),
   nonMemberWebsite: z.string().nullable(),
   nonMemberLogoUrl: z.string().nullable(),
   contactName: z.string().nullable(),
   contactEmail: z.string().nullable(),
-  eventId: z.uuid().nullable(),
+  eventId: eventIdSchema.nullable(),
   eventName: z.string().nullable(),
   // tier is intentionally a bare string, not a z.enum — it's a
   // reference-table-backed evolvable vocabulary (sponsorship_tier_config,
-  // migration 0053), not a fixed code enum (PR #1 review §1.3's "reference
+  // consolidated migration 0035), not a fixed code enum (PR #1 review §1.3's "reference
   // table" enforcement category).
   tier: z.string().nullable(),
   pipelineStage: sponsorshipPipelineStageSchema,
   startDate: z.string().nullable(),
   renewalDate: z.string().nullable(),
-  assignedToUserId: z.uuid().nullable(),
+  assignedToUserId: databaseIdSchema.nullable(),
   assignedToName: z.string().nullable(),
   notes: z.string().nullable(),
   priceAmountCents: z.number().nullable(),
@@ -59,25 +57,37 @@ export const adminSponsorshipSchema = z.object({
 });
 
 export const sponsorshipEventSchema = z.object({
-  id: z.uuid(),
+  id: databaseIdSchema,
   fromStage: z.string().nullable(),
   toStage: z.string(),
-  actorUserId: z.uuid().nullable(),
+  actorUserId: databaseIdSchema.nullable(),
   actorName: z.string().nullable(),
   note: z.string().nullable(),
   createdAt: z.string(),
 });
 
+export type AdminSponsorship = z.infer<typeof adminSponsorshipSchema>;
+export type SponsorshipEvent = z.infer<typeof sponsorshipEventSchema>;
+
 // ── List ─────────────────────────────────────────────────────────────────
 
-export const sponsorshipsListQuerySchema = paginationQuerySchema.extend({
+export const ADMIN_SPONSORSHIP_SORT_COLUMNS = [
+  "company",
+  "eventName",
+  "tier",
+  "pipelineStage",
+  "renewalDate",
+  "updatedAt",
+] as const;
+
+export const sponsorshipsListQuerySchema = listQuerySchema(ADMIN_SPONSORSHIP_SORT_COLUMNS).extend({
   type: sponsorTypeSchema.optional(),
   stage: sponsorshipPipelineStageSchema.optional(),
   tier: trimmedString(1, 100).optional(),
   // Company-scoped filters — decomposed from a company list row's `key`,
   // used to fetch one company's sponsorships for the detail panel instead
   // of the full list.
-  organizationId: z.uuid().optional(),
+  organizationId: databaseIdSchema.optional(),
   nonMemberName: trimmedString(1, 200).optional(),
   contactName: trimmedString(1, 200).optional(),
 });
@@ -108,7 +118,11 @@ export const sponsorshipCompanySchema = z.object({
   stages: z.string(),
 });
 
-export const sponsorshipCompaniesListQuerySchema = paginationQuerySchema.extend({
+export type SponsorshipCompany = z.infer<typeof sponsorshipCompanySchema>;
+
+export const ADMIN_SPONSORSHIP_COMPANY_SORT_COLUMNS = ["label", "sponsorshipCount"] as const;
+
+export const sponsorshipCompaniesListQuerySchema = listQuerySchema(ADMIN_SPONSORSHIP_COMPANY_SORT_COLUMNS).extend({
   type: sponsorTypeSchema.optional(),
   stage: sponsorshipPipelineStageSchema.optional(),
   tier: trimmedString(1, 100).optional(),
@@ -135,14 +149,14 @@ export const sponsorshipCompaniesListRouteSchema = {
 export const sponsorshipCreateSchema = z
   .object({
     sponsorType: sponsorTypeSchema,
-    organizationId: z.uuid().nullable().optional(),
+    organizationId: databaseIdSchema.nullable().optional(),
     nonMemberName: trimmedString(1, 200).nullable().optional(),
     nonMemberWebsite: z.url().nullable().optional(),
     contactName: trimmedString(1, 200).nullable().optional(),
     contactEmail: normalizedEmailSchema.nullable().optional(),
-    eventId: z.uuid().nullable().optional(),
+    eventId: eventIdSchema.nullable().optional(),
     tier: trimmedString(1, 100).nullable().optional(),
-    assignedToUserId: z.uuid().nullable().optional(),
+    assignedToUserId: databaseIdSchema.nullable().optional(),
     renewalDate: z.iso.date().nullable().optional(),
     notes: trimmedString(0, 5000).nullable().optional(),
   })
@@ -223,7 +237,7 @@ export const sponsorshipLogoDeleteRouteSchema = {
 
 export const sponsorshipUpdateSchema = z.object({
   tier: trimmedString(1, 100).nullable().optional(),
-  assignedToUserId: z.uuid().nullable().optional(),
+  assignedToUserId: databaseIdSchema.nullable().optional(),
   renewalDate: z.iso.date().nullable().optional(),
   notes: trimmedString(0, 5000).nullable().optional(),
 });
@@ -292,9 +306,17 @@ export const eventSponsorTierSchema = z.object({
   hasAttendeeDataAccess: z.boolean(),
 });
 
-export const eventSponsorTiersReplaceSchema = z.object({
-  tiers: z.array(eventSponsorTierSchema).max(50),
-});
+export const eventSponsorTiersReplaceSchema = z
+  .object({
+    tiers: z.array(eventSponsorTierSchema).max(50),
+  })
+  .superRefine((value, ctx) => {
+    addDuplicateStringIssues(value.tiers, ctx, {
+      value: (tier) => tier.tierName.toLowerCase(),
+      path: (index) => ["tiers", index, "tierName"],
+      label: "Sponsor tier",
+    });
+  });
 
 export const eventSponsorTiersGetRouteSchema = {
   tags: ["Sponsorships"],
@@ -323,12 +345,12 @@ export const eventSponsorTiersPutRouteSchema = {
 
 // ── Sponsorship tier pricing config (self-service checkout) ──
 //
-// Managed data, not a code constant (migration 0053) — a price change is a
+// Managed data, not a code constant (consolidated migration 0035) — a price change is a
 // PATCH, not a deployment. Distinct from eventSponsorTiersSchema above,
 // which controls attendee-data-access per event, not pricing.
 
 export const sponsorshipTierConfigSchema = z.object({
-  id: z.uuid(),
+  id: databaseIdSchema,
   sponsorType: sponsorTypeSchema,
   tier: z.string(),
   currency: z.string(),
@@ -347,7 +369,7 @@ export const sponsorshipTierConfigListRouteSchema = {
   },
 };
 
-export const sponsorshipTierConfigIdParamsSchema = z.object({ id: z.uuid() });
+export const sponsorshipTierConfigIdParamsSchema = z.object({ id: databaseIdSchema });
 
 export const sponsorshipTierConfigUpdateSchema = z.object({
   amountCents: z.number().int().min(0).max(100_000_000).optional(),

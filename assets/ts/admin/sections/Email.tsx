@@ -8,6 +8,7 @@ import { api } from "../api";
 import { fmt, toast } from "../ui";
 import type { AdminEmailOutboxRow, AdminEmailOutboxResponse } from "../types";
 import type { StatsResponse } from "../types";
+import { adminEmailOutboxResponseSchema } from "../../../shared/schemas/admin-email-outbox";
 
 // ────────────────────────────────────────────────────────
 // Types
@@ -185,12 +186,12 @@ export function Email() {
       if (filters.messageType) qs.set("messageType", filters.messageType);
       if (filters.q) qs.set("q", filters.q);
 
-      const [s, data] = await Promise.all([
+      const [s, raw] = await Promise.all([
         api<StatsResponse>("/api/v1/admin/stats"),
-        api<AdminEmailOutboxResponse>(`/api/v1/admin/email/outbox?${qs.toString()}`),
+        api<unknown>(`/api/v1/admin/email/outbox?${qs.toString()}`),
       ]);
       setOutboxStats(s.email.outboxByStatus);
-      setOutboxData(data);
+      setOutboxData(adminEmailOutboxResponseSchema.parse(raw));
       setSelectedIds(new Set());
     } catch (e) {
       setError((e as Error).message);
@@ -435,12 +436,11 @@ export function Email() {
                 <label class="form-label small fw-semibold mb-1">Batch limit</label>
                 <input
                   type="number"
-                  class="form-control form-control-sm"
+                  class="form-control form-control-sm adm-email-batch-limit"
                   value={retryLimit}
                   min={1}
                   max={500}
                   onInput={(e) => setRetryLimit(Number((e.target as HTMLInputElement).value) || 20)}
-                  style="width:90px"
                 />
               </div>
               <div class="form-check mt-4">

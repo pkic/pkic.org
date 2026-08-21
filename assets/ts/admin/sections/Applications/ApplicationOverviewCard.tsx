@@ -109,9 +109,9 @@ export function ApplicationOverviewCard({
                 <td class="mono">{detail.membershipCategory}</td>
               </tr>
               <tr>
-                <th class="text-muted small">Status</th>
+                <th class="text-muted small">Stage</th>
                 <td>
-                  <Badge status={detail.status} />
+                  <Badge status={detail.stage} />
                 </td>
               </tr>
               {detail.onHoldSubtype && (

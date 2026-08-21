@@ -18,6 +18,10 @@ FEEDBACK_IDENTITY_SECRET_V1=replace-with-strong-random-value
 # SENDGRID_API_KEY=replace-with-sendgrid-api-key
 # FROM_EMAIL=noreply@pkic.org
 # FROM_NAME=PKI Consortium
+# Optional only on loopback local development. Preview and production fail
+# closed unless this SendGrid Event Webhook public key is configured as a
+# Wrangler secret.
+# SENDGRID_WEBHOOK_VERIFICATION_KEY=replace-with-base64-p256-public-key
 
 # Optional — only needed to test the join-membership/sponsor-interest forms
 # locally (functions/_lib/services/membership-form-submission.ts). Without

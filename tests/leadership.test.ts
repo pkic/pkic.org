@@ -1,8 +1,8 @@
 /**
  * leadership.test.ts
  *
- * Board of Directors / Executive Council leadership positions (migration
- * 0049) — admin CRUD (functions/api/v1/admin/leadership-positions) and the
+ * Board of Directors / Executive Council leadership positions (consolidated
+ * migration 0035) — admin CRUD (functions/api/v1/admin/leadership-positions) and the
  * public roster + forum-chairs reads (functions/api/v1/leadership). See
  * functions/_lib/services/leadership.ts for the design (a dedicated table
  * instead of user_roles, since Board/EC need many simultaneous holders, an
@@ -15,6 +15,11 @@ import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
+import {
+  leadershipAffiliationsResponseSchema,
+  leadershipPositionResponseSchema,
+  leadershipPositionsListResponseSchema,
+} from "../assets/shared/schemas/leadership";
 
 function request(token: string | null, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -58,9 +63,10 @@ async function insertOrganization(name: string, website: string): Promise<string
   return id;
 }
 
-async function insertMember(userId: string, organizationId: string): Promise<void> {
+async function insertMember(userId: string, organizationId: string): Promise<string> {
   const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
   await addRepresentative(env.DB, memberId, userId);
+  return memberId;
 }
 
 async function assignRole(
@@ -77,7 +83,7 @@ async function assignRole(
     .run();
 }
 
-describe("leadership positions (migration 0049) — Board / Executive Council rosters", () => {
+describe("leadership positions (consolidated migration 0035) — Board / Executive Council rosters", () => {
   let adminToken: string;
   let adminId: string;
 
@@ -116,6 +122,73 @@ describe("leadership positions (migration 0049) — Board / Executive Council ro
     expect(position.endsAt).toBeNull();
   });
 
+  it("requires and preserves an explicit affiliation for a user representing multiple organizations", async () => {
+    const userId = await insertUser("multi-org-leader@example.test", ["Multi", "Leader"]);
+    const firstOrganizationId = await insertOrganization("First Organization", "https://first.example");
+    const secondOrganizationId = await insertOrganization("Second Organization", "https://second.example");
+    const firstMemberId = await insertMember(userId, firstOrganizationId);
+    const secondMemberId = await insertMember(userId, secondOrganizationId);
+
+    const affiliationsResponse = await call(
+      adminToken,
+      `/api/v1/admin/leadership-positions/users/${userId}/affiliations`,
+    );
+    expect(affiliationsResponse.status).toBe(200);
+    const affiliations = leadershipAffiliationsResponseSchema.parse(await affiliationsResponse.json());
+    expect(affiliations.affiliations.map((item) => item.memberId).sort()).toEqual(
+      [firstMemberId, secondMemberId].sort(),
+    );
+
+    const ambiguous = await call(adminToken, "/api/v1/admin/leadership-positions", {
+      method: "POST",
+      body: JSON.stringify({ body: "board", userId, title: "Board Member", startsAt: "2026-01-01" }),
+    });
+    expect(ambiguous.status).toBe(422);
+    expect(await ambiguous.json()).toMatchObject({ error: { code: "AFFILIATION_REQUIRED" } });
+
+    const createdResponse = await call(adminToken, "/api/v1/admin/leadership-positions", {
+      method: "POST",
+      body: JSON.stringify({
+        body: "board",
+        userId,
+        memberId: secondMemberId,
+        title: "Board Member",
+        startsAt: "2026-01-01",
+      }),
+    });
+    expect(createdResponse.status).toBe(201);
+    const created = leadershipPositionResponseSchema.parse(await createdResponse.json());
+    expect(created.memberId).toBe(secondMemberId);
+    expect(created.organizationName).toBe("Second Organization");
+
+    const publicResponse = await call(null, "/api/v1/leadership/board");
+    const publicBody = (await publicResponse.json()) as { current: Array<{ organizationName: string | null }> };
+    expect(publicBody.current[0].organizationName).toBe("Second Organization");
+  });
+
+  it("rolls back leadership creation when its audit record cannot be written", async () => {
+    const userId = await insertUser("audit-rollback-leader@example.test", ["Audit", "Rollback"]);
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_leadership_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'leadership_position_created'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced leadership audit failure');
+       END`,
+    ).run();
+
+    try {
+      const response = await call(adminToken, "/api/v1/admin/leadership-positions", {
+        method: "POST",
+        body: JSON.stringify({ body: "board", userId, title: "Board Member", startsAt: "2026-01-01" }),
+      });
+      expect(response.status).toBe(500);
+      expect(await queryAll(env.DB, "SELECT id FROM leadership_positions WHERE user_id = ?", [userId])).toEqual([]);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER IF EXISTS fail_leadership_audit").run();
+    }
+  });
+
   it("lists positions scoped to the requested body only", async () => {
     const boardMember = await insertUser("board-only@example.test", ["Board", "Only"]);
     const ecMember = await insertUser("ec-only@example.test", ["Ec", "Only"]);
@@ -129,15 +202,26 @@ describe("leadership positions (migration 0049) — Board / Executive Council ro
       body: JSON.stringify({ body: "executive_council", userId: ecMember, title: "EC Member", startsAt: "2022-06-01" }),
     });
 
-    const boardList = (await (await call(adminToken, "/api/v1/admin/leadership-positions?body=board")).json()) as {
-      positions: Array<{ name: string }>;
-    };
+    const boardList = leadershipPositionsListResponseSchema.parse(
+      await (await call(adminToken, "/api/v1/admin/leadership-positions?body=board")).json(),
+    );
     expect(boardList.positions.map((p) => p.name)).toEqual(["Board Only"]);
 
-    const ecList = (await (
-      await call(adminToken, "/api/v1/admin/leadership-positions?body=executive_council")
-    ).json()) as { positions: Array<{ name: string }> };
+    const ecList = leadershipPositionsListResponseSchema.parse(
+      await (await call(adminToken, "/api/v1/admin/leadership-positions?body=executive_council")).json(),
+    );
     expect(ecList.positions.map((p) => p.name)).toEqual(["Ec Only"]);
+
+    const filtered = leadershipPositionsListResponseSchema.parse(
+      await (
+        await call(
+          adminToken,
+          "/api/v1/admin/leadership-positions?body=board&status=current&q=Board&limit=1&sort=-starts_at",
+        )
+      ).json(),
+    );
+    expect(filtered.positions.map((position) => position.name)).toEqual(["Board Only"]);
+    expect(filtered.page).toMatchObject({ limit: 1, offset: 0, total: 1, hasMore: false });
   });
 
   it("rejects an unknown body value", async () => {

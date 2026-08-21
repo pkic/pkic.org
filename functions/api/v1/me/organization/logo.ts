@@ -9,11 +9,15 @@
 import { json } from "../../../../_lib/http";
 import { requireMemberFromRequest } from "../../../../_lib/auth/member";
 import { AppError } from "../../../../_lib/errors";
-import { ALLOWED_MIME_TYPES, MAX_HEADSHOT_BYTES, readUploadedImage } from "../../../../_lib/utils/headshot-upload";
-import { requireOrgContact, stageOrganizationLogo } from "../../../../_lib/services/organization-content-reviews";
+import { imageExtension, putUploadedImage, readValidatedUploadedImage } from "../../../../_lib/utils/image-upload";
+import { requireOrgContact, stageOrganizationLogo } from "../../../../_lib/services/organization-content";
 import { myOrganizationLogoUploadRouteSchema } from "../../../../../assets/shared/schemas/me";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
+import {
+  enqueueStorageDeletion,
+  processStorageDeletionForKey,
+} from "../../../../_lib/services/storage-deletion-outbox";
 
 export const MeOrganizationLogoPost = openApiRoute(myOrganizationLogoUploadRouteSchema, async (c: AdminContext) => {
   const db = requestDb(c);
@@ -25,30 +29,25 @@ export const MeOrganizationLogoPost = openApiRoute(myOrganizationLogoUploadRoute
   const bucket = c.env.ASSETS_BUCKET;
   if (!bucket) throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "File uploads are not configured");
 
-  const { buffer, contentType } = await readUploadedImage(c.req.raw);
-  if (!ALLOWED_MIME_TYPES.has(contentType)) {
-    return json(
-      { error: { code: "INVALID_FILE_TYPE", message: "Only JPEG, PNG, and WebP images are accepted." } },
-      415,
-    );
-  }
-  if (buffer.byteLength > MAX_HEADSHOT_BYTES) {
-    return json(
-      { error: { code: "FILE_TOO_LARGE", message: `Logo must be under ${MAX_HEADSHOT_BYTES / (1024 * 1024)} MB.` } },
-      413,
-    );
-  }
+  const image = await readValidatedUploadedImage(c.req.raw, "Logo");
+  const ext = imageExtension(image.contentType);
+  const r2Key = `org-logos/${member.organizationId}/staging-${crypto.randomUUID()}.${ext}`;
+  await putUploadedImage(bucket, r2Key, image, "logo");
 
-  const ext = contentType === "image/png" ? "png" : contentType === "image/webp" ? "webp" : "jpg";
-  const r2Key = `org-logos/${member.organizationId}/staging-${Date.now()}.${ext}`;
-  await bucket.put(r2Key, buffer, { httpMetadata: { contentType } });
-
-  const { previousStagingKey } = await stageOrganizationLogo(db, member, r2Key);
+  let previousStagingKey: string | null;
+  try {
+    ({ previousStagingKey } = await stageOrganizationLogo(db, member, r2Key));
+  } catch (error) {
+    try {
+      await bucket.delete(r2Key);
+    } catch {
+      await enqueueStorageDeletion(db, r2Key, "assets");
+    }
+    throw error;
+  }
 
   if (previousStagingKey && previousStagingKey !== r2Key) {
-    c.executionCtx.waitUntil(
-      (bucket as unknown as { delete(key: string): Promise<void> }).delete(previousStagingKey).catch(() => {}),
-    );
+    c.executionCtx.waitUntil(processStorageDeletionForKey(db, c.env, previousStagingKey, "assets"));
   }
 
   return json({ success: true, r2Key });

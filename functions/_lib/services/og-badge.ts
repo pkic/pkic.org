@@ -18,9 +18,10 @@
  * format they support.
  */
 
+import type { EventParticipantRole } from "../../../assets/shared/schemas/participant-roles";
+
 /** Role displayed on the badge for a referral code owner. */
-export type BadgeRole =
-  "attendee" | "speaker" | "co_speaker" | "moderator" | "panelist" | "organizer" | "staff" | "proposer";
+export type BadgeRole = EventParticipantRole;
 
 /** Data required to render a badge. */
 export interface BadgeData {

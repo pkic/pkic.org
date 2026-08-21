@@ -83,7 +83,7 @@ export function Login({ onSignedIn }: { onSignedIn: () => void | Promise<void> }
 
   return (
     <div class="d-flex justify-content-center py-5">
-      <div class="card shadow-sm" style="max-width: 420px; width: 100%;">
+      <div class="card shadow-sm content-width-sm">
         <div class="card-body p-4">
           <h2 class="h4 mb-3">Member Portal</h2>
 

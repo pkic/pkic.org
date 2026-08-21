@@ -9,8 +9,8 @@ export function ApplicationConcernsCard({ detail }: { detail: AdminApplicationDe
         <ul class="list-unstyled small mb-0">
           {detail.concerns.map((c) => (
             <li key={c.id} class="mb-2">
-              {c.concern_text}
-              <div class="mono text-muted small">{fmt(c.created_at)}</div>
+              {c.concernText}
+              <div class="mono text-muted small">{fmt(c.createdAt)}</div>
             </li>
           ))}
           {detail.concerns.length === 0 && <li class="text-muted">None submitted.</li>}

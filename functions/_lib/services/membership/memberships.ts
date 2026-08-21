@@ -4,7 +4,7 @@
  * `members` (migration 0000) is never rebuilt or altered by this PR — it
  * already models one row per organization or per individual, with
  * user_id/organization_id mutual exclusivity DB-enforced. Category lives in
- * `member_category_assignments` (migration 0037), one row per aggregate,
+ * `member_category_assignments` (consolidated migration 0035), one row per aggregate,
  * for both org-tied and org-less members alike.
  */
 import { first } from "../../db/queries";

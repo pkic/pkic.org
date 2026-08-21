@@ -79,7 +79,7 @@ describe("buildOrganizationDomainStatements", () => {
   it("emits one INSERT OR IGNORE per non-blank domain, trimmed and lowercased", () => {
     const statements = buildOrganizationDomainStatements("acme corp", [" Acme.Example ", "", "other.example"]);
     expect(statements).toHaveLength(2);
-    expect(statements[0]).toContain("INSERT OR IGNORE INTO organization_domains");
+    expect(statements[0]).toContain("INSERT OR IGNORE INTO organization_domain_claims");
     expect(statements[0]).toContain(sqlString("acme.example"));
     expect(statements[1]).toContain(sqlString("other.example"));
   });

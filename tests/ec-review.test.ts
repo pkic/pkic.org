@@ -12,6 +12,7 @@ import { resetDb } from "./helpers/reset-db";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
+import { seedMemberApplication } from "./helpers/member-applications";
 
 function requestWithAuth(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -29,16 +30,14 @@ async function call(token: string, path: string, init: RequestInit = {}): Promis
 }
 
 async function createEcReviewApplication(): Promise<{ id: string }> {
-  const id = crypto.randomUUID();
-  await env.DB.prepare(
-    `INSERT INTO member_applications
-       (id, applicant_email, applicant_name, organization_name, organization_domain, membership_category,
-        status, stage, stage_entered_at, manage_token_hash, created_at, updated_at)
-     VALUES (?, 'applicant@example.test', 'Applicant', 'Example Org', 'example.test', 'F',
-             'ec_review', 'ec_review', datetime('now'), ?, datetime('now'), datetime('now'))`,
-  )
-    .bind(id, crypto.randomUUID())
-    .run();
+  const id = await seedMemberApplication({
+    applicantEmail: "applicant@example.test",
+    applicantName: "Applicant",
+    organizationName: "Example Org",
+    organizationDomain: "example.test",
+    membershipCategory: "F",
+    stage: "ec_review",
+  });
   return { id };
 }
 
@@ -165,15 +164,14 @@ describe("Executive Council review", () => {
   });
 
   it("cannot record an EC decision when the application is not in ec_review", async () => {
-    const id = crypto.randomUUID();
-    await env.DB.prepare(
-      `INSERT INTO member_applications
-         (id, applicant_email, applicant_name, organization_name, organization_domain, membership_category,
-          status, stage, stage_entered_at, manage_token_hash, created_at, updated_at)
-       VALUES (?, 'x@example.test', 'X', 'Org', 'example.test', 'F', 'in_review', 'in_review', datetime('now'), ?, datetime('now'), datetime('now'))`,
-    )
-      .bind(id, crypto.randomUUID())
-      .run();
+    const id = await seedMemberApplication({
+      applicantEmail: "x@example.test",
+      applicantName: "X",
+      organizationName: "Org",
+      organizationDomain: "example.test",
+      membershipCategory: "F",
+      stage: "in_review",
+    });
     const ecUserId = await insertActiveMember("ec-wrong-stage@example.test", true);
     const token = await createMemberSession(env.DB, ecUserId, "ec-wrong-stage-token");
 

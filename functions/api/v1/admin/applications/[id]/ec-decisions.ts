@@ -6,7 +6,6 @@ import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
-import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { recordEcDecision } from "../../../../../_lib/services/ec-review";
 import { adminEcDecisionCreateRouteSchema } from "../../../../../../assets/shared/schemas/admin-applications";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
@@ -26,12 +25,7 @@ export const AdminApplicationEcDecisionsPost = openApiRoute(
       ecMemberUserId: body.ecMemberUserId,
       decision: body.decision,
       reason: body.reason ?? null,
-    });
-
-    await writeAuditLog(db, "admin", admin.id, "ec_decision_recorded_by_staff", "member_application", applicationId, {
-      ecMemberUserId: body.ecMemberUserId,
-      decision: body.decision,
-      reason: body.reason ?? null,
+      audit: { actorType: "admin", actorId: admin.id, action: "ec_decision_recorded_by_staff" },
     });
 
     return json(

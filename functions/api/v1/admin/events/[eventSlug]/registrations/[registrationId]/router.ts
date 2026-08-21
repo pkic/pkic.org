@@ -1,5 +1,11 @@
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
+import { openApiRoute } from "../../../../../../../_lib/openapi/route";
+import {
+  adminRegistrationAuditLogRouteSchema,
+  adminRegistrationBadgeRegenerationRouteSchema,
+  adminRegistrationDetailRouteSchema,
+} from "../../../../../../../../assets/shared/schemas/route-contracts";
 import { onRequestPost as AdminEventsEventSlugRegistrationsRegistrationIdAdmitPost_l } from "./admit";
 import { onRequestGet as AdminEventsEventSlugRegistrationsRegistrationIdAuditLogGet_l } from "./audit-log";
 import { onRequestGet as AdminEventsEventSlugRegistrationsRegistrationIdBadgeRoleGet_l } from "./badge-role";
@@ -16,14 +22,26 @@ const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
 app.post("/admit", AdminEventsEventSlugRegistrationsRegistrationIdAdmitPost_l);
-app.get("/audit-log", AdminEventsEventSlugRegistrationsRegistrationIdAuditLogGet_l);
+openapi.get(
+  "/audit-log",
+  openApiRoute(adminRegistrationAuditLogRouteSchema, AdminEventsEventSlugRegistrationsRegistrationIdAuditLogGet_l),
+);
 app.get("/badge-role", AdminEventsEventSlugRegistrationsRegistrationIdBadgeRoleGet_l);
 app.patch("/badge-role", AdminEventsEventSlugRegistrationsRegistrationIdBadgeRolePatch_l);
 app.patch("/day-attendance", AdminEventsEventSlugRegistrationsRegistrationIdDayAttendancePatch_l);
-app.get("/", AdminEventsEventSlugRegistrationsRegistrationIdGet_l);
+openapi.get(
+  "/",
+  openApiRoute(adminRegistrationDetailRouteSchema, AdminEventsEventSlugRegistrationsRegistrationIdGet_l),
+);
 app.patch("/", AdminEventsEventSlugRegistrationsRegistrationIdPatch_l);
 app.post("/open-manage", AdminEventsEventSlugRegistrationsRegistrationIdOpenManagePost_l);
-app.post("/regenerate-badge", AdminEventsEventSlugRegistrationsRegistrationIdRegenerateBadgePost_l);
+openapi.post(
+  "/regenerate-badge",
+  openApiRoute(
+    adminRegistrationBadgeRegenerationRouteSchema,
+    AdminEventsEventSlugRegistrationsRegistrationIdRegenerateBadgePost_l,
+  ),
+);
 app.post("/resend-confirmation", AdminEventsEventSlugRegistrationsRegistrationIdResendConfirmationPost_l);
 
 export default openapi;

@@ -1,3 +1,8 @@
+import type { FormFieldDefinition } from "../../shared/schemas/forms";
+
+export type { EventFormsResponse, RequiredTerm } from "../../shared/schemas/forms";
+export type { ProposalManageResponse } from "../../shared/schemas/proposal-management";
+
 export interface ApiErrorPayload {
   error: {
     code: string;
@@ -9,15 +14,7 @@ export interface ApiErrorPayload {
   };
 }
 
-export interface FormField {
-  key: string;
-  label: string;
-  fieldType: string;
-  required: boolean;
-  sortOrder: number;
-  options: Array<string | { value: string; label?: string }>;
-  validation: Record<string, unknown>;
-}
+export type FormField = Omit<FormFieldDefinition, "id"> & { id?: FormFieldDefinition["id"] };
 
 export interface FormDefinition {
   id: string;
@@ -27,41 +24,13 @@ export interface FormDefinition {
   fields: FormField[];
 }
 
-export interface RequiredTerm {
-  termKey: string;
-  version: string;
-  required: boolean;
-  contentRef: string | null;
-  displayText?: string | null;
-  helpText?: string | null;
-}
-
-export interface EventFormsResponse {
-  event: {
-    id: string;
-    slug: string;
-    name: string;
-  };
-  purpose: "event_registration" | "proposal_submission";
-  form: FormDefinition | null;
-  requiredTerms: RequiredTerm[];
-  /** Session types offered for proposal submissions (e.g. "talk", "panel"). */
-  allowedSessionTypes?: string[];
-  eventDays: Array<{
-    dayDate: string;
-    label: string | null;
-    inPersonCapacity: number | null;
-    sortOrder: number;
-    attendanceOptions: Array<{ value: string; label: string; spotsRemainingPercent?: number | null }>;
-  }>;
-}
-
 export interface RegistrationManageResponse {
   success: true;
   registration: {
     id: string;
     event_id: string;
     status: string;
+    cancellation_reason_code: string | null;
     attendance_type: string;
     custom_answers: Record<string, unknown> | null;
     isEmailVerified: boolean;
@@ -101,33 +70,4 @@ export interface RegistrationManageResponse {
   manageToken?: string | null;
   headshotUrl?: string | null;
   userId?: string | null;
-}
-
-export interface ProposalManageResponse {
-  success: true;
-  proposal: {
-    id: string;
-    status: string;
-    proposal_type: string;
-    title: string;
-    abstract: string;
-    details: Record<string, unknown> | null;
-  };
-  speakers: Array<{
-    userId: string;
-    role: string;
-    status: string;
-    confirmedAt: string | null;
-    declinedAt: string | null;
-    email: string;
-    firstName: string | null;
-    lastName: string | null;
-    organizationName: string | null;
-    jobTitle: string | null;
-    bio: string | null;
-    links: string[];
-    headshotUploaded: boolean;
-    headshotUpdatedAt: string | null;
-    headshotUrl: string | null;
-  }>;
 }

@@ -2,7 +2,7 @@ import { parseJsonBody } from "../../../../_lib/validation";
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { renderEmail, renderSubject } from "../../../../_lib/email/render";
-import { loadEmailLayout, loadEmailPartials } from "../../../../_lib/email/partials";
+import { loadEmailPartials, loadEmailRenderResources } from "../../../../_lib/email/partials";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
 import { adminEmailTemplatePreviewSchema } from "../../../../../assets/shared/schemas/api";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
@@ -32,7 +32,8 @@ function buildDefaultPreviewData(baseUrl: string): Record<string, unknown> {
 }
 
 export async function onRequestPost(c: AdminContext): Promise<Response> {
-  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  const db = requestDb(c);
+  await requireAdminFromRequest(db, c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminEmailTemplatePreviewSchema);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
@@ -40,8 +41,10 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     ...buildDefaultPreviewData(appBaseUrl),
     ...(body.data ?? {}),
   };
-  const partials = await loadEmailPartials(requestDb(c));
-  const layoutHtml = body.layoutHtml ?? (await loadEmailLayout(requestDb(c)));
+  const resources = body.layoutHtml
+    ? { partials: await loadEmailPartials(db), layoutHtml: body.layoutHtml }
+    : await loadEmailRenderResources(db);
+  const { partials, layoutHtml } = resources;
   const dataWithPartials = { ...data, _partials: partials };
 
   const subject = renderSubject(body.subjectTemplate ?? null, "PKI Consortium Preview Subject", dataWithPartials);

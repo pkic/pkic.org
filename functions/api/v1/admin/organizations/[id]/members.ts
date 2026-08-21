@@ -6,7 +6,6 @@
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
-import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { addOrganizationRepresentative } from "../../../../../_lib/services/admin-organizations";
 import { organizationAddRepresentativeRouteSchema } from "../../../../../../assets/shared/schemas/admin-organizations";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
@@ -20,20 +19,7 @@ export const OrganizationAddRepresentative = openApiRoute(
 
     const organizationId = data.params.id;
     const body = data.body;
-    const representative = await addOrganizationRepresentative(requestDb(c), organizationId, body);
-
-    await writeAuditLog(
-      requestDb(c),
-      "admin",
-      admin.id,
-      "organization_representative_added",
-      "organization",
-      organizationId,
-      {
-        representativeId: representative.representativeId,
-        email: representative.email,
-      },
-    );
+    const representative = await addOrganizationRepresentative(requestDb(c), admin.id, organizationId, body);
 
     return json({ representative }, 201);
   },

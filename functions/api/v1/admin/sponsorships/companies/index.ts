@@ -20,9 +20,9 @@ export const SponsorshipCompaniesList = openApiRoute(
     const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
     requirePermission(admin, "sponsorships:read");
 
-    const { type, stage, tier, limit = 50, offset = 0 } = data.query;
+    const { type, stage, tier, q, sort, limit = 50, offset = 0 } = data.query;
 
-    const { companies, total } = await listSponsorshipCompanies(db, { type, stage, tier, limit, offset });
+    const { companies, total } = await listSponsorshipCompanies(db, { type, stage, tier, q, sort, limit, offset });
     return json({ companies, page: buildPageInfo(limit, offset, total, companies.length) });
   },
 );

@@ -1,6 +1,15 @@
 import { expect, test } from "@playwright/test";
 
 test("renders the admin proposal detail workflow with submission answers and operator actions", async ({ page }) => {
+  const proposalId = "11111111111111111111111111111111";
+  const proposerUserId = "22222222222222222222222222222222";
+  const formId = "33333333333333333333333333333333";
+  const fieldIds = {
+    audience: "44444444444444444444444444444444",
+    format: "55555555555555555555555555555555",
+    tracks: "66666666666666666666666666666666",
+    recording: "77777777777777777777777777777777",
+  };
   const openedUrls: string[] = [];
   const consoleErrors: string[] = [];
   let adminUpload:
@@ -39,14 +48,14 @@ test("renders the admin proposal detail workflow with submission answers and ope
           id: "admin-1",
           email: "admin@pkic.org",
           role: "admin",
-          scopes: ["proposals:read", "proposal-reviews:write", "proposal-finalization:write"],
+          scopes: ["proposals:read", "proposals:score", "proposals:manage"],
           expiresAt: null,
         },
       }),
     });
   });
 
-  await page.route("**/api/v1/admin/proposals/proposal-1/open-manage", async (route) => {
+  await page.route(`**/api/v1/admin/proposals/${proposalId}/open-manage`, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -54,38 +63,85 @@ test("renders the admin proposal detail workflow with submission answers and ope
     });
   });
 
-  await page.route("**/api/v1/admin/proposals/proposal-1/reviews", async (route) => {
+  await page.route(`**/api/v1/admin/proposals/${proposalId}/reviews**`, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
+        proposalId,
         reviews: [
           {
-            id: "review-1",
-            reviewer_user_id: "reviewer-1",
+            id: "88888888888888888888888888888881",
+            proposal_id: proposalId,
+            reviewer_user_id: "88888888888888888888888888888882",
             reviewer_email: "reviewer@pkic.org",
             reviewer_first_name: "Ada",
             reviewer_last_name: "Reviewer",
+            review_round: 1,
             recommendation: "accept",
             score: 9,
             reviewer_comment: "Strong operational framing and practical guidance.",
             applicant_note: "Please keep the examples grounded in deployment constraints.",
+            created_at: "2025-02-01T10:30:00.000Z",
             updated_at: "2025-02-01T10:30:00.000Z",
           },
         ],
+        myReview: null,
+        summary: {
+          totalReviews: 1,
+          averageScore: 9,
+          acceptCount: 1,
+          needsWorkCount: 0,
+          rejectCount: 0,
+          minReviewsRequired: 2,
+          quorumMet: false,
+        },
+        page: { limit: 25, offset: 0, total: 1, hasMore: false },
       }),
     });
   });
 
-  await page.route("**/api/v1/admin/proposals/proposal-1/comments", async (route) => {
+  await page.route(`**/api/v1/admin/proposals/${proposalId}/comments**`, async (route) => {
+    const offset = Number(new URL(route.request().url()).searchParams.get("offset") ?? 0);
+    const comments =
+      offset === 0
+        ? [
+            {
+              id: "88888888888888888888888888888888",
+              proposal_id: proposalId,
+              author_user_id: "99999999999999999999999999999999",
+              comment: "Newest committee note",
+              created_at: "2025-02-01T12:00:00.000Z",
+              updated_at: "2025-02-01T12:00:00.000Z",
+              author_email: "reviewer@pkic.org",
+              author_first_name: "Ada",
+              author_last_name: "Reviewer",
+            },
+          ]
+        : [
+            {
+              id: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              proposal_id: proposalId,
+              author_user_id: "99999999999999999999999999999999",
+              comment: "Older committee note",
+              created_at: "2025-01-31T12:00:00.000Z",
+              updated_at: "2025-01-31T12:00:00.000Z",
+              author_email: "reviewer@pkic.org",
+              author_first_name: "Ada",
+              author_last_name: "Reviewer",
+            },
+          ];
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ comments: [] }),
+      body: JSON.stringify({
+        comments,
+        page: { limit: 25, offset, total: 2, hasMore: offset === 0 },
+      }),
     });
   });
 
-  await page.route("**/api/v1/admin/proposals/proposal-1/speakers", async (route) => {
+  await page.route(`**/api/v1/admin/proposals/${proposalId}/speakers`, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -113,7 +169,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
     });
   });
 
-  await page.route("**/api/v1/admin/proposals/proposal-1/presentation/versions", async (route) => {
+  await page.route(`**/api/v1/admin/proposals/${proposalId}/presentation/versions`, async (route) => {
     if (route.request().method() === "POST") {
       const headers = route.request().headers();
       adminUpload = {
@@ -136,15 +192,15 @@ test("renders the admin proposal detail workflow with submission answers and ope
     });
   });
 
-  await page.route("**/api/v1/admin/proposals/proposal-1", async (route) => {
+  await page.route(`**/api/v1/admin/proposals/${proposalId}`, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
         proposal: {
-          id: "proposal-1",
+          id: proposalId,
           event_id: "event-1",
-          proposer_user_id: "user-1",
+          proposer_user_id: proposerUserId,
           status: "accepted",
           proposal_type: "panel",
           title: "Operational PKI at Internet Scale",
@@ -154,6 +210,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
           proposer_email: "speaker@pkic.org",
           proposer_first_name: "Sam",
           proposer_last_name: "Speaker",
+          review_round: 1,
           review_count: 1,
           decision_status: "accepted",
           decision_note: null,
@@ -171,12 +228,12 @@ test("renders the admin proposal detail workflow with submission answers and ope
           canFinalize: true,
         },
         form: {
-          id: "form-1",
+          id: formId,
           title: "CFP Form",
           description: "Structured submission answers for the review team.",
           fields: [
             {
-              id: "field-audience",
+              id: fieldIds.audience,
               key: "audience",
               label: "Target audience",
               fieldType: "text",
@@ -186,7 +243,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
               sortOrder: 1,
             },
             {
-              id: "field-format",
+              id: fieldIds.format,
               key: "format",
               label: "Preferred format",
               fieldType: "select",
@@ -199,7 +256,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
               sortOrder: 2,
             },
             {
-              id: "field-tracks",
+              id: fieldIds.tracks,
               key: "tracks",
               label: "Tracks",
               fieldType: "multi_select",
@@ -212,7 +269,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
               sortOrder: 3,
             },
             {
-              id: "field-recording",
+              id: fieldIds.recording,
               key: "recordingConsent",
               label: "Recording consent",
               fieldType: "boolean",
@@ -232,7 +289,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
     });
   });
 
-  await page.goto("/admin/#/events/pqc-2026/proposal/proposal-1");
+  await page.goto(`/admin/#/events/pqc-2026/proposal/${proposalId}`);
 
   await expect(page.getByRole("heading", { name: "Operational PKI at Internet Scale" })).toBeVisible();
 
@@ -249,9 +306,16 @@ test("renders the admin proposal detail workflow with submission answers and ope
   // Review quorum shown in stat cards (always visible)
   await expect(page.getByText("1 / 2 required").first()).toBeVisible();
 
+  await expect(page.getByText("Newest committee note")).toBeVisible();
+  await page.getByRole("button", { name: "Load more comments" }).click();
+  await expect(page.getByText("Older committee note")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Load more comments" })).toHaveCount(0);
+
   // Navigate to Reviews tab to see reviewer details
   await page.getByRole("tab", { name: /Reviews/ }).click();
-  await expect(page.getByText("Ada Reviewer")).toBeVisible();
+  await expect(page.getByText("Ada Reviewer").first()).toBeVisible();
+  await expect(page.getByText("Reviews are read-only after a proposal decision.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Submit Review" })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Open Proposer Manage Page ↗" }).click();
   await expect

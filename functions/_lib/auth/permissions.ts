@@ -1,68 +1,26 @@
 /**
  * Context-aware permission checking.
  *
- * This is additive to, and independent from, the existing global
- * `AUTH_SCOPES` system in ./scopes.ts, which continues to gate the existing
- * admin/* routes unchanged (every `role='admin'` user still gets the full
- * legacy scopes array exactly as before). This module powers the *new*
- * surface: the access-grants/roles admin endpoints, event-scoped
- * organizer/program-committee access, and any future working-group/
- * membership/organization-scoped checks.
+ * Runtime authorization and delegated OAuth scopes share the canonical
+ * permission vocabulary. Contextual grants come from D1; an OAuth/MCP token
+ * can further restrict (never expand) those effective permissions.
  */
 import { all } from "../db/queries";
 import { normalizeEmail } from "../validation";
 import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike, PermissionGrant } from "../types";
+import { PERMISSION_DENIED_MESSAGE } from "../../../assets/shared/auth-errors";
+import { PERMISSIONS, isPermission, type Permission } from "../../../assets/shared/schemas/permissions";
+
+export { PERMISSIONS, isPermission, type Permission };
 
 /**
  * Every permission string in the system (table, plus the
  * `organizations`/`sponsorships`/`sponsor-portal` additions pulled forward
  *, plus the `admin:read`/`admin:write` fallback pair for
- * admin routes not yet mapped to a named module — see migration 0035's
+ * admin routes not yet mapped to a named module — see consolidated migration 0035's
  * header comment).
  */
-export const PERMISSIONS = [
-  "membership:read",
-  "membership:write",
-  "membership:approve",
-  "events:read",
-  "events:write",
-  "events:manage",
-  "working-groups:read",
-  "working-groups:write",
-  "email-templates:read",
-  "email-templates:write",
-  "donations:read",
-  "donations:sync",
-  "users:read",
-  "users:write",
-  "users:anonymize",
-  "audit:read",
-  "access:grant",
-  "access:revoke",
-  "organizations:read",
-  "organizations:write",
-  "organizations:content-review",
-  "sponsorships:read",
-  "sponsorships:write",
-  "votes:create",
-  "votes:manage",
-  "proposals:read",
-  "proposals:score",
-  "proposals:manage",
-  "agenda:read",
-  "agenda:write",
-  "sponsor-portal:attendee-data",
-  "admin:read",
-  "admin:write",
-] as const;
-
-export type Permission = (typeof PERMISSIONS)[number];
-
-export function isPermission(value: string): value is Permission {
-  return (PERMISSIONS as readonly string[]).includes(value);
-}
-
 export interface PermissionContext {
   type: string;
   id: string;
@@ -79,7 +37,7 @@ interface GrantRow {
  * `user_roles` (via `role_permissions`) and `permission_grants`, excluding
  * expired/revoked rows. Matches `user_roles` rows by `user_id` OR (when
  * `user_id IS NULL`) by normalized email, preserving the pre-provisioning
- * pattern `event_permissions` used (see migration 0035).
+ * pattern `event_permissions` used (see consolidated migration 0035).
  *
  * Called on every authenticated admin request — see requireAdminFromRequest
  * in ./admin.ts. This is a deliberate deviation from "no DB query on
@@ -128,6 +86,9 @@ export async function computeGrantsForUser(
  * request scoped to a different event B).
  */
 export function hasPermission(actor: AuthAdmin, permission: string, context?: PermissionContext): boolean {
+  if (actor.scopeRestricted && actor.scopes?.includes(permission) !== true) {
+    return false;
+  }
   if (actor.role === "admin") {
     return true;
   }
@@ -142,6 +103,9 @@ export function hasPermission(actor: AuthAdmin, permission: string, context?: Pe
 }
 
 export function requirePermission(actor: AuthAdmin, permission: string, context?: PermissionContext): void {
+  if (actor.scopeRestricted && actor.scopes?.includes(permission) !== true) {
+    throw new AppError(403, "SCOPE_REQUIRED", PERMISSION_DENIED_MESSAGE);
+  }
   if (!hasPermission(actor, permission, context)) {
     const scope = context ? ` (context: ${context.type}:${context.id})` : "";
     throw new AppError(403, "PERMISSION_REQUIRED", `Missing required permission: ${permission}${scope}`);

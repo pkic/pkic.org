@@ -4,6 +4,7 @@ import { env } from "cloudflare:workers";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createInvite } from "../functions/_lib/services/invites";
 import { onRequestGet as declineGet, onRequestPost as declinePost } from "../functions/api/v1/invites/[token]/decline";
+import app from "../functions/router";
 
 describe("invite decline", () => {
   beforeEach(async () => {
@@ -89,6 +90,22 @@ describe("invite decline", () => {
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
   });
 
+  it("validates the shared capability query contract through the mounted router", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { token } = await createInvite(env.DB, {
+      eventId,
+      inviteeEmail: "invalid-query@example.test",
+      inviteType: "attendee",
+      signingSecret: "test-signing-secret",
+    });
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/invites/${token}/decline-info?id=not-a-database-id`),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(response.status).toBe(400);
+  });
+
   it("stores structured reason and unsubscribe choice", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
@@ -136,7 +153,7 @@ describe("invite decline", () => {
     expect(Number(unsub.total)).toBe(1);
   });
 
-  it("creates new invites (via createInvite) for forwarded contacts", async () => {
+  it("atomically creates forwarded invites and their durable email intents", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
     const { token } = await createInvite(env.DB, {
@@ -184,6 +201,13 @@ describe("invite decline", () => {
       ])
     )[0];
     expect(fwd2.source_type).toBe("declined-forward");
+
+    const outbox = await queryAll<{ recipient_email: string }>(
+      env.DB,
+      "SELECT recipient_email FROM email_outbox WHERE recipient_email IN (?, ?) ORDER BY recipient_email",
+      ["colleague1@example.test", "colleague2@example.test"],
+    );
+    expect(outbox.map((row) => row.recipient_email)).toEqual(["colleague1@example.test", "colleague2@example.test"]);
   });
 
   it("silently skips unsubscribed contacts when forwarding", async () => {
@@ -221,5 +245,49 @@ describe("invite decline", () => {
     expect(response.status).toBe(200);
     const data = (await response.json()) as { success: boolean; forwarded: string[] };
     expect(data.forwarded).toEqual([]);
+  });
+
+  it("rolls back forwarded invites and outbox rows when the decline transition fails", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { token, invite } = await createInvite(env.DB, {
+      eventId,
+      inviteeEmail: "decliner-rollback@example.test",
+      inviteType: "attendee",
+      ttlHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_test_decline BEFORE UPDATE ON invites
+       WHEN OLD.id = '${invite.id}' AND NEW.status = 'declined'
+       BEGIN SELECT RAISE(ABORT, 'forced decline failure'); END`,
+    ).run();
+
+    await expect(
+      declinePost(
+        createContext(
+          env,
+          new Request(`https://app.test/api/v1/invites/${token}/decline`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              reasonCode: "schedule_conflict",
+              forwards: [{ email: "forward-rollback@example.test" }],
+            }),
+          }),
+          { token },
+        ),
+      ),
+    ).rejects.toThrow("forced decline failure");
+
+    expect(
+      await queryAll(env.DB, "SELECT id FROM invites WHERE invitee_email = ?", ["forward-rollback@example.test"]),
+    ).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE recipient_email = ?", [
+        "forward-rollback@example.test",
+      ]),
+    ).toHaveLength(0);
+    const original = await queryAll<{ status: string }>(env.DB, "SELECT status FROM invites WHERE id = ?", [invite.id]);
+    expect(original[0].status).toBe("sent");
   });
 });

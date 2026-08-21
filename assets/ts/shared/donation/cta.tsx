@@ -21,7 +21,7 @@ export interface DonationCtaOptions {
   name?: string | null;
   /** Donor's email — used to pre-fill Stripe Checkout. */
   email?: string | null;
-  /** Donor's organisation — used to pre-fill the org field. */
+  /** Donor's organization — used to pre-fill the org field. */
   organizationName?: string | null;
   /** URL path or label indicating where the donation is being initiated. */
   source?: string | null;

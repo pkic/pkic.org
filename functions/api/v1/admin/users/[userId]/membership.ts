@@ -7,7 +7,6 @@
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
-import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { grantIndividualMembership } from "../../../../../_lib/services/admin-organizations";
 import { userMembershipGrantRouteSchema } from "../../../../../../assets/shared/schemas/admin-organizations";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
@@ -19,12 +18,7 @@ export const UserMembershipGrant = openApiRoute(userMembershipGrantRouteSchema, 
 
   const userId = data.params.userId;
   const body = data.body;
-  const member = await grantIndividualMembership(requestDb(c), userId, body.membershipCategory);
-
-  await writeAuditLog(requestDb(c), "admin", admin.id, "member_created", "member", member.id, {
-    userId,
-    membershipCategory: body.membershipCategory,
-  });
+  const member = await grantIndividualMembership(requestDb(c), admin.id, userId, body.membershipCategory);
 
   return json({ member }, 201);
 });

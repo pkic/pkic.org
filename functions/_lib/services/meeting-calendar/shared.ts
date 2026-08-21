@@ -6,6 +6,7 @@
  * barrel that re-exports everything under the original module surface.
  */
 import { all, first } from "../../db/queries";
+import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 
@@ -87,11 +88,14 @@ export function toIcsFileSummary(row: IcsFileRow): AdminIcsFileSummary {
 
 export async function attachIcsFiles(db: DatabaseLike, seriesRows: SeriesRow[]): Promise<AdminMeetingSeriesSummary[]> {
   if (seriesRows.length === 0) return [];
-  const placeholders = seriesRows.map(() => "?").join(", ");
+  const seriesFilter = buildD1JsonMembershipFilter(
+    "series_id",
+    seriesRows.map((series) => series.id),
+  );
   const icsRows = await all<IcsFileRow>(
     db,
-    `SELECT * FROM meeting_ics_files WHERE series_id IN (${placeholders}) ORDER BY year DESC, label ASC`,
-    seriesRows.map((s) => s.id),
+    `SELECT * FROM meeting_ics_files WHERE ${seriesFilter.sql} ORDER BY year DESC, label ASC`,
+    seriesFilter.bindings,
   );
   const bySeriesId = new Map<string, AdminIcsFileSummary[]>();
   for (const row of icsRows) {

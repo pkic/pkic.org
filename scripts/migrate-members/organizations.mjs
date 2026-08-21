@@ -1,7 +1,7 @@
 /**
  * Step 2 (org-tied branch) + Step 3e (sponsorship reconciliation):
  * processes one org-tied (A-G, H1-H4, H8) YAML record into
- * `organizations`/`organization_domains`/`members`/
+ * `organizations`/`organization_domain_claims`/`members`/
  * `member_category_assignments`/`organization_representatives`/
  * `user_roles`/`sponsorships` statements. Pure with respect to its inputs
  * — all shared mutable state lives on the `ctx` object build-migration.mjs

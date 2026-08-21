@@ -9,16 +9,7 @@ import { AppError } from "../../../../_lib/errors";
 import { getNonMemberSponsorLogoR2Key } from "../../../../_lib/services/public-sponsors";
 import { sponsorLogoRouteSchema } from "../../../../../assets/shared/schemas/public-sponsors";
 import { openApiRoute } from "../../../../_lib/openapi/route";
-
-const PUBLIC_CACHE_CONTROL = "public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600";
-
-function guessMimeType(r2Key: string): string {
-  const ext = r2Key.split(".").pop()?.toLowerCase() ?? "";
-  if (ext === "png") return "image/png";
-  if (ext === "webp") return "image/webp";
-  if (ext === "svg") return "image/svg+xml";
-  return "image/jpeg";
-}
+import { PUBLIC_IMAGE_CACHE_CONTROL, storedImageResponse } from "../../../../_lib/services/image-response";
 
 export async function onRequestGet(c: any): Promise<Response> {
   const id = c.req.param("id");
@@ -32,16 +23,10 @@ export async function onRequestGet(c: any): Promise<Response> {
     throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "Asset storage is not configured");
   }
 
-  const obj = await bucket.get(logoR2Key);
-  if (!obj) {
-    throw new AppError(404, "LOGO_NOT_FOUND", "Logo file missing from storage");
-  }
-
-  return new Response(await obj.arrayBuffer(), {
-    headers: {
-      "Content-Type": guessMimeType(logoR2Key),
-      "Cache-Control": PUBLIC_CACHE_CONTROL,
-    },
+  return storedImageResponse(bucket, logoR2Key, {
+    notFoundCode: "LOGO_NOT_FOUND",
+    notFoundMessage: "Logo file missing from storage",
+    cacheControl: PUBLIC_IMAGE_CACHE_CONTROL,
   });
 }
 

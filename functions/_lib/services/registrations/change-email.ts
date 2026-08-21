@@ -18,49 +18,57 @@ import { normalizeEmail } from "../../validation";
 import { nowIso, addHours } from "../../utils/time";
 import { checkEmailDomainMx } from "../../email/mx-check";
 import type { DatabaseLike, StatementLike } from "../../types";
-import type { RegistrationRecord } from "./types";
+import { REGISTRATION_COLUMNS, type RegistrationRecord } from "./types";
 import { newCapabilityLinkSecret, signedOrQueuedCapability } from "../capability-links";
+import { prepareAuditLog } from "../audit";
+import { prepareRegistrationConfirmationEmail, type RegistrationConfirmationEmailParams } from "./status-notifications";
 
 const PENDING_CONFIRMATION_DEADLINE_HOURS = 14 * 24;
 
-interface ChangeEmailResult {
+export interface ChangeEmailResult {
   registration: RegistrationRecord;
   userId: string;
   confirmationToken: string;
   previousEmail: string;
   pendingEmail: string;
+  outboxId: string | null;
+}
+
+export interface ChangeRegistrationEmailParams {
+  registrationId: string;
+  newEmail: string;
+  confirmationTtlHours: number;
+  signingSecret?: string;
+  /** Admin recovery may reactivate a cancelled registration. */
+  allowCancelled?: boolean;
+  auditActor?: { type: "admin" | "user"; id: string; action: string; eventId?: string };
+  confirmationEmail?: Omit<RegistrationConfirmationEmailParams, "registrationId" | "recipientEmail" | "registration">;
+  /** Planned state supplied by a caller composing one larger D1 batch. */
+  registrationOverride?: RegistrationRecord;
+}
+
+export interface PreparedRegistrationEmailChange extends ChangeEmailResult {
+  statements: StatementLike[];
 }
 
 /**
  * Initiates an email change by setting pending_email on the user.
  * The email is not finalized until confirmed via token verification.
  */
-export async function changeRegistrationEmail(
+export async function prepareRegistrationEmailChange(
   db: DatabaseLike,
-  params: {
-    registrationId: string;
-    newEmail: string;
-    confirmationTtlHours: number;
-    signingSecret?: string;
-    /**
-     * When true, allows changing the email on a cancelled registration and
-     * resets its status to pending_email_confirmation. Intended for admin use
-     * only so operators can recover bounce-cancelled registrations.
-     */
-    allowCancelled?: boolean;
-  },
-): Promise<ChangeEmailResult> {
-  const registration = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE id = ?", [
-    params.registrationId,
-  ]);
+  params: ChangeRegistrationEmailParams,
+): Promise<PreparedRegistrationEmailChange> {
+  const registration =
+    params.registrationOverride ??
+    (await first<RegistrationRecord>(db, `SELECT ${REGISTRATION_COLUMNS} FROM registrations WHERE id = ?`, [
+      params.registrationId,
+    ]));
   if (!registration) {
     throw new AppError(404, "REGISTRATION_NOT_FOUND", "Registration not found");
   }
 
-  if (
-    !params.allowCancelled &&
-    (registration.status === "cancelled" || registration.status === "cancelled_unauthorized")
-  ) {
+  if (!params.allowCancelled && registration.status === "cancelled") {
     throw new AppError(409, "ALREADY_CANCELLED", "Cannot change email on a cancelled registration");
   }
 
@@ -137,35 +145,6 @@ export async function changeRegistrationEmail(
   // via audit logs / outgoing email).
   const pendingEmailToStore = newNormalized;
 
-  // Store pending email on user record (doesn't violate UNIQUE constraint
-  // on users.normalized_email; the dedicated pending_email index is checked).
-  await run(
-    db,
-    `UPDATE users 
-     SET pending_email = ?, pending_email_expires_at = ?, updated_at = ?
-     WHERE id = ?`,
-    [pendingEmailToStore, pendingEmailExpiresAt, now, currentUser.id],
-  );
-
-  // Reset registration to pending confirmation with new token
-  await run(
-    db,
-    `UPDATE registrations
-     SET status = 'pending_email_confirmation',
-         confirmation_link_secret = ?,
-         pending_confirmation_deadline_at = ?,
-         confirmation_reminder_sent_at = NULL,
-         confirmed_at = NULL,
-         updated_at = ?
-     WHERE id = ?`,
-    [confirmationLinkSecret, confirmationDeadlineAt, now, registration.id],
-  );
-
-  const updated = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE id = ?", [registration.id]);
-  if (!updated) {
-    throw new AppError(500, "EMAIL_CHANGE_FAILED", "Failed to update registration");
-  }
-
   const confirmationToken = await signedOrQueuedCapability({
     signingSecret: params.signingSecret,
     linkSecret: confirmationLinkSecret,
@@ -173,13 +152,83 @@ export async function changeRegistrationEmail(
     resourceId: registration.id,
     ttlSeconds: params.confirmationTtlHours * 60 * 60,
   });
+  // The user reservation and registration state are one aggregate change.
+  // Generate the capability before committing so a signing/configuration
+  // failure cannot leave a pending change that the caller never received.
+  const statements: StatementLike[] = [
+    db
+      .prepare(
+        `UPDATE users
+         SET pending_email = ?, pending_email_expires_at = ?, updated_at = ?
+         WHERE id = ?`,
+      )
+      .bind(pendingEmailToStore, pendingEmailExpiresAt, now, currentUser.id),
+    db
+      .prepare(
+        `UPDATE registrations
+         SET status = 'pending_email_confirmation',
+             confirmation_link_secret = ?,
+             pending_confirmation_deadline_at = ?,
+             confirmation_reminder_sent_at = NULL,
+             confirmed_at = NULL,
+             updated_at = ?
+         WHERE id = ?`,
+      )
+      .bind(confirmationLinkSecret, confirmationDeadlineAt, now, registration.id),
+  ];
+  if (params.auditActor) {
+    statements.push(
+      prepareAuditLog(
+        db,
+        params.auditActor.type,
+        params.auditActor.id,
+        params.auditActor.action,
+        "registration",
+        registration.id,
+        {
+          ...(params.auditActor.eventId ? { eventId: params.auditActor.eventId } : {}),
+          previousEmail: currentUser.email,
+          newEmail: pendingEmailToStore,
+        },
+      ),
+    );
+  }
+  const updated: RegistrationRecord = {
+    ...registration,
+    status: "pending_email_confirmation",
+    confirmation_link_secret: confirmationLinkSecret,
+    pending_confirmation_deadline_at: confirmationDeadlineAt,
+    confirmed_at: null,
+    updated_at: now,
+  };
+  const preparedEmail = params.confirmationEmail
+    ? await prepareRegistrationConfirmationEmail(db, {
+        ...params.confirmationEmail,
+        registrationId: registration.id,
+        recipientEmail: pendingEmailToStore,
+        registration: updated,
+      })
+    : null;
+  if (preparedEmail) statements.push(preparedEmail.statement);
   return {
     registration: updated,
     userId: currentUser.id,
     confirmationToken,
     previousEmail: currentUser.email,
     pendingEmail: pendingEmailToStore,
+    outboxId: preparedEmail?.outboxId ?? null,
+    statements,
   };
+}
+
+export async function changeRegistrationEmail(
+  db: DatabaseLike,
+  params: ChangeRegistrationEmailParams,
+): Promise<ChangeEmailResult> {
+  const prepared = await prepareRegistrationEmailChange(db, params);
+  await db.batch(prepared.statements);
+  const { statements: _statements, ...result } = prepared;
+  return result;
 }
 
 interface FinalizeEmailChangeResult {
@@ -187,6 +236,10 @@ interface FinalizeEmailChangeResult {
   mergedWithRegistrationId: string | null;
   mergedFromUserId: string | null;
   finalEmail: string;
+}
+
+export interface PreparedFinalizeEmailChange extends FinalizeEmailChangeResult {
+  statements: StatementLike[];
 }
 
 /**
@@ -205,20 +258,22 @@ interface FinalizeEmailChangeResult {
  *
  * All mutations run in a single db.batch() for atomicity.
  */
-export async function finalizeEmailChange(
+export async function prepareFinalizeEmailChange(
   db: DatabaseLike,
   params: {
     userId: string;
     eventId: string;
     registrationId: string;
   },
-): Promise<FinalizeEmailChangeResult> {
+): Promise<PreparedFinalizeEmailChange> {
   const now = nowIso();
 
   // Verify registration binding before mutating anything.
-  const registrationBefore = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE id = ?", [
-    params.registrationId,
-  ]);
+  const registrationBefore = await first<RegistrationRecord>(
+    db,
+    `SELECT ${REGISTRATION_COLUMNS} FROM registrations WHERE id = ?`,
+    [params.registrationId],
+  );
   if (!registrationBefore) {
     throw new AppError(404, "REGISTRATION_NOT_FOUND", "Registration not found");
   }
@@ -344,20 +399,37 @@ export async function finalizeEmailChange(
       .bind(user.pending_email, newNormalized, now, user.id),
   );
 
-  await db.batch(stmts);
-
-  const registration = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE id = ?", [
-    params.registrationId,
-  ]);
-
-  if (!registration) {
-    throw new AppError(500, "REGISTRATION_NOT_FOUND", "Registration not found after email change");
-  }
-
   return {
-    registration,
+    registration: registrationBefore,
     mergedWithRegistrationId,
     mergedFromUserId,
     finalEmail: user.pending_email,
+    statements: stmts,
+  };
+}
+
+export async function finalizeEmailChange(
+  db: DatabaseLike,
+  params: {
+    userId: string;
+    eventId: string;
+    registrationId: string;
+  },
+): Promise<FinalizeEmailChangeResult> {
+  const prepared = await prepareFinalizeEmailChange(db, params);
+  await db.batch(prepared.statements);
+  const registration = await first<RegistrationRecord>(
+    db,
+    `SELECT ${REGISTRATION_COLUMNS} FROM registrations WHERE id = ?`,
+    [params.registrationId],
+  );
+  if (!registration) {
+    throw new AppError(500, "REGISTRATION_NOT_FOUND", "Registration not found after email change");
+  }
+  return {
+    registration,
+    mergedWithRegistrationId: prepared.mergedWithRegistrationId,
+    mergedFromUserId: prepared.mergedFromUserId,
+    finalEmail: prepared.finalEmail,
   };
 }

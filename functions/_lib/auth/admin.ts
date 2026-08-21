@@ -2,11 +2,12 @@ import { AppError } from "../errors";
 import { first } from "../db/queries";
 import { normalizeEmail } from "../validation";
 import { signJwt, verifyJwt, type JwtVerifyResult } from "../utils/jwt";
-import { sha256Hex } from "../utils/crypto";
+import { constantTimeEqual, sha256Hex } from "../utils/crypto";
 import { AUTH_SCOPES } from "./scopes";
 import { computeGrantsForUser } from "./permissions";
 import type { AuthAdmin, DatabaseLike, Env } from "../types";
 import {
+  AUTH_MAGIC_LINK_PURPOSES,
   getBearerToken,
   getSessionCookieToken,
   serializeSessionCookie,
@@ -20,6 +21,7 @@ import {
   validateAndConsumeMagicLinkRow,
   type SessionTableConfig,
   type MagicLinkTableConfig,
+  type AuthMagicLinkPurpose,
 } from "./session-engine";
 
 /**
@@ -74,6 +76,7 @@ export interface AdminSessionTokenClaims {
   email: string;
   role: string;
   scopes: string[];
+  scopeRestricted?: boolean;
   state?: string;
   exp: number;
 }
@@ -83,26 +86,18 @@ export const ADMIN_SESSION_COOKIE_NAME = "pkic_admin_session";
 export const ADMIN_SESSION_COOKIE_PATH = "/api/v1";
 
 const SESSIONS_TABLE: SessionTableConfig = { table: "sessions", subjectColumn: "user_id" };
-const MAGIC_LINKS_TABLE: MagicLinkTableConfig = { table: "auth_magic_links", subjectColumn: "user_id" };
+const MAGIC_LINKS_TABLE = { table: "auth_magic_links", subjectColumn: "user_id" } satisfies MagicLinkTableConfig;
+
+export type AdminMagicLinkPurpose = Extract<AuthMagicLinkPurpose, "admin" | "mcp_oauth">;
+
+function adminMagicLinkTable(purpose: AdminMagicLinkPurpose): MagicLinkTableConfig {
+  return { ...MAGIC_LINKS_TABLE, purpose };
+}
 
 const adminByRequest = new WeakMap<Request, AuthAdmin>();
 const adminAuthTransportByRequest = new WeakMap<Request, AdminAuthTransport>();
 
 type AdminAuthTransport = "bearer" | "cookie" | "api-key";
-
-async function sha256Bytes(value: string): Promise<Uint8Array> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return new Uint8Array(digest);
-}
-
-async function constantTimeEqual(a: string, b: string): Promise<boolean> {
-  const [aHash, bHash] = await Promise.all([sha256Bytes(a), sha256Bytes(b)]);
-  let diff = 0;
-  for (let i = 0; i < aHash.length; i++) {
-    diff |= aHash[i] ^ bHash[i];
-  }
-  return diff === 0;
-}
 
 export function cacheAdminForRequest(request: Request, admin: AuthAdmin, transport?: AdminAuthTransport): void {
   adminByRequest.set(request, admin);
@@ -139,6 +134,7 @@ function isAdminSessionTokenClaims(claims: object): claims is AdminSessionTokenC
     typeof candidate.role === "string" &&
     Array.isArray(candidate.scopes) &&
     candidate.scopes.every((scope) => typeof scope === "string") &&
+    (candidate.scopeRestricted === undefined || typeof candidate.scopeRestricted === "boolean") &&
     (candidate.state === undefined || typeof candidate.state === "string")
   );
 }
@@ -151,6 +147,7 @@ export async function signAdminSessionToken(
     expiresAt: string;
     state?: string | null;
     scopes?: string[];
+    scopeRestricted?: boolean;
   },
 ): Promise<string> {
   const claims: AdminSessionTokenClaims = {
@@ -160,6 +157,7 @@ export async function signAdminSessionToken(
     email: payload.admin.email,
     role: payload.admin.role,
     scopes: payload.scopes ?? payload.admin.scopes ?? [...AUTH_SCOPES],
+    scopeRestricted: payload.scopeRestricted ?? payload.admin.scopeRestricted,
     exp: sessionExpiresAtToExp(payload.expiresAt),
   };
 
@@ -224,6 +222,23 @@ export async function requireAdminFromRequest(
 
   const admin = await getAdminBySessionClaims(db, verified.claims);
   cacheAdminForRequest(request, admin, bearerToken ? "bearer" : "cookie");
+  return admin;
+}
+
+/** Require an attributable database user for writes whose audit/history rows reference users(id). */
+export async function requireUserBackedAdminFromRequest(
+  db: DatabaseLike,
+  request: Request,
+  env?: Pick<Env, "ADMIN_API_KEY" | "INTERNAL_SIGNING_SECRET">,
+): Promise<AuthAdmin> {
+  const admin = await requireAdminFromRequest(db, request, env);
+  if (getCachedAdminAuthTransport(request) === "api-key") {
+    throw new AppError(
+      403,
+      "USER_BACKED_ADMIN_REQUIRED",
+      "This action requires an attributable admin session rather than the shared API key",
+    );
+  }
   return admin;
 }
 
@@ -294,6 +309,7 @@ export async function getAdminBySessionClaims(db: DatabaseLike, claims: AdminSes
     email: activeRow.email,
     role: activeRow.role,
     scopes: claims.scopes,
+    scopeRestricted: claims.scopeRestricted ?? false,
     grants,
     sessionId: activeRow.id,
     expiresAt: activeRow.expires_at,
@@ -308,6 +324,7 @@ export async function requestAdminMagicLink(
     ipHash?: string | null;
     userAgentHash?: string | null;
     ttlMinutes: number;
+    purpose?: AdminMagicLinkPurpose;
   },
 ): Promise<{ token: string | null; admin: AuthAdmin | null }> {
   const email = normalizeEmail(payload.email);
@@ -321,7 +338,8 @@ export async function requestAdminMagicLink(
     return { token: null, admin: null };
   }
 
-  const token = await insertMagicLinkRow(db, MAGIC_LINKS_TABLE, admin.id, payload);
+  const purpose = payload.purpose ?? AUTH_MAGIC_LINK_PURPOSES.admin;
+  const token = await insertMagicLinkRow(db, adminMagicLinkTable(purpose), admin.id, payload);
 
   return {
     token,
@@ -335,9 +353,16 @@ export async function requestAdminMagicLink(
 
 export async function verifyAdminMagicLink(
   db: DatabaseLike,
-  payload: { token: string; sessionTtlHours: number; ipHash?: string | null; userAgentHash?: string | null },
+  payload: {
+    token: string;
+    sessionTtlHours: number;
+    ipHash?: string | null;
+    userAgentHash?: string | null;
+    purpose?: AdminMagicLinkPurpose;
+  },
 ): Promise<{ admin: AuthAdmin; sessionId: string; expiresAt: string }> {
   const tokenHash = await sha256Hex(payload.token);
+  const purpose = payload.purpose ?? AUTH_MAGIC_LINK_PURPOSES.admin;
   const row = await first<{
     id: string;
     user_id: string;
@@ -352,8 +377,8 @@ export async function verifyAdminMagicLink(
     `SELECT m.id, m.user_id, m.expires_at, m.used_at, m.request_ip_hash, m.user_agent_hash, u.email, u.role
      FROM auth_magic_links m
      JOIN users u ON u.id = m.user_id
-     WHERE m.token_hash = ? AND u.active = 1 AND ${STAFF_ACCESS_CONDITION}`,
-    [tokenHash],
+     WHERE m.token_hash = ? AND m.purpose = ? AND u.active = 1 AND ${STAFF_ACCESS_CONDITION}`,
+    [tokenHash, purpose],
   );
 
   if (!row) {

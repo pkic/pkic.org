@@ -5,6 +5,27 @@ function parseIntOrDefault(value: string | undefined, defaultValue: number): num
   return Number.isFinite(parsed) ? parsed : defaultValue;
 }
 
+export const DEFAULT_RSVP_INBOUND_EMAIL_MAX_BYTES = 5 * 1024 * 1024;
+export const DEFAULT_CSV_EXPORT_MAX_ROWS = 5_000;
+export const DEFAULT_CSV_EXPORT_MAX_BYTES = 8 * 1024 * 1024;
+
+export function getRsvpInboundEmailMaxBytes(env: Pick<Env, "RSVP_INBOUND_EMAIL_MAX_BYTES">): number {
+  return Math.min(
+    25 * 1024 * 1024,
+    Math.max(64 * 1024, parseIntOrDefault(env.RSVP_INBOUND_EMAIL_MAX_BYTES, DEFAULT_RSVP_INBOUND_EMAIL_MAX_BYTES)),
+  );
+}
+
+export function getCsvExportLimits(env: Pick<Env, "CSV_EXPORT_MAX_ROWS" | "CSV_EXPORT_MAX_BYTES">) {
+  return {
+    maxRows: Math.min(25_000, Math.max(1, parseIntOrDefault(env.CSV_EXPORT_MAX_ROWS, DEFAULT_CSV_EXPORT_MAX_ROWS))),
+    maxBytes: Math.min(
+      32 * 1024 * 1024,
+      Math.max(64 * 1024, parseIntOrDefault(env.CSV_EXPORT_MAX_BYTES, DEFAULT_CSV_EXPORT_MAX_BYTES)),
+    ),
+  };
+}
+
 function toOrigin(value: string | undefined): string | null {
   if (!value) {
     return null;
@@ -68,20 +89,24 @@ export function getConfig(env: Env, request?: Request) {
     ),
     scheduledReminderLimit: parseIntOrDefault(env.SCHEDULED_REMINDER_LIMIT, 120),
     scheduledOutboxLimit: parseIntOrDefault(env.SCHEDULED_OUTBOX_LIMIT, 120),
+    scheduledBadgeRenderLimit: Math.min(25, Math.max(0, parseIntOrDefault(env.SCHEDULED_BADGE_RENDER_LIMIT, 5))),
+    scheduledStorageDeletionLimit: parseIntOrDefault(env.SCHEDULED_STORAGE_DELETION_LIMIT, 25),
     scheduledWaitlistPromotionLimit: parseIntOrDefault(env.SCHEDULED_WAITLIST_PROMOTION_LIMIT, 120),
     scheduledDueWorkMaxPasses: parseIntOrDefault(env.SCHEDULED_DUE_WORK_MAX_PASSES, 50),
     scheduledDueWorkMaxMs: parseIntOrDefault(env.SCHEDULED_DUE_WORK_MAX_MS, 600_000),
-    scheduledDueWorkMaxSubrequests: parseIntOrDefault(env.SCHEDULED_DUE_WORK_MAX_SUBREQUESTS, 9_000),
-    // Shared budget for the REMINDER_CRON job registry (functions/router.ts)
-    // that dispatches runScheduledDueWork + the sibling membership/
-    // sponsorship/votes due-work jobs — leaves headroom before the next
-    // 15-minute cron tick fires. Per-pass item limits below bound each
-    // individual job's own query so no single pass can scan an unbounded
-    // due-row set (PR #1 review §9.1).
-    reminderCronBudgetMs: parseIntOrDefault(env.REMINDER_CRON_BUDGET_MS, 780_000),
+    // D1 allows a finite number of statements per Worker invocation and
+    // counts each statement in batch(). Keep explicit headroom for logging
+    // and platform/runtime behavior rather than attempting to infer this
+    // from row counts or HTTP subrequests.
+    scheduledD1QueryBudget: Math.min(950, Math.max(1, parseIntOrDefault(env.SCHEDULED_D1_QUERY_BUDGET, 900))),
     scheduledOnHoldReminderLimit: parseIntOrDefault(env.SCHEDULED_ON_HOLD_REMINDER_LIMIT, 100),
     scheduledEcAutoApproveLimit: parseIntOrDefault(env.SCHEDULED_EC_AUTO_APPROVE_LIMIT, 100),
     scheduledSponsorshipDueWorkLimit: parseIntOrDefault(env.SCHEDULED_SPONSORSHIP_DUE_WORK_LIMIT, 100),
+    scheduledVoteNotificationLimit: parseIntOrDefault(env.SCHEDULED_VOTE_NOTIFICATION_LIMIT, 100),
+    adminCampaignMaxRecipients: Math.min(
+      10_000,
+      Math.max(1, parseIntOrDefault(env.ADMIN_CAMPAIGN_MAX_RECIPIENTS, 2_000)),
+    ),
     sendgridApiBase: env.SENDGRID_API_BASE ?? "https://api.sendgrid.com/v3/mail/send",
   };
 }

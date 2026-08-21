@@ -7,14 +7,25 @@ import {
   findInviteByToken,
   setInviteRemindersPausedUntil,
 } from "../../../../_lib/services/invites";
-import { inviteReminderPreferenceSchema } from "../../../../../assets/shared/schemas/api";
+import {
+  inviteCapabilityQuerySchema,
+  inviteReminderPreferenceRouteSchema,
+  inviteReminderPreferenceSchema,
+} from "../../../../../assets/shared/schemas/invites";
 import { requireInternalSecret } from "../../../../_lib/request";
+import { openApiRoute } from "../../../../_lib/openapi/route";
+import type { AdminContext } from "../../../../_lib/db/context";
 
-export async function onRequestPost(c: any): Promise<Response> {
-  c.set("sensitive", true);
-  const body = await parseJsonBody(c.req, inviteReminderPreferenceSchema);
-  const inviteId = new URL(c.req.raw.url).searchParams.get("id");
-  const invite = await findInviteByToken(c.env.DB, c.req.param("token"), requireInternalSecret(c.env), inviteId);
+type ReminderAction = "postpone_7d" | "pause_30d" | "resume" | "unsubscribe";
+
+async function updateInviteReminderPreference(
+  c: AdminContext,
+  token: string,
+  inviteId: string | undefined,
+  body: { action: ReminderAction },
+): Promise<Response> {
+  c.set?.("sensitive", true);
+  const invite = await findInviteByToken(c.env.DB, token, requireInternalSecret(c.env), inviteId ?? null);
 
   if (body.action === "unsubscribe") {
     await declineInvite(c.env.DB, {
@@ -40,6 +51,17 @@ export async function onRequestPost(c: any): Promise<Response> {
     state: body.action === "postpone_7d" ? "postponed" : "paused",
     pausedUntil,
   });
+}
+
+export const InviteRemindersPost = openApiRoute(inviteReminderPreferenceRouteSchema, (c: AdminContext, data) =>
+  updateInviteReminderPreference(c, data.params.token, data.query.id, data.body),
+);
+
+/** Compatibility export for direct endpoint tests. */
+export async function onRequestPost(c: AdminContext): Promise<Response> {
+  const body = await parseJsonBody(c.req, inviteReminderPreferenceSchema);
+  const query = inviteCapabilityQuerySchema.parse(Object.fromEntries(new URL(c.req.raw.url).searchParams));
+  return updateInviteReminderPreference(c, c.req.param("token"), query.id, body);
 }
 
 export async function onRequest(c: any): Promise<Response> {

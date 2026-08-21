@@ -8,7 +8,7 @@
  * non-member sponsor use case"), so the identity being authenticated is a
  * `sponsorships.id`, not a `users.id`. `auth_magic_links`/`sessions` are
  * both `user_id NOT NULL`, so this uses its own tables
- * (`sponsor_portal_magic_links`/`sponsor_portal_sessions`, migration 0042)
+ * (`sponsor_portal_magic_links`/`sponsor_portal_sessions`, consolidated migration 0035)
  * with the same shape, and a distinct JWT `typ` claim so a sponsor-portal
  * session can never be replayed against an admin/member endpoint or vice
  * versa.
@@ -34,6 +34,7 @@ import {
   assertSessionActive,
   revokeSessionRow,
   insertMagicLinkRow,
+  prepareMagicLinkRow,
   fetchMagicLinkRowByToken,
   validateAndConsumeMagicLinkRow,
   type SessionTableConfig,
@@ -259,6 +260,14 @@ export async function issueSponsorPortalMagicLinkForSponsorship(
   payload: { ipHash?: string | null; userAgentHash?: string | null; ttlMinutes: number },
 ): Promise<string> {
   return insertMagicLinkRow(db, MAGIC_LINKS_TABLE, sponsorshipId, payload);
+}
+
+export async function prepareSponsorPortalMagicLinkForSponsorship(
+  db: DatabaseLike,
+  sponsorshipId: string,
+  payload: { ipHash?: string | null; userAgentHash?: string | null; ttlMinutes: number },
+) {
+  return prepareMagicLinkRow(db, MAGIC_LINKS_TABLE, sponsorshipId, payload);
 }
 
 export async function verifySponsorPortalMagicLink(

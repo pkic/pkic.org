@@ -33,56 +33,60 @@ async function seedInvite(
   return { userId, inviteId };
 }
 
+async function seedWaitlistedVipScenario(): Promise<{
+  adminToken: string;
+  eventId: string;
+  registrationId: string;
+}> {
+  const { eventId } = await seedEventAndAdmin(env.DB);
+  await env.DB.prepare(
+    `INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
+     VALUES ('day-1', ?, '2026-12-01', 'Day 1', 1, 10, datetime('now'), datetime('now'))`,
+  )
+    .bind(eventId)
+    .run();
+  const adminId = (
+    await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
+  )[0].id;
+  const adminToken = await createAdminSession(env.DB, adminId, "admin-token");
+  const holderSeed = await seedInvite(env.DB, eventId, "holder@example.test");
+  const vipSeed = await seedInvite(env.DB, eventId, "vip@example.test");
+  const event = await getEventBySlug(env.DB, "pqc-2026");
+  await createRegistration(env.DB, {
+    event,
+    userId: holderSeed.userId,
+    attendanceType: "in_person",
+    dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+    sourceType: "invite",
+    inviteId: holderSeed.inviteId,
+    confirmationTtlHours: 48,
+    signingSecret: "test-signing-secret",
+  });
+  const vipRegistration = await createRegistration(env.DB, {
+    event,
+    userId: vipSeed.userId,
+    attendanceType: "in_person",
+    dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+    sourceType: "invite",
+    inviteId: vipSeed.inviteId,
+    confirmationTtlHours: 48,
+    signingSecret: "test-signing-secret",
+  });
+  return { adminToken, eventId, registrationId: vipRegistration.registration.id };
+}
+
 describe("admin VIP admit", () => {
   beforeEach(async () => {
     await resetDb();
   });
   it("admits waitlisted day attendance as capacity exempt and logs audit", async () => {
-    const { eventId } = await seedEventAndAdmin(env.DB);
-
-    await env.DB.prepare(
-      `
-      INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
-      VALUES ('day-1', '${eventId}', '2026-12-01', 'Day 1', 1, 10, datetime('now'), datetime('now'));
-    `,
-    ).run();
-
-    const adminId = (
-      await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
-    )[0].id;
-    const adminToken = await createAdminSession(env.DB, adminId, "admin-token");
-
-    const holderSeed = await seedInvite(env.DB, eventId, "holder@example.test");
-    const vipSeed = await seedInvite(env.DB, eventId, "vip@example.test");
-    const event = await getEventBySlug(env.DB, "pqc-2026");
-
-    await createRegistration(env.DB, {
-      event,
-      userId: holderSeed.userId,
-      attendanceType: "in_person",
-      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
-      sourceType: "invite",
-      inviteId: holderSeed.inviteId,
-      confirmationTtlHours: 48,
-      signingSecret: "test-signing-secret",
-    });
-
-    const vipRegistration = await createRegistration(env.DB, {
-      event,
-      userId: vipSeed.userId,
-      attendanceType: "in_person",
-      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
-      sourceType: "invite",
-      inviteId: vipSeed.inviteId,
-      confirmationTtlHours: 48,
-      signingSecret: "test-signing-secret",
-    });
+    const { adminToken, registrationId } = await seedWaitlistedVipScenario();
 
     const before = (
       await queryAll<{ status: string }>(
         env.DB,
         "SELECT status FROM event_day_waitlist_entries WHERE registration_id = ? AND event_day_id = 'day-1'",
-        [vipRegistration.registration.id],
+        [registrationId],
       )
     )[0];
     expect(before.status).toBe("waiting");
@@ -102,7 +106,7 @@ describe("admin VIP admit", () => {
             dayDates: ["2026-12-01"],
           }),
         }),
-        { eventSlug: "pqc-2026", registrationId: vipRegistration.registration.id },
+        { eventSlug: "pqc-2026", registrationId },
       ),
     );
 
@@ -112,7 +116,7 @@ describe("admin VIP admit", () => {
       await queryAll<{ capacity_exempt_in_person: number; capacity_exempt_reason: string | null }>(
         env.DB,
         "SELECT capacity_exempt_in_person, capacity_exempt_reason FROM registrations WHERE id = ?",
-        [vipRegistration.registration.id],
+        [registrationId],
       )
     )[0];
 
@@ -123,7 +127,7 @@ describe("admin VIP admit", () => {
       await queryAll<{ status: string }>(
         env.DB,
         "SELECT status FROM event_day_waitlist_entries WHERE registration_id = ? AND event_day_id = 'day-1'",
-        [vipRegistration.registration.id],
+        [registrationId],
       )
     )[0];
     expect(waitlist.status).toBe("removed");
@@ -132,7 +136,7 @@ describe("admin VIP admit", () => {
       await queryAll<{ total: number }>(
         env.DB,
         "SELECT COUNT(*) AS total FROM audit_log WHERE action = 'registration_admitted' AND entity_id = ?",
-        [vipRegistration.registration.id],
+        [registrationId],
       )
     )[0];
     expect(Number(audit.total)).toBe(1);
@@ -152,5 +156,54 @@ describe("admin VIP admit", () => {
     expect(payload.adminAdmitNotice).toBe(true);
     expect(payload.dayWaitlist).toEqual([]);
     expect(payload.dayAttendance?.[0]?.statusLabel).toBe("Confirmed in-person attendance");
+  });
+
+  it("rolls back admission, waitlist, audit, and attendance when the durable email intent fails", async () => {
+    const { adminToken, registrationId } = await seedWaitlistedVipScenario();
+    await env.DB.prepare(
+      `CREATE TRIGGER reject_admission_email
+       BEFORE INSERT ON email_outbox
+       WHEN NEW.template_key = 'registration_updated'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced admission email failure');
+       END`,
+    ).run();
+    try {
+      await expect(
+        admitRegistration(
+          createContext(
+            env,
+            new Request("https://app.test/api/v1/admin/events/pqc-2026/registrations/x/admit", {
+              method: "POST",
+              headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
+              body: JSON.stringify({ mode: "vip", reason: "Rollback proof", dayDates: ["2026-12-01"] }),
+            }),
+            { eventSlug: "pqc-2026", registrationId },
+          ),
+        ),
+      ).rejects.toThrow(/forced admission email failure/);
+
+      const [registration] = await queryAll<{
+        capacity_exempt_in_person: number;
+        capacity_exempt_reason: string | null;
+      }>(env.DB, "SELECT capacity_exempt_in_person, capacity_exempt_reason FROM registrations WHERE id = ?", [
+        registrationId,
+      ]);
+      const [waitlist] = await queryAll<{ status: string }>(
+        env.DB,
+        "SELECT status FROM event_day_waitlist_entries WHERE registration_id = ? AND event_day_id = 'day-1'",
+        [registrationId],
+      );
+      const [audit] = await queryAll<{ total: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS total FROM audit_log WHERE action = 'registration_admitted' AND entity_id = ?",
+        [registrationId],
+      );
+      expect(registration).toEqual({ capacity_exempt_in_person: 0, capacity_exempt_reason: null });
+      expect(waitlist.status).toBe("waiting");
+      expect(Number(audit.total)).toBe(0);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER reject_admission_email").run();
+    }
   });
 });

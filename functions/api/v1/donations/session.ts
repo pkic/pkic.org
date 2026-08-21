@@ -14,16 +14,7 @@ import { donationSessionGetRouteSchema, donationSessionQuerySchema } from "../..
 import { json } from "../../../_lib/http";
 import type { Env } from "../../../_lib/types";
 import { openApiRoute } from "../../../_lib/openapi/route";
-interface DonationBadgeRow {
-  gross_amount: number;
-  currency: string;
-  name: string;
-  source: string | null;
-  completed_at: string | null;
-  status: string;
-  payment_method_type: string | null;
-  session_expires_at: number | null;
-}
+import { getDonationBadgeBySession } from "../../../_lib/services/donations";
 
 export async function onRequestGet(c: any): Promise<Response> {
   const env: Env = c.env;
@@ -36,13 +27,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   }
   const sessionId = query.data.session_id;
 
-  const row = await env.DB.prepare(
-    `SELECT gross_amount, currency, name, source, completed_at, status, payment_method_type, session_expires_at
-     FROM donations
-     WHERE checkout_session_id = ?`,
-  )
-    .bind(sessionId)
-    .first<DonationBadgeRow>();
+  const row = await getDonationBadgeBySession(env.DB, sessionId);
 
   if (!row) {
     // Either not found or not yet created (race condition at checkout)

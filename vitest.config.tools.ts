@@ -8,6 +8,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: ["tests/tools/**/*.test.ts"],
+    exclude: ["**/._*"],
     environment: "node",
     // The fresh-D1 smoke test shells out to real wrangler/workerd processes
     // (migrations apply + d1 execute) — observed 42-55s even on an

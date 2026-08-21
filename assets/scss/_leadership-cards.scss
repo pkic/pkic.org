@@ -230,14 +230,16 @@
 }
 
 // ─── Avatar frame — the colored "Open to Work"-style ring ─────────────────────
-// The frame size is driven by the CSS custom property --avatar-px set inline.
+// Public leadership cards use the default size. The OG-card variant opts into
+// the one smaller supported size with a modifier class, keeping CSP-compatible
+// presentation details in SCSS.
 
 .person-card-avatar-frame {
+  --avatar-px: 80px;
+
   position: relative;
   flex-shrink: 0;
-  width: calc(
-    var(--avatar-px, 80px) + 8px
-  ); // +8px for 3px ring on each side + 1px gap
+  width: calc(var(--avatar-px, 80px) + 8px); // +8px for 3px ring on each side + 1px gap
   height: calc(var(--avatar-px, 80px) + 8px);
   border-radius: 50%;
   // Active ring: solid green
@@ -248,6 +250,10 @@
 
   &--past {
     border-color: $gray-300;
+  }
+
+  &--small {
+    --avatar-px: 72px;
   }
 }
 

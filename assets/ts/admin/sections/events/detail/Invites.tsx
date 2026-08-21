@@ -42,9 +42,7 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
   const [previewToken, setPreviewToken] = useState<string | null>(null);
   const [inviteDigest, setInviteDigest] = useState<string | null>(null);
   const [previewConfirmed, setPreviewConfirmed] = useState(false);
-  const [previewStatus, setPreviewStatus] = useState(
-    inviteType === "attendee" ? "Preview required before sending." : "",
-  );
+  const [previewStatus, setPreviewStatus] = useState("Preview required before sending.");
   const [sendStatus, setSendStatus] = useState("");
   const [sending, setSending] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -66,7 +64,7 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
     setPreviewToken(null);
     setInviteDigest(null);
     setPreviewConfirmed(false);
-    if (inviteType === "attendee") setPreviewStatus("Preview required before sending.");
+    setPreviewStatus("Preview required before sending.");
     toast(
       `Parsed ${valid.length} invite${valid.length !== 1 ? "s" : ""}${skipped ? `, ${skipped} skipped` : ""}`,
       "success",
@@ -90,7 +88,7 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
       setPreviewToken(null);
       setInviteDigest(null);
       setPreviewConfirmed(false);
-      if (inviteType === "attendee") setPreviewStatus("Preview required before sending.");
+      setPreviewStatus("Preview required before sending.");
       toast(
         `Loaded ${valid.length} invite${valid.length !== 1 ? "s" : ""} from file${skipped ? `, ${skipped} skipped` : ""}`,
         "success",
@@ -133,7 +131,7 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
         text: string;
         previewToken: string;
         inviteDigest: string;
-      }>(`/api/v1/admin/events/${slug}/invites/attendees/preview`, {
+      }>(`/api/v1/admin/events/${slug}/invites/${inviteType}s/preview`, {
         method: "POST",
         body: JSON.stringify({ invites }),
       });
@@ -152,7 +150,7 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
   }
 
   async function handleSend() {
-    if (inviteType === "attendee" && !previewConfirmed) {
+    if (!previewConfirmed) {
       toast("Review the preview and tick the confirmation checkbox first.", "error");
       return;
     }
@@ -163,26 +161,14 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
       const invites = validRows.map(({ email, firstName, lastName }) => ({ email, firstName, lastName }));
       const CHUNK = 500;
       let total = 0;
-      if (inviteType === "attendee") {
-        for (let i = 0; i < invites.length; i += CHUNK) {
-          const chunk = invites.slice(i, i + CHUNK);
-          await api(`/api/v1/admin/events/${slug}/invites/attendees/bulk`, {
-            method: "POST",
-            body: JSON.stringify({ previewToken, inviteDigest, invites: chunk }),
-          });
-          total += chunk.length;
-          setSendStatus(`Sent ${total} of ${invites.length}…`);
-        }
-      } else {
-        for (let i = 0; i < invites.length; i += CHUNK) {
-          const chunk = invites.slice(i, i + CHUNK);
-          await api(`/api/v1/admin/events/${slug}/invites/speakers/bulk`, {
-            method: "POST",
-            body: JSON.stringify({ invites: chunk }),
-          });
-          total += chunk.length;
-          setSendStatus(`Sent ${total} of ${invites.length}…`);
-        }
+      for (let i = 0; i < invites.length; i += CHUNK) {
+        const chunk = invites.slice(i, i + CHUNK);
+        await api(`/api/v1/admin/events/${slug}/invites/${inviteType}s/bulk`, {
+          method: "POST",
+          body: JSON.stringify({ previewToken, inviteDigest, invites: chunk }),
+        });
+        total += chunk.length;
+        setSendStatus(`Sent ${total} of ${invites.length}…`);
       }
       toast(`Sent ${total} ${typeLabel} invites`, "success");
       setSendStatus(`✓ Sent ${total} invites`);
@@ -192,7 +178,7 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
       setPreviewToken(null);
       setInviteDigest(null);
       setPreviewConfirmed(false);
-      if (inviteType === "attendee") setPreviewStatus("Preview required before sending.");
+      setPreviewStatus("Preview required before sending.");
     } catch (e) {
       const msg = (e as Error).message;
       setSendStatus(msg);
@@ -202,7 +188,7 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
     }
   }
 
-  const canSend = inviteType === "speaker" || previewConfirmed;
+  const canSend = previewConfirmed;
 
   return (
     <div>
@@ -280,11 +266,9 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
         <button type="button" class="btn btn-sm btn-outline-secondary" onClick={addRow}>
           + Add row
         </button>
-        {inviteType === "attendee" && (
-          <button type="button" class="btn btn-sm btn-outline-primary" onClick={() => void handlePreview()}>
-            Preview Email
-          </button>
-        )}
+        <button type="button" class="btn btn-sm btn-outline-primary" onClick={() => void handlePreview()}>
+          Preview Email
+        </button>
         <button
           type="button"
           class="btn btn-sm btn-success"

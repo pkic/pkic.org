@@ -5,7 +5,6 @@
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
-import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { getAdminOrganization, updateAdminOrganization } from "../../../../../_lib/services/admin-organizations";
 import {
   organizationGetRouteSchema,
@@ -28,9 +27,7 @@ export const OrganizationUpdate = openApiRoute(organizationUpdateRouteSchema, as
 
   const id = data.params.id;
   const body = data.body;
-  const organization = await updateAdminOrganization(requestDb(c), id, body);
-
-  await writeAuditLog(requestDb(c), "admin", admin.id, "organization_updated", "organization", id, body);
+  const organization = await updateAdminOrganization(requestDb(c), admin.id, id, body);
 
   return json({ organization });
 });

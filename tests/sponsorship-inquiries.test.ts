@@ -60,6 +60,9 @@ describe("POST /api/v1/sponsorship/inquiries", () => {
     expect(rows[0].pipeline_stage).toBe("new_inquiry");
     expect(rows[0].tier).toBe("Gold");
     expect(rows[0].notes).toBe("Interested in learning more.");
+    expect(
+      await queryAll(testEnv.DB, "SELECT id FROM audit_log WHERE action = 'sponsorship_inquiry_submitted'"),
+    ).toHaveLength(1);
   });
 
   it("infers sponsor_type=event when an eventId is provided", async () => {
@@ -155,5 +158,68 @@ describe("POST /api/v1/sponsorship/inquiries", () => {
       createContext(testEnv, postRequest("https://pkic.org/api/v1/sponsorship/inquiries", {}), {}),
     );
     expect(response.status).toBe(400);
+  });
+
+  it("rejects a tier outside the active shared catalogue", async () => {
+    const testEnv = makeEnv();
+    const response = await callEndpoint(
+      createInquiry,
+      createContext(
+        testEnv,
+        postRequest("https://pkic.org/api/v1/sponsorship/inquiries", {
+          contactName: "Dana Sponsor",
+          contactEmail: "dana@sponsor-corp.test",
+          organizationName: "Sponsor Corp",
+          desiredTier: "Hardcoded Future Tier",
+        }),
+        {},
+      ),
+    );
+
+    expect(response.status).toBe(422);
+    expect(await queryAll(testEnv.DB, "SELECT id FROM sponsorships")).toHaveLength(0);
+  });
+
+  it("rolls back the sponsorship, event, emails, and audit as one transaction", async () => {
+    const testEnv = makeEnv();
+    await testEnv.DB.prepare(
+      `CREATE TRIGGER fail_sponsorship_inquiry_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'sponsorship_inquiry_submitted'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced sponsorship inquiry audit failure');
+       END`,
+    ).run();
+
+    try {
+      const response = await callEndpoint(
+        createInquiry,
+        createContext(
+          testEnv,
+          postRequest("https://pkic.org/api/v1/sponsorship/inquiries", {
+            contactName: "Dana Sponsor",
+            contactEmail: "dana@sponsor-corp.test",
+            organizationName: "Sponsor Corp",
+            desiredTier: "Gold",
+          }),
+          {},
+        ),
+      );
+
+      expect(response.status).toBe(500);
+      expect(await queryAll(testEnv.DB, "SELECT id FROM sponsorships")).toHaveLength(0);
+      expect(await queryAll(testEnv.DB, "SELECT id FROM sponsorship_events")).toHaveLength(0);
+      expect(
+        await queryAll(
+          testEnv.DB,
+          "SELECT id FROM email_outbox WHERE template_key IN ('sponsorship-brochure', 'sponsorship-new-inquiry')",
+        ),
+      ).toHaveLength(0);
+      expect(
+        await queryAll(testEnv.DB, "SELECT id FROM audit_log WHERE action = 'sponsorship_inquiry_submitted'"),
+      ).toHaveLength(0);
+    } finally {
+      await testEnv.DB.prepare("DROP TRIGGER fail_sponsorship_inquiry_audit").run();
+    }
   });
 });

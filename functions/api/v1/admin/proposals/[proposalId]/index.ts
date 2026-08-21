@@ -8,76 +8,32 @@ import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getProposalAccessForEvent } from "../../../../../_lib/auth/proposal-access";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
-import { first } from "../../../../../_lib/db/queries";
 import { getConfig } from "../../../../../_lib/config";
-import { getActiveFormByPurpose } from "../../../../../_lib/services/forms";
-import { parseJsonSafe } from "../../../../../_lib/utils/json";
-import type { ProposalListRecord } from "../../../../../_lib/services/proposals";
-import { resolveSessionTypes } from "../../../../../_lib/services/events";
+import { getAdminProposalDetailData } from "../../../../../_lib/services/proposal-admin-detail";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
-import { omitCapabilitySecrets } from "../../../../../_lib/services/capability-links";
 import { proposalIdParamsSchema } from "../../../../../../assets/shared/schemas/api";
+import { adminProposalDetailResponseSchema } from "../../../../../../assets/shared/schemas/admin-event-proposals";
 
 export async function onRequestGet(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const proposalId = c.req.param("proposalId");
-
-  const proposal = await first<ProposalListRecord>(
-    requestDb(c),
-    `SELECT
-       sp.*,
-       u.email      AS proposer_email,
-       u.first_name AS proposer_first_name,
-       u.last_name  AS proposer_last_name,
-       COALESCE(rv.review_count, 0) AS review_count,
-       pd.final_status AS decision_status,
-       pd.decision_note AS decision_note,
-       pd.decided_at AS decision_decided_at
-     FROM session_proposals sp
-     JOIN users u ON u.id = sp.proposer_user_id
-     LEFT JOIN (
-       SELECT proposal_id, COUNT(*) AS review_count
-       FROM proposal_reviews
-       GROUP BY proposal_id
-     ) rv ON rv.proposal_id = sp.id
-     LEFT JOIN proposal_decisions pd ON pd.proposal_id = sp.id
-     WHERE sp.id = ?`,
-    [proposalId],
-  );
-
-  if (!proposal) {
+  const detail = await getAdminProposalDetailData(requestDb(c), proposalId);
+  if (!detail) {
     return json({ error: { code: "PROPOSAL_NOT_FOUND", message: "Proposal not found" } }, 404);
   }
 
-  const access = await getProposalAccessForEvent(requestDb(c), proposal.event_id, admin);
+  const access = await getProposalAccessForEvent(requestDb(c), detail.eventId, admin);
   const config = getConfig(c.env, c.req.raw);
-  const [proposalForm, eventRow] = await Promise.all([
-    getActiveFormByPurpose(requestDb(c), proposal.event_id, "proposal_submission"),
-    first<{ settings_json: string }>(requestDb(c), "SELECT settings_json FROM events WHERE id = ?", [
-      proposal.event_id,
-    ]),
-  ]);
-  const eventSettings = parseJsonSafe<{ proposal?: { sessionTypes?: unknown[] } }>(eventRow?.settings_json ?? "{}", {});
-  const sessionTypes = resolveSessionTypes(eventSettings);
 
-  return json({
-    proposal: {
-      ...omitCapabilitySecrets(proposal),
-      details: parseJsonSafe<Record<string, unknown> | null>(proposal.details_json, null),
-    },
-    access,
-    form:
-      proposalForm == null
-        ? null
-        : {
-            id: proposalForm.id,
-            title: proposalForm.title,
-            description: proposalForm.description,
-            fields: proposalForm.fields,
-          },
-    minReviewsRequired: config.minProposalReviews,
-    sessionTypes,
-  });
+  return json(
+    adminProposalDetailResponseSchema.parse({
+      proposal: detail.proposal,
+      access,
+      form: detail.form,
+      minReviewsRequired: config.minProposalReviews,
+      sessionTypes: detail.sessionTypes,
+    }),
+  );
 }
 
 export const AdminProposalsProposalIdGet = openApiRoute(
@@ -88,7 +44,10 @@ export const AdminProposalsProposalIdGet = openApiRoute(
       params: proposalIdParamsSchema,
     },
     responses: {
-      "200": { description: "Proposal details visible to the authenticated actor." },
+      "200": {
+        description: "Proposal details visible to the authenticated actor.",
+        content: { "application/json": { schema: adminProposalDetailResponseSchema } },
+      },
       "401": { description: "Missing or invalid authentication." },
       "404": { description: "Proposal not found." },
     },

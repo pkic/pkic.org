@@ -5,7 +5,9 @@
  * still composes a real `LIMIT`/`OFFSET` + `COUNT(*)` bound rather than
  * returning every row unbounded, matching every other admin list endpoint.
  */
-import { all, first } from "../../db/queries";
+import { queryPage } from "../../db/pagination";
+import { buildD1TextSearchFilter } from "../../db/search";
+import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
 
 export interface AdminFormSummaryRow {
@@ -34,12 +36,62 @@ const FORMS_LIST_FROM = `
 
 export async function listAdminForms(
   db: DatabaseLike,
-  params: { limit: number; offset: number },
+  params: {
+    limit: number;
+    offset: number;
+    q?: string;
+    sort?: string;
+    purpose?: string;
+    eventId?: string;
+    includeGlobal?: boolean;
+  },
 ): Promise<{ forms: AdminFormSummaryRow[]; total: number }> {
-  const [forms, totalRow] = await Promise.all([
-    all<AdminFormSummaryRow>(
-      db,
-      `SELECT
+  const conditions: string[] = [];
+  const bindings: unknown[] = [];
+  if (params.eventId) {
+    conditions.push(
+      params.includeGlobal
+        ? "((f.scope_type = 'event' AND f.scope_ref = ?) OR f.scope_type = 'global')"
+        : "f.scope_type = 'event' AND f.scope_ref = ?",
+    );
+    bindings.push(params.eventId);
+  }
+  if (params.purpose) {
+    conditions.push("f.purpose = ?");
+    bindings.push(params.purpose);
+  }
+  if (params.q) {
+    const search = buildD1TextSearchFilter(params.q, [
+      "f.key",
+      "f.title",
+      "f.description",
+      "f.purpose",
+      "f.status",
+      "e.name",
+      "e.slug",
+    ]);
+    conditions.push(search.sql);
+    bindings.push(...search.bindings);
+  }
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  const orderBy = resolveMappedOrderBy(
+    params.sort,
+    {
+      key: "f.key COLLATE NOCASE",
+      title: "f.title COLLATE NOCASE",
+      purpose: "f.purpose",
+      status: "f.status",
+      scopeType: "f.scope_type",
+      updatedAt: "f.updated_at",
+      submissionCount: "submission_count",
+    },
+    "f.scope_type ASC, f.purpose ASC, f.updated_at DESC",
+    "f.id ASC",
+  );
+  const { rows: forms, total } = await queryPage<AdminFormSummaryRow>(
+    db,
+    {
+      sql: `SELECT
          f.*,
          e.slug AS event_slug,
          e.name AS event_name,
@@ -62,13 +114,20 @@ export async function listAdminForms(
                  )
              ) ELSE 0 END AS submission_count
        ${FORMS_LIST_FROM}
+       ${where}
        GROUP BY f.id
-       ORDER BY f.scope_type ASC, f.purpose ASC, f.updated_at DESC
+       ${orderBy}
        LIMIT ? OFFSET ?`,
-      [params.limit, params.offset],
-    ),
-    first<{ total: number }>(db, `SELECT COUNT(*) AS total FROM forms f`),
-  ]);
+      bindings: [...bindings, params.limit, params.offset],
+    },
+    {
+      sql: `SELECT COUNT(*) AS total
+            FROM forms f
+            LEFT JOIN events e ON e.id = f.scope_ref AND f.scope_type = 'event'
+            ${where}`,
+      bindings,
+    },
+  );
 
-  return { forms, total: totalRow?.total ?? 0 };
+  return { forms, total };
 }

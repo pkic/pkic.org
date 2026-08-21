@@ -117,6 +117,7 @@ async function authorizationHeaderForMcp(
     expiresAt: oauthProps.sessionExpiresAt,
     state: oauthProps.state ?? null,
     scopes: oauthProps.scopes,
+    scopeRestricted: true,
   });
 
   return `Bearer ${token}`;

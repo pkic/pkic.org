@@ -2,11 +2,11 @@
  * Organization representative role grants (primary contact, secondary
  * contact, voting delegate) — ordinary `user_roles` rows scoped
  * `context_type='organization'`, `context_id=members.id`, reusing the
- * existing roles/user_roles RBAC system (migration 0038) instead of a
+ * existing roles/user_roles RBAC system (consolidated migration 0035) instead of a
  * second, bespoke role table.
  *
  * Each of the three is a singleton per organization
- * (`uq_user_roles_single_holder_per_context`, migration 0038): assigning a
+ * (`uq_user_roles_single_holder_per_context`, consolidated migration 0035): assigning a
  * new holder revokes the previous active grant in the same `db.batch()`.
  */
 import { all, first } from "../../db/queries";
@@ -40,6 +40,7 @@ export function buildAssignRepresentativeRoleStatementsForNewRepresentative(
     userId: string;
     roleId: RepresentativeRoleId;
     grantedByUserId?: string | null;
+    assignmentId?: string;
     now?: string;
   },
 ): StatementLike[] {
@@ -57,7 +58,14 @@ export function buildAssignRepresentativeRoleStatementsForNewRepresentative(
            (id, user_id, role_id, context_type, context_id, granted_by_user_id, single_holder_per_context, created_at)
          VALUES (?, ?, ?, 'organization', ?, ?, 1, ?)`,
       )
-      .bind(uuid(), input.userId, input.roleId, input.memberId, input.grantedByUserId ?? null, now),
+      .bind(
+        input.assignmentId ?? uuid(),
+        input.userId,
+        input.roleId,
+        input.memberId,
+        input.grantedByUserId ?? null,
+        now,
+      ),
   ];
 }
 
@@ -66,7 +74,7 @@ export function buildAssignRepresentativeRoleStatementsForNewRepresentative(
  * the three singleton representative roles. Throws before building any
  * statement if `(userId, memberId)` has no active `organization_representatives`
  * row — the service-layer invariant that replaces the composite FK a
- * bespoke role table would have had (see migration 0037's header).
+ * bespoke role table would have had (see consolidated migration 0035's header).
  *
  * Caller is responsible for executing the returned statements in the same
  * `db.batch()` as any other write in the same operation (e.g. approval
@@ -79,6 +87,7 @@ export async function buildAssignRepresentativeRoleStatements(
     userId: string;
     roleId: RepresentativeRoleId;
     grantedByUserId?: string | null;
+    assignmentId?: string;
     now?: string;
   },
 ): Promise<StatementLike[]> {

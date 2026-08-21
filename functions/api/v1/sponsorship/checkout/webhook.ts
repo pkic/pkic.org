@@ -11,49 +11,17 @@
  */
 import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../_lib/http";
-import { queueEmail, processOutboxByIdBackground } from "../../../../_lib/email/outbox";
+import { readBoundedTextBody, STRIPE_WEBHOOK_MAX_BYTES } from "../../../../_lib/http-body";
+import { processOutboxByIdBackground } from "../../../../_lib/email/outbox";
 import { recordPaidSponsorshipCheckout } from "../../../../_lib/services/sponsorship";
-import { sponsorshipCheckoutWebhookRouteSchema } from "../../../../../assets/shared/schemas/sponsorship";
-
-const TOLERANCE_SECONDS = 300;
-
-async function verifyStripeSignature(rawBody: string, signatureHeader: string, secret: string): Promise<boolean> {
-  const parts: Record<string, string> = {};
-  for (const part of signatureHeader.split(",")) {
-    const idx = part.indexOf("=");
-    if (idx !== -1) parts[part.slice(0, idx)] = part.slice(idx + 1);
-  }
-  const timestamp = parts["t"];
-  const v1 = parts["v1"];
-  if (!timestamp || !v1) return false;
-
-  const ts = parseInt(timestamp, 10);
-  if (isNaN(ts)) return false;
-  if (Math.abs(Math.floor(Date.now() / 1000) - ts) > TOLERANCE_SECONDS) return false;
-
-  const signedPayload = `${timestamp}.${rawBody}`;
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, [
-    "sign",
-  ]);
-  const signatureBuffer = await crypto.subtle.sign("HMAC", key, encoder.encode(signedPayload));
-  const computed = Array.from(new Uint8Array(signatureBuffer))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-
-  if (computed.length !== v1.length) return false;
-  let diff = 0;
-  for (let i = 0; i < computed.length; i++) diff |= computed.charCodeAt(i) ^ v1.charCodeAt(i);
-  return diff === 0;
-}
-
-interface StripeCheckoutSession {
-  id: string;
-  payment_status?: string | null;
-  metadata?: Record<string, string> | null;
-  amount_total?: number | null;
-  currency?: string | null;
-}
+import {
+  paidSponsorshipCheckoutSessionSchema,
+  sponsorshipCheckoutSessionStatusSchema,
+  sponsorshipCheckoutWebhookEnvelopeSchema,
+  sponsorshipCheckoutWebhookRouteSchema,
+} from "../../../../../assets/shared/schemas/sponsorship";
+import { verifyStripeWebhookSignature } from "../../../../_lib/integrations/stripe/verify-webhook";
+import { resolveAppBaseUrl } from "../../../../_lib/config";
 
 export async function onRequestPost(c: any): Promise<Response> {
   const env = c.env;
@@ -64,80 +32,76 @@ export async function onRequestPost(c: any): Promise<Response> {
     return json({ error: "Webhook not configured" }, 503);
   }
 
-  const rawBody = await request.text();
+  const rawBody = await readBoundedTextBody(request, STRIPE_WEBHOOK_MAX_BYTES);
   const sigHeader = request.headers.get("stripe-signature") ?? "";
-  const valid = await verifyStripeSignature(rawBody, sigHeader, env.STRIPE_WEBHOOK_SECRET);
+  const valid = await verifyStripeWebhookSignature(rawBody, sigHeader, env.STRIPE_WEBHOOK_SECRET);
   if (!valid) {
     return json({ error: "Invalid signature" }, 400);
   }
 
-  let event: { type: string; data: { object: unknown } };
+  let decoded: unknown;
   try {
-    event = JSON.parse(rawBody);
+    decoded = JSON.parse(rawBody);
   } catch {
     return json({ error: "Invalid JSON" }, 400);
   }
+  const envelope = sponsorshipCheckoutWebhookEnvelopeSchema.safeParse(decoded);
+  if (!envelope.success) {
+    return json({ error: "Invalid Stripe event payload" }, 400);
+  }
+  const event = envelope.data;
 
   if (event.type !== "checkout.session.completed" && event.type !== "checkout.session.async_payment_succeeded") {
     return json({ received: true });
   }
 
-  const session = event.data.object as StripeCheckoutSession;
-  if (session.payment_status !== "paid") {
+  const sessionStatus = sponsorshipCheckoutSessionStatusSchema.safeParse(event.data.object);
+  if (!sessionStatus.success) {
+    return json({ error: "Invalid Stripe checkout session payload" }, 400);
+  }
+  if (sessionStatus.data.payment_status !== "paid") {
     return json({ received: true, pending: true });
   }
 
-  const metadata = session.metadata ?? {};
-  if (!metadata.tier || !metadata.contact_name || !metadata.contact_email) {
-    console.error("Sponsorship checkout webhook: missing required metadata on session", session.id);
-    return json({ received: true, skipped: true });
+  const paidSession = paidSponsorshipCheckoutSessionSchema.safeParse(event.data.object);
+  if (!paidSession.success) {
+    console.error("Sponsorship checkout webhook: invalid paid session payload", {
+      eventId: event.id,
+      sessionId: sessionStatus.data.id,
+      issues: paidSession.error.issues,
+    });
+    return json({ error: "Invalid paid sponsorship checkout payload" }, 400);
+  }
+  const session = paidSession.data;
+  const metadata = session.metadata;
+  if (session.amount_total !== metadata.price_amount_cents || session.currency !== metadata.price_currency) {
+    console.error("Sponsorship checkout webhook: price snapshot mismatch", {
+      eventId: event.id,
+      sessionId: session.id,
+    });
+    return json({ error: "Paid checkout does not match its price snapshot" }, 400);
   }
 
-  const sponsorship = await recordPaidSponsorshipCheckout(db, {
+  const result = await recordPaidSponsorshipCheckout(db, {
+    stripeEventId: event.id,
     checkoutSessionId: session.id,
     tier: metadata.tier,
     contactName: metadata.contact_name,
     contactEmail: metadata.contact_email,
     organizationName: metadata.organization_name ?? null,
-    eventId: metadata.event_id ?? null,
-    // Stripe's own reported amount/currency on the completed session — the
-    // authoritative record of what was actually charged, not re-derived
-    // from current tier config (which may have changed since checkout).
-    priceAmountCents: session.amount_total ?? null,
-    priceCurrency: session.currency ?? null,
+    eventId: metadata.event_id,
+    eventSlug: metadata.event_slug,
+    priceAmountCents: session.amount_total,
+    priceCurrency: session.currency,
+    brochureUrl: env.SPONSORSHIP_BROCHURE_URL ?? "https://pkic.org/sponsors/",
+    notificationEmail: env.SPONSORSHIP_NOTIFICATION_EMAIL ?? "sponsorships@pkic.org",
+    adminUrl: `${resolveAppBaseUrl(env, request)}/admin/`,
   });
+  for (const outboxId of result.outboxIds) {
+    c.executionCtx.waitUntil(processOutboxByIdBackground(db, env, outboxId));
+  }
 
-  const brochureOutboxId = await queueEmail(db, {
-    templateKey: "sponsorship-brochure",
-    recipientEmail: sponsorship.contact_email ?? metadata.contact_email,
-    messageType: "transactional",
-    subject: "PKI Consortium sponsorship information",
-    data: {
-      contactName: sponsorship.contact_name ?? metadata.contact_name,
-      eventName: sponsorship.event_id ?? "",
-      brochureUrl: env.SPONSORSHIP_BROCHURE_URL ?? "https://pkic.org/sponsors/",
-    },
-  });
-  c.executionCtx.waitUntil(processOutboxByIdBackground(db, env, brochureOutboxId));
-
-  const staffOutboxId = await queueEmail(db, {
-    templateKey: "sponsorship-new-inquiry",
-    recipientEmail: env.SPONSORSHIP_NOTIFICATION_EMAIL ?? "sponsorships@pkic.org",
-    messageType: "transactional",
-    subject: `New sponsorship inquiry: ${metadata.contact_name} (${metadata.organization_name ?? "n/a"})`,
-    data: {
-      contactName: metadata.contact_name,
-      contactEmail: metadata.contact_email,
-      organizationName: metadata.organization_name ?? "",
-      sponsorType: "event",
-      tier: metadata.tier,
-      notes: "Paid via self-service Stripe checkout",
-      adminUrl: "https://pkic.org/admin/",
-    },
-  });
-  c.executionCtx.waitUntil(processOutboxByIdBackground(db, env, staffOutboxId));
-
-  return json({ received: true });
+  return json({ received: true, duplicate: !result.created });
 }
 
 export class SponsorshipCheckoutWebhookPost extends OpenAPIRoute {

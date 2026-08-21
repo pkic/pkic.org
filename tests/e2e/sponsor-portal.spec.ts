@@ -14,6 +14,7 @@ import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
+import { e2eAdminEmail } from "../helpers/e2e-admin";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 const EVENT_SLUG = "pqc-conference-amsterdam-nl";
@@ -22,13 +23,22 @@ function sendgridServer(): string {
   return process.env.E2E_SENDGRID_API_BASE ?? readFileSync(SENDGRID_URL_FILE, "utf8").trim();
 }
 
-async function waitForEmail(to: string, subjectFragment: string, timeoutMs = 15_000): Promise<CapturedEmail> {
+async function readOutbox(): Promise<CapturedEmail[]> {
+  const response = await fetch(`${sendgridServer()}/outbox`);
+  return (await response.json()) as CapturedEmail[];
+}
+
+async function waitForEmail(
+  to: string,
+  subjectFragment: string,
+  timeoutMs = 15_000,
+  afterIndex = 0,
+): Promise<CapturedEmail> {
   const deadline = Date.now() + timeoutMs;
   let lastEmails: CapturedEmail[] = [];
   while (Date.now() < deadline) {
-    const resp = await fetch(`${sendgridServer()}/outbox`);
-    lastEmails = (await resp.json()) as CapturedEmail[];
-    for (let i = lastEmails.length - 1; i >= 0; i--) {
+    lastEmails = await readOutbox();
+    for (let i = lastEmails.length - 1; i >= afterIndex; i--) {
       const e = lastEmails[i];
       if (e.to === to && e.subject.toLowerCase().includes(subjectFragment.toLowerCase())) {
         return e;
@@ -54,13 +64,14 @@ function extractUrlFromEmail(email: CapturedEmail, urlSubstring: string): string
 }
 
 async function signInAsAdmin(page: Page): Promise<void> {
+  const adminEmail = e2eAdminEmail("sponsor-portal");
   await page.goto("/admin/");
   await expect(page.locator("#form-magic")).toBeVisible({ timeout: 10_000 });
-  await page.locator("#inp-email").fill("admin@pkic.org");
+  await page.locator("#inp-email").fill(adminEmail);
   await page.locator("#btn-send").click();
   await expect(page.locator("#magic-sent")).toBeVisible({ timeout: 10_000 });
 
-  const magicEmail = await waitForEmail("admin@pkic.org", "sign-in");
+  const magicEmail = await waitForEmail(adminEmail, "sign-in");
   const magicUrl = extractUrlFromEmail(magicEmail, "/admin/");
   await page.goto(magicUrl);
   await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
@@ -205,12 +216,13 @@ test.describe("sponsor portal", () => {
     // ── Self-service "request a new link" flow, keyed by the event's public
     // slug rather than its internal id (a sponsor
     // contact only ever knows the slug) ────────────────────────────────────
+    const resendAfterIndex = (await readOutbox()).length;
     await page.locator("#sp-inp-email").fill(contactEmail);
     await page.locator("#sp-inp-event").fill(EVENT_SLUG);
     await page.getByRole("button", { name: "Send sign-in link" }).click();
     await expect(page.getByText(/you'll receive a sign-in link shortly/i)).toBeVisible();
 
-    const resendEmail = await waitForEmail(contactEmail, "sponsor portal");
+    const resendEmail = await waitForEmail(contactEmail, "sponsor portal", 15_000, resendAfterIndex);
     const resendUrl = extractUrlFromEmail(resendEmail, "/sponsor-portal/");
     expect(resendUrl).not.toBe(portalUrl);
 

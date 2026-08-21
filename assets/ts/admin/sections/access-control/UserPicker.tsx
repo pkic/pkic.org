@@ -65,10 +65,7 @@ export function UserPicker({
         disabled={disabled}
       />
       {open && results.length > 0 && (
-        <div
-          class="list-group position-absolute w-100 shadow-sm"
-          style={{ zIndex: 20, maxHeight: "220px", overflowY: "auto" }}
-        >
+        <div class="list-group position-absolute w-100 shadow-sm adm-user-picker-results">
           {results.map((user) => (
             <button
               key={user.id}

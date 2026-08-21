@@ -3,7 +3,8 @@ import { speakerManagePageUrl } from "../frontend-links";
 import { buildEventEmailVariables } from "../events";
 import { queuedCapabilityToken } from "../capability-links";
 import { type DueSpeakerInviteRow, type EventRouteRow, type ReminderCandidatePreview } from "../reminders-support";
-import { batchQueueEmailsAndUpdateState, bulkBuildProposalInviteEmailContexts } from "./shared";
+import { batchQueueEmailsAndUpdateState } from "./shared";
+import { buildProposalInviteEmailContextMap } from "../proposal-invite-email-context";
 import type { DatabaseLike } from "../../types";
 
 export async function runCoSpeakerInviteReminders(
@@ -53,7 +54,7 @@ export async function runCoSpeakerInviteReminders(
       : [];
 
   const uniqueProposalIds = [...new Set(dueSpeakerInvites.map((r) => r.proposal_id))];
-  const proposalContexts = await bulkBuildProposalInviteEmailContexts(db, uniqueProposalIds);
+  const proposalContexts = await buildProposalInviteEmailContextMap(db, uniqueProposalIds);
 
   const coSpeakerInvites: ReminderCandidatePreview[] = [];
   for (const row of dueSpeakerInvites) {

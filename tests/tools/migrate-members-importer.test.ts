@@ -14,7 +14,7 @@
  *   3. Apply the complete migration set to an empty local D1.
  *   4. Execute the generated SQL against it via `wrangler d1 execute --file`.
  *   5. Assert no missing-column/table errors, and spot-check the rows that
- *      landed match the final schema (organization_domains,
+ *      landed match the final schema (organization_domain_claims,
  *      member_category_assignments, organization_representatives,
  *      role-primary_contact) — the exact shapes 0033-era intermediate
  *      columns (social_*, organizations.membership_category,
@@ -85,7 +85,7 @@ describe("migrate-members-yaml-to-d1 importer — fresh-D1 execution smoke test"
     fs.mkdirSync(membersDir);
     fs.mkdirSync(csvDir);
 
-    // Org-tied member: exercises organizations, organization_domains, the
+    // Org-tied member: exercises organizations, organization_domain_claims, the
     // members aggregate + member_category_assignments, users,
     // organization_representatives, and the role-primary_contact grant.
     fs.writeFileSync(
@@ -158,7 +158,7 @@ memberType: H5
     expect(orgs).toHaveLength(1);
     expect(orgs[0]!.links_json).toBe(JSON.stringify(["https://linkedin.com/company/acme"]));
 
-    const domains = queryD1(persistTo, "SELECT domain FROM organization_domains");
+    const domains = queryD1(persistTo, "SELECT domain FROM organization_domain_claims");
     expect(domains.map((r) => r.domain)).toEqual(["acme.example"]);
 
     const memberAggregates = queryD1(persistTo, "SELECT member_type, member_since FROM members ORDER BY member_type");
@@ -186,6 +186,8 @@ memberType: H5
     // No `unmatched-bob@members.invalid`-style row lacks its sentinel user.
     const sentinelUser = queryD1(persistTo, "SELECT email FROM users WHERE email = 'unmatched-bob@members.invalid'");
     expect(sentinelUser).toHaveLength(1);
+
+    expect(queryD1(persistTo, "PRAGMA foreign_key_check")).toEqual([]);
   });
 
   it("rejects the entire import — no SQL generated at all — when any record has a missing or unknown category", () => {
@@ -332,5 +334,6 @@ sponsor:
     const second = snapshot();
 
     expect(second).toEqual(first);
+    expect(queryD1(persistTo, "PRAGMA foreign_key_check")).toEqual([]);
   });
 });

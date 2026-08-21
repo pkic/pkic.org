@@ -12,7 +12,7 @@ import {
   type EventRouteRow,
   type ReminderCandidatePreview,
 } from "../reminders-support";
-import { prepareBulkQueueInviteEmailStatements } from "../../email/outbox";
+import { prepareBulkQueueInviteEmailChunkStatements } from "../../email/outbox";
 import { batchStatements } from "./shared";
 import type { DatabaseLike } from "../../types";
 import { queuedCapabilityToken } from "../capability-links";
@@ -274,7 +274,7 @@ export async function runConfirmationReminders(
     });
 
     await batchStatements(db, [
-      ...prepareBulkQueueInviteEmailStatements(db, emailRows, now),
+      ...prepareBulkQueueInviteEmailChunkStatements(db, emailRows, now).map((chunk) => chunk.statement),
       ...registrationUpdateStatements,
     ]);
   }

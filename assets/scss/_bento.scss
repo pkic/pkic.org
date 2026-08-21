@@ -77,7 +77,7 @@
   z-index: 1;
 
   &::before {
-    content: '';
+    content: "";
     position: absolute;
     inset: 0;
     z-index: -1;
@@ -113,7 +113,9 @@
   // Default (light)
   background: #ffffff;
   border: 1px solid rgba(0, 0, 0, 0.05);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.02);
   color: #0f172a;
 
   // Icon accent
@@ -150,7 +152,10 @@
     flex: 1;
     line-height: 1.6;
 
-    p, ul, ol, li {
+    p,
+    ul,
+    ol,
+    li {
       color: inherit;
     }
   }
@@ -188,13 +193,15 @@
   background: linear-gradient(135deg, lighten($bg, 8%), darken($bg, 6%));
   color: $text;
   border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 4px 16px rgba($bg, 0.25), inset 0 1px 0 rgba(255,255,255,0.2);
+  box-shadow:
+    0 4px 16px rgba($bg, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 
   .bento-badge {
     background: rgba(255, 255, 255, 0.2);
     backdrop-filter: blur(8px);
     color: $text;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
   }
 
   .bento-text {
@@ -205,12 +212,16 @@
   .bento-icon {
     background: rgba(255, 255, 255, 0.15);
     backdrop-filter: blur(4px);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 2px 8px rgba(0,0,0,0.1);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.2),
+      0 2px 8px rgba(0, 0, 0, 0.1);
     color: inherit;
   }
 
   &:hover {
-    box-shadow: 0 8px 24px rgba($bg, 0.35), inset 0 1px 0 rgba(255,255,255,0.3) !important;
+    box-shadow:
+      0 8px 24px rgba($bg, 0.35),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
   }
 }
 
@@ -218,7 +229,9 @@
   background: linear-gradient(145deg, #ffffff 0%, rgba($bg, 0.08) 100%);
   color: $body-color;
   border: 1px solid rgba($bg, 0.15);
-  box-shadow: 0 4px 12px rgba($bg, 0.05), inset 0 1px 0 rgba(255,255,255,0.5);
+  box-shadow:
+    0 4px 12px rgba($bg, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
 
   .bento-badge {
     background: rgba($bg, 0.1);
@@ -235,7 +248,9 @@
   }
 
   &:hover {
-    box-shadow: 0 8px 24px rgba($bg, 0.12), inset 0 1px 0 rgba(255,255,255,0.8) !important;
+    box-shadow:
+      0 8px 24px rgba($bg, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
   }
 }
 
@@ -691,7 +706,7 @@ $wg-colors: (
 
 // Standalone initials avatar — same palette as .member-card-initials above, but
 // usable outside a .member-card wrapper (member profile hero/representative
-// avatars, which aren't grid cards). Size is set inline by the caller.
+// avatars, which aren't grid cards).
 .standalone-initials {
   display: flex;
   align-items: center;
@@ -701,6 +716,18 @@ $wg-colors: (
   letter-spacing: 0.04em;
   color: #fff;
   user-select: none;
+
+  &.standalone-initials--representative {
+    width: 100px;
+    height: 100px;
+    font-size: 1.5rem;
+  }
+
+  &.standalone-initials--hero {
+    width: 120px;
+    height: 120px;
+    font-size: 2rem;
+  }
 
   &.initial-color-0 {
     background: linear-gradient(135deg, #2a7a4f, #1a5c3a);
@@ -720,6 +747,11 @@ $wg-colors: (
   &.initial-color-5 {
     background: linear-gradient(135deg, #0891b2, #0e7490);
   }
+}
+
+.member-profile-logo {
+  height: 150px;
+  max-width: 60%;
 }
 
 // --- Color highlight sections ---

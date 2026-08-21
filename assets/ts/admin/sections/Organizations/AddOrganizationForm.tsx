@@ -2,14 +2,13 @@
  * Add organization (or org-less individual) — Interim Admin Tool.
  * Split out of Organizations.tsx (PR #1 review).
  */
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { api } from "../../api";
 import { toast } from "../../ui";
-import {
-  MEMBERSHIP_CATEGORIES,
-  INDIVIDUAL_MEMBERSHIP_CATEGORIES,
-  WORKING_GROUP_SLUGS,
-} from "../../../../shared/schemas/admin-members";
+import { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../../../shared/schemas/admin-members";
+import type { AdminWorkingGroupSummary } from "../../../../shared/schemas/working-groups";
+import { ProfileLinksInput } from "../../../components/ProfileLinksInput";
+import { getAdminWorkingGroupCatalogue } from "../../services/catalogues";
 
 // Kept for the "Add organization" (create) flow only — category is
 // picked once there. Once an organization exists, its category lives at
@@ -20,11 +19,11 @@ interface RepresentativeDraft {
   name: string;
   email: string;
   role: string;
-  linkedin: string;
+  links: string[];
 }
 
 function emptyRepresentative(): RepresentativeDraft {
-  return { name: "", email: "", role: "", linkedin: "" };
+  return { name: "", email: "", role: "", links: [] };
 }
 
 export function AddOrganizationForm({ onCreated, onCancel }: { onCreated: () => void; onCancel: () => void }) {
@@ -34,11 +33,27 @@ export function AddOrganizationForm({ onCreated, onCancel }: { onCreated: () => 
   const [membershipCategory, setMembershipCategory] = useState<string>("F");
   const [memberSince, setMemberSince] = useState(() => new Date().toISOString().slice(0, 10));
   const [representatives, setRepresentatives] = useState<RepresentativeDraft[]>([emptyRepresentative()]);
+  const [workingGroups, setWorkingGroups] = useState<AdminWorkingGroupSummary[]>([]);
+  const [workingGroupsError, setWorkingGroupsError] = useState("");
   const [workingGroupSlugs, setWorkingGroupSlugs] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
 
   const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(membershipCategory);
+
+  useEffect(() => {
+    let active = true;
+    void getAdminWorkingGroupCatalogue()
+      .then((groups) => {
+        if (active) setWorkingGroups(groups.filter((group) => group.active));
+      })
+      .catch((error: unknown) => {
+        if (active) setWorkingGroupsError((error as Error).message);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   function updateRep(index: number, patch: Partial<RepresentativeDraft>) {
     setRepresentatives((reps) => reps.map((rep, i) => (i === index ? { ...rep, ...patch } : rep)));
@@ -89,7 +104,7 @@ export function AddOrganizationForm({ onCreated, onCancel }: { onCreated: () => 
           name: r.name.trim(),
           email: r.email.trim(),
           ...(r.role.trim() ? { role: r.role.trim() } : {}),
-          ...(r.linkedin.trim() ? { linkedin: r.linkedin.trim() } : {}),
+          ...(r.links.length > 0 ? { links: r.links } : {}),
         })),
         workingGroupSlugs: Array.from(workingGroupSlugs),
       };
@@ -215,13 +230,12 @@ export function AddOrganizationForm({ onCreated, onCancel }: { onCreated: () => 
               />
             </div>
             <div class="col-md-3">
-              {i === 0 && <label class="form-label small text-muted">LinkedIn</label>}
-              <input
-                class="form-control form-control-sm"
-                type="url"
-                value={rep.linkedin}
-                onInput={(e) => updateRep(i, { linkedin: (e.target as HTMLInputElement).value })}
-                placeholder="https://linkedin.com/in/..."
+              {i === 0 && <label class="form-label small text-muted">Profile links</label>}
+              <ProfileLinksInput
+                fieldName={`representatives.${i}.links`}
+                value={rep.links}
+                onChange={(links) => updateRep(i, { links })}
+                max={15}
               />
             </div>
             <div class="col-md-1">
@@ -248,21 +262,22 @@ export function AddOrganizationForm({ onCreated, onCancel }: { onCreated: () => 
       <div class="mb-3">
         <label class="form-label small fw-semibold mb-1">Working groups</label>
         <div class="d-flex flex-wrap gap-3">
-          {WORKING_GROUP_SLUGS.map((slug) => (
-            <div class="form-check" key={slug}>
+          {workingGroups.map((group) => (
+            <div class="form-check" key={group.id}>
               <input
                 class="form-check-input"
                 type="checkbox"
-                id={`wg-${slug}`}
-                checked={workingGroupSlugs.has(slug)}
-                onChange={() => toggleWorkingGroup(slug)}
+                id={`wg-${group.id}`}
+                checked={workingGroupSlugs.has(group.slug)}
+                onChange={() => toggleWorkingGroup(group.slug)}
               />
-              <label class="form-check-label small text-uppercase mono" for={`wg-${slug}`}>
-                {slug}
+              <label class="form-check-label small" for={`wg-${group.id}`}>
+                {group.name}
               </label>
             </div>
           ))}
         </div>
+        {workingGroupsError && <div class="small text-danger mt-1">{workingGroupsError}</div>}
       </div>
 
       <div class="d-flex gap-2 align-items-center">

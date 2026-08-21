@@ -2,8 +2,9 @@ import { all } from "../db/queries";
 import { AppError } from "../errors";
 import { getActiveFormByPurpose } from "./forms";
 import { buildCustomAnswerRows, buildCustomAnswerVariables } from "../utils/registration-email";
-import { hmacSha256Hex, sha256Hex } from "../utils/crypto";
-import { parseJsonSafe } from "../utils/json";
+import { sha256Hex } from "../utils/crypto";
+import { signAdminPreviewToken, verifyAdminPreviewToken } from "../auth/admin-preview-token";
+import { parseJsonSafe, stringifyJson } from "../utils/json";
 import {
   ATTENDANCE_TYPE_LABELS,
   buildAttendanceEmailData,
@@ -13,6 +14,11 @@ import type { EventRecord } from "./events";
 import type { DatabaseLike } from "../types";
 import type { FormFieldDefinition } from "./forms/read";
 import type { EmailMessageType } from "../../../assets/shared/schemas/admin-email-templates";
+import { adminEventCampaignPreviewSchema } from "../../../assets/shared/schemas/admin-events";
+import type { z } from "zod";
+import { resolveTemplate } from "../email/templates";
+
+export type AdminCampaignInput = z.infer<typeof adminEventCampaignPreviewSchema>;
 
 export interface CampaignRecipient {
   registrationId?: string;
@@ -30,15 +36,6 @@ export interface CampaignAudienceFilter {
   dayDate?: string;
   dayWaitlistStatus?: "all" | "active" | "waiting" | "offered" | "accepted" | "none";
   speakerStatus?: "all" | "confirmed" | "invited" | "pending";
-}
-
-interface CampaignPreviewClaims {
-  v: 1;
-  type: "admin_campaign_preview";
-  eventId: string;
-  adminId: string;
-  digest: string;
-  exp: number;
 }
 
 interface AttendeeCampaignRow {
@@ -65,25 +62,6 @@ interface AttendeeDayWaitlistRow {
   registration_id: string;
   dayDate: string;
   status: string;
-}
-
-function b64urlEncode(input: string): string {
-  return btoa(input).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-function b64urlDecode(input: string): string {
-  const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
-  return atob(padded);
-}
-
-function safeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) {
-    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return diff === 0;
 }
 
 function dayWaitlistFilterSql(scope: "registration" | "day"): string {
@@ -118,7 +96,10 @@ export async function listCampaignRecipients(
   event: Pick<EventRecord, "id" | "slug" | "base_path" | "starts_at" | "settings_json">,
   _appBaseUrl: string,
   filter: CampaignAudienceFilter,
+  options: { maxRecipients?: number } = {},
 ): Promise<CampaignRecipient[]> {
+  const maxRecipients = Math.max(1, Math.floor(options.maxRecipients ?? 2_000));
+  const fetchLimit = maxRecipients + 1;
   if (filter.audience === "attendees") {
     const form = await getActiveFormByPurpose(db, event.id, "event_registration");
     const attendeeStatus = filter.attendeeStatus ?? "registered";
@@ -126,20 +107,31 @@ export async function listCampaignRecipients(
     if (filter.dayDate) {
       const rows = await all<AttendeeCampaignRow>(
         db,
-        `SELECT DISTINCT r.id AS registration_id, u.id AS user_id,
-                u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
-                r.status, r.attendance_type, r.custom_answers_json
-         FROM registrations r
-         JOIN users u ON u.id = r.user_id
-         JOIN registration_day_attendance rda ON rda.registration_id = r.id
-         JOIN event_days ed ON ed.id = rda.event_day_id
-         WHERE r.event_id = ?
-           AND (? = 'all' OR r.status = ?)
-           AND ed.day_date = ?
-           AND (? = 'all' OR rda.attendance_type = ?)
-           AND u.email IS NOT NULL
-           ${dayWaitlistFilterSql("day")}
-         ORDER BY lower(u.email) ASC`,
+        `WITH ranked_recipients AS (
+           SELECT r.id AS registration_id, u.id AS user_id,
+                  u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
+                  r.status, r.attendance_type, r.custom_answers_json,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY lower(trim(u.email))
+                    ORDER BY datetime(r.created_at) DESC, r.id ASC
+                  ) AS recipient_rank
+           FROM registrations r
+           JOIN users u ON u.id = r.user_id
+           JOIN registration_day_attendance rda ON rda.registration_id = r.id
+           JOIN event_days ed ON ed.id = rda.event_day_id
+           WHERE r.event_id = ?
+             AND (? = 'all' OR r.status = ?)
+             AND ed.day_date = ?
+             AND (? = 'all' OR rda.attendance_type = ?)
+             AND u.email IS NOT NULL
+             ${dayWaitlistFilterSql("day")}
+         )
+         SELECT registration_id, user_id, email, first_name, last_name, organization_name,
+                job_title, status, attendance_type, custom_answers_json
+         FROM ranked_recipients
+         WHERE recipient_rank = 1
+         ORDER BY lower(email) ASC
+         LIMIT ?`,
         [
           event.id,
           attendeeStatus,
@@ -148,24 +140,37 @@ export async function listCampaignRecipients(
           filter.attendanceType ?? "all",
           filter.attendanceType ?? "all",
           ...dayWaitlistFilterParams(dayWaitlistStatus),
+          fetchLimit,
         ],
       );
+      assertCampaignRecipientLimit(rows, maxRecipients);
       return buildAttendeeCampaignRecipients(db, event.id, rows, form?.fields);
     }
 
     const rows = await all<AttendeeCampaignRow>(
       db,
-      `SELECT DISTINCT r.id AS registration_id, u.id AS user_id,
-            u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
-            r.status, r.attendance_type, r.custom_answers_json
-       FROM registrations r
-       JOIN users u ON u.id = r.user_id
-       WHERE r.event_id = ?
-         AND (? = 'all' OR r.status = ?)
-         AND (? = 'all' OR r.attendance_type = ?)
-         AND u.email IS NOT NULL
-         ${dayWaitlistFilterSql("registration")}
-       ORDER BY lower(u.email) ASC`,
+      `WITH ranked_recipients AS (
+         SELECT r.id AS registration_id, u.id AS user_id,
+                u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
+                r.status, r.attendance_type, r.custom_answers_json,
+                ROW_NUMBER() OVER (
+                  PARTITION BY lower(trim(u.email))
+                  ORDER BY datetime(r.created_at) DESC, r.id ASC
+                ) AS recipient_rank
+         FROM registrations r
+         JOIN users u ON u.id = r.user_id
+         WHERE r.event_id = ?
+           AND (? = 'all' OR r.status = ?)
+           AND (? = 'all' OR r.attendance_type = ?)
+           AND u.email IS NOT NULL
+           ${dayWaitlistFilterSql("registration")}
+       )
+       SELECT registration_id, user_id, email, first_name, last_name, organization_name,
+              job_title, status, attendance_type, custom_answers_json
+       FROM ranked_recipients
+       WHERE recipient_rank = 1
+       ORDER BY lower(email) ASC
+       LIMIT ?`,
       [
         event.id,
         attendeeStatus,
@@ -173,9 +178,11 @@ export async function listCampaignRecipients(
         filter.attendanceType ?? "all",
         filter.attendanceType ?? "all",
         ...dayWaitlistFilterParams(dayWaitlistStatus),
+        fetchLimit,
       ],
     );
 
+    assertCampaignRecipientLimit(rows, maxRecipients);
     return buildAttendeeCampaignRecipients(db, event.id, rows, form?.fields);
   }
 
@@ -200,41 +207,59 @@ export async function listCampaignRecipients(
     speaker_confirmed_at: string | null;
   }>(
     db,
-    `SELECT u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
-            ps.status AS speaker_status,
-            sp.title AS proposal_title,
-            sp.abstract AS proposal_abstract,
-            sp.proposal_type AS proposal_type,
-            sp.details_json AS details_json,
-            sp.updated_at AS proposal_updated_at,
-            ps.confirmed_at AS speaker_confirmed_at
-     FROM proposal_speakers ps
-     JOIN session_proposals sp ON sp.id = ps.proposal_id
-     JOIN users u ON u.id = ps.user_id
-     WHERE sp.event_id = ?
-       AND ps.status != 'declined'
-       AND (? = 'all' OR ps.status = ?)
-       AND u.email IS NOT NULL
-     ORDER BY lower(u.email) ASC,
-              CASE ps.status WHEN 'confirmed' THEN 0 WHEN 'invited' THEN 1 WHEN 'pending' THEN 2 ELSE 3 END ASC,
-              COALESCE(ps.confirmed_at, sp.updated_at) DESC`,
-    [event.id, speakerStatus, speakerStatus],
+    `WITH ranked_recipients AS (
+       SELECT u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
+              ps.status AS speaker_status,
+              sp.title AS proposal_title,
+              sp.abstract AS proposal_abstract,
+              sp.proposal_type AS proposal_type,
+              sp.details_json AS details_json,
+              sp.updated_at AS proposal_updated_at,
+              ps.confirmed_at AS speaker_confirmed_at,
+              ROW_NUMBER() OVER (
+                PARTITION BY lower(trim(u.email))
+                ORDER BY
+                  CASE ps.status WHEN 'confirmed' THEN 0 WHEN 'invited' THEN 1 WHEN 'pending' THEN 2 ELSE 3 END ASC,
+                  datetime(COALESCE(ps.confirmed_at, sp.updated_at)) DESC,
+                  ps.proposal_id ASC
+              ) AS recipient_rank
+       FROM proposal_speakers ps
+       JOIN session_proposals sp ON sp.id = ps.proposal_id
+       JOIN users u ON u.id = ps.user_id
+       WHERE sp.event_id = ?
+         AND ps.status != 'declined'
+         AND (? = 'all' OR ps.status = ?)
+         AND u.email IS NOT NULL
+     )
+     SELECT email, first_name, last_name, organization_name, job_title,
+            speaker_status, proposal_title, proposal_abstract, proposal_type,
+            details_json, proposal_updated_at, speaker_confirmed_at
+     FROM ranked_recipients
+     WHERE recipient_rank = 1
+     ORDER BY lower(email) ASC
+     LIMIT ?`,
+    [event.id, speakerStatus, speakerStatus, fetchLimit],
   );
 
-  const recipients: CampaignRecipient[] = [];
-  const seenEmails = new Set<string>();
-  for (const row of rows) {
+  assertCampaignRecipientLimit(rows, maxRecipients);
+  return rows.map((row) => {
     const email = row.email.trim().toLowerCase();
-    if (seenEmails.has(email)) continue;
-    seenEmails.add(email);
-    recipients.push({
+    return {
       email,
       firstName: (row.first_name ?? "").trim(),
       lastName: (row.last_name ?? "").trim(),
       templateData: buildSpeakerTemplateData(row, form?.fields),
-    });
-  }
-  return recipients;
+    };
+  });
+}
+
+function assertCampaignRecipientLimit(rows: unknown[], maxRecipients: number): void {
+  if (rows.length <= maxRecipients) return;
+  throw new AppError(
+    422,
+    "CAMPAIGN_RECIPIENT_LIMIT_EXCEEDED",
+    `The selected audience exceeds the configured ${maxRecipients}-recipient campaign limit. Narrow the filters and preview again.`,
+  );
 }
 
 function escapeRegex(value: string): string {
@@ -243,7 +268,7 @@ function escapeRegex(value: string): string {
 
 async function listAttendeeDayAttendanceByRegistration(
   db: DatabaseLike,
-  eventId: string,
+  registrationIdsJson: string,
 ): Promise<Map<string, Array<{ dayDate: string; attendanceType: string; label: string | null }>>> {
   const byRegistration = new Map<string, Array<{ dayDate: string; attendanceType: string; label: string | null }>>();
   const rows = await all<AttendeeDayAttendanceRow>(
@@ -253,11 +278,10 @@ async function listAttendeeDayAttendanceByRegistration(
             rda.attendance_type AS attendanceType,
             ed.label AS label
      FROM registration_day_attendance rda
-     JOIN registrations r ON r.id = rda.registration_id
      JOIN event_days ed ON ed.id = rda.event_day_id
-     WHERE r.event_id = ?
+     WHERE rda.registration_id IN (SELECT value FROM json_each(?))
      ORDER BY rda.registration_id ASC, ed.sort_order ASC, ed.day_date ASC`,
-    [eventId],
+    [registrationIdsJson],
   );
   for (const row of rows) {
     const entries = byRegistration.get(row.registration_id) ?? [];
@@ -274,7 +298,7 @@ async function listAttendeeDayAttendanceByRegistration(
 
 async function listAttendeeDayWaitlistByRegistration(
   db: DatabaseLike,
-  eventId: string,
+  registrationIdsJson: string,
 ): Promise<Map<string, Array<{ dayDate: string; status: string }>>> {
   const byRegistration = new Map<string, Array<{ dayDate: string; status: string }>>();
   const rows = await all<AttendeeDayWaitlistRow>(
@@ -284,10 +308,10 @@ async function listAttendeeDayWaitlistByRegistration(
             w.status AS status
      FROM event_day_waitlist_entries w
      JOIN event_days ed ON ed.id = w.event_day_id
-     WHERE w.event_id = ?
+     WHERE w.registration_id IN (SELECT value FROM json_each(?))
        AND w.status IN ('waiting', 'offered', 'accepted')
      ORDER BY w.registration_id ASC, ed.sort_order ASC, ed.day_date ASC`,
-    [eventId],
+    [registrationIdsJson],
   );
   for (const row of rows) {
     const entries = byRegistration.get(row.registration_id) ?? [];
@@ -303,13 +327,15 @@ async function listAttendeeDayWaitlistByRegistration(
 
 async function buildAttendeeCampaignRecipients(
   db: DatabaseLike,
-  eventId: string,
+  _eventId: string,
   rows: AttendeeCampaignRow[],
   formFields: FormFieldDefinition[] | undefined,
 ): Promise<CampaignRecipient[]> {
+  if (rows.length === 0) return [];
+  const registrationIdsJson = stringifyJson(rows.map((row) => row.registration_id));
   const [dayAttendanceByRegistration, dayWaitlistByRegistration] = await Promise.all([
-    listAttendeeDayAttendanceByRegistration(db, eventId),
-    listAttendeeDayWaitlistByRegistration(db, eventId),
+    listAttendeeDayAttendanceByRegistration(db, registrationIdsJson),
+    listAttendeeDayWaitlistByRegistration(db, registrationIdsJson),
   ]);
 
   return rows.map((row) => ({
@@ -453,6 +479,61 @@ export async function computeCampaignDigest(payload: {
   return sha256Hex(JSON.stringify(canonical));
 }
 
+/** Shared D1-backed audience/template/digest preparation used by preview and send. */
+export async function prepareAdminCampaign(
+  db: DatabaseLike,
+  event: Pick<EventRecord, "id" | "slug" | "base_path" | "starts_at" | "settings_json">,
+  appBaseUrl: string,
+  input: AdminCampaignInput,
+  maxRecipients: number,
+) {
+  const template = !input.bodyContent && input.templateKey ? await resolveTemplate(db, input.templateKey) : null;
+  const messageType = input.messageType ?? template?.messageType ?? "promotional";
+  const filter: CampaignAudienceFilter = {
+    audience: input.filter.audience,
+    attendeeStatus: input.filter.attendeeStatus,
+    attendanceType: input.filter.attendanceType,
+    dayDate: input.filter.dayDate,
+    dayWaitlistStatus: input.filter.dayWaitlistStatus,
+    speakerStatus: input.filter.speakerStatus,
+  };
+  const recipients = await listCampaignRecipients(db, event, appBaseUrl, filter, { maxRecipients });
+  const digest = await computeCampaignDigest({
+    templateKey: input.templateKey,
+    subjectOverride: input.subjectOverride ?? null,
+    customText: input.customText ?? null,
+    bodyContent: input.bodyContent ?? null,
+    messageType,
+    sendMode: input.sendMode,
+    batchSize: input.batchSize,
+    filter,
+    recipients,
+  });
+  return { template, messageType, filter, recipients, digest };
+}
+
+export function assertCampaignBroadcastSafety(
+  input: Pick<AdminCampaignInput, "sendMode" | "subjectOverride" | "bodyContent" | "customText">,
+  recipients: CampaignRecipient[],
+  template: { subjectTemplate: string | null; content: string } | null,
+): void {
+  if (input.sendMode !== "bcc_batch") return;
+  const unsafeRefs = findBroadcastOnlyTemplateRefs(recipients, [
+    input.subjectOverride,
+    input.bodyContent,
+    input.customText,
+    template?.subjectTemplate,
+    template?.content,
+  ]);
+  if (unsafeRefs.length > 0) {
+    throw new AppError(
+      400,
+      "CAMPAIGN_BROADCAST_UNSAFE_TEMPLATE",
+      `Broadcast emails cannot use recipient-specific tags: ${unsafeRefs.join(", ")}. Switch to Personal (1:1) or remove those tags.`,
+    );
+  }
+}
+
 export async function signCampaignPreviewToken(payload: {
   secret: string;
   eventId: string;
@@ -460,21 +541,7 @@ export async function signCampaignPreviewToken(payload: {
   digest: string;
   ttlSeconds: number;
 }): Promise<{ token: string; expiresAt: string }> {
-  const exp = Math.floor(Date.now() / 1000) + payload.ttlSeconds;
-  const claims: CampaignPreviewClaims = {
-    v: 1,
-    type: "admin_campaign_preview",
-    eventId: payload.eventId,
-    adminId: payload.adminId,
-    digest: payload.digest,
-    exp,
-  };
-  const encoded = b64urlEncode(JSON.stringify(claims));
-  const signature = await hmacSha256Hex(payload.secret, encoded);
-  return {
-    token: `${encoded}.${signature}`,
-    expiresAt: new Date(exp * 1000).toISOString(),
-  };
+  return signAdminPreviewToken({ ...payload, type: "admin_campaign_preview" });
 }
 
 export async function verifyCampaignPreviewToken(payload: {
@@ -484,26 +551,8 @@ export async function verifyCampaignPreviewToken(payload: {
   adminId: string;
   digest: string;
 }): Promise<{ ok: true } | { ok: false; reason: "invalid" | "expired" | "mismatch" }> {
-  const parts = payload.token.split(".");
-  if (parts.length !== 2) return { ok: false, reason: "invalid" };
-  const [encoded, signature] = parts;
-  const expectedSignature = await hmacSha256Hex(payload.secret, encoded);
-  if (!safeEqual(signature, expectedSignature)) return { ok: false, reason: "invalid" };
-
-  let claims: CampaignPreviewClaims;
-  try {
-    claims = JSON.parse(b64urlDecode(encoded)) as CampaignPreviewClaims;
-  } catch {
-    return { ok: false, reason: "invalid" };
-  }
-
-  if (claims.v !== 1 || claims.type !== "admin_campaign_preview") return { ok: false, reason: "invalid" };
-  if (Math.floor(Date.now() / 1000) > claims.exp) return { ok: false, reason: "expired" };
-  if (claims.eventId !== payload.eventId || claims.adminId !== payload.adminId || claims.digest !== payload.digest) {
-    return { ok: false, reason: "mismatch" };
-  }
-
-  return { ok: true };
+  const validation = await verifyAdminPreviewToken({ ...payload, type: "admin_campaign_preview" });
+  return validation.ok ? { ok: true } : validation;
 }
 
 export function chunkRecipients(recipients: CampaignRecipient[], batchSize: number): CampaignRecipient[][] {

@@ -1,11 +1,14 @@
 import type { DatabaseLike, Env } from "../types";
 
 export const REQUEST_DB_CONTEXT_KEY = "requestDb";
+export const SENSITIVE_CONTEXT_KEY = "sensitive";
+type ContextKey = typeof REQUEST_DB_CONTEXT_KEY | typeof SENSITIVE_CONTEXT_KEY;
 
 export type RequestDbContext = {
   Bindings: Env;
   Variables: {
     [REQUEST_DB_CONTEXT_KEY]?: DatabaseLike;
+    [SENSITIVE_CONTEXT_KEY]?: boolean;
   };
 };
 
@@ -22,9 +25,10 @@ export interface AdminContext<P extends Record<string, string> = Record<string, 
   };
   var?: {
     [REQUEST_DB_CONTEXT_KEY]?: DatabaseLike;
+    [SENSITIVE_CONTEXT_KEY]?: boolean;
   };
-  get?: (key: typeof REQUEST_DB_CONTEXT_KEY) => unknown;
-  set?: (key: typeof REQUEST_DB_CONTEXT_KEY, value: DatabaseLike) => void;
+  get?: (key: ContextKey) => unknown;
+  set?: (key: ContextKey, value: DatabaseLike | boolean) => void;
 }
 
 type RequestDbCarrier = Pick<AdminContext, "env"> &

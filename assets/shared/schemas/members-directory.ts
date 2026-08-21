@@ -1,34 +1,35 @@
 import { z } from "zod";
+import { publicOrganizationPersonSchema } from "./public-person";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import {
+  organizationProfileExtendedFieldsSchema,
+  organizationProfileLongContentSchema,
+  organizationProfileSummaryFieldsSchema,
+} from "./organization-profile";
 
 /** Schemas for the public member directory & working groups endpoints. */
 
-export const publicMemberSummarySchema = z.object({
-  id: z.string(),
-  slug: z.string().nullable(),
-  name: z.string(),
-  memberType: z.string(),
-  tier: z.string().nullable(),
-  website: z.string().nullable(),
-  description: z.string().nullable(),
-  slogan: z.string().nullable(),
-  logoUrl: z.string().nullable(),
-  memberSince: z.string(),
-});
+export const publicMemberSummarySchema = z
+  .object({
+    id: z.string(),
+    slug: z.string().nullable(),
+    name: z.string(),
+    memberType: z.string(),
+    tier: z.string().nullable(),
+    memberSince: z.string(),
+  })
+  .extend(organizationProfileSummaryFieldsSchema.shape);
+
+export type PublicMemberSummary = z.infer<typeof publicMemberSummarySchema>;
 
 /** group: "organization" = org-tied categories (A-G, H1-H4, H8); "independent" = org-less H5/H6/H7 */
-export const membersListQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(500).optional(),
-  offset: z.coerce.number().int().min(0).optional(),
-  q: z.string().trim().min(1).max(200).optional(),
+export const MEMBERS_LIST_SORT_COLUMNS = ["name", "memberSince"] as const;
+export const membersListQuerySchema = listQuerySchema(MEMBERS_LIST_SORT_COLUMNS).extend({
   group: z.enum(["all", "organization", "independent"]).optional(),
 });
 
-export const membersListResponseSchema = z.object({
-  members: z.array(publicMemberSummarySchema),
-  total: z.number(),
-  limit: z.number(),
-  offset: z.number(),
-});
+export const membersListResponseSchema = paginatedResponseSchema("members", publicMemberSummarySchema);
+export type MembersListResponse = z.infer<typeof membersListResponseSchema>;
 
 export const membersListRouteSchema = {
   tags: ["Members"],
@@ -43,6 +44,36 @@ export const membersListRouteSchema = {
   },
 };
 
+export const memberWallQuerySchema = z.object({
+  memberLimit: z.coerce.number().int().min(0).max(200).optional(),
+});
+
+export const memberWallEntrySchema = z.object({
+  key: z.string(),
+  href: z.string(),
+  logoUrl: z.string(),
+  name: z.string(),
+  slogan: z.string().nullable(),
+  sponsorLevel: z.number().int().min(0),
+  sponsorLevelName: z.string().nullable(),
+});
+
+export const memberWallResponseSchema = z.object({ entries: z.array(memberWallEntrySchema) });
+export type MemberWallEntry = z.infer<typeof memberWallEntrySchema>;
+
+export const memberWallRouteSchema = {
+  tags: ["Members"],
+  summary: "Public member and sponsor logo wall",
+  description: "Returns the unified, display-ready member and sponsor wall from one bounded D1 read model.",
+  request: { query: memberWallQuerySchema },
+  responses: {
+    "200": {
+      description: "Display-ready wall entries.",
+      content: { "application/json": { schema: memberWallResponseSchema } },
+    },
+  },
+};
+
 export const publicMemberRepresentativeSchema = z.object({
   name: z.string(),
   jobTitle: z.string().nullable(),
@@ -51,28 +82,16 @@ export const publicMemberRepresentativeSchema = z.object({
   photoUrl: z.string().nullable(),
 });
 
-export const publicMemberSocialSchema = z.object({
-  x: z.string().nullable(),
-  linkedin: z.string().nullable(),
-  facebook: z.string().nullable(),
-  instagram: z.string().nullable(),
-  youtube: z.string().nullable(),
-});
-
 export const publicMemberDetailSchema = publicMemberSummarySchema.extend({
-  content: z.string().nullable(),
-  blogUrl: z.string().nullable(),
-  blogFeedUrl: z.string().nullable(),
-  pressUrl: z.string().nullable(),
-  pressFeedUrl: z.string().nullable(),
-  careersUrl: z.string().nullable(),
-  social: publicMemberSocialSchema,
+  ...organizationProfileExtendedFieldsSchema.omit({ contentMarkdown: true }).shape,
+  content: organizationProfileLongContentSchema,
   // Populated for org-tied members from show_on_org_profile=1 representatives.
   // Empty for org-less individual members — their own bio/jobTitle live on the summary/detail fields directly.
   representatives: z.array(publicMemberRepresentativeSchema),
   jobTitle: z.string().nullable(),
   linkedin: z.string().nullable(),
 });
+export type PublicMemberDetail = z.infer<typeof publicMemberDetailSchema>;
 
 export const memberLogoRouteSchema = {
   tags: ["Members"],
@@ -121,31 +140,52 @@ export const workingGroupsListRouteSchema = {
   },
 };
 
-const workingGroupChairSchema = z.object({
-  name: z.string(),
-  organizationName: z.string().nullable(),
-  organizationLogoUrl: z.string().nullable(),
-  organizationWebsite: z.string().nullable(),
-  photoUrl: z.string().nullable(),
-  linkedin: z.string().nullable(),
-});
+export const workingGroupChairSchema = publicOrganizationPersonSchema;
 
 export const workingGroupDetailSchema = workingGroupSummarySchema.extend({
   mailingListEmail: z.string().nullable(),
-  members: z.array(z.object({ name: z.string(), organizationName: z.string().nullable() })),
   chair: workingGroupChairSchema.nullable(),
   viceChair: workingGroupChairSchema.nullable(),
 });
+export type WorkingGroupChair = z.infer<typeof workingGroupChairSchema>;
+export type WorkingGroupDetail = z.infer<typeof workingGroupDetailSchema>;
 
 export const workingGroupDetailRouteSchema = {
   tags: ["Working Groups"],
   summary: "Working group detail",
-  description: "Detail plus a public subset of the member list. :id accepts either the working group UUID or its slug.",
+  description: "Working-group metadata and leadership. :id accepts either the working-group UUID or its slug.",
   request: { params: z.object({ id: z.string() }) },
   responses: {
     "200": {
       description: "Working group detail.",
       content: { "application/json": { schema: workingGroupDetailSchema } },
+    },
+    "404": { description: "Working group not found." },
+  },
+};
+
+export const publicWorkingGroupMemberSchema = z.object({
+  name: z.string(),
+  organizationName: z.string().nullable(),
+});
+export const PUBLIC_WORKING_GROUP_MEMBER_SORT_COLUMNS = ["name", "organizationName"] as const;
+export const publicWorkingGroupMembersListQuerySchema = listQuerySchema(PUBLIC_WORKING_GROUP_MEMBER_SORT_COLUMNS);
+export const publicWorkingGroupMembersListResponseSchema = paginatedResponseSchema(
+  "members",
+  publicWorkingGroupMemberSchema,
+);
+export const publicWorkingGroupMembersListRouteSchema = {
+  tags: ["Working Groups"],
+  summary: "List public working-group members",
+  description: "Paginated, searchable public roster. :wgId accepts a working-group id or slug.",
+  request: {
+    params: z.object({ wgId: z.string().trim().min(1).max(200) }),
+    query: publicWorkingGroupMembersListQuerySchema,
+  },
+  responses: {
+    "200": {
+      description: "Paginated public member roster.",
+      content: { "application/json": { schema: publicWorkingGroupMembersListResponseSchema } },
     },
     "404": { description: "Working group not found." },
   },

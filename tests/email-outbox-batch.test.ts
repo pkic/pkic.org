@@ -2,8 +2,19 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env as workerEnv } from "cloudflare:workers";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
-import { queueEmail, processPendingOutbox, processSelectedOutbox } from "../functions/_lib/email/outbox";
-import { createTemplateVersion, activateTemplateVersion } from "../functions/_lib/email/templates";
+import {
+  bulkQueueInviteEmails,
+  prepareQueueEmailStatement,
+  queueEmail,
+  processPendingOutbox,
+  processSelectedOutbox,
+} from "../functions/_lib/email/outbox";
+import {
+  createTemplateVersion,
+  activateTemplateVersion,
+  invalidateTemplateCache,
+} from "../functions/_lib/email/templates";
+import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
 import type { Env } from "../functions/_lib/types";
 
 const env = workerEnv as unknown as Env;
@@ -88,6 +99,75 @@ describe("email outbox batch processing", () => {
     expect(rows.every((r) => r.status === "sent")).toBe(true);
   });
 
+  it("enqueues a domain notification exactly once when concurrent batches reuse its idempotency key", async () => {
+    const payload = {
+      outboxId: "1234567890abcdef1234567890abcdef",
+      idempotencyKey: "speaker_invite:proposal-1:speaker-1:0",
+      eventId,
+      templateKey: "attendee_invite",
+      recipientEmail: "same@example.test",
+      messageType: "transactional" as const,
+      data: { firstName: "Same" },
+    };
+    const first = prepareQueueEmailStatement(env.DB, payload);
+    const duplicate = prepareQueueEmailStatement(env.DB, payload);
+    await Promise.all([env.DB.batch([first.statement]), env.DB.batch([duplicate.statement])]);
+
+    const rows = await queryAll<{ id: string; idempotency_key: string }>(
+      env.DB,
+      "SELECT id, idempotency_key FROM email_outbox WHERE idempotency_key = ?",
+      [payload.idempotencyKey],
+    );
+    expect(rows).toEqual([{ id: payload.outboxId, idempotency_key: payload.idempotencyKey }]);
+  });
+
+  it("claims an idempotent outbox row once when direct processors race or retry", async () => {
+    const fetchMock = makeSendgridMock();
+    vi.stubGlobal("fetch", fetchMock);
+    const payload = {
+      outboxId: "abcdef1234567890abcdef1234567890",
+      idempotencyKey: "donation_thank_you:donation-1",
+      eventId,
+      templateKey: "attendee_invite",
+      recipientEmail: "same@example.test",
+      messageType: "transactional" as const,
+      data: { firstName: "Same" },
+    };
+    const outboxId = await queueEmail(env.DB, payload);
+
+    const [first, second] = await Promise.all([
+      processSelectedOutbox(env.DB, env, [outboxId]),
+      processSelectedOutbox(env.DB, env, [outboxId]),
+    ]);
+    const retry = await processSelectedOutbox(env.DB, env, [outboxId]);
+
+    expect(first.processed + second.processed).toBe(1);
+    expect(first.skipped + second.skipped).toBe(1);
+    expect(retry).toEqual({ processed: 0, failed: 0, skipped: 1 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(
+      await queryAll<{ status: string }>(env.DB, "SELECT status FROM email_outbox WHERE id = ?", [outboxId]),
+    ).toEqual([{ status: "sent" }]);
+  });
+
+  it("bulk-enqueues hundreds of emails without consuming one D1 query per recipient", async () => {
+    const budgeted = createD1QueryBudgetedDatabase(env.DB, 2);
+    const rows = Array.from({ length: 501 }, (_, index) => ({
+      eventId,
+      templateKey: "attendee_invite",
+      recipientEmail: `bulk-${index}@example.test`,
+      subject: "Bulk invite",
+      data: { firstName: `Bulk ${index}` },
+    }));
+
+    await bulkQueueInviteEmails(budgeted.db, rows);
+
+    expect(budgeted.budget.usedQueries()).toBe(2);
+    expect((await queryAll<{ count: number }>(env.DB, "SELECT COUNT(*) AS count FROM email_outbox"))[0]?.count).toBe(
+      rows.length,
+    );
+  });
+
   it("respects the limit parameter and only processes up to limit rows", async () => {
     const fetchMock = makeSendgridMock();
     vi.stubGlobal("fetch", fetchMock);
@@ -154,6 +234,22 @@ describe("email outbox batch processing", () => {
     // All 10 fetches should start within a short window (< 200 ms) since they run concurrently
     const spread = Math.max(...startTimes) - Math.min(...startTimes);
     expect(spread).toBeLessThan(200);
+  });
+
+  it("loads shared layout, partials, and a common template once per batch", async () => {
+    const fetchMock = makeSendgridMock();
+    vi.stubGlobal("fetch", fetchMock);
+    await queueN(env.DB, eventId, 10);
+    invalidateTemplateCache();
+    const budgeted = createD1QueryBudgetedDatabase(env.DB, 100);
+
+    const result = await processPendingOutbox(budgeted.db, env, 10);
+
+    expect(result).toEqual({ processed: 10, failed: 0 });
+    // 1 backlog query + 5 shared render resources + 1 message template
+    // + two state updates per email. This must grow by two statements per
+    // row, not by reloading six templates for every concurrent recipient.
+    expect(budgeted.budget.usedQueries()).toBeLessThanOrEqual(27);
   });
 
   it("processSelectedOutbox only processes the specified ids", async () => {

@@ -11,58 +11,12 @@
  */
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
-import { requirePermission } from "../../../../../_lib/auth/permissions";
-import { all, first } from "../../../../../_lib/db/queries";
-import { AppError } from "../../../../../_lib/errors";
+import { listActiveRoleAssignmentHolders } from "../../../../../_lib/services/access-control/user-role-assignments";
 import { roleAssignmentsListRouteSchema } from "../../../../../../assets/shared/schemas/access-control";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 
-interface RoleAssignmentRow {
-  user_role_id: string;
-  user_id: string;
-  first_name: string | null;
-  last_name: string | null;
-  email: string;
-  context_type: string | null;
-  context_id: string | null;
-  expires_at: string | null;
-  created_at: string;
-}
-
 export const RoleAssignmentsList = openApiRoute(roleAssignmentsListRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  requirePermission(admin, "access:grant");
-
-  const roleId = data.params.id;
-  const role = await first<{ id: string }>(requestDb(c), "SELECT id FROM roles WHERE id = ?", [roleId]);
-  if (!role) {
-    throw new AppError(404, "NOT_FOUND", "Role not found");
-  }
-
-  const rows = await all<RoleAssignmentRow>(
-    requestDb(c),
-    `SELECT ur.id AS user_role_id, u.id AS user_id, u.first_name, u.last_name, u.email,
-            ur.context_type, ur.context_id, ur.expires_at, ur.created_at
-     FROM user_roles ur
-     JOIN users u ON u.id = ur.user_id
-     WHERE ur.role_id = ?
-       AND ur.revoked_at IS NULL
-       AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-     ORDER BY ur.created_at DESC`,
-    [roleId],
-  );
-
-  return json({
-    assignments: rows.map((r) => ({
-      userRoleId: r.user_role_id,
-      userId: r.user_id,
-      name: [r.first_name, r.last_name].filter(Boolean).join(" ") || r.email,
-      email: r.email,
-      contextType: r.context_type,
-      contextId: r.context_id,
-      expiresAt: r.expires_at,
-      createdAt: r.created_at,
-    })),
-  });
+  return json({ assignments: await listActiveRoleAssignmentHolders(requestDb(c), admin, data.params.id) });
 });

@@ -11,10 +11,7 @@ import { requireMemberFromRequest } from "../../../../_lib/auth/member";
 import { findUsersWithPermission } from "../../../../_lib/auth/permissions";
 import { queueEmail, processOutboxByIdBackground } from "../../../../_lib/email/outbox";
 import { getConfig } from "../../../../_lib/config";
-import {
-  getMyOrganizationProfile,
-  submitOrgContentChange,
-} from "../../../../_lib/services/organization-content-reviews";
+import { getMyOrganizationProfile, submitOrgContentChange } from "../../../../_lib/services/organization-content";
 import {
   myOrganizationContentChangeRouteSchema,
   myOrganizationProfileGetRouteSchema,

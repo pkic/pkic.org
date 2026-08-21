@@ -1,15 +1,13 @@
 import { z } from "zod";
-import { paginationQuerySchema, paginatedResponseSchema, sortColumnSchema } from "./pagination";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 /**
  * Allowlisted sort columns for GET /api/v1/admin/audit-log — see
- * functions/api/v1/admin/audit-log.ts. Table-qualified (`al.`) where the
- * column name would otherwise collide with the LEFT JOINed `users` table's
- * own `created_at`; `actor_display` is the query's own COALESCE(...) alias.
+ * functions/api/v1/admin/audit-log.ts. These are API-facing keys; the route
+ * maps them to qualified SQL expressions so database aliases never leak into
+ * the request contract.
  */
-export const ADMIN_AUDIT_LOG_SORT_COLUMNS = ["actor_display", "al.action", "al.entity_type", "al.created_at"] as const;
-
-export const auditLogSortValueSchema = sortColumnSchema(ADMIN_AUDIT_LOG_SORT_COLUMNS);
+export const ADMIN_AUDIT_LOG_SORT_COLUMNS = ["actor", "action", "entity_type", "created_at"] as const;
 
 // Free-text filters here have no fixed vocabulary (entity_type/actor_type/
 // action/entity_id are arbitrary application-defined strings, not an enum),
@@ -27,13 +25,11 @@ function optionalFilterString(max: number) {
   return z.string().trim().max(max).nullable().optional();
 }
 
-export const auditLogListQuerySchema = paginationQuerySchema.extend({
-  q: optionalFilterString(200),
+export const auditLogListQuerySchema = listQuerySchema(ADMIN_AUDIT_LOG_SORT_COLUMNS).extend({
   entityType: optionalFilterString(200),
   actorType: optionalFilterString(200),
   action: optionalFilterString(200),
   entityId: optionalFilterString(200),
-  sort: auditLogSortValueSchema,
 });
 
 export const auditLogEntrySchema = z.object({
@@ -47,6 +43,8 @@ export const auditLogEntrySchema = z.object({
   details: z.record(z.string(), z.unknown()).nullable(),
   created_at: z.string(),
 });
+export type AuditLogEntry = z.infer<typeof auditLogEntrySchema>;
+export const auditLogListResponseSchema = paginatedResponseSchema("entries", auditLogEntrySchema);
 
 export const auditLogListRouteSchema = {
   tags: ["Audit log"],
@@ -58,7 +56,7 @@ export const auditLogListRouteSchema = {
     "200": {
       description: "Audit log entries.",
       content: {
-        "application/json": { schema: paginatedResponseSchema("entries", auditLogEntrySchema) },
+        "application/json": { schema: auditLogListResponseSchema },
       },
     },
   },

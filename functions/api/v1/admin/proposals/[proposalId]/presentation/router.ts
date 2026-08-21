@@ -7,15 +7,26 @@ import { onRequestGet as versionDownloadGet } from "./versions/[versionId]/downl
 import { onRequestPost as versionReviewPost } from "./versions/[versionId]/review";
 import { onRequestDelete as versionDelete } from "./versions/[versionId]/index";
 import type { RequestDbContext } from "../../../../../../_lib/db/context";
+import { openApiRoute } from "../../../../../../_lib/openapi/route";
+import {
+  adminPresentationUploadRouteSchema,
+  adminPresentationVersionDeleteRouteSchema,
+  adminPresentationVersionDownloadRouteSchema,
+  adminPresentationVersionReviewRouteSchema,
+  adminPresentationVersionsListRouteSchema,
+} from "../../../../../../../assets/shared/schemas/route-contracts";
 
 const app = new Hono<RequestDbContext>();
 app.onError((error, _c) => handleError(error));
 export const openapi = fromHono(app);
 
-openapi.get("/versions", versionsGet);
-openapi.post("/versions", versionsUpload);
-openapi.get("/versions/:versionId/download", versionDownloadGet);
-openapi.post("/versions/:versionId/review", versionReviewPost);
-openapi.delete("/versions/:versionId", versionDelete);
+openapi.get("/versions", openApiRoute(adminPresentationVersionsListRouteSchema, versionsGet));
+openapi.post("/versions", openApiRoute(adminPresentationUploadRouteSchema, versionsUpload));
+openapi.get(
+  "/versions/:versionId/download",
+  openApiRoute(adminPresentationVersionDownloadRouteSchema, versionDownloadGet),
+);
+openapi.post("/versions/:versionId/review", openApiRoute(adminPresentationVersionReviewRouteSchema, versionReviewPost));
+openapi.delete("/versions/:versionId", openApiRoute(adminPresentationVersionDeleteRouteSchema, versionDelete));
 
 export default openapi;

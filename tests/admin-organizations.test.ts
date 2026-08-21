@@ -144,7 +144,7 @@ describe("Admin Organizations — membership category on the aggregate (Phase 1 
     expect(categories).toEqual([...categories].sort());
   });
 
-  it("creating an organization via the Interim Admin Tool sets member_since on the aggregate (migration 0049, regression guard)", async () => {
+  it("creating an organization via the Interim Admin Tool sets member_since on the aggregate (consolidated migration 0035, regression guard)", async () => {
     const { organizationId } = await createOrg();
     const aggregateId = await aggregateIdFor(organizationId);
 
@@ -216,11 +216,17 @@ describe("Admin Organizations — membership category on the aggregate (Phase 1 
 
     const response = await call(adminToken, `/api/v1/admin/organizations/${organizationId}/members`, {
       method: "POST",
-      body: JSON.stringify({ name: "New Rep", email: "newrep@acme.test", jobTitle: "Engineer" }),
+      body: JSON.stringify({
+        name: "New Rep",
+        email: "newrep@acme.test",
+        jobTitle: "Engineer",
+        links: ["https://github.com/newrep", "https://orcid.org/0000-0001-2345-6789"],
+      }),
     });
     expect(response.status).toBe(201);
-    const body = (await response.json()) as { representative: { representativeId: string } };
+    const body = (await response.json()) as { representative: { representativeId: string; links: string[] } };
     expect(body.representative).not.toHaveProperty("membershipCategory");
+    expect(body.representative.links).toEqual(["https://github.com/newrep", "https://orcid.org/0000-0001-2345-6789"]);
 
     const repRows = await queryAll<{ member_id: string }>(
       env.DB,
@@ -228,6 +234,14 @@ describe("Admin Organizations — membership category on the aggregate (Phase 1 
       body.representative.representativeId,
     );
     expect(await categoryFor(repRows[0].member_id)).toBe("B");
+
+    const detailResponse = await call(adminToken, `/api/v1/admin/organizations/${organizationId}`);
+    const detail = (await detailResponse.json()) as {
+      organization: { representatives: Array<{ email: string; links: string[] }> };
+    };
+    expect(detail.organization.representatives.find((rep) => rep.email === "newrep@acme.test")?.links).toEqual(
+      body.representative.links,
+    );
   });
 
   it("rejects adding a representative when the organization has no category set yet", async () => {

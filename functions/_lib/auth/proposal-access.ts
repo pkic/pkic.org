@@ -14,9 +14,10 @@ export interface ProposalAccess {
  * `hasPermission`, not the dropped `event_permissions` table (see migration
  * 0035). `proposals:score` (program_committee, event_moderator)
  * grants review; `proposals:manage` (event_organizer, program_committee)
- * grants finalize — matching the old REVIEW_PERMISSIONS/FINALIZE_PERMISSIONS
- * sets those roles were backfilled from. Global admins keep full access via
- * hasPermission's built-in role='admin' bypass.
+ * grants finalize. These are separate capabilities: custom roles must
+ * explicitly receive `proposals:score` to author reviews. Seeded roles retain
+ * both permissions, matching the old REVIEW_PERMISSIONS/FINALIZE_PERMISSIONS
+ * sets. Global admins keep full access via hasPermission's role bypass.
  */
 export async function getProposalAccessForEvent(
   _db: DatabaseLike,
@@ -30,7 +31,7 @@ export async function getProposalAccessForEvent(
 
   return {
     eventPermissions,
-    canReview: hasPermission(actor, "proposals:score", context) || hasPermission(actor, "proposals:manage", context),
+    canReview: hasPermission(actor, "proposals:score", context),
     canFinalize: hasPermission(actor, "proposals:manage", context),
   };
 }

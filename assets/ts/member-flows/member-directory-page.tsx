@@ -3,42 +3,23 @@
  * A-Z grid (layouts/partials/members/listing.html, driven by hugo.Data.members
  * at build time) with a Preact component that fetches GET /api/v1/members.
  *
- * D1 is now the source of truth (Step 2 has run), so this fetches once
- * per page-load (group is fixed per page: "organization" for /members/,
- * "independent" for /members/independent/) at a limit generous enough to
- * cover the whole directory in one request, then filters/groups by letter
- * client-side — mirroring the instant-filter UX the old assets/js/members.js
- * script gave, without a network round-trip per keystroke. The public
- * endpoint's cache headers (5min client / 15min CDN) make this cheap even
- * under repeated page loads.
+ * D1 is now the source of truth (Step 2 has run). Search, sorting, and
+ * pagination are sent to the API and performed in D1; the browser only
+ * groups the current page into presentation buckets.
  */
 import { render } from "preact";
 import { useMemo, useState, useEffect, useCallback } from "preact/hooks";
 import { getJson } from "../shared/api-client";
 import { Spinner } from "../components/Spinner";
 import { ErrorAlert } from "../components/ErrorAlert";
+import { Pager } from "../components/Pager";
+import { membersListResponseSchema, type PublicMemberSummary } from "../../shared/schemas/members-directory";
 
 const API_BASE_FALLBACK = "/api/v1";
-const FETCH_LIMIT = 500;
+const DEFAULT_PAGE_SIZE = 50;
 const DIGITS = new Set("0123456789".split(""));
 
-export interface DirectoryMember {
-  id: string;
-  slug: string | null;
-  name: string;
-  memberType: string;
-  tier: string | null;
-  website: string | null;
-  description: string | null;
-  slogan: string | null;
-  logoUrl: string | null;
-  memberSince: string;
-}
-
-interface DirectoryResponse {
-  members: DirectoryMember[];
-  total: number;
-}
+export type DirectoryMember = PublicMemberSummary;
 
 function letterBucket(name: string): string {
   const c = name.trim().charAt(0).toUpperCase();
@@ -185,39 +166,53 @@ function MemberDirectory({
 }) {
   const [members, setMembers] = useState<DirectoryMember[] | null>(null);
   const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const [offset, setOffset] = useState(0);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   const load = useCallback(async () => {
     setError(null);
+    setMembers(null);
     try {
-      const data = await getJson<DirectoryResponse>(`${apiBase}/members?group=${group}&limit=${FETCH_LIMIT}&offset=0`);
+      const query = new URLSearchParams({
+        group,
+        limit: String(pageSize),
+        offset: String(offset),
+        sort: "name",
+      });
+      if (search) query.set("q", search);
+      const data = membersListResponseSchema.parse(await getJson<unknown>(`${apiBase}/members?${query.toString()}`));
       setMembers(data.members);
-      setTotal(data.total);
+      setTotal(data.page.total);
+      setHasMore(data.page.hasMore);
     } catch (e) {
       setError((e as Error).message);
     }
-  }, [apiBase, group]);
+  }, [apiBase, group, offset, pageSize, search]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const filtered = useMemo(() => {
-    if (!members) return [];
-    const q = search.trim().toLowerCase();
-    if (!q) return members;
-    return members.filter((m) => m.name.toLowerCase().includes(q));
-  }, [members, search]);
-
   if (error) return <ErrorAlert error={error} />;
   if (!members) return <Spinner />;
+
+  const page = Math.floor(offset / pageSize) + 1;
+
+  function submitSearch(event: SubmitEvent): void {
+    event.preventDefault();
+    setOffset(0);
+    setSearch(searchInput.trim());
+  }
 
   return (
     <>
       <div class="py-3">
         <div class="container">
-          <div class="members-search-bar mx-auto">
+          <form class="members-search-bar mx-auto" onSubmit={submitSearch}>
             <div class="input-group input-group-lg">
               <span class="input-group-text bg-white border-end-0 text-muted">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
@@ -227,23 +222,36 @@ function MemberDirectory({
               <input
                 type="search"
                 class="form-control border-start-0 ps-0"
-                placeholder={`Filter ${members.length} ${label}…`}
-                aria-label={`Filter ${label}`}
+                placeholder={`Search ${label}…`}
+                aria-label={`Search ${label}`}
                 autocomplete="off"
-                value={search}
-                onInput={(e) => setSearch((e.target as HTMLInputElement).value)}
+                value={searchInput}
+                onInput={(e) => setSearchInput((e.target as HTMLInputElement).value)}
               />
+              <button class="btn btn-primary" type="submit">
+                Search
+              </button>
             </div>
-          </div>
-          {total > members.length && (
-            <p class="text-muted small text-center mt-2">
-              Showing the first {members.length.toLocaleString()} of {total.toLocaleString()} {label}.
-            </p>
-          )}
+          </form>
         </div>
       </div>
       <div class="container-fluid px-2 px-md-4 pb-5">
-        <DirectoryGrid members={filtered} prefix={prefix} detailBase={detailBase} />
+        <DirectoryGrid members={members} prefix={prefix} detailBase={detailBase} />
+        <Pager
+          page={page}
+          hasMore={hasMore}
+          pageSize={pageSize}
+          offset={offset}
+          rowCount={members.length}
+          total={total}
+          onPrev={() => setOffset(Math.max(0, offset - pageSize))}
+          onNext={() => setOffset(offset + pageSize)}
+          onJump={(nextPage) => setOffset((nextPage - 1) * pageSize)}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setOffset(0);
+          }}
+        />
       </div>
     </>
   );

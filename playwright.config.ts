@@ -6,6 +6,7 @@ const e2eBaseUrl = `http://127.0.0.1:${e2ePort}`;
 export default defineConfig({
   testDir: "./tests/e2e",
   testMatch: "**/*.spec.ts",
+  testIgnore: "**/._*",
   timeout: 120_000,
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),

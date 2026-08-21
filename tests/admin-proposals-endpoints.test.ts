@@ -2,18 +2,25 @@ import { describe, expect, it, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { env } from "cloudflare:workers";
+import {
+  adminProposalDetailResponseSchema,
+  adminProposalSpeakerPatchResponseSchema,
+  adminProposalSpeakersResponseSchema,
+} from "../assets/shared/schemas/admin-event-proposals";
 import app from "../functions/router";
 import { onRequestGet as getProposalDetail } from "../functions/api/v1/admin/proposals/[proposalId]";
 import { onRequestPost as openProposalManage } from "../functions/api/v1/admin/proposals/[proposalId]/open-manage";
-import { onRequestGet as getProposalReviews } from "../functions/api/v1/admin/proposals/[proposalId]/reviews";
-import { onRequestPatch as updateProposalSpeaker } from "../functions/api/v1/admin/proposals/[proposalId]/speakers/[userId]";
-import {
-  onRequestGet as getProposalComments,
-  onRequestPost as addProposalComment,
-} from "../functions/api/v1/admin/proposals/[proposalId]/comments";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { getProposalByManageToken } from "../functions/_lib/services/proposals";
+import { adminEventProposalsResponseSchema } from "../assets/shared/schemas/admin-event-proposals";
+import {
+  proposalCommentCreateResponseSchema,
+  proposalCommentsListResponseSchema,
+} from "../assets/shared/schemas/proposal-comments";
+import { adminProposalPatchResponseSchema } from "../assets/shared/schemas/proposal-management";
+import { proposalReviewsListResponseSchema } from "../assets/shared/schemas/proposal-reviews";
+import { editAdminProposalSpeaker } from "../functions/_lib/services/proposal-speaker-admin";
 
 const proposalDetails = {
   audience: "Operators",
@@ -28,6 +35,60 @@ const proposalDetailsJson = JSON.stringify(proposalDetails);
 async function callAdminProposalsList(token: string, path: string): Promise<Response> {
   return app.fetch(
     new Request(`https://app.test${path}`, { headers: { authorization: `Bearer ${token}` } }),
+    env as any,
+    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+  );
+}
+
+async function callAdminProposalComments(
+  token: string,
+  proposalId: string,
+  suffix = "",
+  init?: RequestInit,
+): Promise<Response> {
+  return app.fetch(
+    new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/comments${suffix}`, {
+      ...init,
+      headers: { authorization: `Bearer ${token}`, ...init?.headers },
+    }),
+    env as any,
+    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+  );
+}
+
+async function callAdminProposalPatch(token: string, proposalId: string, body: unknown): Promise<Response> {
+  return app.fetch(
+    new Request(`https://app.test/api/v1/admin/proposals/${proposalId}`, {
+      method: "PATCH",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+    env as any,
+    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+  );
+}
+
+async function callAdminProposalReviews(token: string, proposalId: string, suffix = ""): Promise<Response> {
+  return app.fetch(
+    new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/reviews${suffix}`, {
+      headers: { authorization: `Bearer ${token}` },
+    }),
+    env as any,
+    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+  );
+}
+
+async function callAdminProposalSpeakers(
+  token: string,
+  proposalId: string,
+  suffix = "",
+  init?: RequestInit,
+): Promise<Response> {
+  return app.fetch(
+    new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers${suffix}`, {
+      ...init,
+      headers: { authorization: `Bearer ${token}`, ...init?.headers },
+    }),
     env as any,
     { passThroughOnException: () => {}, waitUntil: () => {} } as any,
   );
@@ -163,6 +224,29 @@ async function seedProposalWithReviews(
   return { proposalId, adminId };
 }
 
+async function seedProposalSpeaker(
+  proposalId: string,
+  options: { status?: "pending" | "invited" | "confirmed" | "declined"; role?: string } = {},
+): Promise<{ speakerId: string; proposalSpeakerId: string }> {
+  const speakerId = crypto.randomUUID();
+  const proposalSpeakerId = crypto.randomUUID();
+  const email = `profile-speaker-${speakerId}@example.test`;
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO users (
+           id, email, normalized_email, first_name, last_name, organization_name, job_title,
+           biography, links_json, created_at, updated_at
+         ) VALUES (?, ?, ?, 'Profile', 'Speaker', 'Old Org', 'Old Role', NULL, NULL, datetime('now'), datetime('now'))`,
+    ).bind(speakerId, email, email),
+    env.DB.prepare(
+      `INSERT INTO proposal_speakers (
+           id, proposal_id, user_id, role, status, manage_link_secret, created_at
+         ) VALUES (?, ?, ?, ?, ?, NULL, datetime('now'))`,
+    ).bind(proposalSpeakerId, proposalId, speakerId, options.role ?? "speaker", options.status ?? "pending"),
+  ]);
+  return { speakerId, proposalSpeakerId };
+}
+
 describe("admin proposal endpoints", () => {
   beforeEach(async () => {
     await resetDb();
@@ -176,23 +260,10 @@ describe("admin proposal endpoints", () => {
     const response = await callAdminProposalsList(adminToken, "/api/v1/admin/events/pqc-2026/proposals");
 
     expect(response.status).toBe(200);
-    const payload = (await response.json()) as {
-      proposals: Array<{
-        proposer_email: string;
-        review_count: number;
-        average_review_score: number | null;
-        recommendation_accept_count: number;
-        decision_status: string | null;
-      }>;
-      page: { total: number; hasMore: boolean; limit: number; offset: number };
-      stats: {
-        byStatus: Record<string, number>;
-        byRecommendation: Record<string, number>;
-        reviewedCount: number;
-        unreviewedCount: number;
-        total: number;
-      };
-    };
+    const raw = (await response.json()) as { proposals: Array<Record<string, unknown>> };
+    expect(raw.proposals[0]).not.toHaveProperty("manage_link_secret");
+    expect(raw.proposals[0]).not.toHaveProperty("referral_code");
+    const payload = adminEventProposalsResponseSchema.parse(raw);
 
     expect(payload.proposals.length).toBe(1);
     expect(payload.proposals[0].proposer_email).toBe("speaker@pkic.org");
@@ -246,7 +317,7 @@ describe("admin proposal endpoints", () => {
     const adminToken = await createAdminSession(env.DB, adminId, "token-admin-list-sort");
     const scoreResponse = await callAdminProposalsList(
       adminToken,
-      "/api/v1/admin/events/pqc-2026/proposals?sort=score_asc",
+      "/api/v1/admin/events/pqc-2026/proposals?sort=score",
     );
     const scorePayload = (await scoreResponse.json()) as { proposals: Array<{ title: string }> };
     expect(scorePayload.proposals.map((proposal) => proposal.title)).toEqual([
@@ -320,41 +391,32 @@ describe("admin proposal endpoints", () => {
   it("updates a proposal speaker profile including links", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
-    const speakerId = crypto.randomUUID();
+    const { speakerId } = await seedProposalSpeaker(proposalId);
     const adminToken = await createAdminSession(env.DB, adminId, "token-admin-speaker-profile");
 
-    await env.DB.batch([
-      env.DB.prepare(`
-        INSERT INTO users (id, email, normalized_email, first_name, last_name, organization_name, job_title, biography, links_json, created_at, updated_at)
-        VALUES ('${speakerId}', 'profile-speaker@example.test', 'profile-speaker@example.test', 'Profile', 'Speaker', 'Old Org', 'Old Role', NULL, NULL, datetime('now'), datetime('now'))
-      `),
-      env.DB.prepare(`
-        INSERT INTO proposal_speakers (id, proposal_id, user_id, role, status, manage_link_secret, created_at)
-        VALUES ('${crypto.randomUUID()}', '${proposalId}', '${speakerId}', 'speaker', 'pending', NULL, datetime('now'))
-      `),
-    ]);
-
-    const response = await updateProposalSpeaker(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${speakerId}`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json", authorization: `Bearer ${adminToken}` },
-          body: JSON.stringify({
-            firstName: "Updated",
-            lastName: "Speaker",
-            organizationName: "PKIC Labs",
-            jobTitle: "Moderator",
-            biography: "Updated biography from the admin proposal detail screen.",
-            links: ["https://example.test/speaker", "https://github.com/speaker"],
-            role: "moderator",
-          }),
-        }),
-        { proposalId, userId: speakerId },
-      ),
-    );
+    const response = await callAdminProposalSpeakers(adminToken, proposalId, `/${speakerId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        firstName: "Updated",
+        lastName: "Speaker",
+        organizationName: "PKIC Labs",
+        jobTitle: "Moderator",
+        biography: "Updated biography from the admin proposal detail screen.",
+        links: ["https://example.test/speaker", "https://github.com/speaker"],
+        role: "moderator",
+      }),
+    });
 
     expect(response.status).toBe(200);
+    const payload = adminProposalSpeakerPatchResponseSchema.parse(await response.json());
+    expect(payload.speaker).toMatchObject({
+      userId: speakerId,
+      firstName: "Updated",
+      organizationName: "PKIC Labs",
+      role: "moderator",
+      links: ["https://example.test/speaker", "https://github.com/speaker"],
+    });
     const user = (
       await queryAll<{
         first_name: string | null;
@@ -379,6 +441,153 @@ describe("admin proposal endpoints", () => {
     expect(user.biography).toBe("Updated biography from the admin proposal detail screen.");
     expect(JSON.parse(user.links_json ?? "[]")).toEqual(["https://example.test/speaker", "https://github.com/speaker"]);
     expect(speaker.role).toBe("moderator");
+  });
+
+  it("returns the proposal speaker roster through its canonical response schema", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const { speakerId } = await seedProposalSpeaker(proposalId, { status: "confirmed" });
+    const adminToken = await createAdminSession(env.DB, adminId, "token-admin-speaker-roster");
+
+    const response = await callAdminProposalSpeakers(adminToken, proposalId);
+
+    expect(response.status).toBe(200);
+    const payload = adminProposalSpeakersResponseSchema.parse(await response.json());
+    expect(payload.summary).toMatchObject({ total: 1, confirmed: 1, pending: 0, declined: 0 });
+    expect(payload.speakers[0]).toMatchObject({ userId: speakerId, role: "speaker", links: [] });
+  });
+
+  it("rejects an invalid proposal speaker role through the mounted shared schema", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const { speakerId } = await seedProposalSpeaker(proposalId);
+    const adminToken = await createAdminSession(env.DB, adminId, "token-admin-speaker-invalid-role");
+
+    const response = await callAdminProposalSpeakers(adminToken, proposalId, `/${speakerId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ role: "keynote-emperor" }),
+    });
+
+    expect(response.status).toBe(400);
+    const [speaker] = await queryAll<{ role: string }>(env.DB, "SELECT role FROM proposal_speakers WHERE user_id = ?", [
+      speakerId,
+    ]);
+    expect(speaker.role).toBe("speaker");
+  });
+
+  it("rolls back every proposal speaker change when its audit write fails", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const { speakerId } = await seedProposalSpeaker(proposalId);
+    const adminToken = await createAdminSession(env.DB, adminId, "token-admin-speaker-audit-rollback");
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_admin_speaker_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'speaker_profile_updated'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced speaker audit failure');
+       END`,
+    ).run();
+
+    const response = await callAdminProposalSpeakers(adminToken, proposalId, `/${speakerId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ firstName: "Must Roll Back", role: "moderator" }),
+    });
+    await env.DB.prepare("DROP TRIGGER fail_admin_speaker_audit").run();
+
+    expect(response.status).toBe(500);
+    const [user] = await queryAll<{ first_name: string }>(env.DB, "SELECT first_name FROM users WHERE id = ?", [
+      speakerId,
+    ]);
+    const [speaker] = await queryAll<{ role: string }>(env.DB, "SELECT role FROM proposal_speakers WHERE user_id = ?", [
+      speakerId,
+    ]);
+    expect(user.first_name).toBe("Profile");
+    expect(speaker.role).toBe("speaker");
+  });
+
+  it("rejects a stale proposal speaker plan without committing its profile, role, or audit fallout", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const { speakerId } = await seedProposalSpeaker(proposalId);
+    const baseDb: DatabaseLike = env.DB;
+    let injectedChange = false;
+    const racingDb: DatabaseLike = {
+      prepare: (query) => baseDb.prepare(query),
+      async batch(statements) {
+        if (!injectedChange) {
+          injectedChange = true;
+          await baseDb
+            .prepare("UPDATE users SET first_name = 'Concurrent', updated_at = ? WHERE id = ?")
+            .bind("2099-01-01T00:00:00.000Z", speakerId)
+            .run();
+        }
+        return baseDb.batch(statements);
+      },
+    };
+
+    await expect(
+      editAdminProposalSpeaker(
+        racingDb,
+        { id: adminId, email: "admin@pkic.org", role: "admin" },
+        proposalId,
+        speakerId,
+        { biography: "This stale biography must not be stored.", role: "moderator" },
+        "https://app.test",
+      ),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
+    const [user] = await queryAll<{ first_name: string; biography: string | null }>(
+      env.DB,
+      "SELECT first_name, biography FROM users WHERE id = ?",
+      [speakerId],
+    );
+    const [speaker] = await queryAll<{ role: string }>(env.DB, "SELECT role FROM proposal_speakers WHERE user_id = ?", [
+      speakerId,
+    ]);
+    expect(user).toEqual({ first_name: "Concurrent", biography: null });
+    expect(speaker.role).toBe("speaker");
+    await expect(
+      queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'speaker_profile_updated'"),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("keeps a declined speaker inactive when an admin changes the proposal role", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const { speakerId } = await seedProposalSpeaker(proposalId, { status: "declined" });
+    const adminToken = await createAdminSession(env.DB, adminId, "token-admin-declined-speaker-role");
+    await env.DB.batch([
+      env.DB.prepare("UPDATE session_proposals SET status = 'accepted', updated_at = ? WHERE id = ?").bind(
+        "2028-01-01T00:00:00.000Z",
+        proposalId,
+      ),
+      env.DB.prepare(
+        `INSERT INTO event_participants (
+             id, event_id, user_id, role, subrole, status, source_type, source_ref, created_at, updated_at
+           ) VALUES (?, ?, ?, 'speaker', NULL, 'active', 'proposal', ?, datetime('now'), datetime('now'))`,
+      ).bind(crypto.randomUUID(), eventId, speakerId, proposalId),
+    ]);
+
+    const response = await callAdminProposalSpeakers(adminToken, proposalId, `/${speakerId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ role: "moderator" }),
+    });
+
+    expect(response.status).toBe(200);
+    const participants = await queryAll<{ role: string; status: string }>(
+      env.DB,
+      `SELECT role, status FROM event_participants
+       WHERE event_id = ? AND user_id = ? AND source_type = 'proposal'
+       ORDER BY role`,
+      [eventId, speakerId],
+    );
+    expect(participants).toEqual([
+      { role: "moderator", status: "inactive" },
+      { role: "speaker", status: "inactive" },
+    ]);
   });
 
   it("searches proposal and review text", async () => {
@@ -411,12 +620,13 @@ describe("admin proposal endpoints", () => {
     );
 
     expect(response.status).toBe(200);
-    const payload = (await response.json()) as {
-      proposal: { details: Record<string, unknown> | null };
-      form: { title: string; fields: Array<{ key: string; label: string; fieldType: string }> } | null;
-    };
+    const rawPayload = await response.json();
+    const payload = adminProposalDetailResponseSchema.parse(rawPayload);
 
     expect(payload.proposal.details).toEqual(proposalDetails);
+    expect(rawPayload).not.toHaveProperty("proposal.manage_link_secret");
+    expect(rawPayload).not.toHaveProperty("proposal.manage_token_hash");
+    expect(rawPayload).not.toHaveProperty("proposal.referral_code");
     expect(payload.form?.title).toBe("CFP Form");
     expect(payload.form?.fields.map((field) => [field.key, field.label, field.fieldType])).toEqual([
       ["audience", "Target audience", "text"],
@@ -432,24 +642,52 @@ describe("admin proposal endpoints", () => {
 
     const adminToken = await createAdminSession(env.DB, adminId, "token-admin-reviews");
 
-    const response = await getProposalReviews(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/reviews`, {
-          headers: { authorization: `Bearer ${adminToken}` },
-        }),
-        { proposalId },
-      ),
-    );
+    const response = await callAdminProposalReviews(adminToken, proposalId);
 
     expect(response.status).toBe(200);
-    const payload = (await response.json()) as {
-      reviews: Array<{ reviewer_email?: string; reviewer_first_name?: string | null }>;
-    };
+    const payload = proposalReviewsListResponseSchema.parse(await response.json());
 
     expect(payload.reviews.length).toBe(1);
     expect(payload.reviews[0].reviewer_email).toBe("admin@pkic.org");
     expect(payload.reviews[0].reviewer_first_name ?? null).toBeNull();
+    expect(payload.summary).toMatchObject({ totalReviews: 1, acceptCount: 1, quorumMet: false });
+    expect(payload.page).toEqual({ limit: 25, offset: 0, total: 1, hasMore: false });
+  });
+
+  it("searches and paginates reviews in D1 while returning unfiltered proposal aggregates", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const secondReviewerId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO users (id, email, normalized_email, first_name, role, active, created_at, updated_at)
+           VALUES (?, 'second-reviewer@pkic.org', 'second-reviewer@pkic.org', 'Second', 'admin', 1, datetime('now'), datetime('now'))`,
+      ).bind(secondReviewerId),
+      env.DB.prepare(
+        `INSERT INTO proposal_reviews (
+             id, proposal_id, reviewer_user_id, recommendation, score,
+             reviewer_comment, applicant_note, created_at, updated_at
+           ) VALUES (?, ?, ?, 'reject', 7, 'Different deployment concern', NULL, datetime('now'), datetime('now'))`,
+      ).bind(crypto.randomUUID(), proposalId, secondReviewerId),
+    ]);
+    const adminToken = await createAdminSession(env.DB, adminId, "token-admin-review-query");
+
+    const response = await callAdminProposalReviews(adminToken, proposalId, "?limit=1&q=deployment&sort=-score");
+
+    expect(response.status).toBe(200);
+    const payload = proposalReviewsListResponseSchema.parse(await response.json());
+    expect(payload.reviews.map((review) => review.reviewer_email)).toEqual(["second-reviewer@pkic.org"]);
+    expect(payload.page).toEqual({ limit: 1, offset: 0, total: 1, hasMore: false });
+    expect(payload.myReview?.reviewer_user_id).toBe(adminId);
+    expect(payload.summary).toEqual({
+      totalReviews: 2,
+      averageScore: 8,
+      acceptCount: 1,
+      needsWorkCount: 0,
+      rejectCount: 1,
+      minReviewsRequired: 2,
+      quorumMet: true,
+    });
   });
 
   it("stores and returns internal proposal comments", async () => {
@@ -457,39 +695,113 @@ describe("admin proposal endpoints", () => {
     const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
     const adminToken = await createAdminSession(env.DB, adminId, "token-admin-comments");
 
-    const addResponse = await addProposalComment(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/comments`, {
-          method: "POST",
-          headers: {
-            authorization: `Bearer ${adminToken}`,
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({ comment: "Discuss **schedule fit** before final email." }),
-        }),
-        { proposalId },
-      ),
-    );
+    const addResponse = await callAdminProposalComments(adminToken, proposalId, "", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ comment: "Discuss **schedule fit** before final email." }),
+    });
 
     expect(addResponse.status).toBe(200);
-    const addPayload = (await addResponse.json()) as { comment: { comment: string; author_email: string } };
+    const addPayload = proposalCommentCreateResponseSchema.parse(await addResponse.json());
     expect(addPayload.comment.comment).toContain("schedule fit");
     expect(addPayload.comment.author_email).toBe("admin@pkic.org");
 
-    const listResponse = await getProposalComments(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/comments`, {
-          headers: { authorization: `Bearer ${adminToken}` },
-        }),
-        { proposalId },
-      ),
-    );
+    const listResponse = await callAdminProposalComments(adminToken, proposalId, "?limit=1&q=schedule");
     expect(listResponse.status).toBe(200);
-    const listPayload = (await listResponse.json()) as { comments: Array<{ comment: string }> };
+    const listPayload = proposalCommentsListResponseSchema.parse(await listResponse.json());
     expect(listPayload.comments).toHaveLength(1);
     expect(listPayload.comments[0].comment).toBe("Discuss **schedule fit** before final email.");
+    expect(listPayload.page).toEqual({ limit: 1, offset: 0, total: 1, hasMore: false });
+    const [audit] = await queryAll<{ details_json: string }>(
+      env.DB,
+      "SELECT details_json FROM audit_log WHERE action = 'proposal_internal_comment_added'",
+    );
+    expect(JSON.parse(audit.details_json)).toEqual({ commentId: { from: null, to: addPayload.comment.id } });
+
+    const secondAddResponse = await callAdminProposalComments(adminToken, proposalId, "", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ comment: "A second internal note." }),
+    });
+    expect(secondAddResponse.status).toBe(200);
+    const firstPage = proposalCommentsListResponseSchema.parse(
+      await (await callAdminProposalComments(adminToken, proposalId, "?limit=1")).json(),
+    );
+    expect(firstPage.comments).toHaveLength(1);
+    expect(firstPage.page).toEqual({ limit: 1, offset: 0, total: 2, hasMore: true });
+  });
+
+  it("rolls back a proposal comment when its audit write fails", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const adminToken = await createAdminSession(env.DB, adminId, "token-admin-comment-rollback");
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_proposal_comment_audit
+         BEFORE INSERT ON audit_log
+         WHEN NEW.action = 'proposal_internal_comment_added'
+         BEGIN
+           SELECT RAISE(ABORT, 'forced audit failure');
+         END`,
+    ).run();
+
+    const response = await callAdminProposalComments(adminToken, proposalId, "", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ comment: "This must roll back." }),
+    });
+
+    expect(response.status).toBe(500);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM proposal_internal_comments WHERE proposal_id = ?", [proposalId]),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("atomically edits proposal text and records only changed fields", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const adminToken = await createAdminSession(env.DB, adminId, "token-admin-proposal-edit");
+
+    const response = await callAdminProposalPatch(adminToken, proposalId, { title: "Updated Endpoint Proposal" });
+    expect(response.status).toBe(200);
+    const payload = adminProposalPatchResponseSchema.parse(await response.json());
+    expect(payload.proposal.title).toBe("Updated Endpoint Proposal");
+    const [audit] = await queryAll<{ details_json: string }>(
+      env.DB,
+      "SELECT details_json FROM audit_log WHERE action = 'proposal_edited'",
+    );
+    expect(JSON.parse(audit.details_json)).toEqual({
+      title: { from: "Endpoint Proposal", to: "Updated Endpoint Proposal" },
+    });
+  });
+
+  it("rolls back a proposal edit when its audit write fails", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const adminToken = await createAdminSession(env.DB, adminId, "token-admin-proposal-edit-rollback");
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_proposal_edit_audit
+         BEFORE INSERT ON audit_log
+         WHEN NEW.action = 'proposal_edited'
+         BEGIN
+           SELECT RAISE(ABORT, 'forced audit failure');
+         END`,
+    ).run();
+
+    const response = await callAdminProposalPatch(adminToken, proposalId, { title: "Must Roll Back" });
+    expect(response.status).toBe(500);
+    const [proposal] = await queryAll<{ title: string }>(env.DB, "SELECT title FROM session_proposals WHERE id = ?", [
+      proposalId,
+    ]);
+    expect(proposal.title).toBe("Endpoint Proposal");
+  });
+
+  it("rejects an empty proposal edit through the mounted shared schema", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const adminToken = await createAdminSession(env.DB, adminId, "token-admin-proposal-edit-empty");
+
+    const response = await callAdminProposalPatch(adminToken, proposalId, {});
+    expect(response.status).toBe(400);
   });
 
   it("refreshes the proposer manage token and returns a working manage URL", async () => {

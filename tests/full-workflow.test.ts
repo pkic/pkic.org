@@ -6,8 +6,7 @@ import { createTemplateVersion, activateTemplateVersion } from "../functions/_li
 import { onRequestPost as requestAdminLink } from "../functions/api/v1/admin/auth/request-link";
 import { onRequestPost as verifyAdminLink } from "../functions/api/v1/admin/auth/verify-link";
 import { onRequestPost as inviteSpeakersBulk } from "../functions/api/v1/admin/events/[eventSlug]/invites/speakers/bulk";
-import { onRequestPost as addProposalReview } from "../functions/api/v1/admin/proposals/[proposalId]/reviews";
-import { onRequestPost as finalizeProposal } from "../functions/api/v1/admin/proposals/[proposalId]/finalize";
+import { onRequestPost as previewSpeakerInvites } from "../functions/api/v1/admin/events/[eventSlug]/invites/speakers/preview";
 import { onRequestPost as submitProposal } from "../functions/api/v1/events/[eventSlug]/proposals";
 import { onRequestPost as createRegistration } from "../functions/api/v1/events/[eventSlug]/registrations";
 import { onRequest as confirmRegistrationEmail } from "../functions/api/v1/events/[eventSlug]/registrations/confirm-email";
@@ -17,6 +16,7 @@ import { onRequestGet as referralRedirect } from "../functions/r/[code]";
 import { onRequestPost as retryPendingEmail } from "../functions/api/v1/internal/email/retry";
 import { queueEmail } from "../functions/_lib/email/outbox";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
+import app from "../functions/router";
 
 interface VerifyAdminPayload {
   token: string;
@@ -103,6 +103,10 @@ async function extractTokenFromOutboxUrl(payloadJson: string, fieldName: string)
   return token;
 }
 
+async function callMountedApp(request: Request): Promise<Response> {
+  return app.fetch(request, env as any, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
+}
+
 describe("full workflow", () => {
   it("runs end-to-end attendee and speaker workflows", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
@@ -166,6 +170,25 @@ describe("full workflow", () => {
       ).run();
       const reviewerToken = await createAdminSession(env.DB, reviewerUserId, "reviewer-2-token");
 
+      const speakerInvites = [
+        { email: "speaker@example.test", firstName: "Speaker", lastName: "One", sourceType: "direct" },
+      ];
+      const speakerPreviewResponse = await previewSpeakerInvites(
+        createContext(
+          env,
+          new Request("https://app.test/api/v1/admin/events/pqc-2026/invites/speakers/preview", {
+            method: "POST",
+            headers: { "content-type": "application/json", cookie: adminSessionCookie },
+            body: JSON.stringify({ invites: speakerInvites }),
+          }),
+          { eventSlug: "pqc-2026" },
+        ),
+      );
+      expect(speakerPreviewResponse.status).toBe(200);
+      const speakerPreview = (await speakerPreviewResponse.json()) as {
+        previewToken: string;
+        inviteDigest: string;
+      };
       const speakerInviteResponse = await inviteSpeakersBulk(
         createContext(
           env,
@@ -176,7 +199,9 @@ describe("full workflow", () => {
               cookie: adminSessionCookie,
             },
             body: JSON.stringify({
-              invites: [{ email: "speaker@example.test", firstName: "Speaker", lastName: "One", sourceType: "direct" }],
+              invites: speakerInvites,
+              previewToken: speakerPreview.previewToken,
+              inviteDigest: speakerPreview.inviteDigest,
             }),
           }),
           { eventSlug: "pqc-2026" },
@@ -230,63 +255,50 @@ describe("full workflow", () => {
       expect(proposalResponse.status).toBe(200);
       const createdProposal = (await proposalResponse.json()) as ProposalPayload;
 
-      const reviewOneResponse = await addProposalReview(
-        createContext(
-          env,
-          new Request(`https://app.test/api/v1/admin/proposals/${createdProposal.proposalId}/reviews`, {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              cookie: adminSessionCookie,
-            },
-            body: JSON.stringify({
-              recommendation: "accept",
-              score: 9,
-              reviewerComment: "Strong proposal",
-            }),
+      const reviewOneResponse = await callMountedApp(
+        new Request(`https://app.test/api/v1/admin/proposals/${createdProposal.proposalId}/reviews`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            cookie: adminSessionCookie,
+          },
+          body: JSON.stringify({
+            recommendation: "accept",
+            score: 9,
+            reviewerComment: "Strong proposal",
           }),
-          { proposalId: createdProposal.proposalId },
-        ),
+        }),
       );
       expect(reviewOneResponse.status).toBe(200);
 
-      const reviewTwoResponse = await addProposalReview(
-        createContext(
-          env,
-          new Request(`https://app.test/api/v1/admin/proposals/${createdProposal.proposalId}/reviews`, {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              authorization: `Bearer ${reviewerToken}`,
-            },
-            body: JSON.stringify({
-              recommendation: "accept",
-              score: 8,
-              reviewerComment: "Also strong",
-            }),
+      const reviewTwoResponse = await callMountedApp(
+        new Request(`https://app.test/api/v1/admin/proposals/${createdProposal.proposalId}/reviews`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${reviewerToken}`,
+          },
+          body: JSON.stringify({
+            recommendation: "accept",
+            score: 8,
+            reviewerComment: "Also strong",
           }),
-          { proposalId: createdProposal.proposalId },
-        ),
+        }),
       );
       expect(reviewTwoResponse.status).toBe(200);
 
-      const finalizeResponse = await finalizeProposal(
-        createContext(
-          env,
-          new Request(`https://app.test/api/v1/admin/proposals/${createdProposal.proposalId}/finalize`, {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              cookie: adminSessionCookie,
-            },
-            body: JSON.stringify({
-              finalStatus: "accepted",
-              decisionNote: "Approved by committee",
-              minReviewsRequired: 2,
-            }),
+      const finalizeResponse = await callMountedApp(
+        new Request(`https://app.test/api/v1/admin/proposals/${createdProposal.proposalId}/finalize`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            cookie: adminSessionCookie,
+          },
+          body: JSON.stringify({
+            finalStatus: "accepted",
+            decisionNote: "Approved by committee",
           }),
-          { proposalId: createdProposal.proposalId },
-        ),
+        }),
       );
       expect(finalizeResponse.status).toBe(200);
 

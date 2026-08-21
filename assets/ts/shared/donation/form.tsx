@@ -8,7 +8,7 @@
  * provided. Clicking "Donate" creates a Stripe Checkout Session via the
  * backend and mounts Stripe Embedded Checkout inline.
  *
- * Donor identity (name, email, organisation) is collected in the form and
+ * Donor identity (name, email, organization) is collected in the form and
  * submitted to the backend for tax-reporting purposes. When context is
  * available (e.g. the user just registered for an event) the fields are
  * pre-filled via data attributes or URL query parameters.
@@ -34,7 +34,7 @@ interface DonationConfig {
   name?: string;
   /** Pre-fill the Stripe Checkout email field. */
   email?: string;
-  /** Pre-fill the donor's organisation. */
+  /** Pre-fill the donor's organization. */
   organizationName?: string;
   /** URL path or label indicating where the donation was initiated. */
   source?: string;
@@ -110,6 +110,11 @@ async function initForm(root: HTMLElement): Promise<void> {
   const checkoutContainer = widget?.querySelector<HTMLElement>("[data-donation-checkout]") ?? null;
   const checkoutMount = widget?.querySelector<HTMLElement>("[data-donation-checkout-mount]") ?? null;
   const backBtn = widget?.querySelector<HTMLButtonElement>("[data-donation-back]") ?? null;
+  let checkoutAttemptId = crypto.randomUUID();
+
+  root.addEventListener("input", () => {
+    checkoutAttemptId = crypto.randomUUID();
+  });
 
   if (!currencySelect || !presetContainer || !customInput || !donateBtn) return;
 
@@ -205,6 +210,7 @@ async function initForm(root: HTMLElement): Promise<void> {
     try {
       const smallestUnit = toSmallestUnit(selectedAmount, selectedCurrency);
       const payload = donationCheckoutSchema.parse({
+        checkoutAttemptId,
         amount: smallestUnit,
         currency: selectedCurrency,
         name,

@@ -98,6 +98,27 @@ describe("Google Groups sync", () => {
     expect(rows[0].action).toBe("add_to_list");
   });
 
+  it("coalesces concurrent duplicate active actions", async () => {
+    const userId = await insertUser("gg-dedupe@example.test");
+    const params = { userId, googleGroupEmail: "pqc@lists.pkic.org", action: "add_to_list" as const };
+    const [firstId, secondId] = await Promise.all([
+      enqueueGoogleGroupsSync(env.DB, params),
+      enqueueGoogleGroupsSync(env.DB, params),
+    ]);
+
+    expect(firstId).toBe(secondId);
+    expect(
+      await queryAll(
+        env.DB,
+        `SELECT id FROM google_groups_sync_queue
+         WHERE user_id = ? AND google_group_email = ? AND action = ? AND status IN ('pending', 'processing')`,
+        userId,
+        params.googleGroupEmail,
+        params.action,
+      ),
+    ).toHaveLength(1);
+  });
+
   it("lists pending rows in FIFO order", async () => {
     const userId = await insertUser("gg-fifo@example.test");
     await enqueueGoogleGroupsSync(env.DB, { userId, googleGroupEmail: "a@lists.pkic.org", action: "add_to_list" });

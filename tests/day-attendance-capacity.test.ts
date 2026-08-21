@@ -10,6 +10,7 @@ import {
   updateRegistrationByManageToken,
 } from "../functions/_lib/services/registrations";
 import { promoteDayWaitlistIfCapacity } from "../functions/_lib/services/registrations/day-waitlist";
+import { buildCreateRegistration } from "../functions/_lib/services/registrations/create";
 import { promoteEventWaitlistWithNotifications } from "../functions/_lib/services/registrations/waitlist-promotions";
 
 describe("day attendance capacity", () => {
@@ -70,6 +71,62 @@ describe("day attendance capacity", () => {
     expect(waitlist).toHaveLength(1);
     expect(waitlist[0].status).toBe("waiting");
     expect(waitlist[0].priority_lane).toBe("general");
+  });
+
+  it("rejects a stale final-seat plan and rebuilds the losing registration as waitlisted", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    await env.DB.batch([
+      env.DB.prepare(`
+        INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
+        VALUES ('day-final-seat', '${eventId}', '2026-12-01', 'Day 1', 1, 10, datetime('now'), datetime('now'))
+      `),
+      env.DB.prepare(`
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+        VALUES
+          ('user-final-seat-a', 'final-seat-a@example.test', 'final-seat-a@example.test', 'Final', 'A', datetime('now'), datetime('now')),
+          ('user-final-seat-b', 'final-seat-b@example.test', 'final-seat-b@example.test', 'Final', 'B', datetime('now'), datetime('now'))
+      `),
+    ]);
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const common = {
+      event,
+      attendanceType: "in_person" as const,
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    };
+
+    // Both plans intentionally read the same capacity revision, as two
+    // concurrent requests can do before either batch acquires D1's writer.
+    const [firstPlan, stalePlan] = await Promise.all([
+      buildCreateRegistration(env.DB, { ...common, userId: "user-final-seat-a" }),
+      buildCreateRegistration(env.DB, { ...common, userId: "user-final-seat-b" }),
+    ]);
+    await env.DB.batch(firstPlan.statements);
+    await expect(env.DB.batch(stalePlan.statements)).rejects.toThrow(/EVENT_DAY_CAPACITY_CHANGED/);
+
+    const rebuilt = await createRegistration(env.DB, { ...common, userId: "user-final-seat-b" });
+    const rows = await queryAll<{ registration_id: string; status: string }>(
+      env.DB,
+      `SELECT registration_id, status
+       FROM event_day_waitlist_entries
+       WHERE event_day_id = 'day-final-seat' AND status IN ('waiting', 'offered')`,
+    );
+    expect(rows).toEqual([{ registration_id: rebuilt.registration.id, status: "waiting" }]);
+
+    const confirmedSeats = await queryAll<{ total: number }>(
+      env.DB,
+      `SELECT COUNT(*) AS total
+       FROM registration_day_attendance rda
+       LEFT JOIN event_day_waitlist_entries w
+         ON w.event_day_id = rda.event_day_id AND w.registration_id = rda.registration_id
+        AND w.status IN ('waiting', 'offered')
+       WHERE rda.event_day_id = 'day-final-seat'
+         AND rda.attendance_type = 'in_person'
+         AND w.id IS NULL`,
+    );
+    expect(Number(confirmedSeats[0].total)).toBe(1);
   });
 
   it("lets an attendee cancel the whole registration when a selected day is still pending", async () => {

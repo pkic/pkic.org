@@ -15,11 +15,19 @@ import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 import { onRequestPost as createRegistration } from "../functions/api/v1/events/[eventSlug]/registrations";
 import { onRequestGet as confirmInfo } from "../functions/api/v1/events/[eventSlug]/registrations/confirm-info";
 import { onRequestPost as resendConfirmation } from "../functions/api/v1/events/[eventSlug]/registrations/resend-confirmation";
-import { onRequestPost as resendManageLink } from "../functions/api/v1/events/[eventSlug]/registrations/resend-manage-link";
 import { issueDatabaseCapability, materializeQueuedCapabilityLinks } from "../functions/_lib/services/capability-links";
 import { getRegistrationByManageToken } from "../functions/_lib/services/registrations";
+import { callApi } from "./helpers/app";
 
 const signingSecret = "test-signing-secret";
+
+function resendManageLink(environment: typeof env, email: string, clientIp = "203.0.113.20"): Promise<Response> {
+  return callApi(environment, "/api/v1/events/pqc-2026/registrations/resend-manage-link", {
+    method: "POST",
+    headers: { "content-type": "application/json", "cf-connecting-ip": clientIp },
+    body: JSON.stringify({ email }),
+  });
+}
 
 async function registerAttendee(): Promise<{
   confirmationToken: string;
@@ -362,17 +370,7 @@ describe("resend-manage-link endpoint", () => {
       )
     )[0].manage_link_secret;
 
-    const response = await resendManageLink(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/events/pqc-2026/registrations/resend-manage-link", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ email }),
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const response = await resendManageLink(env, email);
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as { success: boolean };
@@ -409,17 +407,7 @@ describe("resend-manage-link endpoint", () => {
   it("returns success even for non-existent email (prevents enumeration)", async () => {
     await seedEventAndAdmin(env.DB);
 
-    const response = await resendManageLink(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/events/pqc-2026/registrations/resend-manage-link", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ email: "nobody@example.test" }),
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const response = await resendManageLink(env, "nobody@example.test");
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as { success: boolean };
@@ -429,19 +417,10 @@ describe("resend-manage-link endpoint", () => {
   it("rejects with invalid email format", async () => {
     await seedEventAndAdmin(env.DB);
 
-    await expect(
-      resendManageLink(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/events/pqc-2026/registrations/resend-manage-link", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ email: "not-an-email" }),
-          }),
-          { eventSlug: "pqc-2026" },
-        ),
-      ),
-    ).rejects.toBeTruthy();
+    const response = await resendManageLink(env, "not-an-email");
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "VALIDATION_ERROR" } });
   });
 
   it("rate-limits repeated manage-link resends for the same email", async () => {
@@ -453,25 +432,11 @@ describe("resend-manage-link endpoint", () => {
     };
     const email = `rate-limit-${crypto.randomUUID()}@example.test`;
 
-    const makeRequest = () =>
-      resendManageLink(
-        createContext(
-          limitedEnv,
-          new Request("https://app.test/api/v1/events/pqc-2026/registrations/resend-manage-link", {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              "cf-connecting-ip": "203.0.113.20",
-            },
-            body: JSON.stringify({ email }),
-          }),
-          { eventSlug: "pqc-2026" },
-        ),
-      );
+    const makeRequest = () => resendManageLink(limitedEnv, email);
 
     expect((await makeRequest()).status).toBe(200);
     expect((await makeRequest()).status).toBe(200);
     expect((await makeRequest()).status).toBe(200);
-    await expect(makeRequest()).rejects.toMatchObject({ code: "RATE_LIMITED", status: 429 });
+    expect((await makeRequest()).status).toBe(429);
   });
 });
