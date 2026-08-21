@@ -185,6 +185,36 @@ describe("admin user deactivation", () => {
     expect(entry.action).toBe("user_updated");
   });
 
+  it("records changed field names without copying profile PII into the audit log", async () => {
+    await setup();
+    const userId = await seedUser(env.DB, "private-update@example.test");
+
+    await patchUser(
+      createContext(
+        env,
+        adminRequest(`/api/v1/admin/users/${userId}`, "PATCH", {
+          email: "new-private@example.test",
+          biography: "Sensitive private biography",
+          links: ["https://private.example.test/profile"],
+        }),
+        { userId },
+      ),
+    );
+
+    const [{ details_json: detailsJson }] = await queryAll<{ details_json: string }>(
+      env.DB,
+      "SELECT details_json FROM audit_log WHERE entity_id = ? AND action = 'user_updated'",
+      userId,
+    );
+    expect(detailsJson).not.toContain("private-update@example.test");
+    expect(detailsJson).not.toContain("new-private@example.test");
+    expect(detailsJson).not.toContain("Sensitive private biography");
+    expect(detailsJson).not.toContain("private.example.test");
+    expect(JSON.parse(detailsJson)).toMatchObject({
+      changedFields: { to: expect.arrayContaining(["email", "biography", "links"]) },
+    });
+  });
+
   it("sets and clears isEcMember (users.is_ec_member, consolidated migration 0035)", async () => {
     await setup();
     const userId = await seedUser(env.DB, "ec-member@example.test");
@@ -287,6 +317,81 @@ describe("admin user anonymization", () => {
     expect(sessions.every((s) => s.revoked_at !== null)).toBe(true);
   });
 
+  it("removes alternate identities and credentials and revokes durable access tokens", async () => {
+    await setup();
+    const userId = await seedUser(env.DB, "credentials@example.test");
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO user_emails (id, user_id, email, normalized_email, created_at) VALUES (?, ?, ?, ?, datetime('now'))",
+      ).bind(crypto.randomUUID(), userId, "alias@example.test", "alias@example.test"),
+      env.DB.prepare(
+        `INSERT INTO auth_magic_links (id, user_id, token_hash, expires_at, created_at)
+           VALUES (?, ?, ?, datetime('now', '+1 hour'), datetime('now'))`,
+      ).bind(crypto.randomUUID(), userId, `magic-${crypto.randomUUID()}`),
+      env.DB.prepare(
+        `INSERT INTO passkey_credentials
+             (id, user_id, credential_id, public_key, sign_count, device_name, created_at)
+           VALUES (?, ?, ?, 'public-key', 0, 'Personal security key', datetime('now'))`,
+      ).bind(crypto.randomUUID(), userId, `credential-${crypto.randomUUID()}`),
+      env.DB.prepare(
+        `INSERT INTO refresh_tokens (id, user_id, token_hash, issued_at, expires_at)
+           VALUES (?, ?, ?, datetime('now'), datetime('now', '+1 day'))`,
+      ).bind(crypto.randomUUID(), userId, `refresh-${crypto.randomUUID()}`),
+      env.DB.prepare(
+        `UPDATE users SET pending_email = 'pending@example.test', pending_email_expires_at = datetime('now', '+1 day'),
+                            role = 'admin', is_ec_member = 1
+           WHERE id = ?`,
+      ).bind(userId),
+    ]);
+
+    await anonymizeUser(
+      createContext(env, adminRequest(`/api/v1/admin/users/${userId}/anonymize`, "POST"), { userId }),
+    );
+
+    expect(await queryAll(env.DB, "SELECT id FROM user_emails WHERE user_id = ?", userId)).toHaveLength(0);
+    expect(await queryAll(env.DB, "SELECT id FROM auth_magic_links WHERE user_id = ?", userId)).toHaveLength(0);
+    expect(await queryAll(env.DB, "SELECT id FROM passkey_credentials WHERE user_id = ?", userId)).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM refresh_tokens WHERE user_id = ? AND revoked_at IS NULL", userId),
+    ).toHaveLength(0);
+    const [user] = await queryAll<{
+      pending_email: string | null;
+      role: string;
+      is_ec_member: number;
+    }>(env.DB, "SELECT pending_email, role, is_ec_member FROM users WHERE id = ?", userId);
+    expect(user).toMatchObject({ pending_email: null, role: "user", is_ec_member: 0 });
+  });
+
+  it("durably queues deletion of the prior headshot while clearing its pointer", async () => {
+    await setup();
+    const userId = await seedUser(env.DB, "headshot-anon@example.test");
+    const key = `headshots/${userId}/before-anonymize.jpg`;
+    await env.DB.prepare("UPDATE users SET headshot_r2_key = ? WHERE id = ?").bind(key, userId).run();
+
+    await anonymizeUser(
+      createContext(
+        { ...(env as any), SPEAKER_UPLOADS_BUCKET: undefined },
+        adminRequest(`/api/v1/admin/users/${userId}/anonymize`, "POST"),
+        {
+          userId,
+        },
+      ),
+    );
+
+    const [outbox] = await queryAll<{ bucket: string; object_key: string }>(
+      env.DB,
+      "SELECT bucket, object_key FROM storage_deletion_outbox WHERE object_key = ?",
+      key,
+    );
+    expect(outbox).toEqual({ bucket: "speaker_uploads", object_key: key });
+    const [user] = await queryAll<{ headshot_r2_key: string | null }>(
+      env.DB,
+      "SELECT headshot_r2_key FROM users WHERE id = ?",
+      userId,
+    );
+    expect(user.headshot_r2_key).toBeNull();
+  });
+
   it("refuses to anonymize an already-anonymized user", async () => {
     await setup();
     const userId = await seedUser(env.DB, "already-anon@example.test");
@@ -337,10 +442,25 @@ describe("admin user anonymization", () => {
       )
     )[0];
     expect(entry.action).toBe("user_anonymized");
-    const details = JSON.parse(entry.details_json) as {
-      previousEmail: { from: string | null; to: string };
-    };
-    expect(details.previousEmail).toEqual({ from: null, to: "audit-anon@example.test" });
+    expect(entry.details_json).not.toContain("audit-anon@example.test");
+    expect(JSON.parse(entry.details_json)).toMatchObject({
+      authenticationRevoked: { to: true },
+      profileRedacted: { to: true },
+    });
+  });
+
+  it("does not allow an anonymized account to be repopulated or reactivated", async () => {
+    await setup();
+    const userId = await seedUser(env.DB, "cannot-restore@example.test");
+    await anonymizeUser(
+      createContext(env, adminRequest(`/api/v1/admin/users/${userId}/anonymize`, "POST"), { userId }),
+    );
+
+    await expect(
+      patchUser(
+        createContext(env, adminRequest(`/api/v1/admin/users/${userId}`, "PATCH", { active: true }), { userId }),
+      ),
+    ).rejects.toMatchObject({ code: "ALREADY_ANONYMIZED" });
   });
 });
 

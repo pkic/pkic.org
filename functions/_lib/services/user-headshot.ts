@@ -30,12 +30,32 @@ interface UserHeadshotContext {
   audit: HeadshotAudit;
 }
 
-export async function getUserHeadshotPointer(db: DatabaseLike, userId: string): Promise<string | null> {
-  const row = await first<{ headshot_r2_key: string | null }>(db, "SELECT headshot_r2_key FROM users WHERE id = ?", [
+export interface UserHeadshotRecord {
+  id: string;
+  email: string;
+  headshot_r2_key: string | null;
+}
+
+export async function getUserHeadshotRecord(db: DatabaseLike, userId: string): Promise<UserHeadshotRecord> {
+  const row = await first<UserHeadshotRecord>(db, "SELECT id, email, headshot_r2_key FROM users WHERE id = ?", [
     userId,
   ]);
   if (!row) throw new AppError(404, "NOT_FOUND", "User not found");
-  return row.headshot_r2_key;
+  return row;
+}
+
+export async function getUserHeadshotPointer(db: DatabaseLike, userId: string): Promise<string | null> {
+  return (await getUserHeadshotRecord(db, userId)).headshot_r2_key;
+}
+
+export async function adminUserHeadshotResponse(db: DatabaseLike, bucket: R2Bucket, userId: string) {
+  const user = await getUserHeadshotRecord(db, userId);
+  if (!user.headshot_r2_key) throw new AppError(404, "NOT_FOUND", "No headshot on file");
+  return storedImageResponse(bucket, user.headshot_r2_key, {
+    notFoundCode: "NOT_FOUND",
+    notFoundMessage: "Headshot file missing from storage",
+    cacheControl: "private, max-age=3600",
+  });
 }
 
 function conditionalHeadshotAuditStatement(

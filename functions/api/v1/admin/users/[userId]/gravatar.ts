@@ -20,19 +20,13 @@
  */
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
-import { first } from "../../../../../_lib/db/queries";
 import { gravatarHash, fetchGravatar } from "../../../../../_lib/utils/gravatar";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { invalidateAndRerender } from "../../../../../_lib/services/og-badge-prerender";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { AppError } from "../../../../../_lib/errors";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
-
-interface UserEmailRow {
-  id: string;
-  email: string;
-  headshot_r2_key: string | null;
-}
+import { getUserHeadshotRecord } from "../../../../../_lib/services/user-headshot";
 
 // ── Handler ─────────────────────────────────────────────────────────────────
 
@@ -40,10 +34,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const userId = c.req.param("userId");
 
-  const user = await first<UserEmailRow>(requestDb(c), "SELECT id, email, headshot_r2_key FROM users WHERE id = ?", [
-    userId,
-  ]);
-  if (!user) throw new AppError(404, "NOT_FOUND", "User not found");
+  const user = await getUserHeadshotRecord(requestDb(c), userId);
 
   const bucket = c.env.SPEAKER_UPLOADS_BUCKET;
   if (!bucket) throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "File uploads are not configured");

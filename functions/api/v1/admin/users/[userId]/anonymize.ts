@@ -1,99 +1,15 @@
-/**
- * POST /api/v1/admin/users/:userId/anonymize
- *
- * Irreversibly removes all PII from a user record and deactivates the account.
- * Active sessions are revoked so the user is signed out immediately.
- *
- * Effects:
- *   - Nulls first_name, last_name, preferred_name, organization_name,
- *     job_title, biography, links_json, data_json, headshot_r2_key
- *   - Replaces email with a non-identifiable placeholder
- *   - Sets active = 0, pii_redacted_at = now
- *   - Revokes all active sessions for the user
- *   - Writes an audit-log entry
- *
- * Only a global admin may call this endpoint.
- * An admin cannot anonymize their own account.
- */
-import { json } from "../../../../../_lib/http";
+/** POST /api/v1/admin/users/:userId/anonymize — irreversible account redaction and access revocation. */
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
-import { first, run } from "../../../../../_lib/db/queries";
-import { nowIso } from "../../../../../_lib/utils/time";
-import { writeAuditLog } from "../../../../../_lib/services/audit";
-import { AppError } from "../../../../../_lib/errors";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
-
-interface UserRow {
-  id: string;
-  email: string;
-  role: string;
-  active: number;
-  pii_redacted_at: string | null;
-}
+import { json } from "../../../../../_lib/http";
+import { anonymizeAdminUser } from "../../../../../_lib/services/admin-user-anonymize";
+import { removePreviousHeadshot } from "../../../../../_lib/services/user-headshot";
 
 export async function onRequestPost(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const userId = c.req.param("userId");
-
-  if (userId === admin.id) {
-    throw new AppError(403, "FORBIDDEN", "You cannot anonymize your own account");
-  }
-
-  const user = await first<UserRow>(
-    requestDb(c),
-    "SELECT id, email, role, active, pii_redacted_at FROM users WHERE id = ?",
-    [userId],
-  );
-
-  if (!user) {
-    throw new AppError(404, "NOT_FOUND", "User not found");
-  }
-
-  if (user.pii_redacted_at) {
-    throw new AppError(409, "ALREADY_ANONYMIZED", "User has already been anonymized");
-  }
-
-  const now = nowIso();
-  // Replace the email with a deterministic placeholder so UNIQUE constraints
-  // are preserved while all identifying information is gone.
-  const redactedEmail = `redacted-${user.id}@anonymized.invalid`;
-  const redactedNormalized = redactedEmail;
-
-  await run(
-    requestDb(c),
-    `UPDATE users
-     SET email             = ?,
-         normalized_email  = ?,
-         first_name        = NULL,
-         last_name         = NULL,
-         preferred_name    = NULL,
-         organization_name = NULL,
-         job_title         = NULL,
-         biography         = NULL,
-         links_json        = NULL,
-         data_json         = NULL,
-         headshot_r2_key   = NULL,
-         headshot_updated_at = NULL,
-         active            = 0,
-         pii_redacted_at   = ?,
-         updated_at        = ?
-     WHERE id = ?`,
-    [redactedEmail, redactedNormalized, now, now, user.id],
-  );
-
-  // Revoke all non-expired sessions so the user is signed out immediately.
-  await run(
-    requestDb(c),
-    "UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?",
-    [now, user.id, now],
-  );
-
-  await writeAuditLog(requestDb(c), "admin", admin.id, "user_anonymized", "user", user.id, {
-    previousEmail: user.email,
-    previousRole: user.role,
-  });
-
-  return json({ success: true, userId: user.id });
+  const result = await anonymizeAdminUser(requestDb(c), admin, c.req.param("userId"));
+  c.executionCtx.waitUntil(removePreviousHeadshot(requestDb(c), c.env, result.previousHeadshotKey));
+  return json({ success: true, userId: result.userId });
 }
 
 export async function onRequest(c: AdminContext): Promise<Response> {

@@ -9,7 +9,6 @@
  */
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
-import { first } from "../../../../../_lib/db/queries";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { invalidateAndRerender } from "../../../../../_lib/services/og-badge-prerender";
 import { AppError } from "../../../../../_lib/errors";
@@ -21,39 +20,22 @@ import {
   adminUserHeadshotPutRouteSchema,
 } from "../../../../../../assets/shared/schemas/route-contracts";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
-import { storedImageResponse } from "../../../../../_lib/services/image-response";
 import {
+  adminUserHeadshotResponse,
+  getUserHeadshotRecord,
   removePreviousHeadshot,
   removeUserHeadshot,
   replaceUserHeadshot,
 } from "../../../../../_lib/services/user-headshot";
-interface HeadshotRow {
-  id: string;
-  headshot_r2_key: string | null;
-}
 
 // ── GET — serve the headshot image ──────────────────────────────────────────
 
 async function onGet(c: AdminContext): Promise<Response> {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  const user = await first<HeadshotRow>(requestDb(c), "SELECT id, headshot_r2_key FROM users WHERE id = ?", [
-    c.req.param("userId"),
-  ]);
-
-  if (!user) throw new AppError(404, "NOT_FOUND", "User not found");
-  if (!user.headshot_r2_key) {
-    return json({ error: { code: "NOT_FOUND", message: "No headshot on file" } }, 404);
-  }
-
   const bucket = c.env.SPEAKER_UPLOADS_BUCKET;
   if (!bucket) throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "File uploads are not configured");
-
-  return storedImageResponse(bucket, user.headshot_r2_key, {
-    notFoundCode: "NOT_FOUND",
-    notFoundMessage: "Headshot file missing from storage",
-    cacheControl: "private, max-age=3600",
-  });
+  return adminUserHeadshotResponse(requestDb(c), bucket, c.req.param("userId"));
 }
 
 // ── PUT — upload / replace headshot ─────────────────────────────────────────
@@ -61,10 +43,7 @@ async function onGet(c: AdminContext): Promise<Response> {
 async function onPut(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  const user = await first<HeadshotRow>(requestDb(c), "SELECT id, headshot_r2_key FROM users WHERE id = ?", [
-    c.req.param("userId"),
-  ]);
-  if (!user) throw new AppError(404, "NOT_FOUND", "User not found");
+  const user = await getUserHeadshotRecord(requestDb(c), c.req.param("userId"));
 
   const bucket = c.env.SPEAKER_UPLOADS_BUCKET;
   if (!bucket) throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "File uploads are not configured");
@@ -98,10 +77,7 @@ async function onPut(c: AdminContext): Promise<Response> {
 async function onDelete(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  const user = await first<HeadshotRow>(requestDb(c), "SELECT id, headshot_r2_key FROM users WHERE id = ?", [
-    c.req.param("userId"),
-  ]);
-  if (!user) throw new AppError(404, "NOT_FOUND", "User not found");
+  const user = await getUserHeadshotRecord(requestDb(c), c.req.param("userId"));
 
   await removeUserHeadshot({
     db: requestDb(c),

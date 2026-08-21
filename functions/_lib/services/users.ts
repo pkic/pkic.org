@@ -90,6 +90,7 @@ export interface FindOrCreateUserPayload {
 export interface UserProfilePatch {
   firstName?: string | null;
   lastName?: string | null;
+  preferredName?: string | null;
   organizationName?: string | null;
   jobTitle?: string | null;
   biography?: string | null;
@@ -114,6 +115,7 @@ export function prepareUserProfileStatement(
   };
   add("first_name", payload.firstName);
   add("last_name", payload.lastName);
+  add("preferred_name", payload.preferredName);
   add("organization_name", payload.organizationName);
   add("job_title", payload.jobTitle);
   add("biography", payload.biography);

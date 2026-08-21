@@ -1,5 +1,7 @@
+# macOS Finder and AppleDouble metadata
 .DS_Store
 ._*
+.AppleDouble/
 public
 dist
 resources/_gen/
