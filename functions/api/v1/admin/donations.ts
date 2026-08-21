@@ -18,6 +18,6 @@ import { listDonations } from "../../../_lib/services/donations";
 export const DonationsList = openApiRoute(donationsListRouteSchema, async (c: AdminContext, data) => {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  const { status, q, sort, limit = 100, offset = 0 } = data.query;
+  const { status, q, sort, limit, offset } = data.query;
   return json(await listDonations(requestDb(c), { status, q, sort, limit, offset }));
 });

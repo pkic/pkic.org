@@ -15,8 +15,8 @@ export async function onRequestGet(
     await listProposalAuditLog(requestDb(c), proposalId, {
       q: data.query.q,
       sort: data.query.sort,
-      limit: data.query.limit ?? 50,
-      offset: data.query.offset ?? 0,
+      limit: data.query.limit,
+      offset: data.query.offset,
     }),
   );
 }

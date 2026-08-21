@@ -13,7 +13,7 @@ import { openApiRoute } from "../../../_lib/openapi/route";
 const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=60";
 
 export const SponsorsGet = openApiRoute(sponsorsListRouteSchema, async (c: any, data) => {
-  const { eventName, level, minWeight, limit = 200, offset = 0, q, sort } = data.query;
+  const { eventName, level, minWeight, limit, offset, q, sort } = data.query;
 
   const body = await listPublicSponsors(c.env.DB, { eventName, level, minWeight, limit, offset, q, sort });
 

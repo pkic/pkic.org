@@ -7,8 +7,15 @@
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { eventIdSchema, normalizedEmailSchema, trimmedString } from "./api-common";
-import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import {
+  listQuerySchema,
+  paginatedResponseSchema,
+  searchableListQuerySchema,
+  sortColumnSchemaWithDefault,
+} from "./pagination";
 import { addDuplicateStringIssues } from "./refinements";
+import { httpOrSameOriginUrlSchema, httpUrlSchema } from "./urls";
+import { logoUploadResponseSchema } from "./images";
 
 export const SPONSOR_TYPES = ["consortium", "event"] as const;
 export const sponsorTypeSchema = z.enum(SPONSOR_TYPES);
@@ -33,8 +40,8 @@ export const adminSponsorshipSchema = z.object({
   organizationId: databaseIdSchema.nullable(),
   organizationName: z.string().nullable(),
   nonMemberName: z.string().nullable(),
-  nonMemberWebsite: z.string().nullable(),
-  nonMemberLogoUrl: z.string().nullable(),
+  nonMemberWebsite: httpUrlSchema.nullable(),
+  nonMemberLogoUrl: httpOrSameOriginUrlSchema.nullable(),
   contactName: z.string().nullable(),
   contactEmail: z.string().nullable(),
   eventId: eventIdSchema.nullable(),
@@ -58,8 +65,8 @@ export const adminSponsorshipSchema = z.object({
 
 export const sponsorshipEventSchema = z.object({
   id: databaseIdSchema,
-  fromStage: z.string().nullable(),
-  toStage: z.string(),
+  fromStage: sponsorshipPipelineStageSchema.nullable(),
+  toStage: sponsorshipPipelineStageSchema,
   actorUserId: databaseIdSchema.nullable(),
   actorName: z.string().nullable(),
   note: z.string().nullable(),
@@ -68,6 +75,15 @@ export const sponsorshipEventSchema = z.object({
 
 export type AdminSponsorship = z.infer<typeof adminSponsorshipSchema>;
 export type SponsorshipEvent = z.infer<typeof sponsorshipEventSchema>;
+
+export const SPONSORSHIP_EVENTS_SORT_COLUMNS = ["createdAt"] as const;
+export const sponsorshipEventsListQuerySchema = searchableListQuerySchema(
+  sortColumnSchemaWithDefault(SPONSORSHIP_EVENTS_SORT_COLUMNS, "-createdAt"),
+  { limit: 25 },
+);
+export type SponsorshipEventsListQuery = z.infer<typeof sponsorshipEventsListQuerySchema>;
+export const sponsorshipEventsListResponseSchema = paginatedResponseSchema("events", sponsorshipEventSchema);
+export type SponsorshipEventsListResponse = z.infer<typeof sponsorshipEventsListResponseSchema>;
 
 // ── List ─────────────────────────────────────────────────────────────────
 
@@ -112,7 +128,7 @@ export const sponsorshipsListRouteSchema = {
 export const sponsorshipCompanySchema = z.object({
   key: z.string(),
   label: z.string(),
-  website: z.string().nullable(),
+  website: httpUrlSchema.nullable(),
   sponsorshipCount: z.number(),
   /** Comma-separated distinct pipeline stages across this company's sponsorships. */
   stages: z.string(),
@@ -127,6 +143,7 @@ export const sponsorshipCompaniesListQuerySchema = listQuerySchema(ADMIN_SPONSOR
   stage: sponsorshipPipelineStageSchema.optional(),
   tier: trimmedString(1, 100).optional(),
 });
+export const sponsorshipCompaniesListResponseSchema = paginatedResponseSchema("companies", sponsorshipCompanySchema);
 
 export const sponsorshipCompaniesListRouteSchema = {
   tags: ["Sponsorships"],
@@ -138,7 +155,7 @@ export const sponsorshipCompaniesListRouteSchema = {
     "200": {
       description: "Sponsorship companies list.",
       content: {
-        "application/json": { schema: paginatedResponseSchema("companies", sponsorshipCompanySchema) },
+        "application/json": { schema: sponsorshipCompaniesListResponseSchema },
       },
     },
   },
@@ -146,19 +163,23 @@ export const sponsorshipCompaniesListRouteSchema = {
 
 // ── Create ───────────────────────────────────────────────────────────────
 
+export const sponsorshipEditableFieldsSchema = z.object({
+  tier: trimmedString(1, 100).nullable().optional(),
+  assignedToUserId: databaseIdSchema.nullable().optional(),
+  renewalDate: z.iso.date().nullable().optional(),
+  notes: trimmedString(0, 5000).nullable().optional(),
+});
+
 export const sponsorshipCreateSchema = z
   .object({
     sponsorType: sponsorTypeSchema,
     organizationId: databaseIdSchema.nullable().optional(),
     nonMemberName: trimmedString(1, 200).nullable().optional(),
-    nonMemberWebsite: z.url().nullable().optional(),
+    nonMemberWebsite: httpUrlSchema.nullable().optional(),
     contactName: trimmedString(1, 200).nullable().optional(),
     contactEmail: normalizedEmailSchema.nullable().optional(),
     eventId: eventIdSchema.nullable().optional(),
-    tier: trimmedString(1, 100).nullable().optional(),
-    assignedToUserId: databaseIdSchema.nullable().optional(),
-    renewalDate: z.iso.date().nullable().optional(),
-    notes: trimmedString(0, 5000).nullable().optional(),
+    ...sponsorshipEditableFieldsSchema.shape,
   })
   .refine((v) => v.sponsorType !== "consortium" || !!v.organizationId, {
     message: "organizationId is required for consortium sponsorships",
@@ -208,7 +229,9 @@ export const sponsorshipLogoPutRouteSchema = {
     "200": {
       description: "Logo uploaded.",
       content: {
-        "application/json": { schema: z.object({ success: z.boolean(), r2Key: z.string(), logoUrl: z.string() }) },
+        "application/json": {
+          schema: logoUploadResponseSchema,
+        },
       },
     },
     "404": { description: "Sponsorship not found." },
@@ -235,12 +258,7 @@ export const sponsorshipLogoDeleteRouteSchema = {
 
 // ── Update ───────────────────────────────────────────────────────────────
 
-export const sponsorshipUpdateSchema = z.object({
-  tier: trimmedString(1, 100).nullable().optional(),
-  assignedToUserId: databaseIdSchema.nullable().optional(),
-  renewalDate: z.iso.date().nullable().optional(),
-  notes: trimmedString(0, 5000).nullable().optional(),
-});
+export const sponsorshipUpdateSchema = sponsorshipEditableFieldsSchema;
 
 export const sponsorshipUpdateRouteSchema = {
   tags: ["Sponsorships"],
@@ -256,6 +274,7 @@ export const sponsorshipUpdateRouteSchema = {
       content: { "application/json": { schema: z.object({ sponsorship: adminSponsorshipSchema }) } },
     },
     "404": { description: "Sponsorship not found." },
+    "409": { description: "The sponsorship changed concurrently or the requested update violates its active state." },
   },
 };
 
@@ -282,6 +301,7 @@ export const sponsorshipStageUpdateRouteSchema = {
     },
     "400": { description: "Unknown pipeline stage." },
     "404": { description: "Sponsorship not found." },
+    "409": { description: "The sponsorship changed concurrently or cannot enter the requested stage." },
   },
 };
 
@@ -289,12 +309,12 @@ export const sponsorshipStageUpdateRouteSchema = {
 
 export const sponsorshipEventsRouteSchema = {
   tags: ["Sponsorships"],
-  summary: "Full pipeline audit trail for a sponsorship",
-  request: { params: sponsorshipIdParamsSchema },
+  summary: "Paginated pipeline audit trail for a sponsorship",
+  request: { params: sponsorshipIdParamsSchema, query: sponsorshipEventsListQuerySchema },
   responses: {
     "200": {
       description: "Sponsorship events.",
-      content: { "application/json": { schema: z.object({ events: z.array(sponsorshipEventSchema) }) } },
+      content: { "application/json": { schema: sponsorshipEventsListResponseSchema } },
     },
   },
 };

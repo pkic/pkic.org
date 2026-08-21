@@ -1,6 +1,18 @@
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 
+/** Canonical envelope for successful commands that return no domain payload. */
+export const successResponseSchema = z.object({ success: z.literal(true) });
+
+/**
+ * Boolean query parameters arrive as strings. `z.coerce.boolean()` follows
+ * JavaScript truthiness and therefore turns the non-empty string `"false"`
+ * into `true`; enumerate the wire values instead.
+ */
+export const booleanQueryFlagSchema = z
+  .union([z.boolean(), z.enum(["true", "false"])])
+  .transform((value) => value === true || value === "true");
+
 /** Body format of a rendered email template/message. */
 export const emailContentTypeSchema = z.enum(["markdown", "html", "text"]);
 export type EmailContentType = z.infer<typeof emailContentTypeSchema>;
@@ -40,6 +52,7 @@ export const lastNameSchema = trimmedString(1, 120).regex(namePattern, "Contains
 export const organizationNameSchema = trimmedString(2, 160);
 export const jobTitleSchema = trimmedString(2, 120);
 export const tokenSchema = z.string().trim().regex(tokenPattern, "Invalid token format");
+export const magicLinkVerifySchema = z.object({ token: tokenSchema });
 
 /** Events use stable natural ids (often their initial slug), not generated UUID ids. */
 export const eventIdSchema = trimmedString(1, 200);
@@ -53,6 +66,11 @@ export const proposalIdParamsSchema = z.object({
 });
 
 export const proposalSpeakerIdParamsSchema = proposalIdParamsSchema.extend({
+  userId: databaseIdSchema,
+});
+
+export const proposerManagedSpeakerParamsSchema = z.object({
+  token: tokenSchema,
   userId: databaseIdSchema,
 });
 

@@ -4,23 +4,16 @@ import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Badge } from "../../../../components/Badge";
 import { DataTable } from "../../../../components/Table";
 import { Tabs } from "../../../../components/Tabs";
-import { api } from "../../../api";
-import { useData } from "../../../../hooks/useData";
+import { useServerCollection } from "../../../../hooks/useServerCollection";
+import { loadAdminCollection } from "../../../services/server-collection";
 import { Pager } from "../../../../components/Pager";
-import { useEffect, useState } from "preact/hooks";
+import { useEffect } from "preact/hooks";
 import {
   eventPromotersListResponseSchema,
   type EventPromoter as PromoterEntry,
 } from "../../../../../shared/schemas/admin-event-promoters";
-
-const RANK_CLASS: Record<number, string> = { 1: "gold", 2: "silver", 3: "bronze" };
-const RANK_CARD: Record<number, string> = { 1: "top-1", 2: "top-2", 3: "top-3" };
-
-function rankTier(rank: number): string {
-  if (rank <= 3) return RANK_CLASS[rank];
-  if (rank <= 10) return "top-ten";
-  return "other";
-}
+import { promoterRankCardClass, promoterRankTier } from "../../../promoter-ranking";
+import { useOffsetPager } from "../../../../hooks/useOffsetPager";
 
 function conversionColor(rate: number): string {
   if (rate >= 50) return "high";
@@ -41,14 +34,14 @@ function PromoterCard({ p, rank }: { p: PromoterEntry; rank: number }) {
   const initials = [p.first_name?.[0], p.last_name?.[0]].filter(Boolean).join("").toUpperCase() || "?";
 
   return (
-    <div class={`adm-promoter-card ${RANK_CARD[rank] ?? (rank <= 10 ? "top-ten" : "")}`}>
+    <div class={`adm-promoter-card ${promoterRankCardClass(rank)}`}>
       <div class="adm-promoter-avatar-wrap">
         {p.headshot_url ? (
           <img class="adm-promoter-avatar" src={p.headshot_url ?? undefined} alt={name} />
         ) : (
           <div class="adm-promoter-avatar adm-promoter-avatar-initials">{initials}</div>
         )}
-        <span class={`adm-promoter-rank-badge ${rankTier(rank)}`}>{rank}</span>
+        <span class={`adm-promoter-rank-badge ${promoterRankTier(rank)}`}>{rank}</span>
       </div>
 
       <div class="adm-promoter-info">
@@ -124,29 +117,27 @@ function PromoterCard({ p, rank }: { p: PromoterEntry; rank: number }) {
 export function Promoters({ slug, subTab }: { slug: string; subTab?: string }) {
   const [, navigate] = useHashLocation();
   const tab = subTab === "codes" ? "codes" : "promoters";
-  const [offset, setOffset] = useState(0);
-  const [pageSize, setPageSize] = useState(50);
-  const { data, loading, error } = useData(async () => {
-    const query = new URLSearchParams({
+  const pager = useOffsetPager();
+  const { offset, pageSize } = pager;
+  const { data, loading, error } = useServerCollection({
+    endpoint: `/api/v1/admin/events/${slug}/promoters`,
+    params: {
       view: tab,
       limit: String(pageSize),
       offset: String(offset),
       sort: tab === "promoters" ? "-impact" : "-conversions",
-    });
-    return eventPromotersListResponseSchema.parse(
-      await api<unknown>(`/api/v1/admin/events/${slug}/promoters?${query.toString()}`),
-    );
-  }, [slug, tab, offset, pageSize]);
+    },
+    responseSchema: eventPromotersListResponseSchema,
+    load: loadAdminCollection,
+  });
 
-  useEffect(() => setOffset(0), [tab]);
+  useEffect(() => pager.resetPage(), [tab, pager.resetPage]);
 
   if (loading) return <Spinner />;
   if (error) return <ErrorAlert error={error} />;
   if (!data) return null;
 
   const { promoters, referralCodes, summary, page } = data;
-  const pageNumber = Math.floor(page.offset / page.limit) + 1;
-
   return (
     <div>
       {tab === "promoters" && summary.activePromoters > 0 && (
@@ -227,19 +218,12 @@ export function Promoters({ slug, subTab }: { slug: string; subTab?: string }) {
       )}
 
       <Pager
-        page={pageNumber}
-        hasMore={page.hasMore}
-        pageSize={pageSize}
-        offset={page.offset}
-        rowCount={promoters.length + referralCodes.length}
-        total={page.total}
-        onPrev={() => setOffset(Math.max(0, offset - pageSize))}
-        onNext={() => setOffset(offset + pageSize)}
-        onJump={(nextPage) => setOffset((nextPage - 1) * pageSize)}
-        onPageSizeChange={(size) => {
-          setPageSize(size);
-          setOffset(0);
-        }}
+        {...pager.pagerProps({
+          hasMore: page.hasMore,
+          rowCount: promoters.length + referralCodes.length,
+          total: page.total,
+          serverOffset: page.offset,
+        })}
       />
     </div>
   );

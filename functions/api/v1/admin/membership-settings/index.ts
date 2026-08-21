@@ -4,7 +4,6 @@
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../_lib/auth/permissions";
-import { writeAuditLog } from "../../../../_lib/services/audit";
 import { getMembershipSettings, updateMembershipSettings } from "../../../../_lib/services/membership-settings";
 import {
   membershipSettingsGetRouteSchema,
@@ -41,15 +40,6 @@ export const MembershipSettingsUpdate = openApiRoute(
     requirePermission(admin, "membership:write");
     const body = data.body;
     const settings = await updateMembershipSettings(requestDb(c), body, admin.id);
-    await writeAuditLog(
-      requestDb(c),
-      "admin",
-      admin.id,
-      "membership_settings_updated",
-      "membership_settings",
-      "default",
-      body,
-    );
     return json(toResponse(settings));
   },
 );

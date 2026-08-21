@@ -8,11 +8,5 @@ import { emailTemplatesListRouteSchema } from "../../../../assets/shared/schemas
 export const EmailTemplatesList = openApiRoute(emailTemplatesListRouteSchema, async (c: AdminContext, data) => {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  return json(
-    await listAdminEmailTemplates(requestDb(c), {
-      ...data.query,
-      limit: data.query.limit ?? 50,
-      offset: data.query.offset ?? 0,
-    }),
-  );
+  return json(await listAdminEmailTemplates(requestDb(c), data.query));
 });

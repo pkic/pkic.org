@@ -66,13 +66,15 @@ const BULK_EMAIL_OUTBOX_INSERT_SQL = `INSERT INTO email_outbox (
       NULL,
       json_extract(value, '$.queuedAt'),
       json_extract(value, '$.queuedAt'),
-      NULL, NULL
+      NULL,
+      json_extract(value, '$.idempotencyKey')
     FROM json_each(?)
     WHERE json_extract(value, '$.requiredInviteId') IS NULL
        OR EXISTS (
          SELECT 1 FROM invites
          WHERE invites.id = json_extract(value, '$.requiredInviteId')
-       )`;
+       )
+    ${EMAIL_OUTBOX_CONFLICT_SQL}`;
 
 function buildEmailOutboxValues(payload: QueueEmailPayload, id: string, queuedAt: string): unknown[] {
   const data = { ...payload.data } as Record<string, unknown>;
@@ -147,12 +149,17 @@ export function prepareQueueEmailStatementWhen(
 }
 
 export interface BulkEmailQueueRow {
-  eventId: string;
+  /** Stable database id required together with idempotencyKey. */
+  outboxId?: string;
+  /** Stable domain-operation key for exactly-once durable enqueueing. */
+  idempotencyKey?: string;
+  eventId?: string | null;
   recipientEmail: string;
   recipientUserId?: string | null;
   templateKey: string;
   subject: string;
   data: Record<string, unknown>;
+  attachments?: QueuedEmailAttachment[];
   capabilityLinkValues?: unknown[];
   messageType: EmailMessageType;
   /** Only insert this outbox row if the same D1 batch inserted this invite. */
@@ -171,7 +178,7 @@ export interface PreparedBulkEmailQueueChunk {
 
 interface SerializedBulkEmailQueueRow {
   id: string;
-  eventId: string;
+  eventId: string | null;
   templateKey: string;
   recipientUserId: string | null;
   recipientEmail: string;
@@ -181,21 +188,24 @@ interface SerializedBulkEmailQueueRow {
   sendAfter: string;
   queuedAt: string;
   requiredInviteId: string | null;
+  idempotencyKey: string | null;
 }
 
 function serializeBulkEmailQueueRow(row: BulkEmailQueueRow, queuedAt: string): SerializedBulkEmailQueueRow {
+  const data = row.attachments?.length ? { ...row.data, __attachments: row.attachments } : row.data;
   return {
-    id: uuid(),
-    eventId: row.eventId,
+    id: resolveOutboxId(row),
+    eventId: row.eventId ?? null,
     templateKey: row.templateKey,
     recipientUserId: row.recipientUserId ?? null,
     recipientEmail: row.recipientEmail,
     subject: row.subject,
-    payloadJson: stringifyJson(authorizeQueuedCapabilityLinks(row.data, row.capabilityLinkValues ?? [])),
+    payloadJson: stringifyJson(authorizeQueuedCapabilityLinks(data, row.capabilityLinkValues ?? [])),
     messageType: row.messageType,
     sendAfter: queuedAt,
     queuedAt,
     requiredInviteId: row.requiredInviteId ?? null,
+    idempotencyKey: row.idempotencyKey ?? null,
   };
 }
 
@@ -221,7 +231,7 @@ export function prepareBulkQueueEmailStatements(
   queuedAt = nowIso(),
 ): PreparedBulkEmailQueueRow[] {
   return rows.map((row) => {
-    const id = uuid();
+    const id = resolveOutboxId(row);
     return {
       id,
       statement: db
@@ -238,7 +248,7 @@ export function prepareBulkQueueEmailStatements(
           queuedAt,
           queuedAt,
           queuedAt,
-          null,
+          row.idempotencyKey ?? null,
         ),
     };
   });

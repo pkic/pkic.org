@@ -7,7 +7,15 @@ import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import { AppError } from "../../errors";
-import type { SeriesRow, IcsFileRow, PreferenceRow, MeetingSeriesScopeType } from "./shared";
+import {
+  ICS_FILE_SELECT_COLUMNS,
+  PREFERENCE_SELECT_COLUMNS,
+  SERIES_SELECT_COLUMNS,
+  type SeriesRow,
+  type IcsFileRow,
+  type PreferenceRow,
+  type MeetingSeriesScopeType,
+} from "./shared";
 import type { AuthMember, DatabaseLike } from "../../types";
 
 export interface MyMeetingSeriesIcsFile {
@@ -27,7 +35,7 @@ export interface MyMeetingSeries {
 async function myApplicableSeriesRows(db: DatabaseLike, member: AuthMember): Promise<SeriesRow[]> {
   const consortiumSeries = await all<SeriesRow>(
     db,
-    `SELECT * FROM meeting_series WHERE scope_type = 'consortium' AND active = 1`,
+    `SELECT ${SERIES_SELECT_COLUMNS} FROM meeting_series WHERE scope_type = 'consortium' AND active = 1`,
   );
 
   const wgRows = await all<{ working_group_id: string }>(
@@ -44,7 +52,8 @@ async function myApplicableSeriesRows(db: DatabaseLike, member: AuthMember): Pro
     const workingGroupFilter = buildD1JsonMembershipFilter("working_group_id", wgIds);
     wgSeries = await all<SeriesRow>(
       db,
-      `SELECT * FROM meeting_series WHERE scope_type = 'working_group' AND active = 1 AND ${workingGroupFilter.sql}`,
+      `SELECT ${SERIES_SELECT_COLUMNS} FROM meeting_series
+        WHERE scope_type = 'working_group' AND active = 1 AND ${workingGroupFilter.sql}`,
       workingGroupFilter.bindings,
     );
   }
@@ -61,7 +70,8 @@ export async function listMyMeetingSeries(db: DatabaseLike, member: AuthMember):
 
   const icsRows = await all<IcsFileRow>(
     db,
-    `SELECT * FROM meeting_ics_files WHERE active = 1 AND ${seriesFilter.sql} ORDER BY year DESC, label ASC`,
+    `SELECT ${ICS_FILE_SELECT_COLUMNS} FROM meeting_ics_files
+      WHERE active = 1 AND ${seriesFilter.sql} ORDER BY year DESC, label ASC, id ASC`,
     seriesFilter.bindings,
   );
   const icsBySeriesId = new Map<string, MyMeetingSeriesIcsFile[]>();
@@ -73,7 +83,8 @@ export async function listMyMeetingSeries(db: DatabaseLike, member: AuthMember):
 
   const prefRows = await all<PreferenceRow>(
     db,
-    `SELECT * FROM member_meeting_preferences WHERE user_id = ? AND ${seriesFilter.sql}`,
+    `SELECT ${PREFERENCE_SELECT_COLUMNS} FROM member_meeting_preferences
+      WHERE user_id = ? AND ${seriesFilter.sql}`,
     [member.userId, ...seriesFilter.bindings],
   );
   const prefBySeriesId = new Map(prefRows.map((p) => [p.series_id, p.ics_file_id]));
@@ -92,7 +103,11 @@ async function assertSeriesApplicableToMember(
   member: AuthMember,
   seriesId: string,
 ): Promise<SeriesRow> {
-  const series = await first<SeriesRow>(db, `SELECT * FROM meeting_series WHERE id = ? AND active = 1`, [seriesId]);
+  const series = await first<SeriesRow>(
+    db,
+    `SELECT ${SERIES_SELECT_COLUMNS} FROM meeting_series WHERE id = ? AND active = 1`,
+    [seriesId],
+  );
   if (!series) throw new AppError(404, "MEETING_SERIES_NOT_FOUND", "Meeting series not found");
 
   if (series.scope_type === "consortium") return series;
@@ -144,7 +159,8 @@ export async function getMyIcsFileForDownload(
   await assertSeriesApplicableToMember(db, member, seriesId);
   const file = await first<IcsFileRow>(
     db,
-    `SELECT * FROM meeting_ics_files WHERE id = ? AND series_id = ? AND active = 1`,
+    `SELECT ${ICS_FILE_SELECT_COLUMNS} FROM meeting_ics_files
+      WHERE id = ? AND series_id = ? AND active = 1`,
     [icsFileId, seriesId],
   );
   if (!file) throw new AppError(404, "ICS_FILE_NOT_FOUND", "ICS file not found for this series");

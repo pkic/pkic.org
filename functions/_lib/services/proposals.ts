@@ -22,6 +22,7 @@ import {
 import type { ProposalType } from "../../../assets/shared/schemas/proposal-management";
 import { parseJsonSafe } from "../utils/json";
 import { prepareAuditLogWhen } from "./audit";
+import { prepareCancelProposalEmails } from "./proposal-email-cancellation";
 import { recordProposalDecision } from "./proposal-decisions";
 
 export interface ProposalRecord {
@@ -249,7 +250,11 @@ export async function updateProposalForVerifiedOwner(
 
   const now = nowIso();
   if (payload.action === "withdraw") {
-    const [updated, , , selected] = await db.batch([
+    const withdrawalCondition = {
+      sql: "SELECT 1 FROM session_proposals WHERE id = ? AND status = 'withdrawn' AND withdrawn_at = ? AND updated_at = ?",
+      bindings: [proposal.id, now, now],
+    };
+    const [updated, , , , selected] = await db.batch([
       db
         .prepare(
           `UPDATE session_proposals
@@ -269,6 +274,17 @@ export async function updateProposalForVerifiedOwner(
           "SELECT 1 FROM session_proposals WHERE id = ? AND status = 'withdrawn' AND withdrawn_at = ? AND updated_at = ? AND changes() = 1",
         conditionBindings: [proposal.id, now, now],
       }),
+      prepareCancelProposalEmails(
+        db,
+        {
+          proposalId: proposal.id,
+          eventId: proposal.event_id,
+          reason: "Cancelled because the proposal was withdrawn",
+          conditionSql: withdrawalCondition.sql,
+          conditionBindings: withdrawalCondition.bindings,
+        },
+        now,
+      ),
       db
         .prepare(
           `UPDATE event_participants

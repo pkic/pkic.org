@@ -4,7 +4,6 @@ import { toast } from "../../ui";
 import type { AdminApplicationDetail } from "../../types";
 import type { EcDecisionValue } from "../../../../shared/schemas/ec-review";
 import { adminApplicationDetailSchema } from "../../../../shared/schemas/admin-applications";
-import { getAdminWorkingGroupCatalogue } from "../../services/catalogues";
 
 /**
  * Data + mutation commands for one application's detail view: transition,
@@ -16,7 +15,6 @@ export function useApplicationDetail(applicationId: string) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<AdminApplicationDetail | null>(null);
-  const [workingGroupLabels, setWorkingGroupLabels] = useState<Record<string, string>>({});
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -34,14 +32,6 @@ export function useApplicationDetail(applicationId: string) {
   useEffect(() => {
     void reload();
   }, [reload]);
-
-  useEffect(() => {
-    // Labels for the working_groups answer (array of slugs) — read from the
-    // managed working_groups table instead of a hand-typed slug->name copy.
-    getAdminWorkingGroupCatalogue()
-      .then((groups) => setWorkingGroupLabels(Object.fromEntries(groups.map((group) => [group.slug, group.name]))))
-      .catch(() => setWorkingGroupLabels({}));
-  }, []);
 
   async function transition(params: { toStage: string; onHoldSubtype?: string; note?: string }) {
     try {
@@ -152,7 +142,6 @@ export function useApplicationDetail(applicationId: string) {
     loading,
     error,
     detail,
-    workingGroupLabels,
     reload,
     transition,
     sendCommunication,

@@ -12,9 +12,10 @@ import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 import { nowIso } from "../utils/time";
 import { parseLinksJson, serializeLinks } from "../../../assets/shared/schemas/links";
-import { prepareAuditLogAfterOneChange } from "./audit";
+import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
 import { prepareSyncProposalParticipantRole, proposalParticipantStatus } from "./proposal-participants";
 import {
+  assertProposalSpeakerRoleTransition,
   prepareProposalSpeakersWithStatus,
   prepareProposalSpeakerWithUserById,
   type ProposalSpeakerWithUser,
@@ -36,6 +37,7 @@ interface AdminSpeakerEditSnapshot extends ProposalSpeakerWithUser {
   proposal_event_id: string;
   proposal_status: ProposalStatus;
   proposal_updated_at: string;
+  proposer_user_id: string;
   user_updated_at: string;
 }
 
@@ -150,7 +152,7 @@ async function getAdminSpeakerEditSnapshot(
             ps.confirmed_at, ps.declined_at, ps.terms_accepted_at, ps.decline_reason, ps.created_at,
             u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
             u.biography, u.links_json, u.headshot_r2_key, u.headshot_updated_at, u.updated_at AS user_updated_at,
-            sp.event_id AS proposal_event_id, sp.status AS proposal_status,
+            sp.event_id AS proposal_event_id, sp.status AS proposal_status, sp.proposer_user_id,
             sp.updated_at AS proposal_updated_at
      FROM session_proposals sp
      JOIN proposal_speakers ps ON ps.proposal_id = sp.id AND ps.user_id = ?
@@ -210,10 +212,6 @@ function buildSpeakerPatch(
   return { profile, role, changes };
 }
 
-function isSpeakerEditGuardFailure(error: unknown): boolean {
-  return error instanceof Error && error.message.includes("NOT NULL constraint failed: audit_log.action");
-}
-
 export async function editAdminProposalSpeaker(
   db: DatabaseLike,
   actor: AuthAdmin,
@@ -225,6 +223,11 @@ export async function editAdminProposalSpeaker(
   const current = await getAdminSpeakerEditSnapshot(db, proposalId, userId);
   await requireProposalSpeakerPermission(db, actor, current.proposal_event_id, "manage");
   const next = buildSpeakerPatch(current, patch);
+  assertProposalSpeakerRoleTransition({
+    currentProposerUserId: current.proposer_user_id,
+    speakerUserId: userId,
+    nextRole: next.role,
+  });
   if (Object.keys(next.changes).length === 0) {
     return { success: true, speaker: toAdminProposalSpeaker(current, appBaseUrl) };
   }
@@ -307,7 +310,7 @@ export async function editAdminProposalSpeaker(
   try {
     results = await db.batch(statements);
   } catch (error) {
-    if (isSpeakerEditGuardFailure(error)) {
+    if (isAuditOneChangeGuardFailure(error)) {
       throw new AppError(409, "PROPOSAL_SPEAKER_CONFLICT", "Proposal speaker changed while the update was processed");
     }
     throw error;

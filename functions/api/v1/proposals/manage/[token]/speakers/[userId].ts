@@ -1,4 +1,5 @@
-import { json } from "../../../../../../_lib/http";
+import type { ValidatedData } from "chanfana";
+import { dispatchRequestMethod, json } from "../../../../../../_lib/http";
 import { parseJsonBody } from "../../../../../../_lib/validation";
 import {
   getProposerManagedSpeakerContext,
@@ -6,6 +7,9 @@ import {
 } from "../../../../../../_lib/services/proposer-speaker-profile";
 import { proposerSpeakerPatchSchema } from "../../../../../../../assets/shared/schemas/proposal-management";
 import { requireInternalSecret } from "../../../../../../_lib/request";
+import { proposalSpeakerRemovalResponseSchema } from "../../../../../../../assets/shared/schemas/proposal-management";
+import { proposerManagedSpeakerDeleteRouteSchema } from "../../../../../../../assets/shared/schemas/route-contracts";
+import { removeProposalSpeakerByProposer } from "../../../../../../_lib/services/proposal-speaker-removal";
 
 export async function onRequestPatch(c: any): Promise<Response> {
   const body = await parseJsonBody(c.req, proposerSpeakerPatchSchema);
@@ -33,8 +37,21 @@ export async function onRequestPatch(c: any): Promise<Response> {
   return json({ success: true });
 }
 
+export async function onRequestDelete(
+  c: any,
+  data?: ValidatedData<typeof proposerManagedSpeakerDeleteRouteSchema>,
+): Promise<Response> {
+  c.set?.("sensitive", true);
+  const params = data?.params ?? { token: c.req.param("token"), userId: c.req.param("userId") };
+  const result = await removeProposalSpeakerByProposer(c.env.DB, {
+    manageToken: params.token,
+    signingSecret: requireInternalSecret(c.env),
+    userId: params.userId,
+  });
+  return json(proposalSpeakerRemovalResponseSchema.parse(result));
+}
+
 export async function onRequest(c: any): Promise<Response> {
   c.set("sensitive", true);
-  if (c.req.raw.method === "PATCH") return onRequestPatch(c);
-  return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
+  return dispatchRequestMethod(c, { PATCH: onRequestPatch, DELETE: onRequestDelete });
 }

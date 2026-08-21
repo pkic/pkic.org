@@ -65,6 +65,13 @@ export async function seedWorkflowEmailTemplates(db: DatabaseLike, adminId: stri
   await seedTemplate(
     db,
     adminId,
+    "proposal_manage_link_transferred",
+    "You now manage **{{proposalTitle}}**. Manage: {{{manageUrl}}}.",
+    "Proposal management transferred",
+  );
+  await seedTemplate(
+    db,
+    adminId,
     "proposal_decision",
     "Decision for **{{proposalTitle}}**: {{finalStatus}}. {{decisionNote}}",
     "Proposal decision",

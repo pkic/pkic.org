@@ -159,6 +159,26 @@ export async function upsertEventFromHugo(db: DatabaseLike, payload: EventUpsert
   return getEventBySlug(db, payload.slug);
 }
 
+export async function createAdminEvent(
+  db: DatabaseLike,
+  payload: EventUpsertPayload,
+  actorUserId: string,
+): Promise<EventRecord> {
+  if (await eventSlugExists(db, payload.slug)) {
+    throw new AppError(409, "SLUG_TAKEN", `The slug '${payload.slug}' is already in use`);
+  }
+
+  const mutation = await buildEventUpsertStatement(db, payload);
+  await db.batch([
+    mutation.statement,
+    prepareAuditLog(db, "admin", actorUserId, "event_created", "event", mutation.eventId, {
+      slug: payload.slug,
+    }),
+  ]);
+
+  return getEventBySlug(db, payload.slug);
+}
+
 /** Allowed characters in a base path: letters, digits, hyphens, underscores, dots, slashes. */
 const BASE_PATH_RE = /^\/[a-zA-Z0-9/_\-.]+\/$/;
 

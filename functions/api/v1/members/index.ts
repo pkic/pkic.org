@@ -15,7 +15,7 @@ import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=60";
 
 export const MembersGet = openApiRoute(membersListRouteSchema, async (c: any, data) => {
-  const { limit = 50, offset = 0, q, sort, group = "all" } = data.query;
+  const { limit, offset, q, sort, group } = data.query;
 
   const { members, total } = await listPublicMembers(c.env.DB, { limit, offset, q, sort, group });
 

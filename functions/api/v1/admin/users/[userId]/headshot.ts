@@ -7,7 +7,7 @@
  *
  * All methods require admin authentication.
  */
-import { json } from "../../../../../_lib/http";
+import { dispatchRequestMethod, json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { readValidatedUploadedImage, resizeHeadshot } from "../../../../../_lib/utils/image-upload";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
@@ -83,16 +83,7 @@ async function onDelete(c: AdminContext): Promise<Response> {
 // ── Router ──────────────────────────────────────────────────────────────────
 
 export async function onRequest(c: AdminContext): Promise<Response> {
-  switch (c.req.raw.method) {
-    case "GET":
-      return onGet(c);
-    case "PUT":
-      return onPut(c);
-    case "DELETE":
-      return onDelete(c);
-    default:
-      return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
+  return dispatchRequestMethod(c, { GET: onGet, PUT: onPut, DELETE: onDelete });
 }
 
 export const AdminUsersUserIdHeadshotGet = openApiRoute(adminUserHeadshotGetRouteSchema, onGet);

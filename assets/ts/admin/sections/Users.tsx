@@ -8,7 +8,7 @@ import { confirmHeadshotUsage } from "../../shared/headshot/controller";
 import { AdminHeadshotManager, ADMIN_HEADSHOT_DISCLAIMER } from "../../shared/headshot/AdminHeadshotManager";
 import { ProfileLinksInput, type ProfileLinksHandle } from "../../components/ProfileLinksInput";
 import { normalizeProfileLinks } from "../../shared/widgets/profile-links";
-import { adminRoleValueSchema } from "../../../shared/schemas/api";
+import { adminRoleValueSchema } from "../../../shared/schemas/admin-users";
 import { UserList } from "./users/UserList";
 
 import type { UserDetail } from "./users/model";

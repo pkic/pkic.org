@@ -14,3 +14,4 @@ export {
 export { forceRegistrationStatus } from "./force-status";
 export { changeRegistrationEmail, finalizeEmailChange } from "./change-email";
 export { admitRegistration } from "./admission";
+export { updateManagedRegistration } from "./manage-update";

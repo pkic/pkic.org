@@ -5,10 +5,11 @@
  */
 import { useState } from "preact/hooks";
 import { api } from "../../api";
-import { toast } from "../../ui";
 import type { AdminOrganizationDetail } from "../../types";
 import { ORG_TIED_MEMBERSHIP_CATEGORIES } from "../../../../shared/schemas/admin-organizations";
 import { linksToText, textToLinks } from "../../../shared/links-text";
+import { performAdminAction } from "../../actions";
+import { FormActions } from "../../components/FormActions";
 
 const PROFILE_TEXT_FIELDS: Array<[label: string, field: keyof AdminOrganizationDetail]> = [
   ["Name", "name"],
@@ -47,27 +48,21 @@ export function OrganizationProfileForm({
 
   async function handleSubmit(e: Event) {
     e.preventDefault();
-    setSaving(true);
     setError("");
-    try {
-      const body: Record<string, string | string[] | null> = { membershipCategory, memberSince: memberSince || null };
-      for (const [, field] of PROFILE_TEXT_FIELDS) {
-        body[field] = form[field].trim() ? form[field].trim() : null;
-      }
-      body.description = form.description.trim() ? form.description.trim() : null;
-      body.contentMarkdown = form.contentMarkdown.trim() ? form.contentMarkdown.trim() : null;
-      body.links = textToLinks(linksText);
-
-      await api(`/api/v1/admin/organizations/${org.id}`, { method: "PATCH", body: JSON.stringify(body) });
-      toast("Organization updated", "success");
-      onSaved();
-    } catch (err) {
-      const msg = (err as Error).message;
-      setError(msg);
-      toast(msg, "error");
-    } finally {
-      setSaving(false);
+    const body: Record<string, string | string[] | null> = { membershipCategory, memberSince: memberSince || null };
+    for (const [, field] of PROFILE_TEXT_FIELDS) {
+      body[field] = form[field].trim() ? form[field].trim() : null;
     }
+    body.description = form.description.trim() ? form.description.trim() : null;
+    body.contentMarkdown = form.contentMarkdown.trim() ? form.contentMarkdown.trim() : null;
+    body.links = textToLinks(linksText);
+    await performAdminAction({
+      setBusy: setSaving,
+      request: () => api(`/api/v1/admin/organizations/${org.id}`, { method: "PATCH", body: JSON.stringify(body) }),
+      successMessage: "Organization updated",
+      afterSuccess: onSaved,
+      onError: setError,
+    });
   }
 
   return (
@@ -142,15 +137,15 @@ export function OrganizationProfileForm({
           />
         </div>
       </div>
-      {error && <div class="alert alert-danger small py-2 mb-2">{error}</div>}
-      <div class="d-flex gap-2">
-        <button class="btn btn-sm btn-primary" type="submit" disabled={saving}>
-          {saving ? "Saving…" : "Save"}
-        </button>
-        <button class="btn btn-sm btn-outline-secondary" type="button" onClick={onCancel} disabled={saving}>
-          Cancel
-        </button>
-      </div>
+      <FormActions
+        submitLabel="Save"
+        busyLabel="Saving…"
+        busy={saving}
+        onCancel={onCancel}
+        status={error}
+        statusVariant="danger"
+        submitVariant="primary"
+      />
     </form>
   );
 }

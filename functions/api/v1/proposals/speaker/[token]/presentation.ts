@@ -11,7 +11,7 @@
  * Each upload creates a new version in presentation_versions; the previous version is retained.
  * Speakers can re-upload until the deadline.
  */
-import { json } from "../../../../../_lib/http";
+import { dispatchRequestMethod, json } from "../../../../../_lib/http";
 import { getSpeakerByManageToken } from "../../../../../_lib/services/proposals";
 import {
   getPresentationProposalContext,
@@ -46,6 +46,5 @@ export async function onRequestPut(c: any): Promise<Response> {
 
 export async function onRequest(c: any): Promise<Response> {
   c.set("sensitive", true);
-  if (c.req.raw.method === "PUT") return onRequestPut(c);
-  return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
+  return dispatchRequestMethod(c, { PUT: onRequestPut });
 }

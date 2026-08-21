@@ -90,30 +90,32 @@ function useSponsors(
     minWeight?: number;
     limit?: number;
     sort?: "name" | "-weight";
-    allowTruncation?: boolean;
   },
 ): { sponsors: PublicSponsor[] | null; error: string | null } {
   const [sponsors, setSponsors] = useState<PublicSponsor[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
+    setSponsors(null);
+    setError(null);
     async function load() {
       try {
-        const query = new URLSearchParams({
-          limit: String(options.limit ?? 200),
-          sort: options.sort ?? "-weight",
-        });
+        const query = new URLSearchParams({ sort: options.sort ?? "-weight" });
         if (options.eventName) query.set("eventName", options.eventName);
         if (options.level) query.set("level", options.level);
         if (options.minWeight !== undefined) query.set("minWeight", String(options.minWeight));
-        const data = sponsorsListResponseSchema.parse(await getJson<unknown>(`${apiBase}/sponsors?${query}`));
-        if (data.page.hasMore && !options.allowTruncation) {
-          throw new Error("The sponsor display exceeds the API page limit.");
-        }
-        if (!cancelled) setSponsors(data.sponsors);
+        await loadProgressiveSponsorPages({
+          endpoint: `${apiBase}/sponsors`,
+          query,
+          maxItems: options.limit,
+          signal: controller.signal,
+          load: (url, signal) => getJson<unknown>(url, { signal }),
+          onPage: setSponsors,
+        });
       } catch (e) {
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
+          setSponsors(null);
           setError((e as Error).message);
           console.error("[sponsors-wall]", e);
         }
@@ -121,19 +123,66 @@ function useSponsors(
     }
     void load();
     return () => {
-      cancelled = true;
+      controller.abort();
     };
-  }, [
-    apiBase,
-    options.eventName,
-    options.level,
-    options.minWeight,
-    options.limit,
-    options.sort,
-    options.allowTruncation,
-  ]);
+  }, [apiBase, options.eventName, options.level, options.minWeight, options.limit, options.sort]);
 
   return { sponsors, error };
+}
+
+const SPONSOR_PAGE_SIZE = 100;
+
+/** Fetches bounded server pages and publishes each accumulated display page. */
+export async function loadProgressiveSponsorPages({
+  endpoint,
+  query,
+  maxItems,
+  signal,
+  load,
+  onPage,
+}: {
+  endpoint: string;
+  query: URLSearchParams;
+  maxItems?: number;
+  signal: AbortSignal;
+  load: (url: string, signal: AbortSignal) => Promise<unknown>;
+  onPage: (sponsors: PublicSponsor[]) => void;
+}): Promise<PublicSponsor[]> {
+  if (maxItems !== undefined && (!Number.isSafeInteger(maxItems) || maxItems < 0)) {
+    throw new RangeError("Sponsor item limit must be a non-negative safe integer.");
+  }
+  const sponsors: PublicSponsor[] = [];
+  let offset = 0;
+
+  if (maxItems === 0) {
+    onPage([]);
+    return sponsors;
+  }
+
+  while (!signal.aborted && (maxItems === undefined || sponsors.length < maxItems)) {
+    const remaining = maxItems === undefined ? SPONSOR_PAGE_SIZE : Math.max(0, maxItems - sponsors.length);
+    const limit = Math.min(SPONSOR_PAGE_SIZE, remaining || SPONSOR_PAGE_SIZE);
+    const pageQuery = new URLSearchParams(query);
+    pageQuery.set("limit", String(limit));
+    pageQuery.set("offset", String(offset));
+    const page = sponsorsListResponseSchema.parse(await load(`${endpoint}?${pageQuery.toString()}`, signal));
+    if (page.page.offset !== offset) throw new Error("Sponsor API returned an unexpected page offset.");
+
+    sponsors.push(...page.sponsors);
+    onPage([...sponsors]);
+    if (!page.page.hasMore || page.sponsors.length === 0) break;
+    offset += page.sponsors.length;
+  }
+
+  return sponsors;
+}
+
+function SponsorLoadError({ message }: { message: string }) {
+  return (
+    <p class="text-danger small mb-0" role="alert">
+      Sponsors could not be loaded: {message}
+    </p>
+  );
 }
 
 // ── Grid mode (sponsors.html / grid.html) ──────────────────────────────────
@@ -157,7 +206,7 @@ function GridMode({
   rows: boolean;
   logoClass?: string;
 }) {
-  const { sponsors } = useSponsors(apiBase, { eventName, level, sort: "-weight" });
+  const { sponsors, error } = useSponsors(apiBase, { eventName, level, sort: "-weight" });
 
   const buckets = useMemo(() => {
     if (!sponsors) return null;
@@ -170,6 +219,7 @@ function GridMode({
     return byWeight;
   }, [sponsors]);
 
+  if (error) return <SponsorLoadError message={error} />;
   if (!buckets || buckets.size === 0) return null;
 
   const weights = sponsorWeightsDescending(sponsors ?? []);
@@ -203,7 +253,7 @@ function GridMode({
 // ── Level mode (sponsors-level.html) ───────────────────────────────────────
 
 function LevelMode({ apiBase, eventName, level }: { apiBase: string; eventName?: string; level: string }) {
-  const { sponsors } = useSponsors(apiBase, { eventName, level, sort: "-weight" });
+  const { sponsors, error } = useSponsors(apiBase, { eventName, level, sort: "-weight" });
 
   const groups = useMemo(() => {
     if (!sponsors) return null;
@@ -217,6 +267,7 @@ function LevelMode({ apiBase, eventName, level }: { apiBase: string; eventName?:
     return Array.from(byWeight.entries()).sort((a, b) => b[0] - a[0]);
   }, [sponsors]);
 
+  if (error) return <SponsorLoadError message={error} />;
   if (!groups || groups.length === 0) return null;
 
   return (
@@ -270,15 +321,15 @@ function StripMode({
   labelClass?: string;
   maxItems?: number;
 }) {
-  const { sponsors } = useSponsors(apiBase, {
+  const { sponsors, error } = useSponsors(apiBase, {
     eventName,
     minWeight,
     limit: maxItems,
     sort: "-weight",
-    allowTruncation: maxItems !== undefined,
   });
   const sorted = sponsors?.map((s) => ({ s, weight: s.weight })) ?? null;
 
+  if (error) return <SponsorLoadError message={error} />;
   if (!sorted || sorted.length === 0) return null;
   const centered = sorted
     .map((entry, index) => ({

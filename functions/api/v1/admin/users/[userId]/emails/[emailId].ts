@@ -4,7 +4,6 @@
 import { json } from "../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../../_lib/auth/permissions";
-import { writeAuditLog } from "../../../../../../_lib/services/audit";
 import { removeUserEmail } from "../../../../../../_lib/services/user-emails";
 import { userEmailRemoveRouteSchema } from "../../../../../../../assets/shared/schemas/user-emails";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
@@ -16,9 +15,7 @@ export const UserEmailsRemove = openApiRoute(userEmailRemoveRouteSchema, async (
 
   const userId = data.params.userId;
   const emailId = data.params.emailId;
-  await removeUserEmail(requestDb(c), userId, emailId);
-
-  await writeAuditLog(requestDb(c), "admin", admin.id, "user_email_removed", "user", userId, { emailId });
+  await removeUserEmail(requestDb(c), admin, userId, emailId);
 
   return json({ success: true });
 });

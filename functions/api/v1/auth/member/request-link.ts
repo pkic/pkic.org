@@ -6,48 +6,37 @@
 import { parseJsonBody } from "../../../../_lib/validation";
 import { json } from "../../../../_lib/http";
 import { requestMemberMagicLink } from "../../../../_lib/auth/member";
-import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
-import { getClientIp, getUserAgent, hashOptional, requireInternalSecret } from "../../../../_lib/request";
-import { enforceRateLimit } from "../../../../_lib/rate-limit";
 import { processOutboxByIdBackground, queueEmail } from "../../../../_lib/email/outbox";
 import { logInfo } from "../../../../_lib/logging";
 import { memberAuthRequestSchema } from "../../../../../assets/shared/schemas/member-auth";
-import { requestDb, type AdminContext } from "../../../../_lib/db/context";
+import type { AdminContext } from "../../../../_lib/db/context";
+import { prepareMagicLinkRequestHttp } from "../../../../_lib/auth/http-flow";
+import { dispatchPostOnly } from "../../../../_lib/http";
+
+const MEMBER_MAGIC_LINK_REQUEST_RATE_LIMIT_NAMESPACE = "member-auth-request-link";
 
 export async function onRequestPost(c: AdminContext): Promise<Response> {
   const body = await parseJsonBody(c.req, memberAuthRequestSchema);
-  const clientIp = getClientIp(c.req.raw);
-  await enforceRateLimit({
-    binding: c.env.EMAIL_RATE_LIMITER,
-    namespace: "member-auth-request-link:email",
-    key: body.email,
-  });
-  await enforceRateLimit({ binding: c.env.IP_RATE_LIMITER, namespace: "member-auth-request-link:ip", key: clientIp });
+  const http = await prepareMagicLinkRequestHttp(c, body.email, MEMBER_MAGIC_LINK_REQUEST_RATE_LIMIT_NAMESPACE);
 
-  const config = getConfig(c.env, c.req.raw);
-  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-  const secret = requireInternalSecret(c.env);
-  const ipHash = await hashOptional(clientIp, secret);
-  const userAgentHash = await hashOptional(getUserAgent(c.req.raw), secret);
-
-  const magic = await requestMemberMagicLink(requestDb(c), {
+  const magic = await requestMemberMagicLink(http.db, {
     email: body.email,
-    ipHash,
-    userAgentHash,
-    ttlMinutes: config.magicLinkTtlMinutes,
+    ipHash: http.ipHash,
+    userAgentHash: http.userAgentHash,
+    ttlMinutes: http.magicLinkTtlMinutes,
   });
 
   if (magic.token && magic.member) {
-    const magicLinkUrl = `${appBaseUrl}/portal/?token=${encodeURIComponent(magic.token)}`;
-    const outboxId = await queueEmail(requestDb(c), {
+    const magicLinkUrl = `${http.appBaseUrl}/portal/?token=${encodeURIComponent(magic.token)}`;
+    const outboxId = await queueEmail(http.db, {
       templateKey: "member_magic_link",
       recipientEmail: magic.member.email,
       recipientUserId: null,
       messageType: "transactional",
       subject: "Your PKI Consortium member sign-in link",
-      data: { email: magic.member.email, magicLinkUrl, expiresInMinutes: config.magicLinkTtlMinutes },
+      data: { email: magic.member.email, magicLinkUrl, expiresInMinutes: http.magicLinkTtlMinutes },
     });
-    c.executionCtx.waitUntil(processOutboxByIdBackground(requestDb(c), c.env, outboxId));
+    c.executionCtx.waitUntil(processOutboxByIdBackground(http.db, c.env, outboxId));
   } else {
     logInfo("member_magic_link_skipped", {
       reason: "No active member found for the requested email address.",
@@ -58,8 +47,5 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 }
 
 export async function onRequest(c: AdminContext): Promise<Response> {
-  if (c.req.raw.method !== "POST") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
-  return onRequestPost(c);
+  return dispatchPostOnly(c, onRequestPost);
 }

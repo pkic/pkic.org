@@ -8,9 +8,12 @@
  * navigation already sends; the server's `Content-Disposition: attachment`
  * header does the rest.
  */
-import { useEffect, useState } from "preact/hooks";
-import { getJson, ApiClientError } from "../../shared/api-client";
+import { useEffect } from "preact/hooks";
+import { ApiClientError } from "../../shared/api-client";
+import { Pager } from "../../components/Pager";
+import { useApiPage } from "../../hooks/useApiPage";
 import type { SponsorPortalAttendee, SponsorPortalSession } from "./types";
+import { sponsorPortalAttendeesListResponseSchema } from "../../../shared/schemas/sponsor-portal";
 
 function fmtName(a: SponsorPortalAttendee): string {
   return [a.firstName, a.lastName].filter(Boolean).join(" ").trim() || "—";
@@ -22,44 +25,18 @@ function fmtAttendanceType(value: string | null): string {
 }
 
 export function Attendees({ session, onUnauthorized }: { session: SponsorPortalSession; onUnauthorized: () => void }) {
-  const [attendees, setAttendees] = useState<SponsorPortalAttendee[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [ineligible, setIneligible] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const listing = useApiPage(
+    `/api/v1/sponsor-portal/events/${session.eventId}/attendees`,
+    { sort: "name" },
+    sponsorPortalAttendeesListResponseSchema,
+    (data) => data.attendees,
+  );
+  const attendees = listing.data?.attendees ?? null;
+  const ineligible = listing.error instanceof ApiClientError && listing.error.status === 403;
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function load(): Promise<void> {
-      setLoading(true);
-      setError(null);
-      setIneligible(false);
-      try {
-        const data = await getJson<{ attendees: SponsorPortalAttendee[] }>(
-          `/api/v1/sponsor-portal/events/${session.eventId}/attendees`,
-        );
-        if (!cancelled) setAttendees(data.attendees);
-      } catch (err) {
-        if (cancelled) return;
-        if (err instanceof ApiClientError && err.status === 401) {
-          onUnauthorized();
-          return;
-        }
-        if (err instanceof ApiClientError && err.status === 403) {
-          setIneligible(true);
-          return;
-        }
-        setError(err instanceof ApiClientError ? err.message : "Could not load attendees. Please try again.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [session.eventId]);
+    if (listing.error instanceof ApiClientError && listing.error.status === 401) onUnauthorized();
+  }, [listing.error, onUnauthorized]);
 
   const eventLabel = session.eventName ?? "your event";
 
@@ -98,16 +75,18 @@ export function Attendees({ session, onUnauthorized }: { session: SponsorPortalS
         Only attendees who consented to sharing their profile with event sponsors are listed below.
       </p>
 
-      {loading && (
+      {listing.loading && (
         <div class="d-flex align-items-center gap-2 text-muted py-4">
           <div class="spinner-border spinner-border-sm" role="status"></div>
           Loading attendees…
         </div>
       )}
 
-      {error && <div class="alert alert-danger">✕ {error}</div>}
+      {listing.error && !ineligible && !(listing.error instanceof ApiClientError && listing.error.status === 401) && (
+        <div class="alert alert-danger">✕ {listing.error.message}</div>
+      )}
 
-      {!loading && !error && attendees && (
+      {!listing.loading && !listing.error && attendees && (
         <div class="table-responsive">
           <table class="table table-sm table-hover align-middle">
             <thead>
@@ -141,6 +120,7 @@ export function Attendees({ session, onUnauthorized }: { session: SponsorPortalS
           </table>
         </div>
       )}
+      {listing.pagerProps && <Pager {...listing.pagerProps} />}
     </div>
   );
 }

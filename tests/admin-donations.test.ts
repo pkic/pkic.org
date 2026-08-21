@@ -100,7 +100,11 @@ describe("GET /api/v1/admin/donations (P6M-P2-02)", () => {
     const body = donationsListResponseSchema.parse(await response.json());
     expect(body.donations.map((d) => d.checkout_session_id)).toEqual(["cs_3", "cs_2", "cs_1"]);
     expect(body.page).toEqual({ limit: 100, offset: 0, total: 3, hasMore: false });
-    expect(body.summary).toEqual({ completed: 1, pending: 1, expired: 1 });
+    expect(body.summary).toEqual({
+      byStatus: { completed: 1, pending: 1, expired: 1 },
+      backfillable: 1,
+      syncable: 2,
+    });
   });
 
   it("filters by status", async () => {
@@ -110,7 +114,11 @@ describe("GET /api/v1/admin/donations (P6M-P2-02)", () => {
     expect(body.donations.map((d) => d.checkout_session_id)).toEqual(["cs_2"]);
     expect(body.page.total).toBe(1);
     // summary is unaffected by the status filter — still every status's count.
-    expect(body.summary).toEqual({ completed: 1, pending: 1, expired: 1 });
+    expect(body.summary).toEqual({
+      byStatus: { completed: 1, pending: 1, expired: 1 },
+      backfillable: 1,
+      syncable: 2,
+    });
   });
 
   it("rejects an unknown status value instead of silently matching nothing", async () => {
@@ -149,6 +157,7 @@ describe("GET /api/v1/admin/donations (P6M-P2-02)", () => {
     const body = donationsListResponseSchema.parse(await response.json());
     expect(body.donations.map((d) => d.checkout_session_id)).toEqual(["cs_2"]);
     expect(body.page).toEqual({ limit: 1, offset: 1, total: 3, hasMore: true });
+    expect(body.summary).toMatchObject({ backfillable: 1, syncable: 2 });
   });
 
   it("applies free-text search in D1 through the shared list contract", async () => {

@@ -29,6 +29,7 @@ export async function createAdminRegistrationManageUrl(
   const [iphash, uahash] = await Promise.all([sha256Hex(payload.ip), sha256Hex(payload.userAgent)]);
   const token = await signAdminManageJwt(payload.signingSecret, {
     sub: registration.id,
+    actor: payload.actor.id,
     event: payload.event.slug,
     iphash,
     uahash,

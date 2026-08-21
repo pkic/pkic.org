@@ -8,9 +8,12 @@
  * kind-discriminated response, generalized in this same phase.
  */
 import { useState } from "preact/hooks";
-import { browserSupportsWebAuthn, startAuthentication } from "@simplewebauthn/browser";
-import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
-import { postJson, ApiClientError } from "../../../shared/api-client";
+import { browserSupportsWebAuthn } from "@simplewebauthn/browser";
+import { postJson } from "../../../shared/api-client";
+import { authenticateWithPasskey } from "../../../shared/passkey-authentication";
+import { MagicLinkSubmitButton, SignInError } from "../../../components/MagicLinkFeedback";
+import { useMagicLinkRequest } from "../../../hooks/useMagicLinkRequest";
+import { emailFromSubmitEvent } from "../../../shared/form/helpers";
 
 async function requestMagicLink(email: string): Promise<void> {
   await postJson("/api/v1/auth/member/request-link", { email });
@@ -18,64 +21,32 @@ async function requestMagicLink(email: string): Promise<void> {
 }
 
 async function signInWithPasskey(): Promise<void> {
-  const beginRes = await fetch("/api/v1/auth/passkeys/authenticate/begin");
-  const begin: { options?: unknown; challengeToken?: string; error?: { message?: string } } = await beginRes
-    .json()
-    .catch(() => ({}));
-  if (!beginRes.ok || !begin.options || !begin.challengeToken) {
-    throw new Error(begin.error?.message ?? "Could not start passkey sign-in.");
-  }
-
-  const assertion = await startAuthentication({ optionsJSON: begin.options as PublicKeyCredentialRequestOptionsJSON });
-
-  const completeRes = await fetch("/api/v1/auth/passkeys/authenticate/complete", {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ challengeToken: begin.challengeToken, response: assertion }),
-  });
-  const d: { member?: unknown; error?: { message?: string } } = await completeRes.json().catch(() => ({}));
-  if (!completeRes.ok) {
-    throw new Error(d.error?.message ?? "Passkey sign-in failed.");
-  }
-  if (!d.member) {
+  const result = await authenticateWithPasskey();
+  if (!result.member) {
     // Succeeded, but the passkey belonged to a staff account, not a member.
     throw new Error("This passkey isn't registered to a member account.");
   }
 }
 
 export function Login({ onSignedIn }: { onSignedIn: () => void | Promise<void> }) {
-  const [sent, setSent] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [passkeySubmitting, setPasskeySubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const magicLink = useMagicLinkRequest("Something went wrong. Please try again.");
   const passkeysSupported = typeof window !== "undefined" && browserSupportsWebAuthn();
 
   async function handleSubmit(e: Event): Promise<void> {
-    e.preventDefault();
-    const form = e.currentTarget as HTMLFormElement;
-    const email = (form.elements.namedItem("email") as HTMLInputElement).value.trim();
+    const email = emailFromSubmitEvent(e);
     if (!email) return;
-    setError(null);
-    setSubmitting(true);
-    try {
-      await requestMagicLink(email);
-      setSent(true);
-    } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : "Something went wrong. Please try again.");
-    } finally {
-      setSubmitting(false);
-    }
+    await magicLink.request(() => requestMagicLink(email));
   }
 
   async function handlePasskeySignIn(): Promise<void> {
-    setError(null);
+    magicLink.setError(null);
     setPasskeySubmitting(true);
     try {
       await signInWithPasskey();
       await onSignedIn();
     } catch (err) {
-      setError((err as Error).message);
+      magicLink.setError((err as Error).message);
     } finally {
       setPasskeySubmitting(false);
     }
@@ -87,7 +58,7 @@ export function Login({ onSignedIn }: { onSignedIn: () => void | Promise<void> }
         <div class="card-body p-4">
           <h2 class="h4 mb-3">Member Portal</h2>
 
-          {passkeysSupported && !sent && (
+          {passkeysSupported && !magicLink.sent && (
             <>
               <button
                 type="button"
@@ -104,7 +75,7 @@ export function Login({ onSignedIn }: { onSignedIn: () => void | Promise<void> }
           )}
 
           <p class="text-muted">Enter your email to receive a sign-in link.</p>
-          {sent ? (
+          {magicLink.sent ? (
             <div class="alert alert-success mt-3">
               ✓ If this address belongs to an active member, you'll receive a sign-in link shortly.
             </div>
@@ -128,12 +99,10 @@ export function Login({ onSignedIn }: { onSignedIn: () => void | Promise<void> }
                   autocomplete="email"
                 />
               </div>
-              <button type="submit" class="btn btn-success w-100" disabled={submitting}>
-                {submitting ? "Sending…" : "Send sign-in link"}
-              </button>
+              <MagicLinkSubmitButton submitting={magicLink.submitting} />
             </form>
           )}
-          {error && <div class="alert alert-danger mt-3">✕ Sign-in failed: {error}</div>}
+          <SignInError error={magicLink.error} />
         </div>
       </div>
     </div>

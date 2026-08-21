@@ -1,14 +1,15 @@
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { httpOrSameOriginUrlSchema, httpUrlSchema } from "./urls";
 
 /** Schemas for the public sponsor display endpoints. */
 
 export const publicSponsorItemSchema = z.object({
   id: databaseIdSchema,
   name: z.string(),
-  website: z.string().nullable(),
-  logoUrl: z.string().nullable(),
+  website: httpUrlSchema.nullable(),
+  logoUrl: httpOrSameOriginUrlSchema.nullable(),
   tier: z.string().nullable(),
   eventTier: z.string().nullable(),
   effectiveTier: z.string(),
@@ -17,7 +18,7 @@ export const publicSponsorItemSchema = z.object({
 export type PublicSponsor = z.infer<typeof publicSponsorItemSchema>;
 
 export const PUBLIC_SPONSOR_SORT_COLUMNS = ["name", "weight"] as const;
-export const sponsorsListQuerySchema = listQuerySchema(PUBLIC_SPONSOR_SORT_COLUMNS).extend({
+export const sponsorsListQuerySchema = listQuerySchema(PUBLIC_SPONSOR_SORT_COLUMNS, { limit: 200 }).extend({
   eventName: z.string().trim().min(1).max(200).optional(),
   level: z.string().trim().min(1).max(100).optional(),
   minWeight: z.coerce.number().int().positive().optional(),

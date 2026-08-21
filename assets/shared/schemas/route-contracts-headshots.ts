@@ -1,11 +1,10 @@
-import { adminUserIdParamsSchema } from "./api-common";
+import { adminUserIdParamsSchema, successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { proposalManageTokenParamsSchema } from "./proposal-management";
 import {
   adminHeadshotUploadResponseSchema,
   headshotImageUploadFormSchema,
   headshotUploadResponseSchema,
-  successResponseSchema,
 } from "./registration";
 
 export const adminUserHeadshotGetRouteSchema = {

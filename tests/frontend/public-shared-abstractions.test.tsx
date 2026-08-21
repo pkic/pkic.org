@@ -1,0 +1,273 @@
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { render, type ComponentChildren } from "preact";
+import { act } from "preact/test-utils";
+import { ConsentCard } from "../../assets/ts/components/ConsentCard";
+import { MagicLinkSubmitButton, SignInError } from "../../assets/ts/components/MagicLinkFeedback";
+import { MenuIcon } from "../../assets/ts/components/MenuIcon";
+import { NotFoundPanel } from "../../assets/ts/components/NotFoundPanel";
+import { VerifyingOverlay } from "../../assets/ts/components/VerifyingOverlay";
+import { findEmailReviewCard } from "../../assets/ts/event-flows/registration-page";
+import { loadSpeakerPageData } from "../../assets/ts/event-flows/speaker-link-recovery";
+import { useAsyncSubmission } from "../../assets/ts/hooks/useAsyncSubmission";
+import { useMagicLinkRequest } from "../../assets/ts/hooks/useMagicLinkRequest";
+import { RepresentativeSelect } from "../../assets/ts/member-flows/portal/sections/MyOrganization";
+import { formatStageLabel } from "../../assets/ts/member-flows/portal/ui";
+import { ApiClientError } from "../../assets/ts/shared/api-client";
+import { classifyDonationPollResult } from "../../assets/ts/shared/donation/session-poll";
+import { uploadFile } from "../../assets/ts/shared/file-upload";
+import { emailFromSubmitEvent } from "../../assets/ts/shared/form/helpers";
+import { replaceFormWithSuccess } from "../../assets/ts/shared/form/success-panel";
+import { memberInitials } from "../../assets/ts/shared/member-display";
+import { ORGANIZATION_CONTENT_FIELD_LABELS } from "../../assets/ts/shared/organization-content";
+import { handleFormInviteSubmitError } from "../../assets/ts/shared/widgets/invite-recovery";
+
+const mounted: HTMLElement[] = [];
+
+function mount(node: ComponentChildren): HTMLElement {
+  const container = document.createElement("div");
+  document.body.append(container);
+  mounted.push(container);
+  void act(() => render(node, container));
+  return container;
+}
+
+afterEach(() => {
+  for (const container of mounted.splice(0)) {
+    void act(() => render(null, container));
+    container.remove();
+  }
+  document.body.innerHTML = "";
+  window.history.replaceState({}, "", "/");
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+describe("public shared frontend abstractions", () => {
+  it("keeps featured and compact consent cards on the same interactive frame", () => {
+    const compact = mount(
+      <ConsentCard
+        term={{ termKey: "privacy", version: "1", required: true, contentRef: null, displayText: "Privacy" }}
+      />,
+    );
+    const featured = mount(
+      <ConsentCard
+        term={{
+          termKey: "conduct",
+          version: "2",
+          required: false,
+          contentRef: "/conduct/",
+          displayText: "Code of conduct",
+          helpText: "Please review this policy.",
+        }}
+      />,
+    );
+
+    for (const container of [compact, featured]) {
+      const card = container.querySelector<HTMLElement>('[role="checkbox"]');
+      expect(card?.getAttribute("aria-checked")).toBe("false");
+      void act(() => card?.click());
+      expect(card?.getAttribute("aria-checked")).toBe("true");
+    }
+    expect(featured.textContent).toContain("Please review this policy.");
+  });
+
+  it("finds the canonical registration email-review input and card", () => {
+    const form = document.createElement("form");
+    form.innerHTML = '<div data-email-review-card><input type="checkbox" name="emailReviewConfirmed"></div>';
+    const review = findEmailReviewCard(form);
+    expect(review?.confirmation.name).toBe("emailReviewConfirmed");
+    expect(review?.card.dataset.emailReviewCard).toBe("");
+  });
+
+  it("loads speaker-page data once the common token context is valid", async () => {
+    window.history.replaceState({}, "", "/speaker/?token=shared-token");
+    document.body.innerHTML = `
+      <main data-speaker-test data-event-slug="event-1" data-api-base="/api/v1">
+        <form><div data-flow-status></div></form>
+        <div data-speaker-loading></div><div data-speaker-content></div>
+      </main>`;
+    const request = vi.fn(async () => ({ speaker: "Ada" }));
+
+    const loaded = await loadSpeakerPageData({ selector: "[data-speaker-test]", request });
+
+    expect(request).toHaveBeenCalledWith("shared-token", expect.objectContaining({ eventSlug: "event-1" }));
+    expect(loaded?.token).toBe("shared-token");
+    expect(loaded?.data).toEqual({ speaker: "Ada" });
+  });
+
+  it("shows the shared speaker recovery state when the token is absent", async () => {
+    document.body.innerHTML = `
+      <main data-speaker-test data-event-slug="event-1">
+        <form><div data-flow-status></div></form>
+        <div data-speaker-loading></div>
+        <section class="d-none" data-resend-speaker-manage-section>
+          <button data-resend-speaker-manage-btn></button>
+          <input data-resend-speaker-manage-email>
+          <span data-resend-speaker-manage-status></span>
+        </section>
+      </main>`;
+
+    const loaded = await loadSpeakerPageData({ selector: "[data-speaker-test]", request: vi.fn() });
+
+    expect(loaded).toBeNull();
+    expect(document.querySelector("[data-speaker-loading]")?.classList.contains("d-none")).toBe(true);
+    expect(document.querySelector("[data-resend-speaker-manage-section]")?.classList.contains("d-none")).toBe(false);
+    expect(document.querySelector("[data-resend-speaker-manage-status]")?.textContent).toContain(
+      "Missing speaker token",
+    );
+  });
+
+  it("uses one invitation-aware error path for event forms", async () => {
+    const form = document.createElement("form");
+    form.innerHTML = '<input name="email" value=" ada@example.test ">';
+    const statusEl = document.createElement("div");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 200, headers: { "content-type": "application/json" } })),
+    );
+    const error = new ApiClientError(
+      { error: { code: "INVITE_EXPIRED", message: "Invitation expired", details: null } },
+      400,
+    );
+
+    await handleFormInviteSubmitError({ error, form, apiBase: "/api/v1", statusEl, hasInviteToken: true });
+
+    expect(statusEl.textContent).toContain("fresh link is on its way");
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/v1/invites/resend-link",
+      expect.objectContaining({ body: JSON.stringify({ email: "ada@example.test" }) }),
+    );
+  });
+
+  it("replaces successful forms through one rendering and scroll behavior", () => {
+    const root = document.createElement("div");
+    const form = document.createElement("form");
+    root.append(form);
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: scrollIntoView });
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
+
+    const panel = replaceFormWithSuccess(root, form, <p>Saved successfully</p>);
+
+    expect(form.classList.contains("d-none")).toBe(true);
+    expect(panel.textContent).toBe("Saved successfully");
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+  });
+
+  it("shares member initials, not-found, verification, menu, and organization labels", () => {
+    expect(memberInitials("Ada Byron Lovelace IV")).toBe("ABL");
+    expect(formatStageLabel("in_consultation")).toBe("In Consultation");
+    expect(ORGANIZATION_CONTENT_FIELD_LABELS.blogFeedUrl).toBe("Blog feed URL");
+    const container = mount(
+      <>
+        <NotFoundPanel message="Missing member" backHref="/members/" backLabel="Back to members" />
+        <VerifyingOverlay />
+        <MenuIcon size={24} />
+      </>,
+    );
+    expect(container.textContent).toContain("Missing member");
+    expect(container.textContent).toContain("Verifying your sign-in link");
+    expect(container.querySelector("svg")?.getAttribute("width")).toBe("24");
+  });
+
+  it("normalizes binary uploads and API failures", async () => {
+    const file = new Blob(["logo"], { type: "image/png" });
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ stored: true }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(uploadFile<{ stored: boolean }>("/upload", file)).resolves.toEqual({ stored: true });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/upload",
+      expect.objectContaining({ method: "POST", credentials: "same-origin", body: file }),
+    );
+  });
+
+  it("renders representative choices through the shared selector", () => {
+    const onChange = vi.fn();
+    const container = mount(
+      <RepresentativeSelect
+        className="representative-test"
+        value=""
+        disabled={false}
+        emptyLabel="Primary contact"
+        representatives={[{ userId: "user-1", name: "Ada", email: "ada@example.test" }]}
+        onChange={onChange}
+      />,
+    );
+    const select = container.querySelector<HTMLSelectElement>("select")!;
+    expect(Array.from(select.options).map((option) => option.textContent)).toEqual(["Primary contact", "Ada"]);
+    select.value = "user-1";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("shares async and magic-link submission state transitions", async () => {
+    let asyncState: ReturnType<typeof useAsyncSubmission> | undefined;
+    let magicState: ReturnType<typeof useMagicLinkRequest> | undefined;
+    function Harness() {
+      asyncState = useAsyncSubmission();
+      magicState = useMagicLinkRequest("Could not send link.");
+      return null;
+    }
+    mount(<Harness />);
+
+    void act(() => asyncState?.begin());
+    expect(asyncState?.submitting).toBe(true);
+    void act(() => asyncState?.finish());
+    expect(asyncState?.submitting).toBe(false);
+    await act(async () => {
+      await magicState?.request(async () => undefined);
+    });
+    expect(magicState?.sent).toBe(true);
+    expect(magicState?.submitting).toBe(false);
+  });
+
+  it("shares magic-link feedback presentation", () => {
+    const container = mount(
+      <>
+        <MagicLinkSubmitButton submitting />
+        <SignInError error="Expired" />
+      </>,
+    );
+    expect(container.querySelector("button")?.textContent).toBe("Sending…");
+    expect(container.querySelector("button")?.hasAttribute("disabled")).toBe(true);
+    expect(container.textContent).toContain("Sign-in failed: Expired");
+  });
+
+  it("classifies every donation polling state consistently", () => {
+    expect(classifyDonationPollResult({ pending: true })).toEqual({ state: "pending" });
+    expect(classifyDonationPollResult({ failed: true })).toEqual({ state: "failed" });
+    expect(classifyDonationPollResult({ expired: true })).toEqual({ state: "expired" });
+    expect(
+      classifyDonationPollResult({
+        grossAmount: 5000,
+        currency: "usd",
+        donorFirstName: "Ada",
+        source: null,
+        completedAt: null,
+      }),
+    ).toEqual({
+      state: "confirmed",
+      session: { grossAmount: 5000, currency: "usd", donorFirstName: "Ada", source: null, completedAt: null },
+    });
+  });
+
+  it("reads and trims the standard email from submit events", () => {
+    const form = document.createElement("form");
+    form.innerHTML = '<input name="email" value="  ada@example.test  ">';
+    const handler = vi.fn((event: SubmitEvent) => emailFromSubmitEvent(event));
+    form.addEventListener("submit", handler);
+    form.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+    expect(handler.mock.results[0]?.value).toBe("ada@example.test");
+  });
+});

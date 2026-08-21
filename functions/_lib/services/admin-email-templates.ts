@@ -1,6 +1,7 @@
 import {
   ADMIN_EMAIL_TEMPLATES_SORT_COLUMNS,
   type AdminEmailTemplateVersion,
+  type EmailTemplateVersionStatus,
 } from "../../../assets/shared/schemas/admin-email-templates";
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
 import { queryPage } from "../db/pagination";
@@ -17,6 +18,8 @@ interface TemplateSummaryRow {
 
 interface ListQuery {
   q?: string;
+  templateKeyPrefix?: string;
+  status?: EmailTemplateVersionStatus;
   sort?: string;
   limit: number;
   offset: number;
@@ -30,8 +33,17 @@ export async function listAdminEmailTemplates(db: DatabaseLike, query: ListQuery
     "template_key ASC",
   );
   const search = query.q ? buildD1TextSearchFilter(query.q, ["template_key"]) : null;
-  const where = search ? `WHERE ${search.sql}` : "";
-  const bindings = search?.bindings ?? [];
+  const conditions: string[] = [];
+  const bindings: unknown[] = [];
+  if (search) {
+    conditions.push(search.sql);
+    bindings.push(...search.bindings);
+  }
+  if (query.templateKeyPrefix) {
+    conditions.push("template_key GLOB ?");
+    bindings.push(`${query.templateKeyPrefix}*`);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const { rows: templates, total } = await queryPage<TemplateSummaryRow>(
     db,
     {
@@ -62,8 +74,17 @@ export async function listAdminEmailTemplateVersions(db: DatabaseLike, templateK
   const search = query.q
     ? buildD1TextSearchFilter(query.q, ["subject_template", "status", "content_type", "message_type"])
     : null;
-  const searchSql = search ? `AND ${search.sql}` : "";
-  const bindings = [templateKey, ...(search?.bindings ?? [])];
+  const conditions: string[] = ["template_key = ?"];
+  const bindings: unknown[] = [templateKey];
+  if (search) {
+    conditions.push(search.sql);
+    bindings.push(...search.bindings);
+  }
+  if (query.status) {
+    conditions.push("status = ?");
+    bindings.push(query.status);
+  }
+  const where = `WHERE ${conditions.join(" AND ")}`;
   const orderBy = resolveMappedOrderBy(
     query.sort,
     {
@@ -91,8 +112,7 @@ export async function listAdminEmailTemplateVersions(db: DatabaseLike, templateK
          created_at,
          message_type
        FROM email_template_versions
-       WHERE template_key = ?
-       ${searchSql}
+       ${where}
        ${orderBy}
        LIMIT ? OFFSET ?`,
       bindings: [...bindings, query.limit, query.offset],
@@ -100,8 +120,7 @@ export async function listAdminEmailTemplateVersions(db: DatabaseLike, templateK
     {
       sql: `SELECT COUNT(*) AS total
             FROM email_template_versions
-            WHERE template_key = ?
-            ${searchSql}`,
+            ${where}`,
       bindings,
     },
   );

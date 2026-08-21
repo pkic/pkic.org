@@ -7,26 +7,18 @@
 import { useState, useEffect, useCallback } from "preact/hooks";
 import { Spinner } from "../../components/Spinner";
 import { ErrorAlert } from "../../components/ErrorAlert";
+import { Pager } from "../../components/Pager";
+import { useApiPage } from "../../hooks/useApiPage";
 import { api } from "../api";
 import { toast, fmt } from "../ui";
-import type { OrganizationContentReviewDetail, OrganizationContentReviewSummary } from "../types";
-import { CONTENT_REVIEW_STATUSES as STATUS_TABS } from "../../../shared/schemas/admin-organizations";
-
-function fieldLabel(field: string): string {
-  const labels: Record<string, string> = {
-    slogan: "Slogan",
-    description: "Description",
-    contentMarkdown: "Long-form content",
-    website: "Website",
-    blogUrl: "Blog URL",
-    blogFeedUrl: "Blog feed URL",
-    pressUrl: "Press URL",
-    pressFeedUrl: "Press feed URL",
-    careersUrl: "Careers URL",
-    links: "Links",
-  };
-  return labels[field] ?? field;
-}
+import type { OrganizationContentReviewDetail } from "../types";
+import {
+  CONTENT_REVIEW_STATUSES as STATUS_TABS,
+  contentReviewsListResponseSchema,
+} from "../../../shared/schemas/admin-organizations";
+import { StatusTabs } from "../components/StatusTabs";
+import { performAdminAction } from "../actions";
+import { ORGANIZATION_CONTENT_FIELD_LABELS } from "../../shared/organization-content";
 
 /** `links` diff values are string[] (one URL per line via pre-wrap); every other field is already a plain string. */
 function formatDiffValue(value: unknown): string {
@@ -60,16 +52,12 @@ function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: ()
   }, [load]);
 
   async function approve() {
-    setBusy(true);
-    try {
-      await api(`/api/v1/admin/organizations/content-reviews/${reviewId}/approve`, { method: "POST" });
-      toast("Approved and applied", "success");
-      onDecided();
-    } catch (e) {
-      toast((e as Error).message, "error");
-    } finally {
-      setBusy(false);
-    }
+    await performAdminAction({
+      setBusy,
+      request: () => api(`/api/v1/admin/organizations/content-reviews/${reviewId}/approve`, { method: "POST" }),
+      successMessage: "Approved and applied",
+      afterSuccess: onDecided,
+    });
   }
 
   async function reject() {
@@ -77,19 +65,16 @@ function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: ()
       toast("A reviewer note is required to reject", "error");
       return;
     }
-    setBusy(true);
-    try {
-      await api(`/api/v1/admin/organizations/content-reviews/${reviewId}/reject`, {
-        method: "POST",
-        body: JSON.stringify({ reviewerNote: reviewerNote.trim() }),
-      });
-      toast("Rejected", "success");
-      onDecided();
-    } catch (e) {
-      toast((e as Error).message, "error");
-    } finally {
-      setBusy(false);
-    }
+    await performAdminAction({
+      setBusy,
+      request: () =>
+        api(`/api/v1/admin/organizations/content-reviews/${reviewId}/reject`, {
+          method: "POST",
+          body: JSON.stringify({ reviewerNote: reviewerNote.trim() }),
+        }),
+      successMessage: "Rejected",
+      afterSuccess: onDecided,
+    });
   }
 
   if (loading) return <Spinner />;
@@ -121,7 +106,7 @@ function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: ()
               <tbody>
                 {detail.diff.map((d) => (
                   <tr key={d.field}>
-                    <td class="fw-semibold">{fieldLabel(d.field)}</td>
+                    <td class="fw-semibold">{ORGANIZATION_CONTENT_FIELD_LABELS[d.field] ?? d.field}</td>
                     <td class="text-muted adm-diff-cell">
                       {d.current == null || d.current === "" || (Array.isArray(d.current) && d.current.length === 0) ? (
                         <em>(empty)</em>
@@ -171,58 +156,33 @@ function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: ()
 
 export function OrganizationContentReviews() {
   const [status, setStatus] = useState<(typeof STATUS_TABS)[number]>("pending");
-  const [reviews, setReviews] = useState<OrganizationContentReviewSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await api<{ reviews: OrganizationContentReviewSummary[] }>(
-        `/api/v1/admin/organizations/content-reviews?status=${status}`,
-      );
-      setReviews(data.reviews);
-      setSelectedId((current) => current ?? data.reviews[0]?.id ?? null);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [status]);
+  const listing = useApiPage(
+    "/api/v1/admin/organizations/content-reviews",
+    { status, sort: "-submittedAt" },
+    contentReviewsListResponseSchema,
+    (data) => data.reviews,
+  );
+  const reviews = listing.data?.reviews ?? [];
 
   useEffect(() => {
-    setSelectedId(null);
-    void load();
-  }, [load]);
+    setSelectedId(reviews[0]?.id ?? null);
+  }, [status, listing.data]);
 
   function handleDecided() {
     setSelectedId(null);
-    void load();
+    void listing.reload();
   }
 
   return (
     <div>
-      <ul class="nav nav-tabs mb-3">
-        {STATUS_TABS.map((tab) => (
-          <li class="nav-item" key={tab}>
-            <button
-              type="button"
-              class={`nav-link text-capitalize${status === tab ? " active" : ""}`}
-              onClick={() => setStatus(tab)}
-            >
-              {tab}
-            </button>
-          </li>
-        ))}
-      </ul>
+      <StatusTabs statuses={STATUS_TABS} active={status} onChange={setStatus} />
 
-      {loading && <Spinner />}
-      {error && <ErrorAlert error={error} />}
-      {!loading && !error && reviews.length === 0 && <p class="text-muted">No {status} submissions.</p>}
+      {listing.loading && <Spinner />}
+      {listing.error && <ErrorAlert error={listing.error} />}
+      {!listing.loading && !listing.error && reviews.length === 0 && <p class="text-muted">No {status} submissions.</p>}
 
-      {!loading && !error && reviews.length > 0 && (
+      {!listing.loading && !listing.error && reviews.length > 0 && (
         <div class="row g-3">
           <div class="col-md-4">
             <div class="list-group">
@@ -242,6 +202,7 @@ export function OrganizationContentReviews() {
           <div class="col-md-8">{selectedId && <ReviewDetail reviewId={selectedId} onDecided={handleDecided} />}</div>
         </div>
       )}
+      {listing.pagerProps && <Pager {...listing.pagerProps} />}
     </div>
   );
 }

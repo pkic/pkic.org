@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Spinner } from "../../../components/Spinner";
-import { ApiDataTable, type ApiTableActions } from "../../../components/Table";
+import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
 import { api } from "../../api";
 import { fmt, toast } from "../../ui";
-import type { AdminWorkingGroupDetail, AdminWorkingGroupMember, AdminWorkingGroupSummary } from "../../types";
+import type { AdminWorkingGroupDetail, AdminWorkingGroupMember } from "../../types";
 import { UserPicker, type PickedUser } from "./UserPicker";
-import { getAdminWorkingGroupCatalogue } from "../../services/catalogues";
+import { adminWorkingGroupCatalog } from "../../services/catalogs";
+import { performAdminAction } from "../../actions";
 import { workingGroupMembersListResponseSchema } from "../../../../shared/schemas/working-groups";
+import { runGoogleGroupsSync } from "../../services/google-groups-sync";
+import { ServerSearchSelect } from "../../components/ServerSearchSelect";
 
 /**
  * WG management: create/edit working groups, add/remove
@@ -30,27 +33,26 @@ function CreateWorkingGroupForm({ onCreated }: { onCreated: () => void }) {
   async function handleSubmit(e: Event) {
     e.preventDefault();
     if (!name.trim()) return;
-    setSaving(true);
-    try {
-      await api("/api/v1/admin/working-groups", {
-        method: "POST",
-        body: JSON.stringify({
-          name: name.trim(),
-          description: description.trim() || null,
-          mailingListEmail: mailingListEmail.trim() || null,
+    await performAdminAction({
+      setBusy: setSaving,
+      request: () =>
+        api("/api/v1/admin/working-groups", {
+          method: "POST",
+          body: JSON.stringify({
+            name: name.trim(),
+            description: description.trim() || null,
+            mailingListEmail: mailingListEmail.trim() || null,
+          }),
         }),
-      });
-      toast("Working group created", "success");
-      setName("");
-      setDescription("");
-      setMailingListEmail("");
-      setShow(false);
-      onCreated();
-    } catch (err) {
-      toast((err as Error).message, "error");
-    } finally {
-      setSaving(false);
-    }
+      successMessage: "Working group created",
+      afterSuccess: () => {
+        setName("");
+        setDescription("");
+        setMailingListEmail("");
+        setShow(false);
+        onCreated();
+      },
+    });
   }
 
   if (!show) {
@@ -108,8 +110,9 @@ function CreateWorkingGroupForm({ onCreated }: { onCreated: () => void }) {
 
 export function WorkingGroups() {
   const [, navigate] = useHashLocation();
-  const [groups, setGroups] = useState<AdminWorkingGroupSummary[]>([]);
   const [selectedId, setSelectedId] = useState("");
+  const [selectedLabel, setSelectedLabel] = useState<string>();
+  const [catalogRevision, setCatalogRevision] = useState(0);
   const [detail, setDetail] = useState<AdminWorkingGroupDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [addMemberUser, setAddMemberUser] = useState<PickedUser | null>(null);
@@ -118,16 +121,12 @@ export function WorkingGroups() {
   const [syncing, setSyncing] = useState(false);
   const memberTableRef = useRef<ApiTableActions | null>(null);
 
-  async function loadGroups(keepSelection = true) {
-    try {
-      const workingGroups = await getAdminWorkingGroupCatalogue();
-      setGroups(workingGroups);
-      if (!keepSelection || !workingGroups.some((group) => group.id === selectedId)) {
-        if (workingGroups.length) setSelectedId(workingGroups[0].id);
-      }
-    } catch (e) {
-      toast((e as Error).message, "error");
+  function loadGroups(keepSelection = true): void {
+    if (!keepSelection) {
+      setSelectedId("");
+      setSelectedLabel(undefined);
     }
+    setCatalogRevision((current) => current + 1);
   }
 
   useEffect(() => {
@@ -196,20 +195,7 @@ export function WorkingGroups() {
   async function handleSyncNow() {
     setSyncing(true);
     try {
-      const res = await api<{ processed: number; succeeded: number; failed: number; skippedUnconfigured: boolean }>(
-        "/api/v1/admin/mailing-lists/sync",
-        { method: "POST" },
-      );
-      if (res.skippedUnconfigured) {
-        toast("Google Groups sync isn't configured in this environment", "error");
-      } else if (res.processed === 0) {
-        toast("Nothing pending to sync", "success");
-      } else {
-        toast(
-          `Synced ${res.processed}: ${res.succeeded} succeeded${res.failed ? `, ${res.failed} failed` : ""}`,
-          res.failed > 0 ? "error" : "success",
-        );
-      }
+      await runGoogleGroupsSync();
     } catch (err) {
       toast((err as Error).message, "error");
     } finally {
@@ -250,19 +236,19 @@ export function WorkingGroups() {
         <CreateWorkingGroupForm onCreated={() => void loadGroups(false)} />
 
         <div class="mb-3 adm-filter-control">
-          <label class="form-label small fw-semibold">Working group</label>
-          <select
-            class="form-select form-select-sm"
+          <ServerSearchSelect
+            key={catalogRevision}
+            catalog={adminWorkingGroupCatalog}
+            label="Working group"
             value={selectedId}
-            onChange={(e) => setSelectedId((e.target as HTMLSelectElement).value)}
-          >
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name}
-                {!g.active ? " (inactive)" : ""}
-              </option>
-            ))}
-          </select>
+            selectedLabel={selectedLabel ?? detail?.name}
+            allowEmpty={false}
+            autoSelectFirst
+            onChange={(group) => {
+              setSelectedId(group?.id ?? "");
+              setSelectedLabel(group ? adminWorkingGroupCatalog.itemLabel(group) : undefined);
+            }}
+          />
         </div>
 
         {loading ? (
@@ -336,13 +322,12 @@ export function WorkingGroups() {
             <ApiDataTable<AdminWorkingGroupMember>
               endpoint={`/api/v1/admin/working-groups/${selectedId}/members`}
               responseSchema={workingGroupMembersListResponseSchema}
-              resolve={(data) => (data as { members: AdminWorkingGroupMember[] }).members}
-              resolvePage={(data) => (data as { page: { total: number; hasMore: boolean } }).page}
+              resolve={(data) => workingGroupMembersListResponseSchema.parse(data).members}
+              resolvePage={(data) => workingGroupMembersListResponseSchema.parse(data).page}
               paginate
               searchPlaceholder="Search members…"
               initialSort="name"
               actionsRef={memberTableRef}
-              deps={[selectedId]}
               rowKey={(member) => member.userId}
               empty="No members"
               columns={[

@@ -177,25 +177,6 @@ export function resolveHeroImageUrl(event: Pick<EventRecord, "settings_json">): 
   return "heroImageUrl" in settings ? settings.heroImageUrl?.trim() || null : null;
 }
 
-function isLoopbackHostname(hostname: string): boolean {
-  const normalized = hostname.toLowerCase();
-  return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1" || normalized === "[::1]";
-}
-
-export function normalizeEventHeroImageUrl(value: string, siteBaseUrl: string): string {
-  const trimmed = value.trim();
-  if (!trimmed || trimmed.startsWith("/")) return trimmed;
-  try {
-    const url = new URL(trimmed);
-    if (url.origin === new URL(siteBaseUrl).origin || isLoopbackHostname(url.hostname)) {
-      return `${url.pathname}${url.search}${url.hash}`;
-    }
-  } catch {
-    // Request-boundary validation owns malformed URL errors.
-  }
-  return trimmed;
-}
-
 export function resolveEventVenue(event: Pick<EventRecord, "settings_json">): string | null {
   return parseJsonSafe<EventSettings>(event.settings_json, {}).venue?.trim() || null;
 }

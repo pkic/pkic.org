@@ -12,6 +12,7 @@ import {
   recordPresentationUpload,
   type PresentationProposalContext,
 } from "./presentation-versions";
+import { registerStorageUploadCompensation } from "./storage-deletion-outbox";
 
 const ALLOWED_PRESENTATION_TYPES = new Set<string>(ALLOWED_PRESENTATION_MIME_TYPES);
 
@@ -89,12 +90,14 @@ export async function storePresentationFile(
   bucket: R2Bucket,
   context: PresentationStorageContext,
   upload: PresentationUpload,
+  preparedR2Key?: string,
 ): Promise<string> {
   const eventSlug = storagePathSegment(context.eventSlug, "event");
   const proposalTitle = storagePathSegment(context.proposalTitle, "proposal");
   const proposalId = storagePathSegment(context.proposalId, "unknown", 64);
   const safeName = upload.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100) || "presentation";
-  const r2Key = `presentations/${eventSlug}/${proposalTitle}--${proposalId}/${Date.now()}-${uuid()}-${safeName}`;
+  const r2Key =
+    preparedR2Key ?? `presentations/${eventSlug}/${proposalTitle}--${proposalId}/${Date.now()}-${uuid()}-${safeName}`;
   const stored = await bucket.put(r2Key, upload.body, { httpMetadata: { contentType: upload.type } });
   if (stored.size !== upload.size) {
     await bucket.delete(r2Key);
@@ -139,10 +142,17 @@ export async function uploadProposalPresentation(
 
   const parsed = parsePresentationUpload(request);
   if ("error" in parsed) throw new AppError(parsed.status, parsed.error.code, parsed.error.message);
-  const r2Key = await storePresentationFile(
+  const eventSlug = storagePathSegment(context.event_slug, "event");
+  const proposalTitle = storagePathSegment(context.title, "proposal");
+  const proposalId = storagePathSegment(context.id, "unknown", 64);
+  const safeName = parsed.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100) || "presentation";
+  const r2Key = `presentations/${eventSlug}/${proposalTitle}--${proposalId}/${Date.now()}-${uuid()}-${safeName}`;
+  await registerStorageUploadCompensation(db, r2Key, "speaker_uploads");
+  await storePresentationFile(
     bucket,
     { eventSlug: context.event_slug, proposalId: context.id, proposalTitle: context.title },
     parsed,
+    r2Key,
   );
   await recordPresentationUpload(
     db,

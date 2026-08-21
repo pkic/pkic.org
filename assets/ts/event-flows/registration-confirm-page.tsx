@@ -7,11 +7,15 @@ import { renderDonationCta } from "../shared/donation/cta";
 import { withLoadingButton } from "../shared/form/submit";
 import { bootstrap, setStatus } from "./boot";
 import { SuccessPanel } from "../components/SuccessPanel";
+import {
+  hasPendingRegistrationDayWaitlist,
+  RegistrationDayStatusSummary,
+} from "../components/RegistrationDayStatusSummary";
 import { findSubmitButton } from "../shared/form/helpers";
 
 interface ConfirmResponse {
   success: true;
-  status: string;
+  status: "pending_email_confirmation" | "registered" | "cancelled";
   shareUrl?: string | null;
   manageUrl?: string | null;
   manageToken?: string | null;
@@ -56,62 +60,6 @@ function fillPlaceholders(root: HTMLElement, values: Record<string, string>): vo
   }
 }
 
-function isPendingDayWaitlistStatus(status: string | undefined): boolean {
-  return status === "waiting" || status === "offered";
-}
-
-function DayStatusSummary({
-  dayAttendance,
-  dayWaitlist,
-}: {
-  dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
-  dayWaitlist: Array<{ dayDate: string; status: string }>;
-}) {
-  if (dayAttendance.length === 0) return null;
-
-  const waitlistByDay = new Map(dayWaitlist.map((entry) => [entry.dayDate, entry.status] as const));
-
-  return (
-    <div class="alert alert-warning mt-3 mb-0">
-      <p class="fw-semibold mb-2">What is confirmed right now</p>
-      <ul class="list-unstyled mb-2">
-        {dayAttendance.map((entry) => {
-          const dayLabel = entry.label ?? entry.dayDate;
-          const waitlistStatus = waitlistByDay.get(entry.dayDate);
-
-          let statusLabel: string;
-          let statusClass = "text-bg-success";
-
-          if (waitlistStatus === "offered") {
-            statusLabel = "Spot available - review in manage page";
-            statusClass = "text-bg-info";
-          } else if (waitlistStatus === "waiting") {
-            statusLabel = "In-person still pending";
-            statusClass = "text-bg-warning";
-          } else if (entry.attendanceType === "virtual") {
-            statusLabel = "Virtual confirmed";
-          } else if (entry.attendanceType === "on_demand") {
-            statusLabel = "On-demand confirmed";
-          } else {
-            statusLabel = "In-person confirmed";
-          }
-
-          return (
-            <li class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
-              <span>{dayLabel}</span>
-              <span class={`badge ${statusClass}`}>{statusLabel}</span>
-            </li>
-          );
-        })}
-      </ul>
-      <p class="small mb-0">
-        If this mix of confirmed and pending days no longer works for you, use the manage page to switch days, move to
-        on-demand, or cancel the registration.
-      </p>
-    </div>
-  );
-}
-
 /**
  * Psychology applied:
  * - Peak-End Rule: the confirmation success is the emotional peak — pairing it
@@ -139,33 +87,28 @@ function showConfirmedPanel(
   const successBody =
     root.dataset["successBody"] ??
     "Your calendar invite is on its way. Use the link in your confirmation email to manage your registration.";
-  const waitlistTitle = root.dataset["waitlistTitle"] ?? "{firstName}, you're on the waitlist{forEvent}!";
-  const waitlistBody =
-    root.dataset["waitlistBody"] ??
-    "We have your email confirmed. We'll notify you as soon as an in-person spot becomes available. Check the email we sent you for your manage link.";
   const partialWaitlistTitle =
     root.dataset["partialWaitlistTitle"] ?? "{firstName}, your registration is in place{forEvent}!";
   const partialWaitlistBody =
     root.dataset["partialWaitlistBody"] ??
     "Your overall registration is confirmed, but one or more selected in-person days are still pending because those rooms are at capacity right now.";
-  const activeDayWaitlist = (result.dayWaitlist ?? []).filter((entry) => isPendingDayWaitlistStatus(entry.status));
-  const hasPartialDayWaitlist = result.status === "registered" && activeDayWaitlist.length > 0;
+  const hasPartialDayWaitlist =
+    result.status === "registered" && hasPendingRegistrationDayWaitlist(result.dayWaitlist ?? []);
 
   let icon: string;
   let title: string;
   let bodyContent: preact.JSX.Element;
 
-  if (result.status === "waitlisted") {
-    icon = "📋";
-    title = interpolate(waitlistTitle, firstName, eventName);
-    bodyContent = <p class="event-flow-success-body">{interpolate(waitlistBody, firstName, eventName)}</p>;
-  } else if (hasPartialDayWaitlist) {
+  if (hasPartialDayWaitlist) {
     icon = "🗓️";
     title = interpolate(partialWaitlistTitle, firstName, eventName);
     bodyContent = (
       <>
         <p class="event-flow-success-body">{interpolate(partialWaitlistBody, firstName, eventName)}</p>
-        <DayStatusSummary dayAttendance={result.dayAttendance ?? []} dayWaitlist={result.dayWaitlist ?? []} />
+        <RegistrationDayStatusSummary
+          dayAttendance={result.dayAttendance ?? []}
+          dayWaitlist={result.dayWaitlist ?? []}
+        />
       </>
     );
   } else {

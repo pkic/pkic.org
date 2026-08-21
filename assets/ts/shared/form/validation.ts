@@ -1,5 +1,5 @@
 import { clearFieldErrors, findFieldErrorTarget } from "./validation-map";
-import { normalizedEmailSchema } from "../../../shared/schemas/api";
+import { normalizedEmailSchema } from "../../../shared/schemas/api-common";
 
 // Domains that are common personal / consumer email providers.
 // When detected, we show an inline advisory — we do NOT block the submission.

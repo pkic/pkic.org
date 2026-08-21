@@ -1,5 +1,5 @@
 import { parseJsonBody } from "../../../../../../../_lib/validation";
-import { json } from "../../../../../../../_lib/http";
+import { dispatchPostOnly, json } from "../../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
 import { buildEventEmailVariables, getEventBySlug } from "../../../../../../../_lib/services/events";
 import { bulkCreateAttendeesAdmin } from "../../../../../../../_lib/services/invites";
@@ -10,7 +10,7 @@ import {
   computeAdminInviteDigest,
   requireValidAdminInvitePreview,
 } from "../../../../../../../_lib/services/admin-invite-preview";
-import { adminBulkAttendeeInvitesSchema } from "../../../../../../../../assets/shared/schemas/api";
+import { adminBulkAttendeeInvitesSchema } from "../../../../../../../../assets/shared/schemas/admin-events";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 
 // Outcome buckets returned to the admin UI.
@@ -77,9 +77,5 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 }
 
 export async function onRequest(c: AdminContext): Promise<Response> {
-  if (c.req.raw.method !== "POST") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
-
-  return onRequestPost(c);
+  return dispatchPostOnly(c, onRequestPost);
 }

@@ -160,7 +160,7 @@ const portalVoteStatusListSchema = voteStatusListSchema([...VOTE_STATUSES]);
 
 export const VOTES_LIST_SORT_COLUMNS = ["title", "status", "closes_at", "created_at"] as const;
 
-export const publicVotesListQuerySchema = listQuerySchema(VOTES_LIST_SORT_COLUMNS).extend({
+export const publicVotesListQuerySchema = listQuerySchema(VOTES_LIST_SORT_COLUMNS, { limit: 20 }).extend({
   type: voteTypeSchema.optional(),
   scope: voteScopeTypeSchema.optional(),
   wg: z.string().optional(),

@@ -3,8 +3,8 @@ import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
-import { findLinkedinUrl, parseLinksJson } from "../../../../assets/shared/schemas/links";
 import { deterministicRepresentativeJoinSql } from "./representative-lookup";
+import { toPublicRoleProfile, type PublicRoleProfile, type PublicRoleProfileRow } from "./public-role-profile";
 
 export interface WorkingGroupSummary {
   id: string;
@@ -19,14 +19,7 @@ export interface WorkingGroupMemberPublic {
   organizationName: string | null;
 }
 
-export interface WorkingGroupChairPublic {
-  name: string;
-  organizationName: string | null;
-  organizationLogoUrl: string | null;
-  organizationWebsite: string | null;
-  photoUrl: string | null;
-  linkedin: string | null;
-}
+export type WorkingGroupChairPublic = PublicRoleProfile;
 
 export interface WorkingGroupDetail extends WorkingGroupSummary {
   mailingListEmail: string | null;
@@ -70,18 +63,11 @@ async function getWorkingGroupChairsPublic(
   db: DatabaseLike,
   workingGroupId: string,
 ): Promise<{ chair: WorkingGroupChairPublic | null; viceChair: WorkingGroupChairPublic | null }> {
-  const rows = await all<{
-    role_id: string;
-    first_name: string | null;
-    last_name: string | null;
-    org_id: string | null;
-    org_name: string | null;
-    org_logo_r2_key: string | null;
-    org_website: string | null;
-    member_id: string | null;
-    headshot_r2_key: string | null;
-    links_json: string | null;
-  }>(
+  const rows = await all<
+    PublicRoleProfileRow & {
+      role_id: string;
+    }
+  >(
     db,
     `SELECT ur.role_id, u.first_name, u.last_name, o.id AS org_id, o.name AS org_name,
             o.logo_r2_key AS org_logo_r2_key, o.website AS org_website,
@@ -102,14 +88,7 @@ ${deterministicRepresentativeJoinSql("u.id")}
 
   const toPublic = (row: (typeof rows)[number] | undefined): WorkingGroupChairPublic | null => {
     if (!row) return null;
-    return {
-      name: [row.first_name, row.last_name].filter(Boolean).join(" ") || "Unknown",
-      organizationName: row.org_name,
-      organizationLogoUrl: row.org_logo_r2_key && row.org_id ? `/api/v1/members/${row.org_id}/logo` : null,
-      organizationWebsite: row.org_website,
-      photoUrl: row.headshot_r2_key && row.member_id ? `/api/v1/members/${row.member_id}/logo` : null,
-      linkedin: findLinkedinUrl(parseLinksJson(row.links_json)),
-    };
+    return toPublicRoleProfile(row);
   };
 
   return {

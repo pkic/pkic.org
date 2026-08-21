@@ -11,6 +11,8 @@ import {
   buildIndividualMemberAggregateStatements,
   buildWorkingGroupMemberStatement,
   buildLinksJson,
+  buildEventSponsorshipStatements,
+  buildNonMemberEventSponsorshipStatements,
 } from "../../scripts/migrate-members/sql-renderer.mjs";
 
 describe("buildLinksJson", () => {
@@ -36,7 +38,7 @@ describe("buildLinksJson", () => {
     const invalid: string[] = [];
     const result = buildLinksJson(links, (url: string) => invalid.push(url));
     expect(JSON.parse(result as string)).toHaveLength(15);
-    expect(invalid).toEqual(["HTTPS://EXAMPLE.COM/0", "https://example.com/15"]);
+    expect(invalid).toEqual(["https://example.com/15", "HTTPS://EXAMPLE.COM/0"]);
   });
 
   it('real production-data regression: a typo\'d protocol ("ttps://" missing the leading h) is dropped, not silently persisted', () => {
@@ -170,5 +172,24 @@ describe("buildWorkingGroupMemberStatement", () => {
     expect(statement).toContain("INSERT INTO working_group_members");
     expect(statement).toContain("NOT EXISTS");
     expect(statement).toContain("wgm.left_at IS NULL");
+  });
+});
+
+describe("event sponsorship SQL", () => {
+  it("uses the same idempotent event upsert for member and non-member sponsors", () => {
+    const alias = {
+      slug: "example-event",
+      name: "Example Event",
+      timezone: "UTC",
+      startsAt: "2026-09-01T09:00:00Z",
+      endsAt: "2026-09-01T17:00:00Z",
+    };
+    const memberStatements = buildEventSponsorshipStatements("acme", alias, "gold");
+    const nonMemberStatements = buildNonMemberEventSponsorshipStatements("Venue", null, null, alias, "silver");
+
+    expect(memberStatements[0].replace(/'[0-9a-f-]{36}'/, "'<id>'")).toBe(
+      nonMemberStatements[0].replace(/'[0-9a-f-]{36}'/, "'<id>'"),
+    );
+    expect(memberStatements[0]).toContain("ON CONFLICT(slug) DO NOTHING");
   });
 });

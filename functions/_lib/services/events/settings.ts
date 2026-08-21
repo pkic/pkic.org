@@ -1,10 +1,14 @@
-import type { AdminEventSettingsInput } from "../../../../assets/shared/schemas/admin-events";
+import {
+  isAdminEventCustomSettingKey,
+  type AdminEventSettingsInput,
+} from "../../../../assets/shared/schemas/admin-events";
+import { normalizeHttpOrSameOriginUrl } from "../../../../assets/shared/schemas/urls";
 import { first } from "../../db/queries";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { parseJsonSafe, stringifyJson } from "../../utils/json";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
-import { getEventBySlug, normalizeEventHeroImageUrl } from "../events";
+import { getEventBySlug } from "../events";
 
 function setFormLink(
   settings: Record<string, unknown>,
@@ -22,7 +26,11 @@ function mergeEventSettings(
   input: AdminEventSettingsInput,
   appBaseUrl: string,
 ): Record<string, unknown> {
-  const settings = { ...parseJsonSafe<Record<string, unknown>>(existingJson, {}) };
+  const existing = parseJsonSafe<Record<string, unknown>>(existingJson, {});
+  const custom = Object.fromEntries(
+    Object.entries(input.settings ?? {}).filter(([key]) => isAdminEventCustomSettingKey(key)),
+  );
+  const settings = { ...existing, ...custom };
   const assignNullable = (key: string, value: unknown): void => {
     if (value === undefined) return;
     if (value === null) delete settings[key];
@@ -34,7 +42,7 @@ function mergeEventSettings(
   if (input.heroImageUrl !== undefined) {
     assignNullable(
       "heroImageUrl",
-      input.heroImageUrl === null ? null : normalizeEventHeroImageUrl(input.heroImageUrl, appBaseUrl),
+      input.heroImageUrl === null ? null : normalizeHttpOrSameOriginUrl(input.heroImageUrl, appBaseUrl),
     );
   }
   if (input.sessionTypes !== undefined) {
@@ -44,7 +52,6 @@ function mergeEventSettings(
     if (Object.keys(proposal).length === 0) delete settings.proposal;
     else settings.proposal = proposal;
   }
-  if (input.settings) Object.assign(settings, input.settings);
   setFormLink(settings, "event_registration", input.registrationFormKey);
   setFormLink(settings, "proposal_submission", input.proposalFormKey);
   return settings;

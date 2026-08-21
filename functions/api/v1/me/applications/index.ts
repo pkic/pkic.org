@@ -12,7 +12,7 @@ import { buildPageInfo } from "../../../../../assets/shared/schemas/pagination";
 export const MeApplicationsGet = openApiRoute(myApplicationsListRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
   const member = await requireMemberFromRequest(db, c.req.raw, c.env);
-  const { limit = 25, offset = 0, q, sort } = data.query;
+  const { limit, offset, q, sort } = data.query;
   const result = await listMyApplications(db, member, { limit, offset, q, sort });
   return json({
     applications: result.applications,

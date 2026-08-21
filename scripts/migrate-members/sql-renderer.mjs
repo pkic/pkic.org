@@ -8,7 +8,10 @@
 import { randomUUID } from "node:crypto";
 import { normalizeEmail, convertHugoShortcodes } from "./parsers.mjs";
 import { normalizeOrgName } from "./reconciliation.mjs";
-import { linksSchema, serializeLinks } from "../../assets/shared/schemas/links.ts";
+import { normalizeLinks, serializeLinks } from "../../assets/shared/schemas/links.ts";
+import { sqlString, toSqlNullableText } from "../lib/sql.mjs";
+
+export { sqlString, toSqlNullableText } from "../lib/sql.mjs";
 
 /**
  * Canonical `links_json` codec entry point for the importer — validates
@@ -31,43 +34,9 @@ import { linksSchema, serializeLinks } from "../../assets/shared/schemas/links.t
  */
 export function buildLinksJson(links, onInvalid = () => {}) {
   if (!links || links.length === 0) return null;
-  const seen = new Set();
-  const valid = [];
-  for (const raw of links) {
-    const trimmed = String(raw ?? "").trim();
-    let ok =
-      trimmed.length > 0 && trimmed.length <= 500 && (trimmed.startsWith("https://") || trimmed.startsWith("http://"));
-    if (ok) {
-      try {
-        new URL(trimmed);
-      } catch {
-        ok = false;
-      }
-    }
-    const key = trimmed.toLowerCase();
-    if (!ok || seen.has(key)) {
-      onInvalid(raw);
-      continue;
-    }
-    seen.add(key);
-    valid.push(trimmed);
-  }
-  const capped = valid.slice(0, 15);
-  for (const dropped of valid.slice(15)) onInvalid(dropped);
-  if (capped.length === 0) return null;
-  return serializeLinks(linksSchema.parse(capped));
-}
-
-// ── SQL string helpers (matches scripts/seed-event.mjs conventions) ────────
-
-export function sqlString(value) {
-  return `'${String(value).replaceAll("'", "''")}'`;
-}
-
-export function toSqlNullableText(value) {
-  if (value === null || value === undefined) return "NULL";
-  const str = String(value).trim();
-  return str.length === 0 ? "NULL" : sqlString(str);
+  const normalized = normalizeLinks(links);
+  for (const rejected of normalized.rejected) onInvalid(rejected);
+  return normalized.links.length > 0 ? serializeLinks(normalized.links) : null;
 }
 
 /**
@@ -88,8 +57,8 @@ export function buildUpsertOrganizationStatement({ slug, name, doc, logoR2Key, o
   // (`/members/<slug>`) — falls back to the filename-derived slug for the
   // (currently nonexistent) case of a file with no `id:` key at all.
   const urlSlug = String(doc.id ?? slug).trim() || slug;
-  // Canonical persisted shape is a plain URL array (assets/shared/schemas/
-  // links.ts's linksSchema) — no per-provider organizations.social_* columns.
+  // Canonical persisted shape is linksSchema's plain URL array; no
+  // per-provider organizations.social_* columns.
   const links = [social.linkedin, social.x, social.facebook, social.instagram, social.youtube].filter(Boolean);
   const linksJson = buildLinksJson(links, onInvalidLink);
 
@@ -329,14 +298,18 @@ WHERE normalized_name = ${sqlString(normalizedOrgName)};
   ];
 }
 
-/** Per-event sponsorship for an org-tied member, against a resolved `EVENT_NAME_ALIASES` entry. */
-export function buildEventSponsorshipStatements(normalizedOrgName, alias, tier) {
-  return [
-    `
+function buildEventUpsertStatement(alias) {
+  return `
 INSERT INTO events (id, slug, name, timezone, starts_at, ends_at, created_at, updated_at)
 VALUES (${sqlString(randomUUID())}, ${sqlString(alias.slug)}, ${sqlString(alias.name)}, ${sqlString(alias.timezone)}, ${toSqlNullableText(alias.startsAt)}, ${toSqlNullableText(alias.endsAt)}, datetime('now'), datetime('now'))
 ON CONFLICT(slug) DO NOTHING;
-`,
+`;
+}
+
+/** Per-event sponsorship for an org-tied member, against a resolved `EVENT_NAME_ALIASES` entry. */
+export function buildEventSponsorshipStatements(normalizedOrgName, alias, tier) {
+  return [
+    buildEventUpsertStatement(alias),
     `
 INSERT INTO sponsorships (id, sponsor_type, organization_id, event_id, tier, pipeline_stage, created_at, updated_at)
 SELECT ${sqlString(randomUUID())}, 'event', o.id, e.id, ${sqlString(tier)}, 'active', datetime('now'), datetime('now')
@@ -364,11 +337,7 @@ WHERE NOT EXISTS (
 /** Per-event sponsorship for a non-member sponsor, against a resolved `EVENT_NAME_ALIASES` entry. */
 export function buildNonMemberEventSponsorshipStatements(sponsorName, website, logoR2Key, alias, tier) {
   return [
-    `
-INSERT INTO events (id, slug, name, timezone, starts_at, ends_at, created_at, updated_at)
-VALUES (${sqlString(randomUUID())}, ${sqlString(alias.slug)}, ${sqlString(alias.name)}, ${sqlString(alias.timezone)}, ${toSqlNullableText(alias.startsAt)}, ${toSqlNullableText(alias.endsAt)}, datetime('now'), datetime('now'))
-ON CONFLICT(slug) DO NOTHING;
-`,
+    buildEventUpsertStatement(alias),
     `
 INSERT INTO sponsorships (id, sponsor_type, non_member_name, non_member_website, non_member_logo_r2_key, event_id, tier, pipeline_stage, created_at, updated_at)
 SELECT ${sqlString(randomUUID())}, 'event', ${sqlString(sponsorName)}, ${toSqlNullableText(website)}, ${toSqlNullableText(logoR2Key)}, e.id, ${sqlString(tier)}, 'active', datetime('now'), datetime('now')

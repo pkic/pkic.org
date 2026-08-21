@@ -4,11 +4,14 @@ import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 import { nowIso } from "../utils/time";
 import { prepareAuditLog } from "./audit";
 import { prepareStorageDeletion } from "./storage-deletion-outbox";
+import { buildUserAccessOffboardingStatements } from "./membership/offboarding";
+import { prepareBadgeRenderJobsForUser } from "./badge-render-job-statements";
 
 interface AnonymizeUserRow {
   id: string;
   pii_redacted_at: string | null;
   headshot_r2_key: string | null;
+  updated_at: string;
 }
 
 /** Removes account PII and every authentication/access path in one D1 batch. */
@@ -16,7 +19,7 @@ export async function anonymizeAdminUser(db: DatabaseLike, actor: AuthAdmin, use
   if (userId === actor.id) throw new AppError(403, "FORBIDDEN", "You cannot anonymize your own account");
   const user = await first<AnonymizeUserRow>(
     db,
-    "SELECT id, pii_redacted_at, headshot_r2_key FROM users WHERE id = ?",
+    "SELECT id, pii_redacted_at, headshot_r2_key, updated_at FROM users WHERE id = ?",
     [userId],
   );
   if (!user) throw new AppError(404, "NOT_FOUND", "User not found");
@@ -45,6 +48,12 @@ export async function anonymizeAdminUser(db: DatabaseLike, actor: AuthAdmin, use
     db.prepare("DELETE FROM auth_magic_links WHERE user_id = ?").bind(user.id),
     db.prepare("DELETE FROM passkey_credentials WHERE user_id = ?").bind(user.id),
     db.prepare("DELETE FROM user_emails WHERE user_id = ?").bind(user.id),
+    ...(await buildUserAccessOffboardingStatements(db, {
+      userId: user.id,
+      causeKey: `user:${user.id}:anonymize:${user.updated_at}`,
+      at,
+    })),
+    prepareBadgeRenderJobsForUser(db, user.id, at),
     prepareAuditLog(db, "admin", actor.id, "user_anonymized", "user", user.id, {
       authenticationRevoked: true,
       profileRedacted: true,

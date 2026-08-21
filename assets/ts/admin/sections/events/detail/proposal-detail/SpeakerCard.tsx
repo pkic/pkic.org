@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { speakerRoleSchema } from "../../../../../../shared/schemas/registration";
+import { isEligibleReplacementProposerStatus } from "../../../../../../shared/schemas/proposal-status";
 import { Badge } from "../../../../../components/Badge";
 import { ProfileLinksInput, type ProfileLinksHandle } from "../../../../../components/ProfileLinksInput";
 import { AdminHeadshotManager, ADMIN_HEADSHOT_DISCLAIMER } from "../../../../../shared/headshot/AdminHeadshotManager";
@@ -8,6 +9,18 @@ import { api } from "../../../../api";
 import type { ProposalSpeaker } from "../../../../types";
 import { fmt, toast } from "../../../../ui";
 
+export function buildReplacementProposerOptions(
+  speakers: ProposalSpeaker[],
+  removedUserId: string,
+): Array<{ userId: string; label: string }> {
+  return speakers
+    .filter((candidate) => candidate.userId !== removedUserId && isEligibleReplacementProposerStatus(candidate.status))
+    .map((candidate) => ({
+      userId: candidate.userId,
+      label: [candidate.firstName, candidate.lastName].filter(Boolean).join(" ") || candidate.email,
+    }));
+}
+
 export function SpeakerCard({
   speaker,
   proposalId,
@@ -15,7 +28,10 @@ export function SpeakerCard({
   canFinalize,
   decisionStatus,
   requiresPresentation,
+  isCurrentProposer,
+  replacementSpeakers,
   onSaved,
+  onRemoved,
 }: {
   speaker: ProposalSpeaker;
   proposalId: string;
@@ -23,7 +39,10 @@ export function SpeakerCard({
   canFinalize?: boolean;
   decisionStatus?: string | null;
   requiresPresentation?: boolean;
+  isCurrentProposer: boolean;
+  replacementSpeakers: Array<{ userId: string; label: string }>;
   onSaved: (userId: string, patch: Partial<ProposalSpeaker>) => void;
+  onRemoved: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [firstName, setFirstName] = useState(speaker.firstName ?? "");
@@ -33,6 +52,8 @@ export function SpeakerCard({
   const [bio, setBio] = useState(speaker.biography ?? "");
   const [role, setRole] = useState(speaker.role);
   const [saving, setSaving] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [replacementProposerUserId, setReplacementProposerUserId] = useState("");
   const [headshotStatus, setHeadshotStatus] = useState("");
   const linksRef = useRef<ProfileLinksHandle>(null);
 
@@ -46,6 +67,7 @@ export function SpeakerCard({
     setOrganizationName(speaker.organizationName ?? "");
     setJobTitle(speaker.jobTitle ?? "");
     setBio(speaker.biography ?? "");
+    setReplacementProposerUserId("");
     linksRef.current?.setLinks(normalizeProfileLinks(speaker.links));
   }, [speaker]);
 
@@ -120,6 +142,31 @@ export function SpeakerCard({
       toast(`${kind === "profile" ? "Profile" : "Presentation"} reminder sent`, "success");
     } catch (caught) {
       toast((caught as Error).message, "error");
+    }
+  }
+
+  async function removeSpeaker() {
+    if (
+      !confirm(
+        `Remove ${name} from this proposal? The user profile and audit history will be kept.${isCurrentProposer ? " Proposal ownership will transfer to the selected replacement." : ""}`,
+      )
+    ) {
+      return;
+    }
+    setRemoving(true);
+    try {
+      await api(`/api/v1/admin/proposals/${proposalId}/speakers/${speaker.userId}`, {
+        method: "DELETE",
+        body: JSON.stringify({
+          replacementProposerUserId: isCurrentProposer ? replacementProposerUserId : undefined,
+        }),
+      });
+      toast("Speaker removed", "success");
+      onRemoved();
+    } catch (caught) {
+      toast((caught as Error).message, "error");
+    } finally {
+      setRemoving(false);
     }
   }
 
@@ -209,6 +256,40 @@ export function SpeakerCard({
                 ✉ Presentation reminder
               </button>
             )}
+            {canFinalize && replacementSpeakers.length > 0 && (
+              <>
+                {isCurrentProposer && (
+                  <select
+                    class="form-select form-select-sm"
+                    data-replacement-proposer
+                    aria-label="Replacement proposer"
+                    value={replacementProposerUserId}
+                    onChange={(event) => setReplacementProposerUserId((event.target as HTMLSelectElement).value)}
+                  >
+                    <option value="">Choose replacement proposer…</option>
+                    {replacementSpeakers.map((replacement) => (
+                      <option key={replacement.userId} value={replacement.userId}>
+                        {replacement.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <button
+                  class="btn btn-sm btn-outline-danger"
+                  data-remove-proposal-speaker
+                  disabled={removing || (isCurrentProposer && !replacementProposerUserId)}
+                  onClick={() => void removeSpeaker()}
+                >
+                  {removing ? "Removing…" : "Remove speaker"}
+                </button>
+              </>
+            )}
+            {canFinalize && replacementSpeakers.length === 0 && (
+              <span class="small text-muted text-end">
+                Add an invited or confirmed replacement speaker. Otherwise, ask the proposer to use the separate
+                Withdraw proposal action; every proposal must retain its speaker roster.
+              </span>
+            )}
           </div>
         </div>
 
@@ -254,11 +335,16 @@ export function SpeakerCard({
                   value={role}
                   onChange={(event) => setRole(speakerRoleSchema.parse((event.target as HTMLSelectElement).value))}
                 >
-                  <option value="proposer">Proposer</option>
-                  <option value="speaker">Speaker</option>
-                  <option value="co_speaker">Co-speaker</option>
-                  <option value="moderator">Moderator</option>
-                  <option value="panelist">Panelist</option>
+                  {isCurrentProposer ? (
+                    <option value="proposer">Proposer</option>
+                  ) : (
+                    <>
+                      <option value="speaker">Speaker</option>
+                      <option value="co_speaker">Co-speaker</option>
+                      <option value="moderator">Moderator</option>
+                      <option value="panelist">Panelist</option>
+                    </>
+                  )}
                 </select>
               </div>
               <div class="col-12">

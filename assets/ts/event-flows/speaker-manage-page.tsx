@@ -3,31 +3,17 @@ import { getJson, patchJson, postJson } from "../shared/api-client";
 import { normalizeValidation } from "../shared/form/validation-map";
 import { renderProfileLinks, normalizeProfileLinks, type ProfileLinksWidget } from "../shared/widgets/profile-links";
 import { renderConsentInputs, readConsentValues, syncConsentValidation } from "../shared/widgets/consents";
-import { showManageLinkRecoveryForm } from "../shared/widgets/link-recovery";
 import { withLoadingButton } from "../shared/form/submit";
-import { bootstrap, setStatus } from "./boot";
+import { setStatus } from "./boot";
 import { wireTokenHeadshotSection } from "./registration-manage-headshot";
 import type { RequiredTerm } from "../shared/types";
 import { formatStatusLabel, statusBadgeClass, findSubmitButton } from "../shared/form/helpers";
+import type { SpeakerAccessSummary, SpeakerProposalSummary } from "./speaker-api-types";
+import { loadSpeakerPageData } from "./speaker-link-recovery";
 
 interface SpeakerManageResponse {
-  speaker: {
-    role: string;
-    status: string;
-    confirmedAt: string | null;
-    declinedAt: string | null;
-    termsAcceptedAt: string | null;
-  };
-  proposal: {
-    id: string;
-    title: string;
-    proposalType: string;
-    status: string;
-    presentationDeadline: string | null;
-    presentationUploaded: boolean;
-    presentationUploadedAt: string | null;
-    presentationUploader: { firstName: string | null; lastName: string | null; uploadedAt: string } | null;
-    coSpeakers: Array<{ firstName: string | null; lastName: string | null; status: string }>;
+  speaker: SpeakerAccessSummary;
+  proposal: SpeakerProposalSummary & {
     presentationUrl: string | null;
   };
   profile: {
@@ -48,57 +34,13 @@ interface TermsApiResponse {
   terms: RequiredTerm[];
 }
 
-function showResendSpeakerManageLinkForm(
-  root: HTMLElement,
-  apiBase: string,
-  eventSlug: string,
-  introMessage?: string,
-): void {
-  showManageLinkRecoveryForm({
-    root,
-    loadingSelector: "[data-speaker-loading]",
-    sectionSelector: "[data-resend-speaker-manage-section]",
-    buttonSelector: "[data-resend-speaker-manage-btn]",
-    statusSelector: "[data-resend-speaker-manage-status]",
-    emailSelector: "[data-resend-speaker-manage-email]",
-    endpoint: `${apiBase}/events/${eventSlug}/proposals/resend-speaker-manage-link`,
-    successMessage:
-      "If the details match an invited speaker, you will receive an email shortly. Please check your inbox (and spam folder).",
-    introMessage,
-  });
-}
-
 async function main(): Promise<void> {
-  const boot = bootstrap("[data-event-speaker-manage]");
-  if (!boot) return;
-
-  const token = boot.query.token?.trim() ?? null;
-  if (!token) {
-    showResendSpeakerManageLinkForm(
-      boot.root,
-      boot.apiBase,
-      boot.eventSlug,
-      "Missing speaker token. Request a fresh link below.",
-    );
-    return;
-  }
-
-  const loadingEl = boot.root.querySelector<HTMLElement>("[data-speaker-loading]");
-  const contentEl = boot.root.querySelector<HTMLElement>("[data-speaker-content]");
-
-  let data: SpeakerManageResponse;
-  try {
-    data = await getJson<SpeakerManageResponse>(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`);
-  } catch (error) {
-    const normalized = normalizeValidation(error);
-    showResendSpeakerManageLinkForm(
-      boot.root,
-      boot.apiBase,
-      boot.eventSlug,
-      `${normalized.globalMessage} You can request a fresh link below.`,
-    );
-    return;
-  }
+  const loaded = await loadSpeakerPageData<SpeakerManageResponse>({
+    selector: "[data-event-speaker-manage]",
+    request: (token, boot) => getJson(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`),
+  });
+  if (!loaded) return;
+  const { boot, token, data, loadingEl, contentEl } = loaded;
 
   // Summary
   const proposalTitle = boot.root.querySelector<HTMLElement>("[data-proposal-title]");

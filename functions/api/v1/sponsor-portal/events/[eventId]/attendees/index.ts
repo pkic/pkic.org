@@ -10,10 +10,9 @@
 import { json } from "../../../../../../_lib/http";
 import { requireSponsorPortalFromRequest } from "../../../../../../_lib/auth/sponsor-portal";
 import {
-  listSponsorPortalAttendeesPage,
+  listSponsorPortalAttendeesPageWithAudit,
   requireSponsorPortalAttendeeAccess,
 } from "../../../../../../_lib/services/sponsorship";
-import { writeAuditLog } from "../../../../../../_lib/services/audit";
 import { sponsorPortalAttendeesListRouteSchema } from "../../../../../../../assets/shared/schemas/sponsor-portal";
 import { buildPageInfo } from "../../../../../../../assets/shared/schemas/pagination";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
@@ -34,25 +33,13 @@ export const SponsorPortalAttendeesList = openApiRoute(
   sponsorPortalAttendeesListRouteSchema,
   async (c: AdminContext, data) => {
     const { db, session } = await requireEligibleSponsorPortalSession(c);
-    const { limit = 100, offset = 0, q, sort } = data.query;
-    const { attendees, total } = await listSponsorPortalAttendeesPage(db, session.eventId, {
+    const { limit, offset, q, sort } = data.query;
+    const { attendees, total } = await listSponsorPortalAttendeesPageWithAudit(db, session, {
       limit,
       offset,
       q,
       sort,
     });
-
-    await writeAuditLog(
-      db,
-      "sponsor",
-      session.sponsorshipId,
-      "sponsor_portal_attendee_list_viewed",
-      "sponsorship",
-      session.sponsorshipId,
-      {
-        recordCount: attendees.length,
-      },
-    );
 
     return json({ attendees, page: buildPageInfo(limit, offset, total, attendees.length) });
   },

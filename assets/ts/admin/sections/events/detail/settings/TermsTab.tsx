@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from "preact/hooks";
-import { ErrorAlert } from "../../../../../components/ErrorAlert";
-import { Spinner } from "../../../../../components/Spinner";
+import { useState } from "preact/hooks";
 import { api } from "../../../../api";
 import type { AdminEventTerm } from "../../../../types";
-import { toast } from "../../../../ui";
+import { useAdminEditorResource } from "../../../../hooks/useAdminEditorResource";
+import { saveAdminEditor } from "../../../../actions";
+import { AdminSettingsEditor } from "../../../../components/AdminSettingsEditor";
 
 interface TermState {
   termKey: string;
@@ -152,96 +152,98 @@ function TermsGroup({
 }
 
 export function TermsTab({ slug }: { slug: string }) {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [attendee, setAttendee] = useState<TermState[]>([]);
-  const [speaker, setSpeaker] = useState<TermState[]>([]);
-  const [presentation, setPresentation] = useState<TermState[]>([]);
-  const [saving, setSaving] = useState(false);
-  const [saveStatus, setSaveStatus] = useState("");
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const termsResource = useAdminEditorResource(
+    async () => {
       const data = await api<{
         terms: { attendee: AdminEventTerm[]; speaker: AdminEventTerm[]; presentation: AdminEventTerm[] };
       }>(`/api/v1/admin/events/${slug}/terms`);
-      setAttendee((data.terms?.attendee ?? []).map(termFromRow));
-      setSpeaker((data.terms?.speaker ?? []).map(termFromRow));
-      setPresentation((data.terms?.presentation ?? []).map(termFromRow));
-    } catch (caught) {
-      setError((caught as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [slug]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+      return {
+        attendee: (data.terms?.attendee ?? []).map(termFromRow),
+        speaker: (data.terms?.speaker ?? []).map(termFromRow),
+        presentation: (data.terms?.presentation ?? []).map(termFromRow),
+      };
+    },
+    [slug],
+    { attendee: [], speaker: [], presentation: [] } as Record<"attendee" | "speaker" | "presentation", TermState[]>,
+  );
+  const { value: terms, setValue: setTerms, loading, error, reload } = termsResource;
+  const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState("");
+  const { attendee, speaker, presentation } = terms;
+  const updateTerms = (kind: keyof typeof terms, value: TermState[]) =>
+    setTerms((current) => ({ ...current, [kind]: value }));
 
   async function handleSave() {
-    setSaving(true);
-    setSaveStatus("Saving…");
-    try {
-      const toPayload = (terms: TermState[]) =>
-        terms
-          .filter((term) => term.termKey.trim() && term.displayText.trim())
-          .map((term) => ({
-            termKey: term.termKey.trim(),
-            version: term.version.trim() || "1.0",
-            required: term.required,
-            contentRef: term.contentRef.trim() || undefined,
-            displayText: term.displayText.trim(),
-            helpText: term.helpText.trim() || undefined,
-          }));
-      await api(`/api/v1/admin/events/${slug}/terms`, {
-        method: "PUT",
-        body: JSON.stringify({
-          attendee: toPayload(attendee),
-          speaker: toPayload(speaker),
-          presentation: toPayload(presentation),
+    const toPayload = (items: TermState[]) =>
+      items
+        .filter((term) => term.termKey.trim() && term.displayText.trim())
+        .map((term) => ({
+          termKey: term.termKey.trim(),
+          version: term.version.trim() || "1.0",
+          required: term.required,
+          contentRef: term.contentRef.trim() || undefined,
+          displayText: term.displayText.trim(),
+          helpText: term.helpText.trim() || undefined,
+        }));
+    await saveAdminEditor({
+      setSaving,
+      setStatus: setSaveStatus,
+      request: () =>
+        api(`/api/v1/admin/events/${slug}/terms`, {
+          method: "PUT",
+          body: JSON.stringify({
+            attendee: toPayload(attendee),
+            speaker: toPayload(speaker),
+            presentation: toPayload(presentation),
+          }),
         }),
-      });
-      setSaveStatus("✓ Saved");
-      toast("Terms updated", "success");
-      await load();
-    } catch (caught) {
-      const message = (caught as Error).message;
-      setSaveStatus(message);
-      toast(message, "error");
-    } finally {
-      setSaving(false);
-    }
+      successMessage: "Terms updated",
+      reload,
+    });
   }
 
-  if (loading) return <Spinner />;
-  if (error) return <ErrorAlert error={error} />;
-
   return (
-    <div>
-      <div class="d-flex gap-2 align-items-center mb-3 flex-wrap">
-        <span class="small text-muted">Manage terms &amp; conditions shown during registration</span>
-        <button class="btn btn-sm btn-outline-secondary ms-auto" onClick={() => void load()}>
-          ↺ Refresh
-        </button>
-        <button class="btn btn-sm btn-primary" onClick={() => void handleSave()} disabled={saving}>
-          Save Terms
-        </button>
-      </div>
+    <AdminSettingsEditor
+      loading={loading}
+      error={error}
+      description="Manage terms & conditions shown during registration"
+      actions={
+        <>
+          <button class="btn btn-sm btn-outline-secondary ms-auto" onClick={() => void reload()}>
+            ↺ Refresh
+          </button>
+          <button class="btn btn-sm btn-primary" onClick={() => void handleSave()} disabled={saving}>
+            Save Terms
+          </button>
+        </>
+      }
+    >
       {saveStatus && (
         <div class={`small mb-2 ${saveStatus.startsWith("✓") ? "text-success" : "text-warning"}`}>{saveStatus}</div>
       )}
 
-      <TermsGroup title="Attendee Terms" terms={attendee} onChange={setAttendee} addLabel="Add attendee term" />
-      <TermsGroup title="Speaker Terms" terms={speaker} onChange={setSpeaker} addLabel="Add speaker term" />
+      <TermsGroup
+        title="Attendee Terms"
+        terms={attendee}
+        onChange={(value) => updateTerms("attendee", value)}
+        addLabel="Add attendee term"
+      />
+      <TermsGroup
+        title="Speaker Terms"
+        terms={speaker}
+        onChange={(value) => updateTerms("speaker", value)}
+        addLabel="Add speaker term"
+      />
 
       <h6 class="small fw-bold text-uppercase text-muted mb-2">Presentation Upload Terms</h6>
       <p class="small text-muted mb-2">
         Shown as a disclaimer before speakers upload their presentation. Leave empty to use the built-in defaults.
       </p>
-      <TermsGroup terms={presentation} onChange={setPresentation} addLabel="Add presentation term" />
-    </div>
+      <TermsGroup
+        terms={presentation}
+        onChange={(value) => updateTerms("presentation", value)}
+        addLabel="Add presentation term"
+      />
+    </AdminSettingsEditor>
   );
 }

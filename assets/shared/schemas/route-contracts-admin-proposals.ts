@@ -4,6 +4,7 @@ import {
   proposalIdParamsSchema,
   proposalReviewIdParamsSchema,
   proposalSpeakerIdParamsSchema,
+  successResponseSchema,
 } from "./api-common";
 import {
   adminSpeakerBioPatchSchema,
@@ -11,6 +12,8 @@ import {
   adminProposalPatchSchema,
   finalizeProposalResponseSchema,
   finalizeProposalSchema,
+  proposalSpeakerRemovalRequestSchema,
+  proposalSpeakerRemovalResponseSchema,
 } from "./proposal-management";
 import { listQuerySchema } from "./pagination";
 import {
@@ -38,6 +41,7 @@ import {
   presentationVersionsListQuerySchema,
   presentationVersionsResponseSchema,
 } from "./presentation-versions";
+import { httpUrlSchema } from "./urls";
 
 export const adminProposalOpenManageRouteSchema = {
   tags: ["Admin proposals"],
@@ -52,7 +56,7 @@ export const adminProposalOpenManageRouteSchema = {
       description: "Fresh proposal management URL.",
       content: {
         "application/json": {
-          schema: z.object({ manageUrl: z.string().url() }),
+          schema: z.object({ manageUrl: httpUrlSchema }),
         },
       },
     },
@@ -246,7 +250,7 @@ export const adminProposalAuditLogRouteSchema = {
 export const adminProposalCommentsListRouteSchema = {
   tags: ["Admin proposals"],
   summary: "List internal proposal comments",
-  description: "Returns a bounded, searchable page of private programme committee comments for a proposal.",
+  description: "Returns a bounded, searchable page of private program committee comments for a proposal.",
   request: {
     params: proposalIdParamsSchema,
     query: proposalCommentsListQuerySchema,
@@ -265,7 +269,7 @@ export const adminProposalCommentsListRouteSchema = {
 export const adminProposalCommentCreateRouteSchema = {
   tags: ["Admin proposals"],
   summary: "Add an internal proposal comment",
-  description: "Atomically appends a private programme committee comment and its audit record.",
+  description: "Atomically appends a private program committee comment and its audit record.",
   request: {
     params: proposalIdParamsSchema,
     body: {
@@ -329,6 +333,33 @@ export const adminProposalSpeakerPatchRouteSchema = {
   },
 };
 
+export const adminProposalSpeakerDeleteRouteSchema = {
+  tags: ["Admin proposal speakers"],
+  summary: "Remove a proposal speaker",
+  description:
+    "Atomically removes a speaker association, invalidates its capability, deactivates participant projections, cancels pending speaker email, and records audit history. Removing the current proposer requires an explicit replacement.",
+  request: {
+    params: proposalSpeakerIdParamsSchema,
+    body: {
+      content: { "application/json": { schema: proposalSpeakerRemovalRequestSchema } },
+      required: true,
+    },
+  },
+  responses: {
+    "200": {
+      description: "Speaker removed from the proposal.",
+      content: { "application/json": { schema: proposalSpeakerRemovalResponseSchema } },
+    },
+    "400": { description: "Invalid replacement proposer payload." },
+    "401": { description: "Admin authorization required." },
+    "403": { description: "The admin lacks proposal management permission." },
+    "404": { description: "Proposal, speaker, or replacement speaker not found." },
+    "409": {
+      description: "The final speaker cannot be removed, a proposer replacement is required, or state changed.",
+    },
+  },
+};
+
 export const adminPresentationVersionsListRouteSchema = {
   tags: ["Admin proposal presentations"],
   summary: "List presentation versions",
@@ -352,7 +383,7 @@ export const adminPresentationUploadRouteSchema = {
   responses: {
     "200": {
       description: "Presentation uploaded.",
-      content: { "application/json": { schema: z.object({ success: z.literal(true) }) } },
+      content: { "application/json": { schema: successResponseSchema } },
     },
     "400": { description: "Invalid upload metadata or size." },
     "401": { description: "Admin authorization required." },
@@ -396,7 +427,7 @@ export const adminPresentationVersionDeleteRouteSchema = {
   responses: {
     "200": {
       description: "Presentation version deleted.",
-      content: { "application/json": { schema: z.object({ success: z.literal(true) }) } },
+      content: { "application/json": { schema: successResponseSchema } },
     },
     "401": { description: "Admin authorization required." },
     "403": { description: "The admin lacks proposal access." },

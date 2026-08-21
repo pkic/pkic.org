@@ -3,7 +3,7 @@ import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { createTemplateVersion } from "../../../../../_lib/email/templates";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
-import { adminEmailTemplateVersionSchema } from "../../../../../../assets/shared/schemas/api";
+import { adminEmailTemplateVersionSchema } from "../../../../../../assets/shared/schemas/admin-email-templates";
 import { emailTemplateVersionsListRouteSchema } from "../../../../../../assets/shared/schemas/admin-email-templates";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { listAdminEmailTemplateVersions } from "../../../../../_lib/services/admin-email-templates";
@@ -13,13 +13,7 @@ export const EmailTemplateVersionsList = openApiRoute(
   async (c: AdminContext, data) => {
     await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-    return json(
-      await listAdminEmailTemplateVersions(requestDb(c), c.req.param("key"), {
-        ...data.query,
-        limit: data.query.limit ?? 50,
-        offset: data.query.offset ?? 0,
-      }),
-    );
+    return json(await listAdminEmailTemplateVersions(requestDb(c), c.req.param("key"), data.query));
   },
 );
 

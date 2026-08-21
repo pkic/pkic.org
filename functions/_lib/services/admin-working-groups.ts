@@ -29,6 +29,11 @@ import { prepareAuditLog } from "./audit";
 import { deterministicRepresentativeJoinSql } from "./membership/representative-lookup";
 import { findEligibleMemberById } from "../auth/member";
 import type { DatabaseLike } from "../types";
+import {
+  currentWorkingGroupRoleHolderSql,
+  WORKING_GROUP_CHAIR_ROLE_ID,
+  WORKING_GROUP_VICE_CHAIR_ROLE_ID,
+} from "./working-group-leadership";
 
 /**
  * Current holder of a chair/vice-chair designation — resolved from
@@ -145,29 +150,6 @@ function toSummary(row: WorkingGroupSummaryRow): AdminWorkingGroupSummary {
   };
 }
 
-// Resolves the current chair/vice-chair per WG from user_roles via
-// role-wg_chair/role-wg_vice_chair, context_type='working_group'. A ROW_NUMBER() window
-// picks the most-recently-created active (non-revoked, non-expired)
-// assignment per WG so a stray double-assignment can't multiply rows in
-// the outer query.
-const ACTIVE_USER_ROLE_FILTER = `
-  ur.revoked_at IS NULL
-  AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-`;
-
-function chairSubquery(roleId: string): string {
-  return `
-    SELECT wg_id, user_role_id, user_id, first_name, last_name, email, expires_at FROM (
-      SELECT ur.context_id AS wg_id, ur.id AS user_role_id, u.id AS user_id, u.first_name, u.last_name, u.email,
-             ur.expires_at,
-             ROW_NUMBER() OVER (PARTITION BY ur.context_id ORDER BY ur.created_at DESC) AS rn
-      FROM user_roles ur
-      JOIN users u ON u.id = ur.user_id
-      WHERE ur.context_type = 'working_group' AND ur.role_id = '${roleId}' AND ${ACTIVE_USER_ROLE_FILTER}
-    ) WHERE rn = 1
-  `;
-}
-
 const SUMMARY_SELECT = `
   SELECT wg.id, wg.name, wg.slug, wg.description, wg.mailing_list_email, wg.min_endorsers_for_ballot,
          wg.active, wg.created_at, wg.updated_at,
@@ -180,19 +162,28 @@ const SUMMARY_SELECT = `
          vice_chair.first_name AS vice_chair_first_name, vice_chair.last_name AS vice_chair_last_name,
          vice_chair.email AS vice_chair_email, vice_chair.expires_at AS vice_chair_expires_at
   FROM working_groups wg
-  LEFT JOIN (${chairSubquery("role-wg_chair")}) chair ON chair.wg_id = wg.id
-  LEFT JOIN (${chairSubquery("role-wg_vice_chair")}) vice_chair ON vice_chair.wg_id = wg.id
+  LEFT JOIN (${currentWorkingGroupRoleHolderSql(WORKING_GROUP_CHAIR_ROLE_ID)}) chair ON chair.wg_id = wg.id
+  LEFT JOIN (${currentWorkingGroupRoleHolderSql(WORKING_GROUP_VICE_CHAIR_ROLE_ID)}) vice_chair ON vice_chair.wg_id = wg.id
 `;
 
 export async function listAdminWorkingGroups(
   db: DatabaseLike,
-  query: { limit: number; offset: number; q?: string; sort?: string },
+  query: { limit: number; offset: number; q?: string; sort?: string; active?: "true" | "false" },
 ): Promise<{ workingGroups: AdminWorkingGroupSummary[]; total: number }> {
   const search = query.q
     ? buildD1TextSearchFilter(query.q, ["wg.name", "wg.slug", "wg.description", "wg.mailing_list_email"])
     : null;
-  const where = search ? `WHERE ${search.sql}` : "";
-  const bindings = search?.bindings ?? [];
+  const conditions: string[] = [];
+  const bindings: unknown[] = [];
+  if (search) {
+    conditions.push(search.sql);
+    bindings.push(...search.bindings);
+  }
+  if (query.active) {
+    conditions.push("wg.active = ?");
+    bindings.push(query.active === "true" ? 1 : 0);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const orderBy = resolveOrderBy(query.sort, ADMIN_WORKING_GROUP_SORT_COLUMNS, "ORDER BY wg.name ASC", "wg.id ASC");
   const { rows, total } = await queryPage<WorkingGroupSummaryRow>(
     db,

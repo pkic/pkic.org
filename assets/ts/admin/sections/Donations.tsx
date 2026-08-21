@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from "preact/hooks";
+import { useState, useRef } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Badge } from "../../components/Badge";
 import { Spinner } from "../../components/Spinner";
 import { ErrorAlert } from "../../components/ErrorAlert";
-import { ApiDataTable, type ApiTableActions, type Column } from "../../components/Table";
+import type { Column } from "../../components/Table";
+import { ApiDataTable, type ApiTableActions } from "../components/ApiDataTable";
 import { Tabs } from "../../components/Tabs";
 import { api } from "../api";
 import { fmt, toast } from "../ui";
@@ -13,20 +14,16 @@ import {
   donationPromotersListResponseSchema,
   donationSyncResponseSchema,
   donationsListResponseSchema,
+  type AdminDonationListSummary,
   type AdminDonationPromoter as PromoterRow,
 } from "../../../shared/schemas/admin-donations";
 import { formatDonationAmount, type DonationRow } from "./donations/model";
+import { useServerCollection } from "../../hooks/useServerCollection";
+import { loadAdminCollection } from "../services/server-collection";
+import { promoterRankCardClass, promoterRankTier } from "../promoter-ranking";
+import { useOffsetPager } from "../../hooks/useOffsetPager";
 
 const FILTERS = ["", "pending", "awaiting_payment", "completed", "expired", "failed"] as const;
-
-const RANK_CLASS: Record<number, string> = { 1: "gold", 2: "silver", 3: "bronze" };
-const RANK_CARD: Record<number, string> = { 1: "top-1", 2: "top-2", 3: "top-3" };
-
-function rankTier(rank: number): string {
-  if (rank <= 3) return RANK_CLASS[rank];
-  if (rank <= 10) return "top-ten";
-  return "other";
-}
 
 function DonorPromoterCard({ p, rank }: { p: PromoterRow; rank: number }) {
   const ownAmt = p.own_gross > 0 && p.own_currency ? formatDonationAmount(p.own_gross, p.own_currency) : null;
@@ -36,8 +33,8 @@ function DonorPromoterCard({ p, rank }: { p: PromoterRow; rank: number }) {
   const appBase = window.location.origin;
 
   return (
-    <div class={`adm-promoter-card ${RANK_CARD[rank] ?? (rank <= 10 ? "top-ten" : "")}`}>
-      <div class={`adm-promoter-rank ${rankTier(rank)}`}>{rank}</div>
+    <div class={`adm-promoter-card ${promoterRankCardClass(rank)}`}>
+      <div class={`adm-promoter-rank ${promoterRankTier(rank)}`}>{rank}</div>
       <div class="adm-promoter-info">
         <div class="name">{p.name ?? <span class="fst-italic text-muted">anonymous</span>}</div>
         <a href={`${appBase}/donate/r/${p.code}`} target="_blank" rel="noopener" class="email mono">
@@ -84,47 +81,26 @@ function DonorPromoterCard({ p, rank }: { p: PromoterRow; rank: number }) {
 }
 
 function PromotersTab() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [promoters, setPromoters] = useState<PromoterRow[]>([]);
-  const [summary, setSummary] = useState({
+  const pager = useOffsetPager();
+  const { offset, pageSize } = pager;
+  const listing = useServerCollection({
+    endpoint: "/api/v1/admin/donations/promoters",
+    params: {
+      limit: String(pageSize),
+      offset: String(offset),
+      sort: "-impact",
+    },
+    responseSchema: donationPromotersListResponseSchema,
+    load: loadAdminCollection,
+  });
+  const promoters = listing.data?.promoters ?? [];
+  const summary = listing.data?.summary ?? {
     promoterCount: 0,
     totalOwnGrossUsd: 0,
     totalAttributedGrossUsd: 0,
     totalClicks: 0,
     totalAttributedCompleted: 0,
-  });
-  const [offset, setOffset] = useState(0);
-  const [pageSize, setPageSize] = useState(50);
-  const [hasMore, setHasMore] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const query = new URLSearchParams({
-        limit: String(pageSize),
-        offset: String(offset),
-        sort: "-impact",
-      });
-      const data = donationPromotersListResponseSchema.parse(
-        await api<unknown>(`/api/v1/admin/donations/promoters?${query.toString()}`),
-      );
-      setPromoters(data.promoters);
-      setSummary(data.summary);
-      setHasMore(data.page.hasMore);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [offset, pageSize]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const page = Math.floor(offset / pageSize) + 1;
+  };
 
   return (
     <div>
@@ -154,14 +130,14 @@ function PromotersTab() {
       )}
 
       <div class="d-flex justify-content-end mb-2">
-        <button class="btn btn-sm btn-outline-secondary" onClick={() => void load()}>
+        <button class="btn btn-sm btn-outline-secondary" onClick={() => void listing.reload()}>
           ↺ Refresh
         </button>
       </div>
-      {loading && <Spinner />}
-      {!loading && <ErrorAlert error={error} />}
-      {!loading &&
-        !error &&
+      {listing.loading && <Spinner />}
+      {!listing.loading && listing.error && <ErrorAlert error={listing.error} />}
+      {!listing.loading &&
+        !listing.error &&
         (promoters.length === 0 ? (
           <div class="text-muted text-center py-4">No promoter links yet</div>
         ) : (
@@ -171,21 +147,13 @@ function PromotersTab() {
             ))}
           </div>
         ))}
-      {!loading && !error && (
+      {!listing.loading && !listing.error && (
         <Pager
-          page={page}
-          hasMore={hasMore}
-          pageSize={pageSize}
-          offset={offset}
-          rowCount={promoters.length}
-          total={summary.promoterCount}
-          onPrev={() => setOffset(Math.max(0, offset - pageSize))}
-          onNext={() => setOffset(offset + pageSize)}
-          onJump={(nextPage) => setOffset((nextPage - 1) * pageSize)}
-          onPageSizeChange={(size) => {
-            setPageSize(size);
-            setOffset(0);
-          }}
+          {...pager.pagerProps({
+            hasMore: listing.data?.page.hasMore ?? false,
+            rowCount: promoters.length,
+            total: summary.promoterCount,
+          })}
         />
       )}
     </div>
@@ -195,10 +163,9 @@ function PromotersTab() {
 export function Donations({ subTab }: { subTab?: string }) {
   const tab = subTab === "promoters" ? "promoters" : "list";
   const [statusFilter, setStatusFilter] = useState("");
-  const [summary, setSummary] = useState<Record<string, number>>({});
+  const [summary, setSummary] = useState<AdminDonationListSummary>({ byStatus: {}, backfillable: 0, syncable: 0 });
   const [syncingAll, setSyncingAll] = useState(false);
   const [, navigate] = useHashLocation();
-  const [donations, setDonations] = useState<DonationRow[]>([]);
   const actionsRef = useRef<ApiTableActions | null>(null);
 
   async function handleSync(pendingOnly: boolean) {
@@ -230,13 +197,9 @@ export function Donations({ subTab }: { subTab?: string }) {
     }
   }
 
-  const total = Object.values(summary).reduce((sum, v) => sum + v, 0);
-  const pending = (summary.pending ?? 0) + (summary.awaiting_payment ?? 0);
-  const backfillable = donations.filter(
-    (d) => d.status === "completed" && (d.net_amount === null || d.payment_method_type === null),
-  ).length;
-  const syncable = pending + backfillable;
-  const failed = summary.failed ?? 0;
+  const total = Object.values(summary.byStatus).reduce((sum, value) => sum + value, 0);
+  const pending = (summary.byStatus.pending ?? 0) + (summary.byStatus.awaiting_payment ?? 0);
+  const failed = summary.byStatus.failed ?? 0;
 
   const columns: Column<DonationRow>[] = [
     {
@@ -299,10 +262,10 @@ export function Donations({ subTab }: { subTab?: string }) {
         <>
           <ApiDataTable<DonationRow>
             endpoint="/api/v1/admin/donations"
+            responseSchema={donationsListResponseSchema}
             resolve={(d) => {
               const resp = donationsListResponseSchema.parse(d);
               setSummary(resp.summary);
-              setDonations(resp.donations);
               return resp.donations;
             }}
             resolvePage={(d) => {
@@ -312,7 +275,6 @@ export function Donations({ subTab }: { subTab?: string }) {
             params={{
               ...(statusFilter && { status: statusFilter }),
             }}
-            deps={[statusFilter]}
             actionsRef={actionsRef}
             toolbar={({ resetPage }) => (
               <>
@@ -320,7 +282,7 @@ export function Donations({ subTab }: { subTab?: string }) {
                   {FILTERS.map((f) => {
                     const label =
                       f === "" ? "All" : f === "awaiting_payment" ? "Awaiting" : f.charAt(0).toUpperCase() + f.slice(1);
-                    const count = f === "" ? total : (summary[f] ?? 0);
+                    const count = f === "" ? total : (summary.byStatus[f] ?? 0);
                     return (
                       <button
                         key={f}
@@ -346,10 +308,10 @@ export function Donations({ subTab }: { subTab?: string }) {
                 )}
                 <button
                   class="btn btn-sm btn-success"
-                  disabled={syncingAll || syncable === 0}
+                  disabled={syncingAll || summary.syncable === 0}
                   onClick={() => void handleSync(false)}
                 >
-                  {syncingAll ? "Syncing…" : `↺ Sync all (${syncable})`}
+                  {syncingAll ? "Syncing…" : `↺ Sync all (${summary.syncable})`}
                 </button>
                 {failed > 0 && (
                   <span class="badge text-bg-danger" title="Payment failed">

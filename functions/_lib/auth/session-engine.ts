@@ -38,7 +38,13 @@ export function parseCookieHeader(cookieHeader: string): Map<string, string> {
     const name = trimmed.slice(0, separatorIndex).trim();
     const value = trimmed.slice(separatorIndex + 1).trim();
     if (!name) continue;
-    values.set(name, decodeURIComponent(value));
+    try {
+      values.set(name, decodeURIComponent(value));
+    } catch {
+      // Cookie headers are attacker-controlled. Ignore only the malformed
+      // pair so one invalid percent escape cannot turn every auth surface
+      // using this shared parser into an unhandled 500 response.
+    }
   }
   return values;
 }
@@ -119,24 +125,38 @@ export interface SessionTableConfig {
 }
 
 /** Generic session-row INSERT — same shape across admin/member/sponsor-portal, differing only by table + subject column. */
+export async function prepareSessionRow(
+  db: DatabaseLike,
+  config: SessionTableConfig,
+  subjectId: string,
+  sessionTtlHours: number,
+): Promise<{ sessionId: string; expiresAt: string; statement: StatementLike }> {
+  const sessionId = uuid();
+  const sessionHash = await sha256Hex(randomToken(24));
+  const now = nowIso();
+  const expiresAt = addHours(nowIso(), sessionTtlHours);
+
+  return {
+    sessionId,
+    expiresAt,
+    statement: db
+      .prepare(
+        `INSERT INTO ${config.table} (id, ${config.subjectColumn}, token_hash, expires_at, revoked_at, created_at)
+         VALUES (?, ?, ?, ?, NULL, ?)`,
+      )
+      .bind(sessionId, subjectId, sessionHash, expiresAt, now),
+  };
+}
+
 export async function insertSessionRow(
   db: DatabaseLike,
   config: SessionTableConfig,
   subjectId: string,
   sessionTtlHours: number,
 ): Promise<{ sessionId: string; expiresAt: string }> {
-  const sessionId = uuid();
-  const sessionHash = await sha256Hex(randomToken(24));
-  const expiresAt = addHours(nowIso(), sessionTtlHours);
-
-  await run(
-    db,
-    `INSERT INTO ${config.table} (id, ${config.subjectColumn}, token_hash, expires_at, revoked_at, created_at)
-     VALUES (?, ?, ?, ?, NULL, ?)`,
-    [sessionId, subjectId, sessionHash, expiresAt, nowIso()],
-  );
-
-  return { sessionId, expiresAt };
+  const prepared = await prepareSessionRow(db, config, subjectId, sessionTtlHours);
+  await prepared.statement.run();
+  return { sessionId: prepared.sessionId, expiresAt: prepared.expiresAt };
 }
 
 export interface PlainSessionRow {
@@ -308,6 +328,25 @@ export async function validateAndConsumeMagicLinkRow(
   },
   payload: { ipHash?: string | null; userAgentHash?: string | null },
 ): Promise<void> {
+  validateMagicLinkRow(row, payload);
+
+  // Atomic consume to prevent TOCTOU race: only the request that flips used_at
+  // from NULL wins. Other concurrent verifications get MAGIC_LINK_USED.
+  const consume = await prepareConsumeMagicLinkStatement(db, table, row.id).run();
+  if (consume.meta?.changes === 0) {
+    throw new AppError(409, "MAGIC_LINK_USED", "Magic link already used");
+  }
+}
+
+export function validateMagicLinkRow(
+  row: {
+    expiresAt: string;
+    usedAt: string | null;
+    requestIpHash: string | null;
+    userAgentHash: string | null;
+  },
+  payload: { ipHash?: string | null; userAgentHash?: string | null },
+): void {
   if (row.usedAt) {
     throw new AppError(409, "MAGIC_LINK_USED", "Magic link already used");
   }
@@ -320,11 +359,8 @@ export async function validateAndConsumeMagicLinkRow(
   if (row.userAgentHash && row.userAgentHash !== payload.userAgentHash) {
     throw new AppError(403, "MAGIC_LINK_CONTEXT_MISMATCH", "Magic link is not valid from this browser");
   }
+}
 
-  // Atomic consume to prevent TOCTOU race: only the request that flips used_at
-  // from NULL wins. Other concurrent verifications get MAGIC_LINK_USED.
-  const consume = await run(db, `UPDATE ${table} SET used_at = ? WHERE id = ? AND used_at IS NULL`, [nowIso(), row.id]);
-  if (consume.changes === 0) {
-    throw new AppError(409, "MAGIC_LINK_USED", "Magic link already used");
-  }
+export function prepareConsumeMagicLinkStatement(db: DatabaseLike, table: string, rowId: string): StatementLike {
+  return db.prepare(`UPDATE ${table} SET used_at = ? WHERE id = ? AND used_at IS NULL`).bind(nowIso(), rowId);
 }

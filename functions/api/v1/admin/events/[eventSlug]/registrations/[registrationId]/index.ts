@@ -8,9 +8,10 @@
  *   Full registration update attributed to the acting admin — same service logic
  *   as the user-facing manage endpoint, but recorded under the admin's identity.
  *   Supports all standard actions (update, cancel, report_unauthorized) plus the
- *   admin-only "force_status" to directly override the status field.
+ *   admin-only "force_status" lifecycle transition. Active statuses still
+ *   pass through day-capacity and waitlist arbitration.
  */
-import { json } from "../../../../../../../_lib/http";
+import { dispatchRequestMethod, json } from "../../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../../../_lib/services/events";
 import { parseJsonBody } from "../../../../../../../_lib/validation";
@@ -23,8 +24,7 @@ import {
 } from "../../../../../../../_lib/services/registrations";
 import { validateCustomAnswersByPurpose } from "../../../../../../../_lib/services/forms";
 import { deriveEventAttendanceType } from "../../../../../../../_lib/services/event-days";
-import { registrationManageSchema } from "../../../../../../../../assets/shared/schemas/api";
-import { z } from "zod";
+import { adminRegistrationUpdateSchema } from "../../../../../../../../assets/shared/schemas/route-contracts-admin-registrations";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 import {
   fetchAdminRegistrationWithDetails,
@@ -47,12 +47,6 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
 
 // ── PATCH ─────────────────────────────────────────────────────────────────────
 
-// Extend the shared manage schema with an admin-only "force_status" action.
-const adminRegistrationUpdateSchema = registrationManageSchema.omit({ action: true }).extend({
-  action: z.enum(["update", "cancel", "report_unauthorized", "force_status"]),
-  status: z.enum(["pending_email_confirmation", "registered", "cancelled"]).optional(),
-});
-
 export async function onRequestPatch(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
@@ -61,11 +55,8 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
 
   const body = await parseJsonBody(c.req, adminRegistrationUpdateSchema);
 
-  // ── force_status: directly override status without touching waitlist logic ──
+  // ── force_status: override lifecycle status while preserving day capacity ──
   if (body.action === "force_status") {
-    if (!body.status) {
-      return json({ error: { code: "MISSING_STATUS", message: "status is required for force_status action" } }, 400);
-    }
     const forced = await forceRegistrationStatus(requestDb(c), {
       registrationId,
       eventId: event.id,
@@ -179,7 +170,5 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
 // ── Router ────────────────────────────────────────────────────────────────────
 
 export async function onRequest(c: AdminContext): Promise<Response> {
-  if (c.req.raw.method === "GET") return onRequestGet(c);
-  if (c.req.raw.method === "PATCH") return onRequestPatch(c);
-  return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
+  return dispatchRequestMethod(c, { GET: onRequestGet, PATCH: onRequestPatch });
 }

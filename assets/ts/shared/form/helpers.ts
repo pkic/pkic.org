@@ -82,6 +82,14 @@ export function formatStatusLabel(status: string): string {
     .join(" ");
 }
 
+/** Reads and trims the standard email field from a form submit event. */
+export function emailFromSubmitEvent(event: Event): string {
+  event.preventDefault();
+  const form = event.currentTarget as HTMLFormElement;
+  const email = form.elements.namedItem("email");
+  return email instanceof HTMLInputElement ? email.value.trim() : "";
+}
+
 /**
  * Returns a Bootstrap badge CSS class for a workflow status value.
  */

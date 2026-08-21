@@ -3,7 +3,7 @@
  *
  * Returns a bounded, sortable, filterable page of submissions for a form
  * (merging in linked registration/proposal answers not yet backfilled into
- * form_submissions — see functions/_lib/services/form-submissions.ts), plus
+ * form_submissions — see the form-submissions/population-query service), plus
  * Statistics are exposed separately at /submissions/stats so this collection
  * always follows the canonical list contract.
  */
@@ -20,7 +20,7 @@ export const AdminFormsFormKeySubmissionsGet = openApiRoute(
   async (c: AdminContext, data) => {
     await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-    const { limit = 200, offset = 0, q, status, attendanceType, eventSlug, sort } = data.query;
+    const { limit, offset, q, status, attendanceType, eventSlug, sort } = data.query;
 
     const result = await listFormSubmissions(requestDb(c), {
       formKey: data.params.formKey,

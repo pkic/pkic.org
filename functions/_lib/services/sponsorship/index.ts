@@ -10,5 +10,7 @@ export * from "./tier-config";
 export * from "./tier-catalog";
 export * from "./checkout";
 export * from "./event-tiers";
+export * from "./admin-read-model";
+export * from "./event-history";
 export * from "./admin-pipeline";
 export * from "./portal";

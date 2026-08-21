@@ -44,7 +44,7 @@ export function DonationDetailPage({ donationId }: { donationId: string }) {
       else if (result?.outcome === "failed") toast("Payment failed — bank declined or bounced.", "error");
       else if (result?.outcome === "still_pending") toast("Session still pending on Stripe.", "info");
       else toast(result?.error ?? "Sync failed.", "error");
-      reload();
+      await reload();
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {

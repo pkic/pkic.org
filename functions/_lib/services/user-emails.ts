@@ -6,12 +6,13 @@
  * person under different Google-Groups-roster emails; see the user-merge
  * tool (`user-merge.ts`) for folding an existing duplicate account in.
  */
-import { all, first, run } from "../db/queries";
+import { all, first } from "../db/queries";
 import { normalizeEmail } from "../validation";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { AppError } from "../errors";
-import type { DatabaseLike } from "../types";
+import type { AuthAdmin, DatabaseLike } from "../types";
+import { prepareAuditLogAfterOneChange } from "./audit";
 
 export interface UserEmailRecord {
   id: string;
@@ -40,7 +41,12 @@ export async function listUserEmails(db: DatabaseLike, userId: string): Promise<
   return rows.map(toRecord);
 }
 
-export async function addUserEmail(db: DatabaseLike, userId: string, email: string): Promise<UserEmailRecord> {
+export async function addUserEmail(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  userId: string,
+  email: string,
+): Promise<UserEmailRecord> {
   const user = await first<{ id: string }>(db, "SELECT id FROM users WHERE id = ?", [userId]);
   if (!user) {
     throw new AppError(404, "USER_NOT_FOUND", "User not found");
@@ -61,20 +67,30 @@ export async function addUserEmail(db: DatabaseLike, userId: string, email: stri
 
   const id = uuid();
   const now = nowIso();
-  await run(db, "INSERT INTO user_emails (id, user_id, email, normalized_email, created_at) VALUES (?, ?, ?, ?, ?)", [
-    id,
-    userId,
-    email,
-    normalized,
-    now,
+  await db.batch([
+    db
+      .prepare("INSERT INTO user_emails (id, user_id, email, normalized_email, created_at) VALUES (?, ?, ?, ?, ?)")
+      .bind(id, userId, email, normalized, now),
+    prepareAuditLogAfterOneChange(db, "admin", actor.id, "user_email_added", "user", userId, { email }, now),
   ]);
 
   return { id, userId, email, createdAt: now };
 }
 
-export async function removeUserEmail(db: DatabaseLike, userId: string, emailId: string): Promise<void> {
-  const result = await run(db, "DELETE FROM user_emails WHERE id = ? AND user_id = ?", [emailId, userId]);
-  if (result.changes === 0) {
-    throw new AppError(404, "EMAIL_NOT_FOUND", "Secondary email not found for this user");
-  }
+export async function removeUserEmail(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  userId: string,
+  emailId: string,
+): Promise<void> {
+  const existing = await first<{ id: string }>(db, "SELECT id FROM user_emails WHERE id = ? AND user_id = ?", [
+    emailId,
+    userId,
+  ]);
+  if (!existing) throw new AppError(404, "EMAIL_NOT_FOUND", "Secondary email not found for this user");
+
+  await db.batch([
+    db.prepare("DELETE FROM user_emails WHERE id = ? AND user_id = ?").bind(emailId, userId),
+    prepareAuditLogAfterOneChange(db, "admin", actor.id, "user_email_removed", "user", userId, { emailId }),
+  ]);
 }

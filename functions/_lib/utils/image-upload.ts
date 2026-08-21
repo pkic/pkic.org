@@ -2,35 +2,10 @@ import { AppError } from "../errors";
 import { readBoundedBody } from "../http-body";
 import { type ImagesBinding } from "../types";
 import { IMAGE_UPLOAD_ALLOWED_MIME_TYPES, STANDARD_HEADSHOT_MAX_BYTES } from "../../../assets/shared/schemas/images";
+import { detectImageFormat, imageExtensionForContentType } from "./image-format";
 
 export const ALLOWED_MIME_TYPES = new Set<string>(IMAGE_UPLOAD_ALLOWED_MIME_TYPES);
 const MULTIPART_OVERHEAD_MAX_BYTES = 256 * 1024;
-
-function detectedImageContentType(buffer: ArrayBuffer): string | null {
-  const bytes = new Uint8Array(buffer);
-  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
-  if (
-    bytes.length >= 8 &&
-    bytes[0] === 0x89 &&
-    bytes[1] === 0x50 &&
-    bytes[2] === 0x4e &&
-    bytes[3] === 0x47 &&
-    bytes[4] === 0x0d &&
-    bytes[5] === 0x0a &&
-    bytes[6] === 0x1a &&
-    bytes[7] === 0x0a
-  ) {
-    return "image/png";
-  }
-  if (
-    bytes.length >= 12 &&
-    String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" &&
-    String.fromCharCode(...bytes.slice(8, 12)) === "WEBP"
-  ) {
-    return "image/webp";
-  }
-  return null;
-}
 
 /**
  * Robustly reads an uploaded image from a Request, handling both:
@@ -104,7 +79,7 @@ export async function readValidatedUploadedImage(
     }
     throw error;
   }
-  const detectedContentType = detectedImageContentType(uploaded.buffer);
+  const detectedContentType = detectImageFormat(uploaded.buffer)?.contentType ?? null;
   if (!detectedContentType || !ALLOWED_MIME_TYPES.has(detectedContentType)) {
     throw new AppError(415, "INVALID_FILE_TYPE", "Only JPEG, PNG, and WebP images are accepted.");
   }
@@ -132,9 +107,7 @@ export async function validateUploadedImageFile(
 }
 
 export function imageExtension(contentType: string): "jpg" | "png" | "webp" {
-  if (contentType === "image/png") return "png";
-  if (contentType === "image/webp") return "webp";
-  return "jpg";
+  return imageExtensionForContentType(contentType);
 }
 
 export async function putUploadedImage(

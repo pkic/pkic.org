@@ -19,6 +19,7 @@ import {
   RegistrationEmailEditor,
   RegistrationForceStatusPanel,
 } from "./registration-detail/RegistrationPanels";
+import { RegistrationActionCard } from "./registration-detail/RegistrationActionCard";
 
 function attendanceTypeLabel(t: string): string {
   return { in_person: "In-person", virtual: "Virtual", on_demand: "On-demand" }[t] ?? t;
@@ -162,7 +163,6 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
             dayAttendance={dayAttendance}
             dayWaitlist={dayWaitlist}
             eventDays={eventDays}
-            registrationStatus={reg.status}
             slug={slug}
             regId={regId}
             onReload={() => void reload()}
@@ -187,87 +187,56 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
 
       {/* Actions row */}
       <div class="row g-3 mb-3">
-        {/* Manage */}
-        <div class="col-md-4">
-          <div class="card h-100">
-            <div class="card-header">
-              <h6 class="mb-0">Manage</h6>
-            </div>
-            <div class="card-body">
-              <p class="small text-muted mb-2">Opens the registrant-facing manage page in a new tab.</p>
-              <button class="btn btn-sm btn-primary" onClick={() => void handleOpenManage()} disabled={openingManage}>
-                {openingManage ? "Opening…" : "Open Manage Page ↗"}
-              </button>
-              {reg.status === "waitlisted" && (
-                <div class="alert alert-warning mb-0 mt-2 small">
-                  <strong>Waitlisted:</strong> does not yet have a confirmed in-person seat.
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <RegistrationActionCard title="Manage" description="Opens the registrant-facing manage page in a new tab.">
+          <button class="btn btn-sm btn-primary" onClick={() => void handleOpenManage()} disabled={openingManage}>
+            {openingManage ? "Opening…" : "Open Manage Page ↗"}
+          </button>
+        </RegistrationActionCard>
 
-        {/* Resend */}
-        <div class="col-md-4">
-          <div class="card h-100">
-            <div class="card-header">
-              <h6 class="mb-0">Confirmation Email</h6>
+        <RegistrationActionCard title="Confirmation Email" description="Rotates the token and re-queues the email.">
+          <button class="btn btn-sm btn-outline-primary" onClick={() => void handleResend()}>
+            Resend Email
+          </button>
+          {resendStatus && (
+            <div class={`mt-2 small ${resendStatus.startsWith("✓") ? "text-success" : "text-danger"}`}>
+              {resendStatus}
             </div>
-            <div class="card-body">
-              <p class="small text-muted mb-2">Rotates the token and re-queues the email.</p>
-              <button class="btn btn-sm btn-outline-primary" onClick={() => void handleResend()}>
-                Resend Email
-              </button>
-              {resendStatus && (
-                <div class={`mt-2 small ${resendStatus.startsWith("✓") ? "text-success" : "text-danger"}`}>
-                  {resendStatus}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+          )}
+        </RegistrationActionCard>
 
-        {/* Social promo */}
-        <div class="col-md-4">
-          <div class="card h-100">
-            <div class="card-header">
-              <h6 class="mb-0">Social Promo Kit</h6>
-            </div>
-            <div class="card-body">
-              {shareUrl ? (
-                <>
-                  <div class="mb-2">
-                    <label class="form-label small fw-semibold mb-1">Referral Link</label>
-                    <div class="input-group input-group-sm">
-                      <input type="text" class="form-control form-control-sm mono" value={shareUrl} readOnly />
-                      <button
-                        class="btn btn-outline-secondary"
-                        onClick={() => void navigator.clipboard.writeText(shareUrl)}
-                        title="Copy link"
-                      >
-                        📋
-                      </button>
-                    </div>
-                  </div>
-                  <div class="d-flex flex-wrap gap-1">
-                    <a href={ogBadgeUrl!} target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">
-                      View Badge 📷
-                    </a>
-                    <button
-                      class="btn btn-sm btn-outline-secondary"
-                      onClick={() => void handleRegenerateBadge()}
-                      disabled={regenerating}
-                    >
-                      {regenerating ? "Regenerating…" : "Regenerate Badge 🔄"}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <p class="small text-muted fst-italic mb-0">No referral code.</p>
-              )}
-            </div>
-          </div>
-        </div>
+        <RegistrationActionCard title="Social Promo Kit">
+          {shareUrl ? (
+            <>
+              <div class="mb-2">
+                <label class="form-label small fw-semibold mb-1">Referral Link</label>
+                <div class="input-group input-group-sm">
+                  <input type="text" class="form-control form-control-sm mono" value={shareUrl} readOnly />
+                  <button
+                    class="btn btn-outline-secondary"
+                    onClick={() => void navigator.clipboard.writeText(shareUrl)}
+                    title="Copy link"
+                  >
+                    📋
+                  </button>
+                </div>
+              </div>
+              <div class="d-flex flex-wrap gap-1">
+                <a href={ogBadgeUrl!} target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">
+                  View Badge 📷
+                </a>
+                <button
+                  class="btn btn-sm btn-outline-secondary"
+                  onClick={() => void handleRegenerateBadge()}
+                  disabled={regenerating}
+                >
+                  {regenerating ? "Regenerating…" : "Regenerate Badge 🔄"}
+                </button>
+              </div>
+            </>
+          ) : (
+            <p class="small text-muted fst-italic mb-0">No referral code.</p>
+          )}
+        </RegistrationActionCard>
       </div>
 
       {/* Badge role */}

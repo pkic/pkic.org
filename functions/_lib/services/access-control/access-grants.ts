@@ -50,7 +50,7 @@ export async function listAccessGrants(
     requirePermission(actor, "access:grant");
   }
 
-  const { userId, q, sort, limit = 50, offset = 0 } = query;
+  const { userId, q, sort, limit, offset } = query;
   const orderBy = resolveMappedOrderBy(
     sort,
     {

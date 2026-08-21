@@ -1,8 +1,8 @@
 import { useEffect, useState } from "preact/hooks";
 import type { EmailMessageType } from "../../../../../shared/schemas/admin-email-templates";
+import type { AdminEventRegistrationStatusFilter } from "../../../../../shared/schemas/admin-events";
 import { api } from "../../../api";
 import type { TemplateHelperCategory } from "../../../email-template-helpers";
-import { getAdminEmailTemplateCatalogue } from "../../../services/catalogues";
 
 export const HELPER_CATEGORIES: TemplateHelperCategory[] = ["Variables", "Conditions", "CTAs"];
 export const PERSONAL_ONLY_HELPERS = new Set([
@@ -68,11 +68,6 @@ export function SnippetBtn({
   );
 }
 
-interface TemplateOption {
-  key: string;
-  label: string;
-}
-
 export interface CampaignPayload {
   templateKey?: string;
   subjectOverride: string;
@@ -82,31 +77,13 @@ export interface CampaignPayload {
   batchSize: number;
   filter: {
     audience: "attendees" | "speakers";
-    attendeeStatus?: "all" | "registered" | "pending_email_confirmation" | "waitlisted" | "cancelled";
+    attendeeStatus?: AdminEventRegistrationStatusFilter;
     attendanceType?: "all" | "in_person" | "virtual" | "on_demand";
     dayDate?: string;
     dayWaitlistStatus?: "all" | "active" | "waiting" | "offered" | "accepted" | "none";
     speakerStatus?: "all" | "confirmed" | "invited" | "pending";
   };
   previewToken?: string;
-}
-
-export function useTemplates(): { templates: TemplateOption[]; loading: boolean } {
-  const [templates, setTemplates] = useState<TemplateOption[]>([]);
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    getAdminEmailTemplateCatalogue()
-      .then((templates) => {
-        setTemplates(
-          templates
-            .filter((template) => template.template_key.startsWith("msg_"))
-            .map((template) => ({ key: template.template_key, label: template.template_key })),
-        );
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-  return { templates, loading };
 }
 
 export function useDays(slug: string) {

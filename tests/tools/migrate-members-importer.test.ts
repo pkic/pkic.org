@@ -38,6 +38,32 @@ function writeFixtureRosterCsv(filePath: string, rows: string[][]): void {
   fs.writeFileSync(filePath, `${lines.join("\n")}\n`, "utf8");
 }
 
+function createImporterFixture(tmpDirs: string[]) {
+  const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pkic-importer-fixture-"));
+  tmpDirs.push(fixtureRoot);
+  const membersDir = path.join(fixtureRoot, "members");
+  const csvDir = path.join(fixtureRoot, "csv");
+  fs.mkdirSync(membersDir);
+  fs.mkdirSync(csvDir);
+  return {
+    fixtureRoot,
+    membersDir,
+    csvDir,
+    sponsorsYamlPath: path.join(fixtureRoot, "sponsors-does-not-exist.yaml"),
+  };
+}
+
+function writeFixtureRosters(
+  csvDir: string,
+  primaryRows: string[][],
+  workingGroupRows = new Map<string, string[][]>(),
+) {
+  writeFixtureRosterCsv(path.join(csvDir, "pkic.csv"), primaryRows);
+  for (const slug of ["ca", "cbom", "cm", "pkimm", "pqc", "tcwg"]) {
+    writeFixtureRosterCsv(path.join(csvDir, `${slug}.csv`), workingGroupRows.get(slug) ?? []);
+  }
+}
+
 function runWrangler(args: string[]): string {
   return execFileSync("pnpm", ["exec", "wrangler", ...args], {
     cwd: ROOT,
@@ -78,12 +104,7 @@ describe("migrate-members-yaml-to-d1 importer — fresh-D1 execution smoke test"
   });
 
   it("applies the full migration set, then executes the generated import SQL with no missing-column/table errors", () => {
-    const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pkic-importer-fixture-"));
-    tmpDirs.push(fixtureRoot);
-    const membersDir = path.join(fixtureRoot, "members");
-    const csvDir = path.join(fixtureRoot, "csv");
-    fs.mkdirSync(membersDir);
-    fs.mkdirSync(csvDir);
+    const { fixtureRoot, membersDir, csvDir, sponsorsYamlPath } = createImporterFixture(tmpDirs);
 
     // Org-tied member: exercises organizations, organization_domain_claims, the
     // members aggregate + member_category_assignments, users,
@@ -120,18 +141,15 @@ memberType: H5
       "utf8",
     );
 
-    writeFixtureRosterCsv(path.join(csvDir, "pkic.csv"), [
+    writeFixtureRosters(csvDir, [
       ["alice@acme.example", "Alice", "x", "x", "x", "x", "2023", "01", "15", "10", "00", "00"],
     ]);
-    for (const wg of ["ca", "cbom", "cm", "pkimm", "pqc", "tcwg"]) {
-      writeFixtureRosterCsv(path.join(csvDir, `${wg}.csv`), []);
-    }
 
     const { sql, report } = buildMigration({
       uploadLogos: false,
       membersDir,
       csvDir,
-      sponsorsYamlPath: path.join(fixtureRoot, "sponsors-does-not-exist.yaml"),
+      sponsorsYamlPath,
     });
 
     expect(report.totals.matchedOrgs).toBe(1);
@@ -191,12 +209,7 @@ memberType: H5
   });
 
   it("rejects the entire import — no SQL generated at all — when any record has a missing or unknown category", () => {
-    const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pkic-importer-fixture-"));
-    tmpDirs.push(fixtureRoot);
-    const membersDir = path.join(fixtureRoot, "members");
-    const csvDir = path.join(fixtureRoot, "csv");
-    fs.mkdirSync(membersDir);
-    fs.mkdirSync(csvDir);
+    const { membersDir, csvDir, sponsorsYamlPath } = createImporterFixture(tmpDirs);
 
     // One perfectly valid org, one with no memberType at all — the whole
     // batch must be rejected, not just the bad record silently dropped or
@@ -208,28 +221,20 @@ memberType: H5
     );
     fs.writeFileSync(path.join(membersDir, "no-category.yaml"), `id: no-category\nname: No Category Inc\n`, "utf8");
 
-    writeFixtureRosterCsv(path.join(csvDir, "pkic.csv"), []);
-    for (const wg of ["ca", "cbom", "cm", "pkimm", "pqc", "tcwg"]) {
-      writeFixtureRosterCsv(path.join(csvDir, `${wg}.csv`), []);
-    }
+    writeFixtureRosters(csvDir, []);
 
     expect(() =>
       buildMigration({
         uploadLogos: false,
         membersDir,
         csvDir,
-        sponsorsYamlPath: path.join(fixtureRoot, "sponsors-does-not-exist.yaml"),
+        sponsorsYamlPath,
       }),
     ).toThrowError(/Category preflight failed: 1 record\(s\) rejected\. No SQL was generated\./);
   });
 
   it("is idempotent: running the generated SQL twice against the same D1 produces identical row counts and identities", () => {
-    const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pkic-importer-fixture-"));
-    tmpDirs.push(fixtureRoot);
-    const membersDir = path.join(fixtureRoot, "members");
-    const csvDir = path.join(fixtureRoot, "csv");
-    fs.mkdirSync(membersDir);
-    fs.mkdirSync(csvDir);
+    const { fixtureRoot, membersDir, csvDir, sponsorsYamlPath } = createImporterFixture(tmpDirs);
 
     // Org-tied member with two representatives (primary + secondary
     // contact roles), a consortium sponsorship, and an event sponsorship
@@ -262,22 +267,15 @@ sponsor:
     );
     fs.writeFileSync(path.join(membersDir, "bob.yaml"), `id: bob\nname: Bob Individual\nmemberType: H5\n`, "utf8");
 
-    writeFixtureRosterCsv(path.join(csvDir, "pkic.csv"), [
-      ["alice@acme.example", "Alice", "x", "x", "x", "x", "2023", "01", "15", "10", "00", "00"],
-      ["carol@acme.example", "Carol", "x", "x", "x", "x", "2023", "01", "16", "10", "00", "00"],
-    ]);
-    writeFixtureRosterCsv(path.join(csvDir, "ca.csv"), [
-      ["alice@acme.example", "Alice", "x", "x", "x", "x", "2023", "01", "15", "10", "00", "00"],
-    ]);
-    for (const wg of ["cbom", "cm", "pkimm", "pqc", "tcwg"]) {
-      writeFixtureRosterCsv(path.join(csvDir, `${wg}.csv`), []);
-    }
+    const alice = ["alice@acme.example", "Alice", "x", "x", "x", "x", "2023", "01", "15", "10", "00", "00"];
+    const carol = ["carol@acme.example", "Carol", "x", "x", "x", "x", "2023", "01", "16", "10", "00", "00"];
+    writeFixtureRosters(csvDir, [alice, carol], new Map([["ca", [alice]]]));
 
     const { sql } = buildMigration({
       uploadLogos: false,
       membersDir,
       csvDir,
-      sponsorsYamlPath: path.join(fixtureRoot, "sponsors-does-not-exist.yaml"),
+      sponsorsYamlPath,
     });
     const sqlFile = path.join(fixtureRoot, "import.sql");
     fs.writeFileSync(sqlFile, sql, "utf8");

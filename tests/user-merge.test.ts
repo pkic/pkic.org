@@ -28,6 +28,7 @@ import {
   REPRESENTATIVE_ROLE_IDS,
   resolveRepresentativeRoleHolder,
 } from "../functions/_lib/services/membership/representative-roles";
+import { addUserEmail, removeUserEmail } from "../functions/_lib/services/user-emails";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -133,6 +134,48 @@ describe("secondary emails + user merge", () => {
       emails: Array<{ id: string }>;
     };
     expect(afterRemove.emails).toHaveLength(0);
+    expect(
+      await queryAll<{ action: string }>(
+        env.DB,
+        "SELECT action FROM audit_log WHERE entity_id = ? AND action LIKE 'user_email_%' ORDER BY created_at, rowid",
+        userId,
+      ),
+    ).toEqual([{ action: "user_email_added" }, { action: "user_email_removed" }]);
+  });
+
+  it("rolls back secondary-email mutations when their audit cannot commit", async () => {
+    const userId = await insertUser("atomic-email@example.test");
+    const actor = { id: adminId, email: "admin@pkic.org", role: "admin" } as const;
+    await env.DB.prepare(
+      `CREATE TRIGGER reject_user_email_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action IN ('user_email_added', 'user_email_removed')
+       BEGIN
+         SELECT RAISE(ABORT, 'forced user email audit failure');
+       END`,
+    ).run();
+
+    await expect(addUserEmail(env.DB, actor, userId, "rollback-add@example.test")).rejects.toThrow(
+      "forced user email audit failure",
+    );
+    expect(await queryAll(env.DB, "SELECT id FROM user_emails WHERE user_id = ?", userId)).toHaveLength(0);
+
+    await env.DB.prepare("DROP TRIGGER reject_user_email_audit").run();
+    const added = await addUserEmail(env.DB, actor, userId, "rollback-remove@example.test");
+    await env.DB.prepare(
+      `CREATE TRIGGER reject_user_email_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'user_email_removed'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced user email audit failure');
+       END`,
+    ).run();
+    try {
+      await expect(removeUserEmail(env.DB, actor, userId, added.id)).rejects.toThrow("forced user email audit failure");
+      expect(await queryAll(env.DB, "SELECT id FROM user_emails WHERE id = ?", added.id)).toHaveLength(1);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER reject_user_email_audit").run();
+    }
   });
 
   it("rejects adding an email that already belongs to another user's primary or secondary address", async () => {

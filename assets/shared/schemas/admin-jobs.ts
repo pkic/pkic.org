@@ -1,4 +1,24 @@
 import { z } from "zod";
+import { successResponseSchema } from "./api-common";
+
+export const adminRunRemindersSchema = z.object({
+  limit: z.number().int().positive().max(500).default(200),
+  dryRun: z.boolean().default(false),
+});
+
+export const adminRunJobsSchema = z.object({
+  reminderLimit: z.number().int().positive().max(500).default(120),
+  outboxLimit: z.number().int().positive().max(500).default(120),
+  runReminders: z.boolean().default(true),
+  runRetention: z.boolean().default(true),
+  runOutbox: z.boolean().default(true),
+  runRetentionMode: z.enum(["always", "daily_window"]).default("always"),
+  retentionHourUtc: z.number().int().min(0).max(23).default(3),
+  dryRun: z.boolean().default(false),
+  runConsultationBatch: z.boolean().default(false),
+  runEcReviewBatch: z.boolean().default(false),
+  runWgChairDigest: z.boolean().default(false),
+});
 
 export const ADMIN_REMINDER_CATEGORIES = [
   "attendee_invite",
@@ -24,8 +44,7 @@ export const adminReminderPreviewRowSchema = z.object({
 const reminderRows = (category: (typeof ADMIN_REMINDER_CATEGORIES)[number]) =>
   z.array(adminReminderPreviewRowSchema.extend({ category: z.literal(category) }));
 
-export const adminJobsRunResponseSchema = z.object({
-  success: z.literal(true),
+export const adminJobsRunResponseSchema = successResponseSchema.extend({
   dryRun: z.boolean(),
   reminders: z.object({
     processed: z.number(),

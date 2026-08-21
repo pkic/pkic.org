@@ -19,5 +19,5 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
   });
   c.executionCtx.waitUntil(processBadgeRenderJobById(db, c.env, result.jobId));
-  return json({ success: true, status: "queued", ...result });
+  return json({ success: true, status: "queued", ...result }, 202);
 }

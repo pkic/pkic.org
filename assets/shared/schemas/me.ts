@@ -4,6 +4,7 @@
  * target-user path parameter.
  */
 import { z } from "zod";
+import { httpOrSameOriginUrlSchema } from "./urls";
 import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
 import { applicationStageSchema } from "./member-applications";
@@ -50,7 +51,7 @@ export const myProfileSchema = z.object({
   organizationName: z.string().nullable(),
   memberSince: z.string(),
   showOnOrgProfile: z.boolean(),
-  headshotUrl: z.string().nullable(),
+  headshotUrl: httpOrSameOriginUrlSchema.nullable(),
   canEditOrganizationName: z.boolean(),
   // Member portal (self-service coworker enrollment): true when this member
   // is their organization's primary or secondary contact. Always false for
@@ -123,7 +124,7 @@ export const myApplicationSummarySchema = z.object({
 });
 
 export const MY_APPLICATION_SORT_COLUMNS = ["createdAt", "stage"] as const;
-export const myApplicationsListQuerySchema = listQuerySchema(MY_APPLICATION_SORT_COLUMNS);
+export const myApplicationsListQuerySchema = listQuerySchema(MY_APPLICATION_SORT_COLUMNS, { limit: 25 });
 export const myApplicationsListResponseSchema = paginatedResponseSchema("applications", myApplicationSummarySchema);
 
 export const myApplicationsListRouteSchema = {

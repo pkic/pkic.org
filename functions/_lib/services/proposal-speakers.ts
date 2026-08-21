@@ -170,13 +170,30 @@ export async function updateProposalSpeakerRole(
   await db.batch(await buildUpdateProposalSpeakerRoleStatements(db, payload));
 }
 
+export function assertProposalSpeakerRoleTransition(input: {
+  currentProposerUserId: string;
+  speakerUserId: string;
+  nextRole: string;
+}): void {
+  const isCurrentProposer = input.currentProposerUserId === input.speakerUserId;
+  // Ownership and presentation role are separate concepts. The current
+  // owner may change their presentation role without changing ownership.
+  if (!isCurrentProposer && input.nextRole === "proposer") {
+    throw new AppError(
+      409,
+      "PROPOSER_TRANSFER_REQUIRED",
+      "Use the explicit proposer transfer operation before assigning the proposer role",
+    );
+  }
+}
+
 export async function buildUpdateProposalSpeakerRoleStatements(
   db: DatabaseLike,
   payload: { proposalId: string; userId: string; role: string },
 ): Promise<StatementLike[]> {
-  const proposal = await first<{ event_id: string; status: string }>(
+  const proposal = await first<{ event_id: string; status: string; proposer_user_id: string }>(
     db,
-    "SELECT event_id, status FROM session_proposals WHERE id = ?",
+    "SELECT event_id, status, proposer_user_id FROM session_proposals WHERE id = ?",
     [payload.proposalId],
   );
   if (!proposal) throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found");
@@ -186,6 +203,11 @@ export async function buildUpdateProposalSpeakerRoleStatements(
     [payload.proposalId, payload.userId],
   );
   if (!speaker) throw new AppError(404, "SPEAKER_NOT_FOUND", "Speaker not found on this proposal");
+  assertProposalSpeakerRoleTransition({
+    currentProposerUserId: proposal.proposer_user_id,
+    speakerUserId: payload.userId,
+    nextRole: payload.role,
+  });
 
   return [
     db

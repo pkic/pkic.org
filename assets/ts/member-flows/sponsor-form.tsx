@@ -10,17 +10,17 @@
  * form is portal-managed today), so this submits a fixed field set matching
  * sponsorshipInquirySchema — no generic custom-field rendering needed.
  */
-import { render } from "preact";
 import { postJson } from "../shared/api-client";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
 import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
 import { readField, findSubmitButton } from "../shared/form/helpers";
 import { SuccessPanel } from "../components/SuccessPanel";
+import { replaceFormWithSuccess } from "../shared/form/success-panel";
 import { sponsorshipInquirySchema } from "../../shared/schemas/sponsorship";
 
 const API_BASE = "/api/v1";
 
-/** Defaults a bare domain/path to https:// — mirrors the historic assets/js/form.js behaviour. */
+/** Defaults a bare domain/path to https:// — mirrors the historic assets/js/form.js behavior. */
 export function normalizeUrl(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) return trimmed;
@@ -55,19 +55,16 @@ export function buildSponsorshipPayload(form: HTMLFormElement): SponsorshipPaylo
 }
 
 function showSuccessPanel(root: HTMLElement, form: HTMLFormElement): void {
-  form.classList.add("d-none");
-  const container = document.createElement("div");
-  render(
+  replaceFormWithSuccess(
+    root,
+    form,
     <SuccessPanel icon="🤝" title="Thanks for your interest!">
       <p class="event-flow-success-body">
         We&rsquo;ve received your sponsorship interest and emailed you our sponsorship brochure. A member of our team
         will follow up with you shortly.
       </p>
     </SuccessPanel>,
-    container,
   );
-  root.appendChild(container);
-  requestAnimationFrame(() => container.scrollIntoView({ behavior: "smooth", block: "start" }));
 }
 
 async function main(): Promise<void> {

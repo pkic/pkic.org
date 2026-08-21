@@ -21,22 +21,11 @@ import type { MyOrganizationProfile, MyOrganizationReview, MyOrganizationSponsor
 import { linksToText, textToLinks } from "../../../shared/links-text";
 import { myOrganizationReviewsListRouteSchema } from "../../../../shared/schemas/me";
 import type { z } from "zod";
+import { uploadFile } from "../../../shared/file-upload";
+import { ORGANIZATION_CONTENT_FIELD_LABELS } from "../../../shared/organization-content";
 
 const myOrganizationReviewsResponseSchema =
   myOrganizationReviewsListRouteSchema.responses["200"].content["application/json"].schema;
-
-const FIELD_LABELS: Record<string, string> = {
-  slogan: "Slogan",
-  description: "Description",
-  contentMarkdown: "Long-form content",
-  website: "Website",
-  blogUrl: "Blog URL",
-  blogFeedUrl: "Blog feed URL",
-  pressUrl: "Press URL",
-  pressFeedUrl: "Press feed URL",
-  careersUrl: "Careers URL",
-  links: "Links",
-};
 
 const URL_FIELD_ORDER = ["website", "blogUrl", "blogFeedUrl", "pressUrl", "pressFeedUrl", "careersUrl"] as const;
 
@@ -60,16 +49,7 @@ function LogoUploader({ org, reload }: { org: MyOrganizationProfile; reload: () 
   async function upload(file: File): Promise<void> {
     setBusy(true);
     try {
-      const res = await fetch("/api/v1/me/organization/logo", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "content-type": file.type || "application/octet-stream" },
-        body: file,
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-        throw new Error(body.error?.message ?? `HTTP ${res.status}`);
-      }
+      await uploadFile("/api/v1/me/organization/logo", file, "Could not upload the organization logo.");
       toast("Logo submitted for review", "success");
       await reload();
     } catch (err) {
@@ -130,7 +110,7 @@ function OrganizationProfileCard({ org, reload }: { org: MyOrganizationProfile; 
               <dl class="row small mb-0">
                 {links.map((key) => (
                   <Fragment key={key}>
-                    <dt class="col-sm-3">{FIELD_LABELS[key]}</dt>
+                    <dt class="col-sm-3">{ORGANIZATION_CONTENT_FIELD_LABELS[key]}</dt>
                     <dd class="col-sm-9">
                       <a href={org[key] as string} target="_blank" rel="noreferrer">
                         {org[key]}
@@ -179,7 +159,7 @@ function PendingReviewBanner({
         <ul class="small mb-3">
           {fields.map(([field, value]) => (
             <li key={field}>
-              <strong>{FIELD_LABELS[field] ?? field}:</strong>{" "}
+              <strong>{ORGANIZATION_CONTENT_FIELD_LABELS[field] ?? field}:</strong>{" "}
               {value === null || value === "" || (Array.isArray(value) && value.length === 0) ? (
                 <em>(cleared)</em>
               ) : Array.isArray(value) ? (
@@ -295,7 +275,7 @@ function ContentEditForm({ org, reload }: { org: MyOrganizationProfile; reload: 
         </div>
         {URL_FIELD_ORDER.map((key) => (
           <div class="col-sm-6" key={key}>
-            <label class="form-label fw-semibold small">{FIELD_LABELS[key]}</label>
+            <label class="form-label fw-semibold small">{ORGANIZATION_CONTENT_FIELD_LABELS[key]}</label>
             <input
               type="url"
               class="form-control"
@@ -348,6 +328,7 @@ function ReviewHistoryCard() {
     "/api/v1/me/organization/reviews",
     { status: "history", sort: "-submittedAt" },
     myOrganizationReviewsResponseSchema,
+    (data) => data.reviews,
   );
   const reviews = history.data?.reviews ?? [];
 
@@ -417,19 +398,14 @@ function VotingDelegateSection({ org, reload }: { org: MyOrganizationProfile; re
         The member who casts your organization's ballot in forum votes. Defaults to the primary contact if unset.
       </p>
       {org.isOrgContact ? (
-        <select
-          class="form-select form-select-sm portal-category-select"
+        <RepresentativeSelect
+          className="portal-category-select"
           value={value}
           disabled={saving}
+          emptyLabel="Primary contact (default)"
+          representatives={reps}
           onChange={(e) => void handleChange((e.target as HTMLSelectElement).value)}
-        >
-          <option value="">Primary contact (default)</option>
-          {reps.map((r) => (
-            <option key={r.userId} value={r.userId}>
-              {r.name ?? r.email}
-            </option>
-          ))}
-        </select>
+        />
       ) : (
         <p class="mb-0">{current ? (current.name ?? current.email) : "Primary contact (default)"}</p>
       )}
@@ -469,19 +445,14 @@ function SecondaryContactSection({ org, reload }: { org: MyOrganizationProfile; 
         until confirmed by staff.
       </p>
       {org.isPrimaryContact ? (
-        <select
-          class="form-select form-select-sm portal-representative-select"
+        <RepresentativeSelect
+          className="portal-representative-select"
           value={value}
           disabled={saving}
+          emptyLabel="None"
+          representatives={reps}
           onChange={(e) => void handleChange((e.target as HTMLSelectElement).value)}
-        >
-          <option value="">None</option>
-          {reps.map((r) => (
-            <option key={r.userId} value={r.userId}>
-              {r.name ?? r.email}
-            </option>
-          ))}
-        </select>
+        />
       ) : (
         <p class="mb-0 small">
           {org.pendingSecondaryContactUserId
@@ -490,6 +461,33 @@ function SecondaryContactSection({ org, reload }: { org: MyOrganizationProfile; 
         </p>
       )}
     </div>
+  );
+}
+
+export function RepresentativeSelect({
+  className,
+  value,
+  disabled,
+  emptyLabel,
+  representatives,
+  onChange,
+}: {
+  className: string;
+  value: string;
+  disabled: boolean;
+  emptyLabel: string;
+  representatives: Array<{ userId: string; name: string | null; email: string }>;
+  onChange: (event: Event) => void;
+}) {
+  return (
+    <select class={`form-select form-select-sm ${className}`} value={value} disabled={disabled} onChange={onChange}>
+      <option value="">{emptyLabel}</option>
+      {representatives.map((representative) => (
+        <option key={representative.userId} value={representative.userId}>
+          {representative.name ?? representative.email}
+        </option>
+      ))}
+    </select>
   );
 }
 

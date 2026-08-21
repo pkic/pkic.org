@@ -14,7 +14,7 @@ export const ApplicationsList = openApiRoute(adminApplicationsListRouteSchema, a
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "membership:read");
 
-  const { stage, q, sort, limit = 50, offset = 0 } = data.query;
+  const { stage, q, sort, limit, offset } = data.query;
 
   const { applications, total } = await listAdminApplications(requestDb(c), { limit, offset, stage, q, sort });
   return json({ applications, page: buildPageInfo(limit, offset, total, applications.length) });

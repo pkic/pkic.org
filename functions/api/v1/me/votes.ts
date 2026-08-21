@@ -14,7 +14,7 @@ import { openApiRoute } from "../../../_lib/openapi/route";
 export const MeVotesGet = openApiRoute(myVotesListRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
   const member = await requireMemberFromRequest(db, c.req.raw, c.env);
-  const { limit = 50, offset = 0, q, sort } = data.query;
+  const { limit, offset, q, sort } = data.query;
   const { votes, total } = await listMyVoteHistory(db, member, { limit, offset, q, sort });
   return json({ votes, page: buildPageInfo(limit, offset, total, votes.length) });
 });

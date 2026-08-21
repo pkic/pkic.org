@@ -277,10 +277,12 @@ test.describe("Admin browser-verification pass", () => {
     // holders read-only). Assign the seeded admin as chair — a real user
     // row, no separate fixture needed for the UserPicker search.
     await page.goto("/admin/#/leadership");
-    const wgBlock = page.locator("div.border.rounded").filter({ hasText: wgName });
-    await expect(wgBlock).toBeVisible();
+    // Leadership is a server-paginated table now. Keep this locator tied to
+    // the row's semantic structure rather than the former card wrapper.
+    const wgRow = page.locator("tbody tr").filter({ hasText: wgName });
+    await expect(wgRow).toBeVisible();
 
-    const chairSlot = wgBlock
+    const chairSlot = wgRow
       .locator("div.d-flex.align-items-center.gap-2.flex-wrap")
       .filter({ has: page.getByText("Chair", { exact: true }) });
     const chairPicker = chairSlot.getByPlaceholder("Search by email or name…");

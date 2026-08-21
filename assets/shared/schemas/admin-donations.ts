@@ -35,14 +35,21 @@ export const adminDonationSummarySchema = z.object({
   completed_at: z.string().nullable(),
 });
 
-export const donationsListQuerySchema = listQuerySchema(ADMIN_DONATIONS_SORT_COLUMNS).extend({
+export const donationsListQuerySchema = listQuerySchema(ADMIN_DONATIONS_SORT_COLUMNS, { limit: 100 }).extend({
   status: donationStatusSchema.optional(),
 });
 
+export const adminDonationListSummarySchema = z.object({
+  byStatus: z.partialRecord(donationStatusSchema, z.number().int().nonnegative()),
+  backfillable: z.number().int().nonnegative(),
+  syncable: z.number().int().nonnegative(),
+});
+
 export const donationsListResponseSchema = paginatedResponseSchema("donations", adminDonationSummarySchema).extend({
-  summary: z.record(z.string(), z.number()),
+  summary: adminDonationListSummarySchema,
 });
 export type DonationsListResponse = z.infer<typeof donationsListResponseSchema>;
+export type AdminDonationListSummary = z.infer<typeof adminDonationListSummarySchema>;
 
 export const donationSyncResultSchema = z.object({
   sessionId: z.string(),
@@ -95,8 +102,8 @@ export const donationsListRouteSchema = {
   tags: ["Donations"],
   summary: "List donations (admin)",
   description:
-    "Paginated, optionally status-filtered list of donations. `summary` is a status-count breakdown across every " +
-    "donation regardless of the `status` filter (used to render tab/badge counts alongside the filtered list).",
+    "Paginated, optionally status-filtered list of donations. `summary` contains status and reconciliation counts " +
+    "computed across every donation regardless of the current filter or page.",
   request: { query: donationsListQuerySchema },
   responses: {
     "200": {

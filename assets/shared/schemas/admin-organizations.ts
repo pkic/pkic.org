@@ -13,6 +13,7 @@ import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { normalizedEmailSchema, trimmedString } from "./api-common";
 import { linksSchema } from "./links";
+import { logoUploadResponseSchema } from "./images";
 import {
   contentReviewStatusSchema,
   organizationContentReviewSchema,
@@ -97,6 +98,10 @@ export type AdminOrganizationDetail = z.infer<typeof adminOrganizationDetailSche
 export const ADMIN_ORGANIZATIONS_SORT_COLUMNS = ["name", "membership_category", "created_at", "member_count"] as const;
 
 export const organizationsListQuerySchema = listQuerySchema(ADMIN_ORGANIZATIONS_SORT_COLUMNS);
+export const adminOrganizationsListResponseSchema = paginatedResponseSchema(
+  "organizations",
+  adminOrganizationSummarySchema,
+);
 
 export const organizationsListRouteSchema = {
   tags: ["Organizations"],
@@ -107,7 +112,7 @@ export const organizationsListRouteSchema = {
     "200": {
       description: "Organizations list.",
       content: {
-        "application/json": { schema: paginatedResponseSchema("organizations", adminOrganizationSummarySchema) },
+        "application/json": { schema: adminOrganizationsListResponseSchema },
       },
     },
   },
@@ -240,7 +245,7 @@ export const adminOrganizationLogoPutRouteSchema = {
       description: "Logo uploaded.",
       content: {
         "application/json": {
-          schema: z.object({ success: z.boolean(), r2Key: z.string(), logoUrl: z.string() }),
+          schema: logoUploadResponseSchema,
         },
       },
     },
@@ -314,6 +319,7 @@ export const ADMIN_CONTENT_REVIEW_SORT_COLUMNS = [
 export const contentReviewsListQuerySchema = listQuerySchema(ADMIN_CONTENT_REVIEW_SORT_COLUMNS).extend({
   status: contentReviewStatusSchema.optional(),
 });
+export const contentReviewsListResponseSchema = paginatedResponseSchema("reviews", contentReviewSummarySchema);
 
 export const contentReviewsListRouteSchema = {
   tags: ["Organizations"],
@@ -324,7 +330,7 @@ export const contentReviewsListRouteSchema = {
     "200": {
       description: "Reviews list.",
       content: {
-        "application/json": { schema: paginatedResponseSchema("reviews", contentReviewSummarySchema) },
+        "application/json": { schema: contentReviewsListResponseSchema },
       },
     },
   },

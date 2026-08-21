@@ -26,7 +26,7 @@ export const SponsorshipsList = openApiRoute(sponsorshipsListRouteSchema, async 
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
   requirePermission(admin, "sponsorships:read");
 
-  const { type, stage, tier, q, sort, limit = 50, offset = 0 } = data.query;
+  const { type, stage, tier, q, sort, limit, offset } = data.query;
 
   const { sponsorships, total } = await listAdminSponsorships(db, { type, stage, tier, q, sort, limit, offset });
   return json({

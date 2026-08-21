@@ -16,7 +16,7 @@ export const AdminVoteProposalsGet = openApiRoute(adminListProposalsRouteSchema,
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
   requirePermission(admin, "votes:manage");
 
-  const { status, q, sort, limit = 50, offset = 0 } = data.query;
+  const { status, q, sort, limit, offset } = data.query;
   const { proposals, total } = await listAllVoteProposalsForAdmin(db, { status, q, sort, limit, offset });
   return json({ proposals, page: buildPageInfo(limit, offset, total, proposals.length) });
 });

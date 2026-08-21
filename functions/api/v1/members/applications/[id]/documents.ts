@@ -17,7 +17,6 @@ import {
   listApplicationDocuments,
   recordApplicationDocument,
 } from "../../../../../_lib/services/membership/applications/queries";
-import { writeAuditLog } from "../../../../../_lib/services/audit";
 import {
   applicationDocumentListRouteSchema,
   applicationDocumentUploadRouteSchema,
@@ -90,12 +89,6 @@ export async function onRequestPost(c: any): Promise<Response> {
     filename: safeName,
     mimeType,
     fileSizeBytes: blob.size,
-  });
-
-  await writeAuditLog(c.env.DB, "public", null, "application_document_uploaded", "member_application", application.id, {
-    filename: safeName,
-    fileSize: blob.size,
-    mimeType,
   });
 
   return json(

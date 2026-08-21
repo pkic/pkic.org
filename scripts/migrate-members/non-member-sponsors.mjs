@@ -10,8 +10,11 @@ import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
 import { urlizeName } from "./parsers.mjs";
-import { buildNonMemberConsortiumSponsorshipStatement, buildNonMemberEventSponsorshipStatements } from "./sql-renderer.mjs";
-import { EVENT_NAME_ALIASES } from "./constants.mjs";
+import {
+  buildNonMemberConsortiumSponsorshipStatement,
+  buildNonMemberEventSponsorshipStatements,
+} from "./sql-renderer.mjs";
+import { forEachResolvedEventSponsorship } from "./sponsorships.mjs";
 
 export function processNonMemberSponsors(ctx, { sponsorsYamlPath, sponsorLogoDir }) {
   if (!fs.existsSync(sponsorsYamlPath)) return;
@@ -39,19 +42,14 @@ export function processNonMemberSponsors(ctx, { sponsorsYamlPath, sponsorLogoDir
       ctx.report.nonMemberSponsorships.created += 1;
     }
 
-    const sponsoring = sponsor.sponsoring;
-    if (sponsoring && typeof sponsoring === "object") {
-      for (const [eventName, eventSponsor] of Object.entries(sponsoring)) {
-        const tier = String(eventSponsor?.level ?? "").trim();
-        if (!tier) continue;
-        const alias = EVENT_NAME_ALIASES[eventName];
-        if (!alias) {
-          ctx.report.nonMemberSponsorships.unmatchedEvents.push({ name: sponsorName, eventName, tier });
-          continue;
-        }
+    forEachResolvedEventSponsorship(sponsor.sponsoring, {
+      onResolved: ({ alias, tier }) => {
         ctx.statements.push(...buildNonMemberEventSponsorshipStatements(sponsorName, website, logoR2Key, alias, tier));
         ctx.report.nonMemberSponsorships.created += 1;
-      }
-    }
+      },
+      onUnmatched: ({ eventName, tier }) => {
+        ctx.report.nonMemberSponsorships.unmatchedEvents.push({ name: sponsorName, eventName, tier });
+      },
+    });
   }
 }

@@ -2,29 +2,22 @@ import { useCallback, useEffect, useState } from "preact/hooks";
 import { Spinner } from "../../../components/Spinner";
 import { api } from "../../api";
 import { fmt, toast } from "../../ui";
-import type { Role, UserRoleAssignment } from "../../types";
+import type { UserRoleAssignment } from "../../types";
 import { UserPicker, type PickedUser } from "./UserPicker";
 import { ContextPicker, type PickedContext } from "./ContextPicker";
+import { adminRoleCatalog } from "../../services/catalogs";
+import { ServerSearchSelect } from "../../components/ServerSearchSelect";
 
 /** Staff management: assign built-in roles, override individual permissions. */
 export function UserRoles() {
   const [user, setUser] = useState<PickedUser | null>(null);
   const [assignments, setAssignments] = useState<UserRoleAssignment[]>([]);
   const [loading, setLoading] = useState(false);
-  const [roles, setRoles] = useState<Role[]>([]);
   const [roleId, setRoleId] = useState("");
+  const [roleLabel, setRoleLabel] = useState<string>();
   const [context, setContext] = useState<PickedContext>({ contextType: null, contextId: null });
   const [expiresAt, setExpiresAt] = useState("");
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    api<{ roles: Role[] }>("/api/v1/admin/roles")
-      .then((d) => {
-        setRoles(d.roles);
-        if (d.roles.length) setRoleId(d.roles[0].id);
-      })
-      .catch(() => {});
-  }, []);
 
   const loadAssignments = useCallback(async (userId: string) => {
     setLoading(true);
@@ -99,19 +92,19 @@ export function UserRoles() {
           <>
             <form onSubmit={handleAssign} class="row g-2 align-items-end mb-3">
               <div class="col-md-3">
-                <label class="form-label small fw-semibold">Role</label>
-                <select
-                  class="form-select form-select-sm"
+                <ServerSearchSelect
+                  catalog={adminRoleCatalog}
+                  label="Role"
                   value={roleId}
-                  onChange={(e) => setRoleId((e.target as HTMLSelectElement).value)}
+                  selectedLabel={roleLabel}
                   disabled={submitting}
-                >
-                  {roles.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
+                  allowEmpty={false}
+                  autoSelectFirst
+                  onChange={(role) => {
+                    setRoleId(role?.id ?? "");
+                    setRoleLabel(role?.name);
+                  }}
+                />
               </div>
               <div class="col-md-5">
                 <label class="form-label small fw-semibold">Context</label>

@@ -63,7 +63,7 @@ export async function confirmSpeakerParticipation(
     throw new AppError(
       409,
       "SPEAKER_ALREADY_DECLINED",
-      "You have already declined participation. Please contact the organiser if you changed your mind.",
+      "You have already declined participation. Please contact the organizer if you changed your mind.",
     );
   }
   const requiredTerms = await getRequiredTerms(db, proposal.event_id, "speaker");

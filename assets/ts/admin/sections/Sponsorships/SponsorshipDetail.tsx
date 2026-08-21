@@ -1,16 +1,17 @@
-import { useState, useEffect, useCallback } from "preact/hooks";
+import { useState, useEffect, useCallback, useRef } from "preact/hooks";
 import { Spinner } from "../../../components/Spinner";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { api } from "../../api";
-import { toast, fmt } from "../../ui";
+import { fmt } from "../../ui";
 import { SPONSORSHIP_PIPELINE_STAGES } from "../../types";
 import type { Sponsorship, SponsorshipEvent, SponsorshipPipelineStage } from "../../types";
 import { stageBadgeClass, stageLabel } from "./shared";
 import { SponsorshipLogo } from "./SponsorshipLogo";
+import { performAdminAction } from "../../actions";
+import { useSponsorshipEventHistory } from "./useSponsorshipEventHistory";
 
 export function SponsorshipDetail({ id, onChanged }: { id: string; onChanged: () => void }) {
   const [sponsorship, setSponsorship] = useState<Sponsorship | null>(null);
-  const [events, setEvents] = useState<SponsorshipEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
@@ -19,68 +20,69 @@ export function SponsorshipDetail({ id, onChanged }: { id: string; onChanged: ()
   const [nextStage, setNextStage] = useState<SponsorshipPipelineStage>("contacted");
   const [stageNote, setStageNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const detailRequestIdRef = useRef(0);
+  const history = useSponsorshipEventHistory(id);
 
   const load = useCallback(async () => {
+    const requestId = ++detailRequestIdRef.current;
     setLoading(true);
     setError(null);
     try {
-      const [detailData, eventsData] = await Promise.all([
-        api<{ sponsorship: Sponsorship }>(`/api/v1/admin/sponsorships/${id}`),
-        api<{ events: SponsorshipEvent[] }>(`/api/v1/admin/sponsorships/${id}/events`),
-      ]);
+      const detailData = await api<{ sponsorship: Sponsorship }>(`/api/v1/admin/sponsorships/${id}`);
+      if (requestId !== detailRequestIdRef.current) return;
       setSponsorship(detailData.sponsorship);
-      setEvents(eventsData.events);
       setNotes(detailData.sponsorship.notes ?? "");
       setRenewalDate(detailData.sponsorship.renewalDate ?? "");
       setAssignedToUserId(detailData.sponsorship.assignedToUserId ?? "");
     } catch (e) {
-      setError((e as Error).message);
+      if (requestId === detailRequestIdRef.current) setError((e as Error).message);
     } finally {
-      setLoading(false);
+      if (requestId === detailRequestIdRef.current) setLoading(false);
     }
   }, [id]);
 
   useEffect(() => {
     void load();
+    return () => {
+      detailRequestIdRef.current += 1;
+    };
   }, [load]);
 
   async function saveFields() {
-    setBusy(true);
-    try {
-      await api(`/api/v1/admin/sponsorships/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          notes: notes.trim() || null,
-          renewalDate: renewalDate.trim() || null,
-          assignedToUserId: assignedToUserId.trim() || null,
+    await performAdminAction({
+      setBusy,
+      request: () =>
+        api(`/api/v1/admin/sponsorships/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            notes: notes.trim() || null,
+            renewalDate: renewalDate.trim() || null,
+            assignedToUserId: assignedToUserId.trim() || null,
+          }),
         }),
-      });
-      toast("Saved", "success");
-      await load();
-      onChanged();
-    } catch (e) {
-      toast((e as Error).message, "error");
-    } finally {
-      setBusy(false);
-    }
+      successMessage: "Saved",
+      afterSuccess: async () => {
+        await load();
+        onChanged();
+      },
+    });
   }
 
   async function advanceStage() {
-    setBusy(true);
-    try {
-      await api(`/api/v1/admin/sponsorships/${id}/stage`, {
-        method: "PATCH",
-        body: JSON.stringify({ toStage: nextStage, note: stageNote.trim() || null }),
-      });
-      toast(`Stage advanced to ${stageLabel(nextStage)}`, "success");
-      setStageNote("");
-      await load();
-      onChanged();
-    } catch (e) {
-      toast((e as Error).message, "error");
-    } finally {
-      setBusy(false);
-    }
+    await performAdminAction({
+      setBusy,
+      request: () =>
+        api(`/api/v1/admin/sponsorships/${id}/stage`, {
+          method: "PATCH",
+          body: JSON.stringify({ toStage: nextStage, note: stageNote.trim() || null }),
+        }),
+      successMessage: `Stage advanced to ${stageLabel(nextStage)}`,
+      afterSuccess: async () => {
+        setStageNote("");
+        await Promise.all([load(), history.reload()]);
+        onChanged();
+      },
+    });
   }
 
   if (loading) return <Spinner />;
@@ -177,18 +179,53 @@ export function SponsorshipDetail({ id, onChanged }: { id: string; onChanged: ()
           </div>
         </div>
 
-        <h6 class="small text-uppercase text-muted mb-2">Pipeline history</h6>
-        <ul class="list-unstyled small mb-0">
-          {events.map((ev) => (
-            <li key={ev.id} class="mb-1">
-              <span class="text-muted">{fmt(ev.createdAt)}</span> —{" "}
-              {ev.fromStage ? `${stageLabel(ev.fromStage)} → ` : ""}
-              <strong>{stageLabel(ev.toStage)}</strong>
-              {ev.actorName && <span class="text-muted"> by {ev.actorName}</span>}
-              {ev.note && <div class="text-muted fst-italic">{ev.note}</div>}
-            </li>
-          ))}
-        </ul>
+        <section
+          aria-labelledby={`sponsorship-history-heading-${id}`}
+          aria-busy={history.loading || history.loadingMore}
+        >
+          <h6 id={`sponsorship-history-heading-${id}`} class="small text-uppercase text-muted mb-2">
+            Pipeline history
+          </h6>
+          <div class="visually-hidden" aria-live="polite">
+            {history.announcement}
+          </div>
+          {history.loading && <Spinner />}
+          {history.error && (
+            <div class="alert alert-danger" role="alert">
+              <span>{history.error}</span>{" "}
+              <button type="button" class="btn btn-link btn-sm p-0 align-baseline" onClick={history.retry}>
+                Retry history
+              </button>
+            </div>
+          )}
+          {!history.loading && history.events.length === 0 && !history.error && (
+            <p class="small text-muted mb-0">No pipeline history has been recorded.</p>
+          )}
+          <ol id={`sponsorship-history-${id}`} class="list-unstyled small mb-0">
+            {history.events.map((ev: SponsorshipEvent) => (
+              <li key={ev.id} class="mb-1">
+                <time class="text-muted" dateTime={ev.createdAt}>
+                  {fmt(ev.createdAt)}
+                </time>{" "}
+                — {ev.fromStage ? `${stageLabel(ev.fromStage)} → ` : ""}
+                <strong>{stageLabel(ev.toStage)}</strong>
+                {ev.actorName && <span class="text-muted"> by {ev.actorName}</span>}
+                {ev.note && <div class="text-muted fst-italic">{ev.note}</div>}
+              </li>
+            ))}
+          </ol>
+          {history.page?.hasMore && !history.error && (
+            <button
+              type="button"
+              class="btn btn-outline-secondary btn-sm mt-2"
+              aria-controls={`sponsorship-history-${id}`}
+              disabled={history.loadingMore}
+              onClick={history.loadMore}
+            >
+              {history.loadingMore ? "Loading…" : "Load older history"}
+            </button>
+          )}
+        </section>
       </div>
     </div>
   );

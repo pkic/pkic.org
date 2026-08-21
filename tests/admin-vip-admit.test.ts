@@ -79,7 +79,7 @@ describe("admin VIP admit", () => {
   beforeEach(async () => {
     await resetDb();
   });
-  it("admits waitlisted day attendance as capacity exempt and logs audit", async () => {
+  it("admits only the selected waitlisted day beyond capacity and logs audit", async () => {
     const { adminToken, registrationId } = await seedWaitlistedVipScenario();
 
     const before = (
@@ -120,17 +120,21 @@ describe("admin VIP admit", () => {
       )
     )[0];
 
-    expect(registration.capacity_exempt_in_person).toBe(1);
-    expect(registration.capacity_exempt_reason).toContain("vip:");
+    expect(registration.capacity_exempt_in_person).toBe(0);
+    expect(registration.capacity_exempt_reason).toBeNull();
 
     const waitlist = (
-      await queryAll<{ status: string }>(
+      await queryAll<{ status: string; reason_code: string; reason_note: string }>(
         env.DB,
-        "SELECT status FROM event_day_waitlist_entries WHERE registration_id = ? AND event_day_id = 'day-1'",
+        "SELECT status, reason_code, reason_note FROM event_day_waitlist_entries WHERE registration_id = ? AND event_day_id = 'day-1'",
         [registrationId],
       )
     )[0];
-    expect(waitlist.status).toBe("removed");
+    expect(waitlist).toEqual({
+      status: "accepted",
+      reason_code: "admin_capacity_exempt",
+      reason_note: "vip:Key sponsor guest",
+    });
 
     const audit = (
       await queryAll<{ total: number }>(

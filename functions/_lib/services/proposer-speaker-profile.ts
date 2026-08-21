@@ -1,4 +1,5 @@
 import { parseLinksJson, serializeLinks } from "../../../assets/shared/schemas/links";
+import { isProposalSpeakerRosterEditableStatus } from "../../../assets/shared/schemas/proposal-status";
 import { first } from "../db/queries";
 import { AppError } from "../errors";
 import type { DatabaseLike, StatementLike } from "../types";
@@ -48,7 +49,7 @@ export async function getProposerManagedSpeakerContext(
     [proposal.id, userId],
   );
   if (!speaker) throw new AppError(404, "SPEAKER_NOT_FOUND", "Speaker not found on this proposal");
-  if (proposal.status === "withdrawn" || proposal.status === "rejected") {
+  if (!isProposalSpeakerRosterEditableStatus(proposal.status)) {
     throw new AppError(400, "PROPOSAL_CLOSED", "Cannot update speakers on a closed proposal");
   }
   return { proposal, speaker };

@@ -1,14 +1,15 @@
 import { z } from "zod";
+import { booleanQueryFlagSchema } from "./api-common";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 export const ADMIN_DUE_WORK_SORT_COLUMNS = ["dueAt", "title", "typeLabel"] as const;
 export const adminDueWorkBucketSchema = z.enum(["all", "outbox", "reminders", "cleanup"]);
 
-export const adminDueWorkListQuerySchema = listQuerySchema(ADMIN_DUE_WORK_SORT_COLUMNS).extend({
-  bucket: adminDueWorkBucketSchema.optional(),
-  includeRetention: z.coerce.boolean().optional(),
-  reminderLimit: z.coerce.number().int().min(1).max(500).optional(),
-  outboxLimit: z.coerce.number().int().min(1).max(500).optional(),
+export const adminDueWorkListQuerySchema = listQuerySchema(ADMIN_DUE_WORK_SORT_COLUMNS, { limit: 25 }).extend({
+  bucket: adminDueWorkBucketSchema.default("all"),
+  includeRetention: booleanQueryFlagSchema.default(false),
+  reminderLimit: z.coerce.number().int().min(1).max(500).default(120),
+  outboxLimit: z.coerce.number().int().min(1).max(500).default(120),
 });
 
 export const adminDueWorkRowSchema = z.object({

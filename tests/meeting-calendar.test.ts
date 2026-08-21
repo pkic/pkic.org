@@ -17,13 +17,16 @@ import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createApplicationFormSubmission, seedMemberApplication } from "./helpers/member-applications";
 import {
   resolveWgJoinCalendarInviteByMailingListEmail,
+  queueAnnualResend,
   uploadIcsFile,
   deleteIcsFile,
   deleteMeetingSeries,
+  updateMeetingSeries,
 } from "../functions/_lib/services/meeting-calendar";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { isIndividualMembershipCategory } from "../assets/shared/schemas/membership-categories";
 import { insertOrganization, seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
+import { processPendingStorageDeletions } from "../functions/_lib/services/storage-deletion-outbox";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -314,7 +317,99 @@ describe("Meeting calendar management", () => {
     expect(listed.objects).toHaveLength(0);
   });
 
-  it("delete atomicity (PR #1 review §9.2): an R2 delete failure leaves the D1 row intact so a retry can finish safely", async () => {
+  it("retains a durable ICS upload cleanup intent when immediate R2 compensation also fails", async () => {
+    const wgId = await insertWorkingGroup("PQC Durable Orphan", "pqc-durable-orphan");
+    const seriesId = await insertMeetingSeries("working_group", "PQC WG Meeting", wgId);
+    let storedKey: string | null = null;
+    const failingCleanupBucket = {
+      put: async (key: string, value: ArrayBuffer, options: R2PutOptions) => {
+        storedKey = key;
+        return env.ASSETS_BUCKET!.put(key, value, options);
+      },
+      delete: () => {
+        throw new Error("simulated cleanup outage");
+      },
+    } as unknown as R2Bucket;
+
+    await expect(
+      uploadIcsFile(
+        env.DB,
+        failingCleanupBucket,
+        seriesId,
+        { scopeType: "working_group", workingGroupId: wgId },
+        {
+          label: "09:00 CET",
+          year: 2026,
+          buffer: new TextEncoder().encode("BEGIN:VCALENDAR\nEND:VCALENDAR").buffer,
+          contentType: "text/calendar",
+          uploadedByUserId: "00000000-0000-4000-8000-000000000000",
+        },
+      ),
+    ).rejects.toThrow();
+
+    expect(storedKey).toBeTruthy();
+    expect(await env.ASSETS_BUCKET!.get(storedKey!)).toBeTruthy();
+    expect(
+      await queryAll(env.DB, "SELECT object_key, status FROM storage_deletion_outbox WHERE object_key = ?", storedKey!),
+    ).toEqual([{ object_key: storedKey, status: "queued" }]);
+
+    await env.DB.prepare("UPDATE storage_deletion_outbox SET next_attempt_at = datetime('now') WHERE object_key = ?")
+      .bind(storedKey)
+      .run();
+    await processPendingStorageDeletions(env.DB, env, 10);
+    expect(await env.ASSETS_BUCKET!.get(storedKey!)).toBeNull();
+  });
+
+  it("rolls back meeting mutations and deletion intents when their audit cannot commit", async () => {
+    const wgId = await insertWorkingGroup("PQC Audit Rollback", "pqc-audit-rollback");
+    const seriesId = await insertMeetingSeries("working_group", "Original meeting", wgId);
+    const fileId = await insertIcsFile(seriesId, "09:00 CET", 2026, "meeting-ics/audit-rollback.ics");
+    await env.DB.prepare(
+      `CREATE TRIGGER reject_meeting_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action IN ('meeting_series_updated', 'meeting_ics_file_deleted')
+       BEGIN
+         SELECT RAISE(ABORT, 'forced meeting audit failure');
+       END`,
+    ).run();
+
+    try {
+      await expect(
+        updateMeetingSeries(
+          env.DB,
+          seriesId,
+          { scopeType: "working_group", workingGroupId: wgId },
+          { name: "Must roll back" },
+          "audit-actor",
+        ),
+      ).rejects.toThrow("forced meeting audit failure");
+      expect(await queryAll(env.DB, "SELECT name FROM meeting_series WHERE id = ?", seriesId)).toEqual([
+        { name: "Original meeting" },
+      ]);
+
+      await expect(
+        deleteIcsFile(
+          env.DB,
+          undefined,
+          seriesId,
+          fileId,
+          { scopeType: "working_group", workingGroupId: wgId },
+          "audit-actor",
+        ),
+      ).rejects.toThrow("forced meeting audit failure");
+      expect(await queryAll(env.DB, "SELECT id FROM meeting_ics_files WHERE id = ?", fileId)).toHaveLength(1);
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT id FROM storage_deletion_outbox WHERE object_key = 'meeting-ics/audit-rollback.ics'",
+        ),
+      ).toHaveLength(0);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER reject_meeting_audit").run();
+    }
+  });
+
+  it("commits an ICS delete and audit atomically while retaining a durable R2 retry after an outage", async () => {
     const wgId = await insertWorkingGroup("PQC Retry", "pqc-retry");
     const seriesId = await insertMeetingSeries("working_group", "PQC WG Meeting", wgId);
     const fileId = await insertIcsFile(seriesId, "09:00 CET", 2026, "meeting-ics/retry.ics");
@@ -328,25 +423,26 @@ describe("Meeting calendar management", () => {
 
     await expect(
       deleteIcsFile(env.DB, failingBucket, seriesId, fileId, { scopeType: "working_group", workingGroupId: wgId }),
-    ).rejects.toThrow("simulated R2 outage");
+    ).resolves.toEqual({ r2Key: "meeting-ics/retry.ics" });
 
-    // The D1 row must still exist — a retry (with a healthy bucket) can find
-    // it and finish the delete. The pre-fix ordering deleted the D1 row
-    // first, which would have left this object unreachable by any retry.
-    const stillThere = await queryAll(env.DB, "SELECT id FROM meeting_ics_files WHERE id = ?", fileId);
-    expect(stillThere).toHaveLength(1);
-    expect(await env.ASSETS_BUCKET!.get("meeting-ics/retry.ics")).toBeTruthy();
-
-    const { r2Key } = await deleteIcsFile(env.DB, env.ASSETS_BUCKET!, seriesId, fileId, {
-      scopeType: "working_group",
-      workingGroupId: wgId,
-    });
-    expect(r2Key).toBe("meeting-ics/retry.ics");
     expect(await queryAll(env.DB, "SELECT id FROM meeting_ics_files WHERE id = ?", fileId)).toHaveLength(0);
+    expect(await env.ASSETS_BUCKET!.get("meeting-ics/retry.ics")).toBeTruthy();
+    expect(
+      await queryAll<{ status: string }>(
+        env.DB,
+        "SELECT status FROM storage_deletion_outbox WHERE bucket = 'assets' AND object_key = ?",
+        "meeting-ics/retry.ics",
+      ),
+    ).toEqual([{ status: "retrying" }]);
+
+    await env.DB.prepare("UPDATE storage_deletion_outbox SET next_attempt_at = datetime('now') WHERE object_key = ?")
+      .bind("meeting-ics/retry.ics")
+      .run();
+    await processPendingStorageDeletions(env.DB, env, 10);
     expect(await env.ASSETS_BUCKET!.get("meeting-ics/retry.ics")).toBeNull();
   });
 
-  it("cascading series delete atomicity (P9-R01, same pattern as PR #1 review §9.2): an R2 delete failure for any file in the series leaves every D1 row intact so the whole delete can be retried safely", async () => {
+  it("commits a cascading series delete once and durably retries each failed R2 object", async () => {
     const wgId = await insertWorkingGroup("PQC Series Retry", "pqc-series-retry");
     const seriesId = await insertMeetingSeries("working_group", "PQC WG Meeting", wgId);
     const fileId1 = await insertIcsFile(seriesId, "09:00 CET", 2026, "meeting-ics/series-retry-1.ics");
@@ -363,43 +459,27 @@ describe("Meeting calendar management", () => {
     // across a *set* of objects rather than deleteIcsFile's single object.
     let calls = 0;
     const failingBucket = {
-      delete: () => {
+      delete: (key: string) => {
         calls += 1;
         if (calls > 1) throw new Error("simulated R2 outage");
-        return Promise.resolve();
+        return env.ASSETS_BUCKET!.delete(key);
       },
     } as unknown as R2Bucket;
 
     await expect(
       deleteMeetingSeries(env.DB, failingBucket, seriesId, { scopeType: "working_group", workingGroupId: wgId }),
-    ).rejects.toThrow("simulated R2 outage");
-
-    // Because R2 objects are deleted BEFORE any D1 row in this cascade, a
-    // failure partway through must leave every D1 row untouched — the
-    // series, both ICS file rows, and the member preference — so a retry
-    // can find the still-live rows and finish the job. The old D1-first
-    // ordering deleted all `meeting_ics_files` rows up front and let a
-    // partial R2 failure orphan whichever objects it missed, since no row
-    // would reference them again afterward.
-    expect(await queryAll(env.DB, "SELECT id FROM meeting_series WHERE id = ?", seriesId)).toHaveLength(1);
-    expect(await queryAll(env.DB, "SELECT id FROM meeting_ics_files WHERE series_id = ?", seriesId)).toHaveLength(2);
-    expect(
-      await queryAll(env.DB, "SELECT id FROM member_meeting_preferences WHERE series_id = ?", seriesId),
-    ).toHaveLength(1);
-
-    // Retry with a healthy bucket: the whole cascade — both real R2
-    // objects and every D1 row — finishes cleanly, proving the retry is
-    // safe (R2Bucket#delete on an already-missing key is a no-op).
-    const { deletedIcsFileR2Keys } = await deleteMeetingSeries(env.DB, env.ASSETS_BUCKET!, seriesId, {
-      scopeType: "working_group",
-      workingGroupId: wgId,
+    ).resolves.toEqual({
+      deletedIcsFileR2Keys: ["meeting-ics/series-retry-1.ics", "meeting-ics/series-retry-2.ics"],
     });
-    expect(deletedIcsFileR2Keys.sort()).toEqual(["meeting-ics/series-retry-1.ics", "meeting-ics/series-retry-2.ics"]);
+
     expect(await queryAll(env.DB, "SELECT id FROM meeting_series WHERE id = ?", seriesId)).toHaveLength(0);
     expect(await queryAll(env.DB, "SELECT id FROM meeting_ics_files WHERE series_id = ?", seriesId)).toHaveLength(0);
     expect(
       await queryAll(env.DB, "SELECT id FROM member_meeting_preferences WHERE series_id = ?", seriesId),
     ).toHaveLength(0);
+
+    await env.DB.prepare("UPDATE storage_deletion_outbox SET next_attempt_at = datetime('now')").run();
+    await processPendingStorageDeletions(env.DB, env, 10);
     expect(await env.ASSETS_BUCKET!.get("meeting-ics/series-retry-1.ics")).toBeNull();
     expect(await env.ASSETS_BUCKET!.get("meeting-ics/series-retry-2.ics")).toBeNull();
   });
@@ -522,6 +602,42 @@ describe("Meeting calendar management", () => {
     )[0];
     const noPrefAttachments = JSON.parse(noPrefRow.payload_json).__attachments as Array<{ r2Key: string }>;
     expect(noPrefAttachments.map((a) => a.r2Key).sort()).toEqual(["meeting-ics/a.ics", "meeting-ics/b.ics"]);
+  });
+
+  it("consortium resend includes active organization representatives", async () => {
+    const seriesId = await insertMeetingSeries("consortium", "Consortium Meeting");
+    await insertIcsFile(seriesId, "09:00 CET", 2026, "meeting-ics/consortium.ics");
+    const representativeUserId = await insertUser("organization-representative@example.test");
+    await insertMember(representativeUserId, "A");
+
+    const response = await call(adminToken, `/api/v1/admin/consortium/meetings/${seriesId}/resend`, {
+      method: "POST",
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ queuedRecipients: 1 });
+    expect(
+      await queryAll<{ recipient_user_id: string }>(
+        env.DB,
+        "SELECT recipient_user_id FROM email_outbox WHERE template_key = 'calendar-invite-resend'",
+      ),
+    ).toEqual([{ recipient_user_id: representativeUserId }]);
+  });
+
+  it("rejects an annual resend above its configured bound before enqueueing anything", async () => {
+    const wgId = await insertWorkingGroup("Bounded resend", "bounded-resend");
+    const seriesId = await insertMeetingSeries("working_group", "Bounded Meeting", wgId);
+    for (const email of ["first@example.test", "second@example.test"]) {
+      const userId = await insertUser(email);
+      await insertWgMembership(wgId, userId);
+    }
+
+    await expect(
+      queueAnnualResend(env.DB, seriesId, { scopeType: "working_group", workingGroupId: wgId }, 1),
+    ).rejects.toMatchObject({ code: "RESEND_RECIPIENT_LIMIT_EXCEEDED" });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'calendar-invite-resend'"),
+    ).toHaveLength(0);
   });
 
   it("a WG chair (context-scoped working-groups:write) can manage their own WG's meetings but not another WG's", async () => {

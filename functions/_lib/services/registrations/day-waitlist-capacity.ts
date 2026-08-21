@@ -1,8 +1,10 @@
 import { first, all } from "../../db/queries";
+import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import type { EventDayCapacityRow } from "./day-waitlist-types";
+import { NON_CAPACITY_CONSUMING_DAY_WAITLIST_SQL } from "./day-waitlist-policy";
 
 export async function listCapacityEventDays(db: DatabaseLike, eventId: string): Promise<EventDayCapacityRow[]> {
   return all<EventDayCapacityRow>(
@@ -28,7 +30,7 @@ export async function countConfirmedInPersonForDay(
      LEFT JOIN event_day_waitlist_entries w
        ON w.event_day_id = rda.event_day_id
       AND w.registration_id = rda.registration_id
-      AND w.status IN ('waiting', 'offered')
+      AND ${NON_CAPACITY_CONSUMING_DAY_WAITLIST_SQL}
      WHERE rda.event_day_id = ?
        AND rda.attendance_type = 'in_person'
        AND r.status IN ('pending_email_confirmation', 'registered')
@@ -81,14 +83,8 @@ export async function roleBasedCapacityExemptReason(
 
 export async function resolveCapacityExemptReason(
   db: DatabaseLike,
-  payload: { registrationId: string; eventId: string; userId: string },
+  payload: { eventId: string; userId: string },
 ): Promise<string | null> {
-  const existing = await first<{ capacity_exempt_in_person: number; capacity_exempt_reason: string | null }>(
-    db,
-    "SELECT capacity_exempt_in_person, capacity_exempt_reason FROM registrations WHERE id = ?",
-    [payload.registrationId],
-  );
-  if (existing?.capacity_exempt_in_person === 1) return existing.capacity_exempt_reason ?? "manual";
   return roleBasedCapacityExemptReason(db, payload.eventId, payload.userId);
 }
 
@@ -96,22 +92,55 @@ export function isEventDayCapacityConflict(error: unknown): boolean {
   return error instanceof Error && error.message.includes("EVENT_DAY_CAPACITY_CHANGED");
 }
 
+export const DAY_WAITLIST_OFFER_UNAVAILABLE_CODE = "DAY_WAITLIST_OFFER_UNAVAILABLE";
+
+export function dayWaitlistOfferUnavailableError(): AppError {
+  return new AppError(
+    409,
+    DAY_WAITLIST_OFFER_UNAVAILABLE_CODE,
+    "One or more waitlist offers is no longer available. Refresh the registration before trying again.",
+  );
+}
+
+export function isDayWaitlistOfferUnavailable(error: unknown): boolean {
+  return (
+    (error instanceof AppError && error.code === DAY_WAITLIST_OFFER_UNAVAILABLE_CODE) ||
+    (error instanceof Error && error.message.includes(DAY_WAITLIST_OFFER_UNAVAILABLE_CODE))
+  );
+}
+
+export async function withDayCapacityRetry<T>(operation: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (!isEventDayCapacityConflict(error)) throw error;
+      if (attempt === 2) break;
+    }
+  }
+  throw new AppError(409, "DAY_CAPACITY_CHANGED", "Day capacity changed; please retry");
+}
+
 export function prepareCapacityGuardStatements(
   db: DatabaseLike,
   eventDays: EventDayCapacityRow[],
   selectedByDate: Map<string, string>,
   preservedEventDayIds: Set<string>,
+  claim?: { registrationId: string; dayDates: ReadonlySet<string> },
 ): StatementLike[] {
   return eventDays.flatMap((day) => {
-    const affectsCapacity = selectedByDate.get(day.day_date) === "in_person" || preservedEventDayIds.has(day.id);
+    const claimsOffer = claim?.dayDates.has(day.day_date) ?? false;
+    const affectsCapacity =
+      selectedByDate.get(day.day_date) === "in_person" || preservedEventDayIds.has(day.id) || claimsOffer;
     if (!affectsCapacity || !day.in_person_capacity || day.in_person_capacity <= 0) return [];
     return [
       db
         .prepare(
-          `INSERT INTO event_day_capacity_guards (id, event_day_id, expected_revision)
-           VALUES (?, ?, ?)`,
+          `INSERT INTO event_day_capacity_guards (
+             id, event_day_id, expected_revision, claim_registration_id
+           ) VALUES (?, ?, ?, ?)`,
         )
-        .bind(uuid(), day.id, day.capacity_revision),
+        .bind(uuid(), day.id, day.capacity_revision, claimsOffer ? claim!.registrationId : null),
     ];
   });
 }

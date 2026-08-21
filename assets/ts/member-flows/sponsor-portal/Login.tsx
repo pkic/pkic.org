@@ -16,7 +16,9 @@
  * retyping it.
  */
 import { useState } from "preact/hooks";
-import { postJson, ApiClientError } from "../../shared/api-client";
+import { postJson } from "../../shared/api-client";
+import { MagicLinkSubmitButton, SignInError } from "../../components/MagicLinkFeedback";
+import { useMagicLinkRequest } from "../../hooks/useMagicLinkRequest";
 
 function prefilledEvent(): string {
   return new URLSearchParams(window.location.search).get("event") ?? "";
@@ -25,26 +27,17 @@ function prefilledEvent(): string {
 export function Login() {
   const [email, setEmail] = useState("");
   const [eventSlug, setEventSlug] = useState(prefilledEvent);
-  const [sent, setSent] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const magicLink = useMagicLinkRequest("Something went wrong. Please try again.");
 
   async function handleSubmit(e: Event): Promise<void> {
     e.preventDefault();
     if (!email.trim() || !eventSlug.trim()) return;
-    setError(null);
-    setSubmitting(true);
-    try {
-      await postJson("/api/v1/auth/sponsor-portal/request-link", {
+    await magicLink.request(() =>
+      postJson("/api/v1/auth/sponsor-portal/request-link", {
         email: email.trim(),
         eventId: eventSlug.trim(),
-      });
-      setSent(true);
-    } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : "Something went wrong. Please try again.");
-    } finally {
-      setSubmitting(false);
-    }
+      }),
+    );
   }
 
   return (
@@ -56,7 +49,7 @@ export function Login() {
             Access your event's attendee list with a sign-in link, sent to the contact email on file for your
             sponsorship.
           </p>
-          {sent ? (
+          {magicLink.sent ? (
             <div class="alert alert-success mt-3">
               ✓ If this matches an active event sponsorship, you'll receive a sign-in link shortly.
             </div>
@@ -99,12 +92,10 @@ export function Login() {
                   contact.
                 </div>
               </div>
-              <button type="submit" class="btn btn-success w-100" disabled={submitting}>
-                {submitting ? "Sending…" : "Send sign-in link"}
-              </button>
+              <MagicLinkSubmitButton submitting={magicLink.submitting} />
             </form>
           )}
-          {error && <div class="alert alert-danger mt-3">✕ {error}</div>}
+          <SignInError error={magicLink.error} includePrefix={false} />
         </div>
       </div>
     </div>

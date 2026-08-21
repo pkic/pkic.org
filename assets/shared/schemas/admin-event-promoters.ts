@@ -1,7 +1,10 @@
 import { z } from "zod";
 import { listQuerySchema, pageInfoSchema } from "./pagination";
+import { httpOrSameOriginUrlSchema } from "./urls";
 
-export const EVENT_PROMOTER_SORT_COLUMNS = [
+export const EVENT_PROMOTER_SORT_COLUMNS = ["impact", "accepted", "invitations", "clicks"] as const;
+export const EVENT_REFERRAL_CODE_SORT_COLUMNS = ["clicks", "conversions", "createdAt", "code"] as const;
+const EVENT_PROMOTION_SORT_COLUMNS = [
   "impact",
   "accepted",
   "invitations",
@@ -11,9 +14,21 @@ export const EVENT_PROMOTER_SORT_COLUMNS = [
   "code",
 ] as const;
 
-export const eventPromotersListQuerySchema = listQuerySchema(EVENT_PROMOTER_SORT_COLUMNS).extend({
-  view: z.enum(["promoters", "codes"]).optional(),
-});
+/** The omitted view is the promoter view; each view accepts only sort keys its SQL model implements. */
+export const eventPromotersListQuerySchema = listQuerySchema(EVENT_PROMOTION_SORT_COLUMNS)
+  .extend({ view: z.enum(["promoters", "codes"]).default("promoters") })
+  .superRefine((query, ctx) => {
+    if (!query.sort) return;
+    const sortKey = query.sort.startsWith("-") ? query.sort.slice(1) : query.sort;
+    const allowed = query.view === "codes" ? EVENT_REFERRAL_CODE_SORT_COLUMNS : EVENT_PROMOTER_SORT_COLUMNS;
+    if (!(allowed as readonly string[]).includes(sortKey)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["sort"],
+        message: `Sort key '${sortKey}' is not available for the ${query.view} view`,
+      });
+    }
+  });
 
 export const eventPromoterSchema = z.object({
   user_id: z.string(),
@@ -22,7 +37,7 @@ export const eventPromoterSchema = z.object({
   last_name: z.string().nullable(),
   organization: z.string().nullable(),
   job_title: z.string().nullable(),
-  headshot_url: z.string().nullable(),
+  headshot_url: httpOrSameOriginUrlSchema.nullable(),
   invites_sent: z.number(),
   invites_accepted: z.number(),
   invites_declined: z.number(),

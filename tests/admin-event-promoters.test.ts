@@ -89,4 +89,10 @@ describe("GET /api/v1/admin/events/:eventSlug/promoters", () => {
     expect(body.referralCodes[0].owner_email).toBe("owner@example.test");
     expect(body.page.total).toBe(1);
   });
+
+  it("rejects sort keys that belong to the other view", async () => {
+    expect((await call("/api/v1/admin/events/pqc-2026/promoters?view=promoters&sort=conversions")).status).toBe(400);
+    expect((await call("/api/v1/admin/events/pqc-2026/promoters?view=codes&sort=impact")).status).toBe(400);
+    expect((await call("/api/v1/admin/events/pqc-2026/promoters?sort=code")).status).toBe(400);
+  });
 });

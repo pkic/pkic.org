@@ -1,10 +1,10 @@
 import { parseJsonBody } from "../../../../_lib/validation";
-import { json } from "../../../../_lib/http";
+import { dispatchPostOnly, json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { renderEmail, renderSubject } from "../../../../_lib/email/render";
 import { loadEmailPartials, loadEmailRenderResources } from "../../../../_lib/email/partials";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
-import { adminEmailTemplatePreviewSchema } from "../../../../../assets/shared/schemas/api";
+import { adminEmailTemplatePreviewSchema } from "../../../../../assets/shared/schemas/admin-email-templates";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 
 function buildDefaultPreviewData(baseUrl: string): Record<string, unknown> {
@@ -61,9 +61,5 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 }
 
 export async function onRequest(c: AdminContext): Promise<Response> {
-  if (c.req.raw.method !== "POST") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
-
-  return onRequestPost(c);
+  return dispatchPostOnly(c, onRequestPost);
 }

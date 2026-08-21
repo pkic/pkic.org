@@ -31,7 +31,7 @@ export const WorkingGroupMemberAdd = openApiRoute(workingGroupMemberAddRouteSche
 export const WorkingGroupMembersGet = openApiRoute(
   workingGroupMembersListRouteSchema,
   async (c: AdminContext, data) => {
-    const { limit = 50, offset = 0, q, sort } = data.query;
+    const { limit, offset, q, sort } = data.query;
     const result = await listAdminWorkingGroupMembers(requestDb(c), data.params.id, { limit, offset, q, sort });
     return json({
       members: result.members,

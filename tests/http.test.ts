@@ -1,0 +1,189 @@
+import { describe, expect, it, vi } from "vitest";
+import { Hono } from "hono";
+import { dispatchRequestMethod, methodNotAllowed } from "../functions/_lib/http";
+import { onRequest as eventFormsDispatch } from "../functions/api/v1/events/[eventSlug]/forms";
+import { onRequest as retentionDispatch } from "../functions/api/v1/internal/retention/run";
+import { onRequest as eventDaysDispatch } from "../functions/api/v1/admin/events/[eventSlug]/days";
+import { onRequest as registrationConfirmDispatch } from "../functions/api/v1/events/[eventSlug]/registrations/confirm-email";
+import { onRequest as registrationCreateDispatch } from "../functions/api/v1/events/[eventSlug]/registrations";
+import { onRequest as speakerPresentationDispatch } from "../functions/api/v1/proposals/speaker/[token]/presentation";
+import { onRequest as speakerManageDispatch } from "../functions/api/v1/proposals/speaker/[token]";
+import { onRequest as proposerSpeakersDispatch } from "../functions/api/v1/proposals/manage/[token]/speakers";
+import { onRequest as proposerSpeakerReminderDispatch } from "../functions/api/v1/proposals/manage/[token]/speakers/remind";
+import { onRequest as proposerSpeakerDispatch } from "../functions/api/v1/proposals/manage/[token]/speakers/[userId]";
+import { onRequest as registrationManageDispatch } from "../functions/api/v1/registrations/manage/[token]";
+import { onRequest as registrationHeadshotDispatch } from "../functions/api/v1/registrations/manage/[token]/headshot";
+import { onRequest as waitlistPromoteDispatch } from "../functions/api/v1/admin/events/[eventSlug]/waitlist/promote";
+import { onRequest as adminRegistrationDispatch } from "../functions/api/v1/admin/events/[eventSlug]/registrations/[registrationId]/index";
+import { onRequest as badgeRoleDispatch } from "../functions/api/v1/admin/events/[eventSlug]/registrations/[registrationId]/badge-role";
+import { onRequest as registrationAdmitDispatch } from "../functions/api/v1/admin/events/[eventSlug]/registrations/[registrationId]/admit";
+import { onRequest as dayAttendanceDispatch } from "../functions/api/v1/admin/events/[eventSlug]/registrations/[registrationId]/day-attendance";
+
+function context(method: string) {
+  return { req: { raw: new Request("https://app.test/resource", { method }) } };
+}
+
+describe("HTTP method dispatch", () => {
+  it("calls only the exact method handler", async () => {
+    const get = vi.fn(() => new Response("read"));
+    const post = vi.fn(() => new Response("write"));
+
+    const response = await dispatchRequestMethod(context("POST"), { GET: get, POST: post });
+
+    expect(await response.text()).toBe("write");
+    expect(get).not.toHaveBeenCalled();
+    expect(post).toHaveBeenCalledOnce();
+  });
+
+  it("returns the canonical error envelope and Allow header", async () => {
+    const response = await dispatchRequestMethod(context("DELETE"), {
+      GET: () => new Response("read"),
+      PATCH: () => new Response("update"),
+    });
+
+    expect(response.status).toBe(405);
+    expect(response.headers.get("allow")).toBe("GET, PATCH");
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" },
+    });
+  });
+
+  it("can build a canonical 405 response directly", async () => {
+    const response = methodNotAllowed(["POST"]);
+    expect(response.status).toBe(405);
+    expect(response.headers.get("allow")).toBe("POST");
+  });
+
+  it.each([
+    {
+      label: "GET-only",
+      path: "/forms",
+      method: "POST",
+      allow: "GET",
+      handler: eventFormsDispatch,
+    },
+    {
+      label: "POST-only",
+      path: "/retention",
+      method: "GET",
+      allow: "POST",
+      handler: retentionDispatch,
+    },
+    {
+      label: "multi-method",
+      path: "/days",
+      method: "DELETE",
+      allow: "GET, PUT",
+      handler: eventDaysDispatch,
+    },
+    {
+      label: "registration confirmation",
+      path: "/events/event/registrations/confirm-email",
+      method: "DELETE",
+      allow: "GET, POST",
+      handler: registrationConfirmDispatch,
+    },
+    {
+      label: "registration creation",
+      path: "/events/event/registrations",
+      method: "GET",
+      allow: "POST",
+      handler: registrationCreateDispatch,
+    },
+    {
+      label: "speaker presentation",
+      path: "/proposals/speaker/token/presentation",
+      method: "POST",
+      allow: "PUT",
+      handler: speakerPresentationDispatch,
+    },
+    {
+      label: "speaker self-management",
+      path: "/proposals/speaker/token",
+      method: "DELETE",
+      allow: "GET, POST, PATCH",
+      handler: speakerManageDispatch,
+    },
+    {
+      label: "proposer speaker invitation",
+      path: "/proposals/manage/token/speakers",
+      method: "GET",
+      allow: "POST",
+      handler: proposerSpeakersDispatch,
+    },
+    {
+      label: "proposer speaker reminder",
+      path: "/proposals/manage/token/speakers/remind",
+      method: "GET",
+      allow: "POST",
+      handler: proposerSpeakerReminderDispatch,
+    },
+    {
+      label: "proposer speaker management",
+      path: "/proposals/manage/token/speakers/user",
+      method: "POST",
+      allow: "PATCH, DELETE",
+      handler: proposerSpeakerDispatch,
+    },
+    {
+      label: "registration self-management",
+      path: "/registrations/manage/token",
+      method: "POST",
+      allow: "GET, PATCH",
+      handler: registrationManageDispatch,
+    },
+    {
+      label: "registration headshot",
+      path: "/registrations/manage/token/headshot",
+      method: "PATCH",
+      allow: "PUT, DELETE",
+      handler: registrationHeadshotDispatch,
+    },
+    {
+      label: "waitlist promotion",
+      path: "/admin/events/event/waitlist/promote",
+      method: "GET",
+      allow: "POST",
+      handler: waitlistPromoteDispatch,
+    },
+    {
+      label: "admin registration management",
+      path: "/admin/events/event/registrations/registration",
+      method: "POST",
+      allow: "GET, PATCH",
+      handler: adminRegistrationDispatch,
+    },
+    {
+      label: "badge role management",
+      path: "/admin/events/event/registrations/registration/badge-role",
+      method: "POST",
+      allow: "GET, PATCH",
+      handler: badgeRoleDispatch,
+    },
+    {
+      label: "registration admission",
+      path: "/admin/events/event/registrations/registration/admit",
+      method: "GET",
+      allow: "POST",
+      handler: registrationAdmitDispatch,
+    },
+    {
+      label: "day attendance management",
+      path: "/admin/events/event/registrations/registration/day-attendance",
+      method: "GET",
+      allow: "PATCH",
+      handler: dayAttendanceDispatch,
+    },
+  ])("returns the canonical mounted 405 for a $label route", async ({ path, method, allow, handler }) => {
+    const app = new Hono();
+    app.all(path, (c) => handler(c as any));
+
+    const response = await app.request(path, { method });
+
+    expect(response.status).toBe(405);
+    expect(response.headers.get("allow")).toBe(allow);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" },
+    });
+  });
+});

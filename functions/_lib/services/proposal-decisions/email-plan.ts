@@ -1,12 +1,11 @@
 import type { ProposalDecisionStatus } from "../../../../assets/shared/schemas/proposal-status";
-import { isProposalDecidableStatus } from "../../../../assets/shared/schemas/proposal-status";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 import { buildEventEmailVariables, resolveEventSessionTypes } from "../events";
 import { listProposalSpeakersWithStatus, type ProposalSpeakerWithUser } from "../proposal-speakers";
 import type { ProposalDecisionEmailMessage, ProposalDecisionEmailPlan } from "./types";
-import { assertProposalFinalizeAccess } from "./context";
+import { assertProposalDecisionStateAllowed, assertProposalFinalizeAccess } from "./context";
 import { snapshotProposalDecisionSpeaker } from "./snapshot";
 
 interface EventEmailSource {
@@ -44,18 +43,14 @@ export async function buildProposalDecisionEmailPlan(
     db,
     `SELECT sp.id, sp.title, sp.event_id, sp.proposer_user_id, sp.presentation_deadline,
             sp.proposal_type, sp.status, sp.updated_at,
-            EXISTS (SELECT 1 FROM proposal_decisions pd WHERE pd.proposal_id = sp.id) AS has_current_decision
+            pd.id AS current_decision_id, pd.final_status AS current_decision_status
      FROM session_proposals sp
+     LEFT JOIN proposal_decisions pd ON pd.proposal_id = sp.id
      WHERE sp.id = ? AND sp.deleted_at IS NULL`,
     [payload.proposalId],
   );
   if (!proposal) throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found");
-  if (proposal.has_current_decision) {
-    throw new AppError(409, "PROPOSAL_ALREADY_FINALIZED", "Proposal already has a decision for this review round");
-  }
-  if (!isProposalDecidableStatus(proposal.status)) {
-    throw new AppError(409, "PROPOSAL_NOT_DECIDABLE", `A proposal in status '${proposal.status}' cannot be finalized`);
-  }
+  assertProposalDecisionStateAllowed(proposal, payload.finalStatus);
   await assertProposalFinalizeAccess(db, proposal.event_id, payload.actor);
 
   const event = await first<EventEmailSource>(
@@ -84,6 +79,8 @@ export async function buildProposalDecisionEmailPlan(
         fallbackSubject: `Proposal update: ${proposal.title}`,
         data: {
           ...buildEventEmailVariables(event, options.appBaseUrl),
+          proposalId: proposal.id,
+          speakerUserId: speaker.user_id,
           eventName: event.name,
           firstName: speaker.first_name ?? "",
           lastName: speaker.last_name ?? "",
@@ -107,6 +104,8 @@ export async function buildProposalDecisionEmailPlan(
       fallbackSubject: `Action required: complete your speaker profile — ${event.name}`,
       data: {
         ...eventVariables,
+        proposalId: proposal.id,
+        speakerUserId: speaker.user_id,
         firstName: speaker.first_name ?? "",
         proposalTitle: proposal.title,
         profileUrl: manageUrl,
@@ -125,6 +124,8 @@ export async function buildProposalDecisionEmailPlan(
       fallbackSubject: `Please upload your presentation — ${event.name}`,
       data: {
         ...eventVariables,
+        proposalId: proposal.id,
+        speakerUserId: speaker.user_id,
         firstName: speaker.first_name ?? "",
         proposalTitle: proposal.title,
         uploadUrl: manageUrl,

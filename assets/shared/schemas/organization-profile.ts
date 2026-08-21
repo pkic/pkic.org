@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
+import { httpOrSameOriginUrlSchema, httpUrlSchema } from "./urls";
 
 export const CONTENT_REVIEW_STATUSES = ["pending", "approved", "rejected", "withdrawn"] as const;
 export const contentReviewStatusSchema = z.enum(CONTENT_REVIEW_STATUSES);
@@ -21,10 +22,10 @@ export const organizationContentReviewSchema = z.object({
 
 /** Shared response contract for organization cards and list rows. */
 export const organizationProfileSummaryFieldsSchema = z.object({
-  website: z.string().nullable(),
+  website: httpUrlSchema.nullable(),
   description: z.string().nullable(),
   slogan: z.string().nullable(),
-  logoUrl: z.string().nullable(),
+  logoUrl: httpOrSameOriginUrlSchema.nullable(),
 });
 
 export const organizationProfileLongContentSchema = z.string().nullable();
@@ -32,11 +33,11 @@ export const organizationProfileLongContentSchema = z.string().nullable();
 /** Shared response contract for the extended organization profile. */
 export const organizationProfileExtendedFieldsSchema = z.object({
   contentMarkdown: organizationProfileLongContentSchema,
-  blogUrl: z.string().nullable(),
-  blogFeedUrl: z.string().nullable(),
-  pressUrl: z.string().nullable(),
-  pressFeedUrl: z.string().nullable(),
-  careersUrl: z.string().nullable(),
+  blogUrl: httpUrlSchema.nullable(),
+  blogFeedUrl: httpUrlSchema.nullable(),
+  pressUrl: httpUrlSchema.nullable(),
+  pressFeedUrl: httpUrlSchema.nullable(),
+  careersUrl: httpUrlSchema.nullable(),
   links: linksSchema,
 });
 
@@ -49,12 +50,12 @@ export const organizationEditableContentSchema = z.object({
   slogan: z.string().trim().max(300).nullable().optional(),
   description: z.string().trim().max(2000).nullable().optional(),
   contentMarkdown: z.string().trim().max(20000).nullable().optional(),
-  website: z.url().nullable().optional(),
-  blogUrl: z.url().nullable().optional(),
-  blogFeedUrl: z.url().nullable().optional(),
-  pressUrl: z.url().nullable().optional(),
-  pressFeedUrl: z.url().nullable().optional(),
-  careersUrl: z.url().nullable().optional(),
+  website: httpUrlSchema.nullable().optional(),
+  blogUrl: httpUrlSchema.nullable().optional(),
+  blogFeedUrl: httpUrlSchema.nullable().optional(),
+  pressUrl: httpUrlSchema.nullable().optional(),
+  pressFeedUrl: httpUrlSchema.nullable().optional(),
+  careersUrl: httpUrlSchema.nullable().optional(),
   links: linksSchema.optional(),
 });
 

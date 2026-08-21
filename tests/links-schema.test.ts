@@ -7,7 +7,13 @@
  * for every legacy shape it tolerates, deliberately malformed included.
  */
 import { describe, expect, it } from "vitest";
-import { linksSchema, parseLinksJson, serializeLinks } from "../assets/shared/schemas/links";
+import {
+  findLinkedinUrl,
+  linksSchema,
+  normalizeLinks,
+  parseLinksJson,
+  serializeLinks,
+} from "../assets/shared/schemas/links";
 
 function expectConformant(raw: string): string[] {
   const result = parseLinksJson(raw);
@@ -68,5 +74,18 @@ describe("parseLinksJson self-validation (Phase 3 §3.5)", () => {
     const result = expectConformant(raw);
     expect(result).toHaveLength(15);
     expect(result).toEqual(urls.slice(0, 15));
+  });
+
+  it("uses the same tolerant normalizer for invalid, duplicate, and over-limit entries", () => {
+    const values = [" https://example.com/a ", "javascript:alert(1)", "HTTPS://EXAMPLE.COM/A"];
+    const normalized = normalizeLinks(values);
+    expect(normalized.links).toEqual(["https://example.com/a"]);
+    expect(normalized.rejected).toEqual(["javascript:alert(1)", "HTTPS://EXAMPLE.COM/A"]);
+  });
+
+  it("recognizes LinkedIn by parsed hostname, not a substring in an attacker-controlled URL", () => {
+    expect(findLinkedinUrl(["https://notlinkedin.com/path", "https://linkedin.com.evil.test/in/alice"])).toBeNull();
+    expect(findLinkedinUrl(["https://www.linkedin.com/in/alice"])).toBe("https://www.linkedin.com/in/alice");
+    expect(findLinkedinUrl(["https://jobs.linkedin.com/example"])).toBe("https://jobs.linkedin.com/example");
   });
 });

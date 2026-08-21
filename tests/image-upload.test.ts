@@ -20,6 +20,31 @@ describe("canonical image upload validation", () => {
     await expect(readValidatedUploadedImage(request, "Logo")).resolves.toMatchObject({ contentType: "image/png" });
   });
 
+  it("accepts WebP at the signature boundary and rejects a declared MIME mismatch", async () => {
+    const webp = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]);
+    await expect(
+      readValidatedUploadedImage(
+        new Request("https://app.test/upload", {
+          method: "POST",
+          headers: { "content-type": "image/webp" },
+          body: webp,
+        }),
+        "Logo",
+        webp.byteLength,
+      ),
+    ).resolves.toMatchObject({ contentType: "image/webp" });
+    await expect(
+      readValidatedUploadedImage(
+        new Request("https://app.test/upload", {
+          method: "POST",
+          headers: { "content-type": "image/png" },
+          body: webp,
+        }),
+        "Logo",
+      ),
+    ).rejects.toMatchObject({ status: 415, code: "INVALID_FILE_TYPE" });
+  });
+
   it("applies the caller's shared size policy after extracting multipart data", async () => {
     const oversized = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], "headshot.jpg", {
       type: "image/jpeg",

@@ -11,26 +11,16 @@ import { useEffect, useRef } from "preact/hooks";
 import { getJson } from "../api-client";
 import { currencyInfo, toMajorUnit } from "../../../shared/constants/currencies";
 import { asyncPaymentWindow } from "../../../shared/constants/async-payment-window";
+import {
+  classifyDonationPollResult,
+  type DonationSession,
+  type DonationSessionResponse,
+  type PendingDonationSession,
+  type TerminalDonationSession,
+} from "./session-poll";
 
-interface DonationSession {
-  grossAmount: number;
-  currency: string;
-  donorFirstName: string | null;
-  source: string | null;
-  completedAt: string | null;
-}
-
-interface PendingSession {
-  pending: true;
-  asyncPayment?: boolean;
-  paymentMethodType?: string | null;
-  sessionExpiresAt?: number | null;
-}
-
-interface TerminalSession {
-  failed?: true;
-  expired?: true;
-}
+type PendingSession = PendingDonationSession;
+type TerminalSession = TerminalDonationSession;
 
 const POLL_INTERVAL_MS = 2000;
 const MAX_POLLS = 15;
@@ -252,6 +242,25 @@ function renderTo(container: HTMLElement, content: ComponentChildren): void {
   container.hidden = false;
 }
 
+function consumeDonationPollResult(
+  container: HTMLElement,
+  data: DonationSessionResponse,
+): { stop: boolean; session: DonationSession | null } {
+  const result = classifyDonationPollResult(data);
+  if (result.state === "failed") {
+    renderTo(container, <FailedBadge />);
+    return { stop: true, session: null };
+  }
+  if (result.state === "expired") {
+    renderTo(container, <ExpiredBadge />);
+    return { stop: true, session: null };
+  }
+  if (result.state === "confirmed") {
+    return { stop: true, session: result.session };
+  }
+  return { stop: false, session: null };
+}
+
 // ── Main flow ─────────────────────────────────────────────────────────────
 
 export async function initDonationThankYou(): Promise<void> {
@@ -285,16 +294,10 @@ export async function initDonationThankYou(): Promise<void> {
         asyncExpiresAt = data.sessionExpiresAt;
         break;
       }
-      if ("failed" in data) {
-        renderTo(container, <FailedBadge />);
-        return;
-      }
-      if ("expired" in data) {
-        renderTo(container, <ExpiredBadge />);
-        return;
-      }
-      if (!("pending" in data)) {
-        session = data as DonationSession;
+      const result = consumeDonationPollResult(container, data);
+      if (result.stop) {
+        if (!result.session) return;
+        session = result.session;
         break;
       }
     } catch {
@@ -334,16 +337,10 @@ export async function initDonationThankYou(): Promise<void> {
       const data = await getJson<DonationSession | PendingSession | TerminalSession>(
         `/api/v1/donations/session?session_id=${encodeURIComponent(sessionId)}`,
       );
-      if ("failed" in data) {
-        renderTo(container, <FailedBadge />);
-        return;
-      }
-      if ("expired" in data) {
-        renderTo(container, <ExpiredBadge />);
-        return;
-      }
-      if (!("pending" in data)) {
-        session = data as DonationSession;
+      const result = consumeDonationPollResult(container, data);
+      if (result.stop) {
+        if (!result.session) return;
+        session = result.session;
         break;
       }
     } catch {

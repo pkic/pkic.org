@@ -1,126 +1,275 @@
-/**
- * Weekly working-group membership-change digest for WG chairs/vice-chairs
- * (2026-07-31 manual-testing feedback).
- * "Notify the chairs when someone joins or leaves... not a spam email every
- * time there is a change" — this runs on its own weekly cron (see
- * functions/router.ts's WG_CHAIR_DIGEST_CRON) and batches every join/leave
- * from the past 7 days into one email per (working group, chair) pair,
- * mirroring the batching pattern membership-scheduled-jobs.ts's
- * runConsultationBatch/runEcReviewBatch already use for the twice-weekly
- * membership batches — same "fixed rolling window, no persisted last-run
- * state" tradeoff those two accept.
- *
- * Recipients are resolved from the same live user_roles-backed chair/
- * vice-chair data admin-working-groups.ts's listAdminWorkingGroups already
- * computes (role-wg_chair/role-wg_vice_chair, context_type='working_group')
- * — reused as-is rather than duplicating that query. Each recipient's
- * `wgChairMembershipDigest` notification preference (default true, see
- * member-self-service.ts) is checked individually before sending, so a
- * chair who opts out gets nothing even if their co-chair still does.
- */
-import { all } from "../db/queries";
-import { queueEmail, processOutboxByIdBackground } from "../email/outbox";
-import { listAdminWorkingGroups } from "./admin-working-groups";
-import { getUserNotificationPreferences } from "./member-self-service";
-import { deterministicRepresentativeJoinSql } from "./membership/representative-lookup";
+/** Weekly, retry-safe working-group membership-change digest. */
+import { batchRows } from "../db/pagination";
+import { prepareBulkQueueEmailChunkStatements, processSelectedOutbox, type BulkEmailQueueRow } from "../email/outbox";
+import { getConfig } from "../config";
 import type { DatabaseLike, Env } from "../types";
+import { sha256Hex } from "../utils/crypto";
+import { deterministicRepresentativeJoinSql } from "./membership/representative-lookup";
+import { CURRENT_WORKING_GROUP_LEADERSHIP_CTES_SQL, WORKING_GROUP_CHAIR_ROLE_ID } from "./working-group-leadership";
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1_000;
+const DIGEST_BOUNDARY_HOUR_UTC = 8;
+const DIGEST_TEMPLATE_KEY = "wg-chair-membership-digest";
+
+interface WgChangeRow {
+  working_group_id: string;
+  working_group_name: string;
+  membership_id: string;
+  change_type: "joined" | "left";
+  changed_at: string;
+  first_name: string | null;
+  last_name: string | null;
+  organization_name: string | null;
+}
+
+interface WgRecipientRow {
+  working_group_id: string;
+  recipient_user_id: string;
+  recipient_email: string;
+  recipient_first_name: string | null;
+  recipient_last_name: string | null;
+  recipient_role: "chair" | "vice chair";
+}
 
 interface WgChangeEntry {
   name: string;
   organizationName: string | null;
 }
 
-interface WgChangeRow {
-  joined_at: string;
-  left_at: string | null;
-  first_name: string | null;
-  last_name: string | null;
-  org_name: string | null;
+interface WgDigestRecipient {
+  userId: string;
+  email: string;
+  name: string;
+  role: "chair" | "vice chair";
+}
+
+interface WgDigestGroup {
+  id: string;
+  name: string;
+  joined: WgChangeEntry[];
+  left: WgChangeEntry[];
+  recipients: WgDigestRecipient[];
+}
+
+export interface WgChairDigestWindow {
+  start: string;
+  end: string;
+  key: string;
+}
+
+export interface WgChairDigestResult {
+  workingGroupsWithChanges: number;
+  /** Legacy field name: number of new durable outbox rows inserted by this run. */
+  emailsSent: number;
+}
+
+export interface QueuedWgChairDigest extends WgChairDigestResult {
+  outboxIds: string[];
+}
+
+/** Resolve the most recently completed Monday 08:00 UTC weekly window. */
+export function resolveWgChairDigestWindow(now: Date = new Date()): WgChairDigestWindow {
+  const instant = new Date(now);
+  if (!Number.isFinite(instant.getTime())) {
+    throw new Error("Invalid WG chair digest run time");
+  }
+
+  const daysSinceMonday = (instant.getUTCDay() + 6) % 7;
+  let endMs = Date.UTC(
+    instant.getUTCFullYear(),
+    instant.getUTCMonth(),
+    instant.getUTCDate() - daysSinceMonday,
+    DIGEST_BOUNDARY_HOUR_UTC,
+  );
+  if (instant.getTime() < endMs) {
+    endMs -= WEEK_MS;
+  }
+
+  const end = new Date(endMs).toISOString();
+  return {
+    start: new Date(endMs - WEEK_MS).toISOString(),
+    end,
+    key: end,
+  };
+}
+
+const CHANGE_EVENTS_CTE_SQL = `
+  change_events AS (
+    SELECT wgm.id AS membership_id, wgm.working_group_id, wgm.user_id,
+           'joined' AS change_type, wgm.joined_at AS changed_at
+      FROM working_group_members wgm
+     WHERE wgm.joined_at >= ? AND wgm.joined_at < ?
+    UNION ALL
+    SELECT wgm.id AS membership_id, wgm.working_group_id, wgm.user_id,
+           'left' AS change_type, wgm.left_at AS changed_at
+      FROM working_group_members wgm
+     WHERE wgm.left_at IS NOT NULL AND wgm.left_at >= ? AND wgm.left_at < ?
+  )
+`;
+
+/** Exact production change-row query, exported for D1 query-plan regression coverage. */
+export const WG_CHAIR_DIGEST_CHANGE_EVENTS_QUERY = `WITH ${CHANGE_EVENTS_CTE_SQL}
+  SELECT wg.id AS working_group_id, wg.name AS working_group_name,
+         ce.membership_id, ce.change_type, ce.changed_at,
+         u.first_name, u.last_name, o.name AS organization_name
+    FROM change_events ce
+    JOIN working_groups wg ON wg.id = ce.working_group_id AND wg.active = 1
+    JOIN users u ON u.id = ce.user_id
+${deterministicRepresentativeJoinSql("ce.user_id")}
+    LEFT JOIN members m ON m.id = rep.member_id
+    LEFT JOIN organizations o ON o.id = m.organization_id
+   ORDER BY wg.name, wg.id, ce.changed_at, ce.membership_id, ce.change_type`;
+
+function windowBindings(window: WgChairDigestWindow): unknown[] {
+  return [window.start, window.end, window.start, window.end];
+}
+
+async function readDigestRows(
+  db: DatabaseLike,
+  window: WgChairDigestWindow,
+): Promise<{ changes: WgChangeRow[]; recipients: WgRecipientRow[] }> {
+  const [changeResult, recipientResult] = await db.batch([
+    db.prepare(WG_CHAIR_DIGEST_CHANGE_EVENTS_QUERY).bind(...windowBindings(window)),
+    db
+      .prepare(
+        `WITH ${CHANGE_EVENTS_CTE_SQL},
+              changed_groups AS (
+                SELECT DISTINCT working_group_id FROM change_events
+              ),
+              ${CURRENT_WORKING_GROUP_LEADERSHIP_CTES_SQL}
+         SELECT leadership.working_group_id,
+                leadership.user_id AS recipient_user_id,
+                u.email AS recipient_email,
+                u.first_name AS recipient_first_name,
+                u.last_name AS recipient_last_name,
+                CASE
+                  WHEN MAX(CASE WHEN leadership.role_id = '${WORKING_GROUP_CHAIR_ROLE_ID}' THEN 1 ELSE 0 END) = 1
+                    THEN 'chair'
+                  ELSE 'vice chair'
+                END AS recipient_role
+           FROM changed_groups changed
+           JOIN working_groups wg ON wg.id = changed.working_group_id AND wg.active = 1
+           JOIN current_working_group_leadership leadership
+             ON leadership.working_group_id = changed.working_group_id
+           JOIN users u ON u.id = leadership.user_id
+          WHERE u.active = 1
+            AND u.email <> ''
+            AND CASE
+                  WHEN u.notification_preferences_json IS NULL
+                    OR json_valid(u.notification_preferences_json) = 0
+                    THEN 1
+                  ELSE COALESCE(
+                    json_extract(u.notification_preferences_json, '$.wgChairMembershipDigest'),
+                    1
+                  )
+                END = 1
+          GROUP BY leadership.working_group_id, leadership.user_id,
+                   u.email, u.first_name, u.last_name
+          ORDER BY leadership.working_group_id, leadership.user_id`,
+      )
+      .bind(...windowBindings(window)),
+  ]);
+
+  return {
+    changes: batchRows<WgChangeRow>(changeResult),
+    recipients: batchRows<WgRecipientRow>(recipientResult),
+  };
 }
 
 function toChangeEntry(row: WgChangeRow): WgChangeEntry {
   return {
     name: [row.first_name, row.last_name].filter(Boolean).join(" ") || "Unknown",
-    organizationName: row.org_name,
+    organizationName: row.organization_name,
   };
 }
 
-export interface WgChairDigestResult {
-  workingGroupsWithChanges: number;
-  emailsSent: number;
-}
-
-export async function runWeeklyWgChairDigest(db: DatabaseLike, env: Env): Promise<WgChairDigestResult> {
-  const cutoff = new Date(Date.now() - 7 * 86_400_000).toISOString();
-  const { workingGroups: groups } = await listAdminWorkingGroups(db, {
-    limit: 200,
-    offset: 0,
-    sort: "name",
-  });
-
-  let workingGroupsWithChanges = 0;
-  let emailsSent = 0;
-
-  for (const wg of groups) {
-    if (!wg.active) continue;
-
-    const changeRows = await all<WgChangeRow>(
-      db,
-      `SELECT wgm.joined_at, wgm.left_at, u.first_name, u.last_name, o.name AS org_name
-       FROM working_group_members wgm
-       JOIN users u ON u.id = wgm.user_id
-       -- A WG member can represent more than one organization at once
-       -- (consolidated migration 0035) — join to a single deterministic representative
-       -- row (earliest joined_at) instead of fanning out one result row
-       -- (and one duplicate digest entry) per represented organization.
-${deterministicRepresentativeJoinSql("wgm.user_id")}
-       LEFT JOIN members m ON m.id = rep.member_id
-       LEFT JOIN organizations o ON o.id = m.organization_id
-       WHERE wgm.working_group_id = ?
-         AND (wgm.joined_at >= ? OR (wgm.left_at IS NOT NULL AND wgm.left_at >= ?))
-       ORDER BY u.last_name ASC, u.first_name ASC`,
-      [wg.id, cutoff, cutoff],
-    );
-
-    const joined = changeRows.filter((r) => r.joined_at >= cutoff).map(toChangeEntry);
-    const left = changeRows.filter((r) => r.left_at !== null && r.left_at >= cutoff).map(toChangeEntry);
-    if (joined.length === 0 && left.length === 0) continue;
-    workingGroupsWithChanges += 1;
-
-    const recipients: Array<{ userId: string; email: string; name: string; role: string }> = [];
-    if (wg.chair)
-      recipients.push({ userId: wg.chair.userId, email: wg.chair.email, name: wg.chair.name, role: "chair" });
-    if (wg.viceChair && wg.viceChair.userId !== wg.chair?.userId) {
-      recipients.push({
-        userId: wg.viceChair.userId,
-        email: wg.viceChair.email,
-        name: wg.viceChair.name,
-        role: "vice chair",
-      });
-    }
-
-    for (const recipient of recipients) {
-      const preferences = await getUserNotificationPreferences(db, recipient.userId);
-      if (!preferences.wgChairMembershipDigest) continue;
-
-      const outboxId = await queueEmail(db, {
-        templateKey: "wg-chair-membership-digest",
-        recipientUserId: recipient.userId,
-        recipientEmail: recipient.email,
-        messageType: "transactional",
-        subject: `${wg.name} — weekly membership update`,
-        data: {
-          workingGroupName: wg.name,
-          recipientName: recipient.name,
-          recipientRole: recipient.role,
-          joined,
-          left,
-        },
-      });
-      await processOutboxByIdBackground(db, env, outboxId);
-      emailsSent += 1;
-    }
+function groupDigestRows(changes: WgChangeRow[], recipients: WgRecipientRow[]): WgDigestGroup[] {
+  const groups = new Map<string, WgDigestGroup>();
+  for (const change of changes) {
+    const group = groups.get(change.working_group_id) ?? {
+      id: change.working_group_id,
+      name: change.working_group_name,
+      joined: [],
+      left: [],
+      recipients: [],
+    };
+    group[change.change_type].push(toChangeEntry(change));
+    groups.set(change.working_group_id, group);
   }
 
-  return { workingGroupsWithChanges, emailsSent };
+  for (const recipient of recipients) {
+    const group = groups.get(recipient.working_group_id);
+    if (!group) continue;
+    group.recipients.push({
+      userId: recipient.recipient_user_id,
+      email: recipient.recipient_email,
+      name:
+        [recipient.recipient_first_name, recipient.recipient_last_name].filter(Boolean).join(" ") ||
+        recipient.recipient_email,
+      role: recipient.recipient_role,
+    });
+  }
+  return [...groups.values()];
+}
+
+async function buildOutboxRows(groups: WgDigestGroup[], window: WgChairDigestWindow): Promise<BulkEmailQueueRow[]> {
+  return Promise.all(
+    groups.flatMap((group) =>
+      group.recipients.map(async (recipient) => {
+        const idempotencyKey = `${DIGEST_TEMPLATE_KEY}:${window.key}:${group.id}:${recipient.userId}`;
+        return {
+          outboxId: (await sha256Hex(idempotencyKey)).slice(0, 32),
+          idempotencyKey,
+          eventId: null,
+          templateKey: DIGEST_TEMPLATE_KEY,
+          recipientUserId: recipient.userId,
+          recipientEmail: recipient.email,
+          messageType: "transactional" as const,
+          subject: `${group.name} — weekly membership update`,
+          data: {
+            workingGroupName: group.name,
+            recipientName: recipient.name,
+            recipientRole: recipient.role,
+            windowStart: window.start,
+            windowEnd: window.end,
+            joined: group.joined,
+            left: group.left,
+          },
+        };
+      }),
+    ),
+  );
+}
+
+/** Read one closed weekly window and idempotently persist all digest messages. */
+export async function queueWeeklyWgChairDigest(db: DatabaseLike, now: Date = new Date()): Promise<QueuedWgChairDigest> {
+  const window = resolveWgChairDigestWindow(now);
+  const { changes, recipients } = await readDigestRows(db, window);
+  const groups = groupDigestRows(changes, recipients);
+  const rows = await buildOutboxRows(groups, window);
+  const chunks = prepareBulkQueueEmailChunkStatements(db, rows, now.toISOString());
+  const results = chunks.length ? await db.batch(chunks.map((chunk) => chunk.statement)) : [];
+
+  return {
+    workingGroupsWithChanges: groups.length,
+    emailsSent: results.reduce((total, result) => total + (result.meta?.changes ?? 0), 0),
+    outboxIds: chunks.flatMap((chunk) => chunk.ids),
+  };
+}
+
+export async function runWeeklyWgChairDigest(
+  db: DatabaseLike,
+  env: Env,
+  now: Date = new Date(),
+): Promise<WgChairDigestResult> {
+  const queued = await queueWeeklyWgChairDigest(db, now);
+  // Bound immediate delivery within the scheduled invocation's D1 budget.
+  // Remaining durable rows are picked up by the normal outbox processor.
+  const immediateDeliveryLimit = Math.max(0, getConfig(env).scheduledOutboxLimit);
+  const immediateDeliveryIds = queued.outboxIds.slice(0, immediateDeliveryLimit);
+  await processSelectedOutbox(db, env, immediateDeliveryIds);
+  return {
+    workingGroupsWithChanges: queued.workingGroupsWithChanges,
+    emailsSent: queued.emailsSent,
+  };
 }

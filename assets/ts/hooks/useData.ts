@@ -13,7 +13,12 @@ interface DataState<T> {
  * Usage:
  *   const { data, loading, error, reload } = useData(() => api<MyType>("/api/..."), [dep]);
  */
-export function useData<T>(fetcher: () => Promise<T>, deps: unknown[] = []): DataState<T> & { reload: () => void } {
+export function useData<T>(
+  fetcher: () => Promise<T>,
+  deps: unknown[] = [],
+): DataState<T> & {
+  reload: () => Promise<void>;
+} {
   const [state, setState] = useState<DataState<T>>({ data: null, loading: true, error: null });
 
   const load = useCallback(async () => {

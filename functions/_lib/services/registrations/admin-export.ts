@@ -5,6 +5,7 @@ import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
 import { extractDietarySelections } from "../../utils/registration-dietary";
+import { writeAuditLog } from "../audit";
 
 interface ExportRow {
   id: string;
@@ -81,4 +82,18 @@ export async function buildAdminRegistrationCsv(
     ];
   });
   return { csv: encodeBoundedCsv([header, ...dataRows], limits.maxBytes), recordCount: rows.length };
+}
+
+export async function buildAdminRegistrationCsvWithAudit(
+  db: DatabaseLike,
+  eventId: string,
+  actorUserId: string,
+  formFields: FormFieldDefinition[] | null | undefined,
+  limits: { maxRows: number; maxBytes: number },
+): Promise<{ csv: string; recordCount: number }> {
+  const result = await buildAdminRegistrationCsv(db, eventId, formFields, limits);
+  await writeAuditLog(db, "admin", actorUserId, "admin_registration_export", "event", eventId, {
+    recordCount: result.recordCount,
+  });
+  return result;
 }

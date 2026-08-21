@@ -3,7 +3,10 @@ import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { removeOrganizationLogo, replaceOrganizationLogo } from "../functions/_lib/services/organization-logo";
-import { processPendingStorageDeletions } from "../functions/_lib/services/storage-deletion-outbox";
+import {
+  enqueueStorageDeletion,
+  processPendingStorageDeletions,
+} from "../functions/_lib/services/storage-deletion-outbox";
 import { onRequestGet as memberLogo } from "../functions/api/v1/members/[id]/logo";
 import { createContext } from "./helpers/context";
 import type { AuthAdmin } from "../functions/_lib/types";
@@ -115,5 +118,43 @@ describe("shared stored-image pointer lifecycle", () => {
       .run();
     await processPendingStorageDeletions(env.DB, { ASSETS_BUCKET: bucket as unknown as R2Bucket }, 10);
     expect(bucket.keys()).not.toContain(oldKey);
+  });
+
+  it("recovers an expired deletion lease without stealing a live lease", async () => {
+    await setup();
+    const bucket = new FakeAssetsBucket();
+    await bucket.put("expired.jpg", jpeg.buffer);
+    await bucket.put("live.jpg", jpeg.buffer);
+    await enqueueStorageDeletion(env.DB, "expired.jpg", "assets");
+    await enqueueStorageDeletion(env.DB, "live.jpg", "assets");
+    await env.DB.batch([
+      env.DB.prepare(
+        `UPDATE storage_deletion_outbox
+              SET status = 'deleting', processing_token = 'abandoned',
+                  lease_expires_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 minute')
+            WHERE object_key = 'expired.jpg'`,
+      ),
+      env.DB.prepare(
+        `UPDATE storage_deletion_outbox
+              SET status = 'deleting', processing_token = 'current',
+                  lease_expires_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+5 minutes')
+            WHERE object_key = 'live.jpg'`,
+      ),
+    ]);
+
+    expect(await processPendingStorageDeletions(env.DB, { ASSETS_BUCKET: bucket as unknown as R2Bucket }, 10)).toEqual({
+      processed: 1,
+      failed: 0,
+    });
+    expect(bucket.keys()).toEqual(["live.jpg"]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT object_key, status, processing_token FROM storage_deletion_outbox ORDER BY object_key",
+      ),
+    ).toEqual([
+      { object_key: "expired.jpg", status: "deleted", processing_token: null },
+      { object_key: "live.jpg", status: "deleting", processing_token: "current" },
+    ]);
   });
 });

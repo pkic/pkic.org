@@ -4,7 +4,6 @@
 import { jsonNoStore } from "../../../../_lib/http";
 import { requireAnyActorFromRequest } from "../../../../_lib/auth/actor";
 import { revokePasskey } from "../../../../_lib/services/passkeys";
-import { writeAuditLog } from "../../../../_lib/services/audit";
 import { passkeyDeleteRouteSchema } from "../../../../../assets/shared/schemas/passkeys";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
@@ -13,8 +12,7 @@ export const PasskeyDelete = openApiRoute(passkeyDeleteRouteSchema, async (c: Ad
   const actor = await requireAnyActorFromRequest(requestDb(c), c.req.raw, c.env);
   const passkeyId = data.params.id;
 
-  await revokePasskey(requestDb(c), actor.id, passkeyId);
-  await writeAuditLog(requestDb(c), actor.kind, actor.id, "passkey_removed", "passkey_credential", passkeyId, {});
+  await revokePasskey(requestDb(c), actor, passkeyId);
 
   return jsonNoStore({ success: true });
 });

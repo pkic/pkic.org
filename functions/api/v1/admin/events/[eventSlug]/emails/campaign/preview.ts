@@ -1,5 +1,5 @@
 import { parseJsonBody } from "../../../../../../../_lib/validation";
-import { json } from "../../../../../../../_lib/http";
+import { dispatchPostOnly, json } from "../../../../../../../_lib/http";
 import { AppError } from "../../../../../../../_lib/errors";
 import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
 import { buildEventEmailVariables, getEventBySlug } from "../../../../../../../_lib/services/events";
@@ -20,7 +20,7 @@ import {
   prepareAdminCampaign,
   signCampaignPreviewToken,
 } from "../../../../../../../_lib/services/admin-email-campaign";
-import { adminEventCampaignPreviewSchema } from "../../../../../../../../assets/shared/schemas/api";
+import { adminEventCampaignPreviewSchema } from "../../../../../../../../assets/shared/schemas/admin-events";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 
 const PREVIEW_TTL_SECONDS = 10 * 60;
@@ -131,9 +131,5 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 }
 
 export async function onRequest(c: AdminContext): Promise<Response> {
-  if (c.req.raw.method !== "POST") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
-
-  return onRequestPost(c);
+  return dispatchPostOnly(c, onRequestPost);
 }

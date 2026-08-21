@@ -5,13 +5,15 @@ export type {
   PlannedDayWaitlistEntry,
 } from "./day-waitlist-types";
 export {
+  dayWaitlistOfferUnavailableError,
   isEventDayCapacityConflict,
+  isDayWaitlistOfferUnavailable,
   resolveCapacityExemptReason,
   roleBasedCapacityExemptReason,
+  withDayCapacityRetry,
 } from "./day-waitlist-capacity";
 export {
   buildRegistrationDayWaitlistSync,
-  prepareClaimOfferedDayWaitlistStatements,
   prepareRemoveAllDayWaitlistStatement,
   prepareSyncRegistrationDayWaitlistStatements,
   syncRegistrationDayWaitlist,

@@ -1,9 +1,10 @@
 import { useState, useRef } from "preact/hooks";
-import { ApiDataTable, type ApiTableActions } from "../../../../components/Table";
+import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataTable";
 import { api } from "../../../api";
-import { fmt, toast } from "../../../ui";
+import { fmt } from "../../../ui";
 import type { EventPermission } from "../../../types";
-import { adminEventTeamListResponseSchema } from "../../../../../shared/schemas/api";
+import { adminEventTeamListResponseSchema } from "../../../../../shared/schemas/admin-events";
+import { performAdminAction } from "../../../actions";
 
 const PERM_LABELS: Record<string, string> = {
   organizer: "Organizer",
@@ -22,41 +23,37 @@ export function Team({ slug }: { slug: string }) {
 
   async function handleRevoke(permId: string) {
     if (!confirm("Remove this team member?")) return;
-    try {
-      await api(`/api/v1/admin/events/${slug}/permissions/${permId}`, { method: "DELETE" });
-      toast("Permission revoked", "success");
-      tableRef.current?.reload();
-    } catch (e) {
-      toast((e as Error).message, "error");
-    }
+    await performAdminAction({
+      request: () => api(`/api/v1/admin/events/${slug}/permissions/${permId}`, { method: "DELETE" }),
+      successMessage: "Permission revoked",
+      afterSuccess: () => tableRef.current?.reload(),
+    });
   }
 
   async function handleAdd(e: Event) {
     e.preventDefault();
     if (!newEmail.trim()) return;
-    setAdding(true);
     setAddStatus("Adding…");
-    try {
-      await api(`/api/v1/admin/events/${slug}/permissions`, {
-        method: "POST",
-        body: JSON.stringify({
-          userEmail: newEmail.trim(),
-          permission: newPerm,
-          expiresAt: newExpiresAt ? new Date(newExpiresAt).toISOString() : undefined,
+    await performAdminAction({
+      setBusy: setAdding,
+      request: () =>
+        api(`/api/v1/admin/events/${slug}/permissions`, {
+          method: "POST",
+          body: JSON.stringify({
+            userEmail: newEmail.trim(),
+            permission: newPerm,
+            expiresAt: newExpiresAt ? new Date(newExpiresAt).toISOString() : undefined,
+          }),
         }),
-      });
-      toast("Permission added", "success");
-      setNewEmail("");
-      setNewExpiresAt("");
-      setAddStatus("");
-      tableRef.current?.reload();
-    } catch (e) {
-      const msg = (e as Error).message;
-      setAddStatus(msg);
-      toast(msg, "error");
-    } finally {
-      setAdding(false);
-    }
+      successMessage: "Permission added",
+      afterSuccess: () => {
+        setNewEmail("");
+        setNewExpiresAt("");
+        setAddStatus("");
+        tableRef.current?.reload();
+      },
+      onError: setAddStatus,
+    });
   }
 
   return (
@@ -109,12 +106,12 @@ export function Team({ slug }: { slug: string }) {
 
       <ApiDataTable<EventPermission>
         endpoint={`/api/v1/admin/events/${slug}/permissions`}
+        responseSchema={adminEventTeamListResponseSchema}
         resolve={(data) => adminEventTeamListResponseSchema.parse(data).permissions}
         resolvePage={(data) => adminEventTeamListResponseSchema.parse(data).page}
         paginate
         searchPlaceholder="Search email or role…"
         actionsRef={tableRef}
-        deps={[slug]}
         columns={[
           { header: "Email", cell: (p) => p.user_email, sort: { asc: "user_email", desc: "-user_email" } },
           {

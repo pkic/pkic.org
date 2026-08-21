@@ -1,4 +1,4 @@
-import { eventSlugParamsSchema } from "./api-common";
+import { eventSlugParamsSchema, proposerManagedSpeakerParamsSchema, successResponseSchema } from "./api-common";
 import {
   inviteResendLinkSchema,
   proposalCreateResponseSchema,
@@ -7,12 +7,12 @@ import {
   proposalManageSchema,
   proposalManageTokenParamsSchema,
   proposalManageUpdateResponseSchema,
+  proposalSpeakerRemovalResponseSchema,
   proposalResendManageLinkSchema,
   proposalResendSpeakerManageLinkSchema,
 } from "./proposal-management";
-import { successResponseSchema } from "./registration";
 import { jsonResponse, requiredJsonBody } from "./openapi";
-import { speakerReminderPreferenceResponseSchema, speakerReminderPreferenceSchema } from "./api";
+import { speakerReminderPreferenceResponseSchema, speakerReminderPreferenceSchema } from "./speaker-reminders";
 
 const genericAcceptedResponse = jsonResponse(
   "Request accepted. The response is intentionally generic to prevent account enumeration.",
@@ -103,6 +103,23 @@ export const proposalManageUpdateRouteSchema = {
     "400": { description: "Invalid proposal update." },
     "404": { description: "Proposal management capability not found." },
     "409": { description: "Proposal is not editable or changed concurrently." },
+    "410": { description: "Proposal management capability expired." },
+  },
+};
+
+export const proposerManagedSpeakerDeleteRouteSchema = {
+  tags: ["Proposals"],
+  summary: "Remove a speaker through proposal management",
+  description:
+    "Removes a non-proposer speaker while preserving the user and audit history. The final speaker and current proposer cannot be removed through this command.",
+  request: {
+    params: proposerManagedSpeakerParamsSchema,
+  },
+  responses: {
+    "200": jsonResponse("Speaker removed from the proposal.", proposalSpeakerRemovalResponseSchema),
+    "400": { description: "Invalid removal payload." },
+    "404": { description: "Proposal management capability or speaker not found." },
+    "409": { description: "The final speaker, current proposer, or closed proposal cannot be changed." },
     "410": { description: "Proposal management capability expired." },
   },
 };

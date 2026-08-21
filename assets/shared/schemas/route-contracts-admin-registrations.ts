@@ -1,15 +1,24 @@
-import { eventSlugParamsSchema } from "./api-common";
+import { eventSlugParamsSchema, successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema } from "./pagination";
 import { adminRegistrationDetailResponseSchema } from "./admin-registration-detail";
 import { z } from "zod";
+import { httpUrlSchema } from "./urls";
+import { registrationManageSchema } from "./registration";
+import { ADMIN_EVENT_REGISTRATION_STATUSES, adminEventRegistrationStatusSchema } from "./admin-events";
 
-export const badgeRegenerationQueuedResponseSchema = z.object({
-  success: z.literal(true),
+export const ADMIN_REGISTRATION_FORCE_STATUSES = ADMIN_EVENT_REGISTRATION_STATUSES;
+export const adminRegistrationForceStatusSchema = adminEventRegistrationStatusSchema;
+export const adminRegistrationUpdateSchema = z.union([
+  registrationManageSchema,
+  z.object({ action: z.literal("force_status"), status: adminRegistrationForceStatusSchema }),
+]);
+
+export const badgeRegenerationQueuedResponseSchema = successResponseSchema.extend({
   status: z.literal("queued"),
-  jobId: databaseIdSchema,
-  referralCode: z.string().min(1),
-  badgeUrl: z.url(),
+  jobId: z.string().regex(/^badge:[A-Za-z0-9]{1,64}$/),
+  referralCode: z.string().regex(/^[A-Za-z0-9]{1,64}$/),
+  badgeUrl: httpUrlSchema,
 });
 
 export const adminRegistrationAuditLogRouteSchema = {
@@ -51,7 +60,7 @@ export const adminRegistrationBadgeRegenerationRouteSchema = {
     params: eventSlugParamsSchema.extend({ registrationId: databaseIdSchema }),
   },
   responses: {
-    "200": {
+    "202": {
       description: "Badge regeneration queued.",
       content: { "application/json": { schema: badgeRegenerationQueuedResponseSchema } },
     },

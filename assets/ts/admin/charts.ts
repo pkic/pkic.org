@@ -16,17 +16,15 @@ export function statusBars(byStatus: Record<string, number>, total: number): str
 
 export function svgStatusSegmentBar(byStatus: Record<string, number>, total: number): string {
   if (!total) return '<p class="text-muted fst-italic small">No data</p>';
-  const STATUS_ORDER = ["registered", "pending_email_confirmation", "waitlisted", "cancelled"];
+  const STATUS_ORDER = ["registered", "pending_email_confirmation", "cancelled"];
   const STATUS_COLORS: Record<string, string> = {
     registered: "#198754",
     pending_email_confirmation: "#fd7e14",
-    waitlisted: "#0dcaf0",
     cancelled: "#dc3545",
   };
   const STATUS_LABELS: Record<string, string> = {
     registered: "Confirmed",
     pending_email_confirmation: "Pending",
-    waitlisted: "Waitlisted",
     cancelled: "Cancelled",
   };
   const W = 460,
@@ -83,6 +81,23 @@ export function fmtMoney(cents: number, currency: string): string {
   });
 }
 
+function horizontalGrid(
+  width: number,
+  paddingLeft: number,
+  paddingRight: number,
+  paddingTop: number,
+  chartHeight: number,
+  maxValue: number,
+): string {
+  let output = "";
+  for (let grid = 1; grid <= 3; grid++) {
+    const y = paddingTop + chartHeight - (grid / 3) * chartHeight;
+    output += `<line x1="${paddingLeft}" y1="${y.toFixed(1)}" x2="${(width - paddingRight).toFixed(1)}" y2="${y.toFixed(1)}" stroke="#e9ecef" stroke-width="1"/>`;
+    output += `<text x="${(paddingLeft - 3).toFixed(1)}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="#6c757d" font-family="inherit">${Math.round((grid / 3) * maxValue)}</text>`;
+  }
+  return output;
+}
+
 export function svgBarChart(labels: string[], values: number[], opts: { color?: string } = {}): string {
   const n = labels.length;
   if (!n) return '<p class="text-muted fst-italic small">No data</p>';
@@ -99,13 +114,7 @@ export function svgBarChart(labels: string[], values: number[], opts: { color?: 
   const barW = Math.max(2, slotW - 3);
   const color = opts.color ?? "#198754";
   const step = Math.max(1, Math.ceil(n / 10));
-  const gridSteps = 3;
-  let out = "";
-  for (let g = 1; g <= gridSteps; g++) {
-    const gy = pT + chartH - (g / gridSteps) * chartH;
-    out += `<line x1="${pL}" y1="${gy.toFixed(1)}" x2="${(W - pR).toFixed(1)}" y2="${gy.toFixed(1)}" stroke="#e9ecef" stroke-width="1"/>`;
-    out += `<text x="${(pL - 3).toFixed(1)}" y="${(gy + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="#6c757d" font-family="inherit">${Math.round((g / gridSteps) * maxVal)}</text>`;
-  }
+  let out = horizontalGrid(W, pL, pR, pT, chartH, maxVal);
   for (let i = 0; i < n; i++) {
     const x = pL + i * slotW + 1.5;
     const barH = values[i] === 0 ? 0 : Math.max(2, (values[i] / maxVal) * chartH);
@@ -141,13 +150,7 @@ export function svgLineChart(
   const step = Math.max(1, Math.ceil(n / 12));
   const px = (i: number) => pL + (i / Math.max(1, n - 1)) * chartW;
   const py = (v: number) => pT + chartH - (v / maxVal) * chartH;
-  const gridSteps = 3;
-  let out = "";
-  for (let g = 1; g <= gridSteps; g++) {
-    const gy = pT + chartH - (g / gridSteps) * chartH;
-    out += `<line x1="${pL}" y1="${gy.toFixed(1)}" x2="${(W - pR).toFixed(1)}" y2="${gy.toFixed(1)}" stroke="#e9ecef" stroke-width="1"/>`;
-    out += `<text x="${(pL - 3).toFixed(1)}" y="${(gy + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="#6c757d" font-family="inherit">${Math.round((g / gridSteps) * maxVal)}</text>`;
-  }
+  let out = horizontalGrid(W, pL, pR, pT, chartH, maxVal);
   for (let i = 0; i < n; i++) {
     if (i % step === 0 || i === n - 1) {
       out += `<text x="${px(i).toFixed(1)}" y="${(pT + chartH + 14).toFixed(1)}" text-anchor="middle" font-size="9" fill="#6c757d" font-family="inherit">${esc(xLabels[i])}</text>`;
@@ -170,6 +173,26 @@ export function svgLineChart(
   return (
     `<svg class="adm-chart-svg" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true">${out}</svg>` +
     `<div class="adm-chart-legend">${legend}</div>`
+  );
+}
+
+export function recentActivityChart(activity: Array<{ date: string; registrations: number; invites: number }>): string {
+  return svgLineChart(
+    [
+      {
+        label: "Registrations",
+        values: activity.map((day) => day.registrations),
+        stroke: "#198754",
+        area: "rgba(25,135,84,.07)",
+      },
+      {
+        label: "Invites",
+        values: activity.map((day) => day.invites),
+        stroke: "#fd7e14",
+        area: "rgba(253,126,20,.07)",
+      },
+    ],
+    activity.map((day) => day.date.slice(5)),
   );
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { ApiDataTable, type ApiTableActions } from "../../../components/Table";
+import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
 import { Badge } from "../../../components/Badge";
 import { api } from "../../api";
 import { fmt } from "../../ui";
@@ -50,13 +50,13 @@ export function ApplicationsList({ onViewApplication }: { onViewApplication: (id
       {stageFilter === "in_consultation" && <ConsultationQueueBanner />}
       <ApiDataTable<AdminApplicationSummary>
         endpoint="/api/v1/admin/applications"
+        responseSchema={adminApplicationsListResponseSchema}
         resolve={(data) => adminApplicationsListResponseSchema.parse(data).applications}
         resolvePage={(data) => adminApplicationsListResponseSchema.parse(data).page}
         paginate
         actionsRef={tableRef}
         searchPlaceholder="applicant email or name"
         params={stageFilter ? { stage: stageFilter } : {}}
-        deps={[stageFilter]}
         toolbar={({ resetPage }) => (
           <select
             class="form-select form-select-sm w-auto"

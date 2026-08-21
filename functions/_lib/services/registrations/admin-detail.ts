@@ -21,6 +21,7 @@ export interface AdminRegistrationDetailRow {
   display_name: string | null;
   referral_code: string | null;
   rsvp_status: string | null;
+  rsvp_by_day_json: string | null;
   custom_answers_json: string | null;
 }
 
@@ -36,7 +37,37 @@ export async function fetchAdminRegistrationWithDetails(
             u.email AS user_email,
             COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
             rc.code AS referral_code,
-            (SELECT response_status FROM calendar_rsvp_events WHERE registration_id = r.id ORDER BY created_at DESC LIMIT 1) AS rsvp_status
+            (SELECT response_status
+             FROM calendar_rsvp_events
+             WHERE registration_id = r.id
+             ORDER BY julianday(received_at) DESC, id DESC
+             LIMIT 1) AS rsvp_status,
+            COALESCE((
+              SELECT JSON_GROUP_ARRAY(JSON_OBJECT(
+                'event_day_id', event_day_id,
+                'day_date', day_date,
+                'status', response_status,
+                'received_at', received_at,
+                'ics_uid', ics_uid,
+                'action_taken', action_taken
+              ))
+              FROM (
+                SELECT event_day_id, day_date, response_status, received_at, ics_uid, action_taken
+                FROM (
+                  SELECT cre.event_day_id, ed.day_date, cre.response_status, cre.received_at,
+                         cre.ics_uid, cre.action_taken,
+                         ROW_NUMBER() OVER (
+                           PARTITION BY cre.event_day_id
+                           ORDER BY julianday(cre.received_at) DESC, cre.id DESC
+                         ) AS rn
+                  FROM calendar_rsvp_events cre
+                  LEFT JOIN event_days ed ON ed.id = cre.event_day_id
+                  WHERE cre.registration_id = r.id
+                )
+                WHERE rn = 1
+                ORDER BY event_day_id
+              )
+            ), '[]') AS rsvp_by_day_json
      FROM registrations r
      LEFT JOIN users u ON u.id = r.user_id
      LEFT JOIN referral_codes rc ON rc.owner_type = 'registration' AND rc.owner_id = r.id
@@ -78,6 +109,10 @@ export function toAdminRegistrationDetail(
     display_name: registration.display_name,
     referral_code: registration.referral_code,
     rsvp_status: registration.rsvp_status,
+    rsvpByDay: parseJsonSafe<AdminRegistrationDetailResponse["registration"]["rsvpByDay"]>(
+      registration.rsvp_by_day_json,
+      [],
+    ),
     customAnswers: parseJsonSafe<Record<string, unknown> | null>(registration.custom_answers_json, null),
   };
 }

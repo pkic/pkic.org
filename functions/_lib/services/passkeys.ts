@@ -15,14 +15,28 @@ import type { AuthenticationResponseJSON, RegistrationResponseJSON, WebAuthnCred
 import { isoBase64URL } from "@simplewebauthn/server/helpers";
 import type { z } from "zod";
 import { AppError } from "../errors";
-import { all, first, run } from "../db/queries";
+import { all, first } from "../db/queries";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
-import { signJwt, verifyJwt } from "../utils/jwt";
-import { findEligibleStaffUserById, issueAdminSession } from "../auth/admin";
-import { findEligibleMemberById, issueMemberSession } from "../auth/member";
+import { findEligibleStaffUserById } from "../auth/admin";
+import { findEligibleMemberById } from "../auth/member";
+import { prepareSessionRow } from "../auth/session-engine";
+import { resolveMemberSessionTtlHours } from "../auth/session-policy";
+import { AUTH_SCOPES } from "../auth/scopes";
+import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "./audit";
+import { MAX_PASSKEY_CREDENTIALS_PER_USER } from "../../../assets/shared/constants/passkeys";
 import type { authenticationResponseSchema, registrationResponseSchema } from "../../../assets/shared/schemas/passkeys";
-import type { AuthAdmin, AuthMember, DatabaseLike, Env } from "../types";
+import type { AuthAdmin, AuthMember, DatabaseLike, Env, StatementLike } from "../types";
+import {
+  issuePasskeyChallengeToken,
+  passkeyChallengeAlreadyUsedError,
+  prepareConsumePasskeyChallenge,
+  prepareExpiredPasskeyChallengeCleanup,
+  toPasskeyChallengeUse,
+  verifyPasskeyChallengeToken,
+  wasPasskeyChallengeConsumed,
+  type PasskeyChallengeUse,
+} from "./passkey-challenges";
 
 // The route layer validates the WebAuthn response shape with Zod
 // (assets/shared/schemas/passkeys.ts) before it reaches here; that schema is
@@ -32,73 +46,15 @@ import type { AuthAdmin, AuthMember, DatabaseLike, Env } from "../types";
 type RegistrationResponseInput = z.infer<typeof registrationResponseSchema>;
 type AuthenticationResponseInput = z.infer<typeof authenticationResponseSchema>;
 
-const CHALLENGE_TTL_SECONDS = 300;
 const PASSKEY_SESSION_TTL_HOURS = 8;
-// Matches functions/api/v1/auth/member/verify-link.ts's DEFAULT_MEMBER_SESSION_TTL_HOURS —
-// members aren't expected to re-authenticate as often as staff.
-const DEFAULT_MEMBER_PASSKEY_SESSION_TTL_HOURS = 720;
-const CHALLENGE_TOKEN_TYPE = "passkey-challenge";
-
-type ChallengePurpose = "registration" | "authentication";
-
-interface PasskeyChallengeClaims {
-  typ: typeof CHALLENGE_TOKEN_TYPE;
-  purpose: ChallengePurpose;
-  challenge: string;
-  userId?: string;
-  exp: number;
-}
-
-function isPasskeyChallengeClaims(claims: object): claims is PasskeyChallengeClaims {
-  const candidate = claims as Partial<PasskeyChallengeClaims>;
-  return (
-    candidate.typ === CHALLENGE_TOKEN_TYPE &&
-    (candidate.purpose === "registration" || candidate.purpose === "authentication") &&
-    typeof candidate.challenge === "string" &&
-    (candidate.userId === undefined || typeof candidate.userId === "string") &&
-    typeof candidate.exp === "number"
-  );
-}
+const PASSKEY_CREDENTIAL_COLUMNS =
+  "id, user_id, credential_id, public_key, sign_count, aaguid, device_name, last_used_at, created_at, revoked_at";
 
 function requireEnvVar(value: string | undefined, name: string): string {
   if (!value) {
     throw new AppError(500, "WEBAUTHN_CONFIG_MISSING", `${name} is not configured`);
   }
   return value;
-}
-
-async function signChallengeToken(
-  secret: string,
-  purpose: ChallengePurpose,
-  challenge: string,
-  userId?: string,
-): Promise<string> {
-  const claims: PasskeyChallengeClaims = {
-    typ: CHALLENGE_TOKEN_TYPE,
-    purpose,
-    challenge,
-    exp: Math.floor(Date.now() / 1000) + CHALLENGE_TTL_SECONDS,
-  };
-  if (userId) {
-    claims.userId = userId;
-  }
-  return signJwt(secret, claims as unknown as Record<string, unknown>);
-}
-
-async function verifyChallengeToken(
-  secret: string,
-  token: string,
-  purpose: ChallengePurpose,
-): Promise<PasskeyChallengeClaims> {
-  const result = await verifyJwt<object>(secret, token);
-  if (!result.ok || !isPasskeyChallengeClaims(result.claims) || result.claims.purpose !== purpose) {
-    throw new AppError(
-      400,
-      "PASSKEY_CHALLENGE_INVALID",
-      result.ok === false && result.reason === "expired" ? "Passkey challenge expired" : "Invalid passkey challenge",
-    );
-  }
-  return result.claims;
 }
 
 interface PasskeyCredentialRow {
@@ -120,6 +76,14 @@ export interface PasskeySummary {
   aaguid: string | null;
   lastUsedAt: string | null;
   createdAt: string;
+}
+
+export interface VerifiedPasskeyCredentialInput {
+  credentialId: string;
+  publicKey: string;
+  signCount: number;
+  aaguid: string | null;
+  deviceName: string | null;
 }
 
 function toSummary(row: PasskeyCredentialRow): PasskeySummary {
@@ -145,9 +109,16 @@ export async function beginPasskeyRegistration(
 
   const existing = await all<{ credential_id: string }>(
     db,
-    "SELECT credential_id FROM passkey_credentials WHERE user_id = ? AND revoked_at IS NULL",
-    [actor.id],
+    "SELECT credential_id FROM passkey_credentials WHERE user_id = ? AND revoked_at IS NULL ORDER BY created_at ASC, id ASC LIMIT ?",
+    [actor.id, MAX_PASSKEY_CREDENTIALS_PER_USER],
   );
+  if (existing.length >= MAX_PASSKEY_CREDENTIALS_PER_USER) {
+    throw new AppError(
+      409,
+      "PASSKEY_LIMIT_REACHED",
+      `Each account can have at most ${MAX_PASSKEY_CREDENTIALS_PER_USER} active passkeys`,
+    );
+  }
 
   const options = await generateRegistrationOptions({
     rpName,
@@ -159,7 +130,7 @@ export async function beginPasskeyRegistration(
     authenticatorSelection: { residentKey: "preferred", userVerification: "preferred" },
   });
 
-  const challengeToken = await signChallengeToken(signingSecret, "registration", options.challenge, actor.id);
+  const challengeToken = await issuePasskeyChallengeToken(signingSecret, "registration", options.challenge, actor.id);
 
   return { options: options as unknown as Record<string, unknown>, challengeToken };
 }
@@ -167,16 +138,19 @@ export async function beginPasskeyRegistration(
 export async function completePasskeyRegistration(
   db: DatabaseLike,
   env: WebAuthnEnv,
-  actor: { id: string },
+  actor: { id: string; kind: "admin" | "member" },
   payload: { challengeToken: string; response: RegistrationResponseInput; deviceName?: string | null },
 ): Promise<PasskeySummary> {
   const rpId = requireEnvVar(env.WEBAUTHN_RP_ID, "WEBAUTHN_RP_ID");
   const origin = requireEnvVar(env.WEBAUTHN_ORIGIN, "WEBAUTHN_ORIGIN");
   const signingSecret = requireEnvVar(env.INTERNAL_SIGNING_SECRET, "INTERNAL_SIGNING_SECRET");
 
-  const claims = await verifyChallengeToken(signingSecret, payload.challengeToken, "registration");
+  const claims = await verifyPasskeyChallengeToken(signingSecret, payload.challengeToken, "registration");
   if (claims.userId !== actor.id) {
     throw new AppError(400, "PASSKEY_CHALLENGE_INVALID", "Passkey challenge does not match the authenticated user");
+  }
+  if (await wasPasskeyChallengeConsumed(db, claims.challengeId)) {
+    throw passkeyChallengeAlreadyUsedError();
   }
 
   const verification = await verifyRegistrationResponse({
@@ -197,36 +171,114 @@ export async function completePasskeyRegistration(
   }
 
   const { credential, aaguid } = verification.registrationInfo;
+  return persistVerifiedPasskeyCredential(
+    db,
+    actor,
+    {
+      credentialId: credential.id,
+      publicKey: isoBase64URL.fromBuffer(credential.publicKey),
+      signCount: credential.counter,
+      aaguid,
+      deviceName: payload.deviceName ?? null,
+    },
+    toPasskeyChallengeUse(claims),
+  );
+}
 
-  const duplicate = await first<{ id: string }>(db, "SELECT id FROM passkey_credentials WHERE credential_id = ?", [
-    credential.id,
-  ]);
-  if (duplicate) {
+/**
+ * Persists an already verified WebAuthn credential. The cap predicate and
+ * insert execute as one SQLite statement, so concurrent ceremonies cannot
+ * both claim the final slot. The OFFSET probe touches at most the configured
+ * cap through the partial active-credential index, including for legacy
+ * overfull accounts.
+ */
+export async function persistVerifiedPasskeyCredential(
+  db: DatabaseLike,
+  actor: { id: string; kind: "admin" | "member" },
+  credential: VerifiedPasskeyCredentialInput,
+  challenge?: PasskeyChallengeUse,
+): Promise<PasskeySummary> {
+  const findDuplicate = () =>
+    first<{ id: string }>(db, "SELECT id FROM passkey_credentials WHERE credential_id = ? LIMIT 1", [
+      credential.credentialId,
+    ]);
+  if (await findDuplicate()) {
     throw new AppError(409, "PASSKEY_ALREADY_REGISTERED", "This passkey is already registered");
   }
 
   const id = uuid();
   const now = nowIso();
-  const deviceName = payload.deviceName ?? null;
 
-  await run(
-    db,
-    `INSERT INTO passkey_credentials (
-      id, user_id, credential_id, public_key, sign_count, aaguid, device_name, last_used_at, created_at, revoked_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL)`,
-    [
-      id,
-      actor.id,
-      credential.id,
-      isoBase64URL.fromBuffer(credential.publicKey),
-      credential.counter,
-      aaguid,
-      deviceName,
-      now,
-    ],
-  );
+  try {
+    await db.batch([
+      ...(challenge ? [prepareConsumePasskeyChallenge(db, challenge, now)] : []),
+      db
+        .prepare(
+          `INSERT INTO passkey_credentials (
+             id, user_id, credential_id, public_key, sign_count, aaguid, device_name,
+             last_used_at, created_at, revoked_at
+           )
+           SELECT ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL
+           WHERE NOT EXISTS (
+             SELECT 1 FROM passkey_credentials
+             WHERE user_id = ? AND revoked_at IS NULL
+             ORDER BY created_at ASC, id ASC
+             LIMIT 1 OFFSET ?
+           )`,
+        )
+        .bind(
+          id,
+          actor.id,
+          credential.credentialId,
+          credential.publicKey,
+          credential.signCount,
+          credential.aaguid,
+          credential.deviceName,
+          now,
+          actor.id,
+          MAX_PASSKEY_CREDENTIALS_PER_USER - 1,
+        ),
+      prepareAuditLogAfterOneChange(
+        db,
+        actor.kind,
+        actor.id,
+        "passkey_registered",
+        "passkey_credential",
+        id,
+        { deviceName: credential.deviceName },
+        now,
+      ),
+      ...(challenge ? [prepareExpiredPasskeyChallengeCleanup(db, now)] : []),
+    ]);
+  } catch (error) {
+    if (challenge && (await wasPasskeyChallengeConsumed(db, challenge.challengeId))) {
+      throw passkeyChallengeAlreadyUsedError();
+    }
+    if (isAuditOneChangeGuardFailure(error)) {
+      if (await findDuplicate()) {
+        throw new AppError(409, "PASSKEY_ALREADY_REGISTERED", "This passkey is already registered");
+      }
+      throw new AppError(
+        409,
+        "PASSKEY_LIMIT_REACHED",
+        `Each account can have at most ${MAX_PASSKEY_CREDENTIALS_PER_USER} active passkeys`,
+      );
+    }
+    // A different registration can win the unique credential-id race after
+    // the preflight lookup but before this transaction commits.
+    if (await findDuplicate()) {
+      throw new AppError(409, "PASSKEY_ALREADY_REGISTERED", "This passkey is already registered");
+    }
+    throw error;
+  }
 
-  return { id, deviceName, aaguid, lastUsedAt: null, createdAt: now };
+  return {
+    id,
+    deviceName: credential.deviceName,
+    aaguid: credential.aaguid,
+    lastUsedAt: null,
+    createdAt: now,
+  };
 }
 
 export async function beginPasskeyAuthentication(
@@ -246,7 +298,7 @@ export async function beginPasskeyAuthentication(
     userVerification: "preferred",
   });
 
-  const challengeToken = await signChallengeToken(signingSecret, "authentication", options.challenge);
+  const challengeToken = await issuePasskeyChallengeToken(signingSecret, "authentication", options.challenge);
 
   return { options: options as unknown as Record<string, unknown>, challengeToken };
 }
@@ -264,11 +316,14 @@ export async function completePasskeyAuthentication(
   const origin = requireEnvVar(env.WEBAUTHN_ORIGIN, "WEBAUTHN_ORIGIN");
   const signingSecret = requireEnvVar(env.INTERNAL_SIGNING_SECRET, "INTERNAL_SIGNING_SECRET");
 
-  const claims = await verifyChallengeToken(signingSecret, payload.challengeToken, "authentication");
+  const claims = await verifyPasskeyChallengeToken(signingSecret, payload.challengeToken, "authentication");
+  if (await wasPasskeyChallengeConsumed(db, claims.challengeId)) {
+    throw passkeyChallengeAlreadyUsedError();
+  }
 
   const credentialRow = await first<PasskeyCredentialRow>(
     db,
-    "SELECT * FROM passkey_credentials WHERE credential_id = ?",
+    `SELECT ${PASSKEY_CREDENTIAL_COLUMNS} FROM passkey_credentials WHERE credential_id = ?`,
     [payload.response.id],
   );
 
@@ -323,34 +378,114 @@ export async function completePasskeyAuthentication(
     throw new AppError(403, "AUTH_FORBIDDEN", "This account is no longer eligible to sign in");
   }
 
-  await run(db, "UPDATE passkey_credentials SET sign_count = ?, last_used_at = ? WHERE id = ?", [
-    newCounter,
-    nowIso(),
-    credentialRow.id,
-  ]);
+  const lastUsedAt = nowIso();
+  const challenge = toPasskeyChallengeUse(claims);
+  const persistAuthentication = async (input: {
+    actorType: "admin" | "member";
+    actorId: string;
+    entityType: "admin_session" | "member_session";
+    sessionId: string;
+    expiresAt: string;
+    sessionStatement: StatementLike;
+  }) => {
+    try {
+      await db.batch([
+        prepareConsumePasskeyChallenge(db, challenge, lastUsedAt),
+        db
+          .prepare(
+            `UPDATE passkey_credentials
+             SET sign_count = ?, last_used_at = ?
+             WHERE id = ? AND sign_count = ? AND revoked_at IS NULL`,
+          )
+          .bind(newCounter, lastUsedAt, credentialRow.id, credentialRow.sign_count),
+        prepareAuditLogAfterOneChange(
+          db,
+          input.actorType,
+          input.actorId,
+          "passkey_authenticated",
+          input.entityType,
+          input.sessionId,
+          { expiresAt: input.expiresAt },
+          lastUsedAt,
+        ),
+        input.sessionStatement,
+        prepareExpiredPasskeyChallengeCleanup(db, lastUsedAt),
+      ]);
+    } catch (error) {
+      if (await wasPasskeyChallengeConsumed(db, challenge.challengeId)) {
+        throw passkeyChallengeAlreadyUsedError();
+      }
+      if (isAuditOneChangeGuardFailure(error)) {
+        throw new AppError(
+          400,
+          "PASSKEY_SIGN_COUNT_REUSED",
+          "Passkey sign count did not increase; possible replay or clone",
+        );
+      }
+      throw error;
+    }
+  };
 
   if (staffUser) {
-    const issued = await issueAdminSession(db, staffUser, PASSKEY_SESSION_TTL_HOURS);
-    return { kind: "admin", ...issued };
+    const session = await prepareSessionRow(
+      db,
+      { table: "sessions", subjectColumn: "user_id" },
+      staffUser.id,
+      PASSKEY_SESSION_TTL_HOURS,
+    );
+    const admin: AuthAdmin = {
+      id: staffUser.id,
+      email: staffUser.email,
+      role: staffUser.role,
+      scopes: staffUser.role === "admin" ? [...AUTH_SCOPES] : [],
+    };
+    await persistAuthentication({
+      actorType: "admin",
+      actorId: admin.id,
+      entityType: "admin_session",
+      sessionId: session.sessionId,
+      expiresAt: session.expiresAt,
+      sessionStatement: session.statement,
+    });
+    return { kind: "admin", admin, sessionId: session.sessionId, expiresAt: session.expiresAt };
   }
 
-  const parsed = Number.parseInt(env.MEMBER_SESSION_TTL_HOURS ?? "", 10);
-  const memberSessionTtlHours =
-    Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MEMBER_PASSKEY_SESSION_TTL_HOURS;
-  const issued = await issueMemberSession(db, member!, memberSessionTtlHours);
-  return { kind: "member", ...issued };
+  const session = await prepareSessionRow(
+    db,
+    { table: "sessions", subjectColumn: "user_id" },
+    member!.userId,
+    resolveMemberSessionTtlHours(env.MEMBER_SESSION_TTL_HOURS),
+  );
+  const authenticatedMember = { ...member!, sessionId: session.sessionId, expiresAt: session.expiresAt };
+  await persistAuthentication({
+    actorType: "member",
+    actorId: member!.userId,
+    entityType: "member_session",
+    sessionId: session.sessionId,
+    expiresAt: session.expiresAt,
+    sessionStatement: session.statement,
+  });
+  return { kind: "member", member: authenticatedMember, sessionId: session.sessionId, expiresAt: session.expiresAt };
 }
 
 export async function listPasskeysForUser(db: DatabaseLike, userId: string): Promise<PasskeySummary[]> {
   const rows = await all<PasskeyCredentialRow>(
     db,
-    "SELECT * FROM passkey_credentials WHERE user_id = ? AND revoked_at IS NULL ORDER BY created_at ASC",
-    [userId],
+    `SELECT ${PASSKEY_CREDENTIAL_COLUMNS}
+     FROM passkey_credentials
+     WHERE user_id = ? AND revoked_at IS NULL
+     ORDER BY created_at ASC, id ASC
+     LIMIT ?`,
+    [userId, MAX_PASSKEY_CREDENTIALS_PER_USER],
   );
   return rows.map(toSummary);
 }
 
-export async function revokePasskey(db: DatabaseLike, userId: string, passkeyId: string): Promise<void> {
+export async function revokePasskey(
+  db: DatabaseLike,
+  actor: { id: string; kind: "admin" | "member" },
+  passkeyId: string,
+): Promise<void> {
   const row = await first<{ id: string; user_id: string }>(
     db,
     "SELECT id, user_id FROM passkey_credentials WHERE id = ? AND revoked_at IS NULL",
@@ -361,9 +496,12 @@ export async function revokePasskey(db: DatabaseLike, userId: string, passkeyId:
     throw new AppError(404, "NOT_FOUND", "Passkey not found");
   }
 
-  if (row.user_id !== userId) {
+  if (row.user_id !== actor.id) {
     throw new AppError(403, "PERMISSION_REQUIRED", "Cannot remove another user's passkey");
   }
 
-  await run(db, "UPDATE passkey_credentials SET revoked_at = ? WHERE id = ?", [nowIso(), passkeyId]);
+  await db.batch([
+    db.prepare("UPDATE passkey_credentials SET revoked_at = ? WHERE id = ?").bind(nowIso(), passkeyId),
+    prepareAuditLog(db, actor.kind, actor.id, "passkey_removed", "passkey_credential", passkeyId, {}),
+  ]);
 }

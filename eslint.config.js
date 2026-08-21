@@ -8,7 +8,7 @@ const sourceTypeScriptFiles = [
   "functions/**/*.ts",
   "assets/ts/**/*.{ts,tsx}",
   "assets/shared/**/*.ts",
-  "tests/**/*.ts",
+  "tests/**/*.{ts,tsx}",
 ];
 const toolingTypeScriptFiles = ["*.config.ts", "tests/tools/**/*.ts"];
 const allTypeScriptFiles = [...sourceTypeScriptFiles, ...toolingTypeScriptFiles];
@@ -127,6 +127,10 @@ export default tseslint.config(
               group: ["**/_lib/db/queries", "**/_lib/db/pagination"],
               message: "API adapters must call a focused service instead of importing SQL execution helpers.",
             },
+            {
+              group: ["**/_lib/services/audit"],
+              message: "API adapters must call a focused use case that owns the operation and its audit record.",
+            },
           ],
         },
       ],
@@ -139,6 +143,11 @@ export default tseslint.config(
         {
           selector: "CallExpression[callee.property.name='batch']",
           message: "API adapters must not execute D1 batches; the service must own the complete atomic unit of work.",
+        },
+        {
+          selector: "Literal[value=405]",
+          message:
+            "API adapters must use dispatchRequestMethod/dispatchPostOnly so 405 responses and Allow headers stay canonical.",
         },
       ],
     },

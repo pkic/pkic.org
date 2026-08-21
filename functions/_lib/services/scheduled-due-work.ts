@@ -87,6 +87,9 @@ function addRsvpEnforcementTotals(total: RsvpEnforcementResult, next: RsvpEnforc
   total.bouncesProcessed += next.bouncesProcessed;
   total.warningsSent += next.warningsSent;
   total.downgradesProcessed += next.downgradesProcessed;
+  total.ignored += next.ignored;
+  total.examined += next.examined;
+  total.limitReached ||= next.limitReached;
 }
 
 function emptyWaitlistPromotionTotals(): WaitlistPromotionResult {
@@ -144,14 +147,15 @@ function didPassReachWorkLimit(
     badgeRenders.processed + badgeRenders.failed >= limits.scheduledBadgeRenderLimit;
   const promotedWaitlist = waitlistPromotions.dayRegistrationOffers > 0;
   const rsvpQueuedEmails = rsvp.warningsSent + rsvp.downgradesProcessed;
-  const rsvpProcessedWork = rsvp.bouncesProcessed + rsvpQueuedEmails;
+  const rsvpProcessedWork = rsvp.bouncesProcessed + rsvp.ignored + rsvpQueuedEmails;
   return (
     filledReminderBatch ||
     filledOutboxBatch ||
     filledStorageDeletionBatch ||
     filledBadgeRenderBatch ||
     promotedWaitlist ||
-    rsvpProcessedWork > 0
+    rsvpProcessedWork > 0 ||
+    rsvp.limitReached
   );
 }
 
@@ -210,13 +214,21 @@ export async function runScheduledDueWork(
   );
   const reminders = emptyReminderCycleTotals();
   const waitlistPromotions = emptyWaitlistPromotionTotals();
-  const rsvpEnforcement: RsvpEnforcementResult = { bouncesProcessed: 0, warningsSent: 0, downgradesProcessed: 0 };
+  const rsvpEnforcement: RsvpEnforcementResult = {
+    bouncesProcessed: 0,
+    warningsSent: 0,
+    downgradesProcessed: 0,
+    ignored: 0,
+    examined: 0,
+    limitReached: false,
+  };
   const outbox: OutboxResult = { processed: 0, failed: 0 };
   const storageDeletions: StorageDeletionResult = { processed: 0, failed: 0 };
   const badgeRenders: BadgeRenderResult = { processed: 0, failed: 0 };
   const passes: ScheduledDueWorkPass[] = [];
   const passDurations: number[] = [];
   const passD1Queries: number[] = [];
+  let remainingBadgeRenderAllowance = config.scheduledBadgeRenderLimit;
   const initialD1Queries = invocationBudget?.d1QueryBudget?.usedQueries() ?? 0;
   let stoppedReason: ScheduledDueWorkResult["stoppedReason"] = "max_passes";
 
@@ -247,15 +259,20 @@ export async function runScheduledDueWork(
       limit: config.scheduledReminderLimit,
     });
     const cycleTotals = summarizeReminderCycle(cycle);
+    const rsvpPass = await runRsvpEnforcer(env.DB, env, invocationBudget?.d1QueryBudget?.remainingQueries());
     const waitlistPass = await runWaitlistPromotionCycle(env.DB, {
       appBaseUrl: config.appBaseUrl,
       claimWindowHours: config.waitlistClaimWindowHours,
       limit: config.scheduledWaitlistPromotionLimit,
     });
-    const rsvpPass = await runRsvpEnforcer(env.DB, env);
     const outboxPass = await processPendingOutbox(env.DB, env, config.scheduledOutboxLimit);
     const storageDeletionPass = await processPendingStorageDeletions(env.DB, env, config.scheduledStorageDeletionLimit);
-    const badgeRenderPass = await processPendingBadgeRenders(env.DB, env, config.scheduledBadgeRenderLimit);
+    const badgeRenderPassLimit = remainingBadgeRenderAllowance;
+    const badgeRenderPass = await processPendingBadgeRenders(env.DB, env, badgeRenderPassLimit);
+    remainingBadgeRenderAllowance = Math.max(
+      0,
+      remainingBadgeRenderAllowance - badgeRenderPass.processed - badgeRenderPass.failed,
+    );
     const durationMs = Date.now() - passStartedAt;
     const elapsedMs = Date.now() - startedAt;
     const passQueryCount = (invocationBudget?.d1QueryBudget?.usedQueries() ?? 0) - passStartedD1Queries;
@@ -289,7 +306,7 @@ export async function runScheduledDueWork(
         scheduledReminderLimit: config.scheduledReminderLimit,
         scheduledOutboxLimit: config.scheduledOutboxLimit,
         scheduledStorageDeletionLimit: config.scheduledStorageDeletionLimit,
-        scheduledBadgeRenderLimit: config.scheduledBadgeRenderLimit,
+        scheduledBadgeRenderLimit: remainingBadgeRenderAllowance > 0 ? badgeRenderPassLimit : 0,
       })
     ) {
       stoppedReason = "caught_up";

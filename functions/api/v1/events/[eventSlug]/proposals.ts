@@ -9,7 +9,7 @@ import { findInviteByToken, type InviteRecord } from "../../../../_lib/services/
 import { validateRequiredConsents } from "../../../../_lib/services/consent";
 import { processOutboxByIdBackground } from "../../../../_lib/email/outbox";
 import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
-import { proposalCreateSchema } from "../../../../../assets/shared/schemas/api";
+import { proposalCreateSchema } from "../../../../../assets/shared/schemas/proposal-management";
 import { eventProposalCreateRouteSchema } from "../../../../../assets/shared/schemas/route-contracts";
 import { requireInternalSecret } from "../../../../_lib/request";
 import { submitProposal } from "../../../../_lib/services/proposal-submission";

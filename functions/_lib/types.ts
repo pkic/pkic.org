@@ -94,12 +94,15 @@ export interface Env {
   SCHEDULED_BADGE_RENDER_LIMIT?: string;
   SCHEDULED_STORAGE_DELETION_LIMIT?: string;
   SCHEDULED_WAITLIST_PROMOTION_LIMIT?: string;
+  SCHEDULED_RSVP_ENFORCEMENT_LIMIT?: string;
   SCHEDULED_DUE_WORK_MAX_PASSES?: string;
   SCHEDULED_DUE_WORK_MAX_MS?: string;
   /** Maximum D1 statements issued by one scheduled Worker invocation. */
   SCHEDULED_D1_QUERY_BUDGET?: string;
+  SCHEDULED_CONSULTATION_BATCH_LIMIT?: string;
   SCHEDULED_ON_HOLD_REMINDER_LIMIT?: string;
   SCHEDULED_EC_AUTO_APPROVE_LIMIT?: string;
+  SCHEDULED_GOOGLE_GROUPS_SYNC_LIMIT?: string;
   SCHEDULED_SPONSORSHIP_DUE_WORK_LIMIT?: string;
   SCHEDULED_VOTE_NOTIFICATION_LIMIT?: string;
   /** Maximum distinct recipients resolved for a synchronous admin campaign. */

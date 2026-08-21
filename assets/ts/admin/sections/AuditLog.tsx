@@ -1,7 +1,8 @@
 import { useState } from "preact/hooks";
 import { Badge } from "../../components/Badge";
-import { ApiDataTable } from "../../components/Table";
+import { ApiDataTable } from "../components/ApiDataTable";
 import { auditLogListResponseSchema, type AuditLogEntry } from "../../../shared/schemas/admin-audit-log";
+import { FilterSelect, type FilterOption } from "../components/FilterSelect";
 
 const ENTITY_TYPES = [
   "registration",
@@ -15,6 +16,14 @@ const ENTITY_TYPES = [
   "auth",
 ];
 const ACTOR_TYPES = ["admin", "system", "user"];
+const ENTITY_OPTIONS: FilterOption[] = [
+  { value: "", label: "All" },
+  ...ENTITY_TYPES.map((value) => ({ value, label: value })),
+];
+const ACTOR_OPTIONS: FilterOption[] = [
+  { value: "", label: "All" },
+  ...ACTOR_TYPES.map((value) => ({ value, label: value })),
+];
 
 export function AuditLog() {
   const [entityType, setEntityType] = useState("");
@@ -24,6 +33,7 @@ export function AuditLog() {
   return (
     <ApiDataTable<AuditLogEntry>
       endpoint="/api/v1/admin/audit-log"
+      responseSchema={auditLogListResponseSchema}
       resolve={(data) => auditLogListResponseSchema.parse(data).entries}
       resolvePage={(data) => auditLogListResponseSchema.parse(data).page}
       paginate
@@ -33,45 +43,28 @@ export function AuditLog() {
         ...(actorType && { actorType }),
         ...(actionFilter && { action: actionFilter }),
       }}
-      deps={[entityType, actorType, actionFilter]}
       toolbar={({ resetPage }) => (
         <>
-          <div>
-            <label class="form-label small mb-1">Entity type</label>
-            <select
-              class="form-select form-select-sm"
-              value={entityType}
-              onChange={(e) => {
-                setEntityType((e.target as HTMLSelectElement).value);
-                resetPage();
-              }}
-            >
-              <option value="">All</option>
-              {ENTITY_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label class="form-label small mb-1">Actor type</label>
-            <select
-              class="form-select form-select-sm"
-              value={actorType}
-              onChange={(e) => {
-                setActorType((e.target as HTMLSelectElement).value);
-                resetPage();
-              }}
-            >
-              <option value="">All</option>
-              {ACTOR_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FilterSelect
+            label="Entity type"
+            value={entityType}
+            options={ENTITY_OPTIONS}
+            onChange={(value) => {
+              setEntityType(value);
+              resetPage();
+            }}
+            className="form-select form-select-sm"
+          />
+          <FilterSelect
+            label="Actor type"
+            value={actorType}
+            options={ACTOR_OPTIONS}
+            onChange={(value) => {
+              setActorType(value);
+              resetPage();
+            }}
+            className="form-select form-select-sm"
+          />
           <div>
             <label class="form-label small mb-1">Action</label>
             <input

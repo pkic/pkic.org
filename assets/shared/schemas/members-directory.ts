@@ -6,6 +6,7 @@ import {
   organizationProfileLongContentSchema,
   organizationProfileSummaryFieldsSchema,
 } from "./organization-profile";
+import { httpOrSameOriginUrlSchema, httpUrlSchema } from "./urls";
 
 /** Schemas for the public member directory & working groups endpoints. */
 
@@ -25,7 +26,7 @@ export type PublicMemberSummary = z.infer<typeof publicMemberSummarySchema>;
 /** group: "organization" = org-tied categories (A-G, H1-H4, H8); "independent" = org-less H5/H6/H7 */
 export const MEMBERS_LIST_SORT_COLUMNS = ["name", "memberSince"] as const;
 export const membersListQuerySchema = listQuerySchema(MEMBERS_LIST_SORT_COLUMNS).extend({
-  group: z.enum(["all", "organization", "independent"]).optional(),
+  group: z.enum(["all", "organization", "independent"]).default("all"),
 });
 
 export const membersListResponseSchema = paginatedResponseSchema("members", publicMemberSummarySchema);
@@ -50,8 +51,8 @@ export const memberWallQuerySchema = z.object({
 
 export const memberWallEntrySchema = z.object({
   key: z.string(),
-  href: z.string(),
-  logoUrl: z.string(),
+  href: httpOrSameOriginUrlSchema,
+  logoUrl: httpOrSameOriginUrlSchema,
   name: z.string(),
   slogan: z.string().nullable(),
   sponsorLevel: z.number().int().min(0),
@@ -78,8 +79,8 @@ export const publicMemberRepresentativeSchema = z.object({
   name: z.string(),
   jobTitle: z.string().nullable(),
   bio: z.string().nullable(),
-  linkedin: z.string().nullable(),
-  photoUrl: z.string().nullable(),
+  linkedin: httpUrlSchema.nullable(),
+  photoUrl: httpOrSameOriginUrlSchema.nullable(),
 });
 
 export const publicMemberDetailSchema = publicMemberSummarySchema.extend({
@@ -89,7 +90,7 @@ export const publicMemberDetailSchema = publicMemberSummarySchema.extend({
   // Empty for org-less individual members — their own bio/jobTitle live on the summary/detail fields directly.
   representatives: z.array(publicMemberRepresentativeSchema),
   jobTitle: z.string().nullable(),
-  linkedin: z.string().nullable(),
+  linkedin: httpUrlSchema.nullable(),
 });
 export type PublicMemberDetail = z.infer<typeof publicMemberDetailSchema>;
 

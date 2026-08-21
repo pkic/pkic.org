@@ -1,4 +1,5 @@
 import { constantTimeEqual, hmacSha256Hex } from "../utils/crypto";
+import { parseBaseEmailAddress, parseTaggedInboundAddress } from "./tagged-address";
 
 const RSVP_MAC_TOKEN_LENGTH = 8;
 
@@ -37,10 +38,9 @@ export async function generateSignedRsvpAddress(
   // even the per-day address in the SMTP local-part limit.
   const signature = await rsvpMacToken(secret, payload);
 
-  const [localPart, domain] = baseEmail.split("@");
-  if (!domain) throw new Error("Invalid base email");
-  // Strip any existing sub-address (e.g. if baseEmail is already a signed address)
-  const baseLocal = localPart.split("+")[0];
+  const base = parseBaseEmailAddress(baseEmail);
+  if (!base) throw new Error("Invalid base email");
+  const { baseLocal, domain } = base;
 
   // Keep the complete local part within RFC 5321's 64-character limit.
   const maxBaseLocal = dayDate
@@ -91,24 +91,14 @@ export async function verifySignedRsvpAddressFull(
   secret: string,
   baseEmail: string = "rsvp@mail.pkic.org",
 ): Promise<VerifiedRsvpAddress | null> {
-  const [baseLocal, baseDomain] = baseEmail.split("@");
-  if (!baseDomain) return null;
-
-  const parts = emailAddress.split("@");
-  if (parts.length !== 2) return null;
-  if (parts[1].toLowerCase() !== baseDomain.toLowerCase()) return null;
-
-  // Escape only the base local part (before any +)
-  const escapedLocal = baseLocal.split("+")[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const parsed = parseTaggedInboundAddress(emailAddress, baseEmail);
+  if (!parsed) return null;
 
   // ── Compact formats ────────────────────────────────────────────────────────
 
   // Per-day: [base]+[hex32]-[YYYYMMDD]-[base64url8]
-  const compactPerDayRegex = new RegExp(
-    `^${escapedLocal}\\+([a-f0-9]{32})-(\\d{8})-([A-Za-z0-9_-]{${RSVP_MAC_TOKEN_LENGTH}})$`,
-    "i",
-  );
-  const compactPerDayMatch = parts[0].match(compactPerDayRegex);
+  const compactPerDayRegex = new RegExp(`^([a-f0-9]{32})-(\\d{8})-([A-Za-z0-9_-]{${RSVP_MAC_TOKEN_LENGTH}})$`, "i");
+  const compactPerDayMatch = parsed.tag.match(compactPerDayRegex);
   if (compactPerDayMatch) {
     const registrationId = expandUuid(compactPerDayMatch[1].toLowerCase());
     const dayDate = expandDate(compactPerDayMatch[2]);
@@ -120,11 +110,8 @@ export async function verifySignedRsvpAddressFull(
   }
 
   // Single: [base]+[hex32]-[base64url8]
-  const compactSingleRegex = new RegExp(
-    `^${escapedLocal}\\+([a-f0-9]{32})-([A-Za-z0-9_-]{${RSVP_MAC_TOKEN_LENGTH}})$`,
-    "i",
-  );
-  const compactSingleMatch = parts[0].match(compactSingleRegex);
+  const compactSingleRegex = new RegExp(`^([a-f0-9]{32})-([A-Za-z0-9_-]{${RSVP_MAC_TOKEN_LENGTH}})$`, "i");
+  const compactSingleMatch = parsed.tag.match(compactSingleRegex);
   if (compactSingleMatch) {
     const registrationId = expandUuid(compactSingleMatch[1].toLowerCase());
     const signature = compactSingleMatch[2];

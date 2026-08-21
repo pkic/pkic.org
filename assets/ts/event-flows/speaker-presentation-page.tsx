@@ -1,8 +1,8 @@
 import { showHeadshotDisclaimer } from "../shared/headshot/upload";
-import { showManageLinkRecoveryForm } from "../shared/widgets/link-recovery";
-import { normalizeValidation } from "../shared/form/validation-map";
-import { bootstrap, setStatus } from "./boot";
+import { setStatus } from "./boot";
 import { presentationUploadRequest } from "../../shared/presentation-upload";
+import type { SpeakerAccessSummary, SpeakerProposalSummary } from "./speaker-api-types";
+import { loadSpeakerPageData } from "./speaker-link-recovery";
 
 /** Matches the DB record shape returned directly by the GET endpoint. */
 interface PresentationTerm {
@@ -15,7 +15,7 @@ interface PresentationTerm {
 }
 
 const DEFAULT_PRESENTATION_TERMS = [
-  "I am authorised to share this presentation with the PKI Consortium.",
+  "I am authorized to share this presentation with the PKI Consortium.",
   "The presentation does not contain confidential or commercially sensitive information that cannot be made public.",
   "The presentation does not include unlicensed third-party material.",
   "I accept that this presentation may be published on the event website and related materials.",
@@ -23,24 +23,8 @@ const DEFAULT_PRESENTATION_TERMS = [
 ];
 
 interface PresentationApiResponse {
-  speaker: {
-    role: string;
-    status: string;
-    confirmedAt: string | null;
-    declinedAt: string | null;
-    termsAcceptedAt: string | null;
-  };
-  proposal: {
-    id: string;
-    title: string;
-    proposalType: string;
-    status: string;
-    presentationDeadline: string | null;
-    presentationUploaded: boolean;
-    presentationUploadedAt: string | null;
-    presentationUploader: { firstName: string | null; lastName: string | null; uploadedAt: string } | null;
-    coSpeakers: Array<{ firstName: string | null; lastName: string | null; status: string }>;
-  };
+  speaker: SpeakerAccessSummary;
+  proposal: SpeakerProposalSummary;
   presentationTerms: PresentationTerm[];
   profile: {
     firstName: string | null;
@@ -49,53 +33,21 @@ interface PresentationApiResponse {
   };
 }
 
-function showResendForm(root: HTMLElement, apiBase: string, eventSlug: string, introMessage?: string): void {
-  showManageLinkRecoveryForm({
-    root,
-    loadingSelector: "[data-speaker-loading]",
-    sectionSelector: "[data-resend-speaker-manage-section]",
-    buttonSelector: "[data-resend-speaker-manage-btn]",
-    statusSelector: "[data-resend-speaker-manage-status]",
-    emailSelector: "[data-resend-speaker-manage-email]",
-    endpoint: `${apiBase}/events/${eventSlug}/proposals/resend-speaker-manage-link`,
-    successMessage:
-      "If the details match an invited speaker, you will receive an email shortly. Please check your inbox (and spam folder).",
-    introMessage,
-  });
-}
-
 async function main(): Promise<void> {
-  const boot = bootstrap("[data-event-speaker-presentation]");
-  if (!boot) return;
-
-  const token = boot.query.token?.trim() ?? null;
-  if (!token) {
-    showResendForm(boot.root, boot.apiBase, boot.eventSlug, "Missing speaker token. Request a fresh link below.");
-    return;
-  }
-
-  const loadingEl = boot.root.querySelector<HTMLElement>("[data-speaker-loading]");
-  const contentEl = boot.root.querySelector<HTMLElement>("[data-speaker-content]");
+  const loaded = await loadSpeakerPageData<PresentationApiResponse>({
+    selector: "[data-event-speaker-presentation]",
+    request: async (token, boot) => {
+      const response = await fetch(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`);
+      if (!response.ok) {
+        const json = (await response.json()) as { error?: { message?: string } };
+        throw new Error(json.error?.message ?? `HTTP ${response.status}`);
+      }
+      return (await response.json()) as PresentationApiResponse;
+    },
+  });
+  if (!loaded) return;
+  const { boot, token, data, loadingEl, contentEl } = loaded;
   const notAcceptedEl = boot.root.querySelector<HTMLElement>("[data-not-accepted-section]");
-
-  let data: PresentationApiResponse;
-  try {
-    const res = await fetch(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`);
-    if (!res.ok) {
-      const json = (await res.json()) as { error?: { message?: string } };
-      throw new Error(json.error?.message ?? `HTTP ${res.status}`);
-    }
-    data = (await res.json()) as PresentationApiResponse;
-  } catch (error) {
-    const normalized = normalizeValidation(error);
-    showResendForm(
-      boot.root,
-      boot.apiBase,
-      boot.eventSlug,
-      `${normalized.globalMessage} You can request a fresh link below.`,
-    );
-    return;
-  }
 
   if (loadingEl) loadingEl.classList.add("d-none");
 

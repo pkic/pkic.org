@@ -12,8 +12,10 @@ import { ErrorAlert } from "../../components/ErrorAlert";
 import { Tabs } from "../../components/Tabs";
 import { api } from "../api";
 import { toast } from "../ui";
-import type { AdminIcsFile, AdminMeetingSeries, AdminWorkingGroupSummary, MeetingResendResult } from "../types";
-import { getAdminWorkingGroupCatalogue } from "../services/catalogues";
+import type { AdminIcsFile, AdminMeetingSeries, MeetingResendResult } from "../types";
+import { adminWorkingGroupCatalog } from "../services/catalogs";
+import { performAdminAction } from "../actions";
+import { ServerSearchSelect } from "../components/ServerSearchSelect";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -37,20 +39,19 @@ function IcsFileRow({
       setEditing(false);
       return;
     }
-    setBusy(true);
-    try {
-      await api(`${baseUrl}/${seriesId}/ics-files/${file.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ label: label.trim() }),
-      });
-      toast("Label updated", "success");
-      setEditing(false);
-      await onChanged();
-    } catch (err) {
-      toast((err as Error).message, "error");
-    } finally {
-      setBusy(false);
-    }
+    await performAdminAction({
+      setBusy,
+      request: () =>
+        api(`${baseUrl}/${seriesId}/ics-files/${file.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ label: label.trim() }),
+        }),
+      successMessage: "Label updated",
+      afterSuccess: async () => {
+        setEditing(false);
+        await onChanged();
+      },
+    });
   }
 
   async function toggleActive() {
@@ -255,17 +256,15 @@ function MeetingSeriesCard({
       setEditingName(false);
       return;
     }
-    setBusy(true);
-    try {
-      await api(`${baseUrl}/${series.id}`, { method: "PATCH", body: JSON.stringify({ name: name.trim() }) });
-      toast("Series renamed", "success");
-      setEditingName(false);
-      await onChanged();
-    } catch (err) {
-      toast((err as Error).message, "error");
-    } finally {
-      setBusy(false);
-    }
+    await performAdminAction({
+      setBusy,
+      request: () => api(`${baseUrl}/${series.id}`, { method: "PATCH", body: JSON.stringify({ name: name.trim() }) }),
+      successMessage: "Series renamed",
+      afterSuccess: async () => {
+        setEditingName(false);
+        await onChanged();
+      },
+    });
   }
 
   async function toggleActive() {
@@ -403,18 +402,16 @@ function CreateSeriesForm({ baseUrl, onCreated }: { baseUrl: string; onCreated: 
   async function submit(e: Event) {
     e.preventDefault();
     if (!name.trim()) return;
-    setSaving(true);
-    try {
-      await api(baseUrl, { method: "POST", body: JSON.stringify({ name: name.trim() }) });
-      toast("Meeting series created", "success");
-      setName("");
-      setShow(false);
-      await onCreated();
-    } catch (err) {
-      toast((err as Error).message, "error");
-    } finally {
-      setSaving(false);
-    }
+    await performAdminAction({
+      setBusy: setSaving,
+      request: () => api(baseUrl, { method: "POST", body: JSON.stringify({ name: name.trim() }) }),
+      successMessage: "Meeting series created",
+      afterSuccess: async () => {
+        setName("");
+        setShow(false);
+        await onCreated();
+      },
+    });
   }
 
   if (!show) {
@@ -483,37 +480,24 @@ function MeetingSeriesManager({ baseUrl }: { baseUrl: string }) {
 }
 
 function WorkingGroupMeetingsTab() {
-  const [groups, setGroups] = useState<AdminWorkingGroupSummary[]>([]);
-  const [selectedId, setSelectedId] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    getAdminWorkingGroupCatalogue()
-      .then((workingGroups) => {
-        setGroups(workingGroups);
-        if (workingGroups.length) setSelectedId(workingGroups[0].id);
-      })
-      .catch((e) => setError((e as Error).message));
-  }, []);
-
-  if (error) return <ErrorAlert error={error} />;
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedLabel, setSelectedLabel] = useState<string>();
 
   return (
     <div>
       <div class="mb-3 adm-filter-control">
-        <label class="form-label small fw-semibold">Working group</label>
-        <select
-          class="form-select form-select-sm"
+        <ServerSearchSelect
+          catalog={adminWorkingGroupCatalog}
+          label="Working group"
           value={selectedId}
-          onChange={(e) => setSelectedId((e.target as HTMLSelectElement).value)}
-        >
-          {groups.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-              {!g.active ? " (inactive)" : ""}
-            </option>
-          ))}
-        </select>
+          selectedLabel={selectedLabel}
+          allowEmpty={false}
+          autoSelectFirst
+          onChange={(group) => {
+            setSelectedId(group?.id ?? null);
+            setSelectedLabel(group ? adminWorkingGroupCatalog.itemLabel(group) : undefined);
+          }}
+        />
       </div>
       {selectedId ? (
         <MeetingSeriesManager key={selectedId} baseUrl={`/api/v1/admin/working-groups/${selectedId}/meetings`} />

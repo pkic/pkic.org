@@ -4,6 +4,7 @@ import { getRsvpInboundEmailMaxBytes } from "../config";
 import { AppError } from "../errors";
 import { logError, logInfo } from "../logging";
 import { verifySignedRsvpAddressFull } from "../email/rsvp";
+import { sha256Hex } from "../utils/crypto";
 import { parseCalendarRsvp, recordCalendarRsvpEvent } from "./calendar-rsvp";
 
 export type IncomingRsvpEmail = Pick<ForwardableEmailMessage, "from" | "to" | "raw" | "rawSize">;
@@ -19,6 +20,7 @@ export async function processIncomingEmail(message: IncomingRsvpEmail, env: Env)
     const rawEmail = await new Response(message.raw).arrayBuffer();
     const parser = new PostalMime();
     const emailData = await parser.parse(rawEmail);
+    const sourceMessageId = emailData.messageId || `sha256-${await sha256Hex(rawEmail)}`;
 
     logInfo("EMAIL_PARSED", {
       messageId: emailData.messageId,
@@ -65,9 +67,9 @@ export async function processIncomingEmail(message: IncomingRsvpEmail, env: Env)
       message.from.toLowerCase().includes("mailer-daemon");
 
     if (isBounce) {
-      const sourceMessageId = emailData.messageId || `inbound-${Date.now()}`;
       await recordCalendarRsvpEvent(env.DB, {
         registrationId: rsvpRegistrationId,
+        eventDayDate: rsvpDayDate,
         icsUid: `bounce-${rsvpRegistrationId}`,
         attendeeEmail: message.from,
         responseStatus: "bounced",
@@ -126,9 +128,9 @@ export async function processIncomingEmail(message: IncomingRsvpEmail, env: Env)
       else if (subjectLower.startsWith("tentative:")) implicitStatus = "tentative";
 
       if (implicitStatus) {
-        const sourceMessageId = emailData.messageId || `inbound-${Date.now()}`;
         await recordCalendarRsvpEvent(env.DB, {
           registrationId: rsvpRegistrationId,
+          eventDayDate: rsvpDayDate,
           icsUid: rsvpDayDate ? `${rsvpRegistrationId}-${rsvpDayDate}@pkic.org` : `implicit-${rsvpRegistrationId}`,
           attendeeEmail: message.from,
           responseStatus: implicitStatus,
@@ -167,9 +169,9 @@ export async function processIncomingEmail(message: IncomingRsvpEmail, env: Env)
       ? `${rsvpRegistrationId}-${rsvpDayDate}@pkic.org`
       : (parsedRsvp.icsUid ?? `ics-${rsvpRegistrationId}`);
 
-    const sourceMessageId = emailData.messageId || `inbound-${Date.now()}`;
     await recordCalendarRsvpEvent(env.DB, {
       registrationId: rsvpRegistrationId,
+      eventDayDate: rsvpDayDate,
       icsUid,
       attendeeEmail: parsedRsvp.attendeeEmail,
       responseStatus: parsedRsvp.responseStatus,

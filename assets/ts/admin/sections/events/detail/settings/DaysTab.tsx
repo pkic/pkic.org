@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from "preact/hooks";
-import { ErrorAlert } from "../../../../../components/ErrorAlert";
-import { Spinner } from "../../../../../components/Spinner";
+import { useCallback, useState } from "preact/hooks";
 import { api } from "../../../../api";
 import type { AdminAttendanceOption, AdminEventDay } from "../../../../types";
-import { toast } from "../../../../ui";
+import { useAdminEditorResource } from "../../../../hooks/useAdminEditorResource";
+import { saveAdminEditor } from "../../../../actions";
+import { AdminSettingsEditor } from "../../../../components/AdminSettingsEditor";
 
 function DayOptionRow({
   option,
@@ -62,9 +62,6 @@ interface DayState {
 }
 
 export function DaysTab({ slug, timezone }: { slug: string; timezone: string }) {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [days, setDays] = useState<DayState[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
 
@@ -83,32 +80,23 @@ export function DaysTab({ slug, timezone }: { slug: string; timezone: string }) 
     [timezone],
   );
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const daysResource = useAdminEditorResource<DayState[]>(
+    async () => {
       const data = await api<{ days: AdminEventDay[] }>(`/api/v1/admin/events/${slug}/days`);
-      setDays(
-        (data.days ?? []).map((day) => ({
-          id: day.id,
-          date: day.date,
-          label: day.label ?? "",
-          startTime: timeInZone(day.startsAt),
-          endTime: timeInZone(day.endsAt),
-          sortOrder: day.sortOrder,
-          attendanceOptions: day.attendanceOptions ?? [],
-        })),
-      );
-    } catch (caught) {
-      setError((caught as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [slug, timeInZone]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+      return (data.days ?? []).map((day) => ({
+        id: day.id,
+        date: day.date,
+        label: day.label ?? "",
+        startTime: timeInZone(day.startsAt),
+        endTime: timeInZone(day.endsAt),
+        sortOrder: day.sortOrder,
+        attendanceOptions: day.attendanceOptions ?? [],
+      }));
+    },
+    [slug, timeInZone],
+    [],
+  );
+  const { value: days, setValue: setDays, loading, error, reload } = daysResource;
 
   function updateDay(index: number, patch: Partial<DayState>) {
     setDays((current) => current.map((day, dayIndex) => (dayIndex === index ? { ...day, ...patch } : day)));
@@ -121,68 +109,67 @@ export function DaysTab({ slug, timezone }: { slug: string; timezone: string }) 
   }
 
   async function handleSave() {
-    setSaving(true);
-    setSaveStatus("Saving…");
-    try {
-      const body = days
-        .filter((day) => day.date.trim())
-        .map((day) => ({
-          date: day.date.trim(),
-          label: day.label.trim() || undefined,
-          startTime: day.startTime.trim() || undefined,
-          endTime: day.endTime.trim() || undefined,
-          sortOrder: day.sortOrder,
-          attendanceOptions: day.attendanceOptions.filter((option) => option.value && option.label),
-        }));
-      const response = await api<{ skipped?: string[] }>(`/api/v1/admin/events/${slug}/days`, {
-        method: "PUT",
-        body: JSON.stringify({ days: body }),
-      });
-      const skipped = response.skipped ?? [];
-      setSaveStatus(skipped.length ? `Saved with warnings. Could not remove: ${skipped.join(", ")}` : "✓ Saved");
-      toast("Event days updated", "success");
-      await load();
-    } catch (caught) {
-      const message = (caught as Error).message;
-      setSaveStatus(message);
-      toast(message, "error");
-    } finally {
-      setSaving(false);
-    }
+    const body = days
+      .filter((day) => day.date.trim())
+      .map((day) => ({
+        date: day.date.trim(),
+        label: day.label.trim() || undefined,
+        startTime: day.startTime.trim() || undefined,
+        endTime: day.endTime.trim() || undefined,
+        sortOrder: day.sortOrder,
+        attendanceOptions: day.attendanceOptions.filter((option) => option.value && option.label),
+      }));
+    await saveAdminEditor({
+      setSaving,
+      setStatus: setSaveStatus,
+      request: () =>
+        api<{ skipped?: string[] }>(`/api/v1/admin/events/${slug}/days`, {
+          method: "PUT",
+          body: JSON.stringify({ days: body }),
+        }),
+      successMessage: "Event days updated",
+      successStatus: (response) => {
+        const skipped = response.skipped ?? [];
+        return skipped.length ? `Saved with warnings. Could not remove: ${skipped.join(", ")}` : "✓ Saved";
+      },
+      reload,
+    });
   }
 
-  if (loading) return <Spinner />;
-  if (error) return <ErrorAlert error={error} />;
-
   return (
-    <div>
-      <div class="d-flex gap-2 align-items-center mb-3 flex-wrap">
-        <span class="small text-muted">Manage per-day attendance options and local event times</span>
-        <button class="btn btn-sm btn-outline-secondary ms-auto" onClick={() => void load()}>
-          ↺ Refresh
-        </button>
-        <button
-          class="btn btn-sm btn-success"
-          onClick={() =>
-            setDays((current) => [
-              ...current,
-              {
-                date: "",
-                label: "",
-                startTime: "",
-                endTime: "",
-                sortOrder: (current.length + 1) * 10,
-                attendanceOptions: [],
-              },
-            ])
-          }
-        >
-          + Add day
-        </button>
-        <button class="btn btn-sm btn-primary" onClick={() => void handleSave()} disabled={saving}>
-          Save Days
-        </button>
-      </div>
+    <AdminSettingsEditor
+      loading={loading}
+      error={error}
+      description="Manage per-day attendance options and local event times"
+      actions={
+        <>
+          <button class="btn btn-sm btn-outline-secondary ms-auto" onClick={() => void reload()}>
+            ↺ Refresh
+          </button>
+          <button
+            class="btn btn-sm btn-success"
+            onClick={() =>
+              setDays((current) => [
+                ...current,
+                {
+                  date: "",
+                  label: "",
+                  startTime: "",
+                  endTime: "",
+                  sortOrder: (current.length + 1) * 10,
+                  attendanceOptions: [],
+                },
+              ])
+            }
+          >
+            + Add day
+          </button>
+          <button class="btn btn-sm btn-primary" onClick={() => void handleSave()} disabled={saving}>
+            Save Days
+          </button>
+        </>
+      }
+    >
       {saveStatus && (
         <div class={`small mb-2 ${saveStatus.startsWith("✓") ? "text-success" : "text-warning"}`}>{saveStatus}</div>
       )}
@@ -279,6 +266,6 @@ export function DaysTab({ slug, timezone }: { slug: string; timezone: string }) 
       ))}
 
       {days.length === 0 && <p class="text-muted fst-italic small">No days configured yet.</p>}
-    </div>
+    </AdminSettingsEditor>
   );
 }

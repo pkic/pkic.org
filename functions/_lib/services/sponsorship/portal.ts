@@ -11,6 +11,7 @@ import { AppError } from "../../errors";
 import type { AuthMember, DatabaseLike } from "../../types";
 import type { SponsorPortalSession } from "../../auth/sponsor-portal";
 import { eventSponsorTierHasAttendeeAccess } from "./event-tiers";
+import { writeAuditLog } from "../audit";
 
 export async function requireSponsorPortalAttendeeAccess(
   db: DatabaseLike,
@@ -57,8 +58,11 @@ export interface SponsorPortalAttendeeRow {
 const SPONSOR_PORTAL_ATTENDEES_FROM = `
   FROM registrations r
   JOIN users u ON u.id = r.user_id
-  JOIN consent_acceptances ca ON ca.registration_id = r.id AND ca.term_key = 'sponsor-data-sharing'
   WHERE r.event_id = ? AND r.status = 'registered'
+    AND EXISTS (
+      SELECT 1 FROM consent_acceptances ca
+       WHERE ca.registration_id = r.id AND ca.term_key = 'sponsor-data-sharing'
+    )
 `;
 
 function toAttendeeRow(r: {
@@ -164,4 +168,40 @@ export async function listSponsorPortalAttendeesPage(
   );
 
   return { attendees: rows.map(toAttendeeRow), total };
+}
+
+export async function listSponsorPortalAttendeesPageWithAudit(
+  db: DatabaseLike,
+  session: SponsorPortalSession,
+  params: { limit: number; offset: number; q?: string; sort?: string },
+): Promise<{ attendees: SponsorPortalAttendeeRow[]; total: number }> {
+  const result = await listSponsorPortalAttendeesPage(db, session.eventId, params);
+  await writeAuditLog(
+    db,
+    "sponsor",
+    session.sponsorshipId,
+    "sponsor_portal_attendee_list_viewed",
+    "sponsorship",
+    session.sponsorshipId,
+    { recordCount: result.attendees.length },
+  );
+  return result;
+}
+
+export async function listSponsorPortalAttendeesForExportWithAudit(
+  db: DatabaseLike,
+  session: SponsorPortalSession,
+  maxRows: number,
+): Promise<SponsorPortalAttendeeRow[]> {
+  const attendees = await listSponsorPortalAttendeesForExport(db, session.eventId, maxRows);
+  await writeAuditLog(
+    db,
+    "sponsor",
+    session.sponsorshipId,
+    "sponsor_portal_attendee_export",
+    "sponsorship",
+    session.sponsorshipId,
+    { recordCount: attendees.length },
+  );
+  return attendees;
 }

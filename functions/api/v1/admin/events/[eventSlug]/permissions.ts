@@ -2,8 +2,8 @@ import {
   adminEventPermissionSchema,
   adminEventTeamListQuerySchema,
   adminEventTeamListResponseSchema,
-  eventSlugParamsSchema,
-} from "../../../../../../assets/shared/schemas/api";
+} from "../../../../../../assets/shared/schemas/admin-events";
+import { eventSlugParamsSchema } from "../../../../../../assets/shared/schemas/api-common";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { json } from "../../../../../_lib/http";

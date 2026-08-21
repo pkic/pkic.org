@@ -10,6 +10,7 @@ import { Spinner } from "../../components/Spinner";
 import { ErrorAlert } from "../../components/ErrorAlert";
 import { Pager } from "../../components/Pager";
 import { useApiPage } from "../../hooks/useApiPage";
+import { runGoogleGroupsSync } from "../services/google-groups-sync";
 import { api } from "../api";
 import { toast } from "../ui";
 import type { MailingList } from "../types";
@@ -132,6 +133,7 @@ export function MailingLists() {
     "/api/v1/admin/mailing-lists",
     sortKey ? { sort: `${sortDir === "desc" ? "-" : ""}${sortKey}` } : {},
     mailingListsListResponseSchema,
+    (data) => data.mailingLists,
   );
   const lists = listing.data?.mailingLists ?? [];
 
@@ -214,20 +216,7 @@ export function MailingLists() {
   async function handleSyncNow() {
     setSyncing(true);
     try {
-      const res = await api<{ processed: number; succeeded: number; failed: number; skippedUnconfigured: boolean }>(
-        "/api/v1/admin/mailing-lists/sync",
-        { method: "POST" },
-      );
-      if (res.skippedUnconfigured) {
-        toast("Google Groups sync isn't configured in this environment", "error");
-      } else if (res.processed === 0) {
-        toast("Nothing pending to sync", "success");
-      } else {
-        toast(
-          `Synced ${res.processed}: ${res.succeeded} succeeded${res.failed ? `, ${res.failed} failed` : ""}`,
-          res.failed > 0 ? "error" : "success",
-        );
-      }
+      await runGoogleGroupsSync();
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {

@@ -4,6 +4,8 @@
  * the client.
  */
 
+import { hmacSha256Bytes } from "./crypto";
+
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
@@ -35,13 +37,9 @@ function b64urlDecode(input: string): string {
 }
 
 async function hmacSign(secret: string, payload: string): Promise<string> {
-  const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, [
-    "sign",
-  ]);
-  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(payload));
   // Raw signature bytes must be base64url'd directly — UTF-8 encoding them would
   // mangle bytes >= 0x80 and produce non-standard JWT signatures.
-  return b64urlBytes(new Uint8Array(sig));
+  return b64urlBytes(await hmacSha256Bytes(secret, payload));
 }
 
 async function hmacVerify(secret: string, payload: string, signature: string): Promise<boolean> {
@@ -95,6 +93,8 @@ export async function verifyJwt<TClaims extends object>(
 export interface AdminManageClaims {
   /** Registration ID */
   sub: string;
+  /** Admin user ID that opened the management session. */
+  actor: string;
   /** Event slug */
   event: string;
   /** sha256(ip) of the issuing request */
@@ -111,6 +111,7 @@ export async function signAdminManageJwt(
 ): Promise<string> {
   return signJwt(secret, {
     sub: claims.sub,
+    actor: claims.actor,
     event: claims.event,
     iphash: claims.iphash,
     uahash: claims.uahash,
@@ -121,5 +122,11 @@ export async function signAdminManageJwt(
 export type AdminManageJwtVerifyResult = JwtVerifyResult<AdminManageClaims>;
 
 export async function verifyAdminManageJwt(secret: string, token: string): Promise<AdminManageJwtVerifyResult> {
-  return verifyJwt<AdminManageClaims>(secret, token);
+  const result = await verifyJwt<AdminManageClaims>(secret, token);
+  if (!result.ok) return result;
+  const { sub, actor, event, iphash, uahash } = result.claims;
+  if (![sub, actor, event, iphash, uahash].every((claim) => typeof claim === "string" && claim.length > 0)) {
+    return { ok: false, reason: "invalid" };
+  }
+  return result;
 }

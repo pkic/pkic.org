@@ -13,7 +13,7 @@
  * Mailing Lists screen only; editing one's `email` field does not change the
  * WG's actual sync target.
  */
-import { all, first, run } from "../db/queries";
+import { all, first } from "../db/queries";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { parseJsonSafe } from "../utils/json";
@@ -26,6 +26,7 @@ import {
   MAILING_LIST_TYPES,
 } from "../../../assets/shared/schemas/admin-mailing-lists";
 import type { DatabaseLike } from "../types";
+import { prepareAuditLog } from "./audit";
 
 export { MAILING_LIST_TYPES };
 export type MailingListType = (typeof MAILING_LIST_TYPES)[number];
@@ -92,30 +93,33 @@ export interface MailingListInput {
   active?: boolean;
 }
 
-export async function createMailingList(db: DatabaseLike, input: MailingListInput) {
+export async function createMailingList(db: DatabaseLike, input: MailingListInput, actorUserId: string) {
   const existing = await first<{ id: string }>(db, "SELECT id FROM mailing_lists WHERE email = ?", [input.email]);
   if (existing) throw new AppError(409, "DUPLICATE_EMAIL", "A mailing list with that email already exists");
 
   const now = nowIso();
   const id = uuid();
-  await run(
-    db,
-    `INSERT INTO mailing_lists (id, email, label, list_type, working_group_id, auto_sync_categories_json, active, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      id,
-      input.email,
-      input.label,
-      input.listType,
-      input.workingGroupId ?? null,
-      input.autoSyncCategories ? JSON.stringify(input.autoSyncCategories) : null,
-      input.active === false ? 0 : 1,
-      now,
-      now,
-    ],
-  );
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO mailing_lists (id, email, label, list_type, working_group_id, auto_sync_categories_json, active, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(
+        id,
+        input.email,
+        input.label,
+        input.listType,
+        input.workingGroupId ?? null,
+        input.autoSyncCategories ? JSON.stringify(input.autoSyncCategories) : null,
+        input.active === false ? 0 : 1,
+        now,
+        now,
+      ),
+    prepareAuditLog(db, "admin", actorUserId, "mailing_list_created", "mailing_list", id, { email: input.email }, now),
+  ]);
 
-  const row = await first<MailingListRow>(db, "SELECT * FROM mailing_lists WHERE id = ?", [id]);
+  const row = await first<MailingListRow>(db, `SELECT ${MAILING_LIST_COLUMNS} FROM mailing_lists WHERE id = ?`, [id]);
   return toMailingList(row as MailingListRow);
 }
 
@@ -128,8 +132,15 @@ export interface MailingListUpdateInput {
   active?: boolean;
 }
 
-export async function updateMailingList(db: DatabaseLike, id: string, input: MailingListUpdateInput) {
-  const existing = await first<MailingListRow>(db, "SELECT * FROM mailing_lists WHERE id = ?", [id]);
+export async function updateMailingList(
+  db: DatabaseLike,
+  id: string,
+  input: MailingListUpdateInput,
+  actorUserId: string,
+) {
+  const existing = await first<MailingListRow>(db, `SELECT ${MAILING_LIST_COLUMNS} FROM mailing_lists WHERE id = ?`, [
+    id,
+  ]);
   if (!existing) throw new AppError(404, "NOT_FOUND", "Mailing list not found");
 
   if (input.email !== undefined && input.email !== existing.email) {
@@ -169,20 +180,28 @@ export async function updateMailingList(db: DatabaseLike, id: string, input: Mai
 
   if (setClauses.length > 0) {
     setClauses.push("updated_at = ?");
-    values.push(nowIso(), id);
-    await run(db, `UPDATE mailing_lists SET ${setClauses.join(", ")} WHERE id = ?`, values);
+    const now = nowIso();
+    values.push(now, id);
+    await db.batch([
+      db.prepare(`UPDATE mailing_lists SET ${setClauses.join(", ")} WHERE id = ?`).bind(...values),
+      prepareAuditLog(db, "admin", actorUserId, "mailing_list_updated", "mailing_list", id, input, now),
+    ]);
   }
 
-  const row = await first<MailingListRow>(db, "SELECT * FROM mailing_lists WHERE id = ?", [id]);
+  const row = await first<MailingListRow>(db, `SELECT ${MAILING_LIST_COLUMNS} FROM mailing_lists WHERE id = ?`, [id]);
   return toMailingList(row as MailingListRow);
 }
 
-export async function deleteMailingList(db: DatabaseLike, id: string): Promise<void> {
+export async function deleteMailingList(db: DatabaseLike, id: string, actorUserId: string): Promise<void> {
   const existing = await first<{ id: string }>(db, "SELECT id FROM mailing_lists WHERE id = ?", [id]);
   if (!existing) throw new AppError(404, "NOT_FOUND", "Mailing list not found");
   // "the portal stops managing it; the Google Group itself is not
   // deleted" — a plain row delete, no Google-side call.
-  await run(db, "DELETE FROM mailing_lists WHERE id = ?", [id]);
+  const now = nowIso();
+  await db.batch([
+    db.prepare("DELETE FROM mailing_lists WHERE id = ?").bind(id),
+    prepareAuditLog(db, "admin", actorUserId, "mailing_list_deleted", "mailing_list", id, {}, now),
+  ]);
 }
 
 /**

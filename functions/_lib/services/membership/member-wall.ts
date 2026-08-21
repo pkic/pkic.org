@@ -1,7 +1,13 @@
 import type { MemberWallEntry } from "../../../../assets/shared/schemas/members-directory";
+import { sanitizeLegacyHttpOrSameOriginUrl } from "../../../../assets/shared/schemas/urls";
 import { all } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
 import { PUBLIC_SPONSOR_READ_MODEL_SQL } from "../public-sponsors";
+
+interface MemberWallRow extends Omit<MemberWallEntry, "href" | "logoUrl"> {
+  href: string | null;
+  logoUrl: string | null;
+}
 
 /**
  * Unified public wall read model. Membership eligibility, logo presence,
@@ -9,7 +15,7 @@ import { PUBLIC_SPONSOR_READ_MODEL_SQL } from "../public-sponsors";
  * are all resolved in D1; the browser receives display-ready entries.
  */
 export async function listMemberWall(db: DatabaseLike, memberLimit: number): Promise<MemberWallEntry[]> {
-  return all<MemberWallEntry>(
+  const rows = await all<MemberWallRow>(
     db,
     `${PUBLIC_SPONSOR_READ_MODEL_SQL},
      active_member_organizations AS (
@@ -32,7 +38,7 @@ export async function listMemberWall(db: DatabaseLike, memberLimit: number): Pro
          LEFT JOIN enriched_sponsors sponsor ON sponsor.id = member.id
      ), sponsor_only_entries AS (
        SELECT 'sponsor:' || sponsor.id AS key,
-              COALESCE(sponsor.website, '#') AS href,
+              sponsor.website AS href,
               CASE WHEN sponsor.logo_r2_key IS NOT NULL
                    THEN '/api/v1/members/' || sponsor.id || '/logo'
                    ELSE '/api/v1/sponsors/' || sponsor.id || '/logo' END AS logoUrl,
@@ -68,4 +74,10 @@ export async function listMemberWall(db: DatabaseLike, memberLimit: number): Pro
       ORDER BY ((length(key) * 31 + unicode(substr(key, -1)) * 17 + unicode(substr(key, 8, 1))) % 997), key`,
     ["", memberLimit],
   );
+
+  return rows.map((row) => ({
+    ...row,
+    href: sanitizeLegacyHttpOrSameOriginUrl(row.href) ?? (row.key.startsWith("sponsor:") ? "/sponsors/" : "/members/"),
+    logoUrl: sanitizeLegacyHttpOrSameOriginUrl(row.logoUrl) ?? "/img/logo.svg",
+  }));
 }

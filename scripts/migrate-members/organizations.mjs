@@ -18,12 +18,12 @@ import {
   buildRepresentativeRoleGrantStatement,
   buildConsortiumSponsorshipStatements,
   buildEventSponsorshipStatements,
-  buildLinksJson,
 } from "./sql-renderer.mjs";
 import { findLogoFile, findRepPhotoFile } from "./r2-adapter.mjs";
 import { repSummary } from "./report.mjs";
-import { EVENT_NAME_ALIASES } from "./constants.mjs";
 import { REPRESENTATIVE_ROLE_IDS } from "../../assets/shared/schemas/representative-roles.ts";
+import { upsertMemberUser } from "./user-upsert.mjs";
+import { forEachResolvedEventSponsorship } from "./sponsorships.mjs";
 
 /**
  * Consortium-wide and per-event sponsorships from a member's YAML
@@ -40,19 +40,14 @@ function upsertSponsorshipsForOrg(ctx, { normalizedOrgName, doc, filename, name 
     ctx.statements.push(...buildConsortiumSponsorshipStatements(normalizedOrgName, level, startDate));
   }
 
-  const sponsoring = sponsor.sponsoring;
-  if (sponsoring && typeof sponsoring === "object") {
-    for (const [eventName, eventSponsor] of Object.entries(sponsoring)) {
-      const tier = String(eventSponsor?.level ?? "").trim();
-      if (!tier) continue;
-      const alias = EVENT_NAME_ALIASES[eventName];
-      if (!alias) {
-        ctx.report.unmatchedEventSponsorships.push({ file: filename, name, eventName, tier });
-        continue;
-      }
+  forEachResolvedEventSponsorship(sponsor.sponsoring, {
+    onResolved: ({ alias, tier }) => {
       ctx.statements.push(...buildEventSponsorshipStatements(normalizedOrgName, alias, tier));
-    }
-  }
+    },
+    onUnmatched: ({ eventName, tier }) => {
+      ctx.report.unmatchedEventSponsorships.push({ file: filename, name, eventName, tier });
+    },
+  });
 }
 
 export function processOrganizationRecord(ctx, { filename, slug, doc, name, memberType, domains, reps, candidates }) {
@@ -75,7 +70,9 @@ export function processOrganizationRecord(ctx, { filename, slug, doc, name, memb
   });
   ctx.statements.push(organizationStatement);
   ctx.statements.push(...buildOrganizationDomainStatements(normalizedOrgName, domains));
-  ctx.statements.push(...buildOrganizationMemberAggregateStatements(normalizedOrgName, memberType || null, doc.memberSince));
+  ctx.statements.push(
+    ...buildOrganizationMemberAggregateStatements(normalizedOrgName, memberType || null, doc.memberSince),
+  );
   upsertSponsorshipsForOrg(ctx, { normalizedOrgName, doc, filename, name });
 
   if (candidates.length === 0) {
@@ -136,16 +133,17 @@ export function processOrganizationRecord(ctx, { filename, slug, doc, name, memb
       }
     }
 
-    const normalizedEmail = ctx.upsertUser({
+    const normalizedEmail = upsertMemberUser(ctx, {
       email,
       firstName,
       lastName,
       jobTitle: rep.role ?? null,
       biography: rep.description ?? null,
-      linksJson: buildLinksJson(links, (url) => ctx.report.invalidLinks.push({ file: filename, name: rep.name, url })),
+      links,
       headshotR2Key: repHeadshotR2Key,
+      sourceFile: filename,
+      sourceName: rep.name,
     });
-    ctx.claimedEmails.add(normalizedEmail);
     ctx.statements.push(buildOrganizationRepresentativeStatement(normalizedOrgName, normalizedEmail, true));
     contactEmails.push(normalizedEmail);
   }
@@ -171,11 +169,19 @@ export function processOrganizationRecord(ctx, { filename, slug, doc, name, memb
 
   if (contactEmails[0])
     ctx.statements.push(
-      buildRepresentativeRoleGrantStatement(normalizedOrgName, contactEmails[0], REPRESENTATIVE_ROLE_IDS.primaryContact),
+      buildRepresentativeRoleGrantStatement(
+        normalizedOrgName,
+        contactEmails[0],
+        REPRESENTATIVE_ROLE_IDS.primaryContact,
+      ),
     );
   if (contactEmails[1])
     ctx.statements.push(
-      buildRepresentativeRoleGrantStatement(normalizedOrgName, contactEmails[1], REPRESENTATIVE_ROLE_IDS.secondaryContact),
+      buildRepresentativeRoleGrantStatement(
+        normalizedOrgName,
+        contactEmails[1],
+        REPRESENTATIVE_ROLE_IDS.secondaryContact,
+      ),
     );
 
   ctx.report.totals.matchedOrgs += 1;

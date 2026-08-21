@@ -27,9 +27,12 @@ import type {
   AdminApplicationSummary as CanonicalAdminApplicationSummary,
 } from "../../shared/schemas/admin-applications";
 import type {
+  AdminEventRegistrationSummary as CanonicalRegistration,
   AdminEventSummary as CanonicalEventSummary,
+  AdminEventInviteSummary as CanonicalInviteRecord,
+  AdminEventRegistrationAttendanceChange as CanonicalRegistrationAttendanceChange,
   AdminEventTeamListItem as CanonicalEventPermission,
-} from "../../shared/schemas/api";
+} from "../../shared/schemas/admin-events";
 import type {
   AdminOrganizationDetail as CanonicalAdminOrganizationDetail,
   AdminOrganizationRepresentative as CanonicalAdminOrganizationRepresentative,
@@ -146,36 +149,8 @@ export type ApiFn = <T = unknown>(
   opts?: RequestInit & { headers?: Record<string, string> },
 ) => Promise<T>;
 
-export interface RegistrationAttendanceChange {
-  changedAt: string;
-  transitions: Array<{
-    fromType: string;
-    toType: string;
-    days: Array<{ dayDate: string; label: string | null }>;
-  }>;
-}
-
-export interface Registration {
-  id: string;
-  user_id: string;
-  user_email?: string;
-  display_name?: string;
-  status: string;
-  attendance_type?: string;
-  source_type?: string;
-  created_at: string;
-  referral_code?: string | null;
-  rsvp_events_json?: string | null;
-  has_bounced?: boolean;
-  dayAttendance?: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
-  dayWaitlist?: Array<{ dayDate: string; status: string; priorityLane: string; offerExpiresAt: string | null }>;
-  dayWaitlistSummary?: string | null;
-  dayWaitlistCount?: number;
-  attendanceChangeHistory?: RegistrationAttendanceChange[];
-  lastAttendanceChange?: RegistrationAttendanceChange | null;
-  sponsor_consent?: boolean;
-  dietary_restrictions?: string[] | null;
-}
+export type RegistrationAttendanceChange = CanonicalRegistrationAttendanceChange;
+export type Registration = CanonicalRegistration;
 
 export interface AdminRegistrationDay {
   dayDate: string;
@@ -240,25 +215,7 @@ export interface AdminInviteEntry {
   lastName?: string;
 }
 
-export interface InviteRecord {
-  id: string;
-  invitee_email: string;
-  invitee_first_name: string | null;
-  invitee_last_name: string | null;
-  invite_type: string;
-  status: string;
-  decline_reason_code: string | null;
-  decline_reason_note: string | null;
-  unsubscribe_future: number;
-  source_type: string;
-  created_at: string;
-  accepted_at: string | null;
-  declined_at: string | null;
-  inviter_user_id: string | null;
-  inviter_email: string | null;
-  inviter_first_name: string | null;
-  inviter_last_name: string | null;
-}
+export type InviteRecord = CanonicalInviteRecord;
 
 export type AdminEmailOutboxRow = CanonicalAdminEmailOutboxRow;
 export type AdminEmailOutboxResponse = CanonicalAdminEmailOutboxResponse;

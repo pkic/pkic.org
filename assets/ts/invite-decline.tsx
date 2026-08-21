@@ -114,7 +114,7 @@ function hide(el: HTMLElement | null): void {
   el?.classList.add("d-none");
 }
 
-// ── Initialise ────────────────────────────────────────────────────────────────
+// ── Initialize ────────────────────────────────────────────────────────────────
 
 function boot(): void {
   const root = document.querySelector<HTMLElement>("[data-invite-decline]");
@@ -218,7 +218,7 @@ function boot(): void {
     initForm(tok, base, info, inviteIdQuery);
   }
 
-  // ── Form initialisation ─────────────────────────────────────────────────────
+  // ── Form initialization ─────────────────────────────────────────────────────
 
   function initForm(tok: string, base: string, info: DeclineInfoValid, inviteIdQuery: string): void {
     // Personalise greeting

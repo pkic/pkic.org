@@ -5,9 +5,10 @@ import { ErrorAlert } from "../../components/ErrorAlert";
 import { DataTable, type Column } from "../../components/Table";
 import { Tabs } from "../../components/Tabs";
 import { api } from "../api";
-import { fmtMoney, svgBarChart, svgLineChart, svgStackedBarChart } from "../charts";
+import { fmtMoney, recentActivityChart, svgBarChart, svgStackedBarChart } from "../charts";
 import type { StatsResponse, DonationPeriod } from "../types";
 import { useData } from "../../hooks/useData";
+import { ActivityChartCard } from "../components/ActivityChartCard";
 
 type StatsTab = "overview" | "registrations" | "donations";
 
@@ -44,23 +45,7 @@ export function Stats({ subTab }: { subTab?: string }) {
 }
 
 function OverviewTab({ stats }: { stats: StatsResponse }) {
-  const activityChart = svgLineChart(
-    [
-      {
-        label: "Registrations",
-        values: stats.recentActivity.map((d) => d.registrations),
-        stroke: "#198754",
-        area: "rgba(25,135,84,.07)",
-      },
-      {
-        label: "Invites",
-        values: stats.recentActivity.map((d) => d.invites),
-        stroke: "#fd7e14",
-        area: "rgba(253,126,20,.07)",
-      },
-    ],
-    stats.recentActivity.map((d) => d.date.slice(5)),
-  );
+  const activityChart = recentActivityChart(stats.recentActivity);
 
   return (
     <div>
@@ -89,12 +74,7 @@ function OverviewTab({ stats }: { stats: StatsResponse }) {
           </div>
         </div>
       </div>
-      <div class="card border-0 shadow-sm mt-3">
-        <div class="card-body">
-          <h6 class="text-uppercase small fw-bold text-muted mb-3">Activity — last 30 days</h6>
-          <div dangerouslySetInnerHTML={{ __html: activityChart }} />
-        </div>
-      </div>
+      <ActivityChartCard chart={activityChart} />
     </div>
   );
 }

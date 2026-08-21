@@ -111,6 +111,8 @@ export async function sendAdminProposalSpeakerReminders(
         capabilityLinkValues: [actionUrl],
         data: {
           ...buildEventEmailVariables(event, payload.appBaseUrl),
+          proposalId: proposal.id,
+          speakerUserId: speaker.user_id,
           firstName: speaker.first_name ?? "",
           proposalTitle: proposal.title,
           ...(payload.kind === "profile"
@@ -191,6 +193,8 @@ export async function remindProposalSpeakerByProposer(
       data: isProfileReviewRequest
         ? {
             ...buildEventEmailVariables(event, payload.appBaseUrl),
+            proposalId: payload.proposal.id,
+            speakerUserId: speaker.user_id,
             firstName: speaker.first_name ?? "",
             proposalTitle: inviteContext.proposalTitle,
             profileUrl: manageUrl,
@@ -199,6 +203,8 @@ export async function remindProposalSpeakerByProposer(
           }
         : {
             ...buildEventEmailVariables(event, payload.appBaseUrl),
+            proposalId: payload.proposal.id,
+            speakerUserId: speaker.user_id,
             firstName: speaker.first_name ?? "",
             lastName: speaker.last_name ?? "",
             proposerFirstName: proposer?.first_name ?? "",

@@ -323,6 +323,7 @@ export function LeadershipPositions({ body, label }: { body: "board" | "executiv
       status: "current",
     },
     leadershipPositionsListResponseSchema,
+    (data) => data.positions,
   );
   const pastPage = useApiPage<LeadershipPositionsListResponse>(
     "/api/v1/admin/leadership-positions",
@@ -331,6 +332,7 @@ export function LeadershipPositions({ body, label }: { body: "board" | "executiv
       status: "past",
     },
     leadershipPositionsListResponseSchema,
+    (data) => data.positions,
   );
   const current = currentPage.data?.positions ?? [];
   const past = pastPage.data?.positions ?? [];

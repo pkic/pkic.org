@@ -6,7 +6,7 @@ import { prepareConsentStatements } from "./consent";
 import { prepareAcceptInviteStatements, prepareRevokeDuplicateInvitesStatement, type InviteRecord } from "./invites";
 import { prepareReferralCodeStatement } from "./referrals";
 import { buildCreateRegistration } from "./registrations/create";
-import { isEventDayCapacityConflict } from "./registrations/day-waitlist";
+import { isEventDayCapacityConflict, type PlannedDayWaitlistEntry } from "./registrations/day-waitlist";
 import type { RegistrationRecord } from "./registrations";
 import type { DayAttendanceSelection } from "./event-days";
 import { buildFindOrCreateUserStatement, type FindOrCreateUserPayload, type UserRecord } from "./users";
@@ -19,12 +19,7 @@ export interface PreparedRegistrationSubmission {
   reactivated: boolean;
   referralCode: string;
   dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
-  plannedDayWaitlist: Array<{
-    dayDate: string;
-    status: string;
-    priorityLane: string;
-    offerExpiresAt: string | null;
-  }>;
+  plannedDayWaitlist: PlannedDayWaitlistEntry[];
   statements: StatementLike[];
 }
 

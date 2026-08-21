@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { env } from "cloudflare:workers";
 import { onRequest as apiMiddlewareOnRequest } from "../functions/api/v1/_middleware";
+import { onRequest as donationRedirectMiddlewareOnRequest } from "../functions/donate/r/_middleware";
 import { onRequest as redirectMiddlewareOnRequest } from "../functions/r/_middleware";
 import type { PagesContext } from "../functions/_lib/types";
 
@@ -40,10 +41,12 @@ describe("cache policy middleware", () => {
     expect(adminResponse.headers.get("cache-control")).toContain("no-store");
   });
 
-  it("adds no-store to referral/redirect routes", async () => {
-    const referralResponse = await redirectMiddlewareOnRequest(
-      createMiddlewareContext(new Request("https://app.test/r/abc1234"), new Response(null, { status: 302 })),
-    );
-    expect(referralResponse.headers.get("cache-control")).toContain("no-store");
+  it.each([
+    ["event referral", redirectMiddlewareOnRequest, "https://app.test/r/abc1234"],
+    ["donation referral", donationRedirectMiddlewareOnRequest, "https://app.test/donate/r/abc1234"],
+  ])("adds no-store to %s routes", async (_label, middleware, url) => {
+    const response = await middleware(createMiddlewareContext(new Request(url), new Response(null, { status: 302 })));
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(response.headers.get("x-request-id")).toBeTruthy();
   });
 });

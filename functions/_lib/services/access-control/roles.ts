@@ -44,7 +44,7 @@ export async function listRoles(
   query: RolesListQuery,
 ): Promise<{ roles: Role[]; page: PageInfo }> {
   requirePermission(actor, "access:grant");
-  const { q, sort, limit = 50, offset = 0 } = query;
+  const { q, sort, limit, offset } = query;
   const orderBy = resolveOrderBy(sort, ADMIN_ROLES_SORT_COLUMNS, "ORDER BY name ASC", "id ASC");
   const search = q ? buildD1TextSearchFilter(q, ["name", "description"]) : null;
   const where = search ? `WHERE ${search.sql}` : "";

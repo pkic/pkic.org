@@ -4,8 +4,10 @@ import { env } from "cloudflare:workers";
 import { createContext, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
-import { onRequestGet as getRegistration } from "../functions/api/v1/registrations/manage/[token]";
-import { onRequestPatch as updateProposalSpeaker } from "../functions/api/v1/proposals/manage/[token]/speakers/[userId]";
+import {
+  onRequestGet as getRegistration,
+  onRequestPatch as updateRegistration,
+} from "../functions/api/v1/registrations/manage/[token]";
 import { onRequestPost as openRegistrationManage } from "../functions/api/v1/admin/events/[eventSlug]/registrations/[registrationId]/open-manage";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { createRegistration, confirmRegistrationByToken } from "../functions/_lib/services/registrations";
@@ -256,6 +258,10 @@ describe("manage read endpoints", () => {
     const { manageUrl } = (await openResponse.json()) as { manageUrl: string };
     const jwt = new URL(manageUrl).searchParams.get("token") as string;
     expect(jwt.split(".")).toHaveLength(3);
+    const claims = JSON.parse(atob(jwt.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))) as {
+      actor: string;
+    };
+    expect(claims.actor).toBe(admin.id);
 
     const validResponse = await getRegistration(
       createContext(
@@ -269,7 +275,33 @@ describe("manage read endpoints", () => {
         { token: jwt },
       ),
     );
-    expect(validResponse.status).toBe(200);
+    expect(validResponse.status, JSON.stringify(await validResponse.clone().json())).toBe(200);
+
+    const updateResponse = await updateRegistration(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "cf-connecting-ip": "203.0.113.30",
+            "user-agent": "admin-browser",
+          },
+          body: JSON.stringify({ action: "update", firstName: "Admin edited" }),
+        }),
+        { token: jwt },
+      ),
+    );
+    expect(updateResponse.status).toBe(200);
+    const [audit] = await queryAll<{ actor_type: string; actor_id: string }>(
+      env.DB,
+      `SELECT actor_type, actor_id
+       FROM audit_log
+       WHERE entity_id = ? AND action = 'self_service_update'
+       ORDER BY created_at DESC LIMIT 1`,
+      [created.registration.id],
+    );
+    expect(audit).toEqual({ actor_type: "admin", actor_id: admin.id });
 
     const wrongContextResponse = await getRegistration(
       createContext(
@@ -334,7 +366,7 @@ describe("manage read endpoints", () => {
     expect(payload.speakers[0].email).toBe("speaker@example.test");
   });
 
-  it("lets proposers update session type and speaker roles from the manage flow", async () => {
+  it("lets proposers update session type and presentation role without changing ownership", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
     await env.DB.prepare("UPDATE events SET settings_json = ? WHERE id = ?")
@@ -422,16 +454,12 @@ describe("manage read endpoints", () => {
     );
     expect(ambiguousWithdrawal.status).toBe(400);
 
-    const speakerResponse = await updateProposalSpeaker(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/proposals/manage/${token}/speakers/${userId}`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ role: "moderator" }),
-        }),
-        { token, userId },
-      ),
+    const speakerResponse = await callApp(
+      new Request(`https://app.test/api/v1/proposals/manage/${token}/speakers/${userId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ role: "moderator" }),
+      }),
     );
     expect(speakerResponse.status).toBe(200);
 

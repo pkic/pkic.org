@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { adminUserUpdateSchema } from "../../../assets/shared/schemas/api";
+import { adminUserUpdateSchema } from "../../../assets/shared/schemas/admin-users";
 import { serializeLinks } from "../../../assets/shared/schemas/links";
 import { first } from "../db/queries";
 import { AppError } from "../errors";
@@ -7,6 +7,7 @@ import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 import { normalizeEmail } from "../validation";
 import { prepareAuditLog } from "./audit";
 import { prepareUserProfileStatement, type UserProfilePatch } from "./users";
+import { buildUserAccessOffboardingStatements } from "./membership/offboarding";
 
 type AdminUserUpdateInput = z.infer<typeof adminUserUpdateSchema>;
 
@@ -24,6 +25,7 @@ interface AdminUserUpdateRow {
   active: number;
   is_ec_member: number;
   pii_redacted_at: string | null;
+  updated_at: string;
 }
 
 function profilePatch(input: AdminUserUpdateInput): UserProfilePatch {
@@ -75,7 +77,7 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
   const user = await first<AdminUserUpdateRow>(
     db,
     `SELECT id, email, first_name, last_name, preferred_name, organization_name,
-            job_title, biography, links_json, role, active, is_ec_member, pii_redacted_at
+            job_title, biography, links_json, role, active, is_ec_member, pii_redacted_at, updated_at
      FROM users WHERE id = ?`,
     [userId],
   );
@@ -112,6 +114,7 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
     ...(input.isEcMember !== undefined && isEcMember !== Boolean(user.is_ec_member) ? ["isEcMember"] : []),
   ];
   const statements: StatementLike[] = [];
+  const at = new Date().toISOString();
   if (Object.keys(patch).length > 0) statements.push(prepareUserProfileStatement(db, user.id, patch));
   statements.push(
     db
@@ -120,8 +123,19 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
          SET email = ?, normalized_email = ?, role = ?, active = ?, is_ec_member = ?, updated_at = ?
          WHERE id = ?`,
       )
-      .bind(email, normalizeEmail(email), role, active ? 1 : 0, isEcMember ? 1 : 0, new Date().toISOString(), user.id),
+      .bind(email, normalizeEmail(email), role, active ? 1 : 0, isEcMember ? 1 : 0, at, user.id),
   );
+  if (user.active === 1 && !active) {
+    statements.push(
+      db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(at, user.id),
+      db.prepare("UPDATE refresh_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(at, user.id),
+      ...(await buildUserAccessOffboardingStatements(db, {
+        userId: user.id,
+        causeKey: `user:${user.id}:deactivate:${user.updated_at}`,
+        at,
+      })),
+    );
+  }
   if (changedFields.length > 0) {
     statements.push(
       prepareAuditLog(db, "admin", actor.id, "user_updated", "user", user.id, {

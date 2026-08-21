@@ -1,6 +1,7 @@
 import { all } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
 import type { DayWaitlistLane } from "./day-waitlist-types";
+import { NON_CAPACITY_CONSUMING_DAY_WAITLIST_SQL } from "./day-waitlist-policy";
 
 export async function listInPersonEventDayIdsForRegistration(
   db: DatabaseLike,
@@ -27,7 +28,7 @@ export async function listConfirmedInPersonEventDayIdsForRegistration(
      LEFT JOIN event_day_waitlist_entries w
        ON w.event_day_id = rda.event_day_id
       AND w.registration_id = rda.registration_id
-      AND w.status IN ('waiting', 'offered')
+      AND ${NON_CAPACITY_CONSUMING_DAY_WAITLIST_SQL}
      WHERE rda.registration_id = ? AND rda.attendance_type = 'in_person' AND w.id IS NULL`,
     [registrationId],
   );

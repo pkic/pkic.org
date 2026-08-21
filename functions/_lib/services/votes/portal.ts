@@ -28,6 +28,7 @@ import {
   type VoteResult,
 } from "./shared";
 import type { AuthMember, DatabaseLike } from "../../types";
+import { VOTES_LIST_SORT_COLUMNS } from "../../../../assets/shared/schemas/votes";
 
 export interface PortalVoteSummary extends VoteSummary {
   candidates: CandidateSummary[] | null;
@@ -160,12 +161,7 @@ export async function listVisibleVotesForMember(
     args.push(...search.bindings);
   }
   const where = filters.join(" AND ");
-  const orderBy = resolveOrderBy(
-    params.sort,
-    ["title", "status", "closes_at", "created_at"],
-    "ORDER BY closes_at DESC",
-    "id ASC",
-  );
+  const orderBy = resolveOrderBy(params.sort, VOTES_LIST_SORT_COLUMNS, "ORDER BY closes_at DESC", "id ASC");
 
   const { rows, total } = await queryPage<VoteRow>(
     db,

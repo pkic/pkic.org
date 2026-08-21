@@ -26,6 +26,8 @@ export const calendarRsvpStatusSchema = z.enum(["accepted", "declined", "tentati
 /** Shared persistence contract used by webhook and Cloudflare Email ingestion. */
 export const calendarRsvpEventInputSchema = z.object({
   registrationId: databaseIdSchema,
+  /** Trusted day identity derived from a signed inbound address or calendar UID. */
+  eventDayDate: z.iso.date().nullable().optional(),
   icsUid: z.string().trim().min(1).max(500),
   attendeeEmail: normalizedEmailSchema,
   responseStatus: calendarRsvpStatusSchema,

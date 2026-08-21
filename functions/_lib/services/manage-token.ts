@@ -26,7 +26,7 @@ export async function resolveManageToken(
   request: Request,
   env: { DB: DatabaseLike; INTERNAL_SIGNING_SECRET?: string },
   token: string,
-): Promise<{ registration: RegistrationRecord; isJwt: boolean } | Response> {
+): Promise<{ registration: RegistrationRecord; isJwt: boolean; actorUserId: string } | Response> {
   const secret = env.INTERNAL_SIGNING_SECRET;
   if (secret && token.split(".").length === 3) {
     const result = await verifyAdminManageJwt(secret, token);
@@ -48,11 +48,11 @@ export async function resolveManageToken(
       );
     }
     const registration = await getRegistrationById(env.DB, result.claims.sub);
-    return { registration, isJwt: true };
+    return { registration, isJwt: true, actorUserId: result.claims.actor };
   }
   if (!secret) {
     return json({ error: { code: "SERVER_ERROR", message: "Signing secret not configured." } }, 500);
   }
   const registration = await getRegistrationByManageToken(env.DB, token, secret);
-  return { registration, isJwt: false };
+  return { registration, isJwt: false, actorUserId: registration.user_id };
 }

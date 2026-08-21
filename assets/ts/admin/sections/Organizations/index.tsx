@@ -13,11 +13,12 @@
  * organization list + top-level create/detail composition.
  */
 import { useState, useRef } from "preact/hooks";
-import { ApiDataTable, type ApiTableActions } from "../../../components/Table";
+import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
 import { fmt } from "../../ui";
 import type { AdminOrganizationSummary } from "../../types";
 import { AddOrganizationForm } from "./AddOrganizationForm";
 import { OrganizationDetailView } from "./OrganizationDetailView";
+import { adminOrganizationsListResponseSchema } from "../../../../shared/schemas/admin-organizations";
 
 export function Organizations() {
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
@@ -53,8 +54,9 @@ export function Organizations() {
 
       <ApiDataTable<AdminOrganizationSummary>
         endpoint="/api/v1/admin/organizations"
-        resolve={(d) => (d as { organizations: AdminOrganizationSummary[] }).organizations}
-        resolvePage={(d) => (d as { page: { total: number; hasMore: boolean } }).page}
+        responseSchema={adminOrganizationsListResponseSchema}
+        resolve={(data) => adminOrganizationsListResponseSchema.parse(data).organizations}
+        resolvePage={(data) => adminOrganizationsListResponseSchema.parse(data).page}
         paginate
         actionsRef={tableRef}
         searchPlaceholder="organization name"

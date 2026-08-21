@@ -271,6 +271,21 @@ describe("admin forms endpoints", () => {
     const filtered = (await filteredResponse.json()) as { forms: Array<{ key: string }>; page: { total: number } };
     expect(filtered.forms.map((form) => form.key)).toEqual(["global-feedback-form"]);
     expect(filtered.page.total).toBe(1);
+
+    await insertForm({
+      key: "inactive-feedback-form",
+      scopeType: "event",
+      scopeRef: eventId,
+      purpose: "feedback",
+      status: "inactive",
+      title: "Inactive feedback",
+      fields: [],
+    });
+    const inactiveResponse = await callAdmin(
+      "/api/v1/admin/events/pqc-2026/forms?purpose=feedback&status=inactive&limit=10",
+    );
+    const inactive = (await inactiveResponse.json()) as { forms: Array<{ key: string; status: string }> };
+    expect(inactive.forms).toEqual([expect.objectContaining({ key: "inactive-feedback-form", status: "inactive" })]);
   });
 
   it("lists and creates global forms through the admin forms root", async () => {

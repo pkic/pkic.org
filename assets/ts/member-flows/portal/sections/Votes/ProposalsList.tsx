@@ -17,6 +17,7 @@ export function ProposalsList({ wgNames }: { wgNames: Map<string, string> }) {
     "/api/v1/portal/vote-proposals",
     {},
     listProposalsResponseSchema,
+    (data) => data.proposals,
   );
   const [myWorkingGroups, setMyWorkingGroups] = useState<MyWorkingGroupMembership[]>([]);
   const [error, setError] = useState<string | null>(null);

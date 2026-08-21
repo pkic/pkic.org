@@ -1,20 +1,14 @@
 /**
  * Member-facing (non-staff) magic-link authentication.
- * Mirrors adminAuthRequestSchema/adminAuthVerifySchema (assets/shared/schemas/api.ts)
- * exactly; kept separate because the response shape carries an AuthMember, not
- * an AuthAdmin.
+ * Reuses the canonical magic-link request contracts; the member response shape
+ * remains separate because it carries an AuthMember rather than an AuthAdmin.
  */
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
-import { normalizedEmailSchema, tokenSchema } from "./api-common";
+import { emailRecoveryRequestSchema, magicLinkVerifySchema, successResponseSchema } from "./api-common";
 
-export const memberAuthRequestSchema = z.object({
-  email: normalizedEmailSchema,
-});
-
-export const memberAuthVerifySchema = z.object({
-  token: tokenSchema,
-});
+export const memberAuthRequestSchema = emailRecoveryRequestSchema;
+export const memberAuthVerifySchema = magicLinkVerifySchema;
 
 export const authMemberSchema = z.object({
   userId: databaseIdSchema,
@@ -23,6 +17,11 @@ export const authMemberSchema = z.object({
   organizationId: databaseIdSchema.nullable(),
   membershipCategory: z.string(),
   isEcMember: z.boolean(),
+});
+
+export const memberAuthVerifyResponseSchema = successResponseSchema.extend({
+  expiresAt: z.string(),
+  member: authMemberSchema,
 });
 
 export const memberAuthRequestRouteSchema = {
@@ -36,7 +35,7 @@ export const memberAuthRequestRouteSchema = {
   responses: {
     "200": {
       description: "Magic link sent if the email matches an active member.",
-      content: { "application/json": { schema: z.object({ success: z.boolean() }) } },
+      content: { "application/json": { schema: successResponseSchema } },
     },
   },
 };
@@ -52,7 +51,7 @@ export const memberAuthVerifyRouteSchema = {
       description: "Session established.",
       content: {
         "application/json": {
-          schema: z.object({ success: z.boolean(), expiresAt: z.string(), member: authMemberSchema }),
+          schema: memberAuthVerifyResponseSchema,
         },
       },
     },

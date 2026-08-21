@@ -114,6 +114,16 @@ describe("admin email template endpoints", () => {
     expect(payload.error.code).toBe("VALIDATION_ERROR");
   });
 
+  it("filters template catalogs by a validated key prefix in D1", async () => {
+    await setupAdminTemplates();
+    const response = await callAdmin("/api/v1/admin/email-templates?templateKeyPrefix=registration_");
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as { templates: Array<{ template_key: string }> };
+    expect(payload.templates.length).toBeGreaterThan(0);
+    expect(payload.templates.every((template) => template.template_key.startsWith("registration_"))).toBe(true);
+    expect((await callAdmin("/api/v1/admin/email-templates?templateKeyPrefix=bad%2A")).status).toBe(400);
+  });
+
   it("renders preview HTML and text with seeded partials and layout", async () => {
     await setupAdminTemplates();
 
@@ -254,5 +264,51 @@ describe("admin email template endpoints", () => {
 
     const invalidSort = await callAdmin("/api/v1/admin/email-templates/registration_confirm_email/versions?sort=body");
     expect(invalidSort.status).toBe(400);
+  });
+
+  it("filters one template's versions by lifecycle status in D1", async () => {
+    await setupAdminTemplates();
+    await callAdmin("/api/v1/admin/email-templates/registration_confirm_email/versions", {
+      method: "POST",
+      body: JSON.stringify({ content: "Draft body", subjectTemplate: "Draft", contentType: "markdown" }),
+    });
+
+    const active = await callAdmin(
+      "/api/v1/admin/email-templates/registration_confirm_email/versions?status=active&limit=1&sort=-version",
+    );
+    expect(active.status).toBe(200);
+    const activePayload = (await active.json()) as {
+      versions: Array<{ version: number; status: string }>;
+      page: { total: number };
+    };
+    expect(activePayload.versions).toEqual([expect.objectContaining({ version: 1, status: "active" })]);
+    expect(activePayload.page.total).toBe(1);
+
+    const drafts = await callAdmin(
+      "/api/v1/admin/email-templates/registration_confirm_email/versions?status=draft&limit=1&sort=-version",
+    );
+    const draftPayload = (await drafts.json()) as {
+      versions: Array<{ version: number; status: string }>;
+      page: { total: number };
+    };
+    expect(draftPayload.versions).toEqual([expect.objectContaining({ version: 2, status: "draft" })]);
+    expect(draftPayload.page.total).toBe(1);
+    await callAdmin("/api/v1/admin/email-templates/registration_confirm_email/activate", {
+      method: "POST",
+      body: JSON.stringify({ version: 2 }),
+    });
+    const archived = await callAdmin(
+      "/api/v1/admin/email-templates/registration_confirm_email/versions?status=archived&limit=1",
+    );
+    expect(archived.status).toBe(200);
+    const archivedPayload = (await archived.json()) as {
+      versions: Array<{ version: number; status: string }>;
+      page: { total: number };
+    };
+    expect(archivedPayload.versions).toEqual([expect.objectContaining({ version: 1, status: "archived" })]);
+    expect(archivedPayload.page.total).toBe(1);
+    expect(
+      (await callAdmin("/api/v1/admin/email-templates/registration_confirm_email/versions?status=deleted")).status,
+    ).toBe(400);
   });
 });

@@ -12,6 +12,7 @@ import { sha256Hex } from "../../../utils/crypto";
 import { parseJsonSafe } from "../../../utils/json";
 import { AppError } from "../../../errors";
 import type { DatabaseLike, StatementLike } from "../../../types";
+import { prepareAuditLog } from "../../audit";
 
 export interface MemberApplicationRow {
   id: string;
@@ -23,7 +24,9 @@ export interface MemberApplicationRow {
   form_submission_id: string | null;
   stage: string;
   stage_entered_at: string;
+  transition_revision: number;
   on_hold_subtype: string | null;
+  on_hold_reminder_sent_at: string | null;
   review_notes: string | null;
   assigned_to_user_id: string | null;
   manage_token_hash: string;
@@ -35,8 +38,8 @@ export async function getMemberApplicationById(db: DatabaseLike, id: string): Pr
   return first<MemberApplicationRow>(
     db,
     `SELECT id, applicant_email, applicant_name, organization_name, organization_domain,
-            membership_category, form_submission_id, stage, stage_entered_at,
-            on_hold_subtype, review_notes, assigned_to_user_id, manage_token_hash,
+            membership_category, form_submission_id, stage, stage_entered_at, transition_revision,
+            on_hold_subtype, on_hold_reminder_sent_at, review_notes, assigned_to_user_id, manage_token_hash,
             created_at, updated_at
      FROM member_applications
      WHERE id = ?`,
@@ -79,7 +82,10 @@ export async function listApplicationDocuments(
 ): Promise<ApplicationDocumentRow[]> {
   return all<ApplicationDocumentRow>(
     db,
-    `SELECT * FROM application_documents WHERE application_id = ? ORDER BY uploaded_at ASC`,
+    `SELECT id, application_id, uploaded_by_email, r2_key, filename, mime_type, file_size_bytes, uploaded_at
+     FROM application_documents
+     WHERE application_id = ?
+     ORDER BY uploaded_at ASC, id ASC`,
     [applicationId],
   );
 }
@@ -97,22 +103,34 @@ export async function recordApplicationDocument(
 ): Promise<ApplicationDocumentRow> {
   const id = uuid();
   const uploadedAt = nowIso();
-  await run(
-    db,
-    `INSERT INTO application_documents
-       (id, application_id, uploaded_by_email, r2_key, filename, mime_type, file_size_bytes, uploaded_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      id,
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO application_documents
+           (id, application_id, uploaded_by_email, r2_key, filename, mime_type, file_size_bytes, uploaded_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(
+        id,
+        params.applicationId,
+        params.uploadedByEmail,
+        params.r2Key,
+        params.filename,
+        params.mimeType,
+        params.fileSizeBytes,
+        uploadedAt,
+      ),
+    prepareAuditLog(
+      db,
+      "public",
+      null,
+      "application_document_uploaded",
+      "member_application",
       params.applicationId,
-      params.uploadedByEmail,
-      params.r2Key,
-      params.filename,
-      params.mimeType,
-      params.fileSizeBytes,
+      { filename: params.filename, fileSize: params.fileSizeBytes, mimeType: params.mimeType },
       uploadedAt,
-    ],
-  );
+    ),
+  ]);
   return {
     id,
     application_id: params.applicationId,
@@ -274,7 +292,10 @@ export async function listApplicationCommunications(
 ): Promise<ApplicationCommunicationRow[]> {
   return all<ApplicationCommunicationRow>(
     db,
-    `SELECT * FROM application_communications WHERE application_id = ? ORDER BY created_at ASC`,
+    `SELECT id, application_id, kind, actor_user_id, subject, body, template_key, email_outbox_id, created_at
+     FROM application_communications
+     WHERE application_id = ?
+     ORDER BY created_at ASC, id ASC`,
     [applicationId],
   );
 }
@@ -327,7 +348,10 @@ export async function listApplicationConcerns(
 ): Promise<ApplicationConcernRow[]> {
   return all<ApplicationConcernRow>(
     db,
-    `SELECT * FROM application_concerns WHERE application_id = ? ORDER BY created_at ASC`,
+    `SELECT id, application_id, submitted_by_user_id, concern_text, created_at
+     FROM application_concerns
+     WHERE application_id = ?
+     ORDER BY created_at ASC, id ASC`,
     [applicationId],
   );
 }

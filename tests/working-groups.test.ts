@@ -179,6 +179,11 @@ describe("admin working groups", () => {
     const patched = (await patchResponse.json()) as { workingGroup: { description: string; active: boolean } };
     expect(patched.workingGroup.description).toBe("updated");
     expect(patched.workingGroup.active).toBe(false);
+    const inactivePage = workingGroupsListResponseSchema.parse(
+      await (await call(adminToken, "/api/v1/admin/working-groups?active=false")).json(),
+    );
+    expect(inactivePage.workingGroups.map((group) => group.id)).toContain(created.workingGroup.id);
+    expect(inactivePage.workingGroups.every((group) => !group.active)).toBe(true);
 
     const reactivate = await call(adminToken, `/api/v1/admin/working-groups/${created.workingGroup.id}`, {
       method: "PATCH",

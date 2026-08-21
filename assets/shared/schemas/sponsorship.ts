@@ -2,7 +2,7 @@ import { z } from "zod";
 import { eventIdSchema, normalizedEmailSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { stripeCurrencySchema, stripeEventEnvelopeSchema, stripeIdentifierSchema } from "./stripe";
-import { relativeRedirectPathSchema } from "./urls";
+import { httpUrlSchema, relativeRedirectPathSchema } from "./urls";
 
 /** Schemas for /api/v1/sponsorship/*. */
 
@@ -10,7 +10,7 @@ export const sponsorshipInquirySchema = z.object({
   contactName: z.string().trim().min(1).max(160),
   contactEmail: normalizedEmailSchema,
   organizationName: z.string().trim().min(1).max(200),
-  organizationWebsite: z.url().optional(),
+  organizationWebsite: httpUrlSchema.optional(),
   desiredTier: z.string().trim().min(1).max(60),
   eventId: eventIdSchema.optional(),
   comments: z.string().trim().max(4000).optional(),
@@ -90,7 +90,7 @@ export const paidSponsorshipCheckoutSessionSchema = z
 export type PaidSponsorshipCheckoutSession = z.infer<typeof paidSponsorshipCheckoutSessionSchema>;
 
 export const sponsorshipCheckoutResponseSchema = z.object({
-  url: z.string(),
+  url: httpUrlSchema,
 });
 
 export const sponsorshipCheckoutRouteSchema = {

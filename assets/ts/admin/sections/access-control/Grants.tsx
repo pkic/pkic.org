@@ -1,5 +1,5 @@
 import { useRef, useState } from "preact/hooks";
-import { ApiDataTable, type ApiTableActions } from "../../../components/Table";
+import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
 import { api } from "../../api";
 import { fmt, toast } from "../../ui";
 import type { AccessGrant } from "../../types";
@@ -7,6 +7,7 @@ import { PERMISSIONS } from "../../permissions";
 import { UserPicker, type PickedUser } from "./UserPicker";
 import { ContextPicker, type PickedContext } from "./ContextPicker";
 import { accessGrantsListResponseSchema } from "../../../../shared/schemas/access-control";
+import { performAdminAction } from "../../actions";
 
 /** Access Control section: grant/revoke permissions per user, with context and expiry pickers. */
 export function Grants() {
@@ -19,13 +20,11 @@ export function Grants() {
 
   async function handleRevoke(id: string) {
     if (!confirm("Revoke this permission grant?")) return;
-    try {
-      await api(`/api/v1/admin/access-grants/${id}`, { method: "DELETE" });
-      toast("Grant revoked", "success");
-      tableRef.current?.reload();
-    } catch (e) {
-      toast((e as Error).message, "error");
-    }
+    await performAdminAction({
+      request: () => api(`/api/v1/admin/access-grants/${id}`, { method: "DELETE" }),
+      successMessage: "Grant revoked",
+      afterSuccess: () => tableRef.current?.reload(),
+    });
   }
 
   async function handleAdd(e: Event) {
@@ -38,28 +37,27 @@ export function Grants() {
       toast("Pick a specific event/working group, or clear the context", "error");
       return;
     }
-    setSubmitting(true);
-    try {
-      await api("/api/v1/admin/access-grants", {
-        method: "POST",
-        body: JSON.stringify({
-          userId: user.id,
-          permission,
-          contextType: context.contextType,
-          contextId: context.contextId,
-          expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
+    await performAdminAction({
+      setBusy: setSubmitting,
+      request: () =>
+        api("/api/v1/admin/access-grants", {
+          method: "POST",
+          body: JSON.stringify({
+            userId: user.id,
+            permission,
+            contextType: context.contextType,
+            contextId: context.contextId,
+            expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
+          }),
         }),
-      });
-      toast("Permission granted", "success");
-      setUser(null);
-      setContext({ contextType: null, contextId: null });
-      setExpiresAt("");
-      tableRef.current?.reload();
-    } catch (err) {
-      toast((err as Error).message, "error");
-    } finally {
-      setSubmitting(false);
-    }
+      successMessage: "Permission granted",
+      afterSuccess: () => {
+        setUser(null);
+        setContext({ contextType: null, contextId: null });
+        setExpiresAt("");
+        tableRef.current?.reload();
+      },
+    });
   }
 
   return (
@@ -112,6 +110,7 @@ export function Grants() {
 
       <ApiDataTable<AccessGrant>
         endpoint="/api/v1/admin/access-grants"
+        responseSchema={accessGrantsListResponseSchema}
         resolve={(data) => accessGrantsListResponseSchema.parse(data).grants}
         resolvePage={(data) => accessGrantsListResponseSchema.parse(data).page}
         paginate

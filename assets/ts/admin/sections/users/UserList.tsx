@@ -1,5 +1,5 @@
 import { useRef, useState } from "preact/hooks";
-import { ApiDataTable, type ApiTableActions } from "../../../components/Table";
+import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
 import { normalizeProfileLinks } from "../../../shared/widgets/profile-links";
 import { api } from "../../api";
 import type { AdminUser } from "../../types";
@@ -28,13 +28,13 @@ export function UserList({ onViewUser }: { onViewUser: (id: string) => void }) {
   return (
     <ApiDataTable<AdminUser>
       endpoint="/api/v1/admin/users"
+      responseSchema={usersListResponseSchema}
       resolve={(data) => usersListResponseSchema.parse(data).users}
       resolvePage={(data) => usersListResponseSchema.parse(data).page}
       paginate
       actionsRef={tableRef}
       searchPlaceholder="email or name"
       params={{ ...(roleFilter ? { role: roleFilter } : {}), ...(typeFilter ? { type: typeFilter } : {}) }}
-      deps={[roleFilter, typeFilter]}
       toolbar={({ resetPage }) => (
         <>
           <select

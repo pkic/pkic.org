@@ -18,6 +18,16 @@ export interface D1QueryBudget {
   remainingQueries(): number;
 }
 
+/**
+ * Checks an invocation-local D1 statement budget before starting an atomic
+ * batch. Callers must still pass the same budgeted database to the batch so
+ * the statement counter remains authoritative.
+ */
+export function hasD1QueryCapacity(budget: D1QueryBudget | undefined, requiredQueries: number): boolean {
+  if (!budget) return true;
+  return budget.remainingQueries() >= Math.max(0, Math.floor(requiredQueries));
+}
+
 interface MutableD1QueryBudget extends D1QueryBudget {
   consume(count: number): void;
 }

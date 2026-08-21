@@ -1,7 +1,7 @@
 import { useState } from "preact/hooks";
 import { api } from "../../api";
-import { toast } from "../../ui";
 import { SPONSOR_TYPES } from "../../../../shared/schemas/admin-sponsorships";
+import { performAdminAction } from "../../actions";
 
 interface CreateDraft {
   sponsorType: (typeof SPONSOR_TYPES)[number];
@@ -31,27 +31,24 @@ export function CreateSponsorshipForm({ onCreated, onCancel }: { onCreated: () =
 
   async function submit(e: Event) {
     e.preventDefault();
-    setSaving(true);
-    try {
-      await api("/api/v1/admin/sponsorships", {
-        method: "POST",
-        body: JSON.stringify({
-          sponsorType: draft.sponsorType,
-          organizationId: draft.organizationId.trim() || null,
-          eventId: draft.eventId.trim() || null,
-          nonMemberName: draft.nonMemberName.trim() || null,
-          contactName: draft.contactName.trim() || null,
-          contactEmail: draft.contactEmail.trim() || null,
-          tier: draft.tier.trim() || null,
+    await performAdminAction({
+      setBusy: setSaving,
+      request: () =>
+        api("/api/v1/admin/sponsorships", {
+          method: "POST",
+          body: JSON.stringify({
+            sponsorType: draft.sponsorType,
+            organizationId: draft.organizationId.trim() || null,
+            eventId: draft.eventId.trim() || null,
+            nonMemberName: draft.nonMemberName.trim() || null,
+            contactName: draft.contactName.trim() || null,
+            contactEmail: draft.contactEmail.trim() || null,
+            tier: draft.tier.trim() || null,
+          }),
         }),
-      });
-      toast("Sponsorship created", "success");
-      onCreated();
-    } catch (err) {
-      toast((err as Error).message, "error");
-    } finally {
-      setSaving(false);
-    }
+      successMessage: "Sponsorship created",
+      afterSuccess: onCreated,
+    });
   }
 
   return (

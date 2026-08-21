@@ -3,6 +3,7 @@ import { formFieldDefinitionSchema } from "./forms";
 import { normalizedEmailSchema } from "./api-common";
 import { membershipCategorySchema, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "./membership-categories";
 import { formAnswersSchema } from "./form-answers";
+import { databaseIdSchema } from "./identifiers";
 
 export { membershipCategorySchema };
 
@@ -110,20 +111,24 @@ export const memberApplicationCreateRouteSchema = {
 };
 
 export const memberApplicationStatusResponseSchema = z.object({
-  id: z.string(),
+  id: databaseIdSchema,
   stage: applicationStageSchema,
   stageEnteredAt: z.string(),
   createdAt: z.string(),
 });
 
+export const memberApplicationIdParamsSchema = z.object({ id: databaseIdSchema });
+export const memberApplicationCapabilityQuerySchema = z.object({ token: z.string().min(16).max(64) });
+const memberApplicationCapabilityRequest = {
+  params: memberApplicationIdParamsSchema,
+  query: memberApplicationCapabilityQuerySchema,
+};
+
 export const memberApplicationStatusRouteSchema = {
   tags: ["Members"],
   summary: "Check membership application status",
   description: "Token-gated status check for an applicant. Token is issued once at submission time.",
-  request: {
-    params: z.object({ id: z.string() }),
-    query: z.object({ token: z.string().min(16).max(64) }),
-  },
+  request: memberApplicationCapabilityRequest,
   responses: {
     "200": {
       description: "Current application status.",
@@ -159,7 +164,7 @@ export const memberApplicationFormRouteSchema = {
 };
 
 export const applicationDocumentResponseSchema = z.object({
-  id: z.string(),
+  id: databaseIdSchema,
   filename: z.string(),
   mimeType: z.string(),
   fileSizeBytes: z.number(),
@@ -174,10 +179,7 @@ export const applicationDocumentUploadRouteSchema = {
   tags: ["Members"],
   summary: "Upload a supporting document for a membership application",
   description: "Token-gated. multipart/form-data with a single 'file' field.",
-  request: {
-    params: z.object({ id: z.string() }),
-    query: z.object({ token: z.string().min(16).max(64) }),
-  },
+  request: memberApplicationCapabilityRequest,
   responses: {
     "201": {
       description: "Document stored.",
@@ -199,7 +201,7 @@ export const applicationConcernCreateSchema = z.object({
 });
 
 export const applicationConcernResponseSchema = z.object({
-  id: z.string(),
+  id: databaseIdSchema,
   createdAt: z.string(),
 });
 
@@ -209,7 +211,7 @@ export const applicationConcernCreateRouteSchema = {
   description:
     "Visible only to staff/processors, never to the applicant. Member-session gated; only A-G category members may submit.",
   request: {
-    params: z.object({ id: z.string() }),
+    params: memberApplicationIdParamsSchema,
     body: { content: { "application/json": { schema: applicationConcernCreateSchema } }, required: true },
   },
   responses: {
@@ -227,10 +229,7 @@ export const applicationDocumentListRouteSchema = {
   tags: ["Members"],
   summary: "List a membership applicant's own uploaded documents",
   description: "Token-gated.",
-  request: {
-    params: z.object({ id: z.string() }),
-    query: z.object({ token: z.string().min(16).max(64) }),
-  },
+  request: memberApplicationCapabilityRequest,
   responses: {
     "200": {
       description: "Documents uploaded for this application.",

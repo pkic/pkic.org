@@ -62,6 +62,8 @@ async function inviteProposalSpeakerOnce(
     capabilityLinkValues: [manageUrl],
     data: {
       ...buildEventEmailVariables(payload.event, payload.appBaseUrl),
+      proposalId: payload.proposal.id,
+      speakerUserId: preparedUser.user.id,
       firstName: preparedUser.user.first_name ?? "",
       lastName: preparedUser.user.last_name ?? "",
       proposerFirstName: context.inviterFirstName ?? "",

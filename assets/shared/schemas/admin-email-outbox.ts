@@ -1,9 +1,34 @@
 import { z } from "zod";
-import { emailMessageTypeSchema } from "./api-common";
+import { booleanQueryFlagSchema, emailMessageTypeSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
-import { paginatedResponseSchema } from "./pagination";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
-export const adminEmailOutboxStatusSchema = z.enum(["queued", "sending", "sent", "failed", "retrying", "bounced"]);
+export const adminEmailOutboxStatusSchema = z.enum([
+  "queued",
+  "sending",
+  "sent",
+  "failed",
+  "retrying",
+  "bounced",
+  "cancelled",
+]);
+
+export const ADMIN_EMAIL_OUTBOX_SORT_COLUMNS = ["recipient", "template", "status", "sendAfter", "createdAt"] as const;
+
+export const adminEmailOutboxQuerySchema = listQuerySchema(ADMIN_EMAIL_OUTBOX_SORT_COLUMNS).extend({
+  status: adminEmailOutboxStatusSchema.optional(),
+  messageType: emailMessageTypeSchema.optional(),
+  dueNow: booleanQueryFlagSchema.default(false),
+});
+
+export const adminRetryOutboxSchema = z.object({
+  limit: z.number().int().positive().max(500).default(20),
+  ids: z.array(databaseIdSchema).max(100).optional(),
+});
+
+export const adminResetFailedOutboxSchema = z.object({
+  ids: z.array(databaseIdSchema).max(100).optional(),
+});
 
 export const adminEmailOutboxRowSchema = z.object({
   id: databaseIdSchema,

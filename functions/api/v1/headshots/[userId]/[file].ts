@@ -8,7 +8,7 @@
  * is served. Replaced and removed keys are revoked immediately even if their
  * asynchronous R2 cleanup needs a retry.
  */
-import { json } from "../../../../_lib/http";
+import { dispatchRequestMethod, json } from "../../../../_lib/http";
 import { currentUserHeadshotResponse } from "../../../../_lib/services/user-headshot";
 
 export async function onRequestGet(c: any): Promise<Response> {
@@ -25,8 +25,5 @@ export async function onRequestGet(c: any): Promise<Response> {
 }
 
 export async function onRequest(c: any): Promise<Response> {
-  if (c.req.raw.method !== "GET") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
-  return onRequestGet(c);
+  return dispatchRequestMethod(c, { GET: onRequestGet });
 }

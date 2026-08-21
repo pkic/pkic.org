@@ -30,6 +30,7 @@ import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { AppError } from "../errors";
 import type { DatabaseLike, StatementLike } from "../types";
+import { prepareAuditLog } from "./audit";
 
 export interface UserMergeResult {
   survivorId: string;
@@ -39,7 +40,7 @@ export interface UserMergeResult {
 
 export async function mergeUsers(
   db: DatabaseLike,
-  params: { survivorId: string; sourceUserId: string },
+  params: { survivorId: string; sourceUserId: string; actorUserId: string },
 ): Promise<UserMergeResult> {
   const { survivorId, sourceUserId } = params;
 
@@ -205,6 +206,13 @@ export async function mergeUsers(
           WHERE id = ?`,
       )
       .bind(sentinel, normalizeEmail(sentinel), survivorId, now, sourceUserId),
+  );
+
+  stmts.push(
+    prepareAuditLog(db, "admin", params.actorUserId, "users_merged", "user", survivorId, {
+      mergedFromUserId: sourceUserId,
+      mergedFromEmail: source.email,
+    }),
   );
 
   await db.batch(stmts);

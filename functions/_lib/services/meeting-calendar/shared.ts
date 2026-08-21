@@ -42,6 +42,10 @@ export interface PreferenceRow {
   updated_at: string;
 }
 
+export const SERIES_SELECT_COLUMNS = "id, name, scope_type, working_group_id, active, created_at, updated_at";
+export const ICS_FILE_SELECT_COLUMNS = "id, series_id, label, year, r2_key, active, uploaded_by_user_id, created_at";
+export const PREFERENCE_SELECT_COLUMNS = "id, user_id, series_id, ics_file_id, set_at, updated_at";
+
 export interface AdminIcsFileSummary {
   id: string;
   label: string;
@@ -94,7 +98,8 @@ export async function attachIcsFiles(db: DatabaseLike, seriesRows: SeriesRow[]):
   );
   const icsRows = await all<IcsFileRow>(
     db,
-    `SELECT * FROM meeting_ics_files WHERE ${seriesFilter.sql} ORDER BY year DESC, label ASC`,
+    `SELECT ${ICS_FILE_SELECT_COLUMNS} FROM meeting_ics_files
+      WHERE ${seriesFilter.sql} ORDER BY year DESC, label ASC, id ASC`,
     seriesFilter.bindings,
   );
   const bySeriesId = new Map<string, AdminIcsFileSummary[]>();
@@ -120,7 +125,9 @@ export async function getSeriesForAdminOrThrow(
   seriesId: string,
   expected: { scopeType: MeetingSeriesScopeType; workingGroupId?: string },
 ): Promise<SeriesRow> {
-  const row = await first<SeriesRow>(db, `SELECT * FROM meeting_series WHERE id = ?`, [seriesId]);
+  const row = await first<SeriesRow>(db, `SELECT ${SERIES_SELECT_COLUMNS} FROM meeting_series WHERE id = ?`, [
+    seriesId,
+  ]);
   if (!row || row.scope_type !== expected.scopeType) {
     throw new AppError(404, "MEETING_SERIES_NOT_FOUND", "Meeting series not found");
   }

@@ -10,7 +10,7 @@ export default defineConfig({
     },
   },
   test: {
-    include: ["tests/frontend/**/*.test.ts"],
+    include: ["tests/frontend/**/*.test.{ts,tsx}"],
     exclude: ["**/._*"],
     environment: "jsdom",
   },

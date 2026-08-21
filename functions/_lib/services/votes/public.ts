@@ -23,6 +23,7 @@ import {
   type VoteResult,
 } from "./shared";
 import type { DatabaseLike } from "../../types";
+import { VOTES_LIST_SORT_COLUMNS } from "../../../../assets/shared/schemas/votes";
 
 export interface PublicVoteListParams {
   type?: VoteType;
@@ -111,14 +112,8 @@ export async function listPublicVotes(
     args.push(...search.bindings);
   }
 
-  const orderBy = resolveOrderBy(
-    params.sort,
-    ["title", "status", "closes_at", "created_at"],
-    "ORDER BY closes_at DESC",
-    "id ASC",
-  );
-  const limit = params.limit ?? 20;
-  const offset = params.offset ?? 0;
+  const orderBy = resolveOrderBy(params.sort, VOTES_LIST_SORT_COLUMNS, "ORDER BY closes_at DESC", "id ASC");
+  const { limit, offset } = params;
 
   const where = conditions.join(" AND ");
   const { rows, total } = await queryPage<VoteRow>(

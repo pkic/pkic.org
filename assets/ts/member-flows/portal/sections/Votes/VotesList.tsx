@@ -13,16 +13,19 @@ export function VotesList({ wgNames }: { wgNames: Map<string, string> }) {
     "/api/v1/portal/votes",
     { status: "open" },
     portalVotesListResponseSchema,
+    (data) => data.votes,
   );
   const upcoming = useApiPage<PortalVotesListResponse>(
     "/api/v1/portal/votes",
     { status: "scheduled" },
     portalVotesListResponseSchema,
+    (data) => data.votes,
   );
   const closed = useApiPage<PortalVotesListResponse>(
     "/api/v1/portal/votes",
     { status: "closed,cancelled" },
     portalVotesListResponseSchema,
+    (data) => data.votes,
   );
 
   const sections = [

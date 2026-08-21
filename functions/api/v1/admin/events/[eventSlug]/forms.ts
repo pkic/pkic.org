@@ -11,7 +11,7 @@ import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { createManagedForm, listAdminForms } from "../../../../../_lib/services/forms";
-import { adminFormCreateSchema } from "../../../../../../assets/shared/schemas/api";
+import { adminFormCreateSchema } from "../../../../../../assets/shared/schemas/admin-forms";
 import { adminEventFormsListRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
@@ -20,7 +20,7 @@ import { buildPageInfo } from "../../../../../../assets/shared/schemas/paginatio
 export const onRequestGet = openApiRoute(adminEventFormsListRouteSchema, async (c: AdminContext, data) => {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const event = await getEventBySlug(requestDb(c), data.params.eventSlug);
-  const { limit = 200, offset = 0, q, sort, purpose } = data.query;
+  const { limit, offset, q, sort, purpose, status } = data.query;
   const { forms, total } = await listAdminForms(requestDb(c), {
     eventId: event.id,
     includeGlobal: true,
@@ -29,6 +29,7 @@ export const onRequestGet = openApiRoute(adminEventFormsListRouteSchema, async (
     q,
     sort,
     purpose,
+    status,
   });
   return json({ forms, page: buildPageInfo(limit, offset, total, forms.length) });
 });

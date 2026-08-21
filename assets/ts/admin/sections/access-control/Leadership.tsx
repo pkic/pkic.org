@@ -1,11 +1,13 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { Spinner } from "../../../components/Spinner";
 import { api } from "../../api";
 import { fmt, toast } from "../../ui";
-import type { AdminWorkingGroupSummary, Role, RoleAssignment } from "../../types";
+import type { AdminWorkingGroupSummary, RoleAssignment } from "../../types";
 import { UserPicker, type PickedUser } from "./UserPicker";
 import { LeadershipPositions } from "./LeadershipPositions";
-import { getAdminWorkingGroupCatalogue } from "../../services/catalogues";
+import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
+import { workingGroupsListResponseSchema } from "../../../../shared/schemas/working-groups";
+import { SYSTEM_ROLE_IDS } from "../../../../shared/schemas/access-control";
 
 /**
  * "Create a new tab under the Access Control for chairs to set the chairs
@@ -199,36 +201,19 @@ function ChairSlot({
 }
 
 export function Leadership() {
-  const [roles, setRoles] = useState<Role[]>([]);
-  const [groups, setGroups] = useState<AdminWorkingGroupSummary[]>([]);
   const [forumChair, setForumChair] = useState<RoleAssignment | null>(null);
   const [forumViceChair, setForumViceChair] = useState<RoleAssignment | null>(null);
   const [loading, setLoading] = useState(true);
-
-  function roleId(name: string): string | null {
-    return roles.find((r) => r.name === name)?.id ?? null;
-  }
+  const workingGroupsRef = useRef<ApiTableActions | null>(null);
 
   async function load() {
     setLoading(true);
     try {
-      const rolesData = await api<{ roles: Role[] }>("/api/v1/admin/roles");
-      setRoles(rolesData.roles);
-
-      const forumChairRoleId = rolesData.roles.find((r) => r.name === "forum_chair")?.id;
-      const forumViceChairRoleId = rolesData.roles.find((r) => r.name === "forum_vice_chair")?.id;
-
-      const [groupsData, forumChairAssignments, forumViceChairAssignments] = await Promise.all([
-        getAdminWorkingGroupCatalogue(),
-        forumChairRoleId
-          ? api<{ assignments: RoleAssignment[] }>(`/api/v1/admin/roles/${forumChairRoleId}/assignments`)
-          : Promise.resolve({ assignments: [] as RoleAssignment[] }),
-        forumViceChairRoleId
-          ? api<{ assignments: RoleAssignment[] }>(`/api/v1/admin/roles/${forumViceChairRoleId}/assignments`)
-          : Promise.resolve({ assignments: [] as RoleAssignment[] }),
+      const [forumChairAssignments, forumViceChairAssignments] = await Promise.all([
+        api<{ assignments: RoleAssignment[] }>(`/api/v1/admin/roles/${SYSTEM_ROLE_IDS.forumChair}/assignments`),
+        api<{ assignments: RoleAssignment[] }>(`/api/v1/admin/roles/${SYSTEM_ROLE_IDS.forumViceChair}/assignments`),
       ]);
 
-      setGroups(groupsData);
       setForumChair(forumChairAssignments.assignments[0] ?? null);
       setForumViceChair(forumViceChairAssignments.assignments[0] ?? null);
     } catch (e) {
@@ -251,7 +236,7 @@ export function Leadership() {
         <div class="card-body d-flex flex-column gap-2">
           <ChairSlot
             label="Chair"
-            roleId={roleId("forum_chair")}
+            roleId={SYSTEM_ROLE_IDS.forumChair}
             roleMissingLabel='The built-in "forum_chair" role was not found.'
             contextType={null}
             contextId={null}
@@ -260,7 +245,7 @@ export function Leadership() {
           />
           <ChairSlot
             label="Vice chair"
-            roleId={roleId("forum_vice_chair")}
+            roleId={SYSTEM_ROLE_IDS.forumViceChair}
             roleMissingLabel='The built-in "forum_vice_chair" role was not found.'
             contextType={null}
             contextId={null}
@@ -275,36 +260,57 @@ export function Leadership() {
 
       <div class="card border-0 shadow-sm">
         <div class="card-header bg-white fw-semibold">Working groups</div>
-        <div class="card-body d-flex flex-column gap-3">
-          {groups.length === 0 && <span class="text-muted fst-italic small">No working groups</span>}
-          {groups.map((g) => (
-            <div key={g.id} class="border rounded p-2">
-              <div class="fw-semibold small mb-2">
-                {g.name}
-                {!g.active && <span class="badge text-bg-secondary ms-2">Inactive</span>}
-              </div>
-              <div class="d-flex flex-column gap-2">
-                <ChairSlot
-                  label="Chair"
-                  roleId={roleId("wg_chair")}
-                  roleMissingLabel='The built-in "wg_chair" role was not found.'
-                  contextType="working_group"
-                  contextId={g.id}
-                  current={g.chair}
-                  onChanged={() => void load()}
-                />
-                <ChairSlot
-                  label="Vice chair"
-                  roleId={roleId("wg_vice_chair")}
-                  roleMissingLabel='The built-in "wg_vice_chair" role was not found.'
-                  contextType="working_group"
-                  contextId={g.id}
-                  current={g.viceChair}
-                  onChanged={() => void load()}
-                />
-              </div>
-            </div>
-          ))}
+        <div class="card-body">
+          <ApiDataTable<AdminWorkingGroupSummary>
+            endpoint="/api/v1/admin/working-groups"
+            responseSchema={workingGroupsListResponseSchema}
+            resolve={(response) => workingGroupsListResponseSchema.parse(response).workingGroups}
+            resolvePage={(response) => workingGroupsListResponseSchema.parse(response).page}
+            paginate
+            initialPageSize={25}
+            initialSort="name"
+            searchPlaceholder="Search working groups…"
+            actionsRef={workingGroupsRef}
+            rowKey={(group) => group.id}
+            empty="No working groups"
+            columns={[
+              {
+                header: "Working group",
+                cell: (group) => (
+                  <span class="fw-semibold small">
+                    {group.name}
+                    {!group.active && <span class="badge text-bg-secondary ms-2">Inactive</span>}
+                  </span>
+                ),
+                sort: { asc: "name", desc: "-name" },
+              },
+              {
+                header: "Leadership",
+                cell: (group) => (
+                  <div class="d-flex flex-column gap-2">
+                    <ChairSlot
+                      label="Chair"
+                      roleId={SYSTEM_ROLE_IDS.workingGroupChair}
+                      roleMissingLabel='The built-in "wg_chair" role was not found.'
+                      contextType="working_group"
+                      contextId={group.id}
+                      current={group.chair}
+                      onChanged={() => workingGroupsRef.current?.reload()}
+                    />
+                    <ChairSlot
+                      label="Vice chair"
+                      roleId={SYSTEM_ROLE_IDS.workingGroupViceChair}
+                      roleMissingLabel='The built-in "wg_vice_chair" role was not found.'
+                      contextType="working_group"
+                      contextId={group.id}
+                      current={group.viceChair}
+                      onChanged={() => workingGroupsRef.current?.reload()}
+                    />
+                  </div>
+                ),
+              },
+            ]}
+          />
         </div>
       </div>
     </div>

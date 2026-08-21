@@ -5,6 +5,7 @@ import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLogWhen } from "../audit";
+import { prepareCancelProposalEmails } from "../proposal-email-cancellation";
 import {
   assertProposalDecisionAllowed,
   assertProposalFinalizeAccess,
@@ -40,9 +41,11 @@ export async function recordProposalDecision(
     );
   }
   const context = await getProposalDecisionContext(db, input.proposalId);
-  assertProposalDecisionAllowed(context, input.minReviewsRequired, input.expectedProposalUpdatedAt);
+  assertProposalDecisionAllowed(context, input.finalStatus, input.minReviewsRequired, input.expectedProposalUpdatedAt);
   await assertProposalFinalizeAccess(db, context.event_id, input.actor);
   const decisionId = uuid();
+  const decisionSequence = Number(context.current_decision_sequence ?? 0) + 1;
+  const supersedesDecisionId = context.current_decision_id;
   const now = nowIso();
   const hasEventSnapshot = input.expectedEventSnapshot !== undefined;
   const hasSpeakerSnapshot = input.expectedSpeakerSnapshot !== undefined;
@@ -57,8 +60,9 @@ export async function recordProposalDecision(
       ? proposalDecisionSnapshotPredicate(input.expectedEventSnapshot, input.expectedSpeakerSnapshot)
       : { sql: "", bindings: [] };
   const condition = {
-    sql: "SELECT 1 FROM proposal_decisions WHERE id = ? AND proposal_id = ? AND review_round = ?",
-    bindings: [decisionId, input.proposalId, context.review_round],
+    sql: `SELECT 1 FROM proposal_decisions
+          WHERE id = ? AND proposal_id = ? AND review_round = ? AND decision_sequence = ?`,
+    bindings: [decisionId, input.proposalId, context.review_round, decisionSequence],
   };
   const preparedEmails = (input.notifications ?? []).map((notification) =>
     prepareQueueEmailStatementWhen(
@@ -80,49 +84,93 @@ export async function recordProposalDecision(
     ),
   );
 
+  const recordCurrentDecision = supersedesDecisionId
+    ? db
+        .prepare(
+          `UPDATE proposal_decisions
+           SET id = ?, decided_by_user_id = ?, final_status = ?, decision_note = ?,
+               min_reviews_required = ?,
+               review_count = (
+                 SELECT COUNT(*) FROM proposal_reviews pr
+                 WHERE pr.proposal_id = proposal_decisions.proposal_id
+                   AND pr.review_round = proposal_decisions.review_round
+               ),
+               decided_at = ?, decision_sequence = ?
+           WHERE id = ? AND proposal_id = ? AND review_round = ?
+             AND final_status = 'needs-work' AND decision_sequence = ?
+             AND EXISTS (
+               SELECT 1 FROM session_proposals sp
+               WHERE sp.id = proposal_decisions.proposal_id AND sp.deleted_at IS NULL
+                 AND sp.status = ? AND sp.review_round = ? AND sp.updated_at = ?
+                 ${snapshotPredicate.sql}
+                 AND (SELECT COUNT(*) FROM proposal_reviews pr
+                      WHERE pr.proposal_id = sp.id AND pr.review_round = sp.review_round) >= ?
+             )`,
+        )
+        .bind(
+          decisionId,
+          input.actor.id,
+          input.finalStatus,
+          input.decisionNote ?? null,
+          input.minReviewsRequired,
+          now,
+          decisionSequence,
+          supersedesDecisionId,
+          input.proposalId,
+          context.review_round,
+          context.current_decision_sequence,
+          context.status,
+          context.review_round,
+          context.updated_at,
+          ...snapshotPredicate.bindings,
+          input.minReviewsRequired,
+        )
+    : db
+        .prepare(
+          `INSERT INTO proposal_decisions (
+             id, proposal_id, review_round, decided_by_user_id, final_status,
+             decision_note, min_reviews_required, review_count, decided_at, decision_sequence
+           )
+           SELECT ?, sp.id, sp.review_round, ?, ?, ?, ?,
+                  (SELECT COUNT(*) FROM proposal_reviews pr
+                   WHERE pr.proposal_id = sp.id AND pr.review_round = sp.review_round), ?, ?
+           FROM session_proposals sp
+           WHERE sp.id = ? AND sp.deleted_at IS NULL AND sp.status = ? AND sp.review_round = ? AND sp.updated_at = ?
+             ${snapshotPredicate.sql}
+             AND NOT EXISTS (SELECT 1 FROM proposal_decisions pd WHERE pd.proposal_id = sp.id)
+             AND (SELECT COUNT(*) FROM proposal_reviews pr
+                  WHERE pr.proposal_id = sp.id AND pr.review_round = sp.review_round) >= ?`,
+        )
+        .bind(
+          decisionId,
+          input.actor.id,
+          input.finalStatus,
+          input.decisionNote ?? null,
+          input.minReviewsRequired,
+          now,
+          decisionSequence,
+          input.proposalId,
+          context.status,
+          context.review_round,
+          context.updated_at,
+          ...snapshotPredicate.bindings,
+          input.minReviewsRequired,
+        );
+
   const statements: StatementLike[] = [
-    db
-      .prepare(
-        `INSERT INTO proposal_decisions (
-           id, proposal_id, review_round, decided_by_user_id, final_status,
-           decision_note, min_reviews_required, review_count, decided_at
-         )
-         SELECT ?, sp.id, sp.review_round, ?, ?, ?, ?,
-                (SELECT COUNT(*) FROM proposal_reviews pr
-                 WHERE pr.proposal_id = sp.id AND pr.review_round = sp.review_round), ?
-         FROM session_proposals sp
-         WHERE sp.id = ? AND sp.deleted_at IS NULL AND sp.status = ? AND sp.review_round = ? AND sp.updated_at = ?
-           ${snapshotPredicate.sql}
-           AND NOT EXISTS (SELECT 1 FROM proposal_decisions pd WHERE pd.proposal_id = sp.id)
-           AND (SELECT COUNT(*) FROM proposal_reviews pr
-                WHERE pr.proposal_id = sp.id AND pr.review_round = sp.review_round) >= ?`,
-      )
-      .bind(
-        decisionId,
-        input.actor.id,
-        input.finalStatus,
-        input.decisionNote ?? null,
-        input.minReviewsRequired,
-        now,
-        input.proposalId,
-        context.status,
-        context.review_round,
-        context.updated_at,
-        ...snapshotPredicate.bindings,
-        input.minReviewsRequired,
-      ),
+    recordCurrentDecision,
     db
       .prepare(
         `INSERT INTO proposal_decision_history (
            id, proposal_id, review_round, decided_by_user_id, final_status,
-           decision_note, min_reviews_required, review_count, decided_at
+           decision_note, min_reviews_required, review_count, decided_at, decision_sequence
          )
          SELECT id, proposal_id, review_round, decided_by_user_id, final_status,
-                decision_note, min_reviews_required, review_count, decided_at
+                decision_note, min_reviews_required, review_count, decided_at, decision_sequence
          FROM proposal_decisions
-         WHERE id = ? AND proposal_id = ? AND review_round = ?`,
+         WHERE id = ? AND proposal_id = ? AND review_round = ? AND decision_sequence = ?`,
       )
-      .bind(decisionId, input.proposalId, context.review_round),
+      .bind(decisionId, input.proposalId, context.review_round, decisionSequence),
     db
       .prepare(
         `INSERT INTO proposal_review_history (
@@ -178,6 +226,22 @@ export async function recordProposalDecision(
       ),
   ];
 
+  if (input.finalStatus === "rejected") {
+    statements.push(
+      prepareCancelProposalEmails(
+        db,
+        {
+          proposalId: input.proposalId,
+          eventId: context.event_id,
+          reason: "Cancelled because the proposal was rejected",
+          conditionSql: condition.sql,
+          conditionBindings: condition.bindings,
+        },
+        now,
+      ),
+    );
+  }
+
   for (const userId of input.presentationReminderUserIds ?? []) {
     statements.push(
       db
@@ -221,7 +285,9 @@ export async function recordProposalDecision(
         adminEmail: { from: null, to: input.actor.email },
         finalStatus: { from: context.previous_status, to: input.finalStatus },
         decisionNote: { from: context.previous_note, to: input.decisionNote ?? null },
-        reviewRound: { from: context.previous_status ? context.review_round - 1 : null, to: context.review_round },
+        reviewRound: { from: context.previous_review_round, to: context.review_round },
+        decisionSequence: { from: context.current_decision_sequence, to: decisionSequence },
+        supersedesDecisionId: { from: supersedesDecisionId, to: decisionId },
         queuedEmailCount: { from: 0, to: preparedEmails.length },
         manageLinkPolicy: { from: null, to: "expiring_capability" },
       },
@@ -240,6 +306,7 @@ export async function recordProposalDecision(
       return throwProposalDecisionConflict(
         db,
         input.proposalId,
+        input.finalStatus,
         input.minReviewsRequired,
         input.expectedProposalUpdatedAt,
       );
@@ -262,6 +329,7 @@ export async function recordProposalDecision(
     return throwProposalDecisionConflict(
       db,
       input.proposalId,
+      input.finalStatus,
       input.minReviewsRequired,
       input.expectedProposalUpdatedAt,
     );

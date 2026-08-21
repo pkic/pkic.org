@@ -13,6 +13,7 @@ import { buildD1TextSearchFilter } from "../../db/search";
 import { AppError } from "../../errors";
 import { resolveOrderBy } from "../../db/sort";
 import { parseLinksJson } from "../../../../assets/shared/schemas/links";
+import { ADMIN_ORGANIZATIONS_SORT_COLUMNS } from "../../../../assets/shared/schemas/admin-organizations";
 import { REPRESENTATIVE_ROLE_IDS, resolveRepresentativeRoleHolders } from "../membership/representative-roles";
 import { toOrganizationExtendedContent, toOrganizationSummaryContent } from "../organization-content/fields";
 import type { DatabaseLike } from "../../types";
@@ -83,12 +84,6 @@ function toOrgSummary(row: OrgSummaryRow) {
   };
 }
 
-// Unqualified column/alias names, matching what ORG_SUMMARY_SELECT's result
-// set actually labels them as (SQLite allows ORDER BY on a SELECT-list
-// alias) — unambiguous here since none of these names collide with a
-// joined `users` column.
-const ORG_SORT_COLUMNS = ["name", "membership_category", "created_at", "member_count"] as const;
-
 export async function listAdminOrganizations(
   db: DatabaseLike,
   params: { limit: number; offset: number; q?: string; sort?: string },
@@ -96,7 +91,7 @@ export async function listAdminOrganizations(
   const search = params.q ? buildD1TextSearchFilter(params.q, ["o.name"]) : null;
   const where = search ? `WHERE ${search.sql}` : "";
   const whereArgs = search?.bindings ?? [];
-  const orderBy = resolveOrderBy(params.sort, ORG_SORT_COLUMNS, "ORDER BY o.name ASC", "o.id ASC");
+  const orderBy = resolveOrderBy(params.sort, ADMIN_ORGANIZATIONS_SORT_COLUMNS, "ORDER BY o.name ASC", "o.id ASC");
 
   const { rows, total } = await queryPage<OrgSummaryRow>(
     db,

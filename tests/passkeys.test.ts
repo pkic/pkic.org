@@ -13,6 +13,8 @@ import { resetDb } from "./helpers/reset-db";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
+import { MAX_PASSKEY_CREDENTIALS_PER_USER } from "../assets/shared/constants/passkeys";
+import { persistVerifiedPasskeyCredential } from "../functions/_lib/services/passkeys";
 import {
   buildAuthenticationResponse,
   buildRegistrationResponse,
@@ -130,6 +132,65 @@ describe("passkeys (WebAuthn)", () => {
     expect(body.challengeToken).toBeTruthy();
   });
 
+  it("bounds active credentials consistently at registration and listing", async () => {
+    for (let index = 0; index < MAX_PASSKEY_CREDENTIALS_PER_USER; index++) {
+      await env.DB.prepare(
+        `INSERT INTO passkey_credentials
+           (id, user_id, credential_id, public_key, sign_count, device_name, created_at)
+         VALUES (?, ?, ?, ?, 0, ?, datetime('now', ?))`,
+      )
+        .bind(crypto.randomUUID(), userId, `credential-${index}`, "AQ", `Device ${index}`, `-${index} seconds`)
+        .run();
+    }
+
+    const beginResponse = await call("/api/v1/auth/passkeys/register/begin", { method: "POST" }, token);
+    expect(beginResponse.status).toBe(409);
+    const beginBody = (await beginResponse.json()) as { error: { code: string } };
+    expect(beginBody.error.code).toBe("PASSKEY_LIMIT_REACHED");
+
+    const listResponse = await call("/api/v1/auth/passkeys", {}, token);
+    expect(listResponse.status).toBe(200);
+    const list = (await listResponse.json()) as { passkeys: Array<{ id: string }> };
+    expect(list.passkeys).toHaveLength(MAX_PASSKEY_CREDENTIALS_PER_USER);
+  });
+
+  it("atomically allows only one concurrent credential to claim the final active slot", async () => {
+    for (let index = 0; index < MAX_PASSKEY_CREDENTIALS_PER_USER - 1; index++) {
+      await env.DB.prepare(
+        `INSERT INTO passkey_credentials
+           (id, user_id, credential_id, public_key, sign_count, device_name, created_at)
+         VALUES (?, ?, ?, ?, 0, ?, datetime('now', ?))`,
+      )
+        .bind(crypto.randomUUID(), userId, `existing-${index}`, "AQ", `Existing ${index}`, `-${index} seconds`)
+        .run();
+    }
+
+    const persist = (suffix: string) =>
+      persistVerifiedPasskeyCredential(
+        env.DB,
+        { id: userId, kind: "admin" },
+        {
+          credentialId: `final-slot-${suffix}`,
+          publicKey: "AQ",
+          signCount: 0,
+          aaguid: null,
+          deviceName: `Final ${suffix}`,
+        },
+      );
+    const results = await Promise.allSettled([persist("one"), persist("two")]);
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.find((result) => result.status === "rejected")).toMatchObject({
+      reason: expect.objectContaining({ code: "PASSKEY_LIMIT_REACHED" }),
+    });
+    const active = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM passkey_credentials WHERE user_id = ? AND revoked_at IS NULL",
+      userId,
+    );
+    expect(active).toHaveLength(MAX_PASSKEY_CREDENTIALS_PER_USER);
+  });
+
   it("POST register/complete with a valid mock credential creates a passkey_credentials record; invalid credential -> 400", async () => {
     const { passkeyId } = await registerPasskey("Laptop");
 
@@ -196,7 +257,14 @@ describe("passkeys (WebAuthn)", () => {
     const body = (await completeResponse.json()) as { success: boolean; admin: { id: string } };
     expect(body.success).toBe(true);
     expect(body.admin.id).toBe(userId);
-    expect(completeResponse.headers.get("set-cookie")).toContain("pkic_admin_session=");
+    const adminCookie = completeResponse.headers.get("set-cookie") ?? "";
+    expect(adminCookie).toContain("pkic_admin_session=");
+    expect(adminCookie).toContain("Path=/api/v1");
+    expect(adminCookie).toContain("HttpOnly");
+    expect(adminCookie).toContain("SameSite=Strict");
+    expect(adminCookie).toContain("Secure");
+    expect(adminCookie).not.toContain("pkic_member_session=");
+    expect(completeResponse.headers.get("cache-control")).toBe("no-store, max-age=0");
 
     const rows = await queryAll<{ sign_count: number }>(
       env.DB,
@@ -212,6 +280,75 @@ describe("passkeys (WebAuthn)", () => {
       body: JSON.stringify({ challengeToken: begin.challengeToken, response: assertion }),
     });
     expect(replayResponse.status).toBe(400);
+  });
+
+  it("allows a signed assertion to create only one session when the same request completes concurrently", async () => {
+    const { authenticator } = await registerPasskey();
+    const begin = await beginAuthentication();
+    const assertion = await buildAuthenticationResponse(authenticator, {
+      challenge: begin.options.challenge,
+      rpId: RP_ID,
+      origin: ORIGIN,
+      signCount: 1,
+    });
+    const sessionsBefore = await queryAll<{ total: number }>(
+      env.DB,
+      "SELECT COUNT(*) AS total FROM sessions WHERE user_id = ?",
+      userId,
+    );
+
+    const complete = () =>
+      call("/api/v1/auth/passkeys/authenticate/complete", {
+        method: "POST",
+        body: JSON.stringify({ challengeToken: begin.challengeToken, response: assertion }),
+      });
+    const responses = await Promise.all([complete(), complete()]);
+
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 400]);
+    const sessionsAfter = await queryAll<{ total: number }>(
+      env.DB,
+      "SELECT COUNT(*) AS total FROM sessions WHERE user_id = ?",
+      userId,
+    );
+    expect(sessionsAfter[0].total - sessionsBefore[0].total).toBe(1);
+    expect(
+      await queryAll<{ total: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS total FROM audit_log WHERE action = 'passkey_authenticated' AND actor_id = ?",
+        userId,
+      ),
+    ).toEqual([{ total: 1 }]);
+  });
+
+  it("rejects reuse of a consumed challenge when an authenticator does not support a signature counter", async () => {
+    const { authenticator } = await registerPasskey();
+    await env.DB.prepare(
+      `INSERT INTO passkey_challenge_uses (challenge_id, purpose, used_at, expires_at)
+       VALUES ('expired-test-challenge', 'authentication', datetime('now', '-10 minutes'), datetime('now', '-5 minutes'))`,
+    ).run();
+    const begin = await beginAuthentication();
+    const assertion = await buildAuthenticationResponse(authenticator, {
+      challenge: begin.options.challenge,
+      rpId: RP_ID,
+      origin: ORIGIN,
+      signCount: 0,
+    });
+    const complete = () =>
+      call("/api/v1/auth/passkeys/authenticate/complete", {
+        method: "POST",
+        body: JSON.stringify({ challengeToken: begin.challengeToken, response: assertion }),
+      });
+
+    expect((await complete()).status).toBe(200);
+    const replay = await complete();
+    expect(replay.status).toBe(400);
+    await expect(replay.json()).resolves.toMatchObject({ error: { code: "PASSKEY_CHALLENGE_INVALID" } });
+    expect(
+      await queryAll<{ total: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS total FROM passkey_challenge_uses WHERE purpose = 'authentication'",
+      ),
+    ).toEqual([{ total: 1 }]);
   });
 
   it("sign count is incremented after each successful assertion (clone attack detection)", async () => {
@@ -371,7 +508,13 @@ describe("member passkey login (generalizing passkeys beyond staff)", () => {
     expect(body.success).toBe(true);
     expect(body.member?.userId).toBe(memberUserId);
     expect(body.admin).toBeUndefined();
-    expect(completeResponse.headers.get("set-cookie")).toContain("pkic_member_session=");
-    expect(completeResponse.headers.get("set-cookie")).not.toContain("pkic_admin_session=");
+    const memberCookie = completeResponse.headers.get("set-cookie") ?? "";
+    expect(memberCookie).toContain("pkic_member_session=");
+    expect(memberCookie).toContain("Path=/api/v1");
+    expect(memberCookie).toContain("HttpOnly");
+    expect(memberCookie).toContain("SameSite=Strict");
+    expect(memberCookie).toContain("Secure");
+    expect(memberCookie).not.toContain("pkic_admin_session=");
+    expect(completeResponse.headers.get("cache-control")).toBe("no-store, max-age=0");
   });
 });

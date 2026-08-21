@@ -1,4 +1,5 @@
 import { AppError } from "./errors";
+import { readBoundedStream } from "./utils/bounded-stream";
 
 export const STRIPE_WEBHOOK_MAX_BYTES = 1024 * 1024;
 export const SENDGRID_WEBHOOK_MAX_BYTES = 2 * 1024 * 1024;
@@ -26,33 +27,11 @@ export async function readBoundedBody(request: Request, maxBytes: number): Promi
   if (declared !== null && declared > maxBytes) {
     throw new AppError(413, "REQUEST_BODY_TOO_LARGE", "Request body must not exceed " + maxBytes + " bytes");
   }
-  if (!request.body) return new Uint8Array();
-
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > maxBytes) {
-        await reader.cancel("request body exceeds configured limit").catch(() => undefined);
-        throw new AppError(413, "REQUEST_BODY_TOO_LARGE", "Request body must not exceed " + maxBytes + " bytes");
-      }
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
+  const result = await readBoundedStream(request.body, maxBytes, "request body exceeds configured limit");
+  if (!result.ok) {
+    throw new AppError(413, "REQUEST_BODY_TOO_LARGE", "Request body must not exceed " + maxBytes + " bytes");
   }
-
-  const body = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    body.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return body;
+  return result.bytes;
 }
 
 export async function readBoundedTextBody(request: Request, maxBytes: number): Promise<string> {

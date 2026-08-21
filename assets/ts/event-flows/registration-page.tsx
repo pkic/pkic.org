@@ -13,22 +13,19 @@ import { renderDonationCta } from "../shared/donation/cta";
 import type { EventFormsResponse, FormField } from "../shared/types";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
 import { installStepNavigation } from "../shared/form/step-navigation";
-import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
+import { withLoadingButton } from "../shared/form/submit";
 import { bootstrap, setStatus } from "./boot";
 import { clearReferralSession } from "../shared/query-context";
-import { registrationCreateSchema } from "../../shared/schemas/api";
+import { registrationCreateSchema, type RegistrationSubmissionResponse } from "../../shared/schemas/registration";
 import { readField, deriveEventAttendanceType, findSubmitButton } from "../shared/form/helpers";
 import { SuccessPanel } from "../components/SuccessPanel";
+import {
+  hasPendingRegistrationDayWaitlist,
+  RegistrationDayStatusSummary,
+} from "../components/RegistrationDayStatusSummary";
 import { optionsFor } from "../shared/form/custom-field-rules";
-import { tryRecoverInvalidInvite } from "../shared/widgets/invite-recovery";
-
-interface RegistrationSubmitResponse {
-  success: boolean;
-  status: string;
-  manageUrl?: string;
-  shareUrl?: string;
-  manageToken?: string;
-}
+import { handleFormInviteSubmitError } from "../shared/widgets/invite-recovery";
+type RegistrationSubmitResponse = RegistrationSubmissionResponse;
 
 const EMAIL_REVIEW_FIELD = "emailReviewConfirmed";
 
@@ -104,20 +101,23 @@ function showSuccessPanel(
         </p>
       </>
     );
-  } else if (result.status === "waitlisted") {
-    icon = "📋";
-    title = "You're on the waitlist!";
+  } else if (hasPendingRegistrationDayWaitlist(result.dayWaitlist)) {
+    icon = "🗓️";
+    title = "Your registration is in place";
     showShare = !!result.shareUrl;
     body = (
-      <p class="event-flow-success-body">
-        In-person spots are fully booked. We've added you to the waitlist and will notify you by email if a spot becomes
-        available.
-        {result.manageUrl && (
-          <a href={result.manageUrl} class="d-block mt-2">
-            Manage your waitlist entry
-          </a>
-        )}
-      </p>
+      <>
+        <p class="event-flow-success-body">
+          Your overall registration is confirmed, but one or more selected in-person days are still pending because
+          those rooms are at capacity.
+          {result.manageUrl && (
+            <a href={result.manageUrl} class="d-block mt-2">
+              Review or change registration
+            </a>
+          )}
+        </p>
+        <RegistrationDayStatusSummary dayAttendance={result.dayAttendance} dayWaitlist={result.dayWaitlist} />
+      </>
     );
   } else {
     icon = "🎉";
@@ -380,20 +380,27 @@ function updateRegistrationReview(root: HTMLElement, form: HTMLFormElement, cust
   if (inlineEmailEl) inlineEmailEl.textContent = email || "the email address above";
 }
 
-function resetEmailReviewConfirmation(form: HTMLFormElement): void {
+export function findEmailReviewCard(form: HTMLFormElement): {
+  confirmation: HTMLInputElement;
+  card: HTMLElement;
+} | null {
   const confirmation = form.elements.namedItem(EMAIL_REVIEW_FIELD);
-  if (confirmation instanceof HTMLInputElement) {
-    confirmation.checked = false;
-    syncEmailReviewCard(form);
-  }
+  if (!(confirmation instanceof HTMLInputElement)) return null;
+  const card = confirmation.closest<HTMLElement>("[data-email-review-card]");
+  return card ? { confirmation, card } : null;
+}
+
+function resetEmailReviewConfirmation(form: HTMLFormElement): void {
+  const review = findEmailReviewCard(form);
+  if (!review) return;
+  review.confirmation.checked = false;
+  syncEmailReviewCard(form);
 }
 
 function syncEmailReviewCard(form: HTMLFormElement): void {
-  const confirmation = form.elements.namedItem(EMAIL_REVIEW_FIELD);
-  if (!(confirmation instanceof HTMLInputElement)) return;
-
-  const card = confirmation.closest<HTMLElement>("[data-email-review-card]");
-  if (!card) return;
+  const review = findEmailReviewCard(form);
+  if (!review) return;
+  const { confirmation, card } = review;
 
   card.classList.toggle("is-checked", confirmation.checked);
   card.classList.toggle("is-invalid", form.classList.contains("was-validated") && !confirmation.checked);
@@ -401,11 +408,9 @@ function syncEmailReviewCard(form: HTMLFormElement): void {
 }
 
 function installEmailReviewCard(form: HTMLFormElement): void {
-  const confirmation = form.elements.namedItem(EMAIL_REVIEW_FIELD);
-  if (!(confirmation instanceof HTMLInputElement)) return;
-
-  const card = confirmation.closest<HTMLElement>("[data-email-review-card]");
-  if (!card) return;
+  const review = findEmailReviewCard(form);
+  if (!review) return;
+  const { confirmation, card } = review;
 
   const toggle = (): void => {
     confirmation.checked = !confirmation.checked;
@@ -565,18 +570,13 @@ async function main(): Promise<void> {
           eventDayCount || undefined,
         );
       } catch (error) {
-        if (
-          await tryRecoverInvalidInvite({
-            error,
-            email: readField(form, "email"),
-            apiBase,
-            statusEl,
-            hasInviteToken: Boolean(query.inviteToken),
-          })
-        ) {
-          return;
-        }
-        handleSubmitError(error, form, statusEl);
+        await handleFormInviteSubmitError({
+          error,
+          form,
+          apiBase,
+          statusEl,
+          hasInviteToken: Boolean(query.inviteToken),
+        });
       }
     });
   });

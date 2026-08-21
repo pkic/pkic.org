@@ -34,6 +34,11 @@ import {
   remindProposalSpeakerByProposer,
   sendAdminProposalSpeakerReminders,
 } from "../functions/_lib/services/proposal-reminders";
+import {
+  removeAdminProposalSpeaker,
+  removeProposalSpeakerByProposer,
+} from "../functions/_lib/services/proposal-speaker-removal";
+import type { DatabaseLike } from "../functions/_lib/types";
 
 interface StoredObject {
   body: ArrayBuffer;
@@ -249,6 +254,594 @@ describe("speaker self-management endpoints", () => {
     expect(response.status).toBe(404);
     const body = (await response.json()) as { error: { code: string; message: string } };
     expect(body.error.code).toBe("SPEAKER_TOKEN_NOT_FOUND");
+  });
+
+  it("lets the proposer remove a non-proposer speaker through the mounted endpoint", async () => {
+    await setupWorkflow();
+    const { proposalId, proposalManageToken, coSpeakerUserId, speakerManageToken } =
+      await inviteSpeakerAndSubmitProposal();
+    const proposal = await getProposalByManageToken(env.DB, proposalManageToken, env.INTERNAL_SIGNING_SECRET!);
+    const reminder = await remindProposalSpeakerByProposer(env.DB, {
+      proposal,
+      userId: coSpeakerUserId,
+      appBaseUrl: "https://app.test",
+    });
+
+    const response = await app.fetch(
+      new Request(
+        `https://app.test/api/v1/proposals/manage/${encodeURIComponent(proposalManageToken)}/speakers/${coSpeakerUserId}`,
+        {
+          method: "DELETE",
+          headers: { "content-type": "application/json" },
+          body: "{}",
+        },
+      ),
+      env,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?", [
+        proposalId,
+        coSpeakerUserId,
+      ]),
+    ).resolves.toHaveLength(0);
+    await expect(
+      queryAll<{ status: string }>(env.DB, "SELECT status FROM email_outbox WHERE id = ?", [reminder.outboxId]),
+    ).resolves.toEqual([{ status: "cancelled" }]);
+    await expect(
+      queryAll<{ status: string }>(
+        env.DB,
+        `SELECT status FROM event_participants
+         WHERE event_id = ? AND user_id = ? AND source_type = 'proposal' AND source_ref = ?`,
+        [proposal.event_id, coSpeakerUserId, proposalId],
+      ),
+    ).resolves.toSatisfy((rows: Array<{ status: string }>) => rows.every((row) => row.status === "inactive"));
+    await expect(queryAll(env.DB, "SELECT id FROM users WHERE id = ?", [coSpeakerUserId])).resolves.toHaveLength(1);
+    await expect(
+      queryAll(
+        env.DB,
+        "SELECT id FROM audit_log WHERE entity_type = 'proposal_speaker' AND action = 'proposal_speaker_removed'",
+      ),
+    ).resolves.toHaveLength(1);
+
+    const staleCapability = await speakerGet(
+      createContext(env, new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`), {
+        token: speakerManageToken,
+      }),
+    );
+    expect(staleCapability.status).toBe(404);
+  });
+
+  it("lets an authorized admin remove a non-proposer speaker through the mounted endpoint", async () => {
+    await setupWorkflow();
+    const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${coSpeakerUserId}`, {
+        method: "DELETE",
+        headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
+        body: "{}",
+      }),
+      env,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?", [
+        proposalId,
+        coSpeakerUserId,
+      ]),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("blocks final-speaker removal on both proposer and admin surfaces", async () => {
+    await setupWorkflow();
+    const { proposalId, proposalManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const [proposal] = await queryAll<{ proposer_user_id: string }>(
+      env.DB,
+      "SELECT proposer_user_id FROM session_proposals WHERE id = ?",
+      [proposalId],
+    );
+    await env.DB.prepare("DELETE FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?")
+      .bind(proposalId, coSpeakerUserId)
+      .run();
+
+    const proposerResponse = await app.fetch(
+      new Request(
+        `https://app.test/api/v1/proposals/manage/${encodeURIComponent(proposalManageToken)}/speakers/${proposal.proposer_user_id}`,
+        { method: "DELETE", headers: { "content-type": "application/json" }, body: "{}" },
+      ),
+      env,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(proposerResponse.status).toBe(409);
+    await expect(proposerResponse.json()).resolves.toMatchObject({ error: { code: "LAST_SPEAKER_REQUIRED" } });
+
+    const adminResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${proposal.proposer_user_id}`, {
+        method: "DELETE",
+        headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
+        body: "{}",
+      }),
+      env,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(adminResponse.status).toBe(409);
+    await expect(adminResponse.json()).resolves.toMatchObject({ error: { code: "LAST_SPEAKER_REQUIRED" } });
+    await expect(
+      queryAll(env.DB, "SELECT id FROM proposal_speakers WHERE proposal_id = ?", [proposalId]),
+    ).resolves.toHaveLength(1);
+    await expect(
+      queryAll<{ status: string }>(env.DB, "SELECT status FROM session_proposals WHERE id = ?", [proposalId]),
+    ).resolves.toEqual([{ status: "submitted" }]);
+  });
+
+  it("withdraws atomically while retaining the roster and cancelling queued proposal mail", async () => {
+    await setupWorkflow();
+    const { proposalId, proposalManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const proposal = await getProposalByManageToken(env.DB, proposalManageToken, env.INTERNAL_SIGNING_SECRET!);
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const reminder = await remindProposalSpeakerByProposer(env.DB, {
+      proposal,
+      userId: coSpeakerUserId,
+      appBaseUrl: "https://app.test",
+    });
+    const invitation = await inviteProposalSpeaker(env.DB, {
+      proposal,
+      event,
+      appBaseUrl: "https://app.test",
+      email: "withdrawal-invite@example.test",
+      firstName: "Pending",
+      lastName: "Speaker",
+      role: "speaker",
+    });
+    await env.DB.prepare("UPDATE email_outbox SET status = 'retrying' WHERE id = ?").bind(reminder.outboxId).run();
+    const rosterBefore = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM proposal_speakers WHERE proposal_id = ? ORDER BY id",
+      [proposalId],
+    );
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/manage/${encodeURIComponent(proposalManageToken)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "withdraw" }),
+      }),
+      env,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(
+      queryAll<{ status: string }>(env.DB, "SELECT status FROM session_proposals WHERE id = ?", [proposalId]),
+    ).resolves.toEqual([{ status: "withdrawn" }]);
+    await expect(
+      queryAll<{ id: string }>(env.DB, "SELECT id FROM proposal_speakers WHERE proposal_id = ? ORDER BY id", [
+        proposalId,
+      ]),
+    ).resolves.toEqual(rosterBefore);
+    await expect(
+      queryAll<{ id: string; status: string }>(
+        env.DB,
+        "SELECT id, status FROM email_outbox WHERE id IN (?, ?) ORDER BY id",
+        [reminder.outboxId, invitation.outboxId],
+      ),
+    ).resolves.toEqual([reminder.outboxId, invitation.outboxId].sort().map((id) => ({ id, status: "cancelled" })));
+    const participants = await queryAll<{ status: string }>(
+      env.DB,
+      "SELECT status FROM event_participants WHERE event_id = ? AND source_type = 'proposal' AND source_ref = ?",
+      [proposal.event_id, proposalId],
+    );
+    expect(participants.length).toBeGreaterThan(0);
+    expect(participants.every((participant) => participant.status === "inactive")).toBe(true);
+  });
+
+  it("rolls back withdrawal mail cancellation and participant fallout when audit fails", async () => {
+    await setupWorkflow();
+    const { proposalId, proposalManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const proposal = await getProposalByManageToken(env.DB, proposalManageToken, env.INTERNAL_SIGNING_SECRET!);
+    const reminder = await remindProposalSpeakerByProposer(env.DB, {
+      proposal,
+      userId: coSpeakerUserId,
+      appBaseUrl: "https://app.test",
+    });
+    const rosterBefore = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM proposal_speakers WHERE proposal_id = ? ORDER BY id",
+      [proposalId],
+    );
+    const participantsBefore = await queryAll<{ user_id: string; role: string; status: string }>(
+      env.DB,
+      `SELECT user_id, role, status FROM event_participants
+       WHERE source_type = 'proposal' AND source_ref = ? ORDER BY user_id, role`,
+      [proposalId],
+    );
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_proposal_withdrawal_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'proposal_withdrawn'
+       BEGIN SELECT RAISE(ABORT, 'forced withdrawal audit failure'); END`,
+    ).run();
+
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/manage/${encodeURIComponent(proposalManageToken)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "withdraw" }),
+      }),
+      env,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(500);
+    await expect(
+      queryAll<{ status: string }>(env.DB, "SELECT status FROM session_proposals WHERE id = ?", [proposalId]),
+    ).resolves.toEqual([{ status: "submitted" }]);
+    await expect(
+      queryAll<{ id: string }>(env.DB, "SELECT id FROM proposal_speakers WHERE proposal_id = ? ORDER BY id", [
+        proposalId,
+      ]),
+    ).resolves.toEqual(rosterBefore);
+    await expect(
+      queryAll<{ status: string }>(env.DB, "SELECT status FROM email_outbox WHERE id = ?", [reminder.outboxId]),
+    ).resolves.toEqual([{ status: "queued" }]);
+    const participants = await queryAll<{ user_id: string; role: string; status: string }>(
+      env.DB,
+      `SELECT user_id, role, status FROM event_participants
+       WHERE source_type = 'proposal' AND source_ref = ? ORDER BY user_id, role`,
+      [proposalId],
+    );
+    expect(participantsBefore.length).toBeGreaterThan(0);
+    expect(participants).toEqual(participantsBefore);
+  });
+
+  it("rejects non-owner role patches which would claim proposal ownership", async () => {
+    await setupWorkflow();
+    const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const [proposal] = await queryAll<{ proposer_user_id: string }>(
+      env.DB,
+      "SELECT proposer_user_id FROM session_proposals WHERE id = ?",
+      [proposalId],
+    );
+
+    const ownerRoleResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${proposal.proposer_user_id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
+        body: JSON.stringify({ role: "speaker" }),
+      }),
+      env,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(ownerRoleResponse.status).toBe(200);
+
+    const nonOwnerResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${coSpeakerUserId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
+        body: JSON.stringify({ role: "proposer" }),
+      }),
+      env,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(nonOwnerResponse.status).toBe(409);
+    await expect(nonOwnerResponse.json()).resolves.toMatchObject({ error: { code: "PROPOSER_TRANSFER_REQUIRED" } });
+
+    await expect(
+      queryAll<{ user_id: string; role: string }>(
+        env.DB,
+        "SELECT user_id, role FROM proposal_speakers WHERE proposal_id = ? ORDER BY user_id",
+        [proposalId],
+      ),
+    ).resolves.toEqual(
+      [
+        { user_id: proposal.proposer_user_id, role: "speaker" },
+        { user_id: coSpeakerUserId, role: "co_speaker" },
+      ].sort((left, right) => left.user_id.localeCompare(right.user_id)),
+    );
+  });
+
+  it("lets an owner with a presentation role change that role without transferring ownership", async () => {
+    await setupWorkflow();
+    const { proposalId } = await inviteSpeakerAndSubmitProposal();
+    const [proposal] = await queryAll<{ proposer_user_id: string }>(
+      env.DB,
+      "SELECT proposer_user_id FROM session_proposals WHERE id = ?",
+      [proposalId],
+    );
+    await env.DB.prepare("UPDATE proposal_speakers SET role = 'moderator' WHERE proposal_id = ? AND user_id = ?")
+      .bind(proposalId, proposal.proposer_user_id)
+      .run();
+
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${proposal.proposer_user_id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
+        body: JSON.stringify({ role: "speaker" }),
+      }),
+      env,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(
+      queryAll<{ proposer_user_id: string; role: string }>(
+        env.DB,
+        `SELECT sp.proposer_user_id, ps.role
+         FROM session_proposals sp JOIN proposal_speakers ps ON ps.proposal_id = sp.id AND ps.user_id = sp.proposer_user_id
+         WHERE sp.id = ?`,
+        [proposalId],
+      ),
+    ).resolves.toEqual([{ proposer_user_id: proposal.proposer_user_id, role: "speaker" }]);
+  });
+
+  it("requires explicit admin transfer and atomically rotates proposal ownership capability", async () => {
+    await setupWorkflow();
+    const { proposalId, proposalManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const [before] = await queryAll<{ proposer_user_id: string; manage_link_secret: string }>(
+      env.DB,
+      "SELECT proposer_user_id, manage_link_secret FROM session_proposals WHERE id = ?",
+      [proposalId],
+    );
+
+    const selfRemoval = await app.fetch(
+      new Request(
+        `https://app.test/api/v1/proposals/manage/${encodeURIComponent(proposalManageToken)}/speakers/${before.proposer_user_id}`,
+        { method: "DELETE", headers: { "content-type": "application/json" }, body: "{}" },
+      ),
+      env,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(selfRemoval.status).toBe(409);
+    await expect(selfRemoval.json()).resolves.toMatchObject({ error: { code: "PROPOSER_REPLACEMENT_REQUIRED" } });
+
+    const transfer = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${before.proposer_user_id}`, {
+        method: "DELETE",
+        headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
+        body: JSON.stringify({ replacementProposerUserId: coSpeakerUserId }),
+      }),
+      env,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(transfer.status).toBe(200);
+    await expect(transfer.json()).resolves.toMatchObject({ proposerUserId: coSpeakerUserId });
+
+    const [after] = await queryAll<{ proposer_user_id: string; manage_link_secret: string }>(
+      env.DB,
+      "SELECT proposer_user_id, manage_link_secret FROM session_proposals WHERE id = ?",
+      [proposalId],
+    );
+    expect(after.proposer_user_id).toBe(coSpeakerUserId);
+    expect(after.manage_link_secret).not.toBe(before.manage_link_secret);
+    await expect(
+      queryAll<{ user_id: string; role: string }>(
+        env.DB,
+        "SELECT user_id, role FROM proposal_speakers WHERE proposal_id = ?",
+        [proposalId],
+      ),
+    ).resolves.toEqual([{ user_id: coSpeakerUserId, role: "co_speaker" }]);
+    await expect(
+      queryAll<{ user_id: string; role: string; subrole: string | null }>(
+        env.DB,
+        `SELECT user_id, role, subrole FROM event_participants
+         WHERE event_id = (SELECT event_id FROM session_proposals WHERE id = ?)
+           AND source_type = 'proposal' AND source_ref = ? AND user_id = ?`,
+        [proposalId, proposalId, coSpeakerUserId],
+      ),
+    ).resolves.toEqual([{ user_id: coSpeakerUserId, role: "speaker", subrole: "co_speaker" }]);
+
+    const staleProposalCapability = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/manage/${encodeURIComponent(proposalManageToken)}`),
+      env,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(staleProposalCapability.status).toBe(404);
+    await expect(
+      queryAll<{ action: string }>(
+        env.DB,
+        `SELECT action FROM audit_log
+         WHERE action IN ('proposal_proposer_transferred', 'proposal_speaker_removed')
+         ORDER BY action`,
+      ),
+    ).resolves.toEqual([{ action: "proposal_proposer_transferred" }, { action: "proposal_speaker_removed" }]);
+    const transferMail = await queryAll<{
+      recipient_user_id: string;
+      template_key: string;
+      status: string;
+      payload_json: string;
+    }>(
+      env.DB,
+      `SELECT recipient_user_id, template_key, status, payload_json
+       FROM email_outbox WHERE template_key = 'proposal_manage_link_transferred'`,
+    );
+    expect(transferMail).toHaveLength(1);
+    expect(transferMail[0]).toMatchObject({
+      recipient_user_id: coSpeakerUserId,
+      template_key: "proposal_manage_link_transferred",
+      status: "queued",
+    });
+    expect(JSON.parse(transferMail[0].payload_json).proposalId).toBe(proposalId);
+    const deliveredTransfer = await deliveredEmailPayload<{ manageUrl: string }>(
+      env.DB,
+      env,
+      transferMail[0].payload_json,
+    );
+    const replacementToken = new URL(deliveredTransfer.manageUrl).searchParams.get("token");
+    expect(replacementToken).toBeTruthy();
+    const replacementAccess = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/manage/${encodeURIComponent(replacementToken!)}`),
+      env,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(replacementAccess.status).toBe(200);
+    await expect(replacementAccess.json()).resolves.toMatchObject({
+      proposal: { id: proposalId, proposer_user_id: coSpeakerUserId },
+    });
+  });
+
+  it("rejects a declined speaker as replacement proposer without rotating ownership", async () => {
+    await setupWorkflow();
+    const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const [before] = await queryAll<{ proposer_user_id: string; manage_link_secret: string }>(
+      env.DB,
+      "SELECT proposer_user_id, manage_link_secret FROM session_proposals WHERE id = ?",
+      [proposalId],
+    );
+    await env.DB.prepare("UPDATE proposal_speakers SET status = 'declined' WHERE proposal_id = ? AND user_id = ?")
+      .bind(proposalId, coSpeakerUserId)
+      .run();
+
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${before.proposer_user_id}`, {
+        method: "DELETE",
+        headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
+        body: JSON.stringify({ replacementProposerUserId: coSpeakerUserId }),
+      }),
+      env,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "REPLACEMENT_PROPOSER_INELIGIBLE" } });
+    await expect(
+      queryAll<{ proposer_user_id: string; manage_link_secret: string }>(
+        env.DB,
+        "SELECT proposer_user_id, manage_link_secret FROM session_proposals WHERE id = ?",
+        [proposalId],
+      ),
+    ).resolves.toEqual([before]);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'proposal_manage_link_transferred'"),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("rolls back proposer transfer when the proposal changes before the atomic batch", async () => {
+    const { adminUserId } = await setupWorkflow();
+    const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const [before] = await queryAll<{ proposer_user_id: string; manage_link_secret: string }>(
+      env.DB,
+      "SELECT proposer_user_id, manage_link_secret FROM session_proposals WHERE id = ?",
+      [proposalId],
+    );
+    const baseDb: DatabaseLike = env.DB;
+    let raced = false;
+    const racingDb: DatabaseLike = {
+      prepare: (query) => baseDb.prepare(query),
+      async batch(statements) {
+        if (!raced) {
+          raced = true;
+          await baseDb
+            .prepare("UPDATE session_proposals SET updated_at = '2099-01-01T00:00:00.000Z' WHERE id = ?")
+            .bind(proposalId)
+            .run();
+        }
+        return baseDb.batch(statements);
+      },
+    };
+
+    await expect(
+      removeAdminProposalSpeaker(racingDb, {
+        actor: { id: adminUserId, email: "admin@pkic.org", role: "admin" },
+        proposalId,
+        userId: before.proposer_user_id,
+        replacementProposerUserId: coSpeakerUserId,
+        appBaseUrl: "https://app.test",
+      }),
+    ).rejects.toMatchObject({ code: "PROPOSAL_SPEAKER_CONFLICT" });
+    await expect(
+      queryAll<{ proposer_user_id: string; manage_link_secret: string }>(
+        env.DB,
+        "SELECT proposer_user_id, manage_link_secret FROM session_proposals WHERE id = ?",
+        [proposalId],
+      ),
+    ).resolves.toEqual([{ ...before, manage_link_secret: before.manage_link_secret }]);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM proposal_speakers WHERE proposal_id = ?", [proposalId]),
+    ).resolves.toHaveLength(2);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'proposal_manage_link_transferred'"),
+    ).resolves.toHaveLength(0);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'proposal_proposer_transferred'"),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("rolls back removal, participant changes, and email cancellation when audit fails", async () => {
+    await setupWorkflow();
+    const { proposalId, proposalManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const proposal = await getProposalByManageToken(env.DB, proposalManageToken, env.INTERNAL_SIGNING_SECRET!);
+    const reminder = await remindProposalSpeakerByProposer(env.DB, {
+      proposal,
+      userId: coSpeakerUserId,
+      appBaseUrl: "https://app.test",
+    });
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_speaker_removal_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'proposal_speaker_removed'
+       BEGIN SELECT RAISE(ABORT, 'forced speaker removal audit failure'); END`,
+    ).run();
+
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${coSpeakerUserId}`, {
+        method: "DELETE",
+        headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
+        body: "{}",
+      }),
+      env,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(response.status).toBe(500);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?", [
+        proposalId,
+        coSpeakerUserId,
+      ]),
+    ).resolves.toHaveLength(1);
+    await expect(
+      queryAll<{ status: string }>(env.DB, "SELECT status FROM email_outbox WHERE id = ?", [reminder.outboxId]),
+    ).resolves.toEqual([{ status: "queued" }]);
+  });
+
+  it("rolls back a stale removal when the proposal changes before the D1 batch", async () => {
+    await setupWorkflow();
+    const { proposalId, proposalManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const baseDb: DatabaseLike = env.DB;
+    let raced = false;
+    const racingDb: DatabaseLike = {
+      prepare: (query) => baseDb.prepare(query),
+      async batch(statements) {
+        if (!raced) {
+          raced = true;
+          await baseDb
+            .prepare("UPDATE session_proposals SET updated_at = '2099-01-01T00:00:00.000Z' WHERE id = ?")
+            .bind(proposalId)
+            .run();
+        }
+        return baseDb.batch(statements);
+      },
+    };
+
+    await expect(
+      removeProposalSpeakerByProposer(racingDb, {
+        manageToken: proposalManageToken,
+        signingSecret: env.INTERNAL_SIGNING_SECRET!,
+        userId: coSpeakerUserId,
+      }),
+    ).rejects.toMatchObject({ code: "PROPOSAL_SPEAKER_CONFLICT" });
+    await expect(
+      queryAll(env.DB, "SELECT id FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?", [
+        proposalId,
+        coSpeakerUserId,
+      ]),
+    ).resolves.toHaveLength(1);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'proposal_speaker_removed'"),
+    ).resolves.toHaveLength(0);
   });
 
   it("POST confirm — confirms speaker participation with required consents", async () => {

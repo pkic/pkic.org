@@ -3,7 +3,7 @@
  *
  * Reads [data-module] attributes from the DOM and dynamically imports the
  * matching TypeScript module. Each module is self-executing (calls void main()
- * at module level), so importing it is sufficient to initialise it.
+ * at module level), so importing it is sufficient to initialize it.
  *
  * Convention: data-module="<path-relative-to-assets/ts-without-.ts>"
  *   data-module="admin/index"                       → ./admin/index

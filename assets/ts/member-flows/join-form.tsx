@@ -8,13 +8,13 @@
  * rendered generically from GET /api/v1/members/applications/form so staff can
  * edit them from the admin portal without a redeploy.
  */
-import { render } from "preact";
 import { getJson, postJson } from "../shared/api-client";
 import { renderCustomFields, readCustomFieldValues } from "../shared/widgets/custom-fields";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
 import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
 import { setStatus, readField, findSubmitButton } from "../shared/form/helpers";
 import { SuccessPanel } from "../components/SuccessPanel";
+import { replaceFormWithSuccess } from "../shared/form/success-panel";
 import { memberApplicationCreateSchema } from "../../shared/schemas/member-applications";
 import { INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../shared/schemas/membership-categories";
 import type { FormDefinition } from "../shared/types";
@@ -214,12 +214,11 @@ function showSuccessPanel(
   manageToken: string,
   applicantName: string,
 ): void {
-  form.classList.add("d-none");
-
-  const container = document.createElement("div");
   const statusUrl = `/application-status/?id=${encodeURIComponent(applicationId)}&token=${encodeURIComponent(manageToken)}`;
 
-  render(
+  replaceFormWithSuccess(
+    root,
+    form,
     <SuccessPanel icon="🎉" title={`Thanks${applicantName ? `, ${applicantName}` : ""}!`}>
       <p class="event-flow-success-body">
         Your membership application has been received. We&rsquo;ve emailed you a confirmation with a link to check its
@@ -231,11 +230,7 @@ function showSuccessPanel(
         </a>
       </p>
     </SuccessPanel>,
-    container,
   );
-
-  root.appendChild(container);
-  requestAnimationFrame(() => container.scrollIntoView({ behavior: "smooth", block: "start" }));
 }
 
 async function main(): Promise<void> {

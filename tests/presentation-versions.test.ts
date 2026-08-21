@@ -21,11 +21,13 @@ import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 import { createProposal, addProposalSpeaker, finalizeProposalDecision } from "../functions/_lib/services/proposals";
 import {
   createPresentationVersion,
+  deletePresentationVersion,
   presentationDownloadResponse,
   recordPresentationUpload,
 } from "../functions/_lib/services/presentation-versions";
 import { getPresentationUploader } from "../functions/_lib/services/proposals-speaker-profile";
 import app from "../functions/router";
+import { processPendingStorageDeletions } from "../functions/_lib/services/storage-deletion-outbox";
 import {
   MAX_PRESENTATION_BYTES,
   PRESENTATION_FILE_NAME_HEADER,
@@ -45,6 +47,7 @@ class FakePresentationBucket {
   putCalls = 0;
   putKeys: string[] = [];
   lastPutWasStream = false;
+  deleteFailuresRemaining = 0;
 
   async put(
     key: string,
@@ -92,7 +95,15 @@ class FakePresentationBucket {
   }
 
   async delete(key: string) {
+    if (this.deleteFailuresRemaining > 0) {
+      this.deleteFailuresRemaining -= 1;
+      throw new Error("Simulated R2 deletion failure");
+    }
     this.objects.delete(key);
+  }
+
+  keys(): string[] {
+    return [...this.objects.keys()].sort();
   }
 }
 
@@ -257,6 +268,49 @@ describe("presentation versioning", () => {
       proposalId,
     );
     expect(auditRows).toEqual([{ actor_type: "admin", actor_id: adminUserId }]);
+  });
+
+  it("durably retains upload cleanup when D1 commit and immediate R2 compensation both fail", async () => {
+    const { proposalId, adminToken } = await seed();
+    const bucket = new FakePresentationBucket();
+    bucket.deleteFailuresRemaining = 1;
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_presentation_upload_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'presentation_uploaded'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced presentation upload audit failure');
+       END`,
+    ).run();
+    const upload = presentationRequest("orphan-safe.pdf");
+
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions`, {
+        method: "POST",
+        ...upload,
+        headers: { authorization: `Bearer ${adminToken}`, ...upload.headers },
+      }),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    await env.DB.prepare("DROP TRIGGER fail_presentation_upload_audit").run();
+
+    expect(response.status).toBe(500);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM presentation_versions WHERE proposal_id = ?", proposalId),
+    ).toHaveLength(0);
+    expect(bucket.keys()).toHaveLength(1);
+    const [intent] = await queryAll<{ object_key: string; status: string }>(
+      env.DB,
+      "SELECT object_key, status FROM storage_deletion_outbox WHERE bucket = 'speaker_uploads'",
+    );
+    expect(intent).toEqual({ object_key: bucket.keys()[0], status: "queued" });
+
+    await env.DB.prepare("UPDATE storage_deletion_outbox SET next_attempt_at = datetime('now')").run();
+    await expect(
+      processPendingStorageDeletions(env.DB, { SPEAKER_UPLOADS_BUCKET: bucket as unknown as R2Bucket }, 10),
+    ).resolves.toEqual({ processed: 1, failed: 0 });
+    expect(bucket.keys()).toEqual([]);
   });
 
   it("rejects an oversized presentation before sending its body to R2", async () => {
@@ -690,6 +744,48 @@ describe("presentation versioning", () => {
       version.id,
     );
     expect(stored).toEqual({ deleted_at: null, is_current: 1 });
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM storage_deletion_outbox WHERE object_key = ?",
+        "presentations/audit-rollback.pdf",
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("soft-deletes a presentation and atomically queues its R2 object for deletion", async () => {
+    const { proposalId, speakerUserId, adminUserId } = await seed();
+    const version = await createPresentationVersion(env.DB, proposalId, {
+      r2Key: "presentations/durable-delete.pdf",
+      fileName: "durable-delete.pdf",
+      fileSize: 4,
+      mimeType: "application/pdf",
+      uploadedByUserId: speakerUserId,
+    });
+
+    await deletePresentationVersion(env.DB, proposalId, version.id, adminUserId);
+
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT deleted_at IS NOT NULL AS deleted FROM presentation_versions WHERE id = ?",
+        version.id,
+      ),
+    ).toEqual([{ deleted: 1 }]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT bucket, object_key, status FROM storage_deletion_outbox WHERE object_key = ?",
+        version.r2Key,
+      ),
+    ).toEqual([{ bucket: "speaker_uploads", object_key: version.r2Key, status: "queued" }]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT action FROM audit_log WHERE entity_id = ? AND action = 'presentation_version_deleted'",
+        version.id,
+      ),
+    ).toEqual([{ action: "presentation_version_deleted" }]);
   });
 
   it("admin cannot delete the only approved version — returns 409", async () => {

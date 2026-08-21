@@ -1,7 +1,7 @@
 /**
  * OG badge pre-rendering service.
  *
- * Owns the resvg-wasm and font singletons (initialised once per worker
+ * Owns the resvg-wasm and font singletons (initialized once per worker
  * isolate) and exposes:
  *
  *   generateBadgePng      — fetch data + render SVG → PNG bytes
@@ -16,10 +16,10 @@
 
 import { renderBadgeSvg, renderDonationBadgeSvg, type BadgeRole } from "./og-badge";
 import { first, all } from "../db/queries";
-import { fetchGravatar } from "../utils/gravatar";
+import { fetchGravatar } from "./gravatar";
 import type { Env } from "../types";
+import { fetchHeroImage, fetchStaticAsset, uint8ToBase64 } from "./og-badge-hero-image";
 
-type StaticAssetEnv = Pick<Env, "ASSETS" | "ASSETS_PUBLIC">;
 type BadgeRenderEnv = Pick<Env, "DB" | "SPEAKER_UPLOADS_BUCKET" | "ASSETS" | "ASSETS_PUBLIC" | "IMAGES">;
 type BadgeCacheEnv = Pick<
   Env,
@@ -47,53 +47,7 @@ function ensureWasm(): Promise<(typeof import("@resvg/resvg-wasm"))["Resvg"]> {
 
 let fontBuffersCache: Promise<Uint8Array[]> | null = null;
 
-function isLoopbackHostname(hostname: string): boolean {
-  const normalized = hostname.toLowerCase();
-  return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1" || normalized === "[::1]";
-}
-
-function getAssetBinding(env: StaticAssetEnv): Env["ASSETS"] | undefined {
-  return env.ASSETS ?? env.ASSETS_PUBLIC;
-}
-
-async function fetchStaticAsset(env: StaticAssetEnv, origin: string, path: string): Promise<Response> {
-  const request = new Request(new URL(path, origin).toString());
-  const binding = getAssetBinding(env);
-  if (binding) {
-    return binding.fetch(request);
-  }
-  return fetch(request);
-}
-
-function resolveHeroImageSource(raw: string, origin: string): { url: string; assetPath: string | null } {
-  const trimmed = raw.trim();
-  if (trimmed.startsWith("/")) {
-    return {
-      url: new URL(trimmed, origin).toString(),
-      assetPath: trimmed,
-    };
-  }
-
-  try {
-    const url = new URL(trimmed);
-    const appOrigin = new URL(origin).origin;
-    if (url.origin === appOrigin || isLoopbackHostname(url.hostname)) {
-      const assetPath = `${url.pathname}${url.search}${url.hash}`;
-      return {
-        url: new URL(assetPath, origin).toString(),
-        assetPath,
-      };
-    }
-    return { url: url.toString(), assetPath: null };
-  } catch {
-    return {
-      url: new URL(trimmed, origin).toString(),
-      assetPath: trimmed.startsWith("/") ? trimmed : `/${trimmed.replace(/^\/+/, "")}`,
-    };
-  }
-}
-
-function getFontBuffers(origin: string, env: StaticAssetEnv): Promise<Uint8Array[]> {
+function getFontBuffers(origin: string, env: Pick<Env, "ASSETS" | "ASSETS_PUBLIC">): Promise<Uint8Array[]> {
   if (!fontBuffersCache) {
     const p = Promise.all([
       fetchStaticAsset(env, origin, "/fonts/Roboto-Regular.ttf")
@@ -113,21 +67,6 @@ function getFontBuffers(origin: string, env: StaticAssetEnv): Promise<Uint8Array
   return fontBuffersCache;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-/**
- * Fast Uint8Array → base64 without quadratic string re-allocation.
- * Chunks stay under V8's spread-argument stack limit (~32k args).
- */
-export function uint8ToBase64(bytes: Uint8Array): string {
-  const CHUNK = 0x8000;
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
-  }
-  return btoa(binary);
-}
-
 function extractLocation(settingsJson: string): string | null {
   try {
     const s = JSON.parse(settingsJson) as Record<string, unknown>;
@@ -137,57 +76,6 @@ function extractLocation(settingsJson: string): string | null {
     /* ignore */
   }
   return null;
-}
-
-function extractHeroImageUrl(settingsJson: string): string | null {
-  try {
-    const s = JSON.parse(settingsJson) as Record<string, unknown>;
-    if (typeof s.heroImageUrl === "string" && s.heroImageUrl) return s.heroImageUrl;
-  } catch {
-    /* ignore */
-  }
-  return null;
-}
-
-async function fetchHeroImage(
-  settingsJson: string,
-  origin: string,
-  env: Pick<Env, "ASSETS" | "ASSETS_PUBLIC" | "IMAGES">,
-): Promise<string | null> {
-  const raw = extractHeroImageUrl(settingsJson);
-  if (!raw) return null;
-  const source = resolveHeroImageSource(raw, origin);
-  try {
-    let res: Response;
-    if (source.assetPath) {
-      res = await fetchStaticAsset(env, origin, source.assetPath);
-      if (!res.ok) return null;
-
-      if (env.IMAGES && res.body) {
-        const transformed = await env.IMAGES.input(res.body)
-          .transform({ width: 1200, height: 630, fit: "cover" })
-          .output({ format: "jpeg", quality: 95 });
-        res = await transformed.response();
-      }
-    } else {
-      // Resize to badge dimensions and convert to JPEG before embedding.
-      // The hero is used as a dark-overlaid full-bleed background so quality 90
-      // is indistinguishable from the original at this display size.
-      // The `cf.image` option is a Cloudflare Worker-specific extension to fetch();
-      // it is silently ignored in non-CF environments (local dev) so no cast needed
-      // at runtime, but TypeScript doesn't know about it — hence the assertion.
-      res = await fetch(source.url, {
-        cf: { image: { width: 1200, height: 630, fit: "cover", format: "jpeg", quality: 95 } },
-      } as unknown as RequestInit);
-    }
-    if (!res.ok) return null;
-    const buf = await res.arrayBuffer();
-    const ct = res.headers.get("content-type") ?? "image/jpeg";
-    const mime = ct.split(";")[0].trim();
-    return `data:${mime};base64,${uint8ToBase64(new Uint8Array(buf))}`;
-  } catch {
-    return null;
-  }
 }
 
 async function fetchHeadshot(r2Key: string | null, bucket: Env["SPEAKER_UPLOADS_BUCKET"]): Promise<string | null> {

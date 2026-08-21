@@ -1,4 +1,4 @@
-import { eventSlugParamsSchema } from "./api-common";
+import { eventSlugParamsSchema, successResponseSchema } from "./api-common";
 import {
   okResponseSchema,
   registrationConfirmQuerySchema,
@@ -6,7 +6,6 @@ import {
   registrationConfirmSchema,
   registrationResendManageLinkSchema,
   registrationResendConfirmationSchema,
-  successResponseSchema,
 } from "./registration";
 import { jsonResponse, requiredJsonBody } from "./openapi";
 

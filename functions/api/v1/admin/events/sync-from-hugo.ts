@@ -1,9 +1,9 @@
 import { parseJsonBody } from "../../../../_lib/validation";
-import { json } from "../../../../_lib/http";
+import { dispatchPostOnly, json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../_lib/auth/permissions";
 import { syncEventFromHugo } from "../../../../_lib/services/events";
-import { adminEventSyncSchema } from "../../../../../assets/shared/schemas/api";
+import { adminEventSyncSchema } from "../../../../../assets/shared/schemas/admin-events";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 
 export async function onRequestPost(c: AdminContext): Promise<Response> {
@@ -22,8 +22,5 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 }
 
 export async function onRequest(c: AdminContext): Promise<Response> {
-  if (c.req.raw.method !== "POST") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
-  return onRequestPost(c);
+  return dispatchPostOnly(c, onRequestPost);
 }

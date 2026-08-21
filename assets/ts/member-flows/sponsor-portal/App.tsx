@@ -12,21 +12,13 @@ import { Login } from "./Login";
 import { Attendees } from "./Attendees";
 import type { SponsorPortalSession } from "./types";
 import { sponsorPortalAuthVerifyResponseSchema } from "../../../shared/schemas/sponsor-portal";
+import { VerifyingOverlay } from "../../components/VerifyingOverlay";
 
 async function verifyMagicLink(token: string): Promise<SponsorPortalSession> {
   const res = sponsorPortalAuthVerifyResponseSchema.parse(
     await postJson<unknown>("/api/v1/auth/sponsor-portal/verify-link", { token }),
   );
   return res.sponsorship;
-}
-
-function VerifyingOverlay() {
-  return (
-    <div class="d-flex flex-column align-items-center py-5">
-      <div class="spinner-border text-success mb-3" role="status"></div>
-      <p class="text-muted mb-0">Verifying your sign-in link…</p>
-    </div>
-  );
 }
 
 export function App() {

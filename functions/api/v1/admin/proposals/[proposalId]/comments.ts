@@ -18,8 +18,8 @@ export async function onRequestGet(
     await listProposalComments(db, admin, data.params.proposalId, {
       q: data.query.q,
       sort: data.query.sort,
-      limit: data.query.limit ?? 25,
-      offset: data.query.offset ?? 0,
+      limit: data.query.limit,
+      offset: data.query.offset,
     }),
   );
 }

@@ -5,7 +5,7 @@
  */
 import { all, first } from "../../db/queries";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
-import { icsFilename, type SeriesRow, type IcsFileRow } from "./shared";
+import { ICS_FILE_SELECT_COLUMNS, SERIES_SELECT_COLUMNS, icsFilename, type SeriesRow, type IcsFileRow } from "./shared";
 import type { DatabaseLike } from "../../types";
 import type { QueuedIcsFileAttachment } from "../../email/attachments";
 import { buildIcsFileAttachment } from "../../email/attachments";
@@ -24,7 +24,7 @@ export async function resolveApprovalIcsAttachments(
   const workingGroupFilter = buildD1JsonMembershipFilter("slug", workingGroupSlugs);
   const seriesRows = await all<SeriesRow>(
     db,
-    `SELECT * FROM meeting_series WHERE active = 1 AND (
+    `SELECT ${SERIES_SELECT_COLUMNS} FROM meeting_series WHERE active = 1 AND (
        scope_type = 'consortium'
        OR (scope_type = 'working_group' AND working_group_id IN (
          SELECT id FROM working_groups WHERE ${workingGroupFilter.sql}
@@ -40,7 +40,7 @@ export async function resolveApprovalIcsAttachments(
   );
   const icsRows = await all<IcsFileRow>(
     db,
-    `SELECT * FROM meeting_ics_files WHERE active = 1 AND ${seriesFilter.sql}`,
+    `SELECT ${ICS_FILE_SELECT_COLUMNS} FROM meeting_ics_files WHERE active = 1 AND ${seriesFilter.sql}`,
     seriesFilter.bindings,
   );
   const seriesById = new Map(seriesRows.map((s) => [s.id, s]));
@@ -80,14 +80,17 @@ export async function resolveWgJoinCalendarInviteByMailingListEmail(
 
   const series = await first<SeriesRow>(
     db,
-    `SELECT * FROM meeting_series WHERE scope_type = 'working_group' AND working_group_id = ? AND active = 1`,
+    `SELECT ${SERIES_SELECT_COLUMNS} FROM meeting_series
+      WHERE scope_type = 'working_group' AND working_group_id = ? AND active = 1`,
     [wg.id],
   );
   if (!series) return null;
 
-  const icsRows = await all<IcsFileRow>(db, `SELECT * FROM meeting_ics_files WHERE series_id = ? AND active = 1`, [
-    series.id,
-  ]);
+  const icsRows = await all<IcsFileRow>(
+    db,
+    `SELECT ${ICS_FILE_SELECT_COLUMNS} FROM meeting_ics_files WHERE series_id = ? AND active = 1`,
+    [series.id],
+  );
   if (icsRows.length === 0) return null;
 
   return {

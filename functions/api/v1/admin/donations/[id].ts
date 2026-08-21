@@ -4,7 +4,7 @@
  * Returns a single donation by its primary key.
  */
 
-import { json } from "../../../../_lib/http";
+import { dispatchRequestMethod, json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { getAdminDonationById } from "../../../../_lib/services/donations";
@@ -23,8 +23,5 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
 }
 
 export async function onRequest(c: AdminContext): Promise<Response> {
-  if (c.req.raw.method !== "GET") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
-  return onRequestGet(c);
+  return dispatchRequestMethod(c, { GET: onRequestGet });
 }

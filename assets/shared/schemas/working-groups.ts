@@ -15,6 +15,11 @@ export const workingGroupSlugSchema = z.string().trim().min(1).max(200).regex(sl
 // Route references accept either a generated row id or a bounded public slug;
 // the service resolves the value against both columns.
 export const workingGroupReferenceSchema = z.union([workingGroupIdSchema, workingGroupSlugSchema]);
+export const workingGroupLabelSchema = z.object({
+  slug: workingGroupSlugSchema,
+  name: trimmedString(1, 200),
+});
+export type WorkingGroupLabel = z.infer<typeof workingGroupLabelSchema>;
 export const workingGroupIdParamsSchema = z.object({ id: workingGroupReferenceSchema });
 export const workingGroupMemberParamsSchema = z.object({ id: workingGroupReferenceSchema, userId: databaseIdSchema });
 
@@ -74,7 +79,9 @@ export type AdminWorkingGroupMember = z.infer<typeof adminWorkingGroupMemberSche
 export type AdminWorkingGroupDetail = z.infer<typeof adminWorkingGroupDetailSchema>;
 
 export const ADMIN_WORKING_GROUP_SORT_COLUMNS = ["name", "slug", "member_count", "active", "created_at"] as const;
-export const workingGroupsListQuerySchema = listQuerySchema(ADMIN_WORKING_GROUP_SORT_COLUMNS);
+export const workingGroupsListQuerySchema = listQuerySchema(ADMIN_WORKING_GROUP_SORT_COLUMNS).extend({
+  active: z.enum(["true", "false"]).optional(),
+});
 export const workingGroupsListResponseSchema = paginatedResponseSchema("workingGroups", adminWorkingGroupSummarySchema);
 
 export const ADMIN_WORKING_GROUP_MEMBER_SORT_COLUMNS = [

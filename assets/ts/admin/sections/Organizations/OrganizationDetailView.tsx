@@ -11,6 +11,7 @@ import type { AdminOrganizationDetail } from "../../types";
 import { AddRepresentativeForm, RepresentativeRow } from "./Representatives";
 import { OrganizationProfileForm } from "./OrganizationProfileForm";
 import { OrganizationLogo } from "./OrganizationLogo";
+import { RepresentativeContactSelect } from "../../components/RepresentativeContactSelect";
 
 export function OrganizationDetailView({ organizationId, onBack }: { organizationId: string; onBack: () => void }) {
   const [loading, setLoading] = useState(true);
@@ -139,36 +140,18 @@ export function OrganizationDetailView({ organizationId, onBack }: { organizatio
         <div class="card-header bg-white fw-semibold">Contacts</div>
         <div class="card-body p-3">
           <div class="row g-2">
-            <div class="col-md-6">
-              <label class="form-label small mb-1">Primary contact</label>
-              <select
-                class="form-select form-select-sm"
-                value={org.primaryContactUserId ?? ""}
-                onChange={(e) => void updateContact("primaryContactUserId", (e.target as HTMLSelectElement).value)}
-              >
-                <option value="">— None —</option>
-                {org.representatives.map((r) => (
-                  <option key={r.userId} value={r.userId}>
-                    {r.name} ({r.email})
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div class="col-md-6">
-              <label class="form-label small mb-1">Secondary contact</label>
-              <select
-                class="form-select form-select-sm"
-                value={org.secondaryContactUserId ?? ""}
-                onChange={(e) => void updateContact("secondaryContactUserId", (e.target as HTMLSelectElement).value)}
-              >
-                <option value="">— None —</option>
-                {org.representatives.map((r) => (
-                  <option key={r.userId} value={r.userId}>
-                    {r.name} ({r.email})
-                  </option>
-                ))}
-              </select>
-            </div>
+            <RepresentativeContactSelect
+              label="Primary contact"
+              value={org.primaryContactUserId ?? ""}
+              representatives={org.representatives}
+              onChange={(value) => void updateContact("primaryContactUserId", value)}
+            />
+            <RepresentativeContactSelect
+              label="Secondary contact"
+              value={org.secondaryContactUserId ?? ""}
+              representatives={org.representatives}
+              onChange={(value) => void updateContact("secondaryContactUserId", value)}
+            />
           </div>
         </div>
       </div>

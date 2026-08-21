@@ -1,8 +1,7 @@
-import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import type { ChangeRegistrationEmailParams } from "./change-email";
 import { prepareRegistrationEmailChange } from "./change-email";
-import { isEventDayCapacityConflict } from "./day-waitlist";
+import { dayWaitlistOfferUnavailableError, isDayWaitlistOfferUnavailable, withDayCapacityRetry } from "./day-waitlist";
 import { getRegistrationById, getRegistrationByManageToken } from "./queries";
 import { prepareRegistrationStatusEmail, type RegistrationStatusEmailParams } from "./status-notifications";
 import type { RegistrationRecord } from "./types";
@@ -17,17 +16,6 @@ type UpdateNotification = Omit<
 
 type UpdateEmailChange = Omit<ChangeRegistrationEmailParams, "registrationId" | "registrationOverride">;
 
-async function withCapacityRetry<T>(operation: () => Promise<T>): Promise<T> {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      return await operation();
-    } catch (error) {
-      if (!isEventDayCapacityConflict(error) || attempt === 2) throw error;
-    }
-  }
-  throw new AppError(409, "DAY_CAPACITY_CHANGED", "Day capacity changed; please retry");
-}
-
 async function executeRegistrationUpdate<T>(
   db: DatabaseLike,
   payload: RegistrationUpdatePayload,
@@ -35,10 +23,17 @@ async function executeRegistrationUpdate<T>(
   changedBy: string | undefined,
   commit: (built: RegistrationUpdatePlan) => Promise<T>,
 ): Promise<T> {
-  return withCapacityRetry(async () => {
-    const registration = await load();
-    return commit(await buildRegistrationUpdate(db, registration, payload, changedBy));
-  });
+  try {
+    return await withDayCapacityRetry(async () => {
+      const registration = await load();
+      return commit(await buildRegistrationUpdate(db, registration, payload, changedBy));
+    });
+  } catch (error) {
+    if (isDayWaitlistOfferUnavailable(error)) {
+      throw dayWaitlistOfferUnavailableError();
+    }
+    throw error;
+  }
 }
 
 async function commitUpdateWithNotification(

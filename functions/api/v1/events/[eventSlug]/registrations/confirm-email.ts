@@ -1,14 +1,14 @@
 import type { z } from "zod";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { parseJsonBody } from "../../../../../_lib/validation";
-import { json } from "../../../../../_lib/http";
+import { dispatchRequestMethod, json } from "../../../../../_lib/http";
 import { getConfig, resolveAppBaseUrl } from "../../../../../_lib/config";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { confirmRegistrationWithNotification } from "../../../../../_lib/services/registrations/confirmation-workflow";
 import { getRegistrationDayAttendance } from "../../../../../_lib/services/event-days";
 import { listDayWaitlistForRegistration } from "../../../../../_lib/services/registrations/day-waitlist";
 import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
-import { registrationConfirmSchema } from "../../../../../../assets/shared/schemas/api";
+import { registrationConfirmSchema } from "../../../../../../assets/shared/schemas/registration";
 import {
   registrationConfirmEmailGetRouteSchema,
   registrationConfirmEmailPostRouteSchema,
@@ -68,9 +68,7 @@ export async function onRequestGet(c: any): Promise<Response> {
 }
 
 export async function onRequest(c: any): Promise<Response> {
-  if (c.req.raw.method === "GET") return onRequestGet(c);
-  if (c.req.raw.method === "POST") return onRequestPost(c);
-  return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
+  return dispatchRequestMethod(c, { GET: onRequestGet, POST: onRequestPost });
 }
 
 export const EventsEventSlugRegistrationsConfirmEmailGet = openApiRoute(

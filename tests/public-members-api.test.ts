@@ -156,6 +156,22 @@ describe("GET /api/v1/members (public directory)", () => {
     expect(body.members[0].slogan).toBe("Real slogan");
   });
 
+  it("omits unsafe legacy website and logo values at the public mapping boundary", async () => {
+    await seedOrgMember({
+      userId: crypto.randomUUID(),
+      organizationId: crypto.randomUUID(),
+      organizationName: "Legacy URL Org",
+      status: "active",
+      dataJson: JSON.stringify({ website: "javascript:alert(1)", logoUrl: "//evil.example/logo.svg" }),
+    });
+
+    const response = await callMembersList("https://pkic.org/api/v1/members");
+    expect(response.status).toBe(200);
+    const body = membersListResponseSchema.parse(await response.json());
+    expect(body.members[0].website).toBeNull();
+    expect(body.members[0].logoUrl).toBeNull();
+  });
+
   it("filters by search text (q)", async () => {
     await seedOrgMember({
       userId: crypto.randomUUID(),
@@ -274,6 +290,23 @@ describe("GET /api/v1/members/wall", () => {
     const response = await callMembersList("https://pkic.org/api/v1/members/wall?memberLimit=999999");
     expect(response.status).toBe(400);
   });
+
+  it("replaces an unsafe legacy sponsor destination with the same-origin sponsors page", async () => {
+    await env.DB.prepare(
+      `INSERT INTO sponsorships
+         (id, sponsor_type, non_member_name, non_member_website, non_member_logo_r2_key,
+          tier, pipeline_stage, created_at, updated_at)
+       VALUES ('unsafe-wall-sponsor', 'consortium', 'Unsafe Sponsor', 'javascript:alert(1)',
+               'sponsor-logos/unsafe.svg', 'Gold', 'active', datetime('now'), datetime('now'))`,
+    ).run();
+
+    const response = await callMembersList("https://pkic.org/api/v1/members/wall");
+    expect(response.status).toBe(200);
+    const body = memberWallResponseSchema.parse(await response.json());
+    expect(body.entries).toContainEqual(
+      expect.objectContaining({ key: "sponsor:unsafe-wall-sponsor", href: "/sponsors/" }),
+    );
+  });
 });
 
 describe("GET /api/v1/members/:id", () => {
@@ -373,6 +406,46 @@ describe("GET /api/v1/members/:id", () => {
     expect(body.links).toEqual(["https://linkedin.com/company/content-org"]);
     expect(body.representatives).toHaveLength(1);
     expect(body.representatives[0]).toMatchObject({ name: "Rep Person", jobTitle: "CTO", bio: "Leads engineering." });
+  });
+
+  it("omits unsafe legacy organization detail URLs while preserving valid HTTP links", async () => {
+    const organizationId = crypto.randomUUID();
+    await seedOrgMember({
+      userId: crypto.randomUUID(),
+      organizationId,
+      organizationName: "Unsafe Detail URL Org",
+      status: "active",
+    });
+    await env.DB.prepare(
+      `UPDATE organizations
+          SET website = ?, blog_url = ?, blog_feed_url = ?, press_url = ?, press_feed_url = ?, careers_url = ?
+        WHERE id = ?`,
+    )
+      .bind(
+        "javascript:alert(1)",
+        "https://safe.example/blog",
+        "data:text/html,unsafe",
+        "//evil.example/press",
+        "https://safe.example/press.xml",
+        "/relative-careers",
+        organizationId,
+      )
+      .run();
+
+    const response = await callEndpoint(
+      getMember,
+      createContext(env, getRequest(`https://pkic.org/api/v1/members/${organizationId}`), { id: organizationId }),
+    );
+    expect(response.status).toBe(200);
+    const body = publicMemberDetailSchema.parse(await response.json());
+    expect(body).toMatchObject({
+      website: null,
+      blogUrl: "https://safe.example/blog",
+      blogFeedUrl: null,
+      pressUrl: null,
+      pressFeedUrl: "https://safe.example/press.xml",
+      careersUrl: null,
+    });
   });
 
   it("surfaces a representative's own photoUrl when their headshot_r2_key is set", async () => {
@@ -769,6 +842,47 @@ describe("GET /api/v1/working-groups/:id", () => {
     expect(body.chair?.organizationLogoUrl).toBeNull();
     expect(body.chair?.organizationWebsite).toBeNull();
     expect(body.chair?.photoUrl).toBeNull();
+    expect(body.chair?.linkedin).toBeNull();
+  });
+
+  it("omits unsafe persisted chair website and LinkedIn values", async () => {
+    const wgId = crypto.randomUUID();
+    await seedWorkingGroup({ id: wgId, name: "PQC Working Group", slug: "pqc" });
+    const chairUserId = crypto.randomUUID();
+    const orgId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO organizations (id, name, normalized_name, website, created_at, updated_at)
+         VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      ).bind(orgId, "Unsafe Chair Org", "unsafe chair org", "javascript:alert(1)"),
+      env.DB.prepare(
+        `INSERT INTO users (id, email, normalized_email, first_name, last_name, links_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      ).bind(
+        chairUserId,
+        `${chairUserId}@example.test`,
+        `${chairUserId}@example.test`,
+        "Unsafe",
+        "Chair",
+        JSON.stringify({ linkedin: "javascript:alert(2)" }),
+      ),
+      env.DB.prepare(
+        `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, created_at)
+         VALUES (?, ?, 'role-wg_chair', 'working_group', ?, datetime('now'))`,
+      ).bind(crypto.randomUUID(), chairUserId, wgId),
+    ]);
+    const memberId = await seedOrganizationAggregate(env.DB, orgId, "A");
+    await addRepresentativeRow(env.DB, memberId, chairUserId);
+
+    const response = await callEndpoint(
+      getWorkingGroup,
+      createContext(env, getRequest("https://pkic.org/api/v1/working-groups/pqc"), { id: "pqc" }),
+    );
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      chair: { organizationWebsite: string | null; linkedin: string | null } | null;
+    };
+    expect(body.chair?.organizationWebsite).toBeNull();
     expect(body.chair?.linkedin).toBeNull();
   });
 

@@ -1,5 +1,5 @@
 /**
- * GET /api/v1/admin/sponsorships/:id/events — full pipeline audit trail.
+ * GET /api/v1/admin/sponsorships/:id/events — paginated pipeline audit trail.
  */
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { json } from "../../../../../_lib/http";
@@ -14,16 +14,5 @@ export const SponsorshipEventsList = openApiRoute(sponsorshipEventsRouteSchema, 
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
   requirePermission(admin, "sponsorships:read");
 
-  const events = await listSponsorshipEvents(db, data.params.id);
-  return json({
-    events: events.map((e) => ({
-      id: e.id,
-      fromStage: e.from_stage,
-      toStage: e.to_stage,
-      actorUserId: e.actor_user_id,
-      actorName: e.actor_name,
-      note: e.note,
-      createdAt: e.created_at,
-    })),
-  });
+  return json(await listSponsorshipEvents(db, data.params.id, data.query));
 });

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
 import { createContext, queryAll, seedEventAndAdmin } from "./helpers/context";
@@ -7,6 +7,7 @@ import { onRequest as adminUserHeadshotRequest } from "../functions/api/v1/admin
 import app from "../functions/router";
 import { replaceUserHeadshot } from "../functions/_lib/services/user-headshot";
 import { processPendingStorageDeletions } from "../functions/_lib/services/storage-deletion-outbox";
+import { createReferralCode } from "../functions/_lib/services/referrals";
 
 let ADMIN_TOKEN = "admin-session-token";
 
@@ -104,6 +105,77 @@ async function setup(): Promise<{ adminId: string; targetUserId: string }> {
 describe("admin user headshot upload", () => {
   beforeEach(async () => {
     await resetDb();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("imports Gravatar through the atomic headshot service and durably invalidates owned badges", async () => {
+    const { targetUserId } = await setup();
+    const bucket = new FakeUploadsBucket();
+    const oldKey = `headshots/${targetUserId}/old.jpg`;
+    await bucket.put(oldKey, new Uint8Array([0xff, 0xd8, 0xff, 0xd9]).buffer);
+    await env.DB.prepare("UPDATE users SET headshot_r2_key = ? WHERE id = ?").bind(oldKey, targetUserId).run();
+    const [{ id: eventId }] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM events LIMIT 1");
+    const registrationId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO registrations
+         (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
+       VALUES (?, ?, ?, 'registered', 'virtual', 'direct', ?, datetime('now'), datetime('now'))`,
+    )
+      .bind(registrationId, eventId, targetUserId, crypto.randomUUID())
+      .run();
+    const referralCode = await createReferralCode(env.DB, {
+      eventId,
+      ownerType: "registration",
+      ownerId: registrationId,
+      length: 7,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), { headers: { "content-type": "image/jpeg" } }),
+        ),
+    );
+    const background: Promise<unknown>[] = [];
+
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/users/${targetUserId}/gravatar`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+      }),
+      { ...(env as any), IMAGES: undefined, SPEAKER_UPLOADS_BUCKET: bucket },
+      {
+        passThroughOnException() {},
+        waitUntil(promise: Promise<unknown>) {
+          background.push(promise);
+        },
+      } as ExecutionContext,
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { r2Key: string };
+    expect(body.r2Key).not.toBe(oldKey);
+    expect(await queryAll(env.DB, "SELECT headshot_r2_key FROM users WHERE id = ?", targetUserId)).toEqual([
+      { headshot_r2_key: body.r2Key },
+    ]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT action FROM audit_log WHERE entity_id = ? AND action = 'headshot_imported_gravatar'",
+        targetUserId,
+      ),
+    ).toEqual([{ action: "headshot_imported_gravatar" }]);
+    expect(
+      await queryAll(env.DB, "SELECT id, status FROM badge_render_jobs WHERE referral_code = ?", referralCode),
+    ).toEqual([{ id: `badge:${referralCode}`, status: "queued" }]);
+    expect(
+      await queryAll(env.DB, "SELECT object_key FROM storage_deletion_outbox WHERE object_key = ?", oldKey),
+    ).toEqual([{ object_key: oldKey }]);
+    await Promise.all(background);
   });
 
   it("accepts direct image upload and stores key in DB", async () => {

@@ -8,8 +8,9 @@
 import path from "node:path";
 import { splitName, activeRepresentatives } from "./parsers.mjs";
 import { sentinelEmailForSlug } from "./reconciliation.mjs";
-import { buildIndividualMemberAggregateStatements, buildLinksJson } from "./sql-renderer.mjs";
+import { buildIndividualMemberAggregateStatements } from "./sql-renderer.mjs";
 import { findLogoFile } from "./r2-adapter.mjs";
+import { upsertMemberUser } from "./user-upsert.mjs";
 
 /**
  * Individuals have no organization row at all.
@@ -56,17 +57,20 @@ export function processIndividualRecord(ctx, { filename, slug, doc, name, member
   const rep = reps[0] ?? { name, role: null, social: {}, description: null };
   const { firstName, lastName } = splitName(rep.name ?? name);
   const links = [rep.social?.linkedin, rep.social?.x].filter(Boolean);
-  const normalizedEmail = ctx.upsertUser({
+  const normalizedEmail = upsertMemberUser(ctx, {
     email,
     firstName,
     lastName,
     jobTitle: rep.role ?? null,
     biography: rep.description ?? null,
-    linksJson: buildLinksJson(links, (url) => ctx.report.invalidLinks.push({ file: filename, name, url })),
+    links,
     headshotR2Key,
+    sourceFile: filename,
+    sourceName: name,
   });
-  ctx.claimedEmails.add(normalizedEmail);
-  ctx.statements.push(...buildIndividualMemberAggregateStatements(normalizedEmail, memberType || null, doc.memberSince));
+  ctx.statements.push(
+    ...buildIndividualMemberAggregateStatements(normalizedEmail, memberType || null, doc.memberSince),
+  );
   if (needsEmail) ctx.report.totals.sentinelIndividuals += 1;
   else ctx.report.totals.matchedOrgs += 1;
 }

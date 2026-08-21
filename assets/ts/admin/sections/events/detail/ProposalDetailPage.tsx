@@ -12,12 +12,12 @@ import { AuditLogSection } from "./proposal-detail/AuditLogSection";
 import { PresentationVersionsTab } from "./proposal-detail/PresentationVersionsTab";
 import { ProposalSidebar } from "./proposal-detail/ProposalSidebar";
 import { ProposalReviewsTab } from "./proposal-detail/ProposalReviewsTab";
-import { SpeakerCard } from "./proposal-detail/SpeakerCard";
+import { buildReplacementProposerOptions, SpeakerCard } from "./proposal-detail/SpeakerCard";
+import { isProposalDecidableStatus } from "../../../../../shared/schemas/proposal-status";
 import { useProposalSubresources } from "./proposal-detail/useProposalSubresources";
 import type { DetailTab, ProposalResponse } from "./proposal-detail/model";
 import { adminProposalDetailResponseSchema } from "../../../../../shared/schemas/admin-event-proposals";
 import { ProposalDecisionPanel } from "./proposal-detail/ProposalDecisionPanel";
-import { isProposalDecidableStatus } from "../../../../../shared/schemas/proposal-status";
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
@@ -43,6 +43,8 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     commentPage,
     loadingMoreComments,
     versions,
+    versionPage,
+    loadingMoreVersions,
     loading: loadingSub,
     savingComment,
     reload: loadSubData,
@@ -50,6 +52,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     addComment,
     loadMoreComments: handleLoadMoreComments,
     loadMoreReviews: handleLoadMoreReviews,
+    loadMoreVersions: handleLoadMoreVersions,
   } = subresources;
 
   // Abstract editing
@@ -311,6 +314,8 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                     canEdit={access.canReview}
                     canFinalize={access.canFinalize}
                     decisionStatus={proposal.decision_status}
+                    isCurrentProposer={s.userId === proposal.proposer_user_id}
+                    replacementSpeakers={buildReplacementProposerOptions(speakers, s.userId)}
                     requiresPresentation={
                       sessionTypes.find((t) => t.label.toLowerCase() === proposal.proposal_type.toLowerCase())
                         ?.requiresPresentation ?? false
@@ -318,6 +323,10 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                     onSaved={(userId, patch) =>
                       setSpeakers((prev) => prev.map((sp) => (sp.userId === userId ? { ...sp, ...patch } : sp)))
                     }
+                    onRemoved={() => {
+                      void loadSubData();
+                      void reload();
+                    }}
                   />
                 ))
               )}
@@ -330,6 +339,9 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
               proposalId={proposalId}
               versions={versions}
               loading={loadingSub}
+              hasMore={versionPage?.hasMore ?? false}
+              loadingMore={loadingMoreVersions}
+              onLoadMore={() => void handleLoadMoreVersions()}
               onReload={() => void loadSubData()}
             />
           )}

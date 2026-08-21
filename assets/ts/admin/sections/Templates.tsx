@@ -1,11 +1,17 @@
 import { useState, useEffect, useRef } from "preact/hooks";
 import { Badge } from "../../components/Badge";
-import { ApiDataTable, type ApiTableActions } from "../../components/Table";
+import { ApiDataTable, type ApiTableActions } from "../components/ApiDataTable";
 import { api } from "../api";
 import { toast } from "../ui";
 import type { EmailTemplateVersion } from "../types";
-import type { EmailContentType, EmailMessageType } from "../../../shared/schemas/admin-email-templates";
+import {
+  adminEmailTemplatesListResponseSchema,
+  type AdminEmailTemplateSummary,
+  type EmailContentType,
+  type EmailMessageType,
+} from "../../../shared/schemas/admin-email-templates";
 import { TemplateEditor } from "./EmailTemplateEditor";
+import { getAdminEmailTemplateEditorVersion } from "../services/catalogs";
 
 // ────────────────────────────────────────────────────────
 // Create new template
@@ -164,14 +170,9 @@ function CreateTemplate({ onCreated, onCancel }: { onCreated: (key: string) => v
 // Main section
 // ────────────────────────────────────────────────────────
 
-interface TemplateSummary {
-  template_key: string;
-  active_version: number | null;
-  version_count: number;
-  draft_count: number;
-}
+type TemplateSummary = AdminEmailTemplateSummary;
 
-type TemplatesView = "list" | "create" | { key: string; versions: EmailTemplateVersion[] };
+type TemplatesView = "list" | "create" | { key: string; initialVersion: EmailTemplateVersion | null };
 
 export function Templates() {
   const [view, setView] = useState<TemplatesView>("list");
@@ -179,21 +180,7 @@ export function Templates() {
 
   async function openEditor(key: string) {
     try {
-      const data = await api<{ versions: EmailTemplateVersion[] }>(
-        `/api/v1/admin/email-templates/${encodeURIComponent(key)}/versions`,
-      );
-      setView({ key, versions: data.versions ?? [] });
-    } catch (e) {
-      toast((e as Error).message, "error");
-    }
-  }
-
-  async function reloadAndKeepKey(key: string) {
-    try {
-      const data = await api<{ versions: EmailTemplateVersion[] }>(
-        `/api/v1/admin/email-templates/${encodeURIComponent(key)}/versions`,
-      );
-      setView({ key, versions: data.versions ?? [] });
+      setView({ key, initialVersion: await getAdminEmailTemplateEditorVersion(key) });
     } catch (e) {
       toast((e as Error).message, "error");
     }
@@ -201,12 +188,7 @@ export function Templates() {
 
   if (view !== "list" && view !== "create") {
     return (
-      <TemplateEditor
-        templateKey={view.key}
-        versions={view.versions}
-        onBack={() => setView("list")}
-        onReload={() => reloadAndKeepKey(view.key)}
-      />
+      <TemplateEditor templateKey={view.key} initialVersion={view.initialVersion} onBack={() => setView("list")} />
     );
   }
 
@@ -225,8 +207,9 @@ export function Templates() {
   return (
     <ApiDataTable<TemplateSummary>
       endpoint="/api/v1/admin/email-templates"
-      resolve={(d) => (d as { templates: TemplateSummary[] }).templates}
-      resolvePage={(d) => (d as { page: { total: number; hasMore: boolean } }).page}
+      responseSchema={adminEmailTemplatesListResponseSchema}
+      resolve={(data) => adminEmailTemplatesListResponseSchema.parse(data).templates}
+      resolvePage={(data) => adminEmailTemplatesListResponseSchema.parse(data).page}
       paginate
       searchPlaceholder="Search template key…"
       actionsRef={tableRef}
