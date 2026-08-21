@@ -891,7 +891,7 @@ INSERT INTO roles (id, name, description, is_system_role, created_at, updated_at
 --
 -- `event_organizer`'s bundle extends beyond literal
 -- events:write/events:manage to also include proposals:read,
--- proposals:manage, agenda:read, agenda:write — justified by
+-- proposals:score, proposals:manage, agenda:read, agenda:write — justified by
 -- persona description ("manage capacity, send communications, manage
 -- registrations, and view all attendee and proposal data for that event"),
 -- and needed so an organizer's event access isn't missing proposal/agenda
@@ -945,6 +945,7 @@ INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES
   (lower(hex(randomblob(16))), 'role-event_organizer', 'events:write', datetime('now')),
   (lower(hex(randomblob(16))), 'role-event_organizer', 'events:manage', datetime('now')),
   (lower(hex(randomblob(16))), 'role-event_organizer', 'proposals:read', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-event_organizer', 'proposals:score', datetime('now')),
   (lower(hex(randomblob(16))), 'role-event_organizer', 'proposals:manage', datetime('now')),
   (lower(hex(randomblob(16))), 'role-event_organizer', 'agenda:read', datetime('now')),
   (lower(hex(randomblob(16))), 'role-event_organizer', 'agenda:write', datetime('now')),

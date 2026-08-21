@@ -8,14 +8,14 @@ import { onRequestGet as getProposalDetail } from "../functions/api/v1/admin/pro
 import { onRequestPost as openProposalManage } from "../functions/api/v1/admin/proposals/[proposalId]/open-manage";
 import { onRequestGet as getProposalReviews } from "../functions/api/v1/admin/proposals/[proposalId]/reviews";
 import { onRequestPatch as updateProposalSpeaker } from "../functions/api/v1/admin/proposals/[proposalId]/speakers/[userId]";
-import {
-  onRequestGet as getProposalComments,
-  onRequestPost as addProposalComment,
-} from "../functions/api/v1/admin/proposals/[proposalId]/comments";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { getProposalByManageToken } from "../functions/_lib/services/proposals";
 import { adminEventProposalsResponseSchema } from "../assets/shared/schemas/admin-event-proposals";
+import {
+  proposalCommentCreateResponseSchema,
+  proposalCommentsListResponseSchema,
+} from "../assets/shared/schemas/proposal-comments";
 
 const proposalDetails = {
   audience: "Operators",
@@ -30,6 +30,22 @@ const proposalDetailsJson = JSON.stringify(proposalDetails);
 async function callAdminProposalsList(token: string, path: string): Promise<Response> {
   return app.fetch(
     new Request(`https://app.test${path}`, { headers: { authorization: `Bearer ${token}` } }),
+    env as any,
+    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+  );
+}
+
+async function callAdminProposalComments(
+  token: string,
+  proposalId: string,
+  suffix = "",
+  init?: RequestInit,
+): Promise<Response> {
+  return app.fetch(
+    new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/comments${suffix}`, {
+      ...init,
+      headers: { authorization: `Bearer ${token}`, ...init?.headers },
+    }),
     env as any,
     { passThroughOnException: () => {}, waitUntil: () => {} } as any,
   );
@@ -447,39 +463,65 @@ describe("admin proposal endpoints", () => {
     const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
     const adminToken = await createAdminSession(env.DB, adminId, "token-admin-comments");
 
-    const addResponse = await addProposalComment(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/comments`, {
-          method: "POST",
-          headers: {
-            authorization: `Bearer ${adminToken}`,
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({ comment: "Discuss **schedule fit** before final email." }),
-        }),
-        { proposalId },
-      ),
-    );
+    const addResponse = await callAdminProposalComments(adminToken, proposalId, "", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ comment: "Discuss **schedule fit** before final email." }),
+    });
 
     expect(addResponse.status).toBe(200);
-    const addPayload = (await addResponse.json()) as { comment: { comment: string; author_email: string } };
+    const addPayload = proposalCommentCreateResponseSchema.parse(await addResponse.json());
     expect(addPayload.comment.comment).toContain("schedule fit");
     expect(addPayload.comment.author_email).toBe("admin@pkic.org");
 
-    const listResponse = await getProposalComments(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/comments`, {
-          headers: { authorization: `Bearer ${adminToken}` },
-        }),
-        { proposalId },
-      ),
-    );
+    const listResponse = await callAdminProposalComments(adminToken, proposalId, "?limit=1&q=schedule");
     expect(listResponse.status).toBe(200);
-    const listPayload = (await listResponse.json()) as { comments: Array<{ comment: string }> };
+    const listPayload = proposalCommentsListResponseSchema.parse(await listResponse.json());
     expect(listPayload.comments).toHaveLength(1);
     expect(listPayload.comments[0].comment).toBe("Discuss **schedule fit** before final email.");
+    expect(listPayload.page).toEqual({ limit: 1, offset: 0, total: 1, hasMore: false });
+    const [audit] = await queryAll<{ details_json: string }>(
+      env.DB,
+      "SELECT details_json FROM audit_log WHERE action = 'proposal_internal_comment_added'",
+    );
+    expect(JSON.parse(audit.details_json)).toEqual({ commentId: { from: null, to: addPayload.comment.id } });
+
+    const secondAddResponse = await callAdminProposalComments(adminToken, proposalId, "", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ comment: "A second internal note." }),
+    });
+    expect(secondAddResponse.status).toBe(200);
+    const firstPage = proposalCommentsListResponseSchema.parse(
+      await (await callAdminProposalComments(adminToken, proposalId, "?limit=1")).json(),
+    );
+    expect(firstPage.comments).toHaveLength(1);
+    expect(firstPage.page).toEqual({ limit: 1, offset: 0, total: 2, hasMore: true });
+  });
+
+  it("rolls back a proposal comment when its audit write fails", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const adminToken = await createAdminSession(env.DB, adminId, "token-admin-comment-rollback");
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_proposal_comment_audit
+         BEFORE INSERT ON audit_log
+         WHEN NEW.action = 'proposal_internal_comment_added'
+         BEGIN
+           SELECT RAISE(ABORT, 'forced audit failure');
+         END`,
+    ).run();
+
+    const response = await callAdminProposalComments(adminToken, proposalId, "", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ comment: "This must roll back." }),
+    });
+
+    expect(response.status).toBe(500);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM proposal_internal_comments WHERE proposal_id = ?", [proposalId]),
+    ).resolves.toHaveLength(0);
   });
 
   it("refreshes the proposer manage token and returns a working manage URL", async () => {

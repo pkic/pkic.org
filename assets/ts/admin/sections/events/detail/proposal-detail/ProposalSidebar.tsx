@@ -3,6 +3,7 @@ import { Markdown } from "../../../../../components/Markdown";
 import { api } from "../../../../api";
 import type { ProposalAccess, ProposalReview } from "../../../../types";
 import { fmt, toast } from "../../../../ui";
+import type { PageInfo } from "../../../../../../shared/schemas/pagination";
 import type { ProposalDetailRecord, ProposalInternalComment } from "./model";
 
 export function ProposalSidebar({
@@ -19,8 +20,11 @@ export function ProposalSidebar({
   commentDraft,
   savingComment,
   comments,
+  commentsPage,
+  loadingMoreComments,
   onCommentDraftChange,
   onAddComment,
+  onLoadMoreComments,
   onOpenManage,
   onFlag,
 }: {
@@ -37,8 +41,11 @@ export function ProposalSidebar({
   commentDraft: string;
   savingComment: boolean;
   comments: ProposalInternalComment[];
+  commentsPage: PageInfo | null;
+  loadingMoreComments: boolean;
   onCommentDraftChange: (value: string) => void;
   onAddComment: (event: Event) => Promise<void>;
+  onLoadMoreComments: () => Promise<void>;
   onOpenManage: () => Promise<void>;
   onFlag: (action: "spam" | "duplicate" | "delete") => Promise<void>;
 }) {
@@ -203,6 +210,16 @@ export function ProposalSidebar({
                     </div>
                   );
                 })}
+                {commentsPage?.hasMore && (
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline-secondary"
+                    disabled={loadingMoreComments}
+                    onClick={() => void onLoadMoreComments()}
+                  >
+                    {loadingMoreComments ? "Loading…" : "Load more comments"}
+                  </button>
+                )}
               </div>
             )}
           </div>

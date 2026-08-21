@@ -108,6 +108,17 @@ describe("consolidated pending migration upgrade", () => {
         },
       ]),
     );
+    expect(
+      db
+        .prepare("SELECT permission FROM role_permissions WHERE role_id = 'role-event_organizer' ORDER BY permission")
+        .all(),
+    ).toEqual(
+      expect.arrayContaining([
+        { permission: "proposals:read" },
+        { permission: "proposals:score" },
+        { permission: "proposals:manage" },
+      ]),
+    );
     expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'event_permissions'").get()).toBe(
       undefined,
     );

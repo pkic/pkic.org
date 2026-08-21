@@ -86,11 +86,43 @@ test("renders the admin proposal detail workflow with submission answers and ope
     });
   });
 
-  await page.route(`**/api/v1/admin/proposals/${proposalId}/comments`, async (route) => {
+  await page.route(`**/api/v1/admin/proposals/${proposalId}/comments**`, async (route) => {
+    const offset = Number(new URL(route.request().url()).searchParams.get("offset") ?? 0);
+    const comments =
+      offset === 0
+        ? [
+            {
+              id: "88888888888888888888888888888888",
+              proposal_id: proposalId,
+              author_user_id: "99999999999999999999999999999999",
+              comment: "Newest committee note",
+              created_at: "2025-02-01T12:00:00.000Z",
+              updated_at: "2025-02-01T12:00:00.000Z",
+              author_email: "reviewer@pkic.org",
+              author_first_name: "Ada",
+              author_last_name: "Reviewer",
+            },
+          ]
+        : [
+            {
+              id: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              proposal_id: proposalId,
+              author_user_id: "99999999999999999999999999999999",
+              comment: "Older committee note",
+              created_at: "2025-01-31T12:00:00.000Z",
+              updated_at: "2025-01-31T12:00:00.000Z",
+              author_email: "reviewer@pkic.org",
+              author_first_name: "Ada",
+              author_last_name: "Reviewer",
+            },
+          ];
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ comments: [] }),
+      body: JSON.stringify({
+        comments,
+        page: { limit: 25, offset, total: 2, hasMore: offset === 0 },
+      }),
     });
   });
 
@@ -258,9 +290,14 @@ test("renders the admin proposal detail workflow with submission answers and ope
   // Review quorum shown in stat cards (always visible)
   await expect(page.getByText("1 / 2 required").first()).toBeVisible();
 
+  await expect(page.getByText("Newest committee note")).toBeVisible();
+  await page.getByRole("button", { name: "Load more comments" }).click();
+  await expect(page.getByText("Older committee note")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Load more comments" })).toHaveCount(0);
+
   // Navigate to Reviews tab to see reviewer details
   await page.getByRole("tab", { name: /Reviews/ }).click();
-  await expect(page.getByText("Ada Reviewer")).toBeVisible();
+  await expect(page.getByText("Ada Reviewer").first()).toBeVisible();
 
   await page.getByRole("button", { name: "Open Proposer Manage Page ↗" }).click();
   await expect

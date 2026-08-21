@@ -3,6 +3,12 @@ import { proposalIdParamsSchema } from "./api-common";
 import { adminProposalPatchSchema, finalizeProposalSchema } from "./proposal-management";
 import { listQuerySchema } from "./pagination";
 import { proposalDecisionPreviewResponseSchema } from "./admin-event-proposals";
+import {
+  proposalCommentCreateResponseSchema,
+  proposalCommentCreateSchema,
+  proposalCommentsListQuerySchema,
+  proposalCommentsListResponseSchema,
+} from "./proposal-comments";
 
 export const adminProposalOpenManageRouteSchema = {
   tags: ["Admin proposals"],
@@ -109,15 +115,41 @@ export const adminProposalAuditLogRouteSchema = {
   },
 };
 
-export const adminProposalCommentsRouteSchema = {
+export const adminProposalCommentsListRouteSchema = {
   tags: ["Admin proposals"],
-  summary: "List or add internal proposal comments",
-  description: "Returns or appends private programme committee comments for a proposal.",
+  summary: "List internal proposal comments",
+  description: "Returns a bounded, searchable page of private programme committee comments for a proposal.",
   request: {
     params: proposalIdParamsSchema,
+    query: proposalCommentsListQuerySchema,
   },
   responses: {
-    "200": { description: "Proposal internal comments." },
+    "200": {
+      description: "Proposal internal comments.",
+      content: { "application/json": { schema: proposalCommentsListResponseSchema } },
+    },
+    "401": { description: "Admin authorization required." },
+    "403": { description: "The admin lacks review permission for this proposal." },
+    "404": { description: "Proposal not found." },
+  },
+};
+
+export const adminProposalCommentCreateRouteSchema = {
+  tags: ["Admin proposals"],
+  summary: "Add an internal proposal comment",
+  description: "Atomically appends a private programme committee comment and its audit record.",
+  request: {
+    params: proposalIdParamsSchema,
+    body: {
+      content: { "application/json": { schema: proposalCommentCreateSchema } },
+      required: true,
+    },
+  },
+  responses: {
+    "200": {
+      description: "Proposal internal comment created.",
+      content: { "application/json": { schema: proposalCommentCreateResponseSchema } },
+    },
     "400": { description: "Invalid comment payload." },
     "401": { description: "Admin authorization required." },
     "403": { description: "The admin lacks review permission for this proposal." },

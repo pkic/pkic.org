@@ -2,6 +2,9 @@ import type {
   AdminProposalDetailResponse,
   ProposalDecisionPreviewResponse,
 } from "../../../../../../shared/schemas/admin-event-proposals";
+import type { ProposalInternalComment } from "../../../../../../shared/schemas/proposal-comments";
+
+export type { ProposalInternalComment };
 
 export type ProposalResponse = AdminProposalDetailResponse;
 export type ProposalDetailRecord = ProposalResponse["proposal"];
@@ -35,16 +38,4 @@ export interface PresentationVersion {
   isCurrent: boolean;
   deletedAt: string | null;
   latestReview: PresentationVersionReview | null;
-}
-
-export interface ProposalInternalComment {
-  id: string;
-  proposal_id: string;
-  author_user_id: string;
-  comment: string;
-  created_at: string;
-  updated_at: string;
-  author_email: string | null;
-  author_first_name: string | null;
-  author_last_name: string | null;
 }

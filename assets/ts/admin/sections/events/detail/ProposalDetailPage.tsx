@@ -22,6 +22,11 @@ import type {
   ProposalResponse,
 } from "./proposal-detail/model";
 import { adminProposalDetailResponseSchema } from "../../../../../shared/schemas/admin-event-proposals";
+import {
+  proposalCommentCreateResponseSchema,
+  proposalCommentsListResponseSchema,
+} from "../../../../../shared/schemas/proposal-comments";
+import type { PageInfo } from "../../../../../shared/schemas/pagination";
 import { ProposalDecisionPanel } from "./proposal-detail/ProposalDecisionPanel";
 
 // ─── Main page ────────────────────────────────────────────────────────────────
@@ -38,6 +43,8 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
   const [reviews, setReviews] = useState<ProposalReview[]>([]);
   const [speakers, setSpeakers] = useState<ProposalSpeaker[]>([]);
   const [comments, setComments] = useState<ProposalInternalComment[]>([]);
+  const [commentPage, setCommentPage] = useState<PageInfo | null>(null);
+  const [loadingMoreComments, setLoadingMoreComments] = useState(false);
   const [versions, setVersions] = useState<PresentationVersion[]>([]);
   const [loadingSub, setLoadingSub] = useState(true);
 
@@ -78,9 +85,9 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
         api<{ speakers: ProposalSpeaker[] }>(`/api/v1/admin/proposals/${proposalId}/speakers`).catch(() => ({
           speakers: [],
         })),
-        api<{ comments: ProposalInternalComment[] }>(`/api/v1/admin/proposals/${proposalId}/comments`).catch(() => ({
-          comments: [],
-        })),
+        api<unknown>(`/api/v1/admin/proposals/${proposalId}/comments?limit=25`)
+          .then((value) => proposalCommentsListResponseSchema.parse(value))
+          .catch(() => ({ comments: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } })),
         api<{ versions: PresentationVersion[] }>(`/api/v1/admin/proposals/${proposalId}/presentation/versions`).catch(
           () => ({ versions: [] }),
         ),
@@ -88,6 +95,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
       setReviews(r.reviews ?? []);
       setSpeakers(s.speakers ?? []);
       setComments(c.comments ?? []);
+      setCommentPage(c.page);
       setVersions(v.versions ?? []);
     } catch {
       // non-fatal
@@ -226,12 +234,15 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     if (!comment) return;
     setSavingComment(true);
     try {
-      const result = await api<{ comment: ProposalInternalComment }>(`/api/v1/admin/proposals/${proposalId}/comments`, {
-        method: "POST",
-        body: JSON.stringify({ comment }),
-      });
+      const result = proposalCommentCreateResponseSchema.parse(
+        await api<unknown>(`/api/v1/admin/proposals/${proposalId}/comments`, {
+          method: "POST",
+          body: JSON.stringify({ comment }),
+        }),
+      );
       if (result.comment) {
         setComments((prev) => [result.comment, ...prev]);
+        setCommentPage((prev) => (prev ? { ...prev, total: prev.total + 1 } : prev));
       }
       setCommentDraft("");
       toast("Comment added", "success");
@@ -239,6 +250,24 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
       toast((err as Error).message, "error");
     } finally {
       setSavingComment(false);
+    }
+  }
+
+  async function handleLoadMoreComments() {
+    if (!commentPage?.hasMore || loadingMoreComments) return;
+    setLoadingMoreComments(true);
+    try {
+      const next = proposalCommentsListResponseSchema.parse(
+        await api<unknown>(
+          `/api/v1/admin/proposals/${proposalId}/comments?limit=${commentPage.limit}&offset=${comments.length}`,
+        ),
+      );
+      setComments((prev) => [...prev, ...next.comments]);
+      setCommentPage(next.page);
+    } catch (err) {
+      toast((err as Error).message, "error");
+    } finally {
+      setLoadingMoreComments(false);
     }
   }
 
@@ -552,8 +581,11 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
           commentDraft={commentDraft}
           savingComment={savingComment}
           comments={comments}
+          commentsPage={commentPage}
+          loadingMoreComments={loadingMoreComments}
           onCommentDraftChange={setCommentDraft}
           onAddComment={handleComment}
+          onLoadMoreComments={handleLoadMoreComments}
           onOpenManage={handleOpenManage}
           onFlag={handleFlag}
         />

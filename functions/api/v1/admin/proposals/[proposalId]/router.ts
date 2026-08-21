@@ -10,7 +10,8 @@ import { AppError } from "../../../../../_lib/errors";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import {
   adminProposalAuditLogRouteSchema,
-  adminProposalCommentsRouteSchema,
+  adminProposalCommentCreateRouteSchema,
+  adminProposalCommentsListRouteSchema,
   adminProposalFinalizePreviewRouteSchema,
   adminProposalFinalizeRouteSchema,
   adminProposalOpenManageRouteSchema,
@@ -103,11 +104,11 @@ const AdminProposalsProposalIdAuditLogGet = openApiRoute(
   AdminProposalsProposalIdAuditLogGet_l,
 );
 const AdminProposalsProposalIdCommentsGet = openApiRoute(
-  adminProposalCommentsRouteSchema,
+  adminProposalCommentsListRouteSchema,
   AdminProposalsProposalIdCommentsGet_l,
 );
 const AdminProposalsProposalIdCommentsPost = openApiRoute(
-  adminProposalCommentsRouteSchema,
+  adminProposalCommentCreateRouteSchema,
   AdminProposalsProposalIdCommentsPost_l,
 );
 const AdminProposalsProposalIdSpeakersGet = openApiRoute(
