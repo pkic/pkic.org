@@ -282,6 +282,75 @@ describe("passkeys (WebAuthn)", () => {
     expect(replayResponse.status).toBe(400);
   });
 
+  it("allows a signed assertion to create only one session when the same request completes concurrently", async () => {
+    const { authenticator } = await registerPasskey();
+    const begin = await beginAuthentication();
+    const assertion = await buildAuthenticationResponse(authenticator, {
+      challenge: begin.options.challenge,
+      rpId: RP_ID,
+      origin: ORIGIN,
+      signCount: 1,
+    });
+    const sessionsBefore = await queryAll<{ total: number }>(
+      env.DB,
+      "SELECT COUNT(*) AS total FROM sessions WHERE user_id = ?",
+      userId,
+    );
+
+    const complete = () =>
+      call("/api/v1/auth/passkeys/authenticate/complete", {
+        method: "POST",
+        body: JSON.stringify({ challengeToken: begin.challengeToken, response: assertion }),
+      });
+    const responses = await Promise.all([complete(), complete()]);
+
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 400]);
+    const sessionsAfter = await queryAll<{ total: number }>(
+      env.DB,
+      "SELECT COUNT(*) AS total FROM sessions WHERE user_id = ?",
+      userId,
+    );
+    expect(sessionsAfter[0].total - sessionsBefore[0].total).toBe(1);
+    expect(
+      await queryAll<{ total: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS total FROM audit_log WHERE action = 'passkey_authenticated' AND actor_id = ?",
+        userId,
+      ),
+    ).toEqual([{ total: 1 }]);
+  });
+
+  it("rejects reuse of a consumed challenge when an authenticator does not support a signature counter", async () => {
+    const { authenticator } = await registerPasskey();
+    await env.DB.prepare(
+      `INSERT INTO passkey_challenge_uses (challenge_id, purpose, used_at, expires_at)
+       VALUES ('expired-test-challenge', 'authentication', datetime('now', '-10 minutes'), datetime('now', '-5 minutes'))`,
+    ).run();
+    const begin = await beginAuthentication();
+    const assertion = await buildAuthenticationResponse(authenticator, {
+      challenge: begin.options.challenge,
+      rpId: RP_ID,
+      origin: ORIGIN,
+      signCount: 0,
+    });
+    const complete = () =>
+      call("/api/v1/auth/passkeys/authenticate/complete", {
+        method: "POST",
+        body: JSON.stringify({ challengeToken: begin.challengeToken, response: assertion }),
+      });
+
+    expect((await complete()).status).toBe(200);
+    const replay = await complete();
+    expect(replay.status).toBe(400);
+    await expect(replay.json()).resolves.toMatchObject({ error: { code: "PASSKEY_CHALLENGE_INVALID" } });
+    expect(
+      await queryAll<{ total: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS total FROM passkey_challenge_uses WHERE purpose = 'authentication'",
+      ),
+    ).toEqual([{ total: 1 }]);
+  });
+
   it("sign count is incremented after each successful assertion (clone attack detection)", async () => {
     const { authenticator } = await registerPasskey();
 

@@ -1155,16 +1155,14 @@ INSERT INTO roles (id, name, description, is_system_role, single_holder_per_cont
 -- WebAuthn ceremony as a base64url TEXT string rather than BLOB, avoiding a
 -- new binary-binding code path for a single column.
 --
--- WebAuthn registration/authentication ceremonies need a server-held
--- challenge between the /begin and /complete calls of each flow;
--- describes the flow in prose but (per the same class of gap as
--- defines no table for it. Rather than add a
--- `passkey_challenges` table — extra schema plus an expiry-cleanup job for
--- state that only needs to survive a couple of minutes — the challenge is
--- carried statelessly in a short-lived signed JWT returned to the client and
--- echoed back at /complete, reusing the existing hand-rolled JWT utility
--- (functions/_lib/utils/jwt.ts) and the same "JWT-native, no DB row needed"
--- reasoning already applied to permissions.
+-- WebAuthn registration/authentication ceremonies carry their server-issued
+-- challenge in a short-lived signed JWT between /begin and /complete. The JWT
+-- includes a random challenge ID. A successful completion atomically records
+-- that ID in passkey_challenge_uses alongside the credential/session changes,
+-- making the ceremony single-use even for synced authenticators whose
+-- signature counter remains zero. Each successful completion also deletes a
+-- bounded batch of expired rows so this replay ledger cannot grow without
+-- bound and no separate table-rebuild migration is needed.
 --
 -- credential_id stores the credential ID as base64url TEXT, in the clear —
 -- unlike `sessions.token_hash`/`auth_magic_links.token_hash`, a WebAuthn
@@ -1193,6 +1191,16 @@ CREATE INDEX idx_passkey_credentials_user ON passkey_credentials(user_id);
 CREATE INDEX idx_passkey_credentials_active_user_order
   ON passkey_credentials(user_id, created_at, id)
   WHERE revoked_at IS NULL;
+
+CREATE TABLE passkey_challenge_uses (
+  challenge_id TEXT NOT NULL PRIMARY KEY,
+  purpose      TEXT NOT NULL,
+  used_at      TEXT NOT NULL,
+  expires_at   TEXT NOT NULL
+);
+
+CREATE INDEX idx_passkey_challenge_uses_expires
+  ON passkey_challenge_uses(expires_at, challenge_id);
 
 
 
