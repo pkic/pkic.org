@@ -57,6 +57,9 @@ export interface VoteRow {
   opens_at: string;
   closes_at: string;
   current_round: number;
+  transition_revision: number;
+  transition_processing_token: string | null;
+  transition_lease_expires_at: string | null;
   status: VoteStatus;
   result_json: string | null;
   visibility: VoteVisibility;
@@ -68,8 +71,9 @@ export interface VoteRow {
 /** Canonical explicit projection for every query that hydrates a complete VoteRow. */
 export const VOTE_ROW_COLUMNS =
   "id, slug, title, description, vote_type, scope_type, scope_id, created_by_user_id, proposed_by_user_id, " +
-  "eligible_categories, threshold_type, opens_at, closes_at, current_round, status, result_json, visibility, " +
-  "public_detail_level, created_at, updated_at";
+  "eligible_categories, threshold_type, opens_at, closes_at, current_round, transition_revision, " +
+  "transition_processing_token, transition_lease_expires_at, status, result_json, visibility, public_detail_level, " +
+  "created_at, updated_at";
 
 export interface CandidateRow {
   id: string;

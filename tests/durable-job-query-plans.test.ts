@@ -18,6 +18,13 @@ import {
   ON_HOLD_REMINDER_DUE_QUERY,
 } from "../functions/_lib/services/membership/scheduled-jobs";
 import { SPONSORSHIP_DUE_WORK_QUERY } from "../functions/_lib/services/sponsorship-scheduled-jobs";
+import {
+  VOTE_CLOSE_DUE_QUERY,
+  VOTE_ELECTION_TALLY_QUERY,
+  VOTE_MOTION_TALLY_QUERY,
+  VOTE_OPEN_DUE_QUERY,
+  VOTE_STANDING_CANDIDATES_QUERY,
+} from "../functions/_lib/services/votes/closing";
 
 async function explain(
   sql: string,
@@ -127,5 +134,29 @@ describe("durable external-effect due query plans", () => {
     expect(plans[1]).toContain("idx_calendar_rsvp_pending_warning");
     expect(plans[2]).toContain("idx_calendar_rsvp_pending_action");
     for (const plan of plans) expect(plan).not.toMatch(/(?:^|\n)SCAN rsvp(?:$|\n)/);
+  });
+
+  it("uses indexed deterministic scans for scheduled vote openings and due vote closings", async () => {
+    const now = "2026-08-21T12:00:00.000Z";
+
+    expectBoundedDuePlan(await explain(VOTE_OPEN_DUE_QUERY, [now, 20]), ["idx_votes_status_opens_at"], "votes");
+    expectBoundedDuePlan(await explain(VOTE_CLOSE_DUE_QUERY, [now, now, 20]), ["idx_votes_status_closes_at"], "votes");
+  });
+
+  it("uses partial standing-candidate and covering ballot-tally indexes for scheduled vote work", async () => {
+    const voteId = "00000000-0000-4000-8000-000000000001";
+
+    expectBoundedDuePlan(
+      await explain(VOTE_STANDING_CANDIDATES_QUERY, [voteId, 51]),
+      ["idx_vote_candidates_standing"],
+      "vote_candidates",
+    );
+
+    for (const tallyQuery of [VOTE_MOTION_TALLY_QUERY, VOTE_ELECTION_TALLY_QUERY]) {
+      const plan = await explain(tallyQuery, [voteId, 1]);
+      expect(plan).toContain("idx_vote_ballots_vote_round");
+      expect(plan).not.toMatch(/(?:^|\n)SCAN vote_ballots(?:$|\s)/);
+      expect(plan).not.toContain("USE TEMP B-TREE FOR GROUP BY");
+    }
   });
 });

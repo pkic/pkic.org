@@ -1,138 +1,91 @@
 /**
- * Vote closing & tallying — the scheduled job (membership-scheduled-jobs.ts
- * calls closeDueVotes). Split out of votes.ts (PR #1 review).
+ * Bounded orchestration for automatic vote opening and closing.
  *
- * **Successive-elimination rounds.** describes a live, multi-round
- * process ("after each round, the candidate with fewest votes is
- * eliminated... continues until one candidate holds >50%"), nothing is
- * specified for how a new round's voting window is scheduled. This
- * implementation automates it: closeDueVotes computes the closing round's
- * tally, and if no candidate has a majority, eliminates the lowest-scoring
- * candidate(s) (both, if tied for last — tie rule), increments
- * current_round, and reopens voting for the same duration as the original
- * round (closes_at - opens_at). Voters must recast for the new round;
- * vote_ballots.round scopes each round's ballots independently. The one
- * case doesn't cover: if literally every remaining candidate is tied
- * (eliminating "the fewest" would eliminate everyone), nobody is eliminated
- * and the same round re-runs unchanged — a deliberate reading beyond the
- * letter of the tie rule, needed to avoid a zero-candidate result.
+ * Closing claims a due vote before tallying. Ballot writes require the claim
+ * to be absent, so accepted ballots cannot arrive after the tally snapshot.
+ * A failed worker leaves an expiring lease for a later invocation to reclaim.
  */
-import { all, run } from "../../db/queries";
-import { nowIso } from "../../utils/time";
-import { parseJsonSafe, stringifyJson } from "../../utils/json";
-import { getVoteRowOrThrow, VOTE_ROW_COLUMNS, type VoteRow, type CandidateRow } from "./shared";
-import { computeMotionResult, tallyElectionRound, type ElectionRoundTally } from "./tally";
+import { all } from "../../db/queries";
+import { hasD1QueryCapacity, type D1QueryBudget } from "../../db/query-budget";
 import type { DatabaseLike } from "../../types";
+import { nowIso } from "../../utils/time";
+import { claimDueVote, closeClaimedVote, openDueVote } from "./automatic-transitions";
+import { VOTE_CLOSE_DUE_QUERY, VOTE_OPEN_DUE_QUERY } from "./due-queries";
+import type { VoteRow } from "./shared";
+
+export {
+  VOTE_CLOSE_DUE_QUERY,
+  VOTE_ELECTION_TALLY_QUERY,
+  VOTE_MOTION_TALLY_QUERY,
+  VOTE_OPEN_DUE_QUERY,
+  VOTE_STANDING_CANDIDATES_QUERY,
+} from "./due-queries";
 
 export interface CloseDueVotesResult {
-  /** scheduled -> open transitions (initial open, not a round advance). */
   opened: string[];
   closed: string[];
-  /** Election votes that advanced to a new round without a winner yet. */
   roundsAdvanced: string[];
 }
 
-async function finalizeMotionOrConsultation(db: DatabaseLike, vote: VoteRow): Promise<void> {
-  const ballots = await all<{ choice: string }>(db, `SELECT choice FROM vote_ballots WHERE vote_id = ? AND round = ?`, [
-    vote.id,
-    vote.current_round,
-  ]);
-  const result = computeMotionResult(vote.threshold_type as "simple_majority" | "supermajority", ballots);
-  await run(db, `UPDATE votes SET status = 'closed', result_json = ?, updated_at = ? WHERE id = ?`, [
-    stringifyJson(result),
-    nowIso(),
-    vote.id,
-  ]);
-}
-
-async function advanceOrFinalizeElection(db: DatabaseLike, vote: VoteRow): Promise<void> {
-  const standing = await all<CandidateRow>(
-    db,
-    `SELECT * FROM vote_candidates WHERE vote_id = ? AND eliminated_round IS NULL ORDER BY sort_order ASC`,
-    [vote.id],
-  );
-  const ballots = await all<{ choice: string }>(db, `SELECT choice FROM vote_ballots WHERE vote_id = ? AND round = ?`, [
-    vote.id,
-    vote.current_round,
-  ]);
-  const tally = tallyElectionRound(
-    vote.current_round,
-    standing.map((c) => c.id),
-    ballots,
-  );
-
-  const priorRounds = parseJsonSafe<{ rounds: ElectionRoundTally[] }>(vote.result_json, { rounds: [] }).rounds;
-  const rounds = [...priorRounds, tally];
-  const now = nowIso();
-
-  if (tally.winnerCandidateId || standing.length <= 1) {
-    const winnerId = tally.winnerCandidateId ?? standing[0]?.id ?? null;
-    await run(db, `UPDATE votes SET status = 'closed', result_json = ?, updated_at = ? WHERE id = ?`, [
-      stringifyJson({ rounds, winnerCandidateId: winnerId }),
-      now,
-      vote.id,
-    ]);
-    return;
-  }
-
-  if (tally.eliminatedCandidateIds.length > 0) {
-    for (const candidateId of tally.eliminatedCandidateIds) {
-      await run(db, `UPDATE vote_candidates SET eliminated_round = ? WHERE id = ?`, [vote.current_round, candidateId]);
-    }
-  }
-  // If nobody could be eliminated (full tie among all standing candidates),
-  // the round re-runs unchanged — see this file's header.
-
-  const durationMs = new Date(vote.closes_at).getTime() - new Date(vote.opens_at).getTime();
-  const nextClosesAt = new Date(Date.now() + Math.max(durationMs, 60 * 60 * 1000)).toISOString();
-  await run(
-    db,
-    `UPDATE votes SET current_round = current_round + 1, opens_at = ?, closes_at = ?, result_json = ?, updated_at = ? WHERE id = ?`,
-    [now, nextClosesAt, stringifyJson({ rounds }), now, vote.id],
-  );
-}
+const VOTE_DUE_SELECTION_STATEMENTS = 2;
+const VOTE_MAX_CLOSE_STATEMENTS = 6;
+const VOTE_OPEN_STATEMENTS = 2;
+const MAX_DUE_VOTES_PER_PASS = 250;
 
 /**
- * Opens scheduled votes whose opens_at has passed, then closes/advances
- * open votes whose closes_at has passed. Returns which votes newly opened,
- * closed, or advanced a round, so the caller (membership-scheduled-jobs.ts)
- * can resolve each forum vote's eligible delegates and queue
- * `forum-vote-delegate-notify` — this function never calls queueEmail
- * itself, matching every other service in this codebase.
+ * Opens scheduled votes and then claims/finalizes due open votes. The limit
+ * is a total transition limit across both lanes, not a per-lane multiplier.
  */
-export async function closeDueVotes(db: DatabaseLike, limit = 50): Promise<CloseDueVotesResult> {
+export async function closeDueVotes(
+  db: DatabaseLike,
+  limit = 50,
+  d1QueryBudget?: D1QueryBudget,
+): Promise<CloseDueVotesResult> {
+  const result: CloseDueVotesResult = { opened: [], closed: [], roundsAdvanced: [] };
+  const requestedLimit = Math.max(0, Math.min(MAX_DUE_VOTES_PER_PASS, Math.floor(limit)));
+  if (requestedLimit === 0) return result;
+
+  const budgetActionLimit = d1QueryBudget
+    ? Math.floor(
+        Math.max(0, d1QueryBudget.remainingQueries() - VOTE_DUE_SELECTION_STATEMENTS) / VOTE_MAX_CLOSE_STATEMENTS,
+      )
+    : requestedLimit;
+  const actionLimit = Math.min(requestedLimit, budgetActionLimit);
+  if (actionLimit < 1) return result;
+
   const now = nowIso();
-
-  const toOpen = await all<{ id: string }>(
-    db,
-    `SELECT id FROM votes WHERE status = 'scheduled' AND opens_at <= ? LIMIT ?`,
-    [now, limit],
-  );
-  for (const row of toOpen) {
-    await run(db, `UPDATE votes SET status = 'open', updated_at = ? WHERE id = ?`, [now, row.id]);
-  }
-
-  const toClose = await all<VoteRow>(
-    db,
-    `SELECT ${VOTE_ROW_COLUMNS} FROM votes WHERE status = 'open' AND closes_at <= ? LIMIT ?`,
-    [now, limit],
-  );
-
-  const closed: string[] = [];
-  const roundsAdvanced: string[] = [];
-
-  for (const vote of toClose) {
-    if (vote.vote_type === "election") {
-      const beforeRound = vote.current_round;
-      await advanceOrFinalizeElection(db, vote);
-      const after = await getVoteRowOrThrow(db, vote.id);
-      if (after.status === "closed") closed.push(vote.id);
-      else if (after.current_round !== beforeRound) roundsAdvanced.push(vote.id);
-    } else {
-      await finalizeMotionOrConsultation(db, vote);
-      closed.push(vote.id);
+  // With only one action, prioritize an already-open vote. Normal budgets
+  // allow both lanes; this prevents close starvation under emergency limits.
+  const openLimit = actionLimit === 1 ? 0 : Math.ceil(actionLimit / 2);
+  let openCandidatesProcessed = 0;
+  if (openLimit > 0 && hasD1QueryCapacity(d1QueryBudget, 1)) {
+    const toOpen = await all<VoteRow>(db, VOTE_OPEN_DUE_QUERY, [now, openLimit]);
+    for (const vote of toOpen) {
+      if (!hasD1QueryCapacity(d1QueryBudget, VOTE_OPEN_STATEMENTS)) break;
+      openCandidatesProcessed += 1;
+      if (await openDueVote(db, vote, now)) result.opened.push(vote.id);
     }
   }
 
-  return { opened: toOpen.map((r) => r.id), closed, roundsAdvanced };
+  const remainingActionLimit = actionLimit - openCandidatesProcessed;
+  if (remainingActionLimit < 1 || !hasD1QueryCapacity(d1QueryBudget, 1 + VOTE_MAX_CLOSE_STATEMENTS)) {
+    return result;
+  }
+  const budgetCloseLimit = d1QueryBudget
+    ? Math.floor(Math.max(0, d1QueryBudget.remainingQueries() - 1) / VOTE_MAX_CLOSE_STATEMENTS)
+    : remainingActionLimit;
+  const closeLimit = Math.min(remainingActionLimit, budgetCloseLimit);
+  if (closeLimit < 1) return result;
+
+  const toClose = await all<VoteRow>(db, VOTE_CLOSE_DUE_QUERY, [now, now, closeLimit]);
+  for (const vote of toClose) {
+    if (!hasD1QueryCapacity(d1QueryBudget, VOTE_MAX_CLOSE_STATEMENTS)) break;
+    const claimed = await claimDueVote(db, vote, now);
+    if (!claimed) continue;
+    const outcome = await closeClaimedVote(db, claimed, now);
+    if (outcome === "closed") result.closed.push(vote.id);
+    if (outcome === "round-advanced") result.roundsAdvanced.push(vote.id);
+  }
+
+  return result;
 }

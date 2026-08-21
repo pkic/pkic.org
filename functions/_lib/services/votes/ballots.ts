@@ -1,7 +1,7 @@
 /**
  * Ballot eligibility and submission. Split out of votes.ts.
  */
-import { all, first, run } from "../../db/queries";
+import { all, first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import { AppError } from "../../errors";
@@ -16,7 +16,7 @@ import {
   type VoteSummary,
   type BallotChoice,
 } from "./shared";
-import type { AuthMember, DatabaseLike } from "../../types";
+import type { AuthMember, DatabaseLike, StatementLike } from "../../types";
 
 /** role-voting_delegate (user_roles, context_type='organization') falls back to role-primary_contact when unset. */
 export async function resolveVotingDelegateUserId(db: DatabaseLike, organizationId: string): Promise<string | null> {
@@ -171,9 +171,27 @@ function assertEligibleCategory(vote: VoteRow, member: AuthMember): void {
   }
 }
 
-function assertVoteOpen(vote: VoteRow): void {
-  if (vote.status !== "open") {
+function assertVoteOpen(vote: VoteRow, now: string): void {
+  if (vote.status !== "open" || vote.opens_at > now || vote.closes_at <= now) {
     throw new AppError(409, "VOTE_NOT_OPEN", "This vote is not currently open for ballots");
+  }
+}
+
+function isBallotUniquenessError(error: unknown): boolean {
+  return error instanceof Error && error.message.includes("UNIQUE constraint failed: vote_ballots");
+}
+
+async function executeGuardedBallotInsert(statement: StatementLike): Promise<void> {
+  try {
+    const result = await statement.run();
+    if (result.meta?.changes !== 1) {
+      throw new AppError(409, "VOTE_CHANGED", "The vote round or voting window changed; reload and retry");
+    }
+  } catch (error) {
+    if (isBallotUniquenessError(error)) {
+      throw new AppError(409, "ALREADY_VOTED", "You have already cast a ballot for this round");
+    }
+    throw error;
   }
 }
 
@@ -185,12 +203,11 @@ export async function submitBallot(
   ipHash: string | null,
 ): Promise<void> {
   const vote = await getVoteRowOrThrow(db, voteIdOrSlug);
-  assertVoteOpen(vote);
+  const now = nowIso();
+  assertVoteOpen(vote, now);
   await assertVotingCategory(member);
   assertEligibleCategory(vote, member);
   await assertBallotChoiceValid(db, vote, choice);
-
-  const now = nowIso();
 
   if (vote.scope_type === "forum") {
     if (!member.organizationId) {
@@ -207,11 +224,34 @@ export async function submitBallot(
     );
     if (existing)
       throw new AppError(409, "ALREADY_VOTED", "Your organization has already cast a ballot for this round");
-    await run(
-      db,
-      `INSERT INTO vote_ballots (id, vote_id, user_id, organization_id, choice, round, submitted_at, ip_hash)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [uuid(), vote.id, member.userId, member.organizationId, choice, vote.current_round, now, ipHash],
+    await executeGuardedBallotInsert(
+      db
+        .prepare(
+          `INSERT INTO vote_ballots
+             (id, vote_id, user_id, organization_id, choice, round, submitted_at, ip_hash)
+           SELECT ?, v.id, ?, ?, ?, v.current_round, ?, ?
+           FROM votes v
+           WHERE v.id = ?
+             AND v.status = 'open'
+             AND v.current_round = ?
+             AND v.transition_revision = ?
+             AND v.transition_processing_token IS NULL
+             AND v.opens_at <= ?
+             AND v.closes_at > ?`,
+        )
+        .bind(
+          uuid(),
+          member.userId,
+          member.organizationId,
+          choice,
+          now,
+          ipHash,
+          vote.id,
+          vote.current_round,
+          vote.transition_revision,
+          now,
+          now,
+        ),
     );
     return;
   }
@@ -231,10 +271,32 @@ export async function submitBallot(
     [vote.id, member.userId, vote.current_round],
   );
   if (existing) throw new AppError(409, "ALREADY_VOTED", "You have already cast a ballot for this round");
-  await run(
-    db,
-    `INSERT INTO vote_ballots (id, vote_id, user_id, organization_id, choice, round, submitted_at, ip_hash)
-     VALUES (?, ?, ?, NULL, ?, ?, ?, ?)`,
-    [uuid(), vote.id, member.userId, choice, vote.current_round, now, ipHash],
+  await executeGuardedBallotInsert(
+    db
+      .prepare(
+        `INSERT INTO vote_ballots
+           (id, vote_id, user_id, organization_id, choice, round, submitted_at, ip_hash)
+         SELECT ?, v.id, ?, NULL, ?, v.current_round, ?, ?
+         FROM votes v
+         WHERE v.id = ?
+           AND v.status = 'open'
+           AND v.current_round = ?
+           AND v.transition_revision = ?
+           AND v.transition_processing_token IS NULL
+           AND v.opens_at <= ?
+           AND v.closes_at > ?`,
+      )
+      .bind(
+        uuid(),
+        member.userId,
+        choice,
+        now,
+        ipHash,
+        vote.id,
+        vote.current_round,
+        vote.transition_revision,
+        now,
+        now,
+      ),
   );
 }

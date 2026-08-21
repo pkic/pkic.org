@@ -104,6 +104,7 @@ export interface Env {
   SCHEDULED_EC_AUTO_APPROVE_LIMIT?: string;
   SCHEDULED_GOOGLE_GROUPS_SYNC_LIMIT?: string;
   SCHEDULED_SPONSORSHIP_DUE_WORK_LIMIT?: string;
+  SCHEDULED_VOTE_DUE_WORK_LIMIT?: string;
   SCHEDULED_VOTE_NOTIFICATION_LIMIT?: string;
   /** Maximum distinct recipients resolved for a synchronous admin campaign. */
   ADMIN_CAMPAIGN_MAX_RECIPIENTS?: string;

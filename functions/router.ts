@@ -160,11 +160,16 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
         env,
         "votes_due_work",
         config.scheduledD1QueryBudget,
-        (jobEnv) =>
-          runVotesDueWork(jobEnv.DB, {
-            ...jobEnv,
-            SCHEDULED_VOTE_NOTIFICATION_LIMIT: String(config.scheduledVoteNotificationLimit),
-          }),
+        (jobEnv, d1QueryBudget) =>
+          runVotesDueWork(
+            jobEnv.DB,
+            {
+              ...jobEnv,
+              SCHEDULED_VOTE_NOTIFICATION_LIMIT: String(config.scheduledVoteNotificationLimit),
+            },
+            config.scheduledVoteDueWorkLimit,
+            d1QueryBudget,
+          ),
       );
       logInfo("SCHEDULED_VOTES_DUE_WORK_COMPLETED", { cron: controller.cron, outcome });
       return;

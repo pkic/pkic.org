@@ -129,7 +129,11 @@ export function getConfig(env: Env, request?: Request) {
       Math.max(0, parseIntOrDefault(env.SCHEDULED_GOOGLE_GROUPS_SYNC_LIMIT, 25)),
     ),
     scheduledSponsorshipDueWorkLimit: parseIntOrDefault(env.SCHEDULED_SPONSORSHIP_DUE_WORK_LIMIT, 100),
-    scheduledVoteNotificationLimit: parseIntOrDefault(env.SCHEDULED_VOTE_NOTIFICATION_LIMIT, 100),
+    scheduledVoteDueWorkLimit: Math.min(250, Math.max(0, parseIntOrDefault(env.SCHEDULED_VOTE_DUE_WORK_LIMIT, 50))),
+    scheduledVoteNotificationLimit: Math.min(
+      500,
+      Math.max(0, parseIntOrDefault(env.SCHEDULED_VOTE_NOTIFICATION_LIMIT, 100)),
+    ),
     adminCampaignMaxRecipients: Math.min(
       10_000,
       Math.max(1, parseIntOrDefault(env.ADMIN_CAMPAIGN_MAX_RECIPIENTS, 2_000)),

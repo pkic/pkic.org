@@ -2289,6 +2289,9 @@ CREATE TABLE votes (
   opens_at              TEXT NOT NULL,
   closes_at             TEXT NOT NULL,
   current_round         INTEGER NOT NULL DEFAULT 1,
+  transition_revision   INTEGER NOT NULL DEFAULT 0,
+  transition_processing_token TEXT,
+  transition_lease_expires_at TEXT,
   status                TEXT NOT NULL,
   -- allowed: scheduled | open | closed | cancelled
   result_json           TEXT,
@@ -2301,7 +2304,8 @@ CREATE TABLE votes (
 );
 
 CREATE INDEX idx_votes_scope ON votes(scope_type, scope_id);
-CREATE INDEX idx_votes_status_closes_at ON votes(status, closes_at);
+CREATE INDEX idx_votes_status_opens_at ON votes(status, opens_at, id);
+CREATE INDEX idx_votes_status_closes_at ON votes(status, closes_at, id);
 CREATE INDEX idx_votes_visibility ON votes(visibility, closes_at);
 
 CREATE TABLE vote_candidates (
@@ -2319,6 +2323,9 @@ CREATE TABLE vote_candidates (
 );
 
 CREATE INDEX idx_vote_candidates_vote ON vote_candidates(vote_id);
+CREATE INDEX idx_vote_candidates_standing
+  ON vote_candidates(vote_id, sort_order, id)
+  WHERE eliminated_round IS NULL;
 
 CREATE TABLE vote_ballots (
   id              TEXT NOT NULL PRIMARY KEY,
@@ -2335,7 +2342,9 @@ CREATE TABLE vote_ballots (
   ip_hash         TEXT
 );
 
-CREATE INDEX idx_vote_ballots_vote_round ON vote_ballots(vote_id, round);
+-- Cover scheduled tally aggregation without loading every ballot row or
+-- returning to the table for each choice.
+CREATE INDEX idx_vote_ballots_vote_round ON vote_ballots(vote_id, round, choice);
 -- Forum-level: one ballot per organization per round.
 CREATE UNIQUE INDEX idx_vote_ballots_org_round ON vote_ballots(vote_id, organization_id, round)
   WHERE organization_id IS NOT NULL;

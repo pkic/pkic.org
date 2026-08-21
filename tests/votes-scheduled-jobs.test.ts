@@ -21,6 +21,8 @@ import {
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { isIndividualMembershipCategory } from "../assets/shared/schemas/membership-categories";
 import { runVotesDueWork } from "../functions/_lib/services/votes-scheduled-jobs";
+import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
+import { gateBatchGroup } from "./helpers/d1-batch-gate";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -155,5 +157,239 @@ describe("Votes due-work (functions/_lib/services/votes-scheduled-jobs.ts)", () 
   it("does nothing when no votes are due", async () => {
     const result = await runVotesDueWork(env.DB, env as any);
     expect(result).toEqual({ opened: 0, closed: 0, roundsAdvanced: 0, delegateNoticesQueued: 0 });
+  });
+
+  it("lets concurrent due-work runners close a vote once and write one closure audit", async () => {
+    const createRes = await call(adminToken, "/api/v1/admin/votes", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Concurrent Closure Motion",
+        voteType: "motion",
+        scopeType: "forum",
+        thresholdType: "simple_majority",
+        closesAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      }),
+    });
+    expect(createRes.status).toBe(200);
+    const { vote } = (await createRes.json()) as { vote: { id: string } };
+    await env.DB.prepare("UPDATE votes SET closes_at = datetime('now', '-1 second') WHERE id = ?").bind(vote.id).run();
+
+    const results = await Promise.all([runVotesDueWork(env.DB, env as any), runVotesDueWork(env.DB, env as any)]);
+
+    expect(results.reduce((total, result) => total + result.closed, 0)).toBe(1);
+    expect(await queryAll(env.DB, "SELECT status FROM votes WHERE id = ?", vote.id)).toEqual([{ status: "closed" }]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM audit_log WHERE action = 'vote_closed_automatically' AND entity_id = ?",
+        vote.id,
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("rolls back a failed finalization and recovers after the close lease expires", async () => {
+    const createRes = await call(adminToken, "/api/v1/admin/votes", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Recoverable Closure Motion",
+        voteType: "motion",
+        scopeType: "forum",
+        thresholdType: "simple_majority",
+        closesAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      }),
+    });
+    expect(createRes.status).toBe(200);
+    const { vote } = (await createRes.json()) as { vote: { id: string } };
+    await env.DB.prepare("UPDATE votes SET closes_at = datetime('now', '-1 second') WHERE id = ?").bind(vote.id).run();
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_vote_closure_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'vote_closed_automatically'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced vote closure audit failure');
+       END`,
+    ).run();
+
+    try {
+      await expect(runVotesDueWork(env.DB, env as any)).rejects.toThrow("forced vote closure audit failure");
+      const [claimed] = await queryAll<{
+        status: string;
+        transition_revision: number;
+        transition_processing_token: string | null;
+      }>(env.DB, "SELECT status, transition_revision, transition_processing_token FROM votes WHERE id = ?", vote.id);
+      expect(claimed).toMatchObject({ status: "open", transition_revision: 1 });
+      expect(claimed.transition_processing_token).not.toBeNull();
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT id FROM audit_log WHERE action = 'vote_closed_automatically' AND entity_id = ?",
+          vote.id,
+        ),
+      ).toHaveLength(0);
+
+      await env.DB.prepare("UPDATE votes SET transition_lease_expires_at = datetime('now', '-1 second') WHERE id = ?")
+        .bind(vote.id)
+        .run();
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_vote_closure_audit").run();
+    }
+
+    const recovered = await runVotesDueWork(env.DB, env as any);
+    expect(recovered.closed).toBe(1);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT status, transition_revision, transition_processing_token FROM votes WHERE id = ?",
+        vote.id,
+      ),
+    ).toEqual([{ status: "closed", transition_revision: 3, transition_processing_token: null }]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM audit_log WHERE action = 'vote_closed_automatically' AND entity_id = ?",
+        vote.id,
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("rolls back candidate elimination when election round advancement fails", async () => {
+    const createRes = await call(adminToken, "/api/v1/admin/votes", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Recoverable Election Round",
+        voteType: "election",
+        scopeType: "forum",
+        thresholdType: "successive_elimination",
+        closesAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        candidates: [{ name: "Alpha" }, { name: "Beta" }, { name: "Gamma" }],
+      }),
+    });
+    expect(createRes.status).toBe(200);
+    const { vote } = (await createRes.json()) as { vote: { id: string } };
+    const candidates = await queryAll<{ id: string; candidate_name: string }>(
+      env.DB,
+      "SELECT id, candidate_name FROM vote_candidates WHERE vote_id = ? ORDER BY sort_order, id",
+      vote.id,
+    );
+    const candidateId = (name: string) => candidates.find((candidate) => candidate.candidate_name === name)!.id;
+    const choices = [
+      candidateId("Alpha"),
+      candidateId("Alpha"),
+      candidateId("Beta"),
+      candidateId("Beta"),
+      candidateId("Gamma"),
+    ];
+    for (let index = 0; index < choices.length; index += 1) {
+      const userId = await insertUser(`election-rollback-${index}@example.test`);
+      await env.DB.prepare(
+        `INSERT INTO vote_ballots
+           (id, vote_id, user_id, organization_id, choice, round, submitted_at, ip_hash)
+         VALUES (?, ?, ?, NULL, ?, 1, ?, NULL)`,
+      )
+        .bind(crypto.randomUUID(), vote.id, userId, choices[index], new Date().toISOString())
+        .run();
+    }
+    await env.DB.prepare("UPDATE votes SET closes_at = datetime('now', '-1 second') WHERE id = ?").bind(vote.id).run();
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_vote_round_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'vote_round_advanced_automatically'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced vote round audit failure');
+       END`,
+    ).run();
+
+    try {
+      await expect(runVotesDueWork(env.DB, env as any)).rejects.toThrow("forced vote round audit failure");
+      expect(
+        await queryAll(env.DB, "SELECT eliminated_round FROM vote_candidates WHERE id = ?", candidateId("Gamma")),
+      ).toEqual([{ eliminated_round: null }]);
+      expect(await queryAll(env.DB, "SELECT status, current_round FROM votes WHERE id = ?", vote.id)).toEqual([
+        { status: "open", current_round: 1 },
+      ]);
+      await env.DB.prepare("UPDATE votes SET transition_lease_expires_at = datetime('now', '-1 second') WHERE id = ?")
+        .bind(vote.id)
+        .run();
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_vote_round_audit").run();
+    }
+
+    const recovered = await runVotesDueWork(env.DB, env as any);
+    expect(recovered.roundsAdvanced).toBe(1);
+    expect(
+      await queryAll(env.DB, "SELECT eliminated_round FROM vote_candidates WHERE id = ?", candidateId("Gamma")),
+    ).toEqual([{ eliminated_round: 1 }]);
+    expect(await queryAll(env.DB, "SELECT status, current_round FROM votes WHERE id = ?", vote.id)).toEqual([
+      { status: "open", current_round: 2 },
+    ]);
+  });
+
+  it("defers the second closure under a low D1 budget and drains it on the next pass", async () => {
+    const voteIds: string[] = [];
+    for (const title of ["Budgeted Closure One", "Budgeted Closure Two"]) {
+      const createRes = await call(adminToken, "/api/v1/admin/votes", {
+        method: "POST",
+        body: JSON.stringify({
+          title,
+          voteType: "motion",
+          scopeType: "forum",
+          thresholdType: "simple_majority",
+          closesAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        }),
+      });
+      expect(createRes.status).toBe(200);
+      const { vote } = (await createRes.json()) as { vote: { id: string } };
+      voteIds.push(vote.id);
+    }
+    await env.DB.prepare("UPDATE votes SET closes_at = datetime('now', '-1 second') WHERE id IN (?, ?)")
+      .bind(...voteIds)
+      .run();
+
+    const budgeted = createD1QueryBudgetedDatabase(env.DB, 8);
+    const first = await runVotesDueWork(budgeted.db, env as any, 500, budgeted.budget);
+    expect(first.closed).toBe(1);
+    expect(budgeted.budget.usedQueries()).toBeLessThanOrEqual(8);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM votes WHERE status = 'open' AND closes_at <= datetime('now')"),
+    ).toHaveLength(1);
+
+    const second = await runVotesDueWork(env.DB, env as any, 500);
+    expect(second.closed).toBe(1);
+    expect(await queryAll(env.DB, "SELECT id FROM votes WHERE status = 'closed'")).toHaveLength(2);
+  });
+
+  it("keeps concurrent opening runners' delegate notification queue idempotent", async () => {
+    const orgId = await insertOrganization("Concurrent Notification Org");
+    const primaryUserId = await insertMemberUser("A", orgId);
+    await setOrgContacts(orgId, primaryUserId);
+
+    const createRes = await call(adminToken, "/api/v1/admin/votes", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Concurrent Notification Motion",
+        voteType: "motion",
+        scopeType: "forum",
+        thresholdType: "simple_majority",
+        opensAt: new Date(Date.now() + 60_000).toISOString(),
+        closesAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      }),
+    });
+    expect(createRes.status).toBe(200);
+    const { vote } = (await createRes.json()) as { vote: { id: string } };
+    await env.DB.prepare("UPDATE votes SET opens_at = datetime('now', '-1 second') WHERE id = ?").bind(vote.id).run();
+
+    const concurrentDb = gateBatchGroup(env.DB, 2);
+    await Promise.all([runVotesDueWork(concurrentDb, env as any), runVotesDueWork(concurrentDb, env as any)]);
+
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'forum-vote-delegate-notify'"),
+    ).toHaveLength(1);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT vote_id FROM vote_notification_deliveries WHERE vote_id = ? AND round = 1",
+        vote.id,
+      ),
+    ).toHaveLength(1);
   });
 });

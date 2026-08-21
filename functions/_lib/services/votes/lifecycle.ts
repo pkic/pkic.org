@@ -12,7 +12,7 @@ import { AppError } from "../../errors";
 import { resolveOrderBy } from "../../db/sort";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { ADMIN_VOTES_SORT_COLUMNS } from "../../../../assets/shared/schemas/votes-admin";
-import { prepareAuditLog } from "../audit";
+import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
 import {
   resolveScope,
   uniqueSlug,
@@ -166,31 +166,51 @@ export async function updateVoteSettings(
     throw new AppError(422, "INVALID_WINDOW", "closesAt must be after opensAt");
   }
   const now = nowIso();
-  await db.batch([
-    db
-      .prepare(
-        `UPDATE votes SET
-           title = CASE WHEN ? = 1 THEN ? ELSE title END,
-           description = CASE WHEN ? = 1 THEN ? ELSE description END,
-           opens_at = CASE WHEN ? = 1 THEN ? ELSE opens_at END,
-           closes_at = CASE WHEN ? = 1 THEN ? ELSE closes_at END,
-           updated_at = ?
-         WHERE id = ?`,
-      )
-      .bind(
-        input.title === undefined ? 0 : 1,
-        input.title ?? null,
-        input.description === undefined ? 0 : 1,
-        input.description ?? null,
-        input.opensAt === undefined ? 0 : 1,
-        input.opensAt ?? null,
-        input.closesAt === undefined ? 0 : 1,
-        input.closesAt ?? null,
-        now,
+  try {
+    await db.batch([
+      db
+        .prepare(
+          `UPDATE votes SET
+             title = CASE WHEN ? = 1 THEN ? ELSE title END,
+             description = CASE WHEN ? = 1 THEN ? ELSE description END,
+             opens_at = CASE WHEN ? = 1 THEN ? ELSE opens_at END,
+             closes_at = CASE WHEN ? = 1 THEN ? ELSE closes_at END,
+             transition_revision = transition_revision + 1,
+             updated_at = ?
+           WHERE id = ?
+             AND transition_revision = ?
+             AND transition_processing_token IS NULL`,
+        )
+        .bind(
+          input.title === undefined ? 0 : 1,
+          input.title ?? null,
+          input.description === undefined ? 0 : 1,
+          input.description ?? null,
+          input.opensAt === undefined ? 0 : 1,
+          input.opensAt ?? null,
+          input.closesAt === undefined ? 0 : 1,
+          input.closesAt ?? null,
+          now,
+          existing.id,
+          existing.transition_revision,
+        ),
+      prepareAuditLogAfterOneChange(
+        db,
+        "admin",
+        admin.id,
+        "vote_updated",
+        "vote",
         existing.id,
+        { changes: input },
+        now,
       ),
-    prepareAuditLog(db, "admin", admin.id, "vote_updated", "vote", existing.id, { changes: input }, now),
-  ]);
+    ]);
+  } catch (error) {
+    if (isAuditOneChangeGuardFailure(error)) {
+      throw new AppError(409, "VOTE_CHANGED", "Vote state changed; reload and retry");
+    }
+    throw error;
+  }
   return toVoteSummary(await getVoteRowOrThrow(db, existing.id));
 }
 
@@ -202,14 +222,43 @@ export async function updateVoteVisibility(
 ): Promise<VoteSummary> {
   const existing = await getVoteRowOrThrow(db, voteId);
   const now = nowIso();
-  await db.batch([
-    db
-      .prepare(
-        `UPDATE votes SET visibility = COALESCE(?, visibility), public_detail_level = COALESCE(?, public_detail_level), updated_at = ? WHERE id = ?`,
-      )
-      .bind(input.visibility ?? null, input.publicDetailLevel ?? null, now, existing.id),
-    prepareAuditLog(db, "admin", admin.id, "vote_visibility_updated", "vote", existing.id, { changes: input }, now),
-  ]);
+  try {
+    await db.batch([
+      db
+        .prepare(
+          `UPDATE votes
+           SET visibility = COALESCE(?, visibility),
+               public_detail_level = COALESCE(?, public_detail_level),
+               transition_revision = transition_revision + 1,
+               updated_at = ?
+           WHERE id = ?
+             AND transition_revision = ?
+             AND transition_processing_token IS NULL`,
+        )
+        .bind(
+          input.visibility ?? null,
+          input.publicDetailLevel ?? null,
+          now,
+          existing.id,
+          existing.transition_revision,
+        ),
+      prepareAuditLogAfterOneChange(
+        db,
+        "admin",
+        admin.id,
+        "vote_visibility_updated",
+        "vote",
+        existing.id,
+        { changes: input },
+        now,
+      ),
+    ]);
+  } catch (error) {
+    if (isAuditOneChangeGuardFailure(error)) {
+      throw new AppError(409, "VOTE_CHANGED", "Vote state changed; reload and retry");
+    }
+    throw error;
+  }
   return toVoteSummary(await getVoteRowOrThrow(db, existing.id));
 }
 
