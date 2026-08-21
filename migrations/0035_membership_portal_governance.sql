@@ -2776,6 +2776,44 @@ CREATE INDEX idx_storage_deletion_outbox_expired_lease
   ON storage_deletion_outbox(lease_expires_at, created_at, id)
   WHERE status = 'deleting';
 
+-- An upload may only become durable while its pre-registered compensation
+-- row is still queued and unclaimed. The transient guard makes that check
+-- and cancellation one atomic statement inside the caller's D1 batch.
+CREATE TABLE storage_upload_commit_guards (
+  id         TEXT NOT NULL PRIMARY KEY,
+  bucket     TEXT NOT NULL,
+  object_key TEXT NOT NULL
+);
+
+CREATE TRIGGER validate_storage_upload_commit_guard
+BEFORE INSERT ON storage_upload_commit_guards
+FOR EACH ROW
+BEGIN
+  SELECT CASE
+    WHEN NOT EXISTS (
+      SELECT 1
+      FROM storage_deletion_outbox
+      WHERE bucket = NEW.bucket
+        AND object_key = NEW.object_key
+        AND status IN ('queued', 'retrying')
+        AND processing_token IS NULL
+    )
+    THEN RAISE(ABORT, 'STORAGE_UPLOAD_COMPENSATION_UNAVAILABLE')
+  END;
+END;
+
+CREATE TRIGGER apply_storage_upload_commit_guard
+AFTER INSERT ON storage_upload_commit_guards
+FOR EACH ROW
+BEGIN
+  DELETE FROM storage_deletion_outbox
+  WHERE bucket = NEW.bucket
+    AND object_key = NEW.object_key
+    AND status IN ('queued', 'retrying')
+    AND processing_token IS NULL;
+  DELETE FROM storage_upload_commit_guards WHERE id = NEW.id;
+END;
+
 -- Badge rendering writes to R2 and therefore cannot be committed atomically
 -- with its admin audit record. Persist the render intent in D1 first, then let
 -- the request and scheduled worker retry the idempotent R2 overwrite.

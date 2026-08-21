@@ -2,7 +2,7 @@ import { first, all } from "../db/queries";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { AppError } from "../errors";
-import type { DatabaseLike } from "../types";
+import type { DatabaseLike, StatementLike } from "../types";
 import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "./audit";
 import type {
   PresentationVersion,
@@ -14,7 +14,7 @@ import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
 import { queryPage } from "../db/pagination";
 import { buildD1TextSearchFilter } from "../db/search";
 import { resolveMappedOrderBy } from "../db/sort";
-import { prepareStorageDeletion, prepareStorageDeletionCancellation } from "./storage-deletion-outbox";
+import { prepareStorageDeletion } from "./storage-deletion-outbox";
 
 export interface PresentationProposalContext {
   id: string;
@@ -192,38 +192,37 @@ export function presentationDownloadResponse(
   return new Response(object.body, { headers });
 }
 
-/**
- * Records a new version row for an already-uploaded R2 object. Upload callers
- * persist a delayed cleanup intent before writing R2. This transaction
- * commits the pointer and audit while cancelling that intent; if it fails,
- * immediate cleanup is attempted and the durable intent remains when R2 is
- * unavailable. `bucket` is optional for tests/backfills that own cleanup.
- */
-export async function createPresentationVersion(
+interface PresentationVersionCreateInput {
+  r2Key: string;
+  fileName: string | null;
+  fileSize: number | null;
+  mimeType: string | null;
+  uploadedByUserId: string;
+}
+
+interface PresentationVersionAudit {
+  actorType: "admin" | "user";
+  actorId: string;
+  action: string;
+}
+
+/** Builds the D1 side of a presentation upload for an owning transaction. */
+export function preparePresentationVersionCreate(
   db: DatabaseLike,
   proposalId: string,
-  opts: {
-    r2Key: string;
-    fileName: string | null;
-    fileSize: number | null;
-    mimeType: string | null;
-    uploadedByUserId: string;
-  },
-  bucket?: R2Bucket,
-  audit?: { actorType: "admin" | "user"; actorId: string; action: string },
-): Promise<PresentationVersion> {
+  opts: PresentationVersionCreateInput,
+  audit?: PresentationVersionAudit,
+): { id: string; statements: StatementLike[] } {
   const now = nowIso();
   const id = uuid();
-
-  try {
-    const statements = [
-      db.prepare("UPDATE session_proposals SET updated_at = ? WHERE id = ?").bind(now, proposalId),
-      db
-        .prepare("UPDATE presentation_versions SET is_current = 0 WHERE proposal_id = ? AND is_current = 1")
-        .bind(proposalId),
-      db
-        .prepare(
-          `INSERT INTO presentation_versions
+  const statements = [
+    db.prepare("UPDATE session_proposals SET updated_at = ? WHERE id = ?").bind(now, proposalId),
+    db
+      .prepare("UPDATE presentation_versions SET is_current = 0 WHERE proposal_id = ? AND is_current = 1")
+      .bind(proposalId),
+    db
+      .prepare(
+        `INSERT INTO presentation_versions
          (id, proposal_id, version_number, r2_key, file_name, file_size, mime_type,
           uploaded_by_user_id, uploaded_at, is_current)
        VALUES (
@@ -231,62 +230,41 @@ export async function createPresentationVersion(
          (SELECT COALESCE(MAX(version_number), 0) + 1 FROM presentation_versions WHERE proposal_id = ?),
          ?, ?, ?, ?, ?, ?, 1
        )`,
-        )
-        .bind(
-          id,
-          proposalId,
-          proposalId,
-          opts.r2Key,
-          opts.fileName,
-          opts.fileSize,
-          opts.mimeType,
-          opts.uploadedByUserId,
-          now,
-        ),
-    ];
-    if (audit) {
-      statements.push(
-        prepareAuditLog(db, audit.actorType, audit.actorId, audit.action, "session_proposal", proposalId, {
-          r2Key: opts.r2Key,
-          fileName: opts.fileName,
-          fileSize: opts.fileSize,
-          mimeType: opts.mimeType,
-        }),
-      );
-    }
-    if (bucket) {
-      statements.push(prepareStorageDeletionCancellation(db, opts.r2Key, "speaker_uploads"));
-    }
-    await db.batch(statements);
-  } catch (error) {
-    if (bucket) {
-      try {
-        await bucket.delete(opts.r2Key);
-        await prepareStorageDeletionCancellation(db, opts.r2Key, "speaker_uploads").run();
-      } catch {
-        // The pre-upload compensation intent remains available for retry.
-      }
-    }
-    throw error;
+      )
+      .bind(
+        id,
+        proposalId,
+        proposalId,
+        opts.r2Key,
+        opts.fileName,
+        opts.fileSize,
+        opts.mimeType,
+        opts.uploadedByUserId,
+        now,
+      ),
+  ];
+  if (audit) {
+    statements.push(
+      prepareAuditLog(db, audit.actorType, audit.actorId, audit.action, "session_proposal", proposalId, {
+        r2Key: opts.r2Key,
+        fileName: opts.fileName,
+        fileSize: opts.fileSize,
+        mimeType: opts.mimeType,
+      }),
+    );
   }
-
-  return getPresentationVersion(db, id);
+  return { id, statements };
 }
 
-/** Commits the proposal timestamp, version transition, and upload audit as one D1 transaction. */
-export async function recordPresentationUpload(
+export async function createPresentationVersion(
   db: DatabaseLike,
-  bucket: R2Bucket,
   proposalId: string,
-  r2Key: string,
-  uploadedByUserId: string,
-  meta: { fileName: string | null; fileSize: number | null; mimeType: string | null },
-  audit: { actorType: "admin" | "user"; action: string },
-): Promise<void> {
-  await createPresentationVersion(db, proposalId, { r2Key, uploadedByUserId, ...meta }, bucket, {
-    ...audit,
-    actorId: uploadedByUserId,
-  });
+  opts: PresentationVersionCreateInput,
+  audit?: PresentationVersionAudit,
+): Promise<PresentationVersion> {
+  const prepared = preparePresentationVersionCreate(db, proposalId, opts, audit);
+  await db.batch(prepared.statements);
+  return getPresentationVersion(db, prepared.id);
 }
 
 export async function reviewPresentationVersion(

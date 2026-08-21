@@ -17,6 +17,7 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { processPendingStorageDeletions } from "../functions/_lib/services/storage-deletion-outbox";
 import {
   insertUser,
   insertOrganization,
@@ -29,8 +30,45 @@ import {
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
   headers.set("authorization", `Bearer ${token}`);
-  if (init.body && !headers.has("content-type")) headers.set("content-type", "application/json");
+  if (init.body && !(init.body instanceof FormData) && !headers.has("content-type")) {
+    headers.set("content-type", "application/json");
+  }
   return new Request(`https://app.test${path}`, { ...init, headers });
+}
+
+class FakeAssetsBucket {
+  private readonly objects = new Map<string, ArrayBuffer>();
+  failuresRemaining = 0;
+
+  async put(key: string, value: string | ArrayBuffer | ReadableStream): Promise<void> {
+    const body =
+      typeof value === "string"
+        ? new TextEncoder().encode(value).buffer
+        : value instanceof ArrayBuffer
+          ? value
+          : await new Response(value).arrayBuffer();
+    this.objects.set(key, body);
+  }
+
+  async delete(key: string): Promise<void> {
+    if (this.failuresRemaining > 0) {
+      this.failuresRemaining -= 1;
+      throw new Error("temporary staging-logo R2 failure");
+    }
+    this.objects.delete(key);
+  }
+
+  keys(): string[] {
+    return [...this.objects.keys()].sort();
+  }
+}
+
+const JPEG_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+
+function logoUploadRequest(token: string): Request {
+  const formData = new FormData();
+  formData.append("file", new File([JPEG_BYTES], "organization-logo.jpg", { type: "image/jpeg" }));
+  return request(token, "/api/v1/me/organization/logo", { method: "POST", body: formData });
 }
 
 async function call(token: string, path: string, init: RequestInit = {}): Promise<Response> {
@@ -116,6 +154,105 @@ describe("Organization content moderation", () => {
     expect(response.status).toBe(403);
     const body = (await response.json()) as { error: { code: string } };
     expect(body.error.code).toBe("NOT_ORG_CONTACT");
+  });
+
+  it("removes a staged logo when the D1 commit fails after the R2 upload", async () => {
+    const { organizationId, userId } = await seedOrgWithContact("staging-logo-rollback@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "staging-logo-rollback-token");
+    const bucket = new FakeAssetsBucket();
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_staging_logo_commit
+       BEFORE INSERT ON organization_content_reviews
+       WHEN NEW.logo_staging_r2_key IS NOT NULL
+       BEGIN
+         SELECT RAISE(ABORT, 'forced staging logo D1 failure');
+       END`,
+    ).run();
+
+    let response: Response;
+    try {
+      response = await app.fetch(logoUploadRequest(token), { ...(env as any), ASSETS_BUCKET: bucket }, {
+        passThroughOnException: () => {},
+        waitUntil: () => {},
+      } as any);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_staging_logo_commit").run();
+    }
+
+    expect(response!.status).toBe(500);
+    expect(bucket.keys()).toEqual([]);
+    expect(
+      await queryAll<{ logo_staging_r2_key: string | null }>(
+        env.DB,
+        "SELECT logo_staging_r2_key FROM organizations WHERE id = ?",
+        organizationId,
+      ),
+    ).toEqual([{ logo_staging_r2_key: null }]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM organization_content_reviews WHERE organization_id = ?", organizationId),
+    ).toHaveLength(0);
+    expect(await queryAll(env.DB, "SELECT object_key FROM storage_deletion_outbox WHERE bucket = 'assets'")).toEqual(
+      [],
+    );
+  });
+
+  it("retains a failed staged-logo cleanup for durable retry", async () => {
+    const { organizationId, userId } = await seedOrgWithContact("staging-logo-retry@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "staging-logo-retry-token");
+    const bucket = new FakeAssetsBucket();
+    bucket.failuresRemaining = 1;
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_staging_logo_commit_retry
+       BEFORE INSERT ON organization_content_reviews
+       WHEN NEW.logo_staging_r2_key IS NOT NULL
+       BEGIN
+         SELECT RAISE(ABORT, 'forced staging logo D1 failure');
+       END`,
+    ).run();
+
+    let response: Response;
+    try {
+      response = await app.fetch(logoUploadRequest(token), { ...(env as any), ASSETS_BUCKET: bucket }, {
+        passThroughOnException: () => {},
+        waitUntil: () => {},
+      } as any);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_staging_logo_commit_retry").run();
+    }
+
+    expect(response!.status).toBe(500);
+    const [storedKey] = bucket.keys();
+    expect(storedKey).toMatch(new RegExp(`^org-logos/${organizationId}/staging-`));
+    expect(
+      await queryAll<{ bucket: string; object_key: string; status: string }>(
+        env.DB,
+        "SELECT bucket, object_key, status FROM storage_deletion_outbox WHERE object_key = ?",
+        storedKey,
+      ),
+    ).toEqual([{ bucket: "assets", object_key: storedKey, status: "queued" }]);
+    expect(
+      await queryAll<{ logo_staging_r2_key: string | null }>(
+        env.DB,
+        "SELECT logo_staging_r2_key FROM organizations WHERE id = ?",
+        organizationId,
+      ),
+    ).toEqual([{ logo_staging_r2_key: null }]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM organization_content_reviews WHERE organization_id = ?", organizationId),
+    ).toHaveLength(0);
+
+    await env.DB.prepare("UPDATE storage_deletion_outbox SET next_attempt_at = datetime('now') WHERE object_key = ?")
+      .bind(storedKey)
+      .run();
+    await expect(
+      processPendingStorageDeletions(env.DB, { ASSETS_BUCKET: bucket as unknown as R2Bucket }, 10),
+    ).resolves.toEqual({ processed: 1, failed: 0 });
+    expect(bucket.keys()).toEqual([]);
+    expect(
+      await queryAll<{ status: string }>(env.DB, "SELECT status FROM storage_deletion_outbox WHERE object_key = ?", [
+        storedKey,
+      ]),
+    ).toEqual([{ status: "deleted" }]);
   });
 
   it("rejects a second submission while one is already pending with 409", async () => {

@@ -85,9 +85,95 @@ describe("shared stored-image pointer lifecycle", () => {
     expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'organization_logo_uploaded'")).toHaveLength(
       1,
     );
+    expect(
+      await queryAll<{ object_key: string }>(
+        env.DB,
+        "SELECT object_key FROM storage_deletion_outbox WHERE bucket = 'assets' ORDER BY object_key",
+      ),
+    ).toEqual([{ object_key: oldKey }]);
 
     await processPendingStorageDeletions(env.DB, { ASSETS_BUCKET: bucket as unknown as R2Bucket }, 10);
     expect(bucket.keys()).toEqual([pointer]);
+  });
+
+  it("removes a new image when its audited pointer commit fails", async () => {
+    const { actor, organizationId } = await setup();
+    const bucket = new FakeAssetsBucket();
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_stored_image_upload_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'organization_logo_uploaded'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced stored image audit failure');
+       END`,
+    ).run();
+
+    try {
+      await expect(
+        replaceOrganizationLogo(env.DB, actor, bucket as unknown as R2Bucket, organizationId, jpeg),
+      ).rejects.toThrow("forced stored image audit failure");
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_stored_image_upload_audit").run();
+    }
+
+    expect(bucket.keys()).toEqual([]);
+    expect(
+      await queryAll<{ logo_r2_key: string | null }>(env.DB, "SELECT logo_r2_key FROM organizations WHERE id = ?", [
+        organizationId,
+      ]),
+    ).toEqual([{ logo_r2_key: null }]);
+    expect(await queryAll(env.DB, "SELECT object_key FROM storage_deletion_outbox WHERE bucket = 'assets'")).toEqual(
+      [],
+    );
+  });
+
+  it("retains a failed stored-image compensation for durable retry", async () => {
+    const { actor, organizationId } = await setup();
+    const bucket = new FakeAssetsBucket();
+    bucket.failuresRemaining = 1;
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_stored_image_upload_audit_retry
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'organization_logo_uploaded'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced stored image audit failure');
+       END`,
+    ).run();
+
+    try {
+      await expect(
+        replaceOrganizationLogo(env.DB, actor, bucket as unknown as R2Bucket, organizationId, jpeg),
+      ).rejects.toThrow("forced stored image audit failure");
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_stored_image_upload_audit_retry").run();
+    }
+
+    const [storedKey] = bucket.keys();
+    expect(storedKey).toMatch(new RegExp(`^org-logos/${organizationId}/`));
+    expect(
+      await queryAll<{ object_key: string; status: string }>(
+        env.DB,
+        "SELECT object_key, status FROM storage_deletion_outbox WHERE bucket = 'assets'",
+      ),
+    ).toEqual([{ object_key: storedKey, status: "queued" }]);
+    expect(
+      await queryAll<{ logo_r2_key: string | null }>(env.DB, "SELECT logo_r2_key FROM organizations WHERE id = ?", [
+        organizationId,
+      ]),
+    ).toEqual([{ logo_r2_key: null }]);
+
+    await env.DB.prepare("UPDATE storage_deletion_outbox SET next_attempt_at = datetime('now') WHERE object_key = ?")
+      .bind(storedKey)
+      .run();
+    await expect(
+      processPendingStorageDeletions(env.DB, { ASSETS_BUCKET: bucket as unknown as R2Bucket }, 10),
+    ).resolves.toEqual({ processed: 1, failed: 0 });
+    expect(bucket.keys()).toEqual([]);
+    expect(
+      await queryAll<{ status: string }>(env.DB, "SELECT status FROM storage_deletion_outbox WHERE object_key = ?", [
+        storedKey,
+      ]),
+    ).toEqual([{ status: "deleted" }]);
   });
 
   it("makes a removed image unreachable before a failed R2 deletion is retried", async () => {

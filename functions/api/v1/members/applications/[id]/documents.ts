@@ -15,8 +15,9 @@ import { uuid } from "../../../../../_lib/utils/ids";
 import {
   verifyApplicationManageToken,
   listApplicationDocuments,
-  recordApplicationDocument,
+  prepareApplicationDocumentRecord,
 } from "../../../../../_lib/services/membership/applications/queries";
+import { withStorageUploadCompensation } from "../../../../../_lib/services/storage-deletion-outbox";
 import {
   applicationDocumentListRouteSchema,
   applicationDocumentUploadRouteSchema,
@@ -80,9 +81,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   const safeName = sanitizeFilename(blob.name ?? "document");
   const r2Key = `application-docs/${application.id}/${uuid()}-${safeName}`;
-  await bucket.put(r2Key, await blob.arrayBuffer(), { httpMetadata: { contentType: mimeType } });
-
-  const document = await recordApplicationDocument(c.env.DB, {
+  const prepared = prepareApplicationDocumentRecord(c.env.DB, {
     applicationId: application.id,
     uploadedByEmail: application.applicant_email,
     r2Key,
@@ -90,6 +89,15 @@ export async function onRequestPost(c: any): Promise<Response> {
     mimeType,
     fileSizeBytes: blob.size,
   });
+  await withStorageUploadCompensation({
+    db: c.env.DB,
+    bucket,
+    bucketName: "assets",
+    objectKey: r2Key,
+    upload: async () => bucket.put(r2Key, await blob.arrayBuffer(), { httpMetadata: { contentType: mimeType } }),
+    prepareCommitStatements: () => prepared.statements,
+  });
+  const document = prepared.document;
 
   return json(
     {

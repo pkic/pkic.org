@@ -4,12 +4,12 @@ import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { imageExtension, putUploadedImage } from "../utils/image-upload";
 import { first } from "../db/queries";
-import { prepareAuditLogWhen } from "./audit";
+import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange, prepareAuditLogWhen } from "./audit";
 import { storedImageResponse } from "./image-response";
 import {
-  enqueueStorageDeletion,
   prepareStorageDeletion,
   processStorageDeletionForKey,
+  withStorageUploadCompensation,
 } from "./storage-deletion-outbox";
 import type { Env, StatementLike } from "../types";
 import { resolveAppBaseUrl } from "../config";
@@ -131,44 +131,48 @@ export async function replaceUserHeadshot(
   const at = nowIso();
   const extension = imageExtension(context.image.contentType);
   const r2Key = `headshots/${context.userId}/${at.replace(/[:.]/g, "-")}-${uuid().slice(0, 8)}.${extension}`;
-  await putUploadedImage(
-    context.bucket,
-    r2Key,
-    context.image,
-    "headshot",
-    context.source ? { source: context.source } : undefined,
-  );
-
   try {
-    const statements = [
-      context.db
-        .prepare(
-          `UPDATE users SET headshot_r2_key = ?, headshot_updated_at = ?, updated_at = ?
+    await withStorageUploadCompensation({
+      db: context.db,
+      bucket: context.bucket,
+      bucketName: "speaker_uploads",
+      objectKey: r2Key,
+      upload: () =>
+        putUploadedImage(
+          context.bucket,
+          r2Key,
+          context.image,
+          "headshot",
+          context.source ? { source: context.source } : undefined,
+        ),
+      prepareCommitStatements: () => {
+        const statements = [
+          context.db
+            .prepare(
+              `UPDATE users SET headshot_r2_key = ?, headshot_updated_at = ?, updated_at = ?
            WHERE id = ? AND headshot_r2_key IS ?`,
-        )
-        .bind(r2Key, at, at, context.userId, context.previousKey),
-      conditionalHeadshotAuditStatement(
-        context.db,
-        context.userId,
-        context.audit,
-        { r2Key },
-        at,
-        "headshot_r2_key = ?",
-        [r2Key],
-      ),
-      prepareBadgeRenderJobsForUser(context.db, context.userId, at),
-    ];
-    const deletionStatement = prepareStorageDeletion(context.db, context.previousKey, at);
-    if (deletionStatement) statements.push(deletionStatement);
-    const [updateResult] = await context.db.batch(statements);
-    if ((updateResult.meta?.changes ?? 0) !== 1) {
-      throw await headshotConflictError(context.db, context.userId);
-    }
+            )
+            .bind(r2Key, at, at, context.userId, context.previousKey),
+          prepareAuditLogAfterOneChange(
+            context.db,
+            context.audit.actorType,
+            context.audit.actorId,
+            context.audit.action,
+            context.audit.entityType ?? "user",
+            context.audit.entityId ?? context.userId,
+            { ...context.audit.details, r2Key },
+            at,
+          ),
+          prepareBadgeRenderJobsForUser(context.db, context.userId, at),
+        ];
+        const deletionStatement = prepareStorageDeletion(context.db, context.previousKey, at);
+        if (deletionStatement) statements.push(deletionStatement);
+        return statements;
+      },
+    });
   } catch (error) {
-    try {
-      await context.bucket.delete(r2Key);
-    } catch {
-      await enqueueStorageDeletion(context.db, r2Key);
+    if (isAuditOneChangeGuardFailure(error)) {
+      throw await headshotConflictError(context.db, context.userId);
     }
     throw error;
   }

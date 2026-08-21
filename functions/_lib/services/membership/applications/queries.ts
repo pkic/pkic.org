@@ -90,20 +90,22 @@ export async function listApplicationDocuments(
   );
 }
 
-export async function recordApplicationDocument(
+interface ApplicationDocumentRecordInput {
+  applicationId: string;
+  uploadedByEmail: string;
+  r2Key: string;
+  filename: string;
+  mimeType: string;
+  fileSizeBytes: number;
+}
+
+export function prepareApplicationDocumentRecord(
   db: DatabaseLike,
-  params: {
-    applicationId: string;
-    uploadedByEmail: string;
-    r2Key: string;
-    filename: string;
-    mimeType: string;
-    fileSizeBytes: number;
-  },
-): Promise<ApplicationDocumentRow> {
+  params: ApplicationDocumentRecordInput,
+): { document: ApplicationDocumentRow; statements: StatementLike[] } {
   const id = uuid();
   const uploadedAt = nowIso();
-  await db.batch([
+  const statements = [
     db
       .prepare(
         `INSERT INTO application_documents
@@ -130,16 +132,19 @@ export async function recordApplicationDocument(
       { filename: params.filename, fileSize: params.fileSizeBytes, mimeType: params.mimeType },
       uploadedAt,
     ),
-  ]);
+  ];
   return {
-    id,
-    application_id: params.applicationId,
-    uploaded_by_email: params.uploadedByEmail,
-    r2_key: params.r2Key,
-    filename: params.filename,
-    mime_type: params.mimeType,
-    file_size_bytes: params.fileSizeBytes,
-    uploaded_at: uploadedAt,
+    document: {
+      id,
+      application_id: params.applicationId,
+      uploaded_by_email: params.uploadedByEmail,
+      r2_key: params.r2Key,
+      filename: params.filename,
+      mime_type: params.mimeType,
+      file_size_bytes: params.fileSizeBytes,
+      uploaded_at: uploadedAt,
+    },
+    statements,
   };
 }
 

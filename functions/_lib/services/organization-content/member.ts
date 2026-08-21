@@ -24,7 +24,7 @@ import {
   type ContentReviewFieldInput,
   type ReviewRow,
 } from "./model";
-import type { AuthMember, DatabaseLike } from "../../types";
+import type { AuthMember, DatabaseLike, StatementLike } from "../../types";
 import { prepareStorageDeletion } from "../storage-deletion-outbox";
 
 export async function getMyOrganizationProfile(db: DatabaseLike, member: AuthMember) {
@@ -197,51 +197,64 @@ export async function withdrawMyOrganizationReview(db: DatabaseLike, member: Aut
   return { id: reviewId, staleLogoStagingR2Key: review.logo_staging_r2_key };
 }
 
-export async function stageOrganizationLogo(db: DatabaseLike, member: AuthMember, r2Key: string) {
-  const org = await requireOrgContact(db, member);
+export interface PreparedOrganizationLogoStage {
+  previousStagingKey: string | null;
+  statements: StatementLike[];
+  mapCommitError(error: unknown): unknown;
+}
+
+/** Builds the atomic staging mutation after the caller has authorized the organization contact. */
+export async function prepareAuthorizedOrganizationLogoStage(
+  db: DatabaseLike,
+  member: AuthMember,
+  organizationId: string,
+  r2Key: string,
+): Promise<PreparedOrganizationLogoStage> {
   const now = nowIso();
-  const existingPending = await fetchPendingReview(db, org.id);
+  const existingPending = await fetchPendingReview(db, organizationId);
   const previousStagingKey = existingPending?.logo_staging_r2_key ?? null;
 
   if (existingPending) {
-    try {
-      const statements = [
-        prepareReviewTransitionGuard(db, existingPending),
-        db
-          .prepare(
-            "UPDATE organization_content_reviews SET logo_staging_r2_key = ? WHERE id = ? AND status = 'pending'",
-          )
-          .bind(r2Key, existingPending.id),
-        db
-          .prepare("UPDATE organizations SET logo_staging_r2_key = ?, updated_at = ? WHERE id = ?")
-          .bind(r2Key, now, org.id),
-      ];
-      const deletion = prepareStorageDeletion(db, previousStagingKey, now, "assets");
-      if (deletion) statements.push(deletion);
-      await db.batch(statements);
-    } catch (error) {
-      if (!isStaleContentReviewTransition(error)) throw error;
-      throw new AppError(409, "REVIEW_CHANGED", "The pending review changed; please retry the logo upload");
-    }
-  } else {
-    try {
-      await db.batch([
-        db
-          .prepare(
-            `INSERT INTO organization_content_reviews
-               (id, organization_id, submitted_by_user_id, proposed_changes_json, logo_staging_r2_key, status, submitted_at, created_at)
-             VALUES (?, ?, ?, '{}', ?, 'pending', ?, ?)`,
-          )
-          .bind(uuid(), org.id, member.userId, r2Key, now, now),
-        db
-          .prepare("UPDATE organizations SET logo_staging_r2_key = ?, updated_at = ? WHERE id = ?")
-          .bind(r2Key, now, org.id),
-      ]);
-    } catch (error) {
-      if (!isPendingReviewUniqueConflict(error)) throw error;
-      throw new AppError(409, "REVIEW_CHANGED", "A pending review was created; please retry the logo upload");
-    }
+    const statements = [
+      prepareReviewTransitionGuard(db, existingPending),
+      db
+        .prepare("UPDATE organization_content_reviews SET logo_staging_r2_key = ? WHERE id = ? AND status = 'pending'")
+        .bind(r2Key, existingPending.id),
+      db
+        .prepare("UPDATE organizations SET logo_staging_r2_key = ?, updated_at = ? WHERE id = ?")
+        .bind(r2Key, now, organizationId),
+    ];
+    const deletion = prepareStorageDeletion(db, previousStagingKey, now, "assets");
+    if (deletion) statements.push(deletion);
+    return {
+      previousStagingKey,
+      statements,
+      mapCommitError(error) {
+        return isStaleContentReviewTransition(error)
+          ? new AppError(409, "REVIEW_CHANGED", "The pending review changed; please retry the logo upload")
+          : error;
+      },
+    };
   }
 
-  return { previousStagingKey };
+  return {
+    previousStagingKey,
+    statements: [
+      db
+        .prepare(
+          `INSERT INTO organization_content_reviews
+             (id, organization_id, submitted_by_user_id, proposed_changes_json, logo_staging_r2_key, status, submitted_at, created_at)
+           VALUES (?, ?, ?, '{}', ?, 'pending', ?, ?)`,
+        )
+        .bind(uuid(), organizationId, member.userId, r2Key, now, now),
+      db
+        .prepare("UPDATE organizations SET logo_staging_r2_key = ?, updated_at = ? WHERE id = ?")
+        .bind(r2Key, now, organizationId),
+    ],
+    mapCommitError(error) {
+      return isPendingReviewUniqueConflict(error)
+        ? new AppError(409, "REVIEW_CHANGED", "A pending review was created; please retry the logo upload")
+        : error;
+    },
+  };
 }

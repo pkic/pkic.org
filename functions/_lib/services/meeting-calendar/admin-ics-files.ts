@@ -18,9 +18,8 @@ import type { DatabaseLike } from "../../types";
 import { prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
 import {
   prepareStorageDeletion,
-  prepareStorageDeletionCancellation,
   processStorageDeletionForKey,
-  registerStorageUploadCompensation,
+  withStorageUploadCompensation,
 } from "../storage-deletion-outbox";
 
 /**
@@ -41,12 +40,13 @@ export async function uploadIcsFile(
   const now = nowIso();
   const r2Key = `meeting-ics/${seriesId}/${Date.now()}-${id}.ics`;
 
-  await registerStorageUploadCompensation(db, r2Key, "assets");
-
-  await bucket.put(r2Key, input.buffer, { httpMetadata: { contentType: input.contentType } });
-
-  try {
-    await db.batch([
+  await withStorageUploadCompensation({
+    db,
+    bucket,
+    bucketName: "assets",
+    objectKey: r2Key,
+    upload: () => bucket.put(r2Key, input.buffer, { httpMetadata: { contentType: input.contentType } }),
+    prepareCommitStatements: () => [
       db
         .prepare(
           `INSERT INTO meeting_ics_files (id, series_id, label, year, r2_key, active, uploaded_by_user_id, created_at)
@@ -59,20 +59,8 @@ export async function uploadIcsFile(
         label: input.label,
         year: input.year,
       }),
-      prepareStorageDeletionCancellation(db, r2Key, "assets"),
-    ]);
-  } catch (error) {
-    try {
-      await bucket.delete(r2Key);
-      await db
-        .prepare("DELETE FROM storage_deletion_outbox WHERE bucket = 'assets' AND object_key = ?")
-        .bind(r2Key)
-        .run();
-    } catch {
-      // The pre-upload deletion intent remains durable for scheduled retry.
-    }
-    throw error;
-  }
+    ],
+  });
 
   return {
     id,

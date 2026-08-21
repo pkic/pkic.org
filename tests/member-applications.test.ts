@@ -9,6 +9,7 @@ import {
   onRequestPost as uploadApplicationDocument,
   onRequestGet as listApplicationDocuments,
 } from "../functions/api/v1/members/applications/[id]/documents";
+import { processPendingStorageDeletions } from "../functions/_lib/services/storage-deletion-outbox";
 import { seedMembershipApplicationForm } from "./helpers/member-applications";
 import { callApi } from "./helpers/app";
 
@@ -453,19 +454,137 @@ describe("POST/GET /api/v1/members/applications/:id/documents", () => {
     expect(listBody.documents).toHaveLength(1);
     expect(listBody.documents[0].filename).toBe("registration.pdf");
   });
+
+  it("cleans up the R2 object when the mounted document-record commit fails", async () => {
+    const bucket = makeFakeBucket();
+    const testEnv = makeEnv({ ASSETS_BUCKET: bucket as any });
+    const created = await createApplicationForDocumentTest(testEnv);
+    await installDocumentAuditFailure(testEnv);
+
+    try {
+      const response = await callApi(
+        testEnv,
+        `/api/v1/members/applications/${created.applicationId}/documents?token=${created.manageToken}`,
+        { method: "POST", body: documentFormData() },
+      );
+
+      expect(response.status).toBe(500);
+      expect(
+        await queryAll(
+          testEnv.DB,
+          "SELECT id FROM application_documents WHERE application_id = ?",
+          created.applicationId,
+        ),
+      ).toHaveLength(0);
+      expect(bucket.keys()).toEqual([]);
+      expect(await queryAll(testEnv.DB, "SELECT id FROM storage_deletion_outbox WHERE bucket = 'assets'")).toHaveLength(
+        0,
+      );
+    } finally {
+      await testEnv.DB.prepare("DROP TRIGGER fail_application_document_audit").run();
+    }
+  });
+
+  it("retains exactly one durable cleanup intent when immediate R2 cleanup fails", async () => {
+    const bucket = makeFakeBucket();
+    bucket.failNextDelete();
+    const testEnv = makeEnv({ ASSETS_BUCKET: bucket as any });
+    const created = await createApplicationForDocumentTest(testEnv);
+    await installDocumentAuditFailure(testEnv);
+
+    try {
+      const response = await callApi(
+        testEnv,
+        `/api/v1/members/applications/${created.applicationId}/documents?token=${created.manageToken}`,
+        { method: "POST", body: documentFormData() },
+      );
+
+      expect(response.status).toBe(500);
+      expect(
+        await queryAll(
+          testEnv.DB,
+          "SELECT id FROM application_documents WHERE application_id = ?",
+          created.applicationId,
+        ),
+      ).toHaveLength(0);
+      expect(bucket.keys()).toHaveLength(1);
+
+      const intents = await queryAll<{ object_key: string; status: string }>(
+        testEnv.DB,
+        "SELECT object_key, status FROM storage_deletion_outbox WHERE bucket = 'assets'",
+      );
+      expect(intents).toHaveLength(1);
+      expect(intents[0].status).toBe("queued");
+
+      await testEnv.DB.prepare(
+        "UPDATE storage_deletion_outbox SET next_attempt_at = datetime('now', '-1 second') WHERE bucket = 'assets'",
+      ).run();
+      await expect(
+        processPendingStorageDeletions(testEnv.DB, { ASSETS_BUCKET: bucket as unknown as R2Bucket }, 10),
+      ).resolves.toEqual({ processed: 1, failed: 0 });
+      expect(bucket.keys()).toEqual([]);
+      expect(
+        await queryAll<{ status: string }>(
+          testEnv.DB,
+          "SELECT status FROM storage_deletion_outbox WHERE bucket = 'assets'",
+        ),
+      ).toEqual([{ status: "deleted" }]);
+    } finally {
+      await testEnv.DB.prepare("DROP TRIGGER fail_application_document_audit").run();
+    }
+  });
 });
+
+async function createApplicationForDocumentTest(testEnv: typeof env) {
+  const response = await callEndpoint(
+    createApplication,
+    createContext(testEnv, postRequest("https://pkic.org/api/v1/members/applications", validPayload), {}),
+  );
+  return (await response.json()) as { applicationId: string; manageToken: string };
+}
+
+function documentFormData() {
+  const formData = new FormData();
+  formData.append("file", new File(["%PDF-1.4 forced-failure"], "registration.pdf", { type: "application/pdf" }));
+  return formData;
+}
+
+async function installDocumentAuditFailure(testEnv: typeof env) {
+  await testEnv.DB.prepare(
+    `CREATE TRIGGER fail_application_document_audit
+     BEFORE INSERT ON audit_log
+     WHEN NEW.action = 'application_document_uploaded'
+     BEGIN
+       SELECT RAISE(ABORT, 'forced application document audit failure');
+     END`,
+  ).run();
+}
 
 function makeFakeBucket() {
   const store = new Map<string, ArrayBuffer>();
+  let deleteFailuresRemaining = 0;
   return {
     async put(key: string, value: ArrayBuffer) {
       store.set(key, value);
       return {};
     },
+    async delete(key: string) {
+      if (deleteFailuresRemaining > 0) {
+        deleteFailuresRemaining -= 1;
+        throw new Error("simulated R2 delete failure");
+      }
+      store.delete(key);
+    },
     async get(key: string) {
       const value = store.get(key);
       if (!value) return null;
       return { arrayBuffer: async () => value };
+    },
+    failNextDelete() {
+      deleteFailuresRemaining += 1;
+    },
+    keys() {
+      return [...store.keys()].sort();
     },
   };
 }

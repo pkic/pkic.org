@@ -1,9 +1,11 @@
 import { first } from "../db/queries";
 import type { Env } from "../types";
 import { downloadGravatar } from "../utils/gravatar";
+import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
+import { prepareAuditLogAfterOneChange } from "./audit";
 import { prepareBadgeRenderJobsForUser } from "./badge-render-job-statements";
-import { prepareStorageDeletionCancellation, registerStorageUploadCompensation } from "./storage-deletion-outbox";
+import { withStorageUploadCompensation } from "./storage-deletion-outbox";
 
 /**
  * Speculatively seeds a first headshot and its durable badge invalidation.
@@ -27,32 +29,33 @@ export async function fetchGravatar(
     const image = await downloadGravatar(email);
     if (!image) return null;
     const extension = image.contentType === "image/png" ? "png" : image.contentType === "image/webp" ? "webp" : "jpg";
-    const r2Key = `headshots/${userId}/${Date.now()}-gravatar.${extension}`;
-    await registerStorageUploadCompensation(env.DB, r2Key, "speaker_uploads");
-    await bucket.put(r2Key, image.buffer, { httpMetadata: { contentType: image.contentType } });
-
+    const r2Key = `headshots/${userId}/${Date.now()}-${uuid()}-gravatar.${extension}`;
     const at = nowIso();
-    const [updated] = await env.DB.batch([
-      env.DB.prepare(
-        `UPDATE users SET headshot_r2_key = ?, headshot_updated_at = ?, updated_at = ?
+    await withStorageUploadCompensation({
+      db: env.DB,
+      bucket,
+      bucketName: "speaker_uploads",
+      objectKey: r2Key,
+      upload: () => bucket.put(r2Key, image.buffer, { httpMetadata: { contentType: image.contentType } }),
+      prepareCommitStatements: () => [
+        env.DB.prepare(
+          `UPDATE users SET headshot_r2_key = ?, headshot_updated_at = ?, updated_at = ?
             WHERE id = ? AND headshot_r2_key IS NULL`,
-      ).bind(r2Key, at, at, userId),
-      prepareBadgeRenderJobsForUser(env.DB, userId, at),
-      env.DB.prepare(
-        `DELETE FROM storage_deletion_outbox
-            WHERE bucket = 'speaker_uploads' AND object_key = ?
-              AND EXISTS (SELECT 1 FROM users WHERE id = ? AND headshot_r2_key = ?)`,
-      ).bind(r2Key, userId, r2Key),
-    ]);
-    if ((updated.meta?.changes ?? 0) === 1) return r2Key;
-
-    try {
-      await bucket.delete(r2Key);
-      await prepareStorageDeletionCancellation(env.DB, r2Key, "speaker_uploads").run();
-    } catch {
-      // The pre-upload cleanup intent remains durable for scheduled retry.
-    }
-    return null;
+        ).bind(r2Key, at, at, userId),
+        prepareAuditLogAfterOneChange(
+          env.DB,
+          "system",
+          null,
+          "headshot_seeded_gravatar",
+          "user",
+          userId,
+          { r2Key },
+          at,
+        ),
+        prepareBadgeRenderJobsForUser(env.DB, userId, at),
+      ],
+    });
+    return r2Key;
   } catch {
     return null;
   }

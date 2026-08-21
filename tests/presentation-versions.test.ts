@@ -23,7 +23,6 @@ import {
   createPresentationVersion,
   deletePresentationVersion,
   presentationDownloadResponse,
-  recordPresentationUpload,
 } from "../functions/_lib/services/presentation-versions";
 import { getPresentationUploader } from "../functions/_lib/services/proposals-speaker-profile";
 import app from "../functions/router";
@@ -534,60 +533,6 @@ describe("presentation versioning", () => {
     expect(versions.map((version) => version.version_number)).toEqual([1, 2]);
     expect(versions.filter((version) => version.is_current === 1)).toHaveLength(1);
     expect(versions[1].is_current).toBe(1);
-  });
-
-  it("upload atomicity (PR #1 review §9.2 principle): a D1 batch failure after a successful R2 put does not leave an orphaned object", async () => {
-    const { proposalId } = await seed();
-    const bucket = new FakePresentationBucket();
-    const r2Key = "presentations/orphan-test/orphan.pdf";
-    // storePresentationFile has already succeeded by the time createPresentationVersion
-    // runs in the real upload flow, so simulate that here directly.
-    await bucket.put(r2Key, "%PDF orphan-marker", { httpMetadata: { contentType: "application/pdf" } });
-
-    await expect(
-      createPresentationVersion(
-        env.DB,
-        proposalId,
-        {
-          r2Key,
-          fileName: "orphan.pdf",
-          fileSize: 4,
-          mimeType: "application/pdf",
-          // A syntactically valid but non-existent user id — violates
-          // presentation_versions.uploaded_by_user_id's FK, forcing the D1
-          // batch to fail after the R2 put has already succeeded.
-          uploadedByUserId: "00000000-0000-4000-8000-000000000000",
-        },
-        bucket as unknown as R2Bucket,
-      ),
-    ).rejects.toThrow();
-
-    const versions = await queryAll(env.DB, "SELECT id FROM presentation_versions WHERE proposal_id = ?", proposalId);
-    expect(versions).toHaveLength(0);
-    await expect(bucket.get(r2Key)).resolves.toBeNull();
-  });
-
-  it("upload atomicity is wired through recordPresentationUpload (the function the routes actually call)", async () => {
-    const { proposalId } = await seed();
-    const bucket = new FakePresentationBucket();
-    const r2Key = "presentations/orphan-wired/orphan.pdf";
-    await bucket.put(r2Key, "%PDF orphan-marker", { httpMetadata: { contentType: "application/pdf" } });
-
-    await expect(
-      recordPresentationUpload(
-        env.DB,
-        bucket as unknown as R2Bucket,
-        proposalId,
-        r2Key,
-        "00000000-0000-4000-8000-000000000000",
-        { fileName: "orphan.pdf", fileSize: 4, mimeType: "application/pdf" },
-        { actorType: "user", action: "presentation_uploaded" },
-      ),
-    ).rejects.toThrow();
-
-    await expect(bucket.get(r2Key)).resolves.toBeNull();
-    const versions = await queryAll(env.DB, "SELECT id FROM presentation_versions WHERE proposal_id = ?", proposalId);
-    expect(versions).toHaveLength(0);
   });
 
   it("admin can list versions, download, and submit a review", async () => {

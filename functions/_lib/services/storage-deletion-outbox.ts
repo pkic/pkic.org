@@ -60,8 +60,23 @@ export function prepareStorageDeletionCancellation(
   bucketName: StorageBucketName,
 ): StatementLike {
   return db
-    .prepare("DELETE FROM storage_deletion_outbox WHERE bucket = ? AND object_key = ?")
+    .prepare(
+      `DELETE FROM storage_deletion_outbox
+       WHERE bucket = ? AND object_key = ?
+         AND status IN ('queued', 'retrying')
+         AND processing_token IS NULL`,
+    )
     .bind(bucketName, objectKey);
+}
+
+function prepareStorageUploadCommitGuard(
+  db: DatabaseLike,
+  objectKey: string,
+  bucketName: StorageBucketName,
+): StatementLike {
+  return db
+    .prepare("INSERT INTO storage_upload_commit_guards (id, bucket, object_key) VALUES (?, ?, ?)")
+    .bind(uuid(), bucketName, objectKey);
 }
 
 /**
@@ -76,14 +91,61 @@ export async function registerStorageUploadCompensation(
   gracePeriodMs = 15 * 60_000,
 ): Promise<void> {
   const createdAt = nowIso();
-  const statement = prepareStorageDeletion(
-    db,
-    objectKey,
-    createdAt,
-    bucketName,
-    new Date(Date.now() + gracePeriodMs).toISOString(),
-  );
-  if (statement) await statement.run();
+  await db
+    .prepare(
+      `INSERT INTO storage_deletion_outbox (
+         id, bucket, object_key, status, attempts, next_attempt_at, last_error, created_at, updated_at, deleted_at
+       ) VALUES (?, ?, ?, 'queued', 0, ?, NULL, ?, ?, NULL)`,
+    )
+    .bind(uuid(), bucketName, objectKey, new Date(Date.now() + gracePeriodMs).toISOString(), createdAt, createdAt)
+    .run();
+}
+
+/**
+ * Coordinates an R2 upload with the D1 transaction that makes it durable.
+ *
+ * The object key must be unique to this upload attempt. Registration rejects
+ * a collision with an active or retained deletion intent before R2 is touched.
+ * A successful D1 batch finishes with a commit guard that atomically verifies
+ * and cancels the cleanup intent. Callers with a guarded update must place
+ * their one-change guard immediately after that update in
+ * `prepareCommitStatements`; otherwise a zero-row CAS could incorrectly commit
+ * dependent statements.
+ *
+ * When upload or commit fails, immediate R2 deletion is an optimization. If
+ * deletion fails, the pre-registered intent remains queued for retry. Cleanup
+ * errors never replace the original upload/commit error.
+ */
+export async function withStorageUploadCompensation(input: {
+  db: DatabaseLike;
+  bucket: R2Bucket;
+  bucketName: StorageBucketName;
+  objectKey: string;
+  upload: () => Promise<unknown>;
+  prepareCommitStatements: () => StatementLike[];
+  gracePeriodMs?: number;
+}): Promise<void> {
+  await registerStorageUploadCompensation(input.db, input.objectKey, input.bucketName, input.gracePeriodMs);
+
+  try {
+    await input.upload();
+    await input.db.batch([
+      ...input.prepareCommitStatements(),
+      prepareStorageUploadCommitGuard(input.db, input.objectKey, input.bucketName),
+    ]);
+  } catch (error) {
+    try {
+      await input.bucket.delete(input.objectKey);
+      try {
+        await prepareStorageDeletionCancellation(input.db, input.objectKey, input.bucketName).run();
+      } catch {
+        // Keeping a deletion intent for an already-absent object is safe.
+      }
+    } catch {
+      // The durable pre-upload cleanup intent remains available for retry.
+    }
+    throw error;
+  }
 }
 
 export async function enqueueStorageDeletion(
