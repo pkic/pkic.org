@@ -33,7 +33,7 @@ export default defineConfig(async () => {
     ],
     test: {
       include: ["tests/**/*.test.ts"],
-      exclude: ["tests/frontend/**", "tests/e2e/**", "tests/tools/**"],
+      exclude: ["tests/frontend/**", "tests/e2e/**", "tests/tools/**", "**/._*"],
       setupFiles: ["./tests/helpers/apply-migrations.ts"],
       maxWorkers: 3,
     },

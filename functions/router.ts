@@ -19,7 +19,7 @@ import r_Router from "./r/router";
 import members_Router from "./members/router";
 import { onRequestGet as OgCardGet } from "./api/v1/og/card/[...path]";
 import type { Env } from "./_lib/types";
-import { processIncomingEmail } from "./_lib/email/ingest";
+import { processIncomingEmail } from "./_lib/services/calendar-rsvp-email-ingest";
 import { decorateOpenApiSpec, filterOpenApiSpecForMcp } from "./_lib/openapi/mcp";
 import { createMcpWorkerFetch, MCP_OPENAPI_JSON_PATH } from "./_lib/mcp/worker";
 

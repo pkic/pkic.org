@@ -1,4 +1,4 @@
-import { hmacSha256Hex } from "../utils/crypto";
+import { constantTimeEqual, hmacSha256Hex } from "../utils/crypto";
 
 export type AdminPreviewTokenFailure = { ok: false; reason: "invalid" | "expired" | "mismatch" };
 
@@ -19,13 +19,6 @@ function b64urlEncode(input: string): string {
 function b64urlDecode(input: string): string {
   const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
   return atob(normalized + "=".repeat((4 - (normalized.length % 4)) % 4));
-}
-
-function constantTimeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let index = 0; index < a.length; index += 1) diff |= a.charCodeAt(index) ^ b.charCodeAt(index);
-  return diff === 0;
 }
 
 export async function signAdminPreviewToken(payload: {
@@ -65,7 +58,7 @@ export async function verifyAdminPreviewToken(payload: {
   if (parts.length !== 2) return { ok: false, reason: "invalid" };
   const [encoded, signature] = parts;
   const expectedSignature = await hmacSha256Hex(payload.secret, encoded);
-  if (!constantTimeEqual(signature, expectedSignature)) return { ok: false, reason: "invalid" };
+  if (!(await constantTimeEqual(signature, expectedSignature))) return { ok: false, reason: "invalid" };
 
   let claims: AdminPreviewClaims;
   try {

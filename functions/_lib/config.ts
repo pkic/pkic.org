@@ -5,6 +5,15 @@ function parseIntOrDefault(value: string | undefined, defaultValue: number): num
   return Number.isFinite(parsed) ? parsed : defaultValue;
 }
 
+export const DEFAULT_RSVP_INBOUND_EMAIL_MAX_BYTES = 5 * 1024 * 1024;
+
+export function getRsvpInboundEmailMaxBytes(env: Pick<Env, "RSVP_INBOUND_EMAIL_MAX_BYTES">): number {
+  return Math.min(
+    25 * 1024 * 1024,
+    Math.max(64 * 1024, parseIntOrDefault(env.RSVP_INBOUND_EMAIL_MAX_BYTES, DEFAULT_RSVP_INBOUND_EMAIL_MAX_BYTES)),
+  );
+}
+
 function toOrigin(value: string | undefined): string | null {
   if (!value) {
     return null;

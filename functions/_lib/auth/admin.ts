@@ -2,7 +2,7 @@ import { AppError } from "../errors";
 import { first } from "../db/queries";
 import { normalizeEmail } from "../validation";
 import { signJwt, verifyJwt, type JwtVerifyResult } from "../utils/jwt";
-import { sha256Hex } from "../utils/crypto";
+import { constantTimeEqual, sha256Hex } from "../utils/crypto";
 import { AUTH_SCOPES } from "./scopes";
 import { computeGrantsForUser } from "./permissions";
 import type { AuthAdmin, DatabaseLike, Env } from "../types";
@@ -98,20 +98,6 @@ const adminByRequest = new WeakMap<Request, AuthAdmin>();
 const adminAuthTransportByRequest = new WeakMap<Request, AdminAuthTransport>();
 
 type AdminAuthTransport = "bearer" | "cookie" | "api-key";
-
-async function sha256Bytes(value: string): Promise<Uint8Array> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return new Uint8Array(digest);
-}
-
-async function constantTimeEqual(a: string, b: string): Promise<boolean> {
-  const [aHash, bHash] = await Promise.all([sha256Bytes(a), sha256Bytes(b)]);
-  let diff = 0;
-  for (let i = 0; i < aHash.length; i++) {
-    diff |= aHash[i] ^ bHash[i];
-  }
-  return diff === 0;
-}
 
 export function cacheAdminForRequest(request: Request, admin: AuthAdmin, transport?: AdminAuthTransport): void {
   adminByRequest.set(request, admin);

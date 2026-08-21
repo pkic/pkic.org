@@ -1,22 +1,6 @@
+import { constantTimeEqual, hmacSha256Hex } from "../../utils/crypto";
+
 export const STRIPE_WEBHOOK_TOLERANCE_SECONDS = 300;
-
-function constantTimeEqual(left: string, right: string): boolean {
-  if (left.length !== right.length) return false;
-  let difference = 0;
-  for (let index = 0; index < left.length; index += 1) {
-    difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
-  }
-  return difference === 0;
-}
-
-async function hmacSha256Hex(secret: string, payload: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, [
-    "sign",
-  ]);
-  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(payload));
-  return Array.from(new Uint8Array(signature), (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
 
 /**
  * Verifies Stripe's signed raw request body, including multiple `v1`
@@ -55,7 +39,9 @@ export async function verifyStripeWebhookSignature(
   const payload = `${timestamp}.${rawBody}`;
   for (const secret of configuredSecrets) {
     const expected = await hmacSha256Hex(secret, payload);
-    if (signatures.some((candidate) => constantTimeEqual(expected, candidate))) return true;
+    for (const candidate of signatures) {
+      if (await constantTimeEqual(expected, candidate)) return true;
+    }
   }
   return false;
 }

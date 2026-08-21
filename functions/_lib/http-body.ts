@@ -2,6 +2,7 @@ import { AppError } from "./errors";
 
 export const STRIPE_WEBHOOK_MAX_BYTES = 1024 * 1024;
 export const SENDGRID_WEBHOOK_MAX_BYTES = 2 * 1024 * 1024;
+export const INTERNAL_CALENDAR_RSVP_MAX_BYTES = 384 * 1024;
 
 function declaredContentLength(request: Request): number | null {
   const value = request.headers.get("content-length");

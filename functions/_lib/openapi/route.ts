@@ -5,6 +5,7 @@ import { readBoundedTextBody } from "../http-body";
 export const OPENAPI_JSON_MAX_BYTES = 2 * 1024 * 1024;
 
 type RouteHandler<Context, Schema> = (context: Context, data: ValidatedData<Schema>) => Response | Promise<Response>;
+type BeforeValidation<Context> = (context: Context) => void | Promise<void>;
 
 async function rejectMalformedJsonBody(context: unknown, schema: OpenAPIRouteSchema): Promise<void> {
   const rawRequest = (context as { req?: { raw?: Request } })?.req?.raw;
@@ -36,11 +37,13 @@ async function rejectMalformedJsonBody(context: unknown, schema: OpenAPIRouteSch
 export function openApiRoute<Schema extends OpenAPIRouteSchema, Context = any>(
   schema: Schema,
   handle: RouteHandler<Context, Schema>,
+  beforeValidation?: BeforeValidation<Context>,
 ): typeof OpenAPIRoute {
   return class extends OpenAPIRoute {
     schema = schema;
 
     async handle(context: Context): Promise<Response> {
+      await beforeValidation?.(context);
       await rejectMalformedJsonBody(context, schema);
       let data: ValidatedData<Schema>;
       try {

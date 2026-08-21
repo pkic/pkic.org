@@ -110,6 +110,7 @@ export interface Env {
   SENDGRID_FROM_EMAIL?: string;
   SENDGRID_FROM_NAME?: string;
   RSVP_EMAIL?: string;
+  RSVP_INBOUND_EMAIL_MAX_BYTES?: string;
   INTERNAL_SIGNING_SECRET?: string;
   /** ECDSA P-256 public key (base64) from SendGrid's Event Webhook settings. Used to verify signed webhook payloads. */
   SENDGRID_WEBHOOK_VERIFICATION_KEY?: string;

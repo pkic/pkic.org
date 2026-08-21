@@ -2,6 +2,22 @@ import { z } from "zod";
 import { adminEmailOutboxQuerySchema, adminEmailTemplateActivateSchema } from "./api";
 import { emailTemplateKeyParamsSchema } from "./api-common";
 import { adminEmailOutboxResponseSchema } from "./admin-email-outbox";
+import { internalCalendarRsvpIngestSchema } from "./calendar-rsvp";
+import { jsonResponse, requiredJsonBody } from "./openapi";
+
+export const internalCalendarRsvpResponseSchema = z.object({ processed: z.literal(1) });
+
+export const internalCalendarRsvpPostRouteSchema = {
+  tags: ["Internal", "Calendar"],
+  summary: "Ingest a signed calendar RSVP event",
+  request: { body: requiredJsonBody(internalCalendarRsvpIngestSchema) },
+  responses: {
+    "200": jsonResponse("RSVP event ingested successfully.", internalCalendarRsvpResponseSchema),
+    "400": { description: "Invalid calendar RSVP payload." },
+    "401": { description: "Missing, invalid, or expired request signature." },
+    "404": { description: "Registration referenced by the calendar UID was not found." },
+  },
+};
 
 export const apiRootGetRouteSchema = {
   tags: ["System"],
