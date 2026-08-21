@@ -5,7 +5,6 @@
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
-import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { mergeUsers } from "../../../../../_lib/services/user-merge";
 import { userMergeRouteSchema } from "../../../../../../assets/shared/schemas/user-emails";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
@@ -17,11 +16,10 @@ export const UserMerge = openApiRoute(userMergeRouteSchema, async (c: AdminConte
 
   const survivorId = data.params.userId;
   const body = data.body;
-  const result = await mergeUsers(requestDb(c), { survivorId, sourceUserId: body.sourceUserId });
-
-  await writeAuditLog(requestDb(c), "admin", admin.id, "users_merged", "user", result.survivorId, {
-    mergedFromUserId: result.mergedFromUserId,
-    mergedFromEmail: result.mergedFromEmail,
+  const result = await mergeUsers(requestDb(c), {
+    survivorId,
+    sourceUserId: body.sourceUserId,
+    actorUserId: admin.id,
   });
 
   return json(result);

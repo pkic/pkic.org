@@ -18,6 +18,7 @@ import {
   INDIVIDUAL_MEMBERSHIP_CATEGORIES,
   memberStatusSchema,
 } from "./membership-categories";
+import { httpUrlSchema } from "./urls";
 
 export { MEMBERSHIP_CATEGORIES, membershipCategorySchema, INDIVIDUAL_MEMBERSHIP_CATEGORIES };
 
@@ -31,7 +32,7 @@ export const representativeCreateSchema = z.object({
 export const memberCreateSchema = z
   .object({
     organizationName: trimmedString(1, 200).optional(),
-    website: z.url().optional(),
+    website: httpUrlSchema.optional(),
     description: trimmedString(0, 2000).optional(),
     membershipCategory: membershipCategorySchema,
     memberSince: z.iso.date(),

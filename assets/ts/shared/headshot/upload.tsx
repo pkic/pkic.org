@@ -3,9 +3,9 @@ import { mountModalTemplate } from "../modal-template";
 
 const HEADSHOT_DISCLAIMER_TEXT = [
   "This is a photograph of myself.",
-  "I hold the copyright to this image, or I have an unrestricted, royalty-free licence to use and publish it.",
+  "I hold the copyright to this image, or I have an unrestricted, royalty-free license to use and publish it.",
   "The image does not infringe any third-party intellectual property rights, privacy rights, or applicable laws.",
-  "I grant PKI Consortium a non-exclusive, worldwide licence to display this image alongside my name and professional details on this website and related materials.",
+  "I grant PKI Consortium a non-exclusive, worldwide license to display this image alongside my name and professional details on this website and related materials.",
   "I accept full responsibility for any claims arising from this upload.",
 ];
 

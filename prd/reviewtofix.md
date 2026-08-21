@@ -445,7 +445,7 @@ functions/_lib/services/membership/
     approve.ts
 ```
 
-Do not name anything `commands`, `management`, `catalogue-repository`, or `outbox-statements` — see AGENTS.md's naming rule. Generic statement-preparation helpers (`prepareQueueEmailStatement`, `prepareAuditStatement`) belong with the generic outbox, not under `membership/`; membership's `notifications.ts` returns typed drafts that the generic outbox helper consumes.
+Do not name anything `commands`, `management`, `catalog-repository`, or `outbox-statements` — see AGENTS.md's naming rule. Generic statement-preparation helpers (`prepareQueueEmailStatement`, `prepareAuditStatement`) belong with the generic outbox, not under `membership/`; membership's `notifications.ts` returns typed drafts that the generic outbox helper consumes.
 
 This is scoped to files actually touched by §1.4 — do not proactively restructure unrelated existing services solely to match this layout.
 

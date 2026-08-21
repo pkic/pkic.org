@@ -11,18 +11,10 @@ import { authStatus, isAuthed, setAuthChecking, saveProfile, clearAuth } from ".
 import { Login } from "./shell/Login";
 import { PortalShell } from "./shell/PortalShell";
 import type { MyProfile } from "./types";
+import { VerifyingOverlay } from "../../components/VerifyingOverlay";
 
 async function verifyMagicLink(token: string): Promise<void> {
   await postJson("/api/v1/auth/member/verify-link", { token });
-}
-
-function VerifyingOverlay() {
-  return (
-    <div class="d-flex flex-column align-items-center py-5">
-      <div class="spinner-border text-success mb-3" role="status"></div>
-      <p class="text-muted mb-0">Verifying your sign-in link…</p>
-    </div>
-  );
 }
 
 export function App() {

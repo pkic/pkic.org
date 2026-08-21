@@ -3,10 +3,11 @@
  * (consolidated migration 0035 seeds `id = 'default'`), read by the consultation/EC
  * batch jobs (membership-scheduled-jobs.ts) and the admin settings screen.
  */
-import { first, run } from "../db/queries";
+import { first } from "../db/queries";
 import { nowIso } from "../utils/time";
 import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
+import { prepareAuditLog } from "./audit";
 
 export interface MembershipSettingsRow {
   id: string;
@@ -68,14 +69,15 @@ export async function updateMembershipSettings(
     updated_by_user_id: actorUserId,
   };
 
-  await run(
-    db,
-    `UPDATE membership_settings
-     SET consultation_window_days = ?, ec_review_window_days = ?, on_hold_response_deadline_days = ?,
-         consultation_email_recipients = ?, ec_email_recipients = ?, cc_applicant_emails = ?,
-         auto_reminder_on_holds = ?, forum_vote_min_endorsers = ?, updated_at = ?, updated_by_user_id = ?
-     WHERE id = 'default'`,
-    [
+  const update = db
+    .prepare(
+      `UPDATE membership_settings
+       SET consultation_window_days = ?, ec_review_window_days = ?, on_hold_response_deadline_days = ?,
+           consultation_email_recipients = ?, ec_email_recipients = ?, cc_applicant_emails = ?,
+           auto_reminder_on_holds = ?, forum_vote_min_endorsers = ?, updated_at = ?, updated_by_user_id = ?
+       WHERE id = 'default'`,
+    )
+    .bind(
       next.consultation_window_days,
       next.ec_review_window_days,
       next.on_hold_response_deadline_days,
@@ -86,8 +88,24 @@ export async function updateMembershipSettings(
       next.forum_vote_min_endorsers,
       now,
       actorUserId,
-    ],
-  );
+    );
+  await db.batch([
+    update,
+    ...(actorUserId
+      ? [
+          prepareAuditLog(
+            db,
+            "admin",
+            actorUserId,
+            "membership_settings_updated",
+            "membership_settings",
+            "default",
+            updates,
+            now,
+          ),
+        ]
+      : []),
+  ]);
 
   return next;
 }

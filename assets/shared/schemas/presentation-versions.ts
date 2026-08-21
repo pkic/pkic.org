@@ -3,7 +3,7 @@ import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 export const PRESENTATION_VERSION_SORT_COLUMNS = ["versionNumber", "fileName", "uploadedAt"] as const;
-export const presentationVersionsListQuerySchema = listQuerySchema(PRESENTATION_VERSION_SORT_COLUMNS);
+export const presentationVersionsListQuerySchema = listQuerySchema(PRESENTATION_VERSION_SORT_COLUMNS, { limit: 25 });
 
 export const presentationReviewStatusSchema = z.enum(["approved", "rejected", "needs_revision"]);
 

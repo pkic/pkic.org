@@ -1,7 +1,6 @@
-import { Spinner } from "../../../../../components/Spinner";
-import { DataTable } from "../../../../../components/Table";
 import { useData } from "../../../../../hooks/useData";
 import { api } from "../../../../api";
+import { AuditLogTable } from "../../../../components/AuditLogTable";
 
 interface ProposalAuditLogEntry {
   id: string;
@@ -114,34 +113,12 @@ export function AuditLogSection({ proposalId }: { proposalId: string }) {
     [proposalId],
   );
 
-  if (loading) return <Spinner />;
-  if (!entries?.length) return <p class="small text-body-secondary mb-0">No audit log entries.</p>;
-
   return (
-    <DataTable
-      columns={[
-        {
-          header: "When",
-          cell: (entry) =>
-            new Date(entry.created_at).toLocaleString("en-US", { dateStyle: "short", timeStyle: "medium" }),
-          className: "text-nowrap small text-muted",
-        },
-        {
-          header: "Actor",
-          cell: (entry) => {
-            if (entry.actor_type === "system") return <span class="text-muted">System</span>;
-            if (entry.actor_display) return entry.actor_display;
-            if (entry.actor_id) return <span class="text-muted small">{entry.actor_id}</span>;
-            return <span class="text-muted">{entry.actor_type}</span>;
-          },
-          className: "small",
-        },
-        { header: "Action", cell: (entry) => <span class="small">{formatAction(entry)}</span> },
-        { header: "Details", cell: (entry) => <AuditDetails details={entry.details} /> },
-      ]}
-      data={entries}
-      className="align-middle"
-      rowKey={(entry) => entry.id}
+    <AuditLogTable
+      entries={entries ?? undefined}
+      loading={loading}
+      actionCell={(entry) => <span class="small">{formatAction(entry)}</span>}
+      detailsCell={(entry) => <AuditDetails details={entry.details} />}
     />
   );
 }

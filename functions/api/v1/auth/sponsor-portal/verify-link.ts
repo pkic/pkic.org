@@ -4,55 +4,42 @@
  * instead of a member session (see _lib/auth/sponsor-portal.ts).
  */
 import { parseJsonBody } from "../../../../_lib/validation";
-import { json } from "../../../../_lib/http";
 import {
   serializeSponsorPortalSessionCookie,
   signSponsorPortalSessionToken,
   verifySponsorPortalMagicLink,
 } from "../../../../_lib/auth/sponsor-portal";
-import { getClientIp, getUserAgent, hashOptional, requireInternalSecret } from "../../../../_lib/request";
-import { enforceRateLimit } from "../../../../_lib/rate-limit";
 import { sponsorPortalAuthVerifySchema } from "../../../../../assets/shared/schemas/sponsor-portal";
-import { requestDb, type AdminContext } from "../../../../_lib/db/context";
+import type { AdminContext } from "../../../../_lib/db/context";
+import { createSessionEstablishedResponse, prepareMagicLinkVerificationHttp } from "../../../../_lib/auth/http-flow";
+import { dispatchPostOnly } from "../../../../_lib/http";
 
 const DEFAULT_SPONSOR_PORTAL_SESSION_TTL_HOURS = 72;
+const SPONSOR_MAGIC_LINK_VERIFY_RATE_LIMIT_NAMESPACE = "sponsor-portal-auth-verify-link:ip";
 
 export async function onRequestPost(c: AdminContext): Promise<Response> {
   const body = await parseJsonBody(c.req, sponsorPortalAuthVerifySchema);
-  const secret = requireInternalSecret(c.env);
-  const clientIp = getClientIp(c.req.raw);
-  await enforceRateLimit({
-    binding: c.env.IP_RATE_LIMITER,
-    namespace: "sponsor-portal-auth-verify-link:ip",
-    key: clientIp,
-  });
+  const http = await prepareMagicLinkVerificationHttp(c, SPONSOR_MAGIC_LINK_VERIFY_RATE_LIMIT_NAMESPACE);
 
-  const [ipHash, userAgentHash] = await Promise.all([
-    hashOptional(clientIp, secret),
-    hashOptional(getUserAgent(c.req.raw), secret),
-  ]);
-
-  const verified = await verifySponsorPortalMagicLink(requestDb(c), {
+  const verified = await verifySponsorPortalMagicLink(http.db, {
     token: body.token,
     sessionTtlHours: DEFAULT_SPONSOR_PORTAL_SESSION_TTL_HOURS,
-    ipHash,
-    userAgentHash,
+    ipHash: http.ipHash,
+    userAgentHash: http.userAgentHash,
   });
 
-  const token = await signSponsorPortalSessionToken(secret, {
+  const token = await signSponsorPortalSessionToken(http.secret, {
     sponsorshipId: verified.session.sponsorshipId,
     sessionId: verified.sessionId,
     expiresAt: verified.expiresAt,
   });
 
-  const response = json({ success: true, expiresAt: verified.expiresAt, sponsorship: verified.session });
-  response.headers.append("Set-Cookie", serializeSponsorPortalSessionCookie(token, c.req.raw));
-  return response;
+  return createSessionEstablishedResponse(
+    { success: true, expiresAt: verified.expiresAt, sponsorship: verified.session },
+    serializeSponsorPortalSessionCookie(token, c.req.raw),
+  );
 }
 
 export async function onRequest(c: AdminContext): Promise<Response> {
-  if (c.req.raw.method !== "POST") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
-  return onRequestPost(c);
+  return dispatchPostOnly(c, onRequestPost);
 }

@@ -1,22 +1,17 @@
 /**
  * Canonical flexible-link schema and `links_json` codec. Split out of
- * api.ts so this file has no other relative imports (only `zod`) and can
- * be loaded directly by plain Node tooling (e.g. the member importer)
- * without a bundler — see scripts/migrate-members/sql-renderer.mjs, which
- * is the reason this file must stay dependency-free beyond `zod`.
+ * api.ts so it and its URL primitive dependency can be loaded directly by
+ * plain Node tooling (e.g. the member importer) without a bundler — see
+ * scripts/migrate-members/sql-renderer.mjs.
  */
 import { z } from "zod";
+import { hasUrlHostname, httpUrlSchema, sanitizeLegacyHttpUrl } from "./urls";
 
 function uniqueStringList(values: string[]): boolean {
   return new Set(values.map((value) => value.toLowerCase())).size === values.length;
 }
 
-const linkUrlSchema = z
-  .string()
-  .trim()
-  .url()
-  .max(500)
-  .refine((value) => value.startsWith("https://") || value.startsWith("http://"), "Only http/https links are allowed");
+export const linkUrlSchema = httpUrlSchema;
 
 export const linksSchema = z
   .array(linkUrlSchema)
@@ -29,6 +24,33 @@ export const linksSchema = z
       });
     }
   });
+
+export interface NormalizeLinksResult {
+  links: string[];
+  rejected: unknown[];
+}
+
+/**
+ * Canonical tolerant normalizer used by legacy readers and import tooling.
+ * It applies the exact persisted-link URL, uniqueness, and cardinality rules
+ * without allowing one malformed historic entry to hide the valid entries.
+ */
+export function normalizeLinks(values: readonly unknown[]): NormalizeLinksResult {
+  const links: string[] = [];
+  const rejected: unknown[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    const url = sanitizeLegacyHttpUrl(value);
+    const key = url?.toLowerCase();
+    if (!url || !key || seen.has(key) || links.length >= 15) {
+      rejected.push(value);
+      continue;
+    }
+    seen.add(key);
+    links.push(url);
+  }
+  return { links, rejected };
+}
 
 /**
  * Canonical `links_json` codec — every writer/reader of a persisted links
@@ -62,21 +84,7 @@ export function parseLinksJson(raw: string | null | undefined): string[] {
     .map((url) => url.trim())
     .filter(Boolean);
 
-  // Enforce the exact contract linksSchema validates on write (http(s)-only,
-  // no case-insensitive duplicates, at most 15) against the tolerantly
-  // normalized legacy shapes above too, instead of returning them unchecked
-  // — a malformed/oversized legacy row degrades by dropping the offending
-  // entries rather than reaching an API response never checked against the
-  // schema that's supposed to be canonical for this field.
-  const deduped: string[] = [];
-  const seen = new Set<string>();
-  for (const url of candidates) {
-    const key = url.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    deduped.push(url);
-  }
-  return deduped.filter((url) => linkUrlSchema.safeParse(url).success).slice(0, 15);
+  return normalizeLinks(candidates).links;
 }
 
 export function serializeLinks(links: string[]): string {
@@ -85,5 +93,5 @@ export function serializeLinks(links: string[]): string {
 
 /** Picks the LinkedIn URL out of a canonical links list, for display surfaces that show LinkedIn specifically. */
 export function findLinkedinUrl(links: string[]): string | null {
-  return links.find((url) => /linkedin\.com/i.test(url)) ?? null;
+  return links.find((url) => hasUrlHostname(url, "linkedin.com")) ?? null;
 }

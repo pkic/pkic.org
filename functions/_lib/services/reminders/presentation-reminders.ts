@@ -112,6 +112,8 @@ export async function runPresentationReminders(
         capabilityLinkValues: [uploadUrl],
         data: {
           ...buildEventEmailVariables(event, appBaseUrl),
+          proposalId: row.proposal_id,
+          speakerUserId: row.user_id,
           firstName: row.first_name ?? "",
           proposalTitle: row.proposal_title,
           uploadUrl,

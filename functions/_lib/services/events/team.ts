@@ -1,6 +1,7 @@
 import {
   EVENT_TEAM_SORT_COLUMNS,
   type AdminEventPermissionInput,
+  type AdminEventTeamListQuery,
   type AdminEventTeamListItem,
   type EventTeamPermission,
 } from "../../../../assets/shared/schemas/admin-events";
@@ -43,22 +44,15 @@ interface PermissionRow {
   granter_email: string | null;
 }
 
-export interface EventTeamListQuery {
-  q?: string;
-  sort?: string;
-  limit?: number;
-  offset?: number;
-}
-
 export async function listEventTeam(
   db: DatabaseLike,
   actor: AuthAdmin,
   eventSlug: string,
-  query: EventTeamListQuery,
+  query: AdminEventTeamListQuery,
 ): Promise<{ permissions: AdminEventTeamListItem[]; page: PageInfo }> {
   const event = await getEventBySlug(db, eventSlug);
   requirePermission(actor, "events:manage", { type: "event", id: event.id });
-  const { q, sort, limit = 100, offset = 0 } = query;
+  const { q, sort, limit, offset } = query;
   const orderBy = resolveMappedOrderBy(
     sort,
     {

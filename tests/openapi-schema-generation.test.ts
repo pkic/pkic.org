@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { describe, expect, it } from "vitest";
-import { registrationConfirmResponseSchema } from "../assets/shared/schemas/api";
+import { registrationConfirmResponseSchema } from "../assets/shared/schemas/registration";
 import { AUTH_EXTENSION, decorateOpenApiSpec } from "../functions/_lib/openapi/mcp";
 import { openapi } from "../functions/router";
 
@@ -41,7 +41,7 @@ describe("OpenAPI schema generation", () => {
       type: "array",
       items: {
         type: "object",
-        required: ["dayDate", "attendanceType"],
+        required: ["dayDate", "attendanceType", "label"],
       },
     });
     expect(z.toJSONSchema(dayWaitlistSchema)).toMatchObject({
@@ -51,5 +51,19 @@ describe("OpenAPI schema generation", () => {
         required: ["dayDate", "status", "priorityLane", "offerExpiresAt"],
       },
     });
+  });
+
+  it("publishes schema-owned list defaults in OpenAPI", () => {
+    const spec = decorateOpenApiSpec(openapi.schema);
+    const publicVotesGet = spec.paths["/api/v1/votes"].get;
+    const limit = publicVotesGet.parameters.find(
+      (parameter: { in?: string; name?: string }) => parameter.in === "query" && parameter.name === "limit",
+    );
+    const offset = publicVotesGet.parameters.find(
+      (parameter: { in?: string; name?: string }) => parameter.in === "query" && parameter.name === "offset",
+    );
+
+    expect(limit).toMatchObject({ required: false, schema: { default: 20, maximum: 200, minimum: 1 } });
+    expect(offset).toMatchObject({ required: false, schema: { default: 0, minimum: 0 } });
   });
 });

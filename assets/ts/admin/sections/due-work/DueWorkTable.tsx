@@ -6,6 +6,7 @@ import { ErrorAlert } from "../../../components/ErrorAlert";
 import { Pager } from "../../../components/Pager";
 import { Spinner } from "../../../components/Spinner";
 import { DataTable } from "../../../components/Table";
+import { useOffsetPager } from "../../../hooks/useOffsetPager";
 import { api } from "../../api";
 import { fmt } from "../../ui";
 
@@ -29,11 +30,15 @@ export function DueWorkTable({
   refreshKey: number;
 }) {
   const [tab, setTab] = useState<AdminDueWorkTab>("all");
-  const [offset, setOffset] = useState(0);
+  const pager = useOffsetPager(25);
+  const { offset, pageSize } = pager;
   const [result, setResult] = useState<AdminDueWorkListResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const pageSize = 25;
+
+  useEffect(() => {
+    pager.resetPage();
+  }, [tab, reminderLimit, outboxLimit, includeRetention, pager.resetPage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,10 +67,9 @@ export function DueWorkTable({
     return () => {
       cancelled = true;
     };
-  }, [tab, offset, reminderLimit, outboxLimit, includeRetention, refreshKey]);
+  }, [tab, offset, pageSize, reminderLimit, outboxLimit, includeRetention, refreshKey]);
 
   const pagedRows = result?.items ?? [];
-  const currentPage = Math.floor(offset / pageSize) + 1;
   const counts = result?.counts ?? { all: 0, outbox: 0, reminders: 0, cleanup: 0 };
   const emptyMsg =
     tab === "cleanup"
@@ -80,7 +84,6 @@ export function DueWorkTable({
 
   function handleTabChange(key: AdminDueWorkTab) {
     setTab(key);
-    setOffset(0);
   }
 
   return (
@@ -143,16 +146,12 @@ export function DueWorkTable({
           className="align-middle"
         />
         <Pager
-          page={currentPage}
-          hasMore={result?.page.hasMore ?? false}
-          pageSize={pageSize}
-          offset={offset}
-          rowCount={pagedRows.length}
-          total={result?.page.total ?? 0}
-          onPrev={() => setOffset(Math.max(0, offset - pageSize))}
-          onNext={() => setOffset(offset + pageSize)}
-          onJump={(page) => setOffset((page - 1) * pageSize)}
-          onPageSizeChange={() => void 0}
+          {...pager.pagerProps({
+            hasMore: result?.page.hasMore ?? false,
+            rowCount: pagedRows.length,
+            total: result?.page.total ?? 0,
+            serverOffset: result?.page.offset,
+          })}
         />
       </div>
     </div>

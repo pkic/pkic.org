@@ -3,15 +3,14 @@ import { json } from "../../../_lib/http";
 import { requireAdminFromRequest } from "../../../_lib/auth/admin";
 import { requirePermission } from "../../../_lib/auth/permissions";
 import { openApiRoute } from "../../../_lib/openapi/route";
-import { eventSlugExists, upsertEventFromHugo } from "../../../_lib/services/events";
+import { createAdminEvent } from "../../../_lib/services/events";
 import { listAdminEvents } from "../../../_lib/services/events/admin-list";
-import { writeAuditLog } from "../../../_lib/services/audit";
 import { parseJsonSafe } from "../../../_lib/utils/json";
 import {
   adminCreateEventSchema,
   adminEventsListQuerySchema,
   adminEventsListResponseSchema,
-} from "../../../../assets/shared/schemas/api";
+} from "../../../../assets/shared/schemas/admin-events";
 import { requestDb, type AdminContext } from "../../../_lib/db/context";
 
 /**
@@ -37,13 +36,7 @@ export const AdminEventsListGet = openApiRoute(
     const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
     requirePermission(admin, "events:read");
 
-    return json(
-      await listAdminEvents(requestDb(c), {
-        ...data.query,
-        limit: data.query.limit ?? 50,
-        offset: data.query.offset ?? 0,
-      }),
-    );
+    return json(await listAdminEvents(requestDb(c), data.query));
   },
 );
 
@@ -57,27 +50,24 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   requirePermission(admin, "events:write");
   const body = await parseJsonBody(c.req, adminCreateEventSchema);
 
-  // Check slug uniqueness before upsert to give a clear error
-  if (await eventSlugExists(requestDb(c), body.slug)) {
-    return json({ error: { code: "SLUG_TAKEN", message: `The slug '${body.slug}' is already in use` } }, 409);
-  }
-
   const settings: Record<string, unknown> = {};
   if (body.venue) settings["venue"] = body.venue;
   if (body.virtualUrl) settings["virtualUrl"] = body.virtualUrl;
 
-  const event = await upsertEventFromHugo(requestDb(c), {
-    slug: body.slug,
-    name: body.name,
-    timezone: body.timezone,
-    startsAt: body.startsAt ?? undefined,
-    endsAt: body.endsAt ?? undefined,
-    registrationMode: body.registrationMode,
-    inviteLimitAttendee: body.inviteLimitAttendee,
-    settings,
-  });
-
-  await writeAuditLog(requestDb(c), "admin", admin.id, "event_created", "event", event.id, { slug: event.slug });
+  const event = await createAdminEvent(
+    requestDb(c),
+    {
+      slug: body.slug,
+      name: body.name,
+      timezone: body.timezone,
+      startsAt: body.startsAt ?? undefined,
+      endsAt: body.endsAt ?? undefined,
+      registrationMode: body.registrationMode,
+      inviteLimitAttendee: body.inviteLimitAttendee,
+      settings,
+    },
+    admin.id,
+  );
 
   return json(
     {

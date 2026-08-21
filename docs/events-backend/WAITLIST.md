@@ -13,6 +13,8 @@ The waitlist offer is the one that expires after a short claim window. Normal in
 
 There is no whole-registration waitlist anymore. Waitlist behavior is per-day only.
 
+The original `registrations.status` database constraint still accepts the legacy `waitlisted` value for storage compatibility. Migration 0030 normalized existing rows and application schemas and services must not emit that value. Removing it from the deployed D1 constraint would require rebuilding the table, so the compatibility token remains until a table rebuild is needed for another reason; it is not application state and must not be used for presentation, filtering, or decisions.
+
 ## Per-Day Waitlists
 
 For events with day-by-day attendance, the waitlist also works day by day.

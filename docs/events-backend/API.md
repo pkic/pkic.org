@@ -73,7 +73,7 @@ Base path: `/api/v1`
 - Per-day attendance is captured as first-class data (`registration_day_attendance`), not as ad-hoc custom question fields.
 
 ## Shared Validation
-- Shared request schemas live in `shared/schemas/api.ts` for backend and future frontend reuse.
+- Shared request schemas live in focused `assets/shared/schemas/` domain modules for backend and frontend reuse.
 - Canonical attendee user field is `organizationName` (not `company`).
 - Name fields are split: `firstName`, `lastName` (and optional `preferred_name` in storage).
 - Event retention setting field is `userRetentionDays`.

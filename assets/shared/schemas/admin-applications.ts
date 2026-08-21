@@ -8,6 +8,8 @@ import { normalizedEmailSchema } from "./api-common";
 import { membershipCategorySchema, applicationStageSchema, onHoldSubtypeSchema } from "./member-applications";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { ecDecisionCreateSchema, ecDecisionValueSchema } from "./ec-review";
+import { httpUrlSchema } from "./urls";
+import { workingGroupLabelSchema } from "./working-groups";
 
 /** Allowlisted sort columns for GET /api/v1/admin/applications — see listAdminApplications. */
 export const ADMIN_APPLICATIONS_SORT_COLUMNS = [
@@ -89,6 +91,7 @@ export const adminApplicationDocumentSchema = z.object({
 export const adminApplicationDetailSchema = adminApplicationSummarySchema.extend({
   stageEnteredAt: z.string(),
   answers: z.record(z.string(), z.unknown()),
+  requestedWorkingGroups: z.array(workingGroupLabelSchema),
   events: z.array(adminApplicationEventSchema),
   communications: z.array(adminApplicationCommunicationSchema),
   concerns: z.array(adminApplicationConcernSchema),
@@ -235,8 +238,8 @@ export const applicationApproveRouteSchema = {
 
 export const applicationEditableAnswersSchema = z.object({
   job_title: z.string().trim().max(200).nullable().optional(),
-  linkedin: z.string().trim().max(500).nullable().optional(),
-  organization_website: z.string().trim().max(500).nullable().optional(),
+  linkedin: httpUrlSchema.nullable().optional(),
+  organization_website: httpUrlSchema.nullable().optional(),
   about_yourself: z.string().trim().max(5000).nullable().optional(),
   about_organization: z.string().trim().max(5000).nullable().optional(),
   reason: z.string().trim().max(5000).nullable().optional(),

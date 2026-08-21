@@ -5,7 +5,6 @@
 import { json } from "../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../../_lib/auth/permissions";
-import { writeAuditLog } from "../../../../../../_lib/services/audit";
 import { listUserEmails, addUserEmail } from "../../../../../../_lib/services/user-emails";
 import {
   userEmailAddRouteSchema,
@@ -28,9 +27,7 @@ export const UserEmailsAdd = openApiRoute(userEmailAddRouteSchema, async (c: Adm
 
   const userId = data.params.userId;
   const body = data.body;
-  const email = await addUserEmail(requestDb(c), userId, body.email);
-
-  await writeAuditLog(requestDb(c), "admin", admin.id, "user_email_added", "user", userId, { email: body.email });
+  const email = await addUserEmail(requestDb(c), admin, userId, body.email);
 
   return json({ email }, 201);
 });

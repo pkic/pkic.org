@@ -2,13 +2,15 @@
  * Add organization (or org-less individual) — Interim Admin Tool.
  * Split out of Organizations.tsx (PR #1 review).
  */
-import { useEffect, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
 import { api } from "../../api";
-import { toast } from "../../ui";
 import { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../../../shared/schemas/admin-members";
 import type { AdminWorkingGroupSummary } from "../../../../shared/schemas/working-groups";
 import { ProfileLinksInput } from "../../../components/ProfileLinksInput";
-import { getAdminWorkingGroupCatalogue } from "../../services/catalogues";
+import { activeAdminWorkingGroupCatalog } from "../../services/catalogs";
+import { performAdminAction } from "../../actions";
+import { FormActions } from "../../components/FormActions";
+import { ServerSearchSelect } from "../../components/ServerSearchSelect";
 
 // Kept for the "Add organization" (create) flow only — category is
 // picked once there. Once an organization exists, its category lives at
@@ -34,26 +36,10 @@ export function AddOrganizationForm({ onCreated, onCancel }: { onCreated: () => 
   const [memberSince, setMemberSince] = useState(() => new Date().toISOString().slice(0, 10));
   const [representatives, setRepresentatives] = useState<RepresentativeDraft[]>([emptyRepresentative()]);
   const [workingGroups, setWorkingGroups] = useState<AdminWorkingGroupSummary[]>([]);
-  const [workingGroupsError, setWorkingGroupsError] = useState("");
-  const [workingGroupSlugs, setWorkingGroupSlugs] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
 
   const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(membershipCategory);
-
-  useEffect(() => {
-    let active = true;
-    void getAdminWorkingGroupCatalogue()
-      .then((groups) => {
-        if (active) setWorkingGroups(groups.filter((group) => group.active));
-      })
-      .catch((error: unknown) => {
-        if (active) setWorkingGroupsError((error as Error).message);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
 
   function updateRep(index: number, patch: Partial<RepresentativeDraft>) {
     setRepresentatives((reps) => reps.map((rep, i) => (i === index ? { ...rep, ...patch } : rep)));
@@ -65,15 +51,6 @@ export function AddOrganizationForm({ onCreated, onCancel }: { onCreated: () => 
 
   function removeRep(index: number) {
     setRepresentatives((reps) => (reps.length > 1 ? reps.filter((_, i) => i !== index) : reps));
-  }
-
-  function toggleWorkingGroup(slug: string) {
-    setWorkingGroupSlugs((slugs) => {
-      const next = new Set(slugs);
-      if (next.has(slug)) next.delete(slug);
-      else next.add(slug);
-      return next;
-    });
   }
 
   function handleCategoryChange(category: string) {
@@ -94,36 +71,30 @@ export function AddOrganizationForm({ onCreated, onCancel }: { onCreated: () => 
       return;
     }
 
-    setSaving(true);
     setStatus("Saving…");
-    try {
-      const body: Record<string, unknown> = {
-        membershipCategory,
-        memberSince,
-        representatives: representatives.map((r) => ({
-          name: r.name.trim(),
-          email: r.email.trim(),
-          ...(r.role.trim() ? { role: r.role.trim() } : {}),
-          ...(r.links.length > 0 ? { links: r.links } : {}),
-        })),
-        workingGroupSlugs: Array.from(workingGroupSlugs),
-      };
-      if (!isIndividual) {
-        body.organizationName = organizationName.trim();
-        if (website.trim()) body.website = website.trim();
-        if (description.trim()) body.description = description.trim();
-      }
-
-      await api("/api/v1/admin/members", { method: "POST", body: JSON.stringify(body) });
-      toast(isIndividual ? "Individual member created" : "Organization created", "success");
-      onCreated();
-    } catch (err) {
-      const msg = (err as Error).message;
-      setStatus(msg);
-      toast(msg, "error");
-    } finally {
-      setSaving(false);
+    const body: Record<string, unknown> = {
+      membershipCategory,
+      memberSince,
+      representatives: representatives.map((representative) => ({
+        name: representative.name.trim(),
+        email: representative.email.trim(),
+        ...(representative.role.trim() ? { role: representative.role.trim() } : {}),
+        ...(representative.links.length > 0 ? { links: representative.links } : {}),
+      })),
+      workingGroupSlugs: workingGroups.map((group) => group.slug),
+    };
+    if (!isIndividual) {
+      body.organizationName = organizationName.trim();
+      if (website.trim()) body.website = website.trim();
+      if (description.trim()) body.description = description.trim();
     }
+    await performAdminAction({
+      setBusy: setSaving,
+      request: () => api("/api/v1/admin/members", { method: "POST", body: JSON.stringify(body) }),
+      successMessage: isIndividual ? "Individual member created" : "Organization created",
+      afterSuccess: onCreated,
+      onError: setStatus,
+    });
   }
 
   return (
@@ -260,35 +231,38 @@ export function AddOrganizationForm({ onCreated, onCancel }: { onCreated: () => 
       </div>
 
       <div class="mb-3">
-        <label class="form-label small fw-semibold mb-1">Working groups</label>
-        <div class="d-flex flex-wrap gap-3">
+        <ServerSearchSelect
+          catalog={activeAdminWorkingGroupCatalog()}
+          label="Add working group"
+          value={null}
+          placeholder="Select a working group…"
+          excludeValues={workingGroups.map((group) => group.id)}
+          onChange={(group) => {
+            if (group) setWorkingGroups((current) => [...current, group]);
+          }}
+        />
+        <div class="d-flex flex-wrap gap-2 mt-2">
           {workingGroups.map((group) => (
-            <div class="form-check" key={group.id}>
-              <input
-                class="form-check-input"
-                type="checkbox"
-                id={`wg-${group.id}`}
-                checked={workingGroupSlugs.has(group.slug)}
-                onChange={() => toggleWorkingGroup(group.slug)}
-              />
-              <label class="form-check-label small" for={`wg-${group.id}`}>
-                {group.name}
-              </label>
-            </div>
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-secondary"
+              key={group.id}
+              aria-label={`Remove ${group.name}`}
+              onClick={() => setWorkingGroups((current) => current.filter((item) => item.id !== group.id))}
+            >
+              {group.name} ×
+            </button>
           ))}
         </div>
-        {workingGroupsError && <div class="small text-danger mt-1">{workingGroupsError}</div>}
       </div>
 
-      <div class="d-flex gap-2 align-items-center">
-        <button type="submit" class="btn btn-sm btn-success" disabled={saving}>
-          {isIndividual ? "Create individual member" : "Create organization"}
-        </button>
-        <button type="button" class="btn btn-sm btn-secondary" onClick={onCancel}>
-          Cancel
-        </button>
-        {status && <span class="small text-muted">{status}</span>}
-      </div>
+      <FormActions
+        submitLabel={isIndividual ? "Create individual member" : "Create organization"}
+        busyLabel="Saving…"
+        busy={saving}
+        onCancel={onCancel}
+        status={status}
+      />
     </form>
   );
 }

@@ -3,7 +3,6 @@ import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
 import { TEMPLATE_HELPERS, TEMPLATE_PARTIALS, type TemplateHelperItem } from "../../../email-template-helpers";
 import { toast } from "../../../ui";
-import type { EmailTemplateVersion } from "../../../types";
 import type { EmailMessageType } from "../../../../../shared/schemas/admin-email-templates";
 import { EMAIL_PREVIEW_TABS, type EmailPreviewTab } from "../../../email-preview-tabs";
 import {
@@ -15,8 +14,15 @@ import {
   highlightBody,
   type CampaignPayload,
   useDays,
-  useTemplates,
 } from "./event-email-support";
+import {
+  ADMIN_EVENT_REGISTRATION_STATUS_FILTERS,
+  adminEventRegistrationStatusLabel,
+  adminEventRegistrationStatusFilterSchema,
+  type AdminEventRegistrationStatusFilter,
+} from "../../../../../shared/schemas/admin-events";
+import { ServerSearchSelect } from "../../../components/ServerSearchSelect";
+import { adminEmailTemplateCatalog, getAdminEmailTemplateEditorVersion } from "../../../services/catalogs";
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -27,7 +33,6 @@ export function EventEmail({
   slug: string;
   audience?: "attendees" | "speakers";
 }) {
-  const { templates, loading: templatesLoading } = useTemplates();
   const days = useDays(slug);
 
   const [templateKey, setTemplateKey] = useState("");
@@ -39,7 +44,7 @@ export function EventEmail({
   const [audience] = useState<"attendees" | "speakers">(defaultAudience);
 
   // attendee filters
-  const [attendeeStatus, setAttendeeStatus] = useState("registered");
+  const [attendeeStatus, setAttendeeStatus] = useState<AdminEventRegistrationStatusFilter>("registered");
   const [attendanceType, setAttendanceType] = useState("all");
   const [dayFilter, setDayFilter] = useState("");
   const [dayWaitlistStatus, setDayWaitlistStatus] = useState("all");
@@ -100,14 +105,10 @@ export function EventEmail({
     const requestId = templateRequestIdRef.current + 1;
     templateRequestIdRef.current = requestId;
     try {
-      const data = await api<{ versions: EmailTemplateVersion[] }>(
-        `/api/v1/admin/email-templates/${encodeURIComponent(key)}/versions`,
-      );
+      const version = await getAdminEmailTemplateEditorVersion(key);
       if (templateRequestIdRef.current !== requestId) {
         return;
       }
-      const active = data.versions.find((version) => version.status === "active");
-      const version = active ?? data.versions[0];
       if (!version) return;
       setSubject(version.subject_template ?? "");
       setBody(version.body ?? "");
@@ -220,20 +221,14 @@ export function EventEmail({
       {/* Template + mode */}
       <div class="row g-2 mb-2">
         <div class="col-md-6">
-          <label class="form-label small mb-1">Template</label>
-          <select
-            class="form-select form-select-sm"
+          <ServerSearchSelect
+            catalog={adminEmailTemplateCatalog("msg_")}
+            label="Template"
             value={templateKey}
-            onChange={(e) => void handleTemplateChange((e.target as HTMLSelectElement).value)}
-            disabled={templatesLoading}
-          >
-            <option value="">— write from scratch —</option>
-            {templates.map((t) => (
-              <option key={t.key} value={t.key}>
-                {t.key}
-              </option>
-            ))}
-          </select>
+            selectedLabel={templateKey}
+            placeholder="Write from scratch"
+            onChange={(template) => void handleTemplateChange(template?.template_key ?? "")}
+          />
         </div>
         <div class="col-md-3">
           <label class="form-label small mb-1">Delivery mode</label>
@@ -354,13 +349,15 @@ export function EventEmail({
             <select
               class="form-select form-select-sm"
               value={attendeeStatus}
-              onChange={(e) => setAttendeeStatus((e.target as HTMLSelectElement).value)}
+              onChange={(e) =>
+                setAttendeeStatus(adminEventRegistrationStatusFilterSchema.parse((e.target as HTMLSelectElement).value))
+              }
             >
-              <option value="registered">Registered</option>
-              <option value="all">All</option>
-              <option value="pending_email_confirmation">Pending confirmation</option>
-              <option value="waitlisted">Waitlisted</option>
-              <option value="cancelled">Cancelled</option>
+              {ADMIN_EVENT_REGISTRATION_STATUS_FILTERS.map((status) => (
+                <option key={status} value={status}>
+                  {status === "all" ? "All" : adminEventRegistrationStatusLabel(status)}
+                </option>
+              ))}
             </select>
           </div>
           <div class="col-md-3">

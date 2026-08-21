@@ -1,6 +1,6 @@
 import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
-import { json } from "../../../../../../_lib/http";
+import { dispatchRequestMethod, json } from "../../../../../../_lib/http";
 import { revokeEventTeamRole } from "../../../../../../_lib/services/events/team";
 
 export async function onRequestDelete(c: AdminContext): Promise<Response> {
@@ -10,6 +10,5 @@ export async function onRequestDelete(c: AdminContext): Promise<Response> {
 }
 
 export async function onRequest(c: AdminContext): Promise<Response> {
-  if (c.req.raw.method === "DELETE") return onRequestDelete(c);
-  return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
+  return dispatchRequestMethod(c, { DELETE: onRequestDelete });
 }

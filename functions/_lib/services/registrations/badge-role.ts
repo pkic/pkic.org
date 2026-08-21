@@ -11,6 +11,7 @@ import type { AuthAdmin, DatabaseLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
 import { getEventBySlug } from "../events";
+import { prepareBadgeRenderJobsForUser } from "../badge-render-job-statements";
 
 const ROLE_PRIORITY: Record<string, number> = {
   speaker: 1,
@@ -113,6 +114,7 @@ export async function setAdminRegistrationBadgeRole(
         .bind(current.registration.id);
   await db.batch([
     mutation,
+    prepareBadgeRenderJobsForUser(db, current.registration.user_id, at),
     prepareAuditLog(db, "admin", actor.id, "admin_badge_role_set", "registration", current.registration.id, {
       eventId: event.id,
       userId: current.registration.user_id,

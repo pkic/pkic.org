@@ -15,6 +15,8 @@ import { getJson } from "../shared/api-client";
 import { Spinner } from "../components/Spinner";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { Markdown } from "../components/Markdown";
+import { NotFoundPanel } from "../components/NotFoundPanel";
+import { memberInitials } from "../shared/member-display";
 import { findLinkedinUrl } from "../../shared/schemas/links";
 import {
   publicMemberDetailSchema,
@@ -89,16 +91,6 @@ function OtherLinks({ links, linkedin }: { links: string[]; linkedin: string | n
   );
 }
 
-function initialsFor(name: string): string {
-  return name
-    .split(/\s+/)
-    .slice(0, 3)
-    .map((w) => w.replace(/[^a-zA-Z]/g, ""))
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase())
-    .join("");
-}
-
 function RepresentativeCard({ rep }: { rep: Representative }) {
   return (
     <div class="row mb-5">
@@ -114,7 +106,7 @@ function RepresentativeCard({ rep }: { rep: Representative }) {
           <img class="img-thumbnail" alt={rep.name} title={rep.name} src={rep.photoUrl} />
         ) : (
           <div class={`standalone-initials standalone-initials--representative initial-color-${rep.name.length % 6}`}>
-            {initialsFor(rep.name)}
+            {memberInitials(rep.name)}
           </div>
         )}
       </div>
@@ -137,7 +129,7 @@ function MemberDetailView({ member, directoryHref }: { member: MemberDetail; dir
               <img class="member-profile-logo py-3" alt={member.name} src={member.logoUrl} />
             ) : (
               <div class={`standalone-initials standalone-initials--hero initial-color-${colorIdx} mx-auto`}>
-                {initialsFor(member.name)}
+                {memberInitials(member.name)}
               </div>
             )}
             <h1 class="fw-light">
@@ -245,10 +237,7 @@ function MemberDetailPage({ apiBase, directoryHref }: { apiBase: string; directo
 
   if (notFound) {
     return (
-      <div class="container py-5 text-center">
-        <p class="lead">We couldn&rsquo;t find that member.</p>
-        <a href={directoryHref}>&larr; Back to members</a>
-      </div>
+      <NotFoundPanel message="We couldn’t find that member." backHref={directoryHref} backLabel="Back to members" />
     );
   }
   if (error) return <ErrorAlert error={error} />;

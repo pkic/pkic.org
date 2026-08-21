@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "preact/hooks";
+import type { ComponentChildren } from "preact";
 import { IconCheckmark, IconExternalLink, IconInfoCircle } from "./icons";
 import type { RequiredTerm } from "../shared/types";
 
@@ -9,6 +10,33 @@ function termLabel(term: RequiredTerm): string {
 
 interface ConsentCardProps {
   term: RequiredTerm;
+}
+
+interface ConsentCardFrameProps {
+  cardClass: string;
+  term: RequiredTerm;
+  checked: boolean;
+  onClick: (event: MouseEvent) => void;
+  onKeyDown: (event: KeyboardEvent) => void;
+  children: ComponentChildren;
+}
+
+function ConsentCardFrame({ cardClass, term, checked, onClick, onKeyDown, children }: ConsentCardFrameProps) {
+  return (
+    <div
+      class={cardClass}
+      data-term-key={term.termKey}
+      data-term-version={term.version}
+      data-term-required={String(Boolean(term.required))}
+      role="checkbox"
+      aria-checked={checked}
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={onKeyDown}
+    >
+      {children}
+    </div>
+  );
 }
 
 export function ConsentCard({ term }: ConsentCardProps) {
@@ -105,14 +133,10 @@ export function ConsentCard({ term }: ConsentCardProps) {
 
   if (featured) {
     return (
-      <div
-        class={cardClass}
-        data-term-key={term.termKey}
-        data-term-version={term.version}
-        data-term-required={String(Boolean(term.required))}
-        role="checkbox"
-        aria-checked={checked}
-        tabIndex={0}
+      <ConsentCardFrame
+        cardClass={cardClass}
+        term={term}
+        checked={checked}
         onClick={handleCardClick}
         onKeyDown={handleKeyDown}
       >
@@ -131,19 +155,15 @@ export function ConsentCard({ term }: ConsentCardProps) {
           {optionalBadge}
           {readLink}
         </div>
-      </div>
+      </ConsentCardFrame>
     );
   }
 
   return (
-    <div
-      class={cardClass}
-      data-term-key={term.termKey}
-      data-term-version={term.version}
-      data-term-required={String(Boolean(term.required))}
-      role="checkbox"
-      aria-checked={checked}
-      tabIndex={0}
+    <ConsentCardFrame
+      cardClass={cardClass}
+      term={term}
+      checked={checked}
       onClick={handleCardClick}
       onKeyDown={handleKeyDown}
     >
@@ -154,7 +174,7 @@ export function ConsentCard({ term }: ConsentCardProps) {
       </label>
       {optionalBadge}
       {readLink}
-    </div>
+    </ConsentCardFrame>
   );
 }
 

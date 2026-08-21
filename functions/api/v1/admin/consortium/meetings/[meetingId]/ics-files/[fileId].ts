@@ -7,7 +7,6 @@
 import { json } from "../../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../../../_lib/auth/permissions";
-import { writeAuditLog } from "../../../../../../../_lib/services/audit";
 import { updateIcsFile, deleteIcsFile } from "../../../../../../../_lib/services/meeting-calendar";
 import {
   consortiumMeetingIcsUpdateRouteSchema,
@@ -30,6 +29,7 @@ export const ConsortiumMeetingIcsUpdatePatch = openApiRoute(
       data.params.fileId,
       { scopeType: "consortium" },
       body,
+      admin.id,
     );
     return json({ icsFile });
   },
@@ -44,11 +44,7 @@ export const ConsortiumMeetingIcsDelete = openApiRoute(
 
     const meetingId = data.params.meetingId;
     const fileId = data.params.fileId;
-    await deleteIcsFile(db, c.env.ASSETS_BUCKET, meetingId, fileId, { scopeType: "consortium" });
-    await writeAuditLog(db, "admin", admin.id, "meeting_ics_file_deleted", "meeting_ics_file", fileId, {
-      scopeType: "consortium",
-      seriesId: meetingId,
-    });
+    await deleteIcsFile(db, c.env.ASSETS_BUCKET, meetingId, fileId, { scopeType: "consortium" }, admin.id);
     return json({ success: true });
   },
 );

@@ -7,7 +7,7 @@
  * Visual style follows the PKI Consortium website exactly:
  *   Background  #0f1923  (dark slate, matches pkic-og.png)
  *   Gradient    green → teal → blue → yellow → orange → red
- *               (exact $scss colours from the footer border-image)
+ *               (exact $scss colors from the footer border-image)
  *   Font        Roboto (loaded via fontBuffers in the OG endpoint)
  *
  * Top AND bottom edges carry the full rainbow gradient so the brand accent
@@ -254,12 +254,12 @@ export function renderBadgeSvg(data: BadgeData): string {
   const chipY = SAFE_T;
   const chipH = 28;
 
-  // ── Person area — vertically centred between event info and brand bar ──
+  // ── Person area — vertically centered between event info and brand bar ──
   const personAreaTop = SAFE_T + EVENT_SIZE + 10 + META_SIZE + 40;
   const personAreaBottom = BRAND_TOP - 20;
   const personAreaMid = Math.round((personAreaTop + personAreaBottom) / 2);
 
-  // Stack: name + subtitle + action — centred vertically
+  // Stack: name + subtitle + action — centered vertically
   const GAP_SUB = 8;
   const GAP_ACTION = 14;
   const SUB_SIZE = 20;
@@ -271,12 +271,12 @@ export function renderBadgeSvg(data: BadgeData): string {
   const subY = subtitle ? nameY + GAP_SUB + SUB_SIZE : nameY;
   const actionY = subY + GAP_ACTION + ACTION_SIZE;
 
-  // ── Headshot circle — centred in person area, right side ───────────────
+  // ── Headshot circle — centered in person area, right side ───────────────
   const HS_CX = 960;
   const HS_CY = personAreaMid;
   const HS_R = Math.min(110, Math.round((personAreaBottom - personAreaTop) / 2 - 10));
 
-  // ── Watermark — large PKI icon, faint colour ──────────────────────────
+  // ── Watermark — large PKI icon, faint color ──────────────────────────
   const wmH = 380;
   const wmX = hasPhoto ? 680 : 780;
   const wmY = Math.round(personAreaMid - wmH / 2);
@@ -287,8 +287,8 @@ export function renderBadgeSvg(data: BadgeData): string {
 
   // ── CTA pill (psychology: personal invitation + button affordance) ──────
   // "Join me, register now!" activates mimetic desire (the sharer is the
-  // social proof) + present-bias urgency ("now"). Solid green = action colour.
-  // The pill shape primes click behaviour in a static image (button affordance).
+  // social proof) + present-bias urgency ("now"). Solid green = action color.
+  // The pill shape primes click behavior in a static image (button affordance).
   // Arrow drawn as SVG path — Unicode arrows are not in Roboto so fall back to
   // a box glyph; a path always renders correctly.
   const PILL_H = LOGO_H; // matches logo height (34)
@@ -296,10 +296,10 @@ export function renderBadgeSvg(data: BadgeData): string {
   const PILL_X = SAFE_R - PILL_W;
   const PILL_Y = logoY;
   const PILL_CY = PILL_Y + Math.round(PILL_H / 2);
-  const PILL_TX = PILL_X + Math.round(PILL_W / 2) - 10; // slightly left of centre — room for arrow
+  const PILL_TX = PILL_X + Math.round(PILL_W / 2) - 10; // slightly left of center — room for arrow
   const PILL_TY = PILL_CY + 5; // baseline
   // Arrow drawn as SVG path — a proper right-pointing arrow (→) with line
-  // and arrowhead, not a chevron. Centred vertically in the pill.
+  // and arrowhead, not a chevron. Centered vertically in the pill.
   const ARW_X = PILL_X + PILL_W - 30;
   const ARW_CY = PILL_CY;
 

@@ -4,6 +4,7 @@ import { env as workerEnv } from "cloudflare:workers";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import {
   bulkQueueInviteEmails,
+  prepareBulkQueueEmailChunkStatements,
   prepareQueueEmailStatement,
   queueEmail,
   processPendingOutbox,
@@ -150,6 +151,41 @@ describe("email outbox batch processing", () => {
     ).toEqual([{ status: "sent" }]);
   });
 
+  it("recovers an expired sending lease but leaves a live lease untouched", async () => {
+    const fetchMock = makeSendgridMock();
+    vi.stubGlobal("fetch", fetchMock);
+    const [expiredId, liveId] = await queueN(env.DB, eventId, 2);
+    await env.DB.batch([
+      env.DB.prepare(
+        `UPDATE email_outbox
+              SET status = 'sending', processing_token = 'abandoned',
+                  lease_expires_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 minute')
+            WHERE id = ?`,
+      ).bind(expiredId),
+      env.DB.prepare(
+        `UPDATE email_outbox
+              SET status = 'sending', processing_token = 'current',
+                  lease_expires_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+5 minutes')
+            WHERE id = ?`,
+      ).bind(liveId),
+    ]);
+
+    expect(await processPendingOutbox(env.DB, env, 10)).toEqual({ processed: 1, failed: 0 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(
+      await queryAll<{ id: string; status: string; processing_token: string | null }>(
+        env.DB,
+        "SELECT id, status, processing_token FROM email_outbox WHERE id IN (?, ?) ORDER BY id",
+        [expiredId, liveId],
+      ),
+    ).toEqual(
+      [
+        { id: expiredId, status: "sent", processing_token: null },
+        { id: liveId, status: "sending", processing_token: "current" },
+      ].sort((a, b) => a.id.localeCompare(b.id)),
+    );
+  });
+
   it("bulk-enqueues hundreds of emails without consuming one D1 query per recipient", async () => {
     const budgeted = createD1QueryBudgetedDatabase(env.DB, 2);
     const rows = Array.from({ length: 501 }, (_, index) => ({
@@ -166,6 +202,31 @@ describe("email outbox batch processing", () => {
     expect((await queryAll<{ count: number }>(env.DB, "SELECT COUNT(*) AS count FROM email_outbox"))[0]?.count).toBe(
       rows.length,
     );
+  });
+
+  it("bulk-enqueues a retried domain notification only once", async () => {
+    const payload = {
+      outboxId: "bulk-idempotent-outbox",
+      idempotencyKey: "weekly-digest:group-1:user-1:2026-08-17",
+      templateKey: "attendee_invite",
+      recipientUserId: adminId,
+      recipientEmail: "digest@example.test",
+      subject: "Weekly digest",
+      messageType: "transactional" as const,
+      data: { firstName: "Digest" },
+    };
+    const first = prepareBulkQueueEmailChunkStatements(env.DB, [payload]);
+    const retry = prepareBulkQueueEmailChunkStatements(env.DB, [payload]);
+
+    await env.DB.batch([...first, ...retry].map((chunk) => chunk.statement));
+
+    expect(
+      await queryAll<{ id: string; idempotency_key: string }>(
+        env.DB,
+        "SELECT id, idempotency_key FROM email_outbox WHERE idempotency_key = ?",
+        [payload.idempotencyKey],
+      ),
+    ).toEqual([{ id: payload.outboxId, idempotency_key: payload.idempotencyKey }]);
   });
 
   it("respects the limit parameter and only processes up to limit rows", async () => {

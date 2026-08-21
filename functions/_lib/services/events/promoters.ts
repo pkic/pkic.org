@@ -1,13 +1,31 @@
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
-import type {
-  EventPromoter,
-  EventPromotersListResponse,
-  EventReferralCode,
+import {
+  EVENT_PROMOTER_SORT_COLUMNS,
+  EVENT_REFERRAL_CODE_SORT_COLUMNS,
+  type EventPromoter,
+  type EventPromotersListResponse,
+  type EventReferralCode,
 } from "../../../../assets/shared/schemas/admin-event-promoters";
 import { batchFirst, batchRows } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
+
+// Keep schema-facing keys and SQL mappings type-coupled: adding a key to a
+// view's API tuple requires adding its trusted SQL expression here.
+const PROMOTER_SORT_EXPRESSIONS = {
+  impact: "impact_score",
+  accepted: "invites_accepted",
+  invitations: "invites_sent",
+  clicks: "referral_clicks",
+} satisfies Record<(typeof EVENT_PROMOTER_SORT_COLUMNS)[number], string>;
+
+const REFERRAL_CODE_SORT_EXPRESSIONS = {
+  clicks: "rc.clicks",
+  conversions: "rc.conversions",
+  createdAt: "rc.created_at",
+  code: "rc.code",
+} satisfies Record<(typeof EVENT_REFERRAL_CODE_SORT_COLUMNS)[number], string>;
 
 interface SummaryRow {
   active_promoters: number;
@@ -88,6 +106,10 @@ const REFERRAL_CODE_SELECT = `
     LEFT JOIN users u ON u.id = COALESCE(rc.created_by_user_id, reg.user_id)
    WHERE rc.event_id = ?`;
 
+const PROMOTER_SELECT_COLUMNS = `user_id, email, first_name, last_name, organization, job_title, headshot_url,
+  invites_sent, invites_accepted, invites_declined, invites_expired, invite_conversion_rate, last_invite_at,
+  referral_codes_issued, referral_clicks, referral_conversions, impact_score`;
+
 export async function listEventPromotionActivity(
   db: DatabaseLike,
   event: { id: string; slug: string },
@@ -101,13 +123,13 @@ export async function listEventPromotionActivity(
     : null;
   const promoterOrder = resolveMappedOrderBy(
     params.sort,
-    { impact: "impact_score", accepted: "invites_accepted", invitations: "invites_sent", clicks: "referral_clicks" },
+    PROMOTER_SORT_EXPRESSIONS,
     "impact_score DESC",
     "user_id ASC",
   );
   const codeOrder = resolveMappedOrderBy(
     params.sort,
-    { clicks: "rc.clicks", conversions: "rc.conversions", createdAt: "rc.created_at", code: "rc.code" },
+    REFERRAL_CODE_SORT_EXPRESSIONS,
     "rc.conversions DESC, rc.clicks DESC",
     "rc.code ASC",
   );
@@ -116,7 +138,7 @@ export async function listEventPromotionActivity(
     params.view === "promoters"
       ? db
           .prepare(
-            `${PROMOTER_READ_MODEL} SELECT * FROM promoter_rows WHERE 1 = 1 ${promoterSearch ? `AND ${promoterSearch.sql}` : ""} ${promoterOrder} LIMIT ? OFFSET ?`,
+            `${PROMOTER_READ_MODEL} SELECT ${PROMOTER_SELECT_COLUMNS} FROM promoter_rows WHERE 1 = 1 ${promoterSearch ? `AND ${promoterSearch.sql}` : ""} ${promoterOrder} LIMIT ? OFFSET ?`,
           )
           .bind(event.id, event.id, ...(promoterSearch?.bindings ?? []), params.limit, params.offset)
       : db

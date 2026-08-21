@@ -24,8 +24,8 @@ export async function onRequestGet(
     await listRegistrationAuditLog(requestDb(c), event.id, registrationId, {
       q: data.query.q,
       sort: data.query.sort,
-      limit: data.query.limit ?? 50,
-      offset: data.query.offset ?? 0,
+      limit: data.query.limit,
+      offset: data.query.offset,
     }),
   );
 }

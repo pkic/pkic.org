@@ -1,13 +1,7 @@
 import type { AdminApplicationDetail } from "../../types";
 import { asBool, asString, asStringArray, externalLink } from "./helpers";
 
-export function ApplicationAnswersCard({
-  detail,
-  workingGroupLabels,
-}: {
-  detail: AdminApplicationDetail;
-  workingGroupLabels: Record<string, string>;
-}) {
+export function ApplicationAnswersCard({ detail }: { detail: AdminApplicationDetail }) {
   return (
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-header bg-white fw-semibold">Application answers</div>
@@ -65,10 +59,10 @@ export function ApplicationAnswersCard({
             <tr>
               <th class="text-muted small">Working groups requested</th>
               <td>
-                {asStringArray(detail.answers.working_groups).length > 0 ? (
+                {detail.requestedWorkingGroups.length > 0 ? (
                   <ul class="list-unstyled mb-0 small">
-                    {asStringArray(detail.answers.working_groups).map((slug) => (
-                      <li key={slug}>{workingGroupLabels[slug] ?? slug}</li>
+                    {detail.requestedWorkingGroups.map((group) => (
+                      <li key={group.slug}>{group.name}</li>
                     ))}
                   </ul>
                 ) : (

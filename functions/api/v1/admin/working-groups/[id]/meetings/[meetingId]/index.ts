@@ -8,7 +8,6 @@
 import { json } from "../../../../../../../_lib/http";
 import { AppError } from "../../../../../../../_lib/errors";
 import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
-import { writeAuditLog } from "../../../../../../../_lib/services/audit";
 import { getWorkingGroupBySlugOrId } from "../../../../../../../_lib/services/working-groups";
 import { updateMeetingSeries, deleteMeetingSeries } from "../../../../../../../_lib/services/meeting-calendar";
 import {
@@ -20,6 +19,7 @@ import { openApiRoute } from "../../../../../../../_lib/openapi/route";
 
 export const WgMeetingUpdate = openApiRoute(wgMeetingUpdateRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
+  const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
   const wg = await getWorkingGroupBySlugOrId(db, data.params.id);
   if (!wg) throw new AppError(404, "WORKING_GROUP_NOT_FOUND", "Working group not found");
 
@@ -29,6 +29,7 @@ export const WgMeetingUpdate = openApiRoute(wgMeetingUpdateRouteSchema, async (c
     data.params.meetingId,
     { scopeType: "working_group", workingGroupId: wg.id },
     body,
+    admin.id,
   );
   return json({ meetingSeries });
 });
@@ -46,13 +47,12 @@ export const WgMeetingDelete = openApiRoute(wgMeetingDeleteRouteSchema, async (c
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
 
   const meetingId = data.params.meetingId;
-  await deleteMeetingSeries(db, c.env.ASSETS_BUCKET, meetingId, {
-    scopeType: "working_group",
-    workingGroupId: wg.id,
-  });
-  await writeAuditLog(db, "admin", admin.id, "meeting_series_deleted", "meeting_series", meetingId, {
-    scopeType: "working_group",
-    workingGroupId: wg.id,
-  });
+  await deleteMeetingSeries(
+    db,
+    c.env.ASSETS_BUCKET,
+    meetingId,
+    { scopeType: "working_group", workingGroupId: wg.id },
+    admin.id,
+  );
   return json({ success: true });
 });

@@ -1,14 +1,17 @@
-import { useState, useEffect, useCallback } from "preact/hooks";
+import { useState, useEffect } from "preact/hooks";
 import { Badge } from "../../components/Badge";
 import { Spinner } from "../../components/Spinner";
 import { ErrorAlert } from "../../components/ErrorAlert";
-import { Pager, ADMIN_LIST_PAGE_SIZE_DEFAULT } from "../../components/Pager";
+import { Pager } from "../../components/Pager";
 import { Table } from "../../components/Table";
 import { api } from "../api";
 import { fmt, toast } from "../ui";
-import type { AdminEmailOutboxRow, AdminEmailOutboxResponse } from "../types";
-import type { StatsResponse } from "../types";
+import type { AdminEmailOutboxRow } from "../types";
 import { adminEmailOutboxResponseSchema } from "../../../shared/schemas/admin-email-outbox";
+import { adminStatsResponseSchema } from "../../../shared/schemas/admin-analytics";
+import { useServerCollection } from "../../hooks/useServerCollection";
+import { useOffsetPager } from "../../hooks/useOffsetPager";
+import { loadAdminCollection } from "../services/server-collection";
 
 // ────────────────────────────────────────────────────────
 // Types
@@ -18,8 +21,6 @@ interface OutboxFilters {
   status: string;
   messageType: string;
   q: string;
-  offset: number;
-  pageSize: number;
 }
 
 const STATUS_DESC_ORDER = ["failed", "retrying", "queued", "sending", "sent", "transactional", "promotional"];
@@ -151,18 +152,11 @@ function OutboxRow({
 // ────────────────────────────────────────────────────────
 
 export function Email() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const [outboxStats, setOutboxStats] = useState<Record<string, number>>({});
-  const [outboxData, setOutboxData] = useState<AdminEmailOutboxResponse | null>(null);
-
+  const pager = useOffsetPager();
   const [filters, setFilters] = useState<OutboxFilters>({
     status: "",
     messageType: "",
     q: "",
-    offset: 0,
-    pageSize: ADMIN_LIST_PAGE_SIZE_DEFAULT,
   });
 
   // Pending filter values (controlled inputs before Apply is clicked)
@@ -174,45 +168,46 @@ export function Email() {
   const [retryLimit, setRetryLimit] = useState(20);
   const [processAllStatus, setProcessAllStatus] = useState("");
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const qs = new URLSearchParams({
-        limit: String(filters.pageSize),
-        offset: String(filters.offset),
-      });
-      if (filters.status) qs.set("status", filters.status);
-      if (filters.messageType) qs.set("messageType", filters.messageType);
-      if (filters.q) qs.set("q", filters.q);
-
-      const [s, raw] = await Promise.all([
-        api<StatsResponse>("/api/v1/admin/stats"),
-        api<unknown>(`/api/v1/admin/email/outbox?${qs.toString()}`),
-      ]);
-      setOutboxStats(s.email.outboxByStatus);
-      setOutboxData(adminEmailOutboxResponseSchema.parse(raw));
-      setSelectedIds(new Set());
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [filters]);
+  const outbox = useServerCollection({
+    endpoint: "/api/v1/admin/email/outbox",
+    params: {
+      limit: String(pager.pageSize),
+      offset: String(pager.offset),
+      ...(filters.status ? { status: filters.status } : {}),
+      ...(filters.messageType ? { messageType: filters.messageType } : {}),
+      ...(filters.q ? { q: filters.q } : {}),
+    },
+    responseSchema: adminEmailOutboxResponseSchema,
+    load: loadAdminCollection,
+  });
+  const stats = useServerCollection({
+    endpoint: "/api/v1/admin/stats",
+    responseSchema: adminStatsResponseSchema,
+    load: loadAdminCollection,
+  });
+  const outboxData = outbox.data;
+  const outboxStats = stats.data?.email.outboxByStatus ?? {};
+  const loading = outbox.loading || stats.loading;
+  const error = outbox.error ?? stats.error;
+  const load = async () => {
+    await Promise.all([outbox.reload(), stats.reload()]);
+  };
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    setSelectedIds(new Set());
+  }, [outboxData]);
 
   function applyFilters() {
-    setFilters((f) => ({ ...f, status: pendingStatus, messageType: pendingType, q: pendingQ, offset: 0 }));
+    setFilters({ status: pendingStatus, messageType: pendingType, q: pendingQ });
+    pager.resetPage();
   }
 
   function clearFilters() {
     setPendingStatus("");
     setPendingType("");
     setPendingQ("");
-    setFilters({ status: "", messageType: "", q: "", offset: 0, pageSize: ADMIN_LIST_PAGE_SIZE_DEFAULT });
+    setFilters({ status: "", messageType: "", q: "" });
+    pager.resetAll();
   }
 
   function toggleRow(id: string, checked: boolean) {
@@ -303,8 +298,6 @@ export function Email() {
   if (error && !outboxData) return <ErrorAlert error={error} />;
 
   const ob = outboxData!;
-  const currentPage = Math.floor(ob.page.offset / Math.max(1, ob.page.limit)) + 1;
-
   return (
     <div>
       {/* Stat cards */}
@@ -507,16 +500,12 @@ export function Email() {
                 ))}
             </Table>
             <Pager
-              page={currentPage}
-              hasMore={ob.page.hasMore}
-              pageSize={ob.page.limit}
-              offset={ob.page.offset}
-              rowCount={ob.outbox.length}
-              total={ob.page.total}
-              onPrev={() => setFilters((f) => ({ ...f, offset: Math.max(0, f.offset - f.pageSize) }))}
-              onNext={() => setFilters((f) => ({ ...f, offset: f.offset + f.pageSize }))}
-              onJump={(page) => setFilters((f) => ({ ...f, offset: (page - 1) * f.pageSize }))}
-              onPageSizeChange={(size) => setFilters((f) => ({ ...f, pageSize: size, offset: 0 }))}
+              {...pager.pagerProps({
+                hasMore: ob.page.hasMore,
+                rowCount: ob.outbox.length,
+                total: ob.page.total,
+                serverOffset: ob.page.offset,
+              })}
             />
           </>
         )}

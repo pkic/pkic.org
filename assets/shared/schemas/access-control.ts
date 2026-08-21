@@ -10,6 +10,14 @@ import { permissionSchema } from "./permissions";
 
 const contextTypeSchema = z.enum(["event", "working_group", "organization"]);
 
+/** Stable identifiers for system roles seeded by the membership migration. */
+export const SYSTEM_ROLE_IDS = {
+  forumChair: "role-forum_chair",
+  forumViceChair: "role-forum_vice_chair",
+  workingGroupChair: "role-wg_chair",
+  workingGroupViceChair: "role-wg_vice_chair",
+} as const;
+
 export const accessGrantIdParamsSchema = z.object({ id: databaseIdSchema });
 // Role ids are NOT always UUIDs — custom roles get a real uuid() (see
 // roles/index.ts's RolesCreate), but every built-in/system role ships with
@@ -180,15 +188,19 @@ export const roleDeleteRouteSchema = {
   },
 };
 
-export const roleAssignmentSchema = z.object({
-  userRoleId: databaseIdSchema,
-  userId: databaseIdSchema,
-  name: z.string(),
-  email: z.string(),
+/** Context and lifecycle fields shared by every user-role assignment projection. */
+export const roleAssignmentContextSchema = z.object({
   contextType: contextTypeSchema.nullable(),
   contextId: z.string().nullable(),
   expiresAt: z.string().nullable(),
   createdAt: z.string(),
+});
+
+export const roleAssignmentSchema = roleAssignmentContextSchema.extend({
+  userRoleId: databaseIdSchema,
+  userId: databaseIdSchema,
+  name: z.string(),
+  email: z.string(),
 });
 
 export type RoleAssignment = z.infer<typeof roleAssignmentSchema>;
@@ -217,15 +229,11 @@ export const userRoleAssignSchema = z
   .superRefine(validateScopedContext);
 export type UserRoleAssignInput = z.infer<typeof userRoleAssignSchema>;
 
-export const userRoleResponseSchema = z.object({
+export const userRoleResponseSchema = roleAssignmentContextSchema.extend({
   id: databaseIdSchema,
   userId: databaseIdSchema,
   roleId: roleIdSchema,
   roleName: z.string(),
-  contextType: contextTypeSchema.nullable(),
-  contextId: z.string().nullable(),
-  expiresAt: z.string().nullable(),
-  createdAt: z.string(),
 });
 
 export type UserRoleAssignment = z.infer<typeof userRoleResponseSchema>;

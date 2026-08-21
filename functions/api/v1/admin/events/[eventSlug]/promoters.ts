@@ -9,6 +9,6 @@ import { eventPromotersListRouteSchema } from "../../../../../../assets/shared/s
 export const AdminEventPromotersGet = openApiRoute(eventPromotersListRouteSchema, async (c: AdminContext, data) => {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
-  const { view = "promoters", limit = 50, offset = 0, q, sort } = data.query;
+  const { view, limit, offset, q, sort } = data.query;
   return json(await listEventPromotionActivity(requestDb(c), event, { view, limit, offset, q, sort }));
 });

@@ -15,12 +15,16 @@ import type { AuthenticationResponseJSON, RegistrationResponseJSON, WebAuthnCred
 import { isoBase64URL } from "@simplewebauthn/server/helpers";
 import type { z } from "zod";
 import { AppError } from "../errors";
-import { all, first, run } from "../db/queries";
+import { all, first } from "../db/queries";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { signJwt, verifyJwt } from "../utils/jwt";
-import { findEligibleStaffUserById, issueAdminSession } from "../auth/admin";
-import { findEligibleMemberById, issueMemberSession } from "../auth/member";
+import { findEligibleStaffUserById } from "../auth/admin";
+import { findEligibleMemberById } from "../auth/member";
+import { prepareSessionRow } from "../auth/session-engine";
+import { resolveMemberSessionTtlHours } from "../auth/session-policy";
+import { AUTH_SCOPES } from "../auth/scopes";
+import { prepareAuditLog } from "./audit";
 import type { authenticationResponseSchema, registrationResponseSchema } from "../../../assets/shared/schemas/passkeys";
 import type { AuthAdmin, AuthMember, DatabaseLike, Env } from "../types";
 
@@ -34,9 +38,6 @@ type AuthenticationResponseInput = z.infer<typeof authenticationResponseSchema>;
 
 const CHALLENGE_TTL_SECONDS = 300;
 const PASSKEY_SESSION_TTL_HOURS = 8;
-// Matches functions/api/v1/auth/member/verify-link.ts's DEFAULT_MEMBER_SESSION_TTL_HOURS —
-// members aren't expected to re-authenticate as often as staff.
-const DEFAULT_MEMBER_PASSKEY_SESSION_TTL_HOURS = 720;
 const CHALLENGE_TOKEN_TYPE = "passkey-challenge";
 
 type ChallengePurpose = "registration" | "authentication";
@@ -167,7 +168,7 @@ export async function beginPasskeyRegistration(
 export async function completePasskeyRegistration(
   db: DatabaseLike,
   env: WebAuthnEnv,
-  actor: { id: string },
+  actor: { id: string; kind: "admin" | "member" },
   payload: { challengeToken: string; response: RegistrationResponseInput; deviceName?: string | null },
 ): Promise<PasskeySummary> {
   const rpId = requireEnvVar(env.WEBAUTHN_RP_ID, "WEBAUTHN_RP_ID");
@@ -209,22 +210,25 @@ export async function completePasskeyRegistration(
   const now = nowIso();
   const deviceName = payload.deviceName ?? null;
 
-  await run(
-    db,
-    `INSERT INTO passkey_credentials (
-      id, user_id, credential_id, public_key, sign_count, aaguid, device_name, last_used_at, created_at, revoked_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL)`,
-    [
-      id,
-      actor.id,
-      credential.id,
-      isoBase64URL.fromBuffer(credential.publicKey),
-      credential.counter,
-      aaguid,
-      deviceName,
-      now,
-    ],
-  );
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO passkey_credentials (
+          id, user_id, credential_id, public_key, sign_count, aaguid, device_name, last_used_at, created_at, revoked_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL)`,
+      )
+      .bind(
+        id,
+        actor.id,
+        credential.id,
+        isoBase64URL.fromBuffer(credential.publicKey),
+        credential.counter,
+        aaguid,
+        deviceName,
+        now,
+      ),
+    prepareAuditLog(db, actor.kind, actor.id, "passkey_registered", "passkey_credential", id, { deviceName }),
+  ]);
 
   return { id, deviceName, aaguid, lastUsedAt: null, createdAt: now };
 }
@@ -323,22 +327,49 @@ export async function completePasskeyAuthentication(
     throw new AppError(403, "AUTH_FORBIDDEN", "This account is no longer eligible to sign in");
   }
 
-  await run(db, "UPDATE passkey_credentials SET sign_count = ?, last_used_at = ? WHERE id = ?", [
-    newCounter,
-    nowIso(),
-    credentialRow.id,
-  ]);
-
+  const lastUsedAt = nowIso();
   if (staffUser) {
-    const issued = await issueAdminSession(db, staffUser, PASSKEY_SESSION_TTL_HOURS);
-    return { kind: "admin", ...issued };
+    const session = await prepareSessionRow(
+      db,
+      { table: "sessions", subjectColumn: "user_id" },
+      staffUser.id,
+      PASSKEY_SESSION_TTL_HOURS,
+    );
+    const admin: AuthAdmin = {
+      id: staffUser.id,
+      email: staffUser.email,
+      role: staffUser.role,
+      scopes: staffUser.role === "admin" ? [...AUTH_SCOPES] : [],
+    };
+    await db.batch([
+      db
+        .prepare("UPDATE passkey_credentials SET sign_count = ?, last_used_at = ? WHERE id = ?")
+        .bind(newCounter, lastUsedAt, credentialRow.id),
+      session.statement,
+      prepareAuditLog(db, "admin", admin.id, "passkey_authenticated", "admin_session", session.sessionId, {
+        expiresAt: session.expiresAt,
+      }),
+    ]);
+    return { kind: "admin", admin, sessionId: session.sessionId, expiresAt: session.expiresAt };
   }
 
-  const parsed = Number.parseInt(env.MEMBER_SESSION_TTL_HOURS ?? "", 10);
-  const memberSessionTtlHours =
-    Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MEMBER_PASSKEY_SESSION_TTL_HOURS;
-  const issued = await issueMemberSession(db, member!, memberSessionTtlHours);
-  return { kind: "member", ...issued };
+  const session = await prepareSessionRow(
+    db,
+    { table: "sessions", subjectColumn: "user_id" },
+    member!.userId,
+    resolveMemberSessionTtlHours(env.MEMBER_SESSION_TTL_HOURS),
+  );
+  const authenticatedMember = { ...member!, sessionId: session.sessionId, expiresAt: session.expiresAt };
+  await db.batch([
+    db
+      .prepare("UPDATE passkey_credentials SET sign_count = ?, last_used_at = ? WHERE id = ?")
+      .bind(newCounter, lastUsedAt, credentialRow.id),
+    session.statement,
+    prepareAuditLog(db, "member", member!.userId, "passkey_authenticated", "member_session", session.sessionId, {
+      expiresAt: session.expiresAt,
+    }),
+  ]);
+  return { kind: "member", member: authenticatedMember, sessionId: session.sessionId, expiresAt: session.expiresAt };
 }
 
 export async function listPasskeysForUser(db: DatabaseLike, userId: string): Promise<PasskeySummary[]> {
@@ -350,7 +381,11 @@ export async function listPasskeysForUser(db: DatabaseLike, userId: string): Pro
   return rows.map(toSummary);
 }
 
-export async function revokePasskey(db: DatabaseLike, userId: string, passkeyId: string): Promise<void> {
+export async function revokePasskey(
+  db: DatabaseLike,
+  actor: { id: string; kind: "admin" | "member" },
+  passkeyId: string,
+): Promise<void> {
   const row = await first<{ id: string; user_id: string }>(
     db,
     "SELECT id, user_id FROM passkey_credentials WHERE id = ? AND revoked_at IS NULL",
@@ -361,9 +396,12 @@ export async function revokePasskey(db: DatabaseLike, userId: string, passkeyId:
     throw new AppError(404, "NOT_FOUND", "Passkey not found");
   }
 
-  if (row.user_id !== userId) {
+  if (row.user_id !== actor.id) {
     throw new AppError(403, "PERMISSION_REQUIRED", "Cannot remove another user's passkey");
   }
 
-  await run(db, "UPDATE passkey_credentials SET revoked_at = ? WHERE id = ?", [nowIso(), passkeyId]);
+  await db.batch([
+    db.prepare("UPDATE passkey_credentials SET revoked_at = ? WHERE id = ?").bind(nowIso(), passkeyId),
+    prepareAuditLog(db, actor.kind, actor.id, "passkey_removed", "passkey_credential", passkeyId, {}),
+  ]);
 }

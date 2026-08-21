@@ -3,6 +3,7 @@ import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { parseJsonSafe } from "../../utils/json";
 import { parseLinksJson, findLinkedinUrl } from "../../../../assets/shared/schemas/links";
+import { sanitizeLegacyHttpOrSameOriginUrl, sanitizeLegacyHttpUrl } from "../../../../assets/shared/schemas/urls";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
 import type { PublicMemberDetail, PublicMemberSummary } from "../../../../assets/shared/schemas/members-directory";
@@ -70,7 +71,7 @@ function toSummary(row: DirectoryRow): PublicMemberSummary {
   const logoUrl = row.organization_id
     ? row.org_logo_r2_key
       ? `/api/v1/members/${row.organization_id}/logo`
-      : (orgData.logoUrl ?? null)
+      : sanitizeLegacyHttpOrSameOriginUrl(orgData.logoUrl)
     : row.headshot_r2_key
       ? `/api/v1/members/${row.member_id}/logo`
       : null;
@@ -83,7 +84,7 @@ function toSummary(row: DirectoryRow): PublicMemberSummary {
     name,
     memberType: row.category_code,
     tier: row.tier,
-    website: row.org_website ?? orgData.website ?? null,
+    website: sanitizeLegacyHttpUrl(row.org_website ?? orgData.website),
     description: row.org_description ?? orgData.description ?? (isIndividual ? row.biography : null) ?? null,
     slogan: row.org_slogan ?? orgData.slogan ?? null,
     logoUrl,
@@ -224,11 +225,11 @@ export async function getPublicMemberById(db: DatabaseLike, idOrSlug: string): P
   return {
     ...summary,
     content: orgRow?.content_markdown ?? null,
-    blogUrl: orgRow?.blog_url ?? null,
-    blogFeedUrl: orgRow?.blog_feed_url ?? null,
-    pressUrl: orgRow?.press_url ?? null,
-    pressFeedUrl: orgRow?.press_feed_url ?? null,
-    careersUrl: orgRow?.careers_url ?? null,
+    blogUrl: sanitizeLegacyHttpUrl(orgRow?.blog_url),
+    blogFeedUrl: sanitizeLegacyHttpUrl(orgRow?.blog_feed_url),
+    pressUrl: sanitizeLegacyHttpUrl(orgRow?.press_url),
+    pressFeedUrl: sanitizeLegacyHttpUrl(orgRow?.press_feed_url),
+    careersUrl: sanitizeLegacyHttpUrl(orgRow?.careers_url),
     links: row.organization_id ? parseLinksJson(orgRow?.links_json ?? null) : userLinks,
     representatives,
     jobTitle: row.organization_id ? null : row.job_title,

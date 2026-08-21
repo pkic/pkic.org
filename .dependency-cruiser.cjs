@@ -40,11 +40,26 @@ module.exports = {
       to: { path: "^functions" },
     },
     {
+      name: "frontend-shared-does-not-import-features",
+      comment:
+        "Reusable frontend presentation, hooks, and clients cannot depend on an admin, event, or member feature.",
+      severity: "error",
+      from: { path: "^assets/ts/(components|hooks|shared)(/|$)" },
+      to: { path: "^assets/ts/(admin|event-flows|member-flows)(/|$)" },
+    },
+    {
       name: "backend-libraries-do-not-import-routes",
       comment: "Backend libraries and use cases cannot depend on HTTP route adapters.",
       severity: "error",
       from: { path: "^functions/_lib" },
       to: { path: "^functions/api" },
+    },
+    {
+      name: "routes-do-not-import-audit-infrastructure",
+      comment: "HTTP adapters must call a use case that owns the business operation and its audit record.",
+      severity: "error",
+      from: { path: "^functions/api" },
+      to: { path: "^functions/_lib/services/audit$" },
     },
     {
       name: "generic-email-does-not-import-feature-services",

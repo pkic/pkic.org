@@ -6,7 +6,8 @@ import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { listAdminEventProposals } from "../../../../../_lib/services/admin-event-proposals";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
-import { adminEventProposalsQuerySchema, eventSlugParamsSchema } from "../../../../../../assets/shared/schemas/api";
+import { adminEventProposalsQuerySchema } from "../../../../../../assets/shared/schemas/admin-events";
+import { eventSlugParamsSchema } from "../../../../../../assets/shared/schemas/api-common";
 import { adminEventProposalsResponseSchema } from "../../../../../../assets/shared/schemas/admin-event-proposals";
 
 export const AdminEventsEventSlugProposalsGet = openApiRoute(
@@ -29,7 +30,7 @@ export const AdminEventsEventSlugProposalsGet = openApiRoute(
     const event = await getEventBySlug(db, c.req.param("eventSlug"));
     requirePermission(admin, "proposals:read", { type: "event", id: event.id });
     const access = await getProposalAccessForEvent(db, event.id, admin);
-    const { status, recommendation, sort = "-submittedAt", q, deleted, limit = 50, offset = 0 } = data.query;
+    const { status, recommendation, sort, q, deleted, limit, offset } = data.query;
     const result = await listAdminEventProposals(db, {
       eventId: event.id,
       status,

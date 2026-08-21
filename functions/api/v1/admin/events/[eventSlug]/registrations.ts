@@ -5,7 +5,11 @@ import { listAdminEventRegistrations } from "../../../../../_lib/services/regist
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { buildPageInfo } from "../../../../../../assets/shared/schemas/pagination";
-import { adminEventRegistrationsQuerySchema, eventSlugParamsSchema } from "../../../../../../assets/shared/schemas/api";
+import {
+  adminEventRegistrationsListResponseSchema,
+  adminEventRegistrationsQuerySchema,
+} from "../../../../../../assets/shared/schemas/admin-events";
+import { eventSlugParamsSchema } from "../../../../../../assets/shared/schemas/api-common";
 
 export const AdminEventRegistrationsGet = openApiRoute(
   {
@@ -16,7 +20,10 @@ export const AdminEventRegistrationsGet = openApiRoute(
       query: adminEventRegistrationsQuerySchema,
     },
     responses: {
-      "200": { description: "Registrations, event-wide stats, and pagination info." },
+      "200": {
+        description: "Registrations, event-wide stats, and pagination info.",
+        content: { "application/json": { schema: adminEventRegistrationsListResponseSchema } },
+      },
       "401": { description: "Missing or invalid authentication." },
       "404": { description: "Event not found." },
     },
@@ -26,7 +33,7 @@ export const AdminEventRegistrationsGet = openApiRoute(
     await requireAdminFromRequest(db, c.req.raw, c.env);
     const event = await getEventBySlug(db, c.req.param("eventSlug"));
 
-    const { limit = 50, offset = 0, q, status, bounced, consent, attendance_change, sort } = data.query;
+    const { limit, offset, q, status, bounced, consent, attendance_change, sort } = data.query;
     const result = await listAdminEventRegistrations(db, event.id, {
       limit,
       offset,

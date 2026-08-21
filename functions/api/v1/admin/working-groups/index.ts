@@ -18,8 +18,8 @@ export const WorkingGroupsList = openApiRoute(workingGroupsListRouteSchema, asyn
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "working-groups:read");
 
-  const { limit = 50, offset = 0, q, sort } = data.query;
-  const { workingGroups, total } = await listAdminWorkingGroups(requestDb(c), { limit, offset, q, sort });
+  const { limit, offset, q, sort, active } = data.query;
+  const { workingGroups, total } = await listAdminWorkingGroups(requestDb(c), { limit, offset, q, sort, active });
   return json({ workingGroups, page: buildPageInfo(limit, offset, total, workingGroups.length) });
 });
 

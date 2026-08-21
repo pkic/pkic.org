@@ -4,7 +4,7 @@ import { prepareAuditLog } from "../audit";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import type { DatabaseLike, StatementLike } from "../../types";
-import type { adminEventTermsReplaceSchema } from "../../../../assets/shared/schemas/api";
+import type { adminEventTermsReplaceSchema } from "../../../../assets/shared/schemas/admin-events";
 
 type EventTermsInput = z.infer<typeof adminEventTermsReplaceSchema>;
 type AudienceType = keyof EventTermsInput;

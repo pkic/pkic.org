@@ -15,7 +15,7 @@
 import { first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { AppError } from "../../errors";
-import { buildFindOrCreateUserStatement, findUserByEmail } from "../users";
+import { buildFindOrCreateUserStatement, findUserByEmail, splitPersonName } from "../users";
 import { serializeLinks } from "../../../../assets/shared/schemas/links";
 import { buildCreateIndividualMemberStatements } from "../membership/memberships";
 import {
@@ -34,13 +34,7 @@ import { prepareAuditLog } from "../audit";
 import { prepareQueueEmailStatement } from "../../email/outbox";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { getOrgAggregate } from "./queries";
-
-function splitName(fullName: string): { firstName: string | null; lastName: string | null } {
-  const tokens = fullName.trim().split(/\s+/).filter(Boolean);
-  if (tokens.length === 0) return { firstName: null, lastName: null };
-  if (tokens.length === 1) return { firstName: tokens[0], lastName: null };
-  return { firstName: tokens.slice(0, -1).join(" "), lastName: tokens[tokens.length - 1] };
-}
+import { buildMembershipAccessOffboardingStatements } from "../membership/offboarding";
 
 export interface AddRepresentativeInput {
   name: string;
@@ -87,7 +81,9 @@ export async function addOrganizationRepresentative(
   // "Ruiter"), which matters here because callers like the Users "Grant
   // membership" flow build `input.name` by joining the user's own existing
   // names.
-  const { firstName, lastName } = existingUser ? { firstName: undefined, lastName: undefined } : splitName(input.name);
+  const { firstName, lastName } = existingUser
+    ? { firstName: undefined, lastName: undefined }
+    : splitPersonName(input.name);
   const { user, statement: userStatement } = await buildFindOrCreateUserStatement(db, {
     email: input.email,
     firstName: firstName ?? undefined,
@@ -225,6 +221,16 @@ export async function updateAdminMember(db: DatabaseLike, actorUserId: string, i
       db
         .prepare(`UPDATE member_category_assignments SET category_code = ?, updated_at = ? WHERE member_id = ?`)
         .bind(input.membershipCategory, nowIso(), id),
+    );
+  }
+  if (member.status === "active" && input.status !== undefined && input.status !== "active") {
+    statements.push(
+      ...(await buildMembershipAccessOffboardingStatements(db, {
+        userId: member.user_id,
+        memberId: member.id,
+        causeKey: `member:${member.id}:status:${member.status}->${input.status}`,
+        at: nowIso(),
+      })),
     );
   }
   statements.push(prepareAuditLog(db, "admin", actorUserId, "member_updated", "member", id, input));
@@ -391,6 +397,12 @@ export async function removeAdminMember(
       db
         .prepare("DELETE FROM organization_secondary_contact_nominations WHERE member_id = ? AND nominated_user_id = ?")
         .bind(representative.member_id, representative.user_id),
+      ...(await buildMembershipAccessOffboardingStatements(db, {
+        userId: representative.user_id,
+        memberId: representative.member_id,
+        causeKey: `representative:${representative.id}:removed`,
+        at: now,
+      })),
       prepareAuditLog(db, "admin", actorUserId, "member_removed", "member", id, {
         userId: representative.user_id,
         organizationId: orgRow?.organization_id ?? null,
@@ -412,7 +424,14 @@ export async function removeAdminMember(
   );
   if (!member) throw new AppError(404, "NOT_FOUND", "Member not found");
 
+  const at = nowIso();
   await db.batch([
+    ...(await buildMembershipAccessOffboardingStatements(db, {
+      userId: member.user_id,
+      memberId: member.id,
+      causeKey: `member:${member.id}:removed`,
+      at,
+    })),
     db.prepare("DELETE FROM member_category_assignments WHERE member_id = ?").bind(id),
     db.prepare("DELETE FROM members WHERE id = ?").bind(id),
     prepareAuditLog(db, "admin", actorUserId, "member_removed", "member", id, {

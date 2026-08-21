@@ -1,5 +1,6 @@
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
 import type { SponsorsListResponse } from "../../../assets/shared/schemas/public-sponsors";
+import { sanitizeLegacyHttpUrl } from "../../../assets/shared/schemas/urls";
 import { queryPage } from "../db/pagination";
 import { buildD1TextSearchFilter } from "../db/search";
 import { resolveMappedOrderBy } from "../db/sort";
@@ -156,7 +157,11 @@ export async function listPublicSponsors(
   const { rows, total } = await queryPage<SponsorRow>(
     db,
     {
-      sql: `${PUBLIC_SPONSOR_READ_MODEL_SQL} SELECT * FROM enriched_sponsors ${filter.sql} ${orderBy} LIMIT ? OFFSET ?`,
+      sql: `${PUBLIC_SPONSOR_READ_MODEL_SQL}
+            SELECT id, name, website, logo_r2_key, sponsorship_logo_r2_key,
+                   tier, event_tier, effective_tier, effective_weight
+              FROM enriched_sponsors
+              ${filter.sql} ${orderBy} LIMIT ? OFFSET ?`,
       bindings: [eventName, ...filter.bindings, options.limit, options.offset],
     },
     {
@@ -168,7 +173,7 @@ export async function listPublicSponsors(
   const sponsors = rows.map((row) => ({
     id: row.id,
     name: row.name,
-    website: row.website,
+    website: sanitizeLegacyHttpUrl(row.website),
     logoUrl: row.logo_r2_key
       ? `/api/v1/members/${row.id}/logo`
       : row.sponsorship_logo_r2_key

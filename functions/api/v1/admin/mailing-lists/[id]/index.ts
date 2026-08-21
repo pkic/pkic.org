@@ -5,7 +5,6 @@
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { deleteMailingList, updateMailingList } from "../../../../../_lib/services/mailing-lists";
-import { writeAuditLog } from "../../../../../_lib/services/audit";
 import {
   mailingListDeleteRouteSchema,
   mailingListUpdateRouteSchema,
@@ -18,8 +17,7 @@ export const MailingListUpdate = openApiRoute(mailingListUpdateRouteSchema, asyn
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
   const id = data.params.id;
   const body = data.body;
-  const mailingList = await updateMailingList(db, id, body);
-  await writeAuditLog(db, "admin", admin.id, "mailing_list_updated", "mailing_list", id, body);
+  const mailingList = await updateMailingList(db, id, body, admin.id);
   return json({ mailingList });
 });
 
@@ -27,7 +25,6 @@ export const MailingListDelete = openApiRoute(mailingListDeleteRouteSchema, asyn
   const db = requestDb(c);
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
   const id = data.params.id;
-  await deleteMailingList(db, id);
-  await writeAuditLog(db, "admin", admin.id, "mailing_list_deleted", "mailing_list", id, {});
+  await deleteMailingList(db, id, admin.id);
   return json({ success: true });
 });

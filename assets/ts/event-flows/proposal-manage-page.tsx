@@ -1,6 +1,6 @@
 import { render } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { getJson, patchJson, postJson } from "../shared/api-client";
+import { deleteJson, getJson, patchJson, postJson } from "../shared/api-client";
 import type { ProposalManageResponse } from "../shared/types";
 import { normalizeValidation } from "../shared/form/validation-map";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
@@ -44,16 +44,18 @@ function displaySpeakerName(speaker: ProposalManageResponse["speakers"][number])
   return [speaker.firstName, speaker.lastName].filter(Boolean).join(" ") || speaker.email;
 }
 
-function SpeakerCard({
+export function ProposalManageSpeakerCard({
   speaker,
   token,
   apiBase,
+  isCurrentProposer,
   onReload,
   onStatus,
 }: {
   speaker: ProposalManageResponse["speakers"][number];
   token: string;
   apiBase: string;
+  isCurrentProposer: boolean;
   onReload: () => Promise<void>;
   onStatus: (message: string, isError?: boolean) => void;
 }) {
@@ -65,6 +67,7 @@ function SpeakerCard({
   const [role, setRole] = useState(speaker.role);
   const [saving, setSaving] = useState(false);
   const [reminding, setReminding] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const [headshotStatus, setHeadshotStatus] = useState("");
   const linksRef = useRef<ProfileLinksHandle>(null);
 
@@ -118,6 +121,22 @@ function SpeakerCard({
       onStatus(normalizeValidation(error).globalMessage, true);
     } finally {
       setReminding(false);
+    }
+  }
+
+  async function removeSpeaker(): Promise<void> {
+    if (!confirm(`Remove ${speakerName} from this proposal? Their user profile and proposal history will be kept.`)) {
+      return;
+    }
+    setRemoving(true);
+    try {
+      await deleteJson(profileEndpoint);
+      await onReload();
+      onStatus(`Removed ${speaker.email} from the proposal.`);
+    } catch (error) {
+      onStatus(normalizeValidation(error).globalMessage, true);
+    } finally {
+      setRemoving(false);
     }
   }
 
@@ -195,6 +214,17 @@ function SpeakerCard({
                       : "Request speaker to review or update their profile"}
                 </button>
               )}
+              {!isCurrentProposer && (
+                <button
+                  type="button"
+                  class="btn btn-outline-danger btn-sm"
+                  data-remove-proposal-speaker
+                  disabled={removing}
+                  onClick={() => void removeSpeaker()}
+                >
+                  {removing ? "Removing…" : "Remove speaker"}
+                </button>
+              )}
             </div>
 
             <form class="row g-3" onSubmit={(event) => void saveProfile(event)}>
@@ -230,11 +260,13 @@ function SpeakerCard({
                   value={role}
                   onChange={(event) => setRole(speakerRoleSchema.parse((event.target as HTMLSelectElement).value))}
                 >
-                  {SPEAKER_ROLE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
+                  {SPEAKER_ROLE_OPTIONS.filter((option) => isCurrentProposer || option.value !== "proposer").map(
+                    (option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ),
+                  )}
                 </select>
               </div>
               <div class="col-12 col-md-6">
@@ -270,7 +302,7 @@ function SpeakerCard({
                   value={biography}
                   onInput={(event) => setBiography((event.target as HTMLTextAreaElement).value)}
                 />
-                <div class="form-text">Visible to attendees on the event programme.</div>
+                <div class="form-text">Visible to attendees on the event program.</div>
               </div>
               <div class="col-12">
                 <ProfileLinksInput ref={linksRef} fieldName={`speaker-links-${speaker.userId}`} max={10} />
@@ -292,12 +324,14 @@ function SpeakerList({
   speakers,
   token,
   apiBase,
+  proposerUserId,
   onReload,
   onStatus,
 }: {
   speakers: ProposalManageResponse["speakers"];
   token: string;
   apiBase: string;
+  proposerUserId: string;
   onReload: () => Promise<void>;
   onStatus: (message: string, isError?: boolean) => void;
 }) {
@@ -307,11 +341,12 @@ function SpeakerList({
   return (
     <div>
       {speakers.map((speaker) => (
-        <SpeakerCard
+        <ProposalManageSpeakerCard
           key={speaker.userId}
           speaker={speaker}
           token={token}
           apiBase={apiBase}
+          isCurrentProposer={speaker.userId === proposerUserId}
           onReload={onReload}
           onStatus={onStatus}
         />
@@ -324,13 +359,21 @@ function renderSpeakerList(
   speakers: ProposalManageResponse["speakers"],
   token: string,
   apiBase: string,
+  proposerUserId: string,
   onReload: () => Promise<void>,
   onStatus: (message: string, isError?: boolean) => void,
 ): void {
   const list = q("[data-cospeaker-list]");
   if (!list) return;
   render(
-    <SpeakerList speakers={speakers} token={token} apiBase={apiBase} onReload={onReload} onStatus={onStatus} />,
+    <SpeakerList
+      speakers={speakers}
+      token={token}
+      apiBase={apiBase}
+      proposerUserId={proposerUserId}
+      onReload={onReload}
+      onStatus={onStatus}
+    />,
     list as HTMLElement,
   );
 }
@@ -362,12 +405,19 @@ async function main(): Promise<void> {
       `${apiBase}/proposals/manage/${encodeURIComponent(manageToken)}`,
     );
     proposalData = refreshed;
-    renderSpeakerList(refreshed.speakers, manageToken, apiBase, reloadSpeakers, (message, isError) => {
-      if (csStatus) {
-        csStatus.textContent = message;
-        csStatus.className = `mt-2 small ${isError ? "text-danger" : "text-success"}`;
-      }
-    });
+    renderSpeakerList(
+      refreshed.speakers,
+      manageToken,
+      apiBase,
+      refreshed.proposal.proposer_user_id,
+      reloadSpeakers,
+      (message, isError) => {
+        if (csStatus) {
+          csStatus.textContent = message;
+          csStatus.className = `mt-2 small ${isError ? "text-danger" : "text-success"}`;
+        }
+      },
+    );
   }
 
   try {
@@ -432,12 +482,19 @@ async function main(): Promise<void> {
   const inviteBtn = q<HTMLButtonElement>("[data-cospeaker-invite-btn]", boot.root);
   const csStatus = q<HTMLElement>("[data-cospeaker-status]", boot.root);
 
-  renderSpeakerList(proposalData.speakers, manageToken, apiBase, reloadSpeakers, (message, isError) => {
-    if (csStatus) {
-      csStatus.textContent = message;
-      csStatus.className = `mt-2 small ${isError ? "text-danger" : "text-success"}`;
-    }
-  });
+  renderSpeakerList(
+    proposalData.speakers,
+    manageToken,
+    apiBase,
+    proposalData.proposal.proposer_user_id,
+    reloadSpeakers,
+    (message, isError) => {
+      if (csStatus) {
+        csStatus.textContent = message;
+        csStatus.className = `mt-2 small ${isError ? "text-danger" : "text-success"}`;
+      }
+    },
+  );
 
   inviteBtn?.addEventListener("click", async () => {
     const email = (q<HTMLInputElement>("#cs-email", boot.root)?.value ?? "").trim();

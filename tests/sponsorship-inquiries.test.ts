@@ -160,7 +160,7 @@ describe("POST /api/v1/sponsorship/inquiries", () => {
     expect(response.status).toBe(400);
   });
 
-  it("rejects a tier outside the active shared catalogue", async () => {
+  it("rejects a tier outside the active shared catalog", async () => {
     const testEnv = makeEnv();
     const response = await callEndpoint(
       createInquiry,

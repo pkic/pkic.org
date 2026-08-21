@@ -41,7 +41,7 @@ import { normalizeEmail } from "../../validation";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import { AppError } from "../../errors";
-import { buildFindOrCreateUserStatement, type UserRecord } from "../users";
+import { buildFindOrCreateUserStatement, splitPersonName, type UserRecord } from "../users";
 import { normalizeOrgName } from "../sponsorship";
 import { getWorkingGroupBySlugOrId, buildAddWorkingGroupMemberStatements } from "../working-groups";
 import {
@@ -107,15 +107,8 @@ export interface ProvisionMembershipResult {
   representatives: ProvisionedRepresentative[];
 }
 
-function splitName(fullName: string): { firstName: string | null; lastName: string | null } {
-  const tokens = fullName.trim().split(/\s+/).filter(Boolean);
-  if (tokens.length === 0) return { firstName: null, lastName: null };
-  if (tokens.length === 1) return { firstName: tokens[0], lastName: null };
-  return { firstName: tokens.slice(0, -1).join(" "), lastName: tokens[tokens.length - 1] };
-}
-
 async function buildRepresentativeUserStatement(db: DatabaseLike, rep: ProvisionRepresentativeInput) {
-  const { firstName, lastName } = splitName(rep.name);
+  const { firstName, lastName } = splitPersonName(rep.name);
   return buildFindOrCreateUserStatement(db, {
     email: rep.email,
     firstName: firstName ?? undefined,

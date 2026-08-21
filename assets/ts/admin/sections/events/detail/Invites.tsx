@@ -1,11 +1,12 @@
 import { useState, useRef } from "preact/hooks";
 import { Badge } from "../../../../components/Badge";
-import { ApiDataTable, type ApiTableActions } from "../../../../components/Table";
+import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataTable";
 import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
 import { fmt, toast } from "../../../ui";
 import type { AdminInviteEntry, InviteRecord } from "../../../types";
 import { parseContactText } from "../../../../shared/invite-parser";
+import { adminEventInvitesListResponseSchema } from "../../../../../shared/schemas/admin-events";
 
 export type InviteType = "attendee" | "speaker";
 
@@ -330,13 +331,13 @@ function InviteList({ slug, inviteType }: { slug: string; inviteType: InviteType
   return (
     <ApiDataTable<InviteRecord>
       endpoint={`/api/v1/admin/events/${slug}/invites`}
-      resolve={(d) => (d as { invites: InviteRecord[] }).invites}
-      resolvePage={(d) => (d as { page: { total: number; hasMore: boolean } }).page}
+      responseSchema={adminEventInvitesListResponseSchema}
+      resolve={(data) => adminEventInvitesListResponseSchema.parse(data).invites}
+      resolvePage={(data) => adminEventInvitesListResponseSchema.parse(data).page}
       paginate
       searchPlaceholder="Search email / name…"
       params={{ type: inviteType, ...(statusFilter ? { status: statusFilter } : {}) }}
       actionsRef={tableRef}
-      deps={[slug, inviteType, statusFilter]}
       toolbar={({ resetPage }) => (
         <select
           class="form-select form-select-sm adm-filter-select"

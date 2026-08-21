@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from "preact/hooks";
-import { ErrorAlert } from "../../../../../components/ErrorAlert";
-import { Spinner } from "../../../../../components/Spinner";
+import { useState } from "preact/hooks";
 import { api } from "../../../../api";
-import { toast } from "../../../../ui";
+import { useAdminEditorResource } from "../../../../hooks/useAdminEditorResource";
+import { saveAdminEditor } from "../../../../actions";
+import { AdminSettingsEditor } from "../../../../components/AdminSettingsEditor";
 
 interface SponsorTierState {
   tierName: string;
@@ -10,63 +10,43 @@ interface SponsorTierState {
 }
 
 export function SponsorTiersTab({ slug }: { slug: string }) {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [tiers, setTiers] = useState<SponsorTierState[]>([]);
+  const tiersResource = useAdminEditorResource(
+    async () => {
+      const data = await api<{ tiers: SponsorTierState[] }>(`/api/v1/admin/events/${slug}/sponsor-tiers`);
+      return data.tiers ?? [];
+    },
+    [slug],
+    [],
+  );
+  const { value: tiers, setValue: setTiers, loading, error, reload } = tiersResource;
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await api<{ tiers: SponsorTierState[] }>(`/api/v1/admin/events/${slug}/sponsor-tiers`);
-      setTiers(data.tiers ?? []);
-    } catch (caught) {
-      setError((caught as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [slug]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
   async function handleSave() {
-    setSaving(true);
-    setSaveStatus("Saving…");
-    try {
-      await api(`/api/v1/admin/events/${slug}/sponsor-tiers`, {
-        method: "PUT",
-        body: JSON.stringify({ tiers: tiers.filter((tier) => tier.tierName.trim()) }),
-      });
-      setSaveStatus("✓ Saved");
-      toast("Sponsor tiers updated", "success");
-      await load();
-    } catch (caught) {
-      const message = (caught as Error).message;
-      setSaveStatus(message);
-      toast(message, "error");
-    } finally {
-      setSaving(false);
-    }
+    await saveAdminEditor({
+      setSaving,
+      setStatus: setSaveStatus,
+      request: () =>
+        api(`/api/v1/admin/events/${slug}/sponsor-tiers`, {
+          method: "PUT",
+          body: JSON.stringify({ tiers: tiers.filter((tier) => tier.tierName.trim()) }),
+        }),
+      successMessage: "Sponsor tiers updated",
+      reload,
+    });
   }
 
-  if (loading) return <Spinner />;
-  if (error) return <ErrorAlert error={error} />;
-
   return (
-    <div>
-      <div class="d-flex gap-2 align-items-center mb-3 flex-wrap">
-        <span class="small text-muted">
-          Which sponsor tiers at this event get attendee-data access via the sponsor portal. Defaults to no tiers having
-          access.
-        </span>
+    <AdminSettingsEditor
+      loading={loading}
+      error={error}
+      description="Which sponsor tiers at this event get attendee-data access via the sponsor portal. Defaults to no tiers having access."
+      actions={
         <button class="btn btn-sm btn-primary ms-auto" onClick={() => void handleSave()} disabled={saving}>
           Save
         </button>
-      </div>
+      }
+    >
       {saveStatus && (
         <div class={`small mb-2 ${saveStatus.startsWith("✓") ? "text-success" : "text-warning"}`}>{saveStatus}</div>
       )}
@@ -127,6 +107,6 @@ export function SponsorTiersTab({ slug }: { slug: string }) {
       >
         + Add tier
       </button>
-    </div>
+    </AdminSettingsEditor>
   );
 }

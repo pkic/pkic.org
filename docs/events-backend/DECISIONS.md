@@ -20,7 +20,7 @@
 - Gamification telemetry is append-only in `engagement_events`; it is subject-based (`subject_type` + `subject_ref`) so engagement can target community, organizations, events, proposals, invites, referrals, and more.
 - Retention is configurable for PII, while legal consent evidence remains immutable.
 - Initial bootstrap admin user is seeded as `admin@pkic.org`.
-- Request payload validation is centralized in shared Zod schemas (`shared/schemas/api.ts`) for backend/frontend reuse.
+- Request payload validation is centralized in focused `assets/shared/schemas/` domain modules for backend/frontend reuse.
 - Future community hooks are established with `users`, `organizations`, `members`, `event_participants`, `forms`, `sponsors`, `sponsor_events`, and `engagement_events`.
 - Flexible extension columns use `data_json` naming for consistency; reserved `value_json`-style naming is avoided.
 

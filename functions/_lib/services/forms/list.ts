@@ -42,6 +42,7 @@ export async function listAdminForms(
     q?: string;
     sort?: string;
     purpose?: string;
+    status?: string;
     eventId?: string;
     includeGlobal?: boolean;
   },
@@ -59,6 +60,10 @@ export async function listAdminForms(
   if (params.purpose) {
     conditions.push("f.purpose = ?");
     bindings.push(params.purpose);
+  }
+  if (params.status) {
+    conditions.push("f.status = ?");
+    bindings.push(params.status);
   }
   if (params.q) {
     const search = buildD1TextSearchFilter(params.q, [

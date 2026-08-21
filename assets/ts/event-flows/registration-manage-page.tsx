@@ -13,9 +13,13 @@ import { renderSharePanel, refreshSharePanelBadge } from "../shared/widgets/shar
 import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
 import { bootstrap, setStatus } from "./boot";
 import { wireHeadshotSection } from "./registration-manage-headshot";
-import { registrationManageSchema } from "../../shared/schemas/api";
+import { registrationManageSchema } from "../../shared/schemas/registration";
 import { buildManageLinkRecoveryMessage, showPostAction, showResendManageLinkForm } from "./registration-manage-panels";
 import { setField, deriveEventAttendanceType, findSubmitButton } from "../shared/form/helpers";
+import {
+  hasPendingRegistrationDayWaitlist,
+  isPendingRegistrationDayWaitlistStatus,
+} from "../components/RegistrationDayStatusSummary";
 
 function attendanceTypeLabel(attendanceType: string): string {
   switch (attendanceType) {
@@ -30,23 +34,16 @@ function attendanceTypeLabel(attendanceType: string): string {
   }
 }
 
-function isPendingDayWaitlistStatus(status: string | undefined): boolean {
-  return status === "waiting" || status === "offered";
-}
-
 function RegistrationStatusBanner({
-  registrationStatus,
   dayAttendance,
   dayWaitlist,
 }: {
-  registrationStatus: string;
   dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
   dayWaitlist: Array<{ dayDate: string; status: string }>;
 }) {
-  const activeDayWaitlist = dayWaitlist.filter((entry) => isPendingDayWaitlistStatus(entry.status));
+  const activeDayWaitlist = dayWaitlist.filter((entry) => isPendingRegistrationDayWaitlistStatus(entry.status));
   const offeredDayWaitlist = activeDayWaitlist.filter((entry) => entry.status === "offered");
   const waitlistByDay = new Map(activeDayWaitlist.map((entry) => [entry.dayDate, entry.status] as const));
-  const isRegistrationWaitlisted = registrationStatus === "waitlisted";
 
   return (
     <>
@@ -54,12 +51,7 @@ function RegistrationStatusBanner({
       {offeredDayWaitlist.length > 0 ? (
         <>
           <span class="badge text-bg-info">Spot available</span> An in-person spot is available for one or more
-          waitlisted days. Keep those days selected as in-person and save your registration to claim the offer.
-        </>
-      ) : isRegistrationWaitlisted ? (
-        <>
-          <span class="badge text-bg-warning">Waitlisted</span> Your registration is active, but one or more seats are
-          still pending confirmation.
+          waitlisted days. Use the claim button below while the offer is active.
         </>
       ) : (
         <>
@@ -98,7 +90,7 @@ function RegistrationStatusBanner({
           </ul>
         </div>
       )}
-      {!isRegistrationWaitlisted && dayWaitlist.length > 0 && (
+      {activeDayWaitlist.length > 0 && (
         <div class="mt-2 small">
           Some day-specific entries still need attention. If that no longer works for you, update the selections below
           or cancel the registration.
@@ -112,8 +104,6 @@ function statusLabel(status: string, cancellationReasonCode: string | null): { l
   switch (status) {
     case "registered":
       return { label: "Confirmed", cssClass: "bg-success" };
-    case "waitlisted":
-      return { label: "Waitlisted", cssClass: "bg-warning text-dark" };
     case "pending_email_confirmation":
       return { label: "Pending confirmation", cssClass: "bg-secondary" };
     case "cancelled":
@@ -181,16 +171,8 @@ async function main(): Promise<void> {
   const firstName = user?.first_name ?? "";
 
   if (statusBanner) {
-    const activeDayWaitlist = (dayWaitlist ?? []).filter((entry) => isPendingDayWaitlistStatus(entry.status));
-    if (registration.status === "waitlisted" || activeDayWaitlist.length > 0) {
-      render(
-        <RegistrationStatusBanner
-          registrationStatus={registration.status}
-          dayAttendance={dayAttendance}
-          dayWaitlist={dayWaitlist ?? []}
-        />,
-        statusBanner,
-      );
+    if (hasPendingRegistrationDayWaitlist(dayWaitlist ?? [])) {
+      render(<RegistrationStatusBanner dayAttendance={dayAttendance} dayWaitlist={dayWaitlist ?? []} />, statusBanner);
       statusBanner.classList.remove("d-none");
     }
   }
@@ -252,15 +234,46 @@ async function main(): Promise<void> {
 
   // ── Day waitlist (only shown when there are active entries) ──────────────
   if (dayWaitlistContainer && dayWaitlistSection) {
-    const activeDayWaitlist = (dayWaitlist ?? []).filter((entry) => isPendingDayWaitlistStatus(entry.status));
+    const activeDayWaitlist = (dayWaitlist ?? []).filter((entry) =>
+      isPendingRegistrationDayWaitlistStatus(entry.status),
+    );
     const labelByDayDate = new Map(eventDays.map((day) => [day.dayDate, day.label ?? day.dayDate] as const));
     if (activeDayWaitlist.length > 0) {
-      const hasOffer = activeDayWaitlist.some((entry) => entry.status === "offered");
+      const offeredDayDates = activeDayWaitlist
+        .filter((entry) => entry.status === "offered")
+        .map((entry) => entry.dayDate);
       render(
         <>
-          {hasOffer && (
+          {offeredDayDates.length > 0 && (
             <div class="event-flow-day-waitlist-offer mb-2">
-              Save this form while the offer is active to claim the available in-person spot.
+              <p class="mb-2">An in-person spot is available. Claim it before the offer expires.</p>
+              <button
+                type="button"
+                class="btn btn-sm btn-info"
+                onClick={(event) => {
+                  const button = event.currentTarget as HTMLButtonElement;
+                  void withLoadingButton(button, async () => {
+                    try {
+                      const selections = readDayAttendance(form);
+                      await patchJson(`${apiBase}/registrations/manage/${encodeURIComponent(token)}`, {
+                        action: "update",
+                        dayAttendance: selections,
+                        claimDayWaitlistOffers: offeredDayDates,
+                      });
+                      if (manageFormEl) {
+                        showPostAction(root, manageFormEl, {
+                          title: "In-person spot claimed",
+                          message: "Your day attendance has been confirmed. A confirmation email is on its way.",
+                        });
+                      }
+                    } catch (error) {
+                      handleSubmitError(error, form, statusEl);
+                    }
+                  });
+                }}
+              >
+                Claim offered {offeredDayDates.length === 1 ? "spot" : "spots"}
+              </button>
             </div>
           )}
           <div class="event-flow-day-waitlist d-flex flex-wrap gap-2">

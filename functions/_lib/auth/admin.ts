@@ -15,14 +15,18 @@ import {
   sessionExpiresAtToExp,
   hasBaseSessionTokenClaims,
   insertSessionRow,
+  prepareSessionRow,
   assertSessionActive,
   revokeSessionRow,
-  insertMagicLinkRow,
+  prepareMagicLinkRow,
   validateAndConsumeMagicLinkRow,
+  validateMagicLinkRow,
+  prepareConsumeMagicLinkStatement,
   type SessionTableConfig,
   type MagicLinkTableConfig,
   type AuthMagicLinkPurpose,
 } from "./session-engine";
+import { prepareAuditLogAfterOneChange } from "../services/audit";
 
 /**
  * Who may sign in through the admin auth flow (magic link / session).
@@ -327,6 +331,22 @@ export async function requestAdminMagicLink(
     purpose?: AdminMagicLinkPurpose;
   },
 ): Promise<{ token: string | null; admin: AuthAdmin | null }> {
+  const prepared = await prepareAdminMagicLink(db, payload);
+  if (!prepared.statement) return { token: null, admin: null };
+  await prepared.statement.run();
+  return { token: prepared.token, admin: prepared.admin };
+}
+
+export async function prepareAdminMagicLink(
+  db: DatabaseLike,
+  payload: {
+    email: string;
+    ipHash?: string | null;
+    userAgentHash?: string | null;
+    ttlMinutes: number;
+    purpose?: AdminMagicLinkPurpose;
+  },
+): Promise<{ token: string | null; admin: AuthAdmin | null; statement: import("../types").StatementLike | null }> {
   const email = normalizeEmail(payload.email);
   const admin = await first<AdminUserRow>(
     db,
@@ -335,19 +355,20 @@ export async function requestAdminMagicLink(
   );
 
   if (!admin) {
-    return { token: null, admin: null };
+    return { token: null, admin: null, statement: null };
   }
 
   const purpose = payload.purpose ?? AUTH_MAGIC_LINK_PURPOSES.admin;
-  const token = await insertMagicLinkRow(db, adminMagicLinkTable(purpose), admin.id, payload);
+  const magic = await prepareMagicLinkRow(db, adminMagicLinkTable(purpose), admin.id, payload);
 
   return {
-    token,
+    token: magic.token,
     admin: {
       id: admin.id,
       email: admin.email,
       role: admin.role,
     },
+    statement: magic.statement,
   };
 }
 
@@ -359,6 +380,7 @@ export async function verifyAdminMagicLink(
     ipHash?: string | null;
     userAgentHash?: string | null;
     purpose?: AdminMagicLinkPurpose;
+    auditAction?: "admin_magic_link_verified";
   },
 ): Promise<{ admin: AuthAdmin; sessionId: string; expiresAt: string }> {
   const tokenHash = await sha256Hex(payload.token);
@@ -385,18 +407,13 @@ export async function verifyAdminMagicLink(
     throw new AppError(404, "MAGIC_LINK_INVALID", "Invalid admin magic link token");
   }
 
-  await validateAndConsumeMagicLinkRow(
-    db,
-    MAGIC_LINKS_TABLE.table,
-    {
-      id: row.id,
-      expiresAt: row.expires_at,
-      usedAt: row.used_at,
-      requestIpHash: row.request_ip_hash,
-      userAgentHash: row.user_agent_hash,
-    },
-    payload,
-  );
+  const magicRow = {
+    id: row.id,
+    expiresAt: row.expires_at,
+    usedAt: row.used_at,
+    requestIpHash: row.request_ip_hash,
+    userAgentHash: row.user_agent_hash,
+  };
 
   // Legacy AUTH_SCOPES only apply to role='admin' — a staff role
   // (membership_processor, wg_chair, event_organizer, program_committee)
@@ -404,5 +421,28 @@ export async function verifyAdminMagicLink(
   // user_roles/permission_grants on every request (see
   // getAdminBySessionClaims), not baked into this token. issueAdminSession
   // applies that same rule.
-  return issueAdminSession(db, { id: row.user_id, email: row.email, role: row.role }, payload.sessionTtlHours);
+  if (!payload.auditAction) {
+    await validateAndConsumeMagicLinkRow(db, MAGIC_LINKS_TABLE.table, magicRow, payload);
+    return issueAdminSession(db, { id: row.user_id, email: row.email, role: row.role }, payload.sessionTtlHours);
+  }
+
+  validateMagicLinkRow(magicRow, payload);
+  const session = await prepareSessionRow(db, SESSIONS_TABLE, row.user_id, payload.sessionTtlHours);
+  await db.batch([
+    prepareConsumeMagicLinkStatement(db, MAGIC_LINKS_TABLE.table, row.id),
+    prepareAuditLogAfterOneChange(db, "admin", row.user_id, payload.auditAction, "admin_session", session.sessionId, {
+      expiresAt: session.expiresAt,
+    }),
+    session.statement,
+  ]);
+  return {
+    admin: {
+      id: row.user_id,
+      email: row.email,
+      role: row.role,
+      scopes: row.role === "admin" ? [...AUTH_SCOPES] : [],
+    },
+    sessionId: session.sessionId,
+    expiresAt: session.expiresAt,
+  };
 }

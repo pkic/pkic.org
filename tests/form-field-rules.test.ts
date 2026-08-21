@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  formFieldRulesSchema,
   formFieldOptionValues,
+  isSafeFormFieldPattern,
   isAllowedProfileUrl,
   isFormFieldVisible,
   parseFormFieldOptions,
@@ -45,5 +47,29 @@ describe("canonical form-field rules", () => {
     expect(isAllowedProfileUrl("https://profile.example.com/alice", ["example.com"])).toBe(true);
     expect(isAllowedProfileUrl("https://notexample.com/alice", ["example.com"])).toBe(false);
     expect(isAllowedProfileUrl("javascript:alert(1)", ["example.com"])).toBe(false);
+  });
+
+  it("accepts only conservative, bounded custom patterns", () => {
+    expect(isSafeFormFieldPattern("^[A-Za-z0-9_-]{1,80}$")).toBe(true);
+    expect(isSafeFormFieldPattern("^\\+?[0-9() -]{7,25}$")).toBe(true);
+    expect(isSafeFormFieldPattern("^(a+)+$")).toBe(false);
+    expect(isSafeFormFieldPattern("^a+$")).toBe(false);
+    expect(isSafeFormFieldPattern("^(?=a).*$")).toBe(false);
+    expect(isSafeFormFieldPattern("^(a|aa)+$")).toBe(false);
+    expect(isSafeFormFieldPattern("^a?b?c?$")).toBe(false);
+  });
+
+  it("bounds and cross-validates every configurable rule at the shared API boundary", () => {
+    expect(formFieldRulesSchema.safeParse({ pattern: "^(a+)+$" }).success).toBe(false);
+    expect(formFieldRulesSchema.safeParse({ maxLength: 100_001 }).success).toBe(false);
+    expect(formFieldRulesSchema.safeParse({ minItems: 3, maxItems: 2 }).success).toBe(false);
+    expect(formFieldRulesSchema.safeParse({ allowedDomains: Array(51).fill("example.com") }).success).toBe(false);
+    expect(formFieldRulesSchema.safeParse({ unknownRule: true }).success).toBe(false);
+  });
+
+  it("drops unsafe legacy patterns before either the browser or backend can compile them", () => {
+    expect(parseFormFieldRules({ pattern: "^(a+)+$", patternMessage: "Nope", maxLength: 200 })).toEqual({
+      maxLength: 200,
+    });
   });
 });

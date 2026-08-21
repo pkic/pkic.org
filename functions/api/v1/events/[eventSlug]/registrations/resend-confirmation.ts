@@ -6,7 +6,7 @@ import { getConfig, resolveAppBaseUrl } from "../../../../../_lib/config";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { recoverRegistrationConfirmation } from "../../../../../_lib/services/registrations/confirmation-recovery";
 import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
-import { registrationResendConfirmationSchema } from "../../../../../../assets/shared/schemas/api";
+import { registrationResendConfirmationSchema } from "../../../../../../assets/shared/schemas/registration";
 import { registrationResendConfirmationRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts";
 import { getClientIp, requireInternalSecret } from "../../../../../_lib/request";
 import { enforceEmailTriggerRateLimits } from "../../../../../_lib/rate-limit";

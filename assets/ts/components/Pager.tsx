@@ -18,7 +18,7 @@ function pageItems(current: number, max: number): Array<number | "…"> {
   return items;
 }
 
-interface PagerProps {
+export interface PagerProps {
   page: number;
   hasMore: boolean;
   pageSize: number;

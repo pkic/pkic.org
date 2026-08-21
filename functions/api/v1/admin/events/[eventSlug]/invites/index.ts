@@ -4,7 +4,10 @@ import { getEventBySlug } from "../../../../../../_lib/services/events";
 import { listAdminEventInvites } from "../../../../../../_lib/services/events/admin-invite-list";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../../_lib/openapi/route";
-import { adminEventInvitesListQuerySchema } from "../../../../../../../assets/shared/schemas/admin-events";
+import {
+  adminEventInvitesListQuerySchema,
+  adminEventInvitesListResponseSchema,
+} from "../../../../../../../assets/shared/schemas/admin-events";
 import { eventSlugParamsSchema } from "../../../../../../../assets/shared/schemas/api-common";
 
 const adminEventInvitesListRouteSchema = {
@@ -13,7 +16,10 @@ const adminEventInvitesListRouteSchema = {
   description: "Paginated, optionally status/type-filtered list of invites for an event.",
   request: { params: eventSlugParamsSchema, query: adminEventInvitesListQuerySchema },
   responses: {
-    "200": { description: "Invites list." },
+    "200": {
+      description: "Invites list.",
+      content: { "application/json": { schema: adminEventInvitesListResponseSchema } },
+    },
   },
 };
 
@@ -28,11 +34,5 @@ const adminEventInvitesListRouteSchema = {
 export const AdminEventInvitesList = openApiRoute(adminEventInvitesListRouteSchema, async (c: AdminContext, data) => {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
-  return json(
-    await listAdminEventInvites(requestDb(c), event.id, {
-      ...data.query,
-      limit: data.query.limit ?? 50,
-      offset: data.query.offset ?? 0,
-    }),
-  );
+  return json(await listAdminEventInvites(requestDb(c), event.id, data.query));
 });

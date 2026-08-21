@@ -9,12 +9,12 @@
  *   attendees; otherwise they are skipped and reported in the response.
  */
 import { parseJsonBody } from "../../../../../_lib/validation";
-import { json } from "../../../../../_lib/http";
+import { dispatchRequestMethod, json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { listAdminEventDaysWithCounts } from "../../../../../_lib/services/event-days";
 import { replaceConfiguredEventDays } from "../../../../../_lib/services/events/day-configuration";
-import { adminEventDaysReplaceSchema } from "../../../../../../assets/shared/schemas/api";
+import { adminEventDaysReplaceSchema } from "../../../../../../assets/shared/schemas/admin-events";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 export async function onRequestGet(c: AdminContext): Promise<Response> {
@@ -36,7 +36,5 @@ export async function onRequestPut(c: AdminContext): Promise<Response> {
 }
 
 export async function onRequest(c: AdminContext): Promise<Response> {
-  if (c.req.raw.method === "GET") return onRequestGet(c);
-  if (c.req.raw.method === "PUT") return onRequestPut(c);
-  return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
+  return dispatchRequestMethod(c, { GET: onRequestGet, PUT: onRequestPut });
 }

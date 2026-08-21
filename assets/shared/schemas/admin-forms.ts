@@ -8,6 +8,7 @@ import {
 } from "./pagination";
 import { trimmedString } from "./api-common";
 import { addDuplicateStringIssues } from "./refinements";
+import { formFieldRulesSchema } from "./form-field-rules";
 
 export const FORM_SUBMISSIONS_SORT_COLUMNS = ["submitter", "status", "submitted_at"] as const;
 export const formSubmissionsSortValueSchema = sortColumnSchema(FORM_SUBMISSIONS_SORT_COLUMNS);
@@ -24,7 +25,7 @@ export const adminFormFieldInputSchema = z.object({
   required: z.boolean().default(false),
   sortOrder: z.number().int().min(0).max(9999).default(0),
   options: z.array(z.string().trim().min(1).max(500)).max(200).optional(),
-  validation: z.record(z.string().trim().min(1).max(80), z.unknown()).optional(),
+  validation: formFieldRulesSchema.optional(),
 });
 
 function addDuplicateFormFieldIssues(value: { fields?: Array<{ key: string }> }, ctx: z.RefinementCtx): void {
@@ -73,8 +74,9 @@ export const ADMIN_FORMS_SORT_COLUMNS = [
   "submissionCount",
 ] as const;
 
-export const adminFormsListQuerySchema = listQuerySchema(ADMIN_FORMS_SORT_COLUMNS).extend({
+export const adminFormsListQuerySchema = listQuerySchema(ADMIN_FORMS_SORT_COLUMNS, { limit: 200 }).extend({
   purpose: z.enum(["event_registration", "proposal_submission", "survey", "feedback", "application"]).optional(),
+  status: z.enum(["active", "inactive", "archived"]).optional(),
 });
 
 export const adminFormSummarySchema = z.object({
@@ -103,9 +105,9 @@ const adminFormSubmissionFiltersSchema = z.object({
   eventSlug: z.string().trim().min(1).max(200).optional(),
 });
 
-export const adminFormSubmissionsQuerySchema = searchableListQuerySchema(formSubmissionsSortValueSchema).merge(
-  adminFormSubmissionFiltersSchema,
-);
+export const adminFormSubmissionsQuerySchema = searchableListQuerySchema(formSubmissionsSortValueSchema, {
+  limit: 200,
+}).merge(adminFormSubmissionFiltersSchema);
 
 export const adminFormSubmissionStatsQuerySchema = searchQuerySchema.merge(adminFormSubmissionFiltersSchema);
 

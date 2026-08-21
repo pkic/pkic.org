@@ -11,6 +11,27 @@ import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { membershipCategorySchema } from "./membership-categories";
 import { linksSchema } from "./links";
 
+export const adminRoleValueSchema = z.enum(["admin", "user", "guest"]);
+export type AdminRoleValue = z.infer<typeof adminRoleValueSchema>;
+
+export const adminUserUpdateSchema = z
+  .object({
+    role: adminRoleValueSchema.optional(),
+    active: z.boolean().optional(),
+    email: z.string().trim().toLowerCase().email().optional(),
+    firstName: z.string().trim().max(80).nullable().optional(),
+    lastName: z.string().trim().max(120).nullable().optional(),
+    preferredName: z.string().trim().max(80).nullable().optional(),
+    organizationName: z.string().trim().max(200).nullable().optional(),
+    jobTitle: z.string().trim().max(200).nullable().optional(),
+    biography: z.string().trim().max(5000).nullable().optional(),
+    links: linksSchema.nullable().optional(),
+    isEcMember: z.boolean().optional(),
+  })
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    message: "At least one field must be provided",
+  });
+
 /** Allowlisted sort columns for GET /api/v1/admin/users — unqualified, matching the route's SELECT-list aliases. */
 export const ADMIN_USERS_SORT_COLUMNS = ["last_name", "email", "organization_name", "role", "created_at"] as const;
 

@@ -1,19 +1,27 @@
-import { useCallback, useEffect, useMemo, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 import { Link } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { DataTable } from "../../../../components/Table";
 import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
-import { getAdminEventFormCatalogue } from "../../../services/catalogues";
+import { adminEventFormCatalog } from "../../../services/catalogs";
 import { fmt, toast } from "../../../ui";
 import type { AdminAttendanceOption, AdminEventFormSummary } from "../../../types";
 import { FormEditor, type AdminFormDetail } from "./FormEditor";
 import { FormResponseStats, FormSubmissionsTable, type ServerFieldStat } from "./FormResponses";
-import { adminFormSubmissionStatsResponseSchema } from "../../../../../shared/schemas/api";
+import {
+  adminFormSubmissionStatsResponseSchema,
+  adminFormsListResponseSchema,
+} from "../../../../../shared/schemas/admin-forms";
+import {
+  ADMIN_EVENT_REGISTRATION_STATUSES,
+  adminEventRegistrationStatusLabel,
+} from "../../../../../shared/schemas/admin-events";
 import { loadEventAttendanceOptions } from "./eventAttendance";
+import { ServerSearchSelect } from "../../../components/ServerSearchSelect";
+import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataTable";
 
 type FormTab = "responses" | "statistics" | "edit";
 
@@ -146,12 +154,7 @@ function FormDetailPanel({
         />
         {tab === "statistics" && <FormResponseStats fields={detail.fields} stats={stats} total={totalResponses} />}
         {tab === "responses" && (
-          <FormSubmissionsTable
-            fields={detail.fields}
-            endpoint={submissionEndpoint}
-            params={submissionParams}
-            deps={[formKey, slug, filters?.status, filters?.attendanceType]}
-          />
+          <FormSubmissionsTable fields={detail.fields} endpoint={submissionEndpoint} params={submissionParams} />
         )}
         {tab === "edit" && (
           <FormEditor
@@ -172,40 +175,15 @@ function FormDetailPanel({
 
 export function Forms({ slug }: { slug?: string }) {
   const [, navigate] = useHashLocation();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [forms, setForms] = useState<AdminEventFormSummary[]>([]);
   const [creating, setCreating] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const endpoint = slug ? `/api/v1/admin/events/${slug}/forms` : "/api/v1/admin/forms";
-      const data = await api<{ forms: AdminEventFormSummary[] }>(endpoint);
-      setForms(data.forms ?? []);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [slug]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  if (loading) return <Spinner />;
-  if (error) return <ErrorAlert error={error} />;
+  const tableActions = useRef<ApiTableActions | null>(null);
+  const endpoint = slug ? `/api/v1/admin/events/${encodeURIComponent(slug)}/forms` : "/api/v1/admin/forms";
 
   return (
     <div>
       <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
         <button class="btn btn-sm btn-success" onClick={() => setCreating(true)}>
           {slug ? "New event form" : "New global form"}
-        </button>
-        <button class="btn btn-sm btn-outline-secondary ms-auto" onClick={() => void load()}>
-          Refresh
         </button>
       </div>
 
@@ -221,7 +199,7 @@ export function Forms({ slug }: { slug?: string }) {
               slug={slug}
               onSaved={(key) => {
                 setCreating(false);
-                void load();
+                tableActions.current?.reload();
                 if (!slug) navigate(`/forms/${key}`);
               }}
               onCancel={() => setCreating(false)}
@@ -230,7 +208,16 @@ export function Forms({ slug }: { slug?: string }) {
         </div>
       )}
 
-      <DataTable
+      <ApiDataTable
+        endpoint={endpoint}
+        responseSchema={adminFormsListResponseSchema}
+        resolve={(response) => response.forms}
+        resolvePage={(response) => response.page}
+        paginate
+        initialPageSize={25}
+        initialSort="title"
+        searchPlaceholder="Search forms…"
+        actionsRef={tableActions}
         columns={[
           { header: "Key", cell: (form) => <span class="mono small">{form.key}</span> },
           ...(!slug
@@ -266,7 +253,6 @@ export function Forms({ slug }: { slug?: string }) {
           },
           { header: "Title", cell: (form) => form.title, className: "small" },
         ]}
-        data={forms}
         empty="No forms configured"
         rowKey={(form) => form.id}
         onRowClick={(form) => {
@@ -302,27 +288,16 @@ export function EventFormResponses({
 }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [forms, setForms] = useState<AdminEventFormSummary[]>([]);
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [selected, setSelected] = useState<AdminEventFormSummary | null>(null);
   const [statusFilter, setStatusFilter] = useState("");
   const [attendanceTypeFilter, setAttendanceTypeFilter] = useState("");
   const [attendanceOptions, setAttendanceOptions] = useState<AdminAttendanceOption[]>([]);
-
-  const selected = useMemo(
-    () => forms.find((form) => form.key === selectedKey) ?? forms[0] ?? null,
-    [forms, selectedKey],
-  );
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [formsData, attendance] = await Promise.all([
-        getAdminEventFormCatalogue(slug, purpose),
-        loadEventAttendanceOptions(slug, purpose),
-      ]);
-      setForms(formsData);
-      setAttendanceOptions(attendance);
+      setAttendanceOptions(await loadEventAttendanceOptions(slug, purpose));
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -334,13 +309,8 @@ export function EventFormResponses({
     void load();
   }, [load]);
 
-  useEffect(() => {
-    if (!selectedKey && forms.length > 0) setSelectedKey(forms[0].key);
-  }, [forms, selectedKey]);
-
   if (loading) return <Spinner />;
   if (error) return <ErrorAlert error={error} />;
-  if (!selected) return <p class="small text-body-secondary fst-italic mb-0">No linked forms found.</p>;
 
   const filters: FormResponseFilters = {
     ...(statusFilter ? { status: statusFilter } : {}),
@@ -350,22 +320,17 @@ export function EventFormResponses({
   return (
     <div>
       <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
-        {forms.length > 1 && (
-          <>
-            <label class="form-label small fw-semibold mb-0">Form</label>
-            <select
-              class="form-select form-select-sm adm-filter-select"
-              value={selected.key}
-              onChange={(event) => setSelectedKey((event.target as HTMLSelectElement).value)}
-            >
-              {forms.map((form) => (
-                <option key={form.key} value={form.key}>
-                  {form.title}
-                </option>
-              ))}
-            </select>
-          </>
-        )}
+        <div class="adm-filter-control">
+          <ServerSearchSelect
+            catalog={adminEventFormCatalog(slug, purpose)}
+            label="Form"
+            value={selected?.key ?? null}
+            selectedLabel={selected?.title}
+            allowEmpty={false}
+            autoSelectFirst
+            onChange={setSelected}
+          />
+        </div>
         <select
           class="form-select form-select-sm adm-filter-select"
           value={statusFilter}
@@ -374,10 +339,11 @@ export function EventFormResponses({
           <option value="">All statuses</option>
           {purpose === "event_registration" ? (
             <>
-              <option value="registered">Confirmed</option>
-              <option value="pending_email_confirmation">Pending confirmation</option>
-              <option value="waitlisted">Waitlisted</option>
-              <option value="cancelled">Cancelled</option>
+              {ADMIN_EVENT_REGISTRATION_STATUSES.map((status) => (
+                <option key={status} value={status}>
+                  {adminEventRegistrationStatusLabel(status)}
+                </option>
+              ))}
             </>
           ) : (
             <>
@@ -403,7 +369,17 @@ export function EventFormResponses({
           </select>
         )}
       </div>
-      <FormDetailPanel formKey={selected.key} slug={slug} summary={selected} filters={filters} showManagement={false} />
+      {selected ? (
+        <FormDetailPanel
+          formKey={selected.key}
+          slug={slug}
+          summary={selected}
+          filters={filters}
+          showManagement={false}
+        />
+      ) : (
+        <p class="small text-body-secondary fst-italic mb-0">No linked forms found.</p>
+      )}
     </div>
   );
 }

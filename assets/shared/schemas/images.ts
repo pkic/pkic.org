@@ -1,5 +1,15 @@
+import { z } from "zod";
+import { httpOrSameOriginUrlSchema } from "./urls";
+import { successResponseSchema } from "./api-common";
+
 /** Canonical browser-safe raster image types accepted by every upload surface. */
 export const IMAGE_UPLOAD_ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+
+/** Shared storage response returned after organization and sponsor logo uploads. */
+export const logoUploadResponseSchema = successResponseSchema.extend({
+  r2Key: z.string(),
+  logoUrl: httpOrSameOriginUrlSchema,
+});
 
 /** Admin and member profile uploads are optionally resized by Cloudflare Images. */
 export const STANDARD_HEADSHOT_MAX_BYTES = 5 * 1024 * 1024;

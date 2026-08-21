@@ -91,10 +91,20 @@ CREATE UNIQUE INDEX uq_audit_log_idempotency_key
 -- deterministic outbox id; ordinary repeatable/campaign email remains
 -- append-only by omitting it.
 ALTER TABLE email_outbox ADD COLUMN idempotency_key TEXT;
+ALTER TABLE email_outbox ADD COLUMN processing_token TEXT;
+ALTER TABLE email_outbox ADD COLUMN lease_expires_at TEXT;
 
 CREATE UNIQUE INDEX uq_email_outbox_idempotency_key
   ON email_outbox(idempotency_key)
   WHERE idempotency_key IS NOT NULL;
+
+DROP INDEX IF EXISTS idx_email_outbox_processing;
+CREATE INDEX idx_email_outbox_due
+  ON email_outbox(send_after, created_at, id)
+  WHERE status IN ('queued', 'retrying');
+CREATE INDEX idx_email_outbox_expired_lease
+  ON email_outbox(lease_expires_at, created_at, id)
+  WHERE status = 'sending';
 
 -- Identifies the logical co-speaker invitation attempt. Re-inviting a
 -- declined speaker advances the generation, while concurrent/retried writes
@@ -217,10 +227,12 @@ END;
 ALTER TABLE event_days ADD COLUMN capacity_revision INTEGER NOT NULL DEFAULT 0;
 
 CREATE TABLE event_day_capacity_guards (
-  id                TEXT NOT NULL PRIMARY KEY,
-  event_day_id      TEXT NOT NULL,
-  expected_revision INTEGER NOT NULL,
-  FOREIGN KEY(event_day_id) REFERENCES event_days(id) ON DELETE CASCADE
+  id                    TEXT NOT NULL PRIMARY KEY,
+  event_day_id          TEXT NOT NULL,
+  expected_revision     INTEGER NOT NULL,
+  claim_registration_id TEXT,
+  FOREIGN KEY(event_day_id) REFERENCES event_days(id) ON DELETE CASCADE,
+  FOREIGN KEY(claim_registration_id) REFERENCES registrations(id) ON DELETE CASCADE
 );
 
 CREATE TRIGGER trg_event_day_capacity_guard_validate
@@ -232,12 +244,42 @@ BEGIN
          <> NEW.expected_revision
     THEN RAISE(ABORT, 'EVENT_DAY_CAPACITY_CHANGED')
   END;
+  SELECT CASE
+    WHEN NEW.claim_registration_id IS NOT NULL
+      AND NOT EXISTS (
+          SELECT 1
+          FROM event_day_waitlist_entries w
+          WHERE w.event_day_id = NEW.event_day_id
+            AND w.registration_id = NEW.claim_registration_id
+            AND w.status = 'offered'
+            AND (
+              w.offer_expires_at IS NULL
+              OR w.offer_expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            )
+        )
+    THEN RAISE(ABORT, 'DAY_WAITLIST_OFFER_UNAVAILABLE')
+  END;
 END;
 
 CREATE TRIGGER trg_event_day_capacity_guard_advance
 AFTER INSERT ON event_day_capacity_guards
 FOR EACH ROW
 BEGIN
+  UPDATE event_day_waitlist_entries
+  SET status = 'accepted', offer_expires_at = NULL,
+      updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+  WHERE NEW.claim_registration_id IS NOT NULL
+    AND event_day_id = NEW.event_day_id
+    AND registration_id = NEW.claim_registration_id
+    AND status = 'offered'
+    AND (
+      offer_expires_at IS NULL
+      OR offer_expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+    );
+  SELECT CASE
+    WHEN NEW.claim_registration_id IS NOT NULL AND changes() <> 1
+    THEN RAISE(ABORT, 'DAY_WAITLIST_OFFER_UNAVAILABLE')
+  END;
   UPDATE event_days SET capacity_revision = capacity_revision + 1 WHERE id = NEW.event_day_id;
   DELETE FROM event_day_capacity_guards WHERE id = NEW.id;
 END;
@@ -571,6 +613,12 @@ CREATE TABLE working_group_members (
 CREATE INDEX idx_wg_members_wg ON working_group_members(working_group_id, left_at);
 CREATE INDEX idx_wg_members_user ON working_group_members(user_id);
 CREATE INDEX idx_wg_members_member ON working_group_members(member_id);
+-- Weekly membership digests query one closed time window across every WG.
+-- Put the range column first so both join and leave branches remain indexed
+-- without depending on an individual working_group_id predicate.
+CREATE INDEX idx_wg_members_joined_window ON working_group_members(joined_at, working_group_id);
+CREATE INDEX idx_wg_members_left_window ON working_group_members(left_at, working_group_id)
+  WHERE left_at IS NOT NULL;
 -- At most one active (left_at IS NULL) membership per (working_group, user);
 -- partial so a user can rejoin after leaving.
 CREATE UNIQUE INDEX idx_wg_members_active_unique ON working_group_members(working_group_id, user_id) WHERE left_at IS NULL;
@@ -1084,7 +1132,7 @@ CREATE INDEX idx_passkey_credentials_user ON passkey_credentials(user_id);
 -- are relationship-owned, not organization- or member-owned facts.
 --
 -- Social links use the same canonical `links_json` array
--- (assets/shared/schemas/api.ts's linksSchema) that `users.links_json`
+-- (assets/shared/schemas/links.ts) that `users.links_json`
 -- already uses (migration 0000), reusing the existing generic links UI
 -- (ProfileLinksInput) instead of per-provider columns that make the schema
 -- depend on whichever social networks happen to exist today. blog/press/
@@ -1204,20 +1252,32 @@ CREATE TABLE application_communications (
 
 CREATE INDEX idx_application_communications_application ON application_communications(application_id, created_at);
 
--- ── Google Groups sync queue ────────────────────────────────
+-- ── Google Groups desired state + sync queue ─────────────────
 -- Zero existing code for Google Groups sync prior to this migration. Every
 -- trigger point (approval onboarding, WG join/leave, deactivation) writes a
 -- row here; a processor (folded into the existing 15-minute due-work cron)
 -- calls the Google Admin Directory API when service-account secrets are
 -- configured, and leaves the row `pending` with a logged reason otherwise.
+CREATE TABLE google_groups_membership_desired_state (
+  user_id            TEXT NOT NULL,
+  google_group_email TEXT NOT NULL,
+  desired_action     TEXT NOT NULL,
+  generation         INTEGER NOT NULL,
+  updated_at         TEXT NOT NULL,
+  PRIMARY KEY(user_id, google_group_email),
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
 CREATE TABLE google_groups_sync_queue (
   id                TEXT NOT NULL PRIMARY KEY,
   user_id           TEXT NOT NULL,
   action            TEXT NOT NULL,
   -- allowed: add_to_list | remove_from_list
   google_group_email TEXT NOT NULL,
+  idempotency_key   TEXT,
+  generation        INTEGER,
   status            TEXT NOT NULL DEFAULT 'pending',
-  -- allowed: pending | processing | completed | failed
+  -- allowed: pending | processing | completed | failed | superseded
   -- 'pending' also covers a row awaiting retry after a transient failure —
   -- next_attempt_at gates when it becomes claimable again (PR #1 review
   -- §9.1: bounded claim/retry/backoff/dead-letter instead of an immediate,
@@ -1225,15 +1285,58 @@ CREATE TABLE google_groups_sync_queue (
   attempts          INTEGER NOT NULL DEFAULT 0,
   last_error        TEXT,
   next_attempt_at   TEXT,
+  processing_token  TEXT,
+  lease_expires_at  TEXT,
   created_at        TEXT NOT NULL,
   processed_at      TEXT,
   FOREIGN KEY(user_id) REFERENCES users(id)
 );
 
-CREATE INDEX idx_google_groups_sync_queue_status ON google_groups_sync_queue(status, created_at);
-CREATE UNIQUE INDEX uq_google_groups_sync_queue_active_action
-  ON google_groups_sync_queue(user_id, google_group_email, action)
+CREATE INDEX idx_google_groups_sync_queue_due
+  ON google_groups_sync_queue(next_attempt_at)
+  WHERE status = 'pending';
+CREATE INDEX idx_google_groups_sync_queue_expired_lease
+  ON google_groups_sync_queue(lease_expires_at)
+  WHERE status = 'processing';
+CREATE UNIQUE INDEX uq_google_groups_sync_queue_idempotency
+  ON google_groups_sync_queue(idempotency_key)
+  WHERE idempotency_key IS NOT NULL;
+CREATE INDEX idx_google_groups_sync_queue_pair_order
+  ON google_groups_sync_queue(user_id, google_group_email, generation)
   WHERE status IN ('pending', 'processing');
+CREATE UNIQUE INDEX uq_google_groups_sync_queue_pair_generation
+  ON google_groups_sync_queue(user_id, google_group_email, generation)
+  WHERE generation IS NOT NULL;
+
+-- One queue INSERT is the atomic desired-state transition. An ignored
+-- idempotent INSERT fires no trigger and therefore cannot advance the desired
+-- generation without a matching job. A new generation supersedes older local
+-- work; if an already-issued Directory call returns late, the processor
+-- reconciles the current desired generation after that external effect.
+CREATE TRIGGER trg_google_groups_sync_queue_desired_state
+AFTER INSERT ON google_groups_sync_queue
+BEGIN
+  INSERT INTO google_groups_membership_desired_state
+    (user_id, google_group_email, desired_action, generation, updated_at)
+  VALUES (NEW.user_id, NEW.google_group_email, NEW.action, 1, NEW.created_at)
+  ON CONFLICT(user_id, google_group_email) DO UPDATE SET
+    desired_action = excluded.desired_action,
+    generation = google_groups_membership_desired_state.generation + 1,
+    updated_at = excluded.updated_at;
+
+  UPDATE google_groups_sync_queue
+     SET generation = (
+       SELECT generation FROM google_groups_membership_desired_state
+        WHERE user_id = NEW.user_id AND google_group_email = NEW.google_group_email
+     )
+   WHERE id = NEW.id;
+
+  UPDATE google_groups_sync_queue
+     SET status = 'superseded', processed_at = NEW.created_at,
+         next_attempt_at = NULL, processing_token = NULL, lease_expires_at = NULL
+   WHERE user_id = NEW.user_id AND google_group_email = NEW.google_group_email
+     AND id != NEW.id AND status IN ('pending', 'processing');
+END;
 
 -- ── Membership workflow settings ───────────────────────────────────
 -- Single configurable row (id is always 'default') rather than a generic
@@ -1778,10 +1881,22 @@ CREATE INDEX idx_sponsor_portal_sessions_sponsorship ON sponsor_portal_sessions(
 -- this migration's logic (it isn't re-run — migrations apply once — but the
 -- guard mirrors the YAML script's own idempotency) never double-inserts.
 
-INSERT INTO sponsorships (id, sponsor_type, organization_id, tier, pipeline_stage, start_date, created_at, updated_at)
+INSERT INTO sponsorships
+  (id, sponsor_type, organization_id, tier, pipeline_stage, start_date, notes, created_at, updated_at)
 SELECT lower(hex(randomblob(16))), 'consortium', s.organization_id, s.sponsorship_level,
-       CASE WHEN s.status = 'active' THEN 'active' ELSE 'lapsed' END,
-       NULL, s.created_at, s.updated_at
+       CASE s.status
+         WHEN 'active' THEN 'active'
+         WHEN 'pending' THEN 'new_inquiry'
+         ELSE 'lapsed'
+       END,
+       NULL,
+       CASE WHEN s.data_json IS NOT NULL THEN
+         json_object(
+           'legacySponsorData',
+           CASE WHEN json_valid(s.data_json) THEN json(s.data_json) ELSE s.data_json END
+         )
+       ELSE NULL END,
+       s.created_at, s.updated_at
 FROM sponsors s
 WHERE NOT EXISTS (
   SELECT 1 FROM sponsorships sp WHERE sp.organization_id = s.organization_id AND sp.sponsor_type = 'consortium'
@@ -1797,12 +1912,29 @@ SET sponsor_tier = (
 WHERE id IN (SELECT organization_id FROM sponsors WHERE status = 'active');
 
 INSERT INTO sponsorships
-  (id, sponsor_type, organization_id, non_member_name, event_id, tier, pipeline_stage, start_date, created_at, updated_at)
+  (id, sponsor_type, organization_id, non_member_name, event_id, tier, pipeline_stage, start_date, notes,
+   created_at, updated_at)
 SELECT lower(hex(randomblob(16))), 'event', s.organization_id,
        CASE WHEN s.organization_id IS NULL THEN 'Legacy sponsor #' || se.sponsor_id ELSE NULL END,
        se.event_id, se.sponsorship_level,
-       CASE WHEN se.status = 'active' THEN 'active' ELSE 'lapsed' END,
-       NULL, se.created_at, se.updated_at
+       CASE se.status
+         WHEN 'active' THEN 'active'
+         WHEN 'pending' THEN 'payment_pending'
+         ELSE 'lapsed'
+       END,
+       NULL,
+       CASE
+         WHEN s.data_json IS NOT NULL OR se.sponsorship_subject IS NOT NULL OR se.data_json IS NOT NULL THEN
+           json_object(
+             'legacySponsorData',
+             CASE WHEN json_valid(s.data_json) THEN json(s.data_json) ELSE s.data_json END,
+             'legacySponsorshipSubject', se.sponsorship_subject,
+             'legacyEventData',
+             CASE WHEN json_valid(se.data_json) THEN json(se.data_json) ELSE se.data_json END
+           )
+         ELSE NULL
+       END,
+       se.created_at, se.updated_at
 FROM sponsor_events se
 JOIN sponsors s ON s.id = se.sponsor_id
 WHERE NOT EXISTS (
@@ -1915,6 +2047,7 @@ CREATE TABLE meeting_ics_files (
 );
 
 CREATE INDEX idx_meeting_ics_files_series_active ON meeting_ics_files(series_id, active);
+CREATE UNIQUE INDEX uq_meeting_ics_files_r2_key ON meeting_ics_files(r2_key);
 
 CREATE TABLE member_meeting_preferences (
   id           TEXT NOT NULL PRIMARY KEY,
@@ -2503,11 +2636,17 @@ CREATE TABLE storage_deletion_outbox (
   created_at      TEXT NOT NULL,
   updated_at      TEXT NOT NULL,
   deleted_at      TEXT,
+  processing_token TEXT,
+  lease_expires_at TEXT,
   UNIQUE(bucket, object_key)
 );
 
 CREATE INDEX idx_storage_deletion_outbox_due
-  ON storage_deletion_outbox(status, next_attempt_at, created_at);
+  ON storage_deletion_outbox(next_attempt_at, created_at, id)
+  WHERE status IN ('queued', 'retrying');
+CREATE INDEX idx_storage_deletion_outbox_expired_lease
+  ON storage_deletion_outbox(lease_expires_at, created_at, id)
+  WHERE status = 'deleting';
 
 -- Badge rendering writes to R2 and therefore cannot be committed atomically
 -- with its admin audit record. Persist the render intent in D1 first, then let
@@ -2515,19 +2654,26 @@ CREATE INDEX idx_storage_deletion_outbox_due
 CREATE TABLE badge_render_jobs (
   id              TEXT NOT NULL PRIMARY KEY,
   referral_code   TEXT NOT NULL UNIQUE,
-  origin          TEXT NOT NULL,
   status          TEXT NOT NULL,
+  requested_generation INTEGER NOT NULL DEFAULT 1,
+  claimed_generation INTEGER,
   attempts        INTEGER NOT NULL DEFAULT 0,
   next_attempt_at TEXT NOT NULL,
   last_error      TEXT,
   created_at      TEXT NOT NULL,
   updated_at      TEXT NOT NULL,
   rendered_at     TEXT,
+  processing_token TEXT,
+  lease_expires_at TEXT,
   FOREIGN KEY(referral_code) REFERENCES referral_codes(code)
 );
 
 CREATE INDEX idx_badge_render_jobs_due
-  ON badge_render_jobs(status, next_attempt_at, created_at);
+  ON badge_render_jobs(next_attempt_at, created_at, id)
+  WHERE status IN ('queued', 'retrying');
+CREATE INDEX idx_badge_render_jobs_expired_lease
+  ON badge_render_jobs(lease_expires_at, created_at, id)
+  WHERE status = 'rendering';
 
 -- Both attendee exports filter consent by registration and term. Without this
 -- index, the correlated lookup scans the complete consent table per row.
@@ -2539,6 +2685,12 @@ CREATE INDEX IF NOT EXISTS idx_consent_acceptances_registration_term
 CREATE INDEX IF NOT EXISTS idx_registrations_event_status_created
   ON registrations(event_id, status, created_at);
 
+-- The form response read model excludes registrations/proposals that already
+-- have normalized answers. Match the complete correlated lookup so D1 does
+-- not rescan every submission for the form once per legacy source row.
+CREATE INDEX IF NOT EXISTS idx_form_submissions_form_context
+  ON form_submissions(form_id, context_type, context_ref);
+
 -- Proposal review decisions may request changes and then be followed by a
 -- revised submission. Keep the current round on the existing rows so the
 -- established proposal/reviewer uniqueness constraints remain useful, while
@@ -2548,6 +2700,7 @@ CREATE INDEX IF NOT EXISTS idx_registrations_event_status_created
 ALTER TABLE session_proposals ADD COLUMN review_round INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE proposal_reviews ADD COLUMN review_round INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE proposal_decisions ADD COLUMN review_round INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE proposal_decisions ADD COLUMN decision_sequence INTEGER NOT NULL DEFAULT 1;
 
 CREATE TABLE proposal_decision_history (
   id                   TEXT    NOT NULL PRIMARY KEY,
@@ -2559,7 +2712,8 @@ CREATE TABLE proposal_decision_history (
   min_reviews_required INTEGER NOT NULL,
   review_count         INTEGER NOT NULL,
   decided_at           TEXT    NOT NULL,
-  UNIQUE(proposal_id, review_round),
+  decision_sequence    INTEGER NOT NULL,
+  UNIQUE(proposal_id, review_round, decision_sequence),
   FOREIGN KEY(proposal_id) REFERENCES session_proposals(id),
   FOREIGN KEY(decided_by_user_id) REFERENCES users(id)
 );
@@ -2577,7 +2731,6 @@ CREATE TABLE proposal_review_history (
   reviewed_at       TEXT    NOT NULL,
   captured_at       TEXT    NOT NULL,
   PRIMARY KEY(decision_id, review_id),
-  UNIQUE(proposal_id, review_round, reviewer_user_id),
   FOREIGN KEY(decision_id) REFERENCES proposal_decision_history(id),
   FOREIGN KEY(proposal_id) REFERENCES session_proposals(id),
   FOREIGN KEY(reviewer_user_id) REFERENCES users(id)
@@ -2585,10 +2738,10 @@ CREATE TABLE proposal_review_history (
 
 INSERT INTO proposal_decision_history (
   id, proposal_id, review_round, decided_by_user_id, final_status,
-  decision_note, min_reviews_required, review_count, decided_at
+  decision_note, min_reviews_required, review_count, decided_at, decision_sequence
 )
 SELECT id, proposal_id, review_round, decided_by_user_id, final_status,
-       decision_note, min_reviews_required, review_count, decided_at
+       decision_note, min_reviews_required, review_count, decided_at, decision_sequence
 FROM proposal_decisions;
 
 INSERT INTO proposal_review_history (
@@ -2616,6 +2769,6 @@ CREATE INDEX idx_session_proposals_event_deleted_submitted
   WHERE deleted_at IS NOT NULL;
 
 CREATE INDEX idx_proposal_decision_history_proposal_round
-  ON proposal_decision_history(proposal_id, review_round DESC);
+  ON proposal_decision_history(proposal_id, review_round DESC, decision_sequence DESC);
 
 PRAGMA foreign_keys = ON;

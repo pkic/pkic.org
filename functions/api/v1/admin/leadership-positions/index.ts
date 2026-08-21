@@ -27,7 +27,7 @@ export const LeadershipPositionsList = openApiRoute(
     const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
     requirePermission(admin, "access:grant");
 
-    const { body, status, q, sort, limit = 50, offset = 0 } = data.query;
+    const { body, status, q, sort, limit, offset } = data.query;
     const { positions, total } = await listLeadershipPositionsAdmin(requestDb(c), {
       body,
       status,

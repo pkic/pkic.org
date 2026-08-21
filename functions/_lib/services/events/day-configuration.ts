@@ -8,7 +8,7 @@ import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { localDateTimeInTimeZoneToIso } from "../../utils/timezone";
 import type { DatabaseLike, StatementLike } from "../../types";
-import type { adminEventDaysReplaceSchema } from "../../../../assets/shared/schemas/api";
+import type { adminEventDaysReplaceSchema } from "../../../../assets/shared/schemas/admin-events";
 
 type EventDaysInput = z.infer<typeof adminEventDaysReplaceSchema>;
 

@@ -1,7 +1,8 @@
 import { z } from "zod";
-import { tokenSchema } from "./api-common";
+import { successResponseSchema, tokenSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { inviteAcceptAttendeeSchema, inviteDeclineSchema, inviteTypeSchema } from "./registration";
+import { httpOrSameOriginUrlSchema } from "./urls";
 
 export const inviteCapabilityParamsSchema = z.object({ token: tokenSchema });
 export const inviteCapabilityQuerySchema = z.object({ id: databaseIdSchema.optional() });
@@ -19,8 +20,8 @@ export const inviteInfoValidSchema = z.object({
   eventName: z.string().nullable(),
   inviteeFirstName: z.string().nullable(),
   inviteType: inviteTypeSchema,
-  registrationUrl: z.string().nullable(),
-  proposalUrl: z.string().nullable(),
+  registrationUrl: httpOrSameOriginUrlSchema.nullable(),
+  proposalUrl: httpOrSameOriginUrlSchema.nullable(),
   inviters: z.array(
     z.object({
       firstName: z.string().nullable(),
@@ -36,24 +37,21 @@ export const inviteDeclineInfoValidSchema = inviteInfoValidSchema.omit({ inviter
 export const inviteDeclineInfoResponseSchema = z.union([inviteDeclineInfoValidSchema, inviteTerminalInfoSchema]);
 
 export const inviteAcceptResponseSchema = z.union([
-  z.object({ success: z.literal(true), inviteType: z.literal("speaker"), next: z.string() }),
-  z.object({
-    success: z.literal(true),
+  successResponseSchema.extend({ inviteType: z.literal("speaker"), next: z.string() }),
+  successResponseSchema.extend({
     registrationId: databaseIdSchema,
     status: z.string(),
     manageToken: tokenSchema,
-    shareUrl: z.string(),
+    shareUrl: httpOrSameOriginUrlSchema,
   }),
 ]);
-export const inviteDeclineResponseSchema = z.object({
-  success: z.literal(true),
+export const inviteDeclineResponseSchema = successResponseSchema.extend({
   forwarded: z.array(z.email()),
 });
 export const inviteReminderPreferenceSchema = z.object({
   action: z.enum(["postpone_7d", "pause_30d", "resume", "unsubscribe"]),
 });
-export const inviteReminderPreferenceResponseSchema = z.object({
-  success: z.literal(true),
+export const inviteReminderPreferenceResponseSchema = successResponseSchema.extend({
   state: z.enum(["unsubscribed", "active", "postponed", "paused"]),
   pausedUntil: z.string().nullable().optional(),
 });

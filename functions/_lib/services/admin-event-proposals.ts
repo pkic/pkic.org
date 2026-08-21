@@ -4,7 +4,7 @@ import { buildD1TextSearchFilter } from "../db/search";
 import type { DatabaseLike } from "../types";
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
 import type { AdminEventProposalSummary, ProposalStats } from "../../../assets/shared/schemas/admin-event-proposals";
-import { adminEventProposalsQuerySchema } from "../../../assets/shared/schemas/api";
+import { adminEventProposalsQuerySchema } from "../../../assets/shared/schemas/admin-events";
 import { PROPOSAL_INACTIVE_STATUSES } from "../../../assets/shared/schemas/proposal-status";
 
 type ProposalSort = NonNullable<z.infer<typeof adminEventProposalsQuerySchema>["sort"]>;

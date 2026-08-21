@@ -10,12 +10,14 @@ import {
   lastNameSchema,
   normalizedEmailSchema,
   organizationNameSchema,
+  successResponseSchema,
   tokenSchema,
   trimmedString,
 } from "./api-common";
 import { consentItemSchema, participantProfileSchema, proposerProfileSchema, speakerRoleSchema } from "./registration";
 import { proposalDecisionStatusSchema, proposalStatusSchema } from "./proposal-status";
 import { addDuplicateStringIssues } from "./refinements";
+import { httpUrlSchema } from "./urls";
 
 /** Event-defined session-type label; allowed values are checked against the event in the service layer. */
 export const proposalTypeSchema = trimmedString(2, 64);
@@ -90,13 +92,12 @@ export const proposalCreateSchema = boundedJsonObject(
   }
 });
 
-export const proposalCreateResponseSchema = z.object({
-  success: z.literal(true),
+export const proposalCreateResponseSchema = successResponseSchema.extend({
   proposalId: databaseIdSchema,
   status: proposalStatusSchema,
   manageToken: z.string(),
-  manageUrl: z.string().url(),
-  shareUrl: z.string().url(),
+  manageUrl: httpUrlSchema,
+  shareUrl: httpUrlSchema,
 });
 
 export const proposalResendManageLinkSchema = emailRecoveryRequestSchema;
@@ -128,6 +129,7 @@ export const proposalManageTokenParamsSchema = z.object({ token: tokenSchema });
 
 export const proposalManageRecordSchema = z.object({
   id: databaseIdSchema,
+  proposer_user_id: databaseIdSchema,
   status: proposalStatusSchema,
   proposal_type: proposalTypeSchema,
   title: z.string(),
@@ -149,7 +151,7 @@ export const proposalSpeakerProfileSchema = z.object({
   jobTitle: z.string().nullable(),
   links: linksSchema,
   headshotUpdatedAt: z.string().nullable(),
-  headshotUrl: z.string().url().nullable(),
+  headshotUrl: httpUrlSchema.nullable(),
 });
 
 export const proposalManageSpeakerSchema = proposalSpeakerProfileSchema.extend({
@@ -159,14 +161,12 @@ export const proposalManageSpeakerSchema = proposalSpeakerProfileSchema.extend({
   headshotUploaded: z.boolean(),
 });
 
-export const proposalManageReadResponseSchema = z.object({
-  success: z.literal(true),
+export const proposalManageReadResponseSchema = successResponseSchema.extend({
   proposal: proposalManageRecordSchema,
   speakers: z.array(proposalManageSpeakerSchema).max(MAX_PROPOSAL_PARTICIPANTS),
 });
 
-export const proposalManageUpdateResponseSchema = z.object({
-  success: z.literal(true),
+export const proposalManageUpdateResponseSchema = successResponseSchema.extend({
   proposal: proposalManageRecordSchema,
 });
 
@@ -195,8 +195,7 @@ export const finalizeProposalSchema = z
     }
   });
 
-export const finalizeProposalResponseSchema = z.object({
-  success: z.literal(true),
+export const finalizeProposalResponseSchema = successResponseSchema.extend({
   decisionId: databaseIdSchema,
   reviewRound: z.number().int().positive(),
   reviewCount: z.number().int().nonnegative(),
@@ -236,11 +235,36 @@ export const speakerProfilePatchSchema = z.object({
   links: linksSchema.optional(),
 });
 
+export const speakerParticipationActionSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("confirm"),
+    consents: z.array(consentItemSchema).min(1).max(20),
+  }),
+  z.object({
+    action: z.literal("decline"),
+    reason: z.string().trim().max(2000).optional(),
+  }),
+]);
+
+export const proposalSpeakerReminderRequestSchema = z.object({
+  userId: databaseIdSchema,
+});
+
 export const proposerSpeakerPatchSchema = speakerProfilePatchSchema.extend({
   role: speakerRoleSchema.optional(),
 });
 
 export const adminSpeakerBioPatchSchema = proposerSpeakerPatchSchema;
+
+export const proposalSpeakerRemovalRequestSchema = z.object({
+  replacementProposerUserId: databaseIdSchema.optional(),
+});
+
+export const proposalSpeakerRemovalResponseSchema = successResponseSchema.extend({
+  removedUserId: databaseIdSchema,
+  proposerUserId: databaseIdSchema,
+  cancelledEmailCount: z.number().int().nonnegative(),
+});
 
 export const coSpeakerInviteSchema = z.object({
   email: normalizedEmailSchema,

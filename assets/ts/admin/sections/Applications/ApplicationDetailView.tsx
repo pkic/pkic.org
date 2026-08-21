@@ -12,18 +12,8 @@ import { ApplicationEcDecisionsCard } from "./ApplicationEcDecisionsCard";
 import { ApplicationConcernsCard } from "./ApplicationConcernsCard";
 
 export function ApplicationDetailView({ applicationId, onBack }: { applicationId: string; onBack: () => void }) {
-  const {
-    loading,
-    error,
-    detail,
-    workingGroupLabels,
-    transition,
-    sendCommunication,
-    addNote,
-    recordEcDecision,
-    approve,
-    saveEdit,
-  } = useApplicationDetail(applicationId);
+  const { loading, error, detail, transition, sendCommunication, addNote, recordEcDecision, approve, saveEdit } =
+    useApplicationDetail(applicationId);
 
   if (loading) return <Spinner />;
   if (error) return <ErrorAlert error={error} />;
@@ -42,7 +32,7 @@ export function ApplicationDetailView({ applicationId, onBack }: { applicationId
       <div class="row g-4">
         <div class="col-md-6">
           <ApplicationOverviewCard detail={detail} onSave={saveEdit} />
-          <ApplicationAnswersCard detail={detail} workingGroupLabels={workingGroupLabels} />
+          <ApplicationAnswersCard detail={detail} />
           <ApplicationTransitionCard detail={detail} onApprove={approve} onTransition={transition} />
           <ApplicationDocumentsCard detail={detail} />
         </div>

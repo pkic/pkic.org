@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eventIdSchema } from "./api-common";
+import { eventIdSchema, successResponseSchema } from "./api-common";
 import { paginatedResponseSchema } from "./pagination";
 import { activeFormSummarySchema } from "./forms";
 import { databaseIdSchema } from "./identifiers";
@@ -101,8 +101,7 @@ export const adminProposalSpeakersResponseSchema = z.object({
   speakers: z.array(adminProposalSpeakerSchema).max(MAX_PROPOSAL_PARTICIPANTS),
 });
 
-export const adminProposalSpeakerPatchResponseSchema = z.object({
-  success: z.literal(true),
+export const adminProposalSpeakerPatchResponseSchema = successResponseSchema.extend({
   speaker: adminProposalSpeakerSchema,
 });
 
@@ -124,8 +123,7 @@ export const proposalDecisionPreviewMessageSchema = z.object({
   templateMissing: z.boolean(),
 });
 
-export const proposalDecisionPreviewResponseSchema = z.object({
-  success: z.literal(true),
+export const proposalDecisionPreviewResponseSchema = successResponseSchema.extend({
   recipientCount: z.number().int().nonnegative(),
   emailCount: z.number().int().nonnegative(),
   layoutMissing: z.boolean(),

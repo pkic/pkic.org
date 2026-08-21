@@ -1,11 +1,13 @@
 import { useState, useRef } from "preact/hooks";
 import { Badge } from "../../../components/Badge";
-import { ApiDataTable, type ApiTableActions } from "../../../components/Table";
+import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
+import { EventScheduleFields } from "../../components/EventScheduleFields";
 import { api } from "../../api";
-import { toast } from "../../ui";
 import type { EventSummary } from "../../types";
-import { adminEventsListResponseSchema } from "../../../../shared/schemas/api";
+import { adminEventsListResponseSchema } from "../../../../shared/schemas/admin-events";
 import { useHashLocation } from "wouter/use-hash-location";
+import { performAdminAction } from "../../actions";
+import { FormActions } from "../../components/FormActions";
 
 // ────────────────────────────────────────────────────────
 // New event form
@@ -50,30 +52,25 @@ function NewEventForm({ onCreated, onCancel }: { onCreated: (slug: string) => vo
       setStatus("Name and slug are required.");
       return;
     }
-    setSaving(true);
     setStatus("Creating…");
-    try {
-      const body: Record<string, unknown> = {
-        name: name.trim(),
-        slug: slug.trim(),
-        timezone: timezone.trim() || "UTC",
-        registration_mode: mode,
-        invite_limit_attendee: inviteLimit,
-      };
-      if (startsAt) body.starts_at = new Date(startsAt).toISOString();
-      if (endsAt) body.ends_at = new Date(endsAt).toISOString();
-      if (venue.trim()) body.venue = venue.trim();
-      if (virtualUrl.trim()) body.virtual_url = virtualUrl.trim();
-      await api("/api/v1/admin/events", { method: "POST", body: JSON.stringify(body) });
-      toast("Event created", "success");
-      onCreated(slug.trim());
-    } catch (e) {
-      const msg = (e as Error).message;
-      setStatus(msg);
-      toast(msg, "error");
-    } finally {
-      setSaving(false);
-    }
+    const body: Record<string, unknown> = {
+      name: name.trim(),
+      slug: slug.trim(),
+      timezone: timezone.trim() || "UTC",
+      registration_mode: mode,
+      invite_limit_attendee: inviteLimit,
+    };
+    if (startsAt) body.starts_at = new Date(startsAt).toISOString();
+    if (endsAt) body.ends_at = new Date(endsAt).toISOString();
+    if (venue.trim()) body.venue = venue.trim();
+    if (virtualUrl.trim()) body.virtual_url = virtualUrl.trim();
+    await performAdminAction({
+      setBusy: setSaving,
+      request: () => api("/api/v1/admin/events", { method: "POST", body: JSON.stringify(body) }),
+      successMessage: "Event created",
+      afterSuccess: () => onCreated(slug.trim()),
+      onError: setStatus,
+    });
   }
 
   return (
@@ -103,37 +100,15 @@ function NewEventForm({ onCreated, onCancel }: { onCreated: (slug: string) => vo
           />
         </div>
       </div>
-      <div class="row g-2 mb-2">
-        <div class="col-md-4">
-          <label class="form-label small fw-semibold">Start date</label>
-          <input
-            class="form-control form-control-sm"
-            type="datetime-local"
-            value={startsAt}
-            onInput={(e) => setStartsAt((e.target as HTMLInputElement).value)}
-          />
-        </div>
-        <div class="col-md-4">
-          <label class="form-label small fw-semibold">End date</label>
-          <input
-            class="form-control form-control-sm"
-            type="datetime-local"
-            value={endsAt}
-            onInput={(e) => setEndsAt((e.target as HTMLInputElement).value)}
-          />
-        </div>
-        <div class="col-md-4">
-          <label class="form-label small fw-semibold">Timezone</label>
-          <input
-            class="form-control form-control-sm"
-            type="text"
-            value={timezone}
-            onInput={(e) => setTimezone((e.target as HTMLInputElement).value)}
-            placeholder="UTC"
-            required
-          />
-        </div>
-      </div>
+      <EventScheduleFields
+        startsAt={startsAt}
+        endsAt={endsAt}
+        timezone={timezone}
+        onStartsAtChange={setStartsAt}
+        onEndsAtChange={setEndsAt}
+        onTimezoneChange={setTimezone}
+        timezonePlaceholder="UTC"
+      />
       <div class="row g-2 mb-2">
         <div class="col-md-6">
           <label class="form-label small fw-semibold">Registration Mode</label>
@@ -181,15 +156,7 @@ function NewEventForm({ onCreated, onCancel }: { onCreated: (slug: string) => vo
           />
         </div>
       </div>
-      <div class="d-flex gap-2 align-items-center">
-        <button type="submit" class="btn btn-sm btn-success" disabled={saving}>
-          Create Event
-        </button>
-        <button type="button" class="btn btn-sm btn-secondary" onClick={onCancel}>
-          Cancel
-        </button>
-        {status && <span class="small text-muted">{status}</span>}
-      </div>
+      <FormActions submitLabel="Create Event" busyLabel="Creating…" busy={saving} onCancel={onCancel} status={status} />
     </form>
   );
 }
@@ -228,6 +195,7 @@ export function EventList() {
 
       <ApiDataTable<EventSummary>
         endpoint="/api/v1/admin/events"
+        responseSchema={adminEventsListResponseSchema}
         resolve={(data) => adminEventsListResponseSchema.parse(data).events}
         resolvePage={(data) => adminEventsListResponseSchema.parse(data).page}
         paginate

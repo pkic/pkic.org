@@ -4,10 +4,12 @@ import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
-import { listEventDays } from "../event-days";
-import { buildRegistrationDayWaitlistSync, isEventDayCapacityConflict } from "./day-waitlist";
+import { deriveEventAttendanceType, listEventDays } from "../event-days";
+import { buildRegistrationDayWaitlistSync, roleBasedCapacityExemptReason, withDayCapacityRetry } from "./day-waitlist";
+import { ADMIN_DAY_CAPACITY_EXEMPT_REASON_CODE } from "./day-waitlist-policy";
 import { getRegistrationById } from "./queries";
 import { prepareRegistrationStatusEmail, type RegistrationStatusEmailParams } from "./status-notifications";
+import { prepareUpsertAttendeeParticipantStatement } from "./participant-registration";
 import type { RegistrationRecord } from "./types";
 
 interface ExistingAttendanceRow {
@@ -71,11 +73,12 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
     .map((day) => ({ dayDate: day.day_date, attendanceType: attendanceByDayId.get(day.id)! }));
 
   const now = nowIso();
-  const capacityExemptReason = `${payload.mode}:${payload.reason}`;
+  const roleExemptReason = await roleBasedCapacityExemptReason(db, payload.event.id, registration.user_id);
   const updated: RegistrationRecord = {
     ...registration,
-    capacity_exempt_in_person: 1,
-    capacity_exempt_reason: capacityExemptReason,
+    attendance_type: deriveEventAttendanceType(selections) ?? registration.attendance_type,
+    capacity_exempt_in_person: roleExemptReason ? 1 : 0,
+    capacity_exempt_reason: roleExemptReason,
     updated_at: now,
   };
   const waitlist = await buildRegistrationDayWaitlistSync(db, {
@@ -83,7 +86,7 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
     eventId: payload.event.id,
     userId: registration.user_id,
     selections,
-    capacityExemptReason,
+    capacityExemptReason: roleExemptReason,
     registrationStatus: registration.status,
     configuredEventDays: eventDays,
   });
@@ -92,11 +95,19 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
     db
       .prepare(
         `UPDATE registrations
-         SET capacity_exempt_in_person = 1, capacity_exempt_reason = ?, updated_at = ?
+         SET attendance_type = ?, capacity_exempt_in_person = ?, capacity_exempt_reason = ?, updated_at = ?
          WHERE id = ? AND event_id = ?`,
       )
-      .bind(capacityExemptReason, now, registration.id, payload.event.id),
+      .bind(
+        updated.attendance_type,
+        updated.capacity_exempt_in_person,
+        roleExemptReason,
+        now,
+        registration.id,
+        payload.event.id,
+      ),
   ];
+  const dayOverrideStatements: StatementLike[] = [];
   for (const dayDate of admittedDayDates) {
     const day = dayByDate.get(dayDate)!;
     const fromType = existingRows.find((row) => row.event_day_id === day.id)?.attendance_type ?? "not_attending";
@@ -122,14 +133,47 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
           .bind(uuid(), registration.id, day.id, fromType, payload.actorUserId, now),
       );
     }
+    if (!roleExemptReason) {
+      dayOverrideStatements.push(
+        db
+          .prepare(
+            `INSERT INTO event_day_waitlist_entries (
+               id, event_id, event_day_id, registration_id, user_id, priority_lane, status, position,
+               offer_expires_at, reason_code, reason_note, created_at, updated_at
+             ) VALUES (
+               ?, ?, ?, ?, ?, 'general', 'accepted',
+               COALESCE((SELECT MAX(position) + 1 FROM event_day_waitlist_entries WHERE event_day_id = ?), 1),
+               NULL, ?, ?, ?, ?
+             )
+             ON CONFLICT(event_day_id, registration_id)
+             DO UPDATE SET status = 'accepted', offer_expires_at = NULL,
+                           reason_code = excluded.reason_code, reason_note = excluded.reason_note,
+                           updated_at = excluded.updated_at`,
+          )
+          .bind(
+            uuid(),
+            payload.event.id,
+            day.id,
+            registration.id,
+            registration.user_id,
+            day.id,
+            ADMIN_DAY_CAPACITY_EXEMPT_REASON_CODE,
+            `${payload.mode}:${payload.reason}`,
+            now,
+            now,
+          ),
+      );
+    }
   }
   statements.push(
     ...waitlist.statements,
+    ...dayOverrideStatements,
+    prepareUpsertAttendeeParticipantStatement(db, updated),
     prepareAuditLog(db, "admin", payload.actorUserId, "registration_admitted", "registration", registration.id, {
       mode: payload.mode,
       reason: payload.reason,
       admittedDayDates,
-      capacityExemptReason,
+      capacityExemptReason: roleExemptReason ?? `day:${ADMIN_DAY_CAPACITY_EXEMPT_REASON_CODE}`,
     }),
   );
   const email = await prepareRegistrationStatusEmail(db, {
@@ -157,18 +201,13 @@ export async function admitRegistration(
   db: DatabaseLike,
   payload: AdmissionPayload,
 ): Promise<{ registration: RegistrationRecord; admittedDayDates: string[]; outboxId: string }> {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  return withDayCapacityRetry(async () => {
     const built = await buildAdmission(db, payload);
-    try {
-      await db.batch(built.statements);
-      return {
-        registration: built.registration,
-        admittedDayDates: built.admittedDayDates,
-        outboxId: built.outboxId,
-      };
-    } catch (error) {
-      if (!isEventDayCapacityConflict(error) || attempt === 2) throw error;
-    }
-  }
-  throw new AppError(409, "DAY_CAPACITY_CHANGED", "Day capacity changed; please retry");
+    await db.batch(built.statements);
+    return {
+      registration: built.registration,
+      admittedDayDates: built.admittedDayDates,
+      outboxId: built.outboxId,
+    };
+  });
 }

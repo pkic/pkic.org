@@ -22,11 +22,5 @@ import { auditLogListRouteSchema } from "../../../../assets/shared/schemas/admin
 export const AdminAuditLogList = openApiRoute(auditLogListRouteSchema, async (c: AdminContext, data) => {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  return json(
-    await listAdminAuditLog(requestDb(c), {
-      ...data.query,
-      limit: data.query.limit ?? 50,
-      offset: data.query.offset ?? 0,
-    }),
-  );
+  return json(await listAdminAuditLog(requestDb(c), data.query));
 });

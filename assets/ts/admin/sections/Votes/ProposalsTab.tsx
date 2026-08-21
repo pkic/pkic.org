@@ -6,6 +6,7 @@ import { fmt } from "../../ui";
 import type { AdminVoteProposalSummary } from "../../types";
 import { PROPOSAL_STATUS_TABS } from "./shared";
 import { ProposalDetail } from "./ProposalDetail";
+import { StatusTabs } from "../../components/StatusTabs";
 
 export function ProposalsTab() {
   const [status, setStatus] = useState<(typeof PROPOSAL_STATUS_TABS)[number]>("open_for_endorsement");
@@ -42,19 +43,7 @@ export function ProposalsTab() {
 
   return (
     <div>
-      <ul class="nav nav-tabs mb-3">
-        {PROPOSAL_STATUS_TABS.map((tab) => (
-          <li class="nav-item" key={tab}>
-            <button
-              type="button"
-              class={`nav-link text-capitalize${status === tab ? " active" : ""}`}
-              onClick={() => setStatus(tab)}
-            >
-              {tab.replace(/_/g, " ")}
-            </button>
-          </li>
-        ))}
-      </ul>
+      <StatusTabs statuses={PROPOSAL_STATUS_TABS} active={status} onChange={setStatus} />
 
       {loading && <Spinner />}
       {error && <ErrorAlert error={error} />}

@@ -13,7 +13,9 @@ import { all, first } from "../db/queries";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { parseLinksJson, findLinkedinUrl } from "../../../assets/shared/schemas/links";
+import { sanitizeLegacyHttpUrl } from "../../../assets/shared/schemas/urls";
 import { deterministicRepresentativeJoinSql } from "./membership/representative-lookup";
+import { toPublicRoleProfile, type PublicRoleProfile } from "./membership/public-role-profile";
 import { prepareAuditLog } from "./audit";
 import { resolveLeadershipAffiliation } from "./leadership-affiliations";
 import { AppError } from "../errors";
@@ -22,6 +24,7 @@ import { buildD1TextSearchFilter } from "../db/search";
 import { resolveMappedOrderBy } from "../db/sort";
 import type { DatabaseLike } from "../types";
 import type { LeadershipBody } from "../../../assets/shared/schemas/leadership";
+import { SYSTEM_ROLE_IDS } from "../../../assets/shared/schemas/access-control";
 
 export type { LeadershipBody };
 
@@ -52,13 +55,7 @@ export interface LeadershipPublicPerson {
   endsAt: string | null;
 }
 
-export interface ForumChairPublic {
-  name: string;
-  organizationName: string | null;
-  organizationLogoUrl: string | null;
-  organizationWebsite: string | null;
-  photoUrl: string | null;
-  linkedin: string | null;
+export interface ForumChairPublic extends PublicRoleProfile {
   startsAt: string;
 }
 
@@ -315,7 +312,7 @@ export async function getLeadershipPublic(
     title: row.title,
     organizationName: row.org_name,
     organizationLogoUrl: row.org_logo_r2_key && row.org_id ? `/api/v1/members/${row.org_id}/logo` : null,
-    organizationWebsite: row.org_website,
+    organizationWebsite: sanitizeLegacyHttpUrl(row.org_website),
     photoUrl: row.headshot_r2_key && row.photo_member_id ? `/api/v1/members/${row.photo_member_id}/logo` : null,
     linkedin: findLinkedinUrl(parseLinksJson(row.links_json)),
     startsAt: row.starts_at,
@@ -370,27 +367,23 @@ ${deterministicRepresentativeJoinSql("u.id")}
      LEFT JOIN members mi ON mi.user_id = u.id AND mi.status = 'active'
      LEFT JOIN organizations o ON o.id = m.organization_id
      WHERE ur.context_type IS NULL AND ur.context_id IS NULL
-       AND ur.role_id IN ('role-forum_chair', 'role-forum_vice_chair')
+       AND ur.role_id IN (?, ?)
        AND ur.revoked_at IS NULL
        AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
      ORDER BY ur.created_at DESC`,
+    [SYSTEM_ROLE_IDS.forumChair, SYSTEM_ROLE_IDS.forumViceChair],
   );
 
   const toPublic = (row: ForumChairRow | undefined): ForumChairPublic | null => {
     if (!row) return null;
     return {
-      name: [row.first_name, row.last_name].filter(Boolean).join(" ") || "Unknown",
-      organizationName: row.org_name,
-      organizationLogoUrl: row.org_logo_r2_key && row.org_id ? `/api/v1/members/${row.org_id}/logo` : null,
-      organizationWebsite: row.org_website,
-      photoUrl: row.headshot_r2_key && row.member_id ? `/api/v1/members/${row.member_id}/logo` : null,
-      linkedin: findLinkedinUrl(parseLinksJson(row.links_json)),
+      ...toPublicRoleProfile(row),
       startsAt: row.created_at,
     };
   };
 
   return {
-    chair: toPublic(rows.find((r) => r.role_id === "role-forum_chair")),
-    viceChair: toPublic(rows.find((r) => r.role_id === "role-forum_vice_chair")),
+    chair: toPublic(rows.find((r) => r.role_id === SYSTEM_ROLE_IDS.forumChair)),
+    viceChair: toPublic(rows.find((r) => r.role_id === SYSTEM_ROLE_IDS.forumViceChair)),
   };
 }

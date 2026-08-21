@@ -10,8 +10,7 @@ import { openApiRoute } from "../../../_lib/openapi/route";
 
 export const VotesGet = openApiRoute(publicVotesListRouteSchema, async (c: any, data) => {
   const q = data.query;
-  const limit = q.limit ?? 20;
-  const offset = q.offset ?? 0;
+  const { limit, offset } = q;
 
   const { votes, total } = await listPublicVotes(c.env.DB, {
     type: q.type,

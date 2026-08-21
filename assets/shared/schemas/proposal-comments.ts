@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { successResponseSchema } from "./api-common";
 
 export const ADMIN_PROPOSAL_COMMENT_SORT_COLUMNS = ["createdAt", "author"] as const;
 
-export const proposalCommentsListQuerySchema = listQuerySchema(ADMIN_PROPOSAL_COMMENT_SORT_COLUMNS);
+export const proposalCommentsListQuerySchema = listQuerySchema(ADMIN_PROPOSAL_COMMENT_SORT_COLUMNS, { limit: 25 });
 
 export const proposalCommentCreateSchema = z.object({
   comment: z.string().trim().min(1).max(10_000),
@@ -24,8 +25,7 @@ export const proposalInternalCommentSchema = z.object({
 
 export const proposalCommentsListResponseSchema = paginatedResponseSchema("comments", proposalInternalCommentSchema);
 
-export const proposalCommentCreateResponseSchema = z.object({
-  success: z.literal(true),
+export const proposalCommentCreateResponseSchema = successResponseSchema.extend({
   comment: proposalInternalCommentSchema,
 });
 

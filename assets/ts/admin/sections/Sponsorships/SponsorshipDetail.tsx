@@ -2,11 +2,12 @@ import { useState, useEffect, useCallback } from "preact/hooks";
 import { Spinner } from "../../../components/Spinner";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { api } from "../../api";
-import { toast, fmt } from "../../ui";
+import { fmt } from "../../ui";
 import { SPONSORSHIP_PIPELINE_STAGES } from "../../types";
 import type { Sponsorship, SponsorshipEvent, SponsorshipPipelineStage } from "../../types";
 import { stageBadgeClass, stageLabel } from "./shared";
 import { SponsorshipLogo } from "./SponsorshipLogo";
+import { performAdminAction } from "../../actions";
 
 export function SponsorshipDetail({ id, onChanged }: { id: string; onChanged: () => void }) {
   const [sponsorship, setSponsorship] = useState<Sponsorship | null>(null);
@@ -45,42 +46,40 @@ export function SponsorshipDetail({ id, onChanged }: { id: string; onChanged: ()
   }, [load]);
 
   async function saveFields() {
-    setBusy(true);
-    try {
-      await api(`/api/v1/admin/sponsorships/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          notes: notes.trim() || null,
-          renewalDate: renewalDate.trim() || null,
-          assignedToUserId: assignedToUserId.trim() || null,
+    await performAdminAction({
+      setBusy,
+      request: () =>
+        api(`/api/v1/admin/sponsorships/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            notes: notes.trim() || null,
+            renewalDate: renewalDate.trim() || null,
+            assignedToUserId: assignedToUserId.trim() || null,
+          }),
         }),
-      });
-      toast("Saved", "success");
-      await load();
-      onChanged();
-    } catch (e) {
-      toast((e as Error).message, "error");
-    } finally {
-      setBusy(false);
-    }
+      successMessage: "Saved",
+      afterSuccess: async () => {
+        await load();
+        onChanged();
+      },
+    });
   }
 
   async function advanceStage() {
-    setBusy(true);
-    try {
-      await api(`/api/v1/admin/sponsorships/${id}/stage`, {
-        method: "PATCH",
-        body: JSON.stringify({ toStage: nextStage, note: stageNote.trim() || null }),
-      });
-      toast(`Stage advanced to ${stageLabel(nextStage)}`, "success");
-      setStageNote("");
-      await load();
-      onChanged();
-    } catch (e) {
-      toast((e as Error).message, "error");
-    } finally {
-      setBusy(false);
-    }
+    await performAdminAction({
+      setBusy,
+      request: () =>
+        api(`/api/v1/admin/sponsorships/${id}/stage`, {
+          method: "PATCH",
+          body: JSON.stringify({ toStage: nextStage, note: stageNote.trim() || null }),
+        }),
+      successMessage: `Stage advanced to ${stageLabel(nextStage)}`,
+      afterSuccess: async () => {
+        setStageNote("");
+        await load();
+        onChanged();
+      },
+    });
   }
 
   if (loading) return <Spinner />;

@@ -38,7 +38,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
     }) as typeof window.open;
   });
 
-  await page.route("**/api/v1/admin/auth/session", async (route) => {
+  await page.route("**/api/v1/admin/auth/session**", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -169,7 +169,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
     });
   });
 
-  await page.route(`**/api/v1/admin/proposals/${proposalId}/presentation/versions`, async (route) => {
+  await page.route(`**/api/v1/admin/proposals/${proposalId}/presentation/versions**`, async (route) => {
     if (route.request().method() === "POST") {
       const headers = route.request().headers();
       adminUpload = {
@@ -188,7 +188,10 @@ test("renders the admin proposal detail workflow with submission answers and ope
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ versions: [] }),
+      body: JSON.stringify({
+        versions: [],
+        page: { limit: 25, offset: 0, total: 0, hasMore: false },
+      }),
     });
   });
 
@@ -340,7 +343,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
 });
 
 test("offers an event-level presentation ZIP from the proposals overview", async ({ page }) => {
-  await page.route("**/api/v1/admin/auth/session", async (route) => {
+  await page.route("**/api/v1/admin/auth/session**", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",

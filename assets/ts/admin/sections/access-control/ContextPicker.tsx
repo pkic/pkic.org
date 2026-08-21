@@ -1,6 +1,5 @@
-import { useEffect, useState } from "preact/hooks";
-import { api } from "../../api";
-import type { EventSummary, WorkingGroupSummary } from "../../types";
+import { adminEventCatalog, adminWorkingGroupCatalog } from "../../services/catalogs";
+import { ServerSearchSelect } from "../../components/ServerSearchSelect";
 
 export interface PickedContext {
   contextType: "event" | "working_group" | null;
@@ -17,67 +16,47 @@ export function ContextPicker({
   onChange: (context: PickedContext) => void;
   disabled?: boolean;
 }) {
-  const [events, setEvents] = useState<EventSummary[] | null>(null);
-  const [workingGroups, setWorkingGroups] = useState<WorkingGroupSummary[] | null>(null);
-
-  useEffect(() => {
-    if (value.contextType === "event" && events === null) {
-      api<{ events: EventSummary[] }>("/api/v1/admin/events")
-        .then((d) => setEvents(d.events))
-        .catch(() => setEvents([]));
-    }
-    if (value.contextType === "working_group" && workingGroups === null) {
-      api<{ workingGroups: WorkingGroupSummary[] }>("/api/v1/working-groups")
-        .then((d) => setWorkingGroups(d.workingGroups))
-        .catch(() => setWorkingGroups([]));
-    }
-  }, [value.contextType]);
-
   return (
-    <div class="d-flex gap-2">
-      <select
-        class="form-select form-select-sm"
-        value={value.contextType ?? ""}
-        disabled={disabled}
-        onChange={(e) => {
-          const contextType = (e.target as HTMLSelectElement).value as "" | "event" | "working_group";
-          onChange({ contextType: contextType || null, contextId: null });
-        }}
-      >
-        <option value="">Global (no context)</option>
-        <option value="event">Event</option>
-        <option value="working_group">Working group</option>
-      </select>
-      {value.contextType === "event" && (
+    <div>
+      <div class="d-flex gap-2">
         <select
           class="form-select form-select-sm"
-          value={value.contextId ?? ""}
+          value={value.contextType ?? ""}
           disabled={disabled}
-          onChange={(e) => onChange({ ...value, contextId: (e.target as HTMLSelectElement).value || null })}
+          onChange={(e) => {
+            const contextType = (e.target as HTMLSelectElement).value as "" | "event" | "working_group";
+            onChange({ contextType: contextType || null, contextId: null });
+          }}
         >
-          <option value="">Select event…</option>
-          {(events ?? []).map((ev) => (
-            <option key={ev.id} value={ev.id}>
-              {ev.name}
-            </option>
-          ))}
+          <option value="">Global (no context)</option>
+          <option value="event">Event</option>
+          <option value="working_group">Working group</option>
         </select>
-      )}
-      {value.contextType === "working_group" && (
-        <select
-          class="form-select form-select-sm"
-          value={value.contextId ?? ""}
-          disabled={disabled}
-          onChange={(e) => onChange({ ...value, contextId: (e.target as HTMLSelectElement).value || null })}
-        >
-          <option value="">Select working group…</option>
-          {(workingGroups ?? []).map((wg) => (
-            <option key={wg.id} value={wg.id}>
-              {wg.name}
-            </option>
-          ))}
-        </select>
-      )}
+        {value.contextType === "event" && (
+          <div class="flex-grow-1">
+            <ServerSearchSelect
+              catalog={adminEventCatalog}
+              label="Event"
+              value={value.contextId}
+              disabled={disabled}
+              placeholder="Select event…"
+              onChange={(event) => onChange({ ...value, contextId: event?.id ?? null })}
+            />
+          </div>
+        )}
+        {value.contextType === "working_group" && (
+          <div class="flex-grow-1">
+            <ServerSearchSelect
+              catalog={adminWorkingGroupCatalog}
+              label="Working group"
+              value={value.contextId}
+              disabled={disabled}
+              placeholder="Select working group…"
+              onChange={(group) => onChange({ ...value, contextId: group?.id ?? null })}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

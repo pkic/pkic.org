@@ -9,14 +9,11 @@
  * on first render and served from cache on subsequent requests.
  */
 
-import { json } from "../../../_lib/http";
+import { dispatchRequestMethod, json } from "../../../_lib/http";
 import { resolveAppBaseUrl } from "../../../_lib/config";
+import { readCachedBadge, serveGeneratedBadge } from "../../../_lib/services/og-badge-http";
 import { generateBadgePng } from "../../../_lib/services/og-badge-prerender";
-import { applyDownloadDisposition } from "../../../_lib/utils/download-disposition";
 
-const JPEG_CONTENT_TYPE = "image/jpeg";
-const PNG_CONTENT_TYPE = "image/png"; // fallback when IMAGES binding unavailable
-const CACHE_CONTROL = "public, max-age=86400, s-maxage=86400, stale-while-revalidate=3600";
 const R2_KEY_PREFIX = "og-badges/";
 
 export async function onRequestGet(c: any): Promise<Response> {
@@ -28,21 +25,16 @@ export async function onRequestGet(c: any): Promise<Response> {
   const isDownload = url.searchParams.get("download") === "1";
   const rawName = url.searchParams.get("name") ?? "";
 
-  // 1. Serve from R2 cache if available (always stored as JPEG)
-  if (bucket) {
-    const cached = await bucket.get(r2Key);
-    if (cached) {
-      const cachedContentType = cached.httpMetadata?.contentType ?? JPEG_CONTENT_TYPE;
-      const response = new Response(await cached.arrayBuffer(), {
-        headers: {
-          "Content-Type": cachedContentType,
-          "Cache-Control": isDownload ? "no-store" : CACHE_CONTROL,
-          "X-Cache": "HIT",
-        },
-      });
-      return isDownload ? applyDownloadDisposition(response, rawName, "attendee-badge") : response;
-    }
-  }
+  const responseOptions = {
+    bucket,
+    cacheKey: r2Key,
+    cacheMetadata: { referralCode: code },
+    isDownload,
+    downloadName: rawName,
+    fallbackDownloadName: "attendee-badge",
+  };
+  const cached = await readCachedBadge(responseOptions);
+  if (cached) return cached;
 
   // 2. Generate PNG (wasm init + fonts + DB + render, all parallelised)
   let png: Uint8Array | null;
@@ -59,51 +51,9 @@ export async function onRequestGet(c: any): Promise<Response> {
     return json({ error: { code: "NOT_FOUND", message: "Unknown referral code" } }, 404);
   }
 
-  // 3. Convert PNG → JPEG via the Images binding and cache.
-  //    If the binding is unavailable (local dev), serve the raw PNG without caching.
-  if (bucket && c.env.IMAGES) {
-    try {
-      const pngStream = new ReadableStream<Uint8Array>({
-        start(ctrl) {
-          ctrl.enqueue(png);
-          ctrl.close();
-        },
-      });
-      const result = await c.env.IMAGES.input(pngStream).transform({}).output({ format: "image/jpeg", quality: 95 });
-      const jpegBuf = await (await result.response()).arrayBuffer();
-      c.executionCtx.waitUntil(
-        bucket.put(r2Key, jpegBuf, {
-          httpMetadata: { contentType: JPEG_CONTENT_TYPE },
-          customMetadata: { referralCode: code },
-        }),
-      );
-      const response = new Response(jpegBuf, {
-        headers: {
-          "Content-Type": JPEG_CONTENT_TYPE,
-          "Cache-Control": isDownload ? "no-store" : CACHE_CONTROL,
-          "X-Cache": "MISS",
-        },
-      });
-      return isDownload ? applyDownloadDisposition(response, rawName, "attendee-badge") : response;
-    } catch {
-      /* fall through to raw PNG */
-    }
-  }
-
-  // Fallback: serve raw PNG (IMAGES binding not configured or conversion failed)
-  const response = new Response(png.buffer as ArrayBuffer, {
-    headers: {
-      "Content-Type": PNG_CONTENT_TYPE,
-      "Cache-Control": isDownload ? "no-store" : CACHE_CONTROL,
-      "X-Cache": "MISS",
-    },
-  });
-  return isDownload ? applyDownloadDisposition(response, rawName, "attendee-badge") : response;
+  return serveGeneratedBadge(png, c.env.IMAGES, c.executionCtx, responseOptions);
 }
 
 export async function onRequest(c: any): Promise<Response> {
-  if (c.req.raw.method !== "GET") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
-  return onRequestGet(c);
+  return dispatchRequestMethod(c, { GET: onRequestGet });
 }

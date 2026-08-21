@@ -1,7 +1,8 @@
 import { useMemo, useEffect, useState } from "preact/hooks";
-import { ApiDataTable } from "../../../../components/Table";
+import { ApiDataTable } from "../../../components/ApiDataTable";
 import type { AdminFormDetailField, AdminFormSubmission } from "../../../types";
 import { fmt } from "../../../ui";
+import { adminFormSubmissionsResponseSchema } from "../../../../../shared/schemas/admin-forms";
 
 export interface FormAnswerRow {
   key: string;
@@ -455,12 +456,10 @@ export function FormSubmissionsTable({
   fields,
   endpoint,
   params,
-  deps = [],
 }: {
   fields: AdminFormDetailField[];
   endpoint: string;
   params?: Record<string, string>;
-  deps?: unknown[];
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const answerColumns = fields.map((field) => ({
@@ -479,11 +478,11 @@ export function FormSubmissionsTable({
   return (
     <ApiDataTable<AdminFormSubmission>
       endpoint={endpoint}
-      resolve={(data) => (data as { submissions: AdminFormSubmission[] }).submissions}
-      resolvePage={(data) => (data as { page: { total: number; hasMore: boolean } }).page}
+      responseSchema={adminFormSubmissionsResponseSchema}
+      resolve={(data) => adminFormSubmissionsResponseSchema.parse(data).submissions}
+      resolvePage={(data) => adminFormSubmissionsResponseSchema.parse(data).page}
       paginate
       params={params}
-      deps={deps}
       empty="No responses found"
       rowKey={(submission) => submission.id}
       columns={[

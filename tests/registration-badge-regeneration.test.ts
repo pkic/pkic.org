@@ -1,5 +1,5 @@
 import { env as workerEnv } from "cloudflare:workers";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createReferralCode } from "../functions/_lib/services/referrals";
 import app from "../functions/router";
 import { getEventBySlug } from "../functions/_lib/services/events";
@@ -13,6 +13,7 @@ import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { resetDb } from "./helpers/reset-db";
 import { badgeRegenerationQueuedResponseSchema } from "../assets/shared/schemas/route-contracts";
+import { fetchGravatar } from "../functions/_lib/services/gravatar";
 
 const env = workerEnv as unknown as Env;
 
@@ -21,6 +22,7 @@ async function seedRegistrationWithReferral(): Promise<{
   event: Awaited<ReturnType<typeof getEventBySlug>>;
   registrationId: string;
   referralCode: string;
+  userId: string;
 }> {
   const { eventId } = await seedEventAndAdmin(env.DB);
   const userId = crypto.randomUUID();
@@ -52,12 +54,56 @@ async function seedRegistrationWithReferral(): Promise<{
     event: await getEventBySlug(env.DB, "pqc-2026"),
     registrationId,
     referralCode,
+    userId,
   };
 }
 
 describe("registration badge regeneration", () => {
   beforeEach(async () => {
     await resetDb();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("atomically queues badge invalidation when first-time Gravatar seeding changes the headshot", async () => {
+    const seeded = await seedRegistrationWithReferral();
+    const stored = new Map<string, ArrayBuffer>();
+    const bucket = {
+      put: async (key: string, value: ArrayBuffer) => {
+        stored.set(key, value);
+        return { size: value.byteLength };
+      },
+      delete: async (key: string) => {
+        stored.delete(key);
+      },
+    } as unknown as R2Bucket;
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), { headers: { "content-type": "image/jpeg" } }),
+        ),
+    );
+
+    const r2Key = await fetchGravatar(seeded.userId, "badge@example.test", {
+      DB: env.DB,
+      SPEAKER_UPLOADS_BUCKET: bucket,
+    });
+
+    expect(r2Key).toBeTruthy();
+    expect(stored.has(r2Key!)).toBe(true);
+    expect(await queryAll(env.DB, "SELECT headshot_r2_key FROM users WHERE id = ?", seeded.userId)).toEqual([
+      { headshot_r2_key: r2Key },
+    ]);
+    expect(
+      await queryAll(env.DB, "SELECT id, status FROM badge_render_jobs WHERE referral_code = ?", seeded.referralCode),
+    ).toEqual([{ id: `badge:${seeded.referralCode}`, status: "queued" }]);
+    expect(await queryAll(env.DB, "SELECT id FROM storage_deletion_outbox WHERE object_key = ?", r2Key!)).toHaveLength(
+      0,
+    );
   });
 
   it("atomically records an audited render intent before executing the R2 effect", async () => {
@@ -112,7 +158,7 @@ describe("registration badge regeneration", () => {
       } as ExecutionContext,
     );
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(202);
     expect(badgeRegenerationQueuedResponseSchema.parse(await response.json())).toMatchObject({
       success: true,
       status: "queued",
@@ -190,6 +236,81 @@ describe("registration badge regeneration", () => {
     ]);
 
     expect(outcomes.filter(Boolean)).toHaveLength(1);
+    expect(render).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves a newer invalidation that arrives while an older generation renders", async () => {
+    const seeded = await seedRegistrationWithReferral();
+    const requested = await requestRegistrationBadgeRegeneration(env.DB, {
+      actor: seeded.actor,
+      event: seeded.event,
+      registrationId: seeded.registrationId,
+      appBaseUrl: "https://app.test",
+    });
+    let finishRender!: () => void;
+    const render = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishRender = resolve;
+        }),
+    );
+
+    const firstRender = processBadgeRenderJobById(env.DB, env, requested.jobId, render);
+    await vi.waitFor(async () => {
+      expect(await queryAll(env.DB, "SELECT status FROM badge_render_jobs WHERE id = ?", requested.jobId)).toEqual([
+        { status: "rendering" },
+      ]);
+    });
+    await requestRegistrationBadgeRegeneration(env.DB, {
+      actor: seeded.actor,
+      event: seeded.event,
+      registrationId: seeded.registrationId,
+      appBaseUrl: "https://ignored-at-processing.test",
+    });
+    finishRender();
+    await expect(firstRender).resolves.toBe(true);
+
+    expect(
+      await queryAll(env.DB, "SELECT status, requested_generation, claimed_generation FROM badge_render_jobs"),
+    ).toEqual([{ status: "queued", requested_generation: 2, claimed_generation: null }]);
+
+    const secondRender = vi.fn().mockResolvedValue(undefined);
+    await expect(processPendingBadgeRenders(env.DB, env, 1, secondRender)).resolves.toEqual({
+      processed: 1,
+      failed: 0,
+    });
+    expect(secondRender).toHaveBeenCalledWith(seeded.referralCode, env, "https://app.test");
+    expect(await queryAll(env.DB, "SELECT status, requested_generation FROM badge_render_jobs")).toEqual([
+      { status: "rendered", requested_generation: 2 },
+    ]);
+  });
+
+  it("recovers an expired render lease without stealing a live lease", async () => {
+    const seeded = await seedRegistrationWithReferral();
+    const requested = await requestRegistrationBadgeRegeneration(env.DB, {
+      actor: seeded.actor,
+      event: seeded.event,
+      registrationId: seeded.registrationId,
+      appBaseUrl: "https://app.test",
+    });
+    const render = vi.fn().mockResolvedValue(undefined);
+    await env.DB.prepare(
+      `UPDATE badge_render_jobs
+          SET status = 'rendering', processing_token = 'current', claimed_generation = requested_generation,
+              lease_expires_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+5 minutes')
+        WHERE id = ?`,
+    )
+      .bind(requested.jobId)
+      .run();
+    await processPendingBadgeRenders(env.DB, env, 10, render);
+    expect(render).not.toHaveBeenCalled();
+
+    await env.DB.prepare(
+      "UPDATE badge_render_jobs SET lease_expires_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 minute') WHERE id = ?",
+    )
+      .bind(requested.jobId)
+      .run();
+    await expect(processPendingBadgeRenders(env.DB, env, 10, render)).resolves.toEqual({ processed: 1, failed: 0 });
     expect(render).toHaveBeenCalledTimes(1);
   });
 });

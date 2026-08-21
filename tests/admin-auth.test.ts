@@ -100,6 +100,86 @@ describe("admin magic-link auth", () => {
     expect(Number(rows[0].total)).toBe(0);
   });
 
+  it("rolls back the magic link and email when its audit record cannot be written", async () => {
+    await seedEventAndAdmin(env.DB);
+    const isolatedEnv = {
+      ...env,
+      EMAIL_RATE_LIMITER: createTestRateLimiter(100),
+      IP_RATE_LIMITER: createTestRateLimiter(100),
+    };
+    await env.DB.prepare(
+      `CREATE TRIGGER reject_admin_auth_request_audit BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'admin_magic_link_requested'
+       BEGIN SELECT RAISE(ABORT, 'forced audit failure'); END`,
+    ).run();
+
+    await expect(
+      requestLink(
+        createContext(
+          isolatedEnv,
+          new Request("https://app.test/api/v1/admin/auth/request-link", {
+            method: "POST",
+            body: JSON.stringify({ email: "admin@pkic.org" }),
+            headers: { "content-type": "application/json" },
+          }),
+          {},
+        ),
+      ),
+    ).rejects.toThrow();
+
+    expect(await queryAll(env.DB, "SELECT id FROM auth_magic_links")).toHaveLength(0);
+    expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
+    await env.DB.prepare("DROP TRIGGER reject_admin_auth_request_audit").run();
+  });
+
+  it("does not consume a magic link or create a session when verification audit fails", async () => {
+    await seedEventAndAdmin(env.DB);
+    const isolatedEnv = {
+      ...env,
+      EMAIL_RATE_LIMITER: createTestRateLimiter(100),
+      IP_RATE_LIMITER: createTestRateLimiter(100),
+    };
+    await requestLink(
+      createContext(
+        isolatedEnv,
+        new Request("https://app.test/api/v1/admin/auth/request-link", {
+          method: "POST",
+          body: JSON.stringify({ email: "admin@pkic.org" }),
+          headers: { "content-type": "application/json" },
+        }),
+        {},
+      ),
+    );
+    const [outbox] = await queryAll<{ payload_json: string }>(env.DB, "SELECT payload_json FROM email_outbox");
+    const token = extractTokenFromMagicLinkPayload(outbox.payload_json);
+    await env.DB.prepare(
+      `CREATE TRIGGER reject_admin_auth_verify_audit BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'admin_magic_link_verified'
+       BEGIN SELECT RAISE(ABORT, 'forced audit failure'); END`,
+    ).run();
+
+    const makeVerification = () =>
+      verifyLink(
+        createContext(
+          isolatedEnv,
+          new Request("https://app.test/api/v1/admin/auth/verify-link", {
+            method: "POST",
+            body: JSON.stringify({ token }),
+            headers: { "content-type": "application/json" },
+          }),
+          {},
+        ),
+      );
+    await expect(makeVerification()).rejects.toThrow();
+    expect(
+      (await queryAll<{ used_at: string | null }>(env.DB, "SELECT used_at FROM auth_magic_links"))[0].used_at,
+    ).toBeNull();
+    expect(await queryAll(env.DB, "SELECT id FROM sessions")).toHaveLength(0);
+
+    await env.DB.prepare("DROP TRIGGER reject_admin_auth_verify_audit").run();
+    expect((await makeVerification()).status).toBe(200);
+  });
+
   it("rate-limits repeated magic-link requests for the same email", async () => {
     await seedEventAndAdmin(env.DB);
     const limitedEnv = {

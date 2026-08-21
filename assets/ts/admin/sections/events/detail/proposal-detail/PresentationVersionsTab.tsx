@@ -24,11 +24,17 @@ export function PresentationVersionsTab({
   proposalId,
   versions,
   loading,
+  hasMore,
+  loadingMore,
+  onLoadMore,
   onReload,
 }: {
   proposalId: string;
   versions: PresentationVersion[];
   loading: boolean;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
   onReload: () => void;
 }) {
   const [reviewingId, setReviewingId] = useState<string | null>(null);
@@ -221,6 +227,11 @@ export function PresentationVersionsTab({
           </div>
         </div>
       ))}
+      {hasMore && (
+        <button type="button" class="btn btn-sm btn-outline-secondary" disabled={loadingMore} onClick={onLoadMore}>
+          {loadingMore ? "Loading…" : "Load more versions"}
+        </button>
+      )}
     </div>
   );
 }

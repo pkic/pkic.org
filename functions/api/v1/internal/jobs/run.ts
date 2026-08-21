@@ -1,5 +1,5 @@
 import { parseJsonBody } from "../../../../_lib/validation";
-import { json } from "../../../../_lib/http";
+import { dispatchPostOnly, json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
 import { processPendingOutbox, summarizePendingOutbox } from "../../../../_lib/email/outbox";
@@ -7,7 +7,7 @@ import { runReminderCycle } from "../../../../_lib/services/reminders";
 import { runRetentionJob, summarizeRetentionJob } from "../../../../_lib/services/retention";
 import { runConsultationBatch, runEcReviewBatch } from "../../../../_lib/services/membership/scheduled-jobs";
 import { runWeeklyWgChairDigest } from "../../../../_lib/services/wg-chair-digest";
-import { adminRunJobsSchema } from "../../../../../assets/shared/schemas/api";
+import { adminRunJobsSchema } from "../../../../../assets/shared/schemas/admin-jobs";
 import { adminJobsRunResponseSchema } from "../../../../../assets/shared/schemas/admin-jobs";
 
 export async function onRequestPost(c: any): Promise<Response> {
@@ -107,8 +107,5 @@ export async function onRequestPost(c: any): Promise<Response> {
 }
 
 export async function onRequest(c: any): Promise<Response> {
-  if (c.req.raw.method !== "POST") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
-  return onRequestPost(c);
+  return dispatchPostOnly(c, onRequestPost);
 }

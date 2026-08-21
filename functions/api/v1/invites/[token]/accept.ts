@@ -1,5 +1,5 @@
 import { parseJsonBody } from "../../../../_lib/validation";
-import { json } from "../../../../_lib/http";
+import { dispatchPostOnly, json } from "../../../../_lib/http";
 import { findInviteByToken, acceptInvite } from "../../../../_lib/services/invites";
 import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
 import { commitRegistrationSubmission } from "../../../../_lib/services/registration-submission";
@@ -88,8 +88,5 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 
 export async function onRequest(c: any): Promise<Response> {
   c.set("sensitive", true);
-  if (c.req.raw.method !== "POST") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
-  return onRequestPost(c);
+  return dispatchPostOnly(c, onRequestPost);
 }

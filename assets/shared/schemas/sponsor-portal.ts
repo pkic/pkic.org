@@ -7,7 +7,7 @@
  */
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
-import { eventIdSchema, normalizedEmailSchema, tokenSchema } from "./api-common";
+import { eventIdSchema, normalizedEmailSchema, successResponseSchema, tokenSchema } from "./api-common";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 export const sponsorPortalAuthRequestSchema = z.object({
@@ -30,8 +30,8 @@ export const sponsorPortalSessionSchema = z.object({
   tier: z.string(),
   contactEmail: z.string(),
 });
-export const sponsorPortalAuthVerifyResponseSchema = z.object({
-  success: z.boolean(),
+export type SponsorPortalSession = z.infer<typeof sponsorPortalSessionSchema>;
+export const sponsorPortalAuthVerifyResponseSchema = successResponseSchema.extend({
   expiresAt: z.string(),
   sponsorship: sponsorPortalSessionSchema,
 });
@@ -48,7 +48,7 @@ export const sponsorPortalAuthRequestRouteSchema = {
   responses: {
     "200": {
       description: "Magic link sent if the email matches an active event sponsorship for this event.",
-      content: { "application/json": { schema: z.object({ success: z.boolean() }) } },
+      content: { "application/json": { schema: successResponseSchema } },
     },
   },
 };
@@ -85,12 +85,15 @@ export const sponsorPortalAttendeesEventIdParamsSchema = z.object({ eventId: eve
 
 // P6M-P2-11: this list was fully unbounded — could grow to thousands for a
 // large event. Bounded via the shared pagination contract.
-export const sponsorPortalAttendeesListQuerySchema = listQuerySchema([
-  "name",
-  "email",
-  "organizationName",
-  "attendanceType",
-] as const);
+export const sponsorPortalAttendeesListQuerySchema = listQuerySchema(
+  ["name", "email", "organizationName", "attendanceType"] as const,
+  { limit: 100 },
+);
+export const sponsorPortalAttendeesListResponseSchema = paginatedResponseSchema(
+  "attendees",
+  sponsorPortalAttendeeSchema,
+);
+export type SponsorPortalAttendee = z.infer<typeof sponsorPortalAttendeeSchema>;
 
 export const sponsorPortalAttendeesListRouteSchema = {
   tags: ["Sponsor Portal"],
@@ -101,7 +104,7 @@ export const sponsorPortalAttendeesListRouteSchema = {
   responses: {
     "200": {
       description: "Consenting attendees.",
-      content: { "application/json": { schema: paginatedResponseSchema("attendees", sponsorPortalAttendeeSchema) } },
+      content: { "application/json": { schema: sponsorPortalAttendeesListResponseSchema } },
     },
     "403": {
       description:

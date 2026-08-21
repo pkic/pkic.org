@@ -1,5 +1,9 @@
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
-import type { AdminDonationSummary, DonationsListResponse } from "../../../../assets/shared/schemas/admin-donations";
+import {
+  ADMIN_DONATIONS_SORT_COLUMNS,
+  type AdminDonationSummary,
+  type DonationsListResponse,
+} from "../../../../assets/shared/schemas/admin-donations";
 import { resolveOrderBy } from "../../db/sort";
 import { batchFirst, batchRows } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
@@ -9,6 +13,7 @@ import { ADMIN_DONATION_SELECT_COLUMNS } from "./read";
 interface StatusCountRow {
   status: string;
   count: number;
+  backfillable_count: number;
 }
 
 export async function listDonations(
@@ -29,12 +34,7 @@ export async function listDonations(
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-  const orderBy = resolveOrderBy(
-    params.sort,
-    ["name", "gross_amount", "status", "created_at"],
-    "ORDER BY created_at DESC",
-    "id ASC",
-  );
+  const orderBy = resolveOrderBy(params.sort, ADMIN_DONATIONS_SORT_COLUMNS, "ORDER BY created_at DESC", "id ASC");
 
   const [pageResult, countResult, summaryResult] = await db.batch([
     db
@@ -47,18 +47,27 @@ export async function listDonations(
       )
       .bind(...bindings, params.limit, params.offset),
     db.prepare(`SELECT COUNT(*) AS total FROM donations ${where}`).bind(...bindings),
-    db.prepare("SELECT status, COUNT(*) AS count FROM donations GROUP BY status"),
+    db.prepare(
+      `SELECT status, COUNT(*) AS count,
+              SUM(CASE
+                    WHEN status = 'completed' AND (net_amount IS NULL OR payment_method_type IS NULL) THEN 1
+                    ELSE 0
+                  END) AS backfillable_count
+         FROM donations
+        GROUP BY status`,
+    ),
   ]);
 
   const donations = batchRows<AdminDonationSummary>(pageResult);
   const total = Number(batchFirst<{ total: number }>(countResult)?.total ?? 0);
-  const summary = Object.fromEntries(
-    batchRows<StatusCountRow>(summaryResult).map(({ status, count }) => [status, Number(count)]),
-  );
+  const statusRows = batchRows<StatusCountRow>(summaryResult);
+  const byStatus = Object.fromEntries(statusRows.map(({ status, count }) => [status, Number(count)]));
+  const backfillable = statusRows.reduce((sum, row) => sum + Number(row.backfillable_count), 0);
+  const syncable = Number(byStatus.pending ?? 0) + Number(byStatus.awaiting_payment ?? 0) + backfillable;
 
   return {
     donations,
     page: buildPageInfo(params.limit, params.offset, total, donations.length),
-    summary,
+    summary: { byStatus, backfillable, syncable },
   };
 }

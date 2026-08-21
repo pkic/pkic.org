@@ -32,6 +32,18 @@ const USER_RECORD_COLUMN_NAMES = [
   "data_json",
 ] as const;
 
+/**
+ * Best-effort split for legacy/admin inputs that still submit one display
+ * name. Callers with separately collected names should preserve those fields
+ * instead of round-tripping them through this helper.
+ */
+export function splitPersonName(fullName: string): { firstName: string | null; lastName: string | null } {
+  const tokens = fullName.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return { firstName: null, lastName: null };
+  if (tokens.length === 1) return { firstName: tokens[0], lastName: null };
+  return { firstName: tokens.slice(0, -1).join(" "), lastName: tokens[tokens.length - 1] };
+}
+
 /** Canonical projection for the deliberately narrow user domain record. */
 export function userRecordColumns(tableAlias?: string): string {
   return USER_RECORD_COLUMN_NAMES.map((column) => (tableAlias ? `${tableAlias}.${column}` : column)).join(", ");

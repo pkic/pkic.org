@@ -6,7 +6,7 @@
  *   Replaces the full tier config. Defaults to no tiers having
  *   access — an empty PUT clears all configured tiers.
  */
-import { json } from "../../../../../_lib/http";
+import { dispatchRequestMethod, json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { listEventSponsorTiers, replaceEventSponsorTiers } from "../../../../../_lib/services/sponsorship";
@@ -33,7 +33,5 @@ export async function onRequestPut(c: AdminContext): Promise<Response> {
 }
 
 export async function onRequest(c: AdminContext): Promise<Response> {
-  if (c.req.raw.method === "GET") return onRequestGet(c);
-  if (c.req.raw.method === "PUT") return onRequestPut(c);
-  return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
+  return dispatchRequestMethod(c, { GET: onRequestGet, PUT: onRequestPut });
 }

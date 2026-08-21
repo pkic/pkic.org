@@ -74,7 +74,7 @@ describe("donationCheckoutSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("normalises currency to lowercase", () => {
+  it("normalizes currency to lowercase", () => {
     const result = parseDonationCheckout({ amount: 5000, currency: "EUR", name: "Alice" });
     expect(result.success).toBe(true);
     if (result.success) {

@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { adminEmailOutboxQuerySchema, adminEmailTemplateActivateSchema } from "./api";
+import { adminEmailOutboxQuerySchema } from "./admin-email-outbox";
+import { adminEmailTemplateActivateSchema } from "./admin-email-templates";
 import { emailTemplateKeyParamsSchema } from "./api-common";
 import { adminEmailOutboxResponseSchema } from "./admin-email-outbox";
 import { internalCalendarRsvpIngestSchema } from "./calendar-rsvp";

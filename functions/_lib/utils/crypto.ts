@@ -20,12 +20,18 @@ export async function constantTimeEqual(left: string, right: string): Promise<bo
 }
 
 export async function hmacSha256Hex(secret: string, payload: string): Promise<string> {
+  const signature = await hmacSha256Bytes(secret, payload);
+  return [...signature].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** Returns the raw SHA-256 HMAC bytes for callers that apply their own wire encoding. */
+export async function hmacSha256Bytes(secret: string, payload: string): Promise<Uint8Array> {
   const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, [
     "sign",
   ]);
 
   const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(payload));
-  return [...new Uint8Array(signature)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return new Uint8Array(signature);
 }
 
 /** Verifies a lowercase or uppercase hex HMAC without comparing secret-derived strings in application code. */

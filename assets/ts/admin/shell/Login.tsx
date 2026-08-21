@@ -1,7 +1,7 @@
 import { useState } from "preact/hooks";
-import { browserSupportsWebAuthn, startAuthentication } from "@simplewebauthn/browser";
-import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
+import { browserSupportsWebAuthn } from "@simplewebauthn/browser";
 import { saveAuth } from "../state";
+import { authenticateWithPasskey } from "../../shared/passkey-authentication";
 
 async function requestMagicLink(email: string): Promise<void> {
   const res = await fetch("/api/v1/admin/auth/request-link", {
@@ -39,27 +39,9 @@ async function verifyMagicLink(token: string): Promise<void> {
  * saveAuth()/redirect handling so both login methods land in the same place.
  */
 async function signInWithPasskey(): Promise<void> {
-  const beginRes = await fetch("/api/v1/auth/passkeys/authenticate/begin");
-  const begin: { options?: unknown; challengeToken?: string; error?: { message?: string } } = await beginRes
-    .json()
-    .catch(() => ({}));
-  if (!beginRes.ok || !begin.options || !begin.challengeToken) {
-    throw new Error(begin.error?.message ?? "Could not start passkey sign-in.");
-  }
-
-  const assertion = await startAuthentication({ optionsJSON: begin.options as PublicKeyCredentialRequestOptionsJSON });
-
-  const completeRes = await fetch("/api/v1/auth/passkeys/authenticate/complete", {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ challengeToken: begin.challengeToken, response: assertion }),
-  });
-  const d: { admin?: { email?: string }; error?: { message?: string } } = await completeRes.json().catch(() => ({}));
-  if (!completeRes.ok) {
-    throw new Error(d.error?.message ?? "Passkey sign-in failed.");
-  }
-  saveAuth(d.admin?.email ?? null);
+  const result = await authenticateWithPasskey();
+  if (!result.admin) throw new Error("This passkey isn't registered to a staff account.");
+  saveAuth(result.admin.email ?? null);
   history.replaceState({}, "", "/admin/");
 }
 

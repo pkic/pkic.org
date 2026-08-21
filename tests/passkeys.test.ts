@@ -196,7 +196,14 @@ describe("passkeys (WebAuthn)", () => {
     const body = (await completeResponse.json()) as { success: boolean; admin: { id: string } };
     expect(body.success).toBe(true);
     expect(body.admin.id).toBe(userId);
-    expect(completeResponse.headers.get("set-cookie")).toContain("pkic_admin_session=");
+    const adminCookie = completeResponse.headers.get("set-cookie") ?? "";
+    expect(adminCookie).toContain("pkic_admin_session=");
+    expect(adminCookie).toContain("Path=/api/v1");
+    expect(adminCookie).toContain("HttpOnly");
+    expect(adminCookie).toContain("SameSite=Strict");
+    expect(adminCookie).toContain("Secure");
+    expect(adminCookie).not.toContain("pkic_member_session=");
+    expect(completeResponse.headers.get("cache-control")).toBe("no-store, max-age=0");
 
     const rows = await queryAll<{ sign_count: number }>(
       env.DB,
@@ -371,7 +378,13 @@ describe("member passkey login (generalizing passkeys beyond staff)", () => {
     expect(body.success).toBe(true);
     expect(body.member?.userId).toBe(memberUserId);
     expect(body.admin).toBeUndefined();
-    expect(completeResponse.headers.get("set-cookie")).toContain("pkic_member_session=");
-    expect(completeResponse.headers.get("set-cookie")).not.toContain("pkic_admin_session=");
+    const memberCookie = completeResponse.headers.get("set-cookie") ?? "";
+    expect(memberCookie).toContain("pkic_member_session=");
+    expect(memberCookie).toContain("Path=/api/v1");
+    expect(memberCookie).toContain("HttpOnly");
+    expect(memberCookie).toContain("SameSite=Strict");
+    expect(memberCookie).toContain("Secure");
+    expect(memberCookie).not.toContain("pkic_admin_session=");
+    expect(completeResponse.headers.get("cache-control")).toBe("no-store, max-age=0");
   });
 });

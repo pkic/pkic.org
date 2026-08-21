@@ -7,14 +7,14 @@ import { installStepNavigation } from "../shared/form/step-navigation";
 import { renderSharePanel } from "../shared/widgets/share-panel";
 import type { EventFormsResponse } from "../shared/types";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
-import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
+import { withLoadingButton } from "../shared/form/submit";
 import { bootstrap, setStatus } from "./boot";
-import { proposalCreateSchema } from "../../shared/schemas/api";
+import { proposalCreateSchema } from "../../shared/schemas/proposal-management";
 import { readField, findSubmitButton } from "../shared/form/helpers";
 import { SpeakerFormCard } from "../components/SpeakerFormCard";
 import { SuccessPanel } from "../components/SuccessPanel";
 import type { ProfileLinksHandle } from "../components/ProfileLinksInput";
-import { tryRecoverInvalidInvite } from "../shared/widgets/invite-recovery";
+import { handleFormInviteSubmitError } from "../shared/widgets/invite-recovery";
 
 // ── Session type labels ───────────────────────────────────────────────────────
 
@@ -216,7 +216,7 @@ function showSuccessPanel(
   render(
     <SuccessPanel icon="📋" title={title}>
       <p class="event-flow-success-body">
-        Your proposal is now under review. The programme committee will be in touch by email with a decision.
+        Your proposal is now under review. The program committee will be in touch by email with a decision.
       </p>
       {result.manageUrl && (
         <p>
@@ -228,7 +228,7 @@ function showSuccessPanel(
       <p class="text-muted small">
         Speakers you listed will each receive a personal email with a private link to confirm their participation,
         complete their profile, and upload a headshot once accepted. If there is context about additional potential
-        speakers, include that in your proposal notes or follow up with the programme team.
+        speakers, include that in your proposal notes or follow up with the program team.
       </p>
       <div ref={shareRef} />
     </SuccessPanel>,
@@ -410,18 +410,13 @@ async function main(): Promise<void> {
         clearReferralSession();
         showSuccessPanel(boot.root, form, result, firstName, eventName, eventSlug);
       } catch (error) {
-        if (
-          await tryRecoverInvalidInvite({
-            error,
-            email: readField(form, "email"),
-            apiBase,
-            statusEl,
-            hasInviteToken: Boolean(query.inviteToken),
-          })
-        ) {
-          return;
-        }
-        handleSubmitError(error, form, statusEl);
+        await handleFormInviteSubmitError({
+          error,
+          form,
+          apiBase,
+          statusEl,
+          hasInviteToken: Boolean(query.inviteToken),
+        });
       }
     });
   });

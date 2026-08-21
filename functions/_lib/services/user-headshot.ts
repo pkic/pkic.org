@@ -6,7 +6,6 @@ import { imageExtension, putUploadedImage } from "../utils/image-upload";
 import { first } from "../db/queries";
 import { prepareAuditLogWhen } from "./audit";
 import { storedImageResponse } from "./image-response";
-import { invalidateAndRerender } from "./og-badge-prerender";
 import {
   enqueueStorageDeletion,
   prepareStorageDeletion,
@@ -14,6 +13,7 @@ import {
 } from "./storage-deletion-outbox";
 import type { Env, StatementLike } from "../types";
 import { resolveAppBaseUrl } from "../config";
+import { prepareBadgeRenderJobsForUser } from "./badge-render-job-statements";
 
 export interface HeadshotAudit {
   actorType: string;
@@ -156,6 +156,7 @@ export async function replaceUserHeadshot(
         "headshot_r2_key = ?",
         [r2Key],
       ),
+      prepareBadgeRenderJobsForUser(context.db, context.userId, at),
     ];
     const deletionStatement = prepareStorageDeletion(context.db, context.previousKey, at);
     if (deletionStatement) statements.push(deletionStatement);
@@ -194,6 +195,7 @@ export async function removeUserHeadshot(context: Omit<UserHeadshotContext, "buc
       "headshot_r2_key IS NULL AND headshot_updated_at = ?",
       [at],
     ),
+    prepareBadgeRenderJobsForUser(context.db, context.userId, at),
   ];
   const deletionStatement = prepareStorageDeletion(context.db, context.previousKey, at);
   if (deletionStatement) statements.push(deletionStatement);
@@ -211,7 +213,7 @@ export function removePreviousHeadshot(
   return processStorageDeletionForKey(db, env, previousKey);
 }
 
-/** Runs derived rendering and opportunistic durable-deletion processing after a committed pointer change. */
+/** Opportunistically processes durable object deletion after the D1 commit. */
 export function finalizeUserHeadshotChange(
   context: {
     db: DatabaseLike;
@@ -223,7 +225,6 @@ export function finalizeUserHeadshotChange(
   waitUntil: (promise: Promise<unknown>) => void,
 ): void {
   waitUntil(removePreviousHeadshot(context.db, context.env, context.previousKey));
-  waitUntil(invalidateAndRerender(context.userId, context.env, context.origin));
 }
 
 export async function commitUserHeadshotUpload(

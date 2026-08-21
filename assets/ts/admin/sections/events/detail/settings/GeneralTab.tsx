@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { api } from "../../../../api";
-import type { AdminEventFormSummary, EventDetail } from "../../../../types";
+import type { EventDetail } from "../../../../types";
 import { toast } from "../../../../ui";
+import { EventScheduleFields } from "../../../../components/EventScheduleFields";
+import { EventFormLinkSelect } from "../../../../components/EventFormLinkSelect";
 
 type FormLinkPurpose = "event_registration" | "proposal_submission";
 type FormLinkMode = "unset" | "none" | "explicit";
@@ -21,10 +23,6 @@ function formLinkValue(settings: Record<string, unknown>, purpose: FormLinkPurpo
   if (typeof value === "string") return value;
   if (value === null) return null;
   return undefined;
-}
-
-function formOptionLabel(form: AdminEventFormSummary): string {
-  return form.event_name ? `${form.title} · ${form.event_name}` : form.title;
 }
 
 export function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated: (event: EventDetail) => void }) {
@@ -49,9 +47,6 @@ export function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated
   const [proposalFormMode, setProposalFormMode] = useState<FormLinkMode>(
     proposalLink === undefined ? "unset" : proposalLink === null ? "none" : "explicit",
   );
-  const [forms, setForms] = useState<AdminEventFormSummary[]>([]);
-  const [formsLoading, setFormsLoading] = useState(true);
-  const [formsLoaded, setFormsLoaded] = useState(false);
   const [mode, setMode] = useState(event.registration_mode ?? "invite_or_open");
   const [inviteLimit, setInviteLimit] = useState(event.invite_limit_attendee ?? 5);
   const [retentionDays, setRetentionDays] = useState(
@@ -143,41 +138,6 @@ export function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated
     setRetentionDays(event.user_retention_days ? String(event.user_retention_days) : "");
   }, [event]);
 
-  const loadForms = useCallback(async () => {
-    setFormsLoading(true);
-    setFormsLoaded(false);
-    try {
-      const data = await api<{ forms: AdminEventFormSummary[] }>(`/api/v1/admin/events/${event.slug}/forms`);
-      setForms(data.forms ?? []);
-    } catch {
-      setForms([]);
-    } finally {
-      setFormsLoading(false);
-      setFormsLoaded(true);
-    }
-  }, [event.slug]);
-
-  useEffect(() => {
-    void loadForms();
-  }, [loadForms]);
-
-  const registrationForms = forms.filter((form) => form.purpose === "event_registration" && form.status === "active");
-  const proposalForms = forms.filter((form) => form.purpose === "proposal_submission" && form.status === "active");
-
-  useEffect(() => {
-    if (!formsLoaded) return;
-    if (registrationFormMode === "unset") {
-      const currentRegistration = registrationForms[0]?.key ?? "";
-      setRegistrationFormKey(currentRegistration);
-      setRegistrationFormMode(currentRegistration ? "explicit" : "none");
-    }
-    if (proposalFormMode === "unset") {
-      const currentProposal = proposalForms[0]?.key ?? "";
-      setProposalFormKey(currentProposal);
-      setProposalFormMode(currentProposal ? "explicit" : "none");
-    }
-  }, [formsLoaded, proposalFormMode, proposalForms, registrationFormMode, registrationForms]);
-
   return (
     <form onSubmit={handleSubmit}>
       <div class="row g-2 mb-2">
@@ -196,36 +156,14 @@ export function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated
           <input class="form-control form-control-sm mono" type="text" value={event.slug} disabled />
         </div>
       </div>
-      <div class="row g-2 mb-2">
-        <div class="col-md-4">
-          <label class="form-label small fw-semibold">Start date</label>
-          <input
-            class="form-control form-control-sm"
-            type="datetime-local"
-            value={startsAt}
-            onInput={(event) => setStartsAt((event.target as HTMLInputElement).value)}
-          />
-        </div>
-        <div class="col-md-4">
-          <label class="form-label small fw-semibold">End date</label>
-          <input
-            class="form-control form-control-sm"
-            type="datetime-local"
-            value={endsAt}
-            onInput={(event) => setEndsAt((event.target as HTMLInputElement).value)}
-          />
-        </div>
-        <div class="col-md-4">
-          <label class="form-label small fw-semibold">Timezone</label>
-          <input
-            class="form-control form-control-sm"
-            type="text"
-            value={timezone}
-            onInput={(event) => setTimezone((event.target as HTMLInputElement).value)}
-            required
-          />
-        </div>
-      </div>
+      <EventScheduleFields
+        startsAt={startsAt}
+        endsAt={endsAt}
+        timezone={timezone}
+        onStartsAtChange={setStartsAt}
+        onEndsAtChange={setEndsAt}
+        onTimezoneChange={setTimezone}
+      />
       <div class="row g-2 mb-2">
         <div class="col-md-6">
           <label class="form-label small fw-semibold">Venue</label>
@@ -323,54 +261,32 @@ export function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated
         </button>
       </div>
       <div class="row g-2 mb-3">
-        <div class="col-md-6">
-          <label class="form-label small fw-semibold">Registration form</label>
-          <select
-            class="form-select form-select-sm"
-            value={registrationFormKey}
-            onChange={(event) => {
-              const value = (event.target as HTMLSelectElement).value;
-              setRegistrationFormKey(value);
-              setRegistrationFormMode(value ? "explicit" : "none");
-            }}
-            disabled={formsLoading}
-          >
-            <option value="">No form</option>
-            {registrationFormKey && !registrationForms.some((form) => form.key === registrationFormKey) && (
-              <option value={registrationFormKey}>{registrationFormKey} (linked, unavailable)</option>
-            )}
-            {registrationForms.map((form) => (
-              <option key={form.key} value={form.key}>
-                {formOptionLabel(form)}
-              </option>
-            ))}
-          </select>
-          <div class="form-text">Choose the form this event should use for registrations.</div>
-        </div>
-        <div class="col-md-6">
-          <label class="form-label small fw-semibold">Proposal form</label>
-          <select
-            class="form-select form-select-sm"
-            value={proposalFormKey}
-            onChange={(event) => {
-              const value = (event.target as HTMLSelectElement).value;
-              setProposalFormKey(value);
-              setProposalFormMode(value ? "explicit" : "none");
-            }}
-            disabled={formsLoading}
-          >
-            <option value="">No form</option>
-            {proposalFormKey && !proposalForms.some((form) => form.key === proposalFormKey) && (
-              <option value={proposalFormKey}>{proposalFormKey} (linked, unavailable)</option>
-            )}
-            {proposalForms.map((form) => (
-              <option key={form.key} value={form.key}>
-                {formOptionLabel(form)}
-              </option>
-            ))}
-          </select>
-          <div class="form-text">Choose the form this event should use for proposals.</div>
-        </div>
+        <EventFormLinkSelect
+          eventSlug={event.slug}
+          purpose="event_registration"
+          label="Registration form"
+          value={registrationFormKey}
+          disabled={saving}
+          autoSelectFirst={registrationFormMode === "unset"}
+          help="Choose the form this event should use for registrations."
+          onChange={(value) => {
+            setRegistrationFormKey(value);
+            setRegistrationFormMode(value ? "explicit" : "none");
+          }}
+        />
+        <EventFormLinkSelect
+          eventSlug={event.slug}
+          purpose="proposal_submission"
+          label="Proposal form"
+          value={proposalFormKey}
+          disabled={saving}
+          autoSelectFirst={proposalFormMode === "unset"}
+          help="Choose the form this event should use for proposals."
+          onChange={(value) => {
+            setProposalFormKey(value);
+            setProposalFormMode(value ? "explicit" : "none");
+          }}
+        />
       </div>
       <div class="row g-2 mb-3">
         <div class="col-md-6">

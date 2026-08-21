@@ -18,7 +18,7 @@ export const OrganizationContentReviewsList = openApiRoute(
     const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
     requirePermission(admin, "organizations:content-review");
 
-    const { status, q, sort, limit = 50, offset = 0 } = data.query;
+    const { status, q, sort, limit, offset } = data.query;
     const { reviews, total } = await listContentReviews(db, { status, q, sort, limit, offset });
 
     return json({ reviews, page: buildPageInfo(limit, offset, total, reviews.length) });

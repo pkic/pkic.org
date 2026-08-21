@@ -8,7 +8,7 @@
  * Only the proposer holds the proposal manage token — co-speakers hold separate
  * per-speaker tokens and cannot reach this endpoint.
  */
-import { json } from "../../../../../_lib/http";
+import { dispatchPostOnly, json } from "../../../../../_lib/http";
 import { parseJsonBody } from "../../../../../_lib/validation";
 import { getProposalByManageToken } from "../../../../../_lib/services/proposals";
 import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
@@ -45,8 +45,5 @@ export async function onRequestPost(c: any): Promise<Response> {
 
 export async function onRequest(c: any): Promise<Response> {
   c.set("sensitive", true);
-  if (c.req.raw.method !== "POST") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
-  return onRequestPost(c);
+  return dispatchPostOnly(c, onRequestPost);
 }

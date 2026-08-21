@@ -72,19 +72,37 @@ export async function buildAddWorkingGroupMemberStatements(
   /** The membership this WG seat is held on behalf of, when the caller has an unambiguous one to record (PR #1 review blocker 2). Null when the caller has no single "acting as" context (e.g. a staff add for a target with more than one active membership). */
   memberId: string | null = null,
 ): Promise<StatementLike[]> {
-  const existing = await first<{ id: string }>(
-    db,
-    `SELECT id FROM working_group_members WHERE working_group_id = ? AND user_id = ? AND left_at IS NULL`,
-    [wg.id, targetUserId],
-  );
-  if (existing) return [];
-
   const statements: StatementLike[] = [
     db
       .prepare(
-        `INSERT OR IGNORE INTO working_group_members (id, working_group_id, user_id, member_id, joined_at, left_at) VALUES (?, ?, ?, ?, ?, NULL)`,
+        `INSERT OR IGNORE INTO working_group_members
+           (id, working_group_id, user_id, member_id, joined_at, left_at)
+         SELECT ?, ?, ?, ?, ?, NULL
+          WHERE EXISTS (SELECT 1 FROM users WHERE id = ? AND active = 1)
+            AND (
+              ? IS NULL
+              OR EXISTS (
+                SELECT 1
+                  FROM members m
+                  LEFT JOIN organization_representatives r
+                    ON r.member_id = m.id AND r.user_id = ? AND r.left_at IS NULL
+                 WHERE m.id = ? AND m.status = 'active'
+                   AND (m.user_id = ? OR r.id IS NOT NULL)
+              )
+            )`,
       )
-      .bind(uuid(), wg.id, targetUserId, memberId, nowIso()),
+      .bind(
+        uuid(),
+        wg.id,
+        targetUserId,
+        memberId,
+        nowIso(),
+        targetUserId,
+        memberId,
+        targetUserId,
+        memberId,
+        targetUserId,
+      ),
   ];
 
   if (wg.mailing_list_email) {
@@ -93,6 +111,7 @@ export async function buildAddWorkingGroupMemberStatements(
         userId: targetUserId,
         googleGroupEmail: wg.mailing_list_email,
         action: "add_to_list",
+        onlyIfPreviousStatementChanged: true,
       }).statement,
     );
   }
@@ -129,13 +148,6 @@ export async function buildRemoveWorkingGroupMemberStatements(
   wg: WorkingGroupRow,
   targetUserId: string,
 ): Promise<StatementLike[]> {
-  const existing = await first<{ id: string }>(
-    db,
-    "SELECT id FROM working_group_members WHERE working_group_id = ? AND user_id = ? AND left_at IS NULL",
-    [wg.id, targetUserId],
-  );
-  if (!existing) return [];
-
   const statements: StatementLike[] = [
     db
       .prepare(
@@ -149,6 +161,7 @@ export async function buildRemoveWorkingGroupMemberStatements(
         userId: targetUserId,
         googleGroupEmail: wg.mailing_list_email,
         action: "remove_from_list",
+        onlyIfPreviousStatementChanged: true,
       }).statement,
     );
   }

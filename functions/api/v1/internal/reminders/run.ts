@@ -1,10 +1,10 @@
 import { parseJsonBody } from "../../../../_lib/validation";
-import { json } from "../../../../_lib/http";
+import { dispatchPostOnly, json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
 import { processPendingOutbox } from "../../../../_lib/email/outbox";
 import { runReminderCycle } from "../../../../_lib/services/reminders";
-import { adminRunRemindersSchema } from "../../../../../assets/shared/schemas/api";
+import { adminRunRemindersSchema } from "../../../../../assets/shared/schemas/admin-jobs";
 
 export async function onRequestPost(c: any): Promise<Response> {
   await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
@@ -32,8 +32,5 @@ export async function onRequestPost(c: any): Promise<Response> {
 }
 
 export async function onRequest(c: any): Promise<Response> {
-  if (c.req.raw.method !== "POST") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
-  return onRequestPost(c);
+  return dispatchPostOnly(c, onRequestPost);
 }

@@ -15,7 +15,7 @@
  *   PUT /api/v1/proposals/speaker/[token]/headshot
  *   PUT /api/v1/proposals/speaker/[token]/presentation
  */
-import { handleError, json } from "../../../../_lib/http";
+import { dispatchRequestMethod, handleError, json } from "../../../../_lib/http";
 import { getSpeakerByManageToken } from "../../../../_lib/services/proposals";
 import {
   confirmSpeakerParticipation,
@@ -29,30 +29,13 @@ import { speakerPresentationPageUrl } from "../../../../_lib/services/frontend-l
 import { parseJsonBody } from "../../../../_lib/validation";
 import { requireInternalSecret } from "../../../../_lib/request";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
-import { z } from "zod";
-import { speakerProfilePatchSchema } from "../../../../../assets/shared/schemas/proposal-management";
+import {
+  speakerParticipationActionSchema,
+  speakerProfilePatchSchema,
+} from "../../../../../assets/shared/schemas/proposal-management";
 import { parseLinksJson, serializeLinks } from "../../../../../assets/shared/schemas/links";
 import { getEventById } from "../../../../_lib/services/events";
 import { requestDb } from "../../../../_lib/db/context";
-
-const speakerActionSchema = z.discriminatedUnion("action", [
-  z.object({
-    action: z.literal("confirm"),
-    consents: z
-      .array(
-        z.object({
-          termKey: z.string().trim().min(1).max(128),
-          version: z.string().trim().min(1).max(64),
-        }),
-      )
-      .min(1)
-      .max(20),
-  }),
-  z.object({
-    action: z.literal("decline"),
-    reason: z.string().trim().max(2000).optional(),
-  }),
-]);
 
 export async function onRequestGet(c: any): Promise<Response> {
   try {
@@ -116,7 +99,7 @@ export async function onRequestGet(c: any): Promise<Response> {
 
 export async function onRequestPost(c: any): Promise<Response> {
   try {
-    const body = await parseJsonBody(c.req, speakerActionSchema);
+    const body = await parseJsonBody(c.req, speakerParticipationActionSchema);
 
     if (body.action === "confirm") {
       await confirmSpeakerParticipation(requestDb(c), c.req.param("token"), requireInternalSecret(c.env), {
@@ -166,10 +149,5 @@ export async function onRequestPatch(c: any): Promise<Response> {
 
 export async function onRequest(c: any): Promise<Response> {
   c.set("sensitive", true);
-
-  if (c.req.raw.method === "GET") return onRequestGet(c);
-  if (c.req.raw.method === "POST") return onRequestPost(c);
-  if (c.req.raw.method === "PATCH") return onRequestPatch(c);
-
-  return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
+  return dispatchRequestMethod(c, { GET: onRequestGet, POST: onRequestPost, PATCH: onRequestPatch });
 }

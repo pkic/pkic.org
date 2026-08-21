@@ -48,8 +48,8 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return (body ?? {}) as T;
 }
 
-export function getJson<T>(url: string): Promise<T> {
-  return request<T>(url, { method: "GET" });
+export function getJson<T>(url: string, init?: Pick<RequestInit, "signal">): Promise<T> {
+  return request<T>(url, { method: "GET", ...init });
 }
 
 export function postJson<T>(url: string, body: unknown, headers?: Record<string, string>): Promise<T> {

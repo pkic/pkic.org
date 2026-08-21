@@ -29,7 +29,7 @@ export const ConsortiumMeetingsCreate = openApiRoute(
     const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
     requirePermission(admin, "working-groups:write");
     const body = data.body;
-    const meetingSeries = await createConsortiumMeetingSeries(requestDb(c), body);
+    const meetingSeries = await createConsortiumMeetingSeries(requestDb(c), body, admin.id);
     return json({ meetingSeries }, 201);
   },
 );

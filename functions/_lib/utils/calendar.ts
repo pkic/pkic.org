@@ -186,7 +186,7 @@ export interface IcsFile {
 /**
  * Builds the ICS calendar attachment for a registration confirmation email.
  *
- * Behaviour:
+ * Behavior:
  * - Multi-day registrations with per-day attendance produce one VEVENT per
  *   live day (in_person or virtual), skipping on_demand days (recorded content
  *   has no fixed schedule).

@@ -11,7 +11,7 @@ const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-rev
 export const WorkingGroupMembersGet = openApiRoute(
   publicWorkingGroupMembersListRouteSchema,
   async (c: AdminContext, data) => {
-    const { limit = 50, offset = 0, q, sort } = data.query;
+    const { limit, offset, q, sort } = data.query;
     const result = await listWorkingGroupMembers(c.env.DB, data.params.wgId, { limit, offset, q, sort });
     if (!result) throw new AppError(404, "WORKING_GROUP_NOT_FOUND", "Working group not found");
     const response = json({

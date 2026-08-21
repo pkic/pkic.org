@@ -9,6 +9,8 @@ import { databaseIdSchema } from "./identifiers";
 import { eventIdSchema, normalizedEmailSchema, trimmedString } from "./api-common";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { addDuplicateStringIssues } from "./refinements";
+import { httpOrSameOriginUrlSchema, httpUrlSchema } from "./urls";
+import { logoUploadResponseSchema } from "./images";
 
 export const SPONSOR_TYPES = ["consortium", "event"] as const;
 export const sponsorTypeSchema = z.enum(SPONSOR_TYPES);
@@ -33,8 +35,8 @@ export const adminSponsorshipSchema = z.object({
   organizationId: databaseIdSchema.nullable(),
   organizationName: z.string().nullable(),
   nonMemberName: z.string().nullable(),
-  nonMemberWebsite: z.string().nullable(),
-  nonMemberLogoUrl: z.string().nullable(),
+  nonMemberWebsite: httpUrlSchema.nullable(),
+  nonMemberLogoUrl: httpOrSameOriginUrlSchema.nullable(),
   contactName: z.string().nullable(),
   contactEmail: z.string().nullable(),
   eventId: eventIdSchema.nullable(),
@@ -112,7 +114,7 @@ export const sponsorshipsListRouteSchema = {
 export const sponsorshipCompanySchema = z.object({
   key: z.string(),
   label: z.string(),
-  website: z.string().nullable(),
+  website: httpUrlSchema.nullable(),
   sponsorshipCount: z.number(),
   /** Comma-separated distinct pipeline stages across this company's sponsorships. */
   stages: z.string(),
@@ -127,6 +129,7 @@ export const sponsorshipCompaniesListQuerySchema = listQuerySchema(ADMIN_SPONSOR
   stage: sponsorshipPipelineStageSchema.optional(),
   tier: trimmedString(1, 100).optional(),
 });
+export const sponsorshipCompaniesListResponseSchema = paginatedResponseSchema("companies", sponsorshipCompanySchema);
 
 export const sponsorshipCompaniesListRouteSchema = {
   tags: ["Sponsorships"],
@@ -138,7 +141,7 @@ export const sponsorshipCompaniesListRouteSchema = {
     "200": {
       description: "Sponsorship companies list.",
       content: {
-        "application/json": { schema: paginatedResponseSchema("companies", sponsorshipCompanySchema) },
+        "application/json": { schema: sponsorshipCompaniesListResponseSchema },
       },
     },
   },
@@ -146,19 +149,23 @@ export const sponsorshipCompaniesListRouteSchema = {
 
 // ── Create ───────────────────────────────────────────────────────────────
 
+export const sponsorshipEditableFieldsSchema = z.object({
+  tier: trimmedString(1, 100).nullable().optional(),
+  assignedToUserId: databaseIdSchema.nullable().optional(),
+  renewalDate: z.iso.date().nullable().optional(),
+  notes: trimmedString(0, 5000).nullable().optional(),
+});
+
 export const sponsorshipCreateSchema = z
   .object({
     sponsorType: sponsorTypeSchema,
     organizationId: databaseIdSchema.nullable().optional(),
     nonMemberName: trimmedString(1, 200).nullable().optional(),
-    nonMemberWebsite: z.url().nullable().optional(),
+    nonMemberWebsite: httpUrlSchema.nullable().optional(),
     contactName: trimmedString(1, 200).nullable().optional(),
     contactEmail: normalizedEmailSchema.nullable().optional(),
     eventId: eventIdSchema.nullable().optional(),
-    tier: trimmedString(1, 100).nullable().optional(),
-    assignedToUserId: databaseIdSchema.nullable().optional(),
-    renewalDate: z.iso.date().nullable().optional(),
-    notes: trimmedString(0, 5000).nullable().optional(),
+    ...sponsorshipEditableFieldsSchema.shape,
   })
   .refine((v) => v.sponsorType !== "consortium" || !!v.organizationId, {
     message: "organizationId is required for consortium sponsorships",
@@ -208,7 +215,9 @@ export const sponsorshipLogoPutRouteSchema = {
     "200": {
       description: "Logo uploaded.",
       content: {
-        "application/json": { schema: z.object({ success: z.boolean(), r2Key: z.string(), logoUrl: z.string() }) },
+        "application/json": {
+          schema: logoUploadResponseSchema,
+        },
       },
     },
     "404": { description: "Sponsorship not found." },
@@ -235,12 +244,7 @@ export const sponsorshipLogoDeleteRouteSchema = {
 
 // ── Update ───────────────────────────────────────────────────────────────
 
-export const sponsorshipUpdateSchema = z.object({
-  tier: trimmedString(1, 100).nullable().optional(),
-  assignedToUserId: databaseIdSchema.nullable().optional(),
-  renewalDate: z.iso.date().nullable().optional(),
-  notes: trimmedString(0, 5000).nullable().optional(),
-});
+export const sponsorshipUpdateSchema = sponsorshipEditableFieldsSchema;
 
 export const sponsorshipUpdateRouteSchema = {
   tags: ["Sponsorships"],

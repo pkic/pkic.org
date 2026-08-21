@@ -3,13 +3,18 @@ import type { DatabaseLike, StatementLike } from "../../types";
 import type { DayAttendanceSelection } from "../event-days";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
-import { listCapacityEventDays, prepareCapacityGuardStatements } from "./day-waitlist-capacity";
+import {
+  dayWaitlistOfferUnavailableError,
+  listCapacityEventDays,
+  prepareCapacityGuardStatements,
+} from "./day-waitlist-capacity";
 import type {
   DayWaitlistLane,
   DayWaitlistRow,
   EventDayCapacityRow,
   PlannedDayWaitlistEntry,
 } from "./day-waitlist-types";
+import { NON_CAPACITY_CONSUMING_DAY_WAITLIST_SQL } from "./day-waitlist-policy";
 
 function normalizeSelections(selections?: DayAttendanceSelection[]): DayAttendanceSelection[] {
   if (!selections?.length) return [];
@@ -29,11 +34,15 @@ export async function buildRegistrationDayWaitlistSync(
     preserveConfirmedEventDayIds?: string[];
     registrationStatus?: string;
     configuredEventDays?: EventDayCapacityRow[];
+    forceWaitlistDayDates?: string[];
+    claimOfferedDayDates?: string[];
   },
 ): Promise<{ guardStatements: StatementLike[]; statements: StatementLike[]; activeRows: PlannedDayWaitlistEntry[] }> {
   const selections = normalizeSelections(payload.selections);
   const selectedByDate = new Map(selections.map((entry) => [entry.dayDate, entry.attendanceType]));
   const preserved = new Set(payload.preserveConfirmedEventDayIds ?? []);
+  const forcedWaitlistDates = new Set(payload.forceWaitlistDayDates ?? []);
+  const claimOfferedDayDates = new Set(payload.claimOfferedDayDates ?? []);
   const now = nowIso();
   const [eventDays, existingRows, capacityRows, storedRegistration] = await Promise.all([
     payload.configuredEventDays
@@ -56,7 +65,7 @@ export async function buildRegistrationDayWaitlistSync(
                 LEFT JOIN event_day_waitlist_entries w
                   ON w.event_day_id = rda.event_day_id
                  AND w.registration_id = rda.registration_id
-                 AND w.status IN ('waiting', 'offered')
+                 AND ${NON_CAPACITY_CONSUMING_DAY_WAITLIST_SQL}
                 WHERE rda.event_day_id = ed.id
                   AND rda.attendance_type = 'in_person'
                   AND r.status IN ('pending_email_confirmation', 'registered')
@@ -82,11 +91,30 @@ export async function buildRegistrationDayWaitlistSync(
       ? Promise.resolve({ status: payload.registrationStatus })
       : first<{ status: string }>(db, "SELECT status FROM registrations WHERE id = ?", [payload.registrationId]),
   ]);
-  if (!eventDays.length) return { guardStatements: [], statements: [], activeRows: [] };
+  if (!eventDays.length) {
+    if (claimOfferedDayDates.size > 0) throw dayWaitlistOfferUnavailableError();
+    return { guardStatements: [], statements: [], activeRows: [] };
+  }
+
+  const dayByDate = new Map(eventDays.map((day) => [day.day_date, day]));
+  for (const dayDate of claimOfferedDayDates) {
+    const day = dayByDate.get(dayDate);
+    if (selectedByDate.get(dayDate) !== "in_person" || !day?.in_person_capacity || day.in_person_capacity <= 0) {
+      throw dayWaitlistOfferUnavailableError();
+    }
+  }
 
   const existingByDay = new Map(existingRows.map((row) => [row.event_day_id, row]));
   const capacityByDay = new Map(capacityRows.map((row) => [row.event_day_id, row]));
-  const guardStatements = prepareCapacityGuardStatements(db, eventDays, selectedByDate, preserved);
+  const guardStatements = prepareCapacityGuardStatements(
+    db,
+    eventDays,
+    selectedByDate,
+    preserved,
+    claimOfferedDayDates.size > 0
+      ? { registrationId: payload.registrationId, dayDates: claimOfferedDayDates }
+      : undefined,
+  );
   const statements: StatementLike[] = [
     db
       .prepare(
@@ -115,10 +143,40 @@ export async function buildRegistrationDayWaitlistSync(
           .prepare(
             `UPDATE event_day_waitlist_entries
              SET status = 'removed', offer_expires_at = NULL, reason_code = ?, reason_note = ?, updated_at = ?
-             WHERE event_day_id = ? AND registration_id = ? AND status IN ('waiting', 'offered')`,
+             WHERE event_day_id = ? AND registration_id = ? AND status IN ('waiting', 'offered', 'accepted')`,
           )
           .bind(clearReason.code, clearReason.note, now, day.id, payload.registrationId),
       );
+      continue;
+    }
+    if (forcedWaitlistDates.has(day.day_date)) {
+      const capacity = capacityByDay.get(day.id);
+      const priorityLane: DayWaitlistLane = "general";
+      statements.push(
+        db
+          .prepare(
+            `INSERT INTO event_day_waitlist_entries (
+               id, event_id, event_day_id, registration_id, user_id, priority_lane, status, position,
+               offer_expires_at, reason_code, reason_note, created_at, updated_at
+             ) VALUES (?, ?, ?, ?, ?, ?, 'waiting', ?, NULL, 'admin_returned_to_waitlist', NULL, ?, ?)
+             ON CONFLICT(event_day_id, registration_id)
+             DO UPDATE SET user_id = excluded.user_id, priority_lane = excluded.priority_lane,
+                           status = 'waiting', offer_expires_at = NULL, position = excluded.position,
+                           reason_code = excluded.reason_code, reason_note = NULL, updated_at = excluded.updated_at`,
+          )
+          .bind(
+            uuid(),
+            payload.eventId,
+            day.id,
+            payload.registrationId,
+            payload.userId,
+            priorityLane,
+            Number(capacity?.max_position ?? 0) + 1,
+            now,
+            now,
+          ),
+      );
+      activeRows.push({ dayDate: day.day_date, status: "waiting", priorityLane, offerExpiresAt: null });
       continue;
     }
     const existingStatus =
@@ -160,7 +218,8 @@ export async function buildRegistrationDayWaitlistSync(
           db
             .prepare(
               `UPDATE event_day_waitlist_entries
-               SET status = 'accepted', offer_expires_at = NULL, updated_at = ? WHERE id = ?`,
+               SET status = 'accepted', offer_expires_at = NULL,
+                   reason_code = NULL, reason_note = NULL, updated_at = ? WHERE id = ?`,
             )
             .bind(now, existing.id),
         );
@@ -180,7 +239,7 @@ export async function buildRegistrationDayWaitlistSync(
            ON CONFLICT(event_day_id, registration_id)
            DO UPDATE SET user_id = excluded.user_id, priority_lane = excluded.priority_lane,
                          status = 'waiting', offer_expires_at = NULL, position = excluded.position,
-                         updated_at = excluded.updated_at`,
+                         reason_code = NULL, reason_note = NULL, updated_at = excluded.updated_at`,
         )
         .bind(
           uuid(),
@@ -223,37 +282,7 @@ export function prepareRemoveAllDayWaitlistStatement(
     .prepare(
       `UPDATE event_day_waitlist_entries
        SET status = 'removed', offer_expires_at = NULL, reason_code = ?, reason_note = ?, updated_at = ?
-       WHERE registration_id = ? AND status IN ('waiting', 'offered')`,
+       WHERE registration_id = ? AND status IN ('waiting', 'offered', 'accepted')`,
     )
     .bind(payload.reasonCode, payload.reasonNote ?? null, nowIso(), payload.registrationId);
-}
-
-export async function prepareClaimOfferedDayWaitlistStatements(
-  db: DatabaseLike,
-  payload: {
-    registrationId: string;
-    eventId: string;
-    selections?: DayAttendanceSelection[];
-    configuredEventDays?: EventDayCapacityRow[];
-  },
-): Promise<StatementLike[]> {
-  const selections = normalizeSelections(payload.selections).filter((entry) => entry.attendanceType === "in_person");
-  if (!selections.length) return [];
-  const days = payload.configuredEventDays ?? (await listCapacityEventDays(db, payload.eventId));
-  const dayIdsByDate = new Map(days.map((day) => [day.day_date, day.id]));
-  const now = nowIso();
-  return selections.flatMap((selection) => {
-    const eventDayId = dayIdsByDate.get(selection.dayDate);
-    if (!eventDayId) return [];
-    return [
-      db
-        .prepare(
-          `UPDATE event_day_waitlist_entries
-           SET status = 'accepted', offer_expires_at = NULL, updated_at = ?
-           WHERE registration_id = ? AND event_day_id = ? AND status = 'offered'
-             AND (offer_expires_at IS NULL OR offer_expires_at > ?)`,
-        )
-        .bind(now, payload.registrationId, eventDayId, now),
-    ];
-  });
 }

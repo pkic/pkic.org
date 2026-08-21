@@ -131,6 +131,30 @@ describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application field
     expect(rows[0].stage).toBe("pending");
   });
 
+  it("resolves only the requested working-group labels in the backend", async () => {
+    await env.DB.prepare(
+      `INSERT INTO working_groups
+         (id, name, slug, description, mailing_list_email, min_endorsers_for_ballot, active, created_at, updated_at)
+       VALUES (?, 'Post-Quantum Cryptography Working Group', 'pqc', NULL, NULL, 0, 1, datetime('now'), datetime('now'))`,
+    )
+      .bind(crypto.randomUUID())
+      .run();
+    const formSubmissionId = await createApplicationFormSubmission({
+      working_groups: ["pqc", "retired-group", "pqc"],
+    });
+    const { id } = await createApplication({ form_submission_id: formSubmissionId });
+
+    const response = await call(adminToken, `/api/v1/admin/applications/${id}`);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      requestedWorkingGroups: Array<{ slug: string; name: string }>;
+    };
+    expect(body.requestedWorkingGroups).toEqual([
+      { slug: "pqc", name: "Post-Quantum Cryptography Working Group" },
+      { slug: "retired-group", name: "retired-group" },
+    ]);
+  });
+
   it("records a member_application_events row for the edit, distinct from a stage transition (fromStage === toStage)", async () => {
     const { id } = await createApplication({ stage: "in_review" });
 

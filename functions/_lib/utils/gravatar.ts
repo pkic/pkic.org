@@ -15,65 +15,18 @@ export async function gravatarHash(email: string): Promise<string> {
     .join("");
 }
 
-import { first, run } from "../db/queries";
-import { nowIso } from "./time";
-import type { Env } from "../types";
-
 const GRAVATAR_SIZE = 512;
 
-/**
- * Fetch a Gravatar for the given email and store it as the user's headshot.
- *
- * By default (force=false) skips silently if the user already has a headshot,
- * making it safe to call speculatively at registration time.
- * Pass { force: true } to always replace (admin import flow).
- *
- * Returns the new R2 key on success, null if no Gravatar exists or on error.
- */
-export async function fetchGravatar(
-  userId: string,
-  email: string,
-  env: Pick<Env, "DB" | "SPEAKER_UPLOADS_BUCKET">,
-  options?: { force?: boolean },
-): Promise<string | null> {
-  if (!env.SPEAKER_UPLOADS_BUCKET) return null;
+export interface DownloadedGravatar {
+  buffer: ArrayBuffer;
+  contentType: string;
+}
 
-  if (!options?.force) {
-    const row = await first<{ headshot_r2_key: string | null }>(
-      env.DB,
-      "SELECT headshot_r2_key FROM users WHERE id = ?",
-      [userId],
-    );
-    if (row?.headshot_r2_key) return null; // already has one, skip
-  }
-
+/** Downloads a custom Gravatar without mutating D1 or R2. */
+export async function downloadGravatar(email: string): Promise<DownloadedGravatar | null> {
   const emailHash = await gravatarHash(email);
-  const url = `https://gravatar.com/avatar/${emailHash}?s=${GRAVATAR_SIZE}&d=404`;
-
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return null; // 404 = no Gravatar for this email
-
-    const buf = await res.arrayBuffer();
-    const ct = res.headers.get("content-type") ?? "image/jpeg";
-    const mime = ct.split(";")[0].trim();
-    const ext = mime === "image/png" ? "png" : mime === "image/webp" ? "webp" : "jpg";
-    const r2Key = `headshots/${userId}/${Date.now()}-gravatar.${ext}`;
-
-    await env.SPEAKER_UPLOADS_BUCKET.put(r2Key, buf, {
-      httpMetadata: { contentType: mime },
-    });
-
-    const now = nowIso();
-    await run(env.DB, "UPDATE users SET headshot_r2_key = ?, headshot_updated_at = ?, updated_at = ? WHERE id = ?", [
-      r2Key,
-      now,
-      now,
-      userId,
-    ]);
-
-    return r2Key;
-  } catch {
-    return null;
-  }
+  const response = await fetch(`https://gravatar.com/avatar/${emailHash}?s=${GRAVATAR_SIZE}&d=404`);
+  if (!response.ok) return null;
+  const contentType = (response.headers.get("content-type") ?? "image/jpeg").split(";", 1)[0].trim();
+  return { buffer: await response.arrayBuffer(), contentType };
 }

@@ -4,6 +4,7 @@ import { ErrorAlert } from "../../../components/ErrorAlert";
 import { api } from "../../api";
 import { toast } from "../../ui";
 import type { AdminVoteProposalSummary } from "../../types";
+import { performAdminAction } from "../../actions";
 
 export function ProposalDetail({ proposalId, onDecided }: { proposalId: string; onDecided: () => void }) {
   const [detail, setDetail] = useState<{ proposal: AdminVoteProposalSummary; endorserUserIds: string[] } | null>(null);
@@ -32,16 +33,12 @@ export function ProposalDetail({ proposalId, onDecided }: { proposalId: string; 
   }, [load]);
 
   async function approve() {
-    setBusy(true);
-    try {
-      await api(`/api/v1/admin/vote-proposals/${proposalId}/approve`, { method: "POST" });
-      toast("Converted to an active vote", "success");
-      onDecided();
-    } catch (err) {
-      toast((err as Error).message, "error");
-    } finally {
-      setBusy(false);
-    }
+    await performAdminAction({
+      setBusy,
+      request: () => api(`/api/v1/admin/vote-proposals/${proposalId}/approve`, { method: "POST" }),
+      successMessage: "Converted to an active vote",
+      afterSuccess: onDecided,
+    });
   }
 
   async function reject() {
@@ -49,19 +46,16 @@ export function ProposalDetail({ proposalId, onDecided }: { proposalId: string; 
       toast("A reason is required to reject", "error");
       return;
     }
-    setBusy(true);
-    try {
-      await api(`/api/v1/admin/vote-proposals/${proposalId}/reject`, {
-        method: "POST",
-        body: JSON.stringify({ reason: reason.trim() }),
-      });
-      toast("Rejected — proposer notified", "success");
-      onDecided();
-    } catch (err) {
-      toast((err as Error).message, "error");
-    } finally {
-      setBusy(false);
-    }
+    await performAdminAction({
+      setBusy,
+      request: () =>
+        api(`/api/v1/admin/vote-proposals/${proposalId}/reject`, {
+          method: "POST",
+          body: JSON.stringify({ reason: reason.trim() }),
+        }),
+      successMessage: "Rejected — proposer notified",
+      afterSuccess: onDecided,
+    });
   }
 
   if (loading) return <Spinner />;

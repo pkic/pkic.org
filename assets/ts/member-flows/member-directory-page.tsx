@@ -8,15 +8,15 @@
  * groups the current page into presentation buckets.
  */
 import { render } from "preact";
-import { useMemo, useState, useEffect, useCallback } from "preact/hooks";
-import { getJson } from "../shared/api-client";
+import { useMemo, useState } from "preact/hooks";
 import { Spinner } from "../components/Spinner";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { Pager } from "../components/Pager";
 import { membersListResponseSchema, type PublicMemberSummary } from "../../shared/schemas/members-directory";
+import { useApiPage } from "../hooks/useApiPage";
+import { memberInitials } from "../shared/member-display";
 
 const API_BASE_FALLBACK = "/api/v1";
-const DEFAULT_PAGE_SIZE = 50;
 const DIGITS = new Set("0123456789".split(""));
 
 export type DirectoryMember = PublicMemberSummary;
@@ -26,16 +26,6 @@ function letterBucket(name: string): string {
   if (DIGITS.has(c)) return "#";
   if (/^[A-Z]$/.test(c)) return c;
   return "…";
-}
-
-function initialsFor(name: string): string {
-  return name
-    .split(/\s+/)
-    .slice(0, 3)
-    .map((w) => w.replace(/[^a-zA-Z]/g, ""))
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase())
-    .join("");
 }
 
 function MemberCard({ member, detailBase }: { member: DirectoryMember; detailBase: string }) {
@@ -54,7 +44,7 @@ function MemberCard({ member, detailBase }: { member: DirectoryMember; detailBas
         {member.logoUrl ? (
           <img class="member-card-logo" src={member.logoUrl} alt={`${member.name} logo`} loading="lazy" />
         ) : (
-          <div class={`member-card-initials initial-color-${colorIdx}`}>{initialsFor(member.name)}</div>
+          <div class={`member-card-initials initial-color-${colorIdx}`}>{memberInitials(member.name)}</div>
         )}
       </div>
       <div class="member-card-name">{member.name}</div>
@@ -164,47 +154,21 @@ function MemberDirectory({
   label: string;
   detailBase: string;
 }) {
-  const [members, setMembers] = useState<DirectoryMember[] | null>(null);
-  const [total, setTotal] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const [offset, setOffset] = useState(0);
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const listing = useApiPage(
+    `${apiBase}/members`,
+    { group, sort: "name", ...(search ? { q: search } : {}) },
+    membersListResponseSchema,
+    (data) => data.members,
+  );
+  const members = listing.data?.members;
 
-  const load = useCallback(async () => {
-    setError(null);
-    setMembers(null);
-    try {
-      const query = new URLSearchParams({
-        group,
-        limit: String(pageSize),
-        offset: String(offset),
-        sort: "name",
-      });
-      if (search) query.set("q", search);
-      const data = membersListResponseSchema.parse(await getJson<unknown>(`${apiBase}/members?${query.toString()}`));
-      setMembers(data.members);
-      setTotal(data.page.total);
-      setHasMore(data.page.hasMore);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }, [apiBase, group, offset, pageSize, search]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  if (error) return <ErrorAlert error={error} />;
+  if (listing.error) return <ErrorAlert error={listing.error} />;
   if (!members) return <Spinner />;
-
-  const page = Math.floor(offset / pageSize) + 1;
 
   function submitSearch(event: SubmitEvent): void {
     event.preventDefault();
-    setOffset(0);
     setSearch(searchInput.trim());
   }
 
@@ -237,21 +201,7 @@ function MemberDirectory({
       </div>
       <div class="container-fluid px-2 px-md-4 pb-5">
         <DirectoryGrid members={members} prefix={prefix} detailBase={detailBase} />
-        <Pager
-          page={page}
-          hasMore={hasMore}
-          pageSize={pageSize}
-          offset={offset}
-          rowCount={members.length}
-          total={total}
-          onPrev={() => setOffset(Math.max(0, offset - pageSize))}
-          onNext={() => setOffset(offset + pageSize)}
-          onJump={(nextPage) => setOffset((nextPage - 1) * pageSize)}
-          onPageSizeChange={(size) => {
-            setPageSize(size);
-            setOffset(0);
-          }}
-        />
+        {listing.pagerProps && <Pager {...listing.pagerProps} />}
       </div>
     </>
   );

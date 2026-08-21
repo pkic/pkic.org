@@ -6,6 +6,7 @@
  * events/[eventSlug]/router.ts's requireEventManagementAccess precedent.
  */
 import { json } from "../../../../../../_lib/http";
+import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
 import { listAdminMeetingSeriesForWg, createWgMeetingSeries } from "../../../../../../_lib/services/meeting-calendar";
 import {
   wgMeetingsListRouteSchema,
@@ -20,7 +21,8 @@ export const WgMeetingsGet = openApiRoute(wgMeetingsListRouteSchema, async (c: A
 });
 
 export const WgMeetingsCreate = openApiRoute(wgMeetingsCreateRouteSchema, async (c: AdminContext, data) => {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const body = data.body;
-  const meetingSeries = await createWgMeetingSeries(requestDb(c), data.params.id, body);
+  const meetingSeries = await createWgMeetingSeries(requestDb(c), data.params.id, body, admin.id);
   return json({ meetingSeries }, 201);
 });

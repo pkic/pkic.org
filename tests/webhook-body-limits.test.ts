@@ -38,6 +38,39 @@ describe("webhook request body limits", () => {
     });
   });
 
+  it("accepts an exact-size body and rejects invalid or oversized declared lengths before reading", async () => {
+    await expect(
+      readBoundedBody(new Request("https://pkic.org/test", { method: "POST", body: new Uint8Array([1, 2, 3]) }), 3),
+    ).resolves.toEqual(new Uint8Array([1, 2, 3]));
+
+    await expect(
+      readBoundedBody(
+        new Request("https://pkic.org/test", {
+          method: "POST",
+          headers: { "content-length": "invalid" },
+          body: new Uint8Array(),
+        }),
+        3,
+      ),
+    ).rejects.toMatchObject({ status: 400, code: "INVALID_CONTENT_LENGTH" });
+
+    const request = new Request("https://pkic.org/test", {
+      method: "POST",
+      headers: { "content-length": "4" },
+      body: new ReadableStream<Uint8Array>({
+        pull(controller) {
+          controller.enqueue(new Uint8Array([1]));
+          controller.close();
+        },
+      }),
+      duplex: "half",
+    } as RequestInit);
+    await expect(readBoundedBody(request, 3)).rejects.toMatchObject({
+      status: 413,
+      code: "REQUEST_BODY_TOO_LARGE",
+    });
+  });
+
   it("rejects oversized SendGrid webhook bodies before signature work", async () => {
     expect(await call("/api/v1/webhooks/sendgrid", SENDGRID_WEBHOOK_MAX_BYTES + 1)).toMatchObject({ status: 413 });
   });

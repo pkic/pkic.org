@@ -22,9 +22,10 @@
  * rendered as complete (PR #1 review, Phase 7.2).
  */
 import { useState, useRef } from "preact/hooks";
-import { ApiDataTable, type ApiTableActions, type Column } from "../../../components/Table";
+import type { Column } from "../../../components/Table";
+import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
 import { SPONSORSHIP_PIPELINE_STAGES } from "../../types";
-import { SPONSOR_TYPES } from "../../../../shared/schemas/admin-sponsorships";
+import { SPONSOR_TYPES, sponsorshipCompaniesListResponseSchema } from "../../../../shared/schemas/admin-sponsorships";
 import type { SponsorshipCompany, SponsorshipPipelineStage } from "../../types";
 import { stageBadgeClass, stageLabel } from "./shared";
 import { CreateSponsorshipForm } from "./CreateSponsorshipForm";
@@ -118,13 +119,13 @@ export function Sponsorships() {
       {!selectedCompany && (
         <ApiDataTable<SponsorshipCompany>
           endpoint="/api/v1/admin/sponsorships/companies"
-          resolve={(d) => (d as { companies: SponsorshipCompany[] }).companies}
-          resolvePage={(d) => (d as { page: { total: number; hasMore: boolean } }).page}
+          responseSchema={sponsorshipCompaniesListResponseSchema}
+          resolve={(data) => sponsorshipCompaniesListResponseSchema.parse(data).companies}
+          resolvePage={(data) => sponsorshipCompaniesListResponseSchema.parse(data).page}
           paginate
           actionsRef={tableRef}
           columns={companyColumns}
           params={{ ...(type ? { type } : {}), ...(stage ? { stage } : {}) }}
-          deps={[type, stage]}
           rowKey={(c) => c.key}
           onRowClick={selectCompany}
           empty="No sponsorships match these filters."

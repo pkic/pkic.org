@@ -1,11 +1,8 @@
 import { z } from "zod";
 import { AppError } from "./errors";
-import {
-  attendanceTypeSchema,
-  consentItemSchema,
-  normalizedEmailSchema,
-  sourceTypeSchema,
-} from "../../assets/shared/schemas/api";
+import { attendanceTypeSchema, consentItemSchema } from "../../assets/shared/schemas/registration";
+import { normalizedEmailSchema } from "../../assets/shared/schemas/api-common";
+import { sourceTypeSchema } from "../../assets/shared/schemas/source";
 
 type JsonRequestLike = Request | { raw?: Request; json?: () => Promise<unknown> };
 

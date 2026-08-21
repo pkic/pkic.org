@@ -1,7 +1,9 @@
 import { useState, useRef } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Badge } from "../../../../components/Badge";
-import { ApiDataTable, type ApiTableActions, type Column } from "../../../../components/Table";
+import type { Column } from "../../../../components/Table";
+import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataTable";
+import { FilterSelect } from "../../../components/FilterSelect";
 import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
 import { ATTENDANCE_TYPE_LABELS, attendanceTypeLabel } from "../../../attendance";
@@ -10,6 +12,12 @@ import type { Registration, RegistrationAttendanceChange } from "../../../types"
 import { Invites } from "./Invites";
 import { EventEmail } from "./EventEmail";
 import { EventFormResponses } from "./Forms";
+import {
+  ADMIN_EVENT_REGISTRATION_STATUSES,
+  adminEventRegistrationStatusLabel,
+  adminEventRegistrationsListResponseSchema,
+  type AdminEventRegistrationsListResponse,
+} from "../../../../../shared/schemas/admin-events";
 
 const ATTENDANCE_CHANGE_PRESETS: Record<string, string> = {
   "attendance-changed": "any",
@@ -34,14 +42,7 @@ function attendanceJourneyLabel(history: RegistrationAttendanceChange[]): string
   return path.map(attendanceTypeLabel).join(" → ");
 }
 
-interface RegistrationStats {
-  byAttendanceType: Record<string, number>;
-  attendanceStatusByType: Record<string, { accepted: number; waitlisted: number }>;
-  byStatus: Record<string, number>;
-  bouncedCount?: number;
-  consentCount?: number;
-  dietaryCounts?: Record<string, number>;
-}
+type RegistrationStats = AdminEventRegistrationsListResponse["stats"];
 
 // ─── Registration list ────────────────────────────────────────────────────────
 
@@ -229,12 +230,13 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
       )}
       <ApiDataTable<Registration>
         endpoint={`/api/v1/admin/events/${slug}/registrations`}
-        resolve={(d) => {
-          const resp = d as { registrations: Registration[]; stats?: RegistrationStats };
-          if (resp.stats) setStats(resp.stats);
+        responseSchema={adminEventRegistrationsListResponseSchema}
+        resolve={(data) => {
+          const resp = adminEventRegistrationsListResponseSchema.parse(data);
+          setStats(resp.stats);
           return resp.registrations;
         }}
-        resolvePage={(d) => (d as { page: { total: number; hasMore: boolean } }).page}
+        resolvePage={(data) => adminEventRegistrationsListResponseSchema.parse(data).page}
         paginate
         searchPlaceholder="Search name / email…"
         params={{
@@ -244,23 +246,22 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
           ...(attendanceChangeFilter && { attendance_change: attendanceChangeFilter }),
         }}
         actionsRef={tableRef}
-        deps={[slug, statusFilter, bouncedFilter, consentFilter, attendanceChangeFilter]}
         toolbar={({ resetPage }) => (
           <>
-            <select
-              class="form-select form-select-sm adm-filter-select"
+            <FilterSelect
               value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter((e.target as HTMLSelectElement).value);
+              options={[
+                { value: "", label: "All statuses" },
+                ...ADMIN_EVENT_REGISTRATION_STATUSES.map((status) => ({
+                  value: status,
+                  label: adminEventRegistrationStatusLabel(status),
+                })),
+              ]}
+              onChange={(value) => {
+                setStatusFilter(value);
                 resetPage();
               }}
-            >
-              <option value="">All statuses</option>
-              <option value="registered">Confirmed</option>
-              <option value="pending_email_confirmation">Pending confirmation</option>
-              <option value="waitlisted">Waitlisted</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
+            />
             <select
               aria-label="Attendance changes"
               class="form-select form-select-sm adm-filter-select"

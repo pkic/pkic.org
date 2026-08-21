@@ -17,7 +17,7 @@
  *   - null when the code is unavailable (e.g. local / localhost / private IP).
  */
 
-import { json } from "../../_lib/http";
+import { dispatchRequestMethod, json } from "../../_lib/http";
 
 /**
  * Allowed origins. Must exactly match the site origin (scheme + host + optional
@@ -47,6 +47,16 @@ function isAllowedOrigin(origin: string): boolean {
   }
 }
 
+function geoResponse(c: any): Response {
+  const request = c.req.raw as Request;
+  const cf = (request as Request & { cf?: { country?: string } }).cf;
+  const country: string | null = cf?.country ?? null;
+
+  return json({ country }, 200, {
+    "cache-control": "private, max-age=60, stale-while-revalidate=0",
+  });
+}
+
 export async function onRequest(c: any): Promise<Response> {
   const request = c.req.raw as Request;
 
@@ -62,22 +72,5 @@ export async function onRequest(c: any): Promise<Response> {
     return json({ error: "forbidden" }, 403);
   }
 
-  // ── Only allow GET / HEAD ────────────────────────────────────────────────
-  const method = request.method.toUpperCase();
-  if (method !== "GET" && method !== "HEAD") {
-    return json({ error: "method not allowed" }, 405);
-  }
-
-  // ── Geo lookup ───────────────────────────────────────────────────────────
-  // Cloudflare attaches geo data to every request in its infrastructure.
-  // At local dev (wrangler pages dev) this is typically undefined / null.
-  const cf = (request as Request & { cf?: { country?: string } }).cf;
-  const country: string | null = cf?.country ?? null;
-
-  return json({ country }, 200, {
-    // Private: must not be stored by shared caches / CDNs.
-    // Short TTL: valid for one minute so a user toggling a VPN gets
-    // a fresh result quickly without hammering the endpoint.
-    "cache-control": "private, max-age=60, stale-while-revalidate=0",
-  });
+  return dispatchRequestMethod(c, { GET: geoResponse, HEAD: geoResponse });
 }

@@ -19,6 +19,7 @@ import {
   leadershipAffiliationsResponseSchema,
   leadershipPositionResponseSchema,
   leadershipPositionsListResponseSchema,
+  leadershipPublicResponseSchema,
 } from "../assets/shared/schemas/leadership";
 
 function request(token: string | null, path: string, init: RequestInit = {}): Request {
@@ -369,6 +370,22 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
     const ecBody = (await ecResponse.json()) as { current: unknown[]; past: unknown[] };
     expect(ecBody.current).toHaveLength(0);
     expect(ecBody.past).toHaveLength(0);
+  });
+
+  it("omits an unsafe legacy organization website from public leadership responses", async () => {
+    const orgId = await insertOrganization("Unsafe Leadership Org", "javascript:alert(1)");
+    const userId = await insertUser("unsafe-leader@example.test", ["Unsafe", "Leader"]);
+    await insertMember(userId, orgId);
+    const createResponse = await call(adminToken, "/api/v1/admin/leadership-positions", {
+      method: "POST",
+      body: JSON.stringify({ body: "board", userId, title: "Board Member", startsAt: "2026-01-01" }),
+    });
+    expect(createResponse.status).toBe(201);
+
+    const response = await call(null, "/api/v1/leadership/board");
+    expect(response.status).toBe(200);
+    const body = leadershipPublicResponseSchema.parse(await response.json());
+    expect(body.current[0].organizationWebsite).toBeNull();
   });
 
   it("public GET /api/v1/leadership/:body 404s for an unknown body", async () => {

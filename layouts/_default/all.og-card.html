@@ -197,7 +197,7 @@
   {{/* OG card layout stylesheet — canvas sizing, grid, visual panel, footer */}}
   {{- $ogStyle := resources.Get "scss/og-card.scss" | css.Sass | resources.Fingerprint -}}
   <link rel="stylesheet" href="{{ $ogStyle.RelPermalink }}">
-  {{/* Per-page CSS custom properties (accent colour, theme gradient, hero image URL) */}}
+  {{/* Per-page CSS custom properties (accent color, theme gradient, hero image URL) */}}
   {{ partial "og-card-page-vars.html" . }}
 </head>
 <body class="{{ if $heroBgImage }}og-has-hero-bg{{ end }}">

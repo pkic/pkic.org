@@ -10,6 +10,7 @@ import {
   normalizedEmailSchema,
   organizationNameSchema,
   registrationManageTokenParamsSchema,
+  successResponseSchema,
   termKeyPattern,
   tokenSchema,
   trimmedString,
@@ -19,6 +20,7 @@ import { linksSchema } from "./links";
 import { defaultedSourceTypeSchema } from "./source";
 import { IMAGE_UPLOAD_ALLOWED_MIME_TYPES } from "./images";
 import { proposalSpeakerRoleSchema } from "./participant-roles";
+import { httpUrlSchema } from "./urls";
 
 export { REGISTRATION_HEADSHOT_MAX_BYTES } from "./images";
 export const REGISTRATION_HEADSHOT_ALLOWED_MIME_TYPES = IMAGE_UPLOAD_ALLOWED_MIME_TYPES;
@@ -37,14 +39,12 @@ export const registrationHeadshotUploadFormSchema = headshotImageUploadFormSchem
     .describe("Consent declaring the attendee owns/has rights to the uploaded photo of themselves"),
 });
 
-export const successResponseSchema = z.object({ success: z.boolean() });
 export const headshotUploadResponseSchema = successResponseSchema.extend({
   r2Key: z.string().describe("R2 object key for the uploaded headshot"),
-  headshotUrl: z.string().url().describe("URL pointing to the uploaded headshot"),
+  headshotUrl: httpUrlSchema.describe("URL pointing to the uploaded headshot"),
 });
 export const registrationHeadshotUploadResponseSchema = headshotUploadResponseSchema.omit({ r2Key: true }).extend({
-  success: z.boolean(),
-  headshotUrl: z.string().url().describe("The permanent URL pointing to the new uploaded headshot profile asset"),
+  headshotUrl: httpUrlSchema.describe("The permanent URL pointing to the new uploaded headshot profile asset"),
 });
 
 export const registrationResendManageLinkSchema = emailRecoveryRequestSchema;
@@ -91,6 +91,15 @@ export const adminHeadshotUploadResponseSchema = headshotUploadResponseSchema.om
 
 export const attendanceTypeSchema = z.enum(["in_person", "virtual", "on_demand"]);
 
+/**
+ * Application lifecycle statuses after migration 0030. The deployed base
+ * table still admits the retired `waitlisted` token in its CHECK constraint;
+ * removing that storage compatibility would require rebuilding the D1 table.
+ * Day waitlist rows are the sole authoritative waitlist state.
+ */
+export const registrationLifecycleStatusSchema = z.enum(["pending_email_confirmation", "registered", "cancelled"]);
+export type RegistrationLifecycleStatus = z.infer<typeof registrationLifecycleStatusSchema>;
+
 // Attendance options are configurable per event day; the service validates
 // this bounded identifier against the event's stored options.
 export const dayAttendanceTypeSchema = z
@@ -130,6 +139,15 @@ export const dayWaitlistItemSchema = z.object({
   status: z.enum(["waiting", "offered", "accepted"]),
   priorityLane: z.enum(["continuity", "general"]),
   offerExpiresAt: z.string().trim().nullable(),
+});
+
+export const registrationDayAttendanceResponseItemSchema = dayAttendanceItemSchema.extend({
+  label: z.string().nullable(),
+});
+
+export const registrationDayStateSchema = z.object({
+  dayAttendance: z.array(registrationDayAttendanceResponseItemSchema),
+  dayWaitlist: z.array(dayWaitlistItemSchema),
 });
 
 /** Backward-compatible name for the canonical portal-managed form answer contract. */
@@ -208,15 +226,19 @@ export const registrationCreateSchema = attendeeRegistrationFieldsSchema
 export const registrationConfirmSchema = z.object({ id: databaseIdSchema.optional(), token: tokenSchema });
 export const registrationConfirmQuerySchema = registrationConfirmSchema;
 
-export const registrationConfirmResponseSchema = z.object({
-  success: z.boolean(),
-  status: z.string(),
-  shareUrl: z.string().url().nullable(),
-  manageUrl: z.string().url(),
+const registrationCompletionResponseSchema = successResponseSchema.merge(registrationDayStateSchema).extend({
+  status: registrationLifecycleStatusSchema,
+  shareUrl: httpUrlSchema.nullable(),
+  manageUrl: httpUrlSchema,
   manageToken: z.string(),
-  dayAttendance: z.array(dayAttendanceItemSchema),
-  dayWaitlist: z.array(dayWaitlistItemSchema),
 });
+
+export const registrationConfirmResponseSchema = registrationCompletionResponseSchema;
+
+export const registrationSubmissionResponseSchema = registrationCompletionResponseSchema.extend({
+  registrationId: databaseIdSchema,
+});
+export type RegistrationSubmissionResponse = z.infer<typeof registrationSubmissionResponseSchema>;
 
 export const registrationResendConfirmationSchema = z
   .object({
@@ -232,6 +254,7 @@ export const registrationManageSchema = z.object({
   action: z.enum(["update", "cancel", "report_unauthorized"]),
   attendanceType: attendanceTypeSchema.optional(),
   dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
+  claimDayWaitlistOffers: z.array(dayDateSchema).max(31).optional(),
   customAnswers: customAnswersSchema.optional(),
   sourceRef: trimmedString(2, 200).optional(),
   email: normalizedEmailSchema.optional(),
@@ -243,8 +266,7 @@ export const registrationManageSchema = z.object({
 
 export const registrationInviteCreateSchema = z.object({ invites: z.array(inviteeSchema).min(1).max(10) });
 
-export const peerInviteResultSchema = z.object({
-  success: z.literal(true),
+export const peerInviteResultSchema = successResponseSchema.extend({
   created: z.array(z.object({ email: normalizedEmailSchema })),
   endorsed: z.array(z.object({ email: normalizedEmailSchema })),
   skipped: z.array(z.object({ email: normalizedEmailSchema, reason: z.string() })),

@@ -1,8 +1,8 @@
 import { parseJsonBody } from "../../../../_lib/validation";
-import { json } from "../../../../_lib/http";
+import { dispatchPostOnly, json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { resetFailedOutbox, processPendingOutbox } from "../../../../_lib/email/outbox";
-import { adminResetFailedOutboxSchema } from "../../../../../assets/shared/schemas/api";
+import { adminResetFailedOutboxSchema } from "../../../../../assets/shared/schemas/admin-email-outbox";
 
 /**
  * POST /api/v1/internal/email/reset-failed
@@ -25,8 +25,5 @@ export async function onRequestPost(c: any): Promise<Response> {
 }
 
 export async function onRequest(c: any): Promise<Response> {
-  if (c.req.raw.method !== "POST") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
-  return onRequestPost(c);
+  return dispatchPostOnly(c, onRequestPost);
 }

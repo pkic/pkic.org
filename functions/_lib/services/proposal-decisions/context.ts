@@ -1,4 +1,7 @@
-import { isProposalDecidableStatus } from "../../../../assets/shared/schemas/proposal-status";
+import {
+  isProposalDecisionTransitionAllowed,
+  type ProposalDecisionStatus,
+} from "../../../../assets/shared/schemas/proposal-status";
 import { getProposalAccessForEvent } from "../../auth/proposal-access";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
@@ -12,6 +15,9 @@ export interface ProposalDecisionContext {
   updated_at: string;
   review_count: number;
   current_decision_id: string | null;
+  current_decision_status: string | null;
+  current_decision_sequence: number | null;
+  previous_review_round: number | null;
   previous_status: string | null;
   previous_note: string | null;
 }
@@ -19,11 +25,18 @@ export interface ProposalDecisionContext {
 const DECISION_COLUMNS = `sp.id, sp.event_id, sp.status, sp.review_round, sp.updated_at,
   (SELECT COUNT(*) FROM proposal_reviews pr
    WHERE pr.proposal_id = sp.id AND pr.review_round = sp.review_round) AS review_count,
-  (SELECT pd.id FROM proposal_decisions pd WHERE pd.proposal_id = sp.id) AS current_decision_id,
+  pd.id AS current_decision_id,
+  pd.final_status AS current_decision_status,
+  pd.decision_sequence AS current_decision_sequence,
+  (SELECT pdh.review_round FROM proposal_decision_history pdh
+   WHERE pdh.proposal_id = sp.id
+   ORDER BY pdh.review_round DESC, pdh.decision_sequence DESC LIMIT 1) AS previous_review_round,
   (SELECT pdh.final_status FROM proposal_decision_history pdh
-   WHERE pdh.proposal_id = sp.id ORDER BY pdh.review_round DESC LIMIT 1) AS previous_status,
+   WHERE pdh.proposal_id = sp.id
+   ORDER BY pdh.review_round DESC, pdh.decision_sequence DESC LIMIT 1) AS previous_status,
   (SELECT pdh.decision_note FROM proposal_decision_history pdh
-   WHERE pdh.proposal_id = sp.id ORDER BY pdh.review_round DESC LIMIT 1) AS previous_note`;
+   WHERE pdh.proposal_id = sp.id
+   ORDER BY pdh.review_round DESC, pdh.decision_sequence DESC LIMIT 1) AS previous_note`;
 
 export async function getProposalDecisionContext(
   db: DatabaseLike,
@@ -33,23 +46,31 @@ export async function getProposalDecisionContext(
     db,
     `SELECT ${DECISION_COLUMNS}
      FROM session_proposals sp
+     LEFT JOIN proposal_decisions pd ON pd.proposal_id = sp.id
      WHERE sp.id = ? AND sp.deleted_at IS NULL`,
     [proposalId],
   );
 }
 
+export function assertProposalDecisionStateAllowed(
+  state: { status: string; current_decision_id: string | null; current_decision_status: string | null },
+  finalStatus: ProposalDecisionStatus,
+): void {
+  if (isProposalDecisionTransitionAllowed(state.status, state.current_decision_status, finalStatus)) return;
+  if (state.current_decision_id) {
+    throw new AppError(409, "PROPOSAL_ALREADY_FINALIZED", "Proposal already has a decision for this review round");
+  }
+  throw new AppError(409, "PROPOSAL_NOT_DECIDABLE", `A proposal in status '${state.status}' cannot be finalized`);
+}
+
 export function assertProposalDecisionAllowed(
   context: ProposalDecisionContext | null,
+  finalStatus: ProposalDecisionStatus,
   minReviewsRequired: number,
   expectedProposalUpdatedAt?: string,
 ): asserts context is ProposalDecisionContext {
   if (!context) throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found");
-  if (context.current_decision_id) {
-    throw new AppError(409, "PROPOSAL_ALREADY_FINALIZED", "Proposal already has a decision for this review round");
-  }
-  if (!isProposalDecidableStatus(context.status)) {
-    throw new AppError(409, "PROPOSAL_NOT_DECIDABLE", `A proposal in status '${context.status}' cannot be finalized`);
-  }
+  assertProposalDecisionStateAllowed(context, finalStatus);
   if (expectedProposalUpdatedAt && context.updated_at !== expectedProposalUpdatedAt) {
     throw new AppError(409, "PROPOSAL_DECISION_CONFLICT", "Proposal changed while the decision was prepared");
   }
@@ -83,17 +104,19 @@ export function isProposalDecisionHistoryConflict(error: unknown): boolean {
     error instanceof Error &&
     error.message.includes("UNIQUE constraint failed") &&
     error.message.includes("proposal_decision_history.proposal_id") &&
-    error.message.includes("proposal_decision_history.review_round")
+    error.message.includes("proposal_decision_history.review_round") &&
+    error.message.includes("proposal_decision_history.decision_sequence")
   );
 }
 
 export async function throwProposalDecisionConflict(
   db: DatabaseLike,
   proposalId: string,
+  finalStatus: ProposalDecisionStatus,
   minReviewsRequired: number,
   expectedProposalUpdatedAt?: string,
 ): Promise<never> {
   const current = await getProposalDecisionContext(db, proposalId);
-  assertProposalDecisionAllowed(current, minReviewsRequired, expectedProposalUpdatedAt);
+  assertProposalDecisionAllowed(current, finalStatus, minReviewsRequired, expectedProposalUpdatedAt);
   throw new AppError(409, "PROPOSAL_DECISION_CONFLICT", "Proposal changed while the decision was recorded");
 }

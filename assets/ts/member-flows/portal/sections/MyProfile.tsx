@@ -8,6 +8,7 @@
 import { useState } from "preact/hooks";
 import { getJson, patchJson, postJson, putJson, ApiClientError } from "../../../shared/api-client";
 import { AdminHeadshotManager } from "../../../shared/headshot/AdminHeadshotManager";
+import { uploadFile } from "../../../shared/file-upload";
 import { Spinner } from "../../../components/Spinner";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { profile as profileSignal, saveProfile } from "../state";
@@ -93,16 +94,7 @@ export function MyProfile() {
               uploadLabel="📷 Upload headshot"
               helpText="JPEG, PNG, or WebP, up to 5MB."
               uploadHeadshot={async (file) => {
-                const res = await fetch("/api/v1/me/headshot", {
-                  method: "POST",
-                  credentials: "same-origin",
-                  headers: { "content-type": file.type || "application/octet-stream" },
-                  body: file,
-                });
-                if (!res.ok) {
-                  const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-                  throw new Error(body.error?.message ?? "Upload failed");
-                }
+                await uploadFile("/api/v1/me/headshot", file);
                 await refreshProfile();
                 return { headshotUrl: profileSignal.value?.headshotUrl };
               }}

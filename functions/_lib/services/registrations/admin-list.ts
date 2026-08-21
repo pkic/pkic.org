@@ -16,7 +16,7 @@ import { getAttendanceStatusByType, type AttendanceStatusCount } from "./admin-s
 import {
   EVENT_REGISTRATIONS_SORT_COLUMNS,
   type AdminEventRegistrationsQuery,
-} from "../../../../assets/shared/schemas/api";
+} from "../../../../assets/shared/schemas/admin-events";
 import type { DatabaseLike } from "../../types";
 
 interface RegistrationRow {

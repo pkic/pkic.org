@@ -130,6 +130,17 @@ export function prepareAuditLogAfterOneChange(
     .bind(uuid(), actorType, actorId, action, entityType, entityId, serializeAuditDetails(details), createdAt);
 }
 
+const AUDIT_ONE_CHANGE_GUARD_ERROR = "NOT NULL constraint failed: audit_log.action";
+
+/**
+ * Classifies the deliberate constraint failure emitted by
+ * `prepareAuditLogAfterOneChange`. Keep the D1/SQLite error-text coupling in
+ * this module rather than duplicating it across every guarded command.
+ */
+export function isAuditOneChangeGuardFailure(error: unknown): boolean {
+  return error instanceof Error && error.message.includes(AUDIT_ONE_CHANGE_GUARD_ERROR);
+}
+
 /**
  * Builds an audit INSERT guarded by a static caller-owned EXISTS predicate.
  * This lets compare-and-set command batches avoid recording a losing write.

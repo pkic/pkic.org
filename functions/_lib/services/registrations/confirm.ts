@@ -143,7 +143,6 @@ export async function prepareConfirmRegistrationByToken(
       : null;
 
   const capacityExemptReason = await resolveCapacityExemptReason(db, {
-    registrationId: registration.id,
     eventId: registration.event_id,
     userId: registration.user_id,
   });

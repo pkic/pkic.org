@@ -23,6 +23,37 @@ export function noContent(): Response {
   return new Response(null, { status: 204 });
 }
 
+type RequestContext = { req: { raw: Request } };
+type RequestMethodHandler<Context extends RequestContext> = (context: Context) => Response | Promise<Response>;
+
+export function methodNotAllowed(allowedMethods: readonly string[]): Response {
+  return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405, {
+    allow: allowedMethods.join(", "),
+  });
+}
+
+/**
+ * Keeps the Cloudflare Pages `onRequest` compatibility export as a thin HTTP
+ * adapter. Domain routes still export their method-specific handlers; this
+ * helper owns only exact method selection and the canonical 405 response.
+ */
+export async function dispatchRequestMethod<Context extends RequestContext>(
+  context: Context,
+  handlers: Readonly<Record<string, RequestMethodHandler<Context>>>,
+): Promise<Response> {
+  const method = context.req.raw.method.toUpperCase();
+  const handler = handlers[method];
+  if (!handler) return methodNotAllowed(Object.keys(handlers));
+  return handler(context);
+}
+
+export function dispatchPostOnly<Context extends RequestContext>(
+  context: Context,
+  handler: RequestMethodHandler<Context>,
+): Promise<Response> {
+  return dispatchRequestMethod(context, { POST: handler });
+}
+
 /**
  * Mark a Pages Function context as sensitive so the middleware applies
  * `no-store` cache control to every response (including error responses

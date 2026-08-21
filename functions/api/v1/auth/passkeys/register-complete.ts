@@ -6,7 +6,6 @@ import { jsonNoStore } from "../../../../_lib/http";
 import { requireAnyActorFromRequest } from "../../../../_lib/auth/actor";
 import { parseJsonBody } from "../../../../_lib/validation";
 import { completePasskeyRegistration } from "../../../../_lib/services/passkeys";
-import { writeAuditLog } from "../../../../_lib/services/audit";
 import {
   passkeyRegisterCompleteRouteSchema,
   passkeyRegisterCompleteSchema,
@@ -29,10 +28,6 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     challengeToken: body.challengeToken,
     response: body.response,
     deviceName: body.deviceName,
-  });
-
-  await writeAuditLog(requestDb(c), actor.kind, actor.id, "passkey_registered", "passkey_credential", passkey.id, {
-    deviceName: passkey.deviceName,
   });
 
   return jsonNoStore(passkey, 201);

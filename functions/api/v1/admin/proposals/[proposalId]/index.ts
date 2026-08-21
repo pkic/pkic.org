@@ -11,7 +11,7 @@ import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { getConfig } from "../../../../../_lib/config";
 import { getAdminProposalDetailData } from "../../../../../_lib/services/proposal-admin-detail";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
-import { proposalIdParamsSchema } from "../../../../../../assets/shared/schemas/api";
+import { proposalIdParamsSchema } from "../../../../../../assets/shared/schemas/api-common";
 import { adminProposalDetailResponseSchema } from "../../../../../../assets/shared/schemas/admin-event-proposals";
 
 export async function onRequestGet(c: AdminContext): Promise<Response> {

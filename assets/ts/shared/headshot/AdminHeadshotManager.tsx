@@ -5,7 +5,7 @@ import type { HeadshotPreviewOptions } from "./preview";
 
 export const ADMIN_HEADSHOT_DISCLAIMER: string[] = [
   "This is a photograph of the named individual.",
-  "PKI Consortium holds the copyright, or has an unrestricted, royalty-free licence to use and publish this image.",
+  "PKI Consortium holds the copyright, or has an unrestricted, royalty-free license to use and publish this image.",
   "The image does not infringe any third-party intellectual property rights, privacy rights, or applicable laws.",
   "PKI Consortium may display this image alongside the individual's name and professional details on the website and related materials.",
   "I accept full responsibility for any claims arising from this upload.",

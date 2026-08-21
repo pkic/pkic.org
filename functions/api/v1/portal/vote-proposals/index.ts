@@ -21,8 +21,7 @@ export const PortalVoteProposalsGet = openApiRoute(listProposalsRouteSchema, asy
   const db = requestDb(c);
   await requireMemberFromRequest(db, c.req.raw, c.env);
   const q = data.query;
-  const limit = q.limit ?? 50;
-  const offset = q.offset ?? 0;
+  const { limit, offset } = q;
   const { proposals, total } = await listVoteProposals(db, { ...q, limit, offset });
   return json({ proposals, page: buildPageInfo(limit, offset, total, proposals.length) });
 });

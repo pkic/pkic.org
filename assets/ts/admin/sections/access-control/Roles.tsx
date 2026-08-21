@@ -1,5 +1,5 @@
 import { useRef, useState } from "preact/hooks";
-import { ApiDataTable, type ApiTableActions } from "../../../components/Table";
+import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
 import { api } from "../../api";
 import { toast } from "../../ui";
 import type { Role } from "../../types";
@@ -116,6 +116,7 @@ export function Roles() {
 
       <ApiDataTable<Role>
         endpoint="/api/v1/admin/roles"
+        responseSchema={rolesListResponseSchema}
         resolve={(data) => rolesListResponseSchema.parse(data).roles}
         resolvePage={(data) => rolesListResponseSchema.parse(data).page}
         paginate

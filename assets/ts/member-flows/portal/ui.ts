@@ -1,4 +1,5 @@
 import { formatDateTime, showToast, type ToastType } from "../../shared/ui";
+import { formatStatusLabel } from "../../shared/form/helpers";
 export type { ToastType } from "../../shared/ui";
 
 export function toast(message: string, type: ToastType = "info"): void {
@@ -12,12 +13,7 @@ export function fmt(value: string | null | undefined): string {
 
 /** "in_review" -> "In Review" */
 export function formatStageLabel(stage: string): string {
-  return stage
-    .replace(/_/g, " ")
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
+  return formatStatusLabel(stage);
 }
 
 export function stageBadgeClass(stage: string): string {

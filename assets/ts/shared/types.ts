@@ -1,4 +1,5 @@
 import type { FormFieldDefinition } from "../../shared/schemas/forms";
+import type { RegistrationLifecycleStatus } from "../../shared/schemas/registration";
 
 export type { EventFormsResponse, RequiredTerm } from "../../shared/schemas/forms";
 export type { ProposalManageResponse } from "../../shared/schemas/proposal-management";
@@ -29,7 +30,7 @@ export interface RegistrationManageResponse {
   registration: {
     id: string;
     event_id: string;
-    status: string;
+    status: RegistrationLifecycleStatus;
     cancellation_reason_code: string | null;
     attendance_type: string;
     custom_answers: Record<string, unknown> | null;

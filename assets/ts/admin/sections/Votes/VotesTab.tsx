@@ -1,46 +1,29 @@
-import { useState, useEffect, useCallback } from "preact/hooks";
+import { useState } from "preact/hooks";
 import { Spinner } from "../../../components/Spinner";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { fmt } from "../../ui";
-import type { AdminWorkingGroupSummary } from "../../types";
 import { statusBadge } from "./shared";
 import { CreateVoteForm } from "./CreateVoteForm";
 import { VoteDetail } from "./VoteDetail";
-import { getAdminWorkingGroupCatalogue } from "../../services/catalogues";
 import { adminVotesListResponseSchema } from "../../../../shared/schemas/votes-admin";
 import { useApiPage } from "../../../hooks/useApiPage";
 import { Pager } from "../../../components/Pager";
 
 export function VotesTab() {
-  const [workingGroups, setWorkingGroups] = useState<AdminWorkingGroupSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [catalogueLoading, setCatalogueLoading] = useState(true);
-  const [catalogueError, setCatalogueError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const listing = useApiPage("/api/v1/admin/votes", { sort: "-created_at" }, adminVotesListResponseSchema);
-
-  const loadCatalogue = useCallback(async () => {
-    setCatalogueLoading(true);
-    setCatalogueError(null);
-    try {
-      setWorkingGroups(await getAdminWorkingGroupCatalogue());
-    } catch (e) {
-      setCatalogueError((e as Error).message);
-    } finally {
-      setCatalogueLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadCatalogue();
-  }, [loadCatalogue]);
+  const listing = useApiPage(
+    "/api/v1/admin/votes",
+    { sort: "-created_at" },
+    adminVotesListResponseSchema,
+    (data) => data.votes,
+  );
 
   const votes = listing.data?.votes ?? [];
 
   const selected = votes.find((v) => v.id === selectedId) ?? null;
 
-  if (catalogueLoading || listing.loading) return <Spinner />;
-  if (catalogueError) return <ErrorAlert error={catalogueError} />;
+  if (listing.loading) return <Spinner />;
   if (listing.error) {
     return <ErrorAlert error={listing.error instanceof Error ? listing.error.message : "Could not load votes."} />;
   }
@@ -56,7 +39,6 @@ export function VotesTab() {
 
       {showCreate && (
         <CreateVoteForm
-          workingGroups={workingGroups}
           onCreated={() => {
             setShowCreate(false);
             void listing.reload();

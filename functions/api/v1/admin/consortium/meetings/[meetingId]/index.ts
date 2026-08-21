@@ -7,7 +7,6 @@
 import { json } from "../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../../_lib/auth/permissions";
-import { writeAuditLog } from "../../../../../../_lib/services/audit";
 import { updateMeetingSeries, deleteMeetingSeries } from "../../../../../../_lib/services/meeting-calendar";
 import {
   consortiumMeetingUpdateRouteSchema,
@@ -28,6 +27,7 @@ export const ConsortiumMeetingUpdate = openApiRoute(
       data.params.meetingId,
       { scopeType: "consortium" },
       body,
+      admin.id,
     );
     return json({ meetingSeries });
   },
@@ -41,10 +41,7 @@ export const ConsortiumMeetingDelete = openApiRoute(
     requirePermission(admin, "working-groups:write");
 
     const meetingId = data.params.meetingId;
-    await deleteMeetingSeries(db, c.env.ASSETS_BUCKET, meetingId, { scopeType: "consortium" });
-    await writeAuditLog(db, "admin", admin.id, "meeting_series_deleted", "meeting_series", meetingId, {
-      scopeType: "consortium",
-    });
+    await deleteMeetingSeries(db, c.env.ASSETS_BUCKET, meetingId, { scopeType: "consortium" }, admin.id);
     return json({ success: true });
   },
 );

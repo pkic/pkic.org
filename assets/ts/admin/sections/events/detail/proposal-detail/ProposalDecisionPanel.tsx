@@ -6,7 +6,10 @@ import { Tabs } from "../../../../../components/Tabs";
 import { api } from "../../../../api";
 import { fmt, toast } from "../../../../ui";
 import { isNeedsWorkDecision, type DecisionPreviewResponse, type ProposalDetailRecord } from "./model";
-import { isProposalDecidableStatus } from "../../../../../../shared/schemas/proposal-status";
+import {
+  isProposalDecisionTransitionAllowed,
+  PROPOSAL_DECISION_STATUSES,
+} from "../../../../../../shared/schemas/proposal-status";
 import { EMAIL_PREVIEW_TABS, type EmailPreviewTab } from "../../../../email-preview-tabs";
 
 function decisionEmailLabel(templateKey: string): string {
@@ -47,16 +50,17 @@ export function ProposalDecisionPanel({
   const [selectedPreviewId, setSelectedPreviewId] = useState("");
 
   const quorumMet = reviewCount >= minReviewsRequired;
-  const proposalDecidable = isProposalDecidableStatus(proposal.status);
+  const availableDecisionStatuses = PROPOSAL_DECISION_STATUSES.filter((status) =>
+    isProposalDecisionTransitionAllowed(proposal.status, proposal.decision_status, status),
+  );
+  const canRecordDecision = availableDecisionStatuses.length > 0;
   const needsWorkRequiresNote = isNeedsWorkDecision(decisionStatus) && !decisionNote.trim();
   const selectedPreview =
     preview?.messages.find((message) => message.id === selectedPreviewId) ?? preview?.messages[0] ?? null;
 
   useEffect(() => {
-    setDecisionStatus(
-      isNeedsWorkDecision(proposal.decision_status ?? "") ? "needs-work" : (proposal.decision_status ?? ""),
-    );
-    setDecisionNote(proposal.decision_note ?? "");
+    setDecisionStatus("");
+    setDecisionNote("");
   }, [proposal]);
 
   useEffect(() => {
@@ -121,8 +125,8 @@ export function ProposalDecisionPanel({
         <h6 class="mb-0">Final Decision</h6>
       </div>
       <div class="card-body">
-        {proposal.decision_status ? (
-          <div class="alert alert-info mb-0">
+        {proposal.decision_status && (
+          <div class={`alert alert-info${canRecordDecision ? " mb-3" : " mb-0"}`}>
             <div class="d-flex gap-2 align-items-center mb-1">
               <strong>Decision recorded:</strong>
               <Badge status={proposal.decision_status} />
@@ -132,9 +136,11 @@ export function ProposalDecisionPanel({
               <div class="small text-muted mt-2">Recorded {fmt(proposal.decision_decided_at)}</div>
             )}
           </div>
-        ) : !proposalDecidable ? (
+        )}
+        {!canRecordDecision && !proposal.decision_status && (
           <div class="alert alert-warning mb-0">This proposal is not in a state that can receive a decision.</div>
-        ) : (
+        )}
+        {canRecordDecision && (
           <>
             {!quorumMet && !loading && (
               <div class="alert alert-warning">
@@ -152,9 +158,11 @@ export function ProposalDecisionPanel({
                     onChange={(event) => setDecisionStatus((event.target as HTMLSelectElement).value)}
                   >
                     <option value="">— select —</option>
-                    <option value="accepted">Accepted</option>
-                    <option value="needs-work">Needs Work</option>
-                    <option value="rejected">Rejected</option>
+                    {availableDecisionStatuses.map((status) => (
+                      <option key={status} value={status}>
+                        {{ accepted: "Accepted", "needs-work": "Needs Work", rejected: "Rejected" }[status]}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div class="col-12">
@@ -284,7 +292,7 @@ export function ProposalDecisionPanel({
                     class="btn btn-primary"
                     disabled={
                       saving ||
-                      !proposalDecidable ||
+                      !canRecordDecision ||
                       !decisionStatus ||
                       !quorumMet ||
                       needsWorkRequiresNote ||

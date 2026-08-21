@@ -10,14 +10,22 @@
  */
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
+import { successResponseSchema } from "./api-common";
 
 export const passkeyIdParamsSchema = z.object({ id: databaseIdSchema });
 
 const webauthnOptionsSchema = z.record(z.string(), z.unknown());
 
-export const registrationResponseSchema = z.object({
+/** Fields present on every WebAuthn PublicKeyCredential JSON response. */
+export const publicKeyCredentialEnvelopeSchema = z.object({
   id: z.string(),
   rawId: z.string(),
+  authenticatorAttachment: z.string().optional(),
+  clientExtensionResults: z.record(z.string(), z.unknown()),
+  type: z.literal("public-key"),
+});
+
+export const registrationResponseSchema = publicKeyCredentialEnvelopeSchema.extend({
   response: z.object({
     clientDataJSON: z.string(),
     attestationObject: z.string(),
@@ -26,23 +34,15 @@ export const registrationResponseSchema = z.object({
     publicKey: z.string().optional(),
     publicKeyAlgorithm: z.number().optional(),
   }),
-  authenticatorAttachment: z.string().optional(),
-  clientExtensionResults: z.record(z.string(), z.unknown()),
-  type: z.literal("public-key"),
 });
 
-export const authenticationResponseSchema = z.object({
-  id: z.string(),
-  rawId: z.string(),
+export const authenticationResponseSchema = publicKeyCredentialEnvelopeSchema.extend({
   response: z.object({
     clientDataJSON: z.string(),
     authenticatorData: z.string(),
     signature: z.string(),
     userHandle: z.string().optional(),
   }),
-  authenticatorAttachment: z.string().optional(),
-  clientExtensionResults: z.record(z.string(), z.unknown()),
-  type: z.literal("public-key"),
 });
 
 export const passkeyRegisterCompleteSchema = z.object({
@@ -71,8 +71,7 @@ export const passkeySummarySchema = z.object({
 export type PasskeySummary = z.infer<typeof passkeySummarySchema>;
 export const passkeysListResponseSchema = z.object({ passkeys: z.array(passkeySummarySchema) });
 
-export const passkeyAuthenticateCompleteResponseSchema = z.object({
-  success: z.literal(true),
+export const passkeyAuthenticateCompleteResponseSchema = successResponseSchema.extend({
   expiresAt: z.string(),
   admin: z.object({ id: z.string(), email: z.string(), role: z.string() }),
 });

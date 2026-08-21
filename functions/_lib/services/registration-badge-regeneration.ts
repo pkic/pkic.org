@@ -1,19 +1,22 @@
 import { all, first, run } from "../db/queries";
 import { AppError } from "../errors";
 import { logError } from "../logging";
-import type { AuthAdmin, DatabaseLike, Env, StatementLike } from "../types";
-import { uuid } from "../utils/ids";
+import type { AuthAdmin, DatabaseLike, Env } from "../types";
 import { nowIso } from "../utils/time";
 import { prepareAuditLog } from "./audit";
+import { resolveAppBaseUrl } from "../config";
+import { createDurableJobLease } from "../jobs/lease";
 import type { EventRecord } from "./events";
 import { renderAndCacheBadge } from "./og-badge-prerender";
+import { prepareBadgeRenderJob } from "./badge-render-job-statements";
+export { prepareBadgeRenderJobsForUser } from "./badge-render-job-statements";
 
 const MAX_ATTEMPTS = 10;
 
 interface BadgeRenderJobRow {
   id: string;
   referral_code: string;
-  origin: string;
+  requested_generation: number;
   attempts: number;
 }
 
@@ -22,36 +25,18 @@ export interface BadgeRenderResult {
   failed: number;
 }
 
-type BadgeRenderer = (code: string, env: Env, origin: string) => Promise<void>;
+export const BADGE_RENDER_DUE_QUERY = `
+  SELECT id, referral_code, requested_generation, attempts, next_attempt_at AS due_at, created_at
+    FROM badge_render_jobs
+   WHERE status IN ('queued', 'retrying') AND next_attempt_at <= ?
+  UNION ALL
+  SELECT id, referral_code, requested_generation, attempts, lease_expires_at AS due_at, created_at
+    FROM badge_render_jobs
+   WHERE status = 'rendering' AND lease_expires_at <= ?
+  ORDER BY due_at, created_at, id
+  LIMIT ?`;
 
-function prepareBadgeRenderJob(
-  db: DatabaseLike,
-  referralCode: string,
-  origin: string,
-  createdAt: string,
-): { id: string; statement: StatementLike } {
-  const id = uuid();
-  return {
-    id,
-    statement: db
-      .prepare(
-        `INSERT INTO badge_render_jobs (
-           id, referral_code, origin, status, attempts, next_attempt_at,
-           last_error, created_at, updated_at, rendered_at
-         ) VALUES (?, ?, ?, 'queued', 0, ?, NULL, ?, ?, NULL)
-         ON CONFLICT(referral_code) DO UPDATE SET
-           id = excluded.id,
-           origin = excluded.origin,
-           status = 'queued',
-           attempts = 0,
-           next_attempt_at = excluded.next_attempt_at,
-           last_error = NULL,
-           updated_at = excluded.updated_at,
-           rendered_at = NULL`,
-      )
-      .bind(id, referralCode, origin, createdAt, createdAt, createdAt),
-  };
-}
+type BadgeRenderer = (code: string, env: Env, origin: string) => Promise<void>;
 
 export async function requestRegistrationBadgeRegeneration(
   db: DatabaseLike,
@@ -70,7 +55,7 @@ export async function requestRegistrationBadgeRegeneration(
   if (!referral) throw new AppError(404, "NO_REFERRAL_CODE", "No referral code found for this registration");
 
   const createdAt = nowIso();
-  const job = prepareBadgeRenderJob(db, referral.code, payload.appBaseUrl, createdAt);
+  const job = prepareBadgeRenderJob(db, referral.code, createdAt);
   await db.batch([
     job.statement,
     prepareAuditLog(
@@ -92,18 +77,36 @@ export async function requestRegistrationBadgeRegeneration(
   };
 }
 
-async function markBadgeRenderFailed(db: DatabaseLike, job: BadgeRenderJobRow, error: unknown): Promise<void> {
+async function markBadgeRenderFailed(
+  db: DatabaseLike,
+  job: BadgeRenderJobRow,
+  processingToken: string,
+  error: unknown,
+): Promise<void> {
   const attempts = job.attempts + 1;
   const retryDelaySeconds = Math.min(3600, 2 ** Math.min(attempts, 10) * 15);
   const status = attempts >= MAX_ATTEMPTS ? "failed" : "retrying";
   const message = error instanceof Error ? error.message : "Unknown badge render error";
+  const currentGenerationQueued = await run(
+    db,
+    `UPDATE badge_render_jobs
+        SET status = 'queued', attempts = 0, next_attempt_at = ?, last_error = NULL,
+            claimed_generation = NULL, processing_token = NULL, lease_expires_at = NULL, updated_at = ?
+      WHERE id = ? AND status = 'rendering' AND processing_token = ?
+        AND requested_generation != claimed_generation`,
+    [nowIso(), nowIso(), job.id, processingToken],
+  );
+  if (currentGenerationQueued.changes === 1) return;
+
   await run(
     db,
     `UPDATE badge_render_jobs
-        SET status = ?, attempts = ?, next_attempt_at = datetime('now', ?),
-            last_error = ?, updated_at = ?
-      WHERE id = ? AND status = 'rendering'`,
-    [status, attempts, `+${retryDelaySeconds} seconds`, message.slice(0, 1000), nowIso(), job.id],
+        SET status = ?, attempts = ?, next_attempt_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?),
+            last_error = ?, claimed_generation = NULL, processing_token = NULL,
+            lease_expires_at = NULL, updated_at = ?
+      WHERE id = ? AND status = 'rendering' AND processing_token = ?
+        AND requested_generation = claimed_generation`,
+    [status, attempts, `+${retryDelaySeconds} seconds`, message.slice(0, 1000), nowIso(), job.id, processingToken],
   );
 }
 
@@ -113,27 +116,43 @@ async function processBadgeRenderJob(
   job: BadgeRenderJobRow,
   render: BadgeRenderer,
 ): Promise<boolean> {
+  const lease = createDurableJobLease();
   const claimed = await run(
     db,
     `UPDATE badge_render_jobs
-        SET status = 'rendering', updated_at = ?
-      WHERE id = ? AND status IN ('queued', 'retrying') AND next_attempt_at <= ?`,
-    [nowIso(), job.id, nowIso()],
+        SET status = 'rendering', claimed_generation = requested_generation,
+            processing_token = ?, lease_expires_at = ?, updated_at = ?
+      WHERE id = ? AND next_attempt_at <= ?
+        AND (status IN ('queued', 'retrying') OR (status = 'rendering' AND lease_expires_at <= ?))`,
+    [lease.token, lease.expiresAt, lease.claimedAt, job.id, lease.claimedAt, lease.claimedAt],
   );
   if (claimed.changes !== 1) return false;
 
   try {
-    await render(job.referral_code, env, job.origin);
-    await run(
+    await render(job.referral_code, env, resolveAppBaseUrl(env));
+    const finalized = await run(
       db,
       `UPDATE badge_render_jobs
-          SET status = 'rendered', rendered_at = ?, last_error = NULL, updated_at = ?
-        WHERE id = ? AND status = 'rendering'`,
-      [nowIso(), nowIso(), job.id],
+          SET status = 'rendered', rendered_at = ?, last_error = NULL,
+              claimed_generation = NULL, processing_token = NULL, lease_expires_at = NULL, updated_at = ?
+        WHERE id = ? AND status = 'rendering' AND processing_token = ?
+          AND requested_generation = claimed_generation`,
+      [nowIso(), nowIso(), job.id, lease.token],
     );
+    if (finalized.changes === 0) {
+      await run(
+        db,
+        `UPDATE badge_render_jobs
+            SET status = 'queued', attempts = 0, next_attempt_at = ?, last_error = NULL,
+                claimed_generation = NULL, processing_token = NULL, lease_expires_at = NULL, updated_at = ?
+          WHERE id = ? AND status = 'rendering' AND processing_token = ?
+            AND requested_generation != claimed_generation`,
+        [nowIso(), nowIso(), job.id, lease.token],
+      );
+    }
     return true;
   } catch (error) {
-    await markBadgeRenderFailed(db, job, error);
+    await markBadgeRenderFailed(db, job, lease.token, error);
     logError("badge render failed", { error, jobId: job.id, referralCode: job.referral_code });
     return false;
   }
@@ -147,10 +166,11 @@ export async function processBadgeRenderJobById(
 ): Promise<boolean> {
   const job = await first<BadgeRenderJobRow>(
     db,
-    `SELECT id, referral_code, origin, attempts
+    `SELECT id, referral_code, requested_generation, attempts
        FROM badge_render_jobs
-      WHERE id = ? AND status IN ('queued', 'retrying') AND next_attempt_at <= ?`,
-    [jobId, nowIso()],
+      WHERE id = ? AND next_attempt_at <= ?
+        AND (status IN ('queued', 'retrying') OR (status = 'rendering' AND lease_expires_at <= ?))`,
+    [jobId, nowIso(), nowIso()],
   );
   return job ? processBadgeRenderJob(db, env, job, render) : true;
 }
@@ -162,15 +182,7 @@ export async function processPendingBadgeRenders(
   render: BadgeRenderer = renderAndCacheBadge,
 ): Promise<BadgeRenderResult> {
   if (limit <= 0) return { processed: 0, failed: 0 };
-  const jobs = await all<BadgeRenderJobRow>(
-    db,
-    `SELECT id, referral_code, origin, attempts
-       FROM badge_render_jobs
-      WHERE status IN ('queued', 'retrying') AND next_attempt_at <= ?
-      ORDER BY next_attempt_at, created_at
-      LIMIT ?`,
-    [nowIso(), limit],
-  );
+  const jobs = await all<BadgeRenderJobRow>(db, BADGE_RENDER_DUE_QUERY, [nowIso(), nowIso(), limit]);
 
   let processed = 0;
   let failed = 0;

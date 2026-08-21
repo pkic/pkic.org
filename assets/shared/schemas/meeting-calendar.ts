@@ -7,6 +7,7 @@
  */
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
+import { successResponseSchema } from "./api-common";
 import { workingGroupIdSchema, workingGroupReferenceSchema } from "./working-groups";
 
 export const meetingSeriesIdParamsSchema = z.object({ id: workingGroupReferenceSchema });
@@ -54,15 +55,59 @@ export const adminMeetingSeriesSummarySchema = z.object({
   icsFiles: z.array(adminIcsFileSummarySchema),
 });
 
-export const meetingResendResultSchema = z.object({
-  success: z.boolean(),
+export const meetingResendResultSchema = successResponseSchema.extend({
   seriesName: z.string(),
   queuedRecipients: z.number(),
 });
 
+const adminMeetingSeriesListResponseSchema = z.object({ meetingSeries: z.array(adminMeetingSeriesSummarySchema) });
+const adminMeetingSeriesResponseSchema = z.object({ meetingSeries: adminMeetingSeriesSummarySchema });
+const adminIcsFileResponseSchema = z.object({ icsFile: adminIcsFileSummarySchema });
+
 export type AdminIcsFile = z.infer<typeof adminIcsFileSummarySchema>;
 export type AdminMeetingSeries = z.infer<typeof adminMeetingSeriesSummarySchema>;
 export type MeetingResendResult = z.infer<typeof meetingResendResultSchema>;
+
+function buildMeetingSeriesUpdateRouteSchema<TParams extends z.ZodType>(summary: string, params: TParams) {
+  return {
+    tags: ["Meeting Calendar"],
+    summary,
+    request: {
+      params,
+      body: { content: { "application/json": { schema: meetingSeriesUpdateSchema } }, required: true },
+    },
+    responses: {
+      "200": {
+        description: "Meeting series updated.",
+        content: { "application/json": { schema: adminMeetingSeriesResponseSchema } },
+      },
+      "404": { description: "Meeting series not found." },
+    },
+  };
+}
+
+function buildMeetingIcsUpdateRouteSchema<TParams extends z.ZodType>(options: {
+  summary: string;
+  params: TParams;
+  description?: string;
+}) {
+  return {
+    tags: ["Meeting Calendar"],
+    summary: options.summary,
+    ...(options.description ? { description: options.description } : {}),
+    request: {
+      params: options.params,
+      body: { content: { "application/json": { schema: meetingIcsFileUpdateSchema } }, required: true },
+    },
+    responses: {
+      "200": {
+        description: "ICS file updated.",
+        content: { "application/json": { schema: adminIcsFileResponseSchema } },
+      },
+      "404": { description: "ICS file not found." },
+    },
+  };
+}
 
 // ── WG-nested admin routes ─────────────────────────────────────────────
 
@@ -74,7 +119,7 @@ export const wgMeetingsListRouteSchema = {
     "200": {
       description: "Meeting series for this working group.",
       content: {
-        "application/json": { schema: z.object({ meetingSeries: z.array(adminMeetingSeriesSummarySchema) }) },
+        "application/json": { schema: adminMeetingSeriesListResponseSchema },
       },
     },
     "404": { description: "Working group not found." },
@@ -91,27 +136,16 @@ export const wgMeetingsCreateRouteSchema = {
   responses: {
     "201": {
       description: "Meeting series created.",
-      content: { "application/json": { schema: z.object({ meetingSeries: adminMeetingSeriesSummarySchema }) } },
+      content: { "application/json": { schema: adminMeetingSeriesResponseSchema } },
     },
     "404": { description: "Working group not found." },
   },
 };
 
-export const wgMeetingUpdateRouteSchema = {
-  tags: ["Meeting Calendar"],
-  summary: "Update a working group's meeting series",
-  request: {
-    params: meetingSeriesWithMeetingIdParamsSchema,
-    body: { content: { "application/json": { schema: meetingSeriesUpdateSchema } }, required: true },
-  },
-  responses: {
-    "200": {
-      description: "Meeting series updated.",
-      content: { "application/json": { schema: z.object({ meetingSeries: adminMeetingSeriesSummarySchema }) } },
-    },
-    "404": { description: "Meeting series not found." },
-  },
-};
+export const wgMeetingUpdateRouteSchema = buildMeetingSeriesUpdateRouteSchema(
+  "Update a working group's meeting series",
+  meetingSeriesWithMeetingIdParamsSchema,
+);
 
 export const wgMeetingIcsUploadRouteSchema = {
   tags: ["Meeting Calendar"],
@@ -121,29 +155,18 @@ export const wgMeetingIcsUploadRouteSchema = {
   responses: {
     "201": {
       description: "ICS file uploaded.",
-      content: { "application/json": { schema: z.object({ icsFile: adminIcsFileSummarySchema }) } },
+      content: { "application/json": { schema: adminIcsFileResponseSchema } },
     },
     "404": { description: "Meeting series not found." },
     "413": { description: "File too large." },
   },
 };
 
-export const wgMeetingIcsUpdateRouteSchema = {
-  tags: ["Meeting Calendar"],
+export const wgMeetingIcsUpdateRouteSchema = buildMeetingIcsUpdateRouteSchema({
   summary: "Update or deactivate a working group meeting series' ICS file",
   description: "Deactivation is non-destructive (R2 object retained) and clears any member preference pointing at it.",
-  request: {
-    params: meetingIcsFileParamsSchema,
-    body: { content: { "application/json": { schema: meetingIcsFileUpdateSchema } }, required: true },
-  },
-  responses: {
-    "200": {
-      description: "ICS file updated.",
-      content: { "application/json": { schema: z.object({ icsFile: adminIcsFileSummarySchema }) } },
-    },
-    "404": { description: "ICS file not found." },
-  },
-};
+  params: meetingIcsFileParamsSchema,
+});
 
 export const wgMeetingDeleteRouteSchema = {
   tags: ["Meeting Calendar"],
@@ -189,7 +212,7 @@ export const consortiumMeetingsListRouteSchema = {
     "200": {
       description: "Consortium meeting series.",
       content: {
-        "application/json": { schema: z.object({ meetingSeries: z.array(adminMeetingSeriesSummarySchema) }) },
+        "application/json": { schema: adminMeetingSeriesListResponseSchema },
       },
     },
   },
@@ -202,26 +225,15 @@ export const consortiumMeetingsCreateRouteSchema = {
   responses: {
     "201": {
       description: "Meeting series created.",
-      content: { "application/json": { schema: z.object({ meetingSeries: adminMeetingSeriesSummarySchema }) } },
+      content: { "application/json": { schema: adminMeetingSeriesResponseSchema } },
     },
   },
 };
 
-export const consortiumMeetingUpdateRouteSchema = {
-  tags: ["Meeting Calendar"],
-  summary: "Update a consortium meeting series",
-  request: {
-    params: consortiumMeetingIdParamsSchema,
-    body: { content: { "application/json": { schema: meetingSeriesUpdateSchema } }, required: true },
-  },
-  responses: {
-    "200": {
-      description: "Meeting series updated.",
-      content: { "application/json": { schema: z.object({ meetingSeries: adminMeetingSeriesSummarySchema }) } },
-    },
-    "404": { description: "Meeting series not found." },
-  },
-};
+export const consortiumMeetingUpdateRouteSchema = buildMeetingSeriesUpdateRouteSchema(
+  "Update a consortium meeting series",
+  consortiumMeetingIdParamsSchema,
+);
 
 export const consortiumMeetingIcsUploadRouteSchema = {
   tags: ["Meeting Calendar"],
@@ -231,28 +243,17 @@ export const consortiumMeetingIcsUploadRouteSchema = {
   responses: {
     "201": {
       description: "ICS file uploaded.",
-      content: { "application/json": { schema: z.object({ icsFile: adminIcsFileSummarySchema }) } },
+      content: { "application/json": { schema: adminIcsFileResponseSchema } },
     },
     "404": { description: "Meeting series not found." },
     "413": { description: "File too large." },
   },
 };
 
-export const consortiumMeetingIcsUpdateRouteSchema = {
-  tags: ["Meeting Calendar"],
+export const consortiumMeetingIcsUpdateRouteSchema = buildMeetingIcsUpdateRouteSchema({
   summary: "Update or deactivate a consortium meeting series' ICS file",
-  request: {
-    params: consortiumIcsFileParamsSchema,
-    body: { content: { "application/json": { schema: meetingIcsFileUpdateSchema } }, required: true },
-  },
-  responses: {
-    "200": {
-      description: "ICS file updated.",
-      content: { "application/json": { schema: z.object({ icsFile: adminIcsFileSummarySchema }) } },
-    },
-    "404": { description: "ICS file not found." },
-  },
-};
+  params: consortiumIcsFileParamsSchema,
+});
 
 export const consortiumMeetingDeleteRouteSchema = {
   tags: ["Meeting Calendar"],

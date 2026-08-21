@@ -1,4 +1,5 @@
-import { hmacSha256Hex } from "../utils/crypto";
+import { constantTimeEqual, hmacSha256Hex } from "../utils/crypto";
+import { parseBaseEmailAddress, parseTaggedInboundAddress } from "./tagged-address";
 
 export async function generateSignedBounceAddress(
   outboxId: string,
@@ -8,9 +9,9 @@ export async function generateSignedBounceAddress(
   const hmac = await hmacSha256Hex(secret, outboxId);
   const signature = hmac.substring(0, 10);
 
-  const [localPart, domain] = baseEmail.split("@");
-  if (!domain) throw new Error("Invalid base email");
-  const baseLocal = localPart.split("+")[0];
+  const base = parseBaseEmailAddress(baseEmail);
+  if (!base) throw new Error("Invalid base email");
+  const { baseLocal, domain } = base;
 
   // sub-address appended: +{UUID-36}-{sig10} = 1+36+1+10 = 48 chars
   // RFC 5321 local-part limit is 64 chars, so base must be ≤ 16
@@ -30,26 +31,16 @@ export async function verifySignedBounceAddress(
   secret: string,
   baseEmail: string = "bounces@mail.pkic.org",
 ): Promise<string | null> {
-  const [baseLocal, baseDomain] = baseEmail.split("@");
-  if (!baseDomain) return null;
-
-  const parts = emailAddress.split("@");
-  if (parts.length !== 2) return null;
-  if (parts[1].toLowerCase() !== baseDomain.toLowerCase()) return null;
-
-  const escapedLocal = baseLocal.split("+")[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const regex = new RegExp(
-    `^${escapedLocal}\\+([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})-([a-f0-9]{10})$`,
-    "i",
-  );
-  const match = parts[0].match(regex);
+  const parsed = parseTaggedInboundAddress(emailAddress, baseEmail);
+  if (!parsed) return null;
+  const match = parsed.tag.match(/^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})-([a-f0-9]{10})$/i);
   if (!match) return null;
 
   const outboxId = match[1];
   const signature = match[2];
 
   const expectedHmac = await hmacSha256Hex(secret, outboxId);
-  if (expectedHmac.substring(0, 10).toLowerCase() === signature.toLowerCase()) {
+  if (await constantTimeEqual(expectedHmac.substring(0, 10), signature.toLowerCase())) {
     return outboxId;
   }
 

@@ -105,7 +105,12 @@ function ApplicationDetailView({ id, onBack }: { id: string; onBack: () => void 
 }
 
 export function MyApplications() {
-  const page = useApiPage("/api/v1/me/applications", { sort: "-createdAt" }, myApplicationsListResponseSchema);
+  const page = useApiPage(
+    "/api/v1/me/applications",
+    { sort: "-createdAt" },
+    myApplicationsListResponseSchema,
+    (data) => data.applications,
+  );
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   if (selectedId) {

@@ -13,7 +13,7 @@
 - [x] Add Wrangler config for D1/R2 bindings.
 - [x] Add shared validation/error modules.
 - [x] Add max 500-line guard script.
-- [x] Centralize reusable Zod API schemas in `shared/schemas/api.ts`.
+- [x] Centralize reusable Zod API schemas in focused `assets/shared/schemas/` domain modules.
 
 ## Stage 2: Data Model + Migrations
 - [x] Add v2 D1 migration set.

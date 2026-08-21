@@ -17,7 +17,6 @@ export function DayAttendancePanel({
   dayAttendance,
   dayWaitlist,
   eventDays,
-  registrationStatus,
   slug,
   regId,
   onReload,
@@ -25,7 +24,6 @@ export function DayAttendancePanel({
   dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
   dayWaitlist: Array<{ dayDate: string; status: string; priorityLane: string; offerExpiresAt: string | null }>;
   eventDays: AdminEventDay[];
-  registrationStatus: string;
   slug: string;
   regId: string;
   onReload: () => void;
@@ -42,6 +40,7 @@ export function DayAttendancePanel({
   const rows = eventDays.map((d) => ({
     dayDate: d.date,
     label: d.label,
+    inPersonCapacity: d.attendanceOptions.find((option) => option.value === "in_person")?.capacity ?? null,
     current: attendanceByDate.get(d.date) ?? ("none" as DayOption),
     waitlist: waitlistByDate.get(d.date) ?? null,
   }));
@@ -54,24 +53,13 @@ export function DayAttendancePanel({
     removed: "secondary",
   };
 
-  async function applyChange(dayDate: string, action: DayOption) {
+  async function applyChange(dayDate: string, action: DayOption | "waitlist") {
     setSaving((s) => ({ ...s, [dayDate]: true }));
     try {
-      if (action === "in_person") {
-        await api(`/api/v1/admin/events/${slug}/registrations/${regId}/admit`, {
-          method: "POST",
-          body: JSON.stringify({
-            mode: "capacity_exempt",
-            reason: "Admin approved in-person admission",
-            dayDates: [dayDate],
-          }),
-        });
-      } else {
-        await api(`/api/v1/admin/events/${slug}/registrations/${regId}/day-attendance`, {
-          method: "PATCH",
-          body: JSON.stringify({ action: action === "none" ? "remove" : action, dayDates: [dayDate] }),
-        });
-      }
+      await api(`/api/v1/admin/events/${slug}/registrations/${regId}/day-attendance`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: action === "none" ? "remove" : action, dayDates: [dayDate] }),
+      });
       toast(`Day ${dayDate} updated`, "success");
       setPending((p) => {
         const n = { ...p };
@@ -122,7 +110,7 @@ export function DayAttendancePanel({
 
   return (
     <>
-      {(registrationStatus === "waitlisted" || activeWaitlistCount > 0) && (
+      {activeWaitlistCount > 0 && (
         <div class="alert alert-info small py-2 mb-3">
           Select <strong>Admin override</strong> for one or more waitlisted in-person days to admit the attendee beyond
           capacity. This removes those day waitlist entries, updates the registration as needed, and sends an update
@@ -195,20 +183,38 @@ export function DayAttendancePanel({
               const selected = pending[d.dayDate] ?? d.current;
               const activeWaitlist = d.waitlist?.status === "waiting" || d.waitlist?.status === "offered";
               const canAdmit = activeWaitlist && selected === "in_person";
+              const canReturnToWaitlist =
+                !activeWaitlist &&
+                selected === "in_person" &&
+                d.current === "in_person" &&
+                d.inPersonCapacity != null &&
+                d.inPersonCapacity > 0;
               const inputId = `admin-admit-${d.dayDate}`;
               return (
-                <div class="form-check mb-0">
-                  <input
-                    id={inputId}
-                    type="checkbox"
-                    class="form-check-input"
-                    checked={admitDayDates.includes(d.dayDate)}
-                    disabled={!canAdmit || admitting}
-                    onChange={(e) => setAdmitChecked(d.dayDate, (e.target as HTMLInputElement).checked)}
-                  />
-                  <label class={`form-check-label small ${canAdmit ? "" : "text-muted"}`} for={inputId}>
-                    Admit day
-                  </label>
+                <div>
+                  <div class="form-check mb-1">
+                    <input
+                      id={inputId}
+                      type="checkbox"
+                      class="form-check-input"
+                      checked={admitDayDates.includes(d.dayDate)}
+                      disabled={!canAdmit || admitting}
+                      onChange={(e) => setAdmitChecked(d.dayDate, (e.target as HTMLInputElement).checked)}
+                    />
+                    <label class={`form-check-label small ${canAdmit ? "" : "text-muted"}`} for={inputId}>
+                      Admit day
+                    </label>
+                  </div>
+                  {canReturnToWaitlist && (
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-outline-warning text-nowrap"
+                      disabled={saving[d.dayDate] ?? false}
+                      onClick={() => void applyChange(d.dayDate, "waitlist")}
+                    >
+                      Return to waitlist
+                    </button>
+                  )}
                 </div>
               );
             },

@@ -116,7 +116,12 @@ export async function getAdminApplicationDetail(
     throw new AppError(404, "APPLICATION_NOT_FOUND", "Application not found");
   }
 
-  const [eventRows, communications, concerns, ecDecisions, documents] = await Promise.all([
+  const answers = await getApplicationAnswers(db, application.form_submission_id);
+  const requestedWorkingGroups = answers.working_groups ?? answers.workingGroups;
+  const requestedSlugs = Array.isArray(requestedWorkingGroups)
+    ? [...new Set(requestedWorkingGroups.filter((value): value is string => typeof value === "string"))].slice(0, 200)
+    : [];
+  const [eventRows, communications, concerns, ecDecisions, documents, requestedWorkingGroupRows] = await Promise.all([
     all<ApplicationEventRow>(
       db,
       `SELECT from_stage, to_stage, actor_user_id, note, created_at FROM member_application_events WHERE application_id = ? ORDER BY created_at ASC`,
@@ -126,12 +131,26 @@ export async function getAdminApplicationDetail(
     listApplicationConcerns(db, applicationId),
     listEcDecisions(db, applicationId),
     listApplicationDocuments(db, applicationId),
+    requestedSlugs.length > 0
+      ? all<{ slug: string; name: string }>(
+          db,
+          `SELECT slug, name
+             FROM working_groups
+            WHERE slug IN (SELECT value FROM json_each(?))`,
+          [JSON.stringify(requestedSlugs)],
+        )
+      : Promise.resolve([]),
   ]);
+  const requestedWorkingGroupNames = new Map(requestedWorkingGroupRows.map((row) => [row.slug, row.name]));
 
   return adminApplicationDetailSchema.parse({
     ...toSummary(application),
     stageEnteredAt: application.stage_entered_at,
-    answers: await getApplicationAnswers(db, application.form_submission_id),
+    answers,
+    requestedWorkingGroups: requestedSlugs.map((slug) => ({
+      slug,
+      name: requestedWorkingGroupNames.get(slug) ?? slug,
+    })),
     events: eventRows.map((row) => ({
       fromStage: row.from_stage,
       toStage: row.to_stage,

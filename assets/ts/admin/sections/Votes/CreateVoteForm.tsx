@@ -1,8 +1,10 @@
 import { useState } from "preact/hooks";
 import { api } from "../../api";
 import { toast } from "../../ui";
-import type { AdminWorkingGroupSummary } from "../../types";
 import { VOTE_TYPES, SCOPE_TYPES, thresholdOptionsFor } from "./shared";
+import { performAdminAction } from "../../actions";
+import { ServerSearchSelect } from "../../components/ServerSearchSelect";
+import { activeAdminWorkingGroupCatalog } from "../../services/catalogs";
 
 interface CandidateDraft {
   name: string;
@@ -38,15 +40,10 @@ function emptyDraft(): CreateDraft {
   };
 }
 
-export function CreateVoteForm({
-  workingGroups,
-  onCreated,
-}: {
-  workingGroups: AdminWorkingGroupSummary[];
-  onCreated: () => void;
-}) {
+export function CreateVoteForm({ onCreated }: { onCreated: () => void }) {
   const [draft, setDraft] = useState<CreateDraft>(emptyDraft());
   const [saving, setSaving] = useState(false);
+  const [workingGroupLabel, setWorkingGroupLabel] = useState<string>();
 
   function patch(p: Partial<CreateDraft>) {
     setDraft((d) => ({ ...d, ...p }));
@@ -58,35 +55,37 @@ export function CreateVoteForm({
       toast("Closes-at is required", "error");
       return;
     }
-    setSaving(true);
-    try {
-      await api("/api/v1/admin/votes", {
-        method: "POST",
-        body: JSON.stringify({
-          title: draft.title.trim(),
-          description: draft.description.trim() || undefined,
-          voteType: draft.voteType,
-          scopeType: draft.scopeType,
-          scopeId: draft.scopeType === "working_group" ? draft.scopeId || undefined : undefined,
-          thresholdType: draft.thresholdType,
-          opensAt: draft.opensAt ? new Date(draft.opensAt).toISOString() : undefined,
-          closesAt: new Date(draft.closesAt).toISOString(),
-          candidates:
-            draft.voteType === "election"
-              ? draft.candidates
-                  .filter((c) => c.name.trim())
-                  .map((c) => ({ name: c.name.trim(), bio: c.bio.trim() || undefined }))
-              : undefined,
+    await performAdminAction({
+      setBusy: setSaving,
+      request: () =>
+        api("/api/v1/admin/votes", {
+          method: "POST",
+          body: JSON.stringify({
+            title: draft.title.trim(),
+            description: draft.description.trim() || undefined,
+            voteType: draft.voteType,
+            scopeType: draft.scopeType,
+            scopeId: draft.scopeType === "working_group" ? draft.scopeId || undefined : undefined,
+            thresholdType: draft.thresholdType,
+            opensAt: draft.opensAt ? new Date(draft.opensAt).toISOString() : undefined,
+            closesAt: new Date(draft.closesAt).toISOString(),
+            candidates:
+              draft.voteType === "election"
+                ? draft.candidates
+                    .filter((candidate) => candidate.name.trim())
+                    .map((candidate) => ({
+                      name: candidate.name.trim(),
+                      bio: candidate.bio.trim() || undefined,
+                    }))
+                : undefined,
+          }),
         }),
-      });
-      toast("Vote created", "success");
-      setDraft(emptyDraft());
-      onCreated();
-    } catch (err) {
-      toast((err as Error).message, "error");
-    } finally {
-      setSaving(false);
-    }
+      successMessage: "Vote created",
+      afterSuccess: () => {
+        setDraft(emptyDraft());
+        onCreated();
+      },
+    });
   }
 
   return (
@@ -143,19 +142,17 @@ export function CreateVoteForm({
           </div>
           {draft.scopeType === "working_group" && (
             <div class="col-sm-3">
-              <label class="form-label small">Working group</label>
-              <select
-                class="form-select form-select-sm"
+              <ServerSearchSelect
+                catalog={activeAdminWorkingGroupCatalog()}
+                label="Working group"
                 value={draft.scopeId}
-                onChange={(e) => patch({ scopeId: (e.target as HTMLSelectElement).value })}
-              >
-                <option value="">Select…</option>
-                {workingGroups.map((wg) => (
-                  <option value={wg.id} key={wg.id}>
-                    {wg.name}
-                  </option>
-                ))}
-              </select>
+                selectedLabel={workingGroupLabel}
+                disabled={saving}
+                onChange={(group) => {
+                  patch({ scopeId: group?.id ?? "" });
+                  setWorkingGroupLabel(group?.name);
+                }}
+              />
             </div>
           )}
           <div class="col-sm-3">

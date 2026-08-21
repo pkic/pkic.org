@@ -217,6 +217,7 @@ export async function runScheduledDueWork(
   const passes: ScheduledDueWorkPass[] = [];
   const passDurations: number[] = [];
   const passD1Queries: number[] = [];
+  let remainingBadgeRenderAllowance = config.scheduledBadgeRenderLimit;
   const initialD1Queries = invocationBudget?.d1QueryBudget?.usedQueries() ?? 0;
   let stoppedReason: ScheduledDueWorkResult["stoppedReason"] = "max_passes";
 
@@ -255,7 +256,12 @@ export async function runScheduledDueWork(
     const rsvpPass = await runRsvpEnforcer(env.DB, env);
     const outboxPass = await processPendingOutbox(env.DB, env, config.scheduledOutboxLimit);
     const storageDeletionPass = await processPendingStorageDeletions(env.DB, env, config.scheduledStorageDeletionLimit);
-    const badgeRenderPass = await processPendingBadgeRenders(env.DB, env, config.scheduledBadgeRenderLimit);
+    const badgeRenderPassLimit = remainingBadgeRenderAllowance;
+    const badgeRenderPass = await processPendingBadgeRenders(env.DB, env, badgeRenderPassLimit);
+    remainingBadgeRenderAllowance = Math.max(
+      0,
+      remainingBadgeRenderAllowance - badgeRenderPass.processed - badgeRenderPass.failed,
+    );
     const durationMs = Date.now() - passStartedAt;
     const elapsedMs = Date.now() - startedAt;
     const passQueryCount = (invocationBudget?.d1QueryBudget?.usedQueries() ?? 0) - passStartedD1Queries;
@@ -289,7 +295,7 @@ export async function runScheduledDueWork(
         scheduledReminderLimit: config.scheduledReminderLimit,
         scheduledOutboxLimit: config.scheduledOutboxLimit,
         scheduledStorageDeletionLimit: config.scheduledStorageDeletionLimit,
-        scheduledBadgeRenderLimit: config.scheduledBadgeRenderLimit,
+        scheduledBadgeRenderLimit: remainingBadgeRenderAllowance > 0 ? badgeRenderPassLimit : 0,
       })
     ) {
       stoppedReason = "caught_up";

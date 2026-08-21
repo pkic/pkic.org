@@ -1,5 +1,5 @@
 import type { ValidatedData } from "chanfana";
-import { finalizeProposalResponseSchema } from "../../../../../../assets/shared/schemas/api";
+import { finalizeProposalResponseSchema } from "../../../../../../assets/shared/schemas/proposal-management";
 import { adminProposalFinalizeRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts";
 import { requireUserBackedAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getConfig, resolveAppBaseUrl } from "../../../../../_lib/config";

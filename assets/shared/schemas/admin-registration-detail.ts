@@ -3,7 +3,16 @@ import { eventIdSchema } from "./api-common";
 import { activeFormSummarySchema } from "./forms";
 import { databaseIdSchema } from "./identifiers";
 
-export const adminRegistrationDetailSchema = z.object({
+/** Joined display, attribution, and lifecycle fields common to admin registration projections. */
+export const adminRegistrationRecordContextSchema = z.object({
+  created_at: z.string(),
+  updated_at: z.string(),
+  user_email: z.string().nullable(),
+  display_name: z.string().nullable(),
+  referral_code: z.string().nullable(),
+});
+
+export const adminRegistrationDetailSchema = adminRegistrationRecordContextSchema.extend({
   id: databaseIdSchema,
   event_id: eventIdSchema,
   user_id: databaseIdSchema,
@@ -11,11 +20,6 @@ export const adminRegistrationDetailSchema = z.object({
   cancellation_reason_code: z.string().nullable(),
   attendance_type: z.string(),
   source_type: z.string(),
-  created_at: z.string(),
-  updated_at: z.string(),
-  user_email: z.string().nullable(),
-  display_name: z.string().nullable(),
-  referral_code: z.string().nullable(),
   rsvp_status: z.string().nullable(),
   customAnswers: z.record(z.string(), z.unknown()).nullable(),
 });

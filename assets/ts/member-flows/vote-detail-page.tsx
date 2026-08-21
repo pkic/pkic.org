@@ -21,6 +21,7 @@ import { useEffect, useState } from "preact/hooks";
 import { getJson, ApiClientError } from "../shared/api-client";
 import { Spinner } from "../components/Spinner";
 import { ErrorAlert } from "../components/ErrorAlert";
+import { NotFoundPanel } from "../components/NotFoundPanel";
 
 const API_BASE_FALLBACK = "/api/v1";
 
@@ -179,12 +180,7 @@ function VoteDetailPage({ apiBase, indexHref }: { apiBase: string; indexHref: st
   }, [apiBase]);
 
   if (notFound) {
-    return (
-      <div class="container py-5 text-center">
-        <p class="lead">We couldn&rsquo;t find that vote.</p>
-        <a href={indexHref}>&larr; Back to all votes</a>
-      </div>
-    );
+    return <NotFoundPanel message="We couldn’t find that vote." backHref={indexHref} backLabel="Back to all votes" />;
   }
   if (error) return <ErrorAlert error={error} />;
   if (!vote) return <Spinner />;

@@ -15,6 +15,8 @@ import { materializeQueuedCapabilityLinks } from "../auth/capability-links";
 import type { DatabaseLike, Env } from "../types";
 import type { EmailContentType, EmailMessageType } from "../../../assets/shared/schemas/admin-email-templates";
 import type { CalendarPayload } from "./outbox-queue";
+import { createDurableJobLease } from "../jobs/lease";
+import { resolveImageAttachmentFormat } from "../utils/image-format";
 
 export * from "./outbox-queue";
 
@@ -47,11 +49,24 @@ interface OutboxRow {
   created_at: string;
   updated_at: string;
   sent_at: string | null;
+  processing_token: string | null;
+  lease_expires_at: string | null;
 }
 
 const OUTBOX_ROW_COLUMNS = `id, event_id, template_key, template_version, recipient_user_id, recipient_email,
   subject, payload_json, message_type, provider, provider_message_id, status, attempts, send_after,
-  last_error, created_at, updated_at, sent_at`;
+  last_error, created_at, updated_at, sent_at, processing_token, lease_expires_at`;
+
+export const EMAIL_OUTBOX_DUE_QUERY = `
+  SELECT ${OUTBOX_ROW_COLUMNS}, send_after AS due_at
+    FROM email_outbox
+   WHERE status IN ('queued', 'retrying') AND send_after <= ?
+  UNION ALL
+  SELECT ${OUTBOX_ROW_COLUMNS}, lease_expires_at AS due_at
+    FROM email_outbox
+   WHERE status = 'sending' AND lease_expires_at <= ?
+  ORDER BY due_at, created_at, id
+  LIMIT ?`;
 
 type ResolvedEmailTemplate = Awaited<ReturnType<typeof resolveTemplate>>;
 
@@ -88,6 +103,11 @@ function getOutboxStatusForRetry(attempts: number): "retrying" | "failed" {
   return attempts >= 5 ? "failed" : "retrying";
 }
 
+function outboxRetryAt(attempts: number): string {
+  const delayMs = Math.min(60 * 60_000, 60_000 * 2 ** Math.max(0, attempts - 1));
+  return new Date(Date.now() + delayMs).toISOString();
+}
+
 function resolveEmailBaseUrl(payload: Record<string, unknown>, env: Env): string {
   if (typeof payload.__baseUrl === "string" && payload.__baseUrl) {
     const explicitBaseUrl = payload.__baseUrl;
@@ -97,83 +117,48 @@ function resolveEmailBaseUrl(payload: Record<string, unknown>, env: Env): string
   return resolveAppBaseUrl(env);
 }
 
-function sniffImageAttachmentFormat(contentType: string, bytes: Uint8Array): { contentType: string; ext: string } {
-  const declaredType = contentType.split(";")[0]?.trim().toLowerCase() || "image/jpeg";
-
-  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
-    return { contentType: "image/jpeg", ext: "jpg" };
-  }
-
-  if (
-    bytes.length >= 8 &&
-    bytes[0] === 0x89 &&
-    bytes[1] === 0x50 &&
-    bytes[2] === 0x4e &&
-    bytes[3] === 0x47 &&
-    bytes[4] === 0x0d &&
-    bytes[5] === 0x0a &&
-    bytes[6] === 0x1a &&
-    bytes[7] === 0x0a
-  ) {
-    return { contentType: "image/png", ext: "png" };
-  }
-
-  if (
-    bytes.length >= 12 &&
-    bytes[0] === 0x52 &&
-    bytes[1] === 0x49 &&
-    bytes[2] === 0x46 &&
-    bytes[3] === 0x46 &&
-    bytes[8] === 0x57 &&
-    bytes[9] === 0x45 &&
-    bytes[10] === 0x42 &&
-    bytes[11] === 0x50
-  ) {
-    return { contentType: "image/webp", ext: "webp" };
-  }
-
-  if (declaredType === "image/png") {
-    return { contentType: "image/png", ext: "png" };
-  }
-
-  if (declaredType === "image/webp") {
-    return { contentType: "image/webp", ext: "webp" };
-  }
-
-  return { contentType: "image/jpeg", ext: "jpg" };
-}
-
-async function claimOutboxForSending(db: DatabaseLike, outboxId: string): Promise<boolean> {
+async function claimOutboxForSending(db: DatabaseLike, outboxId: string): Promise<string | null> {
+  const lease = createDurableJobLease();
   const claimed = await run(
     db,
     `UPDATE email_outbox
-     SET status = 'sending', updated_at = ?
+     SET status = 'sending', processing_token = ?, lease_expires_at = ?, updated_at = ?
      WHERE id = ?
-       AND status IN ('queued', 'retrying')
-       AND send_after <= ?`,
-    [nowIso(), outboxId, nowIso()],
+       AND send_after <= ?
+       AND (
+         status IN ('queued', 'retrying')
+         OR (status = 'sending' AND lease_expires_at <= ?)
+       )`,
+    [lease.token, lease.expiresAt, lease.claimedAt, outboxId, lease.claimedAt, lease.claimedAt],
   );
-  return claimed.changes === 1;
+  return claimed.changes === 1 ? lease.token : null;
 }
 
 async function markOutboxSent(
   db: DatabaseLike,
   row: OutboxRow,
+  processingToken: string,
   messageId: string | null,
   templateVersion: number,
 ): Promise<void> {
   await run(
     db,
     `UPDATE email_outbox
-     SET status = 'sent', template_version = ?, provider_message_id = ?, sent_at = ?, last_error = NULL, updated_at = ?
-     WHERE id = ? AND status = 'sending'`,
-    [templateVersion, messageId, nowIso(), nowIso(), row.id],
+     SET status = 'sent', template_version = ?, provider_message_id = ?, sent_at = ?,
+         last_error = NULL, processing_token = NULL, lease_expires_at = NULL, updated_at = ?
+     WHERE id = ? AND status = 'sending' AND processing_token = ?`,
+    [templateVersion, messageId, nowIso(), nowIso(), row.id, processingToken],
   );
 
   // Calendar delivery is tracked through email_outbox rows to keep storage/model simple.
 }
 
-async function markOutboxFailed(db: DatabaseLike, row: OutboxRow, error: unknown): Promise<void> {
+async function markOutboxFailed(
+  db: DatabaseLike,
+  row: OutboxRow,
+  processingToken: string,
+  error: unknown,
+): Promise<void> {
   const attempts = row.attempts + 1;
   const nonRetryable =
     error instanceof AppError &&
@@ -190,9 +175,18 @@ async function markOutboxFailed(db: DatabaseLike, row: OutboxRow, error: unknown
   await run(
     db,
     `UPDATE email_outbox
-     SET attempts = ?, status = ?, last_error = ?, updated_at = ?
-     WHERE id = ? AND status = 'sending'`,
-    [attempts, status, message + details, nowIso(), row.id],
+     SET attempts = ?, status = ?, last_error = ?, send_after = ?, processing_token = NULL,
+         lease_expires_at = NULL, updated_at = ?
+     WHERE id = ? AND status = 'sending' AND processing_token = ?`,
+    [
+      attempts,
+      status,
+      message + details,
+      status === "retrying" ? outboxRetryAt(attempts) : row.send_after,
+      nowIso(),
+      row.id,
+      processingToken,
+    ],
   );
 }
 
@@ -212,7 +206,8 @@ async function processOutboxRow(
   // scheduled/admin/direct processors may therefore select the same queued
   // row. Claim it with a guarded write before contacting SendGrid so only one
   // invocation owns the external side effect.
-  if (!(await claimOutboxForSending(db, row.id))) return false;
+  const processingToken = await claimOutboxForSending(db, row.id);
+  if (!processingToken) return false;
 
   try {
     const storedPayload = parseJsonSafe<Record<string, unknown>>(row.payload_json, {});
@@ -279,9 +274,9 @@ async function processOutboxRow(
           const declaredType = badgeObj.httpMetadata?.contentType ?? "image/jpeg";
           const buf = await badgeObj.arrayBuffer();
           const bytes = new Uint8Array(buf);
-          const format = sniffImageAttachmentFormat(declaredType, bytes);
+          const format = resolveImageAttachmentFormat(declaredType, bytes);
           const base64 = uint8ToBase64(bytes);
-          const badgeFilename = `${badgeAttachment.filenameBase}.${format.ext}`;
+          const badgeFilename = `${badgeAttachment.filenameBase}.${format.extension}`;
           attachments = [
             ...(attachments ?? []),
             { filename: badgeFilename, contentType: format.contentType, base64Content: base64 },
@@ -328,10 +323,10 @@ async function processOutboxRow(
       attachments,
     });
 
-    await markOutboxSent(db, row, messageId, templateVersion);
+    await markOutboxSent(db, row, processingToken, messageId, templateVersion);
     return true;
   } catch (error) {
-    await markOutboxFailed(db, row, error);
+    await markOutboxFailed(db, row, processingToken, error);
     throw error;
   }
 }
@@ -379,14 +374,7 @@ export async function processPendingOutbox(
   env: Env,
   limit = 20,
 ): Promise<{ processed: number; failed: number }> {
-  const rows = await all<OutboxRow>(
-    db,
-    `SELECT ${OUTBOX_ROW_COLUMNS} FROM email_outbox
-     WHERE status IN ('queued', 'retrying') AND send_after <= ?
-     ORDER BY created_at ASC
-     LIMIT ?`,
-    [nowIso(), limit],
-  );
+  const rows = await all<OutboxRow>(db, EMAIL_OUTBOX_DUE_QUERY, [nowIso(), nowIso(), limit]);
 
   return processInChunks(db, env, rows);
 }
@@ -394,21 +382,24 @@ export async function processPendingOutbox(
 export async function summarizePendingOutbox(
   db: DatabaseLike,
 ): Promise<{ dueNow: number; dueByStatus: Record<string, number>; nextSendAfter: string | null }> {
+  const now = nowIso();
   const rows = await all<{ status: string; count: number }>(
     db,
     `SELECT status, COUNT(*) AS count
      FROM email_outbox
-     WHERE status IN ('queued', 'retrying') AND send_after <= ?
+     WHERE send_after <= ?
+       AND (status IN ('queued', 'retrying') OR (status = 'sending' AND lease_expires_at <= ?))
      GROUP BY status`,
-    [nowIso()],
+    [now, now],
   );
 
   const nextRow = await first<{ send_after: string | null }>(
     db,
     `SELECT MIN(send_after) AS send_after
      FROM email_outbox
-     WHERE status IN ('queued', 'retrying')`,
-    [],
+     WHERE status IN ('queued', 'retrying')
+        OR (status = 'sending' AND lease_expires_at <= ?)`,
+    [now],
   );
 
   return {
@@ -432,10 +423,10 @@ export async function processSelectedOutbox(
     db,
     `SELECT ${OUTBOX_ROW_COLUMNS} FROM email_outbox
      WHERE ${idFilter.sql}
-       AND status IN ('queued', 'retrying')
        AND send_after <= ?
+       AND (status IN ('queued', 'retrying') OR (status = 'sending' AND lease_expires_at <= ?))
      ORDER BY created_at ASC`,
-    [...idFilter.bindings, nowIso()],
+    [...idFilter.bindings, nowIso(), nowIso()],
   );
 
   const results = await processInChunks(db, env, rows);

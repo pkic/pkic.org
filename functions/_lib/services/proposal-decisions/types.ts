@@ -46,7 +46,8 @@ export interface ProposalDecisionEmailPlan {
     presentation_deadline: string | null;
     proposal_type: string;
     status: string;
-    has_current_decision: number;
+    current_decision_id: string | null;
+    current_decision_status: string | null;
     updated_at: string;
   };
   eventSnapshot: ProposalDecisionEventSnapshot;

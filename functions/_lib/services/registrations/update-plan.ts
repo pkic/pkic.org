@@ -12,9 +12,9 @@ import {
 import { prepareUserProfileStatement, type UserProfilePatch } from "../users";
 import {
   buildRegistrationDayWaitlistSync,
+  dayWaitlistOfferUnavailableError,
   listConfirmedInPersonEventDayIdsForRegistration,
   listInPersonEventDayIdsForRegistration,
-  prepareClaimOfferedDayWaitlistStatements,
   prepareRemoveAllDayWaitlistStatement,
   resolveCapacityExemptReason,
   type DayWaitlistLane,
@@ -26,9 +26,13 @@ export interface RegistrationUpdatePayload {
   action: "update" | "cancel" | "report_unauthorized";
   attendanceType?: "in_person" | "virtual" | "on_demand";
   dayAttendance?: DayAttendanceSelection[];
+  /** Offered day seats are accepted only when the caller explicitly names them. */
+  claimDayWaitlistOffers?: string[];
+  /** Admin-only transition that puts selected in-person days at the end of the waitlist. */
+  forceWaitlistDayDates?: string[];
   customAnswersJson?: string | null;
   sourceRef?: string | null;
-  waitlistClaimWindowHours: number;
+  waitlistClaimWindowHours?: number;
   profilePatch?: UserProfilePatch;
   auditActor?: { type: "admin" | "user"; id: string; action: string };
 }
@@ -77,6 +81,9 @@ export async function buildRegistrationUpdate(
   payload: RegistrationUpdatePayload,
   changedBy = "self",
 ): Promise<BuiltRegistrationUpdate> {
+  if (payload.claimDayWaitlistOffers?.length && (payload.action !== "update" || !payload.dayAttendance)) {
+    throw dayWaitlistOfferUnavailableError();
+  }
   const isCancelled = registration.status === "cancelled";
   if (payload.action === "cancel") {
     if (isCancelled) throw new AppError(409, "ALREADY_CANCELLED", "Registration is already cancelled");
@@ -151,10 +158,30 @@ export async function buildRegistrationUpdate(
     throw new AppError(400, "ATTENDANCE_TYPE_REQUIRED", "attendanceType is required for update action");
   }
   const capacityExemptReason = await resolveCapacityExemptReason(db, {
-    registrationId: registration.id,
     eventId: registration.event_id,
     userId: registration.user_id,
   });
+  const forceWaitlistDayDates = new Set(payload.forceWaitlistDayDates ?? []);
+  if (forceWaitlistDayDates.size > 0) {
+    if (capacityExemptReason) {
+      throw new AppError(
+        409,
+        "CAPACITY_EXEMPT_REGISTRATION",
+        "A role-based capacity-exempt attendee cannot be placed on the waitlist",
+      );
+    }
+    const selectionByDate = new Map(payload.dayAttendance?.map((entry) => [entry.dayDate, entry.attendanceType]));
+    const dayByDate = new Map(configuredEventDays.map((day) => [day.day_date, day]));
+    for (const dayDate of forceWaitlistDayDates) {
+      const day = dayByDate.get(dayDate);
+      if (selectionByDate.get(dayDate) !== "in_person") {
+        throw new AppError(400, "WAITLIST_REQUIRES_IN_PERSON", `Day '${dayDate}' must be selected as in-person`);
+      }
+      if (!day?.in_person_capacity || day.in_person_capacity <= 0) {
+        throw new AppError(409, "DAY_CAPACITY_UNLIMITED", `Day '${dayDate}' does not have a finite capacity`);
+      }
+    }
+  }
   const hasPerDayAttendanceInput = Boolean(payload.dayAttendance?.length);
   const hasPerDayAttendanceContext = hasPerDayAttendanceInput || previousInPersonDayIds.length > 0;
   let newStatus = isCancelled ? "registered" : registration.status;
@@ -202,6 +229,8 @@ export async function buildRegistrationUpdate(
       preserveConfirmedEventDayIds: isCancelled ? [] : previousConfirmedInPersonDayIds,
       registrationStatus: newStatus,
       configuredEventDays,
+      forceWaitlistDayDates: payload.forceWaitlistDayDates,
+      claimOfferedDayDates: payload.claimDayWaitlistOffers,
     });
     statements.unshift(...waitlist.guardStatements);
     statements.push(
@@ -213,16 +242,13 @@ export async function buildRegistrationUpdate(
         configuredEventDays,
       })),
       ...waitlist.statements,
-      ...(await prepareClaimOfferedDayWaitlistStatements(db, {
-        registrationId: registration.id,
-        eventId: registration.event_id,
-        selections: payload.dayAttendance,
-        configuredEventDays,
-      })),
     );
-    const selectedInPersonDates = new Set(
+    const claimedInPersonDates = new Set(
       payload.dayAttendance
-        .filter((selection) => selection.attendanceType === "in_person")
+        .filter(
+          (selection) =>
+            selection.attendanceType === "in_person" && payload.claimDayWaitlistOffers?.includes(selection.dayDate),
+        )
         .map((selection) => selection.dayDate),
     );
     plannedDayAttendance = payload.dayAttendance.map((selection) => ({
@@ -231,7 +257,7 @@ export async function buildRegistrationUpdate(
       label: configuredEventDays.find((day) => day.day_date === selection.dayDate)?.label ?? null,
     }));
     plannedDayWaitlist = waitlist.activeRows.map((row) =>
-      row.status === "offered" && selectedInPersonDates.has(row.dayDate)
+      row.status === "offered" && claimedInPersonDates.has(row.dayDate)
         ? { ...row, status: "accepted", offerExpiresAt: null }
         : row,
     );

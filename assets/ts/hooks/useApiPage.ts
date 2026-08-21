@@ -1,65 +1,50 @@
-import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import { useEffect } from "preact/hooks";
 import type { z } from "zod";
 import type { PageInfo } from "../../shared/schemas/pagination";
 import { getJson } from "../shared/api-client";
-import { usePageState } from "./usePageState";
+import { useOffsetPager } from "./useOffsetPager";
+import { useServerCollection, type CollectionLoader } from "./useServerCollection";
 
 export interface ApiPageResponse {
   page: PageInfo;
 }
 
 /** Shared bounded-fetch state for non-table API collections. */
+const loadCollection: CollectionLoader = (url, signal) => getJson<unknown>(url, { signal });
+
 export function useApiPage<T extends ApiPageResponse>(
   endpoint: string,
   params: Record<string, string>,
   responseSchema: z.ZodType<T>,
+  resolveItems: (data: T) => readonly unknown[],
+  initialPageSize?: number,
 ) {
-  const pageState = usePageState();
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<unknown>(null);
-  const [loading, setLoading] = useState(true);
-  const latestRequest = useRef(0);
-  const serializedParams = JSON.stringify(params);
-
-  const reload = useCallback(async () => {
-    const requestId = ++latestRequest.current;
-    setLoading(true);
-    setError(null);
-    try {
-      const query = new URLSearchParams(params);
-      query.set("limit", String(pageState.pageSize));
-      query.set("offset", String(pageState.offset));
-      const raw = await getJson<unknown>(`${endpoint}?${query.toString()}`);
-      if (requestId === latestRequest.current) {
-        setData(responseSchema.parse(raw));
-      }
-    } catch (cause) {
-      if (requestId === latestRequest.current) setError(cause);
-    } finally {
-      if (requestId === latestRequest.current) setLoading(false);
-    }
-  }, [endpoint, pageState.pageSize, pageState.offset, serializedParams, responseSchema]);
+  const pager = useOffsetPager(initialPageSize);
+  const serializedParams = JSON.stringify(Object.entries(params).sort(([left], [right]) => left.localeCompare(right)));
+  const listing = useServerCollection({
+    endpoint,
+    params: {
+      ...params,
+      limit: String(pager.pageSize),
+      offset: String(pager.offset),
+    },
+    responseSchema,
+    load: loadCollection,
+  });
 
   useEffect(() => {
-    pageState.resetPage();
-  }, [endpoint, serializedParams]);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+    pager.resetPage();
+  }, [endpoint, serializedParams, pager.resetPage]);
 
   return {
-    data,
-    error,
-    loading,
-    reload,
-    pagerProps: data ? pageState.pagerProps(pageItemCount(data), data.page.total, data.page.hasMore) : null,
+    ...listing,
+    pagerProps: listing.data
+      ? pager.pagerProps({
+          hasMore: listing.data.page.hasMore,
+          rowCount: resolveItems(listing.data).length,
+          total: listing.data.page.total,
+          serverOffset: listing.data.page.offset,
+        })
+      : null,
   };
-}
-
-function pageItemCount(data: ApiPageResponse): number {
-  for (const [key, value] of Object.entries(data)) {
-    if (key !== "page" && Array.isArray(value)) return value.length;
-  }
-  return 0;
 }

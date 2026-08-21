@@ -1,4 +1,4 @@
-import { json } from "../../../../_lib/http";
+import { dispatchRequestMethod, json } from "../../../../_lib/http";
 import { proposalPageUrl, registrationPageUrl } from "../../../../_lib/services/frontend-links";
 import { loadPublicInviteView } from "../../../../_lib/routes/public-invite-view";
 import {
@@ -47,8 +47,5 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
 }
 
 export async function onRequest(c: any): Promise<Response> {
-  if (c.req.raw.method !== "GET") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
-  return onRequestGet(c);
+  return dispatchRequestMethod(c, { GET: onRequestGet });
 }

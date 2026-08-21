@@ -71,14 +71,7 @@ export const mailingListCreateRouteSchema = {
 
 export const mailingListIdParamsSchema = z.object({ id: z.string().trim().min(1).max(100) });
 
-export const mailingListUpdateSchema = z.object({
-  email: z.string().trim().toLowerCase().email().optional(),
-  label: trimmedString(1, 200).optional(),
-  listType: mailingListTypeSchema.optional(),
-  workingGroupId: workingGroupIdSchema.nullable().optional(),
-  autoSyncCategories: z.array(z.string()).nullable().optional(),
-  active: z.boolean().optional(),
-});
+export const mailingListUpdateSchema = mailingListCreateSchema.partial();
 
 export const mailingListUpdateRouteSchema = {
   tags: ["Mailing Lists"],

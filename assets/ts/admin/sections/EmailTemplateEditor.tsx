@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { Tabs } from "../../components/Tabs";
 import { Badge } from "../../components/Badge";
-import { DataTable } from "../../components/Table";
+import { ApiDataTable, type ApiTableActions } from "../components/ApiDataTable";
 import { api } from "../api";
 import { toast } from "../ui";
 import { highlightTemplateSyntax } from "../email-template-syntax";
@@ -12,7 +12,11 @@ import {
   PREVIEW_DEFAULTS,
   type TemplateHelperCategory,
 } from "../email-template-helpers";
-import type { EmailContentType, EmailMessageType } from "../../../shared/schemas/admin-email-templates";
+import {
+  adminEmailTemplateVersionsListResponseSchema,
+  type EmailContentType,
+  type EmailMessageType,
+} from "../../../shared/schemas/admin-email-templates";
 import { EMAIL_PREVIEW_TABS, type EmailPreviewTab } from "../email-preview-tabs";
 
 const EMAIL_LAYOUT_TEMPLATE_KEY = "email_layout";
@@ -24,17 +28,14 @@ const HELPER_CATEGORIES: TemplateHelperCategory[] = ["Variables", "Conditions", 
 
 export function TemplateEditor({
   templateKey,
-  versions,
+  initialVersion,
   onBack,
-  onReload,
 }: {
   templateKey: string;
-  versions: EmailTemplateVersion[];
+  initialVersion: EmailTemplateVersion | null;
   onBack: () => void;
-  onReload: () => Promise<void>;
 }) {
-  const active = versions.find((v) => v.status === "active");
-  const current = active ?? versions[0];
+  const current = initialVersion;
   const isLayout = templateKey === EMAIL_LAYOUT_TEMPLATE_KEY;
 
   const [contentType, setContentType] = useState<EmailContentType>(current?.content_type ?? "markdown");
@@ -55,6 +56,7 @@ export function TemplateEditor({
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const editorFocusRef = useRef<"subject" | "body">("body");
+  const historyRef = useRef<ApiTableActions | null>(null);
 
   // sync highlight backdrop when subject/body changes
   useEffect(() => {
@@ -193,7 +195,7 @@ export function TemplateEditor({
         },
       );
       toast(`Saved as draft v${result.version.version}`, "success");
-      await onReload();
+      historyRef.current?.reload();
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {
@@ -208,7 +210,7 @@ export function TemplateEditor({
         body: JSON.stringify({ version }),
       });
       toast(`v${version} is now active`, "success");
-      await onReload();
+      historyRef.current?.reload();
     } catch (e) {
       toast((e as Error).message, "error");
     }
@@ -439,7 +441,15 @@ export function TemplateEditor({
       <div class="card border-0 shadow-sm mt-3">
         <div class="card-body">
           <h6 class="text-uppercase small fw-bold text-muted mb-2">Version History</h6>
-          <DataTable
+          <ApiDataTable<EmailTemplateVersion>
+            endpoint={`/api/v1/admin/email-templates/${encodeURIComponent(templateKey)}/versions`}
+            responseSchema={adminEmailTemplateVersionsListResponseSchema}
+            resolve={(response) => adminEmailTemplateVersionsListResponseSchema.parse(response).versions}
+            resolvePage={(response) => adminEmailTemplateVersionsListResponseSchema.parse(response).page}
+            paginate
+            initialPageSize={25}
+            initialSort="-version"
+            actionsRef={historyRef}
             columns={[
               { header: "Version", cell: (v) => `v${v.version}`, className: "mono" },
               { header: "Status", cell: (v) => <Badge status={v.status} /> },
@@ -476,7 +486,6 @@ export function TemplateEditor({
                 className: "text-nowrap",
               },
             ]}
-            data={versions}
             empty="No versions yet"
             rowKey={(v) => v.id}
           />

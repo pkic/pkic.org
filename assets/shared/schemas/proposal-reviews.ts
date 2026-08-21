@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, pageInfoSchema } from "./pagination";
-import { trimmedString } from "./api-common";
+import { successResponseSchema, trimmedString } from "./api-common";
 
 export const PROPOSAL_RECOMMENDATIONS = ["accept", "reject", "needs-work"] as const;
 export const proposalRecommendationSchema = z.enum(PROPOSAL_RECOMMENDATIONS);
@@ -58,7 +58,7 @@ export const proposalReviewSchema = z.object({
 });
 
 export const PROPOSAL_REVIEW_SORT_COLUMNS = ["updatedAt", "reviewer", "recommendation", "score"] as const;
-export const proposalReviewsListQuerySchema = listQuerySchema(PROPOSAL_REVIEW_SORT_COLUMNS).extend({
+export const proposalReviewsListQuerySchema = listQuerySchema(PROPOSAL_REVIEW_SORT_COLUMNS, { limit: 25 }).extend({
   recommendation: proposalRecommendationSchema.optional(),
 });
 
@@ -80,8 +80,7 @@ export const proposalReviewsListResponseSchema = z.object({
   page: pageInfoSchema,
 });
 
-export const proposalReviewWriteResponseSchema = z.object({
-  success: z.literal(true),
+export const proposalReviewWriteResponseSchema = successResponseSchema.extend({
   review: proposalReviewSchema,
 });
 

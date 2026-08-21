@@ -309,7 +309,7 @@ describe("roles (Built-in and custom roles)", () => {
     await env.DB.batch([
       env.DB.prepare(
         `INSERT INTO roles (id, name, description, is_system_role, created_at, updated_at)
-         VALUES ('role-search-target', 'search_target', 'Unique catalogue description', 0, datetime('now'), datetime('now'))`,
+         VALUES ('role-search-target', 'search_target', 'Unique catalog description', 0, datetime('now'), datetime('now'))`,
       ),
       env.DB.prepare(
         `INSERT INTO role_permissions (id, role_id, permission, created_at)
@@ -317,7 +317,7 @@ describe("roles (Built-in and custom roles)", () => {
       ).bind(crypto.randomUUID()),
     ]);
 
-    const response = await call(adminToken, "/api/v1/admin/roles?q=catalogue&limit=1");
+    const response = await call(adminToken, "/api/v1/admin/roles?q=catalog&limit=1");
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
       roles: Array<{ name: string; permissions: string[] }>;

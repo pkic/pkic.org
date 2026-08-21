@@ -14,6 +14,7 @@ import { api } from "../../../../api";
 import type { ProposalSpeaker } from "../../../../types";
 import { toast } from "../../../../ui";
 import type { PresentationVersion } from "./model";
+import { presentationVersionsResponseSchema } from "../../../../../../shared/schemas/presentation-versions";
 
 const EMPTY_REVIEW_SUMMARY: ProposalReviewSummary = {
   totalReviews: 0,
@@ -44,6 +45,8 @@ export function useProposalSubresources(proposalId: string, reloadProposal: () =
   const [commentPage, setCommentPage] = useState<PageInfo | null>(null);
   const [loadingMoreComments, setLoadingMoreComments] = useState(false);
   const [versions, setVersions] = useState<PresentationVersion[]>([]);
+  const [versionPage, setVersionPage] = useState<PageInfo | null>(null);
+  const [loadingMoreVersions, setLoadingMoreVersions] = useState(false);
   const [loading, setLoading] = useState(true);
   const [savingComment, setSavingComment] = useState(false);
 
@@ -65,9 +68,14 @@ export function useProposalSubresources(proposalId: string, reloadProposal: () =
               page: { limit: 25, offset: 0, total: 0, hasMore: false },
             }),
           ),
-        api<{ versions: PresentationVersion[] }>(`/api/v1/admin/proposals/${proposalId}/presentation/versions`).catch(
-          recoverSubresource("presentation versions", { versions: [] }),
-        ),
+        api<unknown>(`/api/v1/admin/proposals/${proposalId}/presentation/versions?limit=25`)
+          .then((value) => presentationVersionsResponseSchema.parse(value))
+          .catch(
+            recoverSubresource("presentation versions", {
+              versions: [],
+              page: { limit: 25, offset: 0, total: 0, hasMore: false },
+            }),
+          ),
       ]);
       setReviews(reviewData?.reviews ?? []);
       setReviewPage(reviewData?.page ?? null);
@@ -77,6 +85,7 @@ export function useProposalSubresources(proposalId: string, reloadProposal: () =
       setComments(commentData.comments ?? []);
       setCommentPage(commentData.page);
       setVersions(presentationData.versions ?? []);
+      setVersionPage(presentationData.page);
     } finally {
       setLoading(false);
     }
@@ -155,6 +164,24 @@ export function useProposalSubresources(proposalId: string, reloadProposal: () =
     }
   }
 
+  async function loadMoreVersions(): Promise<void> {
+    if (!versionPage?.hasMore || loadingMoreVersions) return;
+    setLoadingMoreVersions(true);
+    try {
+      const next = presentationVersionsResponseSchema.parse(
+        await api<unknown>(
+          `/api/v1/admin/proposals/${proposalId}/presentation/versions?limit=${versionPage.limit}&offset=${versions.length}`,
+        ),
+      );
+      setVersions((previous) => [...previous, ...next.versions]);
+      setVersionPage(next.page);
+    } catch (error) {
+      toast((error as Error).message, "error");
+    } finally {
+      setLoadingMoreVersions(false);
+    }
+  }
+
   return {
     reviews,
     reviewPage,
@@ -167,6 +194,8 @@ export function useProposalSubresources(proposalId: string, reloadProposal: () =
     commentPage,
     loadingMoreComments,
     versions,
+    versionPage,
+    loadingMoreVersions,
     loading,
     savingComment,
     reload,
@@ -174,5 +203,6 @@ export function useProposalSubresources(proposalId: string, reloadProposal: () =
     addComment,
     loadMoreComments,
     loadMoreReviews,
+    loadMoreVersions,
   };
 }

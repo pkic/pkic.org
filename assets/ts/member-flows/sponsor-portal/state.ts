@@ -11,6 +11,7 @@
  * every load (App.tsx) rather than trusting it blindly.
  */
 import type { SponsorPortalSession } from "./types";
+import { sponsorPortalSessionSchema } from "../../../shared/schemas/sponsor-portal";
 
 const STORAGE_KEY = "pkic_sponsor_portal_session";
 
@@ -18,7 +19,8 @@ export function loadStoredSession(): SponsorPortalSession | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as SponsorPortalSession;
+    const result = sponsorPortalSessionSchema.safeParse(JSON.parse(raw));
+    return result.success ? result.data : null;
   } catch {
     return null;
   }

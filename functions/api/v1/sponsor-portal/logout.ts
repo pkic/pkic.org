@@ -16,27 +16,21 @@ import {
   serializeExpiredSponsorPortalSessionCookie,
   verifySponsorPortalSessionToken,
 } from "../../../_lib/auth/sponsor-portal";
-import { json } from "../../../_lib/http";
-import { requestDb, type AdminContext } from "../../../_lib/db/context";
-import { requireInternalSecret } from "../../../_lib/request";
+import type { AdminContext } from "../../../_lib/db/context";
+import { logoutSession, type SessionLogoutPolicy } from "../../../_lib/auth/http-flow";
+import { dispatchPostOnly } from "../../../_lib/http";
+
+const SPONSOR_PORTAL_LOGOUT_POLICY = {
+  readCookie: getSponsorPortalSessionCookieToken,
+  verify: verifySponsorPortalSessionToken,
+  revoke: revokeSponsorPortalSession,
+  serializeExpiredCookie: serializeExpiredSponsorPortalSessionCookie,
+} satisfies SessionLogoutPolicy;
 
 export async function onRequestPost(c: AdminContext): Promise<Response> {
-  const token = getSponsorPortalSessionCookieToken(c.req.raw);
-  if (token) {
-    const verified = await verifySponsorPortalSessionToken(requireInternalSecret(c.env), token);
-    if (verified.ok) {
-      await revokeSponsorPortalSession(requestDb(c), verified.claims.sid);
-    }
-  }
-
-  const response = json({ success: true });
-  response.headers.append("Set-Cookie", serializeExpiredSponsorPortalSessionCookie(c.req.raw));
-  return response;
+  return logoutSession(c, SPONSOR_PORTAL_LOGOUT_POLICY);
 }
 
 export async function onRequest(c: AdminContext): Promise<Response> {
-  if (c.req.raw.method !== "POST") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
-  return onRequestPost(c);
+  return dispatchPostOnly(c, onRequestPost);
 }

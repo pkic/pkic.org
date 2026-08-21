@@ -15,7 +15,7 @@ export const MeOrganizationReviewsGet = openApiRoute(
   async (c: AdminContext, data) => {
     const db = requestDb(c);
     const member = await requireMemberFromRequest(db, c.req.raw, c.env);
-    const { status, q, sort, limit = 50, offset = 0 } = data.query;
+    const { status, q, sort, limit, offset } = data.query;
     const result = await listMyOrganizationReviews(db, member, { status, q, sort, limit, offset });
     return json({
       reviews: result.reviews,

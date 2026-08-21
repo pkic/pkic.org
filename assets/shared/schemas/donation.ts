@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { SUPPORTED_CURRENCY_CODES } from "../constants/currencies";
 import { stripeCheckoutSessionIdSchema } from "./stripe";
-import { relativeRedirectPathSchema } from "./urls";
+import { httpUrlSchema, relativeRedirectPathSchema } from "./urls";
 
 /**
  * Schema for POST /api/v1/donations/checkout — creates a Stripe Checkout Session.
@@ -38,7 +38,7 @@ export const donationCheckoutSchema = z.object({
   embedded: z.boolean().optional(),
 });
 
-export const donationCheckoutRedirectResponseSchema = z.object({ url: z.url() });
+export const donationCheckoutRedirectResponseSchema = z.object({ url: httpUrlSchema });
 export const donationCheckoutEmbeddedResponseSchema = z.object({
   clientSecret: z.string().min(1),
   publishableKey: z.string(),
@@ -72,8 +72,8 @@ export const donationPromoterRequestSchema = z.object({
 
 export const donationPromoterResponseSchema = z.object({
   code: z.string().describe("Uniquely generated promoter code"),
-  shareUrl: z.string().url().describe("The URL where users can visit the share landing page"),
-  ogImageUrl: z.string().url().describe("The dynamically generated image URL representing the donation badge"),
+  shareUrl: httpUrlSchema.describe("The URL where users can visit the share landing page"),
+  ogImageUrl: httpUrlSchema.describe("The dynamically generated image URL representing the donation badge"),
 });
 
 export const donationPromoterPostRouteSchema = {

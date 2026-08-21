@@ -1,10 +1,9 @@
-import { run, first, all } from "../db/queries";
+import { first, all } from "../db/queries";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
-import { prepareAuditLog } from "./audit";
-import { prepareAuditLogAfterOneChange } from "./audit";
+import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "./audit";
 import type {
   PresentationVersion,
   PresentationVersionReview,
@@ -12,9 +11,10 @@ import type {
   PresentationVersionsListQuery,
 } from "../../../assets/shared/schemas/presentation-versions";
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
-import { batchFirst, batchRows } from "../db/pagination";
+import { queryPage } from "../db/pagination";
 import { buildD1TextSearchFilter } from "../db/search";
 import { resolveMappedOrderBy } from "../db/sort";
+import { prepareStorageDeletion, prepareStorageDeletionCancellation } from "./storage-deletion-outbox";
 
 export interface PresentationProposalContext {
   id: string;
@@ -73,7 +73,17 @@ function rowToVersion(row: PresentationVersionRow): PresentationVersion {
 
 const VERSION_SELECT = `
   SELECT
-    pv.*,
+    pv.id,
+    pv.proposal_id,
+    pv.version_number,
+    pv.r2_key,
+    pv.file_name,
+    pv.file_size,
+    pv.mime_type,
+    pv.uploaded_by_user_id,
+    pv.uploaded_at,
+    pv.is_current,
+    pv.deleted_at,
     pvr.id          AS review_id,
     pvr.status      AS review_status,
     pvr.note        AS review_note,
@@ -105,7 +115,7 @@ export async function getPresentationProposalContext(
 export async function listProposalPresentationVersions(
   db: DatabaseLike,
   proposalId: string,
-  query: PresentationVersionsListQuery & { limit: number; offset: number },
+  query: PresentationVersionsListQuery,
 ) {
   await getPresentationProposalContext(db, proposalId);
   const search = query.q ? buildD1TextSearchFilter(query.q, ["pv.file_name", "pv.mime_type"]) : null;
@@ -122,12 +132,15 @@ export async function listProposalPresentationVersions(
     "pv.version_number DESC",
     "pv.id ASC",
   );
-  const [versionsResult, countResult] = await db.batch([
-    db.prepare(`${VERSION_SELECT} ${where} ${orderBy} LIMIT ? OFFSET ?`).bind(...bindings, query.limit, query.offset),
-    db.prepare(`SELECT COUNT(*) AS total FROM presentation_versions pv ${where}`).bind(...bindings),
-  ]);
-  const versions = batchRows<PresentationVersionRow>(versionsResult).map(rowToVersion);
-  const total = Number(batchFirst<{ total: number }>(countResult)?.total ?? 0);
+  const { rows, total } = await queryPage<PresentationVersionRow>(
+    db,
+    {
+      sql: `${VERSION_SELECT} ${where} ${orderBy} LIMIT ? OFFSET ?`,
+      bindings: [...bindings, query.limit, query.offset],
+    },
+    { sql: `SELECT COUNT(*) AS total FROM presentation_versions pv ${where}`, bindings },
+  );
+  const versions = rows.map(rowToVersion);
   return { versions, page: buildPageInfo(query.limit, query.offset, total, versions.length) };
 }
 
@@ -180,15 +193,11 @@ export function presentationDownloadResponse(
 }
 
 /**
- * Records a new version row for an already-uploaded R2 object. R2 and D1 are
- * not one transaction: `storePresentationFile` puts the object first, so a
- * D1 batch failure here (FK/UNIQUE violation, outage) would otherwise leave
- * that object orphaned — uploaded but never referenced by any committed row.
- * When `bucket` is supplied, a batch failure is compensated by deleting the
- * just-written object, the same principle §9.2 established for ICS file
- * uploads (`meeting-calendar/admin-ics-files.ts`'s `uploadIcsFile`). `bucket`
- * is optional because some call sites (tests, backfills) create a version
- * row for an object they manage themselves and have no orphan to clean up.
+ * Records a new version row for an already-uploaded R2 object. Upload callers
+ * persist a delayed cleanup intent before writing R2. This transaction
+ * commits the pointer and audit while cancelling that intent; if it fails,
+ * immediate cleanup is attempted and the durable intent remains when R2 is
+ * unavailable. `bucket` is optional for tests/backfills that own cleanup.
  */
 export async function createPresentationVersion(
   db: DatabaseLike,
@@ -245,9 +254,19 @@ export async function createPresentationVersion(
         }),
       );
     }
+    if (bucket) {
+      statements.push(prepareStorageDeletionCancellation(db, opts.r2Key, "speaker_uploads"));
+    }
     await db.batch(statements);
   } catch (error) {
-    if (bucket) await bucket.delete(opts.r2Key).catch(() => {});
+    if (bucket) {
+      try {
+        await bucket.delete(opts.r2Key);
+        await prepareStorageDeletionCancellation(db, opts.r2Key, "speaker_uploads").run();
+      } catch {
+        // The pre-upload compensation intent remains available for retry.
+      }
+    }
     throw error;
   }
 
@@ -297,10 +316,6 @@ export async function reviewPresentationVersion(
   return getPresentationVersion(db, versionId);
 }
 
-function isPresentationDeleteGuardFailure(error: unknown): boolean {
-  return error instanceof Error && error.message.includes("NOT NULL constraint failed: audit_log.action");
-}
-
 export async function deletePresentationVersion(
   db: DatabaseLike,
   proposalId: string,
@@ -321,6 +336,7 @@ export async function deletePresentationVersion(
 
   const now = nowIso();
   try {
+    const storageDeletion = prepareStorageDeletion(db, version.r2Key, now, "speaker_uploads");
     await db.batch([
       db
         .prepare(
@@ -344,6 +360,7 @@ export async function deletePresentationVersion(
         { proposalId, r2Key: version.r2Key },
         now,
       ),
+      ...(storageDeletion ? [storageDeletion] : []),
       db
         .prepare(
           `UPDATE presentation_versions SET is_current = 1
@@ -356,7 +373,7 @@ export async function deletePresentationVersion(
         .bind(proposalId, version.isCurrent ? 1 : 0),
     ]);
   } catch (error) {
-    if (isPresentationDeleteGuardFailure(error)) {
+    if (isAuditOneChangeGuardFailure(error)) {
       const current = await getPresentationVersion(db, versionId);
       if (current.latestReview?.status === "approved") {
         throw new AppError(409, "CANNOT_DELETE_APPROVED", "Cannot delete the currently approved presentation version");
@@ -374,10 +391,17 @@ export async function purgeAllPresentationVersions(db: DatabaseLike, proposalId:
     [proposalId],
   );
   const now = nowIso();
-  await run(
-    db,
-    "UPDATE presentation_versions SET deleted_at = ?, is_current = 0 WHERE proposal_id = ? AND deleted_at IS NULL",
-    [now, proposalId],
-  );
+  const deletionStatements = versions.flatMap((version) => {
+    const statement = prepareStorageDeletion(db, version.r2_key, now, "speaker_uploads");
+    return statement ? [statement] : [];
+  });
+  await db.batch([
+    db
+      .prepare(
+        "UPDATE presentation_versions SET deleted_at = ?, is_current = 0 WHERE proposal_id = ? AND deleted_at IS NULL",
+      )
+      .bind(now, proposalId),
+    ...deletionStatements,
+  ]);
   return versions.map((v) => v.r2_key);
 }

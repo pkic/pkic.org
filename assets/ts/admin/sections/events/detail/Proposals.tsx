@@ -1,7 +1,8 @@
 import { useRef, useState, useEffect } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Badge } from "../../../../components/Badge";
-import { ApiDataTable, type ApiTableActions } from "../../../../components/Table";
+import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataTable";
+import { FilterSelect } from "../../../components/FilterSelect";
 import { Tabs } from "../../../../components/Tabs";
 import { fmt } from "../../../ui";
 import type { ProposalSummary } from "../../../types";
@@ -13,10 +14,12 @@ import {
   type AdminEventProposalsResponse,
   type ProposalStats,
 } from "../../../../../shared/schemas/admin-event-proposals";
+import { PROPOSAL_ADMIN_STATUS_FILTERS } from "../../../../../shared/schemas/proposal-status";
+import { PROPOSAL_RECOMMENDATIONS, type ProposalRecommendation } from "../../../../../shared/schemas/proposal-reviews";
 
 // ─── Proposals list ───────────────────────────────────────────────────────────
 
-type RecommendationFilter = "" | "accept" | "needs-work" | "reject";
+type RecommendationFilter = "" | ProposalRecommendation;
 
 function formatAverageScore(score: number | null): string {
   if (score == null) return "—";
@@ -43,20 +46,17 @@ function recommendationSummary(p: ProposalSummary) {
 
 const FILTER_STORAGE_KEY = (slug: string) => `adm_proposal_filters_${slug}`;
 
-const VALID_STATUSES = new Set([
-  "",
-  "active",
-  "submitted",
-  "resubmitted",
-  "under_review",
-  "accepted",
-  "rejected",
-  "needs-work",
-  "withdrawn",
-  "spam",
-  "duplicate",
-]);
-const VALID_RECOMMENDATIONS = new Set<RecommendationFilter>(["", "accept", "needs-work", "reject"]);
+const VALID_STATUSES = new Set<string>(["", ...PROPOSAL_ADMIN_STATUS_FILTERS]);
+const VALID_RECOMMENDATIONS = new Set<RecommendationFilter>(["", ...PROPOSAL_RECOMMENDATIONS]);
+const PROPOSAL_FILTER_LABELS: Record<string, string> = {
+  active: "Active (excludes withdrawn/rejected/spam)",
+  under_review: "Under Review",
+  "needs-work": "Needs Work",
+};
+
+function proposalFilterLabel(value: string): string {
+  return PROPOSAL_FILTER_LABELS[value] ?? value.charAt(0).toUpperCase() + value.slice(1).replaceAll("_", " ");
+}
 
 function loadSavedFilters(slug: string): { status: string; recommendation: RecommendationFilter } {
   try {
@@ -181,7 +181,6 @@ function ProposalsList({ slug }: { slug: string }) {
           ...(recommendationFilter && { recommendation: recommendationFilter }),
         }}
         actionsRef={tableRef}
-        deps={[slug, statusFilter, recommendationFilter]}
         toolbar={({ resetPage }) => (
           <>
             <div class="btn-group" role="group" aria-label="Download event presentations">
@@ -200,26 +199,20 @@ function ProposalsList({ slug }: { slug: string }) {
                 All versions
               </a>
             </div>
-            <select
-              class="form-select form-select-sm adm-filter-select"
+            <FilterSelect
               value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter((e.target as HTMLSelectElement).value);
+              options={[
+                { value: "", label: "All statuses" },
+                ...PROPOSAL_ADMIN_STATUS_FILTERS.map((status) => ({
+                  value: status,
+                  label: proposalFilterLabel(status),
+                })),
+              ]}
+              onChange={(value) => {
+                setStatusFilter(value);
                 resetPage();
               }}
-            >
-              <option value="">All statuses</option>
-              <option value="active">Active (excludes withdrawn/rejected/spam)</option>
-              <option value="submitted">Submitted</option>
-              <option value="resubmitted">Resubmitted</option>
-              <option value="under_review">Under Review</option>
-              <option value="accepted">Accepted</option>
-              <option value="rejected">Rejected</option>
-              <option value="needs-work">Needs Work</option>
-              <option value="withdrawn">Withdrawn</option>
-              <option value="spam">Spam</option>
-              <option value="duplicate">Duplicate</option>
-            </select>
+            />
             <select
               class="form-select form-select-sm adm-filter-select"
               value={recommendationFilter}
@@ -229,9 +222,11 @@ function ProposalsList({ slug }: { slug: string }) {
               }}
             >
               <option value="">All recommendations</option>
-              <option value="accept">Accept</option>
-              <option value="needs-work">Needs Work</option>
-              <option value="reject">Reject</option>
+              {PROPOSAL_RECOMMENDATIONS.map((recommendation) => (
+                <option key={recommendation} value={recommendation}>
+                  {proposalFilterLabel(recommendation)}
+                </option>
+              ))}
             </select>
           </>
         )}

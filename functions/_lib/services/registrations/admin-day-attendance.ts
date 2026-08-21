@@ -1,16 +1,11 @@
 import type { AdminManageDayAttendanceInput } from "../../../../assets/shared/schemas/admin-events";
 import { requirePermission } from "../../auth/permissions";
-import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike } from "../../types";
-import { prepareAuditLog } from "../audit";
-import {
-  getRegistrationDayAttendance,
-  listEventDays,
-  prepareReplaceRegistrationDayAttendanceStatements,
-} from "../event-days";
+import { deriveEventAttendanceType, getRegistrationDayAttendance, listEventDays } from "../event-days";
 import { getEventBySlug } from "../events";
-import { prepareRegistrationStatusEmail } from "./status-notifications";
+import { getRegistrationById } from "./queries";
+import { updateRegistrationByIdWithNotification } from "./update";
 
 export async function updateAdminRegistrationDayAttendance(
   db: DatabaseLike,
@@ -24,11 +19,8 @@ export async function updateAdminRegistrationDayAttendance(
 ): Promise<{ outboxId: string | null }> {
   const event = await getEventBySlug(db, input.eventSlug);
   requirePermission(actor, "events:manage", { type: "event", id: event.id });
-  const registration = await first<{ id: string }>(db, "SELECT id FROM registrations WHERE id = ? AND event_id = ?", [
-    input.registrationId,
-    event.id,
-  ]);
-  if (!registration) throw new AppError(404, "NOT_FOUND", "Registration not found for this event");
+  const registration = await getRegistrationById(db, input.registrationId);
+  if (registration.event_id !== event.id) throw new AppError(404, "NOT_FOUND", "Registration not found for this event");
 
   const [eventDays, current] = await Promise.all([
     listEventDays(db, event.id),
@@ -43,7 +35,7 @@ export async function updateAdminRegistrationDayAttendance(
   const next = new Map(current.map((entry) => [entry.dayDate, entry.attendanceType]));
   for (const dayDate of input.change.dayDates) {
     if (input.change.action === "remove") next.delete(dayDate);
-    else next.set(dayDate, input.change.action);
+    else next.set(dayDate, input.change.action === "waitlist" ? "in_person" : input.change.action);
   }
   const dayAttendance = eventDays
     .filter((day) => next.has(day.day_date))
@@ -52,37 +44,23 @@ export async function updateAdminRegistrationDayAttendance(
       attendanceType: next.get(day.day_date)!,
       label: day.label,
     }));
-  const statements = await prepareReplaceRegistrationDayAttendanceStatements(db, {
-    registrationId: registration.id,
-    eventId: event.id,
-    selections: dayAttendance,
-    changedBy: actor.id,
-    configuredEventDays: eventDays,
-  });
-  statements.push(
-    prepareAuditLog(
-      db,
-      "admin",
-      actor.id,
-      "registration_day_attendance_updated",
-      "registration",
-      registration.id,
-      input.change,
-    ),
-  );
-  let outboxId: string | null = null;
-  if (input.change.action !== "remove") {
-    const preparedEmail = await prepareRegistrationStatusEmail(db, {
-      event,
+  const result = await updateRegistrationByIdWithNotification(
+    db,
+    {
       registrationId: registration.id,
-      appBaseUrl: input.appBaseUrl,
-      templateKey: "registration_updated",
-      subject: `Registration updated for ${event.name}`,
+      action: "update",
+      attendanceType: deriveEventAttendanceType(dayAttendance) ?? registration.attendance_type,
       dayAttendance,
-    });
-    statements.push(preparedEmail.statement);
-    outboxId = preparedEmail.outboxId;
-  }
-  await db.batch(statements);
-  return { outboxId };
+      forceWaitlistDayDates: input.change.action === "waitlist" ? input.change.dayDates : undefined,
+      auditActor: { type: "admin", id: actor.id, action: "registration_day_attendance_updated" },
+      notification: {
+        event,
+        appBaseUrl: input.appBaseUrl,
+        templateKey: "registration_updated",
+        subject: `Registration updated for ${event.name}`,
+      },
+    },
+    actor.id,
+  );
+  return { outboxId: result.outboxId };
 }

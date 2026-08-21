@@ -3,6 +3,7 @@ import type { DatabaseLike } from "../../types";
 import { addHours, nowIso } from "../../utils/time";
 import { countActiveOffersForDay, countConfirmedInPersonForDay } from "./day-waitlist-capacity";
 import type { DayWaitlistRow } from "./day-waitlist-types";
+import { NON_CAPACITY_CONSUMING_DAY_WAITLIST_SQL } from "./day-waitlist-policy";
 
 export async function expireDayWaitlistOffers(db: DatabaseLike, eventId: string): Promise<void> {
   const now = nowIso();
@@ -73,7 +74,7 @@ export async function promoteDayWaitlistIfCapacity(
              LEFT JOIN event_day_waitlist_entries w
                ON w.event_day_id = rda.event_day_id
               AND w.registration_id = rda.registration_id
-              AND w.status IN ('waiting', 'offered')
+              AND ${NON_CAPACITY_CONSUMING_DAY_WAITLIST_SQL}
              WHERE rda.event_day_id = ? AND rda.attendance_type = 'in_person'
                AND r.status IN ('pending_email_confirmation', 'registered')
                AND r.capacity_exempt_in_person = 0 AND w.id IS NULL

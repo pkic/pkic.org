@@ -21,11 +21,5 @@ import { openApiRoute } from "../../../_lib/openapi/route";
 
 export const UsersList = openApiRoute(usersListRouteSchema, async (c: AdminContext, data) => {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  return json(
-    await listAdminUsers(requestDb(c), {
-      ...data.query,
-      limit: data.query.limit ?? 50,
-      offset: data.query.offset ?? 0,
-    }),
-  );
+  return json(await listAdminUsers(requestDb(c), data.query));
 });

@@ -12,8 +12,8 @@ import {
 } from "../event-days";
 import {
   buildRegistrationDayWaitlistSync,
-  isEventDayCapacityConflict,
   roleBasedCapacityExemptReason,
+  withDayCapacityRetry,
   type PlannedDayWaitlistEntry,
 } from "./day-waitlist";
 import { prepareUpsertAttendeeParticipantStatement } from "./participant-registration";
@@ -54,21 +54,16 @@ export async function createRegistration(
   confirmationToken: string | null;
   reactivated: boolean;
 }> {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  return withDayCapacityRetry(async () => {
     const built = await buildCreateRegistration(db, payload);
-    try {
-      await db.batch(built.statements);
-      return {
-        registration: built.registration,
-        manageToken: built.manageToken,
-        confirmationToken: built.confirmationToken,
-        reactivated: built.reactivated,
-      };
-    } catch (error) {
-      if (!isEventDayCapacityConflict(error) || attempt === 2) throw error;
-    }
-  }
-  throw new AppError(409, "DAY_CAPACITY_CHANGED", "Day capacity changed; please retry");
+    await db.batch(built.statements);
+    return {
+      registration: built.registration,
+      manageToken: built.manageToken,
+      confirmationToken: built.confirmationToken,
+      reactivated: built.reactivated,
+    };
+  });
 }
 
 export async function buildCreateRegistration(

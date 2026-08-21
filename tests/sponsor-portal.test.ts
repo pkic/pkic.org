@@ -58,7 +58,7 @@ async function callAdmin(token: string, path: string, init: RequestInit = {}): P
   return call(new Request(`https://app.test${path}`, { ...init, headers }));
 }
 
-async function seedConsentingRegistration(eventId: string, email: string, term: string): Promise<void> {
+async function seedConsentingRegistration(eventId: string, email: string, term: string): Promise<string> {
   const userId = crypto.randomUUID();
   const registrationId = crypto.randomUUID();
   await env.DB.batch([
@@ -75,6 +75,7 @@ async function seedConsentingRegistration(eventId: string, email: string, term: 
        VALUES (?, ?, ?, ?, 'attendee', ?, 'v1', datetime('now'))`,
     ).bind(crypto.randomUUID(), registrationId, eventId, userId, term),
   ]);
+  return registrationId;
 }
 
 describe("Sponsor portal", () => {
@@ -182,6 +183,39 @@ describe("Sponsor portal", () => {
     const secondBody = (await secondPage.json()) as { attendees: unknown[]; page: { hasMore: boolean } };
     expect(secondBody.attendees).toHaveLength(1);
     expect(secondBody.page.hasMore).toBe(false);
+  });
+
+  it("returns one attendee when the same registration accepted multiple versions of the sharing term", async () => {
+    const sponsorshipId = await createActiveEventSponsorship("Leader", "leader-consent-history@sponsor.test");
+    const registrationId = await seedConsentingRegistration(
+      eventId,
+      "consent-history@attendee.test",
+      "sponsor-data-sharing",
+    );
+    const [{ user_id: userId }] = await queryAll<{ user_id: string }>(
+      env.DB,
+      "SELECT user_id FROM registrations WHERE id = ?",
+      registrationId,
+    );
+    await env.DB.prepare(
+      `INSERT INTO consent_acceptances
+         (id, registration_id, event_id, user_id, audience_type, term_key, term_version, accepted_at)
+       VALUES (?, ?, ?, ?, 'attendee', 'sponsor-data-sharing', 'v2', datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), registrationId, eventId, userId)
+      .run();
+
+    const sessionToken = await createSponsorPortalSession(sponsorshipId);
+    const response = await call(
+      getRequest(`/api/v1/sponsor-portal/events/${eventId}/attendees?limit=10&offset=0`, sessionToken),
+    );
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { attendees: Array<{ email: string }>; page: { total: number } };
+    expect(body.attendees.map((attendee) => attendee.email)).toEqual(["consent-history@attendee.test"]);
+    expect(body.page.total).toBe(1);
+
+    const exported = await listSponsorPortalAttendeesForExport(env.DB, eventId, 10);
+    expect(exported).toHaveLength(1);
   });
 
   it("403s attendee access when the sponsorship's tier is not configured for attendee data access", async () => {

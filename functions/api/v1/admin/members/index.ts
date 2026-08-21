@@ -21,7 +21,7 @@ export const MembersList = openApiRoute(membersListRouteSchema, async (c: AdminC
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "membership:read");
 
-  const { limit = 50, offset = 0, q, sort, membershipCategory, status } = data.query;
+  const { limit, offset, q, sort, membershipCategory, status } = data.query;
 
   const { members, total } = await listAdminMembers(requestDb(c), {
     limit,

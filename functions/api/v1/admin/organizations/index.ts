@@ -19,7 +19,7 @@ export const OrganizationsList = openApiRoute(organizationsListRouteSchema, asyn
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "organizations:read");
 
-  const { q, sort, limit = 50, offset = 0 } = data.query;
+  const { q, sort, limit, offset } = data.query;
 
   const { organizations, total } = await listAdminOrganizations(requestDb(c), { limit, offset, q, sort });
   return json({ organizations, page: buildPageInfo(limit, offset, total, organizations.length) });

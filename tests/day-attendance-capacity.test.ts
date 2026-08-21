@@ -4,11 +4,14 @@ import { env } from "cloudflare:workers";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import {
+  admitRegistration,
   createRegistration,
   confirmRegistrationByToken,
+  forceRegistrationStatus,
   updateRegistrationById,
   updateRegistrationByManageToken,
 } from "../functions/_lib/services/registrations";
+import { updateAdminRegistrationDayAttendance } from "../functions/_lib/services/registrations/admin-day-attendance";
 import { promoteDayWaitlistIfCapacity } from "../functions/_lib/services/registrations/day-waitlist";
 import { buildCreateRegistration } from "../functions/_lib/services/registrations/create";
 import { promoteEventWaitlistWithNotifications } from "../functions/_lib/services/registrations/waitlist-promotions";
@@ -194,7 +197,7 @@ describe("day attendance capacity", () => {
     expect(waitlist[0].status).toBe("removed");
   });
 
-  it("offers the pending day when more capacity becomes available", async () => {
+  it("requires an explicit claim before accepting an offered day", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
     await env.DB.batch([
@@ -271,12 +274,289 @@ describe("day attendance capacity", () => {
       signingSecret: "test-signing-secret",
     });
 
-    const afterClaim = await queryAll<{ status: string }>(
+    const afterUnrelatedUpdate = await queryAll<{ status: string }>(
       env.DB,
       "SELECT status FROM event_day_waitlist_entries WHERE registration_id = ?",
       [second.registration.id],
     );
-    expect(afterClaim[0].status).toBe("accepted");
+    expect(afterUnrelatedUpdate[0].status).toBe("offered");
+
+    await updateRegistrationByManageToken(env.DB, {
+      manageToken: confirmedSecond.manageToken,
+      action: "update",
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      claimDayWaitlistOffers: ["2026-12-01"],
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+
+    const afterExplicitClaim = await queryAll<{ status: string }>(
+      env.DB,
+      "SELECT status FROM event_day_waitlist_entries WHERE registration_id = ?",
+      [second.registration.id],
+    );
+    expect(afterExplicitClaim[0].status).toBe("accepted");
+  });
+
+  it("lets an admin return an admitted day to the capacity-managed waitlist", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    await env.DB.batch([
+      env.DB.prepare(`
+        INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
+        VALUES ('day-admin-return', '${eventId}', '2026-12-01', 'Day 1', 1, 10, datetime('now'), datetime('now'))
+      `),
+      env.DB.prepare(`
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+        VALUES
+          ('user-admin-holder', 'admin-holder@example.test', 'admin-holder@example.test', 'Seat', 'Holder', datetime('now'), datetime('now')),
+          ('user-admin-return', 'admin-return@example.test', 'admin-return@example.test', 'Admin', 'Return', datetime('now'), datetime('now'))
+      `),
+    ]);
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const holder = await createRegistration(env.DB, {
+      event,
+      userId: "user-admin-holder",
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    await confirmRegistrationByToken(env.DB, {
+      token: holder.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+    const attendee = await createRegistration(env.DB, {
+      event,
+      userId: "user-admin-return",
+      attendanceType: "virtual",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    await confirmRegistrationByToken(env.DB, {
+      token: attendee.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+    const admin = (
+      await queryAll<{ id: string; email: string }>(env.DB, "SELECT id, email FROM users WHERE role = 'admin' LIMIT 1")
+    )[0];
+    await updateAdminRegistrationDayAttendance(
+      env.DB,
+      { id: admin.id, email: admin.email, role: "admin" },
+      {
+        eventSlug: event.slug,
+        registrationId: attendee.registration.id,
+        change: { action: "in_person", dayDates: ["2026-12-01"] },
+        appBaseUrl: "https://example.test",
+      },
+    );
+    const beforeOverride = await queryAll<{ status: string }>(
+      env.DB,
+      "SELECT status FROM event_day_waitlist_entries WHERE registration_id = ? AND event_day_id = 'day-admin-return'",
+      [attendee.registration.id],
+    );
+    expect(beforeOverride).toEqual([{ status: "waiting" }]);
+    await admitRegistration(env.DB, {
+      registrationId: attendee.registration.id,
+      event,
+      dayDates: ["2026-12-01"],
+      mode: "capacity_exempt",
+      reason: "Approved exception",
+      actorUserId: admin.id,
+      appBaseUrl: "https://example.test",
+    });
+
+    await updateAdminRegistrationDayAttendance(
+      env.DB,
+      { id: admin.id, email: admin.email, role: "admin" },
+      {
+        eventSlug: event.slug,
+        registrationId: attendee.registration.id,
+        change: { action: "waitlist", dayDates: ["2026-12-01"] },
+        appBaseUrl: "https://example.test",
+      },
+    );
+
+    const [registration] = await queryAll<{ capacity_exempt_in_person: number }>(
+      env.DB,
+      "SELECT capacity_exempt_in_person FROM registrations WHERE id = ?",
+      [attendee.registration.id],
+    );
+    const waitlist = await queryAll<{ status: string }>(
+      env.DB,
+      "SELECT status FROM event_day_waitlist_entries WHERE registration_id = ? AND event_day_id = 'day-admin-return'",
+      [attendee.registration.id],
+    );
+    expect(registration.capacity_exempt_in_person).toBe(0);
+    expect(waitlist).toEqual([{ status: "waiting" }]);
+  });
+
+  it("scopes an admin capacity override to the admitted day", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    await env.DB.batch([
+      env.DB.prepare(`
+        INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
+        VALUES
+          ('day-admin-a', '${eventId}', '2026-12-01', 'Day A', 1, 10, datetime('now'), datetime('now')),
+          ('day-admin-b', '${eventId}', '2026-12-02', 'Day B', 1, 20, datetime('now'), datetime('now'))
+      `),
+      env.DB.prepare(`
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+        VALUES
+          ('user-holder-a', 'holder-a@example.test', 'holder-a@example.test', 'Holder', 'A', datetime('now'), datetime('now')),
+          ('user-holder-b', 'holder-b@example.test', 'holder-b@example.test', 'Holder', 'B', datetime('now'), datetime('now')),
+          ('user-day-scoped', 'day-scoped@example.test', 'day-scoped@example.test', 'Day', 'Scoped', datetime('now'), datetime('now'))
+      `),
+    ]);
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    for (const [userId, dayDate] of [
+      ["user-holder-a", "2026-12-01"],
+      ["user-holder-b", "2026-12-02"],
+    ] as const) {
+      const holder = await createRegistration(env.DB, {
+        event,
+        userId,
+        attendanceType: "in_person",
+        dayAttendance: [{ dayDate, attendanceType: "in_person" }],
+        sourceType: "direct",
+        confirmationTtlHours: 48,
+        signingSecret: "test-signing-secret",
+      });
+      await confirmRegistrationByToken(env.DB, {
+        token: holder.confirmationToken as string,
+        waitlistClaimWindowHours: 24,
+        signingSecret: "test-signing-secret",
+      });
+    }
+    const attendee = await createRegistration(env.DB, {
+      event,
+      userId: "user-day-scoped",
+      attendanceType: "virtual",
+      dayAttendance: [
+        { dayDate: "2026-12-01", attendanceType: "virtual" },
+        { dayDate: "2026-12-02", attendanceType: "virtual" },
+      ],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    const confirmed = await confirmRegistrationByToken(env.DB, {
+      token: attendee.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+    const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1");
+    await admitRegistration(env.DB, {
+      registrationId: attendee.registration.id,
+      event,
+      dayDates: ["2026-12-01"],
+      mode: "capacity_exempt",
+      reason: "Day A only",
+      actorUserId: admin.id,
+      appBaseUrl: "https://example.test",
+    });
+
+    await updateRegistrationByManageToken(env.DB, {
+      manageToken: confirmed.manageToken,
+      action: "update",
+      dayAttendance: [
+        { dayDate: "2026-12-01", attendanceType: "in_person" },
+        { dayDate: "2026-12-02", attendanceType: "in_person" },
+      ],
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+
+    const [registration] = await queryAll<{ capacity_exempt_in_person: number }>(
+      env.DB,
+      "SELECT capacity_exempt_in_person FROM registrations WHERE id = ?",
+      [attendee.registration.id],
+    );
+    const rows = await queryAll<{ day_date: string; status: string; reason_code: string | null }>(
+      env.DB,
+      `SELECT ed.day_date, w.status, w.reason_code
+       FROM event_day_waitlist_entries w
+       JOIN event_days ed ON ed.id = w.event_day_id
+       WHERE w.registration_id = ?
+       ORDER BY ed.day_date`,
+      [attendee.registration.id],
+    );
+    expect(registration.capacity_exempt_in_person).toBe(0);
+    expect(rows).toEqual([
+      { day_date: "2026-12-01", status: "accepted", reason_code: "admin_capacity_exempt" },
+      { day_date: "2026-12-02", status: "waiting", reason_code: null },
+    ]);
+  });
+
+  it("re-applies day capacity when an admin restores a cancelled registration", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    await env.DB.batch([
+      env.DB.prepare(`
+        INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
+        VALUES ('day-force-restore', '${eventId}', '2026-12-01', 'Day 1', 1, 10, datetime('now'), datetime('now'))
+      `),
+      env.DB.prepare(`
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+        VALUES
+          ('user-force-target', 'force-target@example.test', 'force-target@example.test', 'Force', 'Target', datetime('now'), datetime('now')),
+          ('user-force-holder', 'force-holder@example.test', 'force-holder@example.test', 'Force', 'Holder', datetime('now'), datetime('now'))
+      `),
+    ]);
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const target = await createRegistration(env.DB, {
+      event,
+      userId: "user-force-target",
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    const confirmedTarget = await confirmRegistrationByToken(env.DB, {
+      token: target.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+    await updateRegistrationByManageToken(env.DB, {
+      manageToken: confirmedTarget.manageToken,
+      action: "cancel",
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+    const holder = await createRegistration(env.DB, {
+      event,
+      userId: "user-force-holder",
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    await confirmRegistrationByToken(env.DB, {
+      token: holder.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+    const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1");
+
+    await forceRegistrationStatus(env.DB, {
+      registrationId: target.registration.id,
+      eventId,
+      status: "registered",
+      actorUserId: admin.id,
+    });
+
+    const rows = await queryAll<{ status: string }>(
+      env.DB,
+      "SELECT status FROM event_day_waitlist_entries WHERE registration_id = ? AND event_day_id = 'day-force-restore'",
+      [target.registration.id],
+    );
+    expect(rows).toEqual([{ status: "waiting" }]);
   });
 
   it("keeps existing confirmed days when claiming another day's waitlist offer", async () => {
@@ -381,6 +661,7 @@ describe("day attendance capacity", () => {
         { dayDate: "2026-12-02", attendanceType: "in_person" },
         { dayDate: "2026-12-03", attendanceType: "in_person" },
       ],
+      claimDayWaitlistOffers: ["2026-12-01"],
       waitlistClaimWindowHours: 24,
       signingSecret: "test-signing-secret",
     });

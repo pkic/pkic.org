@@ -27,7 +27,9 @@ function seedRepresentativePre0035State(db: DatabaseSync): void {
     VALUES ('event-1', 'upgrade-test', 'Upgrade test', 'UTC', '2025-01-01', '2025-01-01');
 
     INSERT INTO organizations (id, name, normalized_name, created_at, updated_at)
-    VALUES ('org-1', 'Acme Corp', 'acme corp', '2025-01-01', '2025-01-01');
+    VALUES
+      ('org-1', 'Acme Corp', 'acme corp', '2025-01-01', '2025-01-01'),
+      ('org-2', 'Pending Corp', 'pending corp', '2025-01-01', '2025-01-01');
 
     INSERT INTO users (id, email, normalized_email, first_name, role, created_at, updated_at)
     VALUES
@@ -61,12 +63,18 @@ function seedRepresentativePre0035State(db: DatabaseSync): void {
       ('permission-1', 'event-1', 'organizer@example.test', 'organizer-1', 'organizer', 'admin-1', '2025-01-02');
 
     INSERT INTO sponsors
-      (id, organization_id, sponsorship_level, status, created_at, updated_at)
-    VALUES ('sponsor-1', 'org-1', 'Gold', 'active', '2025-01-03', '2025-01-03');
+      (id, organization_id, sponsorship_level, status, data_json, created_at, updated_at)
+    VALUES
+      ('sponsor-1', 'org-1', 'Gold', 'active', '{"legacyCompanyField":"kept"}', '2025-01-03', '2025-01-03'),
+      ('sponsor-2', 'org-2', 'Silver', 'pending', '{"pendingLead":"kept"}', '2025-01-03', '2025-01-03');
 
     INSERT INTO sponsor_events
-      (id, sponsor_id, event_id, sponsorship_level, sponsorship_subject, status, created_at, updated_at)
-    VALUES ('sponsor-event-1', 'sponsor-1', 'event-1', 'Platinum', 'Upgrade test', 'active', '2025-01-04', '2025-01-04');
+      (id, sponsor_id, event_id, sponsorship_level, sponsorship_subject, status, data_json, created_at, updated_at)
+    VALUES
+      ('sponsor-event-1', 'sponsor-1', 'event-1', 'Platinum', 'Upgrade test', 'active',
+       '{"legacyEventField":"kept"}', '2025-01-04', '2025-01-04'),
+      ('sponsor-event-2', 'sponsor-2', 'event-1', 'Silver', 'Pending upgrade test', 'pending',
+       '{"pendingEventField":"kept"}', '2025-01-04', '2025-01-04');
 
     INSERT INTO invites
       (id, event_id, invitee_email, invite_type, link_secret, status, created_at)
@@ -122,8 +130,9 @@ describe("consolidated pending migration upgrade", () => {
     expect(db.prepare("SELECT id, organization_id FROM members").all()).toEqual([
       { id: "member-1", organization_id: "org-1" },
     ]);
-    expect(db.prepare("SELECT id, normalized_name, sponsor_tier FROM organizations").all()).toEqual([
+    expect(db.prepare("SELECT id, normalized_name, sponsor_tier FROM organizations ORDER BY id").all()).toEqual([
       { id: "org-1", normalized_name: "acme corp", sponsor_tier: "Gold" },
+      { id: "org-2", normalized_name: "pending corp", sponsor_tier: null },
     ]);
 
     const roles = db
@@ -155,11 +164,38 @@ describe("consolidated pending migration upgrade", () => {
       undefined,
     );
 
-    expect(
-      db.prepare("SELECT sponsor_type, tier, pipeline_stage FROM sponsorships ORDER BY sponsor_type").all(),
-    ).toEqual([
-      { sponsor_type: "consortium", tier: "Gold", pipeline_stage: "active" },
-      { sponsor_type: "event", tier: "Platinum", pipeline_stage: "active" },
+    const sponsorshipRows = db
+      .prepare(
+        `SELECT sponsor_type, organization_id, tier, pipeline_stage, notes
+         FROM sponsorships
+         ORDER BY sponsor_type, organization_id`,
+      )
+      .all() as Array<{
+      sponsor_type: string;
+      organization_id: string;
+      tier: string;
+      pipeline_stage: string;
+      notes: string;
+    }>;
+    expect(sponsorshipRows.map(({ notes: _notes, ...row }) => row)).toEqual([
+      { sponsor_type: "consortium", organization_id: "org-1", tier: "Gold", pipeline_stage: "active" },
+      { sponsor_type: "consortium", organization_id: "org-2", tier: "Silver", pipeline_stage: "new_inquiry" },
+      { sponsor_type: "event", organization_id: "org-1", tier: "Platinum", pipeline_stage: "active" },
+      { sponsor_type: "event", organization_id: "org-2", tier: "Silver", pipeline_stage: "payment_pending" },
+    ]);
+    expect(sponsorshipRows.map((row) => JSON.parse(row.notes))).toEqual([
+      { legacySponsorData: { legacyCompanyField: "kept" } },
+      { legacySponsorData: { pendingLead: "kept" } },
+      {
+        legacySponsorData: { legacyCompanyField: "kept" },
+        legacySponsorshipSubject: "Upgrade test",
+        legacyEventData: { legacyEventField: "kept" },
+      },
+      {
+        legacySponsorData: { pendingLead: "kept" },
+        legacySponsorshipSubject: "Pending upgrade test",
+        legacyEventData: { pendingEventField: "kept" },
+      },
     ]);
     expect(db.prepare("SELECT id, status FROM invites ORDER BY id").all()).toEqual([
       { id: "invite-new", status: "revoked" },

@@ -8,7 +8,6 @@
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { createMailingList, listMailingLists } from "../../../../_lib/services/mailing-lists";
-import { writeAuditLog } from "../../../../_lib/services/audit";
 import {
   mailingListCreateRouteSchema,
   mailingListsListRouteSchema,
@@ -20,7 +19,7 @@ import { buildPageInfo } from "../../../../../assets/shared/schemas/pagination";
 export const MailingListsList = openApiRoute(mailingListsListRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
   await requireAdminFromRequest(db, c.req.raw, c.env);
-  const { limit = 50, offset = 0, q, sort } = data.query;
+  const { limit, offset, q, sort } = data.query;
   const { mailingLists, total } = await listMailingLists(db, { limit, offset, q, sort });
   return json({ mailingLists, page: buildPageInfo(limit, offset, total, mailingLists.length) });
 });
@@ -29,9 +28,6 @@ export const MailingListsCreate = openApiRoute(mailingListCreateRouteSchema, asy
   const db = requestDb(c);
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
   const body = data.body;
-  const mailingList = await createMailingList(db, body);
-  await writeAuditLog(db, "admin", admin.id, "mailing_list_created", "mailing_list", mailingList.id, {
-    email: mailingList.email,
-  });
+  const mailingList = await createMailingList(db, body, admin.id);
   return json({ mailingList }, 201);
 });

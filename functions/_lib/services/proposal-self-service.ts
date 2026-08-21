@@ -19,6 +19,7 @@ type ProposalManageUpdateResponse = z.infer<typeof proposalManageUpdateResponseS
 function toManagedProposal(proposal: ProposalRecord): ProposalManageUpdateResponse["proposal"] {
   return {
     id: proposal.id,
+    proposer_user_id: proposal.proposer_user_id,
     status: proposal.status,
     proposal_type: proposal.proposal_type,
     title: proposal.title,

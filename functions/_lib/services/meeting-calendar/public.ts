@@ -5,7 +5,7 @@
 import { all } from "../../db/queries";
 import { AppError } from "../../errors";
 import { getWorkingGroupBySlugOrId } from "../working-groups";
-import type { SeriesRow } from "./shared";
+import { SERIES_SELECT_COLUMNS, type SeriesRow } from "./shared";
 import type { DatabaseLike } from "../../types";
 
 export interface PublicMeetingSeries {
@@ -22,7 +22,9 @@ export async function listPublicMeetingSeriesForWg(
 
   const rows = await all<SeriesRow>(
     db,
-    `SELECT * FROM meeting_series WHERE scope_type = 'working_group' AND working_group_id = ? AND active = 1 ORDER BY created_at ASC`,
+    `SELECT ${SERIES_SELECT_COLUMNS} FROM meeting_series
+      WHERE scope_type = 'working_group' AND working_group_id = ? AND active = 1
+      ORDER BY created_at ASC, id ASC`,
     [wg.id],
   );
   return rows.map((r) => ({ id: r.id, name: r.name }));

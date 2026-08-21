@@ -11,6 +11,7 @@ import { stringifyJson } from "../../utils/json";
 import { AppError } from "../../errors";
 import { resolveOrderBy } from "../../db/sort";
 import { buildD1TextSearchFilter } from "../../db/search";
+import { ADMIN_VOTES_SORT_COLUMNS } from "../../../../assets/shared/schemas/votes-admin";
 import { prepareAuditLog } from "../audit";
 import {
   resolveScope,
@@ -225,7 +226,6 @@ export interface AdminVoteSummary extends VoteSummary {
   candidates: CandidateSummary[] | null;
 }
 
-const ADMIN_VOTES_SORT_COLUMNS = ["title", "vote_type", "status", "opens_at", "closes_at", "created_at"] as const;
 export async function listVotesForAdmin(
   db: DatabaseLike,
   params: { status?: VoteStatus; q?: string; limit: number; offset: number; sort?: string },

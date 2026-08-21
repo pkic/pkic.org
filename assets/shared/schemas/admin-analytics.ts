@@ -69,6 +69,18 @@ const attendanceChangeDaySchema = z.object({
   joined_in_person_attendees: z.number(),
 });
 
+const inviteDeclineReasonCountSchema = z.object({
+  reason_code: z.string().nullable(),
+  count: z.number(),
+  unsubscribed: z.number(),
+});
+
+const inviteStatsSchema = z.object({
+  byStatus: countMapSchema,
+  total: z.number(),
+  declineReasons: z.array(inviteDeclineReasonCountSchema),
+});
+
 export const adminEventStatsResponseSchema = z.object({
   event: z.object({ id: databaseIdSchema, slug: z.string(), name: z.string() }),
   registrations: z.object({
@@ -125,20 +137,8 @@ export const adminEventStatsResponseSchema = z.object({
     }),
   ),
   invites: z.object({
-    attendee: z.object({
-      byStatus: countMapSchema,
-      total: z.number(),
-      declineReasons: z.array(
-        z.object({ reason_code: z.string().nullable(), count: z.number(), unsubscribed: z.number() }),
-      ),
-    }),
-    speaker: z.object({
-      byStatus: countMapSchema,
-      total: z.number(),
-      declineReasons: z.array(
-        z.object({ reason_code: z.string().nullable(), count: z.number(), unsubscribed: z.number() }),
-      ),
-    }),
+    attendee: inviteStatsSchema,
+    speaker: inviteStatsSchema,
   }),
   proposals: z.object({ byStatus: countMapSchema, total: z.number() }),
   rsvp: z.object({

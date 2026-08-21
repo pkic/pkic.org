@@ -185,6 +185,20 @@ describe("GET /api/v1/sponsors (public consortium + event sponsors)", () => {
     expect(body.sponsors.map((s) => s.name)).toEqual(["Active Non-Member Sponsor"]);
   });
 
+  it("drops unsafe legacy sponsor websites at the response mapping boundary", async () => {
+    await seedNonMemberConsortiumSponsorship({
+      name: "Legacy Unsafe Website",
+      website: "javascript:alert(1)",
+      tier: "Gold",
+    });
+
+    const response = await callSponsorsList("https://pkic.org/api/v1/sponsors");
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { sponsors: Array<{ website: string | null }> };
+    expect(body.sponsors).toHaveLength(1);
+    expect(body.sponsors[0]?.website).toBeNull();
+  });
+
   it("merges an org-tied event sponsorship onto the same record as its consortium tier", async () => {
     const orgId = crypto.randomUUID();
     await seedOrganization({ id: orgId, name: "Dual Sponsor Org", sponsorTier: "Titanium" });

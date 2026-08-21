@@ -197,7 +197,7 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
         env,
         "wg_chair_digest",
         config.scheduledD1QueryBudget,
-        (jobEnv) => runWeeklyWgChairDigest(jobEnv.DB, jobEnv),
+        (jobEnv) => runWeeklyWgChairDigest(jobEnv.DB, jobEnv, new Date(controller.scheduledTime)),
       );
       logInfo("SCHEDULED_WG_CHAIR_DIGEST_COMPLETED", { cron: controller.cron, wgChairDigest });
       return;

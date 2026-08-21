@@ -1,5 +1,4 @@
 import {
-    loadEventData,
     getHashParams,
     resolveDayTime,
     parseOffsetToSeconds,
@@ -9,7 +8,10 @@ import {
     getSessionSpeakerGroups,
     parseTime,
     formatSecondsAsTime,
-    getAgendaData
+    getAgendaData,
+    createIncrementalSearchBuffer,
+    handleSearchOrNumericShortcut,
+    initializeEventDisplay
 } from './event-common.js';
 
 const svgTemplate = `
@@ -51,8 +53,6 @@ const ViewMode = {
     ALL: 'all'             // All speakers (no filters)
 };
 
-const SEARCH_RESET_DELAY = 1000;
-
 let filteredSpeakers = [];
 let nextSpeakers = [];
 let allSpeakers = [];
@@ -64,8 +64,7 @@ let nextSlotInfo = null;
 let sessionOffset = 0; // Track how many sessions forward/backward we've navigated
 let allSessionSlots = []; // Store all available session slots
 
-let searchBuffer = '';
-let searchResetTimer = null;
+const incrementalSearch = createIncrementalSearchBuffer();
 let debugOverlay = null;
 
 function createDebugOverlay() {
@@ -180,24 +179,6 @@ function updateDebugOverlay() {
             Space: All mode | Ctrl+Space: Freeze | Esc: Reset
         </div>
     `;
-}
-
-function resetSearchBuffer() {
-    searchBuffer = '';
-    if (searchResetTimer) {
-        clearTimeout(searchResetTimer);
-        searchResetTimer = null;
-    }
-}
-
-function scheduleSearchReset() {
-    if (searchResetTimer) {
-        clearTimeout(searchResetTimer);
-    }
-    searchResetTimer = setTimeout(() => {
-        searchBuffer = '';
-        searchResetTimer = null;
-    }, SEARCH_RESET_DELAY);
 }
 
 function buildAllSessionSlots() {
@@ -407,8 +388,7 @@ function setSpeakerIndex(index, { fromUser = false } = {}) {
 
 function handleSearchKey(key) {
     const character = key.toLowerCase();
-    searchBuffer += character;
-    scheduleSearchReset();
+    const searchBuffer = incrementalSearch.append(character);
 
     // ONLY search within the current speaker list (current group)
     const inCurrentList = findSpeakerIndexInList(speakers, searchBuffer);
@@ -665,7 +645,7 @@ function navigateSpeakers(event) {
         if (!speakers.length) {
             return;
         }
-        resetSearchBuffer();
+        incrementalSearch.reset();
         currentSpeakerIndex = (currentSpeakerIndex > 0) ? currentSpeakerIndex - 1 : speakers.length - 1;
         autoUpdateEnabled = false;
         setSpeakerIndex(currentSpeakerIndex, { fromUser: true });
@@ -674,7 +654,7 @@ function navigateSpeakers(event) {
         if (!speakers.length) {
             return;
         }
-        resetSearchBuffer();
+        incrementalSearch.reset();
         currentSpeakerIndex = (currentSpeakerIndex < speakers.length - 1) ? currentSpeakerIndex + 1 : 0;
         autoUpdateEnabled = false;
         setSpeakerIndex(currentSpeakerIndex, { fromUser: true });
@@ -684,7 +664,7 @@ function navigateSpeakers(event) {
     // ↑ ↓ : Navigate between sessions (CURRENT <-> NEXT <-> NEXT+1...)
     else if (event.key === 'ArrowUp') {
         event.preventDefault();
-        resetSearchBuffer();
+        incrementalSearch.reset();
         if (sessionOffset > 0) {
             navigateToSessionOffset(sessionOffset - 1);
         } else {
@@ -693,7 +673,7 @@ function navigateSpeakers(event) {
         return;
     } else if (event.key === 'ArrowDown') {
         event.preventDefault();
-        resetSearchBuffer();
+        incrementalSearch.reset();
         navigateToSessionOffset(sessionOffset + 1);
         return;
     }
@@ -701,7 +681,7 @@ function navigateSpeakers(event) {
     // Space : Toggle ALL sessions/speakers mode (removes all filters, shows everyone)
     else if (event.key === ' ') {
         event.preventDefault();
-        resetSearchBuffer();
+        incrementalSearch.reset();
         if (viewMode === ViewMode.ALL) {
             // Go back to filtered mode with auto-update
             console.log("Returning to filtered view with auto-update.");
@@ -719,7 +699,7 @@ function navigateSpeakers(event) {
     
     // Escape : Return to CURRENT mode with auto-update
     else if (event.key === 'Escape') {
-        resetSearchBuffer();
+        incrementalSearch.reset();
         console.log("Returning to current session with auto-update.");
         setViewMode(ViewMode.CURRENT);
         autoUpdateEnabled = true;
@@ -727,39 +707,19 @@ function navigateSpeakers(event) {
         return;
     }
     
-    // a-z : Incremental search within current group
-    else if (/^[a-zA-Z]$/.test(event.key)) {
-        handleSearchKey(event.key);
-        return;
-    }
-    
-    // 0-9 : Jump to speaker by index within current group
-    else if (/^[0-9]$/.test(event.key)) {
-        resetSearchBuffer();
-        const numericValue = parseInt(event.key, 10);
-        let index = numericValue - 1;
-        if (numericValue === 0) {
-            index = 9;
-        }
-        if (speakers.length && index >= 0 && index < speakers.length) {
-            setSpeakerIndex(index, { fromUser: true });
-        }
+    else if (handleSearchOrNumericShortcut(event, {
+        onSearch: handleSearchKey,
+        items: speakers,
+        onBeforeSelect: incrementalSearch.reset,
+        onSelect: (index) => setSpeakerIndex(index, { fromUser: true })
+    })) {
         return;
     }
 }
 
-function refreshIfAutoUpdateEnabled() {
-    if (autoUpdateEnabled) {
-        updateNameAndTitle();
-    }
-}
-
-loadEventData()
-    .then(() => {
-        updateNameAndTitle();
-        setInterval(refreshIfAutoUpdateEnabled, 60000);
-
-        window.addEventListener('hashchange', updateNameAndTitle);
-        window.addEventListener('keydown', navigateSpeakers);
-    })
+initializeEventDisplay({
+    update: updateNameAndTitle,
+    onKeyDown: navigateSpeakers,
+    isAutoUpdateEnabled: () => autoUpdateEnabled
+})
     .catch(error => console.error('Error loading event data:', error));

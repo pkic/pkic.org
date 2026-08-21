@@ -3,6 +3,7 @@ import { postJson, ApiClientError } from "../../../../shared/api-client";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { toast } from "../../ui";
 import type { VoteType, VoteScopeType, MyWorkingGroupMembership } from "../../types";
+import { useAsyncSubmission } from "../../../../hooks/useAsyncSubmission";
 
 export function ProposalForm({
   myWorkingGroups,
@@ -16,17 +17,16 @@ export function ProposalForm({
   const [voteType, setVoteType] = useState<VoteType>("motion");
   const [scopeType, setScopeType] = useState<VoteScopeType>("forum");
   const [scopeId, setScopeId] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const submission = useAsyncSubmission();
 
   async function handleSubmit(e: Event): Promise<void> {
     e.preventDefault();
-    setError(null);
+    submission.setError(null);
     if (scopeType === "working_group" && !scopeId) {
-      setError("Choose a working group.");
+      submission.setError("Choose a working group.");
       return;
     }
-    setSubmitting(true);
+    submission.begin();
     try {
       await postJson("/api/v1/portal/vote-proposals", {
         title: title.trim(),
@@ -40,9 +40,9 @@ export function ProposalForm({
       setDescription("");
       await onCreated();
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : "Could not submit your proposal.");
+      submission.setError(err instanceof ApiClientError ? err.message : "Could not submit your proposal.");
     } finally {
-      setSubmitting(false);
+      submission.finish();
     }
   }
 
@@ -60,7 +60,7 @@ export function ProposalForm({
                 maxLength={300}
                 value={title}
                 onInput={(e) => setTitle((e.target as HTMLInputElement).value)}
-                disabled={submitting}
+                disabled={submission.submitting}
               />
             </div>
             <div class="col-12">
@@ -71,7 +71,7 @@ export function ProposalForm({
                 required
                 value={description}
                 onInput={(e) => setDescription((e.target as HTMLTextAreaElement).value)}
-                disabled={submitting}
+                disabled={submission.submitting}
               />
             </div>
             <div class="col-sm-6">
@@ -80,7 +80,7 @@ export function ProposalForm({
                 class="form-select"
                 value={voteType}
                 onChange={(e) => setVoteType((e.target as HTMLSelectElement).value as VoteType)}
-                disabled={submitting}
+                disabled={submission.submitting}
               >
                 <option value="motion">Motion</option>
                 <option value="consultation">Consultation</option>
@@ -96,7 +96,7 @@ export function ProposalForm({
                   setScopeType((e.target as HTMLSelectElement).value as VoteScopeType);
                   setScopeId("");
                 }}
-                disabled={submitting}
+                disabled={submission.submitting}
               >
                 <option value="forum">Forum</option>
                 <option value="working_group">Working group</option>
@@ -109,7 +109,7 @@ export function ProposalForm({
                   class="form-select"
                   value={scopeId}
                   onChange={(e) => setScopeId((e.target as HTMLSelectElement).value)}
-                  disabled={submitting}
+                  disabled={submission.submitting}
                 >
                   <option value="">Choose…</option>
                   {myWorkingGroups.map((wg) => (
@@ -125,10 +125,10 @@ export function ProposalForm({
             )}
           </div>
 
-          {error && <ErrorAlert error={error} />}
+          {submission.error && <ErrorAlert error={submission.error} />}
 
-          <button type="submit" class="btn btn-success mt-3" disabled={submitting}>
-            {submitting ? "Submitting…" : "Submit proposal"}
+          <button type="submit" class="btn btn-success mt-3" disabled={submission.submitting}>
+            {submission.submitting ? "Submitting…" : "Submit proposal"}
           </button>
         </form>
       </div>

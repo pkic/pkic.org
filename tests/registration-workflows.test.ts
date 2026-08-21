@@ -713,7 +713,7 @@ describe("registration workflows", () => {
     expect(emailPayload.dayAttendance.map((entry) => entry.waitlistStatus)).toEqual(["waiting", "waiting"]);
   });
 
-  it("sends offer and update emails with correct day-waitlist content for accept and expired-accept paths", async () => {
+  it("sends accepted-offer email state and rejects an expired offer without queuing an update", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
     await env.DB.batch([
@@ -824,6 +824,7 @@ describe("registration workflows", () => {
             action: "update",
             attendanceType: "in_person",
             dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+            claimDayWaitlistOffers: ["2026-12-01"],
           }),
         }),
         { token: offeredManageToken },
@@ -863,27 +864,29 @@ describe("registration workflows", () => {
             action: "update",
             attendanceType: "in_person",
             dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+            claimDayWaitlistOffers: ["2026-12-01"],
           }),
         }),
         { token: expiredConfirmed.manageToken },
       ),
     );
-    expect(expiredResponse.status).toBe(200);
+    expect(expiredResponse.status).toBe(409);
+    await expect(expiredResponse.json()).resolves.toMatchObject({
+      error: { code: "DAY_WAITLIST_OFFER_UNAVAILABLE" },
+    });
 
-    const expiredUpdateRows = await queryAll<{ payload_json: string }>(
+    const expiredUpdateRows = await queryAll<{ total: number }>(
       env.DB,
-      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_updated' AND recipient_email = 'expired-user@example.test' ORDER BY created_at DESC LIMIT 1",
+      "SELECT COUNT(*) AS total FROM email_outbox WHERE template_key = 'registration_updated' AND recipient_email = 'expired-user@example.test'",
     );
-    const expiredUpdatePayload = JSON.parse(expiredUpdateRows[0].payload_json) as {
-      hasActiveDayWaitlist: boolean;
-      waitlistedDayCount: number;
-      dayAttendance: Array<{ statusLabel: string; waitlistStatus: string; isWaitlistOffer: boolean }>;
-    };
-    expect(expiredUpdatePayload.hasActiveDayWaitlist).toBe(true);
-    expect(expiredUpdatePayload.waitlistedDayCount).toBe(1);
-    expect(expiredUpdatePayload.dayAttendance[0].statusLabel).toBe("Waitlisted for in-person attendance");
-    expect(expiredUpdatePayload.dayAttendance[0].waitlistStatus).toBe("waiting");
-    expect(expiredUpdatePayload.dayAttendance[0].isWaitlistOffer).toBe(false);
+    expect(Number(expiredUpdateRows[0].total)).toBe(0);
+    await expect(
+      queryAll<{ status: string }>(
+        env.DB,
+        "SELECT status FROM event_day_waitlist_entries WHERE registration_id = ? AND event_day_id = 'day-1'",
+        [expiredConfirmed.registration.id],
+      ),
+    ).resolves.toEqual([{ status: "offered" }]);
   });
 
   it("rolls back registration cancellation when its participant projection fails", async () => {

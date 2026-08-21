@@ -1,7 +1,7 @@
 /** POST /api/v1/admin/users/:userId/anonymize — irreversible account redaction and access revocation. */
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
-import { json } from "../../../../../_lib/http";
+import { dispatchPostOnly, json } from "../../../../../_lib/http";
 import { anonymizeAdminUser } from "../../../../../_lib/services/admin-user-anonymize";
 import { removePreviousHeadshot } from "../../../../../_lib/services/user-headshot";
 
@@ -13,8 +13,5 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 }
 
 export async function onRequest(c: AdminContext): Promise<Response> {
-  if (c.req.raw.method !== "POST") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
-  return onRequestPost(c);
+  return dispatchPostOnly(c, onRequestPost);
 }

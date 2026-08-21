@@ -1,9 +1,7 @@
 import { adminBadgeRolePatchSchema } from "../../../../../../../../assets/shared/schemas/participant-roles";
 import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
-import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
-import { json } from "../../../../../../../_lib/http";
-import { invalidateAndRerender } from "../../../../../../../_lib/services/og-badge-prerender";
+import { dispatchRequestMethod, json } from "../../../../../../../_lib/http";
 import {
   getAdminRegistrationBadgeRole,
   setAdminRegistrationBadgeRole,
@@ -25,12 +23,9 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
     registrationId: c.req.param("registrationId"),
     patch,
   });
-  c.executionCtx.waitUntil(invalidateAndRerender(result.userId, c.env, resolveAppBaseUrl(c.env, c.req.raw)));
   return json(result.response);
 }
 
 export async function onRequest(c: AdminContext): Promise<Response> {
-  if (c.req.raw.method === "GET") return onRequestGet(c);
-  if (c.req.raw.method === "PATCH") return onRequestPatch(c);
-  return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
+  return dispatchRequestMethod(c, { GET: onRequestGet, PATCH: onRequestPatch });
 }

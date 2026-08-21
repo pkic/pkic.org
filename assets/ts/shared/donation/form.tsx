@@ -1,5 +1,5 @@
 /**
- * Donation form logic — initialises the donation widget rendered by the
+ * Donation form logic — initializes the donation widget rendered by the
  * `donation-form.html` Hugo shortcode.
  *
  * On load it auto-detects the visitor's country via `/api/v1/geo` and maps
@@ -45,7 +45,7 @@ interface DonationConfig {
 }
 
 /**
- * Initialise every `[data-donation-form]` element on the page.
+ * Initialize every `[data-donation-form]` element on the page.
  * Called at module-level (deferred script).
  */
 export function initDonationForms(): void {
@@ -55,7 +55,7 @@ export function initDonationForms(): void {
 }
 
 /**
- * Initialise a single donation form root element.
+ * Initialize a single donation form root element.
  * Safe to call on dynamically injected elements (e.g. in the registration
  * success panel) after the DOM is already loaded.
  */

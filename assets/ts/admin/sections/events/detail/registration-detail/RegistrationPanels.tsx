@@ -1,12 +1,16 @@
 import { useState } from "preact/hooks";
 import { Spinner } from "../../../../../components/Spinner";
-import { DataTable } from "../../../../../components/Table";
 import { api } from "../../../../api";
 import { toast } from "../../../../ui";
 import type { BadgeRoleInfo } from "../../../../types";
 import { useData } from "../../../../../hooks/useData";
+import {
+  ADMIN_EVENT_REGISTRATION_STATUSES,
+  adminEventRegistrationStatusLabel,
+} from "../../../../../../shared/schemas/admin-events";
+import { AuditLogTable } from "../../../../components/AuditLogTable";
 
-const ROLE_BADGE_COLOUR: Record<string, string> = {
+const ROLE_BADGE_COLOR: Record<string, string> = {
   attendee: "primary",
   speaker: "success",
   moderator: "warning",
@@ -51,12 +55,12 @@ export function BadgeRolePanel({ slug, regId }: { slug: string; regId: string })
 
   if (!info) return loading ? <Spinner /> : null;
 
-  const colour = ROLE_BADGE_COLOUR[info.effective_role] ?? "secondary";
+  const color = ROLE_BADGE_COLOR[info.effective_role] ?? "secondary";
   return (
     <div>
       <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
         <span class="small text-muted">Effective:</span>
-        <span class={`badge text-bg-${colour}`}>{info.effective_role}</span>
+        <span class={`badge text-bg-${color}`}>{info.effective_role}</span>
         {info.admin_override ? (
           <span class="small text-muted ms-1">(forced; auto would be {info.auto_detected})</span>
         ) : (
@@ -103,46 +107,16 @@ export function RegistrationAuditLogSection({ slug, regId }: { slug: string; reg
     [slug, regId],
   );
 
-  if (loading) return <Spinner />;
-  if (!entries?.length) return <p class="small text-body-secondary mb-0">No audit log entries.</p>;
-
   return (
-    <DataTable
-      columns={[
-        {
-          header: "When",
-          cell: (entry) =>
-            new Date(entry.created_at).toLocaleString("en-US", { dateStyle: "short", timeStyle: "medium" }),
-          className: "text-nowrap small text-muted",
-        },
-        {
-          header: "Actor",
-          cell: (entry) => {
-            const actor =
-              entry.actor_type === "system" ? (
-                <span class="text-muted">System</span>
-              ) : entry.actor_display ? (
-                <>{entry.actor_display}</>
-              ) : entry.actor_id ? (
-                <span class="text-muted small">{entry.actor_id}</span>
-              ) : (
-                <span class="text-muted">{entry.actor_type}</span>
-              );
-            return actor;
-          },
-          className: "small",
-        },
-        { header: "Action", cell: (entry) => <code class="small">{entry.action}</code> },
-        {
-          header: "Details",
-          cell: (entry) =>
-            entry.details ? (
-              <pre class="mb-0 small text-body-secondary">{JSON.stringify(entry.details, null, 2)}</pre>
-            ) : null,
-        },
-      ]}
-      data={entries}
-      className="align-middle"
+    <AuditLogTable
+      entries={entries ?? undefined}
+      loading={loading}
+      actionCell={(entry) => <code class="small">{entry.action}</code>}
+      detailsCell={(entry) =>
+        entry.details ? (
+          <pre class="mb-0 small text-body-secondary">{JSON.stringify(entry.details, null, 2)}</pre>
+        ) : null
+      }
     />
   );
 }
@@ -246,13 +220,6 @@ export function RegistrationEmailEditor({
 
 // ─── Force status panel ───────────────────────────────────────────────────────
 
-const FORCE_STATUS_OPTIONS = [
-  { value: "pending_email_confirmation", label: "Pending confirmation" },
-  { value: "registered", label: "Registered" },
-  { value: "waitlisted", label: "Waitlisted" },
-  { value: "cancelled", label: "Cancelled" },
-] as const;
-
 export function RegistrationForceStatusPanel({
   currentStatus,
   slug,
@@ -289,7 +256,8 @@ export function RegistrationForceStatusPanel({
   return (
     <div>
       <p class="small text-muted mb-2">
-        Directly override the registration status. Use with care — this bypasses capacity and waitlist logic.
+        Override the registration lifecycle status. Restoring an active status re-evaluates day capacity and waitlist
+        placement.
       </p>
       <div class="d-flex align-items-center gap-2 flex-wrap">
         <select
@@ -297,9 +265,9 @@ export function RegistrationForceStatusPanel({
           value={selected}
           onChange={(e) => setSelected((e.target as HTMLSelectElement).value)}
         >
-          {FORCE_STATUS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
+          {ADMIN_EVENT_REGISTRATION_STATUSES.map((status) => (
+            <option key={status} value={status}>
+              {adminEventRegistrationStatusLabel(status)}
             </option>
           ))}
         </select>

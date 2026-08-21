@@ -10,19 +10,19 @@
  *
  * The uploader must declare (via the `consent` form field) that:
  *  - The image is a photo of themselves
- *  - They own or have a royalty-free licence to the image
+ *  - They own or have a royalty-free license to the image
  *  - They accept full liability
  */
 
 import { OpenAPIRoute } from "chanfana";
-import { json } from "../../../../../_lib/http";
+import { dispatchRequestMethod, json } from "../../../../../_lib/http";
 import { resolveManageToken } from "../../../../../_lib/services/manage-token";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import {
   REGISTRATION_HEADSHOT_MAX_BYTES,
   registrationHeadshotDeleteRouteSchema,
   registrationHeadshotUploadRouteSchema,
-} from "../../../../../../assets/shared/schemas/api";
+} from "../../../../../../assets/shared/schemas/registration";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { readBoundedImageMultipartFormData, validateUploadedImageFile } from "../../../../../_lib/utils/image-upload";
 import {
@@ -113,9 +113,10 @@ async function onDelete(c: AdminContext, token: string): Promise<Response> {
 // ── Router ────────────────────────────────────────────────────────────────────
 
 export async function onRequest(c: AdminContext): Promise<Response> {
-  if (c.req.raw.method === "PUT") return onPut(c, c.req.param("token"));
-  if (c.req.raw.method === "DELETE") return onDelete(c, c.req.param("token"));
-  return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
+  return dispatchRequestMethod(c, {
+    PUT: (context) => onPut(context, context.req.param("token")),
+    DELETE: (context) => onDelete(context, context.req.param("token")),
+  });
 }
 
 // PUT stays a manual OpenAPIRoute (not openApiRoute-wrapped): the schema's

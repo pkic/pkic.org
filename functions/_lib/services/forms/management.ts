@@ -4,7 +4,7 @@ import { stringifyJson } from "../../utils/json";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import type { DatabaseLike, StatementLike } from "../../types";
-import type { AdminFormCreateInput, AdminFormUpdateInput } from "../../../../assets/shared/schemas/api";
+import type { AdminFormCreateInput, AdminFormUpdateInput } from "../../../../assets/shared/schemas/admin-forms";
 
 type FormScope = { type: "global"; ref: null } | { type: "event"; ref: string; eventSlug: string };
 

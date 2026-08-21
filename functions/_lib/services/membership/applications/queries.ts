@@ -12,6 +12,7 @@ import { sha256Hex } from "../../../utils/crypto";
 import { parseJsonSafe } from "../../../utils/json";
 import { AppError } from "../../../errors";
 import type { DatabaseLike, StatementLike } from "../../../types";
+import { prepareAuditLog } from "../../audit";
 
 export interface MemberApplicationRow {
   id: string;
@@ -97,22 +98,34 @@ export async function recordApplicationDocument(
 ): Promise<ApplicationDocumentRow> {
   const id = uuid();
   const uploadedAt = nowIso();
-  await run(
-    db,
-    `INSERT INTO application_documents
-       (id, application_id, uploaded_by_email, r2_key, filename, mime_type, file_size_bytes, uploaded_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      id,
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO application_documents
+           (id, application_id, uploaded_by_email, r2_key, filename, mime_type, file_size_bytes, uploaded_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(
+        id,
+        params.applicationId,
+        params.uploadedByEmail,
+        params.r2Key,
+        params.filename,
+        params.mimeType,
+        params.fileSizeBytes,
+        uploadedAt,
+      ),
+    prepareAuditLog(
+      db,
+      "public",
+      null,
+      "application_document_uploaded",
+      "member_application",
       params.applicationId,
-      params.uploadedByEmail,
-      params.r2Key,
-      params.filename,
-      params.mimeType,
-      params.fileSizeBytes,
+      { filename: params.filename, fileSize: params.fileSizeBytes, mimeType: params.mimeType },
       uploadedAt,
-    ],
-  );
+    ),
+  ]);
   return {
     id,
     application_id: params.applicationId,

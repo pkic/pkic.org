@@ -13,18 +13,23 @@
     return document.getElementById(targetId);
   }
 
+  function resetMegaVisualState() {
+    allPanels.forEach(function (panel) { panel.classList.remove('is-open'); });
+    document.querySelectorAll('.pkic-mega-chevron').forEach(function (chevron) {
+      chevron.classList.remove('is-open');
+      chevron.setAttribute('aria-expanded', 'false');
+    });
+    allTriggers.forEach(function (trigger) {
+      trigger.querySelectorAll('.nav-link').forEach(function (link) { link.classList.remove('is-active'); });
+    });
+  }
+
   function openMega(triggerEl) {
     var targetId = triggerEl.querySelector('[data-mega-target]').getAttribute('data-mega-target');
     var panel    = getPanel(targetId);
     if (!panel) return;
     // Close all first
-    allPanels.forEach(function (p) { p.classList.remove('is-open'); });
-    document.querySelectorAll('.pkic-mega-chevron').forEach(function (c) {
-      c.classList.remove('is-open'); c.setAttribute('aria-expanded', 'false');
-    });
-    allTriggers.forEach(function (t) {
-      t.querySelectorAll('.nav-link').forEach(function (l) { l.classList.remove('is-active'); });
-    });
+    resetMegaVisualState();
     // Open this one
     panel.classList.add('is-open');
     backdrop.classList.add('is-open');
@@ -34,14 +39,8 @@
   }
 
   function closeMega() {
-    allPanels.forEach(function (p) { p.classList.remove('is-open'); });
+    resetMegaVisualState();
     backdrop.classList.remove('is-open');
-    document.querySelectorAll('.pkic-mega-chevron').forEach(function (c) {
-      c.classList.remove('is-open'); c.setAttribute('aria-expanded', 'false');
-    });
-    allTriggers.forEach(function (t) {
-      t.querySelectorAll('.nav-link').forEach(function (l) { l.classList.remove('is-active'); });
-    });
   }
 
   // ── Hover + click per trigger ─────────────────────────────────────────

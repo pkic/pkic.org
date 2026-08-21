@@ -8,6 +8,6 @@ import { donationPromotersListRouteSchema } from "../../../../../assets/shared/s
 
 export const DonationPromotersList = openApiRoute(donationPromotersListRouteSchema, async (c: AdminContext, data) => {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const { limit = 50, offset = 0, q, sort } = data.query;
+  const { limit, offset, q, sort } = data.query;
   return json(await listDonationPromoters(requestDb(c), { limit, offset, q, sort }));
 });
