@@ -370,7 +370,6 @@ export async function finalizeProposalDecision(
 }
 
 export { getSpeakerByManageToken, type SpeakerWithContext } from "./proposals-speaker-capability";
-export { markProposalStatus, softDeleteProposal } from "./proposals-admin";
 export {
   addProposalSpeaker,
   buildAddProposalSpeaker,

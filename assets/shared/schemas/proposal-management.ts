@@ -13,6 +13,7 @@ import {
   trimmedString,
 } from "./api-common";
 import { consentItemSchema, participantProfileSchema, proposerProfileSchema, speakerRoleSchema } from "./registration";
+import { proposalDecisionStatusSchema } from "./proposal-status";
 
 export const proposalTypeSchema = z.enum([
   "keynote",
@@ -135,14 +136,29 @@ export const reviewPatchSchema = z.object({
 });
 
 export const finalizeProposalSchema = z.object({
-  finalStatus: z.enum(["accepted", "rejected", "needs-work"]),
+  finalStatus: proposalDecisionStatusSchema,
   decisionNote: trimmedString(3, 10_000).optional(),
   presentationDeadline: z.iso.datetime().optional(),
 });
 
-export const adminProposalPatchSchema = z.object({
-  title: proposalTitleSchema.optional(),
-  abstract: proposalAbstractSchema.optional(),
+export const adminProposalPatchSchema = z
+  .object({
+    title: proposalTitleSchema.optional(),
+    abstract: proposalAbstractSchema.optional(),
+  })
+  .refine((value) => value.title !== undefined || value.abstract !== undefined, {
+    message: "Provide a title or abstract to update",
+  });
+
+export const adminProposalEditableSchema = z.object({
+  id: databaseIdSchema,
+  title: z.string(),
+  abstract: z.string(),
+  updated_at: z.string(),
+});
+
+export const adminProposalPatchResponseSchema = z.object({
+  proposal: adminProposalEditableSchema,
 });
 
 function optionalNullableOrEmpty<T extends z.ZodTypeAny>(schema: T) {

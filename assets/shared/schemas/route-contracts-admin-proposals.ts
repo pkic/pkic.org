@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { proposalIdParamsSchema } from "./api-common";
-import { adminProposalPatchSchema, finalizeProposalSchema } from "./proposal-management";
+import {
+  adminProposalPatchResponseSchema,
+  adminProposalPatchSchema,
+  finalizeProposalSchema,
+} from "./proposal-management";
 import { listQuerySchema } from "./pagination";
 import { proposalDecisionPreviewResponseSchema } from "./admin-event-proposals";
 import {
@@ -9,6 +13,7 @@ import {
   proposalCommentsListQuerySchema,
   proposalCommentsListResponseSchema,
 } from "./proposal-comments";
+import { proposalFlagRequestSchema, proposalFlagResponseSchema } from "./proposal-status";
 
 export const adminProposalOpenManageRouteSchema = {
   tags: ["Admin proposals"],
@@ -49,11 +54,38 @@ export const adminProposalPatchRouteSchema = {
     },
   },
   responses: {
-    "200": { description: "Updated proposal details." },
+    "200": {
+      description: "Updated proposal details.",
+      content: { "application/json": { schema: adminProposalPatchResponseSchema } },
+    },
     "400": { description: "Invalid proposal patch payload." },
     "401": { description: "Admin authorization required." },
     "403": { description: "The admin lacks organizer permission for this proposal." },
     "404": { description: "Proposal not found." },
+  },
+};
+
+export const adminProposalFlagRouteSchema = {
+  tags: ["Admin proposals"],
+  summary: "Flag or delete a proposal",
+  description: "Atomically records a spam, duplicate, or soft-delete transition and its audit event.",
+  request: {
+    params: proposalIdParamsSchema,
+    body: {
+      content: { "application/json": { schema: proposalFlagRequestSchema } },
+      required: true,
+    },
+  },
+  responses: {
+    "200": {
+      description: "Proposal moderation action applied.",
+      content: { "application/json": { schema: proposalFlagResponseSchema } },
+    },
+    "400": { description: "Invalid moderation action." },
+    "401": { description: "Admin authorization required." },
+    "403": { description: "The admin lacks proposal management permission." },
+    "404": { description: "Proposal not found." },
+    "409": { description: "Proposal was finalized or changed concurrently." },
   },
 };
 

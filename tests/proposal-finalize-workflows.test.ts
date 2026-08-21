@@ -6,16 +6,10 @@ import { createAdminSession } from "./helpers/auth";
 import app from "../functions/router";
 import { onRequestPost as finalizeProposal } from "../functions/api/v1/admin/proposals/[proposalId]/finalize";
 import { onRequestPost as upsertReview } from "../functions/api/v1/admin/proposals/[proposalId]/reviews";
-import { onRequestPost as flagProposal } from "../functions/api/v1/admin/proposals/[proposalId]/flag";
-import {
-  createProposal,
-  addProposalSpeaker,
-  finalizeProposalDecision,
-  markProposalStatus,
-  softDeleteProposal,
-} from "../functions/_lib/services/proposals";
+import { createProposal, addProposalSpeaker, finalizeProposalDecision } from "../functions/_lib/services/proposals";
 import { activateTemplateVersion, createTemplateVersion } from "../functions/_lib/email/templates";
 import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
+import { proposalFlagResponseSchema } from "../assets/shared/schemas/proposal-status";
 
 async function seedProposalWithSpeaker(
   eventId: string,
@@ -300,9 +294,12 @@ describe("proposal spam/duplicate/delete", () => {
 
   it("marks a proposal as spam", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const { proposalId } = await seedProposalWithSpeaker(eventId);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const adminToken = await createAdminSession(env.DB, adminUserId, "flag-spam-service-token");
 
-    await markProposalStatus(env.DB, { proposalId, status: "spam" });
+    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "spam" });
+    expect(response.status).toBe(200);
+    expect(proposalFlagResponseSchema.parse(await response.json())).toEqual({ success: true, action: "spam" });
 
     const [row] = await queryAll<{ status: string }>(env.DB, "SELECT status FROM session_proposals WHERE id = ?", [
       proposalId,
@@ -312,9 +309,11 @@ describe("proposal spam/duplicate/delete", () => {
 
   it("marks a proposal as duplicate", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const { proposalId } = await seedProposalWithSpeaker(eventId);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const adminToken = await createAdminSession(env.DB, adminUserId, "flag-duplicate-token");
 
-    await markProposalStatus(env.DB, { proposalId, status: "duplicate" });
+    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "duplicate" });
+    expect(response.status).toBe(200);
 
     const [row] = await queryAll<{ status: string }>(env.DB, "SELECT status FROM session_proposals WHERE id = ?", [
       proposalId,
@@ -324,9 +323,11 @@ describe("proposal spam/duplicate/delete", () => {
 
   it("soft-delete: sets deleted_at and deactivates participants", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const { proposalId } = await seedProposalWithSpeaker(eventId);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const adminToken = await createAdminSession(env.DB, adminUserId, "flag-delete-service-token");
 
-    await softDeleteProposal(env.DB, { proposalId });
+    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "delete" });
+    expect(response.status).toBe(200);
 
     const [row] = await queryAll<{ status: string; deleted_at: string | null }>(
       env.DB,
@@ -348,9 +349,11 @@ describe("proposal spam/duplicate/delete", () => {
 
   it("soft-delete: proposal excluded from default list query", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const { proposalId } = await seedProposalWithSpeaker(eventId);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const adminToken = await createAdminSession(env.DB, adminUserId, "flag-delete-list-token");
 
-    await softDeleteProposal(env.DB, { proposalId });
+    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "delete" });
+    expect(response.status).toBe(200);
 
     const remaining = await queryAll<{ id: string }>(
       env.DB,
@@ -365,17 +368,7 @@ describe("proposal spam/duplicate/delete", () => {
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
     const adminToken = await createAdminSession(env.DB, adminUserId, "flag-spam-token");
 
-    const response = await flagProposal(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/flag`, {
-          method: "POST",
-          headers: { "content-type": "application/json", authorization: `Bearer ${adminToken}` },
-          body: JSON.stringify({ action: "spam" }),
-        }),
-        { proposalId },
-      ),
-    );
+    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "spam" });
 
     expect(response.status).toBe(200);
 
@@ -397,17 +390,7 @@ describe("proposal spam/duplicate/delete", () => {
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
     const adminToken = await createAdminSession(env.DB, adminUserId, "flag-delete-token");
 
-    const response = await flagProposal(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/flag`, {
-          method: "POST",
-          headers: { "content-type": "application/json", authorization: `Bearer ${adminToken}` },
-          body: JSON.stringify({ action: "delete" }),
-        }),
-        { proposalId },
-      ),
-    );
+    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "delete" });
 
     expect(response.status).toBe(200);
 
@@ -424,6 +407,65 @@ describe("proposal spam/duplicate/delete", () => {
       [proposalId],
     );
     expect(auditRows[0]?.action).toBe("proposal_deleted");
+  });
+
+  it("rolls back proposal deletion and participant changes when its audit write fails", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const adminToken = await createAdminSession(env.DB, adminUserId, "flag-delete-rollback-token");
+    await env.DB.prepare(
+      "UPDATE event_participants SET status = 'active' WHERE source_type = 'proposal' AND source_ref = ?",
+    )
+      .bind(proposalId)
+      .run();
+    await env.DB.prepare(
+      `CREATE TRIGGER reject_proposal_delete_audit
+         BEFORE INSERT ON audit_log
+         WHEN NEW.action = 'proposal_deleted'
+         BEGIN
+           SELECT RAISE(ABORT, 'forced audit failure');
+         END`,
+    ).run();
+
+    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "delete" });
+    expect(response.status).toBe(500);
+
+    const [proposal] = await queryAll<{ status: string; deleted_at: string | null }>(
+      env.DB,
+      "SELECT status, deleted_at FROM session_proposals WHERE id = ?",
+      [proposalId],
+    );
+    expect(proposal).toEqual({ status: "submitted", deleted_at: null });
+    const participants = await queryAll<{ status: string }>(
+      env.DB,
+      "SELECT status FROM event_participants WHERE source_type = 'proposal' AND source_ref = ?",
+      [proposalId],
+    );
+    expect(participants.every(({ status }) => status === "active")).toBe(true);
+  });
+
+  it("does not audit a moderation compare-and-set that loses", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const adminToken = await createAdminSession(env.DB, adminUserId, "flag-conflict-token");
+    await env.DB.prepare(
+      `CREATE TRIGGER ignore_proposal_spam_update
+         BEFORE UPDATE OF status ON session_proposals
+         WHEN NEW.id = '${proposalId}' AND NEW.status = 'spam'
+         BEGIN
+           SELECT RAISE(IGNORE);
+         END`,
+    ).run();
+
+    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "spam" });
+    expect(response.status).toBe(409);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_id = ? AND action = 'proposal_flagged'", [proposalId]),
+    ).resolves.toHaveLength(0);
+    const [proposal] = await queryAll<{ status: string }>(env.DB, "SELECT status FROM session_proposals WHERE id = ?", [
+      proposalId,
+    ]);
+    expect(proposal.status).toBe("submitted");
   });
 });
 
@@ -501,6 +543,15 @@ describe("proposal HTTP error responses (full router stack)", () => {
     expect(response.status).toBe(409);
     const body = (await response.json()) as { error?: { code?: string } };
     expect(body.error?.code).toBe("PROPOSAL_ALREADY_FINALIZED");
+  });
+
+  it("flag: rejects an unknown action through the mounted shared schema", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const adminToken = await createAdminSession(env.DB, adminUserId, "flag-invalid-action-token");
+
+    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "archive" });
+    expect(response.status).toBe(400);
   });
 
   it("finalize: unknown proposal returns JSON 404", async () => {

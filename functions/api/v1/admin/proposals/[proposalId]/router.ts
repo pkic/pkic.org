@@ -14,6 +14,7 @@ import {
   adminProposalCommentsListRouteSchema,
   adminProposalFinalizePreviewRouteSchema,
   adminProposalFinalizeRouteSchema,
+  adminProposalFlagRouteSchema,
   adminProposalOpenManageRouteSchema,
   adminProposalPatchRouteSchema,
   adminProposalSpeakersRouteSchema,
@@ -91,6 +92,7 @@ const AdminProposalsProposalIdOpenManagePost = openApiRoute(
   AdminProposalsProposalIdOpenManagePost_l,
 );
 const AdminProposalsProposalIdPatch = openApiRoute(adminProposalPatchRouteSchema, AdminProposalsProposalIdPatch_l);
+const AdminProposalsProposalIdFlagPost = openApiRoute(adminProposalFlagRouteSchema, AdminProposalsProposalIdFlagPost_l);
 const AdminProposalsProposalIdFinalizePost = openApiRoute(
   adminProposalFinalizeRouteSchema,
   AdminProposalsProposalIdFinalizePost_l,
@@ -118,7 +120,7 @@ const AdminProposalsProposalIdSpeakersGet = openApiRoute(
 
 openapi.get("/", AdminProposalsProposalIdGet);
 openapi.post("/open-manage", AdminProposalsProposalIdOpenManagePost);
-openapi.post("/flag", AdminProposalsProposalIdFlagPost_l);
+openapi.post("/flag", AdminProposalsProposalIdFlagPost);
 openapi.patch("/", AdminProposalsProposalIdPatch);
 openapi.post("/finalize", AdminProposalsProposalIdFinalizePost);
 openapi.post("/finalize-preview", AdminProposalsProposalIdFinalizePreviewPost);

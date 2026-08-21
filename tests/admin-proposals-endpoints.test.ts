@@ -16,6 +16,7 @@ import {
   proposalCommentCreateResponseSchema,
   proposalCommentsListResponseSchema,
 } from "../assets/shared/schemas/proposal-comments";
+import { adminProposalPatchResponseSchema } from "../assets/shared/schemas/proposal-management";
 
 const proposalDetails = {
   audience: "Operators",
@@ -45,6 +46,18 @@ async function callAdminProposalComments(
     new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/comments${suffix}`, {
       ...init,
       headers: { authorization: `Bearer ${token}`, ...init?.headers },
+    }),
+    env as any,
+    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+  );
+}
+
+async function callAdminProposalPatch(token: string, proposalId: string, body: unknown): Promise<Response> {
+  return app.fetch(
+    new Request(`https://app.test/api/v1/admin/proposals/${proposalId}`, {
+      method: "PATCH",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify(body),
     }),
     env as any,
     { passThroughOnException: () => {}, waitUntil: () => {} } as any,
@@ -522,6 +535,54 @@ describe("admin proposal endpoints", () => {
     await expect(
       queryAll(env.DB, "SELECT id FROM proposal_internal_comments WHERE proposal_id = ?", [proposalId]),
     ).resolves.toHaveLength(0);
+  });
+
+  it("atomically edits proposal text and records only changed fields", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const adminToken = await createAdminSession(env.DB, adminId, "token-admin-proposal-edit");
+
+    const response = await callAdminProposalPatch(adminToken, proposalId, { title: "Updated Endpoint Proposal" });
+    expect(response.status).toBe(200);
+    const payload = adminProposalPatchResponseSchema.parse(await response.json());
+    expect(payload.proposal.title).toBe("Updated Endpoint Proposal");
+    const [audit] = await queryAll<{ details_json: string }>(
+      env.DB,
+      "SELECT details_json FROM audit_log WHERE action = 'proposal_edited'",
+    );
+    expect(JSON.parse(audit.details_json)).toEqual({
+      title: { from: "Endpoint Proposal", to: "Updated Endpoint Proposal" },
+    });
+  });
+
+  it("rolls back a proposal edit when its audit write fails", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const adminToken = await createAdminSession(env.DB, adminId, "token-admin-proposal-edit-rollback");
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_proposal_edit_audit
+         BEFORE INSERT ON audit_log
+         WHEN NEW.action = 'proposal_edited'
+         BEGIN
+           SELECT RAISE(ABORT, 'forced audit failure');
+         END`,
+    ).run();
+
+    const response = await callAdminProposalPatch(adminToken, proposalId, { title: "Must Roll Back" });
+    expect(response.status).toBe(500);
+    const [proposal] = await queryAll<{ title: string }>(env.DB, "SELECT title FROM session_proposals WHERE id = ?", [
+      proposalId,
+    ]);
+    expect(proposal.title).toBe("Endpoint Proposal");
+  });
+
+  it("rejects an empty proposal edit through the mounted shared schema", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const adminToken = await createAdminSession(env.DB, adminId, "token-admin-proposal-edit-empty");
+
+    const response = await callAdminProposalPatch(adminToken, proposalId, {});
+    expect(response.status).toBe(400);
   });
 
   it("refreshes the proposer manage token and returns a working manage URL", async () => {

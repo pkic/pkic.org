@@ -9,6 +9,7 @@ export * from "./api-common";
 export * from "./registration";
 export * from "./proposal-management";
 export * from "./proposal-comments";
+export * from "./proposal-status";
 export * from "./admin-forms";
 export * from "./admin-events";
 export * from "./invites";
