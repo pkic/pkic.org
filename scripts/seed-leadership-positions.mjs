@@ -1,6 +1,6 @@
 /**
  * One-time seed for the Board of Directors / Executive Council rosters
- * (migration 0049), matching what content/about/board.md and
+ * (consolidated migration 0035), matching what content/about/board.md and
  * executive-council.md hardcoded before the Leadership admin tab replaced
  * them. Not a schema migration — user ids differ per environment, so this
  * resolves each entry by email at run time via

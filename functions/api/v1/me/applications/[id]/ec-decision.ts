@@ -8,7 +8,6 @@ import { json } from "../../../../../_lib/http";
 import { AppError } from "../../../../../_lib/errors";
 import { requireMemberFromRequest } from "../../../../../_lib/auth/member";
 import { recordEcDecision } from "../../../../../_lib/services/ec-review";
-import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { ecDecisionCreateRouteSchema } from "../../../../../../assets/shared/schemas/ec-review";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
@@ -28,10 +27,7 @@ export const MeApplicationEcDecisionPost = openApiRoute(ecDecisionCreateRouteSch
     ecMemberUserId: member.userId,
     decision: body.decision,
     reason: body.reason ?? null,
-  });
-
-  await writeAuditLog(db, "member", member.userId, "ec_decision_recorded", "member_application", applicationId, {
-    decision: body.decision,
+    audit: { actorType: "member", actorId: member.userId, action: "ec_decision_recorded" },
   });
 
   return json(

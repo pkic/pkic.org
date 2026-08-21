@@ -2,7 +2,7 @@
  * membership-settings-endpoints.test.ts
  *
  * GET/PATCH /api/v1/admin/membership-settings (singleton row
- * seeded by migration 0038).
+ * seeded by consolidated migration 0035).
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";

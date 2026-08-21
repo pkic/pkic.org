@@ -101,7 +101,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   // migration 0000's CHECK — so a representative resolves only via their
   // own organization_representatives row).
   // A user can hold an individual membership and/or represent more than one
-  // organization concurrently (migration 0037) — this summary shows
+  // organization concurrently (consolidated migration 0035) — this summary shows
   // exactly one, so order deterministically (individual row first, then
   // organizations by earliest joined_at) rather than an arbitrary LIMIT 1
   // over an unordered UNION.

@@ -1,6 +1,5 @@
 import { json } from "../../../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../../../_lib/auth/admin";
-import { requireAuthScope } from "../../../../../../../../_lib/auth/scopes";
 import { getPresentationVersion, addVersionReview } from "../../../../../../../../_lib/services/presentation-versions";
 import { writeAuditLog } from "../../../../../../../../_lib/services/audit";
 import { parseJsonBody } from "../../../../../../../../_lib/validation";
@@ -14,7 +13,6 @@ const reviewSchema = z.object({
 
 export async function onRequestPost(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  requireAuthScope(admin, "presentations:review");
 
   const proposalId = c.req.param("proposalId");
   const versionId = c.req.param("versionId");

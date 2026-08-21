@@ -110,6 +110,11 @@ async function initForm(root: HTMLElement): Promise<void> {
   const checkoutContainer = widget?.querySelector<HTMLElement>("[data-donation-checkout]") ?? null;
   const checkoutMount = widget?.querySelector<HTMLElement>("[data-donation-checkout-mount]") ?? null;
   const backBtn = widget?.querySelector<HTMLButtonElement>("[data-donation-back]") ?? null;
+  let checkoutAttemptId = crypto.randomUUID();
+
+  root.addEventListener("input", () => {
+    checkoutAttemptId = crypto.randomUUID();
+  });
 
   if (!currencySelect || !presetContainer || !customInput || !donateBtn) return;
 
@@ -205,6 +210,7 @@ async function initForm(root: HTMLElement): Promise<void> {
     try {
       const smallestUnit = toSmallestUnit(selectedAmount, selectedCurrency);
       const payload = donationCheckoutSchema.parse({
+        checkoutAttemptId,
         amount: smallestUnit,
         currency: selectedCurrency,
         name,

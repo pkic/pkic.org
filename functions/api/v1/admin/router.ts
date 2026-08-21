@@ -7,13 +7,11 @@ import {
   serializeAdminSessionCookie,
   signAdminSessionToken,
 } from "../../../_lib/auth/admin";
-import { requireReviewedAdminRouteInventory } from "../../../_lib/auth/admin-route-policy";
+import { enforceAdminRouteAuthorization } from "../../../_lib/auth/admin-route-policy";
 import { handleError } from "../../../_lib/http";
-import { requireAuthScope } from "../../../_lib/auth/scopes";
 import { REQUEST_DB_CONTEXT_KEY, type RequestDbContext } from "../../../_lib/db/context";
 import { primaryFirstDb, readReplicaDb } from "../../../_lib/db/session";
 import type { DatabaseSessionLike } from "../../../_lib/db/session";
-import { inferredScopesForOperation } from "../../../_lib/openapi/mcp";
 import { AdminAuditLogList } from "./audit-log";
 import { AdminDueWorkList } from "./due-work";
 import { EmailTemplatesList } from "./email-templates";
@@ -64,71 +62,12 @@ function isAdminAuthPath(path: string): boolean {
   return normalizedAdminPath(path).startsWith("/api/v1/admin/auth/");
 }
 
-/**
- * Admin surfaces still governed by the legacy global AUTH_SCOPES system
- * (_lib/auth/scopes.ts) rather than the context-aware permission system
- * (_lib/auth/permissions.ts) — a small, closed set of the original admin
- * routes that predate the permission system and have not been migrated
- * onto it. Every other admin surface enforces its own requirePermission
- * check (with resource-context resolution where the resource has an
- * owner, e.g. requireEventManagementAccess in events/[eventSlug]/router.ts,
- * requireWorkingGroupAccess in working-groups/[id]/router.ts,
- * requireProposalAccess in proposals/[proposalId]/router.ts) directly in
- * its own router/handler, so admin/router.ts does not need — and must not
- * assume — a matching list of "which paths were migrated" to stay correct.
- *
- * This replaces the old isPermissionGatedAdminPath, which inverted the
- * same distinction as an ever-growing allowlist of *migrated* paths that
- * every new permission-gated feature had to remember to add itself to —
- * exactly the "assumes every current and future descendant handler
- * remembers its own permission check" fail-open composition flagged in
- * PR #1 review (round 2, item 4.1). That list had already drifted out of
- * sync with reality before this rewrite: leadership-positions had its own
- * requirePermission("access:grant"/"access:revoke") checks but was
- * missing from the list, so a non-admin-role actor holding an access:grant
- * grant was incorrectly 403'd by the legacy scope check before ever
- * reaching that handler's own, more permissive check.
- */
-const LEGACY_SCOPE_PATH_PREFIXES = [
-  "/api/v1/admin/donations",
-  "/api/v1/admin/audit-log",
-  "/api/v1/admin/email-templates",
-  "/api/v1/admin/stats",
-  "/api/v1/admin/email",
-  "/api/v1/admin/forms",
-  "/api/v1/admin/mailing-lists",
-];
-
-// /admin/users/:userId/(roles|membership|emails|merge) are permission-gated
-// (access:grant/access:revoke, membership:write, users:write); the rest of
-// /admin/users (list, single-user get/patch, anonymize, gravatar, headshot)
-// is still legacy-scope-only.
-const PERMISSION_GATED_USER_SUBPATH = /^\/api\/v1\/admin\/users\/[^/]+\/(roles|membership|emails|merge)/;
-
-function requiresLegacyScopeCheck(path: string): boolean {
-  if (PERMISSION_GATED_USER_SUBPATH.test(path)) {
-    return false;
-  }
-  if (path.startsWith("/api/v1/admin/users")) {
-    return true;
-  }
-  return LEGACY_SCOPE_PATH_PREFIXES.some((prefix) => path.startsWith(prefix));
-}
-
-function enforceAdminScopes(c: Context<RequestDbContext>): void {
+function enforceAdminAuthorization(c: Context<RequestDbContext>): void {
   const admin = getCachedAdminForRequest(c.req.raw);
   if (!admin) {
     return;
   }
-
-  const path = normalizedAdminPath(c.req.path);
-  if (!requiresLegacyScopeCheck(path)) {
-    return;
-  }
-
-  for (const scope of inferredScopesForOperation(path, c.req.method.toLowerCase())) {
-    requireAuthScope(admin, scope);
-  }
+  enforceAdminRouteAuthorization(admin, normalizedAdminPath(c.req.path), c.req.method);
 }
 
 async function rotateAdminToken(c: Context<RequestDbContext>, sessionDb: DatabaseSessionLike): Promise<void> {
@@ -168,8 +107,7 @@ async function useRequestScopedD1Session(c: Context<RequestDbContext>, next: Nex
     c.set(REQUEST_DB_CONTEXT_KEY, sessionDb);
     if (!isAdminAuthPath(c.req.path)) {
       await requireAdminFromRequest(primaryDb, c.req.raw, c.env);
-      requireReviewedAdminRouteInventory(openapi.routes);
-      enforceAdminScopes(c);
+      enforceAdminAuthorization(c);
     }
     await next();
     await rotateAdminToken(c, sessionDb).catch((err) => {
@@ -180,8 +118,7 @@ async function useRequestScopedD1Session(c: Context<RequestDbContext>, next: Nex
 
   const admin = await requireAdminFromRequest(primaryDb, c.req.raw, c.env);
   if (!isAdminAuthPath(c.req.path)) {
-    requireReviewedAdminRouteInventory(openapi.routes);
-    enforceAdminScopes(c);
+    enforceAdminAuthorization(c);
   }
   // Validate state bookmark: must be a reasonable string (null is ok for default session)
   const bookmark = admin.state ? (admin.state.length > 0 && admin.state.length < 1024 ? admin.state : null) : null;

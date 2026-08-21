@@ -17,8 +17,6 @@ import { registrationManageSchema } from "../../shared/schemas/api";
 import { buildManageLinkRecoveryMessage, showPostAction, showResendManageLinkForm } from "./registration-manage-panels";
 import { setField, deriveEventAttendanceType, findSubmitButton } from "../shared/form/helpers";
 
-const CANCELLED_STATUSES = new Set(["cancelled", "cancelled_unauthorized"]);
-
 function attendanceTypeLabel(attendanceType: string): string {
   switch (attendanceType) {
     case "in_person":
@@ -110,7 +108,7 @@ function RegistrationStatusBanner({
   );
 }
 
-function statusLabel(status: string): { label: string; cssClass: string } {
+function statusLabel(status: string, cancellationReasonCode: string | null): { label: string; cssClass: string } {
   switch (status) {
     case "registered":
       return { label: "Confirmed", cssClass: "bg-success" };
@@ -119,9 +117,10 @@ function statusLabel(status: string): { label: string; cssClass: string } {
     case "pending_email_confirmation":
       return { label: "Pending confirmation", cssClass: "bg-secondary" };
     case "cancelled":
-      return { label: "Cancelled", cssClass: "bg-danger" };
-    case "cancelled_unauthorized":
-      return { label: "Cancelled (unauthorized)", cssClass: "bg-danger" };
+      return {
+        label: cancellationReasonCode === "unauthorized_registration" ? "Cancelled (unauthorized)" : "Cancelled",
+        cssClass: "bg-danger",
+      };
     default:
       return { label: status, cssClass: "bg-secondary" };
   }
@@ -177,7 +176,7 @@ async function main(): Promise<void> {
   }
 
   const { registration, event, user, eventDays, dayAttendance, dayWaitlist } = manageData;
-  const isCancelled = CANCELLED_STATUSES.has(registration.status);
+  const isCancelled = registration.status === "cancelled";
   const eventName = event?.name ?? eventSlug;
   const firstName = user?.first_name ?? "";
 
@@ -201,7 +200,7 @@ async function main(): Promise<void> {
     greetingText.textContent = firstName
       ? `Hi ${firstName}, we're looking forward to seeing you at ${eventName}!`
       : `Your registration for ${eventName}`;
-    const { label, cssClass } = statusLabel(registration.status);
+    const { label, cssClass } = statusLabel(registration.status, registration.cancellation_reason_code);
     statusBadge.textContent = label;
     statusBadge.className = `badge ${cssClass}`;
     greetingEl.classList.remove("d-none");

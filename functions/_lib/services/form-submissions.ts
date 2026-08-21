@@ -20,19 +20,15 @@
  * real `ORDER BY` + `LIMIT`/`OFFSET` + `COUNT(*)` in SQL instead of loading
  * every row into memory to paginate.
  *
- * The per-field answer statistics (`stats`, requested via `limit=0`) are the
- * one part of this endpoint that is NOT fully bounded: an accurate
- * distribution requires scanning every matching submission's answers, and
- * those answers are heterogeneous free-form JSON (form_submission_answers
- * rows keyed by field, vs. one JSON blob column on registrations/proposals)
- * — turning that into a single bounded SQL aggregation would need a schema
- * change (e.g. a normalized answers table for registrations/proposals too)
- * that's out of scope here. As an interim bound, `fetchStatsScanRows` caps
- * the stats scan at STATS_SCAN_ROW_LIMIT rows instead of scanning an
- * unbounded matching set, and is called out explicitly wherever it's used.
+ * Per-field statistics use a separate aggregate query and endpoint. JSON1
+ * normalizes both stored answer shapes inside D1, so statistics are exact
+ * for the full filtered population without materializing an arbitrary first
+ * N submissions in the Worker.
  */
 import { all, first } from "../db/queries";
 import { batchFirst, batchRows, queryPage } from "../db/pagination";
+import { buildD1JsonMembershipFilter } from "../db/json-membership";
+import { buildD1TextSearchFilter } from "../db/search";
 import { resolveOrderBy } from "../db/sort";
 import { parseJsonSafe } from "../utils/json";
 import { AppError } from "../errors";
@@ -40,8 +36,7 @@ import { getEventBySlug } from "./events";
 import { FORM_SUBMISSIONS_SORT_COLUMNS } from "../../../assets/shared/schemas/api";
 import type { DatabaseLike } from "../types";
 
-/** Interim bound on how many matching rows the `limit=0` stats scan reads — see file header. */
-const STATS_SCAN_ROW_LIMIT = 5000;
+const MAX_STATS_ENTRIES_PER_FIELD = 50;
 
 export interface FormRow {
   id: string;
@@ -116,6 +111,7 @@ export interface ListFormSubmissionsParams {
   status: string;
   attendanceType: string;
   eventSlug: string;
+  q?: string;
   sort?: string;
   limit: number;
   offset: number;
@@ -127,7 +123,26 @@ export interface ListFormSubmissionsResult {
   offset: number;
   limit: number;
   submissions: AdminSubmissionPayload[];
+}
+
+export interface GetFormSubmissionStatsParams {
+  formKey: string;
+  status: string;
+  attendanceType: string;
+  eventSlug: string;
+  q?: string;
+}
+
+export interface GetFormSubmissionStatsResult {
+  form: { id: string; key: string; title: string; purpose: string };
+  total: number;
   stats: FieldStatPayload[];
+}
+
+interface FormSubmissionPopulation {
+  form: FormRow;
+  cte: string;
+  args: unknown[];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -152,36 +167,6 @@ function optionLabelMap(options: unknown): Map<string, string> {
   return labels;
 }
 
-function stringifyAnswer(value: unknown): string {
-  if (typeof value === "string") return value.trim().length > 0 ? value : "-";
-  if (typeof value === "number" || typeof value === "bigint") return String(value);
-  if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (value == null) return "-";
-  return JSON.stringify(value, null, 2);
-}
-
-function formatAnswerValue(value: unknown, labels: Map<string, string>): string[] {
-  if (Array.isArray(value)) {
-    if (value.length === 0) return ["-"];
-    return value.map((entry) => (typeof entry === "string" ? (labels.get(entry) ?? entry) : stringifyAnswer(entry)));
-  }
-
-  if (typeof value === "string") return [labels.get(value) ?? stringifyAnswer(value)];
-  return [stringifyAnswer(value)];
-}
-
-function extractStatValues(value: unknown, field: FieldRow, labels: Map<string, string>): string[] {
-  if (value == null || value === "") return [];
-  if (Array.isArray(value)) return formatAnswerValue(value, labels).filter((entry) => entry !== "-");
-  if (typeof value === "string" && field.field_type === "textarea") {
-    return value
-      .split(/[,;\n]/)
-      .map((entry) => entry.trim())
-      .filter(Boolean);
-  }
-  return formatAnswerValue(value, labels).filter((entry) => entry !== "-");
-}
-
 function buildFieldStatContexts(fields: FieldRow[]): FieldStatContext[] {
   return fields.map((field) => ({
     field,
@@ -189,33 +174,46 @@ function buildFieldStatContexts(fields: FieldRow[]): FieldStatContext[] {
   }));
 }
 
-function buildStats(fieldContexts: FieldStatContext[], submissions: AdminSubmissionPayload[]): FieldStatPayload[] {
-  return fieldContexts
-    .map(({ field, labels }) => {
-      const counts = new Map<string, number>();
-      let totalAnswers = 0;
+interface AggregatedStatRow {
+  field_key: string;
+  label: string;
+  count: number;
+  total_answers: number;
+  unique_answers: number;
+}
 
-      for (const submission of submissions) {
-        const values = extractStatValues(submission.answers[field.key], field, labels);
-        if (values.length === 0) continue;
-        totalAnswers += 1;
-        for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
-      }
-
-      const maxCount = Math.max(1, ...counts.values());
-      const countedValues = Array.from(counts.values()).reduce((sum, count) => sum + count, 0) || 1;
-      const entries = Array.from(counts.entries())
-        .map(([label, count]) => ({
-          label,
-          count,
-          percent: Math.round((count / countedValues) * 100),
-          weight: count / maxCount,
-        }))
-        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-
-      return { fieldKey: field.key, totalAnswers, uniqueAnswers: entries.length, entries };
-    })
-    .filter((stat) => stat.entries.length > 0);
+function buildStats(fieldContexts: FieldStatContext[], rows: AggregatedStatRow[]): FieldStatPayload[] {
+  const contextByKey = new Map(fieldContexts.map((context) => [context.field.key, context]));
+  const rowsByField = new Map<string, AggregatedStatRow[]>();
+  for (const row of rows) {
+    const values = rowsByField.get(row.field_key) ?? [];
+    values.push(row);
+    rowsByField.set(row.field_key, values);
+  }
+  return Array.from(rowsByField.entries()).map(([fieldKey, fieldRows]) => {
+    const context = contextByKey.get(fieldKey);
+    const merged = new Map<string, number>();
+    for (const row of fieldRows) {
+      const label = context?.labels.get(row.label) ?? row.label;
+      merged.set(label, (merged.get(label) ?? 0) + Number(row.count));
+    }
+    const maxCount = Math.max(1, ...merged.values());
+    const countedValues = Array.from(merged.values()).reduce((sum, count) => sum + count, 0) || 1;
+    const entries = Array.from(merged.entries())
+      .map(([label, count]) => ({
+        label,
+        count,
+        percent: Math.round((count / countedValues) * 100),
+        weight: count / maxCount,
+      }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+    return {
+      fieldKey,
+      totalAnswers: Number(fieldRows[0]?.total_answers ?? 0),
+      uniqueAnswers: Number(fieldRows[0]?.unique_answers ?? entries.length),
+      entries,
+    };
+  });
 }
 
 // Ascending-sort submitter display-name/email key, computed identically in
@@ -265,14 +263,22 @@ function buildMergedSubmissionsQuery(params: {
   formId: string;
   statusFilter: string;
   attendanceTypeFilter: string;
+  searchQuery?: string;
   purpose: string;
   eventId: string | null;
 }): { cte: string; args: unknown[] } {
-  const { formId, statusFilter, attendanceTypeFilter, purpose, eventId } = params;
+  const { formId, statusFilter, attendanceTypeFilter, searchQuery, purpose, eventId } = params;
   const args: unknown[] = [];
+
+  function searchClause(expressions: readonly string[]): { sql: string; bindings: string[] } {
+    if (!searchQuery) return { sql: "", bindings: [] };
+    const search = buildD1TextSearchFilter(searchQuery, expressions);
+    return { sql: `AND ${search.sql}`, bindings: search.bindings };
+  }
 
   const joinAttendance = Boolean(attendanceTypeFilter) && purpose === "event_registration";
   const submitterExpr = submitterSortSql("u.first_name", "u.last_name", "u.email");
+  const submissionSearch = searchClause(["u.email", "u.first_name", "u.last_name", "u.organization_name", "fs.status"]);
 
   const branches: string[] = [
     `SELECT
@@ -295,13 +301,22 @@ function buildMergedSubmissionsQuery(params: {
      ${joinAttendance ? "LEFT JOIN registrations r_filter ON r_filter.id = fs.context_ref AND fs.context_type = 'registration'" : ""}
      WHERE fs.form_id = ?
      ${statusFilter ? "AND fs.status = ?" : ""}
-     ${joinAttendance ? "AND r_filter.attendance_type = ?" : ""}`,
+     ${joinAttendance ? "AND r_filter.attendance_type = ?" : ""}
+     ${submissionSearch.sql}`,
   ];
   args.push(formId);
   if (statusFilter) args.push(statusFilter);
   if (joinAttendance) args.push(attendanceTypeFilter);
+  args.push(...submissionSearch.bindings);
 
   if (eventId && purpose === "event_registration") {
+    const registrationSearch = searchClause([
+      "u.email",
+      "u.first_name",
+      "u.last_name",
+      "u.organization_name",
+      "r.status",
+    ]);
     branches.push(
       `SELECT
          'registration:' || r.id AS id,
@@ -324,6 +339,7 @@ function buildMergedSubmissionsQuery(params: {
          AND r.custom_answers_json IS NOT NULL
          ${statusFilter ? "AND r.status = ?" : ""}
          ${attendanceTypeFilter ? "AND r.attendance_type = ?" : ""}
+         ${registrationSearch.sql}
          AND NOT EXISTS (
            SELECT 1 FROM form_submissions fs2
            WHERE fs2.form_id = ? AND fs2.context_type = 'registration' AND fs2.context_ref = r.id
@@ -332,10 +348,19 @@ function buildMergedSubmissionsQuery(params: {
     args.push(eventId);
     if (statusFilter) args.push(statusFilter);
     if (attendanceTypeFilter) args.push(attendanceTypeFilter);
+    args.push(...registrationSearch.bindings);
     args.push(formId);
   }
 
   if (eventId && purpose === "proposal_submission") {
+    const proposalSearch = searchClause([
+      "u.email",
+      "u.first_name",
+      "u.last_name",
+      "u.organization_name",
+      "sp.status",
+      "sp.title",
+    ]);
     branches.push(
       `SELECT
          'proposal:' || sp.id AS id,
@@ -357,6 +382,7 @@ function buildMergedSubmissionsQuery(params: {
        WHERE sp.event_id = ?
          AND sp.details_json IS NOT NULL
          ${statusFilter ? "AND sp.status = ?" : ""}
+         ${proposalSearch.sql}
          AND NOT EXISTS (
            SELECT 1 FROM form_submissions fs2
            WHERE fs2.form_id = ? AND fs2.context_type = 'proposal' AND fs2.context_ref = sp.id
@@ -364,10 +390,32 @@ function buildMergedSubmissionsQuery(params: {
     );
     args.push(eventId);
     if (statusFilter) args.push(statusFilter);
+    args.push(...proposalSearch.bindings);
     args.push(formId);
   }
 
   return { cte: `WITH merged AS (${branches.join(" UNION ALL ")})`, args };
+}
+
+async function resolveFormSubmissionPopulation(
+  db: DatabaseLike,
+  params: Pick<ListFormSubmissionsParams, "formKey" | "status" | "attendanceType" | "eventSlug" | "q">,
+): Promise<FormSubmissionPopulation> {
+  const form = await getFormByKey(db, params.formKey);
+  const eventId = params.eventSlug
+    ? (await getEventBySlug(db, params.eventSlug)).id
+    : form.scope_type === "event"
+      ? form.scope_ref
+      : null;
+  const query = buildMergedSubmissionsQuery({
+    formId: form.id,
+    statusFilter: params.status,
+    attendanceTypeFilter: params.attendanceType,
+    searchQuery: params.q,
+    purpose: form.purpose,
+    eventId,
+  });
+  return { form, ...query };
 }
 
 // Batch-loads form_submission_answers for exactly the `source: 'submission'`
@@ -376,15 +424,16 @@ function buildMergedSubmissionsQuery(params: {
 // attaches parsed `answers` to every row, submission-sourced or not.
 async function attachAnswers(db: DatabaseLike, rows: MergedSubmissionRow[]): Promise<AdminSubmissionPayload[]> {
   const submissionIds = rows.filter((row) => row.source === "submission").map((row) => row.source_id);
+  const submissionFilter = buildD1JsonMembershipFilter("submission_id", submissionIds);
 
   const answerRows = submissionIds.length
     ? await all<AnswerRow>(
         db,
         `SELECT submission_id, field_key, data_json
          FROM form_submission_answers
-         WHERE submission_id IN (${submissionIds.map(() => "?").join(",")})
+         WHERE ${submissionFilter.sql}
          ORDER BY submission_id, field_key`,
-        submissionIds,
+        submissionFilter.bindings,
       )
     : [];
 
@@ -423,14 +472,38 @@ export async function listFormSubmissions(
   db: DatabaseLike,
   params: ListFormSubmissionsParams,
 ): Promise<ListFormSubmissionsResult> {
-  const form = await getFormByKey(db, params.formKey);
+  const { form, cte, args } = await resolveFormSubmissionPopulation(db, params);
+  const orderBy = resolveOrderBy(
+    params.sort,
+    FORM_SUBMISSIONS_SORT_COLUMNS,
+    "ORDER BY submitted_at DESC",
+    "source ASC, source_id ASC",
+  );
 
-  let eventId: string | null = form.scope_type === "event" ? form.scope_ref : null;
-  if (params.eventSlug) {
-    const event = await getEventBySlug(db, params.eventSlug);
-    eventId = event.id;
-  }
+  const page = await queryPage<MergedSubmissionRow>(
+    db,
+    {
+      sql: `${cte} SELECT * FROM merged ${orderBy} LIMIT ? OFFSET ?`,
+      bindings: [...args, params.limit, params.offset],
+    },
+    { sql: `${cte} SELECT COUNT(*) AS total FROM merged`, bindings: args },
+  );
+  const submissions = page.rows.length > 0 ? await attachAnswers(db, page.rows) : [];
 
+  return {
+    form: { id: form.id, key: form.key, title: form.title, purpose: form.purpose },
+    total: page.total,
+    offset: params.offset,
+    limit: params.limit,
+    submissions,
+  };
+}
+
+export async function getFormSubmissionStats(
+  db: DatabaseLike,
+  params: GetFormSubmissionStatsParams,
+): Promise<GetFormSubmissionStatsResult> {
+  const { form, cte, args } = await resolveFormSubmissionPopulation(db, params);
   const fields = await all<FieldRow>(
     db,
     `SELECT id, key, label, field_type, options_json, validation_json
@@ -439,51 +512,71 @@ export async function listFormSubmissions(
      ORDER BY sort_order ASC, key ASC`,
     [form.id],
   );
-  const fieldContexts = buildFieldStatContexts(fields);
-
-  const { cte, args } = buildMergedSubmissionsQuery({
-    formId: form.id,
-    statusFilter: params.status,
-    attendanceTypeFilter: params.attendanceType,
-    purpose: form.purpose,
-    eventId,
-  });
-  const orderBy = resolveOrderBy(params.sort, FORM_SUBMISSIONS_SORT_COLUMNS, "ORDER BY submitted_at DESC");
-
-  let pageRows: MergedSubmissionRow[] = [];
-  let statsRows: MergedSubmissionRow[] = [];
-  let total: number;
-
-  if (params.limit > 0) {
-    const page = await queryPage<MergedSubmissionRow>(
-      db,
-      {
-        sql: `${cte} SELECT * FROM merged ${orderBy} LIMIT ? OFFSET ?`,
-        bindings: [...args, params.limit, params.offset],
-      },
-      { sql: `${cte} SELECT COUNT(*) AS total FROM merged`, bindings: args },
-    );
-    pageRows = page.rows;
-    total = page.total;
-  } else {
-    const [countResult, statsResult] = await db.batch([
-      db.prepare(`${cte} SELECT COUNT(*) AS total FROM merged`).bind(...args),
-      // See file header — bounded stand-in for a true full-population scan.
-      db.prepare(`${cte} SELECT * FROM merged ${orderBy} LIMIT ?`).bind(...args, STATS_SCAN_ROW_LIMIT),
-    ]);
-    total = Number(batchFirst<{ total: number }>(countResult)?.total ?? 0);
-    statsRows = batchRows<MergedSubmissionRow>(statsResult);
-  }
-
-  const submissions = pageRows.length > 0 ? await attachAnswers(db, pageRows) : [];
-  const statsSubmissions = statsRows.length > 0 ? await attachAnswers(db, statsRows) : [];
-
+  const aggregateSql = `${cte},
+    normalized_answers AS (
+      SELECT m.id AS submission_id, a.field_key, a.data_json
+      FROM merged m
+      JOIN form_submission_answers a ON m.source = 'submission' AND a.submission_id = m.source_id
+      UNION ALL
+      SELECT m.id AS submission_id, je.key AS field_key,
+             CASE WHEN je.type IN ('array', 'object') THEN json(je.value) ELSE json_quote(je.value) END AS data_json
+      FROM merged m
+      CROSS JOIN json_each(COALESCE(m.answers_json, '{}')) je
+      WHERE m.source IN ('registration', 'proposal')
+    ),
+    expanded_raw AS (
+      SELECT a.submission_id, a.field_key, value.type AS value_type, value.value AS value
+      FROM normalized_answers a
+      CROSS JOIN json_each(
+        CASE
+          WHEN json_valid(a.data_json) AND json_type(a.data_json) = 'array' THEN a.data_json
+          WHEN json_valid(a.data_json) THEN json_array(json_extract(a.data_json, '$'))
+          ELSE json_array(a.data_json)
+        END
+      ) value
+    ),
+    labeled AS (
+      SELECT submission_id, field_key,
+             CASE value_type
+               WHEN 'true' THEN 'Yes'
+               WHEN 'false' THEN 'No'
+               WHEN 'null' THEN NULL
+               WHEN 'array' THEN json(value)
+               WHEN 'object' THEN json(value)
+               ELSE TRIM(CAST(value AS TEXT))
+             END AS label
+      FROM expanded_raw
+    ),
+    entry_counts AS (
+      SELECT field_key, label, COUNT(DISTINCT submission_id) AS count
+      FROM labeled
+      WHERE label IS NOT NULL AND label <> ''
+      GROUP BY field_key, label
+    ),
+    field_totals AS (
+      SELECT field_key, COUNT(DISTINCT submission_id) AS total_answers
+      FROM labeled
+      WHERE label IS NOT NULL AND label <> ''
+      GROUP BY field_key
+    ),
+    ranked AS (
+      SELECT e.field_key, e.label, e.count, t.total_answers,
+             COUNT(*) OVER (PARTITION BY e.field_key) AS unique_answers,
+             ROW_NUMBER() OVER (PARTITION BY e.field_key ORDER BY e.count DESC, e.label ASC) AS entry_rank
+      FROM entry_counts e
+      JOIN field_totals t ON t.field_key = e.field_key
+    )
+    SELECT field_key, SUBSTR(label, 1, 500) AS label, count, total_answers, unique_answers
+    FROM ranked
+    WHERE entry_rank <= ?
+    ORDER BY field_key ASC, entry_rank ASC`;
+  const [countResult, statsResult] = await db.batch([
+    db.prepare(`${cte} SELECT COUNT(*) AS total FROM merged`).bind(...args),
+    db.prepare(aggregateSql).bind(...args, MAX_STATS_ENTRIES_PER_FIELD),
+  ]);
   return {
     form: { id: form.id, key: form.key, title: form.title, purpose: form.purpose },
-    total,
-    offset: params.offset,
-    limit: params.limit,
-    submissions,
-    stats: params.limit === 0 ? buildStats(fieldContexts, statsSubmissions) : [],
+    total: Number(batchFirst<{ total: number }>(countResult)?.total ?? 0),
+    stats: buildStats(buildFieldStatContexts(fields), batchRows<AggregatedStatRow>(statsResult)),
   };
 }

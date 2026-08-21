@@ -6,11 +6,17 @@ import type { Env, PagesContext } from "../functions/_lib/types";
 import { currencyForCountry, toSmallestUnit, toMajorUnit } from "../assets/shared/constants/currencies";
 import { donationCheckoutSchema } from "../assets/shared/schemas/donation";
 
+const CHECKOUT_ATTEMPT_ID = "123e4567-e89b-42d3-a456-426614174000";
+
+function parseDonationCheckout(input: Record<string, unknown>) {
+  return donationCheckoutSchema.safeParse({ checkoutAttemptId: CHECKOUT_ATTEMPT_ID, ...input });
+}
+
 // ── Schema validation ──────────────────────────────────────────────────────
 
 describe("donationCheckoutSchema", () => {
   it("accepts a valid minimal payload", () => {
-    const result = donationCheckoutSchema.safeParse({
+    const result = parseDonationCheckout({
       amount: 5000,
       currency: "usd",
       name: "Alice Example",
@@ -19,7 +25,7 @@ describe("donationCheckoutSchema", () => {
   });
 
   it("accepts a full payload with all optional fields", () => {
-    const result = donationCheckoutSchema.safeParse({
+    const result = parseDonationCheckout({
       amount: 10000,
       currency: "eur",
       name: "Alice Example",
@@ -34,7 +40,7 @@ describe("donationCheckoutSchema", () => {
   });
 
   it("accepts embedded: false explicitly", () => {
-    const result = donationCheckoutSchema.safeParse({
+    const result = parseDonationCheckout({
       amount: 5000,
       currency: "usd",
       name: "Alice",
@@ -44,32 +50,32 @@ describe("donationCheckoutSchema", () => {
   });
 
   it("rejects amount below minimum", () => {
-    const result = donationCheckoutSchema.safeParse({ amount: 50, currency: "usd", name: "Alice" });
+    const result = parseDonationCheckout({ amount: 50, currency: "usd", name: "Alice" });
     expect(result.success).toBe(false);
   });
 
   it("rejects non-integer amount", () => {
-    const result = donationCheckoutSchema.safeParse({ amount: 50.5, currency: "usd", name: "Alice" });
+    const result = parseDonationCheckout({ amount: 50.5, currency: "usd", name: "Alice" });
     expect(result.success).toBe(false);
   });
 
   it("rejects negative amount", () => {
-    const result = donationCheckoutSchema.safeParse({ amount: -100, currency: "usd", name: "Alice" });
+    const result = parseDonationCheckout({ amount: -100, currency: "usd", name: "Alice" });
     expect(result.success).toBe(false);
   });
 
   it("rejects amount above safety cap", () => {
-    const result = donationCheckoutSchema.safeParse({ amount: 200_000_000, currency: "usd", name: "Alice" });
+    const result = parseDonationCheckout({ amount: 200_000_000, currency: "usd", name: "Alice" });
     expect(result.success).toBe(false);
   });
 
   it("rejects unsupported currency", () => {
-    const result = donationCheckoutSchema.safeParse({ amount: 5000, currency: "xyz", name: "Alice" });
+    const result = parseDonationCheckout({ amount: 5000, currency: "xyz", name: "Alice" });
     expect(result.success).toBe(false);
   });
 
   it("normalises currency to lowercase", () => {
-    const result = donationCheckoutSchema.safeParse({ amount: 5000, currency: "EUR", name: "Alice" });
+    const result = parseDonationCheckout({ amount: 5000, currency: "EUR", name: "Alice" });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.currency).toBe("eur");
@@ -77,22 +83,22 @@ describe("donationCheckoutSchema", () => {
   });
 
   it("rejects missing name", () => {
-    const result = donationCheckoutSchema.safeParse({ amount: 5000, currency: "usd" });
+    const result = parseDonationCheckout({ amount: 5000, currency: "usd" });
     expect(result.success).toBe(false);
   });
 
   it("rejects empty name", () => {
-    const result = donationCheckoutSchema.safeParse({ amount: 5000, currency: "usd", name: "" });
+    const result = parseDonationCheckout({ amount: 5000, currency: "usd", name: "" });
     expect(result.success).toBe(false);
   });
 
   it("rejects whitespace-only name", () => {
-    const result = donationCheckoutSchema.safeParse({ amount: 5000, currency: "usd", name: "   " });
+    const result = parseDonationCheckout({ amount: 5000, currency: "usd", name: "   " });
     expect(result.success).toBe(false);
   });
 
   it("rejects successPath that doesn't start with /", () => {
-    const result = donationCheckoutSchema.safeParse({
+    const result = parseDonationCheckout({
       amount: 5000,
       currency: "usd",
       name: "Alice",
@@ -102,7 +108,7 @@ describe("donationCheckoutSchema", () => {
   });
 
   it("rejects successPath containing // (open redirect prevention)", () => {
-    const result = donationCheckoutSchema.safeParse({
+    const result = parseDonationCheckout({
       amount: 5000,
       currency: "usd",
       name: "Alice",
@@ -112,12 +118,27 @@ describe("donationCheckoutSchema", () => {
   });
 
   it("rejects cancelPath with open redirect", () => {
-    const result = donationCheckoutSchema.safeParse({
+    const result = parseDonationCheckout({
       amount: 5000,
       currency: "usd",
       name: "Alice",
       cancelPath: "/foo//bar",
     });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects backslash-normalized redirect paths", () => {
+    const result = parseDonationCheckout({
+      amount: 5000,
+      currency: "usd",
+      name: "Alice",
+      successPath: "/\\evil.example/steal",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a missing checkout attempt ID", () => {
+    const result = donationCheckoutSchema.safeParse({ amount: 5000, currency: "usd", name: "Alice" });
     expect(result.success).toBe(false);
   });
 });
@@ -188,7 +209,12 @@ describe("POST /api/v1/donations/checkout", () => {
     body: unknown,
     headers: Record<string, string> = {},
     url = "https://pkic.org/api/v1/donations/checkout",
+    includeCheckoutAttemptId = true,
   ): Request {
+    const requestBody =
+      includeCheckoutAttemptId && body !== null && typeof body === "object" && !Array.isArray(body)
+        ? { checkoutAttemptId: CHECKOUT_ATTEMPT_ID, ...body }
+        : body;
     return new Request(url, {
       method: "POST",
       headers: {
@@ -196,7 +222,7 @@ describe("POST /api/v1/donations/checkout", () => {
         "sec-fetch-site": "same-origin",
         ...headers,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(requestBody),
     });
   }
 
@@ -249,6 +275,22 @@ describe("POST /api/v1/donations/checkout", () => {
     expect(response.status).toBe(400);
     const body = (await response.json()) as Record<string, unknown>;
     expect((body.error as Record<string, unknown>).code).toBe("VALIDATION_ERROR");
+  });
+
+  it("returns 400 when the checkout attempt ID is missing", async () => {
+    const env = makeEnv();
+    const ctx = makeContext(
+      env,
+      makeRequest({ amount: 5000, currency: "usd", name: "Test Donor" }, {}, undefined, false),
+    );
+    const response = await callEndpoint(ctx);
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as {
+      error: { code: string; details?: { fieldErrors?: Record<string, string[]> } };
+    };
+    expect(body.error.code).toBe("VALIDATION_ERROR");
+    expect(body.error.details?.fieldErrors?.checkoutAttemptId).toBeTruthy();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
   it("returns 400 when name is missing and does not call Stripe or D1", async () => {
@@ -442,6 +484,7 @@ describe("POST /api/v1/donations/checkout", () => {
     expect(stripeInit.headers).toEqual(
       expect.objectContaining({
         Authorization: "Bearer sk_test_fake",
+        "Idempotency-Key": expect.stringMatching(/^donation:/),
       }),
     );
 
@@ -458,7 +501,7 @@ describe("POST /api/v1/donations/checkout", () => {
 
     // Verify D1 insert was called with the session ID
     const db = env.DB as ReturnType<typeof makeDbStub>;
-    expect(db.prepare).toHaveBeenCalledWith(expect.stringContaining("checkout_session_id"));
+    expect(db.prepare).toHaveBeenCalledWith(expect.stringContaining("ON CONFLICT(checkout_session_id) DO NOTHING"));
   });
 
   it("uses the configured app base URL for preview deployments", async () => {
@@ -812,10 +855,15 @@ describe("POST /api/v1/webhooks/stripe", () => {
       "pi_test_metadata_fallback",
       "Alice Donor",
       "donor@example.com",
+      "Example Org",
       "usd",
       7500,
       null,
+      "/donate/",
       expect.any(String),
+      null,
+      null,
+      null,
     );
   });
 });

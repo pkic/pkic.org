@@ -79,7 +79,7 @@ export const UsersList = openApiRoute(usersListRouteSchema, async (c: AdminConte
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-  const orderBy = resolveOrderBy(sort, ADMIN_USERS_SORT_COLUMNS, "ORDER BY u.role ASC, u.email ASC");
+  const orderBy = resolveOrderBy(sort, ADMIN_USERS_SORT_COLUMNS, "ORDER BY u.role ASC, u.email ASC", "u.id ASC");
 
   // "member" covers both an org-less individual (members.user_id set
   // directly) and an organization representative (members.user_id is NULL
@@ -97,8 +97,8 @@ export const UsersList = openApiRoute(usersListRouteSchema, async (c: AdminConte
               m.organization_id AS member_organization_id, o.name AS member_organization_name,
               (SELECT COUNT(*) FROM event_participants ep WHERE ep.user_id = u.id) AS event_participation_count
        FROM users u
-       -- A user can represent more than one organization at once (migration
-       -- 0037) — join to a single deterministic representative row (earliest
+       -- A user can represent more than one organization at once (consolidated
+       -- migration 0035) — join to a single deterministic representative row (earliest
        -- joined_at) instead of fanning out one result row (and one
        -- duplicate/miscounted page entry) per represented organization.
 ${deterministicRepresentativeJoinSql("u.id")}

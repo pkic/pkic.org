@@ -7,7 +7,6 @@
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../_lib/auth/permissions";
-import { writeAuditLog } from "../../../../_lib/services/audit";
 import {
   createAdminSponsorship,
   getAdminSponsorship,
@@ -27,9 +26,9 @@ export const SponsorshipsList = openApiRoute(sponsorshipsListRouteSchema, async 
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
   requirePermission(admin, "sponsorships:read");
 
-  const { type, stage, tier, limit = 50, offset = 0 } = data.query;
+  const { type, stage, tier, q, sort, limit = 50, offset = 0 } = data.query;
 
-  const { sponsorships, total } = await listAdminSponsorships(db, { type, stage, tier, limit, offset });
+  const { sponsorships, total } = await listAdminSponsorships(db, { type, stage, tier, q, sort, limit, offset });
   return json({
     sponsorships: sponsorships.map(toApiSponsorship),
     page: buildPageInfo(limit, offset, total, sponsorships.length),
@@ -42,7 +41,7 @@ export const SponsorshipsCreate = openApiRoute(sponsorshipCreateRouteSchema, asy
   requirePermission(admin, "sponsorships:write");
 
   const body = data.body;
-  const { id } = await createAdminSponsorship(db, {
+  const { id } = await createAdminSponsorship(db, admin.id, {
     sponsorType: body.sponsorType,
     organizationId: body.organizationId ?? null,
     nonMemberName: body.nonMemberName ?? null,
@@ -54,10 +53,6 @@ export const SponsorshipsCreate = openApiRoute(sponsorshipCreateRouteSchema, asy
     assignedToUserId: body.assignedToUserId ?? null,
     renewalDate: body.renewalDate ?? null,
     notes: body.notes ?? null,
-  });
-
-  await writeAuditLog(db, "admin", admin.id, "sponsorship_created", "sponsorship", id, {
-    sponsorType: body.sponsorType,
   });
 
   const sponsorship = (await getAdminSponsorship(db, id))!;

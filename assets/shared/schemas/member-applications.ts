@@ -2,11 +2,11 @@ import { z } from "zod";
 import { formFieldDefinitionSchema } from "./forms";
 import { normalizedEmailSchema } from "./api";
 import { membershipCategorySchema, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "./membership-categories";
+import { formAnswersSchema } from "./form-answers";
 
 export { membershipCategorySchema };
 
-// Canonical closed-state vocabulary for member_applications.status/stage
-// (kept as one column pair set to the same value — see
+// Canonical closed-state vocabulary for member_applications.stage. See
 // isValidStageTransition() in
 // functions/_lib/services/membership/applications/transition.ts, which
 // calls this file's own allowedTransitions() below as the actual
@@ -69,8 +69,8 @@ export const memberApplicationCreateSchema = z
     applicantName: z.string().trim().min(1, "Name is required").max(160),
     membershipCategory: membershipCategorySchema,
     organizationName: z.string().trim().min(1).max(200).optional(),
-    /** Free-form answers keyed by form_fields.key (see GET .../applications/form). */
-    answers: z.record(z.string(), z.unknown()).optional(),
+    /** Validated answers keyed by form_fields.key (see GET .../applications/form). */
+    answers: formAnswersSchema.optional(),
   })
   .superRefine((value, ctx) => {
     const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(value.membershipCategory);
@@ -87,7 +87,6 @@ export type MemberApplicationCreateInput = z.infer<typeof memberApplicationCreat
 
 export const memberApplicationCreateResponseSchema = z.object({
   applicationId: z.string(),
-  status: applicationStageSchema,
   stage: applicationStageSchema,
   manageToken: z.string().describe("Applicant token for status checks and document uploads — shown once"),
 });
@@ -112,7 +111,6 @@ export const memberApplicationCreateRouteSchema = {
 
 export const memberApplicationStatusResponseSchema = z.object({
   id: z.string(),
-  status: applicationStageSchema,
   stage: applicationStageSchema,
   stageEnteredAt: z.string(),
   createdAt: z.string(),

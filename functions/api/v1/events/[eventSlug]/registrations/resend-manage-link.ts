@@ -57,7 +57,6 @@ export async function onRequestPost(c: any): Promise<Response> {
      JOIN   users u ON u.id = r.user_id
      WHERE  lower(u.email) = lower(?)
        AND  r.event_id = ?
-      AND  r.status != 'cancelled_unauthorized'
      ORDER  BY r.created_at DESC
      LIMIT  1`,
     [body.email, event.id],

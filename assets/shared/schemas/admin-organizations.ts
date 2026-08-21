@@ -13,9 +13,14 @@ import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { normalizedEmailSchema } from "./api";
 import { linksSchema } from "./links";
+import {
+  organizationEditableContentSchema,
+  organizationProfileExtendedFieldsSchema,
+  organizationProfileSummaryFieldsSchema,
+} from "./organization-profile";
 import { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "./admin-members";
 import { MEMBER_STATUSES, memberStatusSchema } from "./membership-categories";
-import { listQuerySchema, paginationQuerySchema, paginatedResponseSchema } from "./pagination";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 export { MEMBER_STATUSES, memberStatusSchema };
 
@@ -38,24 +43,22 @@ export const memberIdParamsSchema = z.object({ id: databaseIdSchema });
 
 // ── Organization list/detail ────────────────────────────────────────────────
 
-export const adminOrganizationSummarySchema = z.object({
-  id: databaseIdSchema,
-  name: z.string(),
-  website: z.string().nullable(),
-  description: z.string().nullable(),
-  slogan: z.string().nullable(),
-  logoUrl: z.string().nullable(),
-  membershipCategory: z.string().nullable(),
-  memberSince: z.string(),
-  memberCount: z.number(),
-  primaryContactName: z.string().nullable(),
-  primaryContactEmail: z.string().nullable(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-});
+export const adminOrganizationSummarySchema = z
+  .object({
+    id: databaseIdSchema,
+    name: z.string(),
+    membershipCategory: z.string().nullable(),
+    memberSince: z.string(),
+    memberCount: z.number(),
+    primaryContactName: z.string().nullable(),
+    primaryContactEmail: z.string().nullable(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .extend(organizationProfileSummaryFieldsSchema.shape);
 
 // membershipCategory is deliberately absent here — category lives once per
-// aggregate (member_category_assignments, migration 0037), surfaced once at
+// aggregate (member_category_assignments, consolidated migration 0035), surfaced once at
 // the top of adminOrganizationDetailSchema rather than repeated per
 // representative.
 //
@@ -81,18 +84,16 @@ export const adminOrganizationRepresentativeSchema = z.object({
   createdAt: z.string(),
 });
 
-export const adminOrganizationDetailSchema = adminOrganizationSummarySchema.extend({
-  contentMarkdown: z.string().nullable(),
-  blogUrl: z.string().nullable(),
-  blogFeedUrl: z.string().nullable(),
-  pressUrl: z.string().nullable(),
-  pressFeedUrl: z.string().nullable(),
-  careersUrl: z.string().nullable(),
-  links: linksSchema,
-  primaryContactUserId: databaseIdSchema.nullable(),
-  secondaryContactUserId: databaseIdSchema.nullable(),
-  representatives: z.array(adminOrganizationRepresentativeSchema),
-});
+export const adminOrganizationDetailSchema = adminOrganizationSummarySchema
+  .extend(organizationProfileExtendedFieldsSchema.shape)
+  .extend({
+    primaryContactUserId: databaseIdSchema.nullable(),
+    secondaryContactUserId: databaseIdSchema.nullable(),
+    representatives: z.array(adminOrganizationRepresentativeSchema),
+  });
+
+export type AdminOrganizationSummary = z.infer<typeof adminOrganizationSummarySchema>;
+export type AdminOrganizationDetail = z.infer<typeof adminOrganizationDetailSchema>;
 
 /** Allowlisted sort columns for GET /api/v1/admin/organizations — see listAdminOrganizations. */
 export const ADMIN_ORGANIZATIONS_SORT_COLUMNS = ["name", "membership_category", "created_at", "member_count"] as const;
@@ -129,25 +130,15 @@ export const organizationGetRouteSchema = {
 
 // ── Organization profile update ─────────────────────────────────────────────
 
-export const organizationUpdateSchema = z.object({
+export const organizationUpdateSchema = organizationEditableContentSchema.extend({
   name: trimmedString(1, 200).optional(),
-  // Category is now an organization-level property (migration 0040). Setting
+  // Category is now an organization-level property (consolidated migration 0035). Setting
   // it here cascades to every existing org-tied representative's
   // members.member_type (see updateAdminOrganization) so the two stay in
   // sync — member_type is a mirror for org-tied members, not an
   // independent value.
   membershipCategory: orgTiedMembershipCategorySchema.optional(),
   memberSince: z.iso.date().nullable().optional(),
-  description: trimmedString(0, 2000).nullable().optional(),
-  website: z.url().nullable().optional(),
-  contentMarkdown: trimmedString(0, 20000).nullable().optional(),
-  slogan: trimmedString(0, 300).nullable().optional(),
-  blogUrl: z.url().nullable().optional(),
-  blogFeedUrl: z.url().nullable().optional(),
-  pressUrl: z.url().nullable().optional(),
-  pressFeedUrl: z.url().nullable().optional(),
-  careersUrl: z.url().nullable().optional(),
-  links: linksSchema.optional(),
   primaryContactUserId: databaseIdSchema.nullable().optional(),
   secondaryContactUserId: databaseIdSchema.nullable().optional(),
 });
@@ -156,7 +147,7 @@ export const organizationUpdateRouteSchema = {
   tags: ["Organizations"],
   summary: "Update an organization's profile",
   description:
-    "data-bearing fields (pulled forward by migration 0037). primaryContactUserId/secondaryContactUserId must reference an existing representative (members row) of this organization, or null.",
+    "data-bearing fields (pulled forward by consolidated migration 0035). primaryContactUserId/secondaryContactUserId must reference an existing representative (members row) of this organization, or null.",
   request: {
     params: organizationIdParamsSchema,
     body: { content: { "application/json": { schema: organizationUpdateSchema } }, required: true },
@@ -289,7 +280,7 @@ export const confirmSecondaryContactRouteSchema = {
   tags: ["Organizations"],
   summary: "Confirm a pending secondary contact nomination",
   description:
-    "Confirms the nomination held in organization_secondary_contact_nominations (submitted by the primary contact via PATCH /api/v1/me/organization/secondary-contact), granting the nominee the role-secondary_contact representative role (migration 0038).",
+    "Confirms the nomination held in organization_secondary_contact_nominations (submitted by the primary contact via PATCH /api/v1/me/organization/secondary-contact), granting the nominee the role-secondary_contact representative role (consolidated migration 0035).",
   request: { params: organizationIdParamsSchema },
   responses: {
     "200": {
@@ -326,7 +317,14 @@ export const contentReviewSummarySchema = z.object({
   submitterEmail: z.string(),
 });
 
-export const contentReviewsListQuerySchema = paginationQuerySchema.extend({
+export const ADMIN_CONTENT_REVIEW_SORT_COLUMNS = [
+  "organizationName",
+  "submitterName",
+  "status",
+  "submittedAt",
+] as const;
+
+export const contentReviewsListQuerySchema = listQuerySchema(ADMIN_CONTENT_REVIEW_SORT_COLUMNS).extend({
   status: contentReviewStatusSchema.optional(),
 });
 
@@ -356,6 +354,10 @@ export const contentReviewDetailSchema = contentReviewSummarySchema.extend({
   logoStagingR2Key: z.string().nullable(),
   currentLogoR2Key: z.string().nullable(),
 });
+
+export type OrganizationContentReviewSummary = z.infer<typeof contentReviewSummarySchema>;
+export type OrganizationContentReviewDiffEntry = z.infer<typeof contentReviewDiffEntrySchema>;
+export type OrganizationContentReviewDetail = z.infer<typeof contentReviewDetailSchema>;
 
 export const contentReviewIdParamsSchema = z.object({ id: databaseIdSchema });
 

@@ -980,6 +980,11 @@
   }
 }
 
+.event-flow-attendance-card--in-person { --option-color: #e05c3b; }
+.event-flow-attendance-card--virtual { --option-color: #2b7de8; }
+.event-flow-attendance-card--on-demand { --option-color: #7b2be8; }
+.event-flow-attendance-card--default { --option-color: #198754; }
+
 // Coloured rounded-square icon pill.
 .event-flow-attendance-icon {
   display: flex;

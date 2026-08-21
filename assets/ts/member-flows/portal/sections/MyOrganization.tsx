@@ -6,17 +6,24 @@
  * change or logo is restricted to the primary/secondary contact
  * (org.isOrgContact), secondary-contact nomination to the primary contact
  * alone (org.isPrimaryContact) — mirrors the 403s the backend already
- * enforces in organization-content-reviews.ts / member-organization.ts.
+ * enforces in the organization-content and member-organization services.
  */
 import { Fragment } from "preact";
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { getJson, patchJson, deleteJson, ApiClientError } from "../../../shared/api-client";
 import { Spinner } from "../../../components/Spinner";
 import { ErrorAlert } from "../../../components/ErrorAlert";
+import { Pager } from "../../../components/Pager";
+import { useApiPage } from "../../../hooks/useApiPage";
 import { profile as profileSignal } from "../state";
 import { toast, fmt } from "../ui";
 import type { MyOrganizationProfile, MyOrganizationReview, MyOrganizationSponsorship } from "../types";
 import { linksToText, textToLinks } from "../../../shared/links-text";
+import { myOrganizationReviewsListRouteSchema } from "../../../../shared/schemas/me";
+import type { z } from "zod";
+
+const myOrganizationReviewsResponseSchema =
+  myOrganizationReviewsListRouteSchema.responses["200"].content["application/json"].schema;
 
 const FIELD_LABELS: Record<string, string> = {
   slogan: "Slogan",
@@ -336,29 +343,43 @@ function ContentEditorCard({ org, reload }: { org: MyOrganizationProfile; reload
   );
 }
 
-function ReviewHistoryCard({ reviews }: { reviews: MyOrganizationReview[] | null }) {
-  const past = (reviews ?? []).filter((r) => r.status !== "pending");
+function ReviewHistoryCard() {
+  const history = useApiPage<z.infer<typeof myOrganizationReviewsResponseSchema>>(
+    "/api/v1/me/organization/reviews",
+    { status: "history", sort: "-submittedAt" },
+    myOrganizationReviewsResponseSchema,
+  );
+  const reviews = history.data?.reviews ?? [];
 
   return (
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-white fw-semibold">Submission history</div>
       <div class="card-body">
-        {reviews === null ? (
+        {history.loading ? (
           <Spinner />
-        ) : past.length === 0 ? (
+        ) : history.error ? (
+          <ErrorAlert
+            error={history.error instanceof Error ? history.error.message : "Could not load submission history."}
+          />
+        ) : reviews.length === 0 ? (
           <p class="text-muted small mb-0">No past submissions.</p>
         ) : (
-          <ul class="list-group list-group-flush">
-            {past.map((r) => (
-              <li key={r.id} class="list-group-item px-0">
-                <div class="d-flex justify-content-between align-items-center">
-                  <span class={`badge text-capitalize ${reviewStatusBadgeClass(r.status)}`}>{r.status}</span>
-                  <span class="text-muted small">{fmt(r.submittedAt)}</span>
-                </div>
-                {r.reviewerNote && <p class="small text-muted mb-0 mt-1">{r.reviewerNote}</p>}
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul class="list-group list-group-flush">
+              {reviews.map((review: MyOrganizationReview) => (
+                <li key={review.id} class="list-group-item px-0">
+                  <div class="d-flex justify-content-between align-items-center">
+                    <span class={`badge text-capitalize ${reviewStatusBadgeClass(review.status)}`}>
+                      {review.status}
+                    </span>
+                    <span class="text-muted small">{fmt(review.submittedAt)}</span>
+                  </div>
+                  {review.reviewerNote && <p class="small text-muted mb-0 mt-1">{review.reviewerNote}</p>}
+                </li>
+              ))}
+            </ul>
+            {history.pagerProps && <Pager {...history.pagerProps} />}
+          </>
         )}
       </div>
     </div>
@@ -516,19 +537,14 @@ function SponsorshipCard() {
 
 export function MyOrganization() {
   const [org, setOrg] = useState<MyOrganizationProfile | null>(null);
-  const [reviews, setReviews] = useState<MyOrganizationReview[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     try {
-      const [orgData, reviewsData] = await Promise.all([
-        getJson<MyOrganizationProfile>("/api/v1/me/organization"),
-        getJson<{ reviews: MyOrganizationReview[] }>("/api/v1/me/organization/reviews"),
-      ]);
+      const orgData = await getJson<MyOrganizationProfile>("/api/v1/me/organization");
       setOrg(orgData);
-      setReviews(reviewsData.reviews);
       setError(null);
       setErrorCode(null);
     } catch (e) {
@@ -553,7 +569,7 @@ export function MyOrganization() {
     <div class="d-flex flex-column gap-3 content-width-lg">
       <OrganizationProfileCard org={org} reload={reload} />
       {org.isOrgContact && <ContentEditorCard org={org} reload={reload} />}
-      {org.isOrgContact && <ReviewHistoryCard reviews={reviews} />}
+      {org.isOrgContact && <ReviewHistoryCard key={org.pendingReview?.id ?? "no-pending-review"} />}
       <GovernanceCard org={org} reload={reload} />
       <SponsorshipCard />
     </div>

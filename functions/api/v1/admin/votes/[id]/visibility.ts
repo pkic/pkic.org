@@ -8,8 +8,7 @@ import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { getVoteScopeForPermissionCheck, updateVoteVisibility } from "../../../../../_lib/services/votes";
-import { writeAuditLog } from "../../../../../_lib/services/audit";
-import { adminVoteVisibilityUpdateRouteSchema } from "../../../../../../assets/shared/schemas/votes";
+import { adminVoteVisibilityUpdateRouteSchema } from "../../../../../../assets/shared/schemas/votes-admin";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 export const AdminVoteVisibilityPatch = openApiRoute(
@@ -27,9 +26,7 @@ export const AdminVoteVisibilityPatch = openApiRoute(
     );
 
     const body = data.body;
-    const vote = await updateVoteVisibility(db, id, body);
-
-    await writeAuditLog(db, "admin", admin.id, "vote_visibility_updated", "vote", vote.id, { changes: body });
+    const vote = await updateVoteVisibility(db, admin, id, body);
 
     return json({ vote });
   },

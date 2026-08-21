@@ -1,8 +1,8 @@
 /**
  * Admin Organizations read model — list/detail projections over the
  * post-approval organization profile (data-bearing columns, pulled forward
- * by migration 0040) plus its representative roster
- * (`organization_representatives`, migration 0037). Split from the combined
+ * by consolidated migration 0035) plus its representative roster
+ * (`organization_representatives`, consolidated migration 0035). Split from the combined
  * admin-organizations.ts (PR #1 review, Phase 8) — see profile.ts for the
  * profile-update use case and representatives.ts for representative/member
  * provisioning; this file owns only reads.
@@ -14,11 +14,8 @@ import { AppError } from "../../errors";
 import { resolveOrderBy } from "../../db/sort";
 import { parseLinksJson } from "../../../../assets/shared/schemas/links";
 import { REPRESENTATIVE_ROLE_IDS, resolveRepresentativeRoleHolders } from "../membership/representative-roles";
+import { toOrganizationExtendedContent, toOrganizationSummaryContent } from "../organization-content/fields";
 import type { DatabaseLike } from "../../types";
-
-export function logoUrlFor(id: string, logoR2Key: string | null): string | null {
-  return logoR2Key ? `/api/v1/members/${id}/logo` : null;
-}
 
 export async function getOrgAggregate(
   db: DatabaseLike,
@@ -72,13 +69,10 @@ function toOrgSummary(row: OrgSummaryRow) {
   return {
     id: row.id,
     name: row.name,
-    website: row.website,
-    description: row.description,
-    slogan: row.slogan,
-    logoUrl: logoUrlFor(row.id, row.logo_r2_key),
+    ...toOrganizationSummaryContent(row),
     membershipCategory: row.membership_category,
     // Falls back to the row's own creation time for organizations created
-    // before migration 0049 added this column (or via a path that never set
+    // before consolidated migration 0035 added this column (or via a path that never set
     // it) — matches the same fallback members-directory.ts/member-self-service.ts use.
     memberSince: row.member_since ?? row.created_at,
     memberCount: row.member_count,
@@ -102,7 +96,7 @@ export async function listAdminOrganizations(
   const search = params.q ? buildD1TextSearchFilter(params.q, ["o.name"]) : null;
   const where = search ? `WHERE ${search.sql}` : "";
   const whereArgs = search?.bindings ?? [];
-  const orderBy = resolveOrderBy(params.sort, ORG_SORT_COLUMNS, "ORDER BY o.name ASC");
+  const orderBy = resolveOrderBy(params.sort, ORG_SORT_COLUMNS, "ORDER BY o.name ASC", "o.id ASC");
 
   const { rows, total } = await queryPage<OrgSummaryRow>(
     db,
@@ -189,13 +183,7 @@ async function toOrgDetail(
     : { primaryContactUserId: null, secondaryContactUserId: null, votingDelegateUserId: null };
   return {
     ...toOrgSummary(row),
-    contentMarkdown: row.content_markdown,
-    blogUrl: row.blog_url,
-    blogFeedUrl: row.blog_feed_url,
-    pressUrl: row.press_url,
-    pressFeedUrl: row.press_feed_url,
-    careersUrl: row.careers_url,
-    links: parseLinksJson(row.links_json),
+    ...toOrganizationExtendedContent(row),
     primaryContactUserId: holders.primaryContactUserId,
     secondaryContactUserId: holders.secondaryContactUserId,
     votingDelegateUserId: holders.votingDelegateUserId,

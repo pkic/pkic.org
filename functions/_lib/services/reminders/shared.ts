@@ -1,5 +1,5 @@
 import { all } from "../../db/queries";
-import { prepareBulkQueueInviteEmailStatements, type InviteEmailQueueRow } from "../../email/outbox";
+import { prepareBulkQueueInviteEmailChunkStatements, type InviteEmailQueueRow } from "../../email/outbox";
 import { formatInvitePerson, type ProposalInviteEmailContext } from "../proposals";
 import { attendeeRegistrationClosesAt, type DueInviteRow } from "../reminders-support";
 import type { DatabaseLike, StatementLike } from "../../types";
@@ -16,28 +16,36 @@ export async function batchStatements(db: DatabaseLike, stmts: StatementLike[]):
 export async function batchQueueEmailsAndUpdateState(
   db: DatabaseLike,
   emailRows: InviteEmailQueueRow[],
-  stateStatements: StatementLike[],
+  stateStatements: Array<StatementLike | StatementLike[]>,
   queuedAt: string,
-): Promise<void> {
+  options: { isExpectedConflict?: (error: unknown) => boolean } = {},
+): Promise<number> {
   const MAX_ROWS = 250;
-  for (let i = 0; i < emailRows.length; i += MAX_ROWS) {
-    const emailSlice = emailRows.slice(i, i + MAX_ROWS);
-    const stateSlice = stateStatements.slice(i, i + MAX_ROWS);
-    await db.batch([...prepareBulkQueueInviteEmailStatements(db, emailSlice, queuedAt), ...stateSlice]);
-  }
-}
+  let committed = 0;
 
-export function isAttendeeInviteReminderAllowed(invite: DueInviteRow, nowMs = Date.now()): boolean {
-  if (invite.event_starts_at) {
-    const startsMs = new Date(invite.event_starts_at).getTime();
-    if (Number.isFinite(startsMs) && startsMs <= nowMs) return false;
+  const commitSlice = async (start: number, end: number): Promise<number> => {
+    const emailSlice = emailRows.slice(start, end);
+    const stateSlice = stateStatements
+      .slice(start, end)
+      .flatMap((statements) => (Array.isArray(statements) ? statements : [statements]));
+    try {
+      const emailStatements = prepareBulkQueueInviteEmailChunkStatements(db, emailSlice, queuedAt).map(
+        (chunk) => chunk.statement,
+      );
+      await db.batch([...emailStatements, ...stateSlice]);
+      return emailSlice.length;
+    } catch (error) {
+      if (!options.isExpectedConflict?.(error)) throw error;
+      if (emailSlice.length === 1) return 0;
+      const midpoint = start + Math.floor((end - start) / 2);
+      return (await commitSlice(start, midpoint)) + (await commitSlice(midpoint, end));
+    }
+  };
+
+  for (let i = 0; i < emailRows.length; i += MAX_ROWS) {
+    committed += await commitSlice(i, Math.min(i + MAX_ROWS, emailRows.length));
   }
-  const closesAt = attendeeRegistrationClosesAt(invite);
-  if (closesAt) {
-    const closesMs = new Date(closesAt).getTime();
-    if (Number.isFinite(closesMs) && closesMs <= nowMs) return false;
-  }
-  return true;
+  return committed;
 }
 
 export function attendeeEffectiveDeadline(invite: DueInviteRow): string | null {

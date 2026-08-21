@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { eventIdSchema, normalizedEmailSchema } from "./api";
 import { databaseIdSchema } from "./identifiers";
+import { stripeCurrencySchema, stripeEventEnvelopeSchema, stripeIdentifierSchema } from "./stripe";
+import { relativeRedirectPathSchema } from "./urls";
 
 /** Schemas for /api/v1/sponsorship/*. */
 
@@ -39,28 +41,53 @@ export const sponsorshipInquiryRouteSchema = {
 };
 
 export const sponsorshipCheckoutSchema = z.object({
+  /** Stable for one browser checkout attempt so retries reuse one Stripe session. */
+  checkoutAttemptId: z.uuid(),
   contactName: z.string().trim().min(1).max(160),
   contactEmail: normalizedEmailSchema,
   organizationName: z.string().trim().min(1).max(200).optional(),
   tier: z.string().trim().min(1).max(60),
   eventId: eventIdSchema,
-  successPath: z
-    .string()
-    .trim()
-    .max(500)
-    .refine((p) => p.startsWith("/"), "Must be a relative path starting with /")
-    .refine((p) => !p.includes("//"), "Must not contain //")
-    .optional(),
-  cancelPath: z
-    .string()
-    .trim()
-    .max(500)
-    .refine((p) => p.startsWith("/"), "Must be a relative path starting with /")
-    .refine((p) => !p.includes("//"), "Must not contain //")
-    .optional(),
+  successPath: relativeRedirectPathSchema.optional(),
+  cancelPath: relativeRedirectPathSchema.optional(),
 });
 
 export type SponsorshipCheckoutInput = z.infer<typeof sponsorshipCheckoutSchema>;
+
+export const sponsorshipCheckoutWebhookEnvelopeSchema = stripeEventEnvelopeSchema.extend({
+  id: stripeIdentifierSchema,
+});
+
+export const sponsorshipCheckoutSessionStatusSchema = z
+  .object({
+    id: stripeIdentifierSchema,
+    object: z.literal("checkout.session"),
+    payment_status: z.string().trim().min(1).max(80).nullable().optional(),
+  })
+  .passthrough();
+
+export const paidSponsorshipCheckoutSessionSchema = z
+  .object({
+    id: stripeIdentifierSchema,
+    object: z.literal("checkout.session"),
+    payment_status: z.literal("paid"),
+    amount_total: z.number().int().positive(),
+    currency: stripeCurrencySchema,
+    metadata: z.object({
+      checkout_attempt_id: z.uuid(),
+      tier: z.string().trim().min(1).max(60),
+      contact_name: z.string().trim().min(1).max(160),
+      contact_email: normalizedEmailSchema,
+      organization_name: z.string().trim().min(1).max(200).optional(),
+      event_id: databaseIdSchema,
+      event_slug: eventIdSchema,
+      price_amount_cents: z.coerce.number().int().positive(),
+      price_currency: stripeCurrencySchema,
+    }),
+  })
+  .passthrough();
+
+export type PaidSponsorshipCheckoutSession = z.infer<typeof paidSponsorshipCheckoutSessionSchema>;
 
 export const sponsorshipCheckoutResponseSchema = z.object({
   url: z.string(),
@@ -92,6 +119,7 @@ export const sponsorshipCheckoutWebhookRouteSchema = {
   responses: {
     "200": { description: "Event processed or acknowledged." },
     "400": { description: "Invalid signature or payload." },
+    "413": { description: "Webhook body exceeds the accepted byte limit." },
     "503": { description: "Webhook secret not configured." },
   },
 };

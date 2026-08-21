@@ -3,6 +3,7 @@ import { api } from "../../api";
 import { toast } from "../../ui";
 import type { AdminApplicationDetail } from "../../types";
 import type { EcDecisionValue } from "../../../../shared/schemas/ec-review";
+import { adminApplicationDetailSchema } from "../../../../shared/schemas/admin-applications";
 import { getAdminWorkingGroupCatalogue } from "../../services/catalogues";
 
 /**
@@ -21,8 +22,8 @@ export function useApplicationDetail(applicationId: string) {
     setLoading(true);
     setError(null);
     try {
-      const data = await api<AdminApplicationDetail>(`/api/v1/admin/applications/${applicationId}`);
-      setDetail(data);
+      const data = await api<unknown>(`/api/v1/admin/applications/${applicationId}`);
+      setDetail(adminApplicationDetailSchema.parse(data));
     } catch (e) {
       setError((e as Error).message);
     } finally {

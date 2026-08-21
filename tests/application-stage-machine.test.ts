@@ -10,6 +10,8 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { seedMemberApplication } from "./helpers/member-applications";
+import { adminApplicationDetailSchema } from "../assets/shared/schemas/admin-applications";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -27,25 +29,18 @@ async function call(token: string, path: string, init: RequestInit = {}): Promis
 }
 
 async function createApplication(overrides: Record<string, unknown> = {}): Promise<{ id: string }> {
-  const id = crypto.randomUUID();
-  await env.DB.prepare(
-    `INSERT INTO member_applications
-       (id, applicant_email, applicant_name, organization_name, organization_domain, membership_category,
-        status, stage, stage_entered_at, manage_token_hash, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, datetime('now'), datetime('now'))`,
-  )
-    .bind(
-      id,
-      (overrides.applicant_email as string) ?? "applicant@example.test",
-      (overrides.applicant_name as string) ?? "Applicant Name",
-      (overrides.organization_name as string) ?? "Example Org",
-      (overrides.organization_domain as string) ?? "example.test",
-      (overrides.membership_category as string) ?? "F",
-      (overrides.status as string) ?? "pending",
-      (overrides.stage as string) ?? "pending",
-      crypto.randomUUID(),
-    )
-    .run();
+  const applicantEmail = (overrides.applicant_email as string) ?? "applicant@example.test";
+  const id = await seedMemberApplication({
+    applicantEmail,
+    applicantName: (overrides.applicant_name as string) ?? "Applicant Name",
+    organizationName: (overrides.organization_name as string) ?? "Example Org",
+    organizationDomain:
+      "organization_domain" in overrides
+        ? (overrides.organization_domain as string | null)
+        : (applicantEmail.split("@")[1] ?? null),
+    membershipCategory: (overrides.membership_category as string) ?? "F",
+    stage: (overrides.stage as string) ?? "pending",
+  });
   return { id };
 }
 
@@ -67,13 +62,8 @@ describe("Application stage machine, communications, notes", () => {
     });
     expect(response.status).toBe(200);
 
-    const rows = await queryAll<{ stage: string; status: string }>(
-      env.DB,
-      "SELECT stage, status FROM member_applications WHERE id = ?",
-      id,
-    );
+    const rows = await queryAll<{ stage: string }>(env.DB, "SELECT stage FROM member_applications WHERE id = ?", id);
     expect(rows[0].stage).toBe("in_review");
-    expect(rows[0].status).toBe("in_review");
 
     const events = await queryAll(env.DB, "SELECT * FROM member_application_events WHERE application_id = ?", id);
     expect(events).toHaveLength(1);
@@ -96,13 +86,8 @@ describe("Application stage machine, communications, notes", () => {
     const statuses = [first.status, second.status].sort();
     expect(statuses).toEqual([200, 409]);
 
-    const rows = await queryAll<{ stage: string; status: string }>(
-      env.DB,
-      "SELECT stage, status FROM member_applications WHERE id = ?",
-      id,
-    );
+    const rows = await queryAll<{ stage: string }>(env.DB, "SELECT stage FROM member_applications WHERE id = ?", id);
     expect(rows[0].stage).toBe("in_review");
-    expect(rows[0].status).toBe("in_review");
 
     const events = await queryAll(env.DB, "SELECT * FROM member_application_events WHERE application_id = ?", id);
     expect(events).toHaveLength(1);
@@ -118,7 +103,7 @@ describe("Application stage machine, communications, notes", () => {
   });
 
   it("requires a valid on_hold subtype when moving to on_hold, and queues the matching email", async () => {
-    const { id } = await createApplication({ stage: "in_review", status: "in_review" });
+    const { id } = await createApplication({ stage: "in_review" });
 
     const missingSubtype = await call(adminToken, `/api/v1/admin/applications/${id}/stage`, {
       method: "PATCH",
@@ -148,7 +133,7 @@ describe("Application stage machine, communications, notes", () => {
   });
 
   it("rolls back the transition, event, and audit when its outbox insert fails", async () => {
-    const { id } = await createApplication({ stage: "in_review", status: "in_review" });
+    const { id } = await createApplication({ stage: "in_review" });
     await env.DB.prepare(
       `CREATE TRIGGER fail_stage_email
        BEFORE INSERT ON email_outbox
@@ -165,12 +150,12 @@ describe("Application stage machine, communications, notes", () => {
       });
       expect(response.status).toBe(500);
 
-      const [application] = await queryAll<{ stage: string; status: string }>(
+      const [application] = await queryAll<{ stage: string }>(
         env.DB,
-        "SELECT stage, status FROM member_applications WHERE id = ?",
+        "SELECT stage FROM member_applications WHERE id = ?",
         id,
       );
-      expect(application).toEqual({ stage: "in_review", status: "in_review" });
+      expect(application).toEqual({ stage: "in_review" });
       expect(
         await queryAll(env.DB, "SELECT id FROM member_application_events WHERE application_id = ?", id),
       ).toHaveLength(0);
@@ -187,7 +172,7 @@ describe("Application stage machine, communications, notes", () => {
   });
 
   it("supports the on_hold -> in_review back-transition and clears on_hold_subtype", async () => {
-    const { id } = await createApplication({ stage: "on_hold", status: "on_hold" });
+    const { id } = await createApplication({ stage: "on_hold" });
     await env.DB.prepare("UPDATE member_applications SET on_hold_subtype = 'request_authority' WHERE id = ?")
       .bind(id)
       .run();
@@ -208,7 +193,7 @@ describe("Application stage machine, communications, notes", () => {
   });
 
   it("a terminal stage (declined) has no further transitions", async () => {
-    const { id } = await createApplication({ stage: "declined", status: "declined" });
+    const { id } = await createApplication({ stage: "declined" });
     const response = await call(adminToken, `/api/v1/admin/applications/${id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "in_review" }),
@@ -270,20 +255,46 @@ describe("Application stage machine, communications, notes", () => {
       method: "POST",
       body: JSON.stringify({ body: "note" }),
     });
+    await env.DB.prepare(
+      `INSERT INTO application_documents
+       (id, application_id, uploaded_by_email, r2_key, filename, mime_type, file_size_bytes, uploaded_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        "document-1",
+        id,
+        "applicant@example.test",
+        "applications/document-1",
+        "evidence.pdf",
+        "application/pdf",
+        2048,
+        "2026-08-21T08:00:00.000Z",
+      )
+      .run();
 
     const response = await call(adminToken, `/api/v1/admin/applications/${id}`);
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { events: unknown[]; communications: unknown[] };
+    const body = adminApplicationDetailSchema.parse(await response.json());
     expect(body.events).toHaveLength(1);
     expect(body.communications).toHaveLength(1);
+    expect(body.communications[0]).toMatchObject({ body: "note", createdAt: expect.any(String) });
+    expect(body.documents).toEqual([
+      {
+        id: "document-1",
+        filename: "evidence.pdf",
+        mimeType: "application/pdf",
+        fileSizeBytes: 2048,
+        uploadedAt: "2026-08-21T08:00:00.000Z",
+        uploadedByEmail: "applicant@example.test",
+      },
+    ]);
   });
 
   it("GET list filters by stage", async () => {
-    await createApplication({ stage: "pending", status: "pending" });
+    await createApplication({ stage: "pending" });
     const { id: reviewId } = await createApplication({
       stage: "in_review",
-      status: "in_review",
-      applicant_email: "second@example.test",
+      applicant_email: "second@second.test",
     });
 
     const response = await call(adminToken, "/api/v1/admin/applications?stage=in_review");

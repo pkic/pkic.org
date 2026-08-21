@@ -1,8 +1,8 @@
 /**
- * Board of Directors / Executive Council leadership positions (migration
- * 0049) — admin CRUD plus the public roster read, and the PKIC forum
+ * Board of Directors / Executive Council leadership positions (consolidated
+ * migration 0035) — admin CRUD plus the public roster read, and the PKIC forum
  * chair/vice-chair public read (resolved from role-forum_chair/
- * role-forum_vice_chair, migration 0040 — the same source the admin
+ * role-forum_vice_chair, consolidated migration 0035 — the same source the admin
  * Leadership tab's "Forum" card already manages via user_roles).
  *
  * Board/EC positions store the membership they explicitly represent. This
@@ -362,7 +362,7 @@ export async function getForumChairsPublic(
      FROM user_roles ur
      JOIN users u ON u.id = ur.user_id
      -- A forum chair/vice-chair can represent more than one organization at
-     -- once (migration 0037) — join to a single deterministic
+     -- once (consolidated migration 0035) — join to a single deterministic
      -- representative row (earliest joined_at) instead of fanning out one
      -- result row per represented organization.
 ${deterministicRepresentativeJoinSql("u.id")}

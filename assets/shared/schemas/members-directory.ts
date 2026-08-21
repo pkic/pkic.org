@@ -1,22 +1,24 @@
 import { z } from "zod";
-import { linksSchema } from "./links";
 import { publicOrganizationPersonSchema } from "./public-person";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import {
+  organizationProfileExtendedFieldsSchema,
+  organizationProfileLongContentSchema,
+  organizationProfileSummaryFieldsSchema,
+} from "./organization-profile";
 
 /** Schemas for the public member directory & working groups endpoints. */
 
-export const publicMemberSummarySchema = z.object({
-  id: z.string(),
-  slug: z.string().nullable(),
-  name: z.string(),
-  memberType: z.string(),
-  tier: z.string().nullable(),
-  website: z.string().nullable(),
-  description: z.string().nullable(),
-  slogan: z.string().nullable(),
-  logoUrl: z.string().nullable(),
-  memberSince: z.string(),
-});
+export const publicMemberSummarySchema = z
+  .object({
+    id: z.string(),
+    slug: z.string().nullable(),
+    name: z.string(),
+    memberType: z.string(),
+    tier: z.string().nullable(),
+    memberSince: z.string(),
+  })
+  .extend(organizationProfileSummaryFieldsSchema.shape);
 
 export type PublicMemberSummary = z.infer<typeof publicMemberSummarySchema>;
 
@@ -81,13 +83,8 @@ export const publicMemberRepresentativeSchema = z.object({
 });
 
 export const publicMemberDetailSchema = publicMemberSummarySchema.extend({
-  content: z.string().nullable(),
-  blogUrl: z.string().nullable(),
-  blogFeedUrl: z.string().nullable(),
-  pressUrl: z.string().nullable(),
-  pressFeedUrl: z.string().nullable(),
-  careersUrl: z.string().nullable(),
-  links: linksSchema,
+  ...organizationProfileExtendedFieldsSchema.omit({ contentMarkdown: true }).shape,
+  content: organizationProfileLongContentSchema,
   // Populated for org-tied members from show_on_org_profile=1 representatives.
   // Empty for org-less individual members — their own bio/jobTitle live on the summary/detail fields directly.
   representatives: z.array(publicMemberRepresentativeSchema),
@@ -147,7 +144,6 @@ export const workingGroupChairSchema = publicOrganizationPersonSchema;
 
 export const workingGroupDetailSchema = workingGroupSummarySchema.extend({
   mailingListEmail: z.string().nullable(),
-  members: z.array(z.object({ name: z.string(), organizationName: z.string().nullable() })),
   chair: workingGroupChairSchema.nullable(),
   viceChair: workingGroupChairSchema.nullable(),
 });
@@ -157,12 +153,39 @@ export type WorkingGroupDetail = z.infer<typeof workingGroupDetailSchema>;
 export const workingGroupDetailRouteSchema = {
   tags: ["Working Groups"],
   summary: "Working group detail",
-  description: "Detail plus a public subset of the member list. :id accepts either the working group UUID or its slug.",
+  description: "Working-group metadata and leadership. :id accepts either the working-group UUID or its slug.",
   request: { params: z.object({ id: z.string() }) },
   responses: {
     "200": {
       description: "Working group detail.",
       content: { "application/json": { schema: workingGroupDetailSchema } },
+    },
+    "404": { description: "Working group not found." },
+  },
+};
+
+export const publicWorkingGroupMemberSchema = z.object({
+  name: z.string(),
+  organizationName: z.string().nullable(),
+});
+export const PUBLIC_WORKING_GROUP_MEMBER_SORT_COLUMNS = ["name", "organizationName"] as const;
+export const publicWorkingGroupMembersListQuerySchema = listQuerySchema(PUBLIC_WORKING_GROUP_MEMBER_SORT_COLUMNS);
+export const publicWorkingGroupMembersListResponseSchema = paginatedResponseSchema(
+  "members",
+  publicWorkingGroupMemberSchema,
+);
+export const publicWorkingGroupMembersListRouteSchema = {
+  tags: ["Working Groups"],
+  summary: "List public working-group members",
+  description: "Paginated, searchable public roster. :wgId accepts a working-group id or slug.",
+  request: {
+    params: z.object({ wgId: z.string().trim().min(1).max(200) }),
+    query: publicWorkingGroupMembersListQuerySchema,
+  },
+  responses: {
+    "200": {
+      description: "Paginated public member roster.",
+      content: { "application/json": { schema: publicWorkingGroupMembersListResponseSchema } },
     },
     "404": { description: "Working group not found." },
   },

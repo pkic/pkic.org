@@ -13,9 +13,13 @@ import { nowIso } from "../../../utils/time";
 import { AppError } from "../../../errors";
 import { prepareQueueEmailStatement, type QueueEmailPayload } from "../../../email/outbox";
 import { prepareAuditLog } from "../../audit";
-import { ON_HOLD_SUBTYPES, allowedTransitions } from "../../../../../assets/shared/schemas/member-applications";
+import { prepareReleaseApplicationDomainClaim } from "../organization-domain-claims";
+import {
+  ON_HOLD_SUBTYPES,
+  allowedTransitions,
+  type ApplicationStage,
+} from "../../../../../assets/shared/schemas/member-applications";
 import { getMemberApplicationById, type MemberApplicationRow } from "./queries";
-import type { ApplicationStage } from "./create";
 import type { DatabaseLike, StatementLike } from "../../../types";
 
 export { ON_HOLD_SUBTYPES, allowedTransitions };
@@ -130,10 +134,10 @@ export function prepareApplicationStageTransition(
     db
       .prepare(
         `UPDATE member_applications
-         SET status = ?, stage = ?, stage_entered_at = ?, on_hold_subtype = ?, updated_at = ?
+         SET stage = ?, stage_entered_at = ?, on_hold_subtype = ?, updated_at = ?
          WHERE id = ? AND stage = ?`,
       )
-      .bind(params.toStage, params.toStage, now, nextOnHoldSubtype, now, application.id, fromStage),
+      .bind(params.toStage, now, nextOnHoldSubtype, now, application.id, fromStage),
     db
       .prepare(
         `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
@@ -143,6 +147,9 @@ export function prepareApplicationStageTransition(
   ];
 
   const outboxIds: string[] = [];
+  if (params.toStage === "declined" || params.toStage === "withdrawn") {
+    statements.push(prepareReleaseApplicationDomainClaim(db, application.id));
+  }
   if (email) {
     const preparedEmail = prepareQueueEmailStatement(db, email, now);
     statements.push(preparedEmail.statement);
@@ -166,7 +173,6 @@ export function prepareApplicationStageTransition(
     result: {
       application: {
         ...application,
-        status: params.toStage,
         stage: params.toStage,
         stage_entered_at: now,
         on_hold_subtype: nextOnHoldSubtype,
@@ -182,8 +188,7 @@ export function prepareApplicationStageTransition(
 
 /**
  * Applies a stage transition: validates it against the state machine,
- * updates `status`/`stage`/`stage_entered_at` (kept in sync, matching
- * createMemberApplication's convention), writes a member_application_events
+ * updates the canonical `stage`/`stage_entered_at`, writes a member_application_events
  * row, audit row, and any durable email intent in one D1 batch. Delivery is
  * still owned by the caller after commit; this use case only owns the outbox
  * insert required for atomicity.

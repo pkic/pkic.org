@@ -40,7 +40,7 @@ export function ApplicationCommunicationsCard({
               <span class="badge text-bg-secondary me-1">{c.kind}</span>
               {c.subject && <strong>{c.subject}</strong>}
               <div class="text-muted">{c.body}</div>
-              <div class="mono text-muted small">{fmt(c.created_at)}</div>
+              <div class="mono text-muted small">{fmt(c.createdAt)}</div>
             </li>
           ))}
           {detail.communications.length === 0 && <li class="text-muted">None yet.</li>}

@@ -128,12 +128,12 @@ describe("permission_grants (Access grants)", () => {
 
   it("GET /api/v1/admin/access-grants returns a bounded page envelope and filters by userId", async () => {
     const otherUserId = await insertUser("other@example.test");
-    for (let i = 0; i < 3; i += 1) {
+    for (const permission of ["events:read", "events:write", "events:manage"] as const) {
       await env.DB.prepare(
         `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
          VALUES (?, ?, ?, ?, datetime('now'))`,
       )
-        .bind(crypto.randomUUID(), staffUserId, `perm:${i}`, adminId)
+        .bind(crypto.randomUUID(), staffUserId, permission, adminId)
         .run();
     }
     await env.DB.prepare(
@@ -268,6 +268,20 @@ describe("permission_grants (Access grants)", () => {
 
     expect(hasPermission(actor, "working-groups:write", { type: "working_group", id: "wg-pqc" })).toBe(true);
     expect(hasPermission(actor, "working-groups:write", { type: "working_group", id: "wg-cbom" })).toBe(false);
+  });
+
+  it("caps even a global admin by delegated OAuth scopes when the token is scope-restricted", () => {
+    const delegatedAdmin: AuthAdmin = {
+      id: "oauth-admin",
+      email: "oauth-admin@example.test",
+      role: "admin",
+      scopes: ["proposals:read"],
+      scopeRestricted: true,
+    };
+
+    expect(hasPermission(delegatedAdmin, "proposals:read")).toBe(true);
+    expect(hasPermission(delegatedAdmin, "proposals:manage")).toBe(false);
+    expect(hasPermission(delegatedAdmin, "events:write")).toBe(false);
   });
 
   it("DELETE /api/v1/admin/access-grants/:id sets revoked_at and writes to audit_log", async () => {

@@ -1,22 +1,27 @@
-import { hmacSha256Hex, sha256Hex } from "../utils/crypto";
+import { sha256Hex } from "../utils/crypto";
+import { AppError } from "../errors";
+import { signAdminPreviewToken, verifyAdminPreviewToken } from "../auth/admin-preview-token";
 
-interface AttendeeInvitePreviewClaims {
+export type AdminInviteType = "attendee" | "speaker";
+
+interface AdminInvitePreviewClaims {
   v: 1;
-  type: "attendee_invite_bulk";
+  type: "admin_invite_bulk";
+  inviteType: AdminInviteType;
   eventId: string;
   adminId: string;
   inviteDigest: string;
   exp: number;
 }
 
-interface AttendeeInvitePreviewInput {
+export interface AdminInvitePreviewInput {
   email: string;
   firstName?: string | null;
   lastName?: string | null;
   sourceType?: string | null;
 }
 
-export function computeAttendeeInviteDigest(invites: AttendeeInvitePreviewInput[]): Promise<string> {
+export function computeAdminInviteDigest(invites: AdminInvitePreviewInput[]): Promise<string> {
   const canonical = invites.map((item) => ({
     email: item.email.trim().toLowerCase(),
     firstName: (item.firstName ?? "").trim(),
@@ -27,91 +32,73 @@ export function computeAttendeeInviteDigest(invites: AttendeeInvitePreviewInput[
   return sha256Hex(JSON.stringify(canonical));
 }
 
-function b64urlEncode(input: string): string {
-  return btoa(input).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-function b64urlDecode(input: string): string {
-  const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
-  return atob(padded);
-}
-
-function safeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) {
-    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return diff === 0;
-}
-
-export async function signAttendeeInvitePreviewToken(payload: {
+export async function signAdminInvitePreviewToken(payload: {
   secret: string;
   eventId: string;
   adminId: string;
+  inviteType: AdminInviteType;
   inviteDigest: string;
   ttlSeconds: number;
 }): Promise<{ token: string; expiresAt: string }> {
-  const exp = Math.floor(Date.now() / 1000) + payload.ttlSeconds;
-  const claims: AttendeeInvitePreviewClaims = {
-    v: 1,
-    type: "attendee_invite_bulk",
-    eventId: payload.eventId,
-    adminId: payload.adminId,
-    inviteDigest: payload.inviteDigest,
-    exp,
-  };
-
-  const encoded = b64urlEncode(JSON.stringify(claims));
-  const signature = await hmacSha256Hex(payload.secret, encoded);
-  return {
-    token: `${encoded}.${signature}`,
-    expiresAt: new Date(exp * 1000).toISOString(),
-  };
+  return signAdminPreviewToken({
+    ...payload,
+    type: "admin_invite_bulk",
+    digest: payload.inviteDigest,
+    extraClaims: { inviteType: payload.inviteType },
+  });
 }
 
-export type AttendeeInvitePreviewTokenValidation =
-  { ok: true; claims: AttendeeInvitePreviewClaims } | { ok: false; reason: "invalid" | "expired" | "mismatch" };
+export type AdminInvitePreviewTokenValidation =
+  { ok: true; claims: AdminInvitePreviewClaims } | { ok: false; reason: "invalid" | "expired" | "mismatch" };
 
-export async function verifyAttendeeInvitePreviewToken(payload: {
+export async function verifyAdminInvitePreviewToken(payload: {
   secret: string;
   token: string;
   eventId: string;
   adminId: string;
+  inviteType: AdminInviteType;
   inviteDigest: string;
-}): Promise<AttendeeInvitePreviewTokenValidation> {
-  const parts = payload.token.split(".");
-  if (parts.length !== 2) return { ok: false, reason: "invalid" };
+}): Promise<AdminInvitePreviewTokenValidation> {
+  const validation = await verifyAdminPreviewToken({
+    ...payload,
+    type: "admin_invite_bulk",
+    digest: payload.inviteDigest,
+    extraClaimsMatch: (claims) => claims.inviteType === payload.inviteType,
+  });
+  if (!validation.ok) return validation;
+  return {
+    ok: true,
+    claims: {
+      v: 1,
+      type: "admin_invite_bulk",
+      inviteType: payload.inviteType,
+      eventId: payload.eventId,
+      adminId: payload.adminId,
+      inviteDigest: payload.inviteDigest,
+      exp: validation.claims.exp,
+    },
+  };
+}
 
-  const [encoded, signature] = parts;
-  const expectedSignature = await hmacSha256Hex(payload.secret, encoded);
-  if (!safeEqual(signature, expectedSignature)) {
-    return { ok: false, reason: "invalid" };
+export async function requireValidAdminInvitePreview(payload: {
+  secret: string;
+  token: string;
+  eventId: string;
+  adminId: string;
+  inviteType: AdminInviteType;
+  inviteDigest: string;
+}): Promise<AdminInvitePreviewClaims> {
+  const validation = await verifyAdminInvitePreviewToken(payload);
+  if (validation.ok) return validation.claims;
+  if (validation.reason === "expired") {
+    throw new AppError(409, "INVITE_PREVIEW_EXPIRED", "Invite preview expired. Render a fresh preview before sending.");
   }
-
-  let claims: AttendeeInvitePreviewClaims;
-  try {
-    claims = JSON.parse(b64urlDecode(encoded)) as AttendeeInvitePreviewClaims;
-  } catch {
-    return { ok: false, reason: "invalid" };
+  if (validation.reason === "mismatch") {
+    throw new AppError(
+      409,
+      "INVITE_PREVIEW_STALE",
+      "Invite list changed after preview. Render preview again before sending.",
+    );
   }
-
-  if (claims.v !== 1 || claims.type !== "attendee_invite_bulk") {
-    return { ok: false, reason: "invalid" };
-  }
-
-  if (Math.floor(Date.now() / 1000) > claims.exp) {
-    return { ok: false, reason: "expired" };
-  }
-
-  if (
-    claims.eventId !== payload.eventId ||
-    claims.adminId !== payload.adminId ||
-    claims.inviteDigest !== payload.inviteDigest
-  ) {
-    return { ok: false, reason: "mismatch" };
-  }
-
-  return { ok: true, claims };
+  throw new AppError(400, "INVITE_PREVIEW_INVALID", "Invalid invite preview token. Render preview before sending.");
 }

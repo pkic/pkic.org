@@ -71,9 +71,7 @@ export const adminWorkingGroupMemberSchema = z.object({
   joinedAt: z.string(),
 });
 
-export const adminWorkingGroupDetailSchema = adminWorkingGroupSummarySchema.extend({
-  members: z.array(adminWorkingGroupMemberSchema),
-});
+export const adminWorkingGroupDetailSchema = adminWorkingGroupSummarySchema.extend({});
 
 export type AdminWorkingGroupSummary = z.infer<typeof adminWorkingGroupSummarySchema>;
 export type AdminWorkingGroupMember = z.infer<typeof adminWorkingGroupMemberSchema>;
@@ -82,6 +80,16 @@ export type AdminWorkingGroupDetail = z.infer<typeof adminWorkingGroupDetailSche
 export const ADMIN_WORKING_GROUP_SORT_COLUMNS = ["name", "slug", "member_count", "active", "created_at"] as const;
 export const workingGroupsListQuerySchema = listQuerySchema(ADMIN_WORKING_GROUP_SORT_COLUMNS);
 export const workingGroupsListResponseSchema = paginatedResponseSchema("workingGroups", adminWorkingGroupSummarySchema);
+
+export const ADMIN_WORKING_GROUP_MEMBER_SORT_COLUMNS = [
+  "name",
+  "email",
+  "organization_name",
+  "member_category",
+  "joined_at",
+] as const;
+export const workingGroupMembersListQuerySchema = listQuerySchema(ADMIN_WORKING_GROUP_MEMBER_SORT_COLUMNS);
+export const workingGroupMembersListResponseSchema = paginatedResponseSchema("members", adminWorkingGroupMemberSchema);
 
 export const workingGroupsListRouteSchema = {
   tags: ["Working Groups"],
@@ -151,6 +159,19 @@ export const workingGroupMemberAddRouteSchema = {
   responses: {
     "201": { description: "Member added." },
     "403": { description: "Target user's membership category may not join this working group (CA constraint)." },
+    "404": { description: "Working group not found." },
+  },
+};
+
+export const workingGroupMembersListRouteSchema = {
+  tags: ["Working Groups"],
+  summary: "List a working group's member roster",
+  request: { params: workingGroupIdParamsSchema, query: workingGroupMembersListQuerySchema },
+  responses: {
+    "200": {
+      description: "Paginated member roster.",
+      content: { "application/json": { schema: workingGroupMembersListResponseSchema } },
+    },
     "404": { description: "Working group not found." },
   },
 };

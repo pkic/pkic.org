@@ -7,6 +7,7 @@
  */
 import type { z } from "zod";
 import { all, first } from "../../db/queries";
+import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { parseJsonSafe } from "../../utils/json";
 import { AppError } from "../../errors";
 import { VOTING_CATEGORIES } from "../membership/applications/create";
@@ -186,11 +187,11 @@ export async function getCandidatesForVotes(
   const byVoteId = new Map<string, CandidateSummary[]>();
   if (voteIds.length === 0) return byVoteId;
 
-  const placeholders = voteIds.map(() => "?").join(", ");
+  const voteFilter = buildD1JsonMembershipFilter("vote_id", voteIds);
   const rows = await all<CandidateRow>(
     db,
-    `SELECT * FROM vote_candidates WHERE vote_id IN (${placeholders}) ORDER BY vote_id, sort_order ASC, created_at ASC`,
-    voteIds,
+    `SELECT * FROM vote_candidates WHERE ${voteFilter.sql} ORDER BY vote_id, sort_order ASC, created_at ASC`,
+    voteFilter.bindings,
   );
   for (const row of rows) {
     const list = byVoteId.get(row.vote_id) ?? [];

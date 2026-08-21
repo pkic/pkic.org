@@ -7,8 +7,7 @@ import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { approveVoteProposal, getProposalScopeForPermissionCheck } from "../../../../../_lib/services/votes";
-import { writeAuditLog } from "../../../../../_lib/services/audit";
-import { adminApproveProposalRouteSchema } from "../../../../../../assets/shared/schemas/votes";
+import { adminApproveProposalRouteSchema } from "../../../../../../assets/shared/schemas/votes-admin";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 export const AdminVoteProposalApprovePost = openApiRoute(
@@ -25,11 +24,7 @@ export const AdminVoteProposalApprovePost = openApiRoute(
       scope.scopeType === "working_group" && scope.scopeId ? { type: "working_group", id: scope.scopeId } : undefined,
     );
 
-    const result = await approveVoteProposal(db, id);
-
-    await writeAuditLog(db, "admin", admin.id, "vote_proposal_approved", "vote_proposal", id, {
-      voteId: result.convertedVote.id,
-    });
+    const result = await approveVoteProposal(db, admin, id);
 
     return json(result);
   },

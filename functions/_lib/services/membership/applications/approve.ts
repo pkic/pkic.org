@@ -1,6 +1,6 @@
 /**
  * Post-approval onboarding orchestration. The sole path to
- * `member_applications.status = 'approved'` — transitionApplicationStage
+ * `member_applications.stage = 'approved'` — transitionApplicationStage
  * (transition.ts) deliberately excludes 'approved' as a destination so this
  * full orchestration can't be bypassed by a bare stage-transition call.
  *
@@ -48,7 +48,7 @@
  * event insert is conditioned on that UPDATE's own success rather than on
  * the row's post-write state (which a concurrent winner racing to the same
  * 'approved' target could also satisfy). `uq_member_application_events_approved`
- * (migration 0036) backstops this by rejecting a second concurrent
+ * (consolidated migration 0035) backstops this by rejecting a second concurrent
  * approval's event insert outright, failing that whole `db.batch()` so its
  * provisioning/notification/audit statements never commit either — see the
  * inline comments around the guard below for the full mechanism.
@@ -146,6 +146,7 @@ export async function approveApplication(
   const provisioning = await buildProvisionOrganizationMembership(db, {
     organizationName: isIndividual ? null : application.organization_name,
     organizationDomain: isIndividual ? null : application.organization_domain,
+    domainClaimApplicationId: isIndividual ? null : application.id,
     membershipCategory: application.membership_category,
     representatives: [{ name: application.applicant_name, email: application.applicant_email, jobTitle, links }],
     workingGroupSlugs,
@@ -173,7 +174,7 @@ export async function approveApplication(
   statements.push(
     db
       .prepare(
-        `UPDATE member_applications SET status = 'approved', stage = 'approved', stage_entered_at = ?, updated_at = ? WHERE id = ? AND stage = ?`,
+        `UPDATE member_applications SET stage = 'approved', stage_entered_at = ?, updated_at = ? WHERE id = ? AND stage = ?`,
       )
       .bind(now, now, application.id, fromStage),
     db
@@ -190,7 +191,7 @@ export async function approveApplication(
   // staff-managed mailing_lists config, not a hardcoded constant/category
   // check — resolveAutoSyncListEmails reads it at runtime. (This happens to
   // still resolve to "pkic@ always, consultation@ only for A-G" out of the
-  // box, since that's how migration 0041 seeded auto_sync_categories_json —
+  // box, since that's how consolidated migration 0035 seeded auto_sync_categories_json —
   // but it's now data, not code.)
   const autoSyncListEmails = await resolveAutoSyncListEmails(db, application.membership_category);
   for (const googleGroupEmail of autoSyncListEmails) {

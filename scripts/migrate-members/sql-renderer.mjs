@@ -128,15 +128,16 @@ ON CONFLICT(normalized_name) DO UPDATE SET
 }
 
 /** One statement per YAML `organizationDomains` entry — idempotent via the
- * table's global UNIQUE(domain) index (migration 0041). */
+ * canonical claim registry's UNIQUE(domain) invariant. */
 export function buildOrganizationDomainStatements(normalizedOrgName, domains) {
   const statements = [];
   for (const domain of domains) {
     const trimmed = String(domain).trim().toLowerCase();
     if (!trimmed) continue;
     statements.push(`
-INSERT OR IGNORE INTO organization_domains (id, organization_id, domain, created_at)
-SELECT ${sqlString(randomUUID())}, o.id, ${sqlString(trimmed)}, datetime('now')
+INSERT OR IGNORE INTO organization_domain_claims
+  (id, organization_id, application_id, domain, created_at, updated_at)
+SELECT ${sqlString(randomUUID())}, o.id, NULL, ${sqlString(trimmed)}, datetime('now'), datetime('now')
 FROM organizations o WHERE o.normalized_name = ${sqlString(normalizedOrgName)};
 `);
   }
@@ -182,7 +183,7 @@ WHERE o.normalized_name = ${sqlString(normalizedOrgName)};
 
 /**
  * One `organization_representatives` row for (org, user) — idempotent via
- * `uq_organization_representatives_active_pair` (migration 0037), the same
+ * `uq_organization_representatives_active_pair` (consolidated migration 0035), the same
  * partial-unique-index guard `buildAddRepresentativeStatement` in
  * `functions/_lib/services/membership/representatives.ts` relies on.
  */
@@ -200,7 +201,7 @@ WHERE o.normalized_name = ${sqlString(normalizedOrgName)};
 /**
  * Grants a singleton representative role (primary/secondary contact) if the
  * organization doesn't already have an active holder — idempotent via
- * `uq_user_roles_single_holder_per_context` (migration 0038), the same
+ * `uq_user_roles_single_holder_per_context` (consolidated migration 0035), the same
  * partial-unique-index guard the real assign-role statement builders rely
  * on. Never clobbers a contact staff already set by hand.
  */

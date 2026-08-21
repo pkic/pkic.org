@@ -18,6 +18,7 @@ import type {
   myOrganizationProfileSchema,
   myOrganizationSponsorshipSchema,
   myWorkingGroupSummarySchema,
+  myWorkingGroupsListResponseSchema,
 } from "../../../shared/schemas/me";
 import type { workingGroupSummarySchema } from "../../../shared/schemas/members-directory";
 import type { myMeetingSeriesIcsFileSchema, myMeetingSeriesSchema } from "../../../shared/schemas/meeting-calendar";
@@ -47,6 +48,7 @@ export type MyOrganizationSponsorship = z.infer<typeof myOrganizationSponsorship
 
 export type WorkingGroupSummary = z.infer<typeof workingGroupSummarySchema>;
 export type MyWorkingGroupMembership = z.infer<typeof myWorkingGroupSummarySchema>;
+export type MyWorkingGroupsResponse = z.infer<typeof myWorkingGroupsListResponseSchema>;
 
 export type MyMeetingSeriesIcsFile = z.infer<typeof myMeetingSeriesIcsFileSchema>;
 export type MyMeetingSeries = z.infer<typeof myMeetingSeriesSchema>;

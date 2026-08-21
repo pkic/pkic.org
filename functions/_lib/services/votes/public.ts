@@ -3,12 +3,17 @@
  * Split out of votes.ts.
  */
 import { all, first } from "../../db/queries";
+import { queryPage } from "../../db/pagination";
+import { buildD1JsonMembershipFilter } from "../../db/json-membership";
+import { buildD1TextSearchFilter } from "../../db/search";
+import { resolveOrderBy } from "../../db/sort";
 import { parseJsonSafe } from "../../utils/json";
 import { AppError } from "../../errors";
 import { getWorkingGroupBySlugOrId } from "../working-groups";
 import {
   toVoteSummary,
   getCandidates,
+  getCandidatesForVotes,
   VOTE_ROW_COLUMNS,
   type VoteRow,
   type VoteType,
@@ -26,9 +31,10 @@ export interface PublicVoteListParams {
   status?: Array<"scheduled" | "open" | "closed">;
   from?: string;
   to?: string;
+  q?: string;
   limit?: number;
   offset?: number;
-  sort?: "closes_at" | "created_at";
+  sort?: string;
 }
 
 export interface PublicVoteSummary extends VoteSummary {
@@ -56,6 +62,16 @@ async function toPublicVoteSummary(db: DatabaseLike, row: VoteRow): Promise<Publ
   return { ...summary, candidates, result };
 }
 
+async function toPublicVoteSummaries(db: DatabaseLike, rows: VoteRow[]): Promise<PublicVoteSummary[]> {
+  const electionIds = rows.filter((row) => row.vote_type === "election").map((row) => row.id);
+  const candidatesByVoteId = await getCandidatesForVotes(db, electionIds);
+  return rows.map((row) => ({
+    ...toVoteSummary(row),
+    candidates: row.vote_type === "election" ? (candidatesByVoteId.get(row.id) ?? []) : null,
+    result: publicResultForDetailLevel(row),
+  }));
+}
+
 export async function listPublicVotes(
   db: DatabaseLike,
   params: PublicVoteListParams,
@@ -77,8 +93,9 @@ export async function listPublicVotes(
     args.push(wg?.id ?? "__none__");
   }
   if (params.status && params.status.length > 0) {
-    conditions.push(`status IN (${params.status.map(() => "?").join(", ")})`);
-    args.push(...params.status);
+    const statusFilter = buildD1JsonMembershipFilter("status", params.status);
+    conditions.push(statusFilter.sql);
+    args.push(...statusFilter.bindings);
   }
   if (params.from) {
     conditions.push("closes_at >= ?");
@@ -88,21 +105,33 @@ export async function listPublicVotes(
     conditions.push("closes_at <= ?");
     args.push(params.to);
   }
+  if (params.q) {
+    const search = buildD1TextSearchFilter(params.q, ["title", "description", "status", "vote_type", "scope_type"]);
+    conditions.push(search.sql);
+    args.push(...search.bindings);
+  }
 
-  const sortColumn = params.sort === "created_at" ? "created_at" : "closes_at";
+  const orderBy = resolveOrderBy(
+    params.sort,
+    ["title", "status", "closes_at", "created_at"],
+    "ORDER BY closes_at DESC",
+    "id ASC",
+  );
   const limit = params.limit ?? 20;
   const offset = params.offset ?? 0;
 
   const where = conditions.join(" AND ");
-  const rows = await all<VoteRow>(
+  const { rows, total } = await queryPage<VoteRow>(
     db,
-    `SELECT ${VOTE_ROW_COLUMNS} FROM votes WHERE ${where} ORDER BY ${sortColumn} DESC LIMIT ? OFFSET ?`,
-    [...args, limit, offset],
+    {
+      sql: `SELECT ${VOTE_ROW_COLUMNS} FROM votes WHERE ${where} ${orderBy} LIMIT ? OFFSET ?`,
+      bindings: [...args, limit, offset],
+    },
+    { sql: `SELECT COUNT(*) AS total FROM votes WHERE ${where}`, bindings: args },
   );
-  const totalRow = await first<{ total: number }>(db, `SELECT COUNT(*) AS total FROM votes WHERE ${where}`, args);
 
-  const votes = await Promise.all(rows.map((r) => toPublicVoteSummary(db, r)));
-  return { votes, total: totalRow?.total ?? 0 };
+  const votes = await toPublicVoteSummaries(db, rows);
+  return { votes, total };
 }
 
 export async function getPublicVoteBySlug(db: DatabaseLike, slug: string): Promise<PublicVoteSummary> {
@@ -121,5 +150,5 @@ export async function listPublicVotesForFeed(db: DatabaseLike, limit = 50): Prom
     `SELECT ${VOTE_ROW_COLUMNS} FROM votes WHERE visibility = 'public' ORDER BY closes_at DESC LIMIT ?`,
     [limit],
   );
-  return Promise.all(rows.map((r) => toPublicVoteSummary(db, r)));
+  return toPublicVoteSummaries(db, rows);
 }

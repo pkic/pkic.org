@@ -43,7 +43,7 @@ describe("Managed mailing list configuration", () => {
       await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
     )[0];
     adminToken = await createAdminSession(env.DB, adminRow.id, "admin-mailing-lists-token");
-    // migration 0041 seeds 9 lists once at migration time; mailing_lists is
+    // consolidated migration 0035 seeds 9 lists once at migration time; mailing_lists is
     // excluded from resetDb()'s per-test wipe (tests/helpers/reset-db.ts —
     // same "system reference data" treatment as membership_settings), so
     // pkic@/consultation@ are already present here.

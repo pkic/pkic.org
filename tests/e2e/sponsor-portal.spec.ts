@@ -64,7 +64,7 @@ function extractUrlFromEmail(email: CapturedEmail, urlSubstring: string): string
 }
 
 async function signInAsAdmin(page: Page): Promise<void> {
-  const adminEmail = e2eAdminEmail();
+  const adminEmail = e2eAdminEmail("sponsor-portal");
   await page.goto("/admin/");
   await expect(page.locator("#form-magic")).toBeVisible({ timeout: 10_000 });
   await page.locator("#inp-email").fill(adminEmail);

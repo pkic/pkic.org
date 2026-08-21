@@ -13,14 +13,14 @@ describe("OpenAPI schema generation", () => {
     const spec = decorateOpenApiSpec(openapi.schema);
     const operation = spec.paths["/api/v1/admin/proposals/{proposalId}/reviews"].post;
 
-    expect(operation.security).toEqual([{ BearerAuth: ["proposal-reviews:write"] }]);
+    expect(operation.security).toEqual([{ BearerAuth: ["proposals:score"] }]);
     expect(operation[AUTH_EXTENSION]).toEqual({
       required: true,
       scheme: "BearerAuth",
-      scopes: ["proposal-reviews:write"],
+      scopes: ["proposals:score"],
     });
-    expect(operation["x-pkic-required-scopes"]).toEqual(["proposal-reviews:write"]);
-    expect(operation.description).toContain("Required scopes: `proposal-reviews:write`.");
+    expect(operation["x-pkic-required-scopes"]).toEqual(["proposals:score"]);
+    expect(operation.description).toContain("Required scopes: `proposals:score`.");
   });
 
   it("documents role ids as plain strings, not uuid()-formatted, so built-in system roles are valid per the spec (Phase 3 §3.1)", () => {

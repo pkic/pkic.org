@@ -9,7 +9,7 @@
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { normalizedEmailSchema } from "./api";
-import { paginationQuerySchema, paginatedResponseSchema } from "./pagination";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { linksSchema } from "./links";
 import { workingGroupSlugSchema } from "./working-groups";
 import {
@@ -82,18 +82,32 @@ export const adminMemberSummarySchema = z.object({
   createdAt: z.string(),
 });
 
+export type AdminMemberSummary = z.infer<typeof adminMemberSummarySchema>;
+
 export const memberCreateResponseSchema = z.object({
   organizationId: databaseIdSchema.nullable(),
   members: z.array(adminMemberSummarySchema),
 });
 
-export const adminMembersListQuerySchema = paginationQuerySchema;
+export const ADMIN_MEMBERS_SORT_COLUMNS = [
+  "name",
+  "email",
+  "organizationName",
+  "membershipCategory",
+  "status",
+  "createdAt",
+] as const;
+
+export const adminMembersListQuerySchema = listQuerySchema(ADMIN_MEMBERS_SORT_COLUMNS).extend({
+  membershipCategory: membershipCategorySchema.optional(),
+  status: memberStatusSchema.optional(),
+});
 
 export const membersListRouteSchema = {
   tags: ["Membership"],
   summary: "List members (Interim Admin Tool)",
   description:
-    "Interim Admin Tool — unfiltered-by-status admin listing of every members row, one row per representative.",
+    "Interim Admin Tool — searchable, sortable, filterable admin listing of every member, one row per representative.",
   request: {
     query: adminMembersListQuerySchema,
   },

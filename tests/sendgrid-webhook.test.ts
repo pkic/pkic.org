@@ -42,12 +42,14 @@ function p1363ToDer(signature: Uint8Array): Uint8Array {
   return Uint8Array.from([0x30, r.length + s.length, ...r, ...s]);
 }
 
-async function signedWebhook(body: string): Promise<{ key: string; signature: string; timestamp: string }> {
+async function signedWebhook(
+  body: string,
+  timestamp = String(Math.floor(Date.now() / 1000)),
+): Promise<{ key: string; signature: string; timestamp: string }> {
   const keyPair = (await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
     "sign",
     "verify",
   ])) as CryptoKeyPair;
-  const timestamp = "1787200000";
   const rawSignature = new Uint8Array(
     await crypto.subtle.sign(
       { name: "ECDSA", hash: "SHA-256" },
@@ -172,5 +174,60 @@ describe("SendGrid event webhook security", () => {
         "SELECT status FROM email_outbox WHERE provider_message_id = 'local-message'",
       ),
     ).toEqual([{ status: "delivered" }]);
+  });
+
+  it("rejects an otherwise-valid signature outside SendGrid's retry window", async () => {
+    const body = JSON.stringify([{ event: "delivered", sg_message_id: "stale.filter0", env_url: "https://pkic.org" }]);
+    const staleTimestamp = String(Math.floor(Date.now() / 1000) - 26 * 60 * 60);
+    const signed = await signedWebhook(body, staleTimestamp);
+
+    const response = await callWebhook(
+      { ...env, APP_BASE_URL: "https://pkic.org", SENDGRID_WEBHOOK_VERIFICATION_KEY: signed.key } as Env,
+      body,
+      {
+        "X-Twilio-Email-Event-Webhook-Signature": signed.signature,
+        "X-Twilio-Email-Event-Webhook-Timestamp": signed.timestamp,
+      },
+    );
+
+    expect(response.status).toBe(403);
+  });
+
+  it("processes bounce and unsubscribe effects atomically and idempotently across webhook replay", async () => {
+    await seedSentOutbox("message-replay");
+    const body = JSON.stringify([
+      {
+        event: "spamreport",
+        sg_event_id: "event-replay-1",
+        sg_message_id: "message-replay.filter0",
+        email: "Recipient@Example.Test",
+      },
+    ]);
+    const environment = {
+      ...env,
+      APP_BASE_URL: "http://localhost:8788",
+      SENDGRID_WEBHOOK_VERIFICATION_KEY: undefined,
+    } as Env;
+
+    expect((await callWebhook(environment, body)).status).toBe(200);
+    expect((await callWebhook(environment, body)).status).toBe(200);
+
+    expect(
+      await queryAll<{ status: string }>(env.DB, "SELECT status FROM email_outbox WHERE provider_message_id = ?", [
+        "message-replay",
+      ]),
+    ).toEqual([{ status: "bounced" }]);
+    expect(
+      await queryAll<{ email: string; channel: string }>(
+        env.DB,
+        "SELECT email, channel FROM unsubscribes WHERE email = 'recipient@example.test'",
+      ),
+    ).toEqual([{ email: "recipient@example.test", channel: "email" }]);
+    expect(
+      await queryAll<{ count: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS count FROM audit_log WHERE idempotency_key = 'sendgrid:event-replay-1'",
+      ),
+    ).toEqual([{ count: 1 }]);
   });
 });

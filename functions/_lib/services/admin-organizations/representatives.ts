@@ -1,7 +1,7 @@
 /**
  * Admin Organizations representative/member provisioning — adding,
  * editing, and removing an organization's representatives
- * (`organization_representatives`, migration 0037), granting org-less
+ * (`organization_representatives`, consolidated migration 0035), granting org-less
  * individual memberships, and confirming secondary-contact nominations.
  * Split from the combined admin-organizations.ts (PR #1 review, Phase 8) —
  * see queries.ts for reads and profile.ts for the organization
@@ -12,10 +12,10 @@
  * `organization_representatives.id`. Disambiguated by lookup here rather
  * than the route needing to know which.
  */
-import { first, run } from "../../db/queries";
+import { first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { AppError } from "../../errors";
-import { findOrCreateUser } from "../users";
+import { buildFindOrCreateUserStatement, findUserByEmail } from "../users";
 import { serializeLinks } from "../../../../assets/shared/schemas/links";
 import { buildCreateIndividualMemberStatements } from "../membership/memberships";
 import {
@@ -27,8 +27,11 @@ import {
   REPRESENTATIVE_ROLE_IDS,
   resolveRepresentativeRoleHolders,
   buildAssignRepresentativeRoleStatements,
+  buildAssignRepresentativeRoleStatementsForNewRepresentative,
   buildRevokeRepresentativeRoleStatement,
 } from "../membership/representative-roles";
+import { prepareAuditLog } from "../audit";
+import { prepareQueueEmailStatement } from "../../email/outbox";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { getOrgAggregate } from "./queries";
 
@@ -48,6 +51,7 @@ export interface AddRepresentativeInput {
 
 export async function addOrganizationRepresentative(
   db: DatabaseLike,
+  actorUserId: string,
   organizationId: string,
   input: AddRepresentativeInput,
 ) {
@@ -68,9 +72,7 @@ export async function addOrganizationRepresentative(
   }
   const memberId = aggregate.id;
 
-  const existingUser = await first<{ id: string }>(db, "SELECT id FROM users WHERE normalized_email = ?", [
-    input.email.trim().toLowerCase(),
-  ]);
+  const existingUser = await findUserByEmail(db, input.email);
   if (existingUser) {
     const alreadyRepresenting = await isActiveRepresentative(db, memberId, existingUser.id);
     if (alreadyRepresenting) {
@@ -86,7 +88,7 @@ export async function addOrganizationRepresentative(
   // membership" flow build `input.name` by joining the user's own existing
   // names.
   const { firstName, lastName } = existingUser ? { firstName: undefined, lastName: undefined } : splitName(input.name);
-  const user = await findOrCreateUser(db, {
+  const { user, statement: userStatement } = await buildFindOrCreateUserStatement(db, {
     email: input.email,
     firstName: firstName ?? undefined,
     lastName: lastName ?? undefined,
@@ -97,31 +99,41 @@ export async function addOrganizationRepresentative(
 
   const now = nowIso();
   const { representativeId, statement } = buildAddRepresentativeStatement(db, { memberId, userId: user.id, now });
-  await db.batch([statement]);
-
   const holders = await resolveRepresentativeRoleHolders(db, memberId);
+  const statements: StatementLike[] = [];
+  if (userStatement) statements.push(userStatement);
+  statements.push(statement);
   let assignedRole: "primary" | "secondary" | null = null;
   if (!holders.primaryContactUserId) {
-    await db.batch(
-      await buildAssignRepresentativeRoleStatements(db, {
+    statements.push(
+      ...buildAssignRepresentativeRoleStatementsForNewRepresentative(db, {
         memberId,
         userId: user.id,
         roleId: REPRESENTATIVE_ROLE_IDS.primaryContact,
+        grantedByUserId: actorUserId,
         now,
       }),
     );
     assignedRole = "primary";
   } else if (!holders.secondaryContactUserId) {
-    await db.batch(
-      await buildAssignRepresentativeRoleStatements(db, {
+    statements.push(
+      ...buildAssignRepresentativeRoleStatementsForNewRepresentative(db, {
         memberId,
         userId: user.id,
         roleId: REPRESENTATIVE_ROLE_IDS.secondaryContact,
+        grantedByUserId: actorUserId,
         now,
       }),
     );
     assignedRole = "secondary";
   }
+  statements.push(
+    prepareAuditLog(db, "admin", actorUserId, "organization_representative_added", "organization", organizationId, {
+      representativeId,
+      email: user.email,
+    }),
+  );
+  await db.batch(statements);
 
   return {
     // representativeId/membershipId — see queries.ts's toOrgDetail's identical note.
@@ -152,7 +164,7 @@ interface IndividualMemberRow {
   status: string;
 }
 
-export async function updateAdminMember(db: DatabaseLike, id: string, input: MemberUpdateInput) {
+export async function updateAdminMember(db: DatabaseLike, actorUserId: string, id: string, input: MemberUpdateInput) {
   const representative = await first<{ id: string; member_id: string; user_id: string; show_on_org_profile: number }>(
     db,
     "SELECT id, member_id, user_id, show_on_org_profile FROM organization_representatives WHERE id = ? AND left_at IS NULL",
@@ -168,10 +180,11 @@ export async function updateAdminMember(db: DatabaseLike, id: string, input: Mem
       );
     }
     if (input.showOnOrgProfile !== undefined) {
-      await run(db, "UPDATE organization_representatives SET show_on_org_profile = ?, updated_at = ? WHERE id = ?", [
-        input.showOnOrgProfile ? 1 : 0,
-        nowIso(),
-        id,
+      await db.batch([
+        db
+          .prepare("UPDATE organization_representatives SET show_on_org_profile = ?, updated_at = ? WHERE id = ?")
+          .bind(input.showOnOrgProfile ? 1 : 0, nowIso(), id),
+        prepareAuditLog(db, "admin", actorUserId, "member_updated", "member", id, input),
       ]);
     }
     const orgRow = await first<{ organization_id: string }>(db, "SELECT organization_id FROM members WHERE id = ?", [
@@ -194,6 +207,7 @@ export async function updateAdminMember(db: DatabaseLike, id: string, input: Mem
   );
   if (!member) throw new AppError(404, "NOT_FOUND", "Member not found");
 
+  const statements: StatementLike[] = [];
   const setClauses: string[] = [];
   const values: unknown[] = [];
   if (input.status !== undefined) {
@@ -204,15 +218,17 @@ export async function updateAdminMember(db: DatabaseLike, id: string, input: Mem
     setClauses.push("updated_at = ?");
     values.push(nowIso());
     values.push(id);
-    await run(db, `UPDATE members SET ${setClauses.join(", ")} WHERE id = ?`, values);
+    statements.push(db.prepare(`UPDATE members SET ${setClauses.join(", ")} WHERE id = ?`).bind(...values));
   }
   if (input.membershipCategory !== undefined) {
-    await run(db, `UPDATE member_category_assignments SET category_code = ?, updated_at = ? WHERE member_id = ?`, [
-      input.membershipCategory,
-      nowIso(),
-      id,
-    ]);
+    statements.push(
+      db
+        .prepare(`UPDATE member_category_assignments SET category_code = ?, updated_at = ? WHERE member_id = ?`)
+        .bind(input.membershipCategory, nowIso(), id),
+    );
   }
+  statements.push(prepareAuditLog(db, "admin", actorUserId, "member_updated", "member", id, input));
+  await db.batch(statements);
 
   return {
     id,
@@ -229,7 +245,12 @@ export async function updateAdminMember(db: DatabaseLike, id: string, input: Mem
  * from the Users detail view — the counterpart to
  * `addOrganizationRepresentative` for people with no organization.
  */
-export async function grantIndividualMembership(db: DatabaseLike, userId: string, membershipCategory: string) {
+export async function grantIndividualMembership(
+  db: DatabaseLike,
+  actorUserId: string,
+  userId: string,
+  membershipCategory: string,
+) {
   const user = await first<{ id: string }>(db, "SELECT id FROM users WHERE id = ?", [userId]);
   if (!user) throw new AppError(404, "NOT_FOUND", "User not found");
 
@@ -238,6 +259,12 @@ export async function grantIndividualMembership(db: DatabaseLike, userId: string
 
   const now = nowIso();
   const { memberId, statements } = buildCreateIndividualMemberStatements(db, userId, membershipCategory, now);
+  statements.push(
+    prepareAuditLog(db, "admin", actorUserId, "member_created", "member", memberId, {
+      userId,
+      membershipCategory,
+    }),
+  );
   await db.batch(statements);
 
   return {
@@ -254,10 +281,12 @@ export async function grantIndividualMembership(db: DatabaseLike, userId: string
 export interface ConfirmSecondaryContactResult {
   organizationId: string;
   secondaryContactUserId: string;
+  outboxId: string | null;
 }
 
 export async function confirmSecondaryContact(
   db: DatabaseLike,
+  actorUserId: string,
   organizationId: string,
 ): Promise<ConfirmSecondaryContactResult> {
   const org = await first<{ id: string }>(db, "SELECT id FROM organizations WHERE id = ?", [organizationId]);
@@ -275,8 +304,14 @@ export async function confirmSecondaryContact(
     throw new AppError(409, "NO_PENDING_NOMINATION", "This organization has no pending secondary contact nomination");
   }
 
+  const contact = await first<{ email: string; first_name: string | null; last_name: string | null }>(
+    db,
+    "SELECT email, first_name, last_name FROM users WHERE id = ?",
+    [nomination.nominated_user_id],
+  );
+
   const now = nowIso();
-  await db.batch([
+  const statements: StatementLike[] = [
     ...(await buildAssignRepresentativeRoleStatements(db, {
       memberId: aggregate.id,
       userId: nomination.nominated_user_id,
@@ -284,13 +319,38 @@ export async function confirmSecondaryContact(
       now,
     })),
     db.prepare("DELETE FROM organization_secondary_contact_nominations WHERE member_id = ?").bind(aggregate.id),
-  ]);
+    prepareAuditLog(
+      db,
+      "admin",
+      actorUserId,
+      "organization_secondary_contact_confirmed",
+      "organization",
+      organizationId,
+      { secondaryContactUserId: nomination.nominated_user_id },
+    ),
+  ];
+  const preparedEmail = contact
+    ? prepareQueueEmailStatement(db, {
+        templateKey: "org-contact-assigned",
+        recipientEmail: contact.email,
+        recipientUserId: nomination.nominated_user_id,
+        messageType: "transactional",
+        subject: "You have been designated an organization contact",
+        data: {
+          memberName: [contact.first_name, contact.last_name].filter(Boolean).join(" ") || contact.email,
+          contactRole: "secondary",
+        },
+      })
+    : null;
+  if (preparedEmail) statements.push(preparedEmail.statement);
+  await db.batch(statements);
 
-  return { organizationId, secondaryContactUserId: nomination.nominated_user_id };
+  return { organizationId, secondaryContactUserId: nomination.nominated_user_id, outboxId: preparedEmail?.id ?? null };
 }
 
 export async function removeAdminMember(
   db: DatabaseLike,
+  actorUserId: string,
   id: string,
 ): Promise<{ user_id: string; organization_id: string | null }> {
   const representative = await first<{ id: string; member_id: string; user_id: string }>(
@@ -331,6 +391,10 @@ export async function removeAdminMember(
       db
         .prepare("DELETE FROM organization_secondary_contact_nominations WHERE member_id = ? AND nominated_user_id = ?")
         .bind(representative.member_id, representative.user_id),
+      prepareAuditLog(db, "admin", actorUserId, "member_removed", "member", id, {
+        userId: representative.user_id,
+        organizationId: orgRow?.organization_id ?? null,
+      }),
     ];
     // The three role-revoke statements above are scoped to this
     // representative's own user_id (0 rows affected if they didn't hold
@@ -348,8 +412,14 @@ export async function removeAdminMember(
   );
   if (!member) throw new AppError(404, "NOT_FOUND", "Member not found");
 
-  await run(db, "DELETE FROM member_category_assignments WHERE member_id = ?", [id]);
-  await run(db, "DELETE FROM members WHERE id = ?", [id]);
+  await db.batch([
+    db.prepare("DELETE FROM member_category_assignments WHERE member_id = ?").bind(id),
+    db.prepare("DELETE FROM members WHERE id = ?").bind(id),
+    prepareAuditLog(db, "admin", actorUserId, "member_removed", "member", id, {
+      userId: member.user_id,
+      organizationId: null,
+    }),
+  ]);
 
   return { user_id: member.user_id, organization_id: null };
 }

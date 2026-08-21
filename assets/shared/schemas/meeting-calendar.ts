@@ -60,6 +60,10 @@ export const meetingResendResultSchema = z.object({
   queuedRecipients: z.number(),
 });
 
+export type AdminIcsFile = z.infer<typeof adminIcsFileSummarySchema>;
+export type AdminMeetingSeries = z.infer<typeof adminMeetingSeriesSummarySchema>;
+export type MeetingResendResult = z.infer<typeof meetingResendResultSchema>;
+
 // ── WG-nested admin routes ─────────────────────────────────────────────
 
 export const wgMeetingsListRouteSchema = {

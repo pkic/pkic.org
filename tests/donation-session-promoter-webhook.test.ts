@@ -14,6 +14,7 @@ import { createContext } from "./helpers/context";
 import { onRequestGet as donationSession } from "../functions/api/v1/donations/session";
 import { onRequestPost as donationPromoter } from "../functions/api/v1/donations/promoter";
 import { onRequestPost as stripeWebhook } from "../functions/api/v1/webhooks/stripe";
+import { handleDonationStripeEvent } from "../functions/_lib/services/donations/stripe-webhook";
 
 async function insertDonation(opts: {
   sessionId: string;
@@ -161,6 +162,32 @@ describe("POST /api/v1/donations/promoter", () => {
     expect(body1.code).toBe(body2.code);
   });
 
+  it("creates one promoter when concurrent requests race", async () => {
+    const donationId = await insertDonation({ sessionId: "cs_test_concurrent_promoter", status: "completed" });
+    const requestPromoter = () =>
+      donationPromoter(
+        createContext(
+          env,
+          new Request("https://app.test/api/v1/donations/promoter", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ session_id: "cs_test_concurrent_promoter" }),
+          }),
+          {},
+        ),
+      );
+
+    const responses = await Promise.all([requestPromoter(), requestPromoter(), requestPromoter()]);
+    const codes = await Promise.all(
+      responses.map(async (response) => ((await response.json()) as { code: string }).code),
+    );
+    expect(new Set(codes).size).toBe(1);
+    const rows = await env.DB.prepare("SELECT code FROM donation_promoters WHERE donation_id = ?")
+      .bind(donationId)
+      .all();
+    expect(rows.results).toHaveLength(1);
+  });
+
   it("rejects for a pending (uncompleted) donation", async () => {
     await insertDonation({ sessionId: "cs_test_uncompleted", status: "pending" });
 
@@ -267,5 +294,38 @@ describe("POST /api/v1/webhooks/stripe", () => {
     );
 
     expect(response.status).toBe(400);
+  });
+
+  it("enqueues one failure notification when Stripe retries the same transition", async () => {
+    await insertDonation({ sessionId: "cs_test_failed_retry", status: "pending" });
+    const event = {
+      id: "evt_failed_retry",
+      type: "checkout.session.async_payment_failed",
+      data: {
+        object: {
+          id: "cs_test_failed_retry",
+          object: "checkout.session" as const,
+          status: "complete" as const,
+          payment_status: "unpaid",
+          payment_intent: "pi_test_failed_retry",
+          payment_method_types: ["sepa_debit"],
+          amount_total: 5000,
+          currency: "usd",
+          customer_email: "alice@example.test",
+        },
+      },
+    };
+
+    await handleDonationStripeEvent(env.DB, env, event, "https://app.test");
+    await handleDonationStripeEvent(env.DB, env, event, "https://app.test");
+
+    const outbox = await env.DB.prepare(
+      "SELECT id, idempotency_key FROM email_outbox WHERE idempotency_key LIKE 'donation:%:payment_failed'",
+    ).all();
+    expect(outbox.results).toHaveLength(1);
+    const donation = await env.DB.prepare("SELECT status FROM donations WHERE checkout_session_id = ?")
+      .bind("cs_test_failed_retry")
+      .first<{ status: string }>();
+    expect(donation?.status).toBe("failed");
   });
 });

@@ -8,35 +8,15 @@ import {
 } from "../../../../_lib/services/event-days";
 import { parseJsonSafe } from "../../../../_lib/utils/json";
 import { logError } from "../../../../_lib/logging";
-
-type FormsPurpose = "event_registration" | "proposal_submission";
-
-function resolvePurpose(value: string | null): FormsPurpose | null {
-  if (!value) {
-    return "event_registration";
-  }
-
-  if (value === "event_registration" || value === "proposal_submission") {
-    return value;
-  }
-
-  return null;
-}
+import { eventFormsGetRouteSchema, eventFormsResponseSchema } from "../../../../../assets/shared/schemas/forms";
+import { openApiRoute } from "../../../../_lib/openapi/route";
 
 function isMissingTableError(error: unknown): boolean {
   const message = error instanceof Error ? error.message.toLowerCase() : "";
   return message.includes("no such table");
 }
 
-export async function onRequestGet(c: any): Promise<Response> {
-  const purpose = resolvePurpose(new URL(c.req.raw.url).searchParams.get("purpose"));
-  if (!purpose) {
-    return json(
-      { error: { code: "VALIDATION_ERROR", message: "purpose must be event_registration or proposal_submission" } },
-      400,
-    );
-  }
-
+async function getEventForm(c: any, purpose: "event_registration" | "proposal_submission"): Promise<Response> {
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
   const audience = purpose === "proposal_submission" ? "speaker" : "attendee";
 
@@ -103,33 +83,49 @@ export async function onRequestGet(c: any): Promise<Response> {
   const eventSettings = parseJsonSafe<{ proposal?: { sessionTypes?: unknown[] } }>(event.settings_json, {});
   const allowedSessionTypes: string[] = resolveSessionTypes(eventSettings).map((t) => t.label);
 
-  return json({
-    event: { id: event.id, slug: event.slug, name: event.name },
-    purpose,
-    form,
-    allowedSessionTypes,
-    requiredTerms: requiredTerms.map((term) => ({
-      termKey: term.term_key,
-      version: term.version,
-      required: term.required === 1,
-      contentRef: term.content_ref,
-      displayText: term.display_text,
-      helpText: term.help_text ?? null,
-    })),
-    eventDays: eventDays.map((day) => ({
-      dayDate: day.day_date,
-      label: day.label,
-      inPersonCapacity: day.in_person_capacity,
-      sortOrder: day.sort_order,
-      attendanceOptions: resolveAttendanceOptions(day).map((option) => {
-        const capacity = option.capacity ?? null;
-        const registered = registeredCounts.get(day.id)?.get(option.value) ?? 0;
-        const spotsRemainingPercent =
-          capacity != null && capacity > 0 ? Math.round(((capacity - registered) / capacity) * 100) : null;
-        return { value: option.value, label: option.label, spotsRemainingPercent };
-      }),
-    })),
-  });
+  return json(
+    eventFormsResponseSchema.parse({
+      event: { id: event.id, slug: event.slug, name: event.name },
+      purpose,
+      form,
+      allowedSessionTypes,
+      requiredTerms: requiredTerms.map((term) => ({
+        termKey: term.term_key,
+        version: term.version,
+        required: term.required === 1,
+        contentRef: term.content_ref,
+        displayText: term.display_text,
+        helpText: term.help_text ?? null,
+      })),
+      eventDays: eventDays.map((day) => ({
+        dayDate: day.day_date,
+        label: day.label,
+        inPersonCapacity: day.in_person_capacity,
+        sortOrder: day.sort_order,
+        attendanceOptions: resolveAttendanceOptions(day).map((option) => {
+          const capacity = option.capacity ?? null;
+          const registered = registeredCounts.get(day.id)?.get(option.value) ?? 0;
+          const spotsRemainingPercent =
+            capacity != null && capacity > 0 ? Math.round(((capacity - registered) / capacity) * 100) : null;
+          return { value: option.value, label: option.label, spotsRemainingPercent };
+        }),
+      })),
+    }),
+  );
+}
+
+export const EventFormsGet = openApiRoute(eventFormsGetRouteSchema, async (c: any, data) =>
+  getEventForm(c, data.query.purpose),
+);
+
+export async function onRequestGet(c: any): Promise<Response> {
+  const parsed = eventFormsGetRouteSchema.request.query.safeParse(
+    Object.fromEntries(new URL(c.req.raw.url).searchParams),
+  );
+  if (!parsed.success) {
+    return json({ error: { code: "VALIDATION_ERROR", message: "Invalid form purpose" } }, 400);
+  }
+  return getEventForm(c, parsed.data.purpose);
 }
 
 export async function onRequest(c: any): Promise<Response> {

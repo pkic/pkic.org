@@ -1,0 +1,45 @@
+import { z } from "zod";
+
+/** Canonical permission vocabulary shared by the Worker and admin UI. */
+export const PERMISSIONS = [
+  "membership:read",
+  "membership:write",
+  "membership:approve",
+  "events:read",
+  "events:write",
+  "events:manage",
+  "working-groups:read",
+  "working-groups:write",
+  "email-templates:read",
+  "email-templates:write",
+  "donations:read",
+  "donations:sync",
+  "users:read",
+  "users:write",
+  "users:anonymize",
+  "audit:read",
+  "access:grant",
+  "access:revoke",
+  "organizations:read",
+  "organizations:write",
+  "organizations:content-review",
+  "sponsorships:read",
+  "sponsorships:write",
+  "votes:create",
+  "votes:manage",
+  "proposals:read",
+  "proposals:score",
+  "proposals:manage",
+  "agenda:read",
+  "agenda:write",
+  "sponsor-portal:attendee-data",
+  "admin:read",
+  "admin:write",
+] as const;
+
+export const permissionSchema = z.enum(PERMISSIONS);
+export type Permission = z.infer<typeof permissionSchema>;
+
+export function isPermission(value: string): value is Permission {
+  return permissionSchema.safeParse(value).success;
+}

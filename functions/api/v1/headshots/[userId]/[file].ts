@@ -4,15 +4,12 @@
  * GET /api/v1/headshots/:userId/:file
  *
  * Serves headshot images from the SPEAKER_UPLOADS_BUCKET R2 bucket.
- * No authentication required — the key path (headshots/{userId}/{timestamp}.{ext})
- * is unguessable and acts as a capability URL.
- *
- * Responses include long-lived Cache-Control headers so browsers and CDN
- * edge caches can serve repeated requests without hitting R2.
+ * No authentication required, but only the user's current D1-referenced key
+ * is served. Replaced and removed keys are revoked immediately even if their
+ * asynchronous R2 cleanup needs a retry.
  */
 import { json } from "../../../../_lib/http";
-
-const CACHE_CONTROL = "public, max-age=31536000, immutable";
+import { currentUserHeadshotResponse } from "../../../../_lib/services/user-headshot";
 
 export async function onRequestGet(c: any): Promise<Response> {
   const userId = c.req.param("userId");
@@ -24,20 +21,7 @@ export async function onRequestGet(c: any): Promise<Response> {
     return json({ error: { code: "NOT_CONFIGURED", message: "Storage not configured" } }, 503);
   }
 
-  const obj = await bucket.get(r2Key);
-  if (!obj) {
-    return new Response("Not Found", { status: 404 });
-  }
-
-  const ext = file.split(".").pop()?.toLowerCase() ?? "";
-  const mime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
-
-  return new Response(await obj.arrayBuffer(), {
-    headers: {
-      "Content-Type": mime,
-      "Cache-Control": CACHE_CONTROL,
-    },
-  });
+  return currentUserHeadshotResponse(c.env.DB, bucket, userId, r2Key);
 }
 
 export async function onRequest(c: any): Promise<Response> {

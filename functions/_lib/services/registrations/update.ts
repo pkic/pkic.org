@@ -1,192 +1,152 @@
 import { AppError } from "../../errors";
-import { first, run } from "../../db/queries";
-import { nowIso } from "../../utils/time";
-import {
-  deriveEventAttendanceType,
-  replaceRegistrationDayAttendance,
-  type DayAttendanceSelection,
-} from "../event-days";
-import {
-  claimOfferedDayWaitlist,
-  listConfirmedInPersonEventDayIdsForRegistration,
-  listInPersonEventDayIdsForRegistration,
-  removeAllDayWaitlistForRegistration,
-  resolveCapacityExemptReason,
-  syncRegistrationDayWaitlist,
-} from "./day-waitlist";
-import { upsertAttendeeParticipant } from "./participant-registration";
-import { getRegistrationByManageToken, getRegistrationById } from "./queries";
 import type { DatabaseLike } from "../../types";
+import type { ChangeRegistrationEmailParams } from "./change-email";
+import { prepareRegistrationEmailChange } from "./change-email";
+import { isEventDayCapacityConflict } from "./day-waitlist";
+import { getRegistrationById, getRegistrationByManageToken } from "./queries";
+import { prepareRegistrationStatusEmail, type RegistrationStatusEmailParams } from "./status-notifications";
 import type { RegistrationRecord } from "./types";
+import { buildRegistrationUpdate, type RegistrationUpdatePayload } from "./update-plan";
 
-interface UpdatePayload {
-  action: "update" | "cancel" | "report_unauthorized";
-  attendanceType?: "in_person" | "virtual" | "on_demand";
-  dayAttendance?: DayAttendanceSelection[];
-  customAnswersJson?: string | null;
-  sourceRef?: string | null;
-  waitlistClaimWindowHours: number;
-}
+type UpdateNotification = Omit<
+  RegistrationStatusEmailParams,
+  "registrationId" | "registration" | "profilePatch" | "dayAttendance" | "dayWaitlist"
+>;
 
-async function applyRegistrationUpdate(
-  db: DatabaseLike,
-  registration: RegistrationRecord,
-  payload: UpdatePayload,
-  changedBy = "self",
-): Promise<RegistrationRecord> {
-  const previousInPersonDayIds = await listInPersonEventDayIdsForRegistration(db, registration.id);
-  const previousConfirmedInPersonDayIds = await listConfirmedInPersonEventDayIdsForRegistration(db, registration.id);
+type UpdateEmailChange = Omit<ChangeRegistrationEmailParams, "registrationId" | "registrationOverride">;
 
-  const isCancelled = registration.status === "cancelled" || registration.status === "cancelled_unauthorized";
-
-  if (payload.action === "cancel") {
-    if (isCancelled) {
-      throw new AppError(409, "ALREADY_CANCELLED", "Registration is already cancelled");
-    }
-    const now = nowIso();
-    await run(
-      db,
-      `UPDATE registrations
-       SET status = 'cancelled', cancelled_at = ?, updated_at = ?
-       WHERE id = ?`,
-      [now, now, registration.id],
-    );
-    await removeAllDayWaitlistForRegistration(db, {
-      registrationId: registration.id,
-      reasonCode: "registration_cancelled",
-    });
-    await upsertAttendeeParticipant(db, {
-      ...registration,
-      status: "cancelled",
-    });
-    const cancelled = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE id = ?", [
-      registration.id,
-    ]);
-    if (!cancelled) {
-      throw new AppError(500, "REGISTRATION_CANCEL_FAILED", "Unable to cancel registration");
-    }
-    return cancelled;
-  }
-
-  if (payload.action === "report_unauthorized") {
-    if (isCancelled) {
-      throw new AppError(409, "ALREADY_CANCELLED", "This registration has already been cancelled");
-    }
-    const now = nowIso();
-    // Cancel the registration and erase event-specific PII (custom answers).
-    // The user account is not deleted — only this registration's personal data.
-    await run(
-      db,
-      `UPDATE registrations
-       SET status = 'cancelled_unauthorized', cancelled_at = ?, custom_answers_json = NULL, updated_at = ?
-       WHERE id = ?`,
-      [now, now, registration.id],
-    );
-    await removeAllDayWaitlistForRegistration(db, {
-      registrationId: registration.id,
-      reasonCode: "registration_cancelled",
-    });
-    await upsertAttendeeParticipant(db, {
-      ...registration,
-      status: "cancelled_unauthorized",
-    });
-    const updated = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE id = ?", [registration.id]);
-    if (!updated) {
-      throw new AppError(500, "REGISTRATION_CANCEL_FAILED", "Unable to process unauthorized report");
-    }
-    return updated;
-  }
-
-  const derivedAttendanceType = deriveEventAttendanceType(payload.dayAttendance);
-  // When only changing email on a cancelled registration, preserve the original attendance type
-  const effectiveAttendanceType = payload.attendanceType ?? derivedAttendanceType ?? registration.attendance_type;
-  if (!effectiveAttendanceType) {
-    throw new AppError(400, "ATTENDANCE_TYPE_REQUIRED", "attendanceType is required for update action");
-  }
-  const capacityExemptReason = await resolveCapacityExemptReason(db, {
-    registrationId: registration.id,
-    eventId: registration.event_id,
-    userId: registration.user_id,
-  });
-  const hasPerDayAttendanceInput = Boolean(payload.dayAttendance && payload.dayAttendance.length > 0);
-  const hasPerDayAttendanceContext = hasPerDayAttendanceInput || previousInPersonDayIds.length > 0;
-  let newStatus = isCancelled ? "registered" : registration.status;
-  if (hasPerDayAttendanceContext || capacityExemptReason) {
-    newStatus = "registered";
-  } else if (effectiveAttendanceType !== registration.attendance_type) {
-    if (effectiveAttendanceType === "in_person") {
-      newStatus = "registered";
-    }
-    if (registration.attendance_type === "in_person" && effectiveAttendanceType !== "in_person") {
-      newStatus = "registered";
+async function withCapacityRetry<T>(operation: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (!isEventDayCapacityConflict(error) || attempt === 2) throw error;
     }
   }
-  await run(
-    db,
-    `UPDATE registrations
-     SET attendance_type = ?, status = ?, custom_answers_json = COALESCE(?, custom_answers_json),
-         source_ref = COALESCE(?, source_ref), capacity_exempt_in_person = ?,
-         capacity_exempt_reason = ?, cancelled_at = ?, updated_at = ?
-     WHERE id = ?`,
-    [
-      effectiveAttendanceType,
-      newStatus,
-      payload.customAnswersJson ?? null,
-      payload.sourceRef ?? null,
-      capacityExemptReason ? 1 : 0,
-      capacityExemptReason,
-      isCancelled ? null : registration.cancelled_at,
-      nowIso(),
-      registration.id,
-    ],
-  );
-  if (payload.dayAttendance) {
-    await replaceRegistrationDayAttendance(db, {
-      registrationId: registration.id,
-      eventId: registration.event_id,
-      selections: payload.dayAttendance,
-      changedBy,
-    });
-    await claimOfferedDayWaitlist(db, {
-      registrationId: registration.id,
-      eventId: registration.event_id,
-      selections: payload.dayAttendance,
-    });
-    await syncRegistrationDayWaitlist(db, {
-      registrationId: registration.id,
-      eventId: registration.event_id,
-      userId: registration.user_id,
-      selections: payload.dayAttendance,
-      capacityExemptReason,
-      preserveConfirmedEventDayIds: isCancelled ? [] : previousConfirmedInPersonDayIds,
-    });
-  }
-  await upsertAttendeeParticipant(db, {
-    ...registration,
-    status: newStatus,
-    attendance_type: effectiveAttendanceType,
-    source_ref: payload.sourceRef ?? registration.source_ref,
-  });
-  const updated = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE id = ?", [registration.id]);
-  if (!updated) {
-    throw new AppError(500, "REGISTRATION_UPDATE_FAILED", "Unable to update registration");
-  }
-  return updated;
+  throw new AppError(409, "DAY_CAPACITY_CHANGED", "Day capacity changed; please retry");
 }
 
 export async function updateRegistrationByManageToken(
   db: DatabaseLike,
-  payload: { manageToken: string; signingSecret: string } & UpdatePayload,
+  payload: { manageToken: string; signingSecret: string } & RegistrationUpdatePayload,
 ): Promise<RegistrationRecord> {
-  const registration = await getRegistrationByManageToken(db, payload.manageToken, payload.signingSecret);
-  return applyRegistrationUpdate(db, registration, payload);
+  return withCapacityRetry(async () => {
+    const registration = await getRegistrationByManageToken(db, payload.manageToken, payload.signingSecret);
+    const built = await buildRegistrationUpdate(db, registration, payload);
+    await db.batch(built.statements);
+    return built.registration;
+  });
+}
+
+export async function updateRegistrationByManageTokenWithNotification(
+  db: DatabaseLike,
+  payload: {
+    manageToken: string;
+    signingSecret: string;
+    notification: UpdateNotification;
+  } & RegistrationUpdatePayload,
+): Promise<{ registration: RegistrationRecord; outboxId: string }> {
+  return withCapacityRetry(async () => {
+    const registration = await getRegistrationByManageToken(db, payload.manageToken, payload.signingSecret);
+    const built = await buildRegistrationUpdate(db, registration, payload);
+    const email = await prepareRegistrationStatusEmail(db, {
+      ...payload.notification,
+      registrationId: built.registration.id,
+      registration: built.registration,
+      profilePatch: payload.profilePatch,
+      dayAttendance: built.dayAttendance,
+      dayWaitlist: built.dayWaitlist,
+    });
+    await db.batch([...built.statements, email.statement]);
+    return { registration: built.registration, outboxId: email.outboxId };
+  });
+}
+
+export async function updateRegistrationByManageTokenWithEmailChange(
+  db: DatabaseLike,
+  payload: {
+    manageToken: string;
+    signingSecret: string;
+    emailChange: UpdateEmailChange;
+  } & RegistrationUpdatePayload,
+): Promise<{ registration: RegistrationRecord; outboxId: string | null }> {
+  return withCapacityRetry(async () => {
+    const registration = await getRegistrationByManageToken(db, payload.manageToken, payload.signingSecret);
+    const built = await buildRegistrationUpdate(db, registration, payload);
+    const emailChange = await prepareRegistrationEmailChange(db, {
+      ...payload.emailChange,
+      registrationId: built.registration.id,
+      registrationOverride: built.registration,
+      confirmationEmail: payload.emailChange.confirmationEmail
+        ? {
+            ...payload.emailChange.confirmationEmail,
+            profilePatch: payload.profilePatch,
+            dayAttendance: built.dayAttendance,
+            dayWaitlist: built.dayWaitlist,
+          }
+        : undefined,
+    });
+    await db.batch([...built.statements, ...emailChange.statements]);
+    return { registration: emailChange.registration, outboxId: emailChange.outboxId };
+  });
 }
 
 export async function updateRegistrationById(
   db: DatabaseLike,
-  payload: { registrationId: string } & UpdatePayload,
+  payload: { registrationId: string } & RegistrationUpdatePayload,
   changedBy: string,
 ): Promise<RegistrationRecord> {
-  const registration = await getRegistrationById(db, payload.registrationId);
-  return applyRegistrationUpdate(db, registration, payload, changedBy);
+  return withCapacityRetry(async () => {
+    const registration = await getRegistrationById(db, payload.registrationId);
+    const built = await buildRegistrationUpdate(db, registration, payload, changedBy);
+    await db.batch(built.statements);
+    return built.registration;
+  });
+}
+
+export async function updateRegistrationByIdWithNotification(
+  db: DatabaseLike,
+  payload: { registrationId: string; notification: UpdateNotification } & RegistrationUpdatePayload,
+  changedBy: string,
+): Promise<{ registration: RegistrationRecord; outboxId: string }> {
+  return withCapacityRetry(async () => {
+    const registration = await getRegistrationById(db, payload.registrationId);
+    const built = await buildRegistrationUpdate(db, registration, payload, changedBy);
+    const email = await prepareRegistrationStatusEmail(db, {
+      ...payload.notification,
+      registrationId: built.registration.id,
+      registration: built.registration,
+      profilePatch: payload.profilePatch,
+      dayAttendance: built.dayAttendance,
+      dayWaitlist: built.dayWaitlist,
+    });
+    await db.batch([...built.statements, email.statement]);
+    return { registration: built.registration, outboxId: email.outboxId };
+  });
+}
+
+export async function updateRegistrationByIdWithEmailChange(
+  db: DatabaseLike,
+  payload: { registrationId: string; emailChange: UpdateEmailChange } & RegistrationUpdatePayload,
+  changedBy: string,
+): Promise<{ registration: RegistrationRecord; outboxId: string | null }> {
+  return withCapacityRetry(async () => {
+    const registration = await getRegistrationById(db, payload.registrationId);
+    const built = await buildRegistrationUpdate(db, registration, payload, changedBy);
+    const emailChange = await prepareRegistrationEmailChange(db, {
+      ...payload.emailChange,
+      registrationId: built.registration.id,
+      registrationOverride: built.registration,
+      confirmationEmail: payload.emailChange.confirmationEmail
+        ? {
+            ...payload.emailChange.confirmationEmail,
+            profilePatch: payload.profilePatch,
+            dayAttendance: built.dayAttendance,
+            dayWaitlist: built.dayWaitlist,
+          }
+        : undefined,
+    });
+    await db.batch([...built.statements, ...emailChange.statements]);
+    return { registration: emailChange.registration, outboxId: emailChange.outboxId };
+  });
 }

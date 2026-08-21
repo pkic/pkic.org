@@ -18,7 +18,7 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
-import { createApplicationFormSubmission } from "./helpers/member-applications";
+import { createApplicationFormSubmission, seedMemberApplication } from "./helpers/member-applications";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -55,27 +55,16 @@ async function assignRole(userId: string, roleId: string, grantedBy: string): Pr
 }
 
 async function createApplication(overrides: Record<string, unknown> = {}): Promise<{ id: string }> {
-  const id = crypto.randomUUID();
-  await env.DB.prepare(
-    `INSERT INTO member_applications
-       (id, applicant_email, applicant_name, organization_name, organization_domain, membership_category,
-        form_submission_id, status, stage, stage_entered_at, manage_token_hash, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, datetime('now'))`,
-  )
-    .bind(
-      id,
-      (overrides.applicant_email as string) ?? "applicant@example.test",
-      (overrides.applicant_name as string) ?? "Applicant Name",
-      (overrides.organization_name as string) ?? "Example Org",
-      (overrides.organization_domain as string) ?? "example.test",
-      (overrides.membership_category as string) ?? "F",
-      (overrides.form_submission_id as string | null) ?? null,
-      (overrides.status as string) ?? "pending",
-      (overrides.stage as string) ?? "pending",
-      crypto.randomUUID(),
-      (overrides.created_at as string) ?? new Date().toISOString(),
-    )
-    .run();
+  const id = await seedMemberApplication({
+    applicantEmail: (overrides.applicant_email as string) ?? "applicant@example.test",
+    applicantName: (overrides.applicant_name as string) ?? "Applicant Name",
+    organizationName: (overrides.organization_name as string) ?? "Example Org",
+    organizationDomain: (overrides.organization_domain as string) ?? "example.test",
+    membershipCategory: (overrides.membership_category as string) ?? "F",
+    formSubmissionId: (overrides.form_submission_id as string | null) ?? null,
+    stage: (overrides.stage as string) ?? "pending",
+    createdAt: (overrides.created_at as string) ?? new Date().toISOString(),
+  });
   return { id };
 }
 
@@ -129,10 +118,9 @@ describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application field
       applicant_email: string;
       organization_domain: string;
       stage: string;
-      status: string;
     }>(
       env.DB,
-      "SELECT applicant_name, applicant_email, organization_domain, stage, status FROM member_applications WHERE id = ?",
+      "SELECT applicant_name, applicant_email, organization_domain, stage FROM member_applications WHERE id = ?",
       id,
     );
     expect(rows[0].applicant_name).toBe("Corrected Name");
@@ -141,11 +129,10 @@ describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application field
     // duplicate-application detection (Fix 1's subject) doesn't desync.
     expect(rows[0].organization_domain).toBe("newdomain.test");
     expect(rows[0].stage).toBe("pending");
-    expect(rows[0].status).toBe("pending");
   });
 
   it("records a member_application_events row for the edit, distinct from a stage transition (fromStage === toStage)", async () => {
-    const { id } = await createApplication({ stage: "in_review", status: "in_review" });
+    const { id } = await createApplication({ stage: "in_review" });
 
     const response = await call(adminToken, `/api/v1/admin/applications/${id}`, {
       method: "PATCH",
@@ -167,7 +154,7 @@ describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application field
   });
 
   it("allows editing an already-approved application's details more than once (uq_member_application_events_approved must not reject the from_stage=to_stage='approved' marker event)", async () => {
-    const { id } = await createApplication({ stage: "approved", status: "approved" });
+    const { id } = await createApplication({ stage: "approved" });
 
     const first = await call(adminToken, `/api/v1/admin/applications/${id}`, {
       method: "PATCH",
@@ -359,7 +346,7 @@ describe("POST /api/v1/internal/jobs/run — runConsultationBatch/runEcReviewBat
   });
 
   it("runConsultationBatch queues a consultation-batch email for applications in_consultation", async () => {
-    await createApplication({ stage: "in_consultation", status: "in_consultation" });
+    await createApplication({ stage: "in_consultation" });
 
     const response = await call(adminToken, "/api/v1/internal/jobs/run", {
       method: "POST",
@@ -382,7 +369,6 @@ describe("POST /api/v1/internal/jobs/run — runConsultationBatch/runEcReviewBat
   it("runEcReviewBatch transitions eligible applications to ec_review", async () => {
     const { id } = await createApplication({
       stage: "in_consultation",
-      status: "in_consultation",
       created_at: new Date(Date.now() - 10 * 86_400_000).toISOString(),
     });
     // Backdate stage_entered_at past the (default 7-day) consultation window.
@@ -409,7 +395,7 @@ describe("POST /api/v1/internal/jobs/run — runConsultationBatch/runEcReviewBat
   });
 
   it("does not run the membership batches when their flags are omitted (defaults false)", async () => {
-    await createApplication({ stage: "in_consultation", status: "in_consultation" });
+    await createApplication({ stage: "in_consultation" });
 
     const response = await call(adminToken, "/api/v1/internal/jobs/run", {
       method: "POST",
@@ -425,5 +411,67 @@ describe("POST /api/v1/internal/jobs/run — runConsultationBatch/runEcReviewBat
 
     const outbox = await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'consultation-batch'");
     expect(outbox).toHaveLength(0);
+  });
+});
+
+describe("POST /api/v1/admin/applications/:id/communications", () => {
+  let adminToken: string;
+
+  beforeEach(async () => {
+    await resetDb();
+    await seedEventAndAdmin(env.DB);
+    const adminRow = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'"))[0];
+    adminToken = await createAdminSession(env.DB, adminRow.id, "admin-application-communication-token");
+  });
+
+  it("commits its email intent, communication record, and audit atomically", async () => {
+    const { id } = await createApplication({ applicant_email: "communication@example.test" });
+    const response = await call(adminToken, `/api/v1/admin/applications/${id}/communications`, {
+      method: "POST",
+      body: JSON.stringify({ subject: "Additional information", body: "Please provide more detail." }),
+    });
+    expect(response.status).toBe(201);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM application_communications WHERE application_id = ?", id),
+    ).toHaveLength(1);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE recipient_email = ?", "communication@example.test"),
+    ).toHaveLength(1);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM audit_log WHERE action = 'application_communication_sent' AND entity_id = ?",
+        id,
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("rolls back the communication and email intent when audit fails", async () => {
+    const { id } = await createApplication({ applicant_email: "communication-rollback@example.test" });
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_application_communication_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'application_communication_sent'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced application communication audit failure');
+       END`,
+    ).run();
+
+    const response = await call(adminToken, `/api/v1/admin/applications/${id}/communications`, {
+      method: "POST",
+      body: JSON.stringify({ subject: "Must roll back", body: "This cannot become partial." }),
+    });
+    expect(response.status).toBe(500);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM application_communications WHERE application_id = ?", id),
+    ).toHaveLength(0);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM email_outbox WHERE recipient_email = ?",
+        "communication-rollback@example.test",
+      ),
+    ).toHaveLength(0);
+    await env.DB.prepare("DROP TRIGGER fail_application_communication_audit").run();
   });
 });

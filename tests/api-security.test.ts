@@ -81,7 +81,7 @@ async function insertSession(
   _db: DatabaseLike,
   userId: string,
   rawToken: string,
-  opts: { expiresAt?: string; revokedAt?: string; scopes?: AuthScope[] } = {},
+  opts: { expiresAt?: string; revokedAt?: string; scopes?: AuthScope[]; scopeRestricted?: boolean } = {},
 ): Promise<string> {
   const sessionId = crypto.randomUUID();
   const tokenHash = await sha256Hex(rawToken);
@@ -100,6 +100,7 @@ async function insertSession(
     sessionId,
     expiresAt,
     scopes: opts.scopes,
+    scopeRestricted: opts.scopeRestricted,
   });
 }
 
@@ -491,7 +492,10 @@ describe("session-token validation", () => {
   });
 
   it("rejects scoped sessions when the endpoint requires a different scope", async () => {
-    const token = await insertSession(env.DB, adminId, "proposal-read-token", { scopes: ["proposals:read"] });
+    const token = await insertSession(env.DB, adminId, "proposal-read-token", {
+      scopes: ["proposals:read"],
+      scopeRestricted: true,
+    });
     const response = await callUsers(token);
     expect(response.status).toBe(403);
     expect((await response.json()) as { error?: { code?: string; message?: string } }).toEqual({
@@ -504,7 +508,10 @@ describe("session-token validation", () => {
   });
 
   it("requires proposal access in addition to event access for presentation archives", async () => {
-    const token = await insertSession(env.DB, adminId, "event-read-token", { scopes: ["events:read"] });
+    const token = await insertSession(env.DB, adminId, "event-read-token", {
+      scopes: ["events:read"],
+      scopeRestricted: true,
+    });
     const response = await callApp(
       bearerGet("https://app.test/api/v1/admin/events/pqc-2026/presentations/download", token),
     );

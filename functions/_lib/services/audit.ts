@@ -1,12 +1,31 @@
 import { run } from "../db/queries";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
-import { stringifyJson } from "../utils/json";
+import { parseJsonSafe, stringifyJson } from "../utils/json";
 import type { DatabaseLike, StatementLike } from "../types";
 
 interface AuditDeltaLike {
   from: unknown;
   to: unknown;
+}
+
+export interface AuditLogReadRow {
+  id: string;
+  actor_type: string;
+  actor_id: string | null;
+  actor_display: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  details_json: string | null;
+  created_at: string;
+}
+
+export function toAuditLogResponseRows(rows: AuditLogReadRow[]) {
+  return rows.map(({ details_json, ...row }) => ({
+    ...row,
+    details: details_json ? parseJsonSafe<unknown>(details_json, null) : null,
+  }));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -28,6 +47,10 @@ function normalizeAuditDetails(details: unknown): unknown {
   return normalized;
 }
 
+export function serializeAuditDetails(details: unknown): string {
+  return stringifyJson(normalizeAuditDetails(details));
+}
+
 export async function writeAuditLog(
   db: DatabaseLike,
   actorType: string,
@@ -42,7 +65,7 @@ export async function writeAuditLog(
     `INSERT INTO audit_log (
       id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [uuid(), actorType, actorId, action, entityType, entityId, stringifyJson(normalizeAuditDetails(details)), nowIso()],
+    [uuid(), actorType, actorId, action, entityType, entityId, serializeAuditDetails(details), nowIso()],
   );
 }
 
@@ -58,12 +81,14 @@ export function prepareAuditLog(
   entityId: string | null,
   details: unknown,
   createdAt = nowIso(),
+  idempotencyKey: string | null = null,
 ): StatementLike {
   return db
     .prepare(
       `INSERT INTO audit_log (
-      id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at, idempotency_key
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
     )
     .bind(
       uuid(),
@@ -72,7 +97,48 @@ export function prepareAuditLog(
       action,
       entityType,
       entityId,
-      stringifyJson(normalizeAuditDetails(details)),
+      serializeAuditDetails(details),
       createdAt,
+      idempotencyKey,
+    );
+}
+
+/**
+ * Builds an audit INSERT guarded by a static caller-owned EXISTS predicate.
+ * This lets compare-and-set command batches avoid recording a losing write.
+ * The SQL fragment must be a fixed internal string; values remain bound.
+ */
+export function prepareAuditLogWhen(
+  db: DatabaseLike,
+  input: {
+    actorType: string;
+    actorId: string | null;
+    action: string;
+    entityType: string;
+    entityId: string | null;
+    details: unknown;
+    conditionSql: string;
+    conditionBindings: unknown[];
+    createdAt?: string;
+  },
+): StatementLike {
+  return db
+    .prepare(
+      `INSERT INTO audit_log (
+         id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at
+       )
+       SELECT ?, ?, ?, ?, ?, ?, ?, ?
+       WHERE EXISTS (${input.conditionSql})`,
+    )
+    .bind(
+      uuid(),
+      input.actorType,
+      input.actorId,
+      input.action,
+      input.entityType,
+      input.entityId,
+      serializeAuditDetails(input.details),
+      input.createdAt ?? nowIso(),
+      ...input.conditionBindings,
     );
 }

@@ -5,7 +5,6 @@
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../_lib/auth/permissions";
-import { writeAuditLog } from "../../../../_lib/services/audit";
 import { listAdminWorkingGroups, createWorkingGroup } from "../../../../_lib/services/admin-working-groups";
 import {
   workingGroupCreateRouteSchema,
@@ -29,11 +28,7 @@ export const WorkingGroupsCreate = openApiRoute(workingGroupCreateRouteSchema, a
   requirePermission(admin, "working-groups:write");
 
   const body = data.body;
-  const workingGroup = await createWorkingGroup(requestDb(c), body);
-
-  await writeAuditLog(requestDb(c), "admin", admin.id, "working_group_created", "working_group", workingGroup.id, {
-    name: workingGroup.name,
-  });
+  const workingGroup = await createWorkingGroup(requestDb(c), admin.id, body);
 
   return json({ workingGroup }, 201);
 });

@@ -2,26 +2,17 @@ import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { first } from "../../../../../_lib/db/queries";
 import { queryPage } from "../../../../../_lib/db/pagination";
+import { buildD1TextSearchFilter } from "../../../../../_lib/db/search";
+import { resolveMappedOrderBy } from "../../../../../_lib/db/sort";
+import { toAuditLogResponseRows, type AuditLogReadRow } from "../../../../../_lib/services/audit";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { buildPageInfo } from "../../../../../../assets/shared/schemas/pagination";
 import { adminProposalAuditLogRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts";
 import type { ValidatedData } from "chanfana";
 
-interface AuditLogRow {
-  id: string;
-  actor_type: string;
-  actor_id: string | null;
-  actor_display: string | null;
-  action: string;
-  entity_type: string;
-  entity_id: string | null;
-  details_json: string | null;
-  created_at: string;
-}
-
-const AUDIT_LOG_WHERE = `(al.entity_type = 'proposal' AND al.entity_id = ?)
+const AUDIT_LOG_WHERE = `((al.entity_type = 'proposal' AND al.entity_id = ?)
         OR (al.entity_type = 'proposal_review' AND pr.proposal_id = ?)
-        OR (al.entity_type = 'proposal_speaker' AND ps.proposal_id = ?)`;
+        OR (al.entity_type = 'proposal_speaker' AND ps.proposal_id = ?))`;
 
 export async function onRequestGet(
   c: AdminContext,
@@ -39,8 +30,22 @@ export async function onRequestGet(
 
   const limit = data.query.limit ?? 50;
   const offset = data.query.offset ?? 0;
-  const bindings = [proposalId, proposalId, proposalId];
-  const { rows: entries, total } = await queryPage<AuditLogRow>(
+  const search = data.query.q
+    ? buildD1TextSearchFilter(data.query.q, ["al.action", "al.actor_type", "u.email", "u.first_name", "u.last_name"])
+    : null;
+  const searchSql = search ? `AND ${search.sql}` : "";
+  const bindings = [proposalId, proposalId, proposalId, ...(search?.bindings ?? [])];
+  const orderBy = resolveMappedOrderBy(
+    data.query.sort,
+    {
+      createdAt: "al.created_at",
+      action: "al.action COLLATE NOCASE",
+      actor: "actor_display COLLATE NOCASE",
+    },
+    "al.created_at DESC",
+    "al.id ASC",
+  );
+  const { rows: entries, total } = await queryPage<AuditLogReadRow>(
     requestDb(c),
     {
       sql: `SELECT
@@ -58,7 +63,8 @@ export async function onRequestGet(
             LEFT JOIN proposal_reviews pr ON al.entity_type = 'proposal_review' AND pr.id = al.entity_id
             LEFT JOIN proposal_speakers ps ON al.entity_type = 'proposal_speaker' AND ps.id = al.entity_id
             WHERE ${AUDIT_LOG_WHERE}
-            ORDER BY al.created_at DESC
+            ${searchSql}
+            ${orderBy}
             LIMIT ? OFFSET ?`,
       bindings: [...bindings, limit, offset],
     },
@@ -67,24 +73,13 @@ export async function onRequestGet(
             FROM audit_log al
             LEFT JOIN proposal_reviews pr ON al.entity_type = 'proposal_review' AND pr.id = al.entity_id
             LEFT JOIN proposal_speakers ps ON al.entity_type = 'proposal_speaker' AND ps.id = al.entity_id
-            WHERE ${AUDIT_LOG_WHERE}`,
+            LEFT JOIN users u ON al.actor_type = 'admin' AND u.id = al.actor_id
+            WHERE ${AUDIT_LOG_WHERE}
+            ${searchSql}`,
       bindings,
     },
   );
-
-  const parsed = entries.map((e) => ({
-    ...e,
-    details: e.details_json
-      ? (() => {
-          try {
-            return JSON.parse(e.details_json);
-          } catch {
-            return null;
-          }
-        })()
-      : null,
-    details_json: undefined,
-  }));
+  const parsed = toAuditLogResponseRows(entries);
 
   return json({ auditLog: parsed, page: buildPageInfo(limit, offset, total, parsed.length) });
 }

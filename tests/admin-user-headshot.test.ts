@@ -5,6 +5,8 @@ import { createContext, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { onRequest as adminUserHeadshotRequest } from "../functions/api/v1/admin/users/[userId]/headshot";
 import app from "../functions/router";
+import { replaceUserHeadshot } from "../functions/_lib/services/user-headshot";
+import { processPendingStorageDeletions } from "../functions/_lib/services/storage-deletion-outbox";
 
 let ADMIN_TOKEN = "admin-session-token";
 
@@ -45,6 +47,30 @@ class FakeUploadsBucket {
         return stored.body;
       },
     };
+  }
+
+  async delete(key: string): Promise<void> {
+    this.objects.delete(key);
+  }
+
+  stored(key: string): StoredObject | undefined {
+    return this.objects.get(key);
+  }
+
+  keys(): string[] {
+    return [...this.objects.keys()].sort();
+  }
+}
+
+class FailingDeleteUploadsBucket extends FakeUploadsBucket {
+  failuresRemaining = 1;
+
+  override async delete(key: string): Promise<void> {
+    if (this.failuresRemaining > 0) {
+      this.failuresRemaining -= 1;
+      throw new Error("Temporary R2 deletion failure");
+    }
+    await super.delete(key);
   }
 }
 
@@ -94,7 +120,9 @@ describe("admin user headshot upload", () => {
     });
 
     const response = await adminUserHeadshotRequest(
-      createContext({ ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket }, request, { userId: targetUserId }),
+      createContext({ ...(env as any), IMAGES: undefined, SPEAKER_UPLOADS_BUCKET: bucket }, request, {
+        userId: targetUserId,
+      }),
     );
 
     expect(response.status).toBe(200);
@@ -139,6 +167,76 @@ describe("admin user headshot upload", () => {
     expect(payload.r2Key.startsWith(`headshots/${targetUserId}/`)).toBe(true);
   });
 
+  it("preserves validated PNG type when Cloudflare Images is unavailable", async () => {
+    const { targetUserId } = await setup();
+    const bucket = new FakeUploadsBucket();
+    const pngHeader = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const request = new Request(`https://app.test/api/v1/admin/users/${targetUserId}/headshot`, {
+      method: "PUT",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}`, "content-type": "image/png" },
+      body: pngHeader,
+    });
+
+    const response = await adminUserHeadshotRequest(
+      createContext({ ...(env as any), IMAGES: undefined, SPEAKER_UPLOADS_BUCKET: bucket }, request, {
+        userId: targetUserId,
+      }),
+    );
+    const payload = (await response.json()) as { r2Key: string };
+    expect(payload.r2Key).toMatch(/\.png$/);
+    expect(bucket.stored(payload.r2Key)?.contentType).toBe("image/png");
+  });
+
+  it("rejects a declared image MIME type when the bytes do not match", async () => {
+    const { targetUserId } = await setup();
+    const request = new Request(`https://app.test/api/v1/admin/users/${targetUserId}/headshot`, {
+      method: "PUT",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}`, "content-type": "image/jpeg" },
+      body: new TextEncoder().encode("<script>alert(1)</script>"),
+    });
+
+    await expect(
+      adminUserHeadshotRequest(
+        createContext({ ...(env as any), SPEAKER_UPLOADS_BUCKET: new FakeUploadsBucket() }, request, {
+          userId: targetUserId,
+        }),
+      ),
+    ).rejects.toMatchObject({ code: "INVALID_FILE_TYPE", status: 415 });
+  });
+
+  it("clears the D1 reference and deletes the prior R2 object", async () => {
+    const { targetUserId } = await setup();
+    const bucket = new FakeUploadsBucket();
+    const oldKey = `headshots/${targetUserId}/old.jpg`;
+    await bucket.put(oldKey, new Uint8Array([0xff, 0xd8, 0xff, 0xd9]).buffer, {
+      httpMetadata: { contentType: "image/jpeg" },
+    });
+    await env.DB.prepare("UPDATE users SET headshot_r2_key = ? WHERE id = ?").bind(oldKey, targetUserId).run();
+    const request = new Request(`https://app.test/api/v1/admin/users/${targetUserId}/headshot`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+    });
+
+    const context = createContext({ ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket }, request, {
+      userId: targetUserId,
+    });
+    const pending: Promise<unknown>[] = [];
+    context.executionCtx.waitUntil = (promise: Promise<unknown>) => {
+      pending.push(promise);
+    };
+    const response = await adminUserHeadshotRequest(context);
+    expect(response.status).toBe(200);
+    await Promise.all(pending);
+    expect(await bucket.get(oldKey)).toBeNull();
+    expect(
+      (
+        await queryAll<{ headshot_r2_key: string | null }>(env.DB, "SELECT headshot_r2_key FROM users WHERE id = ?", [
+          targetUserId,
+        ])
+      )[0].headshot_r2_key,
+    ).toBeNull();
+  });
+
   it("maps bucket upload transport failures to UPLOAD_FAILED", async () => {
     const { targetUserId } = await setup();
     const bucket = new FailingUploadsBucket();
@@ -160,6 +258,85 @@ describe("admin user headshot upload", () => {
       code: "UPLOAD_FAILED",
       status: 503,
     });
+  });
+
+  it("allows only one concurrent replacement and cleans up the losing object", async () => {
+    const { adminId, targetUserId } = await setup();
+    const bucket = new FakeUploadsBucket();
+    const oldKey = `headshots/${targetUserId}/old.jpg`;
+    await bucket.put(oldKey, new Uint8Array([0xff, 0xd8, 0xff, 0xd9]).buffer);
+    await env.DB.prepare("UPDATE users SET headshot_r2_key = ? WHERE id = ?").bind(oldKey, targetUserId).run();
+
+    const replace = () =>
+      replaceUserHeadshot({
+        db: env.DB,
+        bucket: bucket as unknown as R2Bucket,
+        userId: targetUserId,
+        previousKey: oldKey,
+        image: { buffer: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]).buffer, contentType: "image/jpeg" },
+        audit: { actorType: "admin", actorId: adminId, action: "headshot_uploaded" },
+      });
+    const results = await Promise.allSettled([replace(), replace()]);
+    const winner = results.find((result): result is PromiseFulfilledResult<string> => result.status === "fulfilled");
+    const loser = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
+
+    expect(winner).toBeDefined();
+    expect(loser?.reason).toMatchObject({ status: 409, code: "HEADSHOT_CHANGED" });
+    expect(bucket.keys().filter((key) => key !== oldKey)).toEqual([winner!.value]);
+    expect(
+      await queryAll<{ action: string }>(
+        env.DB,
+        "SELECT action FROM audit_log WHERE entity_id = ? AND action = 'headshot_uploaded'",
+        [targetUserId],
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("revokes the public URL immediately and retries a failed R2 deletion", async () => {
+    const { targetUserId } = await setup();
+    const bucket = new FailingDeleteUploadsBucket();
+    const oldFile = "old.jpg";
+    const oldKey = `headshots/${targetUserId}/${oldFile}`;
+    await bucket.put(oldKey, new Uint8Array([0xff, 0xd8, 0xff, 0xd9]).buffer);
+    await env.DB.prepare("UPDATE users SET headshot_r2_key = ? WHERE id = ?").bind(oldKey, targetUserId).run();
+
+    const request = new Request(`https://app.test/api/v1/admin/users/${targetUserId}/headshot`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+    });
+    const context = createContext({ ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket }, request, {
+      userId: targetUserId,
+    });
+    const pending: Promise<unknown>[] = [];
+    context.executionCtx.waitUntil = (promise: Promise<unknown>) => pending.push(promise);
+    expect((await adminUserHeadshotRequest(context)).status).toBe(200);
+    await Promise.all(pending);
+
+    expect(await bucket.get(oldKey)).not.toBeNull();
+    const publicResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/headshots/${targetUserId}/${oldFile}`),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(publicResponse.status).toBe(404);
+    expect(
+      await queryAll<{ status: string; attempts: number }>(
+        env.DB,
+        "SELECT status, attempts FROM storage_deletion_outbox WHERE object_key = ?",
+        [oldKey],
+      ),
+    ).toEqual([{ status: "retrying", attempts: 1 }]);
+
+    await env.DB.prepare("UPDATE storage_deletion_outbox SET next_attempt_at = datetime('now') WHERE object_key = ?")
+      .bind(oldKey)
+      .run();
+    await processPendingStorageDeletions(env.DB, { SPEAKER_UPLOADS_BUCKET: bucket as unknown as R2Bucket }, 10);
+    expect(await bucket.get(oldKey)).toBeNull();
+    expect(
+      await queryAll<{ status: string }>(env.DB, "SELECT status FROM storage_deletion_outbox WHERE object_key = ?", [
+        oldKey,
+      ]),
+    ).toEqual([{ status: "deleted" }]);
   });
 
   it("works through full router pipeline via app.fetch", async () => {

@@ -8,6 +8,7 @@ import { all, first } from "../../db/queries";
 import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveOrderBy } from "../../db/sort";
+import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { parseJsonSafe } from "../../utils/json";
 import { extractDietarySelections } from "../../utils/registration-dietary";
 import { getActiveFormByPurpose } from "../forms";
@@ -115,7 +116,12 @@ export async function listAdminEventRegistrations(
   params: AdminEventRegistrationsListParams,
 ): Promise<AdminEventRegistrationsListResult> {
   const search = (params.q ?? "").trim();
-  const orderBy = resolveOrderBy(params.sort, EVENT_REGISTRATIONS_SORT_COLUMNS, "ORDER BY r.created_at DESC");
+  const orderBy = resolveOrderBy(
+    params.sort,
+    EVENT_REGISTRATIONS_SORT_COLUMNS,
+    "ORDER BY r.created_at DESC",
+    "r.id ASC",
+  );
   const attendanceChangeFilter = params.attendanceChange;
 
   const conditions: string[] = ["r.event_id = ?"];
@@ -231,6 +237,8 @@ export async function listAdminEventRegistrations(
   );
 
   const registrationIds = registrationRows.map((row) => row.id);
+  const registrationFilter = buildD1JsonMembershipFilter("w.registration_id", registrationIds);
+  const historyRegistrationFilter = buildD1JsonMembershipFilter("h.registration_id", registrationIds);
   const [waitlistSummaries, attendanceChangeRows] =
     registrationIds.length > 0
       ? await Promise.all([
@@ -245,10 +253,10 @@ export async function listAdminEventRegistrations(
            COUNT(*) AS count
          FROM event_day_waitlist_entries w
          LEFT JOIN event_days ed ON ed.id = w.event_day_id
-         WHERE w.registration_id IN (${registrationIds.map(() => "?").join(",")})
+         WHERE ${registrationFilter.sql}
            AND w.status IN ('waiting', 'offered')
          GROUP BY w.registration_id`,
-            registrationIds,
+            registrationFilter.bindings,
           ),
           all<AttendanceChangeRow>(
             db,
@@ -260,11 +268,11 @@ export async function listAdminEventRegistrations(
                     COALESCE(ed.label, ed.day_date) AS day_label
              FROM registration_attendance_history h
              JOIN event_days ed ON ed.id = h.event_day_id
-             WHERE h.registration_id IN (${registrationIds.map(() => "?").join(",")})
+             WHERE ${historyRegistrationFilter.sql}
                AND h.changed_by <> 'system'
                AND COALESCE(h.from_type, '') <> COALESCE(h.to_type, '')
              ORDER BY h.registration_id ASC, h.changed_at ASC, ed.sort_order ASC, ed.day_date ASC`,
-            registrationIds,
+            historyRegistrationFilter.bindings,
           ),
         ])
       : [[], []];

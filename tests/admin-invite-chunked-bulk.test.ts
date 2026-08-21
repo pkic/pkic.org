@@ -24,7 +24,9 @@ import { createTemplateVersion, activateTemplateVersion } from "../functions/_li
 import { onRequestPost as inviteAttendeesPreview } from "../functions/api/v1/admin/events/[eventSlug]/invites/attendees/preview";
 import { onRequestPost as inviteAttendeesBulk } from "../functions/api/v1/admin/events/[eventSlug]/invites/attendees/bulk";
 import { handleError } from "../functions/_lib/http";
-import type { Env as AppEnv } from "../functions/_lib/types";
+import { bulkCreateAttendeesAdmin, bulkCreateInvites } from "../functions/_lib/services/invite-bulk";
+import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
+import type { DatabaseLike, Env as AppEnv } from "../functions/_lib/types";
 
 const appEnv = env as unknown as AppEnv;
 
@@ -129,5 +131,147 @@ describe("attendee invite — chunked bulk send", () => {
     expect(bulkRes.status).toBe(409);
     const bulkBody = (await bulkRes.json()) as { error: { code: string } };
     expect(bulkBody.error.code).toBe("INVITE_PREVIEW_STALE");
+  });
+
+  it("creates hundreds of invites within a bounded D1 query budget", async () => {
+    const event = (await queryAll<{ id: string }>(appEnv.DB, "SELECT id FROM events WHERE slug = ?", [EVENT_SLUG]))[0];
+    const budgeted = createD1QueryBudgetedDatabase(appEnv.DB, 7);
+    const invites = Array.from({ length: 501 }, (_, index) => ({
+      inviteeEmail: `bounded-invite-${index}@example.test`,
+    }));
+
+    const outcomes = await bulkCreateAttendeesAdmin(budgeted.db, {
+      event,
+      invites,
+      buildEmailRow: ({ email }) => ({
+        eventId: event.id,
+        recipientEmail: email,
+        templateKey: "attendee_invite",
+        subject: "Bounded invite",
+        data: {},
+      }),
+    });
+
+    expect(outcomes.filter((outcome) => outcome.status === "created")).toHaveLength(invites.length);
+    // Three classification reads + two JSON invite inserts + two JSON outbox inserts.
+    expect(budgeted.budget.usedQueries()).toBe(7);
+  });
+
+  it("commits invite creation and its outbox intent atomically", async () => {
+    const event = (await queryAll<{ id: string }>(appEnv.DB, "SELECT id FROM events WHERE slug = ?", [EVENT_SLUG]))[0];
+    let batchCall = 0;
+    const failingDb: DatabaseLike = {
+      prepare: (query) => appEnv.DB.prepare(query),
+      batch: (statements) => {
+        batchCall += 1;
+        if (batchCall === 2) {
+          return appEnv.DB.batch([
+            ...statements,
+            appEnv.DB.prepare("INSERT INTO missing_invite_atomicity_table (id) VALUES ('x')"),
+          ]);
+        }
+        return appEnv.DB.batch(statements);
+      },
+    };
+
+    await expect(
+      bulkCreateAttendeesAdmin(failingDb, {
+        event,
+        invites: [{ inviteeEmail: "atomic-invite@example.test" }],
+        buildEmailRow: ({ email }) => ({
+          eventId: event.id,
+          recipientEmail: email,
+          templateKey: "attendee_invite",
+          subject: "Atomic invite",
+          data: {},
+        }),
+      }),
+    ).rejects.toThrow();
+
+    expect(
+      await queryAll(appEnv.DB, "SELECT id FROM invites WHERE invitee_email = 'atomic-invite@example.test'"),
+    ).toHaveLength(0);
+    expect(
+      await queryAll(appEnv.DB, "SELECT id FROM email_outbox WHERE recipient_email = 'atomic-invite@example.test'"),
+    ).toHaveLength(0);
+  });
+
+  it("allows only one concurrent active invite and matching outbox intent", async () => {
+    const event = (await queryAll<{ id: string }>(appEnv.DB, "SELECT id FROM events WHERE slug = ?", [EVENT_SLUG]))[0];
+    const create = () =>
+      bulkCreateAttendeesAdmin(appEnv.DB, {
+        event,
+        invites: [{ inviteeEmail: "concurrent-bulk-invite@example.test" }],
+        buildEmailRow: ({ email }) => ({
+          eventId: event.id,
+          recipientEmail: email,
+          templateKey: "attendee_invite",
+          subject: "Concurrent invite",
+          data: {},
+        }),
+      });
+
+    const [first, second] = await Promise.all([create(), create()]);
+    expect([first[0].status, second[0].status].sort()).toEqual(["created", "endorsed"]);
+    expect(
+      await queryAll(appEnv.DB, "SELECT id FROM invites WHERE invitee_email = 'concurrent-bulk-invite@example.test'"),
+    ).toHaveLength(1);
+    expect(
+      await queryAll(
+        appEnv.DB,
+        "SELECT id FROM email_outbox WHERE recipient_email = 'concurrent-bulk-invite@example.test'",
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("enforces peer quota atomically and makes repeat endorsements idempotent", async () => {
+    const event = (await queryAll<{ id: string }>(appEnv.DB, "SELECT id FROM events WHERE slug = ?", [EVENT_SLUG]))[0];
+    const makePeerInvite = (email: string) =>
+      bulkCreateInvites(appEnv.DB, "attendee", {
+        event,
+        inviter: { userId: adminId, registrationId: null },
+        maxPrimaryInvites: 1,
+        invites: [{ inviteeEmail: email, sourceType: "peer-invite" }],
+        buildEmailRow: ({ email: recipientEmail }) => ({
+          eventId: event.id,
+          recipientEmail,
+          templateKey: "attendee_invite",
+          subject: "Peer invite",
+          data: {},
+        }),
+      });
+
+    const [first, second] = await Promise.all([
+      makePeerInvite("quota-one@example.test"),
+      makePeerInvite("quota-two@example.test"),
+    ]);
+    expect([first[0].status, second[0].status].sort()).toEqual(["created", "skipped"]);
+
+    const createdEmail = first[0].status === "created" ? first[0].email : second[0].email;
+    const repeated = await makePeerInvite(createdEmail);
+    expect(repeated[0].status).toBe("endorsed");
+
+    const invites = await queryAll<{ id: string }>(
+      appEnv.DB,
+      "SELECT id FROM invites WHERE event_id = ? AND inviter_user_id = ? AND invite_type = 'attendee'",
+      [event.id, adminId],
+    );
+    expect(invites).toHaveLength(1);
+    expect(
+      await queryAll(appEnv.DB, "SELECT id FROM invite_inviters WHERE invite_id = ? AND inviter_user_id = ?", [
+        invites[0].id,
+        adminId,
+      ]),
+    ).toHaveLength(1);
+    expect(
+      await queryAll(
+        appEnv.DB,
+        "SELECT id FROM engagement_events WHERE subject_ref = ? AND action_type = 'invite_sent'",
+        [invites[0].id],
+      ),
+    ).toHaveLength(1);
+    expect(
+      await queryAll(appEnv.DB, "SELECT id FROM email_outbox WHERE recipient_email = ?", [createdEmail]),
+    ).toHaveLength(1);
   });
 });

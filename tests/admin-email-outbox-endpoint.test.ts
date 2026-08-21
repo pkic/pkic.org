@@ -102,6 +102,15 @@ describe("GET /api/v1/admin/email/outbox", () => {
     const qPayload = adminEmailOutboxResponseSchema.parse(await qRes.json());
     expect(qPayload.outbox.map((r) => r.id)).toEqual([queuedId]);
 
+    const sortedRes = await callAdmin("/api/v1/admin/email/outbox?sort=-recipient");
+    expect(sortedRes.status).toBe(200);
+    const sortedPayload = adminEmailOutboxResponseSchema.parse(await sortedRes.json());
+    expect(sortedPayload.outbox.map((row) => row.recipientEmail)).toEqual([
+      "carol@example.test",
+      "bob@example.test",
+      "alice@example.test",
+    ]);
+
     // limit/offset — total reflects all 3 rows regardless of page size
     const pageRes = await callAdmin("/api/v1/admin/email/outbox?limit=1&offset=0");
     expect(pageRes.status).toBe(200);
@@ -115,6 +124,7 @@ describe("GET /api/v1/admin/email/outbox", () => {
 
     const response = await callAdmin("/api/v1/admin/email/outbox?limit=500");
     expect(response.status).toBe(400);
+    expect((await callAdmin("/api/v1/admin/email/outbox?sort=provider_message_id")).status).toBe(400);
   });
 
   it("resolves per-row subjects for distinct pinned template versions via the batched preload", async () => {

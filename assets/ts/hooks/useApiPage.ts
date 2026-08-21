@@ -11,8 +11,8 @@ export interface ApiPageResponse {
 /** Shared bounded-fetch state for non-table API collections. */
 export function useApiPage<T extends ApiPageResponse>(
   endpoint: string,
-  params: Record<string, string> = {},
-  responseSchema?: z.ZodType<T>,
+  params: Record<string, string>,
+  responseSchema: z.ZodType<T>,
 ) {
   const pageState = usePageState();
   const [data, setData] = useState<T | null>(null);
@@ -31,7 +31,7 @@ export function useApiPage<T extends ApiPageResponse>(
       query.set("offset", String(pageState.offset));
       const raw = await getJson<unknown>(`${endpoint}?${query.toString()}`);
       if (requestId === latestRequest.current) {
-        setData(responseSchema ? responseSchema.parse(raw) : (raw as T));
+        setData(responseSchema.parse(raw));
       }
     } catch (cause) {
       if (requestId === latestRequest.current) setError(cause);

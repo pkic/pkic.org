@@ -45,8 +45,13 @@ export const SponsorPortalAttendeesList = openApiRoute(
   sponsorPortalAttendeesListRouteSchema,
   async (c: AdminContext, data) => {
     const { db, session } = await requireEligibleSponsorPortalSession(c);
-    const { limit = 100, offset = 0 } = data.query;
-    const { attendees, total } = await listSponsorPortalAttendeesPage(db, session.eventId, { limit, offset });
+    const { limit = 100, offset = 0, q, sort } = data.query;
+    const { attendees, total } = await listSponsorPortalAttendeesPage(db, session.eventId, {
+      limit,
+      offset,
+      q,
+      sort,
+    });
 
     await writeAuditLog(
       db,

@@ -4,10 +4,10 @@ import { publicOrganizationPersonSchema } from "./public-person";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 /**
- * Leadership positions (migration 0049) — Board of Directors and Executive
+ * Leadership positions (consolidated migration 0035) — Board of Directors and Executive
  * Council rosters, admin-managed and publicly readable. Replaces the static
  * `content/about/board.md` / `executive-council.md` person-card lists the
- * same way migration 0040's forum/WG chairs replaced static frontmatter:
+ * same way consolidated migration 0035's forum/WG chairs replaced static frontmatter:
  * assigned in the admin portal, rendered client-side on the public site.
  */
 
@@ -192,7 +192,7 @@ export const forumChairsPublicRouteSchema = {
   tags: ["Leadership"],
   summary: "Public PKIC forum chair / vice chair",
   description:
-    "Resolved from role-forum_chair/role-forum_vice_chair (migration 0040), same source as the admin Leadership tab.",
+    "Resolved from role-forum_chair/role-forum_vice_chair (consolidated migration 0035), same source as the admin Leadership tab.",
   responses: {
     "200": {
       description: "Current forum chair and vice chair, if assigned.",

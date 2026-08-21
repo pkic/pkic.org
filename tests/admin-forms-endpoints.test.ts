@@ -5,6 +5,7 @@ import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { nowIso } from "../functions/_lib/utils/time";
+import { createManagedForm, updateManagedForm } from "../functions/_lib/services/forms";
 
 let ADMIN_TOKEN = "forms-admin-token";
 
@@ -262,6 +263,14 @@ describe("admin forms endpoints", () => {
     expect(eventForm?.submission_count).toBe(0);
     expect(payload.forms.find((form) => form.key === "pqc-registration-double-count-form")?.submission_count).toBe(1);
     expect(payload.forms.find((form) => form.key === "pqc-proposal-double-count-form")?.submission_count).toBe(1);
+
+    const filteredResponse = await callAdmin(
+      "/api/v1/admin/events/pqc-2026/forms?purpose=feedback&q=global&sort=-title&limit=10",
+    );
+    expect(filteredResponse.status).toBe(200);
+    const filtered = (await filteredResponse.json()) as { forms: Array<{ key: string }>; page: { total: number } };
+    expect(filtered.forms.map((form) => form.key)).toEqual(["global-feedback-form"]);
+    expect(filtered.page.total).toBe(1);
   });
 
   it("lists and creates global forms through the admin forms root", async () => {
@@ -316,6 +325,62 @@ describe("admin forms endpoints", () => {
     expect(form).toMatchObject({ scope_type: "global", scope_ref: null, field_count: 1 });
     const eventForm = rootPayload.forms.find((entry) => entry.key === "event-linked-survey");
     expect(eventForm).toMatchObject({ event_slug: "pqc-2026", event_name: "PQC Conference 2026" });
+  });
+
+  it("rolls back form aggregate writes when a field statement fails", async () => {
+    await setupAdmin();
+    const admin = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
+    )[0];
+    const duplicateFields = [
+      { key: "duplicate", label: "One", fieldType: "text" as const, required: false, sortOrder: 1 },
+      { key: "duplicate", label: "Two", fieldType: "text" as const, required: false, sortOrder: 2 },
+    ];
+
+    await expect(
+      createManagedForm(
+        env.DB,
+        admin.id,
+        { type: "global", ref: null },
+        {
+          key: "must-rollback",
+          purpose: "survey",
+          title: "Must roll back",
+          status: "active",
+          fields: duplicateFields,
+        },
+      ),
+    ).rejects.toThrow();
+    expect(await queryAll(env.DB, "SELECT id FROM forms WHERE key = 'must-rollback'")).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_type = 'form' AND action = 'global_form_created'"),
+    ).toHaveLength(0);
+
+    const { formId } = await insertForm({
+      key: "must-preserve",
+      scopeType: "global",
+      scopeRef: null,
+      purpose: "survey",
+      title: "Original title",
+      fields: [{ key: "original", label: "Original", fieldType: "text" }],
+    });
+    await expect(
+      updateManagedForm(
+        env.DB,
+        admin.id,
+        { id: formId, key: "must-preserve" },
+        {
+          title: "Should not persist",
+          fields: duplicateFields,
+        },
+      ),
+    ).rejects.toThrow();
+    expect(await queryAll<{ title: string }>(env.DB, "SELECT title FROM forms WHERE id = ?", [formId])).toEqual([
+      { title: "Original title" },
+    ]);
+    expect(
+      await queryAll<{ key: string }>(env.DB, "SELECT key FROM form_fields WHERE form_id = ? ORDER BY key", [formId]),
+    ).toEqual([{ key: "original" }]);
   });
 
   it("creates and reads a form, including submissions and answers", async () => {
@@ -415,25 +480,21 @@ describe("admin forms endpoints", () => {
     const submissionsResponse = await callAdmin("/api/v1/admin/forms/event-workshop-form/submissions?limit=1");
     expect(submissionsResponse.status).toBe(200);
     const submissionsPayload = (await submissionsResponse.json()) as {
-      total: number;
       page: { total: number; hasMore: boolean };
       submissions: Array<{ answers: Record<string, unknown> }>;
     };
-    expect(submissionsPayload.total).toBe(2);
     expect(submissionsPayload.page).toMatchObject({ total: 2, hasMore: true });
     expect(submissionsPayload.submissions).toHaveLength(1);
     expect(submissionsPayload.submissions[0]?.answers.company).toBe("Example Org");
     expect(submissionsPayload.submissions[0]?.answers.tracks).toEqual(["PKI", "PQC"]);
 
-    const statsOnlyResponse = await callAdmin("/api/v1/admin/forms/event-workshop-form/submissions?limit=0");
+    const statsOnlyResponse = await callAdmin("/api/v1/admin/forms/event-workshop-form/submissions/stats");
     expect(statsOnlyResponse.status).toBe(200);
     const statsOnlyPayload = (await statsOnlyResponse.json()) as {
       total: number;
-      submissions: unknown[];
       stats: Array<{ fieldKey: string; entries: Array<{ label: string; count: number }> }>;
     };
     expect(statsOnlyPayload.total).toBe(2);
-    expect(statsOnlyPayload.submissions).toHaveLength(0);
     expect(statsOnlyPayload.stats.find((stat) => stat.fieldKey === "company")?.entries).toEqual([
       { label: "Example Org", count: 1, percent: 50, weight: 1 },
       { label: "Other Org", count: 1, percent: 50, weight: 1 },
@@ -523,10 +584,10 @@ describe("admin forms endpoints", () => {
     );
     expect(registrationResponse.status).toBe(200);
     const registrationPayload = (await registrationResponse.json()) as {
-      total: number;
+      page: { total: number };
       submissions: Array<{ contextType: string; contextRef: string; answers: Record<string, unknown> }>;
     };
-    expect(registrationPayload.total).toBe(2);
+    expect(registrationPayload.page.total).toBe(2);
     expect(registrationPayload.submissions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -542,22 +603,20 @@ describe("admin forms endpoints", () => {
     );
     expect(filteredRegistrationResponse.status).toBe(200);
     const filteredRegistrationPayload = (await filteredRegistrationResponse.json()) as {
-      total: number;
+      page: { total: number };
       submissions: Array<{ contextRef: string }>;
     };
-    expect(filteredRegistrationPayload.total).toBe(1);
+    expect(filteredRegistrationPayload.page.total).toBe(1);
     expect(filteredRegistrationPayload.submissions[0]?.contextRef).toBe(registrationId);
     const statsOnlyResponse = await callAdmin(
-      "/api/v1/admin/forms/linked-registration-form/submissions?eventSlug=pqc-2026&attendanceType=virtual&limit=0",
+      "/api/v1/admin/forms/linked-registration-form/submissions/stats?eventSlug=pqc-2026&attendanceType=virtual",
     );
     expect(statsOnlyResponse.status).toBe(200);
     const statsOnlyPayload = (await statsOnlyResponse.json()) as {
       total: number;
-      submissions: Array<unknown>;
       stats: Array<{ fieldKey: string; entries: Array<{ label: string; count: number }> }>;
     };
     expect(statsOnlyPayload.total).toBe(1);
-    expect(statsOnlyPayload.submissions).toHaveLength(0);
     expect(statsOnlyPayload.stats.find((stat) => stat.fieldKey === "food")?.entries).toEqual([
       { label: "No peanuts", count: 1, percent: 100, weight: 1 },
     ]);
@@ -565,10 +624,10 @@ describe("admin forms endpoints", () => {
     const proposalResponse = await callAdmin("/api/v1/admin/forms/linked-proposal-form/submissions?eventSlug=pqc-2026");
     expect(proposalResponse.status).toBe(200);
     const proposalPayload = (await proposalResponse.json()) as {
-      total: number;
+      page: { total: number };
       submissions: Array<{ contextType: string; contextRef: string; answers: Record<string, unknown> }>;
     };
-    expect(proposalPayload.total).toBe(1);
+    expect(proposalPayload.page.total).toBe(1);
     expect(proposalPayload.submissions[0]).toMatchObject({
       contextType: "proposal",
       contextRef: proposalId,
@@ -578,7 +637,7 @@ describe("admin forms endpoints", () => {
 
   it("replaces fields on patch and archives submitted forms on delete", async () => {
     const { eventId } = await setupAdmin();
-    await insertForm({
+    const { formId } = await insertForm({
       key: "mutable-form",
       scopeType: "event",
       scopeRef: eventId,
@@ -639,6 +698,13 @@ describe("admin forms endpoints", () => {
       "mutable-form",
     ]);
     expect(archived[0]?.status).toBe("archived");
+    expect(
+      await queryAll<{ action: string }>(
+        env.DB,
+        "SELECT action FROM audit_log WHERE entity_type = 'form' AND entity_id = ? AND action = 'form_archived'",
+        [formId],
+      ),
+    ).toHaveLength(1);
   });
 
   it("deletes an empty form and returns 404 for missing forms", async () => {
@@ -656,6 +722,10 @@ describe("admin forms endpoints", () => {
     expect(deleteResponse.status).toBe(200);
     const deletePayload = (await deleteResponse.json()) as { action: string };
     expect(deletePayload.action).toBe("deleted");
+    expect(await queryAll(env.DB, "SELECT id FROM forms WHERE key = 'empty-form'")).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_type = 'form' AND action = 'form_deleted'"),
+    ).toHaveLength(1);
 
     const missingResponse = await callAdmin("/api/v1/admin/forms/does-not-exist");
     expect(missingResponse.status).toBe(404);

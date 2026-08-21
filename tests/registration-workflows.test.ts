@@ -101,6 +101,203 @@ describe("registration workflows", () => {
     expect(confirmedPayload.status).toBe("registered");
   }, 15_000);
 
+  it("rolls back confirmation when the confirmed-email intent cannot be committed", async () => {
+    await seedEventAndAdmin(env.DB);
+    const createResponse = await createRegistration(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            firstName: "Confirm",
+            lastName: "Rollback",
+            email: "confirm-rollback@pkic.org",
+            attendanceType: "virtual",
+            sourceType: "direct",
+            consents: [
+              { termKey: "privacy-policy", version: "v1" },
+              { termKey: "code-of-conduct", version: "v1" },
+            ],
+          }),
+        }),
+        { eventSlug: "pqc-2026" },
+      ),
+    );
+    expect(createResponse.status).toBe(200);
+    const [confirmationEmail] = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' AND recipient_email = ?",
+      "confirm-rollback@pkic.org",
+    );
+    const token = await extractConfirmationToken(confirmationEmail.payload_json);
+    await env.DB.prepare(
+      `CREATE TRIGGER reject_registration_confirmed_email
+       BEFORE INSERT ON email_outbox
+       WHEN NEW.template_key = 'registration_confirmed'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced confirmed-email failure');
+       END`,
+    ).run();
+
+    try {
+      await expect(
+        confirmEmail(
+          createContext(
+            env,
+            new Request("https://app.test/api/v1/events/pqc-2026/registrations/confirm-email", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ token }),
+            }),
+            { eventSlug: "pqc-2026" },
+          ),
+        ),
+      ).rejects.toThrow("forced confirmed-email failure");
+      const [stored] = await queryAll<{ status: string; confirmation_link_secret: string | null }>(
+        env.DB,
+        `SELECT status, confirmation_link_secret FROM registrations
+         WHERE user_id = (SELECT id FROM users WHERE normalized_email = ?)`,
+        "confirm-rollback@pkic.org",
+      );
+      expect(stored.status).toBe("pending_email_confirmation");
+      expect(stored.confirmation_link_secret).not.toBeNull();
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT id FROM audit_log WHERE action = 'registration_email_confirmed' AND entity_id IN (SELECT id FROM registrations WHERE user_id = (SELECT id FROM users WHERE normalized_email = ?))",
+          "confirm-rollback@pkic.org",
+        ),
+      ).toHaveLength(0);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER reject_registration_confirmed_email").run();
+    }
+  });
+
+  it("commits exactly one confirmation aggregate when the same token is used concurrently", async () => {
+    await seedEventAndAdmin(env.DB);
+    await createRegistration(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            firstName: "Confirm",
+            lastName: "Concurrent",
+            email: "confirm-concurrent@pkic.org",
+            attendanceType: "virtual",
+            sourceType: "direct",
+            consents: [
+              { termKey: "privacy-policy", version: "v1" },
+              { termKey: "code-of-conduct", version: "v1" },
+            ],
+          }),
+        }),
+        { eventSlug: "pqc-2026" },
+      ),
+    );
+    const [confirmationEmail] = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' AND recipient_email = ?",
+      "confirm-concurrent@pkic.org",
+    );
+    const token = await extractConfirmationToken(confirmationEmail.payload_json);
+    const attempt = () =>
+      confirmEmail(
+        createContext(
+          env,
+          new Request("https://app.test/api/v1/events/pqc-2026/registrations/confirm-email", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ token }),
+          }),
+          { eventSlug: "pqc-2026" },
+        ),
+      );
+    const responses = await Promise.allSettled([attempt(), attempt()]);
+    expect(responses.filter((response) => response.status === "fulfilled")).toHaveLength(1);
+    expect(responses.filter((response) => response.status === "rejected")).toHaveLength(1);
+    const fulfilled = responses.find(
+      (response): response is PromiseFulfilledResult<Response> => response.status === "fulfilled",
+    );
+    const rejected = responses.find((response) => response.status === "rejected");
+    expect(fulfilled?.value.status).toBe(200);
+    expect(rejected && rejected.status === "rejected" ? rejected.reason : null).toMatchObject({
+      status: 404,
+      code: "CONFIRM_TOKEN_INVALID",
+    });
+    expect(
+      (
+        await queryAll<{ count: number }>(
+          env.DB,
+          "SELECT COUNT(*) AS count FROM email_outbox WHERE template_key = 'registration_confirmed' AND recipient_email = ?",
+          "confirm-concurrent@pkic.org",
+        )
+      )[0]?.count,
+    ).toBe(1);
+    expect(
+      (
+        await queryAll<{ count: number }>(
+          env.DB,
+          `SELECT COUNT(*) AS count FROM audit_log
+           WHERE action = 'registration_email_confirmed'
+             AND entity_id IN (SELECT id FROM registrations WHERE user_id = (SELECT id FROM users WHERE normalized_email = ?))`,
+          "confirm-concurrent@pkic.org",
+        )
+      )[0]?.count,
+    ).toBe(1);
+  });
+
+  it("rolls back the complete registration aggregate when its durable email intent fails", async () => {
+    await seedEventAndAdmin(env.DB);
+    await env.DB.prepare(
+      `CREATE TRIGGER reject_registration_confirmation_email
+       BEFORE INSERT ON email_outbox
+       WHEN NEW.template_key = 'registration_confirm_email'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced outbox failure');
+       END`,
+    ).run();
+
+    try {
+      await expect(
+        createRegistration(
+          createContext(
+            env,
+            new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                firstName: "Atomic",
+                lastName: "Rollback",
+                email: "atomic-rollback@pkic.org",
+                attendanceType: "virtual",
+                sourceType: "direct",
+                consents: [
+                  { termKey: "privacy-policy", version: "v1" },
+                  { termKey: "code-of-conduct", version: "v1" },
+                ],
+              }),
+            }),
+            { eventSlug: "pqc-2026" },
+          ),
+        ),
+      ).rejects.toBeTruthy();
+
+      for (const table of ["users", "registrations", "consent_acceptances", "referral_codes", "engagement_events"]) {
+        const rows = await queryAll<{ count: number }>(
+          env.DB,
+          `SELECT COUNT(*) AS count FROM ${table} WHERE ${table === "users" ? "normalized_email = ?" : table === "registrations" ? "user_id IN (SELECT id FROM users WHERE normalized_email = ?)" : table === "consent_acceptances" || table === "engagement_events" ? "user_id IN (SELECT id FROM users WHERE normalized_email = ?)" : "created_by_user_id IN (SELECT id FROM users WHERE normalized_email = ?)"}`,
+          "atomic-rollback@pkic.org",
+        );
+        expect(rows[0]?.count).toBe(0);
+      }
+    } finally {
+      await env.DB.prepare("DROP TRIGGER reject_registration_confirmation_email").run();
+    }
+  });
+
   it("accepts a pending invite when the matching registration is confirmed", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
@@ -687,5 +884,245 @@ describe("registration workflows", () => {
     expect(expiredUpdatePayload.dayAttendance[0].statusLabel).toBe("Waitlisted for in-person attendance");
     expect(expiredUpdatePayload.dayAttendance[0].waitlistStatus).toBe("waiting");
     expect(expiredUpdatePayload.dayAttendance[0].isWaitlistOffer).toBe(false);
+  });
+
+  it("rolls back registration cancellation when its participant projection fails", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+       VALUES ('cancel-atomic-user', 'cancel-atomic@example.test', 'cancel-atomic@example.test',
+               'Atomic', 'Cancel', datetime('now'), datetime('now'))`,
+    ).run();
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const created = await createRegistrationService(env.DB, {
+      event,
+      userId: "cancel-atomic-user",
+      attendanceType: "virtual",
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    await confirmRegistrationByToken(env.DB, {
+      token: created.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+    await env.DB.prepare(
+      `CREATE TRIGGER reject_cancel_participant_projection
+       BEFORE UPDATE ON event_participants
+       WHEN NEW.event_id = '${eventId}' AND NEW.user_id = 'cancel-atomic-user'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced participant projection failure');
+       END`,
+    ).run();
+
+    try {
+      await expect(
+        updateRegistrationById(
+          env.DB,
+          { registrationId: created.registration.id, action: "cancel", waitlistClaimWindowHours: 24 },
+          "test",
+        ),
+      ).rejects.toBeTruthy();
+      const [registration] = await queryAll<{ status: string; cancelled_at: string | null }>(
+        env.DB,
+        "SELECT status, cancelled_at FROM registrations WHERE id = ?",
+        [created.registration.id],
+      );
+      const [participant] = await queryAll<{ status: string }>(
+        env.DB,
+        "SELECT status FROM event_participants WHERE event_id = ? AND user_id = ? AND role = 'attendee'",
+        [eventId, "cancel-atomic-user"],
+      );
+      expect(registration).toEqual({ status: "registered", cancelled_at: null });
+      expect(participant.status).toBe("active");
+    } finally {
+      await env.DB.prepare("DROP TRIGGER reject_cancel_participant_projection").run();
+    }
+  });
+
+  it("records an unauthorized cancellation reason without expanding the constrained lifecycle status", async () => {
+    await seedEventAndAdmin(env.DB);
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+       VALUES ('unauthorized-user', 'unauthorized@example.test', 'unauthorized@example.test',
+               'Unauthorized', 'User', datetime('now'), datetime('now'))`,
+    ).run();
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const created = await createRegistrationService(env.DB, {
+      event,
+      userId: "unauthorized-user",
+      attendanceType: "virtual",
+      sourceType: "direct",
+      customAnswersJson: JSON.stringify({ confidential: "remove me" }),
+      signingSecret: "test-signing-secret",
+    });
+
+    const updated = await updateRegistrationById(
+      env.DB,
+      {
+        registrationId: created.registration.id,
+        action: "report_unauthorized",
+        waitlistClaimWindowHours: 24,
+      },
+      "test",
+    );
+
+    expect(updated.status).toBe("cancelled");
+    expect(updated.cancellation_reason_code).toBe("unauthorized_registration");
+    expect(updated.custom_answers_json).toBeNull();
+    const [stored] = await queryAll<{
+      status: string;
+      cancellation_reason_code: string | null;
+      custom_answers_json: string | null;
+    }>(env.DB, "SELECT status, cancellation_reason_code, custom_answers_json FROM registrations WHERE id = ?", [
+      created.registration.id,
+    ]);
+    expect(stored).toEqual({
+      status: "cancelled",
+      cancellation_reason_code: "unauthorized_registration",
+      custom_answers_json: null,
+    });
+  });
+
+  it("rolls back a managed update when its durable notification cannot be queued", async () => {
+    await seedEventAndAdmin(env.DB);
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+       VALUES ('update-atomic-user', 'update-atomic@example.test', 'update-atomic@example.test',
+               'Before', 'Update', datetime('now'), datetime('now'))`,
+    ).run();
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const created = await createRegistrationService(env.DB, {
+      event,
+      userId: "update-atomic-user",
+      attendanceType: "virtual",
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    const confirmed = await confirmRegistrationByToken(env.DB, {
+      token: created.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+    await env.DB.prepare(
+      `CREATE TRIGGER reject_registration_update_email
+       BEFORE INSERT ON email_outbox
+       WHEN NEW.template_key = 'registration_updated'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced update outbox failure');
+       END`,
+    ).run();
+
+    try {
+      const response = await manageRegistration(
+        createContext(
+          env,
+          new Request(`https://app.test/api/v1/registrations/manage/${confirmed.manageToken}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ action: "update", attendanceType: "on_demand", firstName: "After" }),
+          }),
+          { token: confirmed.manageToken },
+        ),
+      );
+      expect(response.status).toBe(500);
+      const [registration] = await queryAll<{ attendance_type: string; status: string }>(
+        env.DB,
+        "SELECT attendance_type, status FROM registrations WHERE id = ?",
+        [created.registration.id],
+      );
+      const [user] = await queryAll<{ first_name: string }>(env.DB, "SELECT first_name FROM users WHERE id = ?", [
+        "update-atomic-user",
+      ]);
+      const audit = await queryAll(
+        env.DB,
+        "SELECT id FROM audit_log WHERE entity_id = ? AND action = 'self_service_update'",
+        [created.registration.id],
+      );
+      expect(registration).toEqual({ attendance_type: "virtual", status: "registered" });
+      expect(user.first_name).toBe("Before");
+      expect(audit).toHaveLength(0);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER reject_registration_update_email").run();
+    }
+  });
+
+  it("rolls back the complete managed email-change aggregate when confirmation queuing fails", async () => {
+    await seedEventAndAdmin(env.DB);
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+       VALUES ('email-atomic-user', 'email-before@example.test', 'email-before@example.test',
+               'Before', 'Email', datetime('now'), datetime('now'))`,
+    ).run();
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const created = await createRegistrationService(env.DB, {
+      event,
+      userId: "email-atomic-user",
+      attendanceType: "virtual",
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    const confirmed = await confirmRegistrationByToken(env.DB, {
+      token: created.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+    await env.DB.prepare(
+      `CREATE TRIGGER reject_registration_email_change_email
+       BEFORE INSERT ON email_outbox
+       WHEN NEW.template_key = 'registration_confirm_email'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced email-change outbox failure');
+       END`,
+    ).run();
+
+    try {
+      const response = await manageRegistration(
+        createContext(
+          env,
+          new Request(`https://app.test/api/v1/registrations/manage/${confirmed.manageToken}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              action: "update",
+              attendanceType: "on_demand",
+              firstName: "After",
+              email: "email-after@example.test",
+            }),
+          }),
+          { token: confirmed.manageToken },
+        ),
+      );
+      expect(response.status).toBe(500);
+      const [registration] = await queryAll<{
+        attendance_type: string;
+        status: string;
+        confirmation_link_secret: string | null;
+      }>(env.DB, "SELECT attendance_type, status, confirmation_link_secret FROM registrations WHERE id = ?", [
+        created.registration.id,
+      ]);
+      const [user] = await queryAll<{ first_name: string; pending_email: string | null }>(
+        env.DB,
+        "SELECT first_name, pending_email FROM users WHERE id = ?",
+        ["email-atomic-user"],
+      );
+      const audits = await queryAll(
+        env.DB,
+        "SELECT id FROM audit_log WHERE entity_id = ? AND action IN ('self_service_update', 'email_changed')",
+        [created.registration.id],
+      );
+      expect(registration).toEqual({
+        attendance_type: "virtual",
+        status: "registered",
+        confirmation_link_secret: null,
+      });
+      expect(user).toEqual({ first_name: "Before", pending_email: null });
+      expect(audits).toHaveLength(0);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER reject_registration_email_change_email").run();
+    }
   });
 });

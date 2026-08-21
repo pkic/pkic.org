@@ -14,6 +14,7 @@ import {
   membersListResponseSchema,
   memberWallResponseSchema,
   publicMemberDetailSchema,
+  publicWorkingGroupMembersListResponseSchema,
 } from "../assets/shared/schemas/members-directory";
 
 async function callEndpoint(handler: (c: any) => Promise<Response>, ctx: any): Promise<Response> {
@@ -133,7 +134,7 @@ describe("GET /api/v1/members (public directory)", () => {
     expect(body.page.total).toBe(1);
   });
 
-  it("prefers the real organizations columns (migration 0037) over the legacy data_json blob", async () => {
+  it("prefers the real organizations columns (consolidated migration 0035) over the legacy data_json blob", async () => {
     const organizationId = crypto.randomUUID();
     await seedOrgMember({
       userId: crypto.randomUUID(),
@@ -310,7 +311,7 @@ describe("GET /api/v1/members/:id", () => {
     expect(response.status).toBe(404);
   });
 
-  it("resolves by organizations.slug (migration 0047) as well as by id", async () => {
+  it("resolves by organizations.slug (consolidated migration 0035) as well as by id", async () => {
     const organizationId = crypto.randomUUID();
     await seedOrgMember({
       userId: crypto.randomUUID(),
@@ -472,6 +473,8 @@ describe("GET /api/v1/members/:id/logo", () => {
     );
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("image/png");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(response.headers.get("content-security-policy")).toContain("sandbox");
     const buf = new Uint8Array(await response.arrayBuffer());
     expect(Array.from(buf)).toEqual([1, 2, 3, 4]);
   });
@@ -578,7 +581,7 @@ describe("GET /api/v1/working-groups/:id", () => {
     await resetDb();
   });
 
-  it("returns working group detail with a public subset of the member list, looked up by slug", async () => {
+  it("keeps detail bounded and exposes the public roster through the shared list contract", async () => {
     const wgId = crypto.randomUUID();
     await seedWorkingGroup({ id: wgId, name: "PQC Working Group", slug: "pqc" });
 
@@ -600,10 +603,44 @@ describe("GET /api/v1/working-groups/:id", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { slug: string; members: Array<{ name: string }> };
+    const body = (await response.json()) as { slug: string };
     expect(body.slug).toBe("pqc");
-    expect(body.members).toHaveLength(1);
-    expect(body.members[0].name).toBe("Wg Member");
+    expect(body).not.toHaveProperty("members");
+
+    const listResponse = await callMembersList("https://pkic.org/api/v1/working-groups/pqc/members?limit=1&sort=name");
+    expect(listResponse.status).toBe(200);
+    const roster = publicWorkingGroupMembersListResponseSchema.parse(await listResponse.json());
+    expect(roster.members).toEqual([{ name: "Wg Member", organizationName: null }]);
+    expect(roster.page).toEqual({ limit: 1, offset: 0, total: 1, hasMore: false });
+  });
+
+  it("searches the public working-group roster in D1 and rejects invalid list queries", async () => {
+    const wgId = crypto.randomUUID();
+    await seedWorkingGroup({ id: wgId, name: "PQC Working Group", slug: "pqc" });
+    for (const [firstName, lastName] of [
+      ["Alice", "Example"],
+      ["Bob", "Other"],
+    ]) {
+      const userId = crypto.randomUUID();
+      await env.DB.batch([
+        env.DB.prepare(
+          `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+        ).bind(userId, `${userId}@example.test`, `${userId}@example.test`, firstName, lastName),
+        env.DB.prepare(
+          `INSERT INTO working_group_members (id, working_group_id, user_id, joined_at, left_at)
+           VALUES (?, ?, ?, datetime('now'), NULL)`,
+        ).bind(crypto.randomUUID(), wgId, userId),
+      ]);
+    }
+
+    const response = await callMembersList("https://pkic.org/api/v1/working-groups/pqc/members?q=other&sort=name");
+    const body = publicWorkingGroupMembersListResponseSchema.parse(await response.json());
+    expect(body.members.map((member) => member.name)).toEqual(["Bob Other"]);
+    expect(body.page.total).toBe(1);
+
+    const invalid = await callMembersList("https://pkic.org/api/v1/working-groups/pqc/members?sort=email");
+    expect(invalid.status).toBe(400);
   });
 
   it("returns the chair and vice chair resolved from user_roles, not the static YAML frontmatter", async () => {

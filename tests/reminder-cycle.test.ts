@@ -271,6 +271,31 @@ describe("runReminderCycle", () => {
     expect(outbox).toHaveLength(0);
   });
 
+  it("applies attendee eligibility before LIMIT so stale rows cannot exhaust the reminder budget", async () => {
+    const staleEventId = crypto.randomUUID();
+    await db
+      .prepare(
+        `INSERT INTO events
+           (id, slug, name, timezone, registration_mode, invite_limit_attendee, settings_json,
+            starts_at, created_at, updated_at)
+         VALUES (?, 'stale-event', 'Stale Event', 'UTC', 'open', 5, '{}',
+                 datetime('now', '-1 day'), datetime('now'), datetime('now'))`,
+      )
+      .bind(staleEventId)
+      .run();
+    await insertAttendeeInvite(crypto.randomUUID(), staleEventId, "stale@example.test");
+    await db
+      .prepare("UPDATE invites SET last_communication_at = datetime('now', '-10 days') WHERE event_id = ?")
+      .bind(staleEventId)
+      .run();
+    await insertAttendeeInvite(crypto.randomUUID(), eventId, "eligible@example.test");
+
+    const result = await runReminderCycle(db, { ...BASE_PAYLOAD, limit: 1 });
+
+    expect(result.inviteRemindersQueued).toBe(1);
+    expect(result.preview.attendeeInvites.map((invite) => invite.recipientEmail)).toEqual(["eligible@example.test"]);
+  });
+
   it("skips attendee invite that has reached the reminder limit", async () => {
     const inviteId = crypto.randomUUID();
     await insertAttendeeInvite(inviteId, eventId, "capped@example.test", { reminderCount: 3 });

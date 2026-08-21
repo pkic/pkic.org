@@ -9,7 +9,7 @@ import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { getVoteScopeForPermissionCheck, listBallotsForAdmin } from "../../../../../_lib/services/votes";
-import { adminVoteBallotsRouteSchema } from "../../../../../../assets/shared/schemas/votes";
+import { adminVoteBallotsRouteSchema } from "../../../../../../assets/shared/schemas/votes-admin";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 export const AdminVoteBallotsGet = openApiRoute(adminVoteBallotsRouteSchema, async (c: AdminContext, data) => {

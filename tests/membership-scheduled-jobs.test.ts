@@ -19,30 +19,27 @@ import {
 } from "../functions/_lib/services/membership/scheduled-jobs";
 import { getMembershipSettings, updateMembershipSettings } from "../functions/_lib/services/membership-settings";
 import { recordEcDecision } from "../functions/_lib/services/ec-review";
+import { seedMemberApplication } from "./helpers/member-applications";
 
 async function createApplication(overrides: Record<string, unknown> = {}): Promise<{ id: string }> {
-  const id = crypto.randomUUID();
-  const stageEnteredAt = (overrides.stage_entered_at as string) ?? "datetime('now')";
-  await env.DB.prepare(
-    `INSERT INTO member_applications
-       (id, applicant_email, applicant_name, organization_name, organization_domain, membership_category,
-        form_submission_id, status, stage, on_hold_subtype, stage_entered_at, manage_token_hash, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${stageEnteredAt}, ?, datetime('now'), datetime('now'))`,
-  )
-    .bind(
-      id,
-      (overrides.applicant_email as string) ?? "applicant@example.test",
-      (overrides.applicant_name as string) ?? "Applicant Name",
-      (overrides.organization_name as string) ?? "Example Org",
-      (overrides.organization_domain as string) ?? "example.test",
-      (overrides.membership_category as string) ?? "F",
-      (overrides.form_submission_id as string) ?? null,
-      (overrides.status as string) ?? "in_consultation",
-      (overrides.stage as string) ?? "in_consultation",
-      (overrides.on_hold_subtype as string) ?? null,
-      crypto.randomUUID(),
-    )
-    .run();
+  const stageAgeDays = /'-(\d+) days'/.exec(String(overrides.stage_entered_at ?? ""))?.[1];
+  const id = await seedMemberApplication({
+    applicantEmail: (overrides.applicant_email as string) ?? "applicant@example.test",
+    applicantName: (overrides.applicant_name as string) ?? "Applicant Name",
+    organizationName: null,
+    organizationDomain: null,
+    membershipCategory: (overrides.membership_category as string) ?? "H6",
+    formSubmissionId: (overrides.form_submission_id as string) ?? null,
+    stage: (overrides.stage as string) ?? "in_consultation",
+    stageEnteredAt: stageAgeDays
+      ? new Date(Date.now() - Number(stageAgeDays) * 86_400_000).toISOString()
+      : new Date().toISOString(),
+  });
+  if (overrides.on_hold_subtype) {
+    await env.DB.prepare("UPDATE member_applications SET on_hold_subtype = ? WHERE id = ?")
+      .bind(overrides.on_hold_subtype, id)
+      .run();
+  }
   return { id };
 }
 
@@ -55,7 +52,7 @@ describe("Membership scheduled jobs", () => {
     const empty = await runConsultationBatch(env.DB, env as any);
     expect(empty.applicationsNotified).toBe(0);
 
-    await createApplication({ stage: "in_consultation", status: "in_consultation" });
+    await createApplication({ stage: "in_consultation" });
     const result = await runConsultationBatch(env.DB, env as any);
     expect(result.applicationsNotified).toBe(1);
 
@@ -68,12 +65,10 @@ describe("Membership scheduled jobs", () => {
 
     const { id: recentId } = await createApplication({
       stage: "in_consultation",
-      status: "in_consultation",
       stage_entered_at: "datetime('now', '-1 days')",
     });
     const { id: overdueId } = await createApplication({
       stage: "in_consultation",
-      status: "in_consultation",
       stage_entered_at: "datetime('now', '-10 days')",
       applicant_email: "overdue@example.test",
     });
@@ -148,7 +143,6 @@ describe("Membership scheduled jobs", () => {
     await updateMembershipSettings(env.DB, { onHoldResponseDeadlineDays: 7 }, null);
     const { id } = await createApplication({
       stage: "on_hold",
-      status: "on_hold",
       on_hold_subtype: "request_information",
       stage_entered_at: "datetime('now', '-8 days')",
     });
@@ -156,11 +150,7 @@ describe("Membership scheduled jobs", () => {
     const result = await runOnHoldReminders(env.DB, env as any);
     expect(result.autoClosed).toBe(1);
 
-    const rows = await queryAll<{ stage: string; status: string }>(
-      env.DB,
-      "SELECT stage, status FROM member_applications WHERE id = ?",
-      id,
-    );
+    const rows = await queryAll<{ stage: string }>(env.DB, "SELECT stage FROM member_applications WHERE id = ?", id);
     expect(rows[0].stage).toBe("withdrawn");
 
     const outbox = await queryAll<{ status: string }>(
@@ -179,7 +169,6 @@ describe("Membership scheduled jobs", () => {
     for (let i = 0; i < 3; i++) {
       await createApplication({
         stage: "on_hold",
-        status: "on_hold",
         on_hold_subtype: "request_information",
         stage_entered_at: "datetime('now', '-8 days')",
         applicant_email: `on-hold-${i}@example.test`,
@@ -197,7 +186,6 @@ describe("Membership scheduled jobs", () => {
     await updateMembershipSettings(env.DB, { onHoldResponseDeadlineDays: 7, autoReminderOnHolds: true }, null);
     await createApplication({
       stage: "on_hold",
-      status: "on_hold",
       on_hold_subtype: "request_org_email",
       stage_entered_at: "datetime('now', '-5 days')",
     });
@@ -219,7 +207,6 @@ describe("Membership scheduled jobs", () => {
     await updateMembershipSettings(env.DB, { onHoldResponseDeadlineDays: 7, autoReminderOnHolds: false }, null);
     await createApplication({
       stage: "on_hold",
-      status: "on_hold",
       on_hold_subtype: "request_org_email",
       stage_entered_at: "datetime('now', '-5 days')",
     });
@@ -232,7 +219,6 @@ describe("Membership scheduled jobs", () => {
     await updateMembershipSettings(env.DB, { ecReviewWindowDays: 7 }, null);
     const { id } = await createApplication({
       stage: "ec_review",
-      status: "ec_review",
       stage_entered_at: "datetime('now', '-8 days')",
     });
 
@@ -240,8 +226,8 @@ describe("Membership scheduled jobs", () => {
     expect(result.autoApproved).toBe(1);
     expect(result.heldForDecline).toBe(0);
 
-    const rows = await queryAll<{ status: string }>(env.DB, "SELECT status FROM member_applications WHERE id = ?", id);
-    expect(rows[0].status).toBe("approved");
+    const rows = await queryAll<{ stage: string }>(env.DB, "SELECT stage FROM member_applications WHERE id = ?", id);
+    expect(rows[0].stage).toBe("approved");
 
     const events = await queryAll<{ note: string }>(
       env.DB,
@@ -262,7 +248,6 @@ describe("Membership scheduled jobs", () => {
     for (let i = 0; i < 3; i++) {
       await createApplication({
         stage: "ec_review",
-        status: "ec_review",
         stage_entered_at: "datetime('now', '-8 days')",
         applicant_email: `ec-overdue-${i}@example.test`,
       });
@@ -279,7 +264,6 @@ describe("Membership scheduled jobs", () => {
     await updateMembershipSettings(env.DB, { ecReviewWindowDays: 7 }, null);
     const { id } = await createApplication({
       stage: "ec_review",
-      status: "ec_review",
       stage_entered_at: "datetime('now', '-8 days')",
     });
 
@@ -301,15 +285,14 @@ describe("Membership scheduled jobs", () => {
     expect(result.autoApproved).toBe(0);
     expect(result.heldForDecline).toBe(1);
 
-    const rows = await queryAll<{ status: string }>(env.DB, "SELECT status FROM member_applications WHERE id = ?", id);
-    expect(rows[0].status).toBe("ec_review");
+    const rows = await queryAll<{ stage: string }>(env.DB, "SELECT stage FROM member_applications WHERE id = ?", id);
+    expect(rows[0].stage).toBe("ec_review");
   });
 
   it("does not touch applications still within the EC review window", async () => {
     await updateMembershipSettings(env.DB, { ecReviewWindowDays: 7 }, null);
     await createApplication({
       stage: "ec_review",
-      status: "ec_review",
       stage_entered_at: "datetime('now', '-1 days')",
     });
 

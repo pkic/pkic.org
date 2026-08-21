@@ -185,7 +185,7 @@ describe("admin user deactivation", () => {
     expect(entry.action).toBe("user_updated");
   });
 
-  it("sets and clears isEcMember (users.is_ec_member, migration 0038)", async () => {
+  it("sets and clears isEcMember (users.is_ec_member, consolidated migration 0035)", async () => {
     await setup();
     const userId = await seedUser(env.DB, "ec-member@example.test");
 

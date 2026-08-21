@@ -9,6 +9,7 @@ import {
   onRequestPost as uploadApplicationDocument,
   onRequestGet as listApplicationDocuments,
 } from "../functions/api/v1/members/applications/[id]/documents";
+import { seedMembershipApplicationForm } from "./helpers/member-applications";
 
 function makeEnv(overrides: Partial<typeof env> = {}) {
   return { ...env, IP_RATE_LIMITER: createTestRateLimiter(100), ...overrides } as typeof env;
@@ -35,14 +36,16 @@ const validPayload = {
   applicantName: "Alice Example",
   membershipCategory: "A",
   organizationName: "Example Corp",
+  answers: { reason: "We want to contribute to the PKI community." },
 };
 
 describe("POST /api/v1/members/applications", () => {
   beforeEach(async () => {
     await resetDb();
+    await seedMembershipApplicationForm();
   });
 
-  it("creates a member_applications record with status=pending", async () => {
+  it("creates a member_applications record with stage=pending", async () => {
     const testEnv = makeEnv();
     const response = await callEndpoint(
       createApplication,
@@ -50,17 +53,16 @@ describe("POST /api/v1/members/applications", () => {
     );
 
     expect(response.status).toBe(201);
-    const body = (await response.json()) as { applicationId: string; status: string; manageToken: string };
-    expect(body.status).toBe("pending");
+    const body = (await response.json()) as { applicationId: string; stage: string; manageToken: string };
+    expect(body.stage).toBe("pending");
     expect(body.manageToken).toBeTruthy();
 
-    const rows = await queryAll<{ status: string; stage: string; applicant_email: string }>(
+    const rows = await queryAll<{ stage: string; applicant_email: string }>(
       testEnv.DB,
-      "SELECT status, stage, applicant_email FROM member_applications WHERE id = ?",
+      "SELECT stage, applicant_email FROM member_applications WHERE id = ?",
       [body.applicationId],
     );
     expect(rows).toHaveLength(1);
-    expect(rows[0].status).toBe("pending");
     expect(rows[0].stage).toBe("pending");
     expect(rows[0].applicant_email).toBe("alice@example-corp.test");
   });
@@ -138,6 +140,7 @@ describe("POST /api/v1/members/applications", () => {
       applicantEmail: "solo@example-corp.test",
       applicantName: "Solo Person",
       membershipCategory: "H6",
+      answers: { reason: "I want to contribute to the PKI community." },
     };
     const first = await callEndpoint(
       createApplication,
@@ -189,6 +192,96 @@ describe("POST /api/v1/members/applications", () => {
     expect(response.status).toBe(422);
   });
 
+  it("validates answers against the active form, including required and unknown fields", async () => {
+    const testEnv = makeEnv();
+    const missingRequired = await callEndpoint(
+      createApplication,
+      createContext(
+        testEnv,
+        postRequest("https://pkic.org/api/v1/members/applications", {
+          ...validPayload,
+          answers: {},
+        }),
+        {},
+      ),
+    );
+    expect(missingRequired.status).toBe(422);
+
+    const unknownField = await callEndpoint(
+      createApplication,
+      createContext(
+        testEnv,
+        postRequest("https://pkic.org/api/v1/members/applications", {
+          ...validPayload,
+          answers: { reason: "Valid reason", invented_field: "must not persist" },
+        }),
+        {},
+      ),
+    );
+    expect(unknownField.status).toBe(422);
+    expect(await queryAll(testEnv.DB, "SELECT id FROM member_applications")).toHaveLength(0);
+  });
+
+  it("allows exactly one of two concurrent submissions to claim an organization domain", async () => {
+    const testEnv = makeEnv();
+    const responses = await Promise.all(
+      ["alice", "bob"].map((name) =>
+        callEndpoint(
+          createApplication,
+          createContext(
+            testEnv,
+            postRequest("https://pkic.org/api/v1/members/applications", {
+              ...validPayload,
+              applicantEmail: `${name}@concurrent-domain.test`,
+              applicantName: name,
+            }),
+            {},
+          ),
+        ),
+      ),
+    );
+
+    expect(responses.map(({ status }) => status).sort()).toEqual([201, 409]);
+    expect(
+      await queryAll(testEnv.DB, "SELECT id FROM organization_domain_claims WHERE domain = 'concurrent-domain.test'"),
+    ).toHaveLength(1);
+    expect(await queryAll(testEnv.DB, "SELECT id FROM member_applications")).toHaveLength(1);
+    expect(
+      await queryAll(testEnv.DB, "SELECT id FROM email_outbox WHERE template_key = 'application-received'"),
+    ).toHaveLength(1);
+  });
+
+  it("rolls back application, answers, domain claim, event, and outbox when the atomic audit insert fails", async () => {
+    const testEnv = makeEnv();
+    await testEnv.DB.prepare(
+      `CREATE TRIGGER fail_application_submission_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'member_application_submitted'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced application audit failure');
+       END`,
+    ).run();
+
+    try {
+      const response = await callEndpoint(
+        createApplication,
+        createContext(testEnv, postRequest("https://pkic.org/api/v1/members/applications", validPayload), {}),
+      );
+      expect(response.status).toBe(500);
+      expect(await queryAll(testEnv.DB, "SELECT id FROM member_applications")).toHaveLength(0);
+      expect(
+        await queryAll(testEnv.DB, "SELECT id FROM form_submissions WHERE context_type = 'membership'"),
+      ).toHaveLength(0);
+      expect(await queryAll(testEnv.DB, "SELECT id FROM organization_domain_claims")).toHaveLength(0);
+      expect(await queryAll(testEnv.DB, "SELECT id FROM member_application_events")).toHaveLength(0);
+      expect(
+        await queryAll(testEnv.DB, "SELECT id FROM email_outbox WHERE template_key = 'application-received'"),
+      ).toHaveLength(0);
+    } finally {
+      await testEnv.DB.prepare("DROP TRIGGER fail_application_submission_audit").run();
+    }
+  });
+
   it("queues the application-received confirmation email in email_outbox", async () => {
     const testEnv = makeEnv();
     const response = await callEndpoint(
@@ -209,6 +302,7 @@ describe("POST /api/v1/members/applications", () => {
 describe("GET /api/v1/members/applications/:id/status", () => {
   beforeEach(async () => {
     await resetDb();
+    await seedMembershipApplicationForm();
   });
 
   async function createTestApplication(testEnv: typeof env) {
@@ -235,8 +329,7 @@ describe("GET /api/v1/members/applications/:id/status", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { status: string; stage: string };
-    expect(body.status).toBe("pending");
+    const body = (await response.json()) as { stage: string };
     expect(body.stage).toBe("pending");
   });
 
@@ -280,6 +373,7 @@ describe("GET /api/v1/members/applications/:id/status", () => {
 describe("POST/GET /api/v1/members/applications/:id/documents", () => {
   beforeEach(async () => {
     await resetDb();
+    await seedMembershipApplicationForm();
   });
 
   it("accepts a file upload and links it to the application, then lists it back", async () => {

@@ -1,57 +1,141 @@
+import type { AuthAdmin } from "../types";
 import { AppError } from "../errors";
+import { requirePermission, type Permission } from "./permissions";
 
 interface RouteDefinition {
   method: string;
   path: string;
 }
 
-interface AdminRouteInventory {
-  routeCount: number;
-  fingerprint: string;
+export type AdminRouteAuthorization =
+  { kind: "auth-route" } | { kind: "permission"; permission: Permission } | { kind: "delegated"; boundary: string };
+
+const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+/**
+ * These modules resolve a resource before authorizing it, so their router
+ * boundary can honor grants scoped to an event, working group, or another
+ * domain object. Listing and mutation handlers in the remaining delegated
+ * modules perform their named permission check directly.
+ *
+ * Keeping the delegation list here makes that ownership explicit. An unknown
+ * top-level admin module is denied without disabling unrelated admin routes.
+ */
+const DELEGATED_MODULES = new Map<string, string>([
+  ["access-grants", "access-grants router"],
+  ["applications", "membership application router"],
+  ["consortium", "consortium router"],
+  ["events", "event router"],
+  ["leadership-positions", "leadership router"],
+  ["members", "membership router"],
+  ["membership-settings", "membership settings router"],
+  ["organizations", "organization router"],
+  ["proposals", "proposal router"],
+  ["roles", "role router"],
+  ["sponsorships", "sponsorship router"],
+  ["vote-proposals", "vote proposal router"],
+  ["votes", "vote router"],
+  ["working-groups", "working group router"],
+]);
+
+function normalizedPolicyPath(path: string): string {
+  const adminPrefix = "/api/v1/admin";
+  const relative = path.startsWith(adminPrefix) ? path.slice(adminPrefix.length) : path;
+  return relative.startsWith("/") ? relative : `/${relative}`;
 }
 
-// This fingerprint is intentionally reviewed and updated separately from route
-// registration. A new non-auth admin route remains unavailable until its
-// authorization policy has been reviewed and the inventory is updated.
-const REVIEWED_ADMIN_ROUTE_INVENTORY: AdminRouteInventory = {
-  routeCount: 189,
-  fingerprint: "d38f5d14c74964bb",
-};
-
-function isAuthRoute(path: string): boolean {
-  return path === "/auth" || path.startsWith("/auth/");
+function moduleName(path: string): string {
+  return path.split("/").filter(Boolean)[0] ?? "";
 }
 
-export function adminRouteInventoryFingerprint(routes: readonly RouteDefinition[]): AdminRouteInventory {
-  const entries = routes
-    .filter((route) => route.method !== "ALL" && !isAuthRoute(route.path))
-    .map((route) => `${route.method.toUpperCase()} ${route.path}`)
-    .sort();
+function readOrWrite(method: string, read: Permission, write: Permission): Permission {
+  return WRITE_METHODS.has(method.toUpperCase()) ? write : read;
+}
 
-  // FNV-1a 64-bit gives us a compact, deterministic snapshot that changes
-  // when a method, path, or route count changes.
-  let hash = 0xcbf29ce484222325n;
-  for (const codePoint of entries.join("\n")) {
-    hash ^= BigInt(codePoint.codePointAt(0)!);
-    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+function isDelegatedUserPath(path: string): boolean {
+  return /^\/users\/[^/]+\/(roles|membership)(?:\/|$)/.test(path);
+}
+
+/**
+ * Resolve the effective authorization boundary for one admin request.
+ *
+ * Rules describe modules, not a hash of today's route inventory. New routes
+ * inherit their module's reviewed policy, while a new module fails closed for
+ * that request until a policy is declared. Contextual modules delegate to the
+ * nested router that can resolve the resource ID before checking permission.
+ */
+export function adminAuthorizationForRequest(path: string, method: string): AdminRouteAuthorization {
+  const normalizedPath = normalizedPolicyPath(path);
+  const normalizedMethod = method.toUpperCase();
+  const module = moduleName(normalizedPath);
+
+  if (module === "auth") {
+    return { kind: "auth-route" };
   }
 
-  return {
-    routeCount: entries.length,
-    fingerprint: hash.toString(16).padStart(16, "0"),
-  };
+  if (module === "audit-log") {
+    return { kind: "permission", permission: "audit:read" };
+  }
+  if (module === "donations") {
+    return {
+      kind: "permission",
+      permission: readOrWrite(normalizedMethod, "donations:read", "donations:sync"),
+    };
+  }
+  if (module === "email-templates") {
+    return {
+      kind: "permission",
+      permission: readOrWrite(normalizedMethod, "email-templates:read", "email-templates:write"),
+    };
+  }
+  if (module === "users" && isDelegatedUserPath(normalizedPath)) {
+    return { kind: "delegated", boundary: "user subresource router" };
+  }
+  if (module === "users") {
+    const permission = normalizedPath.endsWith("/anonymize")
+      ? "users:anonymize"
+      : readOrWrite(normalizedMethod, "users:read", "users:write");
+    return { kind: "permission", permission };
+  }
+  if (module === "email" || module === "forms" || module === "mailing-lists") {
+    return {
+      kind: "permission",
+      permission: readOrWrite(normalizedMethod, "admin:read", "admin:write"),
+    };
+  }
+  if (
+    module === "docs" ||
+    module === "redocs" ||
+    module.startsWith("openapi.") ||
+    module === "due-work" ||
+    module === "stats"
+  ) {
+    return { kind: "permission", permission: "admin:read" };
+  }
+
+  const boundary = DELEGATED_MODULES.get(module);
+  if (boundary) {
+    return { kind: "delegated", boundary };
+  }
+
+  throw new AppError(
+    503,
+    "ADMIN_ROUTE_POLICY_MISSING",
+    `No authorization policy is declared for admin path: ${normalizedPath}`,
+  );
 }
 
-export function requireReviewedAdminRouteInventory(routes: readonly RouteDefinition[]): void {
-  const actual = adminRouteInventoryFingerprint(routes);
-  if (
-    actual.routeCount !== REVIEWED_ADMIN_ROUTE_INVENTORY.routeCount ||
-    actual.fingerprint !== REVIEWED_ADMIN_ROUTE_INVENTORY.fingerprint
-  ) {
-    throw new AppError(
-      503,
-      "ADMIN_ROUTE_POLICY_OUT_OF_DATE",
-      "The admin route inventory changed without an authorization-policy review.",
-    );
+export function enforceAdminRouteAuthorization(actor: AuthAdmin, path: string, method: string): void {
+  const policy = adminAuthorizationForRequest(path, method);
+  if (policy.kind === "permission") {
+    requirePermission(actor, policy.permission);
+  }
+}
+
+/** Test/build-time coverage check; unlike the old fingerprint, never runs per request. */
+export function requireAdminRoutesHaveAuthorizationPolicy(routes: readonly RouteDefinition[]): void {
+  for (const route of routes) {
+    if (route.method === "ALL") continue;
+    adminAuthorizationForRequest(route.path, route.method);
   }
 }

@@ -11,7 +11,7 @@ import { nowIso } from "../../../utils/time";
 import { sha256Hex } from "../../../utils/crypto";
 import { parseJsonSafe } from "../../../utils/json";
 import { AppError } from "../../../errors";
-import type { DatabaseLike } from "../../../types";
+import type { DatabaseLike, StatementLike } from "../../../types";
 
 export interface MemberApplicationRow {
   id: string;
@@ -21,7 +21,6 @@ export interface MemberApplicationRow {
   organization_domain: string | null;
   membership_category: string;
   form_submission_id: string | null;
-  status: string;
   stage: string;
   stage_entered_at: string;
   on_hold_subtype: string | null;
@@ -33,7 +32,16 @@ export interface MemberApplicationRow {
 }
 
 export async function getMemberApplicationById(db: DatabaseLike, id: string): Promise<MemberApplicationRow | null> {
-  return first<MemberApplicationRow>(db, `SELECT * FROM member_applications WHERE id = ?`, [id]);
+  return first<MemberApplicationRow>(
+    db,
+    `SELECT id, applicant_email, applicant_name, organization_name, organization_domain,
+            membership_category, form_submission_id, stage, stage_entered_at,
+            on_hold_subtype, review_notes, assigned_to_user_id, manage_token_hash,
+            created_at, updated_at
+     FROM member_applications
+     WHERE id = ?`,
+    [id],
+  );
 }
 
 /**
@@ -172,14 +180,31 @@ export async function addApplicationCommunication(
     emailOutboxId?: string | null;
   },
 ): Promise<ApplicationCommunicationRow> {
+  const prepared = prepareApplicationCommunication(db, params);
+  await db.batch([prepared.statement]);
+  return prepared.communication;
+}
+
+export function prepareApplicationCommunication(
+  db: DatabaseLike,
+  params: {
+    applicationId: string;
+    actorUserId: string;
+    subject: string;
+    body: string;
+    templateKey?: string | null;
+    emailOutboxId?: string | null;
+  },
+): { communication: ApplicationCommunicationRow; statement: StatementLike } {
   const id = uuid();
   const now = nowIso();
-  await run(
-    db,
-    `INSERT INTO application_communications
+  const statement = db
+    .prepare(
+      `INSERT INTO application_communications
        (id, application_id, kind, actor_user_id, subject, body, template_key, email_outbox_id, created_at)
      VALUES (?, ?, 'communication', ?, ?, ?, ?, ?, ?)`,
-    [
+    )
+    .bind(
       id,
       params.applicationId,
       params.actorUserId,
@@ -188,18 +213,20 @@ export async function addApplicationCommunication(
       params.templateKey ?? null,
       params.emailOutboxId ?? null,
       now,
-    ],
-  );
+    );
   return {
-    id,
-    application_id: params.applicationId,
-    kind: "communication",
-    actor_user_id: params.actorUserId,
-    subject: params.subject,
-    body: params.body,
-    template_key: params.templateKey ?? null,
-    email_outbox_id: params.emailOutboxId ?? null,
-    created_at: now,
+    statement,
+    communication: {
+      id,
+      application_id: params.applicationId,
+      kind: "communication",
+      actor_user_id: params.actorUserId,
+      subject: params.subject,
+      body: params.body,
+      template_key: params.templateKey ?? null,
+      email_outbox_id: params.emailOutboxId ?? null,
+      created_at: now,
+    },
   };
 }
 
@@ -207,25 +234,37 @@ export async function addApplicationNote(
   db: DatabaseLike,
   params: { applicationId: string; actorUserId: string; body: string },
 ): Promise<ApplicationCommunicationRow> {
+  const prepared = prepareApplicationNote(db, params);
+  await db.batch([prepared.statement]);
+  return prepared.note;
+}
+
+export function prepareApplicationNote(
+  db: DatabaseLike,
+  params: { applicationId: string; actorUserId: string; body: string },
+): { note: ApplicationCommunicationRow; statement: StatementLike } {
   const id = uuid();
   const now = nowIso();
-  await run(
-    db,
-    `INSERT INTO application_communications
+  const statement = db
+    .prepare(
+      `INSERT INTO application_communications
        (id, application_id, kind, actor_user_id, subject, body, template_key, email_outbox_id, created_at)
      VALUES (?, ?, 'note', ?, NULL, ?, NULL, NULL, ?)`,
-    [id, params.applicationId, params.actorUserId, params.body, now],
-  );
+    )
+    .bind(id, params.applicationId, params.actorUserId, params.body, now);
   return {
-    id,
-    application_id: params.applicationId,
-    kind: "note",
-    actor_user_id: params.actorUserId,
-    subject: null,
-    body: params.body,
-    template_key: null,
-    email_outbox_id: null,
-    created_at: now,
+    statement,
+    note: {
+      id,
+      application_id: params.applicationId,
+      kind: "note",
+      actor_user_id: params.actorUserId,
+      subject: null,
+      body: params.body,
+      template_key: null,
+      email_outbox_id: null,
+      created_at: now,
+    },
   };
 }
 

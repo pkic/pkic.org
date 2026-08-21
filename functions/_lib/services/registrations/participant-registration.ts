@@ -1,7 +1,6 @@
-import { run } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
-import type { DatabaseLike } from "../../types";
+import type { DatabaseLike, StatementLike } from "../../types";
 
 export interface ParticipantRegistrationLike {
   event_id: string;
@@ -26,18 +25,26 @@ export async function upsertAttendeeParticipant(
   db: DatabaseLike,
   registration: ParticipantRegistrationLike,
 ): Promise<void> {
+  await db.batch([prepareUpsertAttendeeParticipantStatement(db, registration)]);
+}
+
+export function prepareUpsertAttendeeParticipantStatement(
+  db: DatabaseLike,
+  registration: ParticipantRegistrationLike,
+): StatementLike {
   const participantStatus = participantStatusForRegistration(registration.status);
   const now = nowIso();
 
-  await run(
-    db,
-    `INSERT INTO event_participants (
+  return db
+    .prepare(
+      `INSERT INTO event_participants (
       id, event_id, user_id, role, subrole, status, source_type, source_ref, created_at, updated_at
     ) VALUES (?, ?, ?, 'attendee', ?, ?, ?, ?, ?, ?)
     ON CONFLICT(event_id, user_id, role, subrole)
     DO UPDATE SET status = excluded.status, source_type = excluded.source_type, source_ref = excluded.source_ref,
                   updated_at = excluded.updated_at`,
-    [
+    )
+    .bind(
       uuid(),
       registration.event_id,
       registration.user_id,
@@ -47,6 +54,5 @@ export async function upsertAttendeeParticipant(
       registration.source_ref,
       now,
       now,
-    ],
-  );
+    );
 }

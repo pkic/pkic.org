@@ -1,25 +1,29 @@
 import { AppError } from "../../errors";
-import { first, run } from "../../db/queries";
+import { first } from "../../db/queries";
 import { uuid } from "../../utils/ids";
 import { nowIso, addHours } from "../../utils/time";
-import { recordReferralConversion } from "../referrals";
-import { recordEngagement } from "../engagement";
+import { prepareReferralConversionStatements } from "../referrals";
+import { prepareEngagementStatement } from "../engagement";
 import {
   deriveEventAttendanceType,
-  replaceRegistrationDayAttendance,
+  listEventDays,
+  prepareReplaceRegistrationDayAttendanceStatements,
   type DayAttendanceSelection,
 } from "../event-days";
-import { roleBasedCapacityExemptReason, syncRegistrationDayWaitlist } from "./day-waitlist";
-import { upsertAttendeeParticipant } from "./participant-registration";
+import {
+  buildRegistrationDayWaitlistSync,
+  isEventDayCapacityConflict,
+  roleBasedCapacityExemptReason,
+  type PlannedDayWaitlistEntry,
+} from "./day-waitlist";
+import { prepareUpsertAttendeeParticipantStatement } from "./participant-registration";
 import { newCapabilityLinkSecret, signedOrQueuedCapability } from "../capability-links";
-import type { DatabaseLike } from "../../types";
+import type { DatabaseLike, StatementLike } from "../../types";
 import type { RegistrationRecord } from "./types";
 
 const DEFAULT_PENDING_CONFIRMATION_DEADLINE_HOURS = 14 * 24;
 
-async function initialRegistrationStatus(
-  inviteId: string | null,
-): Promise<"pending_email_confirmation" | "registered"> {
+function initialRegistrationStatus(inviteId: string | null): "pending_email_confirmation" | "registered" {
   if (!inviteId) {
     return "pending_email_confirmation";
   }
@@ -48,9 +52,55 @@ export async function createRegistration(
   confirmationToken: string | null;
   reactivated: boolean;
 }> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const built = await buildCreateRegistration(db, payload);
+    try {
+      await db.batch(built.statements);
+      return {
+        registration: built.registration,
+        manageToken: built.manageToken,
+        confirmationToken: built.confirmationToken,
+        reactivated: built.reactivated,
+      };
+    } catch (error) {
+      if (!isEventDayCapacityConflict(error) || attempt === 2) throw error;
+    }
+  }
+  throw new AppError(409, "DAY_CAPACITY_CHANGED", "Day capacity changed; please retry");
+}
+
+export async function buildCreateRegistration(
+  db: DatabaseLike,
+  payload: {
+    event: { id: string };
+    userId: string;
+    attendanceType: "in_person" | "virtual" | "on_demand";
+    dayAttendance?: DayAttendanceSelection[];
+    sourceType: string;
+    sourceRef?: string | null;
+    customAnswersJson?: string | null;
+    inviteId?: string | null;
+    referredByCode?: string | null;
+    pendingConfirmationDeadlineHours?: number;
+    confirmationTtlHours?: number;
+    signingSecret?: string;
+  },
+): Promise<{
+  registration: RegistrationRecord;
+  manageToken: string;
+  confirmationToken: string | null;
+  reactivated: boolean;
+  statements: StatementLike[];
+  plannedDayWaitlist: PlannedDayWaitlistEntry[];
+  dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
+}> {
   const existing = await first<RegistrationRecord>(
     db,
-    "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?",
+    `SELECT id, event_id, user_id, invite_id, status, attendance_type, source_type, source_ref,
+            custom_answers_json, referred_by_code, confirmation_link_secret,
+            pending_confirmation_deadline_at, manage_link_secret, capacity_exempt_in_person,
+            capacity_exempt_reason, cancellation_reason_code, confirmed_at, cancelled_at, created_at, updated_at
+     FROM registrations WHERE event_id = ? AND user_id = ?`,
     [payload.event.id, payload.userId],
   );
   if (existing) {
@@ -63,9 +113,10 @@ export async function createRegistration(
   const manageLinkSecret = newCapabilityLinkSecret();
   const attendanceType = deriveEventAttendanceType(payload.dayAttendance) ?? payload.attendanceType;
   const roleExemptReason = await roleBasedCapacityExemptReason(db, payload.event.id, payload.userId);
+  const configuredEventDays = await listEventDays(db, payload.event.id);
   const capacityExemptReason = roleExemptReason;
   const capacityExempt = Boolean(capacityExemptReason);
-  const status = await initialRegistrationStatus(payload.inviteId ?? null);
+  const status = initialRegistrationStatus(payload.inviteId ?? null);
   let confirmationLinkSecret: string | null = null;
   let pendingConfirmationDeadlineAt: string | null = null;
   if (status === "pending_email_confirmation") {
@@ -93,98 +144,120 @@ export async function createRegistration(
     manage_link_secret: manageLinkSecret,
     capacity_exempt_in_person: capacityExempt ? 1 : 0,
     capacity_exempt_reason: capacityExemptReason,
+    cancellation_reason_code: null,
+    transition_revision: existing?.transition_revision ?? 0,
     confirmed_at: status === "registered" ? now : null,
     cancelled_at: null,
     created_at: existing?.created_at ?? now,
     updated_at: now,
   };
+  const statements: StatementLike[] = [];
   if (existing) {
-    await run(
-      db,
-      `UPDATE registrations
+    statements.push(
+      db
+        .prepare(
+          `UPDATE registrations
        SET invite_id = ?, status = ?, attendance_type = ?, source_type = ?, source_ref = ?,
            custom_answers_json = ?, referred_by_code = ?, confirmation_link_secret = ?,
            pending_confirmation_deadline_at = ?,
            manage_link_secret = ?, capacity_exempt_in_person = ?, capacity_exempt_reason = ?,
+           cancellation_reason_code = NULL,
            confirmed_at = ?, cancelled_at = NULL, updated_at = ?
        WHERE id = ?`,
-      [
-        registration.invite_id,
-        registration.status,
-        registration.attendance_type,
-        registration.source_type,
-        registration.source_ref,
-        registration.custom_answers_json,
-        registration.referred_by_code,
-        registration.confirmation_link_secret,
-        registration.pending_confirmation_deadline_at,
-        registration.manage_link_secret,
-        registration.capacity_exempt_in_person,
-        registration.capacity_exempt_reason,
-        registration.confirmed_at,
-        now,
-        registration.id,
-      ],
+        )
+        .bind(
+          registration.invite_id,
+          registration.status,
+          registration.attendance_type,
+          registration.source_type,
+          registration.source_ref,
+          registration.custom_answers_json,
+          registration.referred_by_code,
+          registration.confirmation_link_secret,
+          registration.pending_confirmation_deadline_at,
+          registration.manage_link_secret,
+          registration.capacity_exempt_in_person,
+          registration.capacity_exempt_reason,
+          registration.confirmed_at,
+          now,
+          registration.id,
+        ),
     );
   } else {
-    await run(
-      db,
-      `INSERT INTO registrations (
+    statements.push(
+      db
+        .prepare(
+          `INSERT INTO registrations (
       id, event_id, user_id, invite_id, status, attendance_type, source_type, source_ref,
       custom_answers_json, referred_by_code, confirmation_link_secret, pending_confirmation_deadline_at,
-      manage_link_secret, capacity_exempt_in_person, capacity_exempt_reason,
+      manage_link_secret, capacity_exempt_in_person, capacity_exempt_reason, cancellation_reason_code,
       confirmed_at, cancelled_at, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        registration.id,
-        registration.event_id,
-        registration.user_id,
-        registration.invite_id,
-        registration.status,
-        registration.attendance_type,
-        registration.source_type,
-        registration.source_ref,
-        registration.custom_answers_json,
-        registration.referred_by_code,
-        registration.confirmation_link_secret,
-        registration.pending_confirmation_deadline_at,
-        registration.manage_link_secret,
-        registration.capacity_exempt_in_person,
-        registration.capacity_exempt_reason,
-        registration.confirmed_at,
-        registration.cancelled_at,
-        registration.created_at,
-        registration.updated_at,
-      ],
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(
+          registration.id,
+          registration.event_id,
+          registration.user_id,
+          registration.invite_id,
+          registration.status,
+          registration.attendance_type,
+          registration.source_type,
+          registration.source_ref,
+          registration.custom_answers_json,
+          registration.referred_by_code,
+          registration.confirmation_link_secret,
+          registration.pending_confirmation_deadline_at,
+          registration.manage_link_secret,
+          registration.capacity_exempt_in_person,
+          registration.capacity_exempt_reason,
+          registration.cancellation_reason_code,
+          registration.confirmed_at,
+          registration.cancelled_at,
+          registration.created_at,
+          registration.updated_at,
+        ),
     );
   }
-  await replaceRegistrationDayAttendance(db, {
-    registrationId: registration.id,
-    eventId: registration.event_id,
-    selections: payload.dayAttendance,
-    recordHistory: Boolean(existing),
-  });
-  await syncRegistrationDayWaitlist(db, {
+  const waitlist = await buildRegistrationDayWaitlistSync(db, {
     registrationId: registration.id,
     eventId: registration.event_id,
     userId: registration.user_id,
     selections: payload.dayAttendance,
     capacityExemptReason,
+    registrationStatus: registration.status,
+    configuredEventDays,
   });
-  await upsertAttendeeParticipant(db, registration);
-  await recordEngagement(db, {
-    userId: registration.user_id,
-    eventId: registration.event_id,
-    subjectType: "registration",
-    subjectRef: registration.id,
-    actionType: "registration_created",
-    points: 2,
-    sourceType: "registration",
-    sourceRef: registration.id,
-    data: { status: registration.status, attendanceType: registration.attendance_type },
-  });
+  statements.unshift(...waitlist.guardStatements);
+  statements.push(
+    ...(await prepareReplaceRegistrationDayAttendanceStatements(db, {
+      registrationId: registration.id,
+      eventId: registration.event_id,
+      selections: payload.dayAttendance,
+      recordHistory: Boolean(existing),
+      configuredEventDays,
+    })),
+    ...waitlist.statements,
+    prepareUpsertAttendeeParticipantStatement(db, registration),
+    prepareEngagementStatement(db, {
+      userId: registration.user_id,
+      eventId: registration.event_id,
+      subjectType: "registration",
+      subjectRef: registration.id,
+      actionType: "registration_created",
+      points: 2,
+      sourceType: "registration",
+      sourceRef: registration.id,
+      idempotencyKey: `registration_created:registration:${registration.id}`,
+      data: { status: registration.status, attendanceType: registration.attendance_type },
+    }),
+  );
   if (payload.referredByCode) {
-    await recordReferralConversion(db, payload.referredByCode);
+    statements.push(
+      ...(await prepareReferralConversionStatements(db, payload.referredByCode, {
+        type: "registration",
+        ref: registration.id,
+      })),
+    );
   }
   const manageToken = await signedOrQueuedCapability({
     signingSecret: payload.signingSecret,
@@ -201,5 +274,16 @@ export async function createRegistration(
         ttlSeconds: payload.confirmationTtlHours != null ? payload.confirmationTtlHours * 3600 : undefined,
       })
     : null;
-  return { registration, manageToken, confirmationToken, reactivated: Boolean(existing) };
+  return {
+    registration,
+    manageToken,
+    confirmationToken,
+    reactivated: Boolean(existing),
+    statements,
+    plannedDayWaitlist: waitlist.activeRows,
+    dayAttendance: (payload.dayAttendance ?? []).map((selection) => {
+      const day = configuredEventDays.find((entry) => entry.day_date === selection.dayDate);
+      return { dayDate: selection.dayDate, attendanceType: selection.attendanceType, label: day?.label ?? null };
+    }),
+  };
 }

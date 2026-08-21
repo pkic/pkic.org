@@ -141,6 +141,15 @@ describe("Votes due-work (functions/_lib/services/votes-scheduled-jobs.ts)", () 
     // Enqueue only — the shared bounded outbox processor owns delivery, not
     // this loop (PR #1 review §9.1).
     expect(outboxRows[0].status).toBe("queued");
+
+    const second = await runVotesDueWork(env.DB, env as any);
+    expect(second.delegateNoticesQueued).toBe(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'forum-vote-delegate-notify'"),
+    ).toHaveLength(1);
+    expect(
+      await queryAll(env.DB, "SELECT vote_id FROM vote_notification_deliveries WHERE vote_id = ?", vote.id),
+    ).toHaveLength(1);
   });
 
   it("does nothing when no votes are due", async () => {

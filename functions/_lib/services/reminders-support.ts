@@ -18,6 +18,7 @@ export interface DueInviteRow {
   invitee_last_name: string | null;
   invite_type: "attendee" | "speaker";
   reminder_count: number;
+  transition_revision: number;
   expires_at: string | null;
   event_name: string;
   event_slug: string;

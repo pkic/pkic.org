@@ -9,34 +9,17 @@
 
 import { render } from "preact";
 import { setButtonLoading, resetButton } from "./shared/form/button-loading";
-import { inviteDeclineSchema } from "../shared/schemas/api";
+import { INVITE_FORWARD_LIMIT, inviteDeclineSchema } from "../shared/schemas/registration";
+import { inviteDeclineInfoResponseSchema, inviteDeclineResponseSchema } from "../shared/schemas/invites";
 import { getJson, postJson, ApiClientError } from "./shared/api-client";
 import { parseContactText } from "./shared/invite-parser";
 import type { ParsedContact } from "./shared/invite-parser";
 import { showManageLinkRecoveryForm } from "./shared/widgets/link-recovery";
+import type { z } from "zod";
 
-interface DeclineInfoValid {
-  status: "valid";
-  eventName: string | null;
-  inviteeFirstName: string | null;
-  inviteType: "attendee" | "speaker";
-  registrationUrl: string | null;
-  proposalUrl: string | null;
-}
-
-interface DeclineInfoOther {
-  status: "already_processed" | "expired" | "invalid";
-}
-
-type DeclineInfo = DeclineInfoValid | DeclineInfoOther;
-
-interface DeclinePayload {
-  reasonCode: string;
-  reasonNote?: string;
-  unsubscribeFuture?: boolean;
-  npsScore?: number;
-  forwards?: { email: string; firstName?: string; lastName?: string }[];
-}
+type DeclineInfo = z.infer<typeof inviteDeclineInfoResponseSchema>;
+type DeclineInfoValid = Extract<DeclineInfo, { status: "valid" }>;
+type DeclinePayload = z.infer<typeof inviteDeclineSchema>;
 
 // ── Reasons that trigger the virtual-pivot offer ──────────────────────────────
 // schedule_conflict is intentionally excluded: a live remote stream has the same
@@ -191,7 +174,9 @@ function boot(): void {
     const inviteIdQuery = id ? `?id=${encodeURIComponent(id)}` : "";
     let info: DeclineInfo;
     try {
-      info = await getJson<DeclineInfo>(`${base}/invites/${tok}/decline-info${inviteIdQuery}`);
+      info = inviteDeclineInfoResponseSchema.parse(
+        await getJson<unknown>(`${base}/invites/${tok}/decline-info${inviteIdQuery}`),
+      );
     } catch {
       showStatus(
         "Something went wrong",
@@ -227,9 +212,10 @@ function boot(): void {
       );
       return;
     }
+    if (info.status !== "valid") return;
 
     // Valid invite — personalise and show the form
-    initForm(tok, base, info as DeclineInfoValid, inviteIdQuery);
+    initForm(tok, base, info, inviteIdQuery);
   }
 
   // ── Form initialisation ─────────────────────────────────────────────────────
@@ -358,8 +344,10 @@ function boot(): void {
 
   // ── Forward section ─────────────────────────────────────────────────────────
 
-  /** Maximum number of forward contacts. Read from data-forward-max; defaults to 10. */
-  const MAX_FORWARDS = parseInt(root.dataset.forwardMax ?? "", 10) || 10;
+  const configuredForwardLimit = parseInt(root.dataset.forwardMax ?? "", 10);
+  const MAX_FORWARDS = Number.isFinite(configuredForwardLimit)
+    ? Math.max(0, Math.min(configuredForwardLimit, INVITE_FORWARD_LIMIT))
+    : INVITE_FORWARD_LIMIT;
   let forwardCount = 0;
 
   function wireForwardToggle(): void {
@@ -540,9 +528,8 @@ function boot(): void {
       if (submitBtn) setButtonLoading(submitBtn);
 
       try {
-        const result = await postJson<{ success: boolean; forwarded: string[] }>(
-          `${base}/invites/${tok}/decline${inviteIdQuery}`,
-          payload,
+        const result = inviteDeclineResponseSchema.parse(
+          await postJson<unknown>(`${base}/invites/${tok}/decline${inviteIdQuery}`, payload),
         );
 
         if (result.success) {

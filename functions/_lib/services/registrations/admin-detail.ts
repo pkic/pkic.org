@@ -12,6 +12,7 @@ export interface AdminRegistrationDetailRow {
   event_id: string;
   user_id: string;
   status: string;
+  cancellation_reason_code: string | null;
   attendance_type: string;
   source_type: string;
   created_at: string;
@@ -30,7 +31,7 @@ export async function fetchAdminRegistrationWithDetails(
 ): Promise<AdminRegistrationDetailRow | null> {
   return first<AdminRegistrationDetailRow>(
     db,
-    `SELECT r.id, r.event_id, r.user_id, r.status, r.attendance_type, r.source_type,
+    `SELECT r.id, r.event_id, r.user_id, r.status, r.cancellation_reason_code, r.attendance_type, r.source_type,
             r.custom_answers_json, r.created_at, r.updated_at,
             u.email AS user_email,
             COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
@@ -44,6 +45,22 @@ export async function fetchAdminRegistrationWithDetails(
   );
 }
 
+export async function getRegistrationNormalizedEmail(
+  db: DatabaseLike,
+  eventId: string,
+  registrationId: string,
+): Promise<string | null> {
+  const row = await first<{ normalized_email: string }>(
+    db,
+    `SELECT u.normalized_email
+       FROM registrations r
+       JOIN users u ON u.id = r.user_id
+      WHERE r.id = ? AND r.event_id = ?`,
+    [registrationId, eventId],
+  );
+  return row?.normalized_email ?? null;
+}
+
 export function toAdminRegistrationDetail(
   registration: AdminRegistrationDetailRow,
 ): AdminRegistrationDetailResponse["registration"] {
@@ -52,6 +69,7 @@ export function toAdminRegistrationDetail(
     event_id: registration.event_id,
     user_id: registration.user_id,
     status: registration.status,
+    cancellation_reason_code: registration.cancellation_reason_code,
     attendance_type: registration.attendance_type,
     source_type: registration.source_type,
     created_at: registration.created_at,

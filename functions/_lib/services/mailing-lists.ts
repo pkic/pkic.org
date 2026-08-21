@@ -69,12 +69,13 @@ export async function listMailingLists(
   const orderBy = resolveOrderBy(
     query.sort,
     ADMIN_MAILING_LIST_SORT_COLUMNS,
-    "ORDER BY list_type ASC, email ASC, id ASC",
+    "ORDER BY list_type ASC, email ASC",
+    "id ASC",
   );
   const { rows, total } = await queryPage<MailingListRow>(
     db,
     {
-      sql: `SELECT ${MAILING_LIST_COLUMNS} FROM mailing_lists ${where} ${orderBy}, id ASC LIMIT ? OFFSET ?`,
+      sql: `SELECT ${MAILING_LIST_COLUMNS} FROM mailing_lists ${where} ${orderBy} LIMIT ? OFFSET ?`,
       bindings: [...bindings, query.limit, query.offset],
     },
     { sql: `SELECT COUNT(*) AS total FROM mailing_lists ${where}`, bindings },
@@ -193,14 +194,21 @@ export async function deleteMailingList(db: DatabaseLike, id: string): Promise<v
  * hardcode.
  */
 export async function resolveAutoSyncListEmails(db: DatabaseLike, membershipCategory: string): Promise<string[]> {
-  const rows = await all<MailingListRow>(
+  const rows = await all<Pick<MailingListRow, "email">>(
     db,
-    `SELECT * FROM mailing_lists WHERE active = 1 AND list_type IN ('all_members', 'consultation')`,
+    `SELECT email
+     FROM mailing_lists
+     WHERE active = 1
+       AND list_type IN ('all_members', 'consultation')
+       AND (
+         auto_sync_categories_json IS NULL
+         OR EXISTS (
+           SELECT 1 FROM json_each(mailing_lists.auto_sync_categories_json)
+           WHERE value = ?
+         )
+       )
+     ORDER BY email ASC`,
+    [membershipCategory],
   );
-  return rows
-    .filter((row) => {
-      const categories = parseJsonSafe<string[] | null>(row.auto_sync_categories_json, null);
-      return categories === null || categories.includes(membershipCategory);
-    })
-    .map((row) => row.email);
+  return rows.map((row) => row.email);
 }

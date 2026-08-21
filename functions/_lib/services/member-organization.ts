@@ -154,7 +154,7 @@ export async function nominateSecondaryContact(
 
 /**
  * Sets an organization's standing forum-vote delegate (role-voting_delegate,
- * a singleton user_roles grant — migration 0038). Takes effect immediately,
+ * a singleton user_roles grant — consolidated migration 0035). Takes effect immediately,
  * unlike the secondary-contact nomination above (no staff-confirmation
  * step): "the primary or secondary contact can change the voting delegate
  * at any time." A NULL delegate falls back to the primary contact at

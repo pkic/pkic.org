@@ -107,4 +107,31 @@ describe("engagement events", () => {
     expect(rows[0].subject_type).toBe("community");
     expect(rows[0].subject_ref).toBe("profile_completion");
   });
+
+  it("deduplicates one-shot engagement by its domain idempotency key", async () => {
+    await seedEventAndAdmin(env.DB);
+    const admin = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
+    )[0];
+    const payload = {
+      userId: admin.id,
+      subjectType: "invite" as const,
+      subjectRef: "invite-retry",
+      actionType: "invite_accepted",
+      points: 3,
+      sourceType: "invite",
+      sourceRef: "invite-retry",
+      idempotencyKey: "invite_accepted:invite:invite-retry",
+    };
+
+    await Promise.all([recordEngagement(env.DB, payload), recordEngagement(env.DB, payload)]);
+
+    const rows = await queryAll<{ count: number; points: number }>(
+      env.DB,
+      `SELECT COUNT(*) AS count, COALESCE(SUM(points), 0) AS points
+       FROM engagement_events WHERE idempotency_key = ?`,
+      [payload.idempotencyKey],
+    );
+    expect(rows[0]).toEqual({ count: 1, points: 3 });
+  });
 });

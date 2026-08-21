@@ -11,6 +11,7 @@ export async function listAdminEmailOutbox(
     messageType?: string;
     dueNow: boolean;
     q?: string;
+    sort?: string;
     limit: number;
     offset: number;
   },

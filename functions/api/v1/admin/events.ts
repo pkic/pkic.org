@@ -62,7 +62,12 @@ export const AdminEventsListGet = openApiRoute(
     requirePermission(admin, "events:read");
 
     const { q, sort, limit = 50, offset = 0 } = data.query;
-    const orderBy = resolveOrderBy(sort, EVENTS_LIST_SORT_COLUMNS, "ORDER BY COALESCE(e.starts_at, '9999') DESC");
+    const orderBy = resolveOrderBy(
+      sort,
+      EVENTS_LIST_SORT_COLUMNS,
+      "ORDER BY COALESCE(e.starts_at, '9999') DESC",
+      "e.id ASC",
+    );
     const search = q ? buildD1TextSearchFilter(q, ["e.name", "e.slug"]) : null;
     const where = search ? `WHERE ${search.sql}` : "";
     const bindings = search?.bindings ?? [];

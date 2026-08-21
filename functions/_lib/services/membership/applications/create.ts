@@ -1,76 +1,34 @@
 /**
- * Membership application submission. Split out of the former
- * member-applications.ts (PR #1 review §1.5) — queries.ts owns reads,
- * transition.ts owns the stage machine, this file owns everything to do
- * with creating a new application and the domain-duplicate checks that
- * gate it.
+ * Atomic membership-application submission use case.
+ *
+ * The route validates the transport envelope and rate limit. This service
+ * owns the complete durable command: resolve and validate the active form,
+ * create its normalized answer rows, create the application and initial
+ * event, reserve an organization domain, enqueue the confirmation, and
+ * write the audit record in one D1 transaction.
  */
-import { first } from "../../../db/queries";
+import { prepareQueueEmailStatement } from "../../../email/outbox";
+import { AppError } from "../../../errors";
+import { prepareAuditLog } from "../../audit";
+import { getGlobalFormByKey, validateCustomAnswersAgainstForm, type CustomAnswerValue } from "../../forms";
+import { randomToken, sha256Hex } from "../../../utils/crypto";
 import { uuid } from "../../../utils/ids";
 import { nowIso } from "../../../utils/time";
-import { randomToken, sha256Hex } from "../../../utils/crypto";
-import { getGlobalFormByKey } from "../../forms";
+import { getOrganizationDomainClaim, prepareClaimDomainForApplication } from "../organization-domain-claims";
 import {
   MEMBERSHIP_CATEGORIES,
   INDIVIDUAL_MEMBERSHIP_CATEGORIES,
   VOTING_CATEGORIES,
 } from "../../../../../assets/shared/schemas/membership-categories";
-import { APPLICATION_STAGES } from "../../../../../assets/shared/schemas/member-applications";
-import type { DatabaseLike } from "../../../types";
+import type { DatabaseLike, StatementLike } from "../../../types";
 
-/** `forms.key` for the portal-managed membership application form (seeded in migrations/0034). */
+/** `forms.key` for the portal-managed membership application form. */
 export const MEMBERSHIP_APPLICATION_FORM_KEY = "membership-application";
 
 export { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES, VOTING_CATEGORIES };
 
-/** member_applications.status/stage — derived from the canonical shared vocabulary (PR #1 review §1.3), not re-declared. */
-export type ApplicationStage = (typeof APPLICATION_STAGES)[number];
-
-/** Non-terminal application stages — an application in one of these still "counts" for duplicate-domain detection. */
-const ACTIVE_APPLICATION_STATUSES: ApplicationStage[] = [
-  "pending",
-  "in_review",
-  "on_hold",
-  "in_consultation",
-  "ec_review",
-  "approved",
-];
-
 export function emailDomain(email: string): string {
   return email.split("@")[1]?.toLowerCase() ?? "";
-}
-
-/**
- * Returns true when an active (non-terminal) application already exists for
- * the given organization domain. Only checks member_applications, not
- * already-approved organizations — see hasConflictingOrganizationDomain for
- * that half, added once organizations gained a domain
- * column.
- */
-export async function hasActiveApplicationForDomain(db: DatabaseLike, domain: string): Promise<boolean> {
-  if (!domain) return false;
-  const placeholders = ACTIVE_APPLICATION_STATUSES.map(() => "?").join(", ");
-  const existing = await first<{ id: string }>(
-    db,
-    `SELECT id FROM member_applications WHERE organization_domain = ? AND status IN (${placeholders}) LIMIT 1`,
-    [domain, ...ACTIVE_APPLICATION_STATUSES],
-  );
-  return existing !== null;
-}
-
-/**
- * Returns true when an already-approved organization's `organization_domains`
- * (populated at approval time) already lists this domain. Only for
- * organizations approved through the flow going forward; the X
- * organizations migrated have no domain data to backfill and
- * remain uncovered.
- */
-export async function hasConflictingOrganizationDomain(db: DatabaseLike, domain: string): Promise<boolean> {
-  if (!domain) return false;
-  const existing = await first<{ id: string }>(db, `SELECT id FROM organization_domains WHERE domain = ? LIMIT 1`, [
-    domain,
-  ]);
-  return existing !== null;
 }
 
 export interface CreateMemberApplicationInput {
@@ -79,63 +37,86 @@ export interface CreateMemberApplicationInput {
   membershipCategory: string;
   organizationName?: string | null;
   answers?: Record<string, unknown>;
+  appBaseUrl: string;
 }
 
 export interface CreateMemberApplicationResult {
   id: string;
   manageToken: string;
-  status: string;
-  stage: string;
+  stage: "pending";
+  outboxId: string;
+}
+
+async function translateDomainClaimConflict(
+  db: DatabaseLike,
+  domain: string | null,
+  applicationId: string,
+  error: unknown,
+): Promise<never> {
+  if (domain) {
+    const claim = await getOrganizationDomainClaim(db, domain);
+    if (claim && claim.applicationId !== applicationId) {
+      throw new AppError(409, "DUPLICATE_APPLICATION", "This organization domain is already claimed");
+    }
+  }
+  throw error;
+}
+
+function buildAnswerStatements(
+  db: DatabaseLike,
+  submissionId: string,
+  answers: Record<string, CustomAnswerValue>,
+  createdAt: string,
+): StatementLike[] {
+  return Object.entries(answers).map(([key, value]) =>
+    db
+      .prepare(
+        `INSERT INTO form_submission_answers (id, submission_id, field_key, data_json, created_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .bind(uuid(), submissionId, key, JSON.stringify(value), createdAt),
+  );
 }
 
 export async function createMemberApplication(
   db: DatabaseLike,
   input: CreateMemberApplicationInput,
 ): Promise<CreateMemberApplicationResult> {
+  const form = await getGlobalFormByKey(db, MEMBERSHIP_APPLICATION_FORM_KEY);
+  if (!form) {
+    throw new AppError(503, "APPLICATION_FORM_UNAVAILABLE", "The membership application form is unavailable");
+  }
+
+  const answers = await validateCustomAnswersAgainstForm(form, {
+    customAnswers: input.answers,
+    errorStatus: 422,
+  });
+
   const id = uuid();
+  const formSubmissionId = uuid();
   const now = nowIso();
   const manageToken = randomToken(24);
   const manageTokenHash = await sha256Hex(manageToken);
   const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(input.membershipCategory);
   const organizationDomain = isIndividual ? null : emailDomain(input.applicantEmail);
+  const statusUrl = `${input.appBaseUrl}/application-status/?id=${encodeURIComponent(id)}&token=${encodeURIComponent(manageToken)}`;
 
-  const hasAnswers = input.answers && Object.keys(input.answers).length > 0;
-  let formSubmissionId: string | null = null;
-  const statements = [];
-
-  if (hasAnswers) {
-    const form = await getGlobalFormByKey(db, MEMBERSHIP_APPLICATION_FORM_KEY);
-    if (form) {
-      formSubmissionId = uuid();
-      statements.push(
-        db
-          .prepare(
-            `INSERT INTO form_submissions (id, form_id, submitted_by_user_id, context_type, context_ref, status, submitted_at)
-             VALUES (?, ?, NULL, 'membership', ?, 'submitted', ?)`,
-          )
-          .bind(formSubmissionId, form.id, id, now),
-      );
-      for (const [key, value] of Object.entries(input.answers as Record<string, unknown>)) {
-        statements.push(
-          db
-            .prepare(
-              `INSERT INTO form_submission_answers (id, submission_id, field_key, data_json, created_at)
-               VALUES (?, ?, ?, ?, ?)`,
-            )
-            .bind(uuid(), formSubmissionId, key, JSON.stringify(value ?? null), now),
-        );
-      }
-    }
-  }
-
-  statements.push(
+  const statements: StatementLike[] = [
+    db
+      .prepare(
+        `INSERT INTO form_submissions
+           (id, form_id, submitted_by_user_id, context_type, context_ref, status, submitted_at)
+         VALUES (?, ?, NULL, 'membership', ?, 'submitted', ?)`,
+      )
+      .bind(formSubmissionId, form.id, id, now),
+    ...buildAnswerStatements(db, formSubmissionId, answers, now),
     db
       .prepare(
         `INSERT INTO member_applications
            (id, applicant_email, applicant_name, organization_name, organization_domain,
-            membership_category, form_submission_id, status, stage, stage_entered_at,
+            membership_category, form_submission_id, stage, stage_entered_at,
             manage_token_hash, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`,
       )
       .bind(
         id,
@@ -150,15 +131,55 @@ export async function createMemberApplication(
         now,
         now,
       ),
+  ];
+
+  if (organizationDomain) {
+    statements.push(prepareClaimDomainForApplication(db, organizationDomain, id, now));
+  }
+
+  statements.push(
     db
       .prepare(
-        `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
+        `INSERT INTO member_application_events
+           (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
          VALUES (?, ?, NULL, 'pending', NULL, 'Application submitted', ?)`,
       )
       .bind(uuid(), id, now),
   );
 
-  await db.batch(statements);
+  const confirmation = prepareQueueEmailStatement(
+    db,
+    {
+      templateKey: "application-received",
+      recipientEmail: input.applicantEmail,
+      messageType: "transactional",
+      subject: "We received your PKI Consortium membership application",
+      data: { applicantName: input.applicantName, statusUrl },
+    },
+    now,
+  );
+  statements.push(
+    confirmation.statement,
+    prepareAuditLog(
+      db,
+      "public",
+      null,
+      "member_application_submitted",
+      "member_application",
+      id,
+      {
+        applicantEmail: input.applicantEmail,
+        membershipCategory: input.membershipCategory,
+      },
+      now,
+    ),
+  );
 
-  return { id, manageToken, status: "pending", stage: "pending" };
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    return translateDomainClaimConflict(db, organizationDomain, id, error);
+  }
+
+  return { id, manageToken, stage: "pending", outboxId: confirmation.id };
 }

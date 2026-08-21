@@ -8,6 +8,7 @@ import { runRetentionJob, summarizeRetentionJob } from "../../../../_lib/service
 import { runConsultationBatch, runEcReviewBatch } from "../../../../_lib/services/membership/scheduled-jobs";
 import { runWeeklyWgChairDigest } from "../../../../_lib/services/wg-chair-digest";
 import { adminRunJobsSchema } from "../../../../../assets/shared/schemas/api";
+import { adminJobsRunResponseSchema } from "../../../../../assets/shared/schemas/admin-jobs";
 
 export async function onRequestPost(c: any): Promise<Response> {
   await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
@@ -82,25 +83,27 @@ export async function onRequestPost(c: any): Promise<Response> {
       ? await runWeeklyWgChairDigest(c.env.DB, c.env)
       : { workingGroupsWithChanges: 0, emailsSent: 0 };
 
-  return json({
-    success: true,
-    dryRun: body.dryRun,
-    reminders,
-    shouldRunRetention,
-    retention: {
-      ...retention,
-      preview: retentionPreview,
-    },
-    outbox: {
-      ...outboxResult,
-      dueNow: outboxPreview.dueNow,
-      dueByStatus: outboxPreview.dueByStatus,
-      nextSendAfter: outboxPreview.nextSendAfter,
-    },
-    consultationBatch,
-    ecReviewBatch,
-    wgChairDigest,
-  });
+  return json(
+    adminJobsRunResponseSchema.parse({
+      success: true,
+      dryRun: body.dryRun,
+      reminders,
+      shouldRunRetention,
+      retention: {
+        ...retention,
+        preview: retentionPreview,
+      },
+      outbox: {
+        ...outboxResult,
+        dueNow: outboxPreview.dueNow,
+        dueByStatus: outboxPreview.dueByStatus,
+        nextSendAfter: outboxPreview.nextSendAfter,
+      },
+      consultationBatch,
+      ecReviewBatch,
+      wgChairDigest,
+    }),
+  );
 }
 
 export async function onRequest(c: any): Promise<Response> {

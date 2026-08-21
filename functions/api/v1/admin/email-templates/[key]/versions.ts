@@ -3,6 +3,8 @@ import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { createTemplateVersion } from "../../../../../_lib/email/templates";
 import { queryPage } from "../../../../../_lib/db/pagination";
+import { buildD1TextSearchFilter } from "../../../../../_lib/db/search";
+import { resolveMappedOrderBy } from "../../../../../_lib/db/sort";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { buildPageInfo } from "../../../../../../assets/shared/schemas/pagination";
 import { adminEmailTemplateVersionSchema } from "../../../../../../assets/shared/schemas/api";
@@ -15,20 +17,52 @@ export const EmailTemplateVersionsList = openApiRoute(
     await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
     const key = c.req.param("key");
-    const { limit = 50, offset = 0 } = data.query;
+    const { q, sort, limit = 50, offset = 0 } = data.query;
+    const search = q
+      ? buildD1TextSearchFilter(q, ["subject_template", "status", "content_type", "message_type"])
+      : null;
+    const searchSql = search ? `AND ${search.sql}` : "";
+    const bindings = [key, ...(search?.bindings ?? [])];
+    const orderBy = resolveMappedOrderBy(
+      sort,
+      {
+        version: "version",
+        status: "status COLLATE NOCASE",
+        createdAt: "created_at",
+      },
+      "version DESC",
+      "id ASC",
+    );
 
     const { rows: versions, total } = await queryPage(
       requestDb(c),
       {
-        sql: `SELECT * FROM email_template_versions
+        sql: `SELECT
+           id,
+           template_key,
+           version,
+           subject_template,
+           body,
+           content_type,
+           r2_object_key,
+           checksum_sha256,
+           status,
+           created_by_user_id,
+           created_at,
+           message_type
+         FROM email_template_versions
          WHERE template_key = ?
-         ORDER BY version DESC
+         ${searchSql}
+         ${orderBy}
          LIMIT ? OFFSET ?`,
-        bindings: [key, limit, offset],
+        bindings: [...bindings, limit, offset],
       },
       {
-        sql: `SELECT COUNT(*) AS total FROM email_template_versions WHERE template_key = ?`,
-        bindings: [key],
+        sql: `SELECT COUNT(*) AS total
+              FROM email_template_versions
+              WHERE template_key = ?
+              ${searchSql}`,
+        bindings,
       },
     );
 

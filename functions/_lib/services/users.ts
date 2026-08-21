@@ -18,6 +18,25 @@ export interface UserRecord {
   data_json: string | null;
 }
 
+const USER_RECORD_COLUMN_NAMES = [
+  "id",
+  "email",
+  "normalized_email",
+  "first_name",
+  "last_name",
+  "preferred_name",
+  "organization_name",
+  "job_title",
+  "biography",
+  "links_json",
+  "data_json",
+] as const;
+
+/** Canonical projection for the deliberately narrow user domain record. */
+export function userRecordColumns(tableAlias?: string): string {
+  return USER_RECORD_COLUMN_NAMES.map((column) => (tableAlias ? `${tableAlias}.${column}` : column)).join(", ");
+}
+
 /**
  * Matches a `users` row by its primary email OR by any secondary email
  * recorded in `user_emails` (admin-managed, e.g. from the user-merge tool
@@ -29,17 +48,28 @@ export interface UserRecord {
  * admin/display/search only and must not grant login via an alias.
  */
 async function findExistingUserByAnyEmail(db: DatabaseLike, normalizedEmail: string): Promise<UserRecord | null> {
-  const direct = await first<UserRecord>(db, "SELECT * FROM users WHERE normalized_email = ?", [normalizedEmail]);
+  const direct = await first<UserRecord>(db, `SELECT ${userRecordColumns()} FROM users WHERE normalized_email = ?`, [
+    normalizedEmail,
+  ]);
   if (direct) return direct;
   return first<UserRecord>(
     db,
-    `SELECT u.* FROM users u JOIN user_emails ue ON ue.user_id = u.id WHERE ue.normalized_email = ?`,
+    `SELECT ${userRecordColumns("u")}
+     FROM users u JOIN user_emails ue ON ue.user_id = u.id
+     WHERE ue.normalized_email = ?`,
     [normalizedEmail],
   );
 }
 
 export async function findUserByEmail(db: DatabaseLike, email: string): Promise<UserRecord | null> {
   return findExistingUserByAnyEmail(db, normalizeEmail(email));
+}
+
+export async function getNormalizedEmailForUser(db: DatabaseLike, userId: string): Promise<string | null> {
+  return (
+    (await first<{ normalized_email: string }>(db, "SELECT normalized_email FROM users WHERE id = ?", [userId]))
+      ?.normalized_email ?? null
+  );
 }
 
 export interface FindOrCreateUserPayload {
@@ -55,6 +85,46 @@ export interface FindOrCreateUserPayload {
   /** Whether to merge submitted profile fields into an existing record.
    *  Default: false — public submissions do not update existing profiles. */
   allowProfileUpdate?: boolean;
+}
+
+export interface UserProfilePatch {
+  firstName?: string | null;
+  lastName?: string | null;
+  organizationName?: string | null;
+  jobTitle?: string | null;
+  biography?: string | null;
+  linksJson?: string | null;
+  headshotR2Key?: string | null;
+}
+
+/** Shared explicit-presence profile patch for every authenticated/admin flow. */
+export function prepareUserProfileStatement(
+  db: DatabaseLike,
+  userId: string,
+  payload: UserProfilePatch,
+): StatementLike {
+  const now = nowIso();
+  const assignments: string[] = [];
+  const values: Array<string | null> = [];
+
+  const add = (column: string, value: string | null | undefined): void => {
+    if (value === undefined) return;
+    assignments.push(`${column} = ?`);
+    values.push(value);
+  };
+  add("first_name", payload.firstName);
+  add("last_name", payload.lastName);
+  add("organization_name", payload.organizationName);
+  add("job_title", payload.jobTitle);
+  add("biography", payload.biography);
+  add("links_json", payload.linksJson);
+  if (payload.headshotR2Key !== undefined) {
+    add("headshot_r2_key", payload.headshotR2Key);
+    add("headshot_updated_at", payload.headshotR2Key ? now : null);
+  }
+  assignments.push("updated_at = ?");
+  values.push(now);
+  return db.prepare(`UPDATE users SET ${assignments.join(", ")} WHERE id = ?`).bind(...values, userId);
 }
 
 /**

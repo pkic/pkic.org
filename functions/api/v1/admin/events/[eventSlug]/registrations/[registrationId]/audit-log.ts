@@ -10,22 +10,13 @@ import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../../../_lib/services/events";
 import { first } from "../../../../../../../_lib/db/queries";
 import { queryPage } from "../../../../../../../_lib/db/pagination";
+import { buildD1TextSearchFilter } from "../../../../../../../_lib/db/search";
+import { resolveMappedOrderBy } from "../../../../../../../_lib/db/sort";
+import { toAuditLogResponseRows, type AuditLogReadRow } from "../../../../../../../_lib/services/audit";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 import { buildPageInfo } from "../../../../../../../../assets/shared/schemas/pagination";
 import { adminRegistrationAuditLogRouteSchema } from "../../../../../../../../assets/shared/schemas/route-contracts";
 import type { ValidatedData } from "chanfana";
-
-interface AuditLogRow {
-  id: string;
-  actor_type: string;
-  actor_id: string | null;
-  actor_display: string | null;
-  action: string;
-  entity_type: string;
-  entity_id: string | null;
-  details_json: string | null;
-  created_at: string;
-}
 
 export async function onRequestGet(
   c: AdminContext,
@@ -46,7 +37,22 @@ export async function onRequestGet(
 
   const limit = data.query.limit ?? 50;
   const offset = data.query.offset ?? 0;
-  const { rows: entries, total } = await queryPage<AuditLogRow>(
+  const search = data.query.q
+    ? buildD1TextSearchFilter(data.query.q, ["al.action", "al.actor_type", "u.email", "u.first_name", "u.last_name"])
+    : null;
+  const searchSql = search ? `AND ${search.sql}` : "";
+  const bindings = [registrationId, ...(search?.bindings ?? [])];
+  const orderBy = resolveMappedOrderBy(
+    data.query.sort,
+    {
+      createdAt: "al.created_at",
+      action: "al.action COLLATE NOCASE",
+      actor: "actor_display COLLATE NOCASE",
+    },
+    "al.created_at DESC",
+    "al.id ASC",
+  );
+  const { rows: entries, total } = await queryPage<AuditLogReadRow>(
     requestDb(c),
     {
       sql: `SELECT
@@ -62,30 +68,20 @@ export async function onRequestGet(
             FROM audit_log al
             LEFT JOIN users u ON al.actor_type = 'admin' AND u.id = al.actor_id
             WHERE al.entity_type = 'registration' AND al.entity_id = ?
-            ORDER BY al.created_at DESC
+            ${searchSql}
+            ${orderBy}
             LIMIT ? OFFSET ?`,
-      bindings: [registrationId, limit, offset],
+      bindings: [...bindings, limit, offset],
     },
     {
-      sql: "SELECT COUNT(*) AS total FROM audit_log WHERE entity_type = 'registration' AND entity_id = ?",
-      bindings: [registrationId],
+      sql: `SELECT COUNT(*) AS total
+            FROM audit_log al
+            LEFT JOIN users u ON al.actor_type = 'admin' AND u.id = al.actor_id
+            WHERE al.entity_type = 'registration' AND al.entity_id = ? ${searchSql}`,
+      bindings,
     },
   );
-
-  // Parse details_json for the caller so it does not have to JSON.parse each row
-  const parsed = entries.map((e) => ({
-    ...e,
-    details: e.details_json
-      ? (() => {
-          try {
-            return JSON.parse(e.details_json);
-          } catch {
-            return null;
-          }
-        })()
-      : null,
-    details_json: undefined,
-  }));
+  const parsed = toAuditLogResponseRows(entries);
 
   return json({ auditLog: parsed, page: buildPageInfo(limit, offset, total, parsed.length) });
 }

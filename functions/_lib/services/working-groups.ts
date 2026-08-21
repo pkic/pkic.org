@@ -22,12 +22,13 @@ export interface WorkingGroupRow {
   slug: string;
   name: string;
   mailing_list_email: string | null;
+  active: number;
 }
 
 export async function getWorkingGroupBySlugOrId(db: DatabaseLike, wgIdOrSlug: string): Promise<WorkingGroupRow | null> {
   return first<WorkingGroupRow>(
     db,
-    `SELECT id, slug, name, mailing_list_email FROM working_groups WHERE id = ? OR slug = ?`,
+    `SELECT id, slug, name, mailing_list_email, active FROM working_groups WHERE id = ? OR slug = ?`,
     [wgIdOrSlug, wgIdOrSlug],
   );
 }
@@ -35,7 +36,7 @@ export async function getWorkingGroupBySlugOrId(db: DatabaseLike, wgIdOrSlug: st
 /**
  * Only category-A members may belong to the CA working group. Takes every
  * membership category the target person currently holds (a person may
- * represent more than one organization at once, migration 0037) and
+ * represent more than one organization at once, consolidated migration 0035) and
  * passes if *any* of them is category A — checking a single arbitrarily
  * -picked category here previously meant a person representing both a
  * category-A and a non-A organization could be accepted or rejected
@@ -116,12 +117,24 @@ export async function removeWorkingGroupMember(
   wg: WorkingGroupRow,
   targetUserId: string,
 ): Promise<void> {
+  const statements = await buildRemoveWorkingGroupMemberStatements(db, wg, targetUserId);
+  if (statements.length > 0) {
+    await db.batch(statements);
+  }
+}
+
+/** Prepared statements for callers that must include removal in a larger atomic use case. */
+export async function buildRemoveWorkingGroupMemberStatements(
+  db: DatabaseLike,
+  wg: WorkingGroupRow,
+  targetUserId: string,
+): Promise<StatementLike[]> {
   const existing = await first<{ id: string }>(
     db,
     "SELECT id FROM working_group_members WHERE working_group_id = ? AND user_id = ? AND left_at IS NULL",
     [wg.id, targetUserId],
   );
-  if (!existing) return;
+  if (!existing) return [];
 
   const statements: StatementLike[] = [
     db
@@ -139,5 +152,5 @@ export async function removeWorkingGroupMember(
       }).statement,
     );
   }
-  await db.batch(statements);
+  return statements;
 }

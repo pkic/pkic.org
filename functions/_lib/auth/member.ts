@@ -68,7 +68,7 @@ interface MemberEligibleUserRow {
 // A person can be simultaneously an org-less individual member AND an
 // active representative of one or more organizations, and can represent
 // more than one organization at once (confirmed product decision — see
-// migration 0037's header). This UNION can therefore return multiple rows
+// consolidated migration 0035's header). This UNION can therefore return multiple rows
 // for one user id. `sort_key` gives every consumer a single, deterministic
 // ordering (individual row first, then organizations by earliest
 // joined_at) instead of relying on whichever row D1 happens to return

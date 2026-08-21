@@ -26,17 +26,18 @@
  * address (wrangler.jsonc), and 8 independent sign-ins for the same
  * admin@pkic.org within that window reliably tripped it.
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { adminApplicationDetailSchema } from "../../assets/shared/schemas/admin-applications";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 const EVENT_SLUG = "pqc-conference-amsterdam-nl";
 const ADMIN_AUTH_FILE = path.join("test-results", "admin-verification-auth.json");
-const ADMIN_EMAIL = e2eAdminEmail();
+const ADMIN_EMAIL = e2eAdminEmail("admin-verification");
 
 function sendgridServer(): string {
   return process.env.E2E_SENDGRID_API_BASE ?? readFileSync(SENDGRID_URL_FILE, "utf8").trim();
@@ -138,6 +139,7 @@ async function provisionApprovedMember(
           applicantName: name,
           membershipCategory: category,
           organizationName: orgName,
+          answers: { reason: "This E2E member wants to contribute to the PKI community." },
         }),
       });
       const body = (await res.json()) as { applicationId?: string };
@@ -198,6 +200,7 @@ async function memberLogin(page: Page, email: string): Promise<void> {
 
 test.describe("Admin browser-verification pass", () => {
   test.beforeAll(async ({ browser }) => {
+    if (existsSync(ADMIN_AUTH_FILE)) return;
     // `browser.newContext()` inside a test file inherits this describe's
     // `test.use({ storageState: ADMIN_AUTH_FILE })` below (applied even
     // though this call is manual, not the `context`/`page` fixtures) — so
@@ -614,6 +617,7 @@ test.describe("Admin browser-verification pass", () => {
 
     await page.goto("/admin/#/users");
     await page.getByPlaceholder("email or name").fill(primaryEmail);
+    await page.getByPlaceholder("email or name").press("Enter");
     const primaryRow = page.locator("tr").filter({ hasText: primaryEmail });
     await expect(primaryRow).toBeVisible({ timeout: 10_000 });
     await primaryRow.click();
@@ -664,12 +668,9 @@ test.describe("Admin browser-verification pass", () => {
     const since = await outboxLength();
 
     await page.goto("/admin/#/membership/applications");
-    // The list's own text search box filters client-visible rows only (its
-    // "q" param isn't read by the backend list route) — the stage filter
-    // is a real, backend-applied query param, and by this point in the
-    // file every other fixture application has already been moved out of
-    // ec_review by its own test, so this reliably narrows to this test's
-    // one application without depending on page/sort order.
+    // The shared table sends search/filter/pagination to the backend. The
+    // stage filter is sufficient here because every earlier fixture has
+    // already moved out of ec_review.
     const stageFilter = page.locator("select").filter({ has: page.locator('option[value="ec_review"]') });
     await stageFilter.selectOption("ec_review");
     const row = page.locator("tr").filter({ hasText: email });
@@ -698,17 +699,13 @@ test.describe("Admin browser-verification pass", () => {
     // reflect) — durably approved with an event recording the transition.
     const refetched = await page.evaluate(async (id) => {
       const res = await fetch(`/api/v1/admin/applications/${id}`, { credentials: "same-origin" });
-      const body = (await res.json()) as {
-        status: string;
-        stage: string;
-        events: Array<{ toStage: string }>;
-      };
+      const body = await res.json();
       return { status: res.status, body };
     }, applicationId);
     expect(refetched.status).toBe(200);
-    expect(refetched.body.status).toBe("approved");
-    expect(refetched.body.stage).toBe("approved");
-    expect(refetched.body.events.some((e) => e.toStage === "approved")).toBe(true);
+    const refetchedBody = adminApplicationDetailSchema.parse(refetched.body);
+    expect(refetchedBody.stage).toBe("approved");
+    expect(refetchedBody.events.some((e) => e.toStage === "approved")).toBe(true);
 
     // Independent confirmation 2/2: onboarding provisioning
     // (approveApplication -> provisionOrganizationMembership) really ran —

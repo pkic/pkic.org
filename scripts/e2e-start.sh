@@ -18,6 +18,7 @@ unset npm_config__jsr_registry NPM_CONFIG__JSR_REGISTRY
 
 mkdir -p "$(dirname "$INTERCEPT_URL_FILE")"
 rm -f "$INTERCEPT_URL_FILE"
+rm -f test-results/admin-verification-auth.json
 
 # ── 0. Clean stale build artifacts ───────────────────────────────────────────
 # A previous `pnpm build` or `deploy:preview` may have left dist/ and

@@ -6,6 +6,7 @@ import { createTemplateVersion, activateTemplateVersion } from "../functions/_li
 import { onRequestPost as requestAdminLink } from "../functions/api/v1/admin/auth/request-link";
 import { onRequestPost as verifyAdminLink } from "../functions/api/v1/admin/auth/verify-link";
 import { onRequestPost as inviteSpeakersBulk } from "../functions/api/v1/admin/events/[eventSlug]/invites/speakers/bulk";
+import { onRequestPost as previewSpeakerInvites } from "../functions/api/v1/admin/events/[eventSlug]/invites/speakers/preview";
 import { onRequestPost as addProposalReview } from "../functions/api/v1/admin/proposals/[proposalId]/reviews";
 import { onRequestPost as finalizeProposal } from "../functions/api/v1/admin/proposals/[proposalId]/finalize";
 import { onRequestPost as submitProposal } from "../functions/api/v1/events/[eventSlug]/proposals";
@@ -166,6 +167,25 @@ describe("full workflow", () => {
       ).run();
       const reviewerToken = await createAdminSession(env.DB, reviewerUserId, "reviewer-2-token");
 
+      const speakerInvites = [
+        { email: "speaker@example.test", firstName: "Speaker", lastName: "One", sourceType: "direct" },
+      ];
+      const speakerPreviewResponse = await previewSpeakerInvites(
+        createContext(
+          env,
+          new Request("https://app.test/api/v1/admin/events/pqc-2026/invites/speakers/preview", {
+            method: "POST",
+            headers: { "content-type": "application/json", cookie: adminSessionCookie },
+            body: JSON.stringify({ invites: speakerInvites }),
+          }),
+          { eventSlug: "pqc-2026" },
+        ),
+      );
+      expect(speakerPreviewResponse.status).toBe(200);
+      const speakerPreview = (await speakerPreviewResponse.json()) as {
+        previewToken: string;
+        inviteDigest: string;
+      };
       const speakerInviteResponse = await inviteSpeakersBulk(
         createContext(
           env,
@@ -176,7 +196,9 @@ describe("full workflow", () => {
               cookie: adminSessionCookie,
             },
             body: JSON.stringify({
-              invites: [{ email: "speaker@example.test", firstName: "Speaker", lastName: "One", sourceType: "direct" }],
+              invites: speakerInvites,
+              previewToken: speakerPreview.previewToken,
+              inviteDigest: speakerPreview.inviteDigest,
             }),
           }),
           { eventSlug: "pqc-2026" },

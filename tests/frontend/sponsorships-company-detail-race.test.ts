@@ -43,6 +43,8 @@ function sponsorship(id: string): Sponsorship {
     assignedToUserId: null,
     assignedToName: null,
     notes: null,
+    priceAmountCents: null,
+    priceCurrency: null,
     createdAt: "2026-01-01T00:00:00Z",
     updatedAt: "2026-01-01T00:00:00Z",
   };

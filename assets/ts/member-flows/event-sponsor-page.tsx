@@ -38,6 +38,11 @@ async function main(): Promise<void> {
 
   const apiBase = root.dataset.apiBase ?? API_BASE_FALLBACK;
   const eventSlug = root.dataset.eventSlug ?? "";
+  let checkoutAttemptId = crypto.randomUUID();
+
+  form.addEventListener("input", () => {
+    checkoutAttemptId = crypto.randomUUID();
+  });
 
   installLiveValidation(form, statusEl);
 
@@ -58,6 +63,7 @@ async function main(): Promise<void> {
         const basePath = currentBasePath();
 
         const data = await postJson<CheckoutResponse>(`${apiBase}/sponsorship/checkout`, {
+          checkoutAttemptId,
           contactName: [firstName, lastName].filter(Boolean).join(" "),
           contactEmail: readField(form, "email"),
           organizationName: organizationName || undefined,

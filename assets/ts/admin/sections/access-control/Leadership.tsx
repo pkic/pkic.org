@@ -11,7 +11,7 @@ import { getAdminWorkingGroupCatalogue } from "../../services/catalogues";
  * "Create a new tab under the Access Control for chairs to set the chairs
  * for each working group and the forum" — one screen for both the
  * PKIC-wide (forum) chair/vice-chair (role-forum_chair/role-forum_vice_chair,
- * global — contextType/contextId both null, migration 0040) and every
+ * global — contextType/contextId both null, consolidated migration 0035) and every
  * working group's chair/vice-chair (role-wg_chair/role-wg_vice_chair,
  * context_type='working_group'). All of it is the same user_roles
  * assign/revoke mechanism the "Staff" and "Working Groups" tabs already use
@@ -19,7 +19,7 @@ import { getAdminWorkingGroupCatalogue } from "../../services/catalogues";
  * requiring staff to already know which user to look up.
  *
  * Renamed from "Chairs" to "Leadership" when Board of Directors and
- * Executive Council roster management (migration 0049) were added here —
+ * Executive Council roster management (consolidated migration 0035) were added here —
  * "Chairs" no longer described the page once it covered the full
  * leadership picture, not just chair/vice-chair designations.
  */

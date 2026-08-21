@@ -13,6 +13,8 @@ import { createMemberSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
 import { seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
+import { seedMemberApplication } from "./helpers/member-applications";
+import { myApplicationsListResponseSchema, myWorkingGroupsListResponseSchema } from "../assets/shared/schemas/me";
 
 function requestWithAuth(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -148,21 +150,24 @@ describe("Member self-service /api/v1/me/*", () => {
   it("GET /api/v1/me/applications lists applications matching my email", async () => {
     const userId = await insertActiveMember("applicant-history@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "applicant-history-token");
-    await env.DB.prepare(
-      `INSERT INTO member_applications
-         (id, applicant_email, applicant_name, organization_name, organization_domain, membership_category,
-          status, stage, stage_entered_at, manage_token_hash, created_at, updated_at)
-       VALUES (?, 'applicant-history@example.test', 'Applicant', 'Org', 'example.test', 'F',
-               'approved', 'approved', datetime('now'), ?, datetime('now'), datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), crypto.randomUUID())
-      .run();
+    await seedMemberApplication({
+      applicantEmail: "applicant-history@example.test",
+      applicantName: "Applicant",
+      organizationName: "Org",
+      organizationDomain: "example.test",
+      membershipCategory: "F",
+      stage: "approved",
+    });
 
     const response = await call(token, "/api/v1/me/applications");
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { applications: Array<{ status: string }> };
+    const body = myApplicationsListResponseSchema.parse(await response.json());
     expect(body.applications).toHaveLength(1);
-    expect(body.applications[0].status).toBe("approved");
+    expect(body.applications[0].stage).toBe("approved");
+    expect(body.page).toEqual({ limit: 25, offset: 0, total: 1, hasMore: false });
+
+    const invalid = await call(token, "/api/v1/me/applications?sort=email");
+    expect(invalid.status).toBe(400);
   });
 
   it("GET /api/v1/me/applications/:id returns the applicant-facing detail (timeline + communications), scoped to my own email", async () => {
@@ -175,16 +180,14 @@ describe("Member self-service /api/v1/me/*", () => {
     )
       .bind(staffUserId)
       .run();
-    const applicationId = crypto.randomUUID();
-    await env.DB.prepare(
-      `INSERT INTO member_applications
-         (id, applicant_email, applicant_name, organization_name, organization_domain, membership_category,
-          status, stage, stage_entered_at, manage_token_hash, created_at, updated_at)
-       VALUES (?, 'applicant-detail@example.test', 'Applicant Detail', 'Org', 'example.test', 'F',
-               'in_review', 'in_review', datetime('now'), ?, datetime('now'), datetime('now'))`,
-    )
-      .bind(applicationId, crypto.randomUUID())
-      .run();
+    const applicationId = await seedMemberApplication({
+      applicantEmail: "applicant-detail@example.test",
+      applicantName: "Applicant Detail",
+      organizationName: "Org",
+      organizationDomain: "example.test",
+      membershipCategory: "F",
+      stage: "in_review",
+    });
     await env.DB.batch([
       env.DB.prepare(
         `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
@@ -320,6 +323,43 @@ describe("Member self-service /api/v1/me/*", () => {
 
     const response = await call(token, "/api/v1/me/working-groups/ca", { method: "POST" });
     expect(response.status).toBe(403);
+  });
+
+  it("selects the eligible working-group catalog in the backend", async () => {
+    await seedWorkingGroup("ca", "ca@lists.pkic.org");
+    await seedWorkingGroup("pqc", "pqc@lists.pkic.org");
+    const categoryFUserId = await insertActiveMember("wg-catalog-f@example.test", "F");
+    const categoryAUserId = await insertActiveMember("wg-catalog-a@example.test", "A");
+
+    const categoryFBody = myWorkingGroupsListResponseSchema.parse(
+      await (
+        await call(
+          await createMemberSession(env.DB, categoryFUserId, "wg-catalog-f-token"),
+          "/api/v1/me/working-groups",
+        )
+      ).json(),
+    );
+    expect(categoryFBody.availableWorkingGroups.map((group) => group.slug)).toEqual(["pqc"]);
+
+    const categoryABody = myWorkingGroupsListResponseSchema.parse(
+      await (
+        await call(
+          await createMemberSession(env.DB, categoryAUserId, "wg-catalog-a-token"),
+          "/api/v1/me/working-groups",
+        )
+      ).json(),
+    );
+    expect(categoryABody.availableWorkingGroups.map((group) => group.slug).sort()).toEqual(["ca", "pqc"]);
+  });
+
+  it("rejects direct joins to inactive working groups", async () => {
+    const workingGroupId = await seedWorkingGroup("inactive", null);
+    await env.DB.prepare("UPDATE working_groups SET active = 0 WHERE id = ?").bind(workingGroupId).run();
+    const userId = await insertActiveMember("wg-inactive@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "wg-inactive-token");
+
+    const response = await call(token, "/api/v1/me/working-groups/inactive", { method: "POST" });
+    expect(response.status).toBe(409);
   });
 
   it("allows category A members into the CA working group", async () => {

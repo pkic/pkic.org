@@ -1,8 +1,11 @@
 import { all, first, run } from "../db/queries";
 import { AppError } from "../errors";
 import { nowIso } from "../utils/time";
-import { writeAuditLog } from "./audit";
+import { prepareAuditLog } from "./audit";
+import { prepareConsentStatements, validateRequiredConsents } from "./consent";
+import { getRequiredTerms } from "./events";
 import { getSpeakerByManageToken } from "./proposals";
+import { prepareUserProfileStatement, type UserProfilePatch } from "./users";
 import type { DatabaseLike } from "../types";
 
 export async function getProposalCoSpeakers(
@@ -45,9 +48,13 @@ export async function confirmSpeakerParticipation(
   db: DatabaseLike,
   manageToken: string,
   signingSecret: string,
-  payload: { termsAccepted: boolean },
+  payload: {
+    consents: Array<{ termKey: string; version: string }>;
+    ip: string | null;
+    userAgent: string | null;
+  },
 ): Promise<void> {
-  const { speaker } = await getSpeakerByManageToken(db, manageToken, signingSecret);
+  const { speaker, proposal } = await getSpeakerByManageToken(db, manageToken, signingSecret);
 
   if (speaker.status === "confirmed") {
     return;
@@ -59,21 +66,31 @@ export async function confirmSpeakerParticipation(
       "You have already declined participation. Please contact the organiser if you changed your mind.",
     );
   }
-  if (!payload.termsAccepted) {
-    throw new AppError(400, "TERMS_NOT_ACCEPTED", "You must accept the participation terms to confirm.");
-  }
-
+  const requiredTerms = await getRequiredTerms(db, proposal.event_id, "speaker");
+  await validateRequiredConsents(requiredTerms, payload.consents);
   const now = nowIso();
-  await run(
-    db,
-    `UPDATE proposal_speakers
-     SET status = 'confirmed', confirmed_at = ?, terms_accepted_at = ?
-     WHERE id = ?`,
-    [now, now, speaker.id],
-  );
-  await writeAuditLog(db, "user", speaker.user_id, "speaker_confirmed", "proposal_speaker", speaker.id, {
-    proposalId: speaker.proposal_id,
-  });
+  await db.batch([
+    ...(await prepareConsentStatements(db, {
+      proposalId: proposal.id,
+      eventId: proposal.event_id,
+      userId: speaker.user_id,
+      audienceType: "speaker",
+      accepted: payload.consents,
+      ip: payload.ip,
+      userAgent: payload.userAgent,
+      secret: signingSecret,
+    })),
+    db
+      .prepare(
+        `UPDATE proposal_speakers
+         SET status = 'confirmed', confirmed_at = ?, terms_accepted_at = ?
+         WHERE id = ?`,
+      )
+      .bind(now, now, speaker.id),
+    prepareAuditLog(db, "user", speaker.user_id, "speaker_confirmed", "proposal_speaker", speaker.id, {
+      proposalId: speaker.proposal_id,
+    }),
+  ]);
 }
 
 export async function declineSpeakerParticipation(
@@ -89,80 +106,33 @@ export async function declineSpeakerParticipation(
   }
 
   const now = nowIso();
-  await run(
-    db,
-    `UPDATE proposal_speakers
-     SET status = 'declined', declined_at = ?, decline_reason = ?
-     WHERE id = ?`,
-    [now, payload.reason ?? null, speaker.id],
-  );
-
-  await run(
-    db,
-    `UPDATE event_participants
-     SET status = 'inactive', updated_at = ?
-     WHERE event_id = ? AND user_id = ? AND source_type = 'proposal' AND source_ref = ?`,
-    [now, proposal.event_id, speaker.user_id, proposal.id],
-  );
-  await writeAuditLog(db, "user", speaker.user_id, "speaker_declined", "proposal_speaker", speaker.id, {
-    proposalId: speaker.proposal_id,
-    reason: payload.reason ?? null,
-  });
+  await db.batch([
+    db
+      .prepare(
+        `UPDATE proposal_speakers
+         SET status = 'declined', declined_at = ?, decline_reason = ?
+         WHERE id = ?`,
+      )
+      .bind(now, payload.reason ?? null, speaker.id),
+    db
+      .prepare(
+        `UPDATE event_participants
+         SET status = 'inactive', updated_at = ?
+         WHERE event_id = ? AND user_id = ? AND source_type = 'proposal' AND source_ref = ?`,
+      )
+      .bind(now, proposal.event_id, speaker.user_id, proposal.id),
+    prepareAuditLog(db, "user", speaker.user_id, "speaker_declined", "proposal_speaker", speaker.id, {
+      proposalId: speaker.proposal_id,
+      reason: payload.reason ?? null,
+    }),
+  ]);
 }
 
-export async function updateSpeakerProfile(
-  db: DatabaseLike,
-  userId: string,
-  payload: {
-    firstName?: string | null;
-    lastName?: string | null;
-    organizationName?: string | null;
-    jobTitle?: string | null;
-    biography?: string | null;
-    linksJson?: string | null;
-    headshotR2Key?: string | null;
-  },
-): Promise<void> {
-  const now = nowIso();
-  const assignments: string[] = [];
-  const values: Array<string | null> = [];
-
-  if (Object.prototype.hasOwnProperty.call(payload, "firstName")) {
-    assignments.push("first_name = ?");
-    values.push(payload.firstName ?? null);
-  }
-  if (Object.prototype.hasOwnProperty.call(payload, "lastName")) {
-    assignments.push("last_name = ?");
-    values.push(payload.lastName ?? null);
-  }
-  if (Object.prototype.hasOwnProperty.call(payload, "organizationName")) {
-    assignments.push("organization_name = ?");
-    values.push(payload.organizationName ?? null);
-  }
-  if (Object.prototype.hasOwnProperty.call(payload, "jobTitle")) {
-    assignments.push("job_title = ?");
-    values.push(payload.jobTitle ?? null);
-  }
-  if (Object.prototype.hasOwnProperty.call(payload, "biography")) {
-    assignments.push("biography = ?");
-    values.push(payload.biography ?? null);
-  }
-  if (Object.prototype.hasOwnProperty.call(payload, "linksJson")) {
-    assignments.push("links_json = ?");
-    values.push(payload.linksJson ?? null);
-  }
-  if (Object.prototype.hasOwnProperty.call(payload, "headshotR2Key")) {
-    assignments.push("headshot_r2_key = ?");
-    values.push(payload.headshotR2Key ?? null);
-    assignments.push("headshot_updated_at = ?");
-    values.push(payload.headshotR2Key ? now : null);
-  }
-
-  assignments.push("updated_at = ?");
-  values.push(now);
-
-  await run(db, `UPDATE users SET ${assignments.join(", ")} WHERE id = ?`, [...values, userId]);
+export async function updateSpeakerProfile(db: DatabaseLike, userId: string, payload: UserProfilePatch): Promise<void> {
+  await db.batch([prepareUserProfileStatement(db, userId, payload)]);
 }
+
+export const prepareSpeakerProfileStatement = prepareUserProfileStatement;
 
 /**
  * Records D1 metadata for a presentation file the caller has already

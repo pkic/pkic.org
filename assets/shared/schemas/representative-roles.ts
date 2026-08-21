@@ -1,7 +1,7 @@
 /**
  * The three organization-representative singleton role IDs (primary
  * contact, secondary contact, voting delegate) — ordinary `roles`/
- * `user_roles` rows (migration 0038), not a bespoke role table. Kept in a
+ * `user_roles` rows (consolidated migration 0035), not a bespoke role table. Kept in a
  * dependency-free shared module (only import is implicit — none) so it can
  * be consumed both by the backend service
  * (functions/_lib/services/membership/representative-roles.ts, the

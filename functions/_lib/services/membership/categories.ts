@@ -54,7 +54,7 @@ interface MembershipCategoryRow {
   is_voting: number;
 }
 
-/** The DB-backed category reference table (migration 0035) — kept in parity with the shared TS vocabulary above by tests/membership-aggregate.test.ts. */
+/** The DB-backed category reference table (consolidated migration 0035) — kept in parity with the shared TS vocabulary above by tests/membership-aggregate.test.ts. */
 export async function listMembershipCategories(db: DatabaseLike): Promise<MembershipCategoryCatalogEntry[]> {
   const rows = await all<MembershipCategoryRow>(db, `SELECT code, is_individual, is_voting FROM membership_categories`);
   return rows.map((row) => ({

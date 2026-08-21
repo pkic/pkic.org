@@ -91,14 +91,18 @@ export interface Env {
   PRESENTATION_REMINDER_LEAD_DAYS?: string;
   SCHEDULED_REMINDER_LIMIT?: string;
   SCHEDULED_OUTBOX_LIMIT?: string;
+  SCHEDULED_STORAGE_DELETION_LIMIT?: string;
   SCHEDULED_WAITLIST_PROMOTION_LIMIT?: string;
   SCHEDULED_DUE_WORK_MAX_PASSES?: string;
   SCHEDULED_DUE_WORK_MAX_MS?: string;
-  SCHEDULED_DUE_WORK_MAX_SUBREQUESTS?: string;
-  REMINDER_CRON_BUDGET_MS?: string;
+  /** Maximum D1 statements issued by one scheduled Worker invocation. */
+  SCHEDULED_D1_QUERY_BUDGET?: string;
   SCHEDULED_ON_HOLD_REMINDER_LIMIT?: string;
   SCHEDULED_EC_AUTO_APPROVE_LIMIT?: string;
   SCHEDULED_SPONSORSHIP_DUE_WORK_LIMIT?: string;
+  SCHEDULED_VOTE_NOTIFICATION_LIMIT?: string;
+  /** Maximum distinct recipients resolved for a synchronous admin campaign. */
+  ADMIN_CAMPAIGN_MAX_RECIPIENTS?: string;
   SENDGRID_API_KEY?: string;
   SENDGRID_API_BASE?: string;
   FROM_EMAIL?: string;
@@ -244,6 +248,8 @@ export interface AuthAdmin {
   email: string;
   role: string;
   scopes?: string[];
+  /** True only for an OAuth/MCP access token whose delegated scopes must cap runtime permissions. */
+  scopeRestricted?: boolean;
   /**
    * Contextual permissions, resolved from `user_roles` +
    * `permission_grants` on every authenticated request (see

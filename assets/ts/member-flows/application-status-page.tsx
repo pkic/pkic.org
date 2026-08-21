@@ -14,7 +14,6 @@ const API_BASE_FALLBACK = "/api/v1";
 
 interface ApplicationStatus {
   id: string;
-  status: string;
   stage: string;
   stageEnteredAt: string;
   createdAt: string;

@@ -5,6 +5,8 @@
  */
 import { first, all } from "../../db/queries";
 import { queryPage } from "../../db/pagination";
+import { buildD1TextSearchFilter } from "../../db/search";
+import { resolveMappedOrderBy } from "../../db/sort";
 import type { AuthMember, DatabaseLike } from "../../types";
 
 export async function getMyOrganizationSponsorship(
@@ -93,8 +95,31 @@ export async function listSponsorPortalAttendees(
 export async function listSponsorPortalAttendeesPage(
   db: DatabaseLike,
   eventId: string,
-  params: { limit: number; offset: number },
+  params: { limit: number; offset: number; q?: string; sort?: string },
 ): Promise<{ attendees: SponsorPortalAttendeeRow[]; total: number }> {
+  const search = params.q
+    ? buildD1TextSearchFilter(params.q, [
+        "u.first_name",
+        "u.last_name",
+        "u.email",
+        "u.organization_name",
+        "u.job_title",
+        "r.attendance_type",
+      ])
+    : null;
+  const searchSql = search ? `AND ${search.sql}` : "";
+  const bindings = [eventId, ...(search?.bindings ?? [])];
+  const orderBy = resolveMappedOrderBy(
+    params.sort,
+    {
+      name: "LOWER(COALESCE(u.last_name, '') || ' ' || COALESCE(u.first_name, ''))",
+      email: "u.email COLLATE NOCASE",
+      organizationName: "u.organization_name COLLATE NOCASE",
+      attendanceType: "r.attendance_type",
+    },
+    "u.last_name ASC, u.first_name ASC",
+    "r.id ASC",
+  );
   const { rows, total } = await queryPage<{
     registration_id: string;
     first_name: string | null;
@@ -109,11 +134,12 @@ export async function listSponsorPortalAttendeesPage(
       sql: `SELECT r.id AS registration_id, u.first_name, u.last_name, u.email,
               u.organization_name, u.job_title, r.attendance_type
        ${SPONSOR_PORTAL_ATTENDEES_FROM}
-       ORDER BY u.last_name ASC, u.first_name ASC
+       ${searchSql}
+       ${orderBy}
        LIMIT ? OFFSET ?`,
-      bindings: [eventId, params.limit, params.offset],
+      bindings: [...bindings, params.limit, params.offset],
     },
-    { sql: `SELECT COUNT(*) AS total ${SPONSOR_PORTAL_ATTENDEES_FROM}`, bindings: [eventId] },
+    { sql: `SELECT COUNT(*) AS total ${SPONSOR_PORTAL_ATTENDEES_FROM} ${searchSql}`, bindings },
   );
 
   return { attendees: rows.map(toAttendeeRow), total };

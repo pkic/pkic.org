@@ -65,7 +65,7 @@ function toDayWindow(
   };
 }
 
-function toEventWindow(event: EventRecord): { start: IcsDateTuple; end: IcsDateTuple } {
+function toEventWindow(event: Pick<EventRecord, "starts_at" | "ends_at">): { start: IcsDateTuple; end: IcsDateTuple } {
   const now = new Date().toISOString();
   const startSource = event.starts_at ?? now;
   const startDate = new Date(startSource);
@@ -199,7 +199,7 @@ export interface IcsFile {
  * - Falls back to a single spanning event when no live day attendance is present.
  */
 export async function buildRegistrationIcs(
-  event: EventRecord,
+  event: Pick<EventRecord, "name" | "slug" | "base_path" | "starts_at" | "ends_at" | "settings_json">,
   registrationId: string,
   manageUrl: string,
   dayAttendance: DayAttendanceEntry[] = [],

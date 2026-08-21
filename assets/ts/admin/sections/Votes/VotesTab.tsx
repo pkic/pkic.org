@@ -1,50 +1,49 @@
 import { useState, useEffect, useCallback } from "preact/hooks";
 import { Spinner } from "../../../components/Spinner";
 import { ErrorAlert } from "../../../components/ErrorAlert";
-import { api } from "../../api";
 import { fmt } from "../../ui";
-import type { AdminVoteSummary, AdminWorkingGroupSummary } from "../../types";
+import type { AdminWorkingGroupSummary } from "../../types";
 import { statusBadge } from "./shared";
 import { CreateVoteForm } from "./CreateVoteForm";
 import { VoteDetail } from "./VoteDetail";
 import { getAdminWorkingGroupCatalogue } from "../../services/catalogues";
+import { adminVotesListResponseSchema } from "../../../../shared/schemas/votes-admin";
+import { useApiPage } from "../../../hooks/useApiPage";
+import { Pager } from "../../../components/Pager";
 
 export function VotesTab() {
-  const [votes, setVotes] = useState<AdminVoteSummary[]>([]);
   const [workingGroups, setWorkingGroups] = useState<AdminWorkingGroupSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [catalogueLoading, setCatalogueLoading] = useState(true);
+  const [catalogueError, setCatalogueError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const listing = useApiPage("/api/v1/admin/votes", { sort: "-created_at" }, adminVotesListResponseSchema);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const loadCatalogue = useCallback(async () => {
+    setCatalogueLoading(true);
+    setCatalogueError(null);
     try {
-      const [votesData, wgData] = await Promise.all([
-        // limit=200 (the list contract's max) — this admin view shows the
-        // complete vote history unfiltered, not a paginated table; 200
-        // comfortably covers realistic vote volume for a consortium.
-        api<{ votes: AdminVoteSummary[] }>("/api/v1/admin/votes?limit=200"),
-        getAdminWorkingGroupCatalogue(),
-      ]);
-      setWorkingGroups(wgData);
-      setVotes(votesData.votes);
+      setWorkingGroups(await getAdminWorkingGroupCatalogue());
     } catch (e) {
-      setError((e as Error).message);
+      setCatalogueError((e as Error).message);
     } finally {
-      setLoading(false);
+      setCatalogueLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void loadCatalogue();
+  }, [loadCatalogue]);
+
+  const votes = listing.data?.votes ?? [];
 
   const selected = votes.find((v) => v.id === selectedId) ?? null;
 
-  if (loading) return <Spinner />;
-  if (error) return <ErrorAlert error={error} />;
+  if (catalogueLoading || listing.loading) return <Spinner />;
+  if (catalogueError) return <ErrorAlert error={catalogueError} />;
+  if (listing.error) {
+    return <ErrorAlert error={listing.error instanceof Error ? listing.error.message : "Could not load votes."} />;
+  }
 
   return (
     <div>
@@ -60,7 +59,7 @@ export function VotesTab() {
           workingGroups={workingGroups}
           onCreated={() => {
             setShowCreate(false);
-            void load();
+            void listing.reload();
           }}
         />
       )}
@@ -87,9 +86,10 @@ export function VotesTab() {
               ))}
             </div>
           </div>
-          <div class="col-md-7">{selected && <VoteDetail vote={selected} onChanged={load} />}</div>
+          <div class="col-md-7">{selected && <VoteDetail vote={selected} onChanged={listing.reload} />}</div>
         </div>
       )}
+      {listing.pagerProps && <Pager {...listing.pagerProps} />}
     </div>
   );
 }

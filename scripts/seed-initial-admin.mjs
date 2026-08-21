@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { cpus } from "node:os";
+import { e2eAdminEmailsForWorkerCount } from "./e2e-admin-identities.mjs";
 
 function parseArgs(argv) {
   let mode = "local";
@@ -49,17 +50,14 @@ function parseArgs(argv) {
 
 // Only under --e2e-worker-pool (passed by scripts/e2e-start.sh, never by
 // `pnpm run seed:local|preview|production`): seeds one admin account per CPU
-// core so parallel Playwright workers each get their own magic-link identity
-// instead of colliding on EMAIL_RATE_LIMITER's shared 3-per-60s-per-address
-// limit — see tests/helpers/e2e-admin.ts, which derives the matching email
-// per worker. Worker 0 keeps the original "admin@pkic.org" address. Gated
-// behind an explicit flag so seeding a real preview/production database
-// (--remote) never creates extra admin accounts beyond the one intended.
+// core and auth scenario so parallel and serial Playwright runs each get
+// isolated magic-link identities instead of colliding on EMAIL_RATE_LIMITER's
+// shared 3-per-60s-per-address limit. The naming contract is shared with the
+// test helper through e2e-admin-identities.mjs. Gated behind an explicit flag
+// so preview/production seeding never creates these test-only accounts.
 function workerAdminEmails() {
   const workerCount = Math.max(1, Math.min(cpus().length, 32));
-  return Array.from({ length: workerCount }, (_, index) =>
-    index === 0 ? "admin@pkic.org" : `admin.w${index}@pkic.org`,
-  );
+  return e2eAdminEmailsForWorkerCount(workerCount);
 }
 
 function runSeed(mode, database, wranglerEnv, persistTo, e2eWorkerPool) {

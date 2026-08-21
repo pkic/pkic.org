@@ -127,7 +127,7 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
               email={reg.user_email ?? "—"}
               slug={slug}
               regId={regId}
-              isCancelled={reg.status === "cancelled" || reg.status === "cancelled_unauthorized"}
+              isCancelled={reg.status === "cancelled"}
               onSaved={() => void reload()}
             />
           </div>

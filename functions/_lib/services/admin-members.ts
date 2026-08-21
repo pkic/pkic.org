@@ -6,7 +6,10 @@
  * members-directory.ts which only surfaces active members).
  */
 import { queryPage } from "../db/pagination";
-import { provisionOrganizationMembership } from "./membership/provisioning";
+import { buildD1TextSearchFilter } from "../db/search";
+import { resolveMappedOrderBy } from "../db/sort";
+import { buildProvisionOrganizationMembership } from "./membership/provisioning";
+import { prepareAuditLog } from "./audit";
 import type { DatabaseLike } from "../types";
 
 export interface AdminMemberCreateRepresentative {
@@ -49,9 +52,10 @@ export interface AdminMemberSummary {
  */
 export async function createAdminMember(
   db: DatabaseLike,
+  actorUserId: string,
   input: AdminMemberCreateInput,
 ): Promise<{ organizationId: string | null; members: AdminMemberSummary[] }> {
-  const result = await provisionOrganizationMembership(db, {
+  const { statements, buildResult } = await buildProvisionOrganizationMembership(db, {
     organizationName: input.organizationName ?? null,
     website: input.website,
     description: input.description,
@@ -65,6 +69,15 @@ export async function createAdminMember(
     })),
     workingGroupSlugs: input.workingGroupSlugs,
   });
+  const result = buildResult();
+  statements.push(
+    prepareAuditLog(db, "admin", actorUserId, "member_created", "organization", result.organizationId, {
+      membershipCategory: input.membershipCategory,
+      organizationName: input.organizationName ?? null,
+      representativeEmails: input.representatives.map((representative) => representative.email),
+    }),
+  );
+  await db.batch(statements);
 
   const members: AdminMemberSummary[] = result.representatives.map((rep) => ({
     id: rep.representativeId ?? rep.membershipId,
@@ -145,15 +158,63 @@ function toAdminMemberSummary(row: AdminMemberRow): AdminMemberSummary {
  */
 export async function listAdminMembers(
   db: DatabaseLike,
-  params: { limit: number; offset: number },
+  params: {
+    limit: number;
+    offset: number;
+    q?: string;
+    sort?: string;
+    membershipCategory?: string;
+    status?: string;
+  },
 ): Promise<{ members: AdminMemberSummary[]; total: number }> {
+  const conditions: string[] = [];
+  const bindings: unknown[] = [];
+  if (params.membershipCategory) {
+    conditions.push("category_code = ?");
+    bindings.push(params.membershipCategory);
+  }
+  if (params.status) {
+    conditions.push("status = ?");
+    bindings.push(params.status);
+  }
+  if (params.q) {
+    const search = buildD1TextSearchFilter(params.q, [
+      "first_name",
+      "last_name",
+      "email",
+      "org_name",
+      "category_code",
+      "status",
+    ]);
+    conditions.push(search.sql);
+    bindings.push(...search.bindings);
+  }
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  const orderBy = resolveMappedOrderBy(
+    params.sort,
+    {
+      name: "LOWER(COALESCE(NULLIF(TRIM(COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')), ''), email))",
+      email: "email COLLATE NOCASE",
+      organizationName: "org_name COLLATE NOCASE",
+      membershipCategory: "category_code",
+      status: "status",
+      createdAt: "created_at",
+    },
+    "created_at DESC",
+    "id ASC",
+  );
   const { rows, total } = await queryPage<AdminMemberRow>(
     db,
     {
-      sql: `SELECT * FROM (${ADMIN_MEMBERS_SELECT}) combined ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-      bindings: [params.limit, params.offset],
+      sql: `SELECT id, user_id, organization_id, org_name, first_name, last_name,
+                   email, category_code, status, show_on_org_profile, created_at
+            FROM (${ADMIN_MEMBERS_SELECT}) combined
+            ${where}
+            ${orderBy}
+            LIMIT ? OFFSET ?`,
+      bindings: [...bindings, params.limit, params.offset],
     },
-    { sql: `SELECT COUNT(*) AS total FROM (${ADMIN_MEMBERS_SELECT}) combined`, bindings: [] },
+    { sql: `SELECT COUNT(*) AS total FROM (${ADMIN_MEMBERS_SELECT}) combined ${where}`, bindings },
   );
 
   return { members: rows.map(toAdminMemberSummary), total };

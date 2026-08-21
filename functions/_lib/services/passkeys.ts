@@ -2,7 +2,7 @@
  * Passkey (WebAuthn) registration and authentication.
  *
  * The WebAuthn ceremony's server-held challenge is carried statelessly in a
- * short-lived signed JWT rather than a new DB table — see migration 0036's
+ * short-lived signed JWT rather than a new DB table — see consolidated migration 0035's
  * header comment for the rationale.
  */
 import {
@@ -240,7 +240,7 @@ export async function beginPasskeyAuthentication(
   // from any resident credential; completePasskeyAuthentication resolves
   // which user it was from the assertion's own credential ID (`response.id`,
   // stored in the clear in passkey_credentials.credential_id — see migration
-  // 0036), not from the WebAuthn `userHandle` field.
+  // consolidated migration 0035), not from the WebAuthn `userHandle` field.
   const options = await generateAuthenticationOptions({
     rpID: rpId,
     userVerification: "preferred",

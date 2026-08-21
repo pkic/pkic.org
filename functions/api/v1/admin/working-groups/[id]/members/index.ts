@@ -3,9 +3,15 @@
  */
 import { json } from "../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
-import { writeAuditLog } from "../../../../../../_lib/services/audit";
-import { addMemberToWorkingGroup } from "../../../../../../_lib/services/admin-working-groups";
-import { workingGroupMemberAddRouteSchema } from "../../../../../../../assets/shared/schemas/working-groups";
+import {
+  addMemberToWorkingGroup,
+  listAdminWorkingGroupMembers,
+} from "../../../../../../_lib/services/admin-working-groups";
+import {
+  workingGroupMemberAddRouteSchema,
+  workingGroupMembersListRouteSchema,
+} from "../../../../../../../assets/shared/schemas/working-groups";
+import { buildPageInfo } from "../../../../../../../assets/shared/schemas/pagination";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../../_lib/openapi/route";
 
@@ -17,11 +23,19 @@ export const WorkingGroupMemberAdd = openApiRoute(workingGroupMemberAddRouteSche
 
   const wgId = data.params.id;
   const body = data.body;
-  await addMemberToWorkingGroup(requestDb(c), wgId, body.userId);
-
-  await writeAuditLog(requestDb(c), "admin", admin.id, "working_group_member_added", "working_group", wgId, {
-    userId: body.userId,
-  });
+  await addMemberToWorkingGroup(requestDb(c), admin.id, wgId, body.userId);
 
   return json({ success: true }, 201);
 });
+
+export const WorkingGroupMembersGet = openApiRoute(
+  workingGroupMembersListRouteSchema,
+  async (c: AdminContext, data) => {
+    const { limit = 50, offset = 0, q, sort } = data.query;
+    const result = await listAdminWorkingGroupMembers(requestDb(c), data.params.id, { limit, offset, q, sort });
+    return json({
+      members: result.members,
+      page: buildPageInfo(limit, offset, result.total, result.members.length),
+    });
+  },
+);

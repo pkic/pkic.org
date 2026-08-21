@@ -66,6 +66,22 @@ describe("admin due-work read model", () => {
     expect((await call("/api/v1/admin/due-work?sort=recipient_email")).status).toBe(400);
   });
 
+  it("treats malformed legacy outbox payload JSON as empty instead of failing the list", async () => {
+    await env.DB.prepare(
+      `INSERT INTO email_outbox
+         (id, template_key, recipient_email, subject, payload_json, message_type, provider, status,
+          attempts, send_after, created_at, updated_at)
+       VALUES
+         ('malformed-payload', 'welcome', 'legacy@example.test', 'Legacy', '{broken', 'transactional',
+          'sendgrid', 'queued', 0, '2020-01-01T00:00:00.000Z', datetime('now'), datetime('now'))`,
+    ).run();
+
+    const response = await call("/api/v1/admin/due-work?bucket=outbox&outboxLimit=10");
+    expect(response.status).toBe(200);
+    const payload = adminDueWorkListResponseSchema.parse(await response.json());
+    expect(payload.items).toEqual([expect.objectContaining({ title: "legacy@example.test" })]);
+  });
+
   it("fails closed for authenticated staff without admin:read", async () => {
     const staffId = crypto.randomUUID();
     const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'"))[0];

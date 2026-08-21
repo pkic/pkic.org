@@ -47,6 +47,7 @@ export async function getSpeakerByManageToken(
     ps_declined_at: string | null;
     ps_decline_reason: string | null;
     ps_created_at: string;
+    ps_invite_generation: number;
     sp_id: string;
     sp_event_id: string;
     sp_proposer_user_id: string;
@@ -85,6 +86,7 @@ export async function getSpeakerByManageToken(
        ps.declined_at     AS ps_declined_at,
        ps.decline_reason  AS ps_decline_reason,
        ps.created_at      AS ps_created_at,
+       ps.invite_generation AS ps_invite_generation,
        sp.id              AS sp_id,
        sp.event_id        AS sp_event_id,
        sp.proposer_user_id AS sp_proposer_user_id,
@@ -133,6 +135,7 @@ export async function getSpeakerByManageToken(
       declined_at: row.ps_declined_at,
       decline_reason: row.ps_decline_reason,
       created_at: row.ps_created_at,
+      invite_generation: row.ps_invite_generation,
     },
     proposal: {
       id: row.sp_id,

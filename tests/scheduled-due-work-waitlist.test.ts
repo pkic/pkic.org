@@ -11,6 +11,7 @@ import {
 import { runWaitlistPromotionCycle } from "../functions/_lib/services/registrations/waitlist-promotions";
 import { runScheduledDueWork } from "../functions/_lib/services/scheduled-due-work";
 import type { Env } from "../functions/_lib/types";
+import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
 
 const baseEnv = workerEnv as unknown as Env;
 
@@ -22,7 +23,7 @@ describe("scheduled due work waitlist promotions", () => {
   it("honors the registry's invocation-wide deadline before starting a pass", async () => {
     const result = await runScheduledDueWork(
       { ...baseEnv, APP_BASE_URL: "https://app.test", SCHEDULED_DUE_WORK_MAX_MS: "120000" },
-      { deadlineAt: Date.now() - 1, remainingMs: () => 0 },
+      { deadlineAt: Date.now() - 1 },
     );
 
     expect(result.stoppedReason).toBe("time_limit");
@@ -93,10 +94,10 @@ describe("scheduled due work waitlist promotions", () => {
       SCHEDULED_OUTBOX_LIMIT: "0",
       SCHEDULED_DUE_WORK_MAX_PASSES: "2",
       SCHEDULED_DUE_WORK_MAX_MS: "120000",
-      SCHEDULED_DUE_WORK_MAX_SUBREQUESTS: "9000",
+      SCHEDULED_D1_QUERY_BUDGET: "900",
     };
-
-    const result = await runScheduledDueWork(dueWorkEnv);
+    const budgeted = createD1QueryBudgetedDatabase(dueWorkEnv.DB, 900);
+    const result = await runScheduledDueWork({ ...dueWorkEnv, DB: budgeted.db }, { d1QueryBudget: budgeted.budget });
 
     expect(result.waitlistPromotions.dayRegistrationOffers).toBe(1);
     expect(result.waitlistPromotions.affectedRegistrations).toBe(1);

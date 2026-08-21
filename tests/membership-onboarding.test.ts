@@ -3,7 +3,7 @@
  *
  * post-approval onboarding — POST /api/v1/admin/applications/:id/approve.
  * Covers org-tied vs. individual branches, primary contact assignment,
- * organization_domains write, Google Groups enqueue, CA WG constraint,
+ * organization_domain_claims transfer, Google Groups enqueue, CA WG constraint,
  * and the three onboarding emails.
  */
 import { describe, expect, it, beforeEach } from "vitest";
@@ -12,7 +12,7 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
-import { createApplicationFormSubmission } from "./helpers/member-applications";
+import { createApplicationFormSubmission, seedMemberApplication } from "./helpers/member-applications";
 import { insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 import { approveApplication } from "../functions/_lib/services/membership/applications/approve";
 import type { DatabaseLike } from "../functions/_lib/types";
@@ -45,25 +45,17 @@ async function createEcReviewApplication(
   overrides: Record<string, unknown> = {},
   answers: Record<string, unknown> = { working_groups: ["pqc"] },
 ): Promise<{ id: string }> {
-  const id = crypto.randomUUID();
   const formSubmissionId = await createApplicationFormSubmission(answers);
-  await env.DB.prepare(
-    `INSERT INTO member_applications
-       (id, applicant_email, applicant_name, organization_name, organization_domain, membership_category,
-        form_submission_id, status, stage, stage_entered_at, manage_token_hash, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'ec_review', 'ec_review', datetime('now'), ?, datetime('now'), datetime('now'))`,
-  )
-    .bind(
-      id,
-      (overrides.applicant_email as string) ?? "newmember@acme.test",
-      (overrides.applicant_name as string) ?? "New Member",
-      (overrides.organization_name as string) ?? "Acme Corp",
-      (overrides.organization_domain as string) ?? "acme.test",
-      (overrides.membership_category as string) ?? "F",
-      formSubmissionId,
-      crypto.randomUUID(),
-    )
-    .run();
+  const id = await seedMemberApplication({
+    applicantEmail: (overrides.applicant_email as string) ?? "newmember@acme.test",
+    applicantName: (overrides.applicant_name as string) ?? "New Member",
+    organizationName: "organization_name" in overrides ? (overrides.organization_name as string | null) : "Acme Corp",
+    organizationDomain:
+      "organization_domain" in overrides ? (overrides.organization_domain as string | null) : "acme.test",
+    membershipCategory: (overrides.membership_category as string) ?? "F",
+    formSubmissionId,
+    stage: "ec_review",
+  });
   return { id };
 }
 
@@ -110,7 +102,7 @@ describe("Post-approval onboarding", () => {
 
     const domainRows = await queryAll<{ domain: string }>(
       env.DB,
-      "SELECT domain FROM organization_domains WHERE organization_id = ?",
+      "SELECT domain FROM organization_domain_claims WHERE organization_id = ?",
       body.organizationId,
     );
     expect(domainRows.map((r) => r.domain)).toEqual(["acme.test"]);
@@ -131,12 +123,7 @@ describe("Post-approval onboarding", () => {
     );
     expect(categoryRows[0].category_code).toBe("F");
 
-    const appRows = await queryAll<{ status: string; stage: string }>(
-      env.DB,
-      "SELECT status, stage FROM member_applications WHERE id = ?",
-      id,
-    );
-    expect(appRows[0].status).toBe("approved");
+    const appRows = await queryAll<{ stage: string }>(env.DB, "SELECT stage FROM member_applications WHERE id = ?", id);
     expect(appRows[0].stage).toBe("approved");
   });
 
@@ -302,15 +289,14 @@ describe("Post-approval onboarding", () => {
   });
 
   it("rejects approval when the application is not in ec_review", async () => {
-    const id = crypto.randomUUID();
-    await env.DB.prepare(
-      `INSERT INTO member_applications
-         (id, applicant_email, applicant_name, organization_name, organization_domain, membership_category,
-          status, stage, stage_entered_at, manage_token_hash, created_at, updated_at)
-       VALUES (?, 'x@acme.test', 'X', 'Acme', 'acme.test', 'F', 'pending', 'pending', datetime('now'), ?, datetime('now'), datetime('now'))`,
-    )
-      .bind(id, crypto.randomUUID())
-      .run();
+    const id = await seedMemberApplication({
+      applicantEmail: "x@acme.test",
+      applicantName: "X",
+      organizationName: "Acme",
+      organizationDomain: "acme.test",
+      membershipCategory: "F",
+      stage: "pending",
+    });
 
     const response = await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
     expect(response.status).toBe(409);
@@ -329,6 +315,7 @@ describe("Post-approval onboarding", () => {
           applicantName: "Another Person",
           membershipCategory: "F",
           organizationName: "Acme Corp Two",
+          answers: { reason: "We want to contribute to the PKI community." },
         }),
       }),
       env as any,
@@ -351,12 +338,12 @@ describe("Post-approval onboarding", () => {
 
     const body = (await winner.json()) as { memberId: string; organizationId: string; userId: string };
 
-    const applications = await queryAll<{ status: string; stage: string }>(
+    const applications = await queryAll<{ stage: string }>(
       env.DB,
-      "SELECT status, stage FROM member_applications WHERE id = ?",
+      "SELECT stage FROM member_applications WHERE id = ?",
       id,
     );
-    expect(applications[0]).toMatchObject({ status: "approved", stage: "approved" });
+    expect(applications[0]).toMatchObject({ stage: "approved" });
 
     const events = await queryAll(
       env.DB,
@@ -420,7 +407,7 @@ describe("Post-approval onboarding", () => {
             baseDb
               .prepare(
                 `UPDATE member_applications
-                 SET status = 'declined', stage = 'declined', stage_entered_at = datetime('now'), updated_at = datetime('now')
+                 SET stage = 'declined', stage_entered_at = datetime('now'), updated_at = datetime('now')
                  WHERE id = ? AND stage = 'ec_review'`,
               )
               .bind(id),
@@ -431,6 +418,7 @@ describe("Post-approval onboarding", () => {
                  VALUES (?, ?, 'ec_review', 'declined', NULL, 'Concurrent decline', datetime('now'))`,
               )
               .bind(crypto.randomUUID(), id),
+            baseDb.prepare("DELETE FROM organization_domain_claims WHERE application_id = ?").bind(id),
           ]);
         }
         return baseDb.batch(statements);
@@ -445,13 +433,9 @@ describe("Post-approval onboarding", () => {
       }),
     ).rejects.toMatchObject({ status: 409 });
 
-    expect(
-      await queryAll<{ status: string; stage: string }>(
-        env.DB,
-        "SELECT status, stage FROM member_applications WHERE id = ?",
-        id,
-      ),
-    ).toEqual([{ status: "declined", stage: "declined" }]);
+    expect(await queryAll<{ stage: string }>(env.DB, "SELECT stage FROM member_applications WHERE id = ?", id)).toEqual(
+      [{ stage: "declined" }],
+    );
     expect(await queryAll(env.DB, "SELECT id FROM organizations WHERE normalized_name = 'acme corp'")).toHaveLength(0);
     expect(await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = 'newmember@acme.test'")).toHaveLength(
       0,
@@ -497,12 +481,12 @@ describe("Post-approval onboarding", () => {
     const response = await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
     expect(response.status).toBe(409);
 
-    const applications = await queryAll<{ status: string; stage: string }>(
+    const applications = await queryAll<{ stage: string }>(
       env.DB,
-      "SELECT status, stage FROM member_applications WHERE id = ?",
+      "SELECT stage FROM member_applications WHERE id = ?",
       id,
     );
-    expect(applications[0]).toMatchObject({ status: "ec_review", stage: "ec_review" });
+    expect(applications[0]).toMatchObject({ stage: "ec_review" });
 
     const events = await queryAll(env.DB, "SELECT id FROM member_application_events WHERE application_id = ?", id);
     expect(events).toHaveLength(0);

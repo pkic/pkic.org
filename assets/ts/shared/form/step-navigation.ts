@@ -31,7 +31,6 @@ export function installStepNavigation(
   const backBtn = root.querySelector<HTMLButtonElement>("[data-step-back]");
   const nextBtn = root.querySelector<HTMLButtonElement>("[data-step-next]");
   const submitBtn = form.querySelector<HTMLButtonElement>("button[type='submit']");
-  const fillEl = root.querySelector<HTMLElement>("[data-step-fill]");
 
   if (stepEls.length < 2) return;
 
@@ -65,10 +64,6 @@ export function installStepNavigation(
         item.removeAttribute("aria-label");
       }
     });
-
-    if (fillEl) {
-      fillEl.style.width = `${((current - 1) / (total - 1)) * 100}%`;
-    }
 
     if (backBtn) backBtn.hidden = current === 1;
     if (nextBtn) nextBtn.hidden = current === total;

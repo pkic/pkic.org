@@ -70,7 +70,7 @@ export async function runWeeklyWgChairDigest(db: DatabaseLike, env: Env): Promis
        FROM working_group_members wgm
        JOIN users u ON u.id = wgm.user_id
        -- A WG member can represent more than one organization at once
-       -- (migration 0037) — join to a single deterministic representative
+       -- (consolidated migration 0035) — join to a single deterministic representative
        -- row (earliest joined_at) instead of fanning out one result row
        -- (and one duplicate digest entry) per represented organization.
 ${deterministicRepresentativeJoinSql("wgm.user_id")}

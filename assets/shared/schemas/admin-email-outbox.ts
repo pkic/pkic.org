@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { emailMessageTypeSchema } from "./api";
 import { databaseIdSchema } from "./identifiers";
-import { pageInfoSchema } from "./pagination";
+import { paginatedResponseSchema } from "./pagination";
 
 export const adminEmailOutboxStatusSchema = z.enum(["queued", "sending", "sent", "failed", "retrying", "bounced"]);
 
@@ -31,8 +31,7 @@ export const adminEmailOutboxRowSchema = z.object({
   hasCustomText: z.boolean(),
 });
 
-export const adminEmailOutboxResponseSchema = z.object({
-  outbox: z.array(adminEmailOutboxRowSchema),
+export const adminEmailOutboxResponseSchema = paginatedResponseSchema("outbox", adminEmailOutboxRowSchema).extend({
   summary: z.object({
     total: z.number(),
     byStatus: z.record(z.string(), z.number()),
@@ -42,7 +41,6 @@ export const adminEmailOutboxResponseSchema = z.object({
     dueByStatus: z.record(z.string(), z.number()),
     nextSendAfter: z.string().nullable(),
   }),
-  page: pageInfoSchema,
 });
 
 export type AdminEmailOutboxRow = z.infer<typeof adminEmailOutboxRowSchema>;

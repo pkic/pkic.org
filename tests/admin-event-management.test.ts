@@ -227,6 +227,36 @@ describe("admin event management endpoints", () => {
     expect(daysPayload.success).toBe(true);
     expect(daysPayload.days.map((day) => day.date)).toEqual(["2026-12-01", "2026-12-02"]);
 
+    const invalidRange = await callAdmin("/api/v1/admin/events/pqc-2026/days", {
+      method: "PUT",
+      body: JSON.stringify({
+        days: [
+          {
+            date: "2026-12-03",
+            startTime: "17:00",
+            endTime: "09:00",
+            attendanceOptions: [{ value: "virtual", label: "Virtual" }],
+          },
+        ],
+      }),
+    });
+    expect(invalidRange.status).toBe(400);
+    const preservedDays = (await (await callAdmin("/api/v1/admin/events/pqc-2026/days")).json()) as {
+      days: Array<{ date: string }>;
+    };
+    expect(preservedDays.days.map((day) => day.date)).toEqual(["2026-12-01", "2026-12-02"]);
+
+    const duplicateDates = await callAdmin("/api/v1/admin/events/pqc-2026/days", {
+      method: "PUT",
+      body: JSON.stringify({
+        days: [
+          { date: "2026-12-01", attendanceOptions: [] },
+          { date: "2026-12-01", attendanceOptions: [] },
+        ],
+      }),
+    });
+    expect(duplicateDates.status).toBe(400);
+
     const permissionResponse = await callAdmin("/api/v1/admin/events/pqc-2026/permissions", {
       method: "POST",
       body: JSON.stringify({
@@ -262,6 +292,57 @@ describe("admin event management endpoints", () => {
         expect.objectContaining({ user_email: "organizer@example.test", permission: "organizer" }),
       ]),
     );
+  });
+
+  it("atomically replaces event terms and rejects duplicate audience term versions", async () => {
+    const { baseEventId } = await setupAdmin();
+    const replacement = {
+      attendee: [
+        {
+          termKey: "privacy-policy",
+          version: "v2",
+          required: true,
+          displayText: "I accept the privacy policy.",
+        },
+      ],
+      speaker: [],
+      presentation: [],
+    };
+    const response = await callAdmin("/api/v1/admin/events/pqc-2026/terms", {
+      method: "PUT",
+      body: JSON.stringify(replacement),
+    });
+    expect(response.status).toBe(200);
+    expect(
+      await queryAll<{ term_key: string; version: string }>(
+        env.DB,
+        "SELECT term_key, version FROM event_terms WHERE event_id = ? AND active = 1 ORDER BY term_key",
+        [baseEventId],
+      ),
+    ).toEqual([{ term_key: "privacy-policy", version: "v2" }]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM audit_log WHERE entity_type = 'event' AND entity_id = ? AND action = 'event_terms_replaced'",
+        [baseEventId],
+      ),
+    ).toHaveLength(1);
+
+    const duplicate = await callAdmin("/api/v1/admin/events/pqc-2026/terms", {
+      method: "PUT",
+      body: JSON.stringify({
+        ...replacement,
+        attendee: [replacement.attendee[0], replacement.attendee[0]],
+      }),
+    });
+    expect(duplicate.status).toBe(400);
+    expect(
+      await queryAll<{ term_key: string; version: string }>(
+        env.DB,
+        "SELECT term_key, version FROM event_terms WHERE event_id = ? AND active = 1",
+        [baseEventId],
+      ),
+    ).toEqual([{ term_key: "privacy-policy", version: "v2" }]);
   });
 
   it("P6M-P2-06: searches, bounds, and sorts the event-team permissions list", async () => {
@@ -469,6 +550,15 @@ describe("admin event management endpoints", () => {
         expect.objectContaining({ attendance_type: "in_person", attendance_status: "accepted", count: 1 }),
         expect.objectContaining({ attendance_type: "in_person", attendance_status: "waitlisted", count: 1 }),
       ]),
+    );
+
+    const platformStatsResponse = await callAdmin("/api/v1/admin/stats");
+    expect(platformStatsResponse.status).toBe(200);
+    const platformStats = (await platformStatsResponse.json()) as {
+      topEvents: Array<{ slug: string; confirmed: number; total: number }>;
+    };
+    expect(platformStats.topEvents).toContainEqual(
+      expect.objectContaining({ slug: "pqc-2026", confirmed: 3, total: 3 }),
     );
   });
 

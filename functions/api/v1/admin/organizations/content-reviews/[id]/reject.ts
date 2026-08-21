@@ -6,12 +6,12 @@
 import { json } from "../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../../_lib/auth/permissions";
-import { queueEmail, processOutboxByIdBackground } from "../../../../../../_lib/email/outbox";
-import { rejectContentReview } from "../../../../../../_lib/services/organization-content-reviews";
-import { writeAuditLog } from "../../../../../../_lib/services/audit";
+import { processOutboxByIdBackground } from "../../../../../../_lib/email/outbox";
+import { rejectContentReview } from "../../../../../../_lib/services/organization-content";
 import { contentReviewRejectRouteSchema } from "../../../../../../../assets/shared/schemas/admin-organizations";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../../_lib/openapi/route";
+import { processStorageDeletionForKey } from "../../../../../../_lib/services/storage-deletion-outbox";
 
 export const OrganizationContentReviewRejectPost = openApiRoute(
   contentReviewRejectRouteSchema,
@@ -24,38 +24,11 @@ export const OrganizationContentReviewRejectPost = openApiRoute(
     const body = data.body;
     const result = await rejectContentReview(db, id, admin, body.reviewerNote);
 
-    if (result.staleLogoStagingR2Key && c.env.ASSETS_BUCKET) {
-      c.executionCtx.waitUntil(
-        (c.env.ASSETS_BUCKET as unknown as { delete(key: string): Promise<void> })
-          .delete(result.staleLogoStagingR2Key)
-          .catch(() => {}),
-      );
+    if (result.staleLogoStagingR2Key) {
+      c.executionCtx.waitUntil(processStorageDeletionForKey(db, c.env, result.staleLogoStagingR2Key, "assets"));
     }
 
-    const outboxId = await queueEmail(db, {
-      templateKey: "org-content-rejected",
-      recipientEmail: result.submitterEmail,
-      messageType: "transactional",
-      subject: "Your organization profile update was not approved",
-      data: {
-        contactName: result.submitterName,
-        organizationName: result.organizationName,
-        reviewerNote: body.reviewerNote,
-      },
-    });
-    c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, outboxId));
-
-    await writeAuditLog(
-      db,
-      "admin",
-      admin.id,
-      "organization_content_review_rejected",
-      "organization_content_review",
-      id,
-      {
-        reviewerNote: body.reviewerNote,
-      },
-    );
+    c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, result.outboxId));
 
     return json({ review: result.review });
   },

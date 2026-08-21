@@ -7,7 +7,8 @@
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { eventIdSchema, normalizedEmailSchema } from "./api";
-import { paginationQuerySchema, paginatedResponseSchema } from "./pagination";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { addDuplicateStringIssues } from "./refinements";
 
 function trimmedString(min: number, max: number): z.ZodString {
   return z.string().trim().min(min).max(max);
@@ -44,7 +45,7 @@ export const adminSponsorshipSchema = z.object({
   eventName: z.string().nullable(),
   // tier is intentionally a bare string, not a z.enum — it's a
   // reference-table-backed evolvable vocabulary (sponsorship_tier_config,
-  // migration 0053), not a fixed code enum (PR #1 review §1.3's "reference
+  // consolidated migration 0035), not a fixed code enum (PR #1 review §1.3's "reference
   // table" enforcement category).
   tier: z.string().nullable(),
   pipelineStage: sponsorshipPipelineStageSchema,
@@ -69,9 +70,21 @@ export const sponsorshipEventSchema = z.object({
   createdAt: z.string(),
 });
 
+export type AdminSponsorship = z.infer<typeof adminSponsorshipSchema>;
+export type SponsorshipEvent = z.infer<typeof sponsorshipEventSchema>;
+
 // ── List ─────────────────────────────────────────────────────────────────
 
-export const sponsorshipsListQuerySchema = paginationQuerySchema.extend({
+export const ADMIN_SPONSORSHIP_SORT_COLUMNS = [
+  "company",
+  "eventName",
+  "tier",
+  "pipelineStage",
+  "renewalDate",
+  "updatedAt",
+] as const;
+
+export const sponsorshipsListQuerySchema = listQuerySchema(ADMIN_SPONSORSHIP_SORT_COLUMNS).extend({
   type: sponsorTypeSchema.optional(),
   stage: sponsorshipPipelineStageSchema.optional(),
   tier: trimmedString(1, 100).optional(),
@@ -109,7 +122,11 @@ export const sponsorshipCompanySchema = z.object({
   stages: z.string(),
 });
 
-export const sponsorshipCompaniesListQuerySchema = paginationQuerySchema.extend({
+export type SponsorshipCompany = z.infer<typeof sponsorshipCompanySchema>;
+
+export const ADMIN_SPONSORSHIP_COMPANY_SORT_COLUMNS = ["label", "sponsorshipCount"] as const;
+
+export const sponsorshipCompaniesListQuerySchema = listQuerySchema(ADMIN_SPONSORSHIP_COMPANY_SORT_COLUMNS).extend({
   type: sponsorTypeSchema.optional(),
   stage: sponsorshipPipelineStageSchema.optional(),
   tier: trimmedString(1, 100).optional(),
@@ -293,9 +310,17 @@ export const eventSponsorTierSchema = z.object({
   hasAttendeeDataAccess: z.boolean(),
 });
 
-export const eventSponsorTiersReplaceSchema = z.object({
-  tiers: z.array(eventSponsorTierSchema).max(50),
-});
+export const eventSponsorTiersReplaceSchema = z
+  .object({
+    tiers: z.array(eventSponsorTierSchema).max(50),
+  })
+  .superRefine((value, ctx) => {
+    addDuplicateStringIssues(value.tiers, ctx, {
+      value: (tier) => tier.tierName.toLowerCase(),
+      path: (index) => ["tiers", index, "tierName"],
+      label: "Sponsor tier",
+    });
+  });
 
 export const eventSponsorTiersGetRouteSchema = {
   tags: ["Sponsorships"],
@@ -324,7 +349,7 @@ export const eventSponsorTiersPutRouteSchema = {
 
 // ── Sponsorship tier pricing config (self-service checkout) ──
 //
-// Managed data, not a code constant (migration 0053) — a price change is a
+// Managed data, not a code constant (consolidated migration 0035) — a price change is a
 // PATCH, not a deployment. Distinct from eventSponsorTiersSchema above,
 // which controls attendee-data-access per event, not pricing.
 

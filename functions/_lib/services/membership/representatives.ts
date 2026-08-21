@@ -1,5 +1,5 @@
 /**
- * organization_representatives (migration 0037) — the N people who
+ * organization_representatives (consolidated migration 0035) — the N people who
  * represent an org-tied membership aggregate. Temporal: active/inactive is
  * exactly what `left_at IS NULL`/`IS NOT NULL` means, so join, leave,
  * transfer, and rejoin all fall out of ordinary inserts/updates rather than
@@ -41,7 +41,7 @@ function toRepresentative(row: RepresentativeRow): OrganizationRepresentative {
 
 /**
  * Builds the insert for a new active representative row. Relies on
- * `uq_organization_representatives_active_pair` (migration 0037) to reject
+ * `uq_organization_representatives_active_pair` (consolidated migration 0035) to reject
  * a duplicate active (member_id, user_id) pair at the database level — a
  * person may still represent more than one *different* organization
  * concurrently (product decision), so this is not a global per-user

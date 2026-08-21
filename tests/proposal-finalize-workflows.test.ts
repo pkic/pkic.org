@@ -219,6 +219,48 @@ describe("proposal finalize workflows", () => {
     expect(outbox.map((r) => r.template_key)).toContain("proposal_decision");
   });
 
+  it("rolls back the decision, participant state, outbox, and deadline when audit insertion fails", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const adminToken = await createAdminSession(env.DB, adminUserId, "finalize-rollback-token");
+    await addReviews(eventId, proposalId, adminUserId);
+    await env.DB.prepare(
+      `CREATE TRIGGER reject_proposal_decision_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'proposal_decision_recorded'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced audit failure');
+       END`,
+    ).run();
+
+    try {
+      const response = await callApp(`/api/v1/admin/proposals/${proposalId}/finalize`, adminToken, {
+        finalStatus: "accepted",
+        presentationDeadline: "2027-03-01T00:00:00.000Z",
+      });
+      expect(response.status).toBe(500);
+
+      const [proposal] = await queryAll<{ status: string; presentation_deadline: string | null }>(
+        env.DB,
+        "SELECT status, presentation_deadline FROM session_proposals WHERE id = ?",
+        [proposalId],
+      );
+      expect(proposal).toMatchObject({ status: "submitted", presentation_deadline: null });
+      expect(
+        await queryAll(env.DB, "SELECT id FROM proposal_decisions WHERE proposal_id = ?", [proposalId]),
+      ).toHaveLength(0);
+      expect(await queryAll(env.DB, "SELECT id FROM email_outbox WHERE event_id = ?", [eventId])).toHaveLength(0);
+      const participants = await queryAll<{ status: string }>(
+        env.DB,
+        "SELECT status FROM event_participants WHERE source_type = 'proposal' AND source_ref = ?",
+        [proposalId],
+      );
+      expect(participants.every(({ status }) => status === "inactive")).toBe(true);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER IF EXISTS reject_proposal_decision_audit").run();
+    }
+  });
+
   it("finalize HTTP handler: accepted proposal queues speaker_profile_request emails", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);

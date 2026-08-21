@@ -29,6 +29,11 @@ describe("parseLinksJson self-validation (Phase 3 §3.5)", () => {
     expect(expectConformant(raw)).toEqual(["https://example.com/a", "https://example.com/b"]);
   });
 
+  it("rejects invalid values at the canonical persistence boundary", () => {
+    expect(() => serializeLinks(["javascript:alert(1)"])).toThrow();
+    expect(() => serializeLinks(["https://example.com", "https://EXAMPLE.com"])).toThrow();
+  });
+
   it("normalizes the legacy {linkedin, x} object shape", () => {
     const raw = JSON.stringify({ linkedin: "https://linkedin.com/in/x", x: "https://x.com/y" });
     expect(expectConformant(raw).sort()).toEqual(["https://linkedin.com/in/x", "https://x.com/y"].sort());

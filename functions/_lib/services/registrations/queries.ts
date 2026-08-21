@@ -3,6 +3,7 @@ import { all, first } from "../../db/queries";
 import { verifyDatabaseCapability } from "../capability-links";
 import type { DatabaseLike } from "../../types";
 import type { RegistrationRecord } from "./types";
+import { REGISTRATION_COLUMNS } from "./types";
 
 export async function getRegistrationByManageToken(
   db: DatabaseLike,
@@ -22,9 +23,11 @@ export async function getRegistrationByManageToken(
       verified.reason === "expired" ? "Registration manage link has expired" : "Invalid registration token",
     );
   }
-  const registration = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE id = ?", [
-    verified.resourceId,
-  ]);
+  const registration = await first<RegistrationRecord>(
+    db,
+    `SELECT ${REGISTRATION_COLUMNS} FROM registrations WHERE id = ?`,
+    [verified.resourceId],
+  );
   if (!registration) {
     throw new AppError(404, "REGISTRATION_NOT_FOUND", "Invalid registration token");
   }
@@ -32,9 +35,11 @@ export async function getRegistrationByManageToken(
 }
 
 export async function getRegistrationById(db: DatabaseLike, registrationId: string): Promise<RegistrationRecord> {
-  const registration = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE id = ?", [
-    registrationId,
-  ]);
+  const registration = await first<RegistrationRecord>(
+    db,
+    `SELECT ${REGISTRATION_COLUMNS} FROM registrations WHERE id = ?`,
+    [registrationId],
+  );
   if (!registration) {
     throw new AppError(404, "REGISTRATION_NOT_FOUND", "Registration not found");
   }
@@ -42,7 +47,9 @@ export async function getRegistrationById(db: DatabaseLike, registrationId: stri
 }
 
 export async function listRegistrationsForEvent(db: DatabaseLike, eventId: string): Promise<RegistrationRecord[]> {
-  return all<RegistrationRecord>(db, "SELECT * FROM registrations WHERE event_id = ? ORDER BY created_at DESC", [
-    eventId,
-  ]);
+  return all<RegistrationRecord>(
+    db,
+    `SELECT ${REGISTRATION_COLUMNS} FROM registrations WHERE event_id = ? ORDER BY created_at DESC`,
+    [eventId],
+  );
 }

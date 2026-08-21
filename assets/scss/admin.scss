@@ -433,36 +433,20 @@ $adm-danger: #dc3545;
     flex-shrink: 0;
   }
 
-  .bar-track {
+  .bar-progress {
     flex: 1;
     height: 6px;
-    background: #e9ecef;
+    appearance: none;
+    border: 0;
     border-radius: 3px;
     overflow: hidden;
+
+    &::-webkit-progress-bar { background: #e9ecef; }
+    &::-webkit-progress-value { background: $adm-green; }
+    &::-moz-progress-bar { background: $adm-green; }
   }
 
-  .bar-fill {
-    height: 100%;
-    border-radius: 3px;
-    background: $adm-green;
-
-    &.CONFIRMED,
-    &.sent {
-      background: $adm-green;
-    }
-    &.PENDING,
-    &.retrying,
-    &.queued {
-      background: #fd7e14;
-    }
-    &.CANCELLED,
-    &.failed {
-      background: $adm-danger;
-    }
-    &.WAITLISTED {
-      background: #ffc107;
-    }
-  }
+  .adm-email-batch-limit { width: 90px; }
 
   .bar-cnt {
     width: 30px;

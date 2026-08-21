@@ -7,7 +7,7 @@ export function statusBars(byStatus: Record<string, number>, total: number): str
       const pct = Math.round((v / total) * 100);
       return (
         `<div class="bar-row"><span class="bar-lbl">${esc(k)}</span>` +
-        `<div class="bar-track"><div class="bar-fill ${esc(k)}" style="width:${pct}%"></div></div>` +
+        `<progress class="bar-progress" max="${total}" value="${v}" aria-label="${esc(k)}: ${pct}%">${pct}%</progress>` +
         `<span class="bar-cnt">${v}</span></div>`
       );
     })

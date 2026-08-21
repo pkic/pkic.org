@@ -145,7 +145,7 @@ export async function mergeUsers(
   );
 
   // 3. user_roles: revoke the source's active singleton-role grants
-  //    (uq_user_roles_single_holder_per_context, migration 0038) that would
+  //    (uq_user_roles_single_holder_per_context, consolidated migration 0035) that would
   //    otherwise collide with a grant the survivor already actively holds
   //    for the same (context_type, context_id, role_id) — e.g. both users
   //    are representatives of the same organization and both separately

@@ -207,7 +207,7 @@ export function Donations({ subTab }: { subTab?: string }) {
       const res = donationSyncResponseSchema.parse(
         await api<unknown>("/api/v1/admin/donations/sync", {
           method: "POST",
-          ...(pendingOnly ? { body: JSON.stringify({ pendingOnly: true }) } : {}),
+          body: JSON.stringify(pendingOnly ? { pendingOnly: true } : {}),
         }),
       );
       const parts = [

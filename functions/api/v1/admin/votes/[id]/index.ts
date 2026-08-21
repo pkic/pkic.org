@@ -6,8 +6,7 @@ import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { getVoteScopeForPermissionCheck, updateVoteSettings } from "../../../../../_lib/services/votes";
-import { writeAuditLog } from "../../../../../_lib/services/audit";
-import { adminVoteUpdateRouteSchema } from "../../../../../../assets/shared/schemas/votes";
+import { adminVoteUpdateRouteSchema } from "../../../../../../assets/shared/schemas/votes-admin";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 export const AdminVotePatch = openApiRoute(adminVoteUpdateRouteSchema, async (c: AdminContext, data) => {
@@ -23,9 +22,7 @@ export const AdminVotePatch = openApiRoute(adminVoteUpdateRouteSchema, async (c:
   );
 
   const body = data.body;
-  const vote = await updateVoteSettings(db, id, body);
-
-  await writeAuditLog(db, "admin", admin.id, "vote_updated", "vote", vote.id, { changes: body });
+  const vote = await updateVoteSettings(db, admin, id, body);
 
   return json({ vote });
 });

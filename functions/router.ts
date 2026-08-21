@@ -4,7 +4,7 @@ import { logError, logInfo } from "./_lib/logging";
 import { getConfig } from "./_lib/config";
 import { runRetentionJob } from "./_lib/services/retention";
 import { runScheduledDueWork } from "./_lib/services/scheduled-due-work";
-import { runScheduledJobRegistry, type ScheduledJobDefinition } from "./_lib/services/scheduled-job-registry";
+import { runScheduledJobWithD1Budget } from "./_lib/services/scheduled-job-runner";
 import {
   runConsultationBatch,
   runEcReviewBatch,
@@ -71,6 +71,9 @@ function mcpOpenApiSpecResponse(): Response {
 }
 
 const REMINDER_CRON = "*/15 * * * *";
+const MEMBERSHIP_DUE_WORK_CRON = "2,17,32,47 * * * *";
+const SPONSORSHIP_DUE_WORK_CRON = "5,20,35,50 * * * *";
+const VOTES_DUE_WORK_CRON = "8,23,38,53 * * * *";
 const RETENTION_CRON = "0 3 * * *";
 // defaults: consultation batch Mon/Wed 07:15 UTC, EC review batch Mon/Wed 08:15 UTC.
 const CONSULTATION_BATCH_CRON = "15 7 * * 1,3";
@@ -98,48 +101,65 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
   try {
     if (controller.cron === REMINDER_CRON) {
       const config = getConfig(env);
-      // One shared budget for all four domains (PR #1 review §9.1) — was
-      // four sequential calls with no shared deadline and no failure
-      // isolation, so an early throw silently aborted every job after it.
-      // registry.run's per-job try/catch means a mid-registry failure no
-      // longer loses or blocks its siblings; each job's own query LIMIT
-      // (membership/sponsorship-scheduled-jobs.ts, votes' pre-existing
-      // LIMIT) bounds a single pass instead of relying on time/subrequest
-      // budgeting mid-job.
-      const jobs: ScheduledJobDefinition<unknown>[] = [
-        {
-          name: "due_work",
-          minRemainingMsToRun: 5_000,
-          run: (jobEnv, budget) => runScheduledDueWork(jobEnv, budget),
-        },
-        {
-          name: "membership_due_work",
-          minRemainingMsToRun: 2_000,
-          run: (jobEnv) =>
-            runMembershipDueWork(jobEnv.DB, jobEnv, {
-              onHoldReminderLimit: config.scheduledOnHoldReminderLimit,
-              ecAutoApproveLimit: config.scheduledEcAutoApproveLimit,
-            }),
-        },
-        {
-          name: "sponsorship_due_work",
-          minRemainingMsToRun: 2_000,
-          run: (jobEnv) => runSponsorshipDueWork(jobEnv.DB, jobEnv, config.scheduledSponsorshipDueWorkLimit),
-        },
-        { name: "votes_due_work", minRemainingMsToRun: 2_000, run: (jobEnv) => runVotesDueWork(jobEnv.DB, jobEnv) },
-      ];
-      const registryResult = await runScheduledJobRegistry(env, jobs, config.reminderCronBudgetMs);
+      const outcome = await runScheduledJobWithD1Budget(
+        env,
+        "due_work",
+        config.scheduledD1QueryBudget,
+        (jobEnv, d1QueryBudget) => runScheduledDueWork(jobEnv, { d1QueryBudget }),
+      );
+      logInfo("SCHEDULED_REMINDERS_COMPLETED", { cron: controller.cron, outcome });
+      return;
+    }
 
-      logInfo("SCHEDULED_REMINDERS_COMPLETED", {
-        cron: controller.cron,
-        outcomes: registryResult.outcomes,
-        elapsedMs: registryResult.elapsedMs,
-      });
+    if (controller.cron === MEMBERSHIP_DUE_WORK_CRON) {
+      const config = getConfig(env);
+      const outcome = await runScheduledJobWithD1Budget(
+        env,
+        "membership_due_work",
+        config.scheduledD1QueryBudget,
+        (jobEnv) =>
+          runMembershipDueWork(jobEnv.DB, jobEnv, {
+            onHoldReminderLimit: config.scheduledOnHoldReminderLimit,
+            ecAutoApproveLimit: config.scheduledEcAutoApproveLimit,
+          }),
+      );
+      logInfo("SCHEDULED_MEMBERSHIP_DUE_WORK_COMPLETED", { cron: controller.cron, outcome });
+      return;
+    }
+
+    if (controller.cron === SPONSORSHIP_DUE_WORK_CRON) {
+      const config = getConfig(env);
+      const outcome = await runScheduledJobWithD1Budget(
+        env,
+        "sponsorship_due_work",
+        config.scheduledD1QueryBudget,
+        (jobEnv) => runSponsorshipDueWork(jobEnv.DB, jobEnv, config.scheduledSponsorshipDueWorkLimit),
+      );
+      logInfo("SCHEDULED_SPONSORSHIP_DUE_WORK_COMPLETED", { cron: controller.cron, outcome });
+      return;
+    }
+
+    if (controller.cron === VOTES_DUE_WORK_CRON) {
+      const config = getConfig(env);
+      const outcome = await runScheduledJobWithD1Budget(
+        env,
+        "votes_due_work",
+        config.scheduledD1QueryBudget,
+        (jobEnv) =>
+          runVotesDueWork(jobEnv.DB, {
+            ...jobEnv,
+            SCHEDULED_VOTE_NOTIFICATION_LIMIT: String(config.scheduledVoteNotificationLimit),
+          }),
+      );
+      logInfo("SCHEDULED_VOTES_DUE_WORK_COMPLETED", { cron: controller.cron, outcome });
       return;
     }
 
     if (controller.cron === RETENTION_CRON) {
-      const retention = await runRetentionJob(env.DB);
+      const config = getConfig(env);
+      const retention = await runScheduledJobWithD1Budget(env, "retention", config.scheduledD1QueryBudget, (jobEnv) =>
+        runRetentionJob(jobEnv.DB),
+      );
       logInfo("SCHEDULED_RETENTION_COMPLETED", {
         cron: controller.cron,
         retention,
@@ -148,19 +168,37 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
     }
 
     if (controller.cron === CONSULTATION_BATCH_CRON) {
-      const consultationBatch = await runConsultationBatch(env.DB, env);
+      const config = getConfig(env);
+      const consultationBatch = await runScheduledJobWithD1Budget(
+        env,
+        "consultation_batch",
+        config.scheduledD1QueryBudget,
+        (jobEnv) => runConsultationBatch(jobEnv.DB, jobEnv),
+      );
       logInfo("SCHEDULED_CONSULTATION_BATCH_COMPLETED", { cron: controller.cron, consultationBatch });
       return;
     }
 
     if (controller.cron === EC_REVIEW_BATCH_CRON) {
-      const ecReviewBatch = await runEcReviewBatch(env.DB, env);
+      const config = getConfig(env);
+      const ecReviewBatch = await runScheduledJobWithD1Budget(
+        env,
+        "ec_review_batch",
+        config.scheduledD1QueryBudget,
+        (jobEnv) => runEcReviewBatch(jobEnv.DB, jobEnv),
+      );
       logInfo("SCHEDULED_EC_REVIEW_BATCH_COMPLETED", { cron: controller.cron, ecReviewBatch });
       return;
     }
 
     if (controller.cron === WG_CHAIR_DIGEST_CRON) {
-      const wgChairDigest = await runWeeklyWgChairDigest(env.DB, env);
+      const config = getConfig(env);
+      const wgChairDigest = await runScheduledJobWithD1Budget(
+        env,
+        "wg_chair_digest",
+        config.scheduledD1QueryBudget,
+        (jobEnv) => runWeeklyWgChairDigest(jobEnv.DB, jobEnv),
+      );
       logInfo("SCHEDULED_WG_CHAIR_DIGEST_COMPLETED", { cron: controller.cron, wgChairDigest });
       return;
     }

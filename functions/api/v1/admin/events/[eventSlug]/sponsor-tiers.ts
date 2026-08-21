@@ -10,7 +10,6 @@ import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { listEventSponsorTiers, replaceEventSponsorTiers } from "../../../../../_lib/services/sponsorship";
-import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { parseJsonBody } from "../../../../../_lib/validation";
 import { eventSponsorTiersReplaceSchema } from "../../../../../../assets/shared/schemas/admin-sponsorships";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
@@ -27,10 +26,7 @@ export async function onRequestPut(c: AdminContext): Promise<Response> {
   const body = await parseJsonBody(c.req, eventSponsorTiersReplaceSchema);
   const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
 
-  await replaceEventSponsorTiers(requestDb(c), event.id, body.tiers);
-  await writeAuditLog(requestDb(c), "admin", admin.id, "event_sponsor_tiers_updated", "event", event.id, {
-    tierCount: body.tiers.length,
-  });
+  await replaceEventSponsorTiers(requestDb(c), admin.id, event.id, body.tiers);
 
   const tiers = await listEventSponsorTiers(requestDb(c), event.id);
   return json({ tiers });

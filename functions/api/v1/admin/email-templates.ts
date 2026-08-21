@@ -15,7 +15,12 @@ export const EmailTemplatesList = openApiRoute(emailTemplatesListRouteSchema, as
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
   const { q, sort, limit = 50, offset = 0 } = data.query;
-  const orderBy = resolveOrderBy(sort, ADMIN_EMAIL_TEMPLATES_SORT_COLUMNS, "ORDER BY template_key ASC");
+  const orderBy = resolveOrderBy(
+    sort,
+    ADMIN_EMAIL_TEMPLATES_SORT_COLUMNS,
+    "ORDER BY template_key ASC",
+    "template_key ASC",
+  );
 
   const conditions: string[] = [];
   const bindings: unknown[] = [];

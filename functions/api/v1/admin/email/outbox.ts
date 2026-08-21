@@ -15,6 +15,6 @@ import { adminEmailOutboxGetRouteSchema } from "../../../../../assets/shared/sch
 export const AdminEmailOutboxGet = openApiRoute(adminEmailOutboxGetRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
   await requireAdminFromRequest(db, c.req.raw, c.env);
-  const { status, messageType, dueNow = false, q, limit = 50, offset = 0 } = data.query;
-  return json(await listAdminEmailOutbox(db, { status, messageType, dueNow, q, limit, offset }));
+  const { status, messageType, dueNow = false, q, sort, limit = 50, offset = 0 } = data.query;
+  return json(await listAdminEmailOutbox(db, { status, messageType, dueNow, q, sort, limit, offset }));
 });

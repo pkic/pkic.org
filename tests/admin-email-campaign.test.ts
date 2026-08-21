@@ -139,6 +139,42 @@ describe("admin email campaign recipients", () => {
     expect(enrichmentQueryCounts.dayWaitlist).toBe(1);
   });
 
+  it("rejects an over-limit audience before loading per-registration enrichment", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const users = Array.from({ length: 3 }, (_, index) => ({
+      id: `limited-campaign-user-${index}`,
+      email: `limited-campaign-user-${index}@example.test`,
+      registrationId: `limited-campaign-registration-${index}`,
+    }));
+    await env.DB.batch(
+      users.flatMap((user) => [
+        env.DB.prepare(
+          `INSERT INTO users (id, email, normalized_email, created_at, updated_at)
+           VALUES (?, ?, ?, datetime('now'), datetime('now'))`,
+        ).bind(user.id, user.email, user.email),
+        env.DB.prepare(
+          `INSERT INTO registrations (
+             id, event_id, user_id, status, attendance_type, source_type,
+             manage_link_secret, created_at, updated_at
+           ) VALUES (?, ?, ?, 'registered', 'virtual', 'direct', ?, datetime('now'), datetime('now'))`,
+        ).bind(user.registrationId, eventId, user.id, `limited-token-${user.id}`),
+      ]),
+    );
+
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const enrichmentQueryCounts = { dayAttendance: 0, dayWaitlist: 0 };
+    await expect(
+      listCampaignRecipients(
+        countingDatabase(env.DB, enrichmentQueryCounts),
+        event,
+        "https://app.test",
+        { audience: "attendees", attendeeStatus: "registered" },
+        { maxRecipients: 2 },
+      ),
+    ).rejects.toMatchObject({ status: 422, code: "CAMPAIGN_RECIPIENT_LIMIT_EXCEEDED" });
+    expect(enrichmentQueryCounts).toEqual({ dayAttendance: 0, dayWaitlist: 0 });
+  });
+
   it("queues a large personal campaign in bounded D1 batches", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
@@ -229,7 +265,7 @@ describe("admin email campaign recipients", () => {
     expect(sendResponse.status).toBe(200);
     expect(sendBody.queuedRecipients).toBe(users.length);
     expect(sendBody.queuedBatches).toBe(users.length);
-    expect(batchCalls).toBe(2);
+    expect(batchCalls).toBe(1);
     expect(backgroundCalls).toBe(1);
     expect((await queryAll<{ count: number }>(env.DB, "SELECT COUNT(*) AS count FROM email_outbox"))[0]?.count).toBe(
       users.length,

@@ -1,26 +1,33 @@
 import { parseJsonBody } from "../../../../_lib/validation";
 import { json } from "../../../../_lib/http";
 import { findInviteByToken, acceptInvite } from "../../../../_lib/services/invites";
-import { getRequiredTerms } from "../../../../_lib/services/events";
 import { first } from "../../../../_lib/db/queries";
-import { findOrCreateUser } from "../../../../_lib/services/users";
-import { createRegistration } from "../../../../_lib/services/registrations";
-import { persistConsents, validateRequiredConsents } from "../../../../_lib/services/consent";
-import { validateCustomAnswersByPurpose } from "../../../../_lib/services/forms";
 import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
-import { createReferralCode } from "../../../../_lib/services/referrals";
+import { commitRegistrationSubmission } from "../../../../_lib/services/registration-submission";
+import { prepareValidatedAttendeeRegistration } from "../../../../_lib/services/attendee-registration";
 import { trySeedGravatarThenPrerender } from "../../../../_lib/services/og-badge-prerender";
 import { proposalPageUrl } from "../../../../_lib/services/frontend-links";
-import { deriveEventAttendanceType } from "../../../../_lib/services/event-days";
-import { inviteAcceptAttendeeSchema } from "../../../../../assets/shared/schemas/api";
+import { inviteAcceptAttendeeSchema } from "../../../../../assets/shared/schemas/registration";
+import { inviteAcceptRouteSchema, inviteCapabilityQuerySchema } from "../../../../../assets/shared/schemas/invites";
 import { requireInternalSecret } from "../../../../_lib/request";
+import { openApiRoute } from "../../../../_lib/openapi/route";
+import type { AdminContext } from "../../../../_lib/db/context";
+import { AppError } from "../../../../_lib/errors";
+import type { z } from "zod";
 
-export async function onRequestPost(c: any): Promise<Response> {
+type InviteAcceptAttendee = z.infer<typeof inviteAcceptAttendeeSchema>;
+
+async function acceptInviteRequest(
+  c: AdminContext,
+  token: string,
+  inviteId: string | undefined,
+  attendeeBody: () => Promise<InviteAcceptAttendee>,
+): Promise<Response> {
+  c.set?.("sensitive", true);
   const config = getConfig(c.env, c.req.raw);
   const signingSecret = requireInternalSecret(c.env);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-  const inviteId = new URL(c.req.raw.url).searchParams.get("id");
-  const invite = await findInviteByToken(c.env.DB, c.req.param("token"), signingSecret, inviteId);
+  const invite = await findInviteByToken(c.env.DB, token, signingSecret, inviteId ?? null);
   const event = await first<{
     id: string;
     slug: string;
@@ -45,77 +52,49 @@ export async function onRequestPost(c: any): Promise<Response> {
     });
   }
 
-  const body = await parseJsonBody(c.req, inviteAcceptAttendeeSchema);
+  const body = await attendeeBody();
 
   if (invite.invitee_email !== body.email) {
     return json({ error: { code: "EMAIL_MISMATCH", message: "Invite email must match registration email" } }, 400);
   }
 
-  const user = await findOrCreateUser(c.env.DB, {
-    email: body.email,
-    firstName: body.firstName,
-    lastName: body.lastName,
-    organizationName: body.organizationName,
-    jobTitle: body.jobTitle,
-  });
-
-  const requiredTerms = await getRequiredTerms(c.env.DB, event.id, "attendee");
-  await validateRequiredConsents(requiredTerms, body.consents);
-  const customAnswers = await validateCustomAnswersByPurpose(c.env.DB, {
+  const { prepared } = await prepareValidatedAttendeeRegistration(c.env.DB, body, {
     eventId: event.id,
-    purpose: "event_registration",
-    customAnswers: body.customAnswers,
-    context: {
-      attendanceType: body.attendanceType ?? deriveEventAttendanceType(body.dayAttendance) ?? undefined,
-      dayAttendance: body.dayAttendance,
-    },
-  });
-
-  const created = await createRegistration(c.env.DB, {
-    event: {
-      id: event.id,
-    },
-    userId: user.id,
-    attendanceType: (body.attendanceType ?? deriveEventAttendanceType(body.dayAttendance)) as
-      "in_person" | "virtual" | "on_demand",
-    dayAttendance: body.dayAttendance,
     sourceType: "invite",
-    customAnswersJson: Object.keys(customAnswers).length > 0 ? JSON.stringify(customAnswers) : null,
-    inviteId: invite.id,
+    invite,
+    ip: c.req.raw.headers.get("cf-connecting-ip"),
+    userAgent: c.req.raw.headers.get("user-agent"),
     pendingConfirmationDeadlineHours:
       (config.maxPendingConfirmationReminders + 1) * config.pendingConfirmationReminderIntervalDays * 24,
     signingSecret,
+    confirmationTtlHours: config.confirmationLinkTtlHours,
+    referralCodeLength: config.referralCodeLength,
   });
-
-  await acceptInvite(c.env.DB, invite.id);
-  await persistConsents(c.env.DB, {
-    registrationId: created.registration.id,
-    eventId: event.id,
-    userId: user.id,
-    audienceType: "attendee",
-    accepted: body.consents,
-    ip: c.req.raw.headers.get("cf-connecting-ip"),
-    userAgent: c.req.raw.headers.get("user-agent"),
-    secret: signingSecret,
-  });
-
-  const referralCode = await createReferralCode(c.env.DB, {
-    eventId: event.id,
-    ownerType: "registration",
-    ownerId: created.registration.id,
-    createdByUserId: user.id,
-    length: config.referralCodeLength,
-  });
-
-  c.executionCtx.waitUntil(trySeedGravatarThenPrerender(user.id, user.email, referralCode, c.env, appBaseUrl));
+  await commitRegistrationSubmission(c.env.DB, prepared);
+  c.executionCtx.waitUntil(
+    trySeedGravatarThenPrerender(prepared.user.id, prepared.user.email, prepared.referralCode, c.env, appBaseUrl),
+  );
 
   return json({
     success: true,
-    registrationId: created.registration.id,
-    status: created.registration.status,
-    manageToken: created.manageToken,
-    shareUrl: `${appBaseUrl}/r/${referralCode}`,
+    registrationId: prepared.registration.id,
+    status: prepared.registration.status,
+    manageToken: prepared.manageToken,
+    shareUrl: `${appBaseUrl}/r/${prepared.referralCode}`,
   });
+}
+
+export const InviteAcceptPost = openApiRoute(inviteAcceptRouteSchema, (c: AdminContext, data) =>
+  acceptInviteRequest(c, data.params.token, data.query.id, async () => {
+    if (!data.body) throw new AppError(400, "INVALID_BODY", "Attendee registration details are required");
+    return data.body;
+  }),
+);
+
+/** Compatibility export for direct endpoint tests. */
+export async function onRequestPost(c: AdminContext): Promise<Response> {
+  const query = inviteCapabilityQuerySchema.parse(Object.fromEntries(new URL(c.req.raw.url).searchParams));
+  return acceptInviteRequest(c, c.req.param("token"), query.id, () => parseJsonBody(c.req, inviteAcceptAttendeeSchema));
 }
 
 export async function onRequest(c: any): Promise<Response> {

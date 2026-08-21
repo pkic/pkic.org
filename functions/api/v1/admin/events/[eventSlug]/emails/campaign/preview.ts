@@ -3,9 +3,8 @@ import { json } from "../../../../../../../_lib/http";
 import { AppError } from "../../../../../../../_lib/errors";
 import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
 import { buildEventEmailVariables, getEventBySlug } from "../../../../../../../_lib/services/events";
-import { resolveTemplate } from "../../../../../../../_lib/email/templates";
 import { renderEmail, renderSubject } from "../../../../../../../_lib/email/render";
-import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
+import { getConfig, resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { requireInternalSecret } from "../../../../../../../_lib/request";
 import { applyCampaignCustomText } from "../../../../../../../_lib/email/campaign-custom";
 import type { EmailContentType } from "../../../../../../../../assets/shared/schemas/admin-email-templates";
@@ -17,9 +16,8 @@ import {
 } from "../../../../../../../_lib/services/frontend-links";
 import {
   chunkRecipients,
-  computeCampaignDigest,
-  findBroadcastOnlyTemplateRefs,
-  listCampaignRecipients,
+  assertCampaignBroadcastSafety,
+  prepareAdminCampaign,
   signCampaignPreviewToken,
 } from "../../../../../../../_lib/services/admin-email-campaign";
 import { adminEventCampaignPreviewSchema } from "../../../../../../../../assets/shared/schemas/api";
@@ -33,40 +31,14 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
   const secret = requireInternalSecret(c.env);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-  const template = !body.bodyContent && body.templateKey ? await resolveTemplate(requestDb(c), body.templateKey) : null;
-  const messageType = body.messageType ?? template?.messageType ?? "promotional";
-
-  const recipients = await listCampaignRecipients(requestDb(c), event, appBaseUrl, {
-    audience: body.filter.audience,
-    attendeeStatus: body.filter.attendeeStatus,
-    attendanceType: body.filter.attendanceType,
-    dayDate: body.filter.dayDate,
-    dayWaitlistStatus: body.filter.dayWaitlistStatus,
-    speakerStatus: body.filter.speakerStatus,
-  });
-
-  const uniqueRecipients = recipients.filter(
-    (recipient, index, arr) => arr.findIndex((candidate) => candidate.email === recipient.email) === index,
+  const campaign = await prepareAdminCampaign(
+    requestDb(c),
+    event,
+    appBaseUrl,
+    body,
+    getConfig(c.env).adminCampaignMaxRecipients,
   );
-
-  const digest = await computeCampaignDigest({
-    templateKey: body.templateKey,
-    subjectOverride: body.subjectOverride ?? null,
-    customText: body.customText ?? null,
-    bodyContent: body.bodyContent ?? null,
-    messageType,
-    sendMode: body.sendMode,
-    batchSize: body.batchSize,
-    filter: {
-      audience: body.filter.audience,
-      attendeeStatus: body.filter.attendeeStatus,
-      attendanceType: body.filter.attendanceType,
-      dayDate: body.filter.dayDate,
-      dayWaitlistStatus: body.filter.dayWaitlistStatus,
-      speakerStatus: body.filter.speakerStatus,
-    },
-    recipients: uniqueRecipients,
-  });
+  const { template, recipients: uniqueRecipients, digest } = campaign;
 
   const token = await signCampaignPreviewToken({
     secret,
@@ -94,22 +66,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     throw new AppError(400, "CAMPAIGN_NO_CONTENT", "Provide a message body or select a template before previewing.");
   }
 
-  if (body.sendMode === "bcc_batch") {
-    const unsafeRefs = findBroadcastOnlyTemplateRefs(uniqueRecipients, [
-      body.subjectOverride,
-      body.bodyContent,
-      body.customText,
-      template?.subjectTemplate,
-      template?.content,
-    ]);
-    if (unsafeRefs.length > 0) {
-      throw new AppError(
-        400,
-        "CAMPAIGN_BROADCAST_UNSAFE_TEMPLATE",
-        `Broadcast emails cannot use recipient-specific tags: ${unsafeRefs.join(", ")}. Switch to Personal (1:1) or remove those tags.`,
-      );
-    }
-  }
+  assertCampaignBroadcastSafety(body, uniqueRecipients, template);
 
   let subject: string;
   let rendered: { html: string; text: string };

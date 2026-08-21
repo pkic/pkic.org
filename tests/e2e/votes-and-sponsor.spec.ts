@@ -60,7 +60,7 @@ function extractUrlFromEmail(email: CapturedEmail, urlSubstring: string): string
 }
 
 async function signInAsAdmin(page: Page): Promise<void> {
-  const adminEmail = e2eAdminEmail();
+  const adminEmail = e2eAdminEmail("votes");
   await page.goto("/admin/");
   await expect(page.locator("#form-magic")).toBeVisible({ timeout: 10_000 });
   await page.locator("#inp-email").fill(adminEmail);
@@ -248,6 +248,7 @@ test.describe("event sponsor self-service checkout (Path B)", () => {
     await expect(page.getByRole("heading", { name: /Thank you for sponsoring/i })).toBeVisible();
 
     expect(capturedBody).toMatchObject({
+      checkoutAttemptId: expect.stringMatching(/^[0-9a-f-]{36}$/i),
       contactName: "Casey Sponsor",
       contactEmail: "casey-sponsor@example.test",
       organizationName: "Example Sponsor Org",

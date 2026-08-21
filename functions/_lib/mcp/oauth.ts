@@ -117,7 +117,9 @@ export function normalizeMcpOauthScopes(
   fallback: readonly AuthScope[] = AUTH_SCOPES,
 ): AuthScope[] {
   const normalized = scopes.filter(isAuthScope);
-  return [...new Set(normalized.length > 0 ? normalized : fallback)];
+  // An omitted scope list receives the documented default. A supplied but
+  // wholly invalid list must not be promoted to every supported permission.
+  return [...new Set(scopes.length === 0 ? fallback : normalized)];
 }
 
 export function buildMcpOauthProps(

@@ -20,7 +20,6 @@ export const ADMIN_APPLICATIONS_SORT_COLUMNS = [
 
 export const adminApplicationsListQuerySchema = listQuerySchema(ADMIN_APPLICATIONS_SORT_COLUMNS).extend({
   stage: applicationStageSchema.optional(),
-  status: applicationStageSchema.optional(),
 });
 
 export const adminApplicationSummarySchema = z.object({
@@ -29,7 +28,6 @@ export const adminApplicationSummarySchema = z.object({
   applicantName: z.string(),
   organizationName: z.string().nullable(),
   membershipCategory: z.string(),
-  status: applicationStageSchema,
   stage: applicationStageSchema,
   onHoldSubtype: onHoldSubtypeSchema.nullable(),
   assignedToUserId: z.string().nullable(),
@@ -41,6 +39,68 @@ export const adminApplicationsListResponseSchema = paginatedResponseSchema(
   "applications",
   adminApplicationSummarySchema,
 );
+
+export const adminApplicationEventSchema = z.object({
+  fromStage: applicationStageSchema.nullable(),
+  toStage: applicationStageSchema,
+  actorUserId: z.string().nullable(),
+  note: z.string().nullable(),
+  createdAt: z.string(),
+});
+
+export const adminApplicationCommunicationSchema = z.object({
+  id: z.string(),
+  applicationId: z.string(),
+  kind: z.enum(["communication", "note"]),
+  actorUserId: z.string(),
+  subject: z.string().nullable(),
+  body: z.string(),
+  templateKey: z.string().nullable(),
+  emailOutboxId: z.string().nullable(),
+  createdAt: z.string(),
+});
+
+export const adminApplicationConcernSchema = z.object({
+  id: z.string(),
+  applicationId: z.string(),
+  submittedByUserId: z.string(),
+  concernText: z.string(),
+  createdAt: z.string(),
+});
+
+export const adminApplicationEcDecisionSchema = z.object({
+  id: z.string(),
+  applicationId: z.string(),
+  ecMemberUserId: z.string(),
+  decision: ecDecisionValueSchema,
+  reason: z.string().nullable(),
+  createdAt: z.string(),
+});
+
+export const adminApplicationDocumentSchema = z.object({
+  id: z.string(),
+  filename: z.string(),
+  mimeType: z.string(),
+  fileSizeBytes: z.number().int().nonnegative(),
+  uploadedAt: z.string(),
+  uploadedByEmail: z.string(),
+});
+
+export const adminApplicationDetailSchema = adminApplicationSummarySchema.extend({
+  stageEnteredAt: z.string(),
+  answers: z.record(z.string(), z.unknown()),
+  events: z.array(adminApplicationEventSchema),
+  communications: z.array(adminApplicationCommunicationSchema),
+  concerns: z.array(adminApplicationConcernSchema),
+  ecDecisions: z.array(adminApplicationEcDecisionSchema),
+  documents: z.array(adminApplicationDocumentSchema),
+});
+export type AdminApplicationDetail = z.infer<typeof adminApplicationDetailSchema>;
+export type AdminApplicationEvent = z.infer<typeof adminApplicationEventSchema>;
+export type AdminApplicationCommunication = z.infer<typeof adminApplicationCommunicationSchema>;
+export type AdminApplicationConcern = z.infer<typeof adminApplicationConcernSchema>;
+export type AdminApplicationEcDecision = z.infer<typeof adminApplicationEcDecisionSchema>;
+export type AdminApplicationDocument = z.infer<typeof adminApplicationDocumentSchema>;
 
 export const adminApplicationsListRouteSchema = {
   tags: ["Membership"],
@@ -61,7 +121,10 @@ export const adminApplicationDetailRouteSchema = {
   summary: "Get a membership application's full detail (staff)",
   request: { params: z.object({ id: z.string() }) },
   responses: {
-    "200": { description: "Application detail." },
+    "200": {
+      description: "Application detail.",
+      content: { "application/json": { schema: adminApplicationDetailSchema } },
+    },
     "404": { description: "Application not found." },
   },
 };

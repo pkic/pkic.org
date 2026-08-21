@@ -6,10 +6,9 @@ import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
-import { queueEmail, processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
+import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
 import { getProposalScopeForPermissionCheck, rejectVoteProposal } from "../../../../../_lib/services/votes";
-import { writeAuditLog } from "../../../../../_lib/services/audit";
-import { adminRejectProposalRouteSchema } from "../../../../../../assets/shared/schemas/votes";
+import { adminRejectProposalRouteSchema } from "../../../../../../assets/shared/schemas/votes-admin";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 export const AdminVoteProposalRejectPost = openApiRoute(
@@ -27,20 +26,11 @@ export const AdminVoteProposalRejectPost = openApiRoute(
     );
 
     const body = data.body;
-    const result = await rejectVoteProposal(db, id, body.reason);
+    const result = await rejectVoteProposal(db, admin, id, body.reason);
 
-    if (result.proposerEmail) {
-      const outboxId = await queueEmail(db, {
-        templateKey: "vote-proposal-rejected",
-        recipientEmail: result.proposerEmail,
-        messageType: "transactional",
-        subject: `Your vote proposal was not approved: ${result.proposal.title}`,
-        data: { proposerName: result.proposerName, proposalTitle: result.proposal.title, rejectionReason: body.reason },
-      });
-      c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, outboxId));
+    if (result.outboxId) {
+      c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, result.outboxId));
     }
-
-    await writeAuditLog(db, "admin", admin.id, "vote_proposal_rejected", "vote_proposal", id, { reason: body.reason });
 
     return json({ proposal: result.proposal });
   },

@@ -74,6 +74,7 @@ export interface AdminSessionTokenClaims {
   email: string;
   role: string;
   scopes: string[];
+  scopeRestricted?: boolean;
   state?: string;
   exp: number;
 }
@@ -139,6 +140,7 @@ function isAdminSessionTokenClaims(claims: object): claims is AdminSessionTokenC
     typeof candidate.role === "string" &&
     Array.isArray(candidate.scopes) &&
     candidate.scopes.every((scope) => typeof scope === "string") &&
+    (candidate.scopeRestricted === undefined || typeof candidate.scopeRestricted === "boolean") &&
     (candidate.state === undefined || typeof candidate.state === "string")
   );
 }
@@ -151,6 +153,7 @@ export async function signAdminSessionToken(
     expiresAt: string;
     state?: string | null;
     scopes?: string[];
+    scopeRestricted?: boolean;
   },
 ): Promise<string> {
   const claims: AdminSessionTokenClaims = {
@@ -160,6 +163,7 @@ export async function signAdminSessionToken(
     email: payload.admin.email,
     role: payload.admin.role,
     scopes: payload.scopes ?? payload.admin.scopes ?? [...AUTH_SCOPES],
+    scopeRestricted: payload.scopeRestricted ?? payload.admin.scopeRestricted,
     exp: sessionExpiresAtToExp(payload.expiresAt),
   };
 
@@ -294,6 +298,7 @@ export async function getAdminBySessionClaims(db: DatabaseLike, claims: AdminSes
     email: activeRow.email,
     role: activeRow.role,
     scopes: claims.scopes,
+    scopeRestricted: claims.scopeRestricted ?? false,
     grants,
     sessionId: activeRow.id,
     expiresAt: activeRow.expires_at,

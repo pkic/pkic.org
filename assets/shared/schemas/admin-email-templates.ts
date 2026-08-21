@@ -1,12 +1,7 @@
 import { z } from "zod";
 import { emailTemplateKeyParamsSchema, emailContentTypeSchema, emailMessageTypeSchema } from "./api";
 import type { EmailContentType, EmailMessageType } from "./api";
-import {
-  paginationQuerySchema,
-  paginatedResponseSchema,
-  searchableListQuerySchema,
-  sortColumnSchema,
-} from "./pagination";
+import { listQuerySchema, paginatedResponseSchema, searchableListQuerySchema, sortColumnSchema } from "./pagination";
 
 export { emailContentTypeSchema, emailMessageTypeSchema };
 export type { EmailContentType, EmailMessageType };
@@ -29,6 +24,12 @@ export const adminEmailTemplateSummarySchema = z.object({
   version_count: z.number(),
   draft_count: z.number(),
 });
+export type AdminEmailTemplateSummary = z.infer<typeof adminEmailTemplateSummarySchema>;
+
+export const adminEmailTemplatesListResponseSchema = paginatedResponseSchema(
+  "templates",
+  adminEmailTemplateSummarySchema,
+);
 
 export const emailTemplatesListQuerySchema = searchableListQuerySchema(emailTemplatesSortValueSchema);
 
@@ -42,7 +43,7 @@ export const emailTemplatesListRouteSchema = {
     "200": {
       description: "Email templates list.",
       content: {
-        "application/json": { schema: paginatedResponseSchema("templates", adminEmailTemplateSummarySchema) },
+        "application/json": { schema: adminEmailTemplatesListResponseSchema },
       },
     },
   },
@@ -51,9 +52,8 @@ export const emailTemplatesListRouteSchema = {
 // ── Template version list ───────────────────────────────────────────────
 
 /**
- * Mirrors every column of email_template_versions (migration 0000, plus
- * message_type from migration 0029) — GET .../:key/versions does
- * `SELECT * FROM email_template_versions WHERE template_key = ?`.
+ * Stable public projection of an email template version. Keep this explicit
+ * rather than exposing every future database column through `SELECT *`.
  */
 export const adminEmailTemplateVersionRowSchema = z.object({
   id: z.string(),
@@ -61,14 +61,20 @@ export const adminEmailTemplateVersionRowSchema = z.object({
   version: z.number(),
   subject_template: z.string().nullable(),
   body: z.string().nullable(),
-  content_type: z.string(),
+  content_type: emailContentTypeSchema,
   r2_object_key: z.string().nullable(),
   checksum_sha256: z.string(),
-  status: z.string(),
+  status: z.enum(["draft", "active"]),
   created_by_user_id: z.string().nullable(),
   created_at: z.string(),
-  message_type: z.string(),
+  message_type: emailMessageTypeSchema,
 });
+
+export type AdminEmailTemplateVersion = z.infer<typeof adminEmailTemplateVersionRowSchema>;
+
+export const ADMIN_EMAIL_TEMPLATE_VERSIONS_SORT_COLUMNS = ["version", "status", "createdAt"] as const;
+
+export const emailTemplateVersionsListQuerySchema = listQuerySchema(ADMIN_EMAIL_TEMPLATE_VERSIONS_SORT_COLUMNS);
 
 export const emailTemplateVersionsListRouteSchema = {
   tags: ["Admin email templates"],
@@ -76,7 +82,7 @@ export const emailTemplateVersionsListRouteSchema = {
   description: "Paginated list of every version of a single template, newest version first.",
   request: {
     params: emailTemplateKeyParamsSchema,
-    query: paginationQuerySchema,
+    query: emailTemplateVersionsListQuerySchema,
   },
   responses: {
     "200": {

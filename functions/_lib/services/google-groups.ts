@@ -119,7 +119,7 @@ export async function listPendingGoogleGroupsSync(db: DatabaseLike, limit = 50):
  * claim-queue pattern: whichever caller's UPDATE lands first in D1 wins the
  * row (flips it to 'processing'); the other's UPDATE matches zero rows and
  * is silently skipped. No schema change needed — 'processing' is already a
- * documented status value on this table (migrations/0041_membership_workflow.sql),
+ * documented status value on this table (migrations/0035_membership_portal_governance.sql),
  * it was just never written.
  */
 export async function claimPendingGoogleGroupsSyncRows(

@@ -24,7 +24,7 @@ import { first, run } from "../db/queries";
 import { nowIso, addMinutes, addHours } from "../utils/time";
 import { randomToken, sha256Hex } from "../utils/crypto";
 import { uuid } from "../utils/ids";
-import type { DatabaseLike } from "../types";
+import type { DatabaseLike, StatementLike } from "../types";
 
 // ── Cookie / bearer token transport ─────────────────────────────────────────
 
@@ -194,6 +194,35 @@ export interface MagicLinkTableConfig {
   subjectColumn: string;
 }
 
+export async function prepareMagicLinkRow(
+  db: DatabaseLike,
+  config: MagicLinkTableConfig,
+  subjectId: string,
+  payload: { ttlMinutes: number; ipHash?: string | null; userAgentHash?: string | null },
+): Promise<{ token: string; statement: StatementLike }> {
+  const token = randomToken(24);
+  const tokenHash = await sha256Hex(token);
+  const now = nowIso();
+  return {
+    token,
+    statement: db
+      .prepare(
+        `INSERT INTO ${config.table} (
+          id, ${config.subjectColumn}, token_hash, expires_at, used_at, request_ip_hash, user_agent_hash, created_at
+        ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?)`,
+      )
+      .bind(
+        uuid(),
+        subjectId,
+        tokenHash,
+        addMinutes(now, payload.ttlMinutes),
+        payload.ipHash ?? null,
+        payload.userAgentHash ?? null,
+        now,
+      ),
+  };
+}
+
 /** Generic magic-link-row INSERT — same shape across all three. Returns the raw (unhashed) token to email to the recipient. */
 export async function insertMagicLinkRow(
   db: DatabaseLike,
@@ -201,27 +230,9 @@ export async function insertMagicLinkRow(
   subjectId: string,
   payload: { ttlMinutes: number; ipHash?: string | null; userAgentHash?: string | null },
 ): Promise<string> {
-  const token = randomToken(24);
-  const tokenHash = await sha256Hex(token);
-  const now = nowIso();
-
-  await run(
-    db,
-    `INSERT INTO ${config.table} (
-      id, ${config.subjectColumn}, token_hash, expires_at, used_at, request_ip_hash, user_agent_hash, created_at
-    ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?)`,
-    [
-      uuid(),
-      subjectId,
-      tokenHash,
-      addMinutes(now, payload.ttlMinutes),
-      payload.ipHash ?? null,
-      payload.userAgentHash ?? null,
-      now,
-    ],
-  );
-
-  return token;
+  const prepared = await prepareMagicLinkRow(db, config, subjectId, payload);
+  await prepared.statement.run();
+  return prepared.token;
 }
 
 export interface PlainMagicLinkRow {

@@ -1,15 +1,19 @@
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
-import { queueEmail } from "../../email/outbox";
+import { prepareQueueEmailStatement } from "../../email/outbox";
+import { buildBadgeAttachment } from "../../email/attachments";
 import { buildEventEmailVariables } from "../events";
-import { registrationManagePageUrl } from "../frontend-links";
+import { registrationConfirmPageUrl, registrationManagePageUrl } from "../frontend-links";
 import { getAcceptedTermsTextForRegistration, getCustomAnswerRows } from "../../utils/registration-email";
 import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../../utils/attendance";
 import { queuedCapabilityToken } from "../capability-links";
+import { buildRegistrationIcs } from "../../utils/calendar";
+import { generateSignedRsvpAddress } from "../../email/rsvp";
 import { getRegistrationDayAttendance } from "../event-days";
 import { listDayWaitlistForRegistration } from "./day-waitlist";
-import type { DatabaseLike } from "../../types";
-import type { RegistrationRecord } from "./types";
+import type { DatabaseLike, StatementLike } from "../../types";
+import type { UserProfilePatch } from "../users";
+import { REGISTRATION_COLUMNS, type RegistrationRecord } from "./types";
 
 interface UserRow {
   id: string;
@@ -31,52 +35,81 @@ export interface RegistrationStatusEmailEvent {
   settings_json: string;
 }
 
-export async function queueRegistrationStatusEmail(
-  db: DatabaseLike,
-  params: {
-    event: RegistrationStatusEmailEvent;
-    registrationId: string;
-    appBaseUrl: string;
-    templateKey: string;
-    subject: string;
-    noticeKind?: "status_update" | "waitlist_offer" | "admin_admit";
-    /** Override the recipient email. Only use when the verified email is known
-     * to bounce and an unverified pending address is preferable — e.g. sending
-     * a cancellation notice after a pending-confirmation timeout. */
-    recipientEmailOverride?: string;
-  },
-): Promise<{ outboxId: string; manageToken: string; manageUrl: string }> {
-  const registration = await first<RegistrationRecord>(
-    db,
-    "SELECT * FROM registrations WHERE id = ? AND event_id = ?",
-    [params.registrationId, params.event.id],
-  );
-  if (!registration) {
-    throw new AppError(404, "REGISTRATION_NOT_FOUND", "Registration not found");
-  }
+interface RegistrationEmailOverrides {
+  registration?: RegistrationRecord;
+  profilePatch?: UserProfilePatch;
+  dayAttendance?: Awaited<ReturnType<typeof getRegistrationDayAttendance>>;
+  dayWaitlist?: Awaited<ReturnType<typeof listDayWaitlistForRegistration>>;
+}
 
-  const user = await first<UserRow>(
+async function loadRegistrationEmailContext(
+  db: DatabaseLike,
+  eventId: string,
+  registrationId: string,
+  overrides: RegistrationEmailOverrides = {},
+): Promise<{
+  registration: RegistrationRecord;
+  user: UserRow;
+  dayAttendance: Awaited<ReturnType<typeof getRegistrationDayAttendance>>;
+  dayWaitlist: Awaited<ReturnType<typeof listDayWaitlistForRegistration>>;
+  customAnswerRows: Awaited<ReturnType<typeof getCustomAnswerRows>>;
+  acceptedTermsText: string;
+}> {
+  const registration =
+    overrides.registration ??
+    (await first<RegistrationRecord>(
+      db,
+      `SELECT ${REGISTRATION_COLUMNS} FROM registrations WHERE id = ? AND event_id = ?`,
+      [registrationId, eventId],
+    ));
+  if (!registration) throw new AppError(404, "REGISTRATION_NOT_FOUND", "Registration not found");
+  const storedUser = await first<UserRow>(
     db,
     "SELECT id, email, first_name, last_name, organization_name, job_title FROM users WHERE id = ?",
     [registration.user_id],
   );
-  if (!user) {
-    throw new AppError(404, "USER_NOT_FOUND", "Associated user record is missing");
-  }
-
-  const [dayAttendance, currentDayWaitlist] = await Promise.all([
-    getRegistrationDayAttendance(db, registration.id),
-    listDayWaitlistForRegistration(db, registration.id),
+  if (!storedUser) throw new AppError(404, "USER_NOT_FOUND", "Associated user record is missing");
+  const patch = overrides.profilePatch;
+  const user: UserRow = {
+    ...storedUser,
+    first_name: patch?.firstName === undefined ? storedUser.first_name : (patch.firstName ?? null),
+    last_name: patch?.lastName === undefined ? storedUser.last_name : (patch.lastName ?? null),
+    organization_name:
+      patch?.organizationName === undefined ? storedUser.organization_name : (patch.organizationName ?? null),
+    job_title: patch?.jobTitle === undefined ? storedUser.job_title : (patch.jobTitle ?? null),
+  };
+  const [dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText] = await Promise.all([
+    overrides.dayAttendance ?? getRegistrationDayAttendance(db, registration.id),
+    overrides.dayWaitlist ?? listDayWaitlistForRegistration(db, registration.id),
+    getCustomAnswerRows(db, eventId, registration.custom_answers_json),
+    getAcceptedTermsTextForRegistration(db, registration.id),
   ]);
-  const attendanceData = buildAttendanceEmailData(registration.attendance_type, dayAttendance, currentDayWaitlist);
-  const statusData = buildRegistrationEmailStatusData(registration.status, currentDayWaitlist);
-  const customAnswerRows = await getCustomAnswerRows(db, params.event.id, registration.custom_answers_json);
-  const acceptedTermsText = await getAcceptedTermsTextForRegistration(db, registration.id);
+  return { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText };
+}
 
+export interface RegistrationStatusEmailParams extends RegistrationEmailOverrides {
+  event: RegistrationStatusEmailEvent;
+  registrationId: string;
+  appBaseUrl: string;
+  templateKey: string;
+  subject: string;
+  noticeKind?: "status_update" | "waitlist_offer" | "admin_admit";
+  /** Override only for a deliberately selected pending/bounce fallback address. */
+  recipientEmailOverride?: string;
+}
+
+export async function prepareRegistrationStatusEmail(
+  db: DatabaseLike,
+  params: RegistrationStatusEmailParams,
+): Promise<{ outboxId: string; statement: StatementLike; manageToken: string; manageUrl: string }> {
+  const { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText } =
+    await loadRegistrationEmailContext(db, params.event.id, params.registrationId, params);
+  const attendanceData = buildAttendanceEmailData(registration.attendance_type, dayAttendance, dayWaitlist);
+  const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
   const manageToken = queuedCapabilityToken("registration_manage", registration.id);
   const manageUrl = registrationManagePageUrl(params.appBaseUrl, params.event, manageToken);
   const recipientEmail = params.recipientEmailOverride ?? user.email;
-  const outboxId = await queueEmail(db, {
+  const prepared = prepareQueueEmailStatement(db, {
     eventId: params.event.id,
     baseUrl: params.appBaseUrl,
     templateKey: params.templateKey,
@@ -95,7 +128,7 @@ export async function queueRegistrationStatusEmail(
       attendanceType: registration.attendance_type,
       attendanceLabel: attendanceData.attendanceLabel,
       dayAttendance: attendanceData.dayAttendance,
-      dayWaitlist: currentDayWaitlist,
+      dayWaitlist,
       customAnswerRows,
       acceptedTermsText: acceptedTermsText || undefined,
       ...statusData,
@@ -105,6 +138,179 @@ export async function queueRegistrationStatusEmail(
       adminAdmitNotice: params.noticeKind === "admin_admit",
     },
   });
+  return { outboxId: prepared.id, statement: prepared.statement, manageToken, manageUrl };
+}
 
-  return { outboxId, manageToken, manageUrl };
+export async function queueRegistrationStatusEmail(
+  db: DatabaseLike,
+  params: RegistrationStatusEmailParams,
+): Promise<{ outboxId: string; manageToken: string; manageUrl: string }> {
+  const prepared = await prepareRegistrationStatusEmail(db, params);
+  await db.batch([prepared.statement]);
+  return { outboxId: prepared.outboxId, manageToken: prepared.manageToken, manageUrl: prepared.manageUrl };
+}
+
+export interface RegistrationConfirmedEmailParams extends RegistrationEmailOverrides {
+  event: RegistrationStatusEmailEvent;
+  registrationId: string;
+  appBaseUrl: string;
+  recipientEmailOverride?: string;
+  referralCode?: string | null;
+  internalSigningSecret?: string;
+  rsvpEmail?: string;
+  outboxId?: string;
+  idempotencyKey?: string;
+}
+
+/** Canonical confirmed-registration email, calendar, badge, and share payload. */
+export async function prepareRegistrationConfirmedEmail(
+  db: DatabaseLike,
+  params: RegistrationConfirmedEmailParams,
+): Promise<{ outboxId: string; statement: StatementLike; manageUrl: string }> {
+  const { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText } =
+    await loadRegistrationEmailContext(db, params.event.id, params.registrationId, params);
+  const recipientEmail = params.recipientEmailOverride ?? user.email;
+  const attendanceData = buildAttendanceEmailData(registration.attendance_type, dayAttendance, dayWaitlist);
+  const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
+  const manageUrl = registrationManagePageUrl(
+    params.appBaseUrl,
+    params.event,
+    queuedCapabilityToken("registration_manage", registration.id),
+  );
+  const rsvpAddress = params.internalSigningSecret
+    ? await generateSignedRsvpAddress(registration.id, params.internalSigningSecret, params.rsvpEmail)
+    : undefined;
+  const calendar = await buildRegistrationIcs(
+    params.event,
+    registration.id,
+    manageUrl,
+    dayAttendance,
+    params.appBaseUrl,
+    rsvpAddress,
+    recipientEmail,
+    params.internalSigningSecret,
+  );
+  const shareUrl = params.referralCode ? `${params.appBaseUrl}/r/${params.referralCode}` : null;
+  const prepared = prepareQueueEmailStatement(db, {
+    outboxId: params.outboxId,
+    idempotencyKey: params.idempotencyKey,
+    eventId: params.event.id,
+    baseUrl: params.appBaseUrl,
+    templateKey: "registration_confirmed",
+    recipientEmail,
+    recipientUserId: user.id,
+    messageType: "transactional",
+    subject: `Registration confirmed for ${params.event.name}`,
+    capabilityLinkValues: [manageUrl],
+    attachments: params.referralCode
+      ? [
+          buildBadgeAttachment({
+            badgeCode: params.referralCode,
+            badgeType: "attendee",
+            firstName: user.first_name ?? "",
+            lastName: user.last_name ?? "",
+          }),
+        ]
+      : undefined,
+    data: {
+      ...buildEventEmailVariables(params.event, params.appBaseUrl),
+      firstName: user.first_name ?? "",
+      lastName: user.last_name ?? "",
+      email: recipientEmail,
+      organizationName: user.organization_name ?? "",
+      jobTitle: user.job_title ?? "",
+      attendanceType: registration.attendance_type,
+      attendanceLabel: attendanceData.attendanceLabel,
+      dayAttendance: attendanceData.dayAttendance,
+      dayWaitlist,
+      customAnswerRows,
+      acceptedTermsText: acceptedTermsText || undefined,
+      ...statusData,
+      registrationId: registration.id,
+      manageUrl,
+      shareUrl,
+      ...(shareUrl
+        ? {
+            badgeImageUrl: `${params.appBaseUrl}/api/v1/og/${params.referralCode}`,
+            linkedinShareUrl: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`,
+            twitterShareUrl: `https://twitter.com/intent/tweet?text=${encodeURIComponent(`I just registered for ${params.event.name} — join me! ${shareUrl}`)}`,
+            blueskyShareUrl: `https://bsky.app/intent/compose?text=${encodeURIComponent(`I just registered for ${params.event.name} — join me!\n${shareUrl}`)}`,
+            redditShareUrl: `https://www.reddit.com/submit?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(`Join me at ${params.event.name}`)}`,
+          }
+        : {}),
+    },
+    bounceAddress: rsvpAddress,
+    calendar: {
+      registrationId: registration.id,
+      eventId: params.event.id,
+      icsUid: calendar.uid,
+      icsFiles: calendar.files,
+      inlineContent: calendar.inlineContent,
+    },
+  });
+  return { outboxId: prepared.id, statement: prepared.statement, manageUrl };
+}
+
+export interface RegistrationConfirmationEmailParams extends RegistrationEmailOverrides {
+  event: RegistrationStatusEmailEvent;
+  registrationId: string;
+  appBaseUrl: string;
+  recipientEmail?: string;
+  confirmationTtlHours: number;
+  subject?: string;
+}
+
+export async function prepareRegistrationConfirmationEmail(
+  db: DatabaseLike,
+  params: RegistrationConfirmationEmailParams,
+): Promise<{ outboxId: string; statement: StatementLike; confirmationUrl: string }> {
+  const { registration, user, dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText } =
+    await loadRegistrationEmailContext(db, params.event.id, params.registrationId, params);
+  const recipientEmail = params.recipientEmail ?? user.email;
+  const attendanceData = buildAttendanceEmailData(registration.attendance_type, dayAttendance, dayWaitlist);
+  const statusData = buildRegistrationEmailStatusData("pending_email_confirmation", dayWaitlist);
+  const confirmationUrl = registrationConfirmPageUrl(
+    params.appBaseUrl,
+    params.event,
+    queuedCapabilityToken("registration_confirm", registration.id, params.confirmationTtlHours * 60 * 60),
+    registration.id,
+  );
+  const prepared = prepareQueueEmailStatement(db, {
+    eventId: params.event.id,
+    baseUrl: params.appBaseUrl,
+    templateKey: "registration_confirm_email",
+    recipientEmail,
+    recipientUserId: user.id,
+    messageType: "transactional",
+    subject: params.subject ?? `Confirm your email address for ${params.event.name}`,
+    capabilityLinkValues: [confirmationUrl],
+    data: {
+      ...buildEventEmailVariables(params.event, params.appBaseUrl),
+      firstName: user.first_name ?? "",
+      lastName: user.last_name ?? "",
+      email: recipientEmail,
+      organizationName: user.organization_name ?? "",
+      jobTitle: user.job_title ?? "",
+      attendanceLabel: attendanceData.attendanceLabel,
+      dayAttendance: attendanceData.dayAttendance,
+      customAnswerRows,
+      dayWaitlist,
+      acceptedTermsText: acceptedTermsText || undefined,
+      ...statusData,
+      registrationId: registration.id,
+      confirmationUrl,
+      manageUrl: `${params.appBaseUrl}/events/${params.event.slug}/manage`,
+      shareUrl: null,
+    },
+  });
+  return { outboxId: prepared.id, statement: prepared.statement, confirmationUrl };
+}
+
+export async function queueRegistrationConfirmationEmail(
+  db: DatabaseLike,
+  params: RegistrationConfirmationEmailParams,
+): Promise<{ outboxId: string; confirmationUrl: string }> {
+  const prepared = await prepareRegistrationConfirmationEmail(db, params);
+  await db.batch([prepared.statement]);
+  return { outboxId: prepared.outboxId, confirmationUrl: prepared.confirmationUrl };
 }

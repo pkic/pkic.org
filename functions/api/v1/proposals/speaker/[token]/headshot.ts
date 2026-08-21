@@ -15,15 +15,16 @@ import { json } from "../../../../../_lib/http";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { invalidateAndRerender } from "../../../../../_lib/services/og-badge-prerender";
 import { getSpeakerByManageToken } from "../../../../../_lib/services/proposals";
-import { updateSpeakerProfile } from "../../../../../_lib/services/proposals-speaker-profile";
-import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { AppError } from "../../../../../_lib/errors";
-import { nowIso } from "../../../../../_lib/utils/time";
-import { run } from "../../../../../_lib/db/queries";
 import { requireInternalSecret } from "../../../../../_lib/request";
-
-const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
-const MAX_HEADSHOT_BYTES = 20 * 1024 * 1024; // 20 MB
+import { SPEAKER_HEADSHOT_MAX_BYTES } from "../../../../../../assets/shared/schemas/images";
+import { readValidatedUploadedImage } from "../../../../../_lib/utils/image-upload";
+import {
+  removePreviousHeadshot,
+  removeUserHeadshot,
+  replaceUserHeadshot,
+} from "../../../../../_lib/services/user-headshot";
+import { storedImageResponse } from "../../../../../_lib/services/image-response";
 
 export async function onRequestGet(c: any): Promise<Response> {
   const { user } = await getSpeakerByManageToken(c.env.DB, c.req.param("token"), requireInternalSecret(c.env));
@@ -37,19 +38,10 @@ export async function onRequestGet(c: any): Promise<Response> {
     throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "File uploads are not configured on this instance.");
   }
 
-  const obj = await bucket.get(user.headshot_r2_key);
-  if (!obj) {
-    return json({ error: { code: "NOT_FOUND", message: "Headshot file missing from storage" } }, 404);
-  }
-
-  const ext = user.headshot_r2_key.split(".").pop()?.toLowerCase() ?? "";
-  const mime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
-
-  return new Response(await obj.arrayBuffer(), {
-    headers: {
-      "Content-Type": mime,
-      "Cache-Control": "private, max-age=3600",
-    },
+  return storedImageResponse(bucket, user.headshot_r2_key, {
+    notFoundCode: "NOT_FOUND",
+    notFoundMessage: "Headshot file missing from storage",
+    cacheControl: "private, max-age=3600",
   });
 }
 
@@ -71,39 +63,17 @@ export async function onRequestPut(c: any): Promise<Response> {
     return json({ error: { code: "INVALID_CONTENT_TYPE", message: "Request must be multipart/form-data" } }, 400);
   }
 
-  const formData = await c.req.raw.formData();
-  const file = formData.get("file");
-
-  if (!file || typeof file === "string") {
-    return json({ error: { code: "MISSING_FILE", message: 'A "file" field is required.' } }, 400);
-  }
-
-  const blob = file as File;
-
-  if (!ALLOWED_MIME_TYPES.has(blob.type)) {
-    return json(
-      {
-        error: {
-          code: "INVALID_FILE_TYPE",
-          message: "Only JPEG, PNG, and WebP images are accepted.",
-        },
-      },
-      415,
-    );
-  }
-
-  if (blob.size > MAX_HEADSHOT_BYTES) {
-    return json({ error: { code: "FILE_TOO_LARGE", message: "Headshot must be under 20 MB." } }, 413);
-  }
-
-  const ext = blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg";
-  const r2Key = `headshots/${user.id}/${Date.now()}.${ext}`;
-
-  await bucket.put(r2Key, await blob.arrayBuffer(), {
-    httpMetadata: { contentType: blob.type },
+  const image = await readValidatedUploadedImage(c.req.raw, "Headshot", SPEAKER_HEADSHOT_MAX_BYTES);
+  const r2Key = await replaceUserHeadshot({
+    db: c.env.DB,
+    bucket,
+    userId: user.id,
+    previousKey: user.headshot_r2_key,
+    image,
+    source: "speaker_self_upload",
+    audit: { actorType: "user", actorId: user.id, action: "headshot_uploaded_by_speaker" },
   });
-
-  await updateSpeakerProfile(c.env.DB, user.id, { headshotR2Key: r2Key });
+  c.executionCtx.waitUntil(removePreviousHeadshot(c.env.DB, c.env, user.headshot_r2_key));
 
   const origin = resolveAppBaseUrl(c.env, c.req.raw);
   await invalidateAndRerender(user.id, c.env, origin);
@@ -118,24 +88,18 @@ export async function onRequestPut(c: any): Promise<Response> {
 export async function onRequestDelete(c: any): Promise<Response> {
   const { user } = await getSpeakerByManageToken(c.env.DB, c.req.param("token"), requireInternalSecret(c.env));
 
-  const bucket = c.env.SPEAKER_UPLOADS_BUCKET;
-  if (bucket && user.headshot_r2_key) {
-    try {
-      await (bucket as unknown as { delete(key: string): Promise<void> }).delete(user.headshot_r2_key);
-    } catch {
-      // Non-fatal
-    }
-  }
-
-  await run(
-    c.env.DB,
-    "UPDATE users SET headshot_r2_key = NULL, headshot_updated_at = NULL, updated_at = ? WHERE id = ?",
-    [nowIso(), user.id],
-  );
-
-  await writeAuditLog(c.env.DB, "user", user.id, "headshot_deleted_by_speaker", "user", user.id, {
-    speakerUserId: user.id,
+  await removeUserHeadshot({
+    db: c.env.DB,
+    userId: user.id,
+    previousKey: user.headshot_r2_key,
+    audit: {
+      actorType: "user",
+      actorId: user.id,
+      action: "headshot_deleted_by_speaker",
+      details: { speakerUserId: user.id },
+    },
   });
+  c.executionCtx.waitUntil(removePreviousHeadshot(c.env.DB, c.env, user.headshot_r2_key));
 
   const origin = resolveAppBaseUrl(c.env, c.req.raw);
   await invalidateAndRerender(user.id, c.env, origin);

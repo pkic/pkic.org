@@ -1,6 +1,6 @@
 /**
  * Phase 1 §1.4 required tests, part 2: organization_representatives
- * invariants (migration 0037) — concurrent multi-organization
+ * invariants (consolidated migration 0035) — concurrent multi-organization
  * representation, transfer, and rejoin.
  */
 import { describe, expect, it, beforeEach } from "vitest";

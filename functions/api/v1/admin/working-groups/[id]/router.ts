@@ -24,7 +24,7 @@ const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
  * requireWgMeetingsAccess this router.ts used to only apply to /meetings/**
  * — resolving the working group once here, for the whole subtree, is what
  * actually gives a role-wg_chair grant (context-scoped
- * working-groups:write per migration 0038) management of their own WG's
+ * working-groups:write per consolidated migration 0035) management of their own WG's
  * roster, not just its meetings.
  */
 async function requireWorkingGroupAccess(c: Context<RequestDbContext>, next: Next): Promise<void> {

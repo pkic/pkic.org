@@ -8,12 +8,26 @@
  * `?sort=` and a raw SQL `ORDER BY` clause — any caller MUST pass the exact
  * set of column expressions it's safe to order by.
  */
-export function resolveOrderBy(sort: string | undefined, allowedColumns: readonly string[], fallback: string): string {
-  if (!sort) return fallback;
+function appendTieBreaker(orderBy: string, tieBreaker: string): string {
+  const normalizedTie = tieBreaker.trim().toLowerCase();
+  const existingTerms = orderBy
+    .replace(/^ORDER\s+BY\s+/i, "")
+    .split(",")
+    .map((term) => term.trim().toLowerCase());
+  return existingTerms.includes(normalizedTie) ? orderBy : `${orderBy}, ${tieBreaker}`;
+}
+
+export function resolveOrderBy(
+  sort: string | undefined,
+  allowedColumns: readonly string[],
+  fallback: string,
+  tieBreaker: string,
+): string {
+  if (!sort) return appendTieBreaker(fallback, tieBreaker);
   const desc = sort.startsWith("-");
   const column = desc ? sort.slice(1) : sort;
-  if (!allowedColumns.includes(column)) return fallback;
-  return `ORDER BY ${column} ${desc ? "DESC" : "ASC"}`;
+  if (!allowedColumns.includes(column)) return appendTieBreaker(fallback, tieBreaker);
+  return appendTieBreaker(`ORDER BY ${column} ${desc ? "DESC" : "ASC"}`, tieBreaker);
 }
 
 /**
@@ -27,10 +41,10 @@ export function resolveMappedOrderBy(
   fallback: string,
   tieBreaker: string,
 ): string {
-  if (!sort) return `ORDER BY ${fallback}, ${tieBreaker}`;
+  if (!sort) return appendTieBreaker(`ORDER BY ${fallback}`, tieBreaker);
   const desc = sort.startsWith("-");
   const key = desc ? sort.slice(1) : sort;
   const expression = columns[key];
-  if (!expression) return `ORDER BY ${fallback}, ${tieBreaker}`;
-  return `ORDER BY ${expression} ${desc ? "DESC" : "ASC"}, ${tieBreaker}`;
+  if (!expression) return appendTieBreaker(`ORDER BY ${fallback}`, tieBreaker);
+  return appendTieBreaker(`ORDER BY ${expression} ${desc ? "DESC" : "ASC"}`, tieBreaker);
 }

@@ -254,7 +254,7 @@ describe("roles (Built-in and custom roles)", () => {
     expect(deleteResponse.status).toBe(409);
   });
 
-  // ── Migration 0040: WG vice chair + forum chair/vice chair roles ─────────
+  // ── Consolidated migration 0035: WG vice chair + forum chair/vice chair roles ─────────
 
   it("seeds role-wg_vice_chair with the same permission bundle as role-wg_chair", async () => {
     const response = await call(adminToken, "/api/v1/admin/roles");

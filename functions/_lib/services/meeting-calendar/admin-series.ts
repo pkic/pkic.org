@@ -131,7 +131,7 @@ export async function updateMeetingSeries(
  * objects, their D1 rows, and any member time-slot preferences pointing at
  * either the series or one of its files. FK constraints on
  * meeting_ics_files/member_meeting_preferences are enforced in this
- * codebase's D1 (see migrations 0035/0036 PRAGMA foreign_keys = ON), so
+ * codebase's D1 (see consolidated migration 0035 PRAGMA foreign_keys = ON), so
  * children must go first there too.
  *
  * R2 objects are deleted BEFORE any D1 row is touched — the same ordering

@@ -1,41 +1,13 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Spinner } from "../../../components/Spinner";
+import { ApiDataTable, type ApiTableActions } from "../../../components/Table";
 import { api } from "../../api";
 import { fmt, toast } from "../../ui";
 import type { AdminWorkingGroupDetail, AdminWorkingGroupMember, AdminWorkingGroupSummary } from "../../types";
 import { UserPicker, type PickedUser } from "./UserPicker";
 import { getAdminWorkingGroupCatalogue } from "../../services/catalogues";
-
-type MemberSortKey = "name" | "organizationName" | "memberCategory";
-type SortDir = "asc" | "desc";
-
-function memberSortValue(m: AdminWorkingGroupMember, key: MemberSortKey): string | null {
-  switch (key) {
-    case "name":
-      return m.name;
-    case "organizationName":
-      return m.organizationName ?? null;
-    case "memberCategory":
-      return m.memberCategory ?? null;
-  }
-}
-
-// Nulls always sort last, regardless of direction.
-function compareMemberSort(
-  a: AdminWorkingGroupMember,
-  b: AdminWorkingGroupMember,
-  key: MemberSortKey,
-  dir: SortDir,
-): number {
-  const av = memberSortValue(a, key);
-  const bv = memberSortValue(b, key);
-  if (av == null && bv == null) return 0;
-  if (av == null) return 1;
-  if (bv == null) return -1;
-  const cmp = av.localeCompare(bv);
-  return dir === "asc" ? cmp : -cmp;
-}
+import { workingGroupMembersListResponseSchema } from "../../../../shared/schemas/working-groups";
 
 /**
  * WG management: create/edit working groups, add/remove
@@ -143,37 +115,8 @@ export function WorkingGroups() {
   const [addMemberUser, setAddMemberUser] = useState<PickedUser | null>(null);
   const [addingMember, setAddingMember] = useState(false);
   const [togglingActive, setTogglingActive] = useState(false);
-  const [memberSortKey, setMemberSortKey] = useState<MemberSortKey | null>(null);
-  const [memberSortDir, setMemberSortDir] = useState<SortDir>("asc");
   const [syncing, setSyncing] = useState(false);
-
-  function toggleMemberSort(key: MemberSortKey) {
-    if (memberSortKey === key) {
-      setMemberSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setMemberSortKey(key);
-      setMemberSortDir("asc");
-    }
-  }
-
-  function memberSortTh(label: string, key: MemberSortKey) {
-    const active = memberSortKey === key;
-    return (
-      <th>
-        <button
-          type="button"
-          class={`tbl-sort-btn${active ? " is-active" : ""}`}
-          onClick={() => toggleMemberSort(key)}
-          aria-sort={active ? (memberSortDir === "asc" ? "ascending" : "descending") : "none"}
-        >
-          <span>{label}</span>
-          <span aria-hidden="true" class="tbl-sort-indicator">
-            {active ? (memberSortDir === "asc" ? "▲" : "▼") : "↕"}
-          </span>
-        </button>
-      </th>
-    );
-  }
+  const memberTableRef = useRef<ApiTableActions | null>(null);
 
   async function loadGroups(keepSelection = true) {
     try {
@@ -220,6 +163,7 @@ export function WorkingGroups() {
       toast("Member added", "success");
       setAddMemberUser(null);
       await Promise.all([loadDetail(), loadGroups()]);
+      memberTableRef.current?.reload();
     } catch (err) {
       toast((err as Error).message, "error");
     } finally {
@@ -234,6 +178,7 @@ export function WorkingGroups() {
       await api(`/api/v1/admin/working-groups/${selectedId}/members/${userId}`, { method: "DELETE" });
       toast("Member removed", "success");
       await Promise.all([loadDetail(), loadGroups()]);
+      memberTableRef.current?.reload();
     } catch (err) {
       toast((err as Error).message, "error");
     }
@@ -387,54 +332,60 @@ export function WorkingGroups() {
               </div>
             </form>
 
-            <div class="fw-semibold small mb-2">Roster ({detail.members.length})</div>
-            <table class="table table-sm table-hover mb-0">
-              <thead class="table-dark">
-                <tr>
-                  {memberSortTh("Name", "name")}
-                  {memberSortTh("Organization", "organizationName")}
-                  {memberSortTh("Category", "memberCategory")}
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {detail.members.length === 0 ? (
-                  <tr>
-                    <td colspan={4} class="text-center text-muted fst-italic py-3">
-                      No members
-                    </td>
-                  </tr>
-                ) : (
-                  (memberSortKey
-                    ? detail.members.slice().sort((a, b) => compareMemberSort(a, b, memberSortKey, memberSortDir))
-                    : detail.members
-                  ).map((m) => (
-                    <tr key={m.userId}>
-                      <td>
-                        <button
-                          type="button"
-                          class="btn btn-link p-0"
-                          onClick={() => navigate(`/users/detail/${m.userId}`)}
-                          title="View user details"
-                        >
-                          {m.name}
-                        </button>
-                      </td>
-                      <td class="text-muted small">{m.organizationName ?? "—"}</td>
-                      <td class="text-muted small mono">{m.memberCategory ?? "—"}</td>
-                      <td class="text-end">
-                        <button
-                          class="btn btn-sm btn-outline-danger"
-                          onClick={() => void handleRemoveMember(m.userId, m.name)}
-                        >
-                          Remove
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+            <div class="fw-semibold small mb-2">Roster ({detail.memberCount})</div>
+            <ApiDataTable<AdminWorkingGroupMember>
+              endpoint={`/api/v1/admin/working-groups/${selectedId}/members`}
+              responseSchema={workingGroupMembersListResponseSchema}
+              resolve={(data) => (data as { members: AdminWorkingGroupMember[] }).members}
+              resolvePage={(data) => (data as { page: { total: number; hasMore: boolean } }).page}
+              paginate
+              searchPlaceholder="Search members…"
+              initialSort="name"
+              actionsRef={memberTableRef}
+              deps={[selectedId]}
+              rowKey={(member) => member.userId}
+              empty="No members"
+              columns={[
+                {
+                  header: "Name",
+                  sort: { asc: "name", desc: "-name" },
+                  cell: (member) => (
+                    <button
+                      type="button"
+                      class="btn btn-link p-0"
+                      onClick={() => navigate(`/users/detail/${member.userId}`)}
+                      title="View user details"
+                    >
+                      {member.name}
+                    </button>
+                  ),
+                },
+                {
+                  header: "Organization",
+                  sort: { asc: "organization_name", desc: "-organization_name" },
+                  cell: (member) => member.organizationName ?? "—",
+                  className: "text-muted small",
+                },
+                {
+                  header: "Category",
+                  sort: { asc: "member_category", desc: "-member_category" },
+                  cell: (member) => member.memberCategory ?? "—",
+                  className: "text-muted small mono",
+                },
+                {
+                  header: "",
+                  cell: (member) => (
+                    <button
+                      class="btn btn-sm btn-outline-danger"
+                      onClick={() => void handleRemoveMember(member.userId, member.name)}
+                    >
+                      Remove
+                    </button>
+                  ),
+                  className: "text-end",
+                },
+              ]}
+            />
           </>
         ) : null}
       </div>

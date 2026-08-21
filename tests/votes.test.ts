@@ -78,7 +78,7 @@ async function insertOrganization(name: string): Promise<string> {
 
 /**
  * Sets the organization's primary contact and (optionally) voting delegate
- * via role-primary_contact/role-voting_delegate grants (migration 0038) —
+ * via role-primary_contact/role-voting_delegate grants (consolidated migration 0035) —
  * the same mechanism resolveVotingDelegateUserId (votes/ballots.ts) reads.
  * `primaryContactUserId`/`votingDelegateUserId` must already be active
  * representatives of this organization (insertMemberUser adds them as such
@@ -252,6 +252,36 @@ describe("Voting system", () => {
 
     const candidatesAfter = await queryAll(env.DB, "SELECT id FROM vote_candidates");
     expect(candidatesAfter).toHaveLength(candidatesBefore.length);
+  });
+
+  it("rolls back direct vote creation when its audit record cannot be written", async () => {
+    await env.DB.prepare(
+      `CREATE TRIGGER reject_vote_created_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'vote_created'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced audit failure');
+       END`,
+    ).run();
+
+    try {
+      const response = await call(adminToken, "/api/v1/admin/votes", {
+        method: "POST",
+        body: JSON.stringify({
+          title: "Must Roll Back With Audit",
+          voteType: "motion",
+          scopeType: "forum",
+          thresholdType: "simple_majority",
+          closesAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        }),
+      });
+
+      expect(response.status).toBe(500);
+      const votes = await queryAll(env.DB, "SELECT id FROM votes WHERE title = 'Must Roll Back With Audit'");
+      expect(votes).toHaveLength(0);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER IF EXISTS reject_vote_created_audit").run();
+    }
   });
 
   it("a WG chair (context-scoped votes:create) can create a vote for their own WG but not another WG", async () => {
@@ -743,6 +773,103 @@ describe("Voting system", () => {
     );
     expect(proposalRows[0].status).toBe("converted_to_vote");
     expect(proposalRows[0].vote_id).toBe(voteRows[0].id);
+  });
+
+  it("serializes concurrent approval and rejection without a split-brain vote proposal", async () => {
+    const wgId = await insertWorkingGroup("Moderation Race WG", "moderation-race-wg", 5);
+    const proposerId = await insertMemberUser("F");
+    await insertWgMembership(wgId, proposerId);
+    const proposerToken = await createMemberSession(env.DB, proposerId, "moderation-race-proposer-token");
+    const submit = await call(proposerToken, "/api/v1/portal/vote-proposals", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Approve Reject Race",
+        description: "Only one terminal transition may win.",
+        voteType: "motion",
+        scopeType: "working_group",
+        scopeId: wgId,
+      }),
+    });
+    const { proposal } = (await submit.json()) as { proposal: { id: string } };
+
+    const [approve, reject] = await Promise.all([
+      call(adminToken, `/api/v1/admin/vote-proposals/${proposal.id}/approve`, { method: "POST" }),
+      call(adminToken, `/api/v1/admin/vote-proposals/${proposal.id}/reject`, {
+        method: "POST",
+        body: JSON.stringify({ reason: "Concurrent moderation" }),
+      }),
+    ]);
+    expect([approve.status, reject.status].filter((status) => status === 200)).toHaveLength(1);
+    expect([approve.status, reject.status].filter((status) => status === 409)).toHaveLength(1);
+
+    const [stored] = await queryAll<{ status: string; vote_id: string | null; rejection_reason: string | null }>(
+      env.DB,
+      "SELECT status, vote_id, rejection_reason FROM vote_proposals WHERE id = ?",
+      proposal.id,
+    );
+    const votes = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM votes WHERE source_proposal_id = ?",
+      proposal.id,
+    );
+    const rejectionEmails = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM email_outbox WHERE template_key = 'vote-proposal-rejected' AND recipient_user_id = ?",
+      proposerId,
+    );
+    if (stored.status === "converted_to_vote") {
+      expect(votes).toHaveLength(1);
+      expect(stored.vote_id).toBe(votes[0].id);
+      expect(stored.rejection_reason).toBeNull();
+      expect(rejectionEmails).toHaveLength(0);
+    } else {
+      expect(stored).toMatchObject({ status: "rejected", vote_id: null, rejection_reason: "Concurrent moderation" });
+      expect(votes).toHaveLength(0);
+      expect(rejectionEmails).toHaveLength(1);
+    }
+  });
+
+  it("serializes concurrent proposer withdrawal and admin approval", async () => {
+    const wgId = await insertWorkingGroup("Withdrawal Race WG", "withdrawal-race-wg", 5);
+    const proposerId = await insertMemberUser("F");
+    await insertWgMembership(wgId, proposerId);
+    const proposerToken = await createMemberSession(env.DB, proposerId, "withdrawal-race-proposer-token");
+    const submit = await call(proposerToken, "/api/v1/portal/vote-proposals", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Approve Withdraw Race",
+        description: "Only one terminal transition may win.",
+        voteType: "motion",
+        scopeType: "working_group",
+        scopeId: wgId,
+      }),
+    });
+    const { proposal } = (await submit.json()) as { proposal: { id: string } };
+
+    const [approve, withdraw] = await Promise.all([
+      call(adminToken, `/api/v1/admin/vote-proposals/${proposal.id}/approve`, { method: "POST" }),
+      call(proposerToken, `/api/v1/portal/vote-proposals/${proposal.id}`, { method: "DELETE" }),
+    ]);
+    expect([approve.status, withdraw.status].filter((status) => status === 200)).toHaveLength(1);
+    expect([approve.status, withdraw.status].filter((status) => status === 409)).toHaveLength(1);
+
+    const [stored] = await queryAll<{ status: string; vote_id: string | null }>(
+      env.DB,
+      "SELECT status, vote_id FROM vote_proposals WHERE id = ?",
+      proposal.id,
+    );
+    const votes = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM votes WHERE source_proposal_id = ?",
+      proposal.id,
+    );
+    if (stored.status === "converted_to_vote") {
+      expect(votes).toHaveLength(1);
+      expect(stored.vote_id).toBe(votes[0].id);
+    } else {
+      expect(stored).toEqual({ status: "withdrawn", vote_id: null });
+      expect(votes).toHaveLength(0);
+    }
   });
 
   it("proposal submission is disabled when the scope's min_endorsers is 0", async () => {

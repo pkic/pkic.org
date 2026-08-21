@@ -1,16 +1,14 @@
 import { parseJsonBody } from "../../../../../../../_lib/validation";
 import { json } from "../../../../../../../_lib/http";
-import { AppError } from "../../../../../../../_lib/errors";
 import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
 import { buildEventEmailVariables, getEventBySlug } from "../../../../../../../_lib/services/events";
 import { bulkCreateAttendeesAdmin } from "../../../../../../../_lib/services/invites";
 import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
-import { bulkQueueInviteEmails } from "../../../../../../../_lib/email/outbox";
 import { registrationPageUrl, inviteDeclineUrl } from "../../../../../../../_lib/services/frontend-links";
 import { requireInternalSecret } from "../../../../../../../_lib/request";
 import {
-  computeAttendeeInviteDigest,
-  verifyAttendeeInvitePreviewToken,
+  computeAdminInviteDigest,
+  requireValidAdminInvitePreview,
 } from "../../../../../../../_lib/services/admin-invite-preview";
 import { adminBulkAttendeeInvitesSchema } from "../../../../../../../../assets/shared/schemas/api";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
@@ -28,35 +26,19 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   // When sending a large list in chunks the frontend supplies the digest of the
   // full invite list (matching what was committed at preview time).  For single-
   // batch sends the digest is computed directly from the current invites.
-  const inviteDigest = body.inviteDigest ?? (await computeAttendeeInviteDigest(body.invites));
-  const previewValidation = await verifyAttendeeInvitePreviewToken({
+  const inviteDigest = body.inviteDigest ?? (await computeAdminInviteDigest(body.invites));
+  await requireValidAdminInvitePreview({
     secret,
     token: body.previewToken,
     eventId: event.id,
     adminId: admin.id,
+    inviteType: "attendee",
     inviteDigest,
   });
 
-  if (!previewValidation.ok) {
-    if (previewValidation.reason === "expired") {
-      throw new AppError(
-        409,
-        "INVITE_PREVIEW_EXPIRED",
-        "Invite preview expired. Render a fresh preview before sending.",
-      );
-    }
-    if (previewValidation.reason === "mismatch") {
-      throw new AppError(
-        409,
-        "INVITE_PREVIEW_STALE",
-        "Invite list changed after preview. Render preview again before sending.",
-      );
-    }
-    throw new AppError(400, "INVITE_PREVIEW_INVALID", "Invalid invite preview token. Render preview before sending.");
-  }
+  const sharedEmailVars = buildEventEmailVariables(event, appBaseUrl);
 
-  // Bulk-create invites with bounded D1 round-trips (pre-check + insert batches)
-  // instead of N×4-6 sequential round-trips for N invites.
+  // Invite creation and its durable email intent commit as one aggregate.
   const outcomes = await bulkCreateAttendeesAdmin(requestDb(c), {
     event,
     invites: body.invites.map((i) => ({
@@ -65,24 +47,16 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
       inviteeLastName: i.lastName ?? null,
       sourceType: i.sourceType,
     })),
-  });
-
-  // Pre-compute shared email variables once.
-  const sharedEmailVars = buildEventEmailVariables(event, appBaseUrl);
-
-  // Queue invite emails for new invites in a single batch INSERT.
-  const emailRows = outcomes
-    .filter((o) => o.status === "created" && o.token)
-    .map((o) => {
+    buildEmailRow: ({ email, inviteId, token }) => {
       const registrationUrl = registrationPageUrl(appBaseUrl, event, {
-        invite: o.token!,
-        inviteId: o.inviteId,
+        invite: token,
+        inviteId,
         source: "invite",
       });
-      const declineUrl = inviteDeclineUrl(appBaseUrl, event, o.token!, o.inviteId);
+      const declineUrl = inviteDeclineUrl(appBaseUrl, event, token, inviteId);
       return {
         eventId: event.id,
-        recipientEmail: o.email,
+        recipientEmail: email,
         templateKey: "attendee_invite",
         subject: `Invitation: ${event.name}`,
         capabilityLinkValues: [registrationUrl, declineUrl],
@@ -92,8 +66,8 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
           declineUrl,
         },
       };
-    });
-  await bulkQueueInviteEmails(requestDb(c), emailRows);
+    },
+  });
 
   const created: BulkItemResult[] = outcomes.filter((o) => o.status === "created").map((o) => ({ email: o.email }));
   const endorsed: BulkItemResult[] = outcomes.filter((o) => o.status === "endorsed").map((o) => ({ email: o.email }));

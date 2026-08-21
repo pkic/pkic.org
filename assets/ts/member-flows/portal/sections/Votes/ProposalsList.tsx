@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
 import type { z } from "zod";
 import { listProposalsResponseSchema } from "../../../../../shared/schemas/votes";
+import { myWorkingGroupsListResponseSchema } from "../../../../../shared/schemas/me";
 import { getJson, ApiClientError } from "../../../../shared/api-client";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
@@ -22,7 +23,9 @@ export function ProposalsList({ wgNames }: { wgNames: Map<string, string> }) {
 
   const reloadMemberships = useCallback(async () => {
     try {
-      const membershipsData = await getJson<{ workingGroups: MyWorkingGroupMembership[] }>("/api/v1/me/working-groups");
+      const membershipsData = myWorkingGroupsListResponseSchema.parse(
+        await getJson<unknown>("/api/v1/me/working-groups"),
+      );
       setMyWorkingGroups(membershipsData.workingGroups);
       setError(null);
     } catch (e) {

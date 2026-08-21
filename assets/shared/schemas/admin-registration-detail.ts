@@ -8,6 +8,7 @@ export const adminRegistrationDetailSchema = z.object({
   event_id: eventIdSchema,
   user_id: databaseIdSchema,
   status: z.string(),
+  cancellation_reason_code: z.string().nullable(),
   attendance_type: z.string(),
   source_type: z.string(),
   created_at: z.string(),

@@ -140,6 +140,30 @@ describe("admin working groups", () => {
     expect(second.status).toBe(409);
   });
 
+  it("rolls back working-group creation when its audit record cannot be written", async () => {
+    await env.DB.prepare(
+      `CREATE TRIGGER reject_working_group_created_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'working_group_created'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced audit failure');
+       END`,
+    ).run();
+
+    try {
+      const response = await call(adminToken, "/api/v1/admin/working-groups", {
+        method: "POST",
+        body: JSON.stringify({ name: "Must Roll Back With Audit" }),
+      });
+      expect(response.status).toBe(500);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM working_groups WHERE name = 'Must Roll Back With Audit'"),
+      ).toHaveLength(0);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER IF EXISTS reject_working_group_created_audit").run();
+    }
+  });
+
   it("updates a working group's fields and can deactivate/reactivate it", async () => {
     const createResponse = await call(adminToken, "/api/v1/admin/working-groups", {
       method: "POST",
@@ -173,19 +197,26 @@ describe("admin working groups", () => {
     });
     expect(addResponse.status).toBe(201);
 
-    const detailResponse = await call(adminToken, `/api/v1/admin/working-groups/${wgId}`);
-    const detail = (await detailResponse.json()) as { workingGroup: { members: Array<{ userId: string }> } };
-    expect(detail.workingGroup.members.some((m) => m.userId === userId)).toBe(true);
+    const memberListResponse = await call(
+      adminToken,
+      `/api/v1/admin/working-groups/${wgId}/members?limit=1&sort=-name&q=wg-member`,
+    );
+    const memberList = (await memberListResponse.json()) as {
+      members: Array<{ userId: string }>;
+      page: { total: number; hasMore: boolean };
+    };
+    expect(memberList.members.map((member) => member.userId)).toEqual([userId]);
+    expect(memberList.page).toMatchObject({ total: 1, hasMore: false });
 
     const removeResponse = await call(adminToken, `/api/v1/admin/working-groups/${wgId}/members/${userId}`, {
       method: "DELETE",
     });
     expect(removeResponse.status).toBe(200);
 
-    const afterRemove = (await (await call(adminToken, `/api/v1/admin/working-groups/${wgId}`)).json()) as {
-      workingGroup: { members: Array<{ userId: string }> };
+    const afterRemove = (await (await call(adminToken, `/api/v1/admin/working-groups/${wgId}/members`)).json()) as {
+      members: Array<{ userId: string }>;
     };
-    expect(afterRemove.workingGroup.members.some((m) => m.userId === userId)).toBe(false);
+    expect(afterRemove.members.some((m) => m.userId === userId)).toBe(false);
   });
 
   it("rejects adding a non-category-A member to the CA working group", async () => {
@@ -266,7 +297,7 @@ describe("admin working groups", () => {
     // PR #1 review, phase1-2-review-20260817.md blocker 2: the CA
     // eligibility check previously used an unordered scalar subquery, so a
     // person representing more than one organization (a supported case
-    // since migration 0037) could be accepted or rejected depending on
+    // since consolidated migration 0035) could be accepted or rejected depending on
     // whichever row SQLite happened to return. Run this several times —
     // a flaky pass/fail pattern is exactly what the old bug would produce.
     const wgId = await insertWorkingGroup("CA Working Group", "ca");
@@ -309,7 +340,7 @@ describe("admin working groups", () => {
     expect(response.status).toBe(403);
   });
 
-  // ── Fix 2: chair / vice chair via user_roles (migration 0040) ────────────
+  // ── Fix 2: chair / vice chair via user_roles (consolidated migration 0035) ────────────
 
   async function findRoleId(name: string): Promise<string> {
     const rows = await queryAll<{ id: string }>(env.DB, "SELECT id FROM roles WHERE name = ?", name);

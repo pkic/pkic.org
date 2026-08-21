@@ -1,8 +1,8 @@
 /**
  * leadership.test.ts
  *
- * Board of Directors / Executive Council leadership positions (migration
- * 0049) — admin CRUD (functions/api/v1/admin/leadership-positions) and the
+ * Board of Directors / Executive Council leadership positions (consolidated
+ * migration 0035) — admin CRUD (functions/api/v1/admin/leadership-positions) and the
  * public roster + forum-chairs reads (functions/api/v1/leadership). See
  * functions/_lib/services/leadership.ts for the design (a dedicated table
  * instead of user_roles, since Board/EC need many simultaneous holders, an
@@ -83,7 +83,7 @@ async function assignRole(
     .run();
 }
 
-describe("leadership positions (migration 0049) — Board / Executive Council rosters", () => {
+describe("leadership positions (consolidated migration 0035) — Board / Executive Council rosters", () => {
   let adminToken: string;
   let adminId: string;
 

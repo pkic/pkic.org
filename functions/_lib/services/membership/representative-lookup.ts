@@ -1,6 +1,6 @@
 /**
  * The deterministic "first" `organization_representatives` row for a user
- * who may represent more than one organization at once (migration 0037,
+ * who may represent more than one organization at once (consolidated migration 0035,
  * concurrent multi-organization representation is a supported case, not
  * an edge case to guard against). Read models that need to show or count
  * exactly one row per user — not one row per represented organization —

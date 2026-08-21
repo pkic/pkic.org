@@ -315,6 +315,8 @@ describe("GET /api/v1/sponsors/:id/logo", () => {
     );
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("image/svg+xml");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(response.headers.get("content-security-policy")).toContain("sandbox");
     const buf = new Uint8Array(await response.arrayBuffer());
     expect(Array.from(buf)).toEqual([1, 2, 3]);
   });

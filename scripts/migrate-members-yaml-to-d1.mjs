@@ -9,17 +9,17 @@
  *   - upserts one `organizations` row per org-tied YAML file (categories
  *     A-G, H1-H4, H8), populating the content columns and a canonical
  *     `links_json` array (social links) directly — no `social_*` columns
- *   - upserts one `organization_domains` row per YAML `organizationDomains`
+ *   - upserts one `organization_domain_claims` row per YAML `organizationDomains`
  *     entry for org-tied organizations
  *   - creates exactly one `members` aggregate row per organization (the
  *     org's `member_type='organization'` row, migration 0000) plus a
- *     `member_category_assignments` row for its category (migration 0037) —
+ *     `member_category_assignments` row for its category (consolidated migration 0035) —
  *     never one `members` row per representative
  *   - upserts one `users` row + one `organization_representatives` row per
  *     representative whose email could be matched against the `pkic.csv`
  *     roster by organization domain (Step 2); the org's primary/secondary
  *     contact are granted as `role-primary_contact`/`role-secondary_contact`
- *     `user_roles` grants (migration 0038), context-scoped to the org's
+ *     `user_roles` grants (consolidated migration 0035), context-scoped to the org's
  *     aggregate `members.id`
  *   - upserts one `users` + `members` (individual aggregate) row for
  *     **every** org-less individual (H5/H6/H7) YAML file, even when no

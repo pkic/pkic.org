@@ -3,7 +3,6 @@
  */
 import { json } from "../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
-import { writeAuditLog } from "../../../../../../_lib/services/audit";
 import { removeMemberFromWorkingGroup } from "../../../../../../_lib/services/admin-working-groups";
 import { workingGroupMemberRemoveRouteSchema } from "../../../../../../../assets/shared/schemas/working-groups";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
@@ -19,11 +18,7 @@ export const WorkingGroupMemberRemove = openApiRoute(
 
     const wgId = data.params.id;
     const userId = data.params.userId;
-    await removeMemberFromWorkingGroup(requestDb(c), wgId, userId);
-
-    await writeAuditLog(requestDb(c), "admin", admin.id, "working_group_member_removed", "working_group", wgId, {
-      userId,
-    });
+    await removeMemberFromWorkingGroup(requestDb(c), admin.id, wgId, userId);
 
     return json({ success: true });
   },

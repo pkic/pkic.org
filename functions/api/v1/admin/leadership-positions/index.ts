@@ -3,7 +3,7 @@
  * POST /api/v1/admin/leadership-positions
  *
  * Admin CRUD for the Board of Directors / Executive Council rosters
- * (migration 0049) — see functions/_lib/services/leadership.ts for the
+ * (consolidated migration 0035) — see functions/_lib/services/leadership.ts for the
  * design rationale (why a dedicated table instead of user_roles). Gated by
  * the same access:grant/access:revoke permissions the existing chair
  * assignment endpoints use, since this is the same kind of designation

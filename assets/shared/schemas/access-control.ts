@@ -5,6 +5,7 @@
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { permissionSchema } from "./permissions";
 
 const contextTypeSchema = z.enum(["event", "working_group", "organization"]);
 
@@ -16,7 +17,7 @@ export const accessGrantIdParamsSchema = z.object({ id: databaseIdSchema });
 // Role ids are NOT always UUIDs — custom roles get a real uuid() (see
 // roles/index.ts's RolesCreate), but every built-in/system role ships with
 // a fixed human-readable id (role-admin, role-wg_chair, role-forum_chair,
-// ...; see migrations 0035/0040). UUID-only validation here previously
+// ...; see consolidated migration 0035). UUID-only validation here previously
 // rejected every
 // attempt to reference a system role by id (assign it via POST .../roles,
 // or look up its holders via GET .../roles/:id/assignments) with a 400
@@ -53,17 +54,18 @@ function validateScopedContext(
 export const accessGrantCreateSchema = z
   .object({
     userId: databaseIdSchema,
-    permission: trimmedString(1, 80),
+    permission: permissionSchema,
     ...scopedContextFields,
   })
   .superRefine(validateScopedContext);
+export type AccessGrantCreateInput = z.infer<typeof accessGrantCreateSchema>;
 
 export const accessGrantResponseSchema = z.object({
   id: databaseIdSchema,
   userId: databaseIdSchema,
   userEmail: z.email(),
-  permission: z.string(),
-  contextType: z.string().nullable(),
+  permission: permissionSchema,
+  contextType: contextTypeSchema.nullable(),
   contextId: z.string().nullable(),
   expiresAt: z.string().nullable(),
   createdAt: z.string(),
@@ -96,6 +98,7 @@ export const ADMIN_ACCESS_GRANTS_SORT_COLUMNS = [
 export const accessGrantsListQuerySchema = listQuerySchema(ADMIN_ACCESS_GRANTS_SORT_COLUMNS).extend({
   userId: databaseIdSchema.optional(),
 });
+export type AccessGrantsListQuery = z.infer<typeof accessGrantsListQuerySchema>;
 export const accessGrantsListResponseSchema = paginatedResponseSchema("grants", accessGrantResponseSchema);
 
 export const accessGrantsListRouteSchema = {
@@ -123,15 +126,16 @@ export const accessGrantRevokeRouteSchema = {
 export const roleCreateSchema = z.object({
   name: trimmedString(1, 80).regex(/^[a-z][a-z0-9_]*$/, "Use lowercase letters, numbers, and underscores only"),
   description: trimmedString(0, 400).optional(),
-  permissions: z.array(trimmedString(1, 80)).max(64).default([]),
+  permissions: z.array(permissionSchema).max(64).default([]),
 });
+export type RoleCreateInput = z.infer<typeof roleCreateSchema>;
 
 export const roleResponseSchema = z.object({
   id: roleIdSchema,
   name: z.string(),
   description: z.string().nullable(),
   isSystemRole: z.boolean(),
-  permissions: z.array(z.string()),
+  permissions: z.array(permissionSchema),
   createdAt: z.string(),
 });
 export type Role = z.infer<typeof roleResponseSchema>;
@@ -153,6 +157,7 @@ export const rolesCreateRouteSchema = {
 export const ADMIN_ROLES_SORT_COLUMNS = ["name", "description"] as const;
 
 export const rolesListQuerySchema = listQuerySchema(ADMIN_ROLES_SORT_COLUMNS);
+export type RolesListQuery = z.infer<typeof rolesListQuerySchema>;
 export const rolesListResponseSchema = paginatedResponseSchema("roles", roleResponseSchema);
 
 export const rolesListRouteSchema = {
@@ -183,11 +188,13 @@ export const roleAssignmentSchema = z.object({
   userId: databaseIdSchema,
   name: z.string(),
   email: z.string(),
-  contextType: z.string().nullable(),
+  contextType: contextTypeSchema.nullable(),
   contextId: z.string().nullable(),
   expiresAt: z.string().nullable(),
   createdAt: z.string(),
 });
+
+export type RoleAssignment = z.infer<typeof roleAssignmentSchema>;
 
 export const roleAssignmentsListRouteSchema = {
   tags: ["Access Control"],
@@ -211,17 +218,20 @@ export const userRoleAssignSchema = z
     ...scopedContextFields,
   })
   .superRefine(validateScopedContext);
+export type UserRoleAssignInput = z.infer<typeof userRoleAssignSchema>;
 
 export const userRoleResponseSchema = z.object({
   id: databaseIdSchema,
   userId: databaseIdSchema,
   roleId: roleIdSchema,
   roleName: z.string(),
-  contextType: z.string().nullable(),
+  contextType: contextTypeSchema.nullable(),
   contextId: z.string().nullable(),
   expiresAt: z.string().nullable(),
   createdAt: z.string(),
 });
+
+export type UserRoleAssignment = z.infer<typeof userRoleResponseSchema>;
 
 export const userRolesAssignRouteSchema = {
   tags: ["Access Control"],
@@ -263,6 +273,7 @@ export const userRoleUpdateExpirySchema = z.object({
   // not allowed — PATCH always states the intended value.
   expiresAt: z.iso.datetime().nullable(),
 });
+export type UserRoleUpdateExpiryInput = z.infer<typeof userRoleUpdateExpirySchema>;
 
 export const userRoleUpdateExpiryRouteSchema = {
   tags: ["Access Control"],

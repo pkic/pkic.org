@@ -6,19 +6,19 @@ interface TableNameRow {
 
 // `roles` / `role_permissions` are system reference data —
 // built-in roles "ship with the portal" and are seeded once by migration
-// 0038, not per-test business data (unlike e.g. `working_groups`, which
+// consolidated migration 0035, not per-test business data (unlike e.g. `working_groups`, which
 // tests already re-seed themselves when they need it). Wiping them on every
 // resetDb() would break the FK from `user_roles.role_id` for any test that
 // grants a built-in role (e.g. via POST .../events/:slug/permissions)
 // without every such test re-inserting all nine built-in roles itself.
-// `membership_settings` (migration 0041) is a singleton
+// `membership_settings` (consolidated migration 0035) is a singleton
 // configuration row seeded once by the migration — the same class of
 // system reference data as roles/role_permissions above, not per-test
 // business data. Every membership-workflow code path (stage transitions,
 // scheduled jobs, the admin settings endpoint) expects this row to always
 // exist; wiping it on every resetDb() would require every such test to
 // re-seed it itself.
-// `mailing_lists` (migration 0044) is the same class of system
+// `mailing_lists` (consolidated migration 0035) is the same class of system
 // reference data — its 9 rows are seeded once by the migration, and
 // membership-onboarding.ts's approveApplication now reads the all_members/
 // consultation rows at runtime (resolveAutoSyncListEmails) instead of the
@@ -26,14 +26,14 @@ interface TableNameRow {
 // silently stop every pre-existing approval-flow test from enqueueing
 // Google Groups sync for pkic@/consultation@, the same failure mode
 // membership_settings' exclusion already guards against.
-// `membership_categories` (migration 0035) is the same class of system
+// `membership_categories` (consolidated migration 0035) is the same class of system
 // reference data too — its 15 rows (A-G/H1-H8) are seeded once by the
 // migration, and member_category_assignments.category_code/
 // member_applications.membership_category both carry a FOREIGN KEY into
 // it (members.member_type no longer does — it's a plain
 // 'individual'/'organization' discriminator, migration 0000's original
 // meaning; category lives solely in member_category_assignments as of
-// migration 0037). Wiping membership_categories on every resetDb() would
+// consolidated migration 0035). Wiping membership_categories on every resetDb() would
 // fail every test's first insert of a categorized application/aggregate
 // with a FK constraint error.
 // `sponsorship_tier_catalog` and `sponsorship_tier_config` are likewise

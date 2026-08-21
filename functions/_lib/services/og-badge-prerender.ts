@@ -266,7 +266,7 @@ export async function generateBadgePng(code: string, env: BadgeRenderEnv, origin
               u.headshot_r2_key,
               e.name   AS event_name,
               e.starts_at, e.ends_at, e.settings_json,
-              (
+              COALESCE(bro.role, (
                 SELECT ep2.role
                 FROM   event_participants ep2
                 WHERE  ep2.event_id = r.event_id
@@ -290,10 +290,11 @@ export async function generateBadgePng(code: string, env: BadgeRenderEnv, origin
                   ELSE 5
                 END
                 LIMIT 1
-              ) AS effective_role
+              )) AS effective_role
        FROM   registrations r
        JOIN   users  u ON u.id = r.user_id
        JOIN   events e ON e.id = r.event_id
+       LEFT JOIN registration_badge_role_overrides bro ON bro.registration_id = r.id
        WHERE  r.id = ?`,
       [ref.owner_id],
     );

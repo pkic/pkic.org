@@ -84,7 +84,14 @@ function SponsorLogo({
 
 function useSponsors(
   apiBase: string,
-  options: { eventName?: string; level?: string; minWeight?: number; limit?: number; sort?: "name" | "-weight" },
+  options: {
+    eventName?: string;
+    level?: string;
+    minWeight?: number;
+    limit?: number;
+    sort?: "name" | "-weight";
+    allowTruncation?: boolean;
+  },
 ): { sponsors: PublicSponsor[] | null; error: string | null } {
   const [sponsors, setSponsors] = useState<PublicSponsor[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -101,6 +108,9 @@ function useSponsors(
         if (options.level) query.set("level", options.level);
         if (options.minWeight !== undefined) query.set("minWeight", String(options.minWeight));
         const data = sponsorsListResponseSchema.parse(await getJson<unknown>(`${apiBase}/sponsors?${query}`));
+        if (data.page.hasMore && !options.allowTruncation) {
+          throw new Error("The sponsor display exceeds the API page limit.");
+        }
         if (!cancelled) setSponsors(data.sponsors);
       } catch (e) {
         if (!cancelled) {
@@ -113,7 +123,15 @@ function useSponsors(
     return () => {
       cancelled = true;
     };
-  }, [apiBase, options.eventName, options.level, options.minWeight, options.limit, options.sort]);
+  }, [
+    apiBase,
+    options.eventName,
+    options.level,
+    options.minWeight,
+    options.limit,
+    options.sort,
+    options.allowTruncation,
+  ]);
 
   return { sponsors, error };
 }
@@ -257,6 +275,7 @@ function StripMode({
     minWeight,
     limit: maxItems,
     sort: "-weight",
+    allowTruncation: maxItems !== undefined,
   });
   const sorted = sponsors?.map((s) => ({ s, weight: s.weight })) ?? null;
 

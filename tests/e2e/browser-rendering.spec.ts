@@ -373,8 +373,8 @@ async function fillProposal(
   }
 }
 
-async function signInAsAdmin(page: Page): Promise<void> {
-  const adminEmail = e2eAdminEmail();
+async function signInAsAdmin(page: Page, scope: "browser-waitlist" | "browser-presentation"): Promise<void> {
+  const adminEmail = e2eAdminEmail(scope);
   await page.goto("/admin/");
   await expect(page.locator("#form-magic")).toBeVisible({ timeout: 10_000 });
 
@@ -519,7 +519,7 @@ test.describe("browser workflows", () => {
     });
     const screenshot = createScreenshotter(page);
 
-    await signInAsAdmin(page);
+    await signInAsAdmin(page, "browser-waitlist");
     const eventSlug = "pqc-conference-amsterdam-nl";
     const dayDate = "2026-12-01";
     const restoredCapacity = 800;
@@ -1051,7 +1051,7 @@ test.describe("browser workflows", () => {
     const errorMonitor = monitorErrors(page);
     const screenshot = createScreenshotter(page);
 
-    const adminEmail = e2eAdminEmail();
+    const adminEmail = e2eAdminEmail("browser-auth");
 
     // Admin page must display the login form (no active session)
     await page.goto("/admin/");
@@ -1390,7 +1390,7 @@ test.describe("browser workflows", () => {
     void proposalManageUrl; // only used to confirm the email arrived; speaker token comes later
 
     // ── 2. Admin signs in and accepts the proposal ────────────────────────────
-    await signInAsAdmin(page);
+    await signInAsAdmin(page, "browser-presentation");
     await screenshot("02-admin-signed-in");
 
     // Accept the proposal. The e2e server is configured with DEFAULT_MIN_PROPOSAL_REVIEWS=0.

@@ -120,7 +120,7 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
     expect(aggregateRows[0].member_type).toBe("organization");
     expect(aggregateRows[0].status).toBe("active");
     // Regression guard: createAdminMember used to accept `memberSince` in the
-    // request but never write it anywhere (migration 0049 added the column,
+    // request but never write it anywhere (consolidated migration 0035 added the column,
     // now on `members`, not `organizations`).
     expect(aggregateRows[0].member_since).toBe("2026-01-15");
 

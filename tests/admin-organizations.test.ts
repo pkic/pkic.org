@@ -144,7 +144,7 @@ describe("Admin Organizations — membership category on the aggregate (Phase 1 
     expect(categories).toEqual([...categories].sort());
   });
 
-  it("creating an organization via the Interim Admin Tool sets member_since on the aggregate (migration 0049, regression guard)", async () => {
+  it("creating an organization via the Interim Admin Tool sets member_since on the aggregate (consolidated migration 0035, regression guard)", async () => {
     const { organizationId } = await createOrg();
     const aggregateId = await aggregateIdFor(organizationId);
 

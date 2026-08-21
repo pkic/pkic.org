@@ -58,6 +58,7 @@ import {
 } from "./representative-roles";
 import { serializeLinks } from "../../../../assets/shared/schemas/links";
 import { INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../../../assets/shared/schemas/membership-categories";
+import { prepareClaimDomainForOrganization, prepareTransferApplicationDomainClaim } from "./organization-domain-claims";
 import type { DatabaseLike, StatementLike } from "../../types";
 
 export interface ProvisionRepresentativeInput {
@@ -72,6 +73,8 @@ export interface ProvisionMembershipInput {
   website?: string | null;
   description?: string | null;
   organizationDomain?: string | null;
+  /** Set when approval transfers the application's existing domain claim. */
+  domainClaimApplicationId?: string | null;
   membershipCategory: string;
   /** Only applied when given; the organization-tied path never overwrites an already-set member_since. */
   memberSince?: string | null;
@@ -236,13 +239,6 @@ async function buildResolveOrganizationStatements(
         now,
       ),
   ];
-  if (input.organizationDomain) {
-    statements.push(
-      db
-        .prepare(`INSERT INTO organization_domains (id, organization_id, domain, created_at) VALUES (?, ?, ?, ?)`)
-        .bind(uuid(), organizationId, input.organizationDomain, now),
-    );
-  }
   return { organizationId, organizationWasCreated: true, statements };
 }
 
@@ -313,6 +309,22 @@ async function buildProvisionOrganizationTiedMemberships(
     statements: orgStatements,
   } = await buildResolveOrganizationStatements(db, input, now);
   statements.push(...orgStatements);
+
+  if (input.organizationDomain) {
+    const domainStatement = input.domainClaimApplicationId
+      ? await prepareTransferApplicationDomainClaim(db, {
+          domain: input.organizationDomain,
+          applicationId: input.domainClaimApplicationId,
+          organizationId,
+          now,
+        })
+      : await prepareClaimDomainForOrganization(db, {
+          domain: input.organizationDomain,
+          organizationId,
+          now,
+        });
+    if (domainStatement) statements.push(domainStatement);
+  }
 
   const { aggregateId, statements: aggregateStatements } = await buildResolveOrCreateAggregateStatements(
     db,

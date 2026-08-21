@@ -9,7 +9,6 @@ import { json } from "../../../../../_lib/http";
 import { AppError } from "../../../../../_lib/errors";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
-import { writeAuditLog } from "../../../../../_lib/services/audit";
 import {
   getAdminSponsorship,
   toApiSponsorship,
@@ -40,9 +39,7 @@ export const SponsorshipUpdate = openApiRoute(sponsorshipUpdateRouteSchema, asyn
 
   const body = data.body;
   const id = data.params.id;
-  const sponsorship = await updateAdminSponsorship(db, id, body);
-
-  await writeAuditLog(db, "admin", admin.id, "sponsorship_updated", "sponsorship", id, body);
+  const sponsorship = await updateAdminSponsorship(db, admin.id, id, body);
 
   return json({ sponsorship: toApiSponsorship(sponsorship) });
 });

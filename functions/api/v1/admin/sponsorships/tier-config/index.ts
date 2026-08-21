@@ -1,7 +1,7 @@
 /**
  * GET /api/v1/admin/sponsorships/tier-config — sponsorship tier pricing
- * config (self-service checkout). Managed data (migration
- * 0053), not a code constant — see [id].ts for the PATCH that updates it.
+ * config (self-service checkout). Managed data (consolidated migration
+ * 0035), not a code constant — see [id].ts for the PATCH that updates it.
  */
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";

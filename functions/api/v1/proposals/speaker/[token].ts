@@ -27,22 +27,12 @@ import {
 import { getRequiredTerms } from "../../../../_lib/services/events";
 import { speakerPresentationPageUrl } from "../../../../_lib/services/frontend-links";
 import { first } from "../../../../_lib/db/queries";
-import { persistConsents, validateRequiredConsents } from "../../../../_lib/services/consent";
 import { parseJsonBody } from "../../../../_lib/validation";
 import { requireInternalSecret } from "../../../../_lib/request";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
 import { z } from "zod";
-import {
-  firstNameSchema,
-  lastNameSchema,
-  organizationNameSchema,
-  jobTitleSchema,
-} from "../../../../../assets/shared/schemas/api";
-import { linksSchema, parseLinksJson, serializeLinks } from "../../../../../assets/shared/schemas/links";
-
-function optionalNullableOrEmpty<T extends z.ZodTypeAny>(schema: T) {
-  return z.union([schema, z.literal(""), z.null()]).optional();
-}
+import { speakerProfilePatchSchema } from "../../../../../assets/shared/schemas/proposal-management";
+import { parseLinksJson, serializeLinks } from "../../../../../assets/shared/schemas/links";
 
 const speakerActionSchema = z.discriminatedUnion("action", [
   z.object({
@@ -62,15 +52,6 @@ const speakerActionSchema = z.discriminatedUnion("action", [
     reason: z.string().trim().max(2000).optional(),
   }),
 ]);
-
-const speakerProfileSchema = z.object({
-  firstName: optionalNullableOrEmpty(firstNameSchema),
-  lastName: optionalNullableOrEmpty(lastNameSchema),
-  organizationName: optionalNullableOrEmpty(organizationNameSchema),
-  jobTitle: optionalNullableOrEmpty(jobTitleSchema),
-  biography: optionalNullableOrEmpty(z.string().trim().min(1).max(10_000)),
-  links: linksSchema.optional(),
-});
 
 export async function onRequestGet(c: any): Promise<Response> {
   try {
@@ -140,28 +121,10 @@ export async function onRequestPost(c: any): Promise<Response> {
     const body = await parseJsonBody(c.req, speakerActionSchema);
 
     if (body.action === "confirm") {
-      const info = await getSpeakerByManageToken(c.env.DB, c.req.param("token"), requireInternalSecret(c.env));
-
-      // Already confirmed is treated as success and does not require resubmission.
-      if (info.speaker.status !== "confirmed") {
-        const requiredTerms = await getRequiredTerms(c.env.DB, info.proposal.event_id, "speaker");
-        await validateRequiredConsents(requiredTerms, body.consents);
-
-        const signingSecret = requireInternalSecret(c.env);
-        await persistConsents(c.env.DB, {
-          proposalId: info.proposal.id,
-          eventId: info.proposal.event_id,
-          userId: info.speaker.user_id,
-          audienceType: "speaker",
-          accepted: body.consents,
-          ip: c.req.raw.headers.get("cf-connecting-ip"),
-          userAgent: c.req.raw.headers.get("user-agent"),
-          secret: signingSecret,
-        });
-      }
-
       await confirmSpeakerParticipation(c.env.DB, c.req.param("token"), requireInternalSecret(c.env), {
-        termsAccepted: true,
+        consents: body.consents,
+        ip: c.req.raw.headers.get("cf-connecting-ip"),
+        userAgent: c.req.raw.headers.get("user-agent"),
       });
       return json({ success: true, status: "confirmed" });
     }
@@ -177,7 +140,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 
 export async function onRequestPatch(c: any): Promise<Response> {
   try {
-    const body = await parseJsonBody(c.req, speakerProfileSchema);
+    const body = await parseJsonBody(c.req, speakerProfilePatchSchema);
     const { speaker, user } = await getSpeakerByManageToken(
       c.env.DB,
       c.req.param("token"),
@@ -194,7 +157,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
       organizationName: body.organizationName === undefined ? undefined : body.organizationName || null,
       jobTitle: body.jobTitle === undefined ? undefined : body.jobTitle || null,
       biography: body.biography === undefined ? undefined : body.biography || null,
-      linksJson: body.links ? serializeLinks(body.links) : null,
+      linksJson: body.links === undefined ? undefined : serializeLinks(body.links),
     });
 
     return json({ success: true });

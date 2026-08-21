@@ -1,6 +1,6 @@
 /**
- * Test fixtures for the post-Phase-1 membership schema (migrations
- * 0035-0038): membership_categories, member_category_assignments,
+ * Test fixtures for the post-Phase-1 membership schema (consolidated
+ * migration 0035): membership_categories, member_category_assignments,
  * organization_representatives, and representative-role user_roles grants.
  * Builds on the real service-layer primitives
  * (functions/_lib/services/membership/*) rather than hand-rolled SQL, so

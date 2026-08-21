@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { eventIdSchema } from "./api-common";
-import { pageInfoSchema } from "./pagination";
+import { paginatedResponseSchema } from "./pagination";
 import { activeFormSummarySchema } from "./forms";
 import { databaseIdSchema } from "./identifiers";
 
@@ -94,12 +94,13 @@ export const proposalStatsSchema = z.object({
   total: z.number(),
 });
 
-export const adminEventProposalsResponseSchema = z.object({
+export const adminEventProposalsResponseSchema = paginatedResponseSchema(
+  "proposals",
+  adminEventProposalSummarySchema,
+).extend({
   event: z.object({ id: eventIdSchema, slug: z.string(), name: z.string() }),
   access: proposalAccessSchema,
-  proposals: z.array(adminEventProposalSummarySchema),
   stats: proposalStatsSchema,
-  page: pageInfoSchema,
 });
 
 export type ProposalAccess = z.infer<typeof proposalAccessSchema>;

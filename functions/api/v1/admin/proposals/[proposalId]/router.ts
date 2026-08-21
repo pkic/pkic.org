@@ -3,6 +3,7 @@ import { fromHono } from "chanfana";
 import { handleError } from "../../../../../_lib/http";
 import { getCachedAdminForRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
+import { proposalPermissionForRequest } from "../../../../../_lib/auth/proposal-route-policy";
 import { first } from "../../../../../_lib/db/queries";
 import { requestDb } from "../../../../../_lib/db/context";
 import { AppError } from "../../../../../_lib/errors";
@@ -74,7 +75,10 @@ async function requireProposalAccess(c: Context<RequestDbContext>, next: Next): 
     throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found");
   }
 
-  requirePermission(admin, "proposals:read", { type: "event", id: proposal.event_id });
+  requirePermission(admin, proposalPermissionForRequest(c.req.path, c.req.method), {
+    type: "event",
+    id: proposal.event_id,
+  });
 
   await next();
 }

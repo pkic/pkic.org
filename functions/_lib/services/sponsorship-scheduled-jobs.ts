@@ -12,12 +12,13 @@
  * lookup against that table before sending is the guard against re-sending
  * on every 15-minute tick for the same threshold.
  */
-import { all, run } from "../db/queries";
+import { all, first } from "../db/queries";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { getConfig } from "../config";
-import { queueEmail } from "../email/outbox";
-import type { DatabaseLike, Env } from "../types";
+import { prepareQueueEmailStatement } from "../email/outbox";
+import { prepareAuditLog } from "./audit";
+import type { DatabaseLike, Env, StatementLike } from "../types";
 
 const REMINDER_60_NOTE = "Renewal reminder sent (60 days)";
 const REMINDER_30_NOTE = "Renewal reminder sent (30 days)";
@@ -42,28 +43,49 @@ interface SponsorshipDueWorkRow {
   pipeline_stage: string;
   renewal_date: string | null;
   assigned_to_email: string | null;
+  reminder_60_applied: number;
+  reminder_30_applied: number;
+  auto_lapse_applied: number;
 }
 
 function daysUntil(iso: string): number {
   return (new Date(iso).getTime() - Date.now()) / ONE_DAY_MS;
 }
 
-async function alreadySent(db: DatabaseLike, sponsorshipId: string, note: string): Promise<boolean> {
-  const rows = await all<{ id: string }>(
-    db,
-    `SELECT id FROM sponsorship_events WHERE sponsorship_id = ? AND note = ? LIMIT 1`,
-    [sponsorshipId, note],
-  );
-  return rows.length > 0;
-}
+const EFFECT_REMINDER_60 = "renewal-reminder-60";
+const EFFECT_REMINDER_30 = "renewal-reminder-30";
+const EFFECT_AUTO_LAPSE = "auto-lapse";
 
-async function recordReminderSent(db: DatabaseLike, sponsorshipId: string, stage: string, note: string): Promise<void> {
-  await run(
-    db,
-    `INSERT INTO sponsorship_events (id, sponsorship_id, from_stage, to_stage, actor_user_id, note, created_at)
-     VALUES (?, ?, ?, ?, NULL, ?, ?)`,
-    [uuid(), sponsorshipId, stage, stage, note, nowIso()],
-  );
+async function applyAutomationEffect(
+  db: DatabaseLike,
+  sponsorshipId: string,
+  effectKey: string,
+  statements: StatementLike[],
+  appliedAt: string,
+): Promise<boolean> {
+  try {
+    await db.batch([
+      db
+        .prepare(
+          `INSERT INTO sponsorship_automation_effects (sponsorship_id, effect_key, created_at)
+           VALUES (?, ?, ?)`,
+        )
+        .bind(sponsorshipId, effectKey, appliedAt),
+      ...statements,
+    ]);
+    return true;
+  } catch (error) {
+    const existing = await first<{ applied: number }>(
+      db,
+      `SELECT 1 AS applied
+       FROM sponsorship_automation_effects
+       WHERE sponsorship_id = ? AND effect_key = ?
+       LIMIT 1`,
+      [sponsorshipId, effectKey],
+    );
+    if (existing) return false;
+    throw error;
+  }
 }
 
 function sponsorName(row: SponsorshipDueWorkRow): string {
@@ -77,7 +99,19 @@ async function activeSponsorshipsWithRenewalDate(db: DatabaseLike, limit: number
     db,
     `SELECT sp.id, sp.sponsor_type, sp.organization_id, o.name AS organization_name,
             sp.non_member_name, sp.contact_name, sp.tier, sp.pipeline_stage,
-            sp.renewal_date, u.email AS assigned_to_email
+            sp.renewal_date, u.email AS assigned_to_email,
+            EXISTS(
+              SELECT 1 FROM sponsorship_automation_effects ae
+              WHERE ae.sponsorship_id = sp.id AND ae.effect_key = '${EFFECT_REMINDER_60}'
+            ) AS reminder_60_applied,
+            EXISTS(
+              SELECT 1 FROM sponsorship_automation_effects ae
+              WHERE ae.sponsorship_id = sp.id AND ae.effect_key = '${EFFECT_REMINDER_30}'
+            ) AS reminder_30_applied,
+            EXISTS(
+              SELECT 1 FROM sponsorship_automation_effects ae
+              WHERE ae.sponsorship_id = sp.id AND ae.effect_key = '${EFFECT_AUTO_LAPSE}'
+            ) AS auto_lapse_applied
      FROM sponsorships sp
      LEFT JOIN organizations o ON o.id = sp.organization_id
      LEFT JOIN users u ON u.id = sp.assigned_to_user_id
@@ -125,9 +159,13 @@ export async function runSponsorshipDueWork(
     // assigned_to_user_id being set.
     if (daysLeft <= 0) {
       const now = nowIso();
-      const statements = [
+      const statements: StatementLike[] = [
         db
-          .prepare(`UPDATE sponsorships SET pipeline_stage = 'lapsed', updated_at = ? WHERE id = ?`)
+          .prepare(
+            `UPDATE sponsorships
+             SET pipeline_stage = 'lapsed', updated_at = ?
+             WHERE id = ? AND pipeline_stage = 'active'`,
+          )
           .bind(now, sponsorship.id),
         db
           .prepare(
@@ -143,47 +181,121 @@ export async function runSponsorshipDueWork(
             .bind(sponsorship.organization_id),
         );
       }
-      await db.batch(statements);
-
       if (assignedEmail) {
-        // Enqueue only (PR #1 review §9.1) — no synchronous send per recipient.
-        await queueEmail(db, {
-          templateKey: "sponsorship-lapsed-staff",
-          recipientEmail: assignedEmail,
-          messageType: "transactional",
-          subject: `Sponsorship lapsed: ${templateData.organizationName}`,
-          data: templateData,
-        });
+        statements.push(
+          prepareQueueEmailStatement(
+            db,
+            {
+              templateKey: "sponsorship-lapsed-staff",
+              recipientEmail: assignedEmail,
+              messageType: "transactional",
+              subject: `Sponsorship lapsed: ${templateData.organizationName}`,
+              data: templateData,
+            },
+            now,
+          ).statement,
+        );
       }
-      autoLapsed++;
+      statements.push(
+        prepareAuditLog(
+          db,
+          "system",
+          null,
+          "sponsorship_auto_lapsed",
+          "sponsorship",
+          sponsorship.id,
+          {
+            renewalDate: sponsorship.renewal_date,
+          },
+          now,
+        ),
+      );
+      if (!sponsorship.auto_lapse_applied) {
+        const applied = await applyAutomationEffect(db, sponsorship.id, EFFECT_AUTO_LAPSE, statements, now);
+        if (applied) autoLapsed++;
+      }
       continue;
     }
 
     if (!assignedEmail) continue;
 
-    if (daysLeft <= 60 && daysLeft > 30 && !(await alreadySent(db, sponsorship.id, REMINDER_60_NOTE))) {
-      await queueEmail(db, {
-        templateKey: "sponsorship-renewal-reminder-60",
-        recipientEmail: assignedEmail,
-        messageType: "transactional",
-        subject: `Sponsorship renewal due in 60 days: ${templateData.organizationName}`,
-        data: templateData,
-      });
-      await recordReminderSent(db, sponsorship.id, sponsorship.pipeline_stage, REMINDER_60_NOTE);
-      reminders60Sent++;
+    if (daysLeft <= 60 && daysLeft > 30 && !sponsorship.reminder_60_applied) {
+      const now = nowIso();
+      const email = prepareQueueEmailStatement(
+        db,
+        {
+          templateKey: "sponsorship-renewal-reminder-60",
+          recipientEmail: assignedEmail,
+          messageType: "transactional",
+          subject: `Sponsorship renewal due in 60 days: ${templateData.organizationName}`,
+          data: templateData,
+        },
+        now,
+      );
+      const applied = await applyAutomationEffect(
+        db,
+        sponsorship.id,
+        EFFECT_REMINDER_60,
+        [
+          email.statement,
+          db
+            .prepare(
+              `INSERT INTO sponsorship_events
+                 (id, sponsorship_id, from_stage, to_stage, actor_user_id, note, created_at)
+               VALUES (?, ?, ?, ?, NULL, ?, ?)`,
+            )
+            .bind(
+              uuid(),
+              sponsorship.id,
+              sponsorship.pipeline_stage,
+              sponsorship.pipeline_stage,
+              REMINDER_60_NOTE,
+              now,
+            ),
+        ],
+        now,
+      );
+      if (applied) reminders60Sent++;
       continue;
     }
 
-    if (daysLeft <= 30 && !(await alreadySent(db, sponsorship.id, REMINDER_30_NOTE))) {
-      await queueEmail(db, {
-        templateKey: "sponsorship-renewal-reminder-30",
-        recipientEmail: assignedEmail,
-        messageType: "transactional",
-        subject: `Sponsorship renewal due in 30 days: ${templateData.organizationName}`,
-        data: templateData,
-      });
-      await recordReminderSent(db, sponsorship.id, sponsorship.pipeline_stage, REMINDER_30_NOTE);
-      reminders30Sent++;
+    if (daysLeft <= 30 && !sponsorship.reminder_30_applied) {
+      const now = nowIso();
+      const email = prepareQueueEmailStatement(
+        db,
+        {
+          templateKey: "sponsorship-renewal-reminder-30",
+          recipientEmail: assignedEmail,
+          messageType: "transactional",
+          subject: `Sponsorship renewal due in 30 days: ${templateData.organizationName}`,
+          data: templateData,
+        },
+        now,
+      );
+      const applied = await applyAutomationEffect(
+        db,
+        sponsorship.id,
+        EFFECT_REMINDER_30,
+        [
+          email.statement,
+          db
+            .prepare(
+              `INSERT INTO sponsorship_events
+                 (id, sponsorship_id, from_stage, to_stage, actor_user_id, note, created_at)
+               VALUES (?, ?, ?, ?, NULL, ?, ?)`,
+            )
+            .bind(
+              uuid(),
+              sponsorship.id,
+              sponsorship.pipeline_stage,
+              sponsorship.pipeline_stage,
+              REMINDER_30_NOTE,
+              now,
+            ),
+        ],
+        now,
+      );
+      if (applied) reminders30Sent++;
     }
   }
 

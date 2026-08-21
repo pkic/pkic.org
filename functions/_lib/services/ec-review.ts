@@ -6,13 +6,14 @@
  * fallback ("Staff admins can manually record an EC decision as a fallback
  * in exceptional access cases").
  */
-import { all, first, run } from "../db/queries";
+import { all, first } from "../db/queries";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { AppError } from "../errors";
 import { getMemberApplicationById } from "./membership/applications/queries";
 import type { DatabaseLike } from "../types";
 import type { EcDecisionValue } from "../../../assets/shared/schemas/ec-review";
+import { prepareAuditLog } from "./audit";
 
 export type { EcDecisionValue };
 
@@ -33,7 +34,13 @@ export interface EcDecisionRow {
  */
 export async function recordEcDecision(
   db: DatabaseLike,
-  params: { applicationId: string; ecMemberUserId: string; decision: EcDecisionValue; reason?: string | null },
+  params: {
+    applicationId: string;
+    ecMemberUserId: string;
+    decision: EcDecisionValue;
+    reason?: string | null;
+    audit?: { actorType: "admin" | "member"; actorId: string; action: string };
+  },
 ): Promise<EcDecisionRow> {
   const application = await getMemberApplicationById(db, params.applicationId);
   if (!application) {
@@ -53,15 +60,33 @@ export async function recordEcDecision(
   );
 
   const now = nowIso();
+  const id = existing?.id ?? uuid();
+  const decisionStatement = existing
+    ? db
+        .prepare("UPDATE ec_decisions SET decision = ?, reason = ?, created_at = ? WHERE id = ?")
+        .bind(params.decision, params.reason ?? null, now, id)
+    : db
+        .prepare(
+          `INSERT INTO ec_decisions (id, application_id, ec_member_user_id, decision, reason, created_at)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(id, params.applicationId, params.ecMemberUserId, params.decision, params.reason ?? null, now);
+  const audit = params.audit ?? {
+    actorType: "member" as const,
+    actorId: params.ecMemberUserId,
+    action: "ec_decision_recorded",
+  };
+  await db.batch([
+    decisionStatement,
+    prepareAuditLog(db, audit.actorType, audit.actorId, audit.action, "member_application", params.applicationId, {
+      ecMemberUserId: params.ecMemberUserId,
+      decision: params.decision,
+      reason: params.reason ?? null,
+    }),
+  ]);
   if (existing) {
-    await run(db, `UPDATE ec_decisions SET decision = ?, reason = ?, created_at = ? WHERE id = ?`, [
-      params.decision,
-      params.reason ?? null,
-      now,
-      existing.id,
-    ]);
     return {
-      id: existing.id,
+      id,
       application_id: params.applicationId,
       ec_member_user_id: params.ecMemberUserId,
       decision: params.decision,
@@ -70,13 +95,6 @@ export async function recordEcDecision(
     };
   }
 
-  const id = uuid();
-  await run(
-    db,
-    `INSERT INTO ec_decisions (id, application_id, ec_member_user_id, decision, reason, created_at)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [id, params.applicationId, params.ecMemberUserId, params.decision, params.reason ?? null, now],
-  );
   return {
     id,
     application_id: params.applicationId,
@@ -88,9 +106,12 @@ export async function recordEcDecision(
 }
 
 export async function listEcDecisions(db: DatabaseLike, applicationId: string): Promise<EcDecisionRow[]> {
-  return all<EcDecisionRow>(db, `SELECT * FROM ec_decisions WHERE application_id = ? ORDER BY created_at ASC`, [
-    applicationId,
-  ]);
+  return all<EcDecisionRow>(
+    db,
+    `SELECT id, application_id, ec_member_user_id, decision, reason, created_at
+     FROM ec_decisions WHERE application_id = ? ORDER BY created_at ASC`,
+    [applicationId],
+  );
 }
 
 /** True if any EC member has declined — halts auto-approval. */

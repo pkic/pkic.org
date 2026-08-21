@@ -8,20 +8,24 @@
  * (self-service join/leave already existed; only staff-driven add/remove
  * on behalf of another user was missing).
  */
-import { all, first, run } from "../db/queries";
+import { first } from "../db/queries";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { AppError } from "../errors";
 import { queryPage } from "../db/pagination";
 import { buildD1TextSearchFilter } from "../db/search";
-import { resolveOrderBy } from "../db/sort";
-import { ADMIN_WORKING_GROUP_SORT_COLUMNS } from "../../../assets/shared/schemas/working-groups";
+import { resolveMappedOrderBy, resolveOrderBy } from "../db/sort";
+import {
+  ADMIN_WORKING_GROUP_MEMBER_SORT_COLUMNS,
+  ADMIN_WORKING_GROUP_SORT_COLUMNS,
+} from "../../../assets/shared/schemas/working-groups";
 import {
   getWorkingGroupBySlugOrId,
   assertCaConstraint,
-  addWorkingGroupMember,
-  removeWorkingGroupMember,
+  buildAddWorkingGroupMemberStatements,
+  buildRemoveWorkingGroupMemberStatements,
 } from "./working-groups";
+import { prepareAuditLog } from "./audit";
 import { deterministicRepresentativeJoinSql } from "./membership/representative-lookup";
 import { findEligibleMemberById } from "../auth/member";
 import type { DatabaseLike } from "../types";
@@ -65,9 +69,7 @@ export interface AdminWorkingGroupMember {
   joinedAt: string;
 }
 
-export interface AdminWorkingGroupDetail extends AdminWorkingGroupSummary {
-  members: AdminWorkingGroupMember[];
-}
+export type AdminWorkingGroupDetail = AdminWorkingGroupSummary;
 
 interface WorkingGroupSummaryRow {
   id: string;
@@ -191,11 +193,11 @@ export async function listAdminWorkingGroups(
     : null;
   const where = search ? `WHERE ${search.sql}` : "";
   const bindings = search?.bindings ?? [];
-  const orderBy = resolveOrderBy(query.sort, ADMIN_WORKING_GROUP_SORT_COLUMNS, "ORDER BY wg.name ASC, wg.id ASC");
+  const orderBy = resolveOrderBy(query.sort, ADMIN_WORKING_GROUP_SORT_COLUMNS, "ORDER BY wg.name ASC", "wg.id ASC");
   const { rows, total } = await queryPage<WorkingGroupSummaryRow>(
     db,
     {
-      sql: `${SUMMARY_SELECT} ${where} ${orderBy}, wg.id ASC LIMIT ? OFFSET ?`,
+      sql: `${SUMMARY_SELECT} ${where} ${orderBy} LIMIT ? OFFSET ?`,
       bindings: [...bindings, query.limit, query.offset],
     },
     {
@@ -209,14 +211,59 @@ export async function listAdminWorkingGroups(
 export async function getAdminWorkingGroupDetail(
   db: DatabaseLike,
   idOrSlug: string,
-): Promise<AdminWorkingGroupDetail | null> {
+): Promise<AdminWorkingGroupSummary | null> {
   const row = await first<WorkingGroupSummaryRow>(db, `${SUMMARY_SELECT} WHERE wg.id = ? OR wg.slug = ?`, [
     idOrSlug,
     idOrSlug,
   ]);
   if (!row) return null;
 
-  const members = await all<{
+  return toSummary(row);
+}
+
+const WORKING_GROUP_MEMBER_FROM_SQL = `FROM working_group_members wgm
+  JOIN users u ON u.id = wgm.user_id
+${deterministicRepresentativeJoinSql("wgm.user_id")}
+  LEFT JOIN members m ON m.id = COALESCE(
+    wgm.member_id,
+    rep.member_id,
+    (
+      SELECT fallback.id FROM members fallback
+      WHERE fallback.user_id = wgm.user_id AND fallback.status = 'active'
+      ORDER BY datetime(fallback.created_at) ASC, fallback.id ASC
+      LIMIT 1
+    )
+  )
+  LEFT JOIN organizations o ON o.id = m.organization_id
+  LEFT JOIN member_category_assignments mca ON mca.member_id = m.id`;
+
+const WORKING_GROUP_MEMBER_SORT_EXPRESSIONS = {
+  name: "LOWER(COALESCE(u.last_name, '') || ' ' || COALESCE(u.first_name, '') || ' ' || u.email)",
+  email: "LOWER(u.email)",
+  organization_name: "LOWER(o.name)",
+  member_category: "mca.category_code",
+  joined_at: "wgm.joined_at",
+} satisfies Record<(typeof ADMIN_WORKING_GROUP_MEMBER_SORT_COLUMNS)[number], string>;
+
+export async function listAdminWorkingGroupMembers(
+  db: DatabaseLike,
+  idOrSlug: string,
+  query: { limit: number; offset: number; q?: string; sort?: string },
+): Promise<{ members: AdminWorkingGroupMember[]; total: number }> {
+  const workingGroup = await getWorkingGroupBySlugOrId(db, idOrSlug);
+  if (!workingGroup) throw new AppError(404, "WORKING_GROUP_NOT_FOUND", "Working group not found");
+  const search = query.q
+    ? buildD1TextSearchFilter(query.q, ["u.first_name", "u.last_name", "u.email", "o.name", "mca.category_code"])
+    : null;
+  const where = `WHERE wgm.working_group_id = ? AND wgm.left_at IS NULL${search ? ` AND ${search.sql}` : ""}`;
+  const bindings = [workingGroup.id, ...(search?.bindings ?? [])];
+  const orderBy = resolveMappedOrderBy(
+    query.sort,
+    WORKING_GROUP_MEMBER_SORT_EXPRESSIONS,
+    WORKING_GROUP_MEMBER_SORT_EXPRESSIONS.name,
+    "u.id ASC",
+  );
+  const { rows, total } = await queryPage<{
     user_id: string;
     first_name: string | null;
     last_name: string | null;
@@ -226,27 +273,23 @@ export async function getAdminWorkingGroupDetail(
     joined_at: string;
   }>(
     db,
-    `SELECT u.id AS user_id, u.first_name, u.last_name, u.email, o.name AS org_name, mca.category_code, wgm.joined_at
-     FROM working_group_members wgm
-     JOIN users u ON u.id = wgm.user_id
-     -- Prefer the membership this WG seat was actually recorded against
-     -- (wgm.member_id, PR #1 review blocker 2) when the row has one. Older
-     -- rows (or ambiguous staff-driven adds with no single "acting as"
-     -- context, see addMemberToWorkingGroup) fall back to the deterministic
-     -- representative pick, same as before this column existed.
-${deterministicRepresentativeJoinSql("wgm.user_id")}
-     LEFT JOIN members m ON m.id = COALESCE(wgm.member_id, rep.member_id)
-     LEFT JOIN members mi ON mi.user_id = wgm.user_id AND mi.status = 'active'
-     LEFT JOIN organizations o ON o.id = m.organization_id
-     LEFT JOIN member_category_assignments mca ON mca.member_id = COALESCE(m.id, mi.id)
-     WHERE wgm.working_group_id = ? AND wgm.left_at IS NULL
-     ORDER BY u.last_name ASC, u.first_name ASC`,
-    [row.id],
+    {
+      sql: `SELECT u.id AS user_id, u.first_name, u.last_name, u.email,
+                   o.name AS org_name, mca.category_code, wgm.joined_at
+            ${WORKING_GROUP_MEMBER_FROM_SQL}
+            ${where}
+            ${orderBy}
+            LIMIT ? OFFSET ?`,
+      bindings: [...bindings, query.limit, query.offset],
+    },
+    {
+      sql: `SELECT COUNT(*) AS total ${WORKING_GROUP_MEMBER_FROM_SQL} ${where}`,
+      bindings,
+    },
   );
 
   return {
-    ...toSummary(row),
-    members: members.map((m) => ({
+    members: rows.map((m) => ({
       userId: m.user_id,
       name: [m.first_name, m.last_name].filter(Boolean).join(" ") || "Unknown",
       email: m.email,
@@ -254,6 +297,7 @@ ${deterministicRepresentativeJoinSql("wgm.user_id")}
       memberCategory: m.category_code,
       joinedAt: m.joined_at,
     })),
+    total,
   };
 }
 
@@ -278,6 +322,7 @@ async function uniqueSlug(db: DatabaseLike, base: string): Promise<string> {
 
 export async function createWorkingGroup(
   db: DatabaseLike,
+  actorUserId: string,
   input: {
     name: string;
     description?: string | null;
@@ -296,22 +341,27 @@ export async function createWorkingGroup(
   const now = nowIso();
   const slug = await uniqueSlug(db, slugify(input.name));
 
-  await run(
-    db,
-    `INSERT INTO working_groups
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO working_groups
        (id, name, slug, description, mailing_list_email, min_endorsers_for_ballot, active, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-    [
-      id,
-      input.name,
-      slug,
-      input.description ?? null,
-      input.mailingListEmail ?? null,
-      input.minEndorsersForBallot ?? 0,
-      now,
-      now,
-    ],
-  );
+      )
+      .bind(
+        id,
+        input.name,
+        slug,
+        input.description ?? null,
+        input.mailingListEmail ?? null,
+        input.minEndorsersForBallot ?? 0,
+        now,
+        now,
+      ),
+    prepareAuditLog(db, "admin", actorUserId, "working_group_created", "working_group", id, {
+      name: input.name,
+    }),
+  ]);
 
   return {
     id,
@@ -331,6 +381,7 @@ export async function createWorkingGroup(
 
 export async function updateWorkingGroup(
   db: DatabaseLike,
+  actorUserId: string,
   id: string,
   patch: {
     name?: string;
@@ -383,18 +434,25 @@ export async function updateWorkingGroup(
     setClauses.push("updated_at = ?");
     values.push(nowIso());
     values.push(id);
-    await run(db, `UPDATE working_groups SET ${setClauses.join(", ")} WHERE id = ?`, values);
+    await db.batch([
+      db.prepare(`UPDATE working_groups SET ${setClauses.join(", ")} WHERE id = ?`).bind(...values),
+      prepareAuditLog(db, "admin", actorUserId, "working_group_updated", "working_group", id, patch),
+    ]);
   }
 
   const detail = await getAdminWorkingGroupDetail(db, id);
   if (!detail) {
     throw new AppError(500, "WORKING_GROUP_UPDATE_FAILED", "Failed to load working group after update");
   }
-  const { members: _members, ...summary } = detail;
-  return summary;
+  return detail;
 }
 
-export async function addMemberToWorkingGroup(db: DatabaseLike, wgId: string, targetUserId: string): Promise<void> {
+export async function addMemberToWorkingGroup(
+  db: DatabaseLike,
+  actorUserId: string,
+  wgId: string,
+  targetUserId: string,
+): Promise<void> {
   const wg = await getWorkingGroupBySlugOrId(db, wgId);
   if (!wg) {
     throw new AppError(404, "WORKING_GROUP_NOT_FOUND", "Working group not found");
@@ -420,11 +478,19 @@ export async function addMemberToWorkingGroup(db: DatabaseLike, wgId: string, ta
   // one active membership has no single "acting as" context a staff-driven
   // add can infer (see buildAddWorkingGroupMemberStatements's own note).
   const memberId = activeMemberships.length === 1 ? activeMemberships[0].memberId : null;
-  await addWorkingGroupMember(db, wg, targetUserId, memberId);
+  const statements = await buildAddWorkingGroupMemberStatements(db, wg, targetUserId, memberId);
+  if (statements.length === 0) return;
+  statements.push(
+    prepareAuditLog(db, "admin", actorUserId, "working_group_member_added", "working_group", wg.id, {
+      userId: targetUserId,
+    }),
+  );
+  await db.batch(statements);
 }
 
 export async function removeMemberFromWorkingGroup(
   db: DatabaseLike,
+  actorUserId: string,
   wgId: string,
   targetUserId: string,
 ): Promise<void> {
@@ -432,5 +498,12 @@ export async function removeMemberFromWorkingGroup(
   if (!wg) {
     throw new AppError(404, "WORKING_GROUP_NOT_FOUND", "Working group not found");
   }
-  await removeWorkingGroupMember(db, wg, targetUserId);
+  const statements = await buildRemoveWorkingGroupMemberStatements(db, wg, targetUserId);
+  if (statements.length === 0) return;
+  statements.push(
+    prepareAuditLog(db, "admin", actorUserId, "working_group_member_removed", "working_group", wg.id, {
+      userId: targetUserId,
+    }),
+  );
+  await db.batch(statements);
 }

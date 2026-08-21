@@ -8,10 +8,13 @@
  */
 import { useEffect, useState } from "preact/hooks";
 import { getJson, ApiClientError } from "../../../shared/api-client";
+import { myApplicationDetailSchema, myApplicationsListResponseSchema } from "../../../../shared/schemas/me";
 import { Spinner } from "../../../components/Spinner";
 import { ErrorAlert } from "../../../components/ErrorAlert";
+import { Pager } from "../../../components/Pager";
+import { useApiPage } from "../../../hooks/useApiPage";
 import { fmt, formatStageLabel, stageBadgeClass } from "../ui";
-import type { MyApplicationDetail, MyApplicationSummary } from "../types";
+import type { MyApplicationDetail } from "../types";
 
 function ApplicationDetailView({ id, onBack }: { id: string; onBack: () => void }) {
   const [detail, setDetail] = useState<MyApplicationDetail | null>(null);
@@ -19,7 +22,8 @@ function ApplicationDetailView({ id, onBack }: { id: string; onBack: () => void 
 
   useEffect(() => {
     let cancelled = false;
-    getJson<MyApplicationDetail>(`/api/v1/me/applications/${id}`)
+    getJson<unknown>(`/api/v1/me/applications/${id}`)
+      .then((response) => myApplicationDetailSchema.parse(response))
       .then((d) => {
         if (!cancelled) setDetail(d);
       })
@@ -101,55 +105,56 @@ function ApplicationDetailView({ id, onBack }: { id: string; onBack: () => void 
 }
 
 export function MyApplications() {
-  const [applications, setApplications] = useState<MyApplicationSummary[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const page = useApiPage("/api/v1/me/applications", { sort: "-createdAt" }, myApplicationsListResponseSchema);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  useEffect(() => {
-    getJson<{ applications: MyApplicationSummary[] }>("/api/v1/me/applications")
-      .then((d) => setApplications(d.applications))
-      .catch((e: unknown) => setError(e instanceof ApiClientError ? e.message : "Could not load your applications."));
-  }, []);
 
   if (selectedId) {
     return <ApplicationDetailView id={selectedId} onBack={() => setSelectedId(null)} />;
   }
 
-  if (error) return <ErrorAlert error={error} />;
-  if (!applications) return <Spinner />;
+  if (page.error) {
+    return (
+      <ErrorAlert error={page.error instanceof Error ? page.error.message : "Could not load your applications."} />
+    );
+  }
+  if (!page.data) return <Spinner />;
+  const applications = page.data.applications;
 
   if (applications.length === 0) {
     return <div class="alert alert-info">No membership application is on file for your account.</div>;
   }
 
   return (
-    <div class="card border-0 shadow-sm content-width-md">
-      <table class="table table-hover mb-0">
-        <thead>
-          <tr>
-            <th>Category</th>
-            <th>Status</th>
-            <th>Submitted</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {applications.map((app) => (
-            <tr key={app.id} class="is-clickable" onClick={() => setSelectedId(app.id)}>
-              <td>{app.membershipCategory}</td>
-              <td>
-                <span class={`badge ${stageBadgeClass(app.stage)}`}>{formatStageLabel(app.stage)}</span>
-              </td>
-              <td class="small">{fmt(app.createdAt)}</td>
-              <td>
-                <button class="btn btn-sm btn-outline-secondary" onClick={() => setSelectedId(app.id)}>
-                  View
-                </button>
-              </td>
+    <div class="content-width-md">
+      <div class="card border-0 shadow-sm">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>Status</th>
+              <th>Submitted</th>
+              <th></th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {applications.map((app) => (
+              <tr key={app.id} class="is-clickable" onClick={() => setSelectedId(app.id)}>
+                <td>{app.membershipCategory}</td>
+                <td>
+                  <span class={`badge ${stageBadgeClass(app.stage)}`}>{formatStageLabel(app.stage)}</span>
+                </td>
+                <td class="small">{fmt(app.createdAt)}</td>
+                <td>
+                  <button class="btn btn-sm btn-outline-secondary" onClick={() => setSelectedId(app.id)}>
+                    View
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {page.pagerProps && <Pager {...page.pagerProps} />}
     </div>
   );
 }

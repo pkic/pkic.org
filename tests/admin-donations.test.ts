@@ -6,7 +6,7 @@
  * + openApiRoute pattern every other admin list endpoint uses (see
  * functions/api/v1/admin/organizations/index.ts).
  */
-import { describe, expect, it, beforeEach } from "vitest";
+import { afterEach, describe, expect, it, beforeEach, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
@@ -159,9 +159,76 @@ describe("GET /api/v1/admin/donations (P6M-P2-02)", () => {
     expect(body.page.total).toBe(1);
   });
 
-  it("rejects a limit above the historical 500 cap", async () => {
-    const response = await call(adminToken, "/api/v1/admin/donations?limit=501");
+  it("uses the shared maximum page size", async () => {
+    const response = await call(adminToken, "/api/v1/admin/donations?limit=201");
     expect(response.status).toBe(400);
+  });
+});
+
+describe("POST /api/v1/admin/donations/sync", () => {
+  let adminToken: string;
+
+  beforeEach(async () => {
+    await resetDb();
+    await seedEventAndAdmin(env.DB);
+    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    adminToken = await createAdminSession(env.DB, admin.id, "admin-donation-sync-token");
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("rejects malformed or over-limit input instead of treating it as sync-all", async () => {
+    const malformed = await call(adminToken, "/api/v1/admin/donations/sync", {
+      method: "POST",
+      body: "{broken",
+    });
+    expect(malformed.status).toBe(400);
+
+    const overLimit = await call(adminToken, "/api/v1/admin/donations/sync", {
+      method: "POST",
+      body: JSON.stringify({ sessionIds: Array.from({ length: 51 }, (_, index) => `cs_${index}`) }),
+    });
+    expect(overLimit.status).toBe(400);
+  });
+
+  it("filters and caps sync-all in D1 before contacting Stripe", async () => {
+    const statements = Array.from({ length: 60 }, (_, index) =>
+      env.DB.prepare(
+        `INSERT INTO donations
+           (id, checkout_session_id, status, name, email, currency, gross_amount, created_at)
+         VALUES (?, ?, 'pending', 'Bounded Donor', ?, 'usd', 1000, ?)`,
+      ).bind(
+        crypto.randomUUID(),
+        `cs_bounded_${index}`,
+        `bounded-${index}@example.test`,
+        new Date(Date.UTC(2026, 0, 1, 0, index)).toISOString(),
+      ),
+    );
+    await env.DB.batch(statements);
+    const stripeFetch = vi.fn().mockImplementation((url: string) =>
+      Promise.resolve(
+        Response.json({
+          id: String(url).split("/").pop(),
+          status: "open",
+          payment_status: "unpaid",
+          payment_intent: null,
+          amount_total: 1000,
+          currency: "usd",
+          customer_email: "bounded@example.test",
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", stripeFetch);
+
+    const response = await call(adminToken, "/api/v1/admin/donations/sync", {
+      method: "POST",
+      body: JSON.stringify({ pendingOnly: true }),
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { synced: number; results: unknown[] };
+    expect(body.synced).toBe(50);
+    expect(body.results).toHaveLength(50);
+    expect(stripeFetch).toHaveBeenCalledTimes(50);
   });
 });
 

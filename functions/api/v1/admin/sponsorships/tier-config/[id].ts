@@ -8,7 +8,6 @@
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
-import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { updateTierConfig } from "../../../../../_lib/services/sponsorship";
 import { sponsorshipTierConfigUpdateRouteSchema } from "../../../../../../assets/shared/schemas/admin-sponsorships";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
@@ -23,9 +22,7 @@ export const SponsorshipTierConfigUpdate = openApiRoute(
 
     const body = data.body;
     const { id } = data.params;
-    const tier = await updateTierConfig(db, id, body);
-
-    await writeAuditLog(db, "admin", admin.id, "sponsorship_tier_config_updated", "sponsorship_tier_config", id, body);
+    const tier = await updateTierConfig(db, admin.id, id, body);
 
     return json({ tier });
   },

@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { listQuerySchema, pageInfoSchema } from "./pagination";
+import { stripeCheckoutSessionIdSchema } from "./stripe";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 /** Allowlisted sort columns for GET /api/v1/admin/donations — see functions/api/v1/admin/donations.ts. */
 export const ADMIN_DONATIONS_SORT_COLUMNS = ["name", "gross_amount", "status", "created_at"] as const;
@@ -34,18 +35,11 @@ export const adminDonationSummarySchema = z.object({
   completed_at: z.string().nullable(),
 });
 
-// limit overrides the shared listQuerySchema's max(200) — this list
-// has always allowed up to 500 rows per page (functions/api/v1/admin/
-// donations.ts's prior Math.min(..., 500)); the default of 100 is applied
-// by the route handler, same as every other admin list route.
 export const donationsListQuerySchema = listQuerySchema(ADMIN_DONATIONS_SORT_COLUMNS).extend({
-  limit: z.coerce.number().int().min(1).max(500).optional(),
   status: donationStatusSchema.optional(),
 });
 
-export const donationsListResponseSchema = z.object({
-  donations: z.array(adminDonationSummarySchema),
-  page: pageInfoSchema,
+export const donationsListResponseSchema = paginatedResponseSchema("donations", adminDonationSummarySchema).extend({
   summary: z.record(z.string(), z.number()),
 });
 export type DonationsListResponse = z.infer<typeof donationsListResponseSchema>;
@@ -65,7 +59,36 @@ export const donationSyncResponseSchema = z.object({
   errors: z.number(),
   results: z.array(donationSyncResultSchema),
 });
+export const ADMIN_DONATION_SYNC_MAX_SESSIONS = 50;
+
+/** Bounded reconciliation input; malformed bodies must never mean "sync all". */
+export const donationSyncRequestSchema = z
+  .object({
+    sessionIds: z.array(stripeCheckoutSessionIdSchema).min(1).max(ADMIN_DONATION_SYNC_MAX_SESSIONS).optional(),
+    pendingOnly: z.boolean().optional(),
+  })
+  .strict();
+
+export const donationSyncPostRouteSchema = {
+  tags: ["Donations"],
+  summary: "Reconcile donations with Stripe (admin)",
+  description:
+    "Reconciles a bounded page of pending/incomplete donations, or an explicit bounded set of checkout sessions. " +
+    "Filtering and limiting are applied in D1 before Stripe is contacted.",
+  request: {
+    body: { content: { "application/json": { schema: donationSyncRequestSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Reconciliation results.",
+      content: { "application/json": { schema: donationSyncResponseSchema } },
+    },
+    "400": { description: "Invalid or over-limit reconciliation request." },
+    "503": { description: "Stripe is not configured." },
+  },
+};
 export type DonationSyncResponse = z.infer<typeof donationSyncResponseSchema>;
+export type DonationSyncRequest = z.infer<typeof donationSyncRequestSchema>;
 export type AdminDonationSummary = z.infer<typeof adminDonationSummarySchema>;
 
 export const donationsListRouteSchema = {
@@ -119,9 +142,10 @@ export const adminDonationPromoterSummarySchema = z.object({
   totalAttributedCompleted: z.number(),
 });
 
-export const donationPromotersListResponseSchema = z.object({
-  promoters: z.array(adminDonationPromoterSchema),
-  page: pageInfoSchema,
+export const donationPromotersListResponseSchema = paginatedResponseSchema(
+  "promoters",
+  adminDonationPromoterSchema,
+).extend({
   summary: adminDonationPromoterSummarySchema,
 });
 export type DonationPromotersListResponse = z.infer<typeof donationPromotersListResponseSchema>;

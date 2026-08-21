@@ -6,15 +6,13 @@
  */
 import { json } from "../../../_lib/http";
 import { requireMemberFromRequest } from "../../../_lib/auth/member";
-import { run } from "../../../_lib/db/queries";
-import { nowIso } from "../../../_lib/utils/time";
 import { AppError } from "../../../_lib/errors";
+import { readValidatedUploadedImage, resizeHeadshot } from "../../../_lib/utils/image-upload";
 import {
-  ALLOWED_MIME_TYPES,
-  MAX_HEADSHOT_BYTES,
-  readUploadedImage,
-  resizeHeadshot,
-} from "../../../_lib/utils/headshot-upload";
+  getUserHeadshotPointer,
+  removePreviousHeadshot,
+  replaceUserHeadshot,
+} from "../../../_lib/services/user-headshot";
 import { myHeadshotUploadRouteSchema } from "../../../../assets/shared/schemas/me";
 import { requestDb, type AdminContext } from "../../../_lib/db/context";
 import { openApiRoute } from "../../../_lib/openapi/route";
@@ -28,35 +26,19 @@ export const MeHeadshotPost = openApiRoute(myHeadshotUploadRouteSchema, async (c
     throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "File uploads are not configured");
   }
 
-  const { buffer, contentType } = await readUploadedImage(c.req.raw);
-  if (!ALLOWED_MIME_TYPES.has(contentType)) {
-    return json(
-      { error: { code: "INVALID_FILE_TYPE", message: "Only JPEG, PNG, and WebP images are accepted." } },
-      415,
-    );
-  }
-  if (buffer.byteLength > MAX_HEADSHOT_BYTES) {
-    return json(
-      {
-        error: { code: "FILE_TOO_LARGE", message: `Headshot must be under ${MAX_HEADSHOT_BYTES / (1024 * 1024)} MB.` },
-      },
-      413,
-    );
-  }
-
-  const resized = await resizeHeadshot(buffer, c.env.IMAGES);
-  const ext = resized.contentType === "image/png" ? "png" : resized.contentType === "image/webp" ? "webp" : "jpg";
-  const r2Key = `headshots/${member.userId}/${Date.now()}.${ext}`;
-
-  await bucket.put(r2Key, resized.buffer, { httpMetadata: { contentType: resized.contentType } });
-
-  const now = nowIso();
-  await run(db, "UPDATE users SET headshot_r2_key = ?, headshot_updated_at = ?, updated_at = ? WHERE id = ?", [
-    r2Key,
-    now,
-    now,
-    member.userId,
-  ]);
+  const previousKey = await getUserHeadshotPointer(db, member.userId);
+  const uploaded = await readValidatedUploadedImage(c.req.raw, "Headshot");
+  const resized = await resizeHeadshot(uploaded.buffer, uploaded.contentType, c.env.IMAGES);
+  const r2Key = await replaceUserHeadshot({
+    db,
+    bucket,
+    userId: member.userId,
+    previousKey,
+    image: resized,
+    source: "member_self_upload",
+    audit: { actorType: "member", actorId: member.userId, action: "headshot_uploaded" },
+  });
+  c.executionCtx.waitUntil(removePreviousHeadshot(db, c.env, previousKey));
 
   return json({ success: true, r2Key });
 });

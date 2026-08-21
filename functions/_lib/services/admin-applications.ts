@@ -1,8 +1,8 @@
 /**
  * Admin listing/detail queries for member_applications. Parallel
  * to admin-members.ts's split between the public directory query and a
- * dedicated, unfiltered admin query — the admin view needs every stage/
- * status (not just active ones) plus the staff-only communications/notes/
+ * dedicated, unfiltered admin query — the admin view needs every stage
+ * (not just active ones) plus the staff-only communications/notes/
  * concerns/EC-decision timelines the applicant-facing status endpoint never
  * returns.
  */
@@ -26,54 +26,48 @@ import {
   type MemberApplicationRow,
 } from "./membership/applications/queries";
 import { getGlobalFormByKey } from "./forms";
+import { validateCustomAnswersAgainstForm } from "./forms";
+import { prepareAuditLog } from "./audit";
+import {
+  getOrganizationDomainClaim,
+  prepareClaimDomainForApplication,
+  prepareReleaseApplicationDomainClaim,
+} from "./membership/organization-domain-claims";
 import { listEcDecisions } from "./ec-review";
-import { ADMIN_APPLICATIONS_SORT_COLUMNS } from "../../../assets/shared/schemas/admin-applications";
+import {
+  ADMIN_APPLICATIONS_SORT_COLUMNS,
+  adminApplicationDetailSchema,
+  adminApplicationSummarySchema,
+  type AdminApplicationDetail,
+  type AdminApplicationSummary,
+} from "../../../assets/shared/schemas/admin-applications";
 import { resolveOrderBy } from "../db/sort";
 import type { DatabaseLike, StatementLike } from "../types";
 
-export interface AdminApplicationSummary {
-  id: string;
-  applicantEmail: string;
-  applicantName: string;
-  organizationName: string | null;
-  membershipCategory: string;
-  status: string;
-  stage: string;
-  onHoldSubtype: string | null;
-  assignedToUserId: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
 function toSummary(row: MemberApplicationRow): AdminApplicationSummary {
-  return {
+  return adminApplicationSummarySchema.parse({
     id: row.id,
     applicantEmail: row.applicant_email,
     applicantName: row.applicant_name,
     organizationName: row.organization_name,
     membershipCategory: row.membership_category,
-    status: row.status,
     stage: row.stage,
     onHoldSubtype: row.on_hold_subtype,
     assignedToUserId: row.assigned_to_user_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-  };
+  });
 }
 
 export async function listAdminApplications(
   db: DatabaseLike,
-  params: { limit: number; offset: number; stage?: string; status?: string; q?: string; sort?: string },
+  params: { limit: number; offset: number; stage?: string; q?: string; sort?: string },
 ): Promise<{ applications: AdminApplicationSummary[]; total: number }> {
   const conditions: string[] = [];
   const values: unknown[] = [];
   if (params.stage) {
     conditions.push("stage = ?");
     values.push(params.stage);
-  }
-  if (params.status) {
-    conditions.push("status = ?");
-    values.push(params.status);
   }
   if (params.q) {
     const search = buildD1TextSearchFilter(params.q, [
@@ -87,34 +81,22 @@ export async function listAdminApplications(
     values.push(...search.bindings);
   }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-  const orderBy = resolveOrderBy(params.sort, ADMIN_APPLICATIONS_SORT_COLUMNS, "ORDER BY created_at DESC");
+  const orderBy = resolveOrderBy(params.sort, ADMIN_APPLICATIONS_SORT_COLUMNS, "ORDER BY created_at DESC", "id ASC");
 
   const { rows, total } = await queryPage<MemberApplicationRow>(
     db,
     {
-      sql: `SELECT * FROM member_applications ${where} ${orderBy} LIMIT ? OFFSET ?`,
+      sql: `SELECT id, applicant_email, applicant_name, organization_name, organization_domain,
+                   membership_category, form_submission_id, stage, stage_entered_at,
+                   on_hold_subtype, review_notes, assigned_to_user_id, manage_token_hash,
+                   created_at, updated_at
+            FROM member_applications ${where} ${orderBy} LIMIT ? OFFSET ?`,
       bindings: [...values, params.limit, params.offset],
     },
     { sql: `SELECT COUNT(*) AS total FROM member_applications ${where}`, bindings: values },
   );
 
   return { applications: rows.map(toSummary), total };
-}
-
-export interface AdminApplicationDetail extends AdminApplicationSummary {
-  stageEnteredAt: string;
-  answers: Record<string, unknown>;
-  events: Array<{
-    fromStage: string | null;
-    toStage: string;
-    actorUserId: string | null;
-    note: string | null;
-    createdAt: string;
-  }>;
-  communications: Awaited<ReturnType<typeof listApplicationCommunications>>;
-  concerns: Awaited<ReturnType<typeof listApplicationConcerns>>;
-  ecDecisions: Awaited<ReturnType<typeof listEcDecisions>>;
-  documents: Awaited<ReturnType<typeof listApplicationDocuments>>;
 }
 
 interface ApplicationEventRow {
@@ -146,7 +128,7 @@ export async function getAdminApplicationDetail(
     listApplicationDocuments(db, applicationId),
   ]);
 
-  return {
+  return adminApplicationDetailSchema.parse({
     ...toSummary(application),
     stageEnteredAt: application.stage_entered_at,
     answers: await getApplicationAnswers(db, application.form_submission_id),
@@ -157,11 +139,41 @@ export async function getAdminApplicationDetail(
       note: row.note,
       createdAt: row.created_at,
     })),
-    communications,
-    concerns,
-    ecDecisions,
-    documents,
-  };
+    communications: communications.map((row) => ({
+      id: row.id,
+      applicationId: row.application_id,
+      kind: row.kind,
+      actorUserId: row.actor_user_id,
+      subject: row.subject,
+      body: row.body,
+      templateKey: row.template_key,
+      emailOutboxId: row.email_outbox_id,
+      createdAt: row.created_at,
+    })),
+    concerns: concerns.map((row) => ({
+      id: row.id,
+      applicationId: row.application_id,
+      submittedByUserId: row.submitted_by_user_id,
+      concernText: row.concern_text,
+      createdAt: row.created_at,
+    })),
+    ecDecisions: ecDecisions.map((row) => ({
+      id: row.id,
+      applicationId: row.application_id,
+      ecMemberUserId: row.ec_member_user_id,
+      decision: row.decision,
+      reason: row.reason,
+      createdAt: row.created_at,
+    })),
+    documents: documents.map((row) => ({
+      id: row.id,
+      filename: row.filename,
+      mimeType: row.mime_type,
+      fileSizeBytes: row.file_size_bytes,
+      uploadedAt: row.uploaded_at,
+      uploadedByEmail: row.uploaded_by_email,
+    })),
+  });
 }
 
 // ── Edit application fields ─────────────────────────────────────────────
@@ -172,7 +184,7 @@ export async function getAdminApplicationDetail(
 // (functions/api/v1/admin/applications/[id]/index.ts) writes the audit_log
 // entry; this function only touches member_applications and records a
 // member_application_events row so the correction shows up in the
-// application's timeline. Per migration 0038's own note, member_application_events
+// application's timeline. Per consolidated migration 0035's own note, member_application_events
 // has no "kind" column to tag this as non-transition, so the marker event
 // uses from_stage === to_stage (the application's current stage, unchanged)
 // with a note explaining what changed — the timeline UI already renders
@@ -221,6 +233,14 @@ export async function updateAdminApplication(
 
   const nextMembershipCategory = input.membershipCategory ?? application.membership_category;
   const nextIsIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(nextMembershipCategory);
+  const nextOrganizationName = nextIsIndividual
+    ? null
+    : input.organizationName === undefined
+      ? application.organization_name
+      : input.organizationName;
+  if (!nextIsIndividual && !nextOrganizationName) {
+    throw new AppError(422, "ORGANIZATION_NAME_REQUIRED", "Organization name is required for this category");
+  }
   if (input.membershipCategory !== undefined && input.membershipCategory !== application.membership_category) {
     setClauses.push("membership_category = ?");
     values.push(input.membershipCategory);
@@ -234,21 +254,32 @@ export async function updateAdminApplication(
     changedFields.push("applicantEmail");
   }
 
-  // organization_domain drives duplicate-application detection
-  // (member-applications.ts's hasActiveApplicationForDomain) — keep it in
-  // lockstep with applicantEmail/membershipCategory the same way
-  // createMemberApplication derives it at submission time, so an edited
-  // email or an individual<->org-tied category change doesn't silently
-  // desync it from what the applicant actually submitted.
+  // Keep the denormalized application snapshot and canonical claim registry
+  // in lockstep. The delete + replacement insert joins the application
+  // update below in one batch, so a conflicting domain rolls everything back.
   const nextOrganizationDomain = nextIsIndividual ? null : emailDomain(nextApplicantEmail);
-  if (nextOrganizationDomain !== application.organization_domain) {
+  const organizationDomainChanged = nextOrganizationDomain !== application.organization_domain;
+  if (organizationDomainChanged) {
+    if (application.stage === "approved") {
+      throw new AppError(
+        409,
+        "APPROVED_DOMAIN_IMMUTABLE",
+        "Change the approved organization's domain through organization management",
+      );
+    }
     setClauses.push("organization_domain = ?");
     values.push(nextOrganizationDomain);
+    if (application.stage !== "declined" && application.stage !== "withdrawn") {
+      preStatements.push(prepareReleaseApplicationDomainClaim(db, application.id));
+      if (nextOrganizationDomain) {
+        preStatements.push(prepareClaimDomainForApplication(db, nextOrganizationDomain, application.id, now));
+      }
+    }
   }
 
   if (input.organizationName !== undefined && input.organizationName !== application.organization_name) {
     setClauses.push("organization_name = ?");
-    values.push(nextIsIndividual ? null : input.organizationName);
+    values.push(nextOrganizationName);
     changedFields.push("organizationName");
   } else if (
     nextIsIndividual !== INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(application.membership_category) &&
@@ -265,26 +296,28 @@ export async function updateAdminApplication(
 
   if (input.answers) {
     const currentAnswers = await getApplicationAnswers(db, application.form_submission_id);
-    const editedEntries: Array<[string, string | null]> = [];
+    const mergedAnswers = { ...currentAnswers };
     for (const key of EDITABLE_ANSWER_KEYS) {
       if (input.answers[key] === undefined) continue;
       const nextValue = input.answers[key] ?? null;
       if (nextValue !== (currentAnswers[key] ?? null)) {
         changedFields.push(`answers.${key}`);
-        editedEntries.push([key, nextValue]);
+        if (nextValue === null || nextValue.trim().length === 0) delete mergedAnswers[key];
+        else mergedAnswers[key] = nextValue;
       }
     }
 
-    if (editedEntries.length > 0) {
+    if (changedFields.some((field) => field.startsWith("answers."))) {
+      const form = await getGlobalFormByKey(db, MEMBERSHIP_APPLICATION_FORM_KEY);
+      if (!form) {
+        throw new AppError(500, "APPLICATION_FORM_MISSING", "No active membership application form is configured");
+      }
+      const normalizedAnswers = await validateCustomAnswersAgainstForm(form, {
+        customAnswers: mergedAnswers,
+        errorStatus: 422,
+      });
       let formSubmissionId = application.form_submission_id;
       if (!formSubmissionId) {
-        // No prior submission (e.g. an application created with no answers
-        // at all) — create one on the fly so the edit has somewhere to land,
-        // mirroring createMemberApplication's own write path.
-        const form = await getGlobalFormByKey(db, MEMBERSHIP_APPLICATION_FORM_KEY);
-        if (!form) {
-          throw new AppError(500, "APPLICATION_FORM_MISSING", "No active membership application form is configured");
-        }
         formSubmissionId = uuid();
         preStatements.push(
           db
@@ -298,16 +331,26 @@ export async function updateAdminApplication(
         values.push(formSubmissionId);
       }
 
-      for (const [key, value] of editedEntries) {
-        preStatements.push(
-          db
-            .prepare(
-              `INSERT INTO form_submission_answers (id, submission_id, field_key, data_json, created_at)
-               VALUES (?, ?, ?, ?, ?)
-               ON CONFLICT(submission_id, field_key) DO UPDATE SET data_json = excluded.data_json`,
-            )
-            .bind(uuid(), formSubmissionId, key, JSON.stringify(value), now),
-        );
+      for (const key of EDITABLE_ANSWER_KEYS) {
+        if (input.answers[key] === undefined) continue;
+        const value = normalizedAnswers[key];
+        if (value === undefined) {
+          preStatements.push(
+            db
+              .prepare("DELETE FROM form_submission_answers WHERE submission_id = ? AND field_key = ?")
+              .bind(formSubmissionId, key),
+          );
+        } else {
+          preStatements.push(
+            db
+              .prepare(
+                `INSERT INTO form_submission_answers (id, submission_id, field_key, data_json, created_at)
+                 VALUES (?, ?, ?, ?, ?)
+                 ON CONFLICT(submission_id, field_key) DO UPDATE SET data_json = excluded.data_json`,
+              )
+              .bind(uuid(), formSubmissionId, key, JSON.stringify(value), now),
+          );
+        }
       }
     }
   }
@@ -322,24 +365,35 @@ export async function updateAdminApplication(
   values.push(now);
   values.push(applicationId);
 
-  await db.batch([
-    ...preStatements,
-    db.prepare(`UPDATE member_applications SET ${setClauses.join(", ")} WHERE id = ?`).bind(...values),
-    db
-      .prepare(
-        `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .bind(
-        uuid(),
-        applicationId,
-        application.stage,
-        application.stage,
-        actorUserId,
-        `Application details edited: ${changedFields.join(", ")}`,
-        now,
-      ),
-  ]);
+  try {
+    await db.batch([
+      ...preStatements,
+      db.prepare(`UPDATE member_applications SET ${setClauses.join(", ")} WHERE id = ?`).bind(...values),
+      db
+        .prepare(
+          `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(
+          uuid(),
+          applicationId,
+          application.stage,
+          application.stage,
+          actorUserId,
+          `Application details edited: ${changedFields.join(", ")}`,
+          now,
+        ),
+      prepareAuditLog(db, "admin", actorUserId, "application_edited", "member_application", applicationId, input, now),
+    ]);
+  } catch (error) {
+    if (organizationDomainChanged && nextOrganizationDomain) {
+      const claim = await getOrganizationDomainClaim(db, nextOrganizationDomain);
+      if (claim && claim.applicationId !== applicationId) {
+        throw new AppError(409, "ORGANIZATION_DOMAIN_IN_USE", "This organization domain is already claimed");
+      }
+    }
+    throw error;
+  }
 
   return getAdminApplicationDetail(db, applicationId);
 }

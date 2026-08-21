@@ -4,6 +4,7 @@ import { resolveOrderBy } from "../../db/sort";
 import { batchFirst, batchRows } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import type { DatabaseLike } from "../../types";
+import { ADMIN_DONATION_SELECT_COLUMNS } from "./read";
 
 interface StatusCountRow {
   status: string;
@@ -32,15 +33,13 @@ export async function listDonations(
     params.sort,
     ["name", "gross_amount", "status", "created_at"],
     "ORDER BY created_at DESC",
+    "id ASC",
   );
 
   const [pageResult, countResult, summaryResult] = await db.batch([
     db
       .prepare(
-        `SELECT id, checkout_session_id, payment_intent_id, name, email,
-                organization, currency, gross_amount, net_amount, source,
-                status, payment_method_type, session_expires_at,
-                settled_amount, settled_currency, created_at, completed_at
+        `SELECT ${ADMIN_DONATION_SELECT_COLUMNS}
            FROM donations
            ${where}
            ${orderBy}

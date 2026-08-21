@@ -1,6 +1,5 @@
 import { json } from "../../../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../../../_lib/auth/admin";
-import { requireAuthScope } from "../../../../../../../../_lib/auth/scopes";
 import {
   deletePresentationVersion,
   getPresentationVersion,
@@ -10,7 +9,6 @@ import { requestDb, type AdminContext } from "../../../../../../../../_lib/db/co
 
 export async function onRequestDelete(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  requireAuthScope(admin, "presentations:delete");
 
   const proposalId = c.req.param("proposalId");
   const versionId = c.req.param("versionId");

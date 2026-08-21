@@ -49,7 +49,6 @@ export const ApplicationStagePatch = openApiRoute(
 
     return json({
       id: result.application.id,
-      status: result.application.status,
       stage: result.application.stage,
       onHoldSubtype: result.application.on_hold_subtype,
     });

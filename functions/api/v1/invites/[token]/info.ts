@@ -1,28 +1,12 @@
 import { json } from "../../../../_lib/http";
-import { first } from "../../../../_lib/db/queries";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
-import { getInviteInviters } from "../../../../_lib/services/invites";
+import { getInviteInviterSummary } from "../../../../_lib/services/invites";
 import { proposalPageUrl, registrationPageUrl } from "../../../../_lib/services/frontend-links";
-import { verifyDatabaseCapability } from "../../../../_lib/services/capability-links";
+import { resolvePublicInvite } from "../../../../_lib/services/invite-public-info";
 import { requireInternalSecret } from "../../../../_lib/request";
-
-interface InviteRow {
-  id: string;
-  event_id: string;
-  invitee_first_name: string | null;
-  invite_type: "attendee" | "speaker";
-  status: string;
-  expires_at: string | null;
-}
-
-interface EventRow {
-  id: string;
-  name: string;
-  slug: string;
-  base_path: string | null;
-  starts_at: string | null;
-  settings_json: string;
-}
+import { inviteCapabilityQuerySchema, inviteInfoRouteSchema } from "../../../../../assets/shared/schemas/invites";
+import { openApiRoute } from "../../../../_lib/openapi/route";
+import type { AdminContext } from "../../../../_lib/db/context";
 
 /**
  * GET /api/v1/invites/:token/info
@@ -35,65 +19,30 @@ interface EventRow {
  *
  * Only first/last names are returned – no email addresses or internal IDs.
  */
-export async function onRequestGet(c: any): Promise<Response> {
-  c.set("sensitive", true);
-
-  const inviteId = new URL(c.req.raw.url).searchParams.get("id");
-  const verified = await verifyDatabaseCapability({
-    db: c.env.DB,
-    signingSecret: requireInternalSecret(c.env),
-    purpose: "invite",
-    token: c.req.param("token"),
-  });
-  if (!verified.ok) {
-    return json({ status: verified.reason === "expired" ? "expired" : "invalid" });
-  }
-  const invite = await first<InviteRow>(
-    c.env.DB,
-    "SELECT id, event_id, invitee_first_name, invite_type, status, expires_at FROM invites WHERE id = ? AND (? IS NULL OR id = ?)",
-    [verified.resourceId, inviteId, inviteId],
-  );
-
-  if (!invite) {
-    return json({ status: "invalid" });
-  }
-
-  if (invite.status === "declined" || invite.status === "accepted") {
-    return json({ status: "already_processed" });
-  }
-
-  if (invite.status === "expired" || invite.status === "revoked") {
-    return json({ status: "expired" });
-  }
+async function getInviteInfo(c: AdminContext, token: string, inviteId?: string): Promise<Response> {
+  c.set?.("sensitive", true);
+  const resolved = await resolvePublicInvite(c.env.DB, requireInternalSecret(c.env), token, inviteId);
+  if (resolved.status !== "valid") return json({ status: resolved.status });
+  const { invite, event } = resolved;
 
   // Valid invite — build URLs and social-proof inviter list.
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-  const event = await first<EventRow>(
-    c.env.DB,
-    "SELECT id, name, slug, base_path, starts_at, settings_json FROM events WHERE id = ?",
-    [invite.event_id],
-  );
-
   const registrationUrl =
-    event && invite.invite_type === "attendee"
-      ? registrationPageUrl(appBaseUrl, event, { invite: c.req.param("token"), inviteId: invite.id, source: "invite" })
+    invite.invite_type === "attendee"
+      ? registrationPageUrl(appBaseUrl, event, { invite: token, inviteId: invite.id, source: "invite" })
       : null;
   const proposalUrl =
-    event && invite.invite_type === "speaker"
+    invite.invite_type === "speaker"
       ? proposalPageUrl(appBaseUrl, event, {
-          invite: c.req.param("token"),
+          invite: token,
           inviteId: invite.id,
           source: "speaker_invite",
         })
       : null;
 
   // Fetch all named inviters for social proof.  Only expose first/last name.
-  const allInviters = await getInviteInviters(c.env.DB, invite.id);
-  const totalInviters = allInviters.length;
-
-  // Return at most 5 names to keep the payload small; the frontend can say
-  // "…and N others" using totalInviters.
-  const inviters = allInviters.slice(0, 5).map((i) => ({
+  const inviterSummary = await getInviteInviterSummary(c.env.DB, invite.id);
+  const inviters = inviterSummary.inviters.map((i) => ({
     firstName: i.firstName,
     lastName: i.lastName,
     organizationName: i.organizationName,
@@ -101,14 +50,24 @@ export async function onRequestGet(c: any): Promise<Response> {
 
   return json({
     status: "valid",
-    eventName: event?.name ?? null,
+    eventName: event.name,
     inviteeFirstName: invite.invitee_first_name ?? null,
     inviteType: invite.invite_type,
     registrationUrl,
     proposalUrl,
     inviters,
-    totalInviters,
+    totalInviters: inviterSummary.total,
   });
+}
+
+export const InviteInfoGet = openApiRoute(inviteInfoRouteSchema, (c: AdminContext, data) =>
+  getInviteInfo(c, data.params.token, data.query.id),
+);
+
+/** Compatibility export for direct endpoint tests. */
+export async function onRequestGet(c: AdminContext): Promise<Response> {
+  const query = inviteCapabilityQuerySchema.parse(Object.fromEntries(new URL(c.req.raw.url).searchParams));
+  return getInviteInfo(c, c.req.param("token"), query.id);
 }
 
 export async function onRequest(c: any): Promise<Response> {

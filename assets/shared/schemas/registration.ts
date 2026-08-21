@@ -1,7 +1,9 @@
 import { z } from "zod";
+import { formAnswersSchema } from "./form-answers";
 import { databaseIdSchema } from "./identifiers";
 import {
   firstNameSchema,
+  eventSlugParamsSchema,
   jobTitleSchema,
   lastNameSchema,
   normalizedEmailSchema,
@@ -14,9 +16,10 @@ import {
 } from "./api-common";
 import { linksSchema } from "./links";
 import { defaultedSourceTypeSchema } from "./source";
+import { IMAGE_UPLOAD_ALLOWED_MIME_TYPES } from "./images";
 
-export const REGISTRATION_HEADSHOT_ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
-export const REGISTRATION_HEADSHOT_MAX_BYTES = 2 * 1024 * 1024;
+export { REGISTRATION_HEADSHOT_MAX_BYTES } from "./images";
+export const REGISTRATION_HEADSHOT_ALLOWED_MIME_TYPES = IMAGE_UPLOAD_ALLOWED_MIME_TYPES;
 
 export const registrationHeadshotUploadFormSchema = z.object({
   consent: z
@@ -122,24 +125,8 @@ export const dayWaitlistItemSchema = z.object({
   offerExpiresAt: z.string().trim().nullable(),
 });
 
-const customAnswerScalarSchema = z.union([z.string().trim().max(500), z.number().finite(), z.boolean()]);
-const customAnswerDateRangeSchema = z
-  .object({ start: dayDateSchema, end: dayDateSchema })
-  .superRefine((value, context) => {
-    if (value.start > value.end) {
-      context.addIssue({
-        code: "custom",
-        message: "start must be less than or equal to end",
-        path: ["start"],
-      });
-    }
-  });
-const customAnswerValueSchema = z.union([
-  customAnswerScalarSchema,
-  z.array(customAnswerScalarSchema).max(25),
-  customAnswerDateRangeSchema,
-]);
-export const customAnswersSchema = z.record(z.string().trim().min(1).max(64), customAnswerValueSchema);
+/** Backward-compatible name for the canonical portal-managed form answer contract. */
+export const customAnswersSchema = formAnswersSchema;
 
 export const userProfileSchema = z.object({
   firstName: firstNameSchema,
@@ -183,18 +170,23 @@ function requireAttendance(
   }
 }
 
-export const registrationCreateSchema = z
-  .object({
-    firstName: firstNameSchema,
-    lastName: lastNameSchema,
-    email: normalizedEmailSchema,
-    organizationName: organizationNameSchema.optional(),
-    jobTitle: jobTitleSchema.optional(),
-    attendanceType: attendanceTypeSchema.optional(),
-    dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
+export const attendeeRegistrationFieldsSchema = z.object({
+  firstName: firstNameSchema,
+  lastName: lastNameSchema,
+  email: normalizedEmailSchema,
+  organizationName: organizationNameSchema.optional(),
+  jobTitle: jobTitleSchema.optional(),
+  attendanceType: attendanceTypeSchema.optional(),
+  dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
+  customAnswers: customAnswersSchema.optional(),
+  consents: z.array(consentItemSchema).min(1).max(20),
+});
+export type AttendeeRegistrationFields = z.infer<typeof attendeeRegistrationFieldsSchema>;
+
+export const registrationCreateSchema = attendeeRegistrationFieldsSchema
+  .extend({
     sourceType: defaultedSourceTypeSchema,
     sourceRef: trimmedString(2, 200).optional(),
-    customAnswers: customAnswersSchema.optional(),
     inviteToken: tokenSchema.optional(),
     inviteId: databaseIdSchema.optional(),
     referralCode: z
@@ -202,7 +194,6 @@ export const registrationCreateSchema = z
       .trim()
       .regex(/^[A-Za-z0-9]{6,12}$/)
       .optional(),
-    consents: z.array(consentItemSchema).min(1).max(20),
   })
   .superRefine(requireAttendance);
 
@@ -244,13 +235,54 @@ export const registrationManageSchema = z.object({
 
 export const registrationInviteCreateSchema = z.object({ invites: z.array(inviteeSchema).min(1).max(10) });
 
+export const peerInviteResultSchema = z.object({
+  success: z.literal(true),
+  created: z.array(z.object({ email: normalizedEmailSchema })),
+  endorsed: z.array(z.object({ email: normalizedEmailSchema })),
+  skipped: z.array(z.object({ email: normalizedEmailSchema, reason: z.string() })),
+  referralCode: z.string().optional(),
+});
+
+function peerInviteRouteSchema(summary: string, description: string) {
+  return {
+    tags: ["Events", "Invites"],
+    summary,
+    description,
+    request: {
+      params: eventSlugParamsSchema,
+      body: { content: { "application/json": { schema: registrationInviteCreateSchema } }, required: true },
+    },
+    responses: {
+      "200": {
+        description: "Invites were created, endorsed, or skipped.",
+        content: { "application/json": { schema: peerInviteResultSchema } },
+      },
+      "400": { description: "Invalid invite payload." },
+      "401": { description: "Registration manage token required." },
+      "403": { description: "The manage token is not valid for this event." },
+      "429": { description: "Invite quota exceeded." },
+    },
+  };
+}
+
+export const attendeePeerInvitesRouteSchema = peerInviteRouteSchema(
+  "Create attendee peer invites",
+  "Creates or endorses a bounded set of attendee invitations using the caller's registration manage capability.",
+);
+export const speakerPeerInvitesRouteSchema = peerInviteRouteSchema(
+  "Create speaker peer nominations",
+  "Creates or endorses a bounded set of speaker nominations using the caller's registration manage capability.",
+);
+
+export const INVITE_FORWARD_LIMIT = 5;
+
 export const inviteDeclineSchema = z
   .object({
     reasonCode: declineReasonCodeSchema,
     reasonNote: trimmedString(3, 2000).optional(),
     unsubscribeFuture: z.boolean().optional(),
     npsScore: z.number().int().min(1).max(10).optional(),
-    forwards: z.array(inviteeSchema).max(5).optional(),
+    forwards: z.array(inviteeSchema).max(INVITE_FORWARD_LIMIT).optional(),
   })
   .superRefine((value, context) => {
     if (value.reasonCode === "other" && !value.reasonNote) {
@@ -263,16 +295,4 @@ export const inviteDeclineSchema = z
     }
   });
 
-export const inviteAcceptAttendeeSchema = z
-  .object({
-    firstName: firstNameSchema,
-    lastName: lastNameSchema,
-    email: normalizedEmailSchema,
-    organizationName: organizationNameSchema.optional(),
-    jobTitle: jobTitleSchema.optional(),
-    attendanceType: attendanceTypeSchema.optional(),
-    dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
-    customAnswers: customAnswersSchema.optional(),
-    consents: z.array(consentItemSchema).min(1).max(20),
-  })
-  .superRefine(requireAttendance);
+export const inviteAcceptAttendeeSchema = attendeeRegistrationFieldsSchema.superRefine(requireAttendance);

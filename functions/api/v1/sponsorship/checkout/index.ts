@@ -11,18 +11,27 @@
 import { resolveAppBaseUrl } from "../../../../_lib/config";
 import { AppError } from "../../../../_lib/errors";
 import { json } from "../../../../_lib/http";
+import { assertSameOriginRequest } from "../../../../_lib/request-origin";
+import { enforceRateLimit } from "../../../../_lib/rate-limit";
+import { getClientIp } from "../../../../_lib/request";
 import { getEventBySlug } from "../../../../_lib/services/events";
 import { getActiveTierConfig, listTierConfig } from "../../../../_lib/services/sponsorship";
 import { sponsorshipCheckoutRouteSchema } from "../../../../../assets/shared/schemas/sponsorship";
+import type { SponsorshipCheckoutInput } from "../../../../../assets/shared/schemas/sponsorship";
 import { openApiRoute } from "../../../../_lib/openapi/route";
+import { createStripeCheckoutSession } from "../../../../_lib/integrations/stripe/checkout";
 
-const STRIPE_API = "https://api.stripe.com/v1/checkout/sessions";
-
-export const SponsorshipCheckoutPost = openApiRoute(sponsorshipCheckoutRouteSchema, async (c: any, data) => {
+export async function handleSponsorshipCheckout(c: any, data: { body: SponsorshipCheckoutInput }): Promise<Response> {
   c.set("sensitive", true);
   const env = c.env;
   const request = c.req.raw;
   const appBaseUrl = resolveAppBaseUrl(env, request);
+  assertSameOriginRequest(request, appBaseUrl, "sponsorship_checkout");
+  await enforceRateLimit({
+    binding: env.IP_RATE_LIMITER,
+    namespace: "sponsorship-checkout:ip",
+    key: getClientIp(request),
+  });
 
   if (!env.STRIPE_SECRET_KEY) {
     throw new AppError(503, "SERVICE_UNAVAILABLE", "Sponsorship checkout is not configured");
@@ -56,31 +65,24 @@ export const SponsorshipCheckoutPost = openApiRoute(sponsorshipCheckoutRouteSche
   params.set("success_url", successUrl);
   params.set("cancel_url", cancelUrl);
   params.set("customer_email", body.contactEmail);
+  params.set("metadata[checkout_attempt_id]", body.checkoutAttemptId);
   params.set("metadata[tier]", body.tier);
   params.set("metadata[contact_name]", body.contactName);
   params.set("metadata[contact_email]", body.contactEmail);
   params.set("metadata[event_id]", event.id);
+  params.set("metadata[event_slug]", event.slug);
+  params.set("metadata[price_amount_cents]", String(unitAmount));
+  params.set("metadata[price_currency]", tierConfig.currency);
   if (body.organizationName) params.set("metadata[organization_name]", body.organizationName);
 
-  const stripeResponse = await fetch(STRIPE_API, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.STRIPE_SECRET_KEY}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: params.toString(),
+  const session = await createStripeCheckoutSession(env.STRIPE_SECRET_KEY, params, {
+    idempotencyKey: `sponsorship:${body.checkoutAttemptId}`,
   });
-
-  if (!stripeResponse.ok) {
-    const errBody = await stripeResponse.text();
-    console.error("Stripe API error:", stripeResponse.status, errBody);
-    throw new AppError(502, "STRIPE_ERROR", "Failed to create sponsorship checkout session");
-  }
-
-  const session = (await stripeResponse.json()) as { id: string; url?: string };
   if (!session.url) {
     throw new AppError(502, "STRIPE_ERROR", "Stripe did not return a checkout URL");
   }
 
   return json({ url: session.url });
-});
+}
+
+export const SponsorshipCheckoutPost = openApiRoute(sponsorshipCheckoutRouteSchema, handleSponsorshipCheckout);

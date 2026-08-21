@@ -2,7 +2,7 @@
  * Phase 1 §1.4 required tests, part 1: the `membership_categories` seed
  * table vs. the canonical shared contract, and
  * `getOrCreateOrganizationMemberAggregate`'s race/conflict/error-propagation
- * behavior (migrations 0035/0037, functions/_lib/services/membership/memberships.ts).
+ * behavior (consolidated migration 0035, functions/_lib/services/membership/memberships.ts).
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";

@@ -4,7 +4,7 @@
  */
 import { json } from "../../../../_lib/http";
 import { requireMemberFromRequest } from "../../../../_lib/auth/member";
-import { joinMyWorkingGroup, leaveMyWorkingGroup } from "../../../../_lib/services/member-self-service";
+import { joinMyWorkingGroup, leaveMyWorkingGroup } from "../../../../_lib/services/member-working-groups";
 import { myWorkingGroupJoinRouteSchema, myWorkingGroupLeaveRouteSchema } from "../../../../../assets/shared/schemas/me";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";

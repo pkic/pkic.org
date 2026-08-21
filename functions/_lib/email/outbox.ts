@@ -1,8 +1,8 @@
 import { all, first, run } from "../db/queries";
+import { buildD1JsonMembershipFilter } from "../db/json-membership";
 import { AppError } from "../errors";
 import { nowIso } from "../utils/time";
 import { parseJsonSafe, stringifyJson } from "../utils/json";
-import { uuid } from "../utils/ids";
 import { logError } from "../logging";
 import { resolveAppBaseUrl } from "../config";
 import { resolveTemplate } from "./templates";
@@ -10,10 +10,13 @@ import { renderEmail, renderSubject } from "./render";
 import { loadEmailLayout, loadEmailPartials } from "./partials";
 import { sendViaSendgrid } from "./sendgrid";
 import { applyCampaignCustomText } from "./campaign-custom";
-import { parseQueuedEmailAttachments, type QueuedEmailAttachment } from "./attachments";
-import { authorizeQueuedCapabilityLinks, materializeQueuedCapabilityLinks } from "../auth/capability-links";
-import type { DatabaseLike, Env, StatementLike } from "../types";
+import { parseQueuedEmailAttachments } from "./attachments";
+import { materializeQueuedCapabilityLinks } from "../auth/capability-links";
+import type { DatabaseLike, Env } from "../types";
 import type { EmailContentType, EmailMessageType } from "../../../assets/shared/schemas/admin-email-templates";
+import type { CalendarPayload } from "./outbox-queue";
+
+export * from "./outbox-queue";
 
 function uint8ToBase64(bytes: Uint8Array): string {
   const chunkSize = 12288; // 12kb chunks to avoid stack overflow
@@ -46,12 +49,41 @@ interface OutboxRow {
   sent_at: string | null;
 }
 
-interface CalendarPayload {
-  registrationId: string;
-  eventId: string;
-  icsUid: string;
-  icsFiles: Array<{ uid: string; filename: string; content: string }>;
-  inlineContent?: string;
+const OUTBOX_ROW_COLUMNS = `id, event_id, template_key, template_version, recipient_user_id, recipient_email,
+  subject, payload_json, message_type, provider, provider_message_id, status, attempts, send_after,
+  last_error, created_at, updated_at, sent_at`;
+
+type ResolvedEmailTemplate = Awaited<ReturnType<typeof resolveTemplate>>;
+
+interface OutboxProcessingContext {
+  renderResources?: Promise<{ partials: Record<string, string>; layoutHtml: string }>;
+  templates: Map<string, Promise<ResolvedEmailTemplate>>;
+}
+
+function createOutboxProcessingContext(): OutboxProcessingContext {
+  return { templates: new Map() };
+}
+
+function loadRenderResources(
+  db: DatabaseLike,
+  context: OutboxProcessingContext,
+): Promise<{ partials: Record<string, string>; layoutHtml: string }> {
+  context.renderResources ??= Promise.all([loadEmailPartials(db), loadEmailLayout(db)]).then(
+    ([partials, layoutHtml]) => ({ partials, layoutHtml }),
+  );
+  return context.renderResources;
+}
+
+function resolveTemplateOnce(
+  db: DatabaseLike,
+  context: OutboxProcessingContext,
+  templateKey: string,
+): Promise<ResolvedEmailTemplate> {
+  const existing = context.templates.get(templateKey);
+  if (existing) return existing;
+  const pending = resolveTemplate(db, templateKey);
+  context.templates.set(templateKey, pending);
+  return pending;
 }
 
 function getOutboxStatusForRetry(attempts: number): "retrying" | "failed" {
@@ -113,171 +145,17 @@ function sniffImageAttachmentFormat(contentType: string, bytes: Uint8Array): { c
   return { contentType: "image/jpeg", ext: "jpg" };
 }
 
-export interface QueueEmailPayload {
-  eventId?: string | null;
-  baseUrl?: string;
-  templateKey: string;
-  recipientUserId?: string | null;
-  recipientEmail: string;
-  subject?: string | null;
-  data: Record<string, unknown>;
-  capabilityLinkValues?: unknown[];
-  messageType: EmailMessageType;
-  calendar?: CalendarPayload;
-  attachments?: QueuedEmailAttachment[];
-  replyTo?: string;
-  bounceAddress?: string;
-  /** Delay delivery by this many seconds (e.g. to let OG badge rendering finish). */
-  sendAfterSeconds?: number;
-}
-
-const EMAIL_OUTBOX_INSERT_SQL = `INSERT INTO email_outbox (
-      id, event_id, template_key, template_version, recipient_user_id, recipient_email,
-      subject, payload_json, message_type, provider, provider_message_id, status, attempts,
-      send_after, last_error, created_at, updated_at, sent_at
-    ) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, 'sendgrid', NULL, 'queued', 0, ?, NULL, ?, ?, NULL)`;
-
-/** Shared row-shaping between `queueEmail` (immediate) and `prepareQueueEmailStatement` (batched) so both insert identical rows. */
-function buildEmailOutboxValues(payload: QueueEmailPayload, id: string, queuedAt: string): unknown[] {
-  const data = { ...payload.data } as Record<string, unknown>;
-
-  if (typeof payload.baseUrl === "string" && payload.baseUrl) {
-    data.__baseUrl = payload.baseUrl;
-  }
-
-  if (payload.calendar) {
-    data.__calendarInvite = payload.calendar;
-  }
-
-  if (payload.attachments && payload.attachments.length > 0) {
-    data.__attachments = payload.attachments;
-  }
-
-  if (payload.replyTo) {
-    data.__replyTo = payload.replyTo;
-  }
-
-  if (payload.bounceAddress) {
-    data.__bounceAddress = payload.bounceAddress;
-  }
-
-  const storedData = authorizeQueuedCapabilityLinks(data, payload.capabilityLinkValues ?? []);
-
-  const sendAfter =
-    payload.sendAfterSeconds && payload.sendAfterSeconds > 0
-      ? new Date(Date.now() + payload.sendAfterSeconds * 1000).toISOString()
-      : queuedAt;
-
-  return [
-    id,
-    payload.eventId ?? null,
-    payload.templateKey,
-    payload.recipientUserId ?? null,
-    payload.recipientEmail,
-    payload.subject ?? null,
-    stringifyJson(storedData),
-    payload.messageType,
-    sendAfter,
-    queuedAt,
-    queuedAt,
-  ];
-}
-
-export async function queueEmail(db: DatabaseLike, payload: QueueEmailPayload): Promise<string> {
-  const id = uuid();
-  await run(db, EMAIL_OUTBOX_INSERT_SQL, buildEmailOutboxValues(payload, id, nowIso()));
-  return id;
-}
-
-/**
- * Same row as `queueEmail`, but returns a prepared statement instead of
- * executing — for callers that need the outbox insert to commit in the
- * same `db.batch()` as other durable writes (e.g.
- * membership/applications/approve.ts folding the claim/welcome/contact
- * emails into the same atomic boundary as provisioning, PR #1 review
- * phase1-2-review-20260817.md blocker 4).
- */
-export function prepareQueueEmailStatement(
-  db: DatabaseLike,
-  payload: QueueEmailPayload,
-  queuedAt = nowIso(),
-): { id: string; statement: StatementLike } {
-  const id = uuid();
-  return { id, statement: db.prepare(EMAIL_OUTBOX_INSERT_SQL).bind(...buildEmailOutboxValues(payload, id, queuedAt)) };
-}
-
-/** Builds prepared outbox inserts so callers can combine them with related D1 writes. */
-export interface BulkEmailQueueRow {
-  eventId: string;
-  recipientEmail: string;
-  recipientUserId?: string | null;
-  templateKey: string;
-  subject: string;
-  data: Record<string, unknown>;
-  capabilityLinkValues?: unknown[];
-  messageType: EmailMessageType;
-}
-
-export interface PreparedBulkEmailQueueRow {
-  id: string;
-  statement: StatementLike;
-}
-
-export function prepareBulkQueueEmailStatements(
-  db: DatabaseLike,
-  rows: BulkEmailQueueRow[],
-  queuedAt = nowIso(),
-): PreparedBulkEmailQueueRow[] {
-  return rows.map((row) =>
-    (() => {
-      const id = uuid();
-      return {
-        id,
-        statement: db
-          .prepare(EMAIL_OUTBOX_INSERT_SQL)
-          .bind(
-            id,
-            row.eventId,
-            row.templateKey,
-            row.recipientUserId ?? null,
-            row.recipientEmail,
-            row.subject,
-            stringifyJson(authorizeQueuedCapabilityLinks(row.data, row.capabilityLinkValues ?? [])),
-            row.messageType,
-            queuedAt,
-            queuedAt,
-            queuedAt,
-          ),
-      };
-    })(),
-  );
-}
-
-export type InviteEmailQueueRow = Omit<BulkEmailQueueRow, "messageType">;
-
-export function prepareBulkQueueInviteEmailStatements(
-  db: DatabaseLike,
-  rows: InviteEmailQueueRow[],
-  queuedAt = nowIso(),
-): StatementLike[] {
-  return prepareBulkQueueEmailStatements(
+async function claimOutboxForSending(db: DatabaseLike, outboxId: string): Promise<boolean> {
+  const claimed = await run(
     db,
-    rows.map((row) => ({ ...row, messageType: "transactional" as const })),
-    queuedAt,
-  ).map((row) => row.statement);
-}
-
-export async function bulkQueueInviteEmails(db: DatabaseLike, rows: InviteEmailQueueRow[]): Promise<void> {
-  if (rows.length === 0) return;
-  const MAX_BATCH = 500;
-  for (let i = 0; i < rows.length; i += MAX_BATCH) {
-    const slice = rows.slice(i, i + MAX_BATCH);
-    await db.batch(prepareBulkQueueInviteEmailStatements(db, slice));
-  }
-}
-
-async function markOutboxSending(db: DatabaseLike, outboxId: string): Promise<void> {
-  await run(db, "UPDATE email_outbox SET status = 'sending', updated_at = ? WHERE id = ?", [nowIso(), outboxId]);
+    `UPDATE email_outbox
+     SET status = 'sending', updated_at = ?
+     WHERE id = ?
+       AND status IN ('queued', 'retrying')
+       AND send_after <= ?`,
+    [nowIso(), outboxId, nowIso()],
+  );
+  return claimed.changes === 1;
 }
 
 async function markOutboxSent(
@@ -290,7 +168,7 @@ async function markOutboxSent(
     db,
     `UPDATE email_outbox
      SET status = 'sent', template_version = ?, provider_message_id = ?, sent_at = ?, last_error = NULL, updated_at = ?
-     WHERE id = ?`,
+     WHERE id = ? AND status = 'sending'`,
     [templateVersion, messageId, nowIso(), nowIso(), row.id],
   );
 
@@ -315,26 +193,34 @@ async function markOutboxFailed(db: DatabaseLike, row: OutboxRow, error: unknown
     db,
     `UPDATE email_outbox
      SET attempts = ?, status = ?, last_error = ?, updated_at = ?
-     WHERE id = ?`,
+     WHERE id = ? AND status = 'sending'`,
     [attempts, status, message + details, nowIso(), row.id],
   );
 }
 
-async function processOutboxRow(db: DatabaseLike, env: Env, row: OutboxRow): Promise<void> {
+async function processOutboxRow(
+  db: DatabaseLike,
+  env: Env,
+  row: OutboxRow,
+  context: OutboxProcessingContext,
+): Promise<boolean> {
   // Honour send_after — sleep until the scheduled time before sending.
   const sendAfterMs = new Date(row.send_after).getTime() - Date.now();
   if (sendAfterMs > 0) {
     await new Promise<void>((resolve) => setTimeout(resolve, sendAfterMs));
   }
 
-  await markOutboxSending(db, row.id);
+  // Selection and delivery are intentionally separate operations. Multiple
+  // scheduled/admin/direct processors may therefore select the same queued
+  // row. Claim it with a guarded write before contacting SendGrid so only one
+  // invocation owns the external side effect.
+  if (!(await claimOutboxForSending(db, row.id))) return false;
 
   try {
     const storedPayload = parseJsonSafe<Record<string, unknown>>(row.payload_json, {});
     const payload = await materializeQueuedCapabilityLinks(db, env, storedPayload);
+    const { partials, layoutHtml } = await loadRenderResources(db, context);
     const emailBaseUrl = resolveEmailBaseUrl(payload, env);
-    const partials = await loadEmailPartials(db);
-    const layoutHtml = await loadEmailLayout(db);
     const dataWithPartials = { ...payload, _partials: partials };
     const bodyOverride =
       typeof payload.__adminCampaignBodyContent === "string" && payload.__adminCampaignBodyContent
@@ -352,7 +238,7 @@ async function processOutboxRow(db: DatabaseLike, env: Env, row: OutboxRow): Pro
       contentWithCustom = bodyOverride;
       resolvedContentType = "markdown";
     } else {
-      const template = await resolveTemplate(db, row.template_key);
+      const template = await resolveTemplateOnce(db, context, row.template_key);
       templateVersion = template.version;
       resolvedContentType = template.contentType as EmailContentType;
       const customText =
@@ -445,6 +331,7 @@ async function processOutboxRow(db: DatabaseLike, env: Env, row: OutboxRow): Pro
     });
 
     await markOutboxSent(db, row, messageId, templateVersion);
+    return true;
   } catch (error) {
     await markOutboxFailed(db, row, error);
     throw error;
@@ -452,11 +339,11 @@ async function processOutboxRow(db: DatabaseLike, env: Env, row: OutboxRow): Pro
 }
 
 export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: string): Promise<void> {
-  const row = await first<OutboxRow>(db, "SELECT * FROM email_outbox WHERE id = ?", [outboxId]);
+  const row = await first<OutboxRow>(db, `SELECT ${OUTBOX_ROW_COLUMNS} FROM email_outbox WHERE id = ?`, [outboxId]);
   if (!row) {
     throw new AppError(404, "OUTBOX_NOT_FOUND", "Outbox message not found");
   }
-  await processOutboxRow(db, env, row);
+  await processOutboxRow(db, env, row, createOutboxProcessingContext());
 }
 
 export async function processOutboxByIdBackground(db: DatabaseLike, env: Env, outboxId: string): Promise<void> {
@@ -469,20 +356,24 @@ export async function processOutboxByIdBackground(db: DatabaseLike, env: Env, ou
   }
 }
 
-/** Process rows in parallel chunks to stay within Cloudflare's subrequest limit (~7 subreqs/email × 10 = 70/chunk). */
+/** Process rows in bounded parallel chunks while sharing immutable render resources. */
 async function processInChunks(
   db: DatabaseLike,
   env: Env,
   rows: OutboxRow[],
   chunkSize = 10,
 ): Promise<{ processed: number; failed: number }> {
+  if (rows.length === 0) return { processed: 0, failed: 0 };
+  const context = createOutboxProcessingContext();
   let failed = 0;
+  let processed = 0;
   for (let i = 0; i < rows.length; i += chunkSize) {
     const chunk = rows.slice(i, i + chunkSize);
-    const results = await Promise.allSettled(chunk.map((row) => processOutboxRow(db, env, row)));
+    const results = await Promise.allSettled(chunk.map((row) => processOutboxRow(db, env, row, context)));
     failed += results.filter((r) => r.status === "rejected").length;
+    processed += results.filter((r) => r.status === "rejected" || (r.status === "fulfilled" && r.value)).length;
   }
-  return { processed: rows.length, failed };
+  return { processed, failed };
 }
 
 export async function processPendingOutbox(
@@ -492,7 +383,7 @@ export async function processPendingOutbox(
 ): Promise<{ processed: number; failed: number }> {
   const rows = await all<OutboxRow>(
     db,
-    `SELECT * FROM email_outbox
+    `SELECT ${OUTBOX_ROW_COLUMNS} FROM email_outbox
      WHERE status IN ('queued', 'retrying') AND send_after <= ?
      ORDER BY created_at ASC
      LIMIT ?`,
@@ -538,21 +429,21 @@ export async function processSelectedOutbox(
     return { processed: 0, failed: 0, skipped: 0 };
   }
 
-  const placeholders = ids.map(() => "?").join(", ");
+  const idFilter = buildD1JsonMembershipFilter("id", ids);
   const rows = await all<OutboxRow>(
     db,
-    `SELECT * FROM email_outbox
-     WHERE id IN (${placeholders})
+    `SELECT ${OUTBOX_ROW_COLUMNS} FROM email_outbox
+     WHERE ${idFilter.sql}
        AND status IN ('queued', 'retrying')
        AND send_after <= ?
      ORDER BY created_at ASC`,
-    [...ids, nowIso()],
+    [...idFilter.bindings, nowIso()],
   );
 
   const results = await processInChunks(db, env, rows);
   return {
     ...results,
-    skipped: Math.max(0, ids.length - rows.length),
+    skipped: Math.max(0, ids.length - results.processed),
   };
 }
 
@@ -585,13 +476,13 @@ export async function processPendingOutboxBackground(db: DatabaseLike, env: Env,
 export async function resetFailedOutbox(db: DatabaseLike, ids?: string[]): Promise<{ reset: number }> {
   const now = nowIso();
   if (ids && ids.length > 0) {
-    const placeholders = ids.map(() => "?").join(", ");
+    const idFilter = buildD1JsonMembershipFilter("id", ids);
     const result = await run(
       db,
       `UPDATE email_outbox
        SET status = 'retrying', attempts = 0, send_after = ?, updated_at = ?
-       WHERE status = 'failed' AND id IN (${placeholders})`,
-      [now, now, ...ids],
+       WHERE status = 'failed' AND ${idFilter.sql}`,
+      [now, now, ...idFilter.bindings],
     );
     return { reset: result.changes };
   }

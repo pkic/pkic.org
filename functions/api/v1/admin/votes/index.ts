@@ -13,8 +13,10 @@ import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../_lib/auth/permissions";
 import { getWorkingGroupBySlugOrId } from "../../../../_lib/services/working-groups";
 import { createVoteDirect, listVotesForAdmin } from "../../../../_lib/services/votes";
-import { writeAuditLog } from "../../../../_lib/services/audit";
-import { adminVoteCreateRouteSchema, adminVotesListRouteSchema } from "../../../../../assets/shared/schemas/votes";
+import {
+  adminVoteCreateRouteSchema,
+  adminVotesListRouteSchema,
+} from "../../../../../assets/shared/schemas/votes-admin";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { buildPageInfo } from "../../../../../assets/shared/schemas/pagination";
@@ -24,9 +26,9 @@ export const AdminVotesGet = openApiRoute(adminVotesListRouteSchema, async (c: A
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
   requirePermission(admin, "votes:manage");
 
-  const { status, sort, limit = 50, offset = 0 } = data.query;
+  const { status, q, sort, limit = 50, offset = 0 } = data.query;
 
-  const { votes, total } = await listVotesForAdmin(db, { status, sort, limit, offset });
+  const { votes, total } = await listVotesForAdmin(db, { status, q, sort, limit, offset });
   return json({ votes, page: buildPageInfo(limit, offset, total, votes.length) });
 });
 
@@ -43,12 +45,6 @@ export const AdminVotesPost = openApiRoute(adminVoteCreateRouteSchema, async (c:
   }
 
   const vote = await createVoteDirect(db, admin, body);
-
-  await writeAuditLog(db, "admin", admin.id, "vote_created", "vote", vote.id, {
-    title: vote.title,
-    voteType: vote.voteType,
-    scopeType: vote.scopeType,
-  });
 
   return json({ vote });
 });

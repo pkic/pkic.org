@@ -2,32 +2,20 @@ import { parseJsonBody } from "../../../../_lib/validation";
 import { json } from "../../../../_lib/http";
 import { AppError } from "../../../../_lib/errors";
 import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
-import {
-  buildEventEmailVariables,
-  getEventBySlug,
-  getRequiredTerms,
-  updateEventBasePath,
-} from "../../../../_lib/services/events";
-import { validateCustomAnswersByPurpose } from "../../../../_lib/services/forms";
-import { findOrCreateUser } from "../../../../_lib/services/users";
-import { acceptInvite, findInviteByToken, revokeDuplicateInvitesForEmail } from "../../../../_lib/services/invites";
-import { createRegistration } from "../../../../_lib/services/registrations";
-import { createReferralCode } from "../../../../_lib/services/referrals";
+import { buildEventEmailVariables, getEventBySlug, updateEventBasePath } from "../../../../_lib/services/events";
+import { findInviteByToken, type InviteRecord } from "../../../../_lib/services/invites";
+import { commitRegistrationSubmission } from "../../../../_lib/services/registration-submission";
+import { prepareValidatedAttendeeRegistration } from "../../../../_lib/services/attendee-registration";
 import { trySeedGravatarThenPrerender } from "../../../../_lib/services/og-badge-prerender";
 import { buildBadgeAttachment } from "../../../../_lib/email/attachments";
-import { persistConsents, validateRequiredConsents } from "../../../../_lib/services/consent";
-import { processOutboxByIdBackground, queueEmail } from "../../../../_lib/email/outbox";
+import { prepareQueueEmailStatement, processOutboxByIdBackground } from "../../../../_lib/email/outbox";
 import { generateSignedRsvpAddress } from "../../../../_lib/email/rsvp";
 import { buildRegistrationIcs } from "../../../../_lib/utils/calendar";
 import { getClientIp, getUserAgent, requireInternalSecret } from "../../../../_lib/request";
-import { writeAuditLog } from "../../../../_lib/services/audit";
-import { deriveEventAttendanceType, getRegistrationDayAttendance } from "../../../../_lib/services/event-days";
-import { listDayWaitlistForRegistration } from "../../../../_lib/services/registrations/day-waitlist";
 import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../../../../_lib/utils/attendance";
 import { buildAcceptedTermsText, getCustomAnswerRows } from "../../../../_lib/utils/registration-email";
 import { registrationConfirmPageUrl, registrationManagePageUrl } from "../../../../_lib/services/frontend-links";
 import { checkEmailDomainMx } from "../../../../_lib/email/mx-check";
-import { first } from "../../../../_lib/db/queries";
 import { registrationCreateSchema } from "../../../../../assets/shared/schemas/api";
 import { queuedCapabilityToken } from "../../../../_lib/services/capability-links";
 
@@ -53,9 +41,9 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
-  let inviteId: string | null = null;
+  let invite: InviteRecord | null = null;
   if (body.inviteToken) {
-    const invite = await findInviteByToken(c.env.DB, body.inviteToken, signingSecret, body.inviteId);
+    invite = await findInviteByToken(c.env.DB, body.inviteToken, signingSecret, body.inviteId);
     if (invite.event_id !== event.id || invite.invite_type !== "attendee") {
       throw new AppError(400, "INVITE_INVALID", "Invite token is not valid for attendee registration for this event");
     }
@@ -64,93 +52,25 @@ export async function onRequestPost(c: any): Promise<Response> {
     // if (invite.invitee_email && invite.invitee_email.toLowerCase() !== body.email.toLowerCase()) {
     //   throw new AppError(400, "INVITE_EMAIL_MISMATCH", "Invite email and registration email must match");
     // }
-    inviteId = invite.id;
   }
 
-  // Promote known profile-field keys from custom answers to the user record.
-  // This lets events configure organization_name / job_title as regular form
-  // fields (sortable, required/optional per event) without losing the ability
-  // to store them on the user profile for personalised future communications.
-  const profileFromCustom: { organizationName?: string; jobTitle?: string } = {};
-  if (typeof body.customAnswers?.organization_name === "string" && body.customAnswers.organization_name.trim()) {
-    profileFromCustom.organizationName = body.customAnswers.organization_name.trim();
-  }
-  if (typeof body.customAnswers?.job_title === "string" && body.customAnswers.job_title.trim()) {
-    profileFromCustom.jobTitle = body.customAnswers.job_title.trim();
-  }
-
-  const user = await findOrCreateUser(c.env.DB, {
-    email: body.email,
-    firstName: body.firstName,
-    lastName: body.lastName,
-    organizationName: body.organizationName ?? profileFromCustom.organizationName,
-    jobTitle: body.jobTitle ?? profileFromCustom.jobTitle,
-  });
-
-  const requiredTerms = await getRequiredTerms(c.env.DB, event.id, "attendee");
-  await validateRequiredConsents(requiredTerms, body.consents);
-  const customAnswers = await validateCustomAnswersByPurpose(c.env.DB, {
+  const { prepared, requiredTerms } = await prepareValidatedAttendeeRegistration(c.env.DB, body, {
     eventId: event.id,
-    purpose: "event_registration",
-    customAnswers: body.customAnswers,
-    context: {
-      attendanceType: body.attendanceType ?? deriveEventAttendanceType(body.dayAttendance) ?? undefined,
-      dayAttendance: body.dayAttendance,
-    },
-  });
-
-  const created = await createRegistration(c.env.DB, {
-    event,
-    userId: user.id,
-    attendanceType: (body.attendanceType ?? deriveEventAttendanceType(body.dayAttendance)) as
-      "in_person" | "virtual" | "on_demand",
-    dayAttendance: body.dayAttendance,
-    sourceType: inviteId ? "invite" : body.sourceType,
+    sourceType: invite ? "invite" : body.sourceType,
     sourceRef: body.sourceRef,
-    customAnswersJson: Object.keys(customAnswers).length > 0 ? JSON.stringify(customAnswers) : null,
-    inviteId,
     referredByCode: body.referralCode,
+    invite,
+    ip: getClientIp(c.req.raw),
+    userAgent: getUserAgent(c.req.raw),
     pendingConfirmationDeadlineHours:
       (config.maxPendingConfirmationReminders + 1) * config.pendingConfirmationReminderIntervalDays * 24,
     signingSecret,
+    confirmationTtlHours: config.confirmationLinkTtlHours,
+    referralCodeLength: config.referralCodeLength,
   });
-
-  await persistConsents(c.env.DB, {
-    registrationId: created.registration.id,
-    eventId: event.id,
-    userId: user.id,
-    audienceType: "attendee",
-    accepted: body.consents,
-    ip: getClientIp(c.req.raw),
-    userAgent: getUserAgent(c.req.raw),
-    secret: signingSecret,
-  });
-
-  if (inviteId) {
-    await acceptInvite(c.env.DB, inviteId);
-    await revokeDuplicateInvitesForEmail(c.env.DB, {
-      eventId: event.id,
-      inviteeEmail: body.email,
-      keepInviteId: inviteId,
-    });
-  }
-
-  const existingReferral = await first<{ code: string }>(
-    c.env.DB,
-    "SELECT code FROM referral_codes WHERE owner_type = 'registration' AND owner_id = ? ORDER BY created_at ASC LIMIT 1",
-    [created.registration.id],
-  );
-  const referralCode =
-    existingReferral?.code ??
-    (await createReferralCode(c.env.DB, {
-      eventId: event.id,
-      ownerType: "registration",
-      ownerId: created.registration.id,
-      createdByUserId: user.id,
-      length: config.referralCodeLength,
-    }));
-
-  c.executionCtx.waitUntil(trySeedGravatarThenPrerender(user.id, user.email, referralCode, c.env, appBaseUrl));
+  const user = prepared.user;
+  const created = prepared;
+  const referralCode = prepared.referralCode;
 
   const manageUrl = registrationManagePageUrl(appBaseUrl, event, created.manageToken);
   const queuedManageUrl = registrationManagePageUrl(
@@ -160,12 +80,13 @@ export async function onRequestPost(c: any): Promise<Response> {
   );
   const shareUrl = `${appBaseUrl}/r/${referralCode}`;
 
-  const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, created.registration.id);
-  const dayWaitlist = await listDayWaitlistForRegistration(c.env.DB, created.registration.id);
+  const dayAttendanceRaw = prepared.dayAttendance;
+  const dayWaitlist = prepared.plannedDayWaitlist;
   const attendanceData = buildAttendanceEmailData(created.registration.attendance_type, dayAttendanceRaw, dayWaitlist);
   const statusData = buildRegistrationEmailStatusData(created.registration.status, dayWaitlist);
   const customAnswerRows = await getCustomAnswerRows(c.env.DB, event.id, created.registration.custom_answers_json);
   const acceptedTermsText = buildAcceptedTermsText(body.consents, requiredTerms);
+  let queuedEmail: ReturnType<typeof prepareQueueEmailStatement>;
 
   if (created.registration.status === "pending_email_confirmation") {
     const confirmationUrl = registrationConfirmPageUrl(
@@ -174,7 +95,7 @@ export async function onRequestPost(c: any): Promise<Response> {
       queuedCapabilityToken("registration_confirm", created.registration.id, config.confirmationLinkTtlHours * 60 * 60),
       created.registration.id,
     );
-    const outboxId = await queueEmail(c.env.DB, {
+    queuedEmail = prepareQueueEmailStatement(c.env.DB, {
       eventId: event.id,
       baseUrl: appBaseUrl,
       templateKey: "registration_confirm_email",
@@ -210,8 +131,6 @@ export async function onRequestPost(c: any): Promise<Response> {
         badgeImageUrl: `${appBaseUrl}/api/v1/og/${referralCode}`,
       },
     });
-
-    c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
   } else {
     const rsvpEmail = c.env.INTERNAL_SIGNING_SECRET
       ? await generateSignedRsvpAddress(created.registration.id, c.env.INTERNAL_SIGNING_SECRET, c.env.RSVP_EMAIL)
@@ -226,7 +145,7 @@ export async function onRequestPost(c: any): Promise<Response> {
       user.email,
       c.env.INTERNAL_SIGNING_SECRET,
     );
-    const outboxId = await queueEmail(c.env.DB, {
+    queuedEmail = prepareQueueEmailStatement(c.env.DB, {
       eventId: event.id,
       baseUrl: appBaseUrl,
       templateKey: "registration_confirmed",
@@ -281,22 +200,10 @@ export async function onRequestPost(c: any): Promise<Response> {
         inlineContent: calendar.inlineContent,
       },
     });
-
-    c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
   }
-
-  await writeAuditLog(
-    c.env.DB,
-    "user",
-    user.id,
-    created.reactivated ? "registration_reactivated" : "registration_created",
-    "registration",
-    created.registration.id,
-    {
-      eventId: event.id,
-      status: created.registration.status,
-    },
-  );
+  await commitRegistrationSubmission(c.env.DB, prepared, [queuedEmail.statement]);
+  c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, queuedEmail.id));
+  c.executionCtx.waitUntil(trySeedGravatarThenPrerender(user.id, user.email, referralCode, c.env, appBaseUrl));
 
   return json({
     success: true,

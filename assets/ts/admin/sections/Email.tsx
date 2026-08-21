@@ -436,12 +436,11 @@ export function Email() {
                 <label class="form-label small fw-semibold mb-1">Batch limit</label>
                 <input
                   type="number"
-                  class="form-control form-control-sm"
+                  class="form-control form-control-sm adm-email-batch-limit"
                   value={retryLimit}
                   min={1}
                   max={500}
                   onInput={(e) => setRetryLimit(Number((e.target as HTMLInputElement).value) || 20)}
-                  style="width:90px"
                 />
               </div>
               <div class="form-check mt-4">

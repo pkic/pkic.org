@@ -48,7 +48,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
           id: "admin-1",
           email: "admin@pkic.org",
           role: "admin",
-          scopes: ["proposals:read", "proposal-reviews:write", "proposal-finalization:write"],
+          scopes: ["proposals:read", "proposals:score", "proposals:manage"],
           expiresAt: null,
         },
       }),

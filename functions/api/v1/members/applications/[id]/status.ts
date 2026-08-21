@@ -28,7 +28,6 @@ export async function onRequestGet(c: any): Promise<Response> {
 
   return json({
     id: application.id,
-    status: application.status,
     stage: application.stage,
     stageEnteredAt: application.stage_entered_at,
     createdAt: application.created_at,

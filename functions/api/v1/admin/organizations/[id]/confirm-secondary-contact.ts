@@ -6,10 +6,8 @@
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
-import { queueEmail, processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
-import { first } from "../../../../../_lib/db/queries";
+import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
 import { confirmSecondaryContact } from "../../../../../_lib/services/admin-organizations";
-import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { confirmSecondaryContactRouteSchema } from "../../../../../../assets/shared/schemas/admin-organizations";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
@@ -22,31 +20,12 @@ export const OrganizationConfirmSecondaryContactPost = openApiRoute(
     requirePermission(admin, "organizations:write");
 
     const id = data.params.id;
-    const result = await confirmSecondaryContact(db, id);
-
-    const contact = await first<{ email: string; first_name: string | null; last_name: string | null }>(
-      db,
-      "SELECT email, first_name, last_name FROM users WHERE id = ?",
-      [result.secondaryContactUserId],
-    );
-    if (contact) {
-      const outboxId = await queueEmail(db, {
-        templateKey: "org-contact-assigned",
-        recipientEmail: contact.email,
-        messageType: "transactional",
-        subject: "You have been designated an organization contact",
-        data: {
-          memberName: [contact.first_name, contact.last_name].filter(Boolean).join(" ") || contact.email,
-          contactRole: "secondary",
-        },
-      });
-      c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, outboxId));
+    const result = await confirmSecondaryContact(db, admin.id, id);
+    if (result.outboxId) {
+      c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, result.outboxId));
     }
 
-    await writeAuditLog(db, "admin", admin.id, "organization_secondary_contact_confirmed", "organization", id, {
-      secondaryContactUserId: result.secondaryContactUserId,
-    });
-
-    return json(result);
+    const { outboxId: _outboxId, ...response } = result;
+    return json(response);
   },
 );

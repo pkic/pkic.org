@@ -80,7 +80,7 @@ export function parseLinksJson(raw: string | null | undefined): string[] {
 }
 
 export function serializeLinks(links: string[]): string {
-  return JSON.stringify(links);
+  return JSON.stringify(linksSchema.parse(links));
 }
 
 /** Picks the LinkedIn URL out of a canonical links list, for display surfaces that show LinkedIn specifically. */

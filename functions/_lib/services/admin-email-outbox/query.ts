@@ -1,5 +1,6 @@
 import { batchFirst, batchRows } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
+import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
 import type { EmailMessageType } from "../../../../assets/shared/schemas/admin-email-templates";
 
@@ -92,12 +93,27 @@ export async function queryAdminEmailOutbox(
     messageType?: string;
     dueNow: boolean;
     q?: string;
+    sort?: string;
     limit: number;
     offset: number;
   },
 ): Promise<AdminEmailOutboxQueryResult> {
   const now = new Date().toISOString();
   const { where, bindings } = buildWhereClause({ ...query, now });
+  const orderBy = resolveMappedOrderBy(
+    query.sort,
+    {
+      recipient: "o.recipient_email COLLATE NOCASE",
+      template: "o.template_key COLLATE NOCASE",
+      status: "o.status COLLATE NOCASE",
+      sendAfter: "o.send_after",
+      createdAt: "o.created_at",
+    },
+    `CASE o.status
+       WHEN 'failed' THEN 0 WHEN 'retrying' THEN 1 WHEN 'queued' THEN 2 WHEN 'sending' THEN 3 ELSE 4
+     END ASC, COALESCE(o.sent_at, o.updated_at, o.created_at) DESC`,
+    "o.id ASC",
+  );
   const aggregateFrom = query.q ? "FROM email_outbox o LEFT JOIN events e ON e.id = o.event_id" : "FROM email_outbox o";
   const [rowsResult, totalResult, statusResult, messageTypeResult, templateResult, dueResult, dueNextResult] =
     await db.batch([
@@ -110,9 +126,7 @@ export async function queryAdminEmailOutbox(
            FROM email_outbox o
            LEFT JOIN events e ON e.id = o.event_id
            ${where}
-           ORDER BY CASE o.status
-             WHEN 'failed' THEN 0 WHEN 'retrying' THEN 1 WHEN 'queued' THEN 2 WHEN 'sending' THEN 3 ELSE 4
-           END, COALESCE(o.sent_at, o.updated_at, o.created_at) DESC, o.id ASC
+           ${orderBy}
            LIMIT ? OFFSET ?`,
         )
         .bind(...bindings, query.limit, query.offset),

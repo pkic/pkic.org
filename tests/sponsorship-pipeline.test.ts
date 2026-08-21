@@ -240,6 +240,62 @@ describe("Sponsorship sales pipeline", () => {
     expect(outboxRows).toHaveLength(0);
   });
 
+  it("rolls back a stage transition, portal token, and notification when its audit insert fails", async () => {
+    await call(adminToken, `/api/v1/admin/events/pqc-2026/sponsor-tiers`, {
+      method: "PUT",
+      body: JSON.stringify({ tiers: [{ tierName: "Rollback", hasAttendeeDataAccess: true }] }),
+    });
+    const createResponse = await call(adminToken, "/api/v1/admin/sponsorships", {
+      method: "POST",
+      body: JSON.stringify({
+        sponsorType: "event",
+        eventId,
+        tier: "Rollback",
+        contactEmail: "rollback-sponsor@example.test",
+      }),
+    });
+    const created = (await createResponse.json()) as { sponsorship: { id: string } };
+
+    await env.DB.prepare(
+      `CREATE TRIGGER reject_sponsorship_stage_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'sponsorship_stage_advanced'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced audit failure');
+       END`,
+    ).run();
+
+    try {
+      const response = await call(adminToken, `/api/v1/admin/sponsorships/${created.sponsorship.id}/stage`, {
+        method: "PATCH",
+        body: JSON.stringify({ toStage: "active" }),
+      });
+      expect(response.status).toBe(500);
+
+      const [sponsorship] = await queryAll<{ pipeline_stage: string }>(
+        env.DB,
+        "SELECT pipeline_stage FROM sponsorships WHERE id = ?",
+        [created.sponsorship.id],
+      );
+      expect(sponsorship.pipeline_stage).toBe("new_inquiry");
+      expect(
+        await queryAll(env.DB, "SELECT id FROM sponsorship_events WHERE sponsorship_id = ? AND to_stage = 'active'", [
+          created.sponsorship.id,
+        ]),
+      ).toHaveLength(0);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM sponsor_portal_magic_links WHERE sponsorship_id = ?", [
+          created.sponsorship.id,
+        ]),
+      ).toHaveLength(0);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM email_outbox WHERE recipient_email = 'rollback-sponsor@example.test'"),
+      ).toHaveLength(0);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER IF EXISTS reject_sponsorship_stage_audit").run();
+    }
+  });
+
   it("lets an org-tied member view their organization's active sponsorship tier via GET /api/v1/me/organization/sponsorship", async () => {
     const { organizationId, userId } = await seedOrganization("Delta Co");
     const memberToken = await createMemberSession(env.DB, userId, "delta-member-token");

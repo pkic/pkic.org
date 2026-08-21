@@ -7,7 +7,6 @@ import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
-import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { getAdminApplicationDetail, updateAdminApplication } from "../../../../../_lib/services/admin-applications";
 import {
   adminApplicationDetailRouteSchema,
@@ -30,8 +29,6 @@ export const ApplicationDetailPatch = openApiRoute(applicationUpdateRouteSchema,
   const id = data.params.id;
   const body = data.body;
   const detail = await updateAdminApplication(db, id, admin.id, body);
-
-  await writeAuditLog(db, "admin", admin.id, "application_edited", "member_application", id, body);
 
   return json(detail);
 });

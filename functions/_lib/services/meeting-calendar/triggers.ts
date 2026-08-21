@@ -4,6 +4,7 @@
  * own emails. Split out of meeting-calendar.ts.
  */
 import { all, first } from "../../db/queries";
+import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { icsFilename, type SeriesRow, type IcsFileRow } from "./shared";
 import type { DatabaseLike } from "../../types";
 import type { QueuedIcsFileAttachment } from "../../email/attachments";
@@ -20,23 +21,27 @@ export async function resolveApprovalIcsAttachments(
   db: DatabaseLike,
   workingGroupSlugs: string[],
 ): Promise<QueuedIcsFileAttachment[]> {
+  const workingGroupFilter = buildD1JsonMembershipFilter("slug", workingGroupSlugs);
   const seriesRows = await all<SeriesRow>(
     db,
     `SELECT * FROM meeting_series WHERE active = 1 AND (
        scope_type = 'consortium'
        OR (scope_type = 'working_group' AND working_group_id IN (
-         SELECT id FROM working_groups WHERE slug IN (${workingGroupSlugs.map(() => "?").join(", ") || "NULL"})
+         SELECT id FROM working_groups WHERE ${workingGroupFilter.sql}
        ))
      )`,
-    workingGroupSlugs,
+    workingGroupFilter.bindings,
   );
   if (seriesRows.length === 0) return [];
 
-  const placeholders = seriesRows.map(() => "?").join(", ");
+  const seriesFilter = buildD1JsonMembershipFilter(
+    "series_id",
+    seriesRows.map((series) => series.id),
+  );
   const icsRows = await all<IcsFileRow>(
     db,
-    `SELECT * FROM meeting_ics_files WHERE active = 1 AND series_id IN (${placeholders})`,
-    seriesRows.map((s) => s.id),
+    `SELECT * FROM meeting_ics_files WHERE active = 1 AND ${seriesFilter.sql}`,
+    seriesFilter.bindings,
   );
   const seriesById = new Map(seriesRows.map((s) => [s.id, s]));
   return icsRows.map((f) => {

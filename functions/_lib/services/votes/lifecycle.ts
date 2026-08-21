@@ -3,13 +3,15 @@
  * visibility updates, and the admin list/ballot-audit queries. Split out of
  * votes.ts.
  */
-import { all, run } from "../../db/queries";
+import { all } from "../../db/queries";
 import { queryPage } from "../../db/pagination";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import { stringifyJson } from "../../utils/json";
 import { AppError } from "../../errors";
 import { resolveOrderBy } from "../../db/sort";
+import { buildD1TextSearchFilter } from "../../db/search";
+import { prepareAuditLog } from "../audit";
 import {
   resolveScope,
   uniqueSlug,
@@ -120,6 +122,20 @@ export async function createVoteDirect(
         )
         .bind(uuid(), id, c.userId ?? null, c.name, c.bio ?? null, admin.id, i, now),
     ),
+    prepareAuditLog(
+      db,
+      "admin",
+      admin.id,
+      "vote_created",
+      "vote",
+      id,
+      {
+        title: input.title,
+        voteType: input.voteType,
+        scopeType: input.scopeType,
+      },
+      now,
+    ),
   ];
   await db.batch(statements);
 
@@ -135,6 +151,7 @@ export interface UpdateVoteInput {
 
 export async function updateVoteSettings(
   db: DatabaseLike,
+  admin: AuthAdmin,
   voteId: string,
   input: UpdateVoteInput,
 ): Promise<VoteSummary> {
@@ -142,28 +159,56 @@ export async function updateVoteSettings(
   if (existing.status === "closed") {
     throw new AppError(409, "VOTE_CLOSED", "Cannot update a closed vote");
   }
+  const opensAt = input.opensAt ?? existing.opens_at;
+  const closesAt = input.closesAt ?? existing.closes_at;
+  if (new Date(closesAt).getTime() <= new Date(opensAt).getTime()) {
+    throw new AppError(422, "INVALID_WINDOW", "closesAt must be after opensAt");
+  }
   const now = nowIso();
-  await run(
-    db,
-    `UPDATE votes SET title = COALESCE(?, title), description = COALESCE(?, description),
-       opens_at = COALESCE(?, opens_at), closes_at = COALESCE(?, closes_at), updated_at = ? WHERE id = ?`,
-    [input.title ?? null, input.description ?? null, input.opensAt ?? null, input.closesAt ?? null, now, existing.id],
-  );
+  await db.batch([
+    db
+      .prepare(
+        `UPDATE votes SET
+           title = CASE WHEN ? = 1 THEN ? ELSE title END,
+           description = CASE WHEN ? = 1 THEN ? ELSE description END,
+           opens_at = CASE WHEN ? = 1 THEN ? ELSE opens_at END,
+           closes_at = CASE WHEN ? = 1 THEN ? ELSE closes_at END,
+           updated_at = ?
+         WHERE id = ?`,
+      )
+      .bind(
+        input.title === undefined ? 0 : 1,
+        input.title ?? null,
+        input.description === undefined ? 0 : 1,
+        input.description ?? null,
+        input.opensAt === undefined ? 0 : 1,
+        input.opensAt ?? null,
+        input.closesAt === undefined ? 0 : 1,
+        input.closesAt ?? null,
+        now,
+        existing.id,
+      ),
+    prepareAuditLog(db, "admin", admin.id, "vote_updated", "vote", existing.id, { changes: input }, now),
+  ]);
   return toVoteSummary(await getVoteRowOrThrow(db, existing.id));
 }
 
 export async function updateVoteVisibility(
   db: DatabaseLike,
+  admin: AuthAdmin,
   voteId: string,
   input: { visibility?: VoteVisibility; publicDetailLevel?: PublicDetailLevel },
 ): Promise<VoteSummary> {
   const existing = await getVoteRowOrThrow(db, voteId);
   const now = nowIso();
-  await run(
-    db,
-    `UPDATE votes SET visibility = COALESCE(?, visibility), public_detail_level = COALESCE(?, public_detail_level), updated_at = ? WHERE id = ?`,
-    [input.visibility ?? null, input.publicDetailLevel ?? null, now, existing.id],
-  );
+  await db.batch([
+    db
+      .prepare(
+        `UPDATE votes SET visibility = COALESCE(?, visibility), public_detail_level = COALESCE(?, public_detail_level), updated_at = ? WHERE id = ?`,
+      )
+      .bind(input.visibility ?? null, input.publicDetailLevel ?? null, now, existing.id),
+    prepareAuditLog(db, "admin", admin.id, "vote_visibility_updated", "vote", existing.id, { changes: input }, now),
+  ]);
   return toVoteSummary(await getVoteRowOrThrow(db, existing.id));
 }
 
@@ -183,11 +228,21 @@ export interface AdminVoteSummary extends VoteSummary {
 const ADMIN_VOTES_SORT_COLUMNS = ["title", "vote_type", "status", "opens_at", "closes_at", "created_at"] as const;
 export async function listVotesForAdmin(
   db: DatabaseLike,
-  params: { status?: VoteStatus; limit: number; offset: number; sort?: string },
+  params: { status?: VoteStatus; q?: string; limit: number; offset: number; sort?: string },
 ): Promise<{ votes: AdminVoteSummary[]; total: number }> {
-  const where = params.status ? "WHERE status = ?" : "";
-  const whereArgs = params.status ? [params.status] : [];
-  const orderBy = resolveOrderBy(params.sort, ADMIN_VOTES_SORT_COLUMNS, "ORDER BY created_at DESC");
+  const conditions: string[] = [];
+  const whereArgs: unknown[] = [];
+  if (params.status) {
+    conditions.push("status = ?");
+    whereArgs.push(params.status);
+  }
+  if (params.q) {
+    const search = buildD1TextSearchFilter(params.q, ["title", "description", "status", "vote_type", "scope_type"]);
+    conditions.push(search.sql);
+    whereArgs.push(...search.bindings);
+  }
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  const orderBy = resolveOrderBy(params.sort, ADMIN_VOTES_SORT_COLUMNS, "ORDER BY created_at DESC", "id ASC");
 
   const { rows, total } = await queryPage<VoteRow>(
     db,
