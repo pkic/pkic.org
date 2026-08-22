@@ -105,6 +105,52 @@ function stubGoogleFetchWithFirstDirectoryCallPaused(firstDirectoryStatus = 200)
   return { fetchMock, directoryStarted, releaseDirectory };
 }
 
+function stubGoogleFetchWithTwoDirectoryCallsPaused(): {
+  firstDirectoryStarted: Promise<void>;
+  secondDirectoryStarted: Promise<void>;
+  releaseFirstDirectory: () => void;
+  releaseSecondDirectory: () => void;
+} {
+  let notifyFirstDirectoryStarted!: () => void;
+  let notifySecondDirectoryStarted!: () => void;
+  let releaseFirstDirectory!: () => void;
+  let releaseSecondDirectory!: () => void;
+  const firstDirectoryStarted = new Promise<void>((resolve) => {
+    notifyFirstDirectoryStarted = resolve;
+  });
+  const secondDirectoryStarted = new Promise<void>((resolve) => {
+    notifySecondDirectoryStarted = resolve;
+  });
+  const firstDirectoryGate = new Promise<void>((resolve) => {
+    releaseFirstDirectory = resolve;
+  });
+  const secondDirectoryGate = new Promise<void>((resolve) => {
+    releaseSecondDirectory = resolve;
+  });
+  let directoryCalls = 0;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockImplementation(async (url: string) => {
+      if (url === "https://oauth2.googleapis.com/token") {
+        return new Response(JSON.stringify({ access_token: "fake-access-token" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      directoryCalls++;
+      if (directoryCalls === 1) {
+        notifyFirstDirectoryStarted();
+        await firstDirectoryGate;
+      } else if (directoryCalls === 2) {
+        notifySecondDirectoryStarted();
+        await secondDirectoryGate;
+      }
+      return new Response(null, { status: 200 });
+    }),
+  );
+  return { firstDirectoryStarted, secondDirectoryStarted, releaseFirstDirectory, releaseSecondDirectory };
+}
+
 describe("Google Groups sync", () => {
   beforeEach(async () => {
     await resetDb();
@@ -485,6 +531,70 @@ describe("Google Groups sync", () => {
         queueId,
       ),
     ).toEqual([{ status: "completed", processing_token: null, lease_expires_at: null }]);
+  });
+
+  it("does not let a stale same-generation completion clear a replacement worker lease or report success", async () => {
+    const userId = await insertUser("gg-same-generation-replacement@example.test");
+    const group = "same-generation-replacement@lists.pkic.org";
+    const queueId = await enqueueGoogleGroupsSync(env.DB, {
+      userId,
+      googleGroupEmail: group,
+      action: "add_to_list",
+    });
+    const serviceAccountEnv = await fakeServiceAccountEnv();
+    const { firstDirectoryStarted, secondDirectoryStarted, releaseFirstDirectory, releaseSecondDirectory } =
+      stubGoogleFetchWithTwoDirectoryCallsPaused();
+
+    const staleWorker = processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv, 10);
+    await firstDirectoryStarted;
+    const firstToken = (
+      await queryAll<{ processing_token: string }>(
+        env.DB,
+        "SELECT processing_token FROM google_groups_sync_queue WHERE id = ?",
+        [queueId],
+      )
+    )[0]?.processing_token;
+    expect(firstToken).toEqual(expect.any(String));
+    await env.DB.prepare(
+      "UPDATE google_groups_sync_queue SET lease_expires_at = ? WHERE id = ? AND status = 'processing'",
+    )
+      .bind(new Date(Date.now() - 1_000).toISOString(), queueId)
+      .run();
+
+    const replacementWorker = processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv, 10);
+    await secondDirectoryStarted;
+    const replacement = (
+      await queryAll<{ status: string; processing_token: string | null; lease_expires_at: string | null }>(
+        env.DB,
+        "SELECT status, processing_token, lease_expires_at FROM google_groups_sync_queue WHERE id = ?",
+        [queueId],
+      )
+    )[0];
+    expect(replacement).toMatchObject({ status: "processing", lease_expires_at: expect.any(String) });
+    expect(replacement.processing_token).not.toBe(firstToken);
+
+    releaseFirstDirectory();
+    await expect(staleWorker).resolves.toMatchObject({
+      processed: 1,
+      succeeded: 0,
+      failed: 0,
+      completedAddsByUser: {},
+    });
+    expect(
+      await queryAll<{ status: string; processing_token: string | null; lease_expires_at: string | null }>(
+        env.DB,
+        "SELECT status, processing_token, lease_expires_at FROM google_groups_sync_queue WHERE id = ?",
+        [queueId],
+      ),
+    ).toEqual([replacement]);
+
+    releaseSecondDirectory();
+    await expect(replacementWorker).resolves.toMatchObject({
+      processed: 1,
+      succeeded: 1,
+      failed: 0,
+      completedAddsByUser: { [userId]: [group] },
+    });
   });
 
   it("does not reclaim a processing lease before it expires", async () => {
