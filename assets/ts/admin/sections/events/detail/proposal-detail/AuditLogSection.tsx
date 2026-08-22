@@ -1,18 +1,5 @@
-import { useData } from "../../../../../hooks/useData";
-import { api } from "../../../../api";
 import { AuditLogTable } from "../../../../components/AuditLogTable";
-
-interface ProposalAuditLogEntry {
-  id: string;
-  created_at: string;
-  actor_type: string;
-  actor_display?: string;
-  actor_id?: string;
-  action: string;
-  entity_type: string;
-  entity_id?: string | null;
-  details?: Record<string, unknown> | null;
-}
+import type { AuditLogEntry } from "../../../../../../shared/schemas/audit-log";
 
 interface AuditDelta {
   from: unknown;
@@ -35,7 +22,7 @@ function formatAuditValue(value: unknown): string {
   return typeof value === "string" ? value : JSON.stringify(value);
 }
 
-function formatAction(entry: ProposalAuditLogEntry): string {
+function formatAction(entry: AuditLogEntry): string {
   switch (entry.action) {
     case "proposal_internal_comment_added":
       return "Internal comment added";
@@ -105,18 +92,9 @@ function AuditDetails({ details }: { details: Record<string, unknown> | null | u
 }
 
 export function AuditLogSection({ proposalId }: { proposalId: string }) {
-  const { data: entries, loading } = useData(
-    () =>
-      api<{ auditLog: ProposalAuditLogEntry[] }>(`/api/v1/admin/proposals/${proposalId}/audit-log`).then(
-        ({ auditLog }) => auditLog ?? [],
-      ),
-    [proposalId],
-  );
-
   return (
     <AuditLogTable
-      entries={entries ?? undefined}
-      loading={loading}
+      endpoint={`/api/v1/admin/proposals/${proposalId}/audit-log`}
       actionCell={(entry) => <span class="small">{formatAction(entry)}</span>}
       detailsCell={(entry) => <AuditDetails details={entry.details} />}
     />

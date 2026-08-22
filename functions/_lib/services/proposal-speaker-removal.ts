@@ -10,7 +10,11 @@ import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { newCapabilityLinkSecret, queuedCapabilityToken } from "./capability-links";
-import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
+import {
+  isAuditOneChangeGuardFailure,
+  prepareAuditLogAfterOneChange,
+  prepareScopedAuditLogAfterOneChange,
+} from "./audit";
 import { buildEventEmailVariables, getEventById } from "./events";
 import { proposalManagePageUrl } from "./frontend-links";
 import { prepareCancelProposalEmails } from "./proposal-email-cancellation";
@@ -283,8 +287,9 @@ async function removeProposalSpeaker(
         replacement?.user_id ?? context.proposer_user_id,
         replacement ? now : context.proposal_updated_at,
       ),
-    prepareAuditLogAfterOneChange(
+    prepareScopedAuditLogAfterOneChange(
       db,
+      { type: "proposal", id: context.proposal_id },
       input.actorType,
       input.actorId,
       "proposal_speaker_removed",

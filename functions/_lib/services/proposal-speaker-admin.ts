@@ -12,7 +12,7 @@ import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 import { nowIso } from "../utils/time";
 import { parseLinksJson, serializeLinks } from "../../../assets/shared/schemas/links";
-import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
+import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
 import { prepareSyncProposalParticipantRole, proposalParticipantStatus } from "./proposal-participants";
 import {
   assertProposalSpeakerRoleTransition,
@@ -273,8 +273,9 @@ export async function editAdminProposalSpeaker(
         current.headshot_r2_key,
         current.headshot_updated_at,
       ),
-    prepareAuditLogAfterOneChange(
+    prepareScopedAuditLogAfterOneChange(
       db,
+      { type: "proposal", id: proposalId },
       "admin",
       actor.id,
       "speaker_profile_updated",

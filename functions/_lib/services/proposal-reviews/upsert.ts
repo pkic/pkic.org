@@ -77,6 +77,7 @@ export async function upsertProposalReview(
           action: "proposal_review_upserted",
           entityType: "proposal_review",
           entityId: reviewId,
+          scope: { type: "proposal", id: proposalId },
           details: changes,
           createdAt: now,
           conditionSql: "SELECT 1 WHERE changes() = 1",

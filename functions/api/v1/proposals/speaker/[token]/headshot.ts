@@ -36,7 +36,7 @@ async function onGet(c: AdminContext, token: string): Promise<Response> {
 }
 
 async function onPut(c: AdminContext, token: string): Promise<Response> {
-  const { speaker, user } = await loadContext(c, token);
+  const { proposal, speaker, user } = await loadContext(c, token);
   if (speaker.status === "declined") {
     return json({ error: { code: "SPEAKER_DECLINED", message: "You have declined participation." } }, 403);
   }
@@ -52,7 +52,13 @@ async function onPut(c: AdminContext, token: string): Promise<Response> {
       previousKey: user.headshot_r2_key,
       image,
       source: "speaker_self_upload",
-      audit: { actorType: "user", actorId: user.id, action: "headshot_uploaded_by_speaker" },
+      audit: {
+        actorType: "user",
+        actorId: user.id,
+        action: "headshot_uploaded_by_speaker",
+        scope: { type: "proposal", id: proposal.id },
+        details: { proposalId: proposal.id, speakerUserId: user.id },
+      },
     },
   );
   return json({
@@ -63,7 +69,7 @@ async function onPut(c: AdminContext, token: string): Promise<Response> {
 }
 
 async function onDelete(c: AdminContext, token: string): Promise<Response> {
-  const { user } = await loadContext(c, token);
+  const { proposal, user } = await loadContext(c, token);
   await removeUserHeadshotForRequest(requestDb(c), c.env, c.req.raw, c.executionCtx.waitUntil.bind(c.executionCtx), {
     userId: user.id,
     previousKey: user.headshot_r2_key,
@@ -71,7 +77,8 @@ async function onDelete(c: AdminContext, token: string): Promise<Response> {
       actorType: "user",
       actorId: user.id,
       action: "headshot_deleted_by_speaker",
-      details: { speakerUserId: user.id },
+      scope: { type: "proposal", id: proposal.id },
+      details: { proposalId: proposal.id, speakerUserId: user.id },
     },
   });
   return json({ success: true });

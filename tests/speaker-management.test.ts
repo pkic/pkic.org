@@ -300,11 +300,29 @@ describe("speaker self-management endpoints", () => {
     ).resolves.toSatisfy((rows: Array<{ status: string }>) => rows.every((row) => row.status === "inactive"));
     await expect(queryAll(env.DB, "SELECT id FROM users WHERE id = ?", [coSpeakerUserId])).resolves.toHaveLength(1);
     await expect(
-      queryAll(
+      queryAll<{ scope_type: string | null; scope_id: string | null }>(
         env.DB,
-        "SELECT id FROM audit_log WHERE entity_type = 'proposal_speaker' AND action = 'proposal_speaker_removed'",
+        `SELECT scope_type, scope_id FROM audit_log
+         WHERE entity_type = 'proposal_speaker' AND action = 'proposal_speaker_removed'`,
       ),
-    ).resolves.toHaveLength(1);
+    ).resolves.toEqual([{ scope_type: "proposal", scope_id: proposalId }]);
+
+    const auditResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/audit-log`, {
+        headers: { authorization: `Bearer ${adminSessionToken}` },
+      }),
+      env,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(auditResponse.status).toBe(200);
+    const auditBody = (await auditResponse.json()) as {
+      auditLog: Array<{ action: string; entity_id: string | null }>;
+    };
+    expect(auditBody.auditLog).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ action: "proposal_speaker_removed", entity_id: expect.any(String) }),
+      ]),
+    );
 
     const staleCapability = await speakerGet(
       createContext(env, new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`), {

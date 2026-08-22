@@ -12,6 +12,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
   };
   const openedUrls: string[] = [];
   const consoleErrors: string[] = [];
+  const auditOffsets: number[] = [];
   let adminUpload:
     | {
         contentType: string | undefined;
@@ -137,6 +138,33 @@ test("renders the admin proposal detail workflow with submission answers and ope
       body: JSON.stringify({
         comments,
         page: { limit: 25, offset, total: 2, hasMore: offset === 0 },
+      }),
+    });
+  });
+
+  await page.route(`**/api/v1/admin/proposals/${proposalId}/audit-log**`, async (route) => {
+    const url = new URL(route.request().url());
+    const offset = Number(url.searchParams.get("offset") ?? 0);
+    auditOffsets.push(offset);
+    const firstPage = offset === 0;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        auditLog: [
+          {
+            id: firstPage ? "audit-first" : "audit-last",
+            actor_type: "admin",
+            actor_id: "admin-1",
+            actor_display: "Ada Reviewer",
+            action: firstPage ? "proposal_edited" : "proposal_speaker_removed",
+            entity_type: firstPage ? "proposal" : "proposal_speaker",
+            entity_id: firstPage ? proposalId : "speaker-removed",
+            details: firstPage ? { title: { from: "Old title", to: "Operational PKI at Internet Scale" } } : null,
+            created_at: firstPage ? "2025-02-01T11:00:00.000Z" : "2025-01-01T11:00:00.000Z",
+          },
+        ],
+        page: { limit: 50, offset, total: 51, hasMore: firstPage },
       }),
     });
   });
@@ -327,6 +355,14 @@ test("renders the admin proposal detail workflow with submission answers and ope
   openedUrls.push(...(await page.evaluate(() => (window as Window & { __openedUrls?: string[] }).__openedUrls ?? [])));
 
   expect(openedUrls).toContain("https://app.test/propose-manage/?event=pqc-2026&token=proposal-token");
+
+  await page.getByRole("tab", { name: "Audit Log" }).click();
+  await expect(page.getByText("Proposal updated: title")).toBeVisible();
+  await expect(page.locator(".adm-pager-range")).toHaveText("1–1 of 51");
+  await page.locator(".adm-pager .page-item").last().getByRole("button").click();
+  await expect(page.getByText("proposal speaker removed")).toBeVisible();
+  await expect(page.locator(".adm-pager-range")).toHaveText("51–51 of 51");
+  expect(auditOffsets).toEqual([0, 50]);
 
   await page.getByRole("tab", { name: "Presentation" }).click();
   const fileChooserPromise = page.waitForEvent("filechooser");

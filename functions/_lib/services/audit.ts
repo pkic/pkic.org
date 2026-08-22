@@ -9,6 +9,11 @@ interface AuditDeltaLike {
   to: unknown;
 }
 
+export interface AuditScope {
+  type: string;
+  id: string;
+}
+
 export interface AuditLogReadRow {
   id: string;
   actor_type: string;
@@ -59,13 +64,25 @@ export async function writeAuditLog(
   entityType: string,
   entityId: string | null,
   details: unknown,
+  scope: AuditScope | null = null,
 ): Promise<void> {
   await run(
     db,
     `INSERT INTO audit_log (
-      id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [uuid(), actorType, actorId, action, entityType, entityId, serializeAuditDetails(details), nowIso()],
+      id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at, scope_type, scope_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      uuid(),
+      actorType,
+      actorId,
+      action,
+      entityType,
+      entityId,
+      serializeAuditDetails(details),
+      nowIso(),
+      scope?.type ?? null,
+      scope?.id ?? null,
+    ],
   );
 }
 
@@ -82,12 +99,14 @@ export function prepareAuditLog(
   details: unknown,
   createdAt = nowIso(),
   idempotencyKey: string | null = null,
+  scope: AuditScope | null = null,
 ): StatementLike {
   return db
     .prepare(
       `INSERT INTO audit_log (
-      id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at, idempotency_key
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at,
+      idempotency_key, scope_type, scope_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
     )
     .bind(
@@ -100,7 +119,36 @@ export function prepareAuditLog(
       serializeAuditDetails(details),
       createdAt,
       idempotencyKey,
+      scope?.type ?? null,
+      scope?.id ?? null,
     );
+}
+
+/** Explicit scoped variant for child-entity audit rows owned by an aggregate. */
+export function prepareScopedAuditLog(
+  db: DatabaseLike,
+  scope: AuditScope,
+  actorType: string,
+  actorId: string | null,
+  action: string,
+  entityType: string,
+  entityId: string | null,
+  details: unknown,
+  createdAt = nowIso(),
+  idempotencyKey: string | null = null,
+): StatementLike {
+  return prepareAuditLog(
+    db,
+    actorType,
+    actorId,
+    action,
+    entityType,
+    entityId,
+    details,
+    createdAt,
+    idempotencyKey,
+    scope,
+  );
 }
 
 /**
@@ -120,14 +168,42 @@ export function prepareAuditLogAfterOneChange(
   entityId: string | null,
   details: unknown,
   createdAt = nowIso(),
+  scope: AuditScope | null = null,
 ): StatementLike {
   return db
     .prepare(
       `INSERT INTO audit_log (
-        id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at
-      ) VALUES (?, ?, ?, CASE WHEN changes() = 1 THEN ? ELSE NULL END, ?, ?, ?, ?)`,
+        id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at,
+        scope_type, scope_id
+      ) VALUES (?, ?, ?, CASE WHEN changes() = 1 THEN ? ELSE NULL END, ?, ?, ?, ?, ?, ?)`,
     )
-    .bind(uuid(), actorType, actorId, action, entityType, entityId, serializeAuditDetails(details), createdAt);
+    .bind(
+      uuid(),
+      actorType,
+      actorId,
+      action,
+      entityType,
+      entityId,
+      serializeAuditDetails(details),
+      createdAt,
+      scope?.type ?? null,
+      scope?.id ?? null,
+    );
+}
+
+/** Scoped compare-and-set audit variant; preserves the same `changes()` guard. */
+export function prepareScopedAuditLogAfterOneChange(
+  db: DatabaseLike,
+  scope: AuditScope,
+  actorType: string,
+  actorId: string | null,
+  action: string,
+  entityType: string,
+  entityId: string | null,
+  details: unknown,
+  createdAt = nowIso(),
+): StatementLike {
+  return prepareAuditLogAfterOneChange(db, actorType, actorId, action, entityType, entityId, details, createdAt, scope);
 }
 
 const AUDIT_ONE_CHANGE_GUARD_ERROR = "NOT NULL constraint failed: audit_log.action";
@@ -158,14 +234,16 @@ export function prepareAuditLogWhen(
     conditionSql: string;
     conditionBindings: unknown[];
     createdAt?: string;
+    scope?: AuditScope | null;
   },
 ): StatementLike {
   return db
     .prepare(
       `INSERT INTO audit_log (
-         id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at
+         id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at,
+         scope_type, scope_id
        )
-       SELECT ?, ?, ?, ?, ?, ?, ?, ?
+       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
        WHERE EXISTS (${input.conditionSql})`,
     )
     .bind(
@@ -177,6 +255,8 @@ export function prepareAuditLogWhen(
       input.entityId,
       serializeAuditDetails(input.details),
       input.createdAt ?? nowIso(),
+      input.scope?.type ?? null,
+      input.scope?.id ?? null,
       ...input.conditionBindings,
     );
 }

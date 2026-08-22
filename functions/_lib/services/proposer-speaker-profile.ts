@@ -3,7 +3,7 @@ import { isProposalSpeakerRosterEditableStatus } from "../../../assets/shared/sc
 import { first } from "../db/queries";
 import { AppError } from "../errors";
 import type { DatabaseLike, StatementLike } from "../types";
-import { prepareAuditLog } from "./audit";
+import { prepareScopedAuditLog } from "./audit";
 import { buildUpdateProposalSpeakerRoleStatements } from "./proposal-speakers";
 import { prepareSpeakerProfileStatement } from "./proposals-speaker-profile";
 import { getProposalByManageToken, type ProposalRecord } from "./proposals";
@@ -100,8 +100,9 @@ export async function updateProposalSpeakerByProposer(
   if (statements.length === 0) return false;
 
   statements.push(
-    prepareAuditLog(
+    prepareScopedAuditLog(
       db,
+      { type: "proposal", id: payload.proposal.id },
       "user",
       payload.proposal.proposer_user_id,
       "speaker_profile_updated_by_proposer",

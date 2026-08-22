@@ -4,7 +4,12 @@ import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { imageExtension, putUploadedImage } from "../utils/image-upload";
 import { first } from "../db/queries";
-import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange, prepareAuditLogWhen } from "./audit";
+import {
+  isAuditOneChangeGuardFailure,
+  prepareAuditLogAfterOneChange,
+  prepareAuditLogWhen,
+  type AuditScope,
+} from "./audit";
 import { storedImageResponse } from "./image-response";
 import {
   prepareStorageDeletion,
@@ -21,6 +26,7 @@ export interface HeadshotAudit {
   action: string;
   entityType?: string;
   entityId?: string | null;
+  scope?: AuditScope;
   details?: Record<string, unknown>;
 }
 
@@ -104,6 +110,7 @@ function conditionalHeadshotAuditStatement(
     entityType: audit.entityType ?? "user",
     entityId: audit.entityId ?? userId,
     details: { ...audit.details, ...details },
+    scope: audit.scope,
     createdAt: at,
     conditionSql: `SELECT 1 FROM users WHERE id = ? AND ${conditionSql}`,
     conditionBindings: [userId, ...conditionValues],
@@ -162,6 +169,7 @@ export async function replaceUserHeadshot(
             context.audit.entityId ?? context.userId,
             { ...context.audit.details, r2Key },
             at,
+            context.audit.scope,
           ),
           prepareBadgeRenderJobsForUser(context.db, context.userId, at),
         ];

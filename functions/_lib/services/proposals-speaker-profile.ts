@@ -1,7 +1,7 @@
 import { all, first } from "../db/queries";
 import { AppError } from "../errors";
 import { nowIso } from "../utils/time";
-import { prepareAuditLog } from "./audit";
+import { prepareScopedAuditLog } from "./audit";
 import { prepareConsentStatements, validateRequiredConsents } from "./consent";
 import { getRequiredTerms } from "./events";
 import { getSpeakerByManageToken } from "./proposals";
@@ -87,9 +87,16 @@ export async function confirmSpeakerParticipation(
          WHERE id = ?`,
       )
       .bind(now, now, speaker.id),
-    prepareAuditLog(db, "user", speaker.user_id, "speaker_confirmed", "proposal_speaker", speaker.id, {
-      proposalId: speaker.proposal_id,
-    }),
+    prepareScopedAuditLog(
+      db,
+      { type: "proposal", id: speaker.proposal_id },
+      "user",
+      speaker.user_id,
+      "speaker_confirmed",
+      "proposal_speaker",
+      speaker.id,
+      { proposalId: speaker.proposal_id },
+    ),
   ]);
 }
 
@@ -121,10 +128,16 @@ export async function declineSpeakerParticipation(
          WHERE event_id = ? AND user_id = ? AND source_type = 'proposal' AND source_ref = ?`,
       )
       .bind(now, proposal.event_id, speaker.user_id, proposal.id),
-    prepareAuditLog(db, "user", speaker.user_id, "speaker_declined", "proposal_speaker", speaker.id, {
-      proposalId: speaker.proposal_id,
-      reason: payload.reason ?? null,
-    }),
+    prepareScopedAuditLog(
+      db,
+      { type: "proposal", id: speaker.proposal_id },
+      "user",
+      speaker.user_id,
+      "speaker_declined",
+      "proposal_speaker",
+      speaker.id,
+      { proposalId: speaker.proposal_id, reason: payload.reason ?? null },
+    ),
   ]);
 }
 

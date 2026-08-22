@@ -1,5 +1,6 @@
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
 import { ADMIN_AUDIT_LOG_SORT_COLUMNS } from "../../../assets/shared/schemas/admin-audit-log";
+import type { AuditLogListQuery } from "../../../assets/shared/schemas/admin-audit-log";
 import { queryPage } from "../db/pagination";
 import { buildD1TextSearchFilter } from "../db/search";
 import { resolveMappedOrderBy } from "../db/sort";
@@ -18,18 +19,7 @@ interface AuditLogRow {
   created_at: string;
 }
 
-export interface AdminAuditLogQuery {
-  q?: string | null;
-  entityType?: string | null;
-  actorType?: string | null;
-  action?: string | null;
-  entityId?: string | null;
-  sort?: string;
-  limit: number;
-  offset: number;
-}
-
-function buildAuditLogFilter(query: AdminAuditLogQuery): { where: string; bindings: unknown[] } {
+function buildAuditLogFilter(query: AuditLogListQuery): { where: string; bindings: unknown[] } {
   const clauses: string[] = [];
   const bindings: unknown[] = [];
   const exactFilters = [
@@ -63,7 +53,7 @@ function buildAuditLogFilter(query: AdminAuditLogQuery): { where: string; bindin
   return { where: clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "", bindings };
 }
 
-export async function listAdminAuditLog(db: DatabaseLike, query: AdminAuditLogQuery) {
+export async function listAdminAuditLog(db: DatabaseLike, query: AuditLogListQuery) {
   const filter = buildAuditLogFilter(query);
   const orderBy = resolveMappedOrderBy(
     query.sort,

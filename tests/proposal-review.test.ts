@@ -80,11 +80,17 @@ describe("proposal review and finalize", () => {
 
     expect(createResponse.status).toBe(200);
 
-    const createdAuditRows = await queryAll<{ details_json: string }>(
+    const createdAuditRows = await queryAll<{
+      details_json: string;
+      scope_type: string | null;
+      scope_id: string | null;
+    }>(
       env.DB,
-      "SELECT details_json FROM audit_log WHERE action = 'proposal_review_upserted' ORDER BY created_at ASC",
+      `SELECT details_json, scope_type, scope_id
+       FROM audit_log WHERE action = 'proposal_review_upserted' ORDER BY created_at ASC`,
     );
     expect(createdAuditRows).toHaveLength(1);
+    expect(createdAuditRows[0]).toMatchObject({ scope_type: "proposal", scope_id: proposalId });
     expect(JSON.parse(createdAuditRows[0].details_json)).toMatchObject({
       recommendation: { from: null, to: "accept" },
       score: { from: null, to: 9 },
@@ -117,11 +123,17 @@ describe("proposal review and finalize", () => {
 
     expect(patchResponse.status).toBe(200);
 
-    const patchedAuditRows = await queryAll<{ details_json: string }>(
+    const patchedAuditRows = await queryAll<{
+      details_json: string;
+      scope_type: string | null;
+      scope_id: string | null;
+    }>(
       env.DB,
-      "SELECT details_json FROM audit_log WHERE action = 'proposal_review_upserted' ORDER BY created_at ASC",
+      `SELECT details_json, scope_type, scope_id
+       FROM audit_log WHERE action = 'proposal_review_upserted' ORDER BY created_at ASC`,
     );
     expect(patchedAuditRows).toHaveLength(2);
+    expect(patchedAuditRows[1]).toMatchObject({ scope_type: "proposal", scope_id: proposalId });
     expect(JSON.parse(patchedAuditRows[1].details_json)).toMatchObject({
       score: { from: 9, to: 10 },
       reviewerComment: { from: "Good", to: "Excellent" },

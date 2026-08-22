@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { auditLogEntrySchema } from "./audit-log";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 /**
@@ -31,19 +32,10 @@ export const auditLogListQuerySchema = listQuerySchema(ADMIN_AUDIT_LOG_SORT_COLU
   action: optionalFilterString(200),
   entityId: optionalFilterString(200),
 });
+export type AuditLogListQuery = z.infer<typeof auditLogListQuerySchema>;
 
-export const auditLogEntrySchema = z.object({
-  id: z.string(),
-  actor_type: z.string(),
-  actor_id: z.string().nullable(),
-  actor_display: z.string().nullable(),
-  action: z.string(),
-  entity_type: z.string(),
-  entity_id: z.string().nullable(),
-  details: z.record(z.string(), z.unknown()).nullable(),
-  created_at: z.string(),
-});
-export type AuditLogEntry = z.infer<typeof auditLogEntrySchema>;
+export { auditLogEntrySchema } from "./audit-log";
+export type { AuditLogEntry } from "./audit-log";
 export const auditLogListResponseSchema = paginatedResponseSchema("entries", auditLogEntrySchema);
 
 export const auditLogListRouteSchema = {

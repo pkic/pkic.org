@@ -81,10 +81,18 @@ CREATE UNIQUE INDEX uq_engagement_events_idempotency_key
 -- state transition it describes. Most audit entries remain append-only and
 -- omit this key; transactional workflows can opt into exactly-once logging.
 ALTER TABLE audit_log ADD COLUMN idempotency_key TEXT;
+-- Child records can be deleted while their audit history must remain visible
+-- from the owning aggregate. Store that immutable read scope on the audit row
+-- instead of reconstructing it by joining mutable/live child tables.
+ALTER TABLE audit_log ADD COLUMN scope_type TEXT;
+ALTER TABLE audit_log ADD COLUMN scope_id TEXT;
 
 CREATE UNIQUE INDEX uq_audit_log_idempotency_key
   ON audit_log(idempotency_key)
   WHERE idempotency_key IS NOT NULL;
+
+CREATE INDEX idx_audit_log_scope
+  ON audit_log(scope_type, scope_id, created_at DESC, id);
 
 -- Domain retries must not enqueue duplicate external side effects. Callers
 -- that can identify a one-shot notification provide this nullable key and a

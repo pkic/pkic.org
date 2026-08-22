@@ -4,7 +4,7 @@ import { sha256Hex } from "../utils/crypto";
 import type { EventRecord } from "./events";
 import { buildEventEmailVariables } from "./events";
 import { speakerManagePageUrl } from "./frontend-links";
-import { prepareAuditLog } from "./audit";
+import { prepareScopedAuditLog } from "./audit";
 import { buildAddProposalSpeaker, buildProposalInviteEmailContext, formatInvitePerson } from "./proposal-speakers";
 import type { ProposalRecord } from "./proposals";
 import { buildFindOrCreateUserStatement } from "./users";
@@ -80,8 +80,9 @@ async function inviteProposalSpeakerOnce(
   statements.push(
     ...preparedSpeaker.statements,
     queued.statement,
-    prepareAuditLog(
+    prepareScopedAuditLog(
       db,
+      { type: "proposal", id: payload.proposal.id },
       "user",
       payload.proposal.proposer_user_id,
       "co_speaker_invited",

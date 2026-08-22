@@ -167,6 +167,7 @@ export async function saveExistingProposalReview(
       action: "proposal_review_upserted",
       entityType: "proposal_review",
       entityId: existing.id,
+      scope: { type: "proposal", id: proposalId },
       details: changes,
       createdAt: now,
       conditionSql:

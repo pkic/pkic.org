@@ -742,6 +742,24 @@ describe("proposal subtree access gate (full router stack)", () => {
       .run();
   }
 
+  async function assignProposalReadOnlyRole(userId: string, eventId: string, grantedBy: string): Promise<void> {
+    const roleId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO roles (id, name, description, is_system_role, created_at, updated_at)
+         VALUES (?, ?, NULL, 0, datetime('now'), datetime('now'))`,
+      ).bind(roleId, `proposal_reader_${roleId}`),
+      env.DB.prepare(
+        `INSERT INTO role_permissions (id, role_id, permission, created_at)
+         VALUES (?, ?, 'proposals:read', datetime('now'))`,
+      ).bind(crypto.randomUUID(), roleId),
+      env.DB.prepare(
+        `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, granted_by_user_id, created_at)
+         VALUES (?, ?, ?, 'event', ?, ?, datetime('now'))`,
+      ).bind(crypto.randomUUID(), userId, roleId, eventId, grantedBy),
+    ]);
+  }
+
   // Grants a role unrelated to proposals/events so the user passes
   // STAFF_ACCESS_CONDITION (can obtain a session at all) while still
   // lacking proposals:read — otherwise a truly grant-less user can't even
@@ -786,6 +804,17 @@ describe("proposal subtree access gate (full router stack)", () => {
     expect(response.status).toBe(403);
   });
 
+  it("audit-log: proposals:read alone cannot expose private review notes", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const staffId = await insertStaffUser("read-only-audit@wf.test");
+    await assignProposalReadOnlyRole(staffId, eventId, adminUserId);
+    const staffToken = await createAdminSession(env.DB, staffId, "read-only-audit-token");
+
+    const response = await callAppGet(`/api/v1/admin/proposals/${proposalId}/audit-log`, staffToken);
+    expect(response.status).toBe(403);
+  });
+
   it("remind-speakers: a staff user with no event-scoped access cannot trigger speaker reminders", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId } = await seedProposalWithSpeaker(eventId);
@@ -806,15 +835,36 @@ describe("proposal subtree access gate (full router stack)", () => {
     expect(response.status).toBe(404);
   });
 
-  it("audit-log: a staff user with an event-scoped proposals:read grant (event_moderator) can view the audit log", async () => {
+  it("audit-log: an event moderator with proposals:score can view private review audit details", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    await env.DB.prepare(
+      `INSERT INTO audit_log
+         (id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at, scope_type, scope_id)
+       VALUES (?, 'admin', ?, 'proposal_review_upserted', 'proposal_review', ?, ?, datetime('now'), 'proposal', ?)`,
+    )
+      .bind(
+        crypto.randomUUID(),
+        adminUserId,
+        crypto.randomUUID(),
+        JSON.stringify({ reviewerComment: { from: null, to: "Private review note" } }),
+        proposalId,
+      )
+      .run();
     const staffId = await insertStaffUser("moderator@wf.test");
     await assignEventModerator(staffId, eventId, adminUserId);
     const staffToken = await createAdminSession(env.DB, staffId, "moderator-token");
 
     const response = await callAppGet(`/api/v1/admin/proposals/${proposalId}/audit-log`, staffToken);
     expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      auditLog: [
+        expect.objectContaining({
+          action: "proposal_review_upserted",
+          details: { reviewerComment: { from: null, to: "Private review note" } },
+        }),
+      ],
+    });
   });
 
   it("decision endpoints require proposals:manage, not only proposal read/score access", async () => {
