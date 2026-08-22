@@ -104,7 +104,6 @@ export async function listAdminEmailTemplateVersions(db: DatabaseLike, templateK
          created_at,
          message_type
        FROM email_template_versions
-       ${where}
        ${where}`,
     bindings,
     orderBy,
