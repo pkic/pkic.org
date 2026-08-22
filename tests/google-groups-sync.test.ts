@@ -386,7 +386,7 @@ describe("Google Groups sync", () => {
     );
     expect(outbox).toHaveLength(1);
     expect(JSON.parse(outbox[0].payload_json)).toMatchObject({
-      lists: ["pqc@lists.pkic.org", "ca@lists.pkic.org"],
+      lists: ["ca@lists.pkic.org", "pqc@lists.pkic.org"],
     });
   });
 
