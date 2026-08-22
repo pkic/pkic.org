@@ -1278,7 +1278,7 @@ CREATE INDEX idx_organization_representatives_user_active
 -- backfills (event_permissions → user_roles, users.role='admin' →
 -- user_roles), then drops event_permissions resolution.
 --
--- One deviation from the original literal schema:
+-- Two deviations from the original literal schema:
 --
 -- 1. `role_permissions` is a new table, not present anywhere in
 --    describes each built-in role's default permission bundle in prose only
@@ -1287,10 +1287,15 @@ CREATE INDEX idx_organization_representatives_user_active
 --    somewhere to actually store and edit the bundle. This is the same
 --    class of gap.
 --
--- Pre-provisioning creates a minimal `users` identity and binds authorization
--- to its immutable ID. Email-only grants are deliberately not carried into
--- the new model because authorization must not transfer if an address is
--- later released and reused by another account.
+-- 2. `user_roles.user_id` is nullable here (with a parallel `user_email`
+--    column), not NOT NULL as shown in SQL sketch.
+--    Resolution text requires the opposite of what SQL says: it
+--    requires the new model to "preserve this pre-provisioning behavior,
+--    since event organizers/PC members are often granted access before
+--    their first login" — exactly the nullable-user_id + user_email pattern
+--    `event_permissions` already used. A NOT NULL user_id makes that
+--    impossible, so the nullable form (matching event_permissions, which
+--    this migration backfills from) is what's implemented.
 --
 -- `permission_grants` and `refresh_tokens` are created exactly as specified.
 
@@ -1320,7 +1325,8 @@ CREATE TABLE role_permissions (
 
 CREATE TABLE user_roles (
   id                 TEXT NOT NULL PRIMARY KEY,
-  user_id            TEXT NOT NULL,
+  user_id            TEXT,
+  user_email         TEXT,
   role_id            TEXT NOT NULL,
   context_type       TEXT,
   -- allowed: 'event' | 'working_group' | 'organization' | NULL (global)
@@ -1342,6 +1348,7 @@ CREATE TABLE user_roles (
 );
 
 CREATE INDEX idx_user_roles_user ON user_roles(user_id);
+CREATE INDEX idx_user_roles_email ON user_roles(user_email);
 CREATE INDEX idx_user_roles_context ON user_roles(context_type, context_id);
 CREATE INDEX idx_user_roles_role ON user_roles(role_id);
 CREATE UNIQUE INDEX uq_user_roles_single_holder_per_context
@@ -1388,10 +1395,15 @@ BEGIN
 END;
 
 -- Preserve the active-grant uniqueness that the legacy event_permissions
--- table enforced and extend it to every non-singleton role assignment.
+-- table enforced and extend it to every non-singleton role assignment. Two
+-- partial indexes cover pre-provisioned email grants and account-bound grants.
+CREATE UNIQUE INDEX uq_user_roles_active_email_role_context
+  ON user_roles(role_id, COALESCE(context_type, ''), COALESCE(context_id, ''), lower(user_email))
+  WHERE revoked_at IS NULL AND single_holder_per_context = 0 AND user_email IS NOT NULL;
+
 CREATE UNIQUE INDEX uq_user_roles_active_user_role_context
   ON user_roles(role_id, COALESCE(context_type, ''), COALESCE(context_id, ''), user_id)
-  WHERE revoked_at IS NULL AND single_holder_per_context = 0;
+  WHERE revoked_at IS NULL AND single_holder_per_context = 0 AND user_email IS NULL AND user_id IS NOT NULL;
 
 CREATE TABLE permission_grants (
   id                 TEXT NOT NULL PRIMARY KEY,
@@ -1528,24 +1540,18 @@ INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES
 
 -- ── Backfill: users.role='admin' → user_roles ────────────────────────
 
-INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, granted_by_user_id, expires_at, revoked_at, created_at)
-SELECT lower(hex(randomblob(16))), u.id, 'role-admin', NULL, NULL, NULL, NULL, NULL, datetime('now')
+INSERT INTO user_roles (id, user_id, user_email, role_id, context_type, context_id, granted_by_user_id, expires_at, revoked_at, created_at)
+SELECT lower(hex(randomblob(16))), u.id, NULL, 'role-admin', NULL, NULL, NULL, NULL, NULL, datetime('now')
 FROM users u
 WHERE u.role = 'admin';
 
 -- ── Backfill: event_permissions → user_roles ─────────────────────────
 
--- Preserve pre-provisioned grants without leaving authorization attached to
--- a reusable string identifier.
-INSERT OR IGNORE INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-SELECT lower(hex(randomblob(16))), ep.user_email, lower(trim(ep.user_email)), 'user', 1, ep.created_at, ep.created_at
-FROM event_permissions ep
-WHERE ep.user_id IS NULL;
-
-INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, granted_by_user_id, expires_at, revoked_at, created_at)
+INSERT INTO user_roles (id, user_id, user_email, role_id, context_type, context_id, granted_by_user_id, expires_at, revoked_at, created_at)
 SELECT
   lower(hex(randomblob(16))),
-  COALESCE(ep.user_id, (SELECT u.id FROM users u WHERE u.normalized_email = lower(trim(ep.user_email)))),
+  ep.user_id,
+  ep.user_email,
   CASE ep.permission
     WHEN 'organizer' THEN 'role-event_organizer'
     WHEN 'program_committee' THEN 'role-program_committee'
@@ -1787,18 +1793,16 @@ CREATE INDEX idx_application_communications_application
 CREATE TABLE google_groups_membership_desired_state (
   user_id            TEXT NOT NULL,
   google_group_email TEXT NOT NULL,
-  member_email       TEXT NOT NULL,
   desired_action     TEXT NOT NULL,
   generation         INTEGER NOT NULL,
   updated_at         TEXT NOT NULL,
-  PRIMARY KEY(member_email, google_group_email),
+  PRIMARY KEY(user_id, google_group_email),
   FOREIGN KEY(user_id) REFERENCES users(id)
 );
 
 CREATE TABLE google_groups_sync_queue (
   id                TEXT NOT NULL PRIMARY KEY,
   user_id           TEXT NOT NULL,
-  member_email      TEXT NOT NULL,
   action            TEXT NOT NULL,
   -- allowed: add_to_list | remove_from_list
   google_group_email TEXT NOT NULL,
@@ -1830,15 +1834,13 @@ CREATE UNIQUE INDEX uq_google_groups_sync_queue_idempotency
   ON google_groups_sync_queue(idempotency_key)
   WHERE idempotency_key IS NOT NULL;
 CREATE INDEX idx_google_groups_sync_queue_pair_order
-  ON google_groups_sync_queue(member_email, google_group_email, generation)
+  ON google_groups_sync_queue(user_id, google_group_email, generation)
   WHERE status IN ('pending', 'processing');
 CREATE UNIQUE INDEX uq_google_groups_sync_queue_pair_generation
-  ON google_groups_sync_queue(member_email, google_group_email, generation)
+  ON google_groups_sync_queue(user_id, google_group_email, generation)
   WHERE generation IS NOT NULL;
 
--- Desired state is keyed by the external identity, not only by internal user:
--- an address reused after anonymization must supersede delayed work belonging
--- to the prior account. One queue INSERT is the atomic desired-state transition. An ignored
+-- One queue INSERT is the atomic desired-state transition. An ignored
 -- idempotent INSERT fires no trigger and therefore cannot advance the desired
 -- generation without a matching job. A new generation supersedes older local
 -- work; if an already-issued Directory call returns late, the processor
@@ -1847,10 +1849,9 @@ CREATE TRIGGER trg_google_groups_sync_queue_desired_state
 AFTER INSERT ON google_groups_sync_queue
 BEGIN
   INSERT INTO google_groups_membership_desired_state
-    (user_id, google_group_email, member_email, desired_action, generation, updated_at)
-  VALUES (NEW.user_id, NEW.google_group_email, NEW.member_email, NEW.action, 1, NEW.created_at)
-  ON CONFLICT(member_email, google_group_email) DO UPDATE SET
-    user_id = excluded.user_id,
+    (user_id, google_group_email, desired_action, generation, updated_at)
+  VALUES (NEW.user_id, NEW.google_group_email, NEW.action, 1, NEW.created_at)
+  ON CONFLICT(user_id, google_group_email) DO UPDATE SET
     desired_action = excluded.desired_action,
     generation = google_groups_membership_desired_state.generation + 1,
     updated_at = excluded.updated_at;
@@ -1858,14 +1859,14 @@ BEGIN
   UPDATE google_groups_sync_queue
      SET generation = (
        SELECT generation FROM google_groups_membership_desired_state
-        WHERE member_email = NEW.member_email AND google_group_email = NEW.google_group_email
+        WHERE user_id = NEW.user_id AND google_group_email = NEW.google_group_email
      )
    WHERE id = NEW.id;
 
   UPDATE google_groups_sync_queue
      SET status = 'superseded', processed_at = NEW.created_at,
          next_attempt_at = NULL, processing_token = NULL, lease_expires_at = NULL
-   WHERE member_email = NEW.member_email AND google_group_email = NEW.google_group_email
+   WHERE user_id = NEW.user_id AND google_group_email = NEW.google_group_email
      AND id != NEW.id AND status IN ('pending', 'processing');
 END;
 
@@ -2183,26 +2184,6 @@ WHEN OLD.pending_email IS NOT NULL
  AND OLD.pending_email != NEW.pending_email
 BEGIN
   SELECT RAISE(ABORT, 'EMAIL_CHANGE_ALREADY_PENDING');
-END;
-
--- A primary address is an authentication identifier shared by every domain
--- owned by a user. Registration capabilities and generic profile editing are
--- not authorized to transfer that identity. Anonymization remains the only
--- deliberate writer because it retires, rather than transfers, the identity.
-CREATE TRIGGER trg_users_primary_email_immutable
-BEFORE UPDATE OF email, normalized_email ON users
-WHEN (
-   OLD.email IS NOT NEW.email
-   OR OLD.normalized_email IS NOT NEW.normalized_email
- )
- AND NOT (
-   OLD.pii_redacted_at IS NULL
-   AND NEW.pii_redacted_at IS NOT NULL
-   AND NEW.email = 'redacted-' || NEW.id || '@anonymized.invalid'
-   AND NEW.normalized_email = NEW.email
- )
-BEGIN
-  SELECT RAISE(ABORT, 'PRIMARY_EMAIL_IMMUTABLE');
 END;
 
 -- Identity consolidation is intentionally not a generic database operation.

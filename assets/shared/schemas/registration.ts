@@ -252,20 +252,19 @@ export const registrationResendConfirmationSchema = z
 
 export const okResponseSchema = z.object({ ok: z.boolean() });
 
-export const registrationManageSchema = z
-  .object({
-    action: z.enum(["update", "cancel", "report_unauthorized"]),
-    attendanceType: attendanceTypeSchema.optional(),
-    dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
-    claimDayWaitlistOffers: z.array(dayDateSchema).max(31).optional(),
-    customAnswers: customAnswersSchema.optional(),
-    sourceRef: trimmedString(2, 200).optional(),
-    firstName: firstNameSchema.optional(),
-    lastName: lastNameSchema.optional(),
-    organizationName: organizationNameSchema.optional(),
-    jobTitle: jobTitleSchema.optional(),
-  })
-  .strict();
+export const registrationManageSchema = z.object({
+  action: z.enum(["update", "cancel", "report_unauthorized"]),
+  attendanceType: attendanceTypeSchema.optional(),
+  dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
+  claimDayWaitlistOffers: z.array(dayDateSchema).max(31).optional(),
+  customAnswers: customAnswersSchema.optional(),
+  sourceRef: trimmedString(2, 200).optional(),
+  email: normalizedEmailSchema.optional(),
+  firstName: firstNameSchema.optional(),
+  lastName: lastNameSchema.optional(),
+  organizationName: organizationNameSchema.optional(),
+  jobTitle: jobTitleSchema.optional(),
+});
 
 export const registrationInviteCreateSchema = z.object({ invites: z.array(inviteeSchema).min(1).max(10) });
 

@@ -18,6 +18,7 @@ export const adminUserUpdateSchema = z
   .object({
     role: adminRoleValueSchema.optional(),
     active: z.boolean().optional(),
+    email: z.string().trim().toLowerCase().email().optional(),
     firstName: z.string().trim().max(80).nullable().optional(),
     lastName: z.string().trim().max(120).nullable().optional(),
     preferredName: z.string().trim().max(80).nullable().optional(),
@@ -27,7 +28,6 @@ export const adminUserUpdateSchema = z
     links: linksSchema.nullable().optional(),
     isEcMember: z.boolean().optional(),
   })
-  .strict()
   .refine((value) => Object.values(value).some((field) => field !== undefined), {
     message: "At least one field must be provided",
   });

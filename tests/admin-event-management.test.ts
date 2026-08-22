@@ -283,19 +283,10 @@ describe("admin event management endpoints", () => {
 
     expect(permissionResponse.status).toBe(201);
     const permissionPayload = (await permissionResponse.json()) as {
-      permission: { id: string; user_email: string; permission: string };
+      permission: { user_email: string; permission: string };
     };
     expect(permissionPayload.permission.user_email).toBe("organizer@example.test");
     expect(permissionPayload.permission.permission).toBe("organizer");
-    expect(
-      await queryAll<{ normalized_email: string }>(
-        env.DB,
-        `SELECT u.normalized_email
-           FROM user_roles ur JOIN users u ON u.id = ur.user_id
-          WHERE ur.id = ?`,
-        permissionPayload.permission.id,
-      ),
-    ).toEqual([{ normalized_email: "organizer@example.test" }]);
 
     const duplicatePermissionResponse = await callAdmin("/api/v1/admin/events/pqc-2026/permissions", {
       method: "POST",

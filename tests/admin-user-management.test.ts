@@ -194,6 +194,7 @@ describe("admin user deactivation", () => {
       createContext(
         env,
         adminRequest(`/api/v1/admin/users/${userId}`, "PATCH", {
+          email: "new-private@example.test",
           biography: "Sensitive private biography",
           links: ["https://private.example.test/profile"],
         }),
@@ -207,10 +208,11 @@ describe("admin user deactivation", () => {
       userId,
     );
     expect(detailsJson).not.toContain("private-update@example.test");
+    expect(detailsJson).not.toContain("new-private@example.test");
     expect(detailsJson).not.toContain("Sensitive private biography");
     expect(detailsJson).not.toContain("private.example.test");
     expect(JSON.parse(detailsJson)).toMatchObject({
-      changedFields: { to: expect.arrayContaining(["biography", "links"]) },
+      changedFields: { to: expect.arrayContaining(["email", "biography", "links"]) },
     });
   });
 
@@ -295,25 +297,6 @@ describe("admin user anonymization", () => {
     expect(row.last_name).toBeNull();
     expect(row.active).toBe(0);
     expect(row.pii_redacted_at).toBeTruthy();
-  });
-
-  it("snapshots the original address for external offboarding before redaction", async () => {
-    await setup();
-    const originalEmail = "external-membership@example.test";
-    const userId = await seedUser(env.DB, originalEmail);
-
-    await anonymizeUser(
-      createContext(env, adminRequest(`/api/v1/admin/users/${userId}/anonymize`, "POST"), { userId }),
-    );
-
-    const removals = await queryAll<{ member_email: string }>(
-      env.DB,
-      `SELECT member_email FROM google_groups_sync_queue
-        WHERE user_id = ? AND action = 'remove_from_list'`,
-      userId,
-    );
-    expect(removals.length).toBeGreaterThan(0);
-    expect(removals.every((row) => row.member_email === originalEmail)).toBe(true);
   });
 
   it("closes active organization relationships so redacted users disappear from rosters and counts", async () => {

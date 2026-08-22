@@ -6,6 +6,7 @@
  * can further restrict (never expand) those effective permissions.
  */
 import { all } from "../db/queries";
+import { normalizeEmail } from "../validation";
 import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike, PermissionGrant } from "../types";
 import { PERMISSION_DENIED_MESSAGE } from "../../../assets/shared/auth-errors";
@@ -34,9 +35,9 @@ interface GrantRow {
 /**
  * Resolves the full set of contextual permissions for a user from
  * `user_roles` (via `role_permissions`) and `permission_grants`, excluding
- * expired/revoked rows. Roles are bound only to immutable `user_id` values;
- * pre-provisioning creates a minimal user rather than attaching authorization
- * to a reusable email address (see consolidated migration 0035).
+ * expired/revoked rows. Matches `user_roles` rows by `user_id` OR (when
+ * `user_id IS NULL`) by normalized email, preserving the pre-provisioning
+ * pattern `event_permissions` used (see consolidated migration 0035).
  *
  * Called on every authenticated admin request — see requireAdminFromRequest
  * in ./admin.ts. This is a deliberate deviation from "no DB query on
@@ -45,13 +46,19 @@ interface GrantRow {
  * same lookup gives real-time (not eventually-consistent, ≤15-minute)
  * revocation at no extra request-path cost.
  */
-export async function computeGrantsForUser(db: DatabaseLike, userId: string): Promise<PermissionGrant[]> {
+export async function computeGrantsForUser(
+  db: DatabaseLike,
+  userId: string,
+  email: string,
+): Promise<PermissionGrant[]> {
+  const normalizedEmail = normalizeEmail(email);
+
   const rows = await all<GrantRow>(
     db,
     `SELECT rp.permission AS permission, ur.context_type AS context_type, ur.context_id AS context_id
      FROM user_roles ur
      JOIN role_permissions rp ON rp.role_id = ur.role_id
-     WHERE ur.user_id = ?
+     WHERE (ur.user_id = ? OR (ur.user_id IS NULL AND ur.user_email = ?))
        AND ur.revoked_at IS NULL
        AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
      UNION ALL
@@ -60,7 +67,7 @@ export async function computeGrantsForUser(db: DatabaseLike, userId: string): Pr
      WHERE pg.user_id = ?
        AND pg.revoked_at IS NULL
        AND (pg.expires_at IS NULL OR pg.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
-    [userId, userId],
+    [userId, normalizedEmail, userId],
   );
 
   return rows.map((row) => ({

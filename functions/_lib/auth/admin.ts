@@ -45,7 +45,7 @@ const STAFF_ACCESS_CONDITION = `(
   u.role = 'admin'
   OR EXISTS (
     SELECT 1 FROM user_roles ur
-    WHERE ur.user_id = u.id
+    WHERE (ur.user_id = u.id OR (ur.user_id IS NULL AND ur.user_email = u.normalized_email))
       AND ur.revoked_at IS NULL
       AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   )
@@ -306,7 +306,7 @@ export async function getAdminBySessionClaims(db: DatabaseLike, claims: AdminSes
   assertSessionActive(row ? { revokedAt: row.revoked_at, expiresAt: row.expires_at } : null, "admin");
   const activeRow = row!;
 
-  const grants = await computeGrantsForUser(db, activeRow.user_id);
+  const grants = await computeGrantsForUser(db, activeRow.user_id, activeRow.email);
 
   return {
     id: activeRow.user_id,

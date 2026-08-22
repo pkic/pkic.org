@@ -500,14 +500,19 @@ describe("Sponsorship sales pipeline", () => {
   });
 
   it("advancing a consortium sponsorship to active queues sponsorship-active-confirmation to the contact email", async () => {
-    const { organizationId } = await seedOrganization("Gamma");
+    const { organizationId, userId } = await seedOrganization("Gamma LLC");
+    await env.DB.prepare(
+      "UPDATE users SET email = 'primary@gamma.test', normalized_email = 'primary@gamma.test' WHERE id = ?",
+    )
+      .bind(userId)
+      .run();
     const createResponse = await call(adminToken, "/api/v1/admin/sponsorships", {
       method: "POST",
       body: JSON.stringify({
         sponsorType: "consortium",
         organizationId,
         tier: "Silver",
-        contactEmail: "contact@gamma.test",
+        contactEmail: "primary@gamma.test",
         contactName: "Primary Contact",
         renewalDate: futureRenewalDate(),
       }),
@@ -524,7 +529,7 @@ describe("Sponsorship sales pipeline", () => {
       "SELECT template_key, recipient_email FROM email_outbox WHERE template_key = 'sponsorship-active-confirmation'",
     );
     expect(outboxRows).toHaveLength(1);
-    expect(outboxRows[0].recipient_email).toBe("contact@gamma.test");
+    expect(outboxRows[0].recipient_email).toBe("primary@gamma.test");
   });
 
   it("advancing an event sponsorship to active at a qualifying tier sends sponsor-portal-access and issues a magic link", async () => {

@@ -9,7 +9,6 @@ export type GoogleGroupsSyncStatus = (typeof GOOGLE_GROUPS_SYNC_STATUSES)[number
 export interface GoogleGroupsSyncQueueRow {
   id: string;
   user_id: string;
-  member_email: string;
   action: GoogleGroupsSyncAction;
   google_group_email: string;
   idempotency_key: string | null;

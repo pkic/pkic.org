@@ -4,9 +4,11 @@ import { serializeLinks } from "../../../assets/shared/schemas/links";
 import { first } from "../db/queries";
 import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
+import { normalizeEmail } from "../validation";
 import { prepareAuditLog } from "./audit";
 import { prepareUserProfileStatement, type UserProfilePatch } from "./users";
 import { buildUserAccessOffboardingStatements } from "./membership/offboarding";
+import { findUserEmailOwner } from "./user-emails";
 
 type AdminUserUpdateInput = z.infer<typeof adminUserUpdateSchema>;
 
@@ -90,12 +92,29 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
     throw new AppError(409, "IDENTITY_RETIRED", "A previously merged account cannot be modified or reactivated");
   }
 
+  let email = user.email;
+  let promotedSecondaryEmail: string | null = null;
+  if (input.email !== undefined) {
+    const normalized = normalizeEmail(input.email);
+    if (normalized !== normalizeEmail(user.email)) {
+      const owner = await findUserEmailOwner(db, normalized);
+      if (owner && owner.userId !== user.id) {
+        throw new AppError(409, "EMAIL_ALREADY_IN_USE", "Another account already uses that email address");
+      }
+      if (owner?.kind === "pending") {
+        throw new AppError(409, "EMAIL_CHANGE_PENDING", "That email address has a pending verification request");
+      }
+      if (owner?.kind === "secondary") promotedSecondaryEmail = normalized;
+      email = normalized;
+    }
+  }
   const role = input.role ?? user.role;
   const active = input.active ?? Boolean(user.active);
   const isEcMember = input.isEcMember ?? Boolean(user.is_ec_member);
   const patch = profilePatch(input);
   const profileFields = changedProfileFields(user, patch);
   const changedFields = [
+    ...(email !== user.email ? ["email"] : []),
     ...profileFields,
     ...(input.role !== undefined && role !== user.role ? ["role"] : []),
     ...(input.active !== undefined && active !== Boolean(user.active) ? ["active"] : []),
@@ -103,15 +122,22 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
   ];
   const statements: StatementLike[] = [];
   const at = new Date().toISOString();
+  if (promotedSecondaryEmail) {
+    statements.push(
+      db
+        .prepare("DELETE FROM user_emails WHERE user_id = ? AND normalized_email = ?")
+        .bind(user.id, promotedSecondaryEmail),
+    );
+  }
   if (Object.keys(patch).length > 0) statements.push(prepareUserProfileStatement(db, user.id, patch));
   statements.push(
     db
       .prepare(
         `UPDATE users
-         SET role = ?, active = ?, is_ec_member = ?, updated_at = ?
+         SET email = ?, normalized_email = ?, role = ?, active = ?, is_ec_member = ?, updated_at = ?
          WHERE id = ?`,
       )
-      .bind(role, active ? 1 : 0, isEcMember ? 1 : 0, at, user.id),
+      .bind(email, normalizeEmail(email), role, active ? 1 : 0, isEcMember ? 1 : 0, at, user.id),
   );
   if (user.active === 1 && !active) {
     statements.push(
@@ -137,5 +163,5 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
     );
   }
   await db.batch(statements);
-  return { id: user.id, email: user.email, role, active, isEcMember };
+  return { id: user.id, email, role, active, isEcMember };
 }

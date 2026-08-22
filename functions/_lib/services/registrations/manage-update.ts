@@ -3,9 +3,15 @@ import type { DatabaseLike } from "../../types";
 import { deriveEventAttendanceType } from "../event-days";
 import { getEventById } from "../events";
 import { validateCustomAnswersByPurpose } from "../forms";
+import { getNormalizedEmailForUser } from "../users";
 import type { z } from "zod";
 import type { RegistrationRecord } from "./types";
-import { updateRegistrationByIdWithNotification, updateRegistrationByManageTokenWithNotification } from "./update";
+import {
+  updateRegistrationByIdWithEmailChange,
+  updateRegistrationByIdWithNotification,
+  updateRegistrationByManageTokenWithEmailChange,
+  updateRegistrationByManageTokenWithNotification,
+} from "./update";
 
 type RegistrationManageBody = z.infer<typeof registrationManageSchema>;
 
@@ -17,12 +23,14 @@ export interface ManageRegistrationUpdateInput {
   body: RegistrationManageBody;
   appBaseUrl: string;
   signingSecret: string;
+  confirmationLinkTtlHours: number;
   waitlistClaimWindowHours: number;
 }
 
 export interface ManageRegistrationUpdateResult {
   registration: RegistrationRecord;
   outboxId: string | null;
+  emailChanged: boolean;
 }
 
 /**
@@ -55,6 +63,9 @@ export async function updateManagedRegistration(
         }
       : undefined;
 
+  const currentEmail =
+    body.action === "update" && body.email ? await getNormalizedEmailForUser(db, current.user_id) : null;
+  const emailChanged = Boolean(currentEmail && body.email && body.email.trim().toLowerCase() !== currentEmail);
   const updatePayload = {
     action: body.action,
     attendanceType,
@@ -80,6 +91,39 @@ export async function updateManagedRegistration(
         : `Registration updated for ${event.name}`,
   };
 
+  if (emailChanged && body.email) {
+    const emailChange = {
+      newEmail: body.email,
+      confirmationTtlHours: input.confirmationLinkTtlHours,
+      signingSecret: input.signingSecret,
+      allowCancelled: true,
+      auditActor: {
+        type: input.isAdminManageJwt ? ("admin" as const) : ("user" as const),
+        id: input.actorUserId,
+        action: "email_changed",
+        eventId: event.id,
+      },
+      confirmationEmail: {
+        event,
+        appBaseUrl: input.appBaseUrl,
+        confirmationTtlHours: input.confirmationLinkTtlHours,
+      },
+    };
+    const result = input.isAdminManageJwt
+      ? await updateRegistrationByIdWithEmailChange(
+          db,
+          { ...updatePayload, registrationId: current.id, emailChange },
+          "admin",
+        )
+      : await updateRegistrationByManageTokenWithEmailChange(db, {
+          ...updatePayload,
+          manageToken: input.manageToken,
+          signingSecret: input.signingSecret,
+          emailChange,
+        });
+    return { registration: result.registration, outboxId: result.outboxId, emailChanged };
+  }
+
   const result = input.isAdminManageJwt
     ? await updateRegistrationByIdWithNotification(
         db,
@@ -92,5 +136,5 @@ export async function updateManagedRegistration(
         signingSecret: input.signingSecret,
         notification,
       });
-  return { registration: result.registration, outboxId: result.outboxId };
+  return { registration: result.registration, outboxId: result.outboxId, emailChanged };
 }

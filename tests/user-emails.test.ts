@@ -144,18 +144,26 @@ describe("secondary user emails", () => {
     expect(clashSecondary.status).toBe(409);
   });
 
-  it("does not let generic admin profile editing change a primary email", async () => {
+  it("uses the same ownership boundary when an admin changes a primary email", async () => {
     const userA = await insertUser("primary-a@example.test");
+    const userB = await insertUser("primary-b@example.test");
     await addUserEmail(env.DB, { id: adminId, email: "admin@pkic.org", role: "admin" }, userA, "alias-a@example.test");
+    await addUserEmail(env.DB, { id: adminId, email: "admin@pkic.org", role: "admin" }, userB, "alias-b@example.test");
 
-    const response = await call(adminToken, `/api/v1/admin/users/${userA}`, {
+    const crossAccount = await call(adminToken, `/api/v1/admin/users/${userA}`, {
+      method: "PATCH",
+      body: JSON.stringify({ email: "alias-b@example.test" }),
+    });
+    expect(crossAccount.status).toBe(409);
+
+    const ownAlias = await call(adminToken, `/api/v1/admin/users/${userA}`, {
       method: "PATCH",
       body: JSON.stringify({ email: "alias-a@example.test" }),
     });
-    expect(response.status).toBe(400);
-    expect(await queryAll(env.DB, "SELECT id FROM user_emails WHERE user_id = ?", userA)).toHaveLength(1);
+    expect(ownAlias.status).toBe(200);
+    expect(await queryAll(env.DB, "SELECT id FROM user_emails WHERE user_id = ?", userA)).toHaveLength(0);
     expect(await queryAll<{ email: string }>(env.DB, "SELECT email FROM users WHERE id = ?", userA)).toEqual([
-      { email: "primary-a@example.test" },
+      { email: "alias-a@example.test" },
     ]);
   });
 
@@ -175,7 +183,7 @@ describe("secondary user emails", () => {
       env.DB.prepare("UPDATE users SET normalized_email = ?, email = ? WHERE id = ?")
         .bind("guard-alias@example.test", "guard-alias@example.test", userB)
         .run(),
-    ).rejects.toThrow("PRIMARY_EMAIL_IMMUTABLE");
+    ).rejects.toThrow("EMAIL_TAKEN");
     await expect(
       env.DB.prepare("UPDATE users SET merged_into_user_id = ? WHERE id = ?").bind(userA, userB).run(),
     ).rejects.toThrow("USER_IDENTITY_MERGE_DISABLED");

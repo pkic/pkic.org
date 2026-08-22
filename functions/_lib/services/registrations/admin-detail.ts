@@ -76,6 +76,22 @@ export async function fetchAdminRegistrationWithDetails(
   );
 }
 
+export async function getRegistrationNormalizedEmail(
+  db: DatabaseLike,
+  eventId: string,
+  registrationId: string,
+): Promise<string | null> {
+  const row = await first<{ normalized_email: string }>(
+    db,
+    `SELECT u.normalized_email
+       FROM registrations r
+       JOIN users u ON u.id = r.user_id
+      WHERE r.id = ? AND r.event_id = ?`,
+    [registrationId, eventId],
+  );
+  return row?.normalized_email ?? null;
+}
+
 export function toAdminRegistrationDetail(
   registration: AdminRegistrationDetailRow,
 ): AdminRegistrationDetailResponse["registration"] {

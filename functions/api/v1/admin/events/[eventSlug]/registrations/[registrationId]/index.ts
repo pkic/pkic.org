@@ -18,6 +18,7 @@ import { parseJsonBody } from "../../../../../../../_lib/validation";
 import { getConfig, resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { processOutboxByIdBackground } from "../../../../../../../_lib/email/outbox";
 import {
+  updateRegistrationByIdWithEmailChange,
   updateRegistrationByIdWithNotification,
   forceRegistrationStatus,
 } from "../../../../../../../_lib/services/registrations";
@@ -28,6 +29,7 @@ import { requestDb, type AdminContext } from "../../../../../../../_lib/db/conte
 import {
   fetchAdminRegistrationWithDetails,
   getAdminRegistrationDetail,
+  getRegistrationNormalizedEmail,
   toAdminRegistrationDetail,
 } from "../../../../../../../_lib/services/registrations/admin-detail";
 
@@ -93,6 +95,11 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
       : {};
 
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
+  const currentUser =
+    body.action === "update" && body.email
+      ? await getRegistrationNormalizedEmail(requestDb(c), event.id, registrationId)
+      : null;
+  const emailChanged = Boolean(currentUser && body.email && body.email.trim().toLowerCase() !== currentUser);
   const updatePayload = {
     registrationId,
     action: body.action,
@@ -121,16 +128,43 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
         ? `Registration cancelled and data removed — ${event.name}`
         : `Registration updated for ${event.name}`,
   };
-  const updateResult = await updateRegistrationByIdWithNotification(
-    requestDb(c),
-    { ...updatePayload, notification },
-    `admin:${admin.id}`,
-  );
-  const { registration: updated, outboxId } = updateResult;
+  let updated;
+  let outboxId: string | null;
+  if (emailChanged && body.email) {
+    const updateResult = await updateRegistrationByIdWithEmailChange(
+      requestDb(c),
+      {
+        ...updatePayload,
+        emailChange: {
+          newEmail: body.email,
+          confirmationTtlHours: config.confirmationLinkTtlHours,
+          allowCancelled: true,
+          auditActor: {
+            type: "admin",
+            id: admin.id,
+            action: "admin_email_changed",
+            eventId: event.id,
+          },
+          confirmationEmail: { event, appBaseUrl, confirmationTtlHours: config.confirmationLinkTtlHours },
+        },
+      },
+      `admin:${admin.id}`,
+    );
+    updated = updateResult.registration;
+    outboxId = updateResult.outboxId;
+  } else {
+    const updateResult = await updateRegistrationByIdWithNotification(
+      requestDb(c),
+      { ...updatePayload, notification },
+      `admin:${admin.id}`,
+    );
+    updated = updateResult.registration;
+    outboxId = updateResult.outboxId;
+  }
   if (outboxId) c.executionCtx.waitUntil(processOutboxByIdBackground(requestDb(c), c.env, outboxId));
 
   const result = await fetchAdminRegistrationWithDetails(requestDb(c), event.id, updated.id);
-  return json({ success: true, registration: result ? toAdminRegistrationDetail(result) : null });
+  return json({ success: true, registration: result ? toAdminRegistrationDetail(result) : null, emailChanged });
 }
 
 // ── Router ────────────────────────────────────────────────────────────────────
