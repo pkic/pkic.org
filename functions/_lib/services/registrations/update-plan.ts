@@ -9,7 +9,7 @@ import {
   prepareReplaceRegistrationDayAttendanceStatements,
   type DayAttendanceSelection,
 } from "../event-days";
-import { prepareUserProfileStatement, type UserProfilePatch } from "../users";
+import { prepareUserProfileStatement, userProfilePatchWouldChange, type UserProfilePatch } from "../users";
 import {
   buildRegistrationDayWaitlistSync,
   dayWaitlistOfferUnavailableError,
@@ -22,6 +22,7 @@ import {
 import type { RegistrationRecord } from "./types";
 import type { AttendanceType } from "../../../../assets/shared/schemas/registration";
 import { prepareClearRegistrationEmailChangeStatement } from "./change-email";
+import { prepareRegistrationTransitionGuard } from "./transition-guard";
 
 export interface RegistrationUpdatePayload {
   action: "update" | "cancel" | "report_unauthorized";
@@ -67,6 +68,8 @@ function prepareRegistrationUpdateAudit(
 export interface BuiltRegistrationUpdate {
   registration: RegistrationRecord;
   statements: StatementLike[];
+  notificationChanged: boolean;
+  notificationRevision: number;
   dayAttendance?: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
   dayWaitlist?: Array<{
     dayDate: string;
@@ -97,6 +100,7 @@ export async function buildRegistrationUpdate(
       updated_at: now,
     };
     const statements: StatementLike[] = [
+      prepareRegistrationTransitionGuard(db, registration),
       db
         .prepare(
           `UPDATE registrations
@@ -112,7 +116,13 @@ export async function buildRegistrationUpdate(
     ];
     const audit = prepareRegistrationUpdateAudit(db, registration, cancelled, payload);
     if (audit) statements.push(audit);
-    return { registration: cancelled, statements, dayWaitlist: [] };
+    return {
+      registration: cancelled,
+      statements,
+      notificationChanged: true,
+      notificationRevision: registration.transition_revision + 1,
+      dayWaitlist: [],
+    };
   }
 
   if (payload.action === "report_unauthorized") {
@@ -129,6 +139,7 @@ export async function buildRegistrationUpdate(
       updated_at: now,
     };
     const statements: StatementLike[] = [
+      prepareRegistrationTransitionGuard(db, registration),
       db
         .prepare(
           `UPDATE registrations
@@ -145,7 +156,13 @@ export async function buildRegistrationUpdate(
     ];
     const audit = prepareRegistrationUpdateAudit(db, registration, updated, payload);
     if (audit) statements.push(audit);
-    return { registration: updated, statements, dayWaitlist: [] };
+    return {
+      registration: updated,
+      statements,
+      notificationChanged: true,
+      notificationRevision: registration.transition_revision + 1,
+      dayWaitlist: [],
+    };
   }
 
   const [previousInPersonDayIds, previousConfirmedInPersonDayIds, configuredEventDays] = await Promise.all([
@@ -215,6 +232,7 @@ export async function buildRegistrationUpdate(
   }
   const now = nowIso();
   const statements: StatementLike[] = [
+    prepareRegistrationTransitionGuard(db, registration),
     db
       .prepare(
         `UPDATE registrations
@@ -240,6 +258,8 @@ export async function buildRegistrationUpdate(
   ];
   let plannedDayAttendance: BuiltRegistrationUpdate["dayAttendance"];
   let plannedDayWaitlist: BuiltRegistrationUpdate["dayWaitlist"];
+  let dayAttendanceChanged = false;
+  let waitlistChanged = false;
   if (payload.dayAttendance) {
     const waitlist = await buildRegistrationDayWaitlistSync(db, {
       registrationId: registration.id,
@@ -253,15 +273,18 @@ export async function buildRegistrationUpdate(
       forceWaitlistDayDates: payload.forceWaitlistDayDates,
       claimOfferedDayDates: payload.claimDayWaitlistOffers,
     });
+    waitlistChanged = waitlist.changed;
+    const dayAttendanceStatements = await prepareReplaceRegistrationDayAttendanceStatements(db, {
+      registrationId: registration.id,
+      eventId: registration.event_id,
+      selections: payload.dayAttendance,
+      changedBy,
+      configuredEventDays,
+    });
+    dayAttendanceChanged = dayAttendanceStatements.length > 0;
     statements.unshift(...waitlist.guardStatements);
     statements.push(
-      ...(await prepareReplaceRegistrationDayAttendanceStatements(db, {
-        registrationId: registration.id,
-        eventId: registration.event_id,
-        selections: payload.dayAttendance,
-        changedBy,
-        configuredEventDays,
-      })),
+      ...dayAttendanceStatements,
       ...waitlist.statements,
     );
     const claimedInPersonDates = new Set(
@@ -296,12 +319,29 @@ export async function buildRegistrationUpdate(
     cancelled_at: isCancelled ? null : registration.cancelled_at,
     updated_at: now,
   };
-  if (payload.profilePatch) statements.push(prepareUserProfileStatement(db, updated.user_id, payload.profilePatch));
+  const scalarChanged =
+    registration.status !== updated.status ||
+    registration.attendance_type !== updated.attendance_type ||
+    registration.cancellation_reason_code !== updated.cancellation_reason_code ||
+    registration.custom_answers_json !== updated.custom_answers_json ||
+    registration.source_ref !== updated.source_ref ||
+    registration.capacity_exempt_in_person !== updated.capacity_exempt_in_person ||
+    registration.capacity_exempt_reason !== updated.capacity_exempt_reason ||
+    registration.cancelled_at !== updated.cancelled_at;
+  const profileChanged = payload.profilePatch
+    ? await userProfilePatchWouldChange(db, updated.user_id, payload.profilePatch)
+    : false;
+  if (payload.profilePatch && profileChanged) {
+    statements.push(prepareUserProfileStatement(db, updated.user_id, payload.profilePatch));
+  }
+  const notificationChanged = scalarChanged || dayAttendanceChanged || waitlistChanged || profileChanged;
   const audit = prepareRegistrationUpdateAudit(db, registration, updated, payload);
-  if (audit) statements.push(audit);
+  if (audit && notificationChanged) statements.push(audit);
   return {
     registration: updated,
     statements,
+    notificationChanged,
+    notificationRevision: registration.transition_revision + (notificationChanged ? 1 : 0),
     dayAttendance: plannedDayAttendance,
     dayWaitlist: plannedDayWaitlist,
   };

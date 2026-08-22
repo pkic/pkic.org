@@ -3,6 +3,7 @@ import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
+import { sha256Hex } from "../../utils/crypto";
 import { prepareAuditLog } from "../audit";
 import { deriveEventAttendanceType, listEventDays } from "../event-days";
 import { buildRegistrationDayWaitlistSync, roleBasedCapacityExemptReason, withDayCapacityRetry } from "./day-waitlist";
@@ -10,6 +11,11 @@ import { ADMIN_DAY_CAPACITY_EXEMPT_REASON_CODE } from "./day-waitlist-policy";
 import { getRegistrationById } from "./queries";
 import { prepareRegistrationStatusEmail, type RegistrationStatusEmailParams } from "./status-notifications";
 import type { RegistrationRecord } from "./types";
+import {
+  isRegistrationTransitionConflict,
+  prepareRegistrationTransitionGuard,
+  registrationChangedError,
+} from "./transition-guard";
 
 interface ExistingAttendanceRow {
   event_day_id: string;
@@ -30,7 +36,7 @@ interface BuiltAdmission {
   registration: RegistrationRecord;
   admittedDayDates: string[];
   statements: StatementLike[];
-  outboxId: string;
+  outboxId: string | null;
 }
 
 async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Promise<BuiltAdmission> {
@@ -63,7 +69,11 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
      WHERE rda.registration_id = ? AND ed.event_id = ?`,
     [registration.id, payload.event.id],
   );
-  const attendanceByDayId = new Map(existingRows.map((row) => [row.event_day_id, row.attendance_type]));
+  const existingAttendanceByDayId = new Map(existingRows.map((row) => [row.event_day_id, row.attendance_type]));
+  const dayAttendanceChanged = admittedDayDates.some(
+    (dayDate) => existingAttendanceByDayId.get(dayByDate.get(dayDate)!.id) !== "in_person",
+  );
+  const attendanceByDayId = new Map(existingAttendanceByDayId);
   for (const dayDate of admittedDayDates) {
     attendanceByDayId.set(dayByDate.get(dayDate)!.id, "in_person");
   }
@@ -90,6 +100,7 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
     configuredEventDays: eventDays,
   });
   const statements: StatementLike[] = [
+    prepareRegistrationTransitionGuard(db, registration),
     ...waitlist.guardStatements,
     db
       .prepare(
@@ -164,9 +175,21 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
       );
     }
   }
+  statements.push(...waitlist.statements, ...dayOverrideStatements);
+  const admittedDayDateSet = new Set(admittedDayDates);
+  const waitlistAdmissionChanged = waitlist.activeRows.some(
+    (row) => admittedDayDateSet.has(row.dayDate) && row.status !== "accepted",
+  );
+  const changed =
+    dayAttendanceChanged ||
+    registration.attendance_type !== updated.attendance_type ||
+    registration.capacity_exempt_in_person !== updated.capacity_exempt_in_person ||
+    registration.capacity_exempt_reason !== updated.capacity_exempt_reason ||
+    waitlist.changed ||
+    waitlistAdmissionChanged;
+  if (!changed) return { registration, admittedDayDates, statements: [], outboxId: null };
+
   statements.push(
-    ...waitlist.statements,
-    ...dayOverrideStatements,
     prepareAuditLog(db, "admin", payload.actorUserId, "registration_admitted", "registration", registration.id, {
       mode: payload.mode,
       reason: payload.reason,
@@ -174,6 +197,9 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
       capacityExemptReason: roleExemptReason ?? `day:${ADMIN_DAY_CAPACITY_EXEMPT_REASON_CODE}`,
     }),
   );
+  const idempotencyKey =
+    `registration-admit:${registration.id}:${registration.transition_revision + 1}:` +
+    admittedDayDates.slice().sort().join(",");
   const email = await prepareRegistrationStatusEmail(db, {
     event: payload.event,
     registrationId: registration.id,
@@ -182,6 +208,8 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
     templateKey: "registration_updated",
     subject: `In-person registration accepted — ${payload.event.name}`,
     noticeKind: "admin_admit",
+    outboxId: (await sha256Hex(idempotencyKey)).slice(0, 32),
+    idempotencyKey,
     dayAttendance: eventDays
       .filter((day) => attendanceByDayId.has(day.id))
       .map((day) => ({
@@ -198,14 +226,19 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
 export async function admitRegistration(
   db: DatabaseLike,
   payload: AdmissionPayload,
-): Promise<{ registration: RegistrationRecord; admittedDayDates: string[]; outboxId: string }> {
-  return withDayCapacityRetry(async () => {
-    const built = await buildAdmission(db, payload);
-    await db.batch(built.statements);
-    return {
-      registration: built.registration,
-      admittedDayDates: built.admittedDayDates,
-      outboxId: built.outboxId,
-    };
-  });
+): Promise<{ registration: RegistrationRecord; admittedDayDates: string[]; outboxId: string | null }> {
+  try {
+    return await withDayCapacityRetry(async () => {
+      const built = await buildAdmission(db, payload);
+      if (built.statements.length) await db.batch(built.statements);
+      return {
+        registration: built.registration,
+        admittedDayDates: built.admittedDayDates,
+        outboxId: built.outboxId,
+      };
+    });
+  } catch (error) {
+    if (isRegistrationTransitionConflict(error)) throw registrationChangedError();
+    throw error;
+  }
 }

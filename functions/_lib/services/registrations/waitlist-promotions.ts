@@ -1,9 +1,12 @@
 import { all, run } from "../../db/queries";
-import { writeAuditLog } from "../audit";
+import { first } from "../../db/queries";
+import { nowIso } from "../../utils/time";
+import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
 import { listEventDays } from "../event-days";
-import { queueRegistrationStatusEmail, type RegistrationStatusEmailEvent } from "./status-notifications";
+import { listDayWaitlistForRegistration } from "./day-waitlist-queries";
+import { prepareRegistrationStatusEmail, type RegistrationStatusEmailEvent } from "./status-notifications";
 import { promoteDayWaitlistIfCapacity } from "./day-waitlist";
-import type { DatabaseLike } from "../../types";
+import type { DatabaseLike, StatementLike } from "../../types";
 
 export interface WaitlistPromotionEvent extends RegistrationStatusEmailEvent {
   capacity_in_person?: number | null;
@@ -43,6 +46,7 @@ export async function promoteEventWaitlistWithNotifications(
 ): Promise<WaitlistPromotionResult> {
   const result = emptyResult();
   const affected = new Set<string>();
+  const queuedRegistrationIds = new Set<string>();
   const maxOffers = payload.maxOffers ?? Number.POSITIVE_INFINITY;
 
   const days = payload.eventDayIds
@@ -50,47 +54,78 @@ export async function promoteEventWaitlistWithNotifications(
     : (await listEventDays(db, payload.event.id)).map((day) => day.id);
   for (const eventDayId of Array.from(new Set(days))) {
     while (result.dayRegistrationOffers < maxOffers) {
+      let preparedOutboxId: string | null = null;
       const promoted = await promoteDayWaitlistIfCapacity(db, {
         eventId: payload.event.id,
         eventDayId,
         claimWindowHours: payload.claimWindowHours,
+        isCommitConflict: isAuditOneChangeGuardFailure,
+        prepareCommitGuard: (promotion) =>
+          prepareAuditLogAfterOneChange(
+            db,
+            payload.source.actorType,
+            payload.source.actorId,
+            payload.source.auditAction,
+            "event",
+            payload.event.id,
+            {
+              source: payload.source.source,
+              eventDayId: promotion.event_day_id,
+              registrationId: promotion.registration_id,
+              dayRegistrationOffers: 1,
+            },
+            nowIso(),
+          ),
+        prepareCommitStatements: async (promotion) => {
+          const statements: StatementLike[] = [];
+          if (!queuedRegistrationIds.has(promotion.registration_id)) {
+            const day = await first<{ day_date: string }>(db, "SELECT day_date FROM event_days WHERE id = ?", [
+              promotion.event_day_id,
+            ]);
+            if (!day) throw new Error("Promoted event day no longer exists");
+            const currentWaitlist = await listDayWaitlistForRegistration(db, promotion.registration_id);
+            const dayWaitlist = [
+              ...currentWaitlist.filter((entry) => entry.dayDate !== day.day_date),
+              {
+                dayDate: day.day_date,
+                status: "offered" as const,
+                priorityLane: promotion.priority_lane,
+                offerExpiresAt: promotion.offer_expires_at,
+              },
+            ];
+            const email = await prepareRegistrationStatusEmail(db, {
+              event: payload.event,
+              registrationId: promotion.registration_id,
+              appBaseUrl: payload.appBaseUrl,
+              templateKey: "registration_waitlist_offer",
+              subject: `In-person spot available — ${payload.event.name}`,
+              noticeKind: "waitlist_offer",
+              outboxId:
+                `waitlist-offer:${payload.event.id}:${promotion.registration_id}:` +
+                `${promotion.event_day_id}:${promotion.offer_expires_at}`,
+              idempotencyKey:
+                `waitlist-offer:${payload.event.id}:${promotion.registration_id}:` +
+                `${promotion.event_day_id}:${promotion.offer_expires_at}`,
+              dayWaitlist,
+            });
+            statements.push(email.statement);
+            preparedOutboxId = email.outboxId;
+          }
+          return statements;
+        },
       });
       if (!promoted) break;
 
       result.dayRegistrationOffers += 1;
       affected.add(promoted.registration_id);
+      if (preparedOutboxId) {
+        queuedRegistrationIds.add(promoted.registration_id);
+        result.outboxIds.push(preparedOutboxId);
+      }
     }
   }
 
   result.affectedRegistrations = Array.from(affected);
-
-  for (const registrationId of result.affectedRegistrations) {
-    const outbox = await queueRegistrationStatusEmail(db, {
-      event: payload.event,
-      registrationId,
-      appBaseUrl: payload.appBaseUrl,
-      templateKey: "registration_waitlist_offer",
-      subject: `In-person spot available — ${payload.event.name}`,
-      noticeKind: "waitlist_offer",
-    });
-    result.outboxIds.push(outbox.outboxId);
-  }
-
-  if (result.affectedRegistrations.length > 0) {
-    await writeAuditLog(
-      db,
-      payload.source.actorType,
-      payload.source.actorId,
-      payload.source.auditAction,
-      "event",
-      payload.event.id,
-      {
-        source: payload.source.source,
-        dayRegistrationOffers: result.dayRegistrationOffers,
-        affectedRegistrations: result.affectedRegistrations,
-      },
-    );
-  }
 
   return result;
 }

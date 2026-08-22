@@ -110,6 +110,43 @@ export interface UserProfilePatch {
   headshotR2Key?: string | null;
 }
 
+interface UserProfilePatchSnapshot {
+  first_name: string | null;
+  last_name: string | null;
+  preferred_name: string | null;
+  organization_name: string | null;
+  job_title: string | null;
+  biography: string | null;
+  links_json: string | null;
+  headshot_r2_key: string | null;
+}
+
+/** True only when at least one explicitly supplied profile field differs. */
+export async function userProfilePatchWouldChange(
+  db: DatabaseLike,
+  userId: string,
+  payload: UserProfilePatch,
+): Promise<boolean> {
+  const user = await first<UserProfilePatchSnapshot>(
+    db,
+    `SELECT first_name, last_name, preferred_name, organization_name, job_title,
+            biography, links_json, headshot_r2_key
+       FROM users WHERE id = ?`,
+    [userId],
+  );
+  if (!user) return false;
+  return (
+    (payload.firstName !== undefined && payload.firstName !== user.first_name) ||
+    (payload.lastName !== undefined && payload.lastName !== user.last_name) ||
+    (payload.preferredName !== undefined && payload.preferredName !== user.preferred_name) ||
+    (payload.organizationName !== undefined && payload.organizationName !== user.organization_name) ||
+    (payload.jobTitle !== undefined && payload.jobTitle !== user.job_title) ||
+    (payload.biography !== undefined && payload.biography !== user.biography) ||
+    (payload.linksJson !== undefined && payload.linksJson !== user.links_json) ||
+    (payload.headshotR2Key !== undefined && payload.headshotR2Key !== user.headshot_r2_key)
+  );
+}
+
 /** Shared explicit-presence profile patch for every authenticated/admin flow. */
 export function prepareUserProfileStatement(
   db: DatabaseLike,

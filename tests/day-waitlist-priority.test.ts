@@ -6,6 +6,7 @@ import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { createRegistration, updateRegistrationByManageToken } from "../functions/_lib/services/registrations";
 import { updateAdminRegistrationDayAttendance } from "../functions/_lib/services/registrations/admin-day-attendance";
+import { promoteDayWaitlistIfCapacity } from "../functions/_lib/services/registrations/day-waitlist";
 import {
   promoteEventWaitlistWithNotifications,
   runWaitlistPromotionCycle,
@@ -261,6 +262,161 @@ describe("day waitlist priorities", () => {
     expect(multiStatuses.find((row) => row.event_day_id === "d1")?.status).toBe("offered");
     expect(multiStatuses.find((row) => row.event_day_id === "d2")?.status).toBe("waiting");
     expect(backupStatuses.find((row) => row.event_day_id === "d2")?.status).toBe("offered");
+  });
+
+  it("enforces one active offer when different event days promote the same user concurrently", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    await env.DB.prepare(
+      `
+      INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
+      VALUES
+        ('race-d1', '${eventId}', '2026-12-01', 'Day 1', 1, 10, datetime('now'), datetime('now')),
+        ('race-d2', '${eventId}', '2026-12-02', 'Day 2', 1, 20, datetime('now'), datetime('now'));
+    `,
+    ).run();
+
+    const seeded = await seedUsersAndInvites(env.DB, eventId, [
+      "race-holder-one@example.test",
+      "race-holder-two@example.test",
+      "race-multi@example.test",
+    ]);
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const holderOne = await createRegistration(env.DB, {
+      event,
+      userId: seeded["race-holder-one@example.test"].userId,
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      sourceType: "invite",
+      inviteId: seeded["race-holder-one@example.test"].inviteId,
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    const holderTwo = await createRegistration(env.DB, {
+      event,
+      userId: seeded["race-holder-two@example.test"].userId,
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-02", attendanceType: "in_person" }],
+      sourceType: "invite",
+      inviteId: seeded["race-holder-two@example.test"].inviteId,
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    const multi = await createRegistration(env.DB, {
+      event,
+      userId: seeded["race-multi@example.test"].userId,
+      attendanceType: "in_person",
+      dayAttendance: [
+        { dayDate: "2026-12-01", attendanceType: "in_person" },
+        { dayDate: "2026-12-02", attendanceType: "in_person" },
+      ],
+      sourceType: "invite",
+      inviteId: seeded["race-multi@example.test"].inviteId,
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    await Promise.all([
+      updateRegistrationByManageToken(env.DB, {
+        manageToken: holderOne.manageToken,
+        action: "cancel",
+        waitlistClaimWindowHours: 24,
+        signingSecret: "test-signing-secret",
+      }),
+      updateRegistrationByManageToken(env.DB, {
+        manageToken: holderTwo.manageToken,
+        action: "cancel",
+        waitlistClaimWindowHours: 24,
+        signingSecret: "test-signing-secret",
+      }),
+    ]);
+
+    const [first, second] = await Promise.all([
+      promoteDayWaitlistIfCapacity(env.DB, { eventId, eventDayId: "race-d1", claimWindowHours: 24 }),
+      promoteDayWaitlistIfCapacity(env.DB, { eventId, eventDayId: "race-d2", claimWindowHours: 24 }),
+    ]);
+    expect([first, second].filter(Boolean)).toHaveLength(1);
+    const statuses = await queryAll<{ event_day_id: string; status: string }>(
+      env.DB,
+      "SELECT event_day_id, status FROM event_day_waitlist_entries WHERE registration_id = ? ORDER BY event_day_id",
+      [multi.registration.id],
+    );
+    expect(statuses.filter((row) => row.status === "offered")).toHaveLength(1);
+    expect(statuses.filter((row) => row.status === "waiting")).toHaveLength(1);
+  });
+
+  it("rolls back the offer and audit when durable notification enqueue fails", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    await env.DB.prepare(
+      `INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
+       VALUES ('failure-day', '${eventId}', '2026-12-01', 'Day 1', 1, 10, datetime('now'), datetime('now'))`,
+    ).run();
+    const seeded = await seedUsersAndInvites(env.DB, eventId, [
+      "failure-holder@example.test",
+      "failure-waiting@example.test",
+    ]);
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const holder = await createRegistration(env.DB, {
+      event,
+      userId: seeded["failure-holder@example.test"].userId,
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      sourceType: "invite",
+      inviteId: seeded["failure-holder@example.test"].inviteId,
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    const waiting = await createRegistration(env.DB, {
+      event,
+      userId: seeded["failure-waiting@example.test"].userId,
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      sourceType: "invite",
+      inviteId: seeded["failure-waiting@example.test"].inviteId,
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    await updateRegistrationByManageToken(env.DB, {
+      manageToken: holder.manageToken,
+      action: "cancel",
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+    await env.DB.prepare(
+      `CREATE TRIGGER reject_waitlist_offer_outbox
+       BEFORE INSERT ON email_outbox
+       WHEN NEW.template_key = 'registration_waitlist_offer'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced waitlist outbox failure');
+       END`,
+    ).run();
+    try {
+      await expect(
+        promoteEventWaitlistWithNotifications(env.DB, {
+          event,
+          appBaseUrl: "https://app.test",
+          claimWindowHours: 24,
+          source: {
+            actorType: "system",
+            actorId: null,
+            auditAction: "system_waitlist_promoted",
+            source: "failure-test",
+          },
+        }),
+      ).rejects.toThrow("forced waitlist outbox failure");
+      const [waitlist] = await queryAll<{ status: string }>(
+        env.DB,
+        "SELECT status FROM event_day_waitlist_entries WHERE registration_id = ?",
+        [waiting.registration.id],
+      );
+      expect(waitlist.status).toBe("waiting");
+      expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'system_waitlist_promoted'")).toHaveLength(
+        0,
+      );
+      expect(
+        await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'registration_waitlist_offer'"),
+      ).toHaveLength(0);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER reject_waitlist_offer_outbox").run();
+    }
   });
 
   it("scheduled promotion cycle queues waitlist offer email and audit log", async () => {
