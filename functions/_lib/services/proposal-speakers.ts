@@ -43,7 +43,7 @@ export async function buildAddProposalSpeaker(
     userId: string;
     role: ProposalSpeakerRole;
     signingSecret?: string;
-    proposalContext?: { event_id: string; status: string };
+    proposalContext?: { event_id: string; status: string; updated_at?: string };
   },
 ): Promise<{
   manageToken: string;
@@ -82,12 +82,29 @@ export async function buildAddProposalSpeaker(
       [payload.proposalId],
     ));
 
+  const proposalWriteGuard =
+    payload.proposalContext?.updated_at === undefined
+      ? { sql: "", bindings: [] as unknown[] }
+      : {
+          sql: `WHERE EXISTS (
+            SELECT 1 FROM session_proposals
+            WHERE id = ? AND event_id = ? AND status = ? AND updated_at = ? AND deleted_at IS NULL
+          )`,
+          bindings: [
+            payload.proposalId,
+            payload.proposalContext.event_id,
+            payload.proposalContext.status,
+            payload.proposalContext.updated_at,
+          ],
+        };
+
   const statements: StatementLike[] = [
     db
       .prepare(
         `INSERT INTO proposal_speakers
            (id, proposal_id, user_id, role, status, manage_link_secret, confirmed_at, created_at, invite_generation)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+         ${proposalWriteGuard.sql}
          ON CONFLICT(proposal_id, user_id) DO UPDATE SET
            role = excluded.role,
            status = CASE WHEN proposal_speakers.status = 'declined' THEN 'invited' ELSE proposal_speakers.status END,
@@ -120,6 +137,7 @@ export async function buildAddProposalSpeaker(
         confirmedAt,
         now,
         inviteGeneration,
+        ...proposalWriteGuard.bindings,
       ),
   ];
   if (proposal) {

@@ -1405,6 +1405,128 @@ describe("speaker self-management endpoints", () => {
     await env.DB.prepare("DROP TRIGGER reject_co_speaker_invite_email").run();
   });
 
+  it.each(["spam", "duplicate"] as const)(
+    "rejects co-speaker invitations for %s proposals through the mounted endpoint",
+    async (status) => {
+      await setupWorkflow();
+      const { proposalManageToken, proposalId } = await inviteSpeakerAndSubmitProposal();
+      await env.DB.prepare(
+        "UPDATE session_proposals SET status = ?, updated_at = datetime('now', '+1 second') WHERE id = ?",
+      )
+        .bind(status, proposalId)
+        .run();
+
+      const response = await app.fetch(
+        new Request(`https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email: `blocked-${status}@example.test`, firstName: "Blocked", role: "speaker" }),
+        }),
+        env,
+        { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+      );
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({ error: { code: "PROPOSAL_CLOSED" } });
+      await expect(
+        queryAll<{ count: number }>(
+          env.DB,
+          "SELECT COUNT(*) AS count FROM users WHERE normalized_email = ?",
+          `blocked-${status}@example.test`,
+        ),
+      ).resolves.toEqual([{ count: 0 }]);
+      await expect(
+        queryAll<{ count: number }>(
+          env.DB,
+          "SELECT COUNT(*) AS count FROM proposal_speakers WHERE proposal_id = ?",
+          proposalId,
+        ),
+      ).resolves.toEqual([{ count: 2 }]);
+      await expect(
+        queryAll<{ count: number }>(
+          env.DB,
+          "SELECT COUNT(*) AS count FROM email_outbox WHERE recipient_email = ? AND template_key = 'co_speaker_invite'",
+          `blocked-${status}@example.test`,
+        ),
+      ).resolves.toEqual([{ count: 0 }]);
+    },
+  );
+
+  it("rolls back a co-speaker invite when moderation closes the proposal after the snapshot", async () => {
+    await setupWorkflow();
+    const { proposalManageToken, proposalId } = await inviteSpeakerAndSubmitProposal();
+    const proposal = await getProposalByManageToken(env.DB, proposalManageToken, env.INTERNAL_SIGNING_SECRET!);
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const baseDb: DatabaseLike = env.DB;
+    let raced = false;
+    const racingDb: DatabaseLike = {
+      prepare: (query) => baseDb.prepare(query),
+      async batch(statements) {
+        if (!raced) {
+          raced = true;
+          await baseDb
+            .prepare(
+              "UPDATE session_proposals SET status = 'duplicate', updated_at = datetime('now', '+1 second') WHERE id = ?",
+            )
+            .bind(proposalId)
+            .run();
+        }
+        return baseDb.batch(statements);
+      },
+    };
+
+    await expect(
+      inviteProposalSpeaker(racingDb, {
+        proposal,
+        event,
+        appBaseUrl: "https://app.test",
+        email: "race-closed-speaker@example.test",
+        firstName: "Race",
+        lastName: "Closed",
+        role: "speaker",
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_CHANGED" });
+
+    await expect(
+      queryAll<{ count: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS count FROM users WHERE normalized_email = ?",
+        "race-closed-speaker@example.test",
+      ),
+    ).resolves.toEqual([{ count: 0 }]);
+    await expect(
+      queryAll<{ count: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS count FROM proposal_speakers WHERE proposal_id = ?",
+        proposalId,
+      ),
+    ).resolves.toEqual([{ count: 2 }]);
+    await expect(
+      queryAll<{ count: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS count FROM email_outbox WHERE recipient_email = ? AND template_key = 'co_speaker_invite'",
+        "race-closed-speaker@example.test",
+      ),
+    ).resolves.toEqual([{ count: 0 }]);
+    await expect(
+      queryAll<{ count: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS count FROM audit_log WHERE action = 'co_speaker_invited' AND scope_type = 'proposal' AND scope_id = ?",
+        proposalId,
+      ),
+    ).resolves.toEqual([{ count: 0 }]);
+    await expect(
+      queryAll<{ count: number }>(
+        env.DB,
+        `SELECT COUNT(*) AS count
+         FROM event_participant_role_sources AS sources
+         JOIN users ON users.id = sources.user_id
+         WHERE users.normalized_email = ?`,
+        "race-closed-speaker@example.test",
+      ),
+    ).resolves.toEqual([{ count: 0 }]);
+  });
+
   it("deduplicates concurrent co-speaker invitations but permits a new invitation after decline", async () => {
     await setupWorkflow();
     const { proposalManageToken, proposalId } = await inviteSpeakerAndSubmitProposal();

@@ -4,12 +4,14 @@ import { sha256Hex } from "../utils/crypto";
 import type { EventRecord } from "./events";
 import { buildEventEmailVariables } from "./events";
 import { speakerManagePageUrl } from "./frontend-links";
-import { prepareScopedAuditLog } from "./audit";
 import { buildProposalInviteEmailContext } from "./proposal-invite-email-context";
 import { buildAddProposalSpeaker, formatInvitePerson } from "./proposal-speakers";
 import type { ProposalRecord } from "./proposals";
 import { buildFindOrCreateUserStatement } from "./users";
 import type { ProposalSpeakerRole } from "../../../assets/shared/schemas/participant-roles";
+import { isProposalSpeakerRosterEditableStatus } from "../../../assets/shared/schemas/proposal-status";
+import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
+import { AppError } from "../errors";
 import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
 import {
   eventParticipantSourceConflictError,
@@ -30,6 +32,10 @@ async function inviteProposalSpeakerOnce(
   db: DatabaseLike,
   payload: ProposalSpeakerInvitation,
 ): Promise<{ email: string; outboxId: string }> {
+  if (!isProposalSpeakerRosterEditableStatus(payload.proposal.status)) {
+    throw new AppError(409, "PROPOSAL_CLOSED", "Cannot invite speakers to a closed proposal");
+  }
+
   const preparedUser = await buildFindOrCreateUserStatement(db, {
     email: payload.email,
     firstName: payload.firstName,
@@ -39,8 +45,15 @@ async function inviteProposalSpeakerOnce(
     proposalId: payload.proposal.id,
     userId: preparedUser.user.id,
     role: payload.role,
-    proposalContext: { event_id: payload.proposal.event_id, status: payload.proposal.status },
+    proposalContext: {
+      event_id: payload.proposal.event_id,
+      status: payload.proposal.status,
+      updated_at: payload.proposal.updated_at,
+    },
   });
+  const speakerWrite = preparedSpeaker.statements[0];
+  if (!speakerWrite) throw new Error("Proposal speaker write statement was not prepared");
+  const capacityStatements = preparedSpeaker.statements.slice(1);
   const context = await buildProposalInviteEmailContext(db, {
     proposalId: payload.proposal.id,
     inviterUserId: payload.proposal.proposer_user_id,
@@ -85,9 +98,8 @@ async function inviteProposalSpeakerOnce(
   const statements: StatementLike[] = [];
   if (preparedUser.statement) statements.push(preparedUser.statement);
   statements.push(
-    ...preparedSpeaker.statements,
-    queued.statement,
-    prepareScopedAuditLog(
+    speakerWrite,
+    prepareScopedAuditLogAfterOneChange(
       db,
       { type: "proposal", id: payload.proposal.id },
       "user",
@@ -104,12 +116,17 @@ async function inviteProposalSpeakerOnce(
       undefined,
       idempotencyKey,
     ),
+    ...capacityStatements,
+    queued.statement,
   );
   try {
     await db.batch(statements);
   } catch (error) {
     if (isRegistrationTransitionConflict(error)) throw registrationChangedError();
     if (isEventParticipantSourceConflict(error)) throw eventParticipantSourceConflictError();
+    if (isAuditOneChangeGuardFailure(error)) {
+      throw new AppError(409, "PROPOSAL_CHANGED", "Proposal changed while the speaker was being invited");
+    }
     throw error;
   }
   return { email: preparedUser.user.email, outboxId: queued.id };

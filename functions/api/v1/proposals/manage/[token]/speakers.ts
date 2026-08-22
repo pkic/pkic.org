@@ -17,12 +17,13 @@ import { getEventById } from "../../../../../_lib/services/events";
 import { coSpeakerInviteSchema } from "../../../../../../assets/shared/schemas/proposal-management";
 import { requireInternalSecret } from "../../../../../_lib/request";
 import { inviteProposalSpeaker } from "../../../../../_lib/services/proposal-speaker-invitations";
+import { isProposalSpeakerRosterEditableStatus } from "../../../../../../assets/shared/schemas/proposal-status";
 
 export async function onRequestPost(c: any): Promise<Response> {
   const body = await parseJsonBody(c.req, coSpeakerInviteSchema);
   const proposal = await getProposalByManageToken(c.env.DB, c.req.param("token"), requireInternalSecret(c.env));
 
-  if (proposal.status === "withdrawn" || proposal.status === "rejected") {
+  if (!isProposalSpeakerRosterEditableStatus(proposal.status)) {
     return json({ error: { code: "PROPOSAL_CLOSED", message: "Cannot invite speakers to a closed proposal" } }, 400);
   }
 
