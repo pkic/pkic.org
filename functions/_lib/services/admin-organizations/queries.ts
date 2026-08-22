@@ -62,7 +62,10 @@ const ORG_SUMMARY_SELECT = `
   LEFT JOIN member_category_assignments mca ON mca.member_id = m.id
   LEFT JOIN user_roles pr ON pr.context_type = 'organization' AND pr.context_id = m.id
     AND pr.role_id = '${REPRESENTATIVE_ROLE_IDS.primaryContact}' AND pr.revoked_at IS NULL
+  LEFT JOIN organization_representatives pr_rep
+    ON pr_rep.member_id = m.id AND pr_rep.user_id = pr.user_id AND pr_rep.left_at IS NULL
   LEFT JOIN users pu ON pu.id = pr.user_id
+    AND pr_rep.id IS NOT NULL
 `;
 
 function toOrgSummary(row: OrgSummaryRow) {
@@ -146,7 +149,10 @@ export async function fetchOrgDetailRow(db: DatabaseLike, id: string): Promise<O
      LEFT JOIN member_category_assignments mca ON mca.member_id = m.id
      LEFT JOIN user_roles pr ON pr.context_type = 'organization' AND pr.context_id = m.id
        AND pr.role_id = '${REPRESENTATIVE_ROLE_IDS.primaryContact}' AND pr.revoked_at IS NULL
+     LEFT JOIN organization_representatives pr_rep
+       ON pr_rep.member_id = m.id AND pr_rep.user_id = pr.user_id AND pr_rep.left_at IS NULL
      LEFT JOIN users pu ON pu.id = pr.user_id
+       AND pr_rep.id IS NOT NULL
      WHERE o.id = ?`,
     [id],
   );

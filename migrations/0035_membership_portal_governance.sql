@@ -989,6 +989,45 @@ CREATE UNIQUE INDEX uq_user_roles_single_holder_per_context
   ON user_roles(context_type, context_id, role_id)
   WHERE revoked_at IS NULL AND single_holder_per_context = 1;
 
+-- Representative designations are relationship-owned facts: an organization
+-- role grant is valid only while its user has an active
+-- organization_representatives row for the same members aggregate. Keep this
+-- invariant at the D1 write boundary as well as in the service preflight. The
+-- trigger is deliberately aborting rather than silently filtering an INSERT,
+-- so a stale preflight cannot revoke the current holder and report success
+-- without installing the replacement.
+CREATE TRIGGER trg_user_roles_representative_requires_active
+BEFORE INSERT ON user_roles
+WHEN NEW.context_type = 'organization'
+  AND NEW.role_id IN ('role-primary_contact', 'role-secondary_contact', 'role-voting_delegate')
+  AND NEW.revoked_at IS NULL
+  AND NOT EXISTS (
+    SELECT 1
+    FROM organization_representatives rep
+    WHERE rep.member_id = NEW.context_id
+      AND rep.user_id = NEW.user_id
+      AND rep.left_at IS NULL
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'representative role requires an active representative');
+END;
+
+CREATE TRIGGER trg_user_roles_representative_update_requires_active
+BEFORE UPDATE OF user_id, role_id, context_type, context_id, revoked_at ON user_roles
+WHEN NEW.context_type = 'organization'
+  AND NEW.role_id IN ('role-primary_contact', 'role-secondary_contact', 'role-voting_delegate')
+  AND NEW.revoked_at IS NULL
+  AND NOT EXISTS (
+    SELECT 1
+    FROM organization_representatives rep
+    WHERE rep.member_id = NEW.context_id
+      AND rep.user_id = NEW.user_id
+      AND rep.left_at IS NULL
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'representative role requires an active representative');
+END;
+
 -- Preserve the active-grant uniqueness that the legacy event_permissions
 -- table enforced and extend it to every non-singleton role assignment. Two
 -- partial indexes cover pre-provisioned email grants and account-bound grants.

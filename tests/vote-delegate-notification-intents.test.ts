@@ -143,7 +143,7 @@ describe("durable forum vote delegate notification intents", () => {
     ).toHaveLength(1);
   });
 
-  it("falls back to an active primary contact when the voting delegate is expired or inactive", async () => {
+  it("falls back to an active primary contact when the voting delegate is expired, inactive, or removed", async () => {
     const expiredPrimary = await createPrimaryContact("Expired Delegate Org");
     const expiredDelegate = await insertOrgRepresentative(env.DB, {
       organizationId: expiredPrimary.organizationId,
@@ -175,6 +175,23 @@ describe("durable forum vote delegate notification intents", () => {
     );
     await env.DB.prepare("UPDATE users SET active = 0 WHERE id = ?").bind(inactiveDelegate.userId).run();
 
+    const removedPrimary = await createPrimaryContact("Removed Delegate Org");
+    const removedDelegate = await insertOrgRepresentative(env.DB, {
+      organizationId: removedPrimary.organizationId,
+      category: "A",
+    });
+    await assignRepresentativeRole(
+      env.DB,
+      removedPrimary.memberId,
+      removedDelegate.userId,
+      REPRESENTATIVE_ROLE_IDS.votingDelegate,
+    );
+    await env.DB.prepare(
+      "UPDATE organization_representatives SET left_at = joined_at WHERE member_id = ? AND user_id = ?",
+    )
+      .bind(removedPrimary.memberId, removedDelegate.userId)
+      .run();
+
     const createResponse = await call(adminToken, "/api/v1/admin/votes", {
       method: "POST",
       body: JSON.stringify({
@@ -191,16 +208,18 @@ describe("durable forum vote delegate notification intents", () => {
         env.DB,
         `SELECT organization_id, delegate_user_id
          FROM vote_delegate_notification_intents
-         WHERE vote_id = ? AND organization_id IN (?, ?)
+         WHERE vote_id = ? AND organization_id IN (?, ?, ?)
          ORDER BY organization_id`,
         vote.id,
         expiredPrimary.organizationId,
         inactivePrimary.organizationId,
+        removedPrimary.organizationId,
       ),
     ).toEqual(
       [
         { organization_id: expiredPrimary.organizationId, delegate_user_id: expiredPrimary.userId },
         { organization_id: inactivePrimary.organizationId, delegate_user_id: inactivePrimary.userId },
+        { organization_id: removedPrimary.organizationId, delegate_user_id: removedPrimary.userId },
       ].sort((a, b) => a.organization_id.localeCompare(b.organization_id)),
     );
   });

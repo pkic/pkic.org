@@ -121,6 +121,34 @@ describe("Admin Organizations — membership category on the aggregate (Phase 1 
     expect(body.organization.representatives[0]).not.toHaveProperty("membershipCategory");
   });
 
+  it("does not surface a stale primary-contact grant after the representative leaves", async () => {
+    const { organizationId, userId } = await createOrg();
+    const aggregateId = await aggregateIdFor(organizationId);
+    await env.DB.prepare(
+      "UPDATE organization_representatives SET left_at = joined_at WHERE member_id = ? AND user_id = ?",
+    )
+      .bind(aggregateId, userId)
+      .run();
+
+    const detailResponse = await call(adminToken, `/api/v1/admin/organizations/${organizationId}`);
+    expect(detailResponse.status).toBe(200);
+    await expect(detailResponse.json()).resolves.toMatchObject({
+      organization: {
+        primaryContactEmail: null,
+        primaryContactUserId: null,
+        representatives: [],
+      },
+    });
+
+    const listResponse = await call(adminToken, "/api/v1/admin/organizations");
+    const listBody = (await listResponse.json()) as {
+      organizations: Array<{ id: string; primaryContactEmail: string | null }>;
+    };
+    expect(listBody.organizations.find((organization) => organization.id === organizationId)?.primaryContactEmail).toBe(
+      null,
+    );
+  });
+
   it("GET organizations list surfaces membershipCategory and supports ?sort=", async () => {
     await createOrg({ organizationName: "Acme Corp", membershipCategory: "F" });
     await createOrg({

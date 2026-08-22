@@ -70,14 +70,18 @@ export function prepareForumVoteDelegateNotificationIntents(
         AND vd.role_id = ?
         AND vd.revoked_at IS NULL
         AND (vd.expires_at IS NULL OR datetime(vd.expires_at) > datetime(?))
-       LEFT JOIN users vdu ON vdu.id = vd.user_id AND vdu.active = 1
+       LEFT JOIN organization_representatives vd_rep
+         ON vd_rep.member_id = m.id AND vd_rep.user_id = vd.user_id AND vd_rep.left_at IS NULL
+       LEFT JOIN users vdu ON vdu.id = vd.user_id AND vdu.active = 1 AND vd_rep.id IS NOT NULL
        LEFT JOIN user_roles pc
          ON pc.context_type = 'organization'
         AND pc.context_id = m.id
         AND pc.role_id = ?
         AND pc.revoked_at IS NULL
         AND (pc.expires_at IS NULL OR datetime(pc.expires_at) > datetime(?))
-       LEFT JOIN users pcu ON pcu.id = pc.user_id AND pcu.active = 1
+       LEFT JOIN organization_representatives pc_rep
+         ON pc_rep.member_id = m.id AND pc_rep.user_id = pc.user_id AND pc_rep.left_at IS NULL
+       LEFT JOIN users pcu ON pcu.id = pc.user_id AND pcu.active = 1 AND pc_rep.id IS NOT NULL
        WHERE COALESCE(vdu.id, pcu.id) IS NOT NULL
          AND (
            v.eligible_categories IS NULL

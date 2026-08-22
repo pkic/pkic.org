@@ -26,12 +26,11 @@ export type { RepresentativeRoleId };
 
 /**
  * Builds [revoke-previous-holder, insert-new-grant] statements for one of
- * the three singleton representative roles, without verifying the active
- * `organization_representatives` invariant — for callers that are
- * themselves inserting that exact representative row earlier in the same
- * `db.batch()` (so the invariant holds by construction; a DB read couldn't
- * see the uncommitted insert anyway). Any other caller must use
- * `buildAssignRepresentativeRoleStatements` instead, which verifies it.
+ * the three singleton representative roles, without doing a preflight read
+ * of `organization_representatives` — for callers that are themselves
+ * inserting that exact representative row earlier in the same `db.batch()`.
+ * The migration-level trigger `trg_user_roles_representative_requires_active`
+ * is the final execution-time guard for every caller, including this path.
  */
 export function buildAssignRepresentativeRoleStatementsForNewRepresentative(
   db: DatabaseLike,
@@ -75,6 +74,8 @@ export function buildAssignRepresentativeRoleStatementsForNewRepresentative(
  * statement if `(userId, memberId)` has no active `organization_representatives`
  * row — the service-layer invariant that replaces the composite FK a
  * bespoke role table would have had (see consolidated migration 0035's header).
+ * The migration-level trigger is also required because this preflight can
+ * become stale before the returned batch executes.
  *
  * Caller is responsible for executing the returned statements in the same
  * `db.batch()` as any other write in the same operation (e.g. approval
@@ -147,6 +148,8 @@ export async function resolveRepresentativeRoleHolder(
     `SELECT ur.user_id
      FROM user_roles ur
      JOIN users u ON u.id = ur.user_id AND u.active = 1
+     JOIN organization_representatives rep
+       ON rep.member_id = ur.context_id AND rep.user_id = ur.user_id AND rep.left_at IS NULL
      WHERE ur.context_type = 'organization' AND ur.context_id = ? AND ur.role_id = ? AND ur.revoked_at IS NULL
        AND (ur.expires_at IS NULL OR datetime(ur.expires_at) > datetime(?))
      LIMIT 1`,
@@ -170,6 +173,8 @@ export async function resolveRepresentativeRoleHolders(
     `SELECT ur.role_id, ur.user_id
      FROM user_roles ur
      JOIN users u ON u.id = ur.user_id AND u.active = 1
+     JOIN organization_representatives rep
+       ON rep.member_id = ur.context_id AND rep.user_id = ur.user_id AND rep.left_at IS NULL
      WHERE ur.context_type = 'organization' AND ur.context_id = ? AND ur.revoked_at IS NULL
        AND (ur.expires_at IS NULL OR datetime(ur.expires_at) > datetime(?))
        AND ur.role_id IN (?, ?, ?)`,
