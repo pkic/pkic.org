@@ -9,11 +9,7 @@ import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveOrderBy } from "../../db/sort";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
-import { parseJsonSafe } from "../../utils/json";
-import { extractDietarySelections, getDietaryFieldKeys } from "../../utils/registration-dietary";
-import { getActiveFormByPurpose } from "../forms";
 import { getAttendanceStatusByType, type AttendanceStatusCount } from "./admin-statistics";
-import { getDietaryCounts } from "./admin-dietary";
 import {
   EVENT_REGISTRATIONS_SORT_COLUMNS,
   type AdminEventRegistrationsQuery,
@@ -78,7 +74,6 @@ export interface AdminEventRegistrationSummary {
   has_bounced: boolean;
   sponsor_consent: boolean;
   custom_answers_json: string | null;
-  dietary_restrictions: string[] | null;
   dayWaitlistSummary: string | null;
   dayWaitlistCount: number;
   attendanceChangeHistory: AttendanceChangeHistoryEntry[];
@@ -96,7 +91,6 @@ export interface AdminEventRegistrationsStats {
   byStatus: Record<string, number>;
   bouncedCount: number;
   consentCount: number;
-  dietaryCounts: Record<string, number>;
 }
 
 export interface AdminEventRegistrationsListResult {
@@ -195,8 +189,6 @@ export async function listAdminEventRegistrations(
        r.id DESC`
     : "r.created_at DESC, r.id DESC";
   const pageOrderBy = attendanceChangeFilter ? `ORDER BY ${orderBySql}` : orderBy;
-  const registrationForm = await getActiveFormByPurpose(db, eventId, "event_registration");
-
   const { rows: registrationRows, total } = await queryPage<RegistrationRow>(db, {
     sql: `SELECT r.id, r.user_id, r.status, r.attendance_type, r.source_type, r.created_at, r.updated_at,
               u.email AS user_email,
@@ -309,15 +301,10 @@ export async function listAdminEventRegistrations(
   const registrations = registrationRows.map((row) => {
     const summary = waitlistByRegistrationId.get(row.id);
     const attendanceChangeHistory = attendanceChangesByRegistrationId.get(row.id) ?? [];
-    const dietarySelections = extractDietarySelections(
-      parseJsonSafe<Record<string, unknown> | null>(row.custom_answers_json, null),
-      registrationForm?.fields,
-    );
     return {
       ...row,
       has_bounced: !!row.has_bounced,
       sponsor_consent: !!row.sponsor_consent,
-      dietary_restrictions: dietarySelections.length > 0 ? dietarySelections : null,
       dayWaitlistSummary: summary?.summary ?? null,
       dayWaitlistCount: summary?.count ?? 0,
       attendanceChangeHistory,
@@ -325,7 +312,7 @@ export async function listAdminEventRegistrations(
     };
   });
 
-  const [statRows, bouncedCountRow, consentCountRow, dietaryCounts, attendanceStatusByType] = await Promise.all([
+  const [statRows, bouncedCountRow, consentCountRow, attendanceStatusByType] = await Promise.all([
     // Aggregate stats always cover all registrations for the event (unfiltered)
     all<{ attendance_type: string; status: string; count: number }>(
       db,
@@ -348,7 +335,6 @@ export async function listAdminEventRegistrations(
        WHERE event_id = ? AND term_key = 'sponsor-data-sharing'`,
       [eventId],
     ),
-    getDietaryCounts(db, eventId, getDietaryFieldKeys(registrationForm?.fields)),
     getAttendanceStatusByType(db, eventId),
   ]);
 
@@ -372,7 +358,6 @@ export async function listAdminEventRegistrations(
       byStatus,
       bouncedCount: Number(bouncedCountRow?.bounced_count ?? 0),
       consentCount: Number(consentCountRow?.consent_count ?? 0),
-      dietaryCounts,
     },
   };
 }

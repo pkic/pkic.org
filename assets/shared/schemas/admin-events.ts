@@ -133,7 +133,6 @@ export const adminEventRegistrationSummarySchema = adminRegistrationRecordContex
   has_bounced: z.boolean(),
   sponsor_consent: z.boolean(),
   custom_answers_json: z.string().nullable(),
-  dietary_restrictions: z.array(z.string()).nullable(),
   dayWaitlistSummary: z.string().nullable(),
   dayWaitlistCount: z.number(),
   attendanceChangeHistory: z.array(adminEventRegistrationAttendanceChangeSchema),
@@ -151,7 +150,6 @@ export const adminEventRegistrationsListResponseSchema = paginatedResponseSchema
     byStatus: z.record(z.string(), z.number()),
     bouncedCount: z.number(),
     consentCount: z.number(),
-    dietaryCounts: z.record(z.string(), z.number()),
   }),
 });
 export type AdminEventRegistrationsListResponse = z.infer<typeof adminEventRegistrationsListResponseSchema>;
