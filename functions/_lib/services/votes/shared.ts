@@ -87,6 +87,9 @@ export interface CandidateRow {
   created_at: string;
 }
 
+export const VOTE_CANDIDATE_COLUMNS =
+  "id, vote_id, user_id, candidate_name, candidate_bio, nominated_by_user_id, sort_order, eliminated_round, created_at";
+
 export function slugify(value: string): string {
   return value
     .toLowerCase()
@@ -177,7 +180,7 @@ export function toVoteSummary(row: VoteRow): VoteSummary {
 export async function getCandidates(db: DatabaseLike, voteId: string): Promise<CandidateSummary[]> {
   const rows = await all<CandidateRow>(
     db,
-    `SELECT * FROM vote_candidates WHERE vote_id = ? ORDER BY sort_order ASC, created_at ASC`,
+    `SELECT ${VOTE_CANDIDATE_COLUMNS} FROM vote_candidates WHERE vote_id = ? ORDER BY sort_order ASC, created_at ASC`,
     [voteId],
   );
   return rows.map(toCandidateSummary);
@@ -194,7 +197,10 @@ export async function getCandidatesForVotes(
   const voteFilter = buildD1JsonMembershipFilter("vote_id", voteIds);
   const rows = await all<CandidateRow>(
     db,
-    `SELECT * FROM vote_candidates WHERE ${voteFilter.sql} ORDER BY vote_id, sort_order ASC, created_at ASC`,
+    `SELECT ${VOTE_CANDIDATE_COLUMNS}
+     FROM vote_candidates
+     WHERE ${voteFilter.sql}
+     ORDER BY vote_id, sort_order ASC, created_at ASC`,
     voteFilter.bindings,
   );
   for (const row of rows) {

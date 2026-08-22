@@ -16,6 +16,8 @@ interface ReferralRow {
   conversions: number;
 }
 
+const REFERRAL_COLUMNS = "code, event_id, owner_type, owner_id, created_by_user_id, clicks, conversions";
+
 export async function createReferralCode(
   db: DatabaseLike,
   payload: {
@@ -77,7 +79,9 @@ export async function recordReferralClick(
   db: DatabaseLike,
   payload: { code: string; ip: string | null; userAgent: string | null; secret: string },
 ): Promise<ReferralRow | null> {
-  const referral = await first<ReferralRow>(db, "SELECT * FROM referral_codes WHERE code = ?", [payload.code]);
+  const referral = await first<ReferralRow>(db, `SELECT ${REFERRAL_COLUMNS} FROM referral_codes WHERE code = ?`, [
+    payload.code,
+  ]);
   if (!referral) {
     return null;
   }
@@ -112,11 +116,9 @@ export async function prepareReferralConversionStatements(
   code: string,
   conversion: { type: "registration" | "proposal"; ref: string },
 ): Promise<StatementLike[]> {
-  const referral = await first<ReferralRow>(
-    db,
-    "SELECT code, event_id, owner_type, owner_id, created_by_user_id, clicks, conversions FROM referral_codes WHERE code = ?",
-    [code],
-  );
+  const referral = await first<ReferralRow>(db, `SELECT ${REFERRAL_COLUMNS} FROM referral_codes WHERE code = ?`, [
+    code,
+  ]);
 
   const conversionKey = `${conversion.type}:${conversion.ref}`;
   const statements: StatementLike[] = [

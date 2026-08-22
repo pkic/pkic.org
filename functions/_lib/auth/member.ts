@@ -57,6 +57,10 @@ interface MemberEligibleUserRow {
   sort_key: string;
 }
 
+const MEMBER_ELIGIBLE_USER_COLUMNS =
+  "id, email, normalized_email, active, member_id, organization_id, organization_name, " +
+  "membership_category, is_ec_member, sort_key";
+
 // A user is member-session-eligible when they hold an active individual
 // `members` row (org-less: member_type='individual', user_id=that user) OR
 // an active `organization_representatives` row for an active org-tied
@@ -207,7 +211,10 @@ export async function verifyMemberSessionToken(
 async function resolveEligibleMembershipRows(db: DatabaseLike, userId: string): Promise<MemberEligibleUserRow[]> {
   return all<MemberEligibleUserRow>(
     db,
-    `SELECT * FROM (${MEMBER_ELIGIBLE_USER_SELECT}) combined WHERE id = ? AND active = 1 ORDER BY sort_key ASC`,
+    `SELECT ${MEMBER_ELIGIBLE_USER_COLUMNS}
+     FROM (${MEMBER_ELIGIBLE_USER_SELECT}) combined
+     WHERE id = ? AND active = 1
+     ORDER BY sort_key ASC`,
     [userId],
   );
 }
@@ -316,7 +323,10 @@ export async function requestMemberMagicLink(
   const email = normalizeEmail(payload.email);
   const row = await first<MemberEligibleUserRow>(
     db,
-    `SELECT * FROM (${MEMBER_ELIGIBLE_USER_SELECT}) combined WHERE normalized_email = ? AND active = 1 ORDER BY sort_key ASC`,
+    `SELECT ${MEMBER_ELIGIBLE_USER_COLUMNS}
+     FROM (${MEMBER_ELIGIBLE_USER_SELECT}) combined
+     WHERE normalized_email = ? AND active = 1
+     ORDER BY sort_key ASC`,
     [email],
   );
 

@@ -55,10 +55,14 @@ export interface TemplateVersionRow {
   created_at: string;
 }
 
+const TEMPLATE_VERSION_COLUMNS =
+  "id, template_key, version, subject_template, body, content_type, message_type, r2_object_key, " +
+  "checksum_sha256, status, created_by_user_id, created_at";
+
 export async function listTemplateVersions(db: DatabaseLike): Promise<TemplateVersionRow[]> {
   return all<TemplateVersionRow>(
     db,
-    `SELECT * FROM email_template_versions
+    `SELECT ${TEMPLATE_VERSION_COLUMNS} FROM email_template_versions
      ORDER BY template_key ASC, version DESC`,
   );
 }
@@ -141,7 +145,7 @@ export async function activateTemplateVersion(
 ): Promise<void> {
   const target = await first<TemplateVersionRow>(
     db,
-    "SELECT * FROM email_template_versions WHERE template_key = ? AND version = ?",
+    `SELECT ${TEMPLATE_VERSION_COLUMNS} FROM email_template_versions WHERE template_key = ? AND version = ?`,
     [payload.templateKey, payload.version],
   );
 
@@ -192,7 +196,9 @@ export async function resolveTemplateSet(
          SELECT CAST(value AS TEXT) AS template_key FROM json_each(?)
        ),
        ranked AS (
-         SELECT etv.*,
+         SELECT etv.id, etv.template_key, etv.version, etv.subject_template, etv.body,
+                etv.content_type, etv.message_type, etv.r2_object_key, etv.checksum_sha256,
+                etv.status, etv.created_by_user_id, etv.created_at,
                 ROW_NUMBER() OVER (PARTITION BY etv.template_key ORDER BY etv.version DESC) AS active_rank
          FROM email_template_versions etv
          JOIN requested r ON r.template_key = etv.template_key

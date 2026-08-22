@@ -1,4 +1,4 @@
-import { VOTE_ROW_COLUMNS } from "./shared";
+import { VOTE_CANDIDATE_COLUMNS, VOTE_ROW_COLUMNS } from "./shared";
 
 /** Indexed, deterministic projections used by scheduled vote due-work. */
 export const VOTE_OPEN_DUE_QUERY = `
@@ -18,7 +18,7 @@ export const VOTE_CLOSE_DUE_QUERY = `
   LIMIT ?`;
 
 export const VOTE_STANDING_CANDIDATES_QUERY = `
-  SELECT *
+  SELECT ${VOTE_CANDIDATE_COLUMNS}
   FROM vote_candidates INDEXED BY idx_vote_candidates_standing
   WHERE vote_id = ? AND eliminated_round IS NULL
   ORDER BY sort_order ASC, id ASC

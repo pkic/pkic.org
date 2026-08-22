@@ -75,7 +75,8 @@ export async function listAdminForms(
   );
   const { rows: forms, total } = await queryPage<AdminFormSummaryRow>(db, {
     sql: `SELECT
-         f.*,
+         f.id, f.key, f.scope_type, f.scope_ref, f.purpose, f.status,
+         f.title, f.description, f.created_at, f.updated_at,
          e.slug AS event_slug,
          e.name AS event_name,
          COUNT(DISTINCT ff.id) AS field_count,

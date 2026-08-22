@@ -28,6 +28,8 @@ interface RepresentativeRow {
   left_at: string | null;
 }
 
+const REPRESENTATIVE_COLUMNS = "id, member_id, user_id, show_on_org_profile, joined_at, left_at";
+
 function toRepresentative(row: RepresentativeRow): OrganizationRepresentative {
   return {
     id: row.id,
@@ -108,7 +110,10 @@ export async function listActiveRepresentatives(
 ): Promise<OrganizationRepresentative[]> {
   const rows = await all<RepresentativeRow>(
     db,
-    "SELECT * FROM organization_representatives WHERE member_id = ? AND left_at IS NULL ORDER BY joined_at ASC",
+    `SELECT ${REPRESENTATIVE_COLUMNS}
+     FROM organization_representatives
+     WHERE member_id = ? AND left_at IS NULL
+     ORDER BY joined_at ASC`,
     [memberId],
   );
   return rows.map(toRepresentative);
@@ -120,7 +125,10 @@ export async function listActiveRepresentativeMemberships(
 ): Promise<OrganizationRepresentative[]> {
   const rows = await all<RepresentativeRow>(
     db,
-    "SELECT * FROM organization_representatives WHERE user_id = ? AND left_at IS NULL ORDER BY joined_at ASC",
+    `SELECT ${REPRESENTATIVE_COLUMNS}
+     FROM organization_representatives
+     WHERE user_id = ? AND left_at IS NULL
+     ORDER BY joined_at ASC`,
     [userId],
   );
   return rows.map(toRepresentative);

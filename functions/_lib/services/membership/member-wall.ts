@@ -51,7 +51,9 @@ export async function listMemberWall(db: DatabaseLike, memberLimit: number): Pro
           AND (sponsor.logo_r2_key IS NOT NULL OR sponsor.sponsorship_logo_r2_key IS NOT NULL)
           AND NOT EXISTS (SELECT 1 FROM active_member_organizations member WHERE member.id = sponsor.id)
      ), ranked_non_sponsors AS (
-       SELECT member_entries.*,
+       SELECT member_entries.key, member_entries.href, member_entries.logoUrl,
+              member_entries.name, member_entries.slogan, member_entries.sponsorLevel,
+              member_entries.sponsorLevelName,
               ROW_NUMBER() OVER (
                 ORDER BY ((length(key) * 31 + unicode(substr(key, -1)) * 17 + unicode(substr(key, 8, 1))) % 997), key
               ) AS display_rank
