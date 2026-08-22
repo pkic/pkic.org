@@ -71,9 +71,9 @@ describe("membership access offboarding", () => {
         [memberId, userId],
       ),
     ).toEqual([{ closed: 1 }]);
-    const removals = await queryAll<{ google_group_email: string; idempotency_key: string }>(
+    const removals = await queryAll<{ google_group_email: string; idempotency_key: string; member_email: string }>(
       env.DB,
-      `SELECT google_group_email, idempotency_key
+      `SELECT google_group_email, idempotency_key, member_email
          FROM google_groups_sync_queue
         WHERE user_id = ? AND action = 'remove_from_list'
         ORDER BY google_group_email`,
@@ -83,6 +83,7 @@ describe("membership access offboarding", () => {
     expect(removals.map((row) => row.google_group_email)).toContain("offboarding-wg@lists.pkic.org");
     expect(new Set(removals.map((row) => row.idempotency_key)).size).toBe(removals.length);
     expect(removals.every((row) => row.idempotency_key.startsWith(`user:${userId}:deactivate:`))).toBe(true);
+    expect(removals.every((row) => row.member_email === "offboarding-user@example.test")).toBe(true);
   });
 
   it("rolls back access closure and queueing when the deactivation audit cannot commit", async () => {

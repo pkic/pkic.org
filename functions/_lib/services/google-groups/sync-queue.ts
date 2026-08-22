@@ -1,4 +1,5 @@
 import { all, first, run } from "../../db/queries";
+import { AppError } from "../../errors";
 import { createDurableJobLease } from "../../jobs/lease";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
@@ -14,7 +15,7 @@ const MAX_CLAIM_BATCH_SIZE = 100;
 export const MAX_SYNC_ATTEMPTS = 5;
 
 const QUEUE_COLUMNS = `
-  current_row.id, current_row.user_id, current_row.action, current_row.google_group_email,
+  current_row.id, current_row.user_id, current_row.member_email, current_row.action, current_row.google_group_email,
   current_row.status, current_row.attempts, current_row.idempotency_key, current_row.generation,
   current_row.last_error, current_row.next_attempt_at, current_row.created_at, current_row.processed_at,
   current_row.processing_token, current_row.lease_expires_at`;
@@ -23,8 +24,9 @@ export const GOOGLE_GROUPS_DUE_QUERY = `
   SELECT ${QUEUE_COLUMNS}, current_row.next_attempt_at AS due_at, current_row.rowid AS queue_order
     FROM google_groups_sync_queue current_row
     JOIN google_groups_membership_desired_state desired
-      ON desired.user_id = current_row.user_id
+      ON desired.member_email = current_row.member_email
      AND desired.google_group_email = current_row.google_group_email
+     AND desired.user_id = current_row.user_id
      AND desired.generation = current_row.generation
      AND desired.desired_action = current_row.action
    WHERE current_row.status = 'pending' AND current_row.next_attempt_at <= ?
@@ -32,8 +34,9 @@ export const GOOGLE_GROUPS_DUE_QUERY = `
   SELECT ${QUEUE_COLUMNS}, current_row.lease_expires_at AS due_at, current_row.rowid AS queue_order
     FROM google_groups_sync_queue current_row
     JOIN google_groups_membership_desired_state desired
-      ON desired.user_id = current_row.user_id
+      ON desired.member_email = current_row.member_email
      AND desired.google_group_email = current_row.google_group_email
+     AND desired.user_id = current_row.user_id
      AND desired.generation = current_row.generation
      AND desired.desired_action = current_row.action
    WHERE current_row.status = 'processing' AND current_row.lease_expires_at <= ?
@@ -58,19 +61,20 @@ export function buildEnqueueGoogleGroupsSyncStatement(
   const statement = db
     .prepare(
       `INSERT OR IGNORE INTO google_groups_sync_queue
-         (id, user_id, action, google_group_email, idempotency_key, status, attempts, last_error,
+         (id, user_id, member_email, action, google_group_email, idempotency_key, status, attempts, last_error,
           next_attempt_at, created_at, processed_at)
-       SELECT ?, ?, ?, ?, ?, 'pending', 0, NULL, ?, ?, NULL
-        WHERE ? = 0 OR changes() = 1`,
+       SELECT ?, u.id, u.normalized_email, ?, ?, ?, 'pending', 0, NULL, ?, ?, NULL
+         FROM users u
+        WHERE u.id = ? AND (? = 0 OR changes() = 1)`,
     )
     .bind(
       id,
-      params.userId,
       params.action,
       params.googleGroupEmail,
       params.idempotencyKey ?? null,
       createdAt,
       createdAt,
+      params.userId,
       params.onlyIfPreviousStatementChanged ? 1 : 0,
     );
   return { id, statement };
@@ -85,12 +89,19 @@ export async function enqueueGoogleGroupsSync(
   const inserted = await run(
     db,
     `INSERT OR IGNORE INTO google_groups_sync_queue
-       (id, user_id, action, google_group_email, idempotency_key, status, attempts, last_error,
+       (id, user_id, member_email, action, google_group_email, idempotency_key, status, attempts, last_error,
         next_attempt_at, created_at, processed_at)
-     VALUES (?, ?, ?, ?, ?, 'pending', 0, NULL, ?, ?, NULL)`,
-    [id, params.userId, params.action, params.googleGroupEmail, params.idempotencyKey ?? null, createdAt, createdAt],
+     SELECT ?, u.id, u.normalized_email, ?, ?, ?, 'pending', 0, NULL, ?, ?, NULL
+       FROM users u WHERE u.id = ?`,
+    [id, params.action, params.googleGroupEmail, params.idempotencyKey ?? null, createdAt, createdAt, params.userId],
   );
   if (inserted.changes === 1) return id;
+
+  // D1 can report the final trigger statement's change count instead of the
+  // top-level INSERT. Verify the generated key before treating a zero as an
+  // ignored insert.
+  const insertedRow = await first<{ id: string }>(db, "SELECT id FROM google_groups_sync_queue WHERE id = ?", [id]);
+  if (insertedRow) return insertedRow.id;
 
   if (params.idempotencyKey) {
     const existing = await first<{ id: string }>(
@@ -100,10 +111,7 @@ export async function enqueueGoogleGroupsSync(
     );
     if (existing) return existing.id;
   }
-  // A generated primary-key collision is not a practical recovery case. D1's
-  // `changes` metadata can also report the final trigger statement rather
-  // than the top-level INSERT, so preserve the inserted UUID for unkeyed work.
-  return id;
+  throw new AppError(404, "USER_NOT_FOUND", "Cannot queue a Google Groups change for a missing user");
 }
 
 export async function listPendingGoogleGroupsSync(db: DatabaseLike, limit = 50): Promise<GoogleGroupsSyncQueueRow[]> {
@@ -128,8 +136,9 @@ function buildClaimStatement(
           AND EXISTS (
             SELECT 1
               FROM google_groups_membership_desired_state desired
-             WHERE desired.user_id = google_groups_sync_queue.user_id
+             WHERE desired.member_email = google_groups_sync_queue.member_email
                AND desired.google_group_email = google_groups_sync_queue.google_group_email
+               AND desired.user_id = google_groups_sync_queue.user_id
                AND desired.generation = google_groups_sync_queue.generation
                AND desired.desired_action = google_groups_sync_queue.action
           )`,
@@ -162,20 +171,20 @@ export async function claimPendingGoogleGroupsSyncRows(
 export async function loadActionableGoogleGroupsSyncClaims(
   db: DatabaseLike,
   claims: ClaimedGoogleGroupsSyncRow[],
-): Promise<Map<string, string | null>> {
+): Promise<Map<string, string>> {
   if (claims.length === 0) return new Map();
 
   const placeholders = claims.map(() => "?").join(", ");
-  const rows = await all<{ id: string; processing_token: string; member_email: string | null }>(
+  const rows = await all<{ id: string; processing_token: string; member_email: string }>(
     db,
-    `SELECT queue.id, queue.processing_token, users.email AS member_email
+    `SELECT queue.id, queue.processing_token, queue.member_email
        FROM google_groups_sync_queue queue
        JOIN google_groups_membership_desired_state desired
-         ON desired.user_id = queue.user_id
+         ON desired.member_email = queue.member_email
         AND desired.google_group_email = queue.google_group_email
+        AND desired.user_id = queue.user_id
         AND desired.generation = queue.generation
         AND desired.desired_action = queue.action
-       LEFT JOIN users ON users.id = queue.user_id
       WHERE queue.id IN (${placeholders}) AND queue.status = 'processing'`,
     claims.map((claim) => claim.id),
   );
@@ -206,8 +215,9 @@ export async function supersedeStaleGoogleGroupsSyncClaims(
               AND NOT EXISTS (
                 SELECT 1
                   FROM google_groups_membership_desired_state desired
-                 WHERE desired.user_id = google_groups_sync_queue.user_id
+                 WHERE desired.member_email = google_groups_sync_queue.member_email
                    AND desired.google_group_email = google_groups_sync_queue.google_group_email
+                   AND desired.user_id = google_groups_sync_queue.user_id
                    AND desired.generation = google_groups_sync_queue.generation
                    AND desired.desired_action = google_groups_sync_queue.action
               )`,
@@ -215,21 +225,6 @@ export async function supersedeStaleGoogleGroupsSyncClaims(
         .bind(at, claim.id, claim.processing_token),
     ),
   );
-}
-
-export async function failGoogleGroupsSyncClaimForMissingUser(
-  db: DatabaseLike,
-  claim: ClaimedGoogleGroupsSyncRow,
-): Promise<boolean> {
-  const result = await run(
-    db,
-    `UPDATE google_groups_sync_queue
-        SET status = 'failed', attempts = attempts + 1, last_error = 'User not found', processed_at = ?,
-            next_attempt_at = NULL, processing_token = NULL, lease_expires_at = NULL
-      WHERE id = ? AND status = 'processing' AND processing_token = ?`,
-    [nowIso(), claim.id, claim.processing_token],
-  );
-  return result.changes === 1;
 }
 
 export async function completeGoogleGroupsDirectoryEffect(
@@ -255,12 +250,13 @@ export async function completeGoogleGroupsDirectoryEffect(
                 last_error = NULL,
                 processed_at = CASE WHEN desired_queue.action = ? THEN ? ELSE NULL END,
                 processing_token = NULL, lease_expires_at = NULL
-          WHERE desired_queue.user_id = ? AND desired_queue.google_group_email = ?
+          WHERE desired_queue.member_email = ? AND desired_queue.google_group_email = ?
             AND desired_queue.generation = (
               SELECT desired.generation
                 FROM google_groups_membership_desired_state desired
-               WHERE desired.user_id = desired_queue.user_id
+               WHERE desired.member_email = desired_queue.member_email
                  AND desired.google_group_email = desired_queue.google_group_email
+                 AND desired.user_id = desired_queue.user_id
                  AND desired.desired_action = desired_queue.action
             )
             AND (
@@ -278,7 +274,7 @@ export async function completeGoogleGroupsDirectoryEffect(
         at,
         claim.action,
         at,
-        claim.user_id,
+        claim.member_email,
         claim.google_group_email,
         claim.action,
         claim.action,
@@ -287,9 +283,9 @@ export async function completeGoogleGroupsDirectoryEffect(
       .prepare(
         `SELECT desired_action
            FROM google_groups_membership_desired_state
-          WHERE user_id = ? AND google_group_email = ?`,
+          WHERE member_email = ? AND google_group_email = ?`,
       )
-      .bind(claim.user_id, claim.google_group_email),
+      .bind(claim.member_email, claim.google_group_email),
   ]);
   const finalizedClaim = (results[0]?.meta?.changes ?? 0) === 1;
   const reconciledCurrentDesiredState =
@@ -313,8 +309,9 @@ export async function recordGoogleGroupsDirectoryFailure(
   const isStillDesired = `EXISTS (
     SELECT 1
       FROM google_groups_membership_desired_state desired
-     WHERE desired.user_id = google_groups_sync_queue.user_id
+     WHERE desired.member_email = google_groups_sync_queue.member_email
        AND desired.google_group_email = google_groups_sync_queue.google_group_email
+       AND desired.user_id = google_groups_sync_queue.user_id
        AND desired.generation = google_groups_sync_queue.generation
        AND desired.desired_action = google_groups_sync_queue.action
   )`;

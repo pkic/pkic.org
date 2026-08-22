@@ -4,7 +4,6 @@ import { nowIso } from "../../utils/time";
 import { prepareEngagementStatement } from "../engagement";
 import { prepareRemoveAllDayWaitlistStatement, resolveCapacityExemptReason } from "./day-waitlist";
 import { prepareAuditLog } from "../audit";
-import { prepareFinalizeEmailChange } from "./change-email";
 import {
   isStaleInviteTransition,
   prepareAcceptInviteStatements,
@@ -62,11 +61,6 @@ export async function prepareConfirmRegistrationByToken(
     throw new AppError(410, "CONFIRM_TOKEN_EXPIRED", "Confirmation link has expired — please request a new one");
   }
 
-  // Finalize any pending email change before confirming registration.
-  // If finalization fails (e.g. EMAIL_TAKEN by a squatting account that
-  // appeared after initiation), clear the pending_email reservation so the
-  // user is not stuck and can retry from the manage URL.
-  const emailFinalizeStatements: StatementLike[] = [];
   const user = await first<{ pending_email: string | null; normalized_email: string }>(
     db,
     "SELECT pending_email, normalized_email FROM users WHERE id = ?",
@@ -75,44 +69,7 @@ export async function prepareConfirmRegistrationByToken(
   if (!user) {
     throw new AppError(500, "USER_NOT_FOUND", "Associated user record is missing");
   }
-  let inviteEmail = user?.normalized_email ?? null;
-  if (user?.pending_email) {
-    try {
-      const emailResult = await prepareFinalizeEmailChange(db, {
-        userId: registration.user_id,
-        eventId: registration.event_id,
-        registrationId: registration.id,
-      });
-      inviteEmail = emailResult.finalEmail;
-      emailFinalizeStatements.push(...emailResult.statements);
-    } catch (err) {
-      if (err instanceof AppError && err.code === "EMAIL_TAKEN") {
-        // Clear the dangling pending_email reservation so the user can pick
-        // a different address. Leave the registration in
-        // pending_email_confirmation so the manage URL still works.
-        await db.batch([
-          db
-            .prepare(
-              `UPDATE users SET pending_email = NULL, pending_email_expires_at = NULL, updated_at = ?
-               WHERE id = ? AND pending_email = ?`,
-            )
-            .bind(now, registration.user_id, user.pending_email),
-          prepareAuditLog(
-            db,
-            "system",
-            null,
-            "registration_email_change_failed",
-            "registration",
-            registration.id,
-            { reason: "email_taken_at_confirmation" },
-            now,
-            `registration_email_change_failed:${registration.id}:${user.pending_email}`,
-          ),
-        ]);
-      }
-      throw err;
-    }
-  }
+  const inviteEmail = user.normalized_email;
 
   const matchingInvite =
     !registration.invite_id && inviteEmail
@@ -135,7 +92,27 @@ export async function prepareConfirmRegistrationByToken(
 
   const updateStatements: StatementLike[] = [
     prepareRegistrationTransitionGuard(db, registration),
-    ...emailFinalizeStatements,
+    ...(user.pending_email
+      ? [
+          db
+            .prepare(
+              `UPDATE users SET pending_email = NULL, pending_email_expires_at = NULL, updated_at = ?
+               WHERE id = ? AND pending_email = ?`,
+            )
+            .bind(now, registration.user_id, user.pending_email),
+          prepareAuditLog(
+            db,
+            "system",
+            null,
+            "legacy_primary_email_change_abandoned",
+            "user",
+            registration.user_id,
+            { registrationId: registration.id, reason: "primary_email_changes_disabled" },
+            now,
+            `legacy_primary_email_change_abandoned:${registration.user_id}:${user.pending_email}`,
+          ),
+        ]
+      : []),
     db
       .prepare(
         `UPDATE registrations
@@ -232,7 +209,7 @@ export async function prepareConfirmRegistrationByToken(
   return {
     registration: updated,
     manageToken,
-    recipientEmail: inviteEmail ?? user.normalized_email,
+    recipientEmail: inviteEmail,
     statements: updateStatements,
   };
 }

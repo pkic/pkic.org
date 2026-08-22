@@ -1058,7 +1058,7 @@ describe("registration workflows", () => {
     }
   });
 
-  it("rolls back the complete managed email-change aggregate when confirmation queuing fails", async () => {
+  it("rejects registration-scoped primary-email changes without mutating registration or user state", async () => {
     await seedEventAndAdmin(env.DB);
     await env.DB.prepare(
       `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
@@ -1079,59 +1079,41 @@ describe("registration workflows", () => {
       waitlistClaimWindowHours: 24,
       signingSecret: "test-signing-secret",
     });
-    await env.DB.prepare(
-      `CREATE TRIGGER reject_registration_email_change_email
-       BEFORE INSERT ON email_outbox
-       WHEN NEW.template_key = 'registration_confirm_email'
-       BEGIN
-         SELECT RAISE(ABORT, 'forced email-change outbox failure');
-       END`,
-    ).run();
-
-    try {
-      const response = await manageRegistration(
-        createContext(
-          env,
-          new Request(`https://app.test/api/v1/registrations/manage/${confirmed.manageToken}`, {
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              action: "update",
-              attendanceType: "on_demand",
-              firstName: "After",
-              email: "email-after@example.test",
-            }),
+    const response = await manageRegistration(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/registrations/manage/${confirmed.manageToken}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            action: "update",
+            attendanceType: "on_demand",
+            firstName: "After",
+            email: "email-after@example.test",
           }),
-          { token: confirmed.manageToken },
-        ),
-      );
-      expect(response.status).toBe(500);
-      const [registration] = await queryAll<{
-        attendance_type: string;
-        status: string;
-        confirmation_link_secret: string | null;
-      }>(env.DB, "SELECT attendance_type, status, confirmation_link_secret FROM registrations WHERE id = ?", [
-        created.registration.id,
-      ]);
-      const [user] = await queryAll<{ first_name: string; pending_email: string | null }>(
+        }),
+        { token: confirmed.manageToken },
+      ),
+    );
+    expect(response.status).toBe(400);
+    expect(
+      await queryAll<{ attendance_type: string; status: string }>(
         env.DB,
-        "SELECT first_name, pending_email FROM users WHERE id = ?",
-        ["email-atomic-user"],
-      );
-      const audits = await queryAll(
-        env.DB,
-        "SELECT id FROM audit_log WHERE entity_id = ? AND action IN ('self_service_update', 'email_changed')",
+        "SELECT attendance_type, status FROM registrations WHERE id = ?",
         [created.registration.id],
-      );
-      expect(registration).toEqual({
-        attendance_type: "virtual",
-        status: "registered",
-        confirmation_link_secret: null,
-      });
-      expect(user).toEqual({ first_name: "Before", pending_email: null });
-      expect(audits).toHaveLength(0);
-    } finally {
-      await env.DB.prepare("DROP TRIGGER reject_registration_email_change_email").run();
-    }
+      ),
+    ).toEqual([{ attendance_type: "virtual", status: "registered" }]);
+    expect(
+      await queryAll<{ email: string; first_name: string; pending_email: string | null }>(
+        env.DB,
+        "SELECT email, first_name, pending_email FROM users WHERE id = ?",
+        ["email-atomic-user"],
+      ),
+    ).toEqual([{ email: "email-before@example.test", first_name: "Before", pending_email: null }]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_id = ? AND action = 'self_service_update'", [
+        created.registration.id,
+      ]),
+    ).toHaveLength(0);
   });
 });

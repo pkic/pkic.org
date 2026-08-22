@@ -28,7 +28,6 @@ export async function onRequestPatch(c: any): Promise<Response> {
       body,
       appBaseUrl,
       signingSecret,
-      confirmationLinkTtlHours: config.confirmationLinkTtlHours,
       waitlistClaimWindowHours: config.waitlistClaimWindowHours,
     });
     if (result.outboxId) {
@@ -38,7 +37,6 @@ export async function onRequestPatch(c: any): Promise<Response> {
     return json({
       success: true,
       registration: omitCapabilitySecrets(result.registration),
-      emailChanged: result.emailChanged,
     });
   } catch (error) {
     return handleError(error);

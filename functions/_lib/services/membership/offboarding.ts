@@ -4,10 +4,10 @@ function enqueueUserRemovals(db: DatabaseLike, input: { userId: string; causeKey
   return db
     .prepare(
       `INSERT OR IGNORE INTO google_groups_sync_queue
-         (id, user_id, action, google_group_email, idempotency_key, status, attempts, last_error,
+         (id, user_id, member_email, action, google_group_email, idempotency_key, status, attempts, last_error,
           next_attempt_at, created_at, processed_at)
-       SELECT 'google-sync:' || lower(hex(randomblob(16))), ?, 'remove_from_list', email,
-              ? || ':google-group:' || email, 'pending', 0, NULL, ?, ?, NULL
+       SELECT 'google-sync:' || lower(hex(randomblob(16))), u.id, u.normalized_email, 'remove_from_list', managed_emails.email,
+              ? || ':google-group:' || managed_emails.email, 'pending', 0, NULL, ?, ?, NULL
          FROM (
            SELECT email FROM mailing_lists WHERE active = 1
            UNION
@@ -16,9 +16,10 @@ function enqueueUserRemovals(db: DatabaseLike, input: { userId: string; causeKey
              JOIN working_groups wg ON wg.id = wgm.working_group_id
             WHERE wgm.user_id = ? AND wgm.left_at IS NULL AND wg.mailing_list_email IS NOT NULL
          ) managed_emails
-        ORDER BY email`,
+         JOIN users u ON u.id = ?
+        ORDER BY managed_emails.email`,
     )
-    .bind(input.userId, input.causeKey, input.at, input.at, input.userId);
+    .bind(input.causeKey, input.at, input.at, input.userId, input.userId);
 }
 
 /** Commit-order-safe user offboarding: no seat/list pre-read can become stale before the batch commits. */
@@ -48,10 +49,10 @@ function enqueueMembershipRemovals(
   return db
     .prepare(
       `INSERT OR IGNORE INTO google_groups_sync_queue
-         (id, user_id, action, google_group_email, idempotency_key, status, attempts, last_error,
+         (id, user_id, member_email, action, google_group_email, idempotency_key, status, attempts, last_error,
           next_attempt_at, created_at, processed_at)
-       SELECT 'google-sync:' || lower(hex(randomblob(16))), ?, 'remove_from_list', email,
-              ? || ':google-group:' || email, 'pending', 0, NULL, ?, ?, NULL
+       SELECT 'google-sync:' || lower(hex(randomblob(16))), u.id, u.normalized_email, 'remove_from_list', removal_emails.email,
+              ? || ':google-group:' || removal_emails.email, 'pending', 0, NULL, ?, ?, NULL
          FROM (
            SELECT wg.mailing_list_email AS email
              FROM working_group_members wgm
@@ -104,10 +105,10 @@ function enqueueMembershipRemovals(
                    )
               )
          ) removal_emails
-        ORDER BY email`,
+         JOIN users u ON u.id = ?
+        ORDER BY removal_emails.email`,
     )
     .bind(
-      input.userId,
       input.causeKey,
       input.at,
       input.at,
@@ -119,6 +120,7 @@ function enqueueMembershipRemovals(
       input.memberId,
       input.userId,
       input.memberId,
+      input.userId,
       input.userId,
     );
 }

@@ -74,8 +74,8 @@ export const eventTeamPermissionSchema = z.enum(["organizer", "program_committee
 export type EventTeamPermission = z.infer<typeof eventTeamPermissionSchema>;
 export const adminEventTeamListItemSchema = z.object({
   id: z.string(),
-  user_email: z.string().nullable(),
-  user_id: z.string().nullable(),
+  user_email: z.string(),
+  user_id: z.string(),
   permission: eventTeamPermissionSchema,
   granted_by_id: z.string().nullable(),
   expires_at: z.string().nullable(),

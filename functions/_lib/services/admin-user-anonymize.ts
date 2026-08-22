@@ -27,7 +27,15 @@ export async function anonymizeAdminUser(db: DatabaseLike, actor: AuthAdmin, use
 
   const at = nowIso();
   const redactedEmail = `redacted-${user.id}@anonymized.invalid`;
+  const offboardingStatements = await buildUserAccessOffboardingStatements(db, {
+    userId: user.id,
+    causeKey: `user:${user.id}:anonymize:${user.updated_at}`,
+    at,
+  });
   const statements: StatementLike[] = [
+    // Queue external removals while the user's real address is still present;
+    // each durable effect snapshots that exact external identity.
+    ...offboardingStatements,
     db
       .prepare(
         `UPDATE users
@@ -48,11 +56,6 @@ export async function anonymizeAdminUser(db: DatabaseLike, actor: AuthAdmin, use
     db.prepare("DELETE FROM auth_magic_links WHERE user_id = ?").bind(user.id),
     db.prepare("DELETE FROM passkey_credentials WHERE user_id = ?").bind(user.id),
     db.prepare("DELETE FROM user_emails WHERE user_id = ?").bind(user.id),
-    ...(await buildUserAccessOffboardingStatements(db, {
-      userId: user.id,
-      causeKey: `user:${user.id}:anonymize:${user.updated_at}`,
-      at,
-    })),
     prepareBadgeRenderJobsForUser(db, user.id, at),
     prepareAuditLog(db, "admin", actor.id, "user_anonymized", "user", user.id, {
       authenticationRevoked: true,
@@ -61,7 +64,8 @@ export async function anonymizeAdminUser(db: DatabaseLike, actor: AuthAdmin, use
   ];
   const deletion = prepareStorageDeletion(db, user.headshot_r2_key, at, "speaker_uploads");
   if (deletion) statements.push(deletion);
-  const [updateResult] = await db.batch(statements);
+  const results = await db.batch(statements);
+  const updateResult = results[offboardingStatements.length];
   if ((updateResult.meta?.changes ?? 0) !== 1) {
     throw new AppError(409, "ALREADY_ANONYMIZED", "User has already been anonymized");
   }

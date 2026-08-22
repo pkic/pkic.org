@@ -5,7 +5,6 @@ import { createGoogleGroupsDirectoryClient, isGoogleGroupsSyncConfigured } from 
 import {
   claimPendingGoogleGroupsSyncRows,
   completeGoogleGroupsDirectoryEffect,
-  failGoogleGroupsSyncClaimForMissingUser,
   listPendingGoogleGroupsSync,
   loadActionableGoogleGroupsSyncClaims,
   recordGoogleGroupsDirectoryFailure,
@@ -64,13 +63,8 @@ export async function processGoogleGroupsSyncQueue(
   const completedAddsByUser: Record<string, string[]> = {};
 
   for (const claim of claims) {
-    if (!memberEmails.has(claim.id)) continue;
     const memberEmail = memberEmails.get(claim.id);
-    if (!memberEmail) {
-      if (await failGoogleGroupsSyncClaimForMissingUser(db, claim)) failed++;
-      continue;
-    }
-
+    if (!memberEmail) continue;
     try {
       await directoryClient.applyMembership({
         action: claim.action,

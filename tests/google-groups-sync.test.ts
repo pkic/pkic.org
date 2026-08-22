@@ -169,13 +169,83 @@ describe("Google Groups sync", () => {
     });
     expect(id).toBeTruthy();
 
-    const rows = await queryAll<{ status: string; action: string }>(
+    const rows = await queryAll<{ status: string; action: string; member_email: string }>(
       env.DB,
-      "SELECT status, action FROM google_groups_sync_queue WHERE id = ?",
+      "SELECT status, action, member_email FROM google_groups_sync_queue WHERE id = ?",
       id,
     );
     expect(rows[0].status).toBe("pending");
     expect(rows[0].action).toBe("add_to_list");
+    expect(rows[0].member_email).toBe("gg-enqueue@example.test");
+  });
+
+  it("applies a queued effect to the snapshotted external address after anonymization", async () => {
+    const originalEmail = "gg-snapshot@example.test";
+    const userId = await insertUser(originalEmail);
+    await enqueueGoogleGroupsSync(env.DB, {
+      userId,
+      googleGroupEmail: "pqc@lists.pkic.org",
+      action: "remove_from_list",
+    });
+    const redactedEmail = `redacted-${userId}@anonymized.invalid`;
+    await env.DB.prepare(
+      "UPDATE users SET email = ?, normalized_email = ?, pii_redacted_at = datetime('now') WHERE id = ?",
+    )
+      .bind(redactedEmail, redactedEmail, userId)
+      .run();
+    const fetchMock = stubGoogleFetch(204);
+
+    expect(await processGoogleGroupsSyncQueue(env.DB, await fakeServiceAccountEnv(), 10)).toMatchObject({
+      processed: 1,
+      succeeded: 1,
+    });
+    const directoryCall = fetchMock.mock.calls.find(([url]) => url !== "https://oauth2.googleapis.com/token");
+    expect(directoryCall?.[0]).toContain(`/members/${encodeURIComponent(originalEmail)}`);
+    expect(directoryCall?.[0]).not.toContain(encodeURIComponent(redactedEmail));
+  });
+
+  it("coordinates delayed effects across accounts that successively own the same external address", async () => {
+    const reusedEmail = "gg-reused@example.test";
+    const group = "pqc@lists.pkic.org";
+    const formerUserId = await insertUser(reusedEmail);
+    const staleRemovalId = await enqueueGoogleGroupsSync(env.DB, {
+      userId: formerUserId,
+      googleGroupEmail: group,
+      action: "remove_from_list",
+    });
+    const redactedEmail = `redacted-${formerUserId}@anonymized.invalid`;
+    await env.DB.prepare(
+      "UPDATE users SET email = ?, normalized_email = ?, pii_redacted_at = datetime('now') WHERE id = ?",
+    )
+      .bind(redactedEmail, redactedEmail, formerUserId)
+      .run();
+    const currentUserId = await insertUser(reusedEmail);
+    const currentAddId = await enqueueGoogleGroupsSync(env.DB, {
+      userId: currentUserId,
+      googleGroupEmail: group,
+      action: "add_to_list",
+    });
+
+    expect(
+      await queryAll<{ id: string; status: string }>(
+        env.DB,
+        "SELECT id, status FROM google_groups_sync_queue WHERE id IN (?, ?) ORDER BY id",
+        [staleRemovalId, currentAddId],
+      ),
+    ).toEqual(
+      [
+        { id: staleRemovalId, status: "superseded" },
+        { id: currentAddId, status: "pending" },
+      ].sort((left, right) => left.id.localeCompare(right.id)),
+    );
+    expect(
+      await queryAll<{ user_id: string; desired_action: string }>(
+        env.DB,
+        `SELECT user_id, desired_action FROM google_groups_membership_desired_state
+          WHERE member_email = ? AND google_group_email = ?`,
+        [reusedEmail, group],
+      ),
+    ).toEqual([{ user_id: currentUserId, desired_action: "add_to_list" }]);
   });
 
   it("coalesces concurrent duplicate active actions", async () => {
@@ -361,8 +431,8 @@ describe("Google Groups sync", () => {
     const userId = await insertUser("gg-deadletter@example.test");
     const queueId = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO google_groups_sync_queue (id, user_id, action, google_group_email, status, attempts, last_error, next_attempt_at, created_at, processed_at)
-       VALUES (?, ?, 'add_to_list', 'pqc@lists.pkic.org', 'pending', ?, NULL, ?, ?, NULL)`,
+      `INSERT INTO google_groups_sync_queue (id, user_id, member_email, action, google_group_email, status, attempts, last_error, next_attempt_at, created_at, processed_at)
+       VALUES (?, ?, 'gg-deadletter@example.test', 'add_to_list', 'pqc@lists.pkic.org', 'pending', ?, NULL, ?, ?, NULL)`,
     )
       .bind(queueId, userId, MAX_SYNC_ATTEMPTS - 1, new Date().toISOString(), new Date().toISOString())
       .run();
@@ -392,8 +462,8 @@ describe("Google Groups sync", () => {
     const queueId = crypto.randomUUID();
     const pastAttemptAt = new Date(Date.now() - 1000).toISOString();
     await env.DB.prepare(
-      `INSERT INTO google_groups_sync_queue (id, user_id, action, google_group_email, status, attempts, last_error, next_attempt_at, created_at, processed_at)
-       VALUES (?, ?, 'add_to_list', 'pqc@lists.pkic.org', 'pending', 1, 'previous transient failure', ?, datetime('now'), NULL)`,
+      `INSERT INTO google_groups_sync_queue (id, user_id, member_email, action, google_group_email, status, attempts, last_error, next_attempt_at, created_at, processed_at)
+       VALUES (?, ?, 'gg-retry-success@example.test', 'add_to_list', 'pqc@lists.pkic.org', 'pending', 1, 'previous transient failure', ?, datetime('now'), NULL)`,
     )
       .bind(queueId, userId, pastAttemptAt)
       .run();

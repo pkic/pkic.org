@@ -195,17 +195,6 @@ async function main(): Promise<void> {
   setField(form, "organizationName", user?.organization_name);
   setField(form, "jobTitle", user?.job_title);
 
-  // ── Email change notice ───────────────────────────────────────────────────
-  const originalEmail = user?.email?.toLowerCase() ?? "";
-  const emailChangeNotice = root.querySelector<HTMLElement>("[data-email-change-notice]");
-  const emailInput = form.elements.namedItem("email") as HTMLInputElement | null;
-  if (emailInput && emailChangeNotice) {
-    emailInput.addEventListener("input", () => {
-      const changed = emailInput.value.trim().toLowerCase() !== originalEmail;
-      emailChangeNotice.classList.toggle("d-none", !changed);
-    });
-  }
-
   // ── Custom event questions (same pipeline as registration-page.ts) ────────
   let customFieldsRendered = false;
   let customFields: CustomFieldsController | null = null;
@@ -352,14 +341,9 @@ async function main(): Promise<void> {
       statusEl?.parentElement?.insertBefore(restoreBtn, statusEl?.nextSibling);
       setStatus(statusEl, "This registration has been cancelled. Your email address is verified.", true);
     } else {
-      // Email not verified → allow user to correct it
-      const emailInput = form.querySelector<HTMLInputElement>("input[name='email']");
-      if (emailInput) {
-        emailInput.disabled = false;
-      }
       setStatus(
         statusEl,
-        "This registration has been cancelled because your email address could not be verified. Please check or correct your email address and try again to restore your registration.",
+        "This registration was cancelled because its email address was not verified. Account email cannot be changed from this link; register again with the correct address or contact the event team.",
         true,
       );
     }
@@ -420,9 +404,7 @@ async function main(): Promise<void> {
     await withLoadingButton(submitBtn, async () => {
       try {
         const dayAttendancePayload = readDayAttendance(form);
-        const emailValue = (form.elements.namedItem("email") as HTMLInputElement | null)?.value.trim() || undefined;
-        const emailIsChanged = emailValue && emailValue.toLowerCase() !== originalEmail;
-        const result = await patchJson<{ success: boolean; emailChanged?: boolean }>(
+        await patchJson<{ success: boolean }>(
           `${apiBase}/registrations/manage/${encodeURIComponent(token)}`,
           registrationManageSchema.parse({
             action: "update",
@@ -430,7 +412,6 @@ async function main(): Promise<void> {
               dayAttendancePayload.length === 0 ? (registration.attendance_type as AttendanceType) : undefined,
             dayAttendance: dayAttendancePayload,
             customAnswers: customFieldsRendered ? readCustomFieldValues(form) : undefined,
-            email: emailIsChanged ? emailValue : undefined,
             firstName: (form.elements.namedItem("firstName") as HTMLInputElement | null)?.value.trim() || undefined,
             lastName: (form.elements.namedItem("lastName") as HTMLInputElement | null)?.value.trim() || undefined,
             organizationName:
@@ -440,10 +421,8 @@ async function main(): Promise<void> {
         );
         if (manageFormEl) {
           showPostAction(root, manageFormEl, {
-            title: result.emailChanged ? "Email address updated" : "Changes saved",
-            message: result.emailChanged
-              ? "We\u2019ve sent a confirmation email to your new address. Please click the link in that email to reactivate your registration."
-              : "Your registration details have been updated. A confirmation email is on its way.",
+            title: "Changes saved",
+            message: "Your registration details have been updated. A confirmation email is on its way.",
           });
         }
       } catch (error) {

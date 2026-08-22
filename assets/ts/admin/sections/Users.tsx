@@ -30,7 +30,6 @@ export function UserDetailView({ userId, onBack }: { userId: string; onBack: () 
   const [editSaving, setEditSaving] = useState(false);
   const editLinksRef = useRef<ProfileLinksHandle>(null);
   const [editForm, setEditForm] = useState<{
-    email: string;
     firstName: string;
     lastName: string;
     preferredName: string;
@@ -90,7 +89,6 @@ export function UserDetailView({ userId, onBack }: { userId: string; onBack: () 
   function startEditing() {
     if (!user) return;
     setEditForm({
-      email: user.email,
       firstName: user.first_name ?? "",
       lastName: user.last_name ?? "",
       preferredName: user.preferred_name ?? "",
@@ -114,7 +112,6 @@ export function UserDetailView({ userId, onBack }: { userId: string; onBack: () 
       await api(`/api/v1/admin/users/${user.id}`, {
         method: "PATCH",
         body: JSON.stringify({
-          email: editForm.email.trim().toLowerCase() || undefined,
           firstName: editForm.firstName || null,
           lastName: editForm.lastName || null,
           preferredName: editForm.preferredName || null,
@@ -328,21 +325,6 @@ export function UserDetailView({ userId, onBack }: { userId: string; onBack: () 
                       <div class="col-12">
                         <label class="form-label small mb-1">Profile links</label>
                         <ProfileLinksInput ref={editLinksRef} fieldName="adminUserProfileLink" max={15} />
-                      </div>
-                      <div class="col-12">
-                        <label class="form-label small mb-1">Email</label>
-                        <input
-                          type="email"
-                          class="form-control form-control-sm"
-                          value={editForm.email}
-                          onInput={(e) =>
-                            setEditForm((f) => f && { ...f, email: (e.target as HTMLInputElement).value })
-                          }
-                          disabled={editSaving}
-                        />
-                        <div class="form-text">
-                          Changing the email address affects login. Existing sessions remain valid.
-                        </div>
                       </div>
                       <div class="col-sm-6">
                         <div class="form-label small mb-1">Role</div>

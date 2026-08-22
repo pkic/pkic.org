@@ -6,12 +6,9 @@ export { confirmRegistrationByToken } from "./confirm";
 export {
   updateRegistrationByManageToken,
   updateRegistrationByManageTokenWithNotification,
-  updateRegistrationByManageTokenWithEmailChange,
   updateRegistrationById,
   updateRegistrationByIdWithNotification,
-  updateRegistrationByIdWithEmailChange,
 } from "./update";
 export { forceRegistrationStatus } from "./force-status";
-export { changeRegistrationEmail, finalizeEmailChange } from "./change-email";
 export { admitRegistration } from "./admission";
 export { updateManagedRegistration } from "./manage-update";

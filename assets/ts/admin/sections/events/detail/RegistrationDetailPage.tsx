@@ -16,7 +16,6 @@ import { DayAttendancePanel } from "./registration-detail/DayAttendancePanel";
 import {
   BadgeRolePanel,
   RegistrationAuditLogSection,
-  RegistrationEmailEditor,
   RegistrationForceStatusPanel,
 } from "./registration-detail/RegistrationPanels";
 import { RegistrationActionCard } from "./registration-detail/RegistrationActionCard";
@@ -124,13 +123,7 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
         <div class="col-md-3">
           <div class="card card-body p-3">
             <div class="small text-muted mb-1">Email</div>
-            <RegistrationEmailEditor
-              email={reg.user_email ?? "—"}
-              slug={slug}
-              regId={regId}
-              isCancelled={reg.status === "cancelled"}
-              onSaved={() => void reload()}
-            />
+            <div>{reg.user_email ?? "—"}</div>
           </div>
         </div>
         <div class="col-md-3">
