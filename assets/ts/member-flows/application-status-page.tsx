@@ -9,15 +9,14 @@
 import { render } from "preact";
 import { getJson } from "../shared/api-client";
 import { setStatus, formatStatusLabel, statusBadgeClass } from "../shared/form/helpers";
+import {
+  memberApplicationStatusResponseSchema,
+  type MemberApplicationStatusResponse,
+} from "../../shared/schemas/member-applications";
 
 const API_BASE_FALLBACK = "/api/v1";
 
-interface ApplicationStatus {
-  id: string;
-  stage: string;
-  stageEnteredAt: string;
-  createdAt: string;
-}
+type ApplicationStatus = MemberApplicationStatusResponse;
 
 export interface LookupParams {
   id: string;
@@ -58,8 +57,10 @@ async function showStatus(root: HTMLElement, apiBase: string, { id, token }: Loo
   resultContainer.classList.remove("d-none");
 
   try {
-    const data = await getJson<ApplicationStatus>(
-      `${apiBase}/members/applications/${encodeURIComponent(id)}/status?token=${encodeURIComponent(token)}`,
+    const data = memberApplicationStatusResponseSchema.parse(
+      await getJson<unknown>(
+        `${apiBase}/members/applications/${encodeURIComponent(id)}/status?token=${encodeURIComponent(token)}`,
+      ),
     );
 
     const summaryHost = document.createElement("div");

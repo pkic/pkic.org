@@ -139,6 +139,13 @@ export const portalVoteSchema = z.object({
 });
 
 export const portalVotesListResponseSchema = paginatedResponseSchema("votes", portalVoteSchema);
+export type PortalVotesListResponse = z.infer<typeof portalVotesListResponseSchema>;
+
+export const publicVotesListResponseSchema = paginatedResponseSchema("votes", publicVoteSchema);
+export type PublicVotesListResponse = z.infer<typeof publicVotesListResponseSchema>;
+
+export const publicVoteGetResponseSchema = z.object({ vote: publicVoteSchema });
+export type PublicVoteGetResponse = z.infer<typeof publicVoteGetResponseSchema>;
 
 // ── Public (no auth) — "Votes (public — no auth required)" ────────────
 
@@ -178,7 +185,7 @@ export const publicVotesListRouteSchema = {
   responses: {
     "200": {
       description: "Public votes.",
-      content: { "application/json": { schema: paginatedResponseSchema("votes", publicVoteSchema) } },
+      content: { "application/json": { schema: publicVotesListResponseSchema } },
     },
   },
 };
@@ -190,7 +197,7 @@ export const publicVoteGetRouteSchema = {
   responses: {
     "200": {
       description: "Vote detail.",
-      content: { "application/json": { schema: z.object({ vote: publicVoteSchema }) } },
+      content: { "application/json": { schema: publicVoteGetResponseSchema } },
     },
     "404": { description: "Vote not found or not public." },
   },

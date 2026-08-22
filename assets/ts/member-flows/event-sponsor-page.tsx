@@ -17,12 +17,9 @@ import { postJson } from "../shared/api-client";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
 import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
 import { readField, findSubmitButton, setStatus } from "../shared/form/helpers";
+import { sponsorshipCheckoutResponseSchema } from "../../shared/schemas/sponsorship";
 
 const API_BASE_FALLBACK = "/api/v1";
-
-interface CheckoutResponse {
-  url: string;
-}
 
 function currentBasePath(): string {
   const path = window.location.pathname;
@@ -62,16 +59,18 @@ async function main(): Promise<void> {
         const organizationName = readField(form, "organizationName");
         const basePath = currentBasePath();
 
-        const data = await postJson<CheckoutResponse>(`${apiBase}/sponsorship/checkout`, {
-          checkoutAttemptId,
-          contactName: [firstName, lastName].filter(Boolean).join(" "),
-          contactEmail: readField(form, "email"),
-          organizationName: organizationName || undefined,
-          tier: readField(form, "tier"),
-          eventId: eventSlug,
-          successPath: `${basePath}complete/`,
-          cancelPath: basePath,
-        });
+        const data = sponsorshipCheckoutResponseSchema.parse(
+          await postJson<unknown>(`${apiBase}/sponsorship/checkout`, {
+            checkoutAttemptId,
+            contactName: [firstName, lastName].filter(Boolean).join(" "),
+            contactEmail: readField(form, "email"),
+            organizationName: organizationName || undefined,
+            tier: readField(form, "tier"),
+            eventId: eventSlug,
+            successPath: `${basePath}complete/`,
+            cancelPath: basePath,
+          }),
+        );
 
         window.location.href = data.url;
       } catch (error) {

@@ -22,30 +22,16 @@ import { getJson, ApiClientError } from "../shared/api-client";
 import { Spinner } from "../components/Spinner";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { NotFoundPanel } from "../components/NotFoundPanel";
+import { publicVoteGetResponseSchema, type PublicVoteGetResponse } from "../../shared/schemas/votes";
 
 const API_BASE_FALLBACK = "/api/v1";
 
-type VoteType = "election" | "motion" | "consultation";
-type VoteScopeType = "forum" | "working_group";
-
-interface VoteCandidate {
-  id: string;
-  candidateName: string;
-}
-
-interface PublicVote {
-  id: string;
-  slug: string;
-  title: string;
-  description: string | null;
-  voteType: VoteType;
-  scopeType: VoteScopeType;
-  opensAt: string;
-  closesAt: string;
-  status: string;
-  candidates: VoteCandidate[] | null;
-  result: Record<string, unknown> | null;
-}
+type PublicVote = PublicVoteGetResponse["vote"];
+type VoteType = PublicVote["voteType"];
+type VoteCandidate = NonNullable<PublicVote["candidates"]>[number];
+type VoteResult = NonNullable<PublicVote["result"]>;
+type ElectionResultData = Extract<VoteResult, { rounds: unknown[] }>;
+type MotionResultData = Exclude<VoteResult, ElectionResultData>;
 
 const VOTE_TYPE_LABELS: Record<VoteType, string> = {
   election: "Election",
@@ -63,10 +49,10 @@ function formatDate(iso: string): string {
   });
 }
 
-function MotionResult({ result }: { result: Record<string, unknown> }) {
-  const outcome = result.outcome as string | null | undefined;
-  const counts = result.counts as { in_favor: number; opposed: number; abstain: number } | undefined;
-  const totalBallots = result.totalBallots as number | undefined;
+function MotionResult({ result }: { result: MotionResultData }) {
+  const { outcome } = result;
+  const counts = "counts" in result ? result.counts : undefined;
+  const totalBallots = "totalBallots" in result ? result.totalBallots : undefined;
 
   return (
     <div class="mt-3">
@@ -85,10 +71,8 @@ function MotionResult({ result }: { result: Record<string, unknown> }) {
   );
 }
 
-function ElectionResult({ result, candidates }: { result: Record<string, unknown>; candidates: VoteCandidate[] }) {
-  const winnerCandidateId = result.winnerCandidateId as string | null | undefined;
-  const rounds = result.rounds as
-    { round: number; counts: Record<string, number>; eliminatedCandidateIds: string[] }[] | undefined;
+function ElectionResult({ result, candidates }: { result: ElectionResultData; candidates: VoteCandidate[] }) {
+  const { winnerCandidateId, rounds } = result;
   const nameOf = (id: string): string => candidates.find((c) => c.id === id)?.candidateName ?? id;
 
   return (
@@ -134,7 +118,7 @@ function VoteResult({ vote }: { vote: PublicVote }) {
   if (!vote.result) {
     return <p class="text-muted mt-3">Results are not yet available.</p>;
   }
-  if ("rounds" in vote.result || "winnerCandidateId" in vote.result) {
+  if ("rounds" in vote.result) {
     return <ElectionResult result={vote.result} candidates={vote.candidates ?? []} />;
   }
   return <MotionResult result={vote.result} />;
@@ -171,8 +155,8 @@ function VoteDetailPage({ apiBase, indexHref }: { apiBase: string; indexHref: st
       setNotFound(true);
       return;
     }
-    getJson<{ vote: PublicVote }>(`${apiBase}/votes/${encodeURIComponent(slug)}`)
-      .then((data) => setVote(data.vote))
+    getJson<unknown>(`${apiBase}/votes/${encodeURIComponent(slug)}`)
+      .then((response) => setVote(publicVoteGetResponseSchema.parse(response).vote))
       .catch((e) => {
         if (e instanceof ApiClientError && e.status === 404) setNotFound(true);
         else setError((e as Error).message);

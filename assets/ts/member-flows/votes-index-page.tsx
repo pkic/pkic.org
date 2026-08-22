@@ -18,29 +18,21 @@
  */
 import { render } from "preact";
 import { useEffect, useState } from "preact/hooks";
-import type { z } from "zod";
 import { getJson } from "../shared/api-client";
 import { Spinner } from "../components/Spinner";
 import { ErrorAlert } from "../components/ErrorAlert";
-import { publicVoteSchema } from "../../shared/schemas/votes";
-import type { pageInfoSchema } from "../../shared/schemas/pagination";
+import { publicVotesListResponseSchema, type PublicVotesListResponse } from "../../shared/schemas/votes";
 
 const API_BASE_FALLBACK = "/api/v1";
 const PAGE_SIZE = 20;
 
-type PublicVote = z.infer<typeof publicVoteSchema>;
+type PublicVote = PublicVotesListResponse["votes"][number];
 type VoteType = PublicVote["voteType"];
 type VoteScopeType = PublicVote["scopeType"];
-type PageInfo = z.infer<typeof pageInfoSchema>;
-
-interface PublicVotesResponse {
-  votes: PublicVote[];
-  page: PageInfo;
-}
 
 interface VoteSection {
   votes: PublicVote[];
-  page: PageInfo;
+  page: PublicVotesListResponse["page"];
 }
 
 type SectionKey = "open" | "closed";
@@ -76,12 +68,17 @@ export function buildVotesSectionUrl(apiBase: string, section: SectionKey, offse
   return `${apiBase}/votes?status=${status}&limit=${PAGE_SIZE}&offset=${offset}&sort=closes_at`;
 }
 
-export function mergeVotesSection(current: VoteSection, next: PublicVotesResponse): VoteSection {
+export function mergeVotesSection(current: VoteSection, next: PublicVotesListResponse): VoteSection {
   return { votes: [...current.votes, ...next.votes], page: next.page };
 }
 
-function fetchVotesSection(apiBase: string, section: SectionKey, offset: number): Promise<PublicVotesResponse> {
-  return getJson<PublicVotesResponse>(buildVotesSectionUrl(apiBase, section, offset));
+async function fetchVotesSection(
+  apiBase: string,
+  section: SectionKey,
+  offset: number,
+): Promise<PublicVotesListResponse> {
+  const response = await getJson<unknown>(buildVotesSectionUrl(apiBase, section, offset));
+  return publicVotesListResponseSchema.parse(response);
 }
 
 function VoteCard({ vote, detailBase }: { vote: PublicVote; detailBase: string }) {
