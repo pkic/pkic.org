@@ -100,7 +100,7 @@ function ProposalsList({ slug }: { slug: string }) {
   const underReview = stats?.byStatus?.under_review ?? 0;
   const accepted = stats?.byStatus?.accepted ?? 0;
   const rejected = stats?.byStatus?.rejected ?? 0;
-  const needsWork = stats?.byStatus?.["needs-work"] ?? stats?.byStatus?.needs_work ?? 0;
+  const needsWork = stats?.byStatus?.["needs-work"] ?? 0;
   const withdrawn = stats?.byStatus?.withdrawn ?? 0;
   const acceptRecommended = stats?.byRecommendation?.accept ?? 0;
   const needsWorkRecommended = stats?.byRecommendation?.["needs-work"] ?? 0;
