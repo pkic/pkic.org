@@ -4,12 +4,11 @@ import { json } from "../../../../../_lib/http";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { requireInternalSecret } from "../../../../../_lib/request";
 import { getSpeakerByManageToken } from "../../../../../_lib/services/proposals";
+import { privateUserHeadshotResponse, requireUserHeadshotBucket } from "../../../../../_lib/services/user-headshot";
 import {
-  privateUserHeadshotResponse,
-  requireUserHeadshotBucket,
-  removeUserHeadshotForRequest,
-  uploadUserHeadshotForRequest,
-} from "../../../../../_lib/services/user-headshot";
+  removeProposalSpeakerSelfHeadshot,
+  uploadProposalSpeakerSelfHeadshot,
+} from "../../../../../_lib/services/proposal-speaker-self-headshot";
 import { readValidatedUploadedImage } from "../../../../../_lib/utils/image-upload";
 import { SPEAKER_HEADSHOT_MAX_BYTES } from "../../../../../../assets/shared/schemas/images";
 import {
@@ -42,24 +41,20 @@ async function onPut(c: AdminContext, token: string): Promise<Response> {
   }
 
   const image = await readValidatedUploadedImage(c.req.raw, "Headshot", SPEAKER_HEADSHOT_MAX_BYTES);
-  const { r2Key, origin } = await uploadUserHeadshotForRequest(
-    requestDb(c),
-    c.env,
-    c.req.raw,
-    c.executionCtx.waitUntil.bind(c.executionCtx),
+  const { r2Key, origin } = await uploadProposalSpeakerSelfHeadshot(
     {
+      db: requestDb(c),
+      env: c.env,
+      request: c.req.raw,
+      waitUntil: c.executionCtx.waitUntil.bind(c.executionCtx),
+      proposalId: proposal.id,
+      proposalSpeakerId: speaker.id,
       userId: user.id,
-      previousKey: user.headshot_r2_key,
-      image,
-      source: "speaker_self_upload",
-      audit: {
-        actorType: "user",
-        actorId: user.id,
-        action: "headshot_uploaded_by_speaker",
-        scope: { type: "proposal", id: proposal.id },
-        details: { proposalId: proposal.id, speakerUserId: user.id },
-      },
+      accountHeadshotKey: user.accountHeadshotR2Key,
+      proposalOverrideSet: user.proposalHeadshotOverrideSet,
+      proposalOverrideKey: user.proposalHeadshotOverrideKey,
     },
+    image,
   );
   return json({
     success: true,
@@ -69,17 +64,18 @@ async function onPut(c: AdminContext, token: string): Promise<Response> {
 }
 
 async function onDelete(c: AdminContext, token: string): Promise<Response> {
-  const { proposal, user } = await loadContext(c, token);
-  await removeUserHeadshotForRequest(requestDb(c), c.env, c.req.raw, c.executionCtx.waitUntil.bind(c.executionCtx), {
+  const { proposal, speaker, user } = await loadContext(c, token);
+  await removeProposalSpeakerSelfHeadshot({
+    db: requestDb(c),
+    env: c.env,
+    request: c.req.raw,
+    waitUntil: c.executionCtx.waitUntil.bind(c.executionCtx),
+    proposalId: proposal.id,
+    proposalSpeakerId: speaker.id,
     userId: user.id,
-    previousKey: user.headshot_r2_key,
-    audit: {
-      actorType: "user",
-      actorId: user.id,
-      action: "headshot_deleted_by_speaker",
-      scope: { type: "proposal", id: proposal.id },
-      details: { proposalId: proposal.id, speakerUserId: user.id },
-    },
+    accountHeadshotKey: user.accountHeadshotR2Key,
+    proposalOverrideSet: user.proposalHeadshotOverrideSet,
+    proposalOverrideKey: user.proposalHeadshotOverrideKey,
   });
   return json({ success: true });
 }

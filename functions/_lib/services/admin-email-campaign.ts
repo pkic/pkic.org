@@ -18,6 +18,7 @@ import type { AttendanceType } from "../../../assets/shared/schemas/registration
 import { adminEventCampaignPreviewSchema } from "../../../assets/shared/schemas/admin-events";
 import type { z } from "zod";
 import { resolveTemplate } from "../email/templates";
+import { proposalSpeakerEffectiveProfileExpression } from "./proposal-speakers";
 
 export type AdminCampaignInput = z.infer<typeof adminEventCampaignPreviewSchema>;
 
@@ -209,7 +210,11 @@ export async function listCampaignRecipients(
   }>(
     db,
     `WITH ranked_recipients AS (
-       SELECT u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
+       SELECT u.email,
+              ${proposalSpeakerEffectiveProfileExpression("u", "ps", "firstName", "first_name")} AS first_name,
+              ${proposalSpeakerEffectiveProfileExpression("u", "ps", "lastName", "last_name")} AS last_name,
+              ${proposalSpeakerEffectiveProfileExpression("u", "ps", "organizationName", "organization_name")} AS organization_name,
+              ${proposalSpeakerEffectiveProfileExpression("u", "ps", "jobTitle", "job_title")} AS job_title,
               ps.status AS speaker_status,
               sp.title AS proposal_title,
               sp.abstract AS proposal_abstract,

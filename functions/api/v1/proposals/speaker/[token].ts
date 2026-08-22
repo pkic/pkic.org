@@ -122,7 +122,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 export async function onRequestPatch(c: any): Promise<Response> {
   try {
     const body = await parseJsonBody(c.req, speakerProfilePatchSchema);
-    const { speaker, user } = await getSpeakerByManageToken(
+    const { speaker, proposal, user } = await getSpeakerByManageToken(
       requestDb(c),
       c.req.param("token"),
       requireInternalSecret(c.env),
@@ -132,14 +132,24 @@ export async function onRequestPatch(c: any): Promise<Response> {
       return json({ error: { code: "SPEAKER_DECLINED", message: "You have declined participation." } }, 403);
     }
 
-    await updateSpeakerProfile(requestDb(c), user.id, {
-      firstName: body.firstName === undefined ? undefined : body.firstName || null,
-      lastName: body.lastName === undefined ? undefined : body.lastName || null,
-      organizationName: body.organizationName === undefined ? undefined : body.organizationName || null,
-      jobTitle: body.jobTitle === undefined ? undefined : body.jobTitle || null,
-      biography: body.biography === undefined ? undefined : body.biography || null,
-      linksJson: body.links === undefined ? undefined : serializeLinks(body.links),
-    });
+    await updateSpeakerProfile(
+      requestDb(c),
+      {
+        firstName: body.firstName === undefined ? undefined : body.firstName || null,
+        lastName: body.lastName === undefined ? undefined : body.lastName || null,
+        organizationName: body.organizationName === undefined ? undefined : body.organizationName || null,
+        jobTitle: body.jobTitle === undefined ? undefined : body.jobTitle || null,
+        biography: body.biography === undefined ? undefined : body.biography || null,
+        linksJson: body.links === undefined ? undefined : serializeLinks(body.links),
+      },
+      {
+        proposalSpeakerId: speaker.id,
+        proposalId: proposal.id,
+        userId: user.id,
+        currentStatus: speaker.status,
+        expectedProfileOverridesJson: user.proposalProfileOverridesJson,
+      },
+    );
 
     return json({ success: true });
   } catch (error) {

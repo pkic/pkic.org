@@ -3,11 +3,11 @@ import { speakerRoleSchema } from "../../../../../../shared/schemas/registration
 import { isEligibleReplacementProposerStatus } from "../../../../../../shared/schemas/proposal-status";
 import { Badge } from "../../../../../components/Badge";
 import { ProfileLinksInput, type ProfileLinksHandle } from "../../../../../components/ProfileLinksInput";
-import { AdminHeadshotManager, ADMIN_HEADSHOT_DISCLAIMER } from "../../../../../shared/headshot/AdminHeadshotManager";
 import { normalizeProfileLinks } from "../../../../../shared/widgets/profile-links";
 import { api } from "../../../../api";
 import type { ProposalSpeaker } from "../../../../types";
 import { fmt, toast } from "../../../../ui";
+import { ProposalSpeakerHeadshotManager } from "./ProposalSpeakerHeadshotManager";
 
 export function buildReplacementProposerOptions(
   speakers: ProposalSpeaker[],
@@ -54,13 +54,11 @@ export function SpeakerCard({
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [replacementProposerUserId, setReplacementProposerUserId] = useState("");
-  const [headshotStatus, setHeadshotStatus] = useState("");
   const linksRef = useRef<ProfileLinksHandle>(null);
 
   const name = [speaker.firstName, speaker.lastName].filter(Boolean).join(" ") || speaker.email;
 
   useEffect(() => {
-    setHeadshotStatus("");
     setRole(speaker.role);
     setFirstName(speaker.firstName ?? "");
     setLastName(speaker.lastName ?? "");
@@ -74,38 +72,6 @@ export function SpeakerCard({
   useEffect(() => {
     if (editing) linksRef.current?.setLinks(normalizeProfileLinks(speaker.links));
   }, [editing, speaker.links]);
-
-  async function uploadHeadshotFile(file: Blob) {
-    const response = await fetch(`/api/v1/admin/users/${speaker.userId}/headshot`, {
-      method: "PUT",
-      credentials: "same-origin",
-      headers: { "Content-Type": file.type || "image/jpeg" },
-      body: file,
-    });
-    const data = (await response.json().catch(() => ({}))) as { error?: { message?: string } };
-    if (!response.ok) throw new Error(data.error?.message ?? `HTTP ${response.status}`);
-
-    const userData = await api<{ user: { headshotUrl: string | null } }>(`/api/v1/admin/users/${speaker.userId}`);
-    return { headshotUrl: userData.user.headshotUrl ?? null };
-  }
-
-  async function fetchGravatar() {
-    setHeadshotStatus("Looking up Gravatar...");
-    try {
-      await api(`/api/v1/admin/users/${speaker.userId}/gravatar`, { method: "POST" });
-      const userData = await api<{ user: { headshotUrl: string | null } }>(`/api/v1/admin/users/${speaker.userId}`);
-      toast("Gravatar imported successfully", "success");
-      onSaved(speaker.userId, {
-        headshotUrl: userData.user.headshotUrl,
-        hasHeadshot: Boolean(userData.user.headshotUrl),
-      });
-      setHeadshotStatus("Gravatar imported");
-    } catch (caught) {
-      const message = (caught as Error).message;
-      toast(message, "error");
-      setHeadshotStatus(`Error: ${message}`);
-    }
-  }
 
   async function handleSave(event: Event) {
     event.preventDefault();
@@ -177,25 +143,12 @@ export function SpeakerCard({
       <div class="card-body">
         <div class="d-flex gap-3 align-items-start">
           <div class="flex-shrink-0">
-            <AdminHeadshotManager
-              initialUrl={speaker.headshotUrl ?? null}
-              alt={name}
-              emptyLabel="User"
-              statusText={headshotStatus}
-              uploadHeadshot={uploadHeadshotFile}
-              deleteHeadshot={() => api(`/api/v1/admin/users/${speaker.userId}/headshot`, { method: "DELETE" })}
-              onFetchGravatar={fetchGravatar}
-              disclaimerTexts={ADMIN_HEADSHOT_DISCLAIMER}
-              onUploaded={(headshotUrl) => {
-                onSaved(speaker.userId, { headshotUrl: headshotUrl ?? null, hasHeadshot: Boolean(headshotUrl) });
-                toast("Headshot uploaded", "success");
-              }}
-              onDeleted={() => {
-                onSaved(speaker.userId, { headshotUrl: null, hasHeadshot: false });
-                toast("Headshot removed", "success");
-              }}
-              onError={(message) => toast(message, "error")}
-              confirmDeleteMessage="Remove this user's headshot?"
+            <ProposalSpeakerHeadshotManager
+              speaker={speaker}
+              proposalId={proposalId}
+              name={name}
+              canEdit={canEdit}
+              onSaved={onSaved}
             />
           </div>
 

@@ -432,15 +432,15 @@ export async function finalizeProposalDecision(
 }
 
 export { getSpeakerByManageToken, type SpeakerWithContext } from "./proposals-speaker-capability";
+export { buildProposalInviteEmailContext, type ProposalInviteEmailContext } from "./proposal-invite-email-context";
 export {
   addProposalSpeaker,
   buildAddProposalSpeaker,
-  buildProposalInviteEmailContext,
   formatInvitePerson,
   listProposalSpeakersWithStatus,
   refreshSpeakerManageToken,
   updateProposalSpeakerRole,
 } from "./proposal-speakers";
-export type { ProposalInviteEmailContext, ProposalSpeakerRecord, ProposalSpeakerWithUser } from "./proposal-speakers";
+export type { ProposalSpeakerRecord, ProposalSpeakerWithUser } from "./proposal-speakers";
 export { listProposalReviews, updateProposalReview, upsertProposalReview } from "./proposal-reviews";
 export { recordProposalDecision } from "./proposal-decisions";

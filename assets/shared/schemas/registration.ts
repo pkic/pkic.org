@@ -43,6 +43,7 @@ export const headshotUploadResponseSchema = successResponseSchema.extend({
   r2Key: z.string().describe("R2 object key for the uploaded headshot"),
   headshotUrl: httpUrlSchema.describe("URL pointing to the uploaded headshot"),
 });
+export type HeadshotUploadResponse = z.infer<typeof headshotUploadResponseSchema>;
 export const registrationHeadshotUploadResponseSchema = headshotUploadResponseSchema.omit({ r2Key: true }).extend({
   headshotUrl: httpUrlSchema.describe("The permanent URL pointing to the new uploaded headshot profile asset"),
 });

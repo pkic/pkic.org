@@ -318,7 +318,7 @@ export const adminProposalSpeakerPatchRouteSchema = {
   tags: ["Admin proposal speakers"],
   summary: "Update a proposal speaker",
   description:
-    "Atomically updates the shared speaker profile, proposal role, participant projection, and audit record.",
+    "Atomically updates the speaker profile for this proposal, proposal role, participant projection, and audit record without changing the account-wide profile.",
   request: {
     params: proposalSpeakerIdParamsSchema,
     body: {

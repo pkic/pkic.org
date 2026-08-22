@@ -10,7 +10,12 @@ import {
   eventParticipantSourceConflictError,
   isEventParticipantSourceConflict,
 } from "./event-participant-source-revision";
-import { formatInvitePerson as formatInvitePersonRecord } from "./proposal-invite-email-context";
+import { formatProposalInvitePerson } from "./proposal-invite-person";
+import {
+  PROPOSAL_PROFILE_FIELDS,
+  proposalProfileFieldNames,
+  type ProposalProfileField,
+} from "./proposal-speaker-profile-overrides";
 import type { DatabaseLike, StatementLike } from "../types";
 import type { ProposalManageSpeakerStatus } from "../../../assets/shared/schemas/proposal-management";
 import type { SpeakerRole } from "../../../assets/shared/schemas/registration";
@@ -341,10 +346,43 @@ export interface ProposalSpeakerWithUser extends ProposalSpeakerUserProfile {
   created_at: string;
 }
 
+/** Effective profile projection: proposal overrides are scoped to this roster row. */
+export function proposalSpeakerEffectiveProfileExpression(
+  userAlias: string,
+  speakerAlias: string,
+  key: string,
+  userColumn: string,
+): string {
+  return `CASE WHEN json_type(COALESCE(${speakerAlias}.profile_overrides_json, '{}'), '$.${key}') IS NULL THEN ${userAlias}.${userColumn} ELSE json_extract(${speakerAlias}.profile_overrides_json, '$.${key}') END`;
+}
+
+export function proposalSpeakerEffectiveHeadshotExpression(userAlias = "u", speakerAlias = "ps"): string {
+  return `CASE WHEN ${speakerAlias}.headshot_override_set = 1 THEN ${speakerAlias}.headshot_r2_key ELSE ${userAlias}.headshot_r2_key END`;
+}
+
+export function proposalSpeakerEffectiveProfileColumns(
+  userAlias = "u",
+  speakerAlias = "ps",
+  prefix = "",
+  fields: readonly ProposalProfileField[] = proposalProfileFieldNames(),
+): string {
+  const effective = (key: string, column: string, alias: string) =>
+    `${proposalSpeakerEffectiveProfileExpression(userAlias, speakerAlias, key, column)} AS ${prefix}${alias}`;
+  return fields.map((key) => effective(key, PROPOSAL_PROFILE_FIELDS[key], PROPOSAL_PROFILE_FIELDS[key])).join(",\n  ");
+}
+
+export function proposalSpeakerEffectiveHeadshotColumns(userAlias = "u", speakerAlias = "ps", prefix = ""): string {
+  return [
+    `${proposalSpeakerEffectiveHeadshotExpression(userAlias, speakerAlias)} AS ${prefix}headshot_r2_key`,
+    `CASE WHEN ${speakerAlias}.headshot_override_set = 1 THEN ${speakerAlias}.headshot_updated_at ELSE ${userAlias}.headshot_updated_at END AS ${prefix}headshot_updated_at`,
+  ].join(",\n  ");
+}
+
 export const PROPOSAL_SPEAKER_WITH_USER_COLUMNS = `ps.id AS speaker_id, ps.user_id, ps.role, ps.status,
   ps.manage_link_secret, ps.confirmed_at, ps.declined_at, ps.terms_accepted_at, ps.decline_reason, ps.created_at,
-  u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
-  u.biography, u.links_json, u.headshot_r2_key, u.headshot_updated_at`;
+  u.email,
+  ${proposalSpeakerEffectiveProfileColumns()},
+  ${proposalSpeakerEffectiveHeadshotColumns()}`;
 
 export function prepareProposalSpeakerWithUserById(db: DatabaseLike, speakerId: string): StatementLike {
   return db
@@ -369,15 +407,13 @@ export function prepareProposalSpeakersWithStatus(db: DatabaseLike, proposalId: 
     .bind(proposalId);
 }
 
-export { buildProposalInviteEmailContext, type ProposalInviteEmailContext } from "./proposal-invite-email-context";
-
 export function formatInvitePerson(
   firstName: string | null,
   lastName: string | null,
   organizationName: string | null,
   fallback: string,
 ): string {
-  return formatInvitePersonRecord({
+  return formatProposalInvitePerson({
     email: fallback,
     first_name: firstName,
     last_name: lastName,

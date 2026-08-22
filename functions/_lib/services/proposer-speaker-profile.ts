@@ -1,16 +1,25 @@
-import { parseLinksJson, serializeLinks } from "../../../assets/shared/schemas/links";
+import { parseLinksJson } from "../../../assets/shared/schemas/links";
 import { isProposalSpeakerRosterEditableStatus } from "../../../assets/shared/schemas/proposal-status";
 import { first } from "../db/queries";
 import { AppError } from "../errors";
 import type { DatabaseLike, StatementLike } from "../types";
-import { isAuditOneChangeGuardFailure, prepareScopedAuditLog, prepareScopedAuditLogAfterOneChange } from "./audit";
-import { assertProposalSpeakerRoleTransition, prepareProposalSpeakerRoleChange } from "./proposal-speakers";
-import { prepareSpeakerProfileStatement } from "./proposals-speaker-profile";
+import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
+import {
+  assertProposalSpeakerRoleTransition,
+  prepareProposalSpeakerRoleChange,
+  proposalSpeakerEffectiveHeadshotExpression,
+  proposalSpeakerEffectiveProfileColumns,
+} from "./proposal-speakers";
 import { getProposalByManageToken, type ProposalRecord } from "./proposals";
 import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
 import { isEventParticipantSourceConflict } from "./event-participant-source-revision";
 import type { ProposalSpeakerRole } from "../../../assets/shared/schemas/participant-roles";
 import type { ProposalManageSpeakerStatus } from "../../../assets/shared/schemas/proposal-management";
+import {
+  updateProposalProfileOverrides,
+  type ProposalProfilePatch,
+  type ProposalProfileValues,
+} from "./proposal-speaker-profile-overrides";
 
 export interface ProposerManagedSpeaker {
   id: string;
@@ -24,6 +33,16 @@ export interface ProposerManagedSpeaker {
   biography: string | null;
   links_json: string | null;
   headshot_r2_key: string | null;
+  headshot_override_set: number;
+  headshot_override_r2_key: string | null;
+  headshot_override_updated_at: string | null;
+  profile_overrides_json: string;
+  base_first_name: string | null;
+  base_last_name: string | null;
+  base_organization_name: string | null;
+  base_job_title: string | null;
+  base_biography: string | null;
+  base_links_json: string | null;
 }
 
 export interface ProposerSpeakerProfilePatch {
@@ -46,8 +65,15 @@ export async function getProposerManagedSpeakerContext(
   const speaker = await first<ProposerManagedSpeaker>(
     db,
     `SELECT ps.id, ps.user_id, ps.status, ps.role,
-            u.first_name, u.last_name, u.organization_name, u.job_title, u.biography, u.links_json,
-            u.headshot_r2_key
+            ${proposalSpeakerEffectiveProfileColumns()},
+            ${proposalSpeakerEffectiveHeadshotExpression("u", "ps")} AS headshot_r2_key,
+            ps.profile_overrides_json,
+            ps.headshot_override_set,
+            ps.headshot_r2_key AS headshot_override_r2_key,
+            ps.headshot_updated_at AS headshot_override_updated_at,
+            u.first_name AS base_first_name, u.last_name AS base_last_name,
+            u.organization_name AS base_organization_name, u.job_title AS base_job_title,
+            u.biography AS base_biography, u.links_json AS base_links_json
        FROM proposal_speakers ps
        JOIN users u ON u.id = ps.user_id
       WHERE ps.proposal_id = ? AND ps.user_id = ?`,
@@ -70,29 +96,94 @@ export async function updateProposalSpeakerByProposer(
 ): Promise<boolean> {
   const statements: StatementLike[] = [];
   const details: Record<string, { from: unknown; to: unknown }> = {};
-  const profilePatch: Omit<ProposerSpeakerProfilePatch, "role" | "links"> & { linksJson?: string | null } = {};
+  const baseValues: ProposalProfileValues = {
+    firstName: payload.speaker.base_first_name,
+    lastName: payload.speaker.base_last_name,
+    organizationName: payload.speaker.base_organization_name,
+    jobTitle: payload.speaker.base_job_title,
+    biography: payload.speaker.base_biography,
+    links: parseLinksJson(payload.speaker.base_links_json),
+  };
+  const profilePatch: ProposalProfilePatch = {};
+  const databaseKeys = {
+    firstName: "first_name",
+    lastName: "last_name",
+    organizationName: "organization_name",
+    jobTitle: "job_title",
+    biography: "biography",
+  } as const;
 
   for (const key of ["firstName", "lastName", "organizationName", "jobTitle", "biography"] as const) {
     if (payload.patch[key] !== undefined) {
-      profilePatch[key] = payload.patch[key] ?? null;
-      const databaseKey = {
-        firstName: "first_name",
-        lastName: "last_name",
-        organizationName: "organization_name",
-        jobTitle: "job_title",
-        biography: "biography",
-      }[key] as "first_name" | "last_name" | "organization_name" | "job_title" | "biography";
-      details[key] = { from: payload.speaker[databaseKey], to: payload.patch[key] ?? null };
+      const value = payload.patch[key] ?? null;
+      details[key] = { from: payload.speaker[databaseKeys[key]], to: value };
+      profilePatch[key] = value;
     }
   }
   if (payload.patch.links !== undefined) {
-    profilePatch.linksJson = serializeLinks(payload.patch.links);
     details.links = { from: parseLinksJson(payload.speaker.links_json), to: payload.patch.links };
+    profilePatch.links = payload.patch.links;
   }
-  if (Object.keys(profilePatch).length > 0) {
-    statements.push(prepareSpeakerProfileStatement(db, payload.speaker.user_id, profilePatch));
-  }
+  const profileOverridesJson = updateProposalProfileOverrides(
+    payload.speaker.profile_overrides_json,
+    baseValues,
+    profilePatch,
+  );
+  const profileChanges = profileOverridesJson !== payload.speaker.profile_overrides_json;
   const roleChanges = payload.patch.role !== undefined && payload.patch.role !== payload.speaker.role;
+  if (profileChanges && roleChanges) {
+    statements.push(
+      db
+        .prepare(
+          `UPDATE proposal_speakers
+           SET role = ?, profile_overrides_json = ?
+           WHERE id = ? AND proposal_id = ? AND user_id = ? AND role = ? AND status = ?
+             AND profile_overrides_json IS ?
+             AND EXISTS (
+               SELECT 1 FROM session_proposals
+               WHERE id = ? AND status = ? AND updated_at = ? AND deleted_at IS NULL
+             )`,
+        )
+        .bind(
+          payload.patch.role,
+          profileOverridesJson,
+          payload.speaker.id,
+          payload.proposal.id,
+          payload.speaker.user_id,
+          payload.speaker.role,
+          payload.speaker.status,
+          payload.speaker.profile_overrides_json,
+          payload.proposal.id,
+          payload.proposal.status,
+          payload.proposal.updated_at,
+        ),
+    );
+  } else if (profileChanges) {
+    statements.push(
+      db
+        .prepare(
+          `UPDATE proposal_speakers
+           SET profile_overrides_json = ?
+           WHERE id = ? AND proposal_id = ? AND user_id = ? AND status = ?
+             AND profile_overrides_json IS ?
+             AND EXISTS (
+               SELECT 1 FROM session_proposals
+               WHERE id = ? AND status = ? AND updated_at = ? AND deleted_at IS NULL
+             )`,
+        )
+        .bind(
+          profileOverridesJson,
+          payload.speaker.id,
+          payload.proposal.id,
+          payload.speaker.user_id,
+          payload.speaker.status,
+          payload.speaker.profile_overrides_json,
+          payload.proposal.id,
+          payload.proposal.status,
+          payload.proposal.updated_at,
+        ),
+    );
+  }
   if (roleChanges) {
     assertProposalSpeakerRoleTransition({
       currentProposerUserId: payload.proposal.proposer_user_id,
@@ -110,26 +201,28 @@ export async function updateProposalSpeakerByProposer(
       currentStatus: payload.speaker.status,
       nextRole: payload.patch.role as ProposalSpeakerRole,
     });
-    statements.push(roleChange.updateStatement);
+    if (!profileChanges) statements.push(roleChange.updateStatement);
     details.role = { from: payload.speaker.role, to: payload.patch.role };
-    statements.push(
-      prepareScopedAuditLogAfterOneChange(
-        db,
-        { type: "proposal", id: payload.proposal.id },
-        "user",
-        payload.proposal.proposer_user_id,
-        "speaker_profile_updated_by_proposer",
-        "proposal_speaker",
-        payload.speaker.id,
-        { proposalId: payload.proposal.id, speakerUserId: payload.speaker.user_id, ...details },
-      ),
-      ...roleChange.capacityStatements,
-    );
+    if (!profileChanges) {
+      statements.push(
+        prepareScopedAuditLogAfterOneChange(
+          db,
+          { type: "proposal", id: payload.proposal.id },
+          "user",
+          payload.proposal.proposer_user_id,
+          "speaker_profile_updated_by_proposer",
+          "proposal_speaker",
+          payload.speaker.id,
+          { proposalId: payload.proposal.id, speakerUserId: payload.speaker.user_id, ...details },
+        ),
+      );
+    }
+    statements.push(...roleChange.capacityStatements);
   }
   if (statements.length === 0) return false;
-  if (!roleChanges) {
+  if (profileChanges) {
     statements.push(
-      prepareScopedAuditLog(
+      prepareScopedAuditLogAfterOneChange(
         db,
         { type: "proposal", id: payload.proposal.id },
         "user",

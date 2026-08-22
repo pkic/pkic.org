@@ -27,6 +27,7 @@ import {
 import { getProposalByManageToken } from "./proposals";
 import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
 import { isEventParticipantSourceConflict } from "./event-participant-source-revision";
+import { prepareStorageDeletion } from "./storage-deletion-outbox";
 
 interface SpeakerRemovalContext {
   proposal_id: string;
@@ -40,6 +41,8 @@ interface SpeakerRemovalContext {
   speaker_user_id: string;
   speaker_role: ProposalSpeakerRole;
   speaker_status: string;
+  headshot_override_set: number;
+  headshot_override_r2_key: string | null;
 }
 
 interface ReplacementSpeaker {
@@ -70,7 +73,8 @@ async function getSpeakerRemovalContext(
             (SELECT COUNT(*) FROM proposal_speakers roster
              WHERE roster.proposal_id = sp.id AND roster.status <> 'declined') AS speaker_count,
             ps.id AS speaker_id, ps.user_id AS speaker_user_id,
-            ps.role AS speaker_role, ps.status AS speaker_status
+            ps.role AS speaker_role, ps.status AS speaker_status,
+            ps.headshot_override_set, ps.headshot_r2_key AS headshot_override_r2_key
      FROM session_proposals sp
      JOIN proposal_speakers ps ON ps.proposal_id = sp.id AND ps.user_id = ?
      WHERE sp.id = ? AND sp.deleted_at IS NULL`,
@@ -320,6 +324,9 @@ async function removeProposalSpeaker(
       },
       now,
     ),
+    ...(context.headshot_override_set === 1 && context.headshot_override_r2_key
+      ? [prepareStorageDeletion(db, context.headshot_override_r2_key, now)!]
+      : []),
     ...(await prepareProposalRoleCapacityForSpeakerRemoval(db, {
       eventId: context.event_id,
       userId: context.speaker_user_id,

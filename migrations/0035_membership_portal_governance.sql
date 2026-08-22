@@ -119,6 +119,17 @@ CREATE INDEX idx_email_outbox_expired_lease
 -- for the same generation share one outbox idempotency key.
 ALTER TABLE proposal_speakers ADD COLUMN invite_generation INTEGER NOT NULL DEFAULT 0;
 
+-- A proposal manager may curate a co-speaker's profile for this proposal, but
+-- the proposer-management capability must never rewrite that person's
+-- account-wide profile or headshot. Keep these overrides on the speaker roster
+-- row so they follow
+-- the proposal aggregate and cannot orphan when a speaker is removed. JSON
+-- key presence distinguishes an explicit NULL override from no override.
+ALTER TABLE proposal_speakers ADD COLUMN profile_overrides_json TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE proposal_speakers ADD COLUMN headshot_override_set INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE proposal_speakers ADD COLUMN headshot_r2_key TEXT;
+ALTER TABLE proposal_speakers ADD COLUMN headshot_updated_at TEXT;
+
 -- Invite acceptance, decline, and manual resend are aggregate transitions:
 -- their state change and any engagement, unsubscribe, email, or audit fallout
 -- must be based on the same snapshot. A revision guard makes a stale D1 batch

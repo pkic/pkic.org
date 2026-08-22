@@ -9,6 +9,12 @@ import { prepareProposalRoleCapacityForSpeakerRemoval } from "./proposal-role-ca
 import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
 import { isEventParticipantSourceConflict } from "./event-participant-source-revision";
 import { prepareUserProfileStatement, type UserProfilePatch } from "./users";
+import {
+  prepareClearProposalSpeakerProfileOverridesStatement,
+  type ProposalProfileField,
+  type ProposalProfileOverrideSnapshot,
+} from "./proposal-speaker-profile-overrides";
+import { proposalSpeakerEffectiveProfileColumns } from "./proposal-speakers";
 import type { DatabaseLike } from "../types";
 
 export async function getProposalCoSpeakers(
@@ -18,7 +24,7 @@ export async function getProposalCoSpeakers(
 ): Promise<{ firstName: string | null; lastName: string | null; status: string }[]> {
   return all<{ first_name: string | null; last_name: string | null; status: string }>(
     db,
-    `SELECT u.first_name, u.last_name, ps.status
+    `SELECT ${proposalSpeakerEffectiveProfileColumns("u", "ps", "", ["firstName", "lastName"])}, ps.status
      FROM proposal_speakers ps
      JOIN users u ON u.id = ps.user_id
      WHERE ps.proposal_id = ? AND ps.user_id != ?
@@ -195,8 +201,46 @@ export async function declineSpeakerParticipation(
   }
 }
 
-export async function updateSpeakerProfile(db: DatabaseLike, userId: string, payload: UserProfilePatch): Promise<void> {
-  await db.batch([prepareUserProfileStatement(db, userId, payload)]);
+export async function updateSpeakerProfile(
+  db: DatabaseLike,
+  payload: UserProfilePatch,
+  context: ProposalProfileOverrideSnapshot,
+): Promise<void> {
+  const statements = [prepareUserProfileStatement(db, context.userId, payload)];
+  const fields: ProposalProfileField[] = [];
+  if (payload.firstName !== undefined) fields.push("firstName");
+  if (payload.lastName !== undefined) fields.push("lastName");
+  if (payload.organizationName !== undefined) fields.push("organizationName");
+  if (payload.jobTitle !== undefined) fields.push("jobTitle");
+  if (payload.biography !== undefined) fields.push("biography");
+  if (payload.linksJson !== undefined) fields.push("links");
+  if (fields.length > 0) {
+    statements.push(prepareClearProposalSpeakerProfileOverridesStatement(db, context, fields));
+    statements.push(
+      prepareScopedAuditLogAfterOneChange(
+        db,
+        { type: "proposal", id: context.proposalId },
+        "user",
+        context.userId,
+        "speaker_profile_updated_by_speaker",
+        "proposal_speaker",
+        context.proposalSpeakerId,
+        { fields },
+      ),
+    );
+  }
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    if (isAuditOneChangeGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "PROPOSAL_SPEAKER_CONFLICT",
+        "Proposal speaker profile changed while it was being updated",
+      );
+    }
+    throw error;
+  }
 }
 
 export const prepareSpeakerProfileStatement = prepareUserProfileStatement;

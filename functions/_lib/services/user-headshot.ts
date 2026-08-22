@@ -36,6 +36,7 @@ export interface UserHeadshotContext {
   userId: string;
   previousKey: string | null;
   audit: HeadshotAudit;
+  prepareAdditionalCommitStatements?: (at: string) => StatementLike[];
 }
 
 export interface UserHeadshotRecord {
@@ -172,6 +173,7 @@ export async function replaceUserHeadshot(
             context.audit.scope,
           ),
           prepareBadgeRenderJobsForUser(context.db, context.userId, at),
+          ...(context.prepareAdditionalCommitStatements?.(at) ?? []),
         ];
         const deletionStatement = prepareStorageDeletion(context.db, context.previousKey, at);
         if (deletionStatement) statements.push(deletionStatement);
@@ -208,10 +210,19 @@ export async function removeUserHeadshot(context: Omit<UserHeadshotContext, "buc
       [at],
     ),
     prepareBadgeRenderJobsForUser(context.db, context.userId, at),
+    ...(context.prepareAdditionalCommitStatements?.(at) ?? []),
   ];
   const deletionStatement = prepareStorageDeletion(context.db, context.previousKey, at);
   if (deletionStatement) statements.push(deletionStatement);
-  const [updateResult] = await context.db.batch(statements);
+  let updateResult;
+  try {
+    [updateResult] = await context.db.batch(statements);
+  } catch (error) {
+    if (isAuditOneChangeGuardFailure(error)) {
+      throw await headshotConflictError(context.db, context.userId);
+    }
+    throw error;
+  }
   if ((updateResult.meta?.changes ?? 0) !== 1) {
     throw await headshotConflictError(context.db, context.userId);
   }
@@ -256,6 +267,7 @@ export async function commitUserHeadshotUpload(
     image: context.image,
     source: context.source,
     audit: context.audit,
+    prepareAdditionalCommitStatements: context.prepareAdditionalCommitStatements,
   });
   finalizeUserHeadshotChange(context, waitUntil);
   return r2Key;
@@ -280,6 +292,7 @@ export async function uploadUserHeadshotForRequest(
     image: { buffer: ArrayBuffer; contentType: string };
     source?: string;
     audit: HeadshotAudit;
+    prepareAdditionalCommitStatements?: (at: string) => StatementLike[];
   },
 ): Promise<{ r2Key: string; origin: string }> {
   const origin = resolveAppBaseUrl(env, request);
@@ -292,7 +305,12 @@ export function removeUserHeadshotForRequest(
   env: Env,
   request: Request,
   waitUntil: (promise: Promise<unknown>) => void,
-  payload: { userId: string; previousKey: string | null; audit: HeadshotAudit },
+  payload: {
+    userId: string;
+    previousKey: string | null;
+    audit: HeadshotAudit;
+    prepareAdditionalCommitStatements?: (at: string) => StatementLike[];
+  },
 ): Promise<void> {
   return commitUserHeadshotRemoval({ db, env, origin: resolveAppBaseUrl(env, request), ...payload }, waitUntil);
 }
