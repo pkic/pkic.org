@@ -7,7 +7,7 @@
  *  - POST /api/v1/webhooks/stripe                     (various event types)
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { createContext } from "./helpers/context";
@@ -15,6 +15,8 @@ import { onRequestGet as donationSession } from "../functions/api/v1/donations/s
 import { onRequestPost as donationPromoter } from "../functions/api/v1/donations/promoter";
 import { onRequestPost as stripeWebhook } from "../functions/api/v1/webhooks/stripe";
 import { handleDonationStripeEvent } from "../functions/_lib/services/donations/stripe-webhook";
+
+const PROVIDER_BODY_SENTINEL = "SECRET_PROVIDER_BODY webhook@example.test";
 
 async function insertDonation(opts: {
   sessionId: string;
@@ -248,6 +250,10 @@ describe("POST /api/v1/webhooks/stripe", () => {
     await resetDb();
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("returns 503 when STRIPE_WEBHOOK_SECRET is not configured", async () => {
     const envWithoutSecret = { ...env, STRIPE_WEBHOOK_SECRET: "" } as typeof env;
 
@@ -327,5 +333,38 @@ describe("POST /api/v1/webhooks/stripe", () => {
       .bind("cs_test_failed_retry")
       .first<{ status: string }>();
     expect(donation?.status).toBe("failed");
+  });
+
+  it("keeps a paid webhook authoritative when supplemental Stripe details fail", async () => {
+    await insertDonation({ sessionId: "cs_paid_details_unavailable", status: "pending", email: "" });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(PROVIDER_BODY_SENTINEL, { status: 503 })));
+
+    await handleDonationStripeEvent(
+      env.DB,
+      { ...env, STRIPE_SECRET_KEY: "stripe-test-key" },
+      {
+        id: "evt_paid_details_unavailable",
+        type: "checkout.session.completed",
+        data: {
+          object: {
+            id: "cs_paid_details_unavailable",
+            object: "checkout.session" as const,
+            status: "complete" as const,
+            payment_status: "paid",
+            payment_intent: "pi_paid_details_unavailable",
+            payment_method_types: ["card"],
+            amount_total: 5000,
+            currency: "usd",
+            customer_email: "",
+          },
+        },
+      },
+      "https://app.test",
+    );
+
+    const donation = await env.DB.prepare("SELECT status, net_amount FROM donations WHERE checkout_session_id = ?")
+      .bind("cs_paid_details_unavailable")
+      .first<{ status: string; net_amount: number | null }>();
+    expect(donation).toEqual({ status: "completed", net_amount: null });
   });
 });

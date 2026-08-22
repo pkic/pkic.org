@@ -254,11 +254,12 @@ describe("email outbox batch processing", () => {
 
   it("processes emails in chunks — a single SendGrid failure does not block other emails", async () => {
     let callCount = 0;
+    const providerBodySentinel = "SECRET_PROVIDER_BODY alice@example.test";
     const fetchMock = vi.fn().mockImplementation(() => {
       callCount += 1;
       // Fail the 2nd call only
       if (callCount === 2) {
-        return Promise.resolve(new Response('{"errors":[{"message":"fail"}]}', { status: 400 }));
+        return Promise.resolve(new Response(providerBodySentinel, { status: 400 }));
       }
       return Promise.resolve(new Response(null, { status: 202, headers: { "x-message-id": `msg-${callCount}` } }));
     });
@@ -276,6 +277,16 @@ describe("email outbox batch processing", () => {
 
     const retrying = await queryAll<{ id: string }>(env.DB, "SELECT id FROM email_outbox WHERE status = 'retrying'");
     expect(retrying).toHaveLength(1);
+    const failedDetails = await queryAll<{ last_error: string }>(
+      env.DB,
+      "SELECT last_error FROM email_outbox WHERE status = 'retrying'",
+    );
+    expect(failedDetails[0]?.last_error).toContain("SENDGRID_SEND_FAILED");
+    expect(failedDetails[0]?.last_error).toContain('"kind":"provider_failure"');
+    expect(failedDetails[0]?.last_error).toContain('"provider":"sendgrid"');
+    expect(failedDetails[0]?.last_error).toContain('"operation":"send_email"');
+    expect(failedDetails[0]?.last_error).toContain('"status":400');
+    expect(failedDetails[0]?.last_error).not.toContain(providerBodySentinel);
   });
 
   it("processes emails concurrently within each chunk of 10", async () => {

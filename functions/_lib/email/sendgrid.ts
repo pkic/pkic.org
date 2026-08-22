@@ -1,4 +1,6 @@
 import { AppError } from "../errors";
+import { discardProviderResponseBody, providerFailureDetails } from "../integrations/provider-failure";
+import { logError } from "../logging";
 import type { Env } from "../types";
 
 export interface SendgridMessage {
@@ -60,21 +62,27 @@ export async function sendViaSendgrid(env: Env, message: SendgridMessage): Promi
     }));
   }
 
-  const response = await fetch(env.SENDGRID_API_BASE ?? "https://api.sendgrid.com/v3/mail/send", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${env.SENDGRID_API_KEY}`,
-    },
-    body: JSON.stringify(payload),
-  });
+  let response: Response;
+  try {
+    response = await fetch(env.SENDGRID_API_BASE ?? "https://api.sendgrid.com/v3/mail/send", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${env.SENDGRID_API_KEY}`,
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    const details = providerFailureDetails("sendgrid", "send_email", null);
+    logError("SENDGRID_SEND_FAILED", details);
+    throw new AppError(502, "SENDGRID_SEND_FAILED", "SendGrid could not be reached", details);
+  }
 
   if (!response.ok) {
-    const body = await response.text();
-    throw new AppError(502, "SENDGRID_SEND_FAILED", "SendGrid rejected email", {
-      status: response.status,
-      body,
-    });
+    const details = providerFailureDetails("sendgrid", "send_email", response.status);
+    await discardProviderResponseBody(response);
+    logError("SENDGRID_SEND_FAILED", details);
+    throw new AppError(502, "SENDGRID_SEND_FAILED", "SendGrid rejected email", details);
   }
 
   return response.headers.get("x-message-id");

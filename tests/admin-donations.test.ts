@@ -60,6 +60,19 @@ async function insertDonation(opts: {
   return id;
 }
 
+function stripeCheckoutSession(sessionId: string, paymentStatus: "paid" | "unpaid") {
+  return {
+    id: sessionId,
+    status: "complete",
+    payment_status: paymentStatus,
+    payment_intent: `pi_${sessionId}`,
+    payment_method_types: ["card"],
+    amount_total: 5000,
+    currency: "usd",
+    customer_email: "",
+  };
+}
+
 describe("GET /api/v1/admin/donations (P6M-P2-02)", () => {
   let adminToken: string;
 
@@ -238,6 +251,84 @@ describe("POST /api/v1/admin/donations/sync", () => {
     expect(body.synced).toBe(50);
     expect(body.results).toHaveLength(50);
     expect(stripeFetch).toHaveBeenCalledTimes(50);
+  });
+
+  it("reports supplemental Stripe failures without falsely changing an unpaid donation", async () => {
+    await insertDonation({ checkoutSessionId: "cs_sync_unpaid_failure", status: "pending", email: "" });
+    const providerBodySentinel = "SECRET_PROVIDER_BODY admin-sync@example.test";
+    const stripeFetch = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json(stripeCheckoutSession("cs_sync_unpaid_failure", "unpaid")))
+      .mockResolvedValueOnce(new Response(providerBodySentinel, { status: 429 }));
+    vi.stubGlobal("fetch", stripeFetch);
+
+    const response = await call(adminToken, "/api/v1/admin/donations/sync", {
+      method: "POST",
+      body: JSON.stringify({ sessionIds: ["cs_sync_unpaid_failure"] }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      results: Array<{ sessionId: string; outcome: string; error?: string }>;
+    };
+    expect(body.results).toEqual([
+      {
+        sessionId: "cs_sync_unpaid_failure",
+        outcome: "error",
+        error: "Failed to fetch payment details from Stripe",
+      },
+    ]);
+    expect(JSON.stringify(body)).not.toContain(providerBodySentinel);
+    const row = await env.DB.prepare("SELECT status FROM donations WHERE checkout_session_id = ?")
+      .bind("cs_sync_unpaid_failure")
+      .first<{ status: string }>();
+    expect(row).toEqual({ status: "pending" });
+  });
+
+  it("keeps a paid Stripe session authoritative when supplemental details fail", async () => {
+    await insertDonation({ checkoutSessionId: "cs_sync_paid_failure", status: "pending", email: "" });
+    const stripeFetch = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json(stripeCheckoutSession("cs_sync_paid_failure", "paid")))
+      .mockResolvedValueOnce(new Response("SECRET_PROVIDER_BODY", { status: 503 }));
+    vi.stubGlobal("fetch", stripeFetch);
+
+    const response = await call(adminToken, "/api/v1/admin/donations/sync", {
+      method: "POST",
+      body: JSON.stringify({ sessionIds: ["cs_sync_paid_failure"] }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { results: Array<{ outcome: string }> };
+    expect(body.results).toEqual([{ sessionId: "cs_sync_paid_failure", outcome: "completed" }]);
+    const row = await env.DB.prepare("SELECT status, net_amount FROM donations WHERE checkout_session_id = ?")
+      .bind("cs_sync_paid_failure")
+      .first<{ status: string; net_amount: number | null }>();
+    expect(row).toEqual({ status: "completed", net_amount: null });
+  });
+
+  it("reports a detail failure instead of claiming completed donation backfill succeeded", async () => {
+    await insertDonation({ checkoutSessionId: "cs_sync_backfill_failure", status: "completed", email: "" });
+    const stripeFetch = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json(stripeCheckoutSession("cs_sync_backfill_failure", "paid")))
+      .mockResolvedValueOnce(new Response("SECRET_PROVIDER_BODY", { status: 503 }));
+    vi.stubGlobal("fetch", stripeFetch);
+
+    const response = await call(adminToken, "/api/v1/admin/donations/sync", {
+      method: "POST",
+      body: JSON.stringify({ sessionIds: ["cs_sync_backfill_failure"] }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { results: Array<{ outcome: string; error?: string }> };
+    expect(body.results).toEqual([
+      {
+        sessionId: "cs_sync_backfill_failure",
+        outcome: "error",
+        error: "Failed to fetch payment details from Stripe",
+      },
+    ]);
   });
 });
 
