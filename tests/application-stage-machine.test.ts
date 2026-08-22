@@ -12,6 +12,7 @@ import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { seedMemberApplication } from "./helpers/member-applications";
 import { adminApplicationDetailSchema } from "../assets/shared/schemas/admin-applications";
+import { adminApplicationDocumentsListResponseSchema } from "../assets/shared/schemas/application-documents";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -245,7 +246,7 @@ describe("Application stage machine, communications, notes", () => {
     expect(outbox).toHaveLength(0);
   });
 
-  it("GET detail returns events, communications, and notes together", async () => {
+  it("keeps documents out of detail and lists them through the bounded admin subresource", async () => {
     const { id } = await createApplication();
     await call(adminToken, `/api/v1/admin/applications/${id}/stage`, {
       method: "PATCH",
@@ -257,37 +258,66 @@ describe("Application stage machine, communications, notes", () => {
     });
     await env.DB.prepare(
       `INSERT INTO application_documents
-       (id, application_id, uploaded_by_email, r2_key, filename, mime_type, file_size_bytes, uploaded_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, application_id, uploaded_by_email, r2_key, filename, mime_type,
+        file_size_bytes, content_sha256, uploaded_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
       .bind(
-        "document-1",
+        "00000000-0000-4000-8000-000000000001",
         id,
         "applicant@example.test",
         "applications/document-1",
         "evidence.pdf",
         "application/pdf",
         2048,
+        "0".repeat(64),
         "2026-08-21T08:00:00.000Z",
       )
       .run();
 
-    const response = await call(adminToken, `/api/v1/admin/applications/${id}`);
-    expect(response.status).toBe(200);
-    const body = adminApplicationDetailSchema.parse(await response.json());
+    const detailResponse = await call(adminToken, `/api/v1/admin/applications/${id}`);
+    expect(detailResponse.status).toBe(200);
+    const rawDetail = await detailResponse.json();
+    expect(rawDetail).not.toHaveProperty("documents");
+    const body = adminApplicationDetailSchema.parse(rawDetail);
     expect(body.events).toHaveLength(1);
     expect(body.communications).toHaveLength(1);
     expect(body.communications[0]).toMatchObject({ body: "note", createdAt: expect.any(String) });
-    expect(body.documents).toEqual([
-      {
-        id: "document-1",
-        filename: "evidence.pdf",
-        mimeType: "application/pdf",
-        fileSizeBytes: 2048,
-        uploadedAt: "2026-08-21T08:00:00.000Z",
-        uploadedByEmail: "applicant@example.test",
-      },
-    ]);
+
+    const documentsResponse = await call(
+      adminToken,
+      `/api/v1/admin/applications/${id}/documents?limit=1&offset=0&sort=-uploadedAt&q=evidence`,
+    );
+    expect(documentsResponse.status).toBe(200);
+    expect(adminApplicationDocumentsListResponseSchema.parse(await documentsResponse.json())).toEqual({
+      documents: [
+        {
+          id: "00000000-0000-4000-8000-000000000001",
+          filename: "evidence.pdf",
+          mimeType: "application/pdf",
+          fileSizeBytes: 2048,
+          uploadedAt: "2026-08-21T08:00:00.000Z",
+          uploadedByEmail: "applicant@example.test",
+        },
+      ],
+      page: { limit: 1, offset: 0, total: 1, hasMore: false },
+    });
+
+    const emailSearch = await call(
+      adminToken,
+      `/api/v1/admin/applications/${id}/documents?q=applicant%40example.test&sort=filename`,
+    );
+    expect(emailSearch.status).toBe(200);
+    expect(adminApplicationDocumentsListResponseSchema.parse(await emailSearch.json()).documents).toHaveLength(1);
+
+    const finalPage = await call(adminToken, `/api/v1/admin/applications/${id}/documents?limit=1&offset=1`);
+    expect(finalPage.status).toBe(200);
+    expect(adminApplicationDocumentsListResponseSchema.parse(await finalPage.json())).toEqual({
+      documents: [],
+      page: { limit: 1, offset: 1, total: 1, hasMore: false },
+    });
+
+    expect((await call(adminToken, `/api/v1/admin/applications/${id}/documents?sort=r2Key`)).status).toBe(400);
   });
 
   it("GET list filters by stage", async () => {

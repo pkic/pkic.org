@@ -471,8 +471,7 @@ CREATE INDEX idx_referral_conversions_code_created
 -- Three groups of tables, each pulled forward from an endpoint that needs them now:
 --
 -- 1. member_applications / member_application_events / application_documents
---    — defined in application_documents, but
---    required immediately by POST /api/v1/members/applications.
+--    — required immediately by POST /api/v1/members/applications.
 --
 -- 2. sponsorships / sponsorship_events —
 --    required immediately by POST /api/v1/sponsorship/inquiries and
@@ -591,12 +590,43 @@ CREATE TABLE application_documents (
   filename          TEXT NOT NULL,
   mime_type         TEXT NOT NULL,
   file_size_bytes   INTEGER NOT NULL,
+  content_sha256    TEXT NOT NULL,
   uploaded_at       TEXT NOT NULL,
+  idempotency_key_hash TEXT,
   FOREIGN KEY(application_id) REFERENCES member_applications(id)
 );
 
 CREATE INDEX idx_application_documents_app
-  ON application_documents(application_id, uploaded_at, id);
+  ON application_documents(application_id, uploaded_at DESC, id ASC);
+CREATE UNIQUE INDEX uq_application_documents_idempotency
+  ON application_documents(application_id, idempotency_key_hash)
+  WHERE idempotency_key_hash IS NOT NULL;
+
+-- A guarded document insert may intentionally affect zero rows when a count,
+-- aggregate-byte, or idempotency condition loses a race. Turn that outcome
+-- into one domain-specific batch failure before audit/storage fallout can
+-- commit; the transient guard row removes itself after validation.
+CREATE TABLE application_document_insert_guards (
+  id          TEXT NOT NULL PRIMARY KEY,
+  document_id TEXT NOT NULL
+);
+
+CREATE TRIGGER validate_application_document_insert_guard
+BEFORE INSERT ON application_document_insert_guards
+FOR EACH ROW
+BEGIN
+  SELECT CASE
+    WHEN NOT EXISTS (SELECT 1 FROM application_documents WHERE id = NEW.document_id)
+    THEN RAISE(ABORT, 'APPLICATION_DOCUMENT_INSERT_REJECTED')
+  END;
+END;
+
+CREATE TRIGGER apply_application_document_insert_guard
+AFTER INSERT ON application_document_insert_guards
+FOR EACH ROW
+BEGIN
+  DELETE FROM application_document_insert_guards WHERE id = NEW.id;
+END;
 
 -- ── Sponsorships ──────────────────────────────────────────────
 

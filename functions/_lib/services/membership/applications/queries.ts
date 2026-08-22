@@ -12,7 +12,6 @@ import { sha256Hex } from "../../../utils/crypto";
 import { parseJsonSafe } from "../../../utils/json";
 import { AppError } from "../../../errors";
 import type { DatabaseLike, StatementLike } from "../../../types";
-import { prepareAuditLog } from "../../audit";
 
 export interface MemberApplicationRow {
   id: string;
@@ -63,89 +62,6 @@ export async function verifyApplicationManageToken(
   const hash = await sha256Hex(token);
   if (hash !== application.manage_token_hash) return null;
   return application;
-}
-
-export interface ApplicationDocumentRow {
-  id: string;
-  application_id: string;
-  uploaded_by_email: string;
-  r2_key: string;
-  filename: string;
-  mime_type: string;
-  file_size_bytes: number;
-  uploaded_at: string;
-}
-
-export async function listApplicationDocuments(
-  db: DatabaseLike,
-  applicationId: string,
-): Promise<ApplicationDocumentRow[]> {
-  return all<ApplicationDocumentRow>(
-    db,
-    `SELECT id, application_id, uploaded_by_email, r2_key, filename, mime_type, file_size_bytes, uploaded_at
-     FROM application_documents
-     WHERE application_id = ?
-     ORDER BY uploaded_at ASC, id ASC`,
-    [applicationId],
-  );
-}
-
-interface ApplicationDocumentRecordInput {
-  applicationId: string;
-  uploadedByEmail: string;
-  r2Key: string;
-  filename: string;
-  mimeType: string;
-  fileSizeBytes: number;
-}
-
-export function prepareApplicationDocumentRecord(
-  db: DatabaseLike,
-  params: ApplicationDocumentRecordInput,
-): { document: ApplicationDocumentRow; statements: StatementLike[] } {
-  const id = uuid();
-  const uploadedAt = nowIso();
-  const statements = [
-    db
-      .prepare(
-        `INSERT INTO application_documents
-           (id, application_id, uploaded_by_email, r2_key, filename, mime_type, file_size_bytes, uploaded_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .bind(
-        id,
-        params.applicationId,
-        params.uploadedByEmail,
-        params.r2Key,
-        params.filename,
-        params.mimeType,
-        params.fileSizeBytes,
-        uploadedAt,
-      ),
-    prepareAuditLog(
-      db,
-      "public",
-      null,
-      "application_document_uploaded",
-      "member_application",
-      params.applicationId,
-      { filename: params.filename, fileSize: params.fileSizeBytes, mimeType: params.mimeType },
-      uploadedAt,
-    ),
-  ];
-  return {
-    document: {
-      id,
-      application_id: params.applicationId,
-      uploaded_by_email: params.uploadedByEmail,
-      r2_key: params.r2Key,
-      filename: params.filename,
-      mime_type: params.mimeType,
-      file_size_bytes: params.fileSizeBytes,
-      uploaded_at: uploadedAt,
-    },
-    statements,
-  };
 }
 
 /**

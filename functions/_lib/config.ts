@@ -13,6 +13,9 @@ function parseIntOrDefault(value: string | undefined, defaultValue: number): num
 export const DEFAULT_RSVP_INBOUND_EMAIL_MAX_BYTES = 5 * 1024 * 1024;
 export const DEFAULT_CSV_EXPORT_MAX_ROWS = 5_000;
 export const DEFAULT_CSV_EXPORT_MAX_BYTES = 8 * 1024 * 1024;
+export const DEFAULT_APPLICATION_DOCUMENT_MAX_BYTES = 20 * 1024 * 1024;
+export const DEFAULT_APPLICATION_DOCUMENT_MAX_COUNT = 20;
+export const DEFAULT_APPLICATION_DOCUMENT_TOTAL_MAX_BYTES = 100 * 1024 * 1024;
 
 export function getRsvpInboundEmailMaxBytes(env: Pick<Env, "RSVP_INBOUND_EMAIL_MAX_BYTES">): number {
   return Math.min(
@@ -27,6 +30,31 @@ export function getCsvExportLimits(env: Pick<Env, "CSV_EXPORT_MAX_ROWS" | "CSV_E
     maxBytes: Math.min(
       32 * 1024 * 1024,
       Math.max(64 * 1024, parseIntOrDefault(env.CSV_EXPORT_MAX_BYTES, DEFAULT_CSV_EXPORT_MAX_BYTES)),
+    ),
+  };
+}
+
+export function getApplicationDocumentLimits(
+  env: Pick<
+    Env,
+    "APPLICATION_DOCUMENT_MAX_BYTES" | "APPLICATION_DOCUMENT_MAX_COUNT" | "APPLICATION_DOCUMENT_TOTAL_MAX_BYTES"
+  >,
+) {
+  return {
+    maxFileBytes: Math.min(
+      25 * 1024 * 1024,
+      Math.max(1, parseIntOrDefault(env.APPLICATION_DOCUMENT_MAX_BYTES, DEFAULT_APPLICATION_DOCUMENT_MAX_BYTES)),
+    ),
+    maxDocumentCount: Math.min(
+      100,
+      Math.max(1, parseIntOrDefault(env.APPLICATION_DOCUMENT_MAX_COUNT, DEFAULT_APPLICATION_DOCUMENT_MAX_COUNT)),
+    ),
+    maxTotalBytes: Math.min(
+      500 * 1024 * 1024,
+      Math.max(
+        1,
+        parseIntOrDefault(env.APPLICATION_DOCUMENT_TOTAL_MAX_BYTES, DEFAULT_APPLICATION_DOCUMENT_TOTAL_MAX_BYTES),
+      ),
     ),
   };
 }

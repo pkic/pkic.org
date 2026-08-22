@@ -9,8 +9,20 @@ import {
 import { formAnswersSchema } from "./form-answers";
 import { databaseIdSchema } from "./identifiers";
 import { isPersonalEmailAddress } from "../constants/email-domains";
+import {
+  applicationDocumentsListQuerySchema,
+  applicationDocumentsListResponseSchema,
+  applicationDocumentUploadFormSchema,
+  applicationDocumentUploadHeadersSchema,
+  applicationDocumentUploadResponseSchema,
+} from "./application-documents";
 
 export { membershipCategorySchema };
+export {
+  applicationDocumentSchema as applicationDocumentResponseSchema,
+  applicationDocumentsListResponseSchema as applicationDocumentListResponseSchema,
+  applicationDocumentUploadResponseSchema,
+} from "./application-documents";
 
 // Canonical closed-state vocabulary for member_applications.stage. See
 // isValidStageTransition() in
@@ -28,7 +40,17 @@ export const APPLICATION_STAGES = [
   "declined",
   "withdrawn",
 ] as const;
+export type ApplicationStage = (typeof APPLICATION_STAGES)[number];
 export const applicationStageSchema = z.enum(APPLICATION_STAGES);
+export const APPLICATION_TERMINAL_STAGES = [
+  "approved",
+  "declined",
+  "withdrawn",
+] as const satisfies readonly ApplicationStage[];
+
+export function isApplicationTerminalStage(stage: string): boolean {
+  return (APPLICATION_TERMINAL_STAGES as readonly string[]).includes(stage);
+}
 
 export const ON_HOLD_SUBTYPES = [
   "request_authority",
@@ -49,8 +71,6 @@ export const onHoldSubtypeSchema = z.enum(ON_HOLD_SUBTYPES);
  * listed destinations here on purpose — reaching it requires the full
  * onboarding orchestration in approveApplication(), not a bare transition.
  */
-export type ApplicationStage = (typeof APPLICATION_STAGES)[number];
-
 export const APPLICATION_STAGE_TRANSITIONS: Record<ApplicationStage, ApplicationStage[]> = {
   pending: ["in_review", "withdrawn"],
   in_review: ["on_hold", "in_consultation", "declined", "withdrawn"],
@@ -175,23 +195,18 @@ export const memberApplicationFormRouteSchema = {
   },
 };
 
-export const applicationDocumentResponseSchema = z.object({
-  id: databaseIdSchema,
-  filename: z.string(),
-  mimeType: z.string(),
-  fileSizeBytes: z.number(),
-  uploadedAt: z.string(),
-});
-
-export const applicationDocumentUploadResponseSchema = z.object({
-  document: applicationDocumentResponseSchema,
-});
-
 export const applicationDocumentUploadRouteSchema = {
   tags: ["Members"],
   summary: "Upload a supporting document for a membership application",
   description: "Token-gated. multipart/form-data with a single 'file' field.",
-  request: memberApplicationCapabilityRequest,
+  request: {
+    ...memberApplicationCapabilityRequest,
+    headers: applicationDocumentUploadHeadersSchema,
+    body: {
+      content: { "multipart/form-data": { schema: applicationDocumentUploadFormSchema } },
+      required: true,
+    },
+  },
   responses: {
     "201": {
       description: "Document stored.",
@@ -203,10 +218,6 @@ export const applicationDocumentUploadRouteSchema = {
     "415": { description: "Unsupported file type." },
   },
 };
-
-export const applicationDocumentListResponseSchema = z.object({
-  documents: z.array(applicationDocumentResponseSchema),
-});
 
 export const applicationConcernCreateSchema = z.object({
   concernText: z.string().trim().min(1).max(5000),
@@ -241,11 +252,14 @@ export const applicationDocumentListRouteSchema = {
   tags: ["Members"],
   summary: "List a membership applicant's own uploaded documents",
   description: "Token-gated.",
-  request: memberApplicationCapabilityRequest,
+  request: {
+    params: memberApplicationIdParamsSchema,
+    query: memberApplicationCapabilityQuerySchema.merge(applicationDocumentsListQuerySchema),
+  },
   responses: {
     "200": {
       description: "Documents uploaded for this application.",
-      content: { "application/json": { schema: applicationDocumentListResponseSchema } },
+      content: { "application/json": { schema: applicationDocumentsListResponseSchema } },
     },
     "401": { description: "Missing or invalid token." },
     "404": { description: "Application not found." },

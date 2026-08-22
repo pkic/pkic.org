@@ -7,6 +7,7 @@ import {
 import { prepareAuditLogAfterOneChange } from "../functions/_lib/services/audit";
 import { resetDb } from "./helpers/reset-db";
 import { queryAll } from "./helpers/context";
+import type { DatabaseLike } from "../functions/_lib/types";
 
 class FakeBucket {
   private readonly objects = new Map<string, string>();
@@ -87,6 +88,37 @@ describe("storage upload compensation", () => {
     expect(await queryAll(env.DB, "SELECT id FROM storage_deletion_outbox WHERE object_key = ?", objectKey)).toEqual(
       [],
     );
+  });
+
+  it("preserves the object when D1 commits but the batch response is lost", async () => {
+    const bucket = new FakeBucket();
+    const objectKey = "storage-tests/ambiguous-commit.txt";
+    const ambiguousDb: DatabaseLike = {
+      prepare: (query) => env.DB.prepare(query),
+      batch: async (statements) => {
+        await env.DB.batch(statements as D1PreparedStatement[]);
+        throw new Error("simulated lost D1 batch response");
+      },
+    };
+
+    await expect(
+      withStorageUploadCompensation({
+        db: ambiguousDb,
+        bucket: bucket as unknown as R2Bucket,
+        bucketName: "assets",
+        objectKey,
+        upload: () => bucket.put(objectKey, "stored"),
+        prepareCommitStatements: () => [successfulCommitStatement("ambiguous_storage_upload_committed")],
+      }),
+    ).rejects.toThrow("simulated lost D1 batch response");
+
+    expect(bucket.has(objectKey)).toBe(true);
+    expect(await queryAll(env.DB, "SELECT id FROM storage_deletion_outbox WHERE object_key = ?", objectKey)).toEqual(
+      [],
+    );
+    expect(
+      await queryAll(env.DB, "SELECT action FROM audit_log WHERE action = 'ambiguous_storage_upload_committed'"),
+    ).toEqual([{ action: "ambiguous_storage_upload_committed" }]);
   });
 
   it("retains the pre-upload cleanup intent when immediate deletion fails and retries it", async () => {
@@ -187,7 +219,7 @@ describe("storage upload compensation", () => {
       }),
     ).rejects.toThrow("STORAGE_UPLOAD_COMPENSATION_UNAVAILABLE");
 
-    expect(bucket.has(objectKey)).toBe(false);
+    expect(bucket.has(objectKey)).toBe(true);
     expect(await queryAll(env.DB, "SELECT action FROM audit_log WHERE action = 'must_not_commit'")).toEqual([]);
     expect(
       await queryAll(

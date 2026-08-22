@@ -22,7 +22,6 @@ import {
   getMemberApplicationById,
   listApplicationCommunications,
   listApplicationConcerns,
-  listApplicationDocuments,
   type MemberApplicationRow,
 } from "./membership/applications/queries";
 import { getGlobalFormByKey } from "./forms";
@@ -134,7 +133,7 @@ export async function getAdminApplicationDetail(
   const requestedSlugs = Array.isArray(requestedWorkingGroups)
     ? [...new Set(requestedWorkingGroups.filter((value): value is string => typeof value === "string"))].slice(0, 200)
     : [];
-  const [eventRows, communications, concerns, ecDecisions, documents, requestedWorkingGroupRows] = await Promise.all([
+  const [eventRows, communications, concerns, ecDecisions, requestedWorkingGroupRows] = await Promise.all([
     all<ApplicationEventRow>(
       db,
       `SELECT from_stage, to_stage, actor_user_id, note, created_at FROM member_application_events WHERE application_id = ? ORDER BY created_at ASC`,
@@ -143,7 +142,6 @@ export async function getAdminApplicationDetail(
     listApplicationCommunications(db, applicationId),
     listApplicationConcerns(db, applicationId),
     listEcDecisions(db, applicationId),
-    listApplicationDocuments(db, applicationId),
     requestedSlugs.length > 0
       ? all<{ slug: string; name: string }>(
           db,
@@ -196,14 +194,6 @@ export async function getAdminApplicationDetail(
       decision: row.decision,
       reason: row.reason,
       createdAt: row.created_at,
-    })),
-    documents: documents.map((row) => ({
-      id: row.id,
-      filename: row.filename,
-      mimeType: row.mime_type,
-      fileSizeBytes: row.file_size_bytes,
-      uploadedAt: row.uploaded_at,
-      uploadedByEmail: row.uploaded_by_email,
     })),
   });
 }

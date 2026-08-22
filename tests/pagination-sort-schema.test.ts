@@ -37,6 +37,7 @@ import { adminEventProposalsQuerySchema } from "../assets/shared/schemas/admin-e
 import { adminEmailOutboxQuerySchema } from "../assets/shared/schemas/admin-email-outbox";
 import { eventPromotersListQuerySchema } from "../assets/shared/schemas/admin-event-promoters";
 import { membersListQuerySchema } from "../assets/shared/schemas/members-directory";
+import { applicationDocumentsListQuerySchema } from "../assets/shared/schemas/application-documents";
 
 describe("sortColumnSchema (canonical)", () => {
   const schema = sortColumnSchema(["name", "created_at"]);
@@ -97,6 +98,11 @@ describe("shared list/search contract", () => {
     expect(adminFormsListQuerySchema.parse({})).toMatchObject({ limit: 200, offset: 0 });
     expect(adminFormSubmissionsQuerySchema.parse({})).toMatchObject({ limit: 200, offset: 0 });
     expect(sponsorsListQuerySchema.parse({})).toMatchObject({ limit: 200, offset: 0 });
+    expect(applicationDocumentsListQuerySchema.parse({})).toMatchObject({
+      limit: 25,
+      offset: 0,
+      sort: "-uploadedAt",
+    });
   });
 
   it("resolves domain filter and sort defaults in the same endpoint contracts", () => {

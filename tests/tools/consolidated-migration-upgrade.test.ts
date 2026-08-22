@@ -216,6 +216,29 @@ describe("consolidated pending migration upgrade", () => {
       db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'storage_deletion_outbox'").get(),
     ).toEqual({ name: "storage_deletion_outbox" });
     expect(
+      db
+        .prepare("PRAGMA table_info(application_documents)")
+        .all()
+        .map((column: any) => column.name),
+    ).toEqual(expect.arrayContaining(["content_sha256", "idempotency_key_hash"]));
+    expect(
+      db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'index' AND name IN ('idx_application_documents_app', 'uq_application_documents_idempotency') ORDER BY name",
+        )
+        .all(),
+    ).toEqual([{ name: "idx_application_documents_app" }, { name: "uq_application_documents_idempotency" }]);
+    expect(
+      db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'trigger' AND name IN ('apply_application_document_insert_guard', 'validate_application_document_insert_guard') ORDER BY name",
+        )
+        .all(),
+    ).toEqual([
+      { name: "apply_application_document_insert_guard" },
+      { name: "validate_application_document_insert_guard" },
+    ]);
+    expect(
       db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'badge_render_jobs'").get(),
     ).toEqual({ name: "badge_render_jobs" });
     expect(

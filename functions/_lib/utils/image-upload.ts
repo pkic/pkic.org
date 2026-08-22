@@ -1,11 +1,10 @@
 import { AppError } from "../errors";
-import { readBoundedBody } from "../http-body";
+import { readBoundedBody, readBoundedMultipartFormData } from "../http-body";
 import { type ImagesBinding } from "../types";
 import { IMAGE_UPLOAD_ALLOWED_MIME_TYPES, STANDARD_HEADSHOT_MAX_BYTES } from "../../../assets/shared/schemas/images";
 import { detectImageFormat, imageExtensionForContentType } from "./image-format";
 
 export const ALLOWED_MIME_TYPES = new Set<string>(IMAGE_UPLOAD_ALLOWED_MIME_TYPES);
-const MULTIPART_OVERHEAD_MAX_BYTES = 256 * 1024;
 
 /**
  * Robustly reads an uploaded image from a Request, handling both:
@@ -46,22 +45,7 @@ export async function readUploadedImage(
 }
 
 export async function readBoundedImageMultipartFormData(request: Request, maxFileBytes: number): Promise<FormData> {
-  const contentType = request.headers.get("content-type") || "";
-  if (!contentType.includes("multipart/form-data")) {
-    throw new AppError(400, "INVALID_CONTENT_TYPE", "Request must be multipart/form-data");
-  }
-  const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
-  if (!(boundaryMatch?.[1] || boundaryMatch?.[2])) {
-    throw new AppError(400, "INVALID_MULTIPART", "Could not parse multipart boundary");
-  }
-  try {
-    const bytes = await readBoundedBody(request, maxFileBytes + MULTIPART_OVERHEAD_MAX_BYTES);
-    const body = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-    return await new Response(body, { headers: { "Content-Type": contentType } }).formData();
-  } catch (error) {
-    if (error instanceof AppError) throw error;
-    throw new AppError(400, "INVALID_MULTIPART", "Could not parse multipart upload");
-  }
+  return readBoundedMultipartFormData(request, maxFileBytes);
 }
 
 /** Reads and validates both declared MIME type and file signature before R2 storage. */

@@ -1,48 +1,23 @@
-/**
- * POST/GET /api/v1/members/applications/:id/documents?token=...
- *
- * Token-gated document upload/list for a membership applicant,
- * application_documents). Reuses ASSETS_BUCKET (env.ASSETS_BUCKET) —
- * the codebase's general-purpose R2 bucket — rather than provisioning a
- * dedicated bucket, since that requires an out-of-band Cloudflare dashboard
- * change outside the scope of this migration. r2Key convention:
- * application-docs/{application_id}/{uuid}-{filename}.
- */
-import { openApiRoute } from "../../../../../_lib/openapi/route";
-import { AppError } from "../../../../../_lib/errors";
-import { json } from "../../../../../_lib/http";
-import { uuid } from "../../../../../_lib/utils/ids";
-import {
-  verifyApplicationManageToken,
-  listApplicationDocuments,
-  prepareApplicationDocumentRecord,
-} from "../../../../../_lib/services/membership/applications/queries";
-import { withStorageUploadCompensation } from "../../../../../_lib/services/storage-deletion-outbox";
+/** Token-gated supporting-document upload and bounded list endpoints. */
 import {
   applicationDocumentListRouteSchema,
   applicationDocumentUploadRouteSchema,
 } from "../../../../../../assets/shared/schemas/member-applications";
+import { getApplicationDocumentLimits } from "../../../../../_lib/config";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import { AppError } from "../../../../../_lib/errors";
+import { readBoundedMultipartFormData } from "../../../../../_lib/http-body";
+import { json } from "../../../../../_lib/http";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
+import { enforceRateLimit } from "../../../../../_lib/rate-limit";
+import { getClientIp } from "../../../../../_lib/request";
+import {
+  listApplicationDocuments,
+  uploadApplicationDocument,
+} from "../../../../../_lib/services/membership/applications/documents";
+import { verifyApplicationManageToken } from "../../../../../_lib/services/membership/applications/queries";
 
-const ALLOWED_MIME_TYPES = new Set([
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-]);
-const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024; // 20 MB
-
-function sanitizeFilename(name: string): string {
-  return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100) || "document";
-}
-
-async function requireApplication(c: any) {
-  const db = c.env.DB;
-  const applicationId = c.req.param("id");
-  const token = new URL(c.req.raw.url).searchParams.get("token");
-  if (!token) {
-    throw new AppError(401, "AUTH_INVALID", "Missing token");
-  }
+async function requireApplication(db: ReturnType<typeof requestDb>, applicationId: string, token: string) {
   const application = await verifyApplicationManageToken(db, applicationId, token);
   if (!application) {
     throw new AppError(401, "AUTH_INVALID", "Invalid application id or token");
@@ -50,85 +25,71 @@ async function requireApplication(c: any) {
   return application;
 }
 
-export async function onRequestPost(c: any): Promise<Response> {
-  c.set("sensitive", true);
-  const application = await requireApplication(c);
-
-  const bucket = c.env.ASSETS_BUCKET;
-  if (!bucket) {
+function requireUploadsBucket(c: AdminContext): R2Bucket {
+  if (!c.env.ASSETS_BUCKET) {
     throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "File uploads are not configured");
   }
-
-  const contentType = (c.req.raw.headers.get("content-type") ?? "").toLowerCase();
-  if (!contentType.includes("multipart/form-data")) {
-    throw new AppError(400, "INVALID_CONTENT_TYPE", "Expected multipart/form-data");
-  }
-
-  const formData = await c.req.raw.formData();
-  const file = formData.get("file");
-  if (!(file instanceof File) && !(file && typeof file === "object" && "arrayBuffer" in file)) {
-    throw new AppError(400, "MISSING_FILE", "No file provided under the 'file' field");
-  }
-  const blob = file as File;
-
-  const mimeType = blob.type || "application/octet-stream";
-  if (!ALLOWED_MIME_TYPES.has(mimeType)) {
-    throw new AppError(415, "UNSUPPORTED_MEDIA_TYPE", `Unsupported file type: ${mimeType}`);
-  }
-  if (blob.size > MAX_DOCUMENT_BYTES) {
-    throw new AppError(413, "FILE_TOO_LARGE", `File exceeds the ${MAX_DOCUMENT_BYTES / (1024 * 1024)}MB limit`);
-  }
-
-  const safeName = sanitizeFilename(blob.name ?? "document");
-  const r2Key = `application-docs/${application.id}/${uuid()}-${safeName}`;
-  const prepared = prepareApplicationDocumentRecord(c.env.DB, {
-    applicationId: application.id,
-    uploadedByEmail: application.applicant_email,
-    r2Key,
-    filename: safeName,
-    mimeType,
-    fileSizeBytes: blob.size,
-  });
-  await withStorageUploadCompensation({
-    db: c.env.DB,
-    bucket,
-    bucketName: "assets",
-    objectKey: r2Key,
-    upload: async () => bucket.put(r2Key, await blob.arrayBuffer(), { httpMetadata: { contentType: mimeType } }),
-    prepareCommitStatements: () => prepared.statements,
-  });
-  const document = prepared.document;
-
-  return json(
-    {
-      document: {
-        id: document.id,
-        filename: document.filename,
-        mimeType: document.mime_type,
-        fileSizeBytes: document.file_size_bytes,
-        uploadedAt: document.uploaded_at,
-      },
-    },
-    201,
-  );
+  return c.env.ASSETS_BUCKET;
 }
 
-export async function onRequestGet(c: any): Promise<Response> {
-  c.set("sensitive", true);
-  const application = await requireApplication(c);
-  const documents = await listApplicationDocuments(c.env.DB, application.id);
+function requireSingleFile(formData: FormData): File {
+  const files = formData.getAll("file");
+  if (files.length !== 1 || typeof files[0] === "string") {
+    throw new AppError(400, "MISSING_FILE", "Exactly one file is required under the 'file' field");
+  }
+  return files[0];
+}
 
-  return json({
-    documents: documents.map((d) => ({
-      id: d.id,
-      filename: d.filename,
-      mimeType: d.mime_type,
-      fileSizeBytes: d.file_size_bytes,
-      uploadedAt: d.uploaded_at,
-    })),
+async function enforceDocumentIpRateLimit(c: AdminContext): Promise<void> {
+  await enforceRateLimit({
+    binding: c.env.IP_RATE_LIMITER,
+    namespace: "application-documents:ip",
+    key: getClientIp(c.req.raw),
   });
 }
 
-export const MembersApplicationsDocumentsPost = openApiRoute(applicationDocumentUploadRouteSchema, onRequestPost);
+async function enforceDocumentApplicationRateLimit(c: AdminContext, applicationId: string): Promise<void> {
+  await enforceRateLimit({
+    binding: c.env.IP_RATE_LIMITER,
+    namespace: "application-documents:application",
+    key: applicationId,
+  });
+}
 
-export const MembersApplicationsDocumentsGet = openApiRoute(applicationDocumentListRouteSchema, onRequestGet);
+export const MembersApplicationsDocumentsPost = openApiRoute(
+  applicationDocumentUploadRouteSchema,
+  async (c: AdminContext, data) => {
+    c.set?.("sensitive", true);
+    await enforceDocumentIpRateLimit(c);
+    const db = requestDb(c);
+    const application = await requireApplication(db, data.params.id, data.query.token);
+    await enforceDocumentApplicationRateLimit(c, application.id);
+
+    const limits = getApplicationDocumentLimits(c.env);
+    const bucket = requireUploadsBucket(c);
+    const formData = await readBoundedMultipartFormData(c.req.raw, limits.maxFileBytes);
+    const document = await uploadApplicationDocument({
+      db,
+      bucket,
+      applicationId: application.id,
+      applicationStage: application.stage,
+      uploadedByEmail: application.applicant_email,
+      file: requireSingleFile(formData),
+      idempotencyKey: data.headers["idempotency-key"],
+      limits,
+    });
+    return json({ document }, 201);
+  },
+);
+
+export const MembersApplicationsDocumentsGet = openApiRoute(
+  applicationDocumentListRouteSchema,
+  async (c: AdminContext, data) => {
+    c.set?.("sensitive", true);
+    await enforceDocumentIpRateLimit(c);
+    const db = requestDb(c);
+    const application = await requireApplication(db, data.params.id, data.query.token);
+    await enforceDocumentApplicationRateLimit(c, application.id);
+    return json(await listApplicationDocuments(db, application.id, data.query));
+  },
+);
