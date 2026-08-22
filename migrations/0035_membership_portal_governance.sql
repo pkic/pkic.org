@@ -2557,9 +2557,10 @@ You may revise and resubmit at any time.',
 --    does. These are the same shape, scoped to `sponsorship_id` instead.
 -- 4. Migrate the live `sponsors`/`sponsor_events` rows into
 --    `sponsorships`/`sponsorship_events` (reconciled by `organization_id`
---    against anything already there), then drop the legacy tables,
---    that drop only happens "after the migration
---    is verified".
+--    against anything already there). Keep the legacy source tables as a
+--    rollback/reconciliation source until the backfill has been verified in
+--    preview and production. A later, explicitly approved migration may drop
+--    them after that verification; application code must not write to them.
 -- 5. New email templates (`sponsorship-renewal-reminder-60`/`-30`,
 --    `sponsorship-lapsed-staff`, `sponsorship-active-confirmation`,
 --    `sponsor-portal-access`) — `sponsorship-brochure`/`sponsorship-new-inquiry`
@@ -2694,8 +2695,10 @@ WHERE NOT EXISTS (
 -- through the app after this migration runs, same as any other row created
 -- directly by SQL rather than through createSponsorshipInquiry.
 
-DROP TABLE sponsor_events;
-DROP TABLE sponsors;
+-- Do not drop the legacy source tables in the same migration that backfills
+-- them. D1 cannot restore those rows if a mapping defect is discovered after
+-- deployment. Keeping the now-unused tables is cheap and makes row-level
+-- reconciliation and recovery possible before a future cleanup migration.
 
 -- ── New email templates ───────────────────────────────────────────
 
