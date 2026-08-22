@@ -73,6 +73,8 @@ function seedRepresentativePre0035State(db: DatabaseSync): void {
     VALUES
       ('sponsor-event-1', 'sponsor-1', 'event-1', 'Platinum', 'Upgrade test', 'active',
        '{"legacyEventField":"kept"}', '2025-01-04', '2025-01-04'),
+      ('sponsor-event-1-alt', 'sponsor-1', 'event-1', 'Gold', 'Second legacy tier', 'active',
+       '{"secondLegacyEventField":"kept"}', '2025-01-05', '2025-01-05'),
       ('sponsor-event-2', 'sponsor-2', 'event-1', 'Silver', 'Pending upgrade test', 'pending',
        '{"pendingEventField":"kept"}', '2025-01-04', '2025-01-04');
 
@@ -168,7 +170,7 @@ describe("consolidated pending migration upgrade", () => {
       .prepare(
         `SELECT sponsor_type, organization_id, tier, pipeline_stage, notes
          FROM sponsorships
-         ORDER BY sponsor_type, organization_id`,
+         ORDER BY sponsor_type, organization_id, tier`,
       )
       .all() as Array<{
       sponsor_type: string;
@@ -180,12 +182,18 @@ describe("consolidated pending migration upgrade", () => {
     expect(sponsorshipRows.map(({ notes: _notes, ...row }) => row)).toEqual([
       { sponsor_type: "consortium", organization_id: "org-1", tier: "Gold", pipeline_stage: "active" },
       { sponsor_type: "consortium", organization_id: "org-2", tier: "Silver", pipeline_stage: "new_inquiry" },
+      { sponsor_type: "event", organization_id: "org-1", tier: "Gold", pipeline_stage: "active" },
       { sponsor_type: "event", organization_id: "org-1", tier: "Platinum", pipeline_stage: "active" },
       { sponsor_type: "event", organization_id: "org-2", tier: "Silver", pipeline_stage: "payment_pending" },
     ]);
     expect(sponsorshipRows.map((row) => JSON.parse(row.notes))).toEqual([
       { legacySponsorData: { legacyCompanyField: "kept" } },
       { legacySponsorData: { pendingLead: "kept" } },
+      {
+        legacySponsorData: { legacyCompanyField: "kept" },
+        legacySponsorshipSubject: "Second legacy tier",
+        legacyEventData: { secondLegacyEventField: "kept" },
+      },
       {
         legacySponsorData: { legacyCompanyField: "kept" },
         legacySponsorshipSubject: "Upgrade test",

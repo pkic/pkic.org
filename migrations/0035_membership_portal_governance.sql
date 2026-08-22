@@ -2137,6 +2137,11 @@ WHERE NOT EXISTS (
   SELECT 1 FROM sponsorships sp
   WHERE sp.event_id = se.event_id
     AND sp.sponsor_type = 'event'
+    -- The legacy UNIQUE(event_id, sponsor_id, sponsorship_level) permits
+    -- multiple tiers for one sponsor/event. Include the tier in the
+    -- idempotency key so a later tier is not silently discarded before the
+    -- legacy source tables are dropped below.
+    AND sp.tier = se.sponsorship_level
     AND (sp.organization_id = s.organization_id OR (sp.organization_id IS NULL AND s.organization_id IS NULL))
 );
 
