@@ -43,7 +43,12 @@ import { uuid } from "../../utils/ids";
 import { AppError } from "../../errors";
 import { buildFindOrCreateUserStatement, splitPersonName, type UserRecord } from "../users";
 import { normalizeOrgName } from "../sponsorship";
-import { getWorkingGroupBySlugOrId, buildAddWorkingGroupMemberStatements } from "../working-groups";
+import {
+  assertCaConstraint,
+  buildAddWorkingGroupMemberStatements,
+  getWorkingGroupsBySlugs,
+  type WorkingGroupRow,
+} from "../working-groups";
 import {
   buildGetOrCreateOrganizationMemberAggregateStatements,
   buildCreateIndividualMemberStatements,
@@ -134,6 +139,7 @@ export interface BuiltProvisioning {
 async function buildProvisionIndividualMemberships(
   db: DatabaseLike,
   input: ProvisionMembershipInput,
+  workingGroups: readonly WorkingGroupRow[],
   now: string,
 ): Promise<BuiltProvisioning> {
   const rejectExisting = input.rejectExistingMembership ?? true;
@@ -169,9 +175,7 @@ async function buildProvisionIndividualMemberships(
       statements.push(db.prepare("UPDATE members SET member_since = ? WHERE id = ?").bind(input.memberSince, memberId));
     }
 
-    for (const slug of input.workingGroupSlugs) {
-      const wg = await getWorkingGroupBySlugOrId(db, slug);
-      if (!wg) continue;
+    for (const wg of workingGroups) {
       statements.push(...(await buildAddWorkingGroupMemberStatements(db, wg, user.id, memberId)));
     }
 
@@ -289,6 +293,7 @@ async function buildResolveOrCreateAggregateStatements(
 async function buildProvisionOrganizationTiedMemberships(
   db: DatabaseLike,
   input: ProvisionMembershipInput,
+  workingGroups: readonly WorkingGroupRow[],
   now: string,
 ): Promise<BuiltProvisioning> {
   const rejectExisting = input.rejectExistingMembership ?? true;
@@ -366,9 +371,7 @@ async function buildProvisionOrganizationTiedMemberships(
     });
     statements.push(repStatement);
 
-    for (const slug of input.workingGroupSlugs) {
-      const wg = await getWorkingGroupBySlugOrId(db, slug);
-      if (!wg) continue;
+    for (const wg of workingGroups) {
       statements.push(...(await buildAddWorkingGroupMemberStatements(db, wg, user.id, aggregateId)));
     }
 
@@ -431,11 +434,16 @@ export async function buildProvisionOrganizationMembership(
   input: ProvisionMembershipInput,
 ): Promise<BuiltProvisioning> {
   const now = nowIso();
+  const workingGroups = await getWorkingGroupsBySlugs(db, input.workingGroupSlugs);
+  for (const workingGroup of workingGroups) {
+    assertCaConstraint(workingGroup, [input.membershipCategory]);
+  }
+
   const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(input.membershipCategory);
   if (isIndividual || !input.organizationName) {
-    return buildProvisionIndividualMemberships(db, input, now);
+    return buildProvisionIndividualMemberships(db, input, workingGroups, now);
   }
-  return buildProvisionOrganizationTiedMemberships(db, input, now);
+  return buildProvisionOrganizationTiedMemberships(db, input, workingGroups, now);
 }
 
 /** Builds and immediately commits, for callers that don't need to fold this into a larger batch. */

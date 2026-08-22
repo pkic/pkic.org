@@ -57,6 +57,18 @@ async function seedWorkingGroup(slug: string, name: string): Promise<void> {
     .run();
 }
 
+async function provisioningRowCounts(): Promise<Record<string, number>> {
+  const tables = ["organizations", "members", "users", "organization_representatives", "working_group_members"];
+  return Object.fromEntries(
+    await Promise.all(
+      tables.map(async (table) => {
+        const [row] = await queryAll<{ total: number }>(env.DB, `SELECT COUNT(*) AS total FROM ${table}`);
+        return [table, row.total] as const;
+      }),
+    ),
+  );
+}
+
 function orgMemberBody(overrides: Record<string, unknown> = {}) {
   return {
     organizationName: "Acme Corp",
@@ -91,6 +103,7 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
     adminToken = await createAdminSession(env.DB, adminId, "admin-members-token");
     await seedWorkingGroup("pqc", "Post-Quantum Cryptography Working Group");
     await seedWorkingGroup("cm", "Cryptographic Module Working Group");
+    await seedWorkingGroup("ca", "Certificate Authorities Working Group");
   });
 
   it("creates an organization, representative, and member row for an org-tied category", async () => {
@@ -187,6 +200,71 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
 
     const orgCount = await queryAll(env.DB, "SELECT id FROM organizations");
     expect(orgCount).toHaveLength(0);
+  });
+
+  it.each([
+    {
+      category: "F",
+      organizationName: "Ineligible Organization",
+      representative: { name: "Ineligible Representative", email: "ineligible-org@example.test" },
+    },
+    {
+      category: "H6",
+      organizationName: undefined,
+      representative: { name: "Ineligible Individual", email: "ineligible-individual@example.test" },
+    },
+  ])(
+    "rejects category $category joining the CA working group without partial provisioning",
+    async ({ category, organizationName, representative }) => {
+      const before = await provisioningRowCounts();
+
+      const response = await call(adminToken, "/api/v1/admin/members", {
+        method: "POST",
+        body: JSON.stringify(
+          orgMemberBody({
+            membershipCategory: category,
+            organizationName,
+            representatives: [representative],
+            workingGroupSlugs: ["ca"],
+          }),
+        ),
+      });
+
+      expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toEqual({
+        error: {
+          code: "CA_CATEGORY_REQUIRED",
+          message: "Only category A members may join the CA working group",
+          details: null,
+        },
+      });
+      await expect(provisioningRowCounts()).resolves.toEqual(before);
+    },
+  );
+
+  it("adds category A to the CA working group once while ignoring duplicate and unknown slugs", async () => {
+    const response = await call(adminToken, "/api/v1/admin/members", {
+      method: "POST",
+      body: JSON.stringify(
+        orgMemberBody({
+          membershipCategory: "A",
+          representatives: [{ name: "Eligible Representative", email: "eligible@example.test" }],
+          workingGroupSlugs: ["ca", "ca", "unknown-working-group"],
+        }),
+      ),
+    });
+
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as { members: Array<{ userId: string }> };
+    const rows = await queryAll<{ id: string }>(
+      env.DB,
+      `SELECT wgm.id
+         FROM working_group_members wgm
+         JOIN working_groups wg ON wg.id = wgm.working_group_id
+        WHERE wgm.user_id = ? AND wg.slug = 'ca' AND wgm.left_at IS NULL`,
+      body.members[0].userId,
+    );
+    expect(rows).toHaveLength(1);
   });
 
   it("rejects an individual category with an organization name", async () => {
