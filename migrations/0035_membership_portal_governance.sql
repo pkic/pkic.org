@@ -2353,6 +2353,10 @@ CREATE TABLE vote_ballots (
 -- Cover scheduled tally aggregation without loading every ballot row or
 -- returning to the table for each choice.
 CREATE INDEX idx_vote_ballots_vote_round ON vote_ballots(vote_id, round, choice);
+-- Cover the staff ballot audit's bounded default order without sorting every
+-- ballot for the vote before applying LIMIT/OFFSET.
+CREATE INDEX idx_vote_ballots_vote_audit_page
+  ON vote_ballots(vote_id, round, submitted_at, id);
 -- Forum-level: one ballot per organization per round.
 CREATE UNIQUE INDEX idx_vote_ballots_org_round ON vote_ballots(vote_id, organization_id, round)
   WHERE organization_id IS NOT NULL;

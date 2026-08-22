@@ -3,15 +3,19 @@
  * visibility updates, and the admin list/ballot-audit queries. Split out of
  * votes.ts.
  */
-import { all } from "../../db/queries";
 import { queryPage } from "../../db/pagination";
+import { buildPageInfo, type PageInfo } from "../../../../assets/shared/schemas/pagination";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import { stringifyJson } from "../../utils/json";
 import { AppError } from "../../errors";
-import { resolveOrderBy } from "../../db/sort";
+import { resolveMappedOrderBy, resolveOrderBy } from "../../db/sort";
 import { buildD1TextSearchFilter } from "../../db/search";
-import { ADMIN_VOTES_SORT_COLUMNS } from "../../../../assets/shared/schemas/votes-admin";
+import {
+  ADMIN_VOTE_BALLOT_SORT_COLUMNS,
+  ADMIN_VOTES_SORT_COLUMNS,
+  type AdminVoteBallotsListQuery,
+} from "../../../../assets/shared/schemas/votes-admin";
 import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
 import { prepareForumVoteDelegateNotificationIntents } from "./delegate-notification-intents";
 import {
@@ -326,9 +330,39 @@ export interface AdminBallotRow {
   submittedAt: string;
 }
 
-export async function listBallotsForAdmin(db: DatabaseLike, voteId: string): Promise<AdminBallotRow[]> {
+const ADMIN_BALLOT_SORT_COLUMNS = {
+  submittedAt: "b.submitted_at",
+  round: "b.round",
+  choice: "b.choice",
+  userId: "b.user_id",
+  organizationId: "b.organization_id",
+} as const satisfies Record<(typeof ADMIN_VOTE_BALLOT_SORT_COLUMNS)[number], string>;
+
+export async function listBallotsForAdmin(
+  db: DatabaseLike,
+  voteId: string,
+  query: AdminVoteBallotsListQuery,
+): Promise<{ ballots: AdminBallotRow[]; page: PageInfo }> {
   await getVoteRowOrThrow(db, voteId);
-  const rows = await all<{
+  const conditions = ["b.vote_id = ?"];
+  const bindings: unknown[] = [voteId];
+  if (query.round !== undefined) {
+    conditions.push("b.round = ?");
+    bindings.push(query.round);
+  }
+  if (query.q) {
+    const search = buildD1TextSearchFilter(query.q, ["b.user_id", "b.organization_id", "b.choice", "b.round"]);
+    conditions.push(search.sql);
+    bindings.push(...search.bindings);
+  }
+  const where = `WHERE ${conditions.join(" AND ")}`;
+  const orderBy = resolveMappedOrderBy(
+    query.sort,
+    ADMIN_BALLOT_SORT_COLUMNS,
+    "b.round ASC, b.submitted_at ASC",
+    "b.id ASC",
+  );
+  const { rows, total } = await queryPage<{
     id: string;
     user_id: string;
     organization_id: string | null;
@@ -337,10 +371,14 @@ export async function listBallotsForAdmin(db: DatabaseLike, voteId: string): Pro
     submitted_at: string;
   }>(
     db,
-    `SELECT id, user_id, organization_id, choice, round, submitted_at FROM vote_ballots WHERE vote_id = ? ORDER BY round ASC, submitted_at ASC`,
-    [voteId],
+    {
+      sql: `SELECT b.id, b.user_id, b.organization_id, b.choice, b.round, b.submitted_at
+              FROM vote_ballots b ${where} ${orderBy} LIMIT ? OFFSET ?`,
+      bindings: [...bindings, query.limit, query.offset],
+    },
+    { sql: `SELECT COUNT(*) AS total FROM vote_ballots b ${where}`, bindings },
   );
-  return rows.map((r) => ({
+  const ballots = rows.map((r) => ({
     id: r.id,
     userId: r.user_id,
     organizationId: r.organization_id,
@@ -348,4 +386,5 @@ export async function listBallotsForAdmin(db: DatabaseLike, voteId: string): Pro
     round: r.round,
     submittedAt: r.submitted_at,
   }));
+  return { ballots, page: buildPageInfo(query.limit, query.offset, total, ballots.length) };
 }

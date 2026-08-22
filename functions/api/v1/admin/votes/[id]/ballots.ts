@@ -19,6 +19,5 @@ export const AdminVoteBallotsGet = openApiRoute(adminVoteBallotsRouteSchema, asy
 
   await requireVoteManagementAccess(db, admin, id);
 
-  const ballots = await listBallotsForAdmin(db, id);
-  return json({ ballots });
+  return json(await listBallotsForAdmin(db, id, data.query));
 });

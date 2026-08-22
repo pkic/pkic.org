@@ -204,6 +204,80 @@ describe("Voting system", () => {
     expect(body.vote.slug).toBe("adopt-new-bylaws");
   });
 
+  it("pages, searches, filters, and sorts the admin ballot audit in D1", async () => {
+    const closesAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const createResponse = await call(adminToken, "/api/v1/admin/votes", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Bounded ballot audit",
+        voteType: "motion",
+        scopeType: "forum",
+        thresholdType: "simple_majority",
+        closesAt,
+      }),
+    });
+    const { vote } = (await createResponse.json()) as { vote: { id: string } };
+    const voters = await Promise.all([
+      insertUser("ballot-a@example.test"),
+      insertUser("ballot-b@example.test"),
+      insertUser("ballot-c@example.test"),
+    ]);
+    const ballotIds = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO vote_ballots (id, vote_id, user_id, organization_id, choice, round, submitted_at)
+         VALUES (?, ?, ?, NULL, 'in_favor', 1, '2026-01-01T00:00:00.000Z')`,
+      ).bind(ballotIds[0], vote.id, voters[0]),
+      env.DB.prepare(
+        `INSERT INTO vote_ballots (id, vote_id, user_id, organization_id, choice, round, submitted_at)
+         VALUES (?, ?, ?, NULL, 'opposed', 1, '2026-01-01T00:01:00.000Z')`,
+      ).bind(ballotIds[1], vote.id, voters[1]),
+      env.DB.prepare(
+        `INSERT INTO vote_ballots (id, vote_id, user_id, organization_id, choice, round, submitted_at)
+         VALUES (?, ?, ?, NULL, 'in_favor', 2, '2026-01-01T00:02:00.000Z')`,
+      ).bind(ballotIds[2], vote.id, voters[2]),
+    ]);
+
+    const firstPage = await call(adminToken, `/api/v1/admin/votes/${vote.id}/ballots?limit=2&offset=0`);
+    expect(firstPage.status).toBe(200);
+    await expect(firstPage.json()).resolves.toMatchObject({
+      ballots: [{ id: ballotIds[0] }, { id: ballotIds[1] }],
+      page: { limit: 2, offset: 0, total: 3, hasMore: true },
+    });
+
+    const finalPage = await call(adminToken, `/api/v1/admin/votes/${vote.id}/ballots?limit=2&offset=2`);
+    await expect(finalPage.json()).resolves.toMatchObject({
+      ballots: [{ id: ballotIds[2] }],
+      page: { limit: 2, offset: 2, total: 3, hasMore: false },
+    });
+
+    const searched = await call(adminToken, `/api/v1/admin/votes/${vote.id}/ballots?q=opposed`);
+    await expect(searched.json()).resolves.toMatchObject({ ballots: [{ id: ballotIds[1] }], page: { total: 1 } });
+
+    const roundTwo = await call(adminToken, `/api/v1/admin/votes/${vote.id}/ballots?round=2`);
+    await expect(roundTwo.json()).resolves.toMatchObject({ ballots: [{ id: ballotIds[2] }], page: { total: 1 } });
+
+    const descending = await call(adminToken, `/api/v1/admin/votes/${vote.id}/ballots?sort=-submittedAt`);
+    await expect(descending.json()).resolves.toMatchObject({
+      ballots: [{ id: ballotIds[2] }, { id: ballotIds[1] }, { id: ballotIds[0] }],
+    });
+
+    const invalidSort = await call(adminToken, `/api/v1/admin/votes/${vote.id}/ballots?sort=unknown`);
+    expect(invalidSort.status).toBe(400);
+
+    const plan = await queryAll<{ detail: string }>(
+      env.DB,
+      `EXPLAIN QUERY PLAN
+       SELECT id, user_id, organization_id, choice, round, submitted_at
+       FROM vote_ballots
+       WHERE vote_id = ?
+       ORDER BY round ASC, submitted_at ASC, id ASC
+       LIMIT ? OFFSET ?`,
+      [vote.id, 2, 0],
+    );
+    expect(plan.some((row) => row.detail.includes("idx_vote_ballots_vote_audit_page"))).toBe(true);
+  });
+
   it("election votes require >=2 candidates, and successive_elimination requires >=3", async () => {
     const closesAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     const noCandidates = await call(adminToken, "/api/v1/admin/votes", {
