@@ -26,8 +26,8 @@
  *     roster email matches its domain — an individual with no reconcilable
  *     email still gets a real row, keyed on a deterministic, non-deliverable
  *     `.invalid`-TLD placeholder email (`unmatched-<slug>@members.invalid`,
- *     same "sentinel email" pattern `user-merge.ts` already uses for
- *     anonymized accounts) so the person, their bio/role, and their photo
+ *     using the non-resolvable domain reserved by RFC 2606) so the person,
+ *     their bio/role, and their photo
  *     show up immediately; flagged `needsEmail: true` in the report so staff
  *     can attach a real email via Users → Edit later. Org-tied
  *     representatives with no matched email are unaffected by this — they

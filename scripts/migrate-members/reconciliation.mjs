@@ -15,9 +15,7 @@ export function emailDomain(email) {
   return at === -1 ? "" : email.slice(at + 1).toLowerCase();
 }
 
-// `.invalid` is reserved by RFC 2606 as never resolvable/deliverable —
-// matches the sentinel-email convention `user-merge.ts`'s `mergeUsers`
-// already established for anonymized accounts (`merged-<id>@deleted.invalid`).
+// `.invalid` is reserved by RFC 2606 as never resolvable/deliverable.
 // Deterministic (keyed on the YAML slug, not a random id) so re-running the
 // migration upserts the same placeholder row instead of creating a new one
 // each time.

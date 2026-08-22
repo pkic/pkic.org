@@ -89,6 +89,34 @@ describe("Registration Email Change", () => {
       ).rejects.toThrow("The new email address is the same as the current one");
     });
 
+    it("rejects an address reserved as another user's secondary email", async () => {
+      const eventId = await createTestEvent();
+      const owner = await findOrCreateUser(env.DB, { email: "alias-owner@example.com" });
+      await run(
+        env.DB,
+        "INSERT INTO user_emails (id, user_id, email, normalized_email, created_at) VALUES (?, ?, ?, ?, ?)",
+        [uuid(), owner.id, "reserved-alias@example.com", "reserved-alias@example.com", nowIso()],
+      );
+      const user = await findOrCreateUser(env.DB, { email: "alias-claimant@example.com" });
+      const { registration } = await createRegistration(env.DB, {
+        event: { id: eventId },
+        userId: user.id,
+        attendanceType: "in_person",
+        sourceType: "web",
+        confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
+      });
+
+      await expect(
+        changeRegistrationEmail(env.DB, {
+          registrationId: registration.id,
+          newEmail: "reserved-alias@example.com",
+          confirmationTtlHours: 24,
+          signingSecret: "test-signing-secret",
+        }),
+      ).rejects.toMatchObject({ code: "EMAIL_TAKEN" });
+    });
+
     it("resets registration to pending confirmation", async () => {
       const eventId = await createTestEvent();
       const user = await findOrCreateUser(env.DB, {
@@ -197,7 +225,6 @@ describe("Registration Email Change", () => {
       });
 
       expect(result.finalEmail).toBe("pending@example.com");
-      expect(result.mergedWithRegistrationId).toBeNull();
 
       const dbUser = await first<{ email: string; pending_email: string | null }>(
         env.DB,
@@ -206,6 +233,45 @@ describe("Registration Email Change", () => {
       );
       expect(dbUser?.email).toBe("pending@example.com");
       expect(dbUser?.pending_email).toBeNull();
+    });
+
+    it("promotes the same user's secondary alias without duplicating ownership", async () => {
+      const eventId = await createTestEvent();
+      const user = await findOrCreateUser(env.DB, { email: "alias-primary@example.com" });
+      const { registration } = await createRegistration(env.DB, {
+        event: { id: eventId },
+        userId: user.id,
+        attendanceType: "in_person",
+        sourceType: "web",
+        confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
+      });
+      await run(
+        env.DB,
+        "INSERT INTO user_emails (id, user_id, email, normalized_email, created_at) VALUES (?, ?, ?, ?, ?)",
+        [uuid(), user.id, "promoted@example.com", "promoted@example.com", nowIso()],
+      );
+      await run(env.DB, "UPDATE users SET pending_email = ?, pending_email_expires_at = ? WHERE id = ?", [
+        "promoted@example.com",
+        addHours(nowIso(), 24),
+        user.id,
+      ]);
+
+      await finalizeEmailChange(env.DB, {
+        userId: user.id,
+        eventId,
+        registrationId: registration.id,
+      });
+
+      expect(await first<{ email: string }>(env.DB, "SELECT email FROM users WHERE id = ?", [user.id])).toEqual({
+        email: "promoted@example.com",
+      });
+      expect(
+        await first(env.DB, "SELECT id FROM user_emails WHERE user_id = ? AND normalized_email = ?", [
+          user.id,
+          "promoted@example.com",
+        ]),
+      ).toBeNull();
     });
 
     it("rejects if pending email has expired", async () => {
@@ -246,7 +312,7 @@ describe("Registration Email Change", () => {
       expect(dbUser?.pending_email).toBeNull();
     });
 
-    it("merges registrations if pending email has another registration for same event", async () => {
+    it("rejects another account's email even when both users registered for the same event", async () => {
       const eventId = await createTestEvent();
       const user1 = await findOrCreateUser(env.DB, {
         email: "merge1@example.com",
@@ -272,31 +338,24 @@ describe("Registration Email Change", () => {
         signingSecret: "test-signing-secret",
       });
 
-      // Set user1's pending email to user2's email
       const now = nowIso();
-      await run(env.DB, `UPDATE users SET pending_email = ?, pending_email_expires_at = ? WHERE id = ?`, [
-        "merge2@example.com",
-        addHours(now, 24),
-        user1.id,
-      ]);
+      await expect(
+        run(env.DB, `UPDATE users SET pending_email = ?, pending_email_expires_at = ? WHERE id = ?`, [
+          "merge2@example.com",
+          addHours(now, 24),
+          user1.id,
+        ]),
+      ).rejects.toThrow("EMAIL_TAKEN");
 
-      const result = await finalizeEmailChange(env.DB, {
-        userId: user1.id,
-        eventId,
-        registrationId: reg1.id,
+      expect(await first<{ email: string }>(env.DB, "SELECT email FROM users WHERE id = ?", [user1.id])).toEqual({
+        email: "merge1@example.com",
       });
-
-      expect(result.mergedWithRegistrationId).toBe(reg2.id);
-
-      // Verify reg2 was cancelled
-      const cancelled = await first<{ status: string }>(env.DB, "SELECT status FROM registrations WHERE id = ?", [
-        reg2.id,
-      ]);
-      expect(cancelled?.status).toBe("cancelled");
-
-      // Verify user1 now has the email
-      const dbUser = await first<{ email: string }>(env.DB, "SELECT email FROM users WHERE id = ?", [user1.id]);
-      expect(dbUser?.email).toBe("merge2@example.com");
+      expect(
+        await first<{ status: string }>(env.DB, "SELECT status FROM registrations WHERE id = ?", [reg1.id]),
+      ).toEqual({ status: "pending_email_confirmation" });
+      expect(
+        await first<{ status: string }>(env.DB, "SELECT status FROM registrations WHERE id = ?", [reg2.id]),
+      ).toEqual({ status: "pending_email_confirmation" });
     });
 
     it("rejects if another user already has the pending email", async () => {
@@ -318,24 +377,21 @@ describe("Registration Email Change", () => {
       });
 
       const now = nowIso();
-      await run(env.DB, `UPDATE users SET pending_email = ?, pending_email_expires_at = ? WHERE id = ?`, [
-        "taken@example.com",
-        addHours(now, 24),
-        user4.id,
-      ]);
-
       await expect(
-        finalizeEmailChange(env.DB, {
-          userId: user4.id,
-          eventId,
-          registrationId: reg4.id,
-        }),
-      ).rejects.toThrow("This email address is already in use");
+        run(env.DB, `UPDATE users SET pending_email = ?, pending_email_expires_at = ? WHERE id = ?`, [
+          "taken@example.com",
+          addHours(now, 24),
+          user4.id,
+        ]),
+      ).rejects.toThrow("EMAIL_TAKEN");
+      expect(
+        await first<{ status: string }>(env.DB, "SELECT status FROM registrations WHERE id = ?", [reg4.id]),
+      ).toEqual({ status: "pending_email_confirmation" });
     });
   });
 
-  describe("Full workflow", () => {
-    it("completes full email change and merge flow", async () => {
+  describe("Cross-account collision workflow", () => {
+    it("rejects the collision without mutating either identity", async () => {
       const eventId = await createTestEvent();
       const origUser = await findOrCreateUser(env.DB, {
         email: "workflow-orig@example.com",
@@ -364,35 +420,21 @@ describe("Registration Email Change", () => {
         signingSecret: "test-signing-secret",
       });
 
-      // Original user initiates email change to duplicate user's email
-      const changeResult = await changeRegistrationEmail(env.DB, {
-        registrationId: origReg.id,
-        newEmail: "workflow-dupe@example.com",
-        confirmationTtlHours: 24,
-        signingSecret: "test-signing-secret",
+      await expect(
+        changeRegistrationEmail(env.DB, {
+          registrationId: origReg.id,
+          newEmail: "workflow-dupe@example.com",
+          confirmationTtlHours: 24,
+          signingSecret: "test-signing-secret",
+        }),
+      ).rejects.toMatchObject({ code: "EMAIL_TAKEN" });
+
+      expect(await first<{ email: string }>(env.DB, "SELECT email FROM users WHERE id = ?", [origUser.id])).toEqual({
+        email: "workflow-orig@example.com",
       });
-
-      expect(changeResult.pendingEmail).toBe("workflow-dupe@example.com");
-
-      // User confirms email
-      const finalResult = await finalizeEmailChange(env.DB, {
-        userId: origUser.id,
-        eventId,
-        registrationId: origReg.id,
-      });
-
-      // Should have merged
-      expect(finalResult.mergedWithRegistrationId).toBe(dupeReg.id);
-
-      // Verify dupe registration was cancelled
-      const dupeAfterMerge = await first<{ status: string }>(env.DB, "SELECT status FROM registrations WHERE id = ?", [
-        dupeReg.id,
-      ]);
-      expect(dupeAfterMerge?.status).toBe("cancelled");
-
-      // Verify original user now has the dupe email
-      const finalUser = await first<{ email: string }>(env.DB, "SELECT email FROM users WHERE id = ?", [origUser.id]);
-      expect(finalUser?.email).toBe("workflow-dupe@example.com");
+      expect(
+        await first<{ status: string }>(env.DB, "SELECT status FROM registrations WHERE id = ?", [dupeReg.id]),
+      ).toEqual({ status: "pending_email_confirmation" });
     });
   });
 
@@ -429,7 +471,7 @@ describe("Registration Email Change", () => {
           confirmationTtlHours: 24,
           signingSecret: "test-signing-secret",
         }),
-      ).rejects.toThrow("This email address is already in use by another account");
+      ).rejects.toThrow("This email address is already reserved by another account");
 
       // Victim's user record should NOT have a pending_email set after rejection.
       const victim = await first<{ pending_email: string | null }>(
@@ -470,7 +512,7 @@ describe("Registration Email Change", () => {
       ).rejects.toThrow("currently being claimed by another account");
     });
 
-    it("allows initiation when target email belongs to a user with same-event registration", async () => {
+    it("rejects initiation when target email belongs to a user with same-event registration", async () => {
       const eventId = await createTestEvent();
       const dupe = await findOrCreateUser(env.DB, { email: "dupe@example.com" });
       await createRegistration(env.DB, {
@@ -492,142 +534,14 @@ describe("Registration Email Change", () => {
         signingSecret: "test-signing-secret",
       });
 
-      const result = await changeRegistrationEmail(env.DB, {
-        registrationId: reg.id,
-        newEmail: "dupe@example.com",
-        confirmationTtlHours: 24,
-        signingSecret: "test-signing-secret",
-      });
-      expect(result.pendingEmail).toBe("dupe@example.com");
-    });
-  });
-
-  describe("Safe merge behavior", () => {
-    it("re-points loser's other-event registrations to surviving user where no conflict exists", async () => {
-      const sharedEventId = await createTestEvent();
-      const loserOnlyEventId = await createTestEvent();
-
-      const survivor = await findOrCreateUser(env.DB, { email: "survivor@example.com" });
-      const loser = await findOrCreateUser(env.DB, { email: "loser@example.com" });
-
-      // Both have a registration on the shared event (this drives the merge).
-      const { registration: survivorReg } = await createRegistration(env.DB, {
-        event: { id: sharedEventId },
-        userId: survivor.id,
-        attendanceType: "in_person",
-        sourceType: "web",
-        confirmationTtlHours: 24,
-        signingSecret: "test-signing-secret",
-      });
-      await createRegistration(env.DB, {
-        event: { id: sharedEventId },
-        userId: loser.id,
-        attendanceType: "in_person",
-        sourceType: "web",
-        confirmationTtlHours: 24,
-        signingSecret: "test-signing-secret",
-      });
-
-      // Loser also has an exclusive registration on another event.
-      const { registration: loserOnlyReg } = await createRegistration(env.DB, {
-        event: { id: loserOnlyEventId },
-        userId: loser.id,
-        attendanceType: "virtual",
-        sourceType: "web",
-        confirmationTtlHours: 24,
-        signingSecret: "test-signing-secret",
-      });
-
-      // Initiate + finalize the merge.
-      await changeRegistrationEmail(env.DB, {
-        registrationId: survivorReg.id,
-        newEmail: "loser@example.com",
-        confirmationTtlHours: 24,
-        signingSecret: "test-signing-secret",
-      });
-      const result = await finalizeEmailChange(env.DB, {
-        userId: survivor.id,
-        eventId: sharedEventId,
-        registrationId: survivorReg.id,
-      });
-
-      expect(result.mergedFromUserId).toBe(loser.id);
-
-      // Loser's exclusive registration is now owned by the survivor.
-      const repointed = await first<{ user_id: string }>(env.DB, "SELECT user_id FROM registrations WHERE id = ?", [
-        loserOnlyReg.id,
-      ]);
-      expect(repointed?.user_id).toBe(survivor.id);
-
-      // Loser is anonymized with sentinel email + merged_into_user_id set.
-      const loserAfter = await first<{
-        email: string;
-        normalized_email: string;
-        merged_into_user_id: string | null;
-      }>(env.DB, "SELECT email, normalized_email, merged_into_user_id FROM users WHERE id = ?", [loser.id]);
-      expect(loserAfter?.merged_into_user_id).toBe(survivor.id);
-      expect(loserAfter?.email).toBe(`merged-${loser.id}@deleted.invalid`);
-    });
-
-    it("leaves loser's same-event registrations attached to loser when survivor already has one", async () => {
-      const sharedEventId = await createTestEvent();
-      const otherSharedEventId = await createTestEvent();
-
-      const survivor = await findOrCreateUser(env.DB, { email: "survivor2@example.com" });
-      const loser = await findOrCreateUser(env.DB, { email: "loser2@example.com" });
-
-      const { registration: survivorReg } = await createRegistration(env.DB, {
-        event: { id: sharedEventId },
-        userId: survivor.id,
-        attendanceType: "in_person",
-        sourceType: "web",
-        confirmationTtlHours: 24,
-        signingSecret: "test-signing-secret",
-      });
-      await createRegistration(env.DB, {
-        event: { id: sharedEventId },
-        userId: loser.id,
-        attendanceType: "in_person",
-        sourceType: "web",
-        confirmationTtlHours: 24,
-        signingSecret: "test-signing-secret",
-      });
-
-      // Both have a registration on a SECOND shared event -- repointing the
-      // loser's row would violate UNIQUE(event_id, user_id), so it must stay.
-      await createRegistration(env.DB, {
-        event: { id: otherSharedEventId },
-        userId: survivor.id,
-        attendanceType: "virtual",
-        sourceType: "web",
-        confirmationTtlHours: 24,
-        signingSecret: "test-signing-secret",
-      });
-      const { registration: loserOtherShared } = await createRegistration(env.DB, {
-        event: { id: otherSharedEventId },
-        userId: loser.id,
-        attendanceType: "virtual",
-        sourceType: "web",
-        confirmationTtlHours: 24,
-        signingSecret: "test-signing-secret",
-      });
-
-      await changeRegistrationEmail(env.DB, {
-        registrationId: survivorReg.id,
-        newEmail: "loser2@example.com",
-        confirmationTtlHours: 24,
-        signingSecret: "test-signing-secret",
-      });
-      await finalizeEmailChange(env.DB, {
-        userId: survivor.id,
-        eventId: sharedEventId,
-        registrationId: survivorReg.id,
-      });
-
-      const stillLoser = await first<{ user_id: string }>(env.DB, "SELECT user_id FROM registrations WHERE id = ?", [
-        loserOtherShared.id,
-      ]);
-      expect(stillLoser?.user_id).toBe(loser.id);
+      await expect(
+        changeRegistrationEmail(env.DB, {
+          registrationId: reg.id,
+          newEmail: "dupe@example.com",
+          confirmationTtlHours: 24,
+          signingSecret: "test-signing-secret",
+        }),
+      ).rejects.toMatchObject({ code: "EMAIL_TAKEN" });
     });
   });
 

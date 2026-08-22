@@ -208,9 +208,9 @@ unless noted:
    no longer skipped entirely.** Previously the script created *nothing* for
    these 16 people — no `users` row, no `members` row, nothing to attach a
    photo to. They now get a real row keyed on a deterministic, non-deliverable
-   placeholder email (`unmatched-<slug>@members.invalid`, `.invalid` per
-   RFC 2606 — same sentinel pattern `user-merge.ts`'s `mergeUsers` already
-   uses for anonymized accounts), flagged `needsEmail: true` in the report.
+   placeholder email (`unmatched-<slug>@members.invalid`, using the
+   non-resolvable `.invalid` domain reserved by RFC 2606), flagged
+   `needsEmail: true` in the report.
    Staff attach a real email later via **Users → [user] → Edit**. Org-tied
    representatives with no matched email are **not** affected by this — they
    still go through the Interim Admin Tool as before, since an org-tied

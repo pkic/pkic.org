@@ -8,6 +8,7 @@ import { normalizeEmail } from "../validation";
 import { prepareAuditLog } from "./audit";
 import { prepareUserProfileStatement, type UserProfilePatch } from "./users";
 import { buildUserAccessOffboardingStatements } from "./membership/offboarding";
+import { findUserEmailOwner } from "./user-emails";
 
 type AdminUserUpdateInput = z.infer<typeof adminUserUpdateSchema>;
 
@@ -25,6 +26,7 @@ interface AdminUserUpdateRow {
   active: number;
   is_ec_member: number;
   pii_redacted_at: string | null;
+  merged_into_user_id: string | null;
   updated_at: string;
 }
 
@@ -77,7 +79,8 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
   const user = await first<AdminUserUpdateRow>(
     db,
     `SELECT id, email, first_name, last_name, preferred_name, organization_name,
-            job_title, biography, links_json, role, active, is_ec_member, pii_redacted_at, updated_at
+            job_title, biography, links_json, role, active, is_ec_member, pii_redacted_at,
+            merged_into_user_id, updated_at
      FROM users WHERE id = ?`,
     [userId],
   );
@@ -85,19 +88,23 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
   if (user.pii_redacted_at) {
     throw new AppError(409, "ALREADY_ANONYMIZED", "An anonymized account cannot be modified");
   }
+  if (user.merged_into_user_id) {
+    throw new AppError(409, "IDENTITY_RETIRED", "A previously merged account cannot be modified or reactivated");
+  }
 
   let email = user.email;
+  let promotedSecondaryEmail: string | null = null;
   if (input.email !== undefined) {
     const normalized = normalizeEmail(input.email);
     if (normalized !== normalizeEmail(user.email)) {
-      if (
-        await first<{ id: string }>(db, "SELECT id FROM users WHERE normalized_email = ? AND id != ?", [
-          normalized,
-          user.id,
-        ])
-      ) {
+      const owner = await findUserEmailOwner(db, normalized);
+      if (owner && owner.userId !== user.id) {
         throw new AppError(409, "EMAIL_ALREADY_IN_USE", "Another account already uses that email address");
       }
+      if (owner?.kind === "pending") {
+        throw new AppError(409, "EMAIL_CHANGE_PENDING", "That email address has a pending verification request");
+      }
+      if (owner?.kind === "secondary") promotedSecondaryEmail = normalized;
       email = normalized;
     }
   }
@@ -115,6 +122,13 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
   ];
   const statements: StatementLike[] = [];
   const at = new Date().toISOString();
+  if (promotedSecondaryEmail) {
+    statements.push(
+      db
+        .prepare("DELETE FROM user_emails WHERE user_id = ? AND normalized_email = ?")
+        .bind(user.id, promotedSecondaryEmail),
+    );
+  }
   if (Object.keys(patch).length > 0) statements.push(prepareUserProfileStatement(db, user.id, patch));
   statements.push(
     db

@@ -8,7 +8,7 @@
  * Screens covered, one test each: Organizations → Content Review,
  * Mailing Lists, Sponsorships + Events → Settings → Sponsor
  * Tiers, Admin → Votes + → Proposals, Working Groups
- * CRUD (2026-07-27 follow-up), and the Users multi-email/merge panel
+ * CRUD (2026-07-27 follow-up), and the Users secondary-email panel
  * (2026-07-27 follow-up).
  *
  * Fixture data (an approved org member, an approved individual member) goes
@@ -551,7 +551,7 @@ test.describe("Admin browser-verification pass", () => {
     await expect(page.locator(".list-group-item").filter({ hasText: orgName })).toBeVisible();
   });
 
-  test("users: multi-email panel and merging a duplicate account", async ({ page }) => {
+  test("users: secondary email panel", async ({ page }) => {
     page.on("dialog", (d) => d.accept());
     const consoleErrors: string[] = [];
     page.on("console", (msg) => {
@@ -562,7 +562,6 @@ test.describe("Admin browser-verification pass", () => {
 
     const stamp = Date.now();
     const primaryEmail = `e2e-primary-${stamp}@e2e-users-${stamp}.test`;
-    const duplicateEmail = `e2e-duplicate-${stamp}@e2e-users-dup-${stamp}.test`;
     const extraEmail = `e2e-secondary-${stamp}@e2e-users-${stamp}.test`;
 
     await provisionApprovedMember(page, {
@@ -570,52 +569,6 @@ test.describe("Admin browser-verification pass", () => {
       name: `Primary User ${stamp}`,
       orgName: `E2E Users Org ${stamp}`,
     });
-
-    // The "duplicate" account must be a bare user with no membership —
-    // POST /api/v1/admin/users/:id/merge rejects BOTH_HOLD_MEMBERSHIP when
-    // both sides have one (confirmed by a first attempt at this test using
-    // a second provisionApprovedMember, which 409'd for exactly that
-    // reason). A real event registration (same technique
-    // sponsor-portal.spec.ts uses for its attendee fixture) creates a
-    // plain `users` row with no membership attached.
-    const registerStatus = await page.evaluate(
-      async ({ slug, email }) => {
-        const res = await fetch(`/api/v1/events/${slug}/registrations`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            firstName: "Duplicate",
-            lastName: `User ${Date.now()}`,
-            email,
-            attendanceType: "virtual",
-            customAnswers: { organization_name: "Duplicate Org", job_title: "Engineer", country: "NL" },
-            consents: [
-              { termKey: "privacy-policy", version: "v1" },
-              { termKey: "code-of-conduct", version: "v1" },
-              { termKey: "photo-policy", version: "v1" },
-            ],
-          }),
-        });
-        return res.status;
-      },
-      { slug: EVENT_SLUG, email: duplicateEmail },
-    );
-    expect(registerStatus).toBe(200);
-
-    const confirmEmail = await waitForEmail(duplicateEmail, "confirm your registration");
-    const confirmUrl = extractUrlFromEmail(confirmEmail, "/confirm/");
-    const confirmParams = new URL(confirmUrl, "http://127.0.0.1:8788").searchParams;
-    const confirmStatus = await page.evaluate(
-      async ({ slug, token, id }) => {
-        const url = `/api/v1/events/${slug}/registrations/confirm-email?token=${encodeURIComponent(token)}${
-          id ? `&id=${encodeURIComponent(id)}` : ""
-        }`;
-        const res = await fetch(url);
-        return res.status;
-      },
-      { slug: EVENT_SLUG, token: confirmParams.get("token") ?? "", id: confirmParams.get("id") },
-    );
-    expect(confirmStatus).toBe(200);
 
     await page.goto("/admin/#/users");
     await page.getByPlaceholder("email or name").fill(primaryEmail);
@@ -633,16 +586,7 @@ test.describe("Admin browser-verification pass", () => {
     await expect(page.locator(".my-toast", { hasText: "Email added" })).toBeVisible();
     await expect(emailPanel.getByText(extraEmail)).toBeVisible();
 
-    const mergePanel = page
-      .locator(".card")
-      .filter({ has: page.locator(".card-header", { hasText: "Merge another account into this one" }) });
-    await mergePanel.locator("input").fill(duplicateEmail);
-    await expect(mergePanel.getByText(duplicateEmail)).toBeVisible({ timeout: 5_000 });
-    await mergePanel.getByText(duplicateEmail).click();
-    await mergePanel.getByRole("button", { name: "Merge into this account" }).click();
-    await expect(page.locator(".my-toast", { hasText: "Accounts merged" })).toBeVisible({ timeout: 10_000 });
-
-    await expect(emailPanel.getByText(duplicateEmail)).toBeVisible();
+    await expect(page.getByText("Merge another account into this one")).toHaveCount(0);
     expect(consoleErrors, consoleErrors.join("\n")).toEqual([]);
   });
 

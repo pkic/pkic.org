@@ -13,7 +13,7 @@ import { UserList } from "./users/UserList";
 
 import type { UserDetail } from "./users/model";
 import { UserMembershipPanel } from "./users/UserMembershipPanel";
-import { MergeUserAccountPanel, UserEmailAddressesPanel } from "./users/UserAccountPanels";
+import { UserEmailAddressesPanel } from "./users/UserAccountPanels";
 
 const ROLE_COLOR: Record<string, string> = { admin: "danger", user: "secondary", guest: "light" };
 // ────────────────────────────────────────────────────────
@@ -424,7 +424,6 @@ export function UserDetailView({ userId, onBack }: { userId: string; onBack: () 
       </div>
       <UserMembershipPanel user={user} onChanged={load} />
       <UserEmailAddressesPanel userId={user.id} primaryEmail={user.email} />
-      <MergeUserAccountPanel userId={user.id} onMerged={load} />
     </div>
   );
 }

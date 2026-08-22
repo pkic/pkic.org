@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
-import { UserPicker, type PickedUser } from "../access-control/UserPicker";
 import { api } from "../../api";
 import { toast } from "../../ui";
 
@@ -103,61 +102,6 @@ export function UserEmailAddressesPanel({ userId, primaryEmail }: { userId: stri
             </button>
           </form>
         )}
-      </div>
-    </div>
-  );
-}
-
-export function MergeUserAccountPanel({ userId, onMerged }: { userId: string; onMerged: () => Promise<void> | void }) {
-  const [sourceUser, setSourceUser] = useState<PickedUser | null>(null);
-  const [merging, setMerging] = useState(false);
-
-  async function handleMerge() {
-    if (!sourceUser) return;
-    if (
-      !confirm(
-        `Merge ${sourceUser.email} into this account? Its memberships, working groups, roles, and passkeys transfer here, its email is kept as a secondary email, and that account is anonymized. This cannot be undone from the UI.`,
-      )
-    ) {
-      return;
-    }
-    setMerging(true);
-    try {
-      await api(`/api/v1/admin/users/${userId}/merge`, {
-        method: "POST",
-        body: JSON.stringify({ sourceUserId: sourceUser.id }),
-      });
-      toast("Accounts merged", "success");
-      setSourceUser(null);
-      await onMerged();
-    } catch (error) {
-      toast((error as Error).message, "error");
-    } finally {
-      setMerging(false);
-    }
-  }
-
-  return (
-    <div class="card border-0 shadow-sm mt-4">
-      <div class="card-header bg-white fw-semibold">Merge another account into this one</div>
-      <div class="card-body p-3">
-        <div class="small text-muted mb-2">
-          Use this to fold a duplicate account into this one — its memberships, working groups, roles, and passkeys
-          transfer here, and its email is kept as a secondary email above.
-        </div>
-        <div class="d-flex gap-2 align-items-end">
-          <div class="adm-user-merge-picker">
-            <UserPicker
-              value={sourceUser}
-              onChange={setSourceUser}
-              disabled={merging}
-              placeholder="Find the duplicate account…"
-            />
-          </div>
-          <button class="btn btn-sm btn-danger" disabled={merging || !sourceUser} onClick={() => void handleMerge()}>
-            {merging ? "Merging…" : "Merge into this account"}
-          </button>
-        </div>
       </div>
     </div>
   );

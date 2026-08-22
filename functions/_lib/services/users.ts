@@ -51,8 +51,8 @@ export function userRecordColumns(tableAlias?: string): string {
 
 /**
  * Matches a `users` row by its primary email OR by any secondary email
- * recorded in `user_emails` (admin-managed, e.g. from the user-merge tool
- * or manually added aliases) -- so admin find-or-create flows (adding a
+ * recorded in `user_emails` (admin-managed aliases) -- so admin
+ * find-or-create flows (adding a
  * representative, the Interim Admin Tool) recognize a person by any known
  * address instead of creating a duplicate `users` row. Login lookups
  * (magic-link request/verify in `_lib/auth/admin.ts`/`_lib/auth/member.ts`)

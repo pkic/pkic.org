@@ -66,7 +66,6 @@ export async function prepareConfirmRegistrationByToken(
   // If finalization fails (e.g. EMAIL_TAKEN by a squatting account that
   // appeared after initiation), clear the pending_email reservation so the
   // user is not stuck and can retry from the manage URL.
-  let emailMergeNote: { merged: boolean; mergedWithId: string | null } | null = null;
   const emailFinalizeStatements: StatementLike[] = [];
   const user = await first<{ pending_email: string | null; normalized_email: string }>(
     db,
@@ -84,10 +83,6 @@ export async function prepareConfirmRegistrationByToken(
         eventId: registration.event_id,
         registrationId: registration.id,
       });
-      emailMergeNote = {
-        merged: !!emailResult.mergedWithRegistrationId,
-        mergedWithId: emailResult.mergedWithRegistrationId,
-      };
       inviteEmail = emailResult.finalEmail;
       emailFinalizeStatements.push(...emailResult.statements);
     } catch (err) {
@@ -99,9 +94,9 @@ export async function prepareConfirmRegistrationByToken(
           db
             .prepare(
               `UPDATE users SET pending_email = NULL, pending_email_expires_at = NULL, updated_at = ?
-               WHERE id = ?`,
+               WHERE id = ? AND pending_email = ?`,
             )
-            .bind(now, registration.user_id),
+            .bind(now, registration.user_id, user.pending_email),
           prepareAuditLog(
             db,
             "system",
@@ -200,7 +195,6 @@ export async function prepareConfirmRegistrationByToken(
           inviteId: matchingInvite.id,
           inviteAcceptedVia: "registration_confirmation",
         }),
-        ...(emailMergeNote && { emailMerge: emailMergeNote }),
       },
       now,
       `registration_email_confirmed:${registration.id}`,

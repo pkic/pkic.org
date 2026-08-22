@@ -2082,7 +2082,7 @@ As part of our transition to the new PKI Consortium member portal, an account ha
     'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
   );
 
--- Section: Secondary email addresses + user merge support
+-- Section: Secondary email addresses
 --
 -- Follow-up to a real, visible problem from the YAML->D1 migration:
 -- Google Groups roster CSVs used different email addresses than
@@ -2090,7 +2090,8 @@ As part of our transition to the new PKI Consortium member portal, an account ha
 -- got their own bare `users` rows created rather than being recognized as
 -- the same person -- real staff/members show up more than once in the
 -- Users admin list, with no way to record "this account also goes by this
--- other email" or clean up the duplicates already sitting in D1.
+-- other email". Alternate addresses are deliberately non-authenticating
+-- metadata; this migration does not attempt irreversible identity merges.
 --
 -- `users.email`/`normalized_email` remain the sole login-identifying
 -- columns (NOT NULL UNIQUE, unchanged) -- this table only adds
@@ -2098,11 +2099,6 @@ As part of our transition to the new PKI Consortium member portal, an account ha
 -- or passkey authentication, which continue to resolve strictly off
 -- `users.normalized_email`.
 --
--- The merge tool built against this table reuses `users.merged_into_user_id`,
--- which already exists (migration 0020_pending_email_change.sql) for a
--- different collision scenario (registration email-change finalization) --
--- no new column needed there, just a second write path.
-
 CREATE TABLE user_emails (
   id               TEXT NOT NULL PRIMARY KEY,
   user_id          TEXT NOT NULL REFERENCES users(id),
@@ -2112,6 +2108,94 @@ CREATE TABLE user_emails (
 );
 
 CREATE INDEX idx_user_emails_user ON user_emails(user_id);
+
+-- An email is one global reservation whether it is primary, secondary, or
+-- pending verification. Application checks provide useful 409 responses;
+-- these triggers close cross-table races at the database boundary.
+CREATE TRIGGER trg_user_emails_reservation_insert
+BEFORE INSERT ON user_emails
+WHEN EXISTS (
+  SELECT 1 FROM users
+   WHERE normalized_email = NEW.normalized_email
+      OR pending_email = NEW.normalized_email
+)
+BEGIN
+  SELECT RAISE(ABORT, 'EMAIL_TAKEN');
+END;
+
+CREATE TRIGGER trg_user_emails_reservation_update
+BEFORE UPDATE OF user_id, normalized_email ON user_emails
+WHEN EXISTS (
+  SELECT 1 FROM users
+   WHERE normalized_email = NEW.normalized_email
+      OR pending_email = NEW.normalized_email
+)
+BEGIN
+  SELECT RAISE(ABORT, 'EMAIL_TAKEN');
+END;
+
+CREATE TRIGGER trg_users_primary_email_reservation_insert
+BEFORE INSERT ON users
+WHEN EXISTS (
+  SELECT 1 FROM user_emails WHERE normalized_email = NEW.normalized_email
+)
+OR EXISTS (
+  SELECT 1 FROM users
+   WHERE pending_email = NEW.normalized_email
+)
+BEGIN
+  SELECT RAISE(ABORT, 'EMAIL_TAKEN');
+END;
+
+CREATE TRIGGER trg_users_primary_email_reservation_update
+BEFORE UPDATE OF normalized_email ON users
+WHEN EXISTS (
+  SELECT 1 FROM user_emails WHERE normalized_email = NEW.normalized_email
+)
+OR EXISTS (
+  SELECT 1 FROM users
+   WHERE id != NEW.id AND pending_email = NEW.normalized_email
+)
+BEGIN
+  SELECT RAISE(ABORT, 'EMAIL_TAKEN');
+END;
+
+CREATE TRIGGER trg_users_pending_email_reservation_update
+BEFORE UPDATE OF pending_email ON users
+WHEN NEW.pending_email IS NOT NULL
+ AND (
+   EXISTS (
+     SELECT 1 FROM users
+      WHERE id != NEW.id AND normalized_email = NEW.pending_email
+   )
+   OR EXISTS (
+     SELECT 1 FROM user_emails
+      WHERE user_id != NEW.id AND normalized_email = NEW.pending_email
+   )
+ )
+BEGIN
+  SELECT RAISE(ABORT, 'EMAIL_TAKEN');
+END;
+
+CREATE TRIGGER trg_users_pending_email_no_overwrite
+BEFORE UPDATE OF pending_email ON users
+WHEN OLD.pending_email IS NOT NULL
+ AND NEW.pending_email IS NOT NULL
+ AND OLD.pending_email != NEW.pending_email
+BEGIN
+  SELECT RAISE(ABORT, 'EMAIL_CHANGE_ALREADY_PENDING');
+END;
+
+-- Identity consolidation is intentionally not a generic database operation.
+-- Existing legacy markers remain readable, but new partial merges must fail
+-- closed until a dedicated reconciliation product can prove every live and
+-- historical ownership rule.
+CREATE TRIGGER trg_user_identity_merge_disabled
+BEFORE UPDATE OF merged_into_user_id ON users
+WHEN OLD.merged_into_user_id IS NOT NEW.merged_into_user_id
+BEGIN
+  SELECT RAISE(ABORT, 'USER_IDENTITY_MERGE_DISABLED');
+END;
 
 -- Section: WG/forum vice chairs
 --
