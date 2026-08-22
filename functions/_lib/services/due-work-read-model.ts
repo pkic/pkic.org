@@ -11,6 +11,7 @@ interface DueWorkListOptions {
   includeRetention: boolean;
   reminderLimit: number;
   outboxLimit: number;
+  cleanupLimit: number;
   limit: number;
   offset: number;
   q?: string;
@@ -55,6 +56,7 @@ const DUE_WORK_CTE = `
            ? AS max_presentation_reminders,
            ? AS reminder_limit,
            ? AS outbox_limit,
+           ? AS cleanup_limit,
            ? AS include_retention
   ),
   outbox_source AS (
@@ -88,15 +90,22 @@ const DUE_WORK_CTE = `
            o.send_after AS due_at,
            o.status AS status_key,
            o.status AS status_label,
-           o.id AS source_id,
-           ROW_NUMBER() OVER (ORDER BY o.send_after ASC, o.id ASC) AS candidate_rank
+           o.id AS source_id
     FROM outbox_source o
     LEFT JOIN events e ON e.id = o.event_id
     CROSS JOIN cfg
     WHERE o.status IN ('queued', 'retrying') AND o.send_after <= cfg.now_at
+    ORDER BY o.send_after ASC, o.id ASC
+    LIMIT (SELECT outbox_limit FROM cfg)
   ),
   invite_candidates AS (
-    SELECT i.*,
+    SELECT i.id,
+           i.invite_type,
+           i.invitee_first_name,
+           i.invitee_last_name,
+           i.invitee_email,
+           i.reminder_count,
+           i.expires_at,
            e.name AS event_name,
            e.slug AS event_slug,
            e.starts_at AS event_starts_at,
@@ -116,7 +125,7 @@ const DUE_WORK_CTE = `
       AND (i.reminders_paused_until IS NULL OR i.reminders_paused_until <= cfg.now_at)
       AND COALESCE(i.last_communication_at, i.created_at) <= cfg.reminder_cutoff
   ),
-  reminder_candidates AS (
+  invite_reminder_candidates AS (
     SELECT 1 AS category_priority,
            i.candidate_due_at AS source_due_at,
            i.id AS source_id,
@@ -142,22 +151,23 @@ const DUE_WORK_CTE = `
     WHERE i.invite_type <> 'attendee'
        OR ((i.event_starts_at IS NULL OR i.event_starts_at > cfg.now_at)
            AND (i.registration_closes_at IS NULL OR i.registration_closes_at > cfg.now_at))
-
-    UNION ALL
-
-    SELECT 2,
-           COALESCE(ps.speaker_invite_last_communication_at, ps.created_at),
-           ps.id,
-           'reminders',
-           'Co-speaker Invite',
-           COALESCE(NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), u.email),
+    ORDER BY i.candidate_due_at ASC, i.id ASC
+    LIMIT (SELECT reminder_limit FROM cfg)
+  ),
+  cospeaker_reminder_candidates AS (
+    SELECT 2 AS category_priority,
+           COALESCE(ps.speaker_invite_last_communication_at, ps.created_at) AS source_due_at,
+           ps.id AS source_id,
+           'reminders' AS bucket,
+           'Co-speaker Invite' AS type_label,
+           COALESCE(NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), u.email) AS title,
            CASE WHEN NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), '') IS NULL
-             THEN NULL ELSE u.email END,
-           e.name || ' | ' || e.slug || ' | co_speaker_invite | #' || (ps.speaker_invite_reminder_count + 1),
-           'Reminder: please confirm speaker participation — ' || e.name || ' | ' || sp.title,
-           e.starts_at,
-           'pending',
-           'Preview'
+             THEN NULL ELSE u.email END AS subtitle,
+           e.name || ' | ' || e.slug || ' | co_speaker_invite | #' || (ps.speaker_invite_reminder_count + 1) AS context,
+           'Reminder: please confirm speaker participation — ' || e.name || ' | ' || sp.title AS detail,
+           e.starts_at AS due_at,
+           'pending' AS status_key,
+           'Preview' AS status_label
     FROM proposal_speakers ps
     JOIN users u ON u.id = ps.user_id
     JOIN session_proposals sp ON sp.id = ps.proposal_id
@@ -170,22 +180,23 @@ const DUE_WORK_CTE = `
       AND ps.speaker_invite_reminder_count < cfg.max_invite_reminders
       AND (ps.speaker_invite_reminders_paused_until IS NULL OR ps.speaker_invite_reminders_paused_until <= cfg.now_at)
       AND COALESCE(ps.speaker_invite_last_communication_at, ps.created_at) <= cfg.reminder_cutoff
-
-    UNION ALL
-
-    SELECT 3,
-           COALESCE(ps.presentation_last_communication_at, sp.updated_at, ps.created_at),
-           ps.id,
-           'reminders',
-           'Presentation Upload',
-           COALESCE(NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), u.email),
+    ORDER BY COALESCE(ps.speaker_invite_last_communication_at, ps.created_at) ASC, ps.id ASC
+    LIMIT (SELECT reminder_limit FROM cfg)
+  ),
+  presentation_reminder_candidates AS (
+    SELECT 3 AS category_priority,
+           COALESCE(ps.presentation_last_communication_at, sp.updated_at, ps.created_at) AS source_due_at,
+           ps.id AS source_id,
+           'reminders' AS bucket,
+           'Presentation Upload' AS type_label,
+           COALESCE(NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), u.email) AS title,
            CASE WHEN NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), '') IS NULL
-             THEN NULL ELSE u.email END,
-           e.name || ' | ' || e.slug || ' | presentation_upload_request | #' || (ps.presentation_reminder_count + 1),
-           'Reminder: please upload your presentation — ' || e.name || ' | ' || sp.title,
-           COALESCE(sp.presentation_deadline, e.starts_at),
-           'pending',
-           'Preview'
+             THEN NULL ELSE u.email END AS subtitle,
+           e.name || ' | ' || e.slug || ' | presentation_upload_request | #' || (ps.presentation_reminder_count + 1) AS context,
+           'Reminder: please upload your presentation — ' || e.name || ' | ' || sp.title AS detail,
+           COALESCE(sp.presentation_deadline, e.starts_at) AS due_at,
+           'pending' AS status_key,
+           'Preview' AS status_label
     FROM proposal_speakers ps
     JOIN users u ON u.id = ps.user_id
     JOIN session_proposals sp ON sp.id = ps.proposal_id
@@ -202,24 +213,25 @@ const DUE_WORK_CTE = `
       AND ps.presentation_reminder_count < cfg.max_presentation_reminders
       AND (ps.presentation_reminders_paused_until IS NULL OR ps.presentation_reminders_paused_until <= cfg.now_at)
       AND COALESCE(ps.presentation_last_communication_at, sp.updated_at, ps.created_at) <= cfg.reminder_cutoff
-
-    UNION ALL
-
-    SELECT 4,
-           COALESCE(r.confirmation_reminder_sent_at, r.created_at),
-           r.id,
-           'reminders',
-           'Registration Confirmation',
-           COALESCE(NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), COALESCE(u.pending_email, u.email)),
+    ORDER BY COALESCE(ps.presentation_last_communication_at, sp.updated_at, ps.created_at) ASC, ps.id ASC
+    LIMIT (SELECT reminder_limit FROM cfg)
+  ),
+  confirmation_reminder_candidates AS (
+    SELECT 4 AS category_priority,
+           COALESCE(r.confirmation_reminder_sent_at, r.created_at) AS source_due_at,
+           r.id AS source_id,
+           'reminders' AS bucket,
+           'Registration Confirmation' AS type_label,
+           COALESCE(NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), COALESCE(u.pending_email, u.email)) AS title,
            CASE WHEN NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), '') IS NULL
-             THEN NULL ELSE COALESCE(u.pending_email, u.email) END,
+             THEN NULL ELSE COALESCE(u.pending_email, u.email) END AS subtitle,
            e.name || ' | ' || e.slug || ' | registration_confirmation_reminder | #' ||
              (MAX(0, MIN(cfg.max_confirmation_reminders - 1,
-               CAST(((julianday(cfg.now_at) - julianday(r.created_at)) / cfg.confirmation_interval_days) AS INTEGER) - 1)) + 1),
-           'Reminder: please confirm your registration for ' || e.name,
-           COALESCE(r.pending_confirmation_deadline_at, datetime(r.created_at, '+' || cfg.confirmation_fallback_days || ' days')),
-           'pending',
-           'Preview'
+               CAST(((julianday(cfg.now_at) - julianday(r.created_at)) / cfg.confirmation_interval_days) AS INTEGER) - 1)) + 1) AS context,
+           'Reminder: please confirm your registration for ' || e.name AS detail,
+           COALESCE(r.pending_confirmation_deadline_at, datetime(r.created_at, '+' || cfg.confirmation_fallback_days || ' days')) AS due_at,
+           'pending' AS status_key,
+           'Preview' AS status_label
     FROM registrations r
     JOIN events e ON e.id = r.event_id
     JOIN users u ON u.id = r.user_id
@@ -229,10 +241,47 @@ const DUE_WORK_CTE = `
       AND datetime(COALESCE(r.confirmation_reminder_sent_at, r.created_at)) <= datetime(cfg.confirmation_cutoff)
       AND julianday(COALESCE(r.pending_confirmation_deadline_at,
                             datetime(r.created_at, '+' || cfg.confirmation_fallback_days || ' days'))) > julianday(cfg.now_at)
+    ORDER BY COALESCE(r.confirmation_reminder_sent_at, r.created_at) ASC, r.id ASC
+    LIMIT (SELECT reminder_limit FROM cfg)
+  ),
+  reminder_candidates AS (
+    SELECT category_priority, source_due_at, source_id, bucket, type_label, title, subtitle, context, detail, due_at, status_key, status_label
+    FROM invite_reminder_candidates
+
+    UNION ALL
+
+    SELECT category_priority, source_due_at, source_id, bucket, type_label, title, subtitle, context, detail, due_at, status_key, status_label
+    FROM cospeaker_reminder_candidates
+
+    UNION ALL
+
+    SELECT category_priority, source_due_at, source_id, bucket, type_label, title, subtitle, context, detail, due_at, status_key, status_label
+    FROM presentation_reminder_candidates
+
+    UNION ALL
+
+    SELECT category_priority, source_due_at, source_id, bucket, type_label, title, subtitle, context, detail, due_at, status_key, status_label
+    FROM confirmation_reminder_candidates
   ),
   ranked_reminders AS (
-    SELECT *, ROW_NUMBER() OVER (ORDER BY category_priority, source_due_at, source_id) AS candidate_rank
+    SELECT category_priority, source_due_at, source_id, bucket, type_label, title, subtitle, context, detail, due_at, status_key, status_label,
+           ROW_NUMBER() OVER (ORDER BY category_priority, source_due_at, source_id) AS candidate_rank
     FROM reminder_candidates
+  ),
+  cleanup_event_candidates AS (
+    SELECT e.id AS event_id,
+           e.name,
+           e.slug,
+           e.ends_at,
+           rp.user_retention_days
+    FROM retention_policies rp
+    JOIN events e ON e.id = rp.event_id
+    CROSS JOIN cfg
+    WHERE cfg.include_retention = 1
+      AND e.ends_at IS NOT NULL
+      AND datetime(e.ends_at) < datetime(cfg.now_at, '-' || rp.user_retention_days || ' days')
+    ORDER BY e.ends_at ASC, e.id ASC
+    LIMIT (SELECT cleanup_limit FROM cfg)
   ),
   cleanup_candidates AS (
     SELECT 'cleanup' AS bucket,
@@ -240,24 +289,19 @@ const DUE_WORK_CTE = `
            e.name AS title,
            e.slug AS subtitle,
            COUNT(r.id) || ' regs | ' || COUNT(DISTINCT r.user_id) || ' users | ' ||
-             rp.user_retention_days || 'd retention' AS context,
+             e.user_retention_days || 'd retention' AS context,
            'Event ended ' || e.ends_at AS detail,
            e.ends_at AS due_at,
            'waiting' AS status_key,
            'Eligible' AS status_label,
-           e.id AS source_id
-    FROM retention_policies rp
-    JOIN events e ON e.id = rp.event_id
-    LEFT JOIN registrations r ON r.event_id = e.id
-    CROSS JOIN cfg
-    WHERE cfg.include_retention = 1
-      AND e.ends_at IS NOT NULL
-      AND datetime(e.ends_at) < datetime(cfg.now_at, '-' || rp.user_retention_days || ' days')
-    GROUP BY e.id, e.name, e.slug, e.ends_at, rp.user_retention_days
+           e.event_id AS source_id
+    FROM cleanup_event_candidates e
+    LEFT JOIN registrations r ON r.event_id = e.event_id
+    GROUP BY e.event_id, e.name, e.slug, e.ends_at, e.user_retention_days
   ),
   work_items AS (
     SELECT bucket, type_label, title, subtitle, context, detail, due_at, status_key, status_label, source_id
-    FROM outbox_candidates, cfg WHERE candidate_rank <= cfg.outbox_limit
+    FROM outbox_candidates
     UNION ALL
     SELECT bucket, type_label, title, subtitle, context, detail, due_at, status_key, status_label, source_id
     FROM ranked_reminders, cfg WHERE candidate_rank <= cfg.reminder_limit
@@ -282,6 +326,7 @@ function queryBindings(env: Env, appBaseUrl: string, options: DueWorkListOptions
     config.maxPresentationReminders,
     options.reminderLimit,
     options.outboxLimit,
+    options.cleanupLimit,
     options.includeRetention ? 1 : 0,
   ];
 }
@@ -321,7 +366,8 @@ export async function listDueWork(db: DatabaseLike, env: Env, appBaseUrl: string
   const orderBy = orderTerms(options.sort);
   const sql = `${DUE_WORK_CTE},
     searched AS (
-      SELECT * FROM work_items ${searchWhere}
+      SELECT bucket, type_label, title, subtitle, context, detail, due_at, status_key, status_label, source_id
+      FROM work_items ${searchWhere}
     ),
     counts AS (
       SELECT COUNT(*) AS all_count,
@@ -331,13 +377,15 @@ export async function listDueWork(db: DatabaseLike, env: Env, appBaseUrl: string
       FROM searched
     ),
     filtered AS (
-      SELECT * FROM searched WHERE ? = 'all' OR bucket = ?
+      SELECT bucket, type_label, title, subtitle, context, detail, due_at, status_key, status_label, source_id
+      FROM searched WHERE ? = 'all' OR bucket = ?
     ),
     page_totals AS (
       SELECT COUNT(*) AS page_total FROM filtered
     ),
     paged AS (
-      SELECT *, ROW_NUMBER() OVER (ORDER BY ${orderBy}) AS page_position
+      SELECT bucket, type_label, title, subtitle, context, detail, due_at, status_key, status_label, source_id,
+             ROW_NUMBER() OVER (ORDER BY ${orderBy}) AS page_position
       FROM filtered
       ORDER BY ${orderBy}
       LIMIT ? OFFSET ?

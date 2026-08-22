@@ -2958,6 +2958,12 @@ CREATE INDEX IF NOT EXISTS idx_consent_acceptances_registration_term
 CREATE INDEX IF NOT EXISTS idx_registrations_event_status_created
   ON registrations(event_id, status, created_at);
 
+-- Retention due-work discovers the oldest eligible events before joining their
+-- registrations. The dynamic per-policy retention predicate cannot be indexed,
+-- but this index supports the event ordering and avoids an unrelated table sort.
+CREATE INDEX IF NOT EXISTS idx_events_ends_at_id
+  ON events(ends_at, id);
+
 -- The form response read model excludes registrations/proposals that already
 -- have normalized answers. Match the complete correlated lookup so D1 does
 -- not rescan every submission for the form once per legacy source row.

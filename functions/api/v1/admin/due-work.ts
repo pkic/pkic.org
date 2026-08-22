@@ -10,7 +10,7 @@ import { adminDueWorkListRouteSchema } from "../../../../assets/shared/schemas/a
 export const AdminDueWorkList = openApiRoute(adminDueWorkListRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "admin:read");
-  const { bucket, includeRetention, reminderLimit, outboxLimit, limit, offset, q, sort } = data.query;
+  const { bucket, includeRetention, reminderLimit, outboxLimit, cleanupLimit, limit, offset, q, sort } = data.query;
 
   return json(
     await listDueWork(requestDb(c), c.env, resolveAppBaseUrl(c.env, c.req.raw), {
@@ -18,6 +18,7 @@ export const AdminDueWorkList = openApiRoute(adminDueWorkListRouteSchema, async 
       includeRetention,
       reminderLimit,
       outboxLimit,
+      cleanupLimit,
       limit,
       offset,
       q,

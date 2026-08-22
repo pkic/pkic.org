@@ -116,6 +116,7 @@ describe("shared list/search contract", () => {
       includeRetention: false,
       reminderLimit: 120,
       outboxLimit: 120,
+      cleanupLimit: 120,
       limit: 25,
       offset: 0,
     });
