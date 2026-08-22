@@ -207,7 +207,7 @@ async function seedProposalWithReviews(
         reviewer_comment, applicant_note, created_at, updated_at
       ) VALUES (
         '${crypto.randomUUID()}', '${proposalId}', '${adminId}', 'accept', 9,
-        'Strong scope and relevance', 'Please include timing details', datetime('now'), datetime('now')
+        'Strong deployment scope and relevance', 'Please include timing details', datetime('now'), datetime('now')
       )
     `),
     env.DB.prepare(`
@@ -365,7 +365,7 @@ describe("admin proposal endpoints", () => {
     const adminToken = await createAdminSession(env.DB, adminId, "token-admin-list-paged");
     const firstPageResponse = await callAdminProposalsList(
       adminToken,
-      "/api/v1/admin/events/pqc-2026/proposals?limit=1&offset=0",
+      "/api/v1/admin/events/pqc-2026/proposals?status=submitted&limit=1&offset=0",
     );
     expect(firstPageResponse.status).toBe(200);
     const firstPagePayload = (await firstPageResponse.json()) as {
@@ -377,7 +377,7 @@ describe("admin proposal endpoints", () => {
 
     const secondPageResponse = await callAdminProposalsList(
       adminToken,
-      "/api/v1/admin/events/pqc-2026/proposals?limit=1&offset=1",
+      "/api/v1/admin/events/pqc-2026/proposals?status=submitted&limit=1&offset=1",
     );
     const secondPagePayload = (await secondPageResponse.json()) as {
       proposals: Array<{ title: string }>;
@@ -672,12 +672,16 @@ describe("admin proposal endpoints", () => {
     ]);
     const adminToken = await createAdminSession(env.DB, adminId, "token-admin-review-query");
 
-    const response = await callAdminProposalReviews(adminToken, proposalId, "?limit=1&q=deployment&sort=-score");
+    const response = await callAdminProposalReviews(
+      adminToken,
+      proposalId,
+      "?limit=1&offset=1&q=deployment&sort=-score",
+    );
 
     expect(response.status).toBe(200);
     const payload = proposalReviewsListResponseSchema.parse(await response.json());
     expect(payload.reviews.map((review) => review.reviewer_email)).toEqual(["second-reviewer@pkic.org"]);
-    expect(payload.page).toEqual({ limit: 1, offset: 0, total: 1, hasMore: false });
+    expect(payload.page).toEqual({ limit: 1, offset: 1, total: 2, hasMore: false });
     expect(payload.myReview?.reviewer_user_id).toBe(adminId);
     expect(payload.summary).toEqual({
       totalReviews: 2,

@@ -1,20 +1,14 @@
-import { EVENT_INVITES_SORT_COLUMNS } from "../../../../assets/shared/schemas/admin-events";
+import {
+  EVENT_INVITES_SORT_COLUMNS,
+  type AdminEventInvitesListQuery,
+} from "../../../../assets/shared/schemas/admin-events";
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
 
-export interface AdminEventInviteListQuery {
-  status?: string;
-  type?: string;
-  q?: string;
-  sort?: string;
-  limit: number;
-  offset: number;
-}
-
-export async function listAdminEventInvites(db: DatabaseLike, eventId: string, query: AdminEventInviteListQuery) {
+export async function listAdminEventInvites(db: DatabaseLike, eventId: string, query: AdminEventInvitesListQuery) {
   const conditions: string[] = ["i.event_id = ?"];
   const bindings: unknown[] = [eventId];
   if (query.status) {

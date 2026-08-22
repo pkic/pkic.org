@@ -1,13 +1,12 @@
-import type { z } from "zod";
-import { batchFirst, batchRows } from "../db/pagination";
+import { batchFirst, buildOffsetPageStatements, decodeOffsetPageResults } from "../db/pagination";
 import { buildD1TextSearchFilter } from "../db/search";
 import type { DatabaseLike } from "../types";
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
 import type { AdminEventProposalSummary, ProposalStats } from "../../../assets/shared/schemas/admin-event-proposals";
-import { adminEventProposalsQuerySchema } from "../../../assets/shared/schemas/admin-events";
+import type { AdminEventProposalsQuery } from "../../../assets/shared/schemas/admin-events";
 import { PROPOSAL_INACTIVE_STATUSES } from "../../../assets/shared/schemas/proposal-status";
 
-type ProposalSort = NonNullable<z.infer<typeof adminEventProposalsQuerySchema>["sort"]>;
+type ProposalSort = AdminEventProposalsQuery["sort"];
 
 const SORT_EXPRESSIONS: Readonly<Record<string, string>> = {
   submittedAt: "sp.submitted_at",
@@ -51,16 +50,7 @@ function parseCountRecord(value: string): Record<string, number> {
 
 export async function listAdminEventProposals(
   db: DatabaseLike,
-  query: {
-    eventId: string;
-    status?: string;
-    recommendation?: string;
-    sort: ProposalSort;
-    q?: string;
-    deleted?: "1";
-    limit: number;
-    offset: number;
-  },
+  query: AdminEventProposalsQuery & { eventId: string },
 ): Promise<{ proposals: AdminEventProposalSummary[]; stats: ProposalStats; page: ReturnType<typeof buildPageInfo> }> {
   const conditions = ["sp.event_id = ?", query.deleted === "1" ? "sp.deleted_at IS NOT NULL" : "sp.deleted_at IS NULL"];
   const bindings: unknown[] = [query.eventId];
@@ -115,10 +105,8 @@ export async function listAdminEventProposals(
   const deletedScope = query.deleted === "1" ? "sp.deleted_at IS NOT NULL" : "sp.deleted_at IS NULL";
   const reviewDeletedScope =
     query.deleted === "1" ? "review_sp.deleted_at IS NOT NULL" : "review_sp.deleted_at IS NULL";
-  const [rowsResult, totalResult, statsResult] = await db.batch([
-    db
-      .prepare(
-        `SELECT sp.id, sp.event_id, sp.proposer_user_id, sp.status, sp.proposal_type, sp.title, sp.abstract,
+  const [pageStatement, countStatement] = buildOffsetPageStatements(db, {
+    sql: `SELECT sp.id, sp.event_id, sp.proposer_user_id, sp.status, sp.proposal_type, sp.title, sp.abstract,
                 sp.review_round,
                 sp.submitted_at, sp.updated_at,
                 u.email AS proposer_email, u.first_name AS proposer_first_name, u.last_name AS proposer_last_name,
@@ -141,18 +129,15 @@ export async function listAdminEventProposals(
            GROUP BY pr.proposal_id, pr.review_round
          ) rv ON rv.proposal_id = sp.id AND rv.review_round = sp.review_round
          LEFT JOIN proposal_decisions pd ON pd.proposal_id = sp.id
-         WHERE ${where}
-         ORDER BY ${proposalOrderBy(query.sort)}
-         LIMIT ? OFFSET ?`,
-      )
-      .bind(query.eventId, ...bindings, query.limit, query.offset),
-    db
-      .prepare(
-        `SELECT COUNT(*) AS total
-         FROM session_proposals sp JOIN users u ON u.id = sp.proposer_user_id
          WHERE ${where}`,
-      )
-      .bind(...bindings),
+    bindings: [query.eventId, ...bindings],
+    orderBy: `ORDER BY ${proposalOrderBy(query.sort)}`,
+    limit: query.limit,
+    offset: query.offset,
+  });
+  const [rowsResult, totalResult, statsResult] = await db.batch([
+    pageStatement,
+    countStatement,
     db
       .prepare(
         `WITH scoped_proposals AS MATERIALIZED (
@@ -184,8 +169,7 @@ export async function listAdminEventProposals(
       .bind(query.eventId),
   ]);
 
-  const proposals = batchRows<AdminEventProposalSummary>(rowsResult);
-  const total = Number(batchFirst<{ total: number }>(totalResult)?.total ?? 0);
+  const { rows: proposals, total } = decodeOffsetPageResults<AdminEventProposalSummary>(rowsResult, totalResult);
   const statsRow = batchFirst<ProposalStatsRow>(statsResult);
   const byStatus = parseCountRecord(statsRow?.by_status_json ?? "{}");
   const byRecommendation = parseCountRecord(statsRow?.by_recommendation_json ?? "{}");

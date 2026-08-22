@@ -43,10 +43,12 @@ export const adminEventProposalsQuerySchema = listQuerySchema(EVENT_PROPOSALS_SO
   recommendation: proposalRecommendationSchema.optional(),
   deleted: z.literal("1").optional(),
 });
+export type AdminEventProposalsQuery = z.infer<typeof adminEventProposalsQuerySchema>;
 
 export const EVENTS_LIST_SORT_COLUMNS = ["name", "starts_at", "registration_mode", "total_registrations"] as const;
 export const eventsListSortValueSchema = sortColumnSchema(EVENTS_LIST_SORT_COLUMNS);
 export const adminEventsListQuerySchema = searchableListQuerySchema(eventsListSortValueSchema);
+export type AdminEventsListQuery = z.infer<typeof adminEventsListQuerySchema>;
 
 export const adminEventSummarySchema = z.object({
   id: eventIdSchema,
@@ -160,6 +162,7 @@ export const adminEventInvitesListQuerySchema = searchableListQuerySchema(eventI
   status: z.enum(["sent", "accepted", "declined", "expired", "revoked"]).optional(),
   type: z.enum(["attendee", "speaker"]).optional(),
 });
+export type AdminEventInvitesListQuery = z.infer<typeof adminEventInvitesListQuerySchema>;
 export const adminEventInviteSummarySchema = z.object({
   id: z.string(),
   invitee_email: z.string(),

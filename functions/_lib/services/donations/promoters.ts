@@ -1,16 +1,13 @@
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import type {
   AdminDonationPromoter,
+  DonationPromotersListQuery,
   DonationPromotersListResponse,
 } from "../../../../assets/shared/schemas/admin-donations";
-import { batchFirst, batchRows } from "../../db/pagination";
+import { batchFirst, buildOffsetPageStatements, decodeOffsetPageResults } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
-
-interface PromoterCountRow {
-  total: number;
-}
 
 interface PromoterSummaryRow {
   promoter_count: number;
@@ -73,9 +70,12 @@ const PROMOTER_READ_MODEL = `
       LEFT JOIN dominant_currency dc ON dc.source = p.code
   )`;
 
+const PROMOTER_SELECT_COLUMNS = `code, name, checkout_session_id, clicks, own_gross, own_gross_usd, own_currency,
+  attributed_total, attributed_completed, attributed_gross, attributed_gross_usd, currency, created_at`;
+
 export async function listDonationPromoters(
   db: DatabaseLike,
-  params: { limit: number; offset: number; q?: string; sort?: string },
+  params: DonationPromotersListQuery,
 ): Promise<DonationPromotersListResponse> {
   const search = params.q ? buildD1TextSearchFilter(params.q, ["code", "name"]) : null;
   const where = search ? `WHERE ${search.sql}` : "";
@@ -92,11 +92,16 @@ export async function listDonationPromoters(
     "code ASC",
   );
 
+  const [pageStatement, countStatement] = buildOffsetPageStatements(db, {
+    sql: `${PROMOTER_READ_MODEL} SELECT ${PROMOTER_SELECT_COLUMNS} FROM promoter_rows ${where}`,
+    bindings,
+    orderBy,
+    limit: params.limit,
+    offset: params.offset,
+  });
   const [pageResult, countResult, summaryResult] = await db.batch([
-    db
-      .prepare(`${PROMOTER_READ_MODEL} SELECT * FROM promoter_rows ${where} ${orderBy} LIMIT ? OFFSET ?`)
-      .bind(...bindings, params.limit, params.offset),
-    db.prepare(`${PROMOTER_READ_MODEL} SELECT COUNT(*) AS total FROM promoter_rows ${where}`).bind(...bindings),
+    pageStatement,
+    countStatement,
     db
       .prepare(
         `${PROMOTER_READ_MODEL}
@@ -110,8 +115,7 @@ export async function listDonationPromoters(
       .bind(...bindings),
   ]);
 
-  const promoters = batchRows<AdminDonationPromoter>(pageResult);
-  const total = batchFirst<PromoterCountRow>(countResult)?.total ?? 0;
+  const { rows: promoters, total } = decodeOffsetPageResults<AdminDonationPromoter>(pageResult, countResult);
   const summary = batchFirst<PromoterSummaryRow>(summaryResult);
   return {
     promoters,

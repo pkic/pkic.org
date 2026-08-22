@@ -1,4 +1,4 @@
-import { EVENTS_LIST_SORT_COLUMNS } from "../../../../assets/shared/schemas/admin-events";
+import { EVENTS_LIST_SORT_COLUMNS, type AdminEventsListQuery } from "../../../../assets/shared/schemas/admin-events";
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
@@ -24,10 +24,7 @@ interface EventWithStats {
   pending_invites: number;
 }
 
-export async function listAdminEvents(
-  db: DatabaseLike,
-  query: { q?: string; sort?: string; limit: number; offset: number },
-) {
+export async function listAdminEvents(db: DatabaseLike, query: AdminEventsListQuery) {
   const orderBy = resolveOrderBy(
     query.sort,
     EVENTS_LIST_SORT_COLUMNS,

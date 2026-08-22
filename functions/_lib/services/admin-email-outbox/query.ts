@@ -1,9 +1,12 @@
-import { batchFirst, batchRows } from "../../db/pagination";
+import { batchFirst, batchRows, buildOffsetPageStatements, decodeOffsetPageResults } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
-import type { EmailMessageType } from "../../../../assets/shared/schemas/admin-email-templates";
-import type { AdminEmailOutboxStatus } from "../../../../assets/shared/schemas/admin-email-outbox";
+import type { EmailMessageType } from "../../../../assets/shared/schemas/api-common";
+import type {
+  AdminEmailOutboxQuery,
+  AdminEmailOutboxStatus,
+} from "../../../../assets/shared/schemas/admin-email-outbox";
 
 export interface OutboxListRow {
   id: string;
@@ -27,13 +30,13 @@ export interface OutboxListRow {
   sent_at: string | null;
 }
 
-interface CountRow {
-  status: string;
+interface StatusCountRow {
+  status: AdminEmailOutboxStatus;
   count: number;
 }
 
 interface MessageTypeCountRow {
-  message_type: string;
+  message_type: EmailMessageType;
   count: number;
 }
 
@@ -45,16 +48,16 @@ export interface TemplateCountRow {
 export interface AdminEmailOutboxQueryResult {
   rows: OutboxListRow[];
   total: number;
-  statusCounts: CountRow[];
+  statusCounts: StatusCountRow[];
   messageTypeCounts: MessageTypeCountRow[];
   templateCounts: TemplateCountRow[];
-  dueCounts: CountRow[];
+  dueCounts: StatusCountRow[];
   nextSendAfter: string | null;
 }
 
 function buildWhereClause(query: {
   status?: AdminEmailOutboxStatus;
-  messageType?: string;
+  messageType?: EmailMessageType;
   q?: string;
   dueNow: boolean;
   now: string;
@@ -95,15 +98,7 @@ function buildWhereClause(query: {
 
 export async function queryAdminEmailOutbox(
   db: DatabaseLike,
-  query: {
-    status?: AdminEmailOutboxStatus;
-    messageType?: string;
-    dueNow: boolean;
-    q?: string;
-    sort?: string;
-    limit: number;
-    offset: number;
-  },
+  query: AdminEmailOutboxQuery,
 ): Promise<AdminEmailOutboxQueryResult> {
   const now = new Date().toISOString();
   const { where, bindings } = buildWhereClause({ ...query, now });
@@ -123,22 +118,23 @@ export async function queryAdminEmailOutbox(
     "o.id ASC",
   );
   const aggregateFrom = query.q ? "FROM email_outbox o LEFT JOIN events e ON e.id = o.event_id" : "FROM email_outbox o";
+  const [pageStatement, countStatement] = buildOffsetPageStatements(db, {
+    sql: `SELECT o.id, o.event_id, e.slug AS event_slug, e.name AS event_name,
+                 o.template_key, o.template_version, o.recipient_email, o.subject, o.payload_json,
+                 o.message_type, o.provider, o.provider_message_id, o.status, o.attempts, o.send_after,
+                 o.last_error, o.created_at, o.updated_at, o.sent_at
+          FROM email_outbox o
+          LEFT JOIN events e ON e.id = o.event_id
+          ${where}`,
+    bindings,
+    orderBy,
+    limit: query.limit,
+    offset: query.offset,
+  });
   const [rowsResult, totalResult, statusResult, messageTypeResult, templateResult, dueResult, dueNextResult] =
     await db.batch([
-      db
-        .prepare(
-          `SELECT o.id, o.event_id, e.slug AS event_slug, e.name AS event_name,
-                  o.template_key, o.template_version, o.recipient_email, o.subject, o.payload_json,
-                  o.message_type, o.provider, o.provider_message_id, o.status, o.attempts, o.send_after,
-                  o.last_error, o.created_at, o.updated_at, o.sent_at
-           FROM email_outbox o
-           LEFT JOIN events e ON e.id = o.event_id
-           ${where}
-           ${orderBy}
-           LIMIT ? OFFSET ?`,
-        )
-        .bind(...bindings, query.limit, query.offset),
-      db.prepare(`SELECT COUNT(*) AS total ${aggregateFrom} ${where}`).bind(...bindings),
+      pageStatement,
+      countStatement,
       db.prepare(`SELECT o.status, COUNT(*) AS count ${aggregateFrom} ${where} GROUP BY o.status`).bind(...bindings),
       db
         .prepare(`SELECT o.message_type, COUNT(*) AS count ${aggregateFrom} ${where} GROUP BY o.message_type`)
@@ -168,12 +164,11 @@ export async function queryAdminEmailOutbox(
     ]);
 
   return {
-    rows: batchRows<OutboxListRow>(rowsResult),
-    total: Number(batchFirst<{ total: number }>(totalResult)?.total ?? 0),
-    statusCounts: batchRows<CountRow>(statusResult),
+    ...decodeOffsetPageResults<OutboxListRow>(rowsResult, totalResult),
+    statusCounts: batchRows<StatusCountRow>(statusResult),
     messageTypeCounts: batchRows<MessageTypeCountRow>(messageTypeResult),
     templateCounts: batchRows<TemplateCountRow>(templateResult),
-    dueCounts: batchRows<CountRow>(dueResult),
+    dueCounts: batchRows<StatusCountRow>(dueResult),
     nextSendAfter: batchFirst<{ send_after: string | null }>(dueNextResult)?.send_after ?? null,
   };
 }

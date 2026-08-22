@@ -29,6 +29,7 @@ export const eventPromotersListQuerySchema = listQuerySchema(EVENT_PROMOTION_SOR
       });
     }
   });
+export type EventPromotersListQuery = z.infer<typeof eventPromotersListQuerySchema>;
 
 export const eventPromoterSchema = z.object({
   user_id: z.string(),
@@ -38,16 +39,16 @@ export const eventPromoterSchema = z.object({
   organization: z.string().nullable(),
   job_title: z.string().nullable(),
   headshot_url: httpOrSameOriginUrlSchema.nullable(),
-  invites_sent: z.number(),
-  invites_accepted: z.number(),
-  invites_declined: z.number(),
-  invites_expired: z.number(),
+  invites_sent: z.number().int().nonnegative(),
+  invites_accepted: z.number().int().nonnegative(),
+  invites_declined: z.number().int().nonnegative(),
+  invites_expired: z.number().int().nonnegative(),
   invite_conversion_rate: z.number().nullable(),
   last_invite_at: z.string().nullable(),
-  referral_codes_issued: z.number(),
-  referral_clicks: z.number(),
-  referral_conversions: z.number(),
-  impact_score: z.number(),
+  referral_codes_issued: z.number().int().nonnegative(),
+  referral_clicks: z.number().int().nonnegative(),
+  referral_conversions: z.number().int().nonnegative(),
+  impact_score: z.number().int().nonnegative(),
 });
 export type EventPromoter = z.infer<typeof eventPromoterSchema>;
 
@@ -60,20 +61,20 @@ export const eventReferralCodeSchema = z.object({
   owner_first_name: z.string().nullable(),
   owner_last_name: z.string().nullable(),
   channel_hint: z.string().nullable(),
-  clicks: z.number(),
-  conversions: z.number(),
+  clicks: z.number().int().nonnegative(),
+  conversions: z.number().int().nonnegative(),
   created_at: z.string(),
 });
 export type EventReferralCode = z.infer<typeof eventReferralCodeSchema>;
 
 export const eventPromoterSummarySchema = z.object({
-  activePromoters: z.number(),
-  promotersWithRegistrations: z.number(),
-  totalInvitesSent: z.number(),
-  totalInvitesAccepted: z.number(),
-  totalReferralClicks: z.number(),
-  totalReferralConversions: z.number(),
-  referralCodeCount: z.number(),
+  activePromoters: z.number().int().nonnegative(),
+  promotersWithRegistrations: z.number().int().nonnegative(),
+  totalInvitesSent: z.number().int().nonnegative(),
+  totalInvitesAccepted: z.number().int().nonnegative(),
+  totalReferralClicks: z.number().int().nonnegative(),
+  totalReferralConversions: z.number().int().nonnegative(),
+  referralCodeCount: z.number().int().nonnegative(),
 });
 
 export const eventPromotersListResponseSchema = z.object({

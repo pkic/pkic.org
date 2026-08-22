@@ -165,7 +165,7 @@ describe("GET /api/v1/admin/donations (P6M-P2-02)", () => {
   });
 
   it("bounds results with limit/offset", async () => {
-    const response = await call(adminToken, "/api/v1/admin/donations?limit=1&offset=1&sort=created_at");
+    const response = await call(adminToken, "/api/v1/admin/donations?q=donor&limit=1&offset=1&sort=created_at");
     expect(response.status).toBe(200);
     const body = donationsListResponseSchema.parse(await response.json());
     expect(body.donations.map((d) => d.checkout_session_id)).toEqual(["cs_2"]);
@@ -373,7 +373,7 @@ describe("GET /api/v1/admin/donations/promoters (P6M-P2-12)", () => {
   });
 
   it("bounds results with limit/offset instead of returning every promoter unbounded", async () => {
-    const response = await call(adminToken, "/api/v1/admin/donations/promoters?limit=1&offset=1");
+    const response = await call(adminToken, "/api/v1/admin/donations/promoters?q=promo&limit=1&offset=1");
     expect(response.status).toBe(200);
     const body = donationPromotersListResponseSchema.parse(await response.json());
     expect(body.promoters.map((p) => p.code)).toEqual(["promoB2"]);

@@ -22,6 +22,7 @@ export const adminEmailOutboxQuerySchema = listQuerySchema(ADMIN_EMAIL_OUTBOX_SO
   messageType: emailMessageTypeSchema.optional(),
   dueNow: booleanQueryFlagSchema.default(false),
 });
+export type AdminEmailOutboxQuery = z.infer<typeof adminEmailOutboxQuerySchema>;
 
 export const adminRetryOutboxSchema = z.object({
   limit: z.number().int().positive().max(500).default(20),
@@ -60,12 +61,12 @@ export const adminEmailOutboxRowSchema = z.object({
 
 export const adminEmailOutboxResponseSchema = paginatedResponseSchema("outbox", adminEmailOutboxRowSchema).extend({
   summary: z.object({
-    total: z.number(),
-    byStatus: z.record(z.string(), z.number()),
-    byMessageType: z.record(z.string(), z.number()),
-    topTemplates: z.array(z.object({ template_key: z.string(), count: z.number() })),
-    dueNow: z.number(),
-    dueByStatus: z.record(z.string(), z.number()),
+    total: z.number().int().nonnegative(),
+    byStatus: z.partialRecord(adminEmailOutboxStatusSchema, z.number().int().nonnegative()),
+    byMessageType: z.partialRecord(emailMessageTypeSchema, z.number().int().nonnegative()),
+    topTemplates: z.array(z.object({ template_key: z.string(), count: z.number().int().nonnegative() })),
+    dueNow: z.number().int().nonnegative(),
+    dueByStatus: z.partialRecord(adminEmailOutboxStatusSchema, z.number().int().nonnegative()),
     nextSendAfter: z.string().nullable(),
   }),
 });

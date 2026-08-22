@@ -2,24 +2,23 @@ import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import {
   ADMIN_DONATIONS_SORT_COLUMNS,
   type AdminDonationSummary,
+  type DonationStatus,
+  type DonationsListQuery,
   type DonationsListResponse,
 } from "../../../../assets/shared/schemas/admin-donations";
 import { resolveOrderBy } from "../../db/sort";
-import { batchFirst, batchRows } from "../../db/pagination";
+import { batchRows, buildOffsetPageStatements, decodeOffsetPageResults } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import type { DatabaseLike } from "../../types";
 import { ADMIN_DONATION_SELECT_COLUMNS } from "./read";
 
 interface StatusCountRow {
-  status: string;
+  status: DonationStatus;
   count: number;
   backfillable_count: number;
 }
 
-export async function listDonations(
-  db: DatabaseLike,
-  params: { status?: string; q?: string; sort?: string; limit: number; offset: number },
-): Promise<DonationsListResponse> {
+export async function listDonations(db: DatabaseLike, params: DonationsListQuery): Promise<DonationsListResponse> {
   const conditions: string[] = [];
   const bindings: unknown[] = [];
 
@@ -36,17 +35,18 @@ export async function listDonations(
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   const orderBy = resolveOrderBy(params.sort, ADMIN_DONATIONS_SORT_COLUMNS, "ORDER BY created_at DESC", "id ASC");
 
+  const [pageStatement, countStatement] = buildOffsetPageStatements(db, {
+    sql: `SELECT ${ADMIN_DONATION_SELECT_COLUMNS}
+            FROM donations
+            ${where}`,
+    bindings,
+    orderBy,
+    limit: params.limit,
+    offset: params.offset,
+  });
   const [pageResult, countResult, summaryResult] = await db.batch([
-    db
-      .prepare(
-        `SELECT ${ADMIN_DONATION_SELECT_COLUMNS}
-           FROM donations
-           ${where}
-           ${orderBy}
-           LIMIT ? OFFSET ?`,
-      )
-      .bind(...bindings, params.limit, params.offset),
-    db.prepare(`SELECT COUNT(*) AS total FROM donations ${where}`).bind(...bindings),
+    pageStatement,
+    countStatement,
     db.prepare(
       `SELECT status, COUNT(*) AS count,
               SUM(CASE
@@ -58,8 +58,7 @@ export async function listDonations(
     ),
   ]);
 
-  const donations = batchRows<AdminDonationSummary>(pageResult);
-  const total = Number(batchFirst<{ total: number }>(countResult)?.total ?? 0);
+  const { rows: donations, total } = decodeOffsetPageResults<AdminDonationSummary>(pageResult, countResult);
   const statusRows = batchRows<StatusCountRow>(summaryResult);
   const byStatus = Object.fromEntries(statusRows.map(({ status, count }) => [status, Number(count)]));
   const backfillable = statusRows.reduce((sum, row) => sum + Number(row.backfillable_count), 0);

@@ -77,17 +77,28 @@ describe("GET /api/v1/admin/events/:eventSlug/promoters", () => {
       totalReferralConversions: 2,
       referralCodeCount: 2,
     });
+
+    const secondPage = await call(
+      "/api/v1/admin/events/pqc-2026/promoters?view=promoters&q=example&sort=-impact&limit=1&offset=1",
+    );
+    expect(secondPage.status).toBe(200);
+    const secondPageBody = eventPromotersListResponseSchema.parse(await secondPage.json());
+    expect(secondPageBody.promoters.map(({ email }) => email)).toEqual(["second@example.test"]);
+    expect(secondPageBody.page).toEqual({ limit: 1, offset: 1, total: 2, hasMore: false });
   });
 
   it("returns a separate bounded referral-code view", async () => {
     await insertPromoter("owner@example.test", 0, 3);
-    const response = await call("/api/v1/admin/events/pqc-2026/promoters?view=codes&limit=1&sort=-clicks");
+    await insertPromoter("second-owner@example.test", 0, 1);
+    const response = await call(
+      "/api/v1/admin/events/pqc-2026/promoters?view=codes&q=example&limit=1&offset=1&sort=-clicks",
+    );
     expect(response.status).toBe(200);
     const body = eventPromotersListResponseSchema.parse(await response.json());
     expect(body.promoters).toEqual([]);
     expect(body.referralCodes).toHaveLength(1);
-    expect(body.referralCodes[0].owner_email).toBe("owner@example.test");
-    expect(body.page.total).toBe(1);
+    expect(body.referralCodes[0].owner_email).toBe("second-owner@example.test");
+    expect(body.page).toEqual({ limit: 1, offset: 1, total: 2, hasMore: false });
   });
 
   it("rejects sort keys that belong to the other view", async () => {

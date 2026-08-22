@@ -1,6 +1,6 @@
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import type { ProposalReview, ProposalReviewsListQuery } from "../../../../assets/shared/schemas/proposal-reviews";
-import { batchFirst, batchRows } from "../../db/pagination";
+import { batchFirst, buildOffsetPageStatements, decodeOffsetPageResults } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { AuthAdmin, DatabaseLike } from "../../types";
@@ -18,7 +18,7 @@ export async function listProposalReviews(
   db: DatabaseLike,
   actor: AuthAdmin,
   proposalId: string,
-  query: ProposalReviewsListQuery & { limit: number; offset: number },
+  query: ProposalReviewsListQuery,
   minReviewsRequired: number,
 ) {
   const context = await getReviewContext(db, actor, proposalId);
@@ -55,11 +55,16 @@ export async function listProposalReviews(
     "pr.updated_at DESC",
     "pr.id ASC",
   );
+  const [pageStatement, countStatement] = buildOffsetPageStatements(db, {
+    sql: `SELECT ${REVIEW_COLUMNS} ${REVIEW_FROM} ${where}`,
+    bindings,
+    orderBy,
+    limit: query.limit,
+    offset: query.offset,
+  });
   const [pageResult, countResult, aggregateResult, myReviewResult] = await db.batch([
-    db
-      .prepare(`SELECT ${REVIEW_COLUMNS} ${REVIEW_FROM} ${where} ${orderBy} LIMIT ? OFFSET ?`)
-      .bind(...bindings, query.limit, query.offset),
-    db.prepare(`SELECT COUNT(*) AS total ${REVIEW_FROM} ${where}`).bind(...bindings),
+    pageStatement,
+    countStatement,
     db
       .prepare(
         `SELECT COUNT(*) AS total_reviews,
@@ -78,8 +83,7 @@ export async function listProposalReviews(
       .bind(proposalId, context.reviewRound, actor.id),
   ]);
 
-  const reviews = batchRows<ProposalReview>(pageResult);
-  const total = Number(batchFirst<{ total: number }>(countResult)?.total ?? 0);
+  const { rows: reviews, total } = decodeOffsetPageResults<ProposalReview>(pageResult, countResult);
   const aggregate = batchFirst<ReviewAggregateRow>(aggregateResult);
   const totalReviews = Number(aggregate?.total_reviews ?? 0);
   return {

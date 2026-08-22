@@ -14,6 +14,7 @@ export const ADMIN_DONATIONS_SORT_COLUMNS = ["name", "gross_amount", "status", "
  */
 export const DONATION_STATUSES = ["pending", "awaiting_payment", "completed", "expired", "failed"] as const;
 export const donationStatusSchema = z.enum(DONATION_STATUSES);
+export type DonationStatus = z.infer<typeof donationStatusSchema>;
 
 export const adminDonationSummarySchema = z.object({
   id: z.string(),
@@ -26,7 +27,7 @@ export const adminDonationSummarySchema = z.object({
   gross_amount: z.number(),
   net_amount: z.number().nullable(),
   source: z.string().nullable(),
-  status: z.string(),
+  status: donationStatusSchema,
   payment_method_type: z.string().nullable(),
   session_expires_at: z.number().nullable(),
   settled_amount: z.number().nullable(),
@@ -38,6 +39,7 @@ export const adminDonationSummarySchema = z.object({
 export const donationsListQuerySchema = listQuerySchema(ADMIN_DONATIONS_SORT_COLUMNS, { limit: 100 }).extend({
   status: donationStatusSchema.optional(),
 });
+export type DonationsListQuery = z.infer<typeof donationsListQuerySchema>;
 
 export const adminDonationListSummarySchema = z.object({
   byStatus: z.partialRecord(donationStatusSchema, z.number().int().nonnegative()),
@@ -123,6 +125,7 @@ export const donationsListRouteSchema = {
 // list endpoint per AGENTS.md.
 export const DONATION_PROMOTER_SORT_COLUMNS = ["impact", "clicks", "donated", "createdAt"] as const;
 export const donationPromotersListQuerySchema = listQuerySchema(DONATION_PROMOTER_SORT_COLUMNS);
+export type DonationPromotersListQuery = z.infer<typeof donationPromotersListQuerySchema>;
 
 export const adminDonationPromoterSchema = z.object({
   code: z.string(),
@@ -142,11 +145,11 @@ export const adminDonationPromoterSchema = z.object({
 export type AdminDonationPromoter = z.infer<typeof adminDonationPromoterSchema>;
 
 export const adminDonationPromoterSummarySchema = z.object({
-  promoterCount: z.number(),
+  promoterCount: z.number().int().nonnegative(),
   totalOwnGrossUsd: z.number(),
   totalAttributedGrossUsd: z.number(),
-  totalClicks: z.number(),
-  totalAttributedCompleted: z.number(),
+  totalClicks: z.number().int().nonnegative(),
+  totalAttributedCompleted: z.number().int().nonnegative(),
 });
 
 export const donationPromotersListResponseSchema = paginatedResponseSchema(

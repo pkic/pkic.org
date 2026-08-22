@@ -132,11 +132,13 @@ export const proposalDecisionPreviewResponseSchema = successResponseSchema.exten
 });
 
 export const proposalStatsSchema = z.object({
-  byStatus: z.record(z.string(), z.number()),
-  byRecommendation: z.record(z.string(), z.number()),
-  reviewedCount: z.number(),
-  unreviewedCount: z.number(),
-  total: z.number(),
+  // Recommendation keys remain open for historical/configurable review policy;
+  // their values are still counts.
+  byStatus: z.partialRecord(proposalStatusSchema, z.number().int().nonnegative()),
+  byRecommendation: z.record(z.string(), z.number().int().nonnegative()),
+  reviewedCount: z.number().int().nonnegative(),
+  unreviewedCount: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
 });
 
 export const adminEventProposalsResponseSchema = paginatedResponseSchema(
