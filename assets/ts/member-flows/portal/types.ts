@@ -22,6 +22,7 @@ import type {
 } from "../../../shared/schemas/me";
 import type { workingGroupSummarySchema } from "../../../shared/schemas/members-directory";
 import type { myMeetingSeriesIcsFileSchema, myMeetingSeriesSchema } from "../../../shared/schemas/meeting-calendar";
+import type { PageInfo } from "../../../shared/schemas/pagination";
 import type {
   voteTypeSchema,
   voteScopeTypeSchema,
@@ -52,6 +53,7 @@ export type MyWorkingGroupsResponse = z.infer<typeof myWorkingGroupsListResponse
 
 export type MyMeetingSeriesIcsFile = z.infer<typeof myMeetingSeriesIcsFileSchema>;
 export type MyMeetingSeries = z.infer<typeof myMeetingSeriesSchema>;
+export type MyMeetingSeriesPageInfo = PageInfo;
 
 export type VoteType = z.infer<typeof voteTypeSchema>;
 export type VoteScopeType = z.infer<typeof voteScopeTypeSchema>;

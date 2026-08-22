@@ -805,8 +805,9 @@ describe("Voting system", () => {
       `/api/v1/portal/votes/${vote.id}`,
     );
     const { vote: voteDetail } = (await candidatesRes.json()) as {
-      vote: { candidates: Array<{ id: string; candidateName: string }> };
+      vote: { scopeName: string | null; candidates: Array<{ id: string; candidateName: string }> };
     };
+    expect(voteDetail.scopeName).toBe("Election WG");
     const alice = voteDetail.candidates!.find((c) => c.candidateName === "Alice")!;
     const bob = voteDetail.candidates!.find((c) => c.candidateName === "Bob")!;
     const carol = voteDetail.candidates!.find((c) => c.candidateName === "Carol")!;
@@ -999,12 +1000,18 @@ describe("Voting system", () => {
 
     const wgListFullRes = await call(proposerToken, "/api/v1/portal/vote-proposals?scopeType=working_group&limit=50");
     const wgListFullBody = (await wgListFullRes.json()) as {
-      proposals: Array<{ id: string; endorsementCount: number; minEndorsersRequired: number }>;
+      proposals: Array<{
+        id: string;
+        endorsementCount: number;
+        minEndorsersRequired: number;
+        scopeName: string | null;
+      }>;
     };
     const byId = new Map(wgListFullBody.proposals.map((p) => [p.id, p]));
     expect(byId.get(wgProposalIds[0])!.endorsementCount).toBe(1);
     expect(byId.get(wgProposalIds[1])!.endorsementCount).toBe(0);
     expect(byId.get(wgProposalIds[0])!.minEndorsersRequired).toBe(3);
+    expect(byId.get(wgProposalIds[0])!.scopeName).toBe("Bounded Proposals WG");
 
     const adminListRes = await call(adminToken, "/api/v1/admin/vote-proposals?limit=2&offset=0");
     expect(adminListRes.status).toBe(200);

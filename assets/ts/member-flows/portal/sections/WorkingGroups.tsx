@@ -5,13 +5,18 @@
  * working-groups.ts). The authenticated list endpoint also applies catalog
  * eligibility, so this view only renders backend-selected data.
  */
-import { useCallback, useEffect, useState } from "preact/hooks";
-import { getJson, postJson, deleteJson, ApiClientError } from "../../../shared/api-client";
+import { useState } from "preact/hooks";
+import type { z } from "zod";
+import { postJson, deleteJson, ApiClientError } from "../../../shared/api-client";
 import { Spinner } from "../../../components/Spinner";
 import { ErrorAlert } from "../../../components/ErrorAlert";
+import { Pager } from "../../../components/Pager";
+import { useApiPage } from "../../../hooks/useApiPage";
 import { toast, fmt } from "../ui";
 import { myWorkingGroupsListResponseSchema } from "../../../../shared/schemas/me";
 import type { WorkingGroupSummary, MyWorkingGroupMembership } from "../types";
+
+type MyWorkingGroupsPage = z.infer<typeof myWorkingGroupsListResponseSchema>;
 
 function WorkingGroupCard({
   wg,
@@ -88,30 +93,22 @@ function WorkingGroupCard({
 }
 
 export function WorkingGroups() {
-  const [groups, setGroups] = useState<WorkingGroupSummary[] | null>(null);
-  const [memberships, setMemberships] = useState<MyWorkingGroupMembership[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const catalog = useApiPage<MyWorkingGroupsPage>(
+    "/api/v1/me/working-groups",
+    { view: "catalog" },
+    myWorkingGroupsListResponseSchema,
+    (data) => data.workingGroups,
+  );
+  const groups = catalog.data?.workingGroups ?? [];
+  const error = catalog.error;
 
-  const reload = useCallback(async () => {
-    try {
-      const data = myWorkingGroupsListResponseSchema.parse(await getJson<unknown>("/api/v1/me/working-groups"));
-      setGroups(data.availableWorkingGroups);
-      setMemberships(data.workingGroups);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof ApiClientError ? e.message : "Could not load working groups.");
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  if (error) return <ErrorAlert error={error} />;
-  if (!groups || !memberships) return <Spinner />;
-  if (groups.length === 0) return <p class="text-muted">No working groups are available right now.</p>;
-
-  const membershipByWgId = new Map(memberships.map((m) => [m.workingGroupId, m]));
+  if (error) {
+    return <ErrorAlert error={error instanceof ApiClientError ? error.message : "Could not load working groups."} />;
+  }
+  if (!catalog.data) return <Spinner />;
+  if (groups.length === 0 && !catalog.data.page.hasMore) {
+    return <p class="text-muted">No working groups are available right now.</p>;
+  }
 
   return (
     <div class="d-flex flex-column gap-3 content-width-schedule">
@@ -119,9 +116,14 @@ export function WorkingGroups() {
         Join or leave working groups at any time. Joining adds you to the group's mailing list and meeting calendar;
         leaving removes both.
       </p>
-      {groups.map((wg) => (
-        <WorkingGroupCard key={wg.id} wg={wg} membership={membershipByWgId.get(wg.id)} onChanged={reload} />
-      ))}
+      {groups.map((entry) => {
+        const wg: WorkingGroupSummary = entry;
+        const membership: MyWorkingGroupMembership | undefined = entry.joinedAt
+          ? { workingGroupId: entry.workingGroupId, slug: entry.slug, name: entry.name, joinedAt: entry.joinedAt }
+          : undefined;
+        return <WorkingGroupCard key={wg.id} wg={wg} membership={membership} onChanged={catalog.reload} />;
+      })}
+      {catalog.pagerProps && <Pager {...catalog.pagerProps} />}
     </div>
   );
 }

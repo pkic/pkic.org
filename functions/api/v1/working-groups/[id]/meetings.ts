@@ -11,8 +11,8 @@ import { openApiRoute } from "../../../../_lib/openapi/route";
 const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=60";
 
 export const WorkingGroupMeetingsGet = openApiRoute(publicWgMeetingsRouteSchema, async (c: any, data) => {
-  const meetingSeries = await listPublicMeetingSeriesForWg(c.env.DB, data.params.wgId);
-  const response = json({ meetingSeries });
+  const result = await listPublicMeetingSeriesForWg(c.env.DB, data.params.wgId, data.query);
+  const response = json(result);
   response.headers.set("cache-control", PUBLIC_CACHE_CONTROL);
   return response;
 });

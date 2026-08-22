@@ -7,6 +7,7 @@ import { AppError } from "../../errors";
 import { getMembershipSettings } from "../membership-settings";
 import type { DatabaseLike } from "../../types";
 import type { VoteProposalStatus, VoteScopeType, VoteType } from "./shared";
+import { getWorkingGroupNamesByIds } from "../working-groups";
 
 export interface ProposalRow {
   id: string;
@@ -38,6 +39,7 @@ export interface ProposalSummary {
   voteType: VoteType;
   scopeType: VoteScopeType;
   scopeId: string | null;
+  scopeName: string | null;
   proposedByUserId: string;
   status: VoteProposalStatus;
   voteId: string | null;
@@ -63,7 +65,12 @@ export async function minEndorsersFor(
   return wg?.min_endorsers_for_ballot ?? 0;
 }
 
-function mapProposalSummary(row: ProposalRow, endorsementCount: number, minEndorsersRequired: number): ProposalSummary {
+function mapProposalSummary(
+  row: ProposalRow,
+  endorsementCount: number,
+  minEndorsersRequired: number,
+  scopeName: string | null,
+): ProposalSummary {
   return {
     id: row.id,
     title: row.title,
@@ -71,6 +78,7 @@ function mapProposalSummary(row: ProposalRow, endorsementCount: number, minEndor
     voteType: row.vote_type,
     scopeType: row.scope_type,
     scopeId: row.scope_id,
+    scopeName,
     proposedByUserId: row.proposed_by_user_id,
     status: row.status,
     voteId: row.vote_id,
@@ -87,7 +95,16 @@ export async function toProposalSummary(db: DatabaseLike, row: ProposalRow): Pro
     "SELECT COUNT(*) AS n FROM vote_proposal_endorsements WHERE proposal_id = ?",
     [row.id],
   );
-  return mapProposalSummary(row, Number(countRow?.n ?? 0), await minEndorsersFor(db, row.scope_type, row.scope_id));
+  const [minEndorsersRequired, scopeNames] = await Promise.all([
+    minEndorsersFor(db, row.scope_type, row.scope_id),
+    getWorkingGroupNamesByIds(db, row.scope_id ? [row.scope_id] : []),
+  ]);
+  return mapProposalSummary(
+    row,
+    Number(countRow?.n ?? 0),
+    minEndorsersRequired,
+    row.scope_id ? (scopeNames.get(row.scope_id) ?? null) : null,
+  );
 }
 
 async function loadEndorsementCounts(db: DatabaseLike, proposalIds: string[]): Promise<Map<string, number>> {
@@ -126,14 +143,25 @@ async function loadMinEndorsers(db: DatabaseLike, rows: ProposalRow[]): Promise<
 
 async function toProposalSummaries(db: DatabaseLike, rows: ProposalRow[]): Promise<ProposalSummary[]> {
   if (rows.length === 0) return [];
-  const [endorsementCounts, thresholds] = await Promise.all([
+  const [endorsementCounts, thresholds, scopeNames] = await Promise.all([
     loadEndorsementCounts(
       db,
       rows.map((row) => row.id),
     ),
     loadMinEndorsers(db, rows),
+    getWorkingGroupNamesByIds(
+      db,
+      rows.flatMap((row) => (row.scope_id ? [row.scope_id] : [])),
+    ),
   ]);
-  return rows.map((row) => mapProposalSummary(row, endorsementCounts.get(row.id) ?? 0, thresholds.get(row.id) ?? 0));
+  return rows.map((row) =>
+    mapProposalSummary(
+      row,
+      endorsementCounts.get(row.id) ?? 0,
+      thresholds.get(row.id) ?? 0,
+      row.scope_id ? (scopeNames.get(row.scope_id) ?? null) : null,
+    ),
+  );
 }
 
 export async function getProposalRowOrThrow(db: DatabaseLike, id: string): Promise<ProposalRow> {

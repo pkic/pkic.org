@@ -9,6 +9,7 @@ import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { successResponseSchema } from "./api-common";
 import { workingGroupIdSchema, workingGroupReferenceSchema } from "./working-groups";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 export const meetingSeriesIdParamsSchema = z.object({ id: workingGroupReferenceSchema });
 export const meetingSeriesWithMeetingIdParamsSchema = z.object({
@@ -60,7 +61,14 @@ export const meetingResendResultSchema = successResponseSchema.extend({
   queuedRecipients: z.number(),
 });
 
-const adminMeetingSeriesListResponseSchema = z.object({ meetingSeries: z.array(adminMeetingSeriesSummarySchema) });
+export const meetingSeriesSortColumns = ["name", "scopeType", "createdAt", "updatedAt"] as const;
+export const meetingSeriesListQuerySchema = listQuerySchema(meetingSeriesSortColumns);
+export type MeetingSeriesListQuery = z.infer<typeof meetingSeriesListQuerySchema>;
+
+export const adminMeetingSeriesListResponseSchema = paginatedResponseSchema(
+  "meetingSeries",
+  adminMeetingSeriesSummarySchema,
+);
 const adminMeetingSeriesResponseSchema = z.object({ meetingSeries: adminMeetingSeriesSummarySchema });
 const adminIcsFileResponseSchema = z.object({ icsFile: adminIcsFileSummarySchema });
 
@@ -114,7 +122,7 @@ function buildMeetingIcsUpdateRouteSchema<TParams extends z.ZodType>(options: {
 export const wgMeetingsListRouteSchema = {
   tags: ["Meeting Calendar"],
   summary: "List a working group's meeting series (admin)",
-  request: { params: meetingSeriesIdParamsSchema },
+  request: { params: meetingSeriesIdParamsSchema, query: meetingSeriesListQuerySchema },
   responses: {
     "200": {
       description: "Meeting series for this working group.",
@@ -208,6 +216,7 @@ export const wgMeetingResendRouteSchema = {
 export const consortiumMeetingsListRouteSchema = {
   tags: ["Meeting Calendar"],
   summary: "List consortium meeting series (admin)",
+  request: { query: meetingSeriesListQuerySchema },
   responses: {
     "200": {
       description: "Consortium meeting series.",
@@ -293,15 +302,19 @@ export const consortiumMeetingResendRouteSchema = {
 // ── Public ───────────────────────────────────────────────────────────────
 
 export const publicMeetingSeriesSchema = z.object({ id: databaseIdSchema, name: z.string() });
+export const publicMeetingSeriesListResponseSchema = paginatedResponseSchema(
+  "meetingSeries",
+  publicMeetingSeriesSchema,
+);
 
 export const publicWgMeetingsRouteSchema = {
   tags: ["Working Groups"],
   summary: "List a working group's active meeting series (public)",
-  request: { params: z.object({ wgId: workingGroupReferenceSchema }) },
+  request: { params: z.object({ wgId: workingGroupReferenceSchema }), query: meetingSeriesListQuerySchema },
   responses: {
     "200": {
       description: "Active meeting series for this working group.",
-      content: { "application/json": { schema: z.object({ meetingSeries: z.array(publicMeetingSeriesSchema) }) } },
+      content: { "application/json": { schema: publicMeetingSeriesListResponseSchema } },
     },
     "404": { description: "Working group not found." },
   },
@@ -318,14 +331,16 @@ export const myMeetingSeriesSchema = z.object({
   icsFiles: z.array(myMeetingSeriesIcsFileSchema),
   preferenceIcsFileId: databaseIdSchema.nullable(),
 });
+export const myMeetingSeriesListResponseSchema = paginatedResponseSchema("meetingSeries", myMeetingSeriesSchema);
 
 export const myCalendarListRouteSchema = {
   tags: ["Me"],
   summary: "List meeting series I'm subscribed to, with my preferences",
+  request: { query: meetingSeriesListQuerySchema },
   responses: {
     "200": {
       description: "My meeting series.",
-      content: { "application/json": { schema: z.object({ meetingSeries: z.array(myMeetingSeriesSchema) }) } },
+      content: { "application/json": { schema: myMeetingSeriesListResponseSchema } },
     },
   },
 };

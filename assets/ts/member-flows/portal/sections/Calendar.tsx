@@ -5,12 +5,12 @@
  * member currently belongs to (`listMyMeetingSeries`) — there's nothing to
  * join/leave here, that's the Working Groups tab's job.
  */
-import { useCallback, useEffect, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { getJson, patchJson, ApiClientError } from "../../../shared/api-client";
 import { Spinner } from "../../../components/Spinner";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { toast, formatStageLabel } from "../ui";
-import type { MyMeetingSeries } from "../types";
+import type { MyMeetingSeries, MyMeetingSeriesPageInfo } from "../types";
 
 function MeetingSeriesCard({ series, onChanged }: { series: MyMeetingSeries; onChanged: () => Promise<void> }) {
   const [saving, setSaving] = useState(false);
@@ -79,21 +79,38 @@ function MeetingSeriesCard({ series, onChanged }: { series: MyMeetingSeries; onC
 
 export function Calendar() {
   const [series, setSeries] = useState<MyMeetingSeries[] | null>(null);
+  const [page, setPage] = useState<MyMeetingSeriesPageInfo | null>(null);
+  const pageRef = useRef<MyMeetingSeriesPageInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  const reload = useCallback(async () => {
+  const load = useCallback(async (append = false) => {
+    if (append) setLoadingMore(true);
     try {
-      const data = await getJson<{ meetingSeries: MyMeetingSeries[] }>("/api/v1/me/calendar");
-      setSeries(data.meetingSeries);
+      const currentPage = pageRef.current;
+      const offset = append && currentPage ? currentPage.offset + currentPage.limit : 0;
+      const params = new URLSearchParams({ limit: "50", offset: String(offset) });
+      const data = await getJson<{ meetingSeries: MyMeetingSeries[]; page: MyMeetingSeriesPageInfo }>(
+        `/api/v1/me/calendar?${params.toString()}`,
+      );
+      setSeries((current) => (append ? [...(current ?? []), ...data.meetingSeries] : data.meetingSeries));
+      pageRef.current = data.page;
+      setPage(data.page);
       setError(null);
     } catch (e) {
       setError(e instanceof ApiClientError ? e.message : "Could not load your calendar.");
+    } finally {
+      if (append) setLoadingMore(false);
     }
   }, []);
 
+  const reload = useCallback(async () => {
+    await load();
+  }, [load]);
+
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    void load();
+  }, [load]);
 
   if (error) return <ErrorAlert error={error} />;
   if (!series) return <Spinner />;
@@ -112,6 +129,13 @@ export function Calendar() {
       {series.map((s) => (
         <MeetingSeriesCard key={s.id} series={s} onChanged={reload} />
       ))}
+      {page?.hasMore && (
+        <div class="text-center">
+          <button class="btn btn-sm btn-outline-primary" disabled={loadingMore} onClick={() => void load(true)}>
+            {loadingMore ? "Loading…" : "Load more meeting series"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

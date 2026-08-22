@@ -16,8 +16,8 @@ import { requestDb, type AdminContext } from "../../../../../../_lib/db/context"
 import { openApiRoute } from "../../../../../../_lib/openapi/route";
 
 export const WgMeetingsGet = openApiRoute(wgMeetingsListRouteSchema, async (c: AdminContext, data) => {
-  const meetingSeries = await listAdminMeetingSeriesForWg(requestDb(c), data.params.id);
-  return json({ meetingSeries });
+  const result = await listAdminMeetingSeriesForWg(requestDb(c), data.params.id, data.query);
+  return json(result);
 });
 
 export const WgMeetingsCreate = openApiRoute(wgMeetingsCreateRouteSchema, async (c: AdminContext, data) => {

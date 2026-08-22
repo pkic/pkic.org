@@ -1,19 +1,12 @@
 import { useState } from "preact/hooks";
 import { fmt, formatStageLabel } from "../../ui";
 import type { PortalVote } from "../../types";
-import { voteStatusBadgeClass, scopeBadgeLabel, isVotingCategory, isElectionResult, isMotionResult } from "./shared";
+import { voteStatusBadgeClass, isVotingCategory, isElectionResult, isMotionResult } from "./shared";
+import { ScopeBadge } from "./ScopeBadge";
 import { BallotForm } from "./BallotForm";
 import { MotionResultView, ElectionResultView } from "./VoteResults";
 
-export function VoteCard({
-  vote,
-  wgNames,
-  onChanged,
-}: {
-  vote: PortalVote;
-  wgNames: Map<string, string>;
-  onChanged: () => Promise<void>;
-}) {
+export function VoteCard({ vote, onChanged }: { vote: PortalVote; onChanged: () => Promise<void> }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -25,7 +18,9 @@ export function VoteCard({
               <span class="fw-semibold">{vote.title}</span>
               <span class={`badge ${voteStatusBadgeClass(vote.status)}`}>{formatStageLabel(vote.status)}</span>
               <span class="badge text-bg-light border">{formatStageLabel(vote.voteType)}</span>
-              <span class="badge text-bg-light border">{scopeBadgeLabel(vote.scopeType, vote.scopeId, wgNames)}</span>
+              <span class="badge text-bg-light border">
+                <ScopeBadge scopeType={vote.scopeType} scopeName={vote.scopeName} />
+              </span>
               {vote.hasCastBallot && <span class="badge text-bg-primary">You voted</span>}
             </div>
             <p class="text-muted small mb-0 mt-1">

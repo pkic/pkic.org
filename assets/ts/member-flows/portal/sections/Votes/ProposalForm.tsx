@@ -1,23 +1,30 @@
 import { useState } from "preact/hooks";
+import type { z } from "zod";
 import { postJson, ApiClientError } from "../../../../shared/api-client";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { Pager } from "../../../../components/Pager";
+import { useApiPage } from "../../../../hooks/useApiPage";
+import { myWorkingGroupsListResponseSchema } from "../../../../../shared/schemas/me";
 import { toast } from "../../ui";
-import type { VoteType, VoteScopeType, MyWorkingGroupMembership } from "../../types";
+import type { VoteType, VoteScopeType } from "../../types";
 import { useAsyncSubmission } from "../../../../hooks/useAsyncSubmission";
 
-export function ProposalForm({
-  myWorkingGroups,
-  onCreated,
-}: {
-  myWorkingGroups: MyWorkingGroupMembership[];
-  onCreated: () => Promise<void>;
-}) {
+export function ProposalForm({ onCreated }: { onCreated: () => Promise<void> }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [voteType, setVoteType] = useState<VoteType>("motion");
   const [scopeType, setScopeType] = useState<VoteScopeType>("forum");
   const [scopeId, setScopeId] = useState("");
+  const [scopeLabel, setScopeLabel] = useState("");
+  const [pendingGroupSearch, setPendingGroupSearch] = useState("");
+  const [groupSearch, setGroupSearch] = useState("");
   const submission = useAsyncSubmission();
+  const groupsPage = useApiPage<z.infer<typeof myWorkingGroupsListResponseSchema>>(
+    "/api/v1/me/working-groups",
+    { view: "joined", ...(groupSearch ? { q: groupSearch } : {}) },
+    myWorkingGroupsListResponseSchema,
+    (data) => data.workingGroups,
+  );
 
   async function handleSubmit(e: Event): Promise<void> {
     e.preventDefault();
@@ -95,6 +102,7 @@ export function ProposalForm({
                 onChange={(e) => {
                   setScopeType((e.target as HTMLSelectElement).value as VoteScopeType);
                   setScopeId("");
+                  setScopeLabel("");
                 }}
                 disabled={submission.submitting}
               >
@@ -105,22 +113,57 @@ export function ProposalForm({
             {scopeType === "working_group" && (
               <div class="col-12">
                 <label class="form-label fw-semibold small">Working group</label>
+                <div class="input-group input-group-sm mb-1">
+                  <input
+                    type="search"
+                    class="form-control"
+                    aria-label="Working group search"
+                    placeholder="Search joined working groups…"
+                    value={pendingGroupSearch}
+                    disabled={submission.submitting}
+                    onInput={(e) => setPendingGroupSearch((e.target as HTMLInputElement).value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        setGroupSearch(pendingGroupSearch.trim());
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    class="btn btn-outline-secondary"
+                    disabled={submission.submitting}
+                    onClick={() => setGroupSearch(pendingGroupSearch.trim())}
+                  >
+                    Search
+                  </button>
+                </div>
                 <select
                   class="form-select"
                   value={scopeId}
-                  onChange={(e) => setScopeId((e.target as HTMLSelectElement).value)}
-                  disabled={submission.submitting}
+                  onChange={(e) => {
+                    const id = (e.target as HTMLSelectElement).value;
+                    const selected = groupsPage.data?.workingGroups.find((group) => group.workingGroupId === id);
+                    setScopeId(id);
+                    setScopeLabel(selected?.name ?? id);
+                  }}
+                  disabled={submission.submitting || groupsPage.loading}
                 >
                   <option value="">Choose…</option>
-                  {myWorkingGroups.map((wg) => (
+                  {scopeId && !groupsPage.data?.workingGroups.some((group) => group.workingGroupId === scopeId) && (
+                    <option value={scopeId}>{scopeLabel || scopeId}</option>
+                  )}
+                  {groupsPage.data?.workingGroups.map((wg) => (
                     <option key={wg.workingGroupId} value={wg.workingGroupId}>
                       {wg.name}
                     </option>
                   ))}
                 </select>
-                {myWorkingGroups.length === 0 && (
+                {groupsPage.error && <div class="form-text text-danger">Could not load joined working groups.</div>}
+                {groupsPage.data?.workingGroups.length === 0 && !groupsPage.loading && (
                   <div class="form-text">You must be a member of a working group to propose a WG-level vote.</div>
                 )}
+                {groupsPage.pagerProps && <Pager {...groupsPage.pagerProps} />}
               </div>
             )}
           </div>

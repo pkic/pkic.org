@@ -12,7 +12,7 @@ import { ErrorAlert } from "../../components/ErrorAlert";
 import { Tabs } from "../../components/Tabs";
 import { api } from "../api";
 import { toast } from "../ui";
-import type { AdminIcsFile, AdminMeetingSeries, MeetingResendResult } from "../types";
+import type { AdminIcsFile, AdminMeetingSeries, MeetingResendResult, MeetingSeriesPageInfo } from "../types";
 import { adminWorkingGroupCatalog } from "../services/catalogs";
 import { performAdminAction } from "../actions";
 import { ServerSearchSelect } from "../components/ServerSearchSelect";
@@ -447,16 +447,31 @@ function CreateSeriesForm({ baseUrl, onCreated }: { baseUrl: string; onCreated: 
 /** Manages meeting series for either the consortium or a single working group, keyed by `baseUrl`. */
 function MeetingSeriesManager({ baseUrl }: { baseUrl: string }) {
   const [series, setSeries] = useState<AdminMeetingSeries[] | null>(null);
+  const [page, setPage] = useState<MeetingSeriesPageInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  async function load() {
+  async function load(options: { append?: boolean } = {}) {
+    const append = options.append === true;
+    if (append) setLoadingMore(true);
     try {
-      const data = await api<{ meetingSeries: AdminMeetingSeries[] }>(baseUrl);
-      setSeries(data.meetingSeries);
+      const offset = append && page ? page.offset + page.limit : 0;
+      const params = new URLSearchParams({ limit: "50", offset: String(offset) });
+      const data = await api<{ meetingSeries: AdminMeetingSeries[]; page: MeetingSeriesPageInfo }>(
+        `${baseUrl}?${params.toString()}`,
+      );
+      setSeries((current) => (append ? [...(current ?? []), ...data.meetingSeries] : data.meetingSeries));
+      setPage(data.page);
       setError(null);
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      if (append) setLoadingMore(false);
     }
+  }
+
+  async function reload() {
+    await load();
   }
 
   useEffect(() => {
@@ -469,11 +484,26 @@ function MeetingSeriesManager({ baseUrl }: { baseUrl: string }) {
 
   return (
     <div>
-      <CreateSeriesForm baseUrl={baseUrl} onCreated={load} />
+      <CreateSeriesForm baseUrl={baseUrl} onCreated={reload} />
       {series.length === 0 ? (
         <p class="text-muted fst-italic">No meeting series yet.</p>
       ) : (
-        series.map((s) => <MeetingSeriesCard key={s.id} series={s} baseUrl={baseUrl} onChanged={load} />)
+        <>
+          {series.map((s) => (
+            <MeetingSeriesCard key={s.id} series={s} baseUrl={baseUrl} onChanged={reload} />
+          ))}
+          {page?.hasMore && (
+            <div class="text-center mb-3">
+              <button
+                class="btn btn-sm btn-outline-primary"
+                disabled={loadingMore}
+                onClick={() => void load({ append: true })}
+              >
+                {loadingMore ? "Loading…" : "Load more meeting series"}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

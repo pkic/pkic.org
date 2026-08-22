@@ -9,9 +9,9 @@ import { myCalendarListRouteSchema } from "../../../../../assets/shared/schemas/
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 
-export const MeCalendarGet = openApiRoute(myCalendarListRouteSchema, async (c: AdminContext) => {
+export const MeCalendarGet = openApiRoute(myCalendarListRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
   const member = await requireMemberFromRequest(db, c.req.raw, c.env);
-  const meetingSeries = await listMyMeetingSeries(db, member);
-  return json({ meetingSeries });
+  const result = await listMyMeetingSeries(db, member, data.query);
+  return json(result);
 });

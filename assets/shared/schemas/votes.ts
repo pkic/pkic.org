@@ -131,6 +131,7 @@ export const publicVoteSchema = z.object({
 
 export const portalVoteSchema = z.object({
   ...voteSummaryFieldsSchema,
+  scopeName: z.string().nullable(),
   candidates: z.array(candidateSummarySchema).nullable(),
   canCastBallot: z.boolean(),
   hasCastBallot: z.boolean(),
@@ -278,6 +279,7 @@ export const proposalSummarySchema = z.object({
   voteType: voteTypeSchema,
   scopeType: voteScopeTypeSchema,
   scopeId: workingGroupIdSchema.nullable(),
+  scopeName: z.string().nullable(),
   proposedByUserId: databaseIdSchema,
   status: voteProposalStatusSchema,
   voteId: databaseIdSchema.nullable(),

@@ -225,14 +225,22 @@ export const myWorkingGroupSummarySchema = z.object({
   joinedAt: z.string(),
 });
 
-export const myWorkingGroupsListResponseSchema = z.object({
-  workingGroups: z.array(myWorkingGroupSummarySchema),
-  availableWorkingGroups: z.array(workingGroupSummarySchema),
+/** One row returned by either the joined-membership or eligible catalog view. */
+export const myWorkingGroupEntrySchema = workingGroupSummarySchema.extend({
+  workingGroupId: workingGroupIdSchema,
+  joinedAt: z.string().nullable(),
 });
+export const MY_WORKING_GROUP_SORT_COLUMNS = ["name", "slug", "joinedAt"] as const;
+export const myWorkingGroupsListQuerySchema = listQuerySchema(MY_WORKING_GROUP_SORT_COLUMNS).extend({
+  view: z.enum(["joined", "catalog"]).default("catalog"),
+});
+export const myWorkingGroupsListResponseSchema = paginatedResponseSchema("workingGroups", myWorkingGroupEntrySchema);
 
 export const myWorkingGroupsListRouteSchema = {
   tags: ["Me"],
-  summary: "List my working group memberships",
+  summary: "List my working groups",
+  description: "Paginated joined-membership or eligible-catalog view selected with the view query parameter.",
+  request: { query: myWorkingGroupsListQuerySchema },
   responses: {
     "200": {
       description: "My working groups.",

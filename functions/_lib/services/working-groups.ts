@@ -54,6 +54,23 @@ export async function getWorkingGroupsBySlugs(db: DatabaseLike, slugs: readonly 
   });
 }
 
+/** Bulk-resolves display names for a bounded set of canonical IDs. */
+export async function getWorkingGroupNamesByIds(
+  db: DatabaseLike,
+  ids: readonly string[],
+): Promise<Map<string, string>> {
+  const uniqueIds = [...new Set(ids)];
+  if (uniqueIds.length === 0) return new Map();
+
+  const filter = buildD1JsonMembershipFilter("id", uniqueIds);
+  const rows = await all<Pick<WorkingGroupRow, "id" | "name">>(
+    db,
+    `SELECT id, name FROM working_groups WHERE ${filter.sql}`,
+    filter.bindings,
+  );
+  return new Map(rows.map((row) => [row.id, row.name]));
+}
+
 /**
  * Only category-A members may belong to the CA working group. Takes every
  * membership category the target person currently holds (a person may

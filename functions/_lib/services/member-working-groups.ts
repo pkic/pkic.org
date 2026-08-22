@@ -1,5 +1,7 @@
 /** Member-owned working-group catalog and membership commands. */
-import { all } from "../db/queries";
+import { queryPage } from "../db/pagination";
+import { buildD1TextSearchFilter } from "../db/search";
+import { resolveMappedOrderBy } from "../db/sort";
 import { AppError } from "../errors";
 import type { AuthMember, DatabaseLike } from "../types";
 import {
@@ -35,9 +37,9 @@ interface MyWorkingGroupCatalogRow {
   joined_at: string | null;
 }
 
-export interface MyWorkingGroups {
-  workingGroups: MyWorkingGroupMembership[];
-  availableWorkingGroups: AvailableWorkingGroup[];
+export interface MyWorkingGroupEntry extends AvailableWorkingGroup {
+  workingGroupId: string;
+  joinedAt: string | null;
 }
 
 /**
@@ -47,32 +49,52 @@ export interface MyWorkingGroups {
  * from the membership context that originally made it eligible, so it can
  * still be left cleanly.
  */
-export async function listMyWorkingGroups(db: DatabaseLike, member: AuthMember): Promise<MyWorkingGroups> {
-  const rows = await all<MyWorkingGroupCatalogRow>(
-    db,
-    `SELECT wg.id, wg.slug, wg.name, wg.description, wg.active, wgm.joined_at
-     FROM working_groups wg
-     LEFT JOIN working_group_members wgm
-       ON wgm.working_group_id = wg.id
-      AND wgm.user_id = ?
-      AND wgm.left_at IS NULL
-     WHERE (wg.active = 1 AND (wg.slug <> ? OR ? = ?))
-        OR wgm.id IS NOT NULL
-     ORDER BY wg.name COLLATE NOCASE ASC, wg.id ASC`,
-    [member.userId, CA_WORKING_GROUP_SLUG, member.membershipCategory, CA_ONLY_CATEGORY],
-  );
+export async function listMyWorkingGroups(
+  db: DatabaseLike,
+  member: AuthMember,
+  params: { view: "joined" | "catalog"; q?: string; sort?: string; limit: number; offset: number },
+): Promise<{ workingGroups: MyWorkingGroupEntry[]; total: number }> {
+  const search = params.q ? buildD1TextSearchFilter(params.q, ["wg.name", "wg.slug", "wg.description"]) : null;
+  const viewPredicate =
+    params.view === "joined"
+      ? "wgm.id IS NOT NULL"
+      : "(wg.active = 1 AND (wg.slug <> ? OR ? = ?)) OR wgm.id IS NOT NULL";
+  const searchPredicate = search ? ` AND ${search.sql}` : "";
+  const bindings = [
+    member.userId,
+    ...(params.view === "catalog" ? [CA_WORKING_GROUP_SLUG, member.membershipCategory, CA_ONLY_CATEGORY] : []),
+    ...(search?.bindings ?? []),
+  ];
+  const result = await queryPage<MyWorkingGroupCatalogRow>(db, {
+    sql: `SELECT wg.id, wg.slug, wg.name, wg.description, wg.active, wgm.joined_at
+       FROM working_groups wg
+       LEFT JOIN working_group_members wgm
+         ON wgm.working_group_id = wg.id
+        AND wgm.user_id = ?
+        AND wgm.left_at IS NULL
+      WHERE (${viewPredicate})${searchPredicate}`,
+    bindings,
+    orderBy: resolveMappedOrderBy(
+      params.sort,
+      { name: "wg.name COLLATE NOCASE", slug: "wg.slug COLLATE NOCASE", joinedAt: "wgm.joined_at" },
+      "wg.name COLLATE NOCASE ASC",
+      "wg.id ASC",
+    ),
+    limit: params.limit,
+    offset: params.offset,
+  });
 
   return {
-    workingGroups: rows.flatMap((row) =>
-      row.joined_at ? [{ workingGroupId: row.id, slug: row.slug, name: row.name, joinedAt: row.joined_at }] : [],
-    ),
-    availableWorkingGroups: rows.map((row) => ({
+    workingGroups: result.rows.map((row) => ({
+      workingGroupId: row.id,
       id: row.id,
       slug: row.slug,
       name: row.name,
       description: row.description,
       active: row.active === 1,
+      joinedAt: row.joined_at,
     })),
+    total: result.total,
   };
 }
 

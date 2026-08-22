@@ -51,15 +51,35 @@ async function getActiveWorkingGroupRow(db: DatabaseLike, idOrSlug: string): Pro
   ]);
 }
 
-export async function listWorkingGroups(db: DatabaseLike): Promise<WorkingGroupSummary[]> {
-  const rows = await all<WorkingGroupRow>(db, `${WORKING_GROUP_SELECT} WHERE active = 1 ORDER BY name ASC, id ASC`);
-  return rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    slug: row.slug,
-    description: row.description,
-    active: row.active === 1,
-  }));
+export async function listWorkingGroups(
+  db: DatabaseLike,
+  params: { q?: string; sort?: string; limit: number; offset: number },
+): Promise<{ workingGroups: WorkingGroupSummary[]; total: number }> {
+  const search = params.q ? buildD1TextSearchFilter(params.q, ["name", "slug", "description"]) : null;
+  const where = search ? ` AND ${search.sql}` : "";
+  const bindings = [...(search?.bindings ?? [])];
+  const result = await queryPage<WorkingGroupRow>(db, {
+    sql: `${WORKING_GROUP_SELECT} WHERE active = 1${where}`,
+    bindings,
+    orderBy: resolveMappedOrderBy(
+      params.sort,
+      { name: "name COLLATE NOCASE", slug: "slug COLLATE NOCASE" },
+      "name COLLATE NOCASE ASC",
+      "id ASC",
+    ),
+    limit: params.limit,
+    offset: params.offset,
+  });
+  return {
+    workingGroups: result.rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      slug: row.slug,
+      description: row.description,
+      active: row.active === 1,
+    })),
+    total: result.total,
+  };
 }
 
 async function getWorkingGroupChairsPublic(
