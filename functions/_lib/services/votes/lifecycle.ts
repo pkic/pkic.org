@@ -299,14 +299,13 @@ export async function listVotesForAdmin(
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   const orderBy = resolveOrderBy(params.sort, ADMIN_VOTES_SORT_COLUMNS, "ORDER BY created_at DESC", "id ASC");
 
-  const { rows, total } = await queryPage<VoteRow>(
-    db,
-    {
-      sql: `SELECT ${VOTE_ROW_COLUMNS} FROM votes ${where} ${orderBy} LIMIT ? OFFSET ?`,
-      bindings: [...whereArgs, params.limit, params.offset],
-    },
-    { sql: `SELECT COUNT(*) AS total FROM votes ${where}`, bindings: whereArgs },
-  );
+  const { rows, total } = await queryPage<VoteRow>(db, {
+    sql: `SELECT ${VOTE_ROW_COLUMNS} FROM votes ${where}`,
+    bindings: whereArgs,
+    orderBy,
+    limit: params.limit,
+    offset: params.offset,
+  });
 
   const electionVoteIds = rows.filter((row) => row.vote_type === "election").map((row) => row.id);
   const candidatesByVoteId = await getCandidatesForVotes(db, electionVoteIds);
@@ -369,15 +368,14 @@ export async function listBallotsForAdmin(
     choice: string;
     round: number;
     submitted_at: string;
-  }>(
-    db,
-    {
-      sql: `SELECT b.id, b.user_id, b.organization_id, b.choice, b.round, b.submitted_at
-              FROM vote_ballots b ${where} ${orderBy} LIMIT ? OFFSET ?`,
-      bindings: [...bindings, query.limit, query.offset],
-    },
-    { sql: `SELECT COUNT(*) AS total FROM vote_ballots b ${where}`, bindings },
-  );
+  }>(db, {
+    sql: `SELECT b.id, b.user_id, b.organization_id, b.choice, b.round, b.submitted_at
+              FROM vote_ballots b ${where}`,
+    bindings,
+    orderBy,
+    limit: query.limit,
+    offset: query.offset,
+  });
   const ballots = rows.map((r) => ({
     id: r.id,
     userId: r.user_id,

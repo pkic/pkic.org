@@ -154,21 +154,17 @@ export async function listPublicSponsors(
   );
   const eventName = options.eventName ?? "";
 
-  const { rows, total } = await queryPage<SponsorRow>(
-    db,
-    {
-      sql: `${PUBLIC_SPONSOR_READ_MODEL_SQL}
+  const { rows, total } = await queryPage<SponsorRow>(db, {
+    sql: `${PUBLIC_SPONSOR_READ_MODEL_SQL}
             SELECT id, name, website, logo_r2_key, sponsorship_logo_r2_key,
                    tier, event_tier, effective_tier, effective_weight
               FROM enriched_sponsors
-              ${filter.sql} ${orderBy} LIMIT ? OFFSET ?`,
-      bindings: [eventName, ...filter.bindings, options.limit, options.offset],
-    },
-    {
-      sql: `${PUBLIC_SPONSOR_READ_MODEL_SQL} SELECT COUNT(*) AS total FROM enriched_sponsors ${filter.sql}`,
-      bindings: [eventName, ...filter.bindings],
-    },
-  );
+              ${filter.sql}`,
+    bindings: [eventName, ...filter.bindings],
+    orderBy,
+    limit: options.limit,
+    offset: options.offset,
+  });
 
   const sponsors = rows.map((row) => ({
     id: row.id,

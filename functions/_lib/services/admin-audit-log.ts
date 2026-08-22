@@ -67,10 +67,8 @@ export async function listAdminAuditLog(db: DatabaseLike, query: AuditLogListQue
     "al.id ASC",
   );
   const baseJoin = `FROM audit_log al LEFT JOIN users u ON al.actor_type = 'admin' AND u.id = al.actor_id`;
-  const { rows, total } = await queryPage<AuditLogRow>(
-    db,
-    {
-      sql: `SELECT
+  const { rows, total } = await queryPage<AuditLogRow>(db, {
+    sql: `SELECT
          al.id,
          al.actor_type,
          al.actor_id,
@@ -82,12 +80,12 @@ export async function listAdminAuditLog(db: DatabaseLike, query: AuditLogListQue
          al.created_at
        ${baseJoin}
        ${filter.where}
-       ${orderBy}
-       LIMIT ? OFFSET ?`,
-      bindings: [...filter.bindings, query.limit, query.offset],
-    },
-    { sql: `SELECT COUNT(*) AS total ${baseJoin} ${filter.where}`, bindings: filter.bindings },
-  );
+       `,
+    bindings: filter.bindings,
+    orderBy,
+    limit: query.limit,
+    offset: query.offset,
+  });
 
   const entries = rows.map(({ details_json: detailsJson, ...row }) => ({
     ...row,

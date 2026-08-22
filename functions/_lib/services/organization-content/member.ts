@@ -152,17 +152,13 @@ export async function listMyOrganizationReviews(
     "submitted_at DESC",
     "id DESC",
   );
-  const { rows, total } = await queryPage<ReviewRow>(
-    db,
-    {
-      sql: `SELECT ${REVIEW_COLUMNS} FROM organization_content_reviews ${where} ${orderBy} LIMIT ? OFFSET ?`,
-      bindings: [...bindings, params.limit, params.offset],
-    },
-    {
-      sql: `SELECT COUNT(*) AS total FROM organization_content_reviews ${where}`,
-      bindings,
-    },
-  );
+  const { rows, total } = await queryPage<ReviewRow>(db, {
+    sql: `SELECT ${REVIEW_COLUMNS} FROM organization_content_reviews ${where}`,
+    bindings,
+    orderBy,
+    limit: params.limit,
+    offset: params.offset,
+  });
   return { reviews: rows.map(toReviewSummary), total };
 }
 

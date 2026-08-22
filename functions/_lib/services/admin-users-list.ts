@@ -65,10 +65,8 @@ export async function listAdminUsers(db: DatabaseLike, query: AdminUsersListQuer
   const listWhere = where.replace(/\bm\.id\b/g, "COALESCE(m.id, mi.id)");
   const representativeJoin = deterministicRepresentativeJoinSql("u.id");
   const orderBy = resolveOrderBy(query.sort, ADMIN_USERS_SORT_COLUMNS, "ORDER BY u.role ASC, u.email ASC", "u.id ASC");
-  const { rows: users, total } = await queryPage<UserRow>(
-    db,
-    {
-      sql: `SELECT u.id, u.email, u.first_name, u.last_name, u.organization_name, u.role, u.active, u.created_at,
+  const { rows: users, total } = await queryPage<UserRow>(db, {
+    sql: `SELECT u.id, u.email, u.first_name, u.last_name, u.organization_name, u.role, u.active, u.created_at,
               u.links_json,
               COALESCE(rep.id, mi.id) AS member_id, mca.category_code AS member_category,
               COALESCE(m.status, mi.status) AS member_status,
@@ -81,19 +79,12 @@ export async function listAdminUsers(db: DatabaseLike, query: AdminUsersListQuer
        LEFT JOIN organizations o ON o.id = m.organization_id
        LEFT JOIN member_category_assignments mca ON mca.member_id = COALESCE(m.id, mi.id)
        ${listWhere}
-       ${orderBy}
-       LIMIT ? OFFSET ?`,
-      bindings: [...bindings, query.limit, query.offset],
-    },
-    {
-      sql: `SELECT COUNT(*) AS total FROM users u
-       ${representativeJoin}
-       LEFT JOIN members m ON m.id = rep.member_id
-       LEFT JOIN members mi ON mi.user_id = u.id
-       ${listWhere}`,
-      bindings,
-    },
-  );
+       `,
+    bindings,
+    orderBy,
+    limit: query.limit,
+    offset: query.offset,
+  });
 
   const results = users.map(({ links_json: linksJson, event_participation_count: participationCount, ...row }) => ({
     ...row,

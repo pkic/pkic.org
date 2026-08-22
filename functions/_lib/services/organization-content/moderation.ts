@@ -82,21 +82,13 @@ export async function listContentReviews(
     "r.submitted_at ASC",
     "r.id ASC",
   );
-  const { rows, total } = await queryPage<AdminReviewRow>(
-    db,
-    {
-      sql: `${ADMIN_REVIEW_SELECT} ${where} ${orderBy} LIMIT ? OFFSET ?`,
-      bindings: [...bindings, params.limit, params.offset],
-    },
-    {
-      sql: `SELECT COUNT(*) AS total
-            FROM organization_content_reviews r
-            JOIN organizations o ON o.id = r.organization_id
-            JOIN users u ON u.id = r.submitted_by_user_id
-            ${where}`,
-      bindings,
-    },
-  );
+  const { rows, total } = await queryPage<AdminReviewRow>(db, {
+    sql: `${ADMIN_REVIEW_SELECT} ${where}`,
+    bindings,
+    orderBy,
+    limit: params.limit,
+    offset: params.offset,
+  });
   return { reviews: rows.map(toAdminReviewSummary), total };
 }
 

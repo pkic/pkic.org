@@ -96,17 +96,16 @@ export async function listAdminApplications(
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   const orderBy = resolveOrderBy(params.sort, ADMIN_APPLICATIONS_SORT_COLUMNS, "ORDER BY created_at DESC", "id ASC");
 
-  const { rows, total } = await queryPage<AdminApplicationSummaryRow>(
-    db,
-    {
-      sql: `SELECT id, applicant_email, applicant_name, organization_name,
+  const { rows, total } = await queryPage<AdminApplicationSummaryRow>(db, {
+    sql: `SELECT id, applicant_email, applicant_name, organization_name,
                    membership_category, stage, on_hold_subtype, assigned_to_user_id,
                    created_at, updated_at
-            FROM member_applications ${where} ${orderBy} LIMIT ? OFFSET ?`,
-      bindings: [...values, params.limit, params.offset],
-    },
-    { sql: `SELECT COUNT(*) AS total FROM member_applications ${where}`, bindings: values },
-  );
+            FROM member_applications ${where}`,
+    bindings: values,
+    orderBy,
+    limit: params.limit,
+    offset: params.offset,
+  });
 
   return { applications: rows.map(toSummary), total };
 }

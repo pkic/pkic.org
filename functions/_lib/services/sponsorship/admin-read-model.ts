@@ -123,22 +123,13 @@ export async function listAdminSponsorships(
     "sp.updated_at DESC",
     "sp.id ASC",
   );
-  const { rows: sponsorships, total } = await queryPage<AdminSponsorshipRow>(
-    db,
-    {
-      sql: `${ADMIN_SPONSORSHIP_SELECT} ${where} ${orderBy} LIMIT ? OFFSET ?`,
-      bindings: [...values, filters.limit, filters.offset],
-    },
-    {
-      sql: `SELECT COUNT(*) AS total
-            FROM sponsorships sp
-            LEFT JOIN organizations o ON o.id = sp.organization_id
-            LEFT JOIN events e ON e.id = sp.event_id
-            LEFT JOIN users u ON u.id = sp.assigned_to_user_id
-            ${where}`,
-      bindings: values,
-    },
-  );
+  const { rows: sponsorships, total } = await queryPage<AdminSponsorshipRow>(db, {
+    sql: `${ADMIN_SPONSORSHIP_SELECT} ${where}`,
+    bindings: values,
+    orderBy,
+    limit: filters.limit,
+    offset: filters.offset,
+  });
   return { sponsorships, total };
 }
 
@@ -182,23 +173,17 @@ export async function listSponsorshipCompanies(
     "label COLLATE NOCASE ASC",
     "key ASC",
   );
-  const { rows: companies, total } = await queryPage<AdminSponsorshipCompanyRow>(
-    db,
-    {
-      sql: `${groupedCte}
+  const { rows: companies, total } = await queryPage<AdminSponsorshipCompanyRow>(db, {
+    sql: `${groupedCte}
             SELECT key, label, MAX(website) AS website, COUNT(*) AS sponsorshipCount,
                    GROUP_CONCAT(DISTINCT stage) AS stages
             FROM grouped
-            GROUP BY key
-            ${orderBy}
-            LIMIT ? OFFSET ?`,
-      bindings: [...values, filters.limit, filters.offset],
-    },
-    {
-      sql: `${groupedCte} SELECT COUNT(*) AS total FROM (SELECT key FROM grouped GROUP BY key)`,
-      bindings: values,
-    },
-  );
+            GROUP BY key`,
+    bindings: values,
+    orderBy,
+    limit: filters.limit,
+    offset: filters.offset,
+  });
   return { companies, total };
 }
 

@@ -44,26 +44,20 @@ export async function listAdminEmailTemplates(db: DatabaseLike, query: ListQuery
     bindings.push(`${query.templateKeyPrefix}*`);
   }
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-  const { rows: templates, total } = await queryPage<TemplateSummaryRow>(
-    db,
-    {
-      sql: `SELECT
+  const { rows: templates, total } = await queryPage<TemplateSummaryRow>(db, {
+    sql: `SELECT
          template_key,
          MAX(CASE WHEN status = 'active' THEN version END) AS active_version,
          COUNT(*) AS version_count,
          SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END) AS draft_count
        FROM email_template_versions
        ${where}
-       GROUP BY template_key
-       ${orderBy}
-       LIMIT ? OFFSET ?`,
-      bindings: [...bindings, query.limit, query.offset],
-    },
-    {
-      sql: `SELECT COUNT(DISTINCT template_key) AS total FROM email_template_versions ${where}`,
-      bindings,
-    },
-  );
+       GROUP BY template_key`,
+    bindings,
+    orderBy,
+    limit: query.limit,
+    offset: query.offset,
+  });
   return {
     templates,
     page: buildPageInfo(query.limit, query.offset, total, templates.length),
@@ -95,10 +89,8 @@ export async function listAdminEmailTemplateVersions(db: DatabaseLike, templateK
     "version DESC",
     "id ASC",
   );
-  const { rows: versions, total } = await queryPage<AdminEmailTemplateVersion>(
-    db,
-    {
-      sql: `SELECT
+  const { rows: versions, total } = await queryPage<AdminEmailTemplateVersion>(db, {
+    sql: `SELECT
          id,
          template_key,
          version,
@@ -113,17 +105,12 @@ export async function listAdminEmailTemplateVersions(db: DatabaseLike, templateK
          message_type
        FROM email_template_versions
        ${where}
-       ${orderBy}
-       LIMIT ? OFFSET ?`,
-      bindings: [...bindings, query.limit, query.offset],
-    },
-    {
-      sql: `SELECT COUNT(*) AS total
-            FROM email_template_versions
-            ${where}`,
-      bindings,
-    },
-  );
+       ${where}`,
+    bindings,
+    orderBy,
+    limit: query.limit,
+    offset: query.offset,
+  });
   return {
     versions,
     page: buildPageInfo(query.limit, query.offset, total, versions.length),

@@ -203,19 +203,16 @@ export async function listAdminMembers(
     "created_at DESC",
     "id ASC",
   );
-  const { rows, total } = await queryPage<AdminMemberRow>(
-    db,
-    {
-      sql: `SELECT id, user_id, organization_id, org_name, first_name, last_name,
+  const { rows, total } = await queryPage<AdminMemberRow>(db, {
+    sql: `SELECT id, user_id, organization_id, org_name, first_name, last_name,
                    email, category_code, status, show_on_org_profile, created_at
             FROM (${ADMIN_MEMBERS_SELECT}) combined
-            ${where}
-            ${orderBy}
-            LIMIT ? OFFSET ?`,
-      bindings: [...bindings, params.limit, params.offset],
-    },
-    { sql: `SELECT COUNT(*) AS total FROM (${ADMIN_MEMBERS_SELECT}) combined ${where}`, bindings },
-  );
+            ${where}`,
+    bindings,
+    orderBy,
+    limit: params.limit,
+    offset: params.offset,
+  });
 
   return { members: rows.map(toAdminMemberSummary), total };
 }

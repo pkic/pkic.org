@@ -11,7 +11,7 @@ import {
   isApplicationTerminalStage,
 } from "../../../../../assets/shared/schemas/member-applications";
 import { buildPageInfo, type PageInfo } from "../../../../../assets/shared/schemas/pagination";
-import { queryPage } from "../../../db/pagination";
+import { queryPage, type OffsetPageQuery } from "../../../db/pagination";
 import { first } from "../../../db/queries";
 import { buildD1TextSearchFilter } from "../../../db/search";
 import { resolveMappedOrderBy } from "../../../db/sort";
@@ -68,8 +68,7 @@ interface ApplicationDocumentUsage {
 }
 
 interface ApplicationDocumentPageStatements {
-  page: { sql: string; bindings: readonly unknown[] };
-  count: { sql: string; bindings: readonly unknown[] };
+  page: OffsetPageQuery;
 }
 
 function toApplicationDocument(row: ApplicationDocumentListRow): ApplicationDocument {
@@ -107,12 +106,12 @@ export function buildApplicationDocumentPageStatements(
       sql: `SELECT id, application_id, uploaded_by_email, filename, mime_type,
                    file_size_bytes, uploaded_at
               FROM application_documents
-              ${where}
-              ${orderBy}
-             LIMIT ? OFFSET ?`,
-      bindings: [...bindings, query.limit, query.offset],
+              ${where}`,
+      bindings,
+      orderBy,
+      limit: query.limit,
+      offset: query.offset,
     },
-    count: { sql: `SELECT COUNT(*) AS total FROM application_documents ${where}`, bindings },
   };
 }
 
@@ -122,7 +121,7 @@ async function queryApplicationDocuments(
   query: ApplicationDocumentsListQuery,
 ): Promise<{ rows: ApplicationDocumentListRow[]; page: PageInfo }> {
   const statements = buildApplicationDocumentPageStatements(applicationId, query);
-  const { rows, total } = await queryPage<ApplicationDocumentListRow>(db, statements.page, statements.count);
+  const { rows, total } = await queryPage<ApplicationDocumentListRow>(db, statements.page);
   return { rows, page: buildPageInfo(query.limit, query.offset, total, rows.length) };
 }
 

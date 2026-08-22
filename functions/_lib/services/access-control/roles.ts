@@ -49,20 +49,19 @@ export async function listRoles(
   const search = q ? buildD1TextSearchFilter(q, ["name", "description"]) : null;
   const where = search ? `WHERE ${search.sql}` : "";
   const bindings = search?.bindings ?? [];
-  const { rows, total } = await queryPage<RoleRow>(
-    db,
-    {
-      sql: `SELECT r.id, r.name, r.description, r.is_system_role, r.created_at,
+  const { rows, total } = await queryPage<RoleRow>(db, {
+    sql: `SELECT r.id, r.name, r.description, r.is_system_role, r.created_at,
                    COALESCE(
                      (SELECT json_group_array(permission)
                         FROM (SELECT permission FROM role_permissions WHERE role_id = r.id ORDER BY permission ASC)),
                      '[]'
                    ) AS permissions_json
-              FROM roles r ${where} ${orderBy} LIMIT ? OFFSET ?`,
-      bindings: [...bindings, limit, offset],
-    },
-    { sql: `SELECT COUNT(*) AS total FROM roles ${where}`, bindings },
-  );
+              FROM roles r ${where}`,
+    bindings,
+    orderBy,
+    limit,
+    offset,
+  });
   const roles = rows.map(serializeRole);
   return { roles, page: buildPageInfo(limit, offset, total, roles.length) };
 }

@@ -132,14 +132,13 @@ export async function listProposalPresentationVersions(
     "pv.version_number DESC",
     "pv.id ASC",
   );
-  const { rows, total } = await queryPage<PresentationVersionRow>(
-    db,
-    {
-      sql: `${VERSION_SELECT} ${where} ${orderBy} LIMIT ? OFFSET ?`,
-      bindings: [...bindings, query.limit, query.offset],
-    },
-    { sql: `SELECT COUNT(*) AS total FROM presentation_versions pv ${where}`, bindings },
-  );
+  const { rows, total } = await queryPage<PresentationVersionRow>(db, {
+    sql: `${VERSION_SELECT} ${where}`,
+    bindings,
+    orderBy,
+    limit: query.limit,
+    offset: query.offset,
+  });
   const versions = rows.map(rowToVersion);
   return { versions, page: buildPageInfo(query.limit, query.offset, total, versions.length) };
 }

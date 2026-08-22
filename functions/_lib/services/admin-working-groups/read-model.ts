@@ -131,17 +131,13 @@ export async function listAdminWorkingGroups(
   }
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const orderBy = resolveOrderBy(query.sort, ADMIN_WORKING_GROUP_SORT_COLUMNS, "ORDER BY wg.name ASC", "wg.id ASC");
-  const { rows, total } = await queryPage<WorkingGroupSummaryRow>(
-    db,
-    {
-      sql: `${SUMMARY_SELECT} ${where} ${orderBy} LIMIT ? OFFSET ?`,
-      bindings: [...bindings, query.limit, query.offset],
-    },
-    {
-      sql: `SELECT COUNT(*) AS total FROM working_groups wg ${where}`,
-      bindings,
-    },
-  );
+  const { rows, total } = await queryPage<WorkingGroupSummaryRow>(db, {
+    sql: `${SUMMARY_SELECT} ${where}`,
+    bindings,
+    orderBy,
+    limit: query.limit,
+    offset: query.offset,
+  });
   return { workingGroups: rows.map(toSummary), total };
 }
 
@@ -206,22 +202,16 @@ export async function listAdminWorkingGroupMembers(
     org_name: string | null;
     category_code: string | null;
     joined_at: string;
-  }>(
-    db,
-    {
-      sql: `SELECT u.id AS user_id, u.first_name, u.last_name, u.email,
+  }>(db, {
+    sql: `SELECT u.id AS user_id, u.first_name, u.last_name, u.email,
                    o.name AS org_name, mca.category_code, wgm.joined_at
             ${WORKING_GROUP_MEMBER_FROM_SQL}
-            ${where}
-            ${orderBy}
-            LIMIT ? OFFSET ?`,
-      bindings: [...bindings, query.limit, query.offset],
-    },
-    {
-      sql: `SELECT COUNT(*) AS total ${WORKING_GROUP_MEMBER_FROM_SQL} ${where}`,
-      bindings,
-    },
-  );
+            ${where}`,
+    bindings,
+    orderBy,
+    limit: query.limit,
+    offset: query.offset,
+  });
 
   return {
     members: rows.map((member) => ({

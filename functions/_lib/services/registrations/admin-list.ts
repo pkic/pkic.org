@@ -194,12 +194,11 @@ export async function listAdminEventRegistrations(
        r.created_at DESC,
        r.id DESC`
     : "r.created_at DESC, r.id DESC";
+  const pageOrderBy = attendanceChangeFilter ? `ORDER BY ${orderBySql}` : orderBy;
   const registrationForm = await getActiveFormByPurpose(db, eventId, "event_registration");
 
-  const { rows: registrationRows, total } = await queryPage<RegistrationRow>(
-    db,
-    {
-      sql: `SELECT r.id, r.user_id, r.status, r.attendance_type, r.source_type, r.created_at, r.updated_at,
+  const { rows: registrationRows, total } = await queryPage<RegistrationRow>(db, {
+    sql: `SELECT r.id, r.user_id, r.status, r.attendance_type, r.source_type, r.created_at, r.updated_at,
               u.email AS user_email,
               COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
               rc.code AS referral_code,
@@ -238,16 +237,12 @@ export async function listAdminEventRegistrations(
        FROM registrations r
        LEFT JOIN users u ON u.id = r.user_id
        LEFT JOIN referral_codes rc ON rc.owner_type = 'registration' AND rc.owner_id = r.id
-       WHERE ${whereClause}
-       ${attendanceChangeFilter ? `ORDER BY ${orderBySql}` : orderBy}
-       LIMIT ? OFFSET ?`,
-      bindings: [...bindings, params.limit, params.offset],
-    },
-    {
-      sql: `SELECT COUNT(*) AS total FROM registrations r LEFT JOIN users u ON u.id = r.user_id WHERE ${whereClause}`,
-      bindings,
-    },
-  );
+       WHERE ${whereClause}`,
+    bindings,
+    orderBy: pageOrderBy,
+    limit: params.limit,
+    offset: params.offset,
+  });
 
   const registrationIds = registrationRows.map((row) => row.id);
   const registrationFilter = buildD1JsonMembershipFilter("w.registration_id", registrationIds);

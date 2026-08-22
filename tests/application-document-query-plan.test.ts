@@ -12,8 +12,8 @@ describe("application document D1 query plan", () => {
       offset: 0,
       sort: "-uploadedAt",
     }).page;
-    const result = await env.DB.prepare(`EXPLAIN QUERY PLAN ${statement.sql}`)
-      .bind(...statement.bindings)
+    const result = await env.DB.prepare(`EXPLAIN QUERY PLAN ${statement.sql} ${statement.orderBy ?? ""}`)
+      .bind(...(statement.bindings ?? []))
       .all<{ detail: string }>();
     const plan = result.results.map((row) => row.detail).join("\n");
 

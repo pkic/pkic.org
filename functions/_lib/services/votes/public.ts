@@ -113,17 +113,17 @@ export async function listPublicVotes(
   }
 
   const orderBy = resolveOrderBy(params.sort, VOTES_LIST_SORT_COLUMNS, "ORDER BY closes_at DESC", "id ASC");
-  const { limit, offset } = params;
+  const limit = params.limit ?? 50;
+  const offset = params.offset ?? 0;
 
   const where = conditions.join(" AND ");
-  const { rows, total } = await queryPage<VoteRow>(
-    db,
-    {
-      sql: `SELECT ${VOTE_ROW_COLUMNS} FROM votes WHERE ${where} ${orderBy} LIMIT ? OFFSET ?`,
-      bindings: [...args, limit, offset],
-    },
-    { sql: `SELECT COUNT(*) AS total FROM votes WHERE ${where}`, bindings: args },
-  );
+  const { rows, total } = await queryPage<VoteRow>(db, {
+    sql: `SELECT ${VOTE_ROW_COLUMNS} FROM votes WHERE ${where}`,
+    bindings: args,
+    orderBy,
+    limit,
+    offset,
+  });
 
   const votes = await toPublicVoteSummaries(db, rows);
   return { votes, total };

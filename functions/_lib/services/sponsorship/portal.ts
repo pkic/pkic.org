@@ -153,19 +153,17 @@ export async function listSponsorPortalAttendeesPage(
     organization_name: string | null;
     job_title: string | null;
     attendance_type: string | null;
-  }>(
-    db,
-    {
-      sql: `SELECT r.id AS registration_id, u.first_name, u.last_name, u.email,
+  }>(db, {
+    sql: `SELECT r.id AS registration_id, u.first_name, u.last_name, u.email,
               u.organization_name, u.job_title, r.attendance_type
        ${SPONSOR_PORTAL_ATTENDEES_FROM}
        ${searchSql}
-       ${orderBy}
-       LIMIT ? OFFSET ?`,
-      bindings: [...bindings, params.limit, params.offset],
-    },
-    { sql: `SELECT COUNT(*) AS total ${SPONSOR_PORTAL_ATTENDEES_FROM} ${searchSql}`, bindings },
-  );
+       `,
+    bindings,
+    orderBy,
+    limit: params.limit,
+    offset: params.offset,
+  });
 
   return { attendees: rows.map(toAttendeeRow), total };
 }

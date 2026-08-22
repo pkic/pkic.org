@@ -55,21 +55,16 @@ export async function listProposalComments(
     "pc.created_at DESC",
     "pc.id ASC",
   );
-  const { rows, total } = await queryPage<ProposalInternalComment>(
-    db,
-    {
-      sql: `SELECT ${COMMENT_COLUMNS}
+  const { rows, total } = await queryPage<ProposalInternalComment>(db, {
+    sql: `SELECT ${COMMENT_COLUMNS}
             ${from}
             WHERE pc.proposal_id = ? ${searchSql}
-            ${orderBy}
-            LIMIT ? OFFSET ?`,
-      bindings: [...bindings, query.limit, query.offset],
-    },
-    {
-      sql: `SELECT COUNT(*) AS total ${from} WHERE pc.proposal_id = ? ${searchSql}`,
-      bindings,
-    },
-  );
+            `,
+    bindings,
+    orderBy,
+    limit: query.limit,
+    offset: query.offset,
+  });
   return { comments: rows, page: buildPageInfo(query.limit, query.offset, total, rows.length) };
 }
 

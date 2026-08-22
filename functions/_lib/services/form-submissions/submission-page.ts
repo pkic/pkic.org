@@ -7,7 +7,6 @@ import { FORM_SUBMISSIONS_SORT_COLUMNS } from "../../../../assets/shared/schemas
 import type { DatabaseLike } from "../../types";
 import type { AdminSubmissionPayload, ListFormSubmissionsParams, ListFormSubmissionsResult } from "./types";
 import {
-  countSubmissionPopulation,
   MERGED_SUBMISSION_COLUMNS,
   resolveFormSubmissionPopulation,
   selectFromSubmissionPopulation,
@@ -81,12 +80,13 @@ export async function listFormSubmissions(
     "ORDER BY submitted_at DESC",
     "source ASC, source_id ASC",
   );
-  const pageQuery = selectFromSubmissionPopulation(
-    population,
-    `SELECT ${MERGED_SUBMISSION_COLUMNS} FROM merged ${orderBy} LIMIT ? OFFSET ?`,
-    [params.limit, params.offset],
-  );
-  const page = await queryPage<MergedSubmissionRow>(db, pageQuery, countSubmissionPopulation(population));
+  const pageQuery = selectFromSubmissionPopulation(population, `SELECT ${MERGED_SUBMISSION_COLUMNS} FROM merged`);
+  const page = await queryPage<MergedSubmissionRow>(db, {
+    ...pageQuery,
+    orderBy,
+    limit: params.limit,
+    offset: params.offset,
+  });
   const submissions = page.rows.length ? await attachSubmissionAnswers(db, page.rows) : [];
 
   return {

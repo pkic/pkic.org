@@ -67,27 +67,20 @@ export async function listEventTeam(
   const search = q ? buildD1TextSearchFilter(q, ["ur.user_email", "ur.role_id"]) : null;
   const searchSql = search ? `AND ${search.sql}` : "";
   const bindings = search?.bindings ?? [];
-  const { rows, total } = await queryPage<PermissionRow>(
-    db,
-    {
-      sql: `SELECT ur.id, ur.user_email, ur.user_id, ur.role_id,
+  const { rows, total } = await queryPage<PermissionRow>(db, {
+    sql: `SELECT ur.id, ur.user_email, ur.user_id, ur.role_id,
                    ur.granted_by_user_id AS granted_by_id, ur.expires_at, ur.created_at,
                    u.email AS granter_email
               FROM user_roles ur
               LEFT JOIN users u ON u.id = ur.granted_by_user_id
              WHERE ur.context_type = 'event' AND ur.context_id = ? AND ur.revoked_at IS NULL
                AND ur.role_id IN ('role-event_organizer', 'role-program_committee', 'role-event_moderator', 'role-event_volunteer')
-               ${searchSql} ${orderBy} LIMIT ? OFFSET ?`,
-      bindings: [event.id, ...bindings, limit, offset],
-    },
-    {
-      sql: `SELECT COUNT(*) AS total FROM user_roles ur
-             WHERE ur.context_type = 'event' AND ur.context_id = ? AND ur.revoked_at IS NULL
-               AND ur.role_id IN ('role-event_organizer', 'role-program_committee', 'role-event_moderator', 'role-event_volunteer')
                ${searchSql}`,
-      bindings: [event.id, ...bindings],
-    },
-  );
+    bindings: [event.id, ...bindings],
+    orderBy,
+    limit,
+    offset,
+  });
   const permissions = rows.map((row) => ({
     id: row.id,
     user_email: row.user_email,

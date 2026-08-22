@@ -144,14 +144,13 @@ ${deterministicRepresentativeJoinSql("wgm.user_id")}
     "COALESCE(u.last_name, u.first_name) COLLATE NOCASE ASC",
     "u.id ASC",
   );
-  const result = await queryPage<WorkingGroupMemberRow>(
-    db,
-    {
-      sql: `SELECT u.first_name, u.last_name, o.name AS org_name ${from} ${orderBy} LIMIT ? OFFSET ?`,
-      bindings: [...bindings, params.limit, params.offset],
-    },
-    { sql: `SELECT COUNT(*) AS total ${from}`, bindings },
-  );
+  const result = await queryPage<WorkingGroupMemberRow>(db, {
+    sql: `SELECT u.first_name, u.last_name, o.name AS org_name ${from}`,
+    bindings,
+    orderBy,
+    limit: params.limit,
+    offset: params.offset,
+  });
   return {
     members: result.rows.map((row) => ({
       name: [row.first_name, row.last_name].filter(Boolean).join(" ") || "Unknown",

@@ -33,10 +33,8 @@ async function listAuditLogForScope(db: DatabaseLike, query: ScopedAuditLogListQ
   const from = `FROM audit_log al
     LEFT JOIN users u ON al.actor_type = 'admin' AND u.id = al.actor_id
     ${scope.joins}`;
-  const { rows, total } = await queryPage<AuditLogReadRow>(
-    db,
-    {
-      sql: `SELECT
+  const { rows, total } = await queryPage<AuditLogReadRow>(db, {
+    sql: `SELECT
               al.id,
               al.actor_type,
               al.actor_id,
@@ -49,15 +47,12 @@ async function listAuditLogForScope(db: DatabaseLike, query: ScopedAuditLogListQ
             ${from}
             WHERE ${scope.where}
             ${searchSql}
-            ${orderBy}
-            LIMIT ? OFFSET ?`,
-      bindings: [...bindings, query.limit, query.offset],
-    },
-    {
-      sql: `SELECT COUNT(*) AS total ${from} WHERE ${scope.where} ${searchSql}`,
-      bindings,
-    },
-  );
+            `,
+    bindings,
+    orderBy,
+    limit: query.limit,
+    offset: query.offset,
+  });
   const auditLog = toAuditLogResponseRows(rows);
   return { auditLog, page: buildPageInfo(query.limit, query.offset, total, auditLog.length) };
 }

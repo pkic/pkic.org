@@ -73,10 +73,8 @@ export async function listAdminForms(
     "f.scope_type ASC, f.purpose ASC, f.updated_at DESC",
     "f.id ASC",
   );
-  const { rows: forms, total } = await queryPage<AdminFormSummaryRow>(
-    db,
-    {
-      sql: `SELECT
+  const { rows: forms, total } = await queryPage<AdminFormSummaryRow>(db, {
+    sql: `SELECT
          f.*,
          e.slug AS event_slug,
          e.name AS event_name,
@@ -100,19 +98,12 @@ export async function listAdminForms(
              ) ELSE 0 END AS submission_count
        ${FORMS_LIST_FROM}
        ${where}
-       GROUP BY f.id
-       ${orderBy}
-       LIMIT ? OFFSET ?`,
-      bindings: [...bindings, params.limit, params.offset],
-    },
-    {
-      sql: `SELECT COUNT(*) AS total
-            FROM forms f
-            LEFT JOIN events e ON e.id = f.scope_ref AND f.scope_type = 'event'
-            ${where}`,
-      bindings,
-    },
-  );
+       GROUP BY f.id`,
+    bindings,
+    orderBy,
+    limit: params.limit,
+    offset: params.offset,
+  });
 
   return { forms, total };
 }

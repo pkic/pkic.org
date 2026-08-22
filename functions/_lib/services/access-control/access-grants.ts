@@ -83,21 +83,17 @@ export async function listAccessGrants(
   }
   const where = `WHERE ${conditions.join(" AND ")}`;
 
-  const { rows, total } = await queryPage<GrantRow>(
-    db,
-    {
-      sql: `SELECT g.id, g.user_id, u.email AS user_email, g.permission, g.context_type, g.context_id,
+  const { rows, total } = await queryPage<GrantRow>(db, {
+    sql: `SELECT g.id, g.user_id, u.email AS user_email, g.permission, g.context_type, g.context_id,
                    g.expires_at, g.created_at
               FROM permission_grants g
               JOIN users u ON u.id = g.user_id
-              ${where} ${orderBy} LIMIT ? OFFSET ?`,
-      bindings: [...bindings, limit, offset],
-    },
-    {
-      sql: `SELECT COUNT(*) AS total FROM permission_grants g JOIN users u ON u.id = g.user_id ${where}`,
-      bindings,
-    },
-  );
+              ${where}`,
+    bindings,
+    orderBy,
+    limit,
+    offset,
+  });
   const grants = rows.map(serializeGrant);
   return { grants, page: buildPageInfo(limit, offset, total, grants.length) };
 }

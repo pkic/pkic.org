@@ -142,22 +142,13 @@ export async function listLeadershipPositionsAdmin(
     "(lp.ends_at IS NOT NULL) ASC, lp.starts_at DESC",
     "lp.id ASC",
   );
-  const { rows, total } = await queryPage<LeadershipPositionRow>(
-    db,
-    {
-      sql: `${ADMIN_POSITION_SELECT} ${where} ${orderBy} LIMIT ? OFFSET ?`,
-      bindings: [...bindings, query.limit, query.offset],
-    },
-    {
-      sql: `SELECT COUNT(*) AS total
-            FROM leadership_positions lp
-            JOIN users u ON u.id = lp.user_id
-            LEFT JOIN members m ON m.id = lp.member_id
-            LEFT JOIN organizations o ON o.id = m.organization_id
-            ${where}`,
-      bindings,
-    },
-  );
+  const { rows, total } = await queryPage<LeadershipPositionRow>(db, {
+    sql: `${ADMIN_POSITION_SELECT} ${where}`,
+    bindings,
+    orderBy,
+    limit: query.limit,
+    offset: query.offset,
+  });
   return { positions: rows.map(toAdmin), total };
 }
 

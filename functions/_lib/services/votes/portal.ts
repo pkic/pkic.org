@@ -163,14 +163,13 @@ export async function listVisibleVotesForMember(
   const where = filters.join(" AND ");
   const orderBy = resolveOrderBy(params.sort, VOTES_LIST_SORT_COLUMNS, "ORDER BY closes_at DESC", "id ASC");
 
-  const { rows, total } = await queryPage<VoteRow>(
-    db,
-    {
-      sql: `SELECT ${VOTE_ROW_COLUMNS} FROM votes WHERE ${where} ${orderBy} LIMIT ? OFFSET ?`,
-      bindings: [...args, params.limit, params.offset],
-    },
-    { sql: `SELECT COUNT(*) AS total FROM votes WHERE ${where}`, bindings: args },
-  );
+  const { rows, total } = await queryPage<VoteRow>(db, {
+    sql: `SELECT ${VOTE_ROW_COLUMNS} FROM votes WHERE ${where}`,
+    bindings: args,
+    orderBy,
+    limit: params.limit,
+    offset: params.offset,
+  });
 
   if (rows.length === 0) return { votes: [], total };
 
@@ -273,19 +272,15 @@ export async function listMyVoteHistory(
     status: VoteStatus;
     choice: string;
     submitted_at: string;
-  }>(
-    db,
-    {
-      sql: `SELECT b.vote_id, v.slug, v.title, v.vote_type, v.scope_type, v.status, b.choice, b.submitted_at
+  }>(db, {
+    sql: `SELECT b.vote_id, v.slug, v.title, v.vote_type, v.scope_type, v.status, b.choice, b.submitted_at
        FROM vote_ballots b JOIN votes v ON v.id = b.vote_id
-       WHERE ${where} ${orderBy} LIMIT ? OFFSET ?`,
-      bindings: [...bindings, params.limit, params.offset],
-    },
-    {
-      sql: `SELECT COUNT(*) AS total FROM vote_ballots b JOIN votes v ON v.id = b.vote_id WHERE ${where}`,
-      bindings,
-    },
-  );
+       WHERE ${where}`,
+    bindings,
+    orderBy,
+    limit: params.limit,
+    offset: params.offset,
+  });
   const votes = rows.map((r) => ({
     voteId: r.vote_id,
     slug: r.slug,

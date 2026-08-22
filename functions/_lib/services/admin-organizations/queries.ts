@@ -96,14 +96,13 @@ export async function listAdminOrganizations(
   const whereArgs = search?.bindings ?? [];
   const orderBy = resolveOrderBy(params.sort, ADMIN_ORGANIZATIONS_SORT_COLUMNS, "ORDER BY o.name ASC", "o.id ASC");
 
-  const { rows, total } = await queryPage<OrgSummaryRow>(
-    db,
-    {
-      sql: `${ORG_SUMMARY_SELECT} ${where} ${orderBy} LIMIT ? OFFSET ?`,
-      bindings: [...whereArgs, params.limit, params.offset],
-    },
-    { sql: `SELECT COUNT(*) AS total FROM organizations o ${where}`, bindings: whereArgs },
-  );
+  const { rows, total } = await queryPage<OrgSummaryRow>(db, {
+    sql: `${ORG_SUMMARY_SELECT} ${where}`,
+    bindings: whereArgs,
+    orderBy,
+    limit: params.limit,
+    offset: params.offset,
+  });
 
   return { organizations: rows.map(toOrgSummary), total };
 }
