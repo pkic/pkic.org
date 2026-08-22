@@ -43,6 +43,8 @@ import {
   type SessionTableConfig,
   type MagicLinkTableConfig,
 } from "./session-engine";
+import { MEMBER_SESSION_COOKIE_NAME, MEMBER_SESSION_COOKIE_PATH } from "./session-cookies";
+export { MEMBER_SESSION_COOKIE_NAME, MEMBER_SESSION_COOKIE_PATH } from "./session-cookies";
 
 interface MemberEligibleUserRow {
   id: string;
@@ -120,8 +122,6 @@ export interface MemberSessionTokenClaims {
 }
 
 const MEMBER_SESSION_TOKEN_TYPE = "member-session";
-export const MEMBER_SESSION_COOKIE_NAME = "pkic_member_session";
-export const MEMBER_SESSION_COOKIE_PATH = "/api/v1";
 
 const SESSIONS_TABLE: SessionTableConfig = { table: "sessions", subjectColumn: "user_id" };
 const MAGIC_LINKS_TABLE: MagicLinkTableConfig = {

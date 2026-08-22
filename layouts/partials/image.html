@@ -11,8 +11,7 @@
     {{- end -}}
 
     {{/* Content hash for cache-busting — changes when page data or site content changes */}}
-    {{- $hashInput := printf "%s|%s|%s|%s|%s" .Title $summary (.Params.heroImage | default "") (.Params.color | default "") (.Lastmod.Format "2006-01-02") -}}
-    {{- $hash := substr (md5 $hashInput) 0 12 -}}
+    {{- $hash := partial "og-card-version.html" . -}}
 
     {{/* Page path for the OG card worker endpoint */}}
     {{- $pagePath := .RelPermalink | strings.TrimPrefix "/" | strings.TrimSuffix "/" -}}
