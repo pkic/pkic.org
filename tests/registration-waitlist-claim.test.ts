@@ -124,6 +124,18 @@ function callMountedClaimWithSelection(token: string, claimDayDate: string, atte
   );
 }
 
+function callMountedScalarAttendanceUpdate(token: string, attendanceType: string): Promise<Response> {
+  return app.fetch(
+    new Request(`https://app.test/api/v1/registrations/manage/${token}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "update", attendanceType }),
+    }),
+    env,
+    { waitUntil: () => undefined, passThroughOnException: () => undefined } as unknown as ExecutionContext,
+  );
+}
+
 async function expectClaimConflict(response: Response): Promise<void> {
   expect(response.status).toBe(409);
   await expect(response.json()).resolves.toMatchObject({
@@ -152,6 +164,31 @@ async function aggregateEffects(registrationId: string): Promise<{
 describe("mounted registration day-waitlist claims", () => {
   beforeEach(async () => {
     await resetDb();
+  });
+
+  it("rejects a scalar-only attendance change when day attendance is canonical", async () => {
+    const fixture = await seedClaimFixture(["2026-12-01"], ["2026-12-01"]);
+
+    const response = await callMountedScalarAttendanceUpdate(fixture.token, "virtual");
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "DAY_ATTENDANCE_REQUIRED" },
+    });
+    await expect(
+      queryAll<{ attendance_type: string }>(
+        env.DB,
+        `SELECT rda.attendance_type FROM registration_day_attendance rda
+         JOIN registrations r ON r.id = rda.registration_id
+         WHERE rda.registration_id = ?`,
+        [fixture.registrationId],
+      ),
+    ).resolves.toEqual([{ attendance_type: "in_person" }]);
+    await expect(
+      queryAll<{ attendance_type: string }>(env.DB, "SELECT attendance_type FROM registrations WHERE id = ?", [
+        fixture.registrationId,
+      ]),
+    ).resolves.toEqual([{ attendance_type: "in_person" }]);
   });
 
   it("rejects an expired offer and rolls back unrelated profile, attendance, audit, and outbox writes", async () => {

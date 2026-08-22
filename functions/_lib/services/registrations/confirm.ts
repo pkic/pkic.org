@@ -3,7 +3,7 @@ import { first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import { prepareEngagementStatement } from "../engagement";
-import { resolveCapacityExemptReason } from "./day-waitlist";
+import { prepareRemoveAllDayWaitlistStatement, resolveCapacityExemptReason } from "./day-waitlist";
 import { prepareUpsertAttendeeParticipantStatement } from "./participant-registration";
 import { prepareAuditLog } from "../audit";
 import { prepareFinalizeEmailChange } from "./change-email";
@@ -170,6 +170,18 @@ export async function prepareConfirmRegistrationByToken(
         registration.id,
       ),
   ];
+  // A role-based attendee does not consume day capacity. Remove any waiting
+  // or offered rows atomically with confirmation so a stale row cannot later
+  // be promoted as though this registration still needed a seat.
+  if (capacityExemptReason) {
+    updateStatements.push(
+      prepareRemoveAllDayWaitlistStatement(db, {
+        registrationId: registration.id,
+        reasonCode: "capacity_exempt",
+        reasonNote: capacityExemptReason,
+      }),
+    );
+  }
   if (matchingInvite) {
     updateStatements.push(...prepareAcceptInviteStatements(db, matchingInvite));
   }

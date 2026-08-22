@@ -76,6 +76,98 @@ describe("day attendance capacity", () => {
     expect(waitlist[0].priority_lane).toBe("general");
   });
 
+  it("removes a pending day waitlist when confirmation becomes role-capacity-exempt", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
+         VALUES ('role-exempt-day', ?, '2026-12-01', 'Day 1', 1, 0, datetime('now'), datetime('now'))`,
+      ).bind(eventId),
+      env.DB.prepare(
+        `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+         VALUES
+           ('role-exempt-holder', 'role-exempt-holder@example.test', 'role-exempt-holder@example.test', 'Seat', 'Holder', datetime('now'), datetime('now')),
+           ('role-exempt-pending', 'role-exempt-pending@example.test', 'role-exempt-pending@example.test', 'Role', 'Exempt', datetime('now'), datetime('now'))`,
+      ),
+    ]);
+
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const holder = await createRegistration(env.DB, {
+      event,
+      userId: "role-exempt-holder",
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    await confirmRegistrationByToken(env.DB, {
+      token: holder.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+
+    const pending = await createRegistration(env.DB, {
+      event,
+      userId: "role-exempt-pending",
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    await expect(
+      queryAll<{ status: string }>(env.DB, "SELECT status FROM event_day_waitlist_entries WHERE registration_id = ?", [
+        pending.registration.id,
+      ]),
+    ).resolves.toEqual([{ status: "waiting" }]);
+
+    await env.DB.prepare(
+      `INSERT INTO event_participants (
+         id, event_id, user_id, role, subrole, status, source_type, source_ref, created_at, updated_at
+       ) VALUES ('role-exempt-participant', ?, 'role-exempt-pending', 'speaker', NULL, 'active', 'test', 'role-exempt', datetime('now'), datetime('now'))`,
+    )
+      .bind(eventId)
+      .run();
+
+    const confirmed = await confirmRegistrationByToken(env.DB, {
+      token: pending.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+    expect(confirmed.registration.capacity_exempt_in_person).toBe(1);
+
+    await expect(
+      queryAll<{ status: string; reason_code: string }>(
+        env.DB,
+        "SELECT status, reason_code FROM event_day_waitlist_entries WHERE registration_id = ?",
+        [pending.registration.id],
+      ),
+    ).resolves.toEqual([{ status: "removed", reason_code: "capacity_exempt" }]);
+
+    // Defense in depth for legacy stale rows: an exempt registration must
+    // never be selected by promotion even if an old row survives cleanup.
+    await env.DB.prepare(
+      `UPDATE event_day_waitlist_entries SET status = 'waiting', reason_code = NULL, updated_at = datetime('now')
+       WHERE registration_id = ?`,
+    )
+      .bind(pending.registration.id)
+      .run();
+    await env.DB.prepare("UPDATE event_days SET in_person_capacity = 2 WHERE id = 'role-exempt-day'").run();
+
+    const promoted = await promoteDayWaitlistIfCapacity(env.DB, {
+      eventId,
+      eventDayId: "role-exempt-day",
+      claimWindowHours: 24,
+    });
+    expect(promoted).toBeNull();
+    await expect(
+      queryAll<{ status: string }>(env.DB, "SELECT status FROM event_day_waitlist_entries WHERE registration_id = ?", [
+        pending.registration.id,
+      ]),
+    ).resolves.toEqual([{ status: "waiting" }]);
+  });
+
   it("rejects a stale final-seat plan and rebuilds the losing registration as waitlisted", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     await env.DB.batch([

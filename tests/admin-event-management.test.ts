@@ -476,6 +476,55 @@ describe("admin event management endpoints", () => {
     expect(row.cancelled_at).toBeNull();
   });
 
+  it("rejects an admin scalar-only attendance change when day attendance is canonical", async () => {
+    const { baseEventId } = await setupAdmin();
+    const userId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
+         VALUES ('admin-scalar-day', ?, '2026-12-01', 'Day 1', 1, 0, datetime('now'), datetime('now'))`,
+      ).bind(baseEventId),
+      env.DB.prepare(
+        `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+         VALUES (?, 'admin-scalar@example.test', 'admin-scalar@example.test', 'Admin', 'Scalar', datetime('now'), datetime('now'))`,
+      ).bind(userId),
+    ]);
+
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const created = await createRegistration(env.DB, {
+      event,
+      userId,
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+
+    const response = await callAdmin(`/api/v1/admin/events/pqc-2026/registrations/${created.registration.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "update", attendanceType: "virtual" }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "DAY_ATTENDANCE_REQUIRED" },
+    });
+    await expect(
+      queryAll<{ attendance_type: string }>(env.DB, "SELECT attendance_type FROM registrations WHERE id = ?", [
+        created.registration.id,
+      ]),
+    ).resolves.toEqual([{ attendance_type: "in_person" }]);
+    await expect(
+      queryAll<{ attendance_type: string }>(
+        env.DB,
+        `SELECT rda.attendance_type FROM registration_day_attendance rda
+         WHERE rda.registration_id = ?`,
+        [created.registration.id],
+      ),
+    ).resolves.toEqual([{ attendance_type: "in_person" }]);
+  });
+
   it("separates accepted attendees from active day waitlists in both event statistics views", async () => {
     const { baseEventId } = await setupAdmin();
 

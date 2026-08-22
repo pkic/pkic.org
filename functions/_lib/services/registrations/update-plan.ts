@@ -152,6 +152,21 @@ export async function buildRegistrationUpdate(
     listConfirmedInPersonEventDayIdsForRegistration(db, registration.id),
     listEventDays(db, registration.event_id),
   ]);
+  // Once an event has day-level attendance, that selection is the canonical
+  // source of truth. A scalar-only update cannot safely infer whether omitted
+  // days should be preserved, removed, or changed, so reject it rather than
+  // leaving registration_day_attendance and its waitlist projection stale.
+  if (
+    payload.attendanceType !== undefined &&
+    payload.dayAttendance === undefined &&
+    (configuredEventDays.length > 0 || previousInPersonDayIds.length > 0)
+  ) {
+    throw new AppError(
+      400,
+      "DAY_ATTENDANCE_REQUIRED",
+      "dayAttendance is required when updating attendance for an event with day-level attendance",
+    );
+  }
   const effectiveAttendanceType =
     payload.attendanceType ?? deriveEventAttendanceType(payload.dayAttendance) ?? registration.attendance_type;
   if (!effectiveAttendanceType) {
