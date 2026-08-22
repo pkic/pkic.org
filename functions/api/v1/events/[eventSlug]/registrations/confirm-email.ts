@@ -8,7 +8,10 @@ import { confirmRegistrationWithNotification } from "../../../../../_lib/service
 import { getRegistrationDayAttendance } from "../../../../../_lib/services/event-days";
 import { listDayWaitlistForRegistration } from "../../../../../_lib/services/registrations/day-waitlist";
 import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
-import { registrationConfirmSchema } from "../../../../../../assets/shared/schemas/registration";
+import {
+  registrationConfirmResponseSchema,
+  registrationConfirmSchema,
+} from "../../../../../../assets/shared/schemas/registration";
 import {
   registrationConfirmEmailGetRouteSchema,
   registrationConfirmEmailPostRouteSchema,
@@ -32,15 +35,17 @@ async function confirmRegistration(c: any, token: string, registrationId?: strin
     getRegistrationDayAttendance(c.env.DB, result.registration.id),
     listDayWaitlistForRegistration(c.env.DB, result.registration.id),
   ]);
-  return json({
-    success: true,
-    status: result.registration.status,
-    shareUrl: result.shareUrl,
-    manageUrl: result.manageUrl,
-    manageToken: result.manageToken,
-    dayAttendance,
-    dayWaitlist,
-  });
+  return json(
+    registrationConfirmResponseSchema.parse({
+      success: true,
+      status: result.registration.status,
+      shareUrl: result.shareUrl,
+      manageUrl: result.manageUrl,
+      manageToken: result.manageToken,
+      dayAttendance,
+      dayWaitlist,
+    }),
+  );
 }
 
 export async function onRequestPost(

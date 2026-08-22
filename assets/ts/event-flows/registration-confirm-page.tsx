@@ -12,27 +12,11 @@ import {
   RegistrationDayStatusSummary,
 } from "../components/RegistrationDayStatusSummary";
 import { findSubmitButton } from "../shared/form/helpers";
-
-interface ConfirmResponse {
-  success: true;
-  status: "pending_email_confirmation" | "registered" | "cancelled";
-  shareUrl?: string | null;
-  manageUrl?: string | null;
-  manageToken?: string | null;
-  dayAttendance?: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
-  dayWaitlist?: Array<{ dayDate: string; status: string }>;
-}
-
-interface ConfirmInfoResponse {
-  firstName: string | null;
-  lastName: string | null;
-  email: string | null;
-  organizationName: string | null;
-  eventName: string | null;
-  /** True when the pending token exists but has passed its expiry time. */
-  expired: boolean;
-  recoverable?: boolean;
-}
+import {
+  registrationConfirmInfoResponseSchema,
+  registrationConfirmResponseSchema,
+  type RegistrationConfirmResponse,
+} from "../../shared/schemas/registration";
 
 /**
  * Replace {firstName}, {eventName} and {forEvent} tokens in a template string
@@ -70,7 +54,7 @@ function fillPlaceholders(root: HTMLElement, values: Record<string, string>): vo
 function showConfirmedPanel(
   root: HTMLElement,
   form: HTMLFormElement,
-  result: ConfirmResponse,
+  result: RegistrationConfirmResponse,
   firstName: string,
   lastName: string,
   eventName: string,
@@ -354,8 +338,10 @@ async function main(): Promise<void> {
   let isExpired = false;
   let isRecoverable = false;
   try {
-    const info = await getJson<ConfirmInfoResponse>(
-      `${boot.apiBase}/events/${boot.eventSlug}/registrations/confirm-info?token=${encodeURIComponent(token)}${registrationId ? `&id=${encodeURIComponent(registrationId)}` : ""}`,
+    const info = registrationConfirmInfoResponseSchema.parse(
+      await getJson<unknown>(
+        `${boot.apiBase}/events/${boot.eventSlug}/registrations/confirm-info?token=${encodeURIComponent(token)}${registrationId ? `&id=${encodeURIComponent(registrationId)}` : ""}`,
+      ),
     );
     firstName = info.firstName ?? "";
     lastName = info.lastName ?? "";
@@ -404,9 +390,11 @@ async function main(): Promise<void> {
 
     await withLoadingButton(findSubmitButton(boot.form), async () => {
       try {
-        const result = await postJson<ConfirmResponse>(
-          `${boot.apiBase}/events/${boot.eventSlug}/registrations/confirm-email`,
-          { token, ...(registrationId ? { id: registrationId } : {}) },
+        const result = registrationConfirmResponseSchema.parse(
+          await postJson<unknown>(`${boot.apiBase}/events/${boot.eventSlug}/registrations/confirm-email`, {
+            token,
+            ...(registrationId ? { id: registrationId } : {}),
+          }),
         );
         showConfirmedPanel(
           boot.root,

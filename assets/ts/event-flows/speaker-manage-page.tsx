@@ -6,38 +6,21 @@ import { renderConsentInputs, readConsentValues, syncConsentValidation } from ".
 import { withLoadingButton } from "../shared/form/submit";
 import { setStatus } from "./boot";
 import { wireTokenHeadshotSection } from "./registration-manage-headshot";
-import type { RequiredTerm } from "../shared/types";
+import { eventTermsResponseSchema, type RequiredTerm } from "../../shared/schemas/forms";
 import { formatStatusLabel, statusBadgeClass, findSubmitButton } from "../shared/form/helpers";
-import type { SpeakerAccessSummary, SpeakerProposalSummary } from "./speaker-api-types";
 import { loadSpeakerPageData } from "./speaker-link-recovery";
-
-interface SpeakerManageResponse {
-  speaker: SpeakerAccessSummary;
-  proposal: SpeakerProposalSummary & {
-    presentationUrl: string | null;
-  };
-  profile: {
-    firstName: string | null;
-    lastName: string | null;
-    email: string;
-    organizationName: string | null;
-    jobTitle: string | null;
-    biography: string | null;
-    links: string[];
-    headshotUploaded: boolean;
-    headshotUpdatedAt: string | null;
-    headshotUrl: string | null;
-  };
-}
-
-interface TermsApiResponse {
-  terms: RequiredTerm[];
-}
+import {
+  speakerSelfServiceReadResponseSchema,
+  type SpeakerSelfServiceReadResponse,
+} from "../../shared/schemas/speaker-self-service";
 
 async function main(): Promise<void> {
-  const loaded = await loadSpeakerPageData<SpeakerManageResponse>({
+  const loaded = await loadSpeakerPageData<SpeakerSelfServiceReadResponse>({
     selector: "[data-event-speaker-manage]",
-    request: (token, boot) => getJson(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`),
+    request: async (token, boot) =>
+      speakerSelfServiceReadResponseSchema.parse(
+        await getJson<unknown>(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`),
+      ),
   });
   if (!loaded) return;
   const { boot, token, data, loadingEl, contentEl } = loaded;
@@ -105,8 +88,8 @@ async function main(): Promise<void> {
 
   if (confirmForm && consentContainer && data.speaker.status === "invited") {
     try {
-      const termsResponse = await getJson<TermsApiResponse>(
-        `${boot.apiBase}/events/${encodeURIComponent(boot.eventSlug)}/terms?audience=speaker`,
+      const termsResponse = eventTermsResponseSchema.parse(
+        await getJson<unknown>(`${boot.apiBase}/events/${encodeURIComponent(boot.eventSlug)}/terms?audience=speaker`),
       );
       speakerTerms = termsResponse.terms ?? [];
       renderConsentInputs(consentContainer, speakerTerms);

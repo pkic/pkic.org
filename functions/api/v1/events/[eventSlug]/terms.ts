@@ -1,6 +1,7 @@
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { getEventBySlug, getRequiredTerms } from "../../../../_lib/services/events";
 import { json } from "../../../../_lib/http";
+import { requiredTermReadModel } from "../../../../_lib/services/event-read-models";
 import {
   eventTermsGetRouteSchema,
   eventTermsQuerySchema,
@@ -15,14 +16,7 @@ async function getTerms(c: any, audience: "attendee" | "speaker"): Promise<Respo
     eventTermsResponseSchema.parse({
       event: { id: event.id, slug: event.slug, name: event.name },
       audience,
-      terms: terms.map((term: any) => ({
-        termKey: term.term_key,
-        version: term.version,
-        required: term.required === 1,
-        contentRef: term.content_ref,
-        displayText: term.display_text,
-        helpText: term.help_text ?? null,
-      })),
+      terms: terms.map(requiredTermReadModel),
     }),
   );
 }

@@ -40,6 +40,7 @@ import {
 } from "../functions/_lib/services/proposer-speaker-profile";
 import { replaceProposalSpeakerHeadshot } from "../functions/_lib/services/proposal-speaker-headshot";
 import type { DatabaseLike } from "../functions/_lib/types";
+import { speakerSelfServiceReadResponseSchema } from "../assets/shared/schemas/speaker-self-service";
 import {
   inviteSpeakerAndSubmitCapacityProposal,
   setupProposalSpeakerCapacityWorkflow,
@@ -124,7 +125,21 @@ describe("speaker self-management endpoints", () => {
   });
 
   it("GET returns speaker participation status and proposal details", async () => {
-    await setupWorkflow();
+    const { eventId } = await setupWorkflow();
+    await env.DB.prepare(
+      `INSERT INTO event_terms (
+         id, event_id, audience_type, term_key, version, required,
+         content_ref, display_text, help_text, active, created_at
+       ) VALUES (?, ?, 'presentation', 'presentation-rights', 'v1', 1, ?, ?, ?, 1, datetime('now'))`,
+    )
+      .bind(
+        crypto.randomUUID(),
+        eventId,
+        "/presentation-rights",
+        "I can share this presentation.",
+        "Confirm publication rights.",
+      )
+      .run();
     const { speakerManageToken } = await inviteSpeakerAndSubmitProposal();
 
     const response = await speakerGet(
@@ -134,15 +149,25 @@ describe("speaker self-management endpoints", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = (await response.json()) as {
-      speaker: { role: string; status: string };
-      proposal: { title: string; status: string };
-      profile: { firstName: string; email: string };
-    };
+    const body = speakerSelfServiceReadResponseSchema.parse(await response.json());
     expect(body.speaker.role).toBeTruthy();
     expect(body.proposal.title).toBe("Post-Quantum Migration Strategies");
     expect(body.profile.firstName).toBe("Co");
     expect(body.profile.email).toBe("cospeaker@example.test");
+    expect(body.presentationTerms).toEqual([
+      {
+        termKey: "presentation-rights",
+        version: "v1",
+        required: true,
+        contentRef: "/presentation-rights",
+        displayText: "I can share this presentation.",
+        helpText: "Confirm publication rights.",
+      },
+    ]);
+    expect(body).not.toHaveProperty("manageToken");
+    expect(body.proposal).not.toHaveProperty("abstract");
+    expect(body.proposal).not.toHaveProperty("details");
+    expect(body.profile).not.toHaveProperty("proposalProfileOverridesJson");
   });
 
   it("GET rejects an invalid manage token", async () => {
@@ -157,6 +182,34 @@ describe("speaker self-management endpoints", () => {
     expect(response.status).toBe(404);
     const body = (await response.json()) as { error: { code: string; message: string } };
     expect(body.error.code).toBe("SPEAKER_TOKEN_NOT_FOUND");
+  });
+
+  it("validates speaker participation actions through the mounted shared contract", async () => {
+    await setupWorkflow();
+    const { speakerManageToken } = await inviteSpeakerAndSubmitProposal();
+
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/speaker/${encodeURIComponent(speakerManageToken)}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "approve" }),
+      }),
+      env,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "VALIDATION_ERROR" } });
+    await expect(
+      queryAll<{ status: string }>(
+        env.DB,
+        `SELECT ps.status
+         FROM proposal_speakers ps
+         JOIN users u ON u.id = ps.user_id
+         WHERE u.normalized_email = 'cospeaker@example.test'
+         ORDER BY ps.created_at DESC LIMIT 1`,
+      ),
+    ).resolves.toEqual([{ status: "invited" }]);
   });
 
   it("lets the proposer remove a non-proposer speaker through the mounted endpoint", async () => {

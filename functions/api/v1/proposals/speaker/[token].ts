@@ -16,6 +16,7 @@
  *   PUT /api/v1/proposals/speaker/[token]/presentation
  */
 import { dispatchRequestMethod, handleError, json } from "../../../../_lib/http";
+import type { ValidatedData } from "chanfana";
 import { getSpeakerByManageToken } from "../../../../_lib/services/proposals";
 import {
   confirmSpeakerParticipation,
@@ -37,16 +38,28 @@ import { parseLinksJson, serializeLinks } from "../../../../../assets/shared/sch
 import { isProposalSpeakerRosterEditableStatus } from "../../../../../assets/shared/schemas/proposal-status";
 import { getEventById } from "../../../../_lib/services/events";
 import { requestDb } from "../../../../_lib/db/context";
+import { requiredTermReadModel } from "../../../../_lib/services/event-read-models";
+import {
+  speakerParticipationResponseSchema,
+  speakerSelfServiceReadResponseSchema,
+} from "../../../../../assets/shared/schemas/speaker-self-service";
+import {
+  proposalSpeakerParticipationRouteSchema,
+  proposalSpeakerProfileUpdateRouteSchema,
+  proposalSpeakerSelfServiceReadRouteSchema,
+} from "../../../../../assets/shared/schemas/route-contracts-public-proposals";
+import { successResponseSchema } from "../../../../../assets/shared/schemas/api-common";
+import { openApiRoute } from "../../../../_lib/openapi/route";
 
-export async function onRequestGet(c: any): Promise<Response> {
+export async function onRequestGet(
+  c: any,
+  data?: ValidatedData<typeof proposalSpeakerSelfServiceReadRouteSchema>,
+): Promise<Response> {
   try {
     const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
     const db = requestDb(c);
-    const { speaker, proposal, user } = await getSpeakerByManageToken(
-      db,
-      c.req.param("token"),
-      requireInternalSecret(c.env),
-    );
+    const token = data?.params.token ?? c.req.param("token");
+    const { speaker, proposal, user } = await getSpeakerByManageToken(db, token, requireInternalSecret(c.env));
 
     const [coSpeakers, presentationUploader, presentationTerms, event] = await Promise.all([
       getProposalCoSpeakers(db, proposal.id, speaker.user_id),
@@ -55,77 +68,87 @@ export async function onRequestGet(c: any): Promise<Response> {
       getEventById(db, proposal.event_id),
     ]);
 
-    const presentationUrl = event ? speakerPresentationPageUrl(appBaseUrl, event, c.req.param("token")) : null;
+    const presentationUrl = event ? speakerPresentationPageUrl(appBaseUrl, event, token) : null;
 
-    return json({
-      speaker: {
-        role: speaker.role,
-        status: speaker.status,
-        confirmedAt: speaker.confirmed_at,
-        declinedAt: speaker.declined_at,
-        termsAcceptedAt: speaker.terms_accepted_at,
-      },
-      proposal: {
-        id: proposal.id,
-        title: proposal.title,
-        proposalType: proposal.proposal_type,
-        status: proposal.status,
-        presentationDeadline: proposal.presentation_deadline ?? null,
-        presentationUploaded: Boolean(presentationUploader),
-        presentationUploadedAt: presentationUploader?.uploadedAt ?? null,
-        presentationUploader: presentationUploader,
-        coSpeakers,
-        presentationUrl,
-      },
-      presentationTerms,
-      profile: {
-        firstName: user.first_name,
-        lastName: user.last_name,
-        email: user.email,
-        organizationName: user.organization_name,
-        jobTitle: user.job_title,
-        biography: user.biography,
-        links: parseLinksJson(user.links_json),
-        headshotUploaded: Boolean(user.headshot_r2_key),
-        headshotUpdatedAt: user.headshot_updated_at,
-        headshotUrl: user.headshot_r2_key
-          ? `${appBaseUrl}/api/v1/proposals/speaker/${encodeURIComponent(c.req.param("token"))}/headshot?v=${encodeURIComponent(user.headshot_updated_at ?? "")}`
-          : null,
-      },
-    });
+    return json(
+      speakerSelfServiceReadResponseSchema.parse({
+        speaker: {
+          role: speaker.role,
+          status: speaker.status,
+          confirmedAt: speaker.confirmed_at,
+          declinedAt: speaker.declined_at,
+          termsAcceptedAt: speaker.terms_accepted_at,
+        },
+        proposal: {
+          id: proposal.id,
+          title: proposal.title,
+          proposalType: proposal.proposal_type,
+          status: proposal.status,
+          presentationDeadline: proposal.presentation_deadline ?? null,
+          presentationUploaded: Boolean(presentationUploader),
+          presentationUploadedAt: presentationUploader?.uploadedAt ?? null,
+          presentationUploader: presentationUploader,
+          coSpeakers,
+          presentationUrl,
+        },
+        presentationTerms: presentationTerms.map(requiredTermReadModel),
+        profile: {
+          firstName: user.first_name,
+          lastName: user.last_name,
+          email: user.email,
+          organizationName: user.organization_name,
+          jobTitle: user.job_title,
+          biography: user.biography,
+          links: parseLinksJson(user.links_json),
+          headshotUploaded: Boolean(user.headshot_r2_key),
+          headshotUpdatedAt: user.headshot_updated_at,
+          headshotUrl: user.headshot_r2_key
+            ? `${appBaseUrl}/api/v1/proposals/speaker/${encodeURIComponent(token)}/headshot?v=${encodeURIComponent(user.headshot_updated_at ?? "")}`
+            : null,
+        },
+      }),
+    );
   } catch (error) {
     return handleError(error);
   }
 }
 
-export async function onRequestPost(c: any): Promise<Response> {
+export async function onRequestPost(
+  c: any,
+  data?: ValidatedData<typeof proposalSpeakerParticipationRouteSchema>,
+): Promise<Response> {
   try {
-    const body = await parseJsonBody(c.req, speakerParticipationActionSchema);
+    const body = data?.body ?? (await parseJsonBody(c.req, speakerParticipationActionSchema));
+    const token = data?.params.token ?? c.req.param("token");
 
     if (body.action === "confirm") {
-      await confirmSpeakerParticipation(requestDb(c), c.req.param("token"), requireInternalSecret(c.env), {
+      await confirmSpeakerParticipation(requestDb(c), token, requireInternalSecret(c.env), {
         consents: body.consents,
         ip: c.req.raw.headers.get("cf-connecting-ip"),
         userAgent: c.req.raw.headers.get("user-agent"),
       });
-      return json({ success: true, status: "confirmed" });
+      return json(speakerParticipationResponseSchema.parse({ success: true, status: "confirmed" }));
     }
 
-    await declineSpeakerParticipation(requestDb(c), c.req.param("token"), requireInternalSecret(c.env), {
+    await declineSpeakerParticipation(requestDb(c), token, requireInternalSecret(c.env), {
       reason: body.reason ?? null,
     });
-    return json({ success: true, status: "declined" });
+    return json(speakerParticipationResponseSchema.parse({ success: true, status: "declined" }));
   } catch (error) {
     return handleError(error);
   }
 }
 
-export async function onRequestPatch(c: any): Promise<Response> {
+export async function onRequestPatch(
+  c: any,
+  data?: ValidatedData<typeof proposalSpeakerProfileUpdateRouteSchema>,
+): Promise<Response> {
   try {
-    const body = await parseJsonBody(c.req, speakerProfilePatchSchema);
+    const body = data?.body ?? (await parseJsonBody(c.req, speakerProfilePatchSchema));
+    const token = data?.params.token ?? c.req.param("token");
     const { speaker, proposal, user } = await getSpeakerByManageToken(
       requestDb(c),
-      c.req.param("token"),
+      token,
       requireInternalSecret(c.env),
     );
 
@@ -160,11 +183,31 @@ export async function onRequestPatch(c: any): Promise<Response> {
       },
     );
 
-    return json({ success: true });
+    return json(successResponseSchema.parse({ success: true }));
   } catch (error) {
     return handleError(error);
   }
 }
+
+function markSensitive(c: any): void {
+  c.set("sensitive", true);
+}
+
+export const ProposalsSpeakerTokenGet = openApiRoute(
+  proposalSpeakerSelfServiceReadRouteSchema,
+  onRequestGet,
+  markSensitive,
+);
+export const ProposalsSpeakerTokenPost = openApiRoute(
+  proposalSpeakerParticipationRouteSchema,
+  onRequestPost,
+  markSensitive,
+);
+export const ProposalsSpeakerTokenPatch = openApiRoute(
+  proposalSpeakerProfileUpdateRouteSchema,
+  onRequestPatch,
+  markSensitive,
+);
 
 export async function onRequest(c: any): Promise<Response> {
   c.set("sensitive", true);

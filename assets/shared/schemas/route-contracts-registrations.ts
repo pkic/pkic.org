@@ -1,9 +1,16 @@
-import { eventSlugParamsSchema, successResponseSchema } from "./api-common";
+import { eventSlugParamsSchema, registrationManageTokenParamsSchema, successResponseSchema } from "./api-common";
 import {
   okResponseSchema,
+  registrationConfirmInfoQuerySchema,
+  registrationConfirmInfoResponseSchema,
   registrationConfirmQuerySchema,
   registrationConfirmResponseSchema,
   registrationConfirmSchema,
+  registrationCreateSchema,
+  registrationManageReadResponseSchema,
+  registrationManageSchema,
+  registrationManageUpdateResponseSchema,
+  registrationSubmissionResponseSchema,
   registrationResendManageLinkSchema,
   registrationResendConfirmationSchema,
 } from "./registration";
@@ -26,6 +33,23 @@ export const registrationResendManageLinkRouteSchema = {
     "400": { description: "Invalid email payload." },
     "404": { description: "Event not found." },
     "429": { description: "Rate limit exceeded." },
+  },
+};
+
+export const eventRegistrationCreateRouteSchema = {
+  tags: ["Registrations"],
+  summary: "Register for an event",
+  description:
+    "Creates or reactivates an event registration, records configured form answers and consents, and queues confirmation email work.",
+  request: {
+    params: eventSlugParamsSchema,
+    body: requiredJsonBody(registrationCreateSchema),
+  },
+  responses: {
+    "200": jsonResponse("Registration submitted.", registrationSubmissionResponseSchema),
+    "400": { description: "Invalid registration, form answers, attendance, invite, or consent." },
+    "404": { description: "Event not found." },
+    "409": { description: "Registration state or capacity changed concurrently." },
   },
 };
 
@@ -99,4 +123,45 @@ export const registrationConfirmEmailPostRouteSchema = {
     },
   },
   responses: registrationConfirmEmailGetRouteSchema.responses,
+};
+
+export const registrationConfirmInfoGetRouteSchema = {
+  tags: ["Registrations"],
+  summary: "Preview registration confirmation details",
+  description:
+    "Returns the bounded attendee/event projection for a valid confirmation capability and a generic empty projection otherwise.",
+  request: {
+    params: eventSlugParamsSchema,
+    query: registrationConfirmInfoQuerySchema,
+  },
+  responses: {
+    "200": jsonResponse("Registration confirmation preview.", registrationConfirmInfoResponseSchema),
+  },
+};
+
+export const registrationManageReadRouteSchema = {
+  tags: ["Registrations"],
+  summary: "Read registration self-service state",
+  request: { params: registrationManageTokenParamsSchema },
+  responses: {
+    "200": jsonResponse("Capability-safe registration management view.", registrationManageReadResponseSchema),
+    "404": { description: "Registration management capability not found." },
+    "410": { description: "Registration management capability expired." },
+  },
+};
+
+export const registrationManageUpdateRouteSchema = {
+  tags: ["Registrations"],
+  summary: "Update registration self-service state",
+  request: {
+    params: registrationManageTokenParamsSchema,
+    body: requiredJsonBody(registrationManageSchema),
+  },
+  responses: {
+    "200": jsonResponse("Registration updated.", registrationManageUpdateResponseSchema),
+    "400": { description: "Invalid registration update." },
+    "404": { description: "Registration management capability not found." },
+    "409": { description: "Registration state or capacity changed concurrently." },
+    "410": { description: "Registration management capability expired." },
+  },
 };

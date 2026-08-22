@@ -1,17 +1,14 @@
 import { batchFirst } from "../../db/pagination";
 import type { DatabaseLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
-import {
-  countRegisteredByEventDay,
-  getRegistrationDayAttendance,
-  listEventDays,
-  resolveAttendanceOptions,
-} from "../event-days";
+import { countRegisteredByEventDay, getRegistrationDayAttendance, listEventDays } from "../event-days";
 import { getEventById } from "../events";
 import { listDayWaitlistForRegistration } from "./day-waitlist";
 import type { RegistrationRecord } from "./types";
-import { omitCapabilitySecrets } from "../capability-links";
 import { publicUserHeadshotUrl } from "../user-headshot";
+import { eventDayReadModels } from "../event-read-models";
+import { AppError } from "../../errors";
+import { registrationManageReadResponseSchema } from "../../../../assets/shared/schemas/registration";
 
 interface ManageUserRow {
   id: string;
@@ -26,7 +23,6 @@ interface ManageUserRow {
 export async function buildRegistrationManageView(
   db: DatabaseLike,
   registration: RegistrationRecord,
-  manageToken: string,
   appBaseUrl: string,
 ) {
   const event = await getEventById(db, registration.event_id);
@@ -52,38 +48,35 @@ export async function buildRegistrationManageView(
     countRegisteredByEventDay(db, event.id),
   ]);
   const user = batchFirst<ManageUserRow>(identityResults[0]);
+  if (!user) {
+    throw new AppError(409, "REGISTRATION_USER_MISSING", "The registration identity is no longer available");
+  }
   const referral = batchFirst<{ code: string }>(identityResults[1]);
   const headshotUrl = publicUserHeadshotUrl(appBaseUrl, user?.headshot_r2_key ?? null);
 
-  return {
+  return registrationManageReadResponseSchema.parse({
     success: true,
     registration: {
-      ...omitCapabilitySecrets(registration),
+      id: registration.id,
+      event_id: registration.event_id,
+      status: registration.status,
+      cancellation_reason_code: registration.cancellation_reason_code,
+      attendance_type: registration.attendance_type,
       custom_answers: parseJsonSafe<Record<string, unknown> | null>(registration.custom_answers_json, null),
       isEmailVerified: registration.confirmed_at !== null,
     },
-    event,
-    user,
+    event: { id: event.id, slug: event.slug, name: event.name },
+    user: {
+      email: user.email,
+      first_name: user.first_name,
+      last_name: user.last_name,
+      organization_name: user.organization_name,
+      job_title: user.job_title,
+    },
     headshotUrl,
     shareUrl: referral ? `${appBaseUrl}/r/${referral.code}` : null,
-    manageToken,
-    eventDays: eventDays.map((day) => ({
-      dayDate: day.day_date,
-      label: day.label,
-      inPersonCapacity: day.in_person_capacity,
-      sortOrder: day.sort_order,
-      attendanceOptions: resolveAttendanceOptions(day).map((option) => {
-        const capacity = option.capacity ?? null;
-        const registered = registeredCounts.get(day.id)?.get(option.value) ?? 0;
-        return {
-          value: option.value,
-          label: option.label,
-          spotsRemainingPercent:
-            capacity != null && capacity > 0 ? Math.round(((capacity - registered) / capacity) * 100) : null,
-        };
-      }),
-    })),
+    eventDays: eventDayReadModels(eventDays, registeredCounts),
     dayAttendance,
     dayWaitlist,
-  };
+  });
 }

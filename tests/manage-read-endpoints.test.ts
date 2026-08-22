@@ -13,6 +13,10 @@ import { getEventBySlug } from "../functions/_lib/services/events";
 import { createRegistration, confirmRegistrationByToken } from "../functions/_lib/services/registrations";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
 import app from "../functions/router";
+import {
+  registrationManageReadResponseSchema,
+  registrationManageUpdateResponseSchema,
+} from "../assets/shared/schemas/registration";
 
 const signingSecret = "test-signing-secret";
 
@@ -57,9 +61,15 @@ describe("manage read endpoints", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store, max-age=0");
-    const payload = (await response.json()) as { registration: { id: string; manage_link_secret?: string } };
+    const payload = registrationManageReadResponseSchema.parse(await response.json());
     expect(payload.registration.id).toBe(registrationId);
-    expect(payload.registration.manage_link_secret).toBeUndefined();
+    expect(payload.registration).not.toHaveProperty("manage_link_secret");
+    expect(payload.registration).not.toHaveProperty("confirmation_link_secret");
+    expect(payload.registration).not.toHaveProperty("transition_revision");
+    expect(payload.registration).not.toHaveProperty("source_ref");
+    expect(payload.event).toEqual({ id: eventId, slug: "pqc-2026", name: "PQC Conference 2026" });
+    expect(payload.user).not.toHaveProperty("id");
+    expect(payload).not.toHaveProperty("manageToken");
   });
 
   it("rejects the stored token hash when it is used as a manage token", async () => {
@@ -289,6 +299,9 @@ describe("manage read endpoints", () => {
       ),
     );
     expect(updateResponse.status).toBe(200);
+    const updatePayload = registrationManageUpdateResponseSchema.parse(await updateResponse.clone().json());
+    expect(updatePayload).toEqual({ success: true, emailChanged: false });
+    expect(updatePayload).not.toHaveProperty("registration");
     const [audit] = await queryAll<{ actor_type: string; actor_id: string }>(
       env.DB,
       `SELECT actor_type, actor_id

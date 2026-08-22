@@ -1,19 +1,31 @@
+import type { ValidatedData } from "chanfana";
 import { parseJsonBody } from "../../../../_lib/validation";
 import { dispatchRequestMethod, handleError, json } from "../../../../_lib/http";
 import { updateManagedRegistration } from "../../../../_lib/services/registrations";
 import { resolveManageToken } from "../../../../_lib/services/manage-token";
 import { processOutboxByIdBackground } from "../../../../_lib/email/outbox";
 import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
-import { registrationManageSchema } from "../../../../../assets/shared/schemas/registration";
+import {
+  registrationManageReadResponseSchema,
+  registrationManageSchema,
+  registrationManageUpdateResponseSchema,
+} from "../../../../../assets/shared/schemas/registration";
+import {
+  registrationManageReadRouteSchema,
+  registrationManageUpdateRouteSchema,
+} from "../../../../../assets/shared/schemas/route-contracts-registrations";
 import { requireInternalSecret } from "../../../../_lib/request";
-import { omitCapabilitySecrets } from "../../../../_lib/services/capability-links";
 import { buildRegistrationManageView } from "../../../../_lib/services/registrations/manage-view";
+import { openApiRoute } from "../../../../_lib/openapi/route";
 
-export async function onRequestPatch(c: any): Promise<Response> {
+export async function onRequestPatch(
+  c: any,
+  data?: ValidatedData<typeof registrationManageUpdateRouteSchema>,
+): Promise<Response> {
   try {
-    const body = await parseJsonBody(c.req, registrationManageSchema);
+    const body = data?.body ?? (await parseJsonBody(c.req, registrationManageSchema));
     const config = getConfig(c.env, c.req.raw);
-    const token = c.req.param("token");
+    const token = data?.params.token ?? c.req.param("token");
 
     const resolved = await resolveManageToken(c.req.raw, c.env, token);
     if (resolved instanceof Response) return resolved;
@@ -35,27 +47,41 @@ export async function onRequestPatch(c: any): Promise<Response> {
       c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, result.outboxId));
     }
 
-    return json({
-      success: true,
-      registration: omitCapabilitySecrets(result.registration),
-      emailChanged: result.emailChanged,
-    });
+    return json(registrationManageUpdateResponseSchema.parse({ success: true, emailChanged: result.emailChanged }));
   } catch (error) {
     return handleError(error);
   }
 }
 
-export async function onRequestGet(c: any): Promise<Response> {
+export async function onRequestGet(
+  c: any,
+  data?: ValidatedData<typeof registrationManageReadRouteSchema>,
+): Promise<Response> {
   try {
-    const token = c.req.param("token");
+    const token = data?.params.token ?? c.req.param("token");
     const resolved = await resolveManageToken(c.req.raw, c.env, token);
     if (resolved instanceof Response) return resolved;
     const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-    return json(await buildRegistrationManageView(c.env.DB, resolved.registration, token, appBaseUrl));
+    return json(
+      registrationManageReadResponseSchema.parse(
+        await buildRegistrationManageView(c.env.DB, resolved.registration, appBaseUrl),
+      ),
+    );
   } catch (error) {
     return handleError(error);
   }
 }
+
+function markSensitive(c: any): void {
+  c.set("sensitive", true);
+}
+
+export const RegistrationsManageTokenGet = openApiRoute(registrationManageReadRouteSchema, onRequestGet, markSensitive);
+export const RegistrationsManageTokenPatch = openApiRoute(
+  registrationManageUpdateRouteSchema,
+  onRequestPatch,
+  markSensitive,
+);
 
 export async function onRequest(c: any): Promise<Response> {
   c.set("sensitive", true);
