@@ -4,9 +4,6 @@
  * review).
  */
 import { all } from "../../db/queries";
-import { queryPage } from "../../db/pagination";
-import { buildD1TextSearchFilter } from "../../db/search";
-import { resolveMappedOrderBy } from "../../db/sort";
 import type { MeetingSeriesListQuery } from "../../../../assets/shared/schemas/meeting-calendar";
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import { nowIso } from "../../utils/time";
@@ -17,8 +14,6 @@ import {
   attachIcsFiles,
   getSeriesForAdminOrThrow,
   ICS_FILE_SELECT_COLUMNS,
-  SERIES_SELECT_COLUMNS,
-  type SeriesRow,
   type IcsFileRow,
   type MeetingSeriesScopeType,
   type AdminMeetingSeriesSummary,
@@ -26,6 +21,7 @@ import {
 import type { DatabaseLike } from "../../types";
 import { prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
 import { prepareStorageDeletion, processStorageDeletionForKey } from "../storage-deletion-outbox";
+import { queryMeetingSeriesPage } from "./series-list";
 
 // ── Admin: working-group-scoped meeting series ───────────────────────────
 
@@ -37,25 +33,9 @@ export async function listAdminMeetingSeriesForWg(
   const wg = await getWorkingGroupBySlugOrId(db, wgIdOrSlug);
   if (!wg) throw new AppError(404, "WORKING_GROUP_NOT_FOUND", "Working group not found");
 
-  const search = query.q ? buildD1TextSearchFilter(query.q, ["name", "scope_type"]) : null;
-  const filters = ["scope_type = 'working_group'", "working_group_id = ?"];
-  const bindings: unknown[] = [wg.id];
-  if (search) {
-    filters.push(search.sql);
-    bindings.push(...search.bindings);
-  }
-  const orderBy = resolveMappedOrderBy(
-    query.sort,
-    { name: "name", scopeType: "scope_type", createdAt: "created_at", updatedAt: "updated_at" },
-    "created_at ASC",
-    "id ASC",
-  );
-  const { rows, total } = await queryPage<SeriesRow>(db, {
-    sql: `SELECT ${SERIES_SELECT_COLUMNS} FROM meeting_series WHERE ${filters.join(" AND ")}`,
-    bindings,
-    orderBy,
-    limit: query.limit,
-    offset: query.offset,
+  const { rows, total } = await queryMeetingSeriesPage(db, query, {
+    kind: "admin_working_group",
+    workingGroupId: wg.id,
   });
   const meetingSeries = await attachIcsFiles(db, rows);
   return { meetingSeries, page: buildPageInfo(query.limit, query.offset, total, meetingSeries.length) };
@@ -105,26 +85,7 @@ export async function listAdminConsortiumMeetingSeries(
   db: DatabaseLike,
   query: MeetingSeriesListQuery,
 ): Promise<{ meetingSeries: AdminMeetingSeriesSummary[]; page: ReturnType<typeof buildPageInfo> }> {
-  const search = query.q ? buildD1TextSearchFilter(query.q, ["name", "scope_type"]) : null;
-  const filters = ["scope_type = 'consortium'"];
-  const bindings: unknown[] = [];
-  if (search) {
-    filters.push(search.sql);
-    bindings.push(...search.bindings);
-  }
-  const orderBy = resolveMappedOrderBy(
-    query.sort,
-    { name: "name", scopeType: "scope_type", createdAt: "created_at", updatedAt: "updated_at" },
-    "created_at ASC",
-    "id ASC",
-  );
-  const { rows, total } = await queryPage<SeriesRow>(db, {
-    sql: `SELECT ${SERIES_SELECT_COLUMNS} FROM meeting_series WHERE ${filters.join(" AND ")}`,
-    bindings,
-    orderBy,
-    limit: query.limit,
-    offset: query.offset,
-  });
+  const { rows, total } = await queryMeetingSeriesPage(db, query, { kind: "admin_consortium" });
   const meetingSeries = await attachIcsFiles(db, rows);
   return { meetingSeries, page: buildPageInfo(query.limit, query.offset, total, meetingSeries.length) };
 }
