@@ -1,21 +1,27 @@
 import { all, first } from "../db/queries";
 import { AppError } from "../errors";
 import { nowIso } from "../utils/time";
-import { isAuditOneChangeGuardFailure, prepareScopedAuditLog, prepareScopedAuditLogAfterOneChange } from "./audit";
+import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
 import { prepareConsentStatements, validateRequiredConsents } from "./consent";
 import { getRequiredTerms } from "./events";
 import { getSpeakerByManageToken } from "./proposals";
-import { prepareProposalRoleCapacityForSpeakerRemoval } from "./proposal-role-capacity";
+import {
+  proposalParticipantStatus,
+  prepareProposalRoleCapacityForSpeakerChange,
+  prepareProposalRoleCapacityForSpeakerRemoval,
+} from "./proposal-role-capacity";
 import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
 import { isEventParticipantSourceConflict } from "./event-participant-source-revision";
 import { prepareUserProfileStatement, type UserProfilePatch } from "./users";
 import {
   prepareClearProposalSpeakerProfileOverridesStatement,
+  prepareProposalSpeakerProfileAuthorityGuard,
   type ProposalProfileField,
   type ProposalProfileOverrideSnapshot,
 } from "./proposal-speaker-profile-overrides";
 import { proposalSpeakerEffectiveProfileColumns } from "./proposal-speakers";
 import type { DatabaseLike } from "../types";
+import { isProposalSpeakerRosterEditableStatus } from "../../../assets/shared/schemas/proposal-status";
 
 export async function getProposalCoSpeakers(
   db: DatabaseLike,
@@ -68,6 +74,9 @@ export async function confirmSpeakerParticipation(
   if (speaker.status === "confirmed") {
     return;
   }
+  if (!isProposalSpeakerRosterEditableStatus(proposal.status)) {
+    throw new AppError(409, "PROPOSAL_CLOSED", "Speaker participation cannot be changed on a closed proposal");
+  }
   if (speaker.status === "declined") {
     throw new AppError(
       409,
@@ -78,35 +87,72 @@ export async function confirmSpeakerParticipation(
   const requiredTerms = await getRequiredTerms(db, proposal.event_id, "speaker");
   await validateRequiredConsents(requiredTerms, payload.consents);
   const now = nowIso();
-  await db.batch([
-    ...(await prepareConsentStatements(db, {
-      proposalId: proposal.id,
-      eventId: proposal.event_id,
-      userId: speaker.user_id,
-      audienceType: "speaker",
-      accepted: payload.consents,
-      ip: payload.ip,
-      userAgent: payload.userAgent,
-      secret: signingSecret,
-    })),
-    db
-      .prepare(
-        `UPDATE proposal_speakers
-         SET status = 'confirmed', confirmed_at = ?, terms_accepted_at = ?
-         WHERE id = ?`,
-      )
-      .bind(now, now, speaker.id),
-    prepareScopedAuditLog(
-      db,
-      { type: "proposal", id: speaker.proposal_id },
-      "user",
-      speaker.user_id,
-      "speaker_confirmed",
-      "proposal_speaker",
-      speaker.id,
-      { proposalId: speaker.proposal_id },
-    ),
-  ]);
+  try {
+    await db.batch([
+      ...(await prepareConsentStatements(db, {
+        proposalId: proposal.id,
+        eventId: proposal.event_id,
+        userId: speaker.user_id,
+        audienceType: "speaker",
+        accepted: payload.consents,
+        ip: payload.ip,
+        userAgent: payload.userAgent,
+        secret: signingSecret,
+      })),
+      db
+        .prepare(
+          `UPDATE proposal_speakers
+           SET status = 'confirmed', confirmed_at = ?, terms_accepted_at = ?
+           WHERE id = ? AND proposal_id = ? AND user_id = ? AND role = ? AND status = ? AND invite_generation = ?
+             AND EXISTS (
+               SELECT 1 FROM session_proposals
+               WHERE id = ? AND status = ? AND updated_at = ? AND deleted_at IS NULL
+             )`,
+        )
+        .bind(
+          now,
+          now,
+          speaker.id,
+          proposal.id,
+          speaker.user_id,
+          speaker.role,
+          speaker.status,
+          speaker.invite_generation,
+          proposal.id,
+          proposal.status,
+          proposal.updated_at,
+        ),
+      prepareScopedAuditLogAfterOneChange(
+        db,
+        { type: "proposal", id: speaker.proposal_id },
+        "user",
+        speaker.user_id,
+        "speaker_confirmed",
+        "proposal_speaker",
+        speaker.id,
+        { proposalId: speaker.proposal_id },
+        now,
+      ),
+      ...(await prepareProposalRoleCapacityForSpeakerChange(db, {
+        eventId: proposal.event_id,
+        userId: speaker.user_id,
+        proposalRole: speaker.role,
+        sourceRef: proposal.id,
+        status: proposalParticipantStatus(proposal.status, "confirmed"),
+        sourceRevisionAdvance: 1,
+      })),
+    ]);
+  } catch (error) {
+    if (isRegistrationTransitionConflict(error)) throw registrationChangedError();
+    if (isAuditOneChangeGuardFailure(error) || isEventParticipantSourceConflict(error)) {
+      throw new AppError(
+        409,
+        "PROPOSAL_SPEAKER_CONFLICT",
+        "Speaker participation changed while it was being confirmed",
+      );
+    }
+    throw error;
+  }
 }
 
 export async function declineSpeakerParticipation(
@@ -119,6 +165,9 @@ export async function declineSpeakerParticipation(
 
   if (speaker.status === "declined") {
     return;
+  }
+  if (!isProposalSpeakerRosterEditableStatus(proposal.status)) {
+    throw new AppError(409, "PROPOSAL_CLOSED", "Speaker participation cannot be changed on a closed proposal");
   }
 
   const nonDeclined = await first<{ total: number }>(
@@ -206,7 +255,6 @@ export async function updateSpeakerProfile(
   payload: UserProfilePatch,
   context: ProposalProfileOverrideSnapshot,
 ): Promise<void> {
-  const statements = [prepareUserProfileStatement(db, context.userId, payload)];
   const fields: ProposalProfileField[] = [];
   if (payload.firstName !== undefined) fields.push("firstName");
   if (payload.lastName !== undefined) fields.push("lastName");
@@ -214,21 +262,25 @@ export async function updateSpeakerProfile(
   if (payload.jobTitle !== undefined) fields.push("jobTitle");
   if (payload.biography !== undefined) fields.push("biography");
   if (payload.linksJson !== undefined) fields.push("links");
-  if (fields.length > 0) {
-    statements.push(prepareClearProposalSpeakerProfileOverridesStatement(db, context, fields));
-    statements.push(
-      prepareScopedAuditLogAfterOneChange(
-        db,
-        { type: "proposal", id: context.proposalId },
-        "user",
-        context.userId,
-        "speaker_profile_updated_by_speaker",
-        "proposal_speaker",
-        context.proposalSpeakerId,
-        { fields },
-      ),
-    );
+  if (fields.length === 0) return;
+  if (!isProposalSpeakerRosterEditableStatus(context.proposalStatus)) {
+    throw new AppError(409, "PROPOSAL_CLOSED", "Speaker profiles cannot be changed on a closed proposal");
   }
+  const statements = [
+    prepareProposalSpeakerProfileAuthorityGuard(db, context),
+    prepareScopedAuditLogAfterOneChange(
+      db,
+      { type: "proposal", id: context.proposalId },
+      "user",
+      context.userId,
+      "speaker_profile_updated_by_speaker",
+      "proposal_speaker",
+      context.proposalSpeakerId,
+      { fields },
+    ),
+    prepareUserProfileStatement(db, context.userId, payload),
+    prepareClearProposalSpeakerProfileOverridesStatement(db, context, fields),
+  ];
   try {
     await db.batch(statements);
   } catch (error) {

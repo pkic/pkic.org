@@ -8,7 +8,10 @@ import {
   finalizeProposalDecision,
   getProposalByManageToken,
 } from "../functions/_lib/services/proposals";
-import { declineSpeakerParticipation } from "../functions/_lib/services/proposals-speaker-profile";
+import {
+  confirmSpeakerParticipation,
+  declineSpeakerParticipation,
+} from "../functions/_lib/services/proposals-speaker-profile";
 import {
   getProposerManagedSpeakerContext,
   updateProposalSpeakerByProposer,
@@ -162,6 +165,108 @@ describe("proposal speaker capacity conflicts", () => {
         coSpeakerUserId,
       ]),
     ).resolves.toEqual([{ status: "invited" }]);
+    await expect(
+      queryAll(env.DB, "SELECT capacity_exempt_in_person FROM registrations WHERE id = ?", [registrationId]),
+    ).resolves.toEqual([{ capacity_exempt_in_person: 1 }]);
+  });
+
+  it("rolls back consent when confirmation loses to a concurrent decline", async () => {
+    const { proposalId, coSpeakerUserId, speakerManageToken } =
+      await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
+    const racingDb = raceBeforeFirstBatch(async () => {
+      await env.DB.prepare("UPDATE proposal_speakers SET status = 'declined' WHERE proposal_id = ? AND user_id = ?")
+        .bind(proposalId, coSpeakerUserId)
+        .run();
+    });
+
+    await expect(
+      confirmSpeakerParticipation(racingDb, speakerManageToken, env.INTERNAL_SIGNING_SECRET!, {
+        consents: [{ termKey: "speaker-terms", version: "v1" }],
+        ip: null,
+        userAgent: null,
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
+    await expect(
+      queryAll(env.DB, "SELECT status FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?", [
+        proposalId,
+        coSpeakerUserId,
+      ]),
+    ).resolves.toEqual([{ status: "declined" }]);
+    await expect(
+      queryAll(env.DB, "SELECT COUNT(*) AS count FROM consent_acceptances WHERE proposal_id = ? AND user_id = ?", [
+        proposalId,
+        coSpeakerUserId,
+      ]),
+    ).resolves.toEqual([{ count: 0 }]);
+  });
+
+  it("does not restore capacity or consent when confirmation loses to concurrent removal", async () => {
+    const { proposalId, coSpeakerUserId, speakerManageToken } =
+      await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
+    const registrationId = await seedAcceptedSpeakerRegistration({
+      eventId,
+      proposalId,
+      speakerUserId: coSpeakerUserId,
+    });
+    const racingDb = raceBeforeFirstBatch(async () => {
+      const removal = await app.fetch(
+        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${coSpeakerUserId}`, {
+          method: "DELETE",
+          headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
+          body: "{}",
+        }),
+        env,
+        requestOptions,
+      );
+      expect(removal.status).toBe(200);
+    });
+
+    await expect(
+      confirmSpeakerParticipation(racingDb, speakerManageToken, env.INTERNAL_SIGNING_SECRET!, {
+        consents: [{ termKey: "speaker-terms", version: "v1" }],
+        ip: null,
+        userAgent: null,
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
+    await expect(
+      queryAll(env.DB, "SELECT id FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?", [
+        proposalId,
+        coSpeakerUserId,
+      ]),
+    ).resolves.toEqual([]);
+    await expect(
+      queryAll(env.DB, "SELECT COUNT(*) AS count FROM consent_acceptances WHERE proposal_id = ? AND user_id = ?", [
+        proposalId,
+        coSpeakerUserId,
+      ]),
+    ).resolves.toEqual([{ count: 0 }]);
+    await expect(
+      queryAll(env.DB, "SELECT capacity_exempt_in_person FROM registrations WHERE id = ?", [registrationId]),
+    ).resolves.toEqual([{ capacity_exempt_in_person: 0 }]);
+  });
+
+  it("reconciles accepted-proposal capacity when a speaker confirms", async () => {
+    const { proposalId, coSpeakerUserId, speakerManageToken } =
+      await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
+    const registrationId = await seedAcceptedSpeakerRegistration({
+      eventId,
+      proposalId,
+      speakerUserId: coSpeakerUserId,
+    });
+
+    await expect(
+      confirmSpeakerParticipation(env.DB, speakerManageToken, env.INTERNAL_SIGNING_SECRET!, {
+        consents: [{ termKey: "speaker-terms", version: "v1" }],
+        ip: null,
+        userAgent: null,
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      queryAll(env.DB, "SELECT status FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?", [
+        proposalId,
+        coSpeakerUserId,
+      ]),
+    ).resolves.toEqual([{ status: "confirmed" }]);
     await expect(
       queryAll(env.DB, "SELECT capacity_exempt_in_person FROM registrations WHERE id = ?", [registrationId]),
     ).resolves.toEqual([{ capacity_exempt_in_person: 1 }]);

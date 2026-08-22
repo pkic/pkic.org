@@ -11,8 +11,10 @@ import { uuid } from "../utils/ids";
 import {
   getPresentationProposalContext,
   preparePresentationVersionCreate,
+  type PresentationCommitAuthority,
   type PresentationProposalContext,
 } from "./presentation-versions";
+import { isAuditOneChangeGuardFailure } from "./audit";
 import { withStorageUploadCompensation } from "./storage-deletion-outbox";
 
 const ALLOWED_PRESENTATION_TYPES = new Set<string>(ALLOWED_PRESENTATION_MIME_TYPES);
@@ -124,6 +126,7 @@ export async function uploadProposalPresentation(
   payload: {
     actor: PresentationUploadActor;
     enforceDeadline: boolean;
+    authority?: Pick<PresentationCommitAuthority, "speaker">;
   },
 ): Promise<string> {
   if (context.status !== "accepted") {
@@ -143,6 +146,13 @@ export async function uploadProposalPresentation(
 
   const parsed = parsePresentationUpload(request);
   if ("error" in parsed) throw new AppError(parsed.status, parsed.error.code, parsed.error.message);
+  if (payload.actor.type === "user" && !payload.authority?.speaker) {
+    throw new AppError(
+      409,
+      "PRESENTATION_UPLOAD_CONFLICT",
+      "Speaker participation changed while the upload was starting.",
+    );
+  }
   const eventSlug = storagePathSegment(context.event_slug, "event");
   const proposalTitle = storagePathSegment(context.title, "proposal");
   const proposalId = storagePathSegment(context.id, "unknown", 64);
@@ -151,63 +161,86 @@ export async function uploadProposalPresentation(
   const uploadedByUserId =
     payload.actor.type === "admin" ? adminDatabaseUserId(payload.actor.admin) : payload.actor.userId;
   const auditActorId = payload.actor.type === "admin" ? payload.actor.admin.id : payload.actor.userId;
-  const prepared = preparePresentationVersionCreate(
-    db,
-    context.id,
-    {
-      r2Key,
-      uploadedByUserId,
-      fileName: parsed.name,
-      fileSize: parsed.size,
-      mimeType: parsed.type,
-    },
-    { actorType: payload.actor.type, actorId: auditActorId, action: "presentation_uploaded" },
-  );
-  await withStorageUploadCompensation({
-    db,
-    bucket,
-    bucketName: "speaker_uploads",
-    objectKey: r2Key,
-    upload: async () => {
-      // FixedLengthStream keeps the R2 object uncommitted until exactly the
-      // declared number of bytes has arrived. The counting transform rejects
-      // oversized or dishonest streams before they reach R2 and preserves a
-      // route-specific error contract for the API response.
-      let total = 0;
-      const counted = new TransformStream<Uint8Array, Uint8Array>({
-        transform(chunk, controller) {
-          total += chunk.byteLength;
-          if (total > MAX_PRESENTATION_BYTES) {
-            throw new AppError(413, "FILE_TOO_LARGE", "Presentation must be 100 MB or smaller.");
-          }
-          if (total > parsed.size) {
-            throw new AppError(400, "FILE_SIZE_MISMATCH", "Presentation file size does not match the request.");
-          }
-          controller.enqueue(chunk);
-        },
-        flush() {
-          if (total !== parsed.size) {
-            throw new AppError(400, "FILE_SIZE_MISMATCH", "Presentation file size does not match the request.");
-          }
-        },
-      });
-      const fixed = new FixedLengthStream(parsed.size);
-      const putPromise = storePresentationFile(
-        bucket,
-        { eventSlug: context.event_slug, proposalId: context.id, proposalTitle: context.title },
-        { ...parsed, body: fixed.readable },
-        r2Key,
+  const authority: PresentationCommitAuthority = {
+    proposalStatus: context.status,
+    proposalUpdatedAt: context.updated_at,
+    presentationDeadline: context.presentation_deadline,
+    enforceDeadline: payload.enforceDeadline,
+    speaker: payload.authority?.speaker,
+  };
+  try {
+    await withStorageUploadCompensation({
+      db,
+      bucket,
+      bucketName: "speaker_uploads",
+      objectKey: r2Key,
+      upload: async () => {
+        // FixedLengthStream keeps the R2 object uncommitted until exactly the
+        // declared number of bytes has arrived. The counting transform rejects
+        // oversized or dishonest streams before they reach R2 and preserves a
+        // route-specific error contract for the API response.
+        let total = 0;
+        const counted = new TransformStream<Uint8Array, Uint8Array>({
+          transform(chunk, controller) {
+            total += chunk.byteLength;
+            if (total > MAX_PRESENTATION_BYTES) {
+              throw new AppError(413, "FILE_TOO_LARGE", "Presentation must be 100 MB or smaller.");
+            }
+            if (total > parsed.size) {
+              throw new AppError(400, "FILE_SIZE_MISMATCH", "Presentation file size does not match the request.");
+            }
+            controller.enqueue(chunk);
+          },
+          flush() {
+            if (total !== parsed.size) {
+              throw new AppError(400, "FILE_SIZE_MISMATCH", "Presentation file size does not match the request.");
+            }
+          },
+        });
+        const fixed = new FixedLengthStream(parsed.size);
+        const putPromise = storePresentationFile(
+          bucket,
+          { eventSlug: context.event_slug, proposalId: context.id, proposalTitle: context.title },
+          { ...parsed, body: fixed.readable },
+          r2Key,
+        );
+        try {
+          await parsed.body.pipeThrough(counted).pipeTo(fixed.writable);
+        } catch (error) {
+          await putPromise.catch(() => undefined);
+          throw error;
+        }
+        return await putPromise;
+      },
+      // Build the D1 statements only after R2 has accepted the stream. Besides
+      // reducing the lifetime of the prepared batch, this makes the authority
+      // guard's timestamp the commit timestamp, so a deadline that expires
+      // while a large upload is in flight cannot be bypassed.
+      prepareCommitStatements: () =>
+        preparePresentationVersionCreate(
+          db,
+          context.id,
+          {
+            r2Key,
+            uploadedByUserId,
+            fileName: parsed.name,
+            fileSize: parsed.size,
+            mimeType: parsed.type,
+          },
+          { actorType: payload.actor.type, actorId: auditActorId, action: "presentation_uploaded" },
+          authority,
+        ).statements,
+    });
+  } catch (error) {
+    if (isAuditOneChangeGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "PRESENTATION_UPLOAD_CONFLICT",
+        "Presentation upload authority changed while the file was uploading.",
       );
-      try {
-        await parsed.body.pipeThrough(counted).pipeTo(fixed.writable);
-      } catch (error) {
-        await putPromise.catch(() => undefined);
-        throw error;
-      }
-      return await putPromise;
-    },
-    prepareCommitStatements: () => prepared.statements,
-  });
+    }
+    throw error;
+  }
   return r2Key;
 }
 

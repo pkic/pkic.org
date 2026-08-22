@@ -25,9 +25,44 @@ export type ProposalProfilePatch = Partial<ProposalProfileValues>;
 export interface ProposalProfileOverrideSnapshot {
   proposalSpeakerId: string;
   proposalId: string;
+  proposalStatus: string;
+  proposalUpdatedAt: string;
   userId: string;
   currentStatus: string;
   expectedProfileOverridesJson: string | null;
+}
+
+/**
+ * Locks a profile mutation to the speaker and proposal snapshot that
+ * authorized it. SQLite reports one changed row for a matched no-op UPDATE,
+ * allowing the caller's immediately following one-change guard to abort the
+ * batch before any account-wide profile fields are changed.
+ */
+export function prepareProposalSpeakerProfileAuthorityGuard(
+  db: DatabaseLike,
+  context: ProposalProfileOverrideSnapshot,
+): StatementLike {
+  return db
+    .prepare(
+      `UPDATE proposal_speakers
+          SET profile_overrides_json = profile_overrides_json
+        WHERE id = ? AND proposal_id = ? AND user_id = ? AND status = ?
+          AND profile_overrides_json IS ?
+          AND EXISTS (
+            SELECT 1 FROM session_proposals
+             WHERE id = ? AND status = ? AND updated_at = ? AND deleted_at IS NULL
+          )`,
+    )
+    .bind(
+      context.proposalSpeakerId,
+      context.proposalId,
+      context.userId,
+      context.currentStatus,
+      context.expectedProfileOverridesJson,
+      context.proposalId,
+      context.proposalStatus,
+      context.proposalUpdatedAt,
+    );
 }
 
 const PROFILE_TEXT_FIELD_NAMES = ["firstName", "lastName", "organizationName", "jobTitle", "biography"] as const;

@@ -20,9 +20,24 @@ import { prepareStorageDeletion } from "./storage-deletion-outbox";
 export interface PresentationProposalContext {
   id: string;
   status: string;
+  updated_at: string;
   title: string;
   event_slug: string;
   presentation_deadline: string | null;
+}
+
+export interface PresentationCommitAuthority {
+  proposalStatus: string;
+  proposalUpdatedAt: string;
+  presentationDeadline: string | null;
+  enforceDeadline: boolean;
+  speaker?: {
+    id: string;
+    userId: string;
+    role: string;
+    status: string;
+    inviteGeneration: number;
+  };
 }
 
 export type { PresentationVersion, PresentationVersionReview };
@@ -103,7 +118,7 @@ export async function getPresentationProposalContext(
 ): Promise<PresentationProposalContext> {
   const proposal = await first<PresentationProposalContext>(
     db,
-    `SELECT sp.id, sp.status, sp.title, sp.presentation_deadline, e.slug AS event_slug
+    `SELECT sp.id, sp.status, sp.updated_at, sp.title, sp.presentation_deadline, e.slug AS event_slug
      FROM session_proposals sp
      JOIN events e ON e.id = sp.event_id
      WHERE sp.id = ? AND sp.deleted_at IS NULL`,
@@ -212,11 +227,69 @@ export function preparePresentationVersionCreate(
   proposalId: string,
   opts: PresentationVersionCreateInput,
   audit?: PresentationVersionAudit,
+  authority?: PresentationCommitAuthority,
 ): { id: string; statements: StatementLike[] } {
   const now = nowIso();
+  // `updated_at` is the proposal CAS token for this upload. Two commits can
+  // land within the same millisecond, so wall-clock `now` alone is not a safe
+  // successor value. Always advance beyond the authority snapshot to ensure
+  // the first successful commit invalidates every competing snapshot.
+  const proposalUpdatedAt = authority
+    ? new Date(Math.max(Date.parse(now), Date.parse(authority.proposalUpdatedAt) + 1)).toISOString()
+    : now;
   const id = uuid();
+  const proposalUpdate = authority
+    ? db
+        .prepare(
+          `UPDATE session_proposals
+           SET updated_at = ?
+           WHERE id = ? AND status = ? AND updated_at = ? AND presentation_deadline IS ? AND deleted_at IS NULL
+             AND (? = 0 OR presentation_deadline IS NULL OR julianday(presentation_deadline) >= julianday(?))
+             AND (
+               ? IS NULL OR EXISTS (
+                 SELECT 1 FROM proposal_speakers ps
+                 WHERE ps.id = ? AND ps.proposal_id = session_proposals.id
+                   AND ps.user_id = ? AND ps.role = ? AND ps.status = ? AND ps.invite_generation = ?
+               )
+             )`,
+        )
+        .bind(
+          proposalUpdatedAt,
+          proposalId,
+          authority.proposalStatus,
+          authority.proposalUpdatedAt,
+          authority.presentationDeadline,
+          authority.enforceDeadline ? 1 : 0,
+          now,
+          authority.speaker?.id ?? null,
+          authority.speaker?.id ?? null,
+          authority.speaker?.userId ?? null,
+          authority.speaker?.role ?? null,
+          authority.speaker?.status ?? null,
+          authority.speaker?.inviteGeneration ?? null,
+        )
+    : db.prepare("UPDATE session_proposals SET updated_at = ? WHERE id = ?").bind(now, proposalId);
   const statements = [
-    db.prepare("UPDATE session_proposals SET updated_at = ? WHERE id = ?").bind(now, proposalId),
+    proposalUpdate,
+    ...(authority && audit
+      ? [
+          prepareAuditLogAfterOneChange(
+            db,
+            audit.actorType,
+            audit.actorId,
+            audit.action,
+            "session_proposal",
+            proposalId,
+            {
+              r2Key: opts.r2Key,
+              fileName: opts.fileName,
+              fileSize: opts.fileSize,
+              mimeType: opts.mimeType,
+            },
+            now,
+          ),
+        ]
+      : []),
     db
       .prepare("UPDATE presentation_versions SET is_current = 0 WHERE proposal_id = ? AND is_current = 1")
       .bind(proposalId),
@@ -243,7 +316,7 @@ export function preparePresentationVersionCreate(
         now,
       ),
   ];
-  if (audit) {
+  if (audit && !authority) {
     statements.push(
       prepareAuditLog(db, audit.actorType, audit.actorId, audit.action, "session_proposal", proposalId, {
         r2Key: opts.r2Key,

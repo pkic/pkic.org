@@ -34,6 +34,7 @@ import {
   speakerProfilePatchSchema,
 } from "../../../../../assets/shared/schemas/proposal-management";
 import { parseLinksJson, serializeLinks } from "../../../../../assets/shared/schemas/links";
+import { isProposalSpeakerRosterEditableStatus } from "../../../../../assets/shared/schemas/proposal-status";
 import { getEventById } from "../../../../_lib/services/events";
 import { requestDb } from "../../../../_lib/db/context";
 
@@ -131,6 +132,12 @@ export async function onRequestPatch(c: any): Promise<Response> {
     if (speaker.status === "declined") {
       return json({ error: { code: "SPEAKER_DECLINED", message: "You have declined participation." } }, 403);
     }
+    if (!isProposalSpeakerRosterEditableStatus(proposal.status)) {
+      return json(
+        { error: { code: "PROPOSAL_CLOSED", message: "Speaker profiles cannot be changed on a closed proposal." } },
+        409,
+      );
+    }
 
     await updateSpeakerProfile(
       requestDb(c),
@@ -145,6 +152,8 @@ export async function onRequestPatch(c: any): Promise<Response> {
       {
         proposalSpeakerId: speaker.id,
         proposalId: proposal.id,
+        proposalStatus: proposal.status,
+        proposalUpdatedAt: proposal.updated_at,
         userId: user.id,
         currentStatus: speaker.status,
         expectedProfileOverridesJson: user.proposalProfileOverridesJson,

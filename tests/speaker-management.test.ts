@@ -843,6 +843,64 @@ describe("speaker self-management endpoints", () => {
     expect(body.status).toBe("confirmed");
   });
 
+  it("POST confirm — rejects an existing capability after the proposal closes", async () => {
+    await setupWorkflow();
+    const { speakerManageToken, proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    await env.DB.prepare("UPDATE session_proposals SET status = 'rejected', updated_at = datetime('now') WHERE id = ?")
+      .bind(proposalId)
+      .run();
+
+    const response = await speakerPost(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            action: "confirm",
+            consents: [{ termKey: "speaker-terms", version: "v1" }],
+          }),
+        }),
+        { token: speakerManageToken },
+      ),
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "PROPOSAL_CLOSED" } });
+    await expect(
+      queryAll(env.DB, "SELECT status FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?", [
+        proposalId,
+        coSpeakerUserId,
+      ]),
+    ).resolves.toEqual([{ status: "invited" }]);
+  });
+
+  it("POST confirm — remains idempotent after an already-confirmed proposal closes", async () => {
+    await setupWorkflow();
+    const { speakerManageToken, proposalId } = await inviteSpeakerAndSubmitProposal();
+    const request = () =>
+      speakerPost(
+        createContext(
+          env,
+          new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              action: "confirm",
+              consents: [{ termKey: "speaker-terms", version: "v1" }],
+            }),
+          }),
+          { token: speakerManageToken },
+        ),
+      );
+
+    expect((await request()).status).toBe(200);
+    await env.DB.prepare("UPDATE session_proposals SET status = 'rejected', updated_at = datetime('now') WHERE id = ?")
+      .bind(proposalId)
+      .run();
+    expect((await request()).status).toBe(200);
+  });
+
   it("rolls back consent and speaker confirmation when its audit write fails", async () => {
     await setupWorkflow();
     const { speakerManageToken, proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
@@ -911,6 +969,35 @@ describe("speaker self-management endpoints", () => {
     const body = (await response.json()) as { success: boolean; status: string };
     expect(body.success).toBe(true);
     expect(body.status).toBe("declined");
+  });
+
+  it("POST decline — rejects a capability after the proposal closes", async () => {
+    await setupWorkflow();
+    const { speakerManageToken, proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    await env.DB.prepare("UPDATE session_proposals SET status = 'rejected', updated_at = datetime('now') WHERE id = ?")
+      .bind(proposalId)
+      .run();
+
+    const response = await speakerPost(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "decline", reason: "Too late" }),
+        }),
+        { token: speakerManageToken },
+      ),
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "PROPOSAL_CLOSED" } });
+    await expect(
+      queryAll(env.DB, "SELECT status FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?", [
+        proposalId,
+        coSpeakerUserId,
+      ]),
+    ).resolves.toEqual([{ status: "invited" }]);
   });
 
   it("PATCH updates speaker profile fields", async () => {
@@ -990,6 +1077,32 @@ describe("speaker self-management endpoints", () => {
     expect(JSON.parse(rows[0]?.links_json ?? "[]")).toEqual(["https://example.test/existing"]);
   });
 
+  it("PATCH rejects a capability after proposal closure without changing the account profile", async () => {
+    await setupWorkflow();
+    const { speakerManageToken, proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    await env.DB.prepare("UPDATE session_proposals SET status = 'rejected', updated_at = datetime('now') WHERE id = ?")
+      .bind(proposalId)
+      .run();
+
+    const response = await speakerPatch(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ firstName: "Must not commit" }),
+        }),
+        { token: speakerManageToken },
+      ),
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "PROPOSAL_CLOSED" } });
+    await expect(
+      queryAll(env.DB, "SELECT first_name FROM users WHERE id = ?", [coSpeakerUserId]),
+    ).resolves.toEqual([{ first_name: "Co" }]);
+  });
+
   it("rejects a stale speaker profile patch without clearing a newer proposal override", async () => {
     await setupWorkflow();
     const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
@@ -998,6 +1111,11 @@ describe("speaker self-management endpoints", () => {
       "SELECT id, status, profile_overrides_json FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
       proposalId,
       coSpeakerUserId,
+    );
+    const [proposal] = await queryAll<{ status: string; updated_at: string }>(
+      env.DB,
+      "SELECT status, updated_at FROM session_proposals WHERE id = ?",
+      proposalId,
     );
     await env.DB.prepare("UPDATE proposal_speakers SET profile_overrides_json = ? WHERE id = ?")
       .bind('{"firstName":"Admin curated"}', speaker.id)
@@ -1010,6 +1128,8 @@ describe("speaker self-management endpoints", () => {
         {
           proposalSpeakerId: speaker.id,
           proposalId,
+          proposalStatus: proposal.status,
+          proposalUpdatedAt: proposal.updated_at,
           userId: coSpeakerUserId,
           currentStatus: speaker.status,
           expectedProfileOverridesJson: speaker.profile_overrides_json,
@@ -1029,6 +1149,43 @@ describe("speaker self-management endpoints", () => {
       speaker.id,
     );
     expect(override.profile_overrides_json).toBe('{"firstName":"Admin curated"}');
+  });
+
+  it("rolls back an account profile patch when the proposal closes after authorization", async () => {
+    await setupWorkflow();
+    const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const [speaker] = await queryAll<{ id: string; status: string; profile_overrides_json: string | null }>(
+      env.DB,
+      "SELECT id, status, profile_overrides_json FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+      [proposalId, coSpeakerUserId],
+    );
+    const [proposal] = await queryAll<{ status: string; updated_at: string }>(
+      env.DB,
+      "SELECT status, updated_at FROM session_proposals WHERE id = ?",
+      proposalId,
+    );
+    await env.DB.prepare("UPDATE session_proposals SET status = 'rejected', updated_at = ? WHERE id = ?")
+      .bind("2099-01-01T00:00:00.000Z", proposalId)
+      .run();
+
+    await expect(
+      updateSpeakerProfile(
+        env.DB,
+        { firstName: "Must not commit" },
+        {
+          proposalSpeakerId: speaker.id,
+          proposalId,
+          proposalStatus: proposal.status,
+          proposalUpdatedAt: proposal.updated_at,
+          userId: coSpeakerUserId,
+          currentStatus: speaker.status,
+          expectedProfileOverridesJson: speaker.profile_overrides_json,
+        },
+      ),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
+    await expect(
+      queryAll(env.DB, "SELECT first_name FROM users WHERE id = ?", [coSpeakerUserId]),
+    ).resolves.toEqual([{ first_name: "Co" }]);
   });
 
   it("proposal manage token updates speaker profile fields", async () => {

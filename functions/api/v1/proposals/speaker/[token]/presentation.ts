@@ -38,7 +38,19 @@ export async function onRequestPut(c: any): Promise<Response> {
     requirePresentationBucket(c.env),
     c.req.raw,
     uploadContext,
-    { actor: { type: "user", userId: speaker.user_id }, enforceDeadline: true },
+    {
+      actor: { type: "user", userId: speaker.user_id },
+      enforceDeadline: true,
+      authority: {
+        speaker: {
+          id: speaker.id,
+          userId: speaker.user_id,
+          role: speaker.role,
+          status: speaker.status,
+          inviteGeneration: speaker.invite_generation,
+        },
+      },
+    },
   );
 
   return json({ success: true, r2Key });
