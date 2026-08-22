@@ -1554,7 +1554,11 @@ SELECT
   END,
   'event',
   ep.event_id,
-  ep.granted_by_id,
+  CASE
+    WHEN EXISTS (SELECT 1 FROM users grantor WHERE grantor.id = ep.granted_by_id)
+      THEN ep.granted_by_id
+    ELSE NULL
+  END,
   NULL,
   NULL,
   ep.created_at

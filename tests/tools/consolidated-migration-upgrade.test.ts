@@ -61,7 +61,9 @@ function seedRepresentativePre0035State(db: DatabaseSync): void {
       (id, event_id, user_email, user_id, permission, granted_by_id, created_at)
     VALUES
       ('permission-1', 'event-1', 'organizer@example.test', 'organizer-1', 'organizer', 'admin-1', '2025-01-02'),
-      ('permission-2', 'event-1', 'preprovisioned@example.test', NULL, 'program_committee', 'admin-1', '2025-01-02');
+      ('permission-2', 'event-1', 'preprovisioned@example.test', NULL, 'program_committee', 'admin-1', '2025-01-02'),
+      ('permission-3', 'event-1', 'api-key-grantee@example.test', NULL, 'moderator', 'api-key', '2025-01-02'),
+      ('permission-4', 'event-1', 'unknown-grantor@example.test', NULL, 'volunteer', 'legacy-missing-admin', '2025-01-02');
 
     INSERT INTO sponsors
       (id, organization_id, sponsorship_level, status, data_json, created_at, updated_at)
@@ -125,6 +127,24 @@ describe("consolidated pending migration upgrade", () => {
         )
         .all(),
     ).toEqual([{ normalized_email: "preprovisioned@example.test", role_id: "role-program_committee" }]);
+    expect(
+      db
+        .prepare(
+          `SELECT u.normalized_email, ur.granted_by_user_id
+             FROM user_roles ur JOIN users u ON u.id = ur.user_id
+            WHERE u.normalized_email IN (
+              'organizer@example.test',
+              'api-key-grantee@example.test',
+              'unknown-grantor@example.test'
+            )
+            ORDER BY u.normalized_email`,
+        )
+        .all(),
+    ).toEqual([
+      { normalized_email: "api-key-grantee@example.test", granted_by_user_id: null },
+      { normalized_email: "organizer@example.test", granted_by_user_id: "admin-1" },
+      { normalized_email: "unknown-grantor@example.test", granted_by_user_id: null },
+    ]);
     expect(
       db
         .prepare(
