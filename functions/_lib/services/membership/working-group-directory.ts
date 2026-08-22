@@ -44,8 +44,11 @@ interface WorkingGroupMemberRow {
 
 const WORKING_GROUP_SELECT = "SELECT id, name, slug, description, mailing_list_email, active FROM working_groups";
 
-async function getWorkingGroupRow(db: DatabaseLike, idOrSlug: string): Promise<WorkingGroupRow | null> {
-  return first<WorkingGroupRow>(db, `${WORKING_GROUP_SELECT} WHERE id = ? OR slug = ? LIMIT 1`, [idOrSlug, idOrSlug]);
+async function getActiveWorkingGroupRow(db: DatabaseLike, idOrSlug: string): Promise<WorkingGroupRow | null> {
+  return first<WorkingGroupRow>(db, `${WORKING_GROUP_SELECT} WHERE (id = ? OR slug = ?) AND active = 1 LIMIT 1`, [
+    idOrSlug,
+    idOrSlug,
+  ]);
 }
 
 export async function listWorkingGroups(db: DatabaseLike): Promise<WorkingGroupSummary[]> {
@@ -101,7 +104,7 @@ export async function getWorkingGroupByIdOrSlug(
   db: DatabaseLike,
   idOrSlug: string,
 ): Promise<WorkingGroupDetail | null> {
-  const row = await getWorkingGroupRow(db, idOrSlug);
+  const row = await getActiveWorkingGroupRow(db, idOrSlug);
   if (!row) return null;
   const { chair, viceChair } = await getWorkingGroupChairsPublic(db, row.id);
   return {
@@ -121,7 +124,7 @@ export async function listWorkingGroupMembers(
   idOrSlug: string,
   params: { q?: string; sort?: string; limit: number; offset: number },
 ): Promise<{ members: WorkingGroupMemberPublic[]; total: number } | null> {
-  const workingGroup = await getWorkingGroupRow(db, idOrSlug);
+  const workingGroup = await getActiveWorkingGroupRow(db, idOrSlug);
   if (!workingGroup) return null;
 
   const search = params.q
