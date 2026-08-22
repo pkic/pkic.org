@@ -151,7 +151,10 @@ export function prepareUserProfileStatement(
 async function resolveUserWrite(
   db: DatabaseLike,
   payload: FindOrCreateUserPayload,
-): Promise<{ user: UserRecord; query: string; values: unknown[] } | { user: UserRecord; query: null }> {
+): Promise<
+  | { user: UserRecord; query: string; values: unknown[]; created: boolean }
+  | { user: UserRecord; query: null; created: false }
+> {
   const normalized = normalizeEmail(payload.email);
   const existing = await findExistingUserByAnyEmail(db, normalized);
 
@@ -173,6 +176,7 @@ async function resolveUserWrite(
     const now = nowIso();
     return {
       user,
+      created: true,
       query: `INSERT INTO users (
         id, email, normalized_email, first_name, last_name, preferred_name,
         organization_name, job_title, biography, links_json,
@@ -198,7 +202,7 @@ async function resolveUserWrite(
 
   // Public submissions must not overwrite existing profile data.
   if (!payload.allowProfileUpdate) {
-    return { user: existing, query: null };
+    return { user: existing, query: null, created: false };
   }
 
   const updatedFirstName = payload.firstName ?? existing.first_name;
@@ -224,6 +228,7 @@ async function resolveUserWrite(
 
   return {
     user,
+    created: false,
     query: `UPDATE users
      SET first_name = ?,
          last_name = ?,
@@ -278,10 +283,14 @@ export async function findOrCreateUser(db: DatabaseLike, payload: FindOrCreateUs
 export async function buildFindOrCreateUserStatement(
   db: DatabaseLike,
   payload: FindOrCreateUserPayload,
-): Promise<{ user: UserRecord; statement: StatementLike | null }> {
+): Promise<{ user: UserRecord; statement: StatementLike | null; created: boolean }> {
   const resolved = await resolveUserWrite(db, payload);
   if (!resolved.query) {
-    return { user: resolved.user, statement: null };
+    return { user: resolved.user, statement: null, created: resolved.created };
   }
-  return { user: resolved.user, statement: db.prepare(resolved.query).bind(...resolved.values) };
+  return {
+    user: resolved.user,
+    statement: db.prepare(resolved.query).bind(...resolved.values),
+    created: resolved.created,
+  };
 }

@@ -95,8 +95,8 @@ export const proposalCreateSchema = boundedJsonObject(
 export const proposalCreateResponseSchema = successResponseSchema.extend({
   proposalId: databaseIdSchema,
   status: proposalStatusSchema,
-  manageToken: z.string(),
-  manageUrl: httpUrlSchema,
+  manageToken: z.string().nullable(),
+  manageUrl: httpUrlSchema.nullable(),
   shareUrl: httpUrlSchema,
 });
 

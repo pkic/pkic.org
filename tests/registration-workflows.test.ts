@@ -112,6 +112,76 @@ describe("registration workflows", () => {
     expect(confirmedPayload.status).toBe("registered");
   }, 15_000);
 
+  it("delivers existing-identity capabilities by email instead of exposing them to the anonymous submitter", async () => {
+    await seedEventAndAdmin(env.DB);
+
+    const createResponse = await createRegistration(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            firstName: "Claimed",
+            lastName: "Admin",
+            email: "admin@pkic.org",
+            attendanceType: "virtual",
+            sourceType: "direct",
+            consents: [
+              { termKey: "privacy-policy", version: "v1" },
+              { termKey: "code-of-conduct", version: "v1" },
+            ],
+          }),
+        }),
+        { eventSlug: "pqc-2026" },
+      ),
+    );
+
+    expect(createResponse.status).toBe(200);
+    const created = (await createResponse.json()) as {
+      registrationId: string;
+      manageToken: string | null;
+      manageUrl: string | null;
+    };
+    expect(created.manageToken).toBeNull();
+    expect(created.manageUrl).toBeNull();
+
+    const [queued] = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' AND recipient_email = ?",
+      "admin@pkic.org",
+    );
+    const delivered = await deliveredEmailPayload<{ confirmationUrl: string; manageUrl: string }>(
+      env.DB,
+      env,
+      queued.payload_json,
+    );
+    expect(new URL(delivered.manageUrl).searchParams.get("token")).toBeTruthy();
+
+    const confirmationToken = new URL(delivered.confirmationUrl).searchParams.get("token");
+    const confirmResponse = await confirmEmail(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/events/pqc-2026/registrations/confirm-email", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ token: confirmationToken, id: created.registrationId }),
+        }),
+        { eventSlug: "pqc-2026" },
+      ),
+    );
+    const confirmed = (await confirmResponse.json()) as { manageToken: string; manageUrl: string };
+    expect(confirmed.manageToken).toBeTruthy();
+    expect(new URL(confirmed.manageUrl).searchParams.get("token")).toBe(confirmed.manageToken);
+    await expect(
+      queryAll<{ normalized_email: string; role: string }>(
+        env.DB,
+        "SELECT normalized_email, role FROM users WHERE normalized_email = ?",
+        "admin@pkic.org",
+      ),
+    ).resolves.toEqual([{ normalized_email: "admin@pkic.org", role: "admin" }]);
+  });
+
   it("rolls back confirmation when the confirmed-email intent cannot be committed", async () => {
     await seedEventAndAdmin(env.DB);
     const createResponse = await createRegistration(

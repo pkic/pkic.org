@@ -94,6 +94,12 @@ export async function submitPublicRegistration(
     queuedCapabilityToken("registration_manage", registration.id),
   );
   const manageUrl = registrationManagePageUrl(metadata.appBaseUrl, event, prepared.manageToken);
+  // Email equality discovers an existing identity; it does not prove that the
+  // anonymous submitter owns it. Existing identities receive their management
+  // capability only through the durable email outbox. A newly created,
+  // unprivileged identity may keep the immediate correction link so a typo can
+  // still be fixed before confirmation.
+  const exposeManageCapability = prepared.identityWasCreated;
   const shareUrl = `${metadata.appBaseUrl}/r/${referralCode}`;
   const dayWaitlist = prepared.plannedDayWaitlist;
   const attendanceData = buildAttendanceEmailData(registration.attendance_type, prepared.dayAttendance, dayWaitlist);
@@ -197,8 +203,8 @@ export async function submitPublicRegistration(
       success: true,
       registrationId: registration.id,
       status: registration.status,
-      manageToken: prepared.manageToken,
-      manageUrl,
+      manageToken: exposeManageCapability ? prepared.manageToken : null,
+      manageUrl: exposeManageCapability ? manageUrl : null,
       shareUrl,
       dayAttendance: prepared.dayAttendance,
       dayWaitlist,

@@ -228,17 +228,22 @@ export const registrationCreateSchema = attendeeRegistrationFieldsSchema
 export const registrationConfirmSchema = z.object({ id: databaseIdSchema.optional(), token: tokenSchema });
 export const registrationConfirmQuerySchema = registrationConfirmSchema;
 
-const registrationCompletionResponseSchema = successResponseSchema.merge(registrationDayStateSchema).extend({
+const registrationCompletionResponseBaseSchema = successResponseSchema.merge(registrationDayStateSchema).extend({
   status: registrationLifecycleStatusSchema,
   shareUrl: httpUrlSchema.nullable(),
+});
+
+export const registrationConfirmResponseSchema = registrationCompletionResponseBaseSchema.extend({
   manageUrl: httpUrlSchema,
   manageToken: z.string(),
 });
 
-export const registrationConfirmResponseSchema = registrationCompletionResponseSchema;
-
-export const registrationSubmissionResponseSchema = registrationCompletionResponseSchema.extend({
+export const registrationSubmissionResponseSchema = registrationCompletionResponseBaseSchema.extend({
   registrationId: databaseIdSchema,
+  // Existing identities receive these capabilities only through their email.
+  // A newly created identity may still receive the immediate correction link.
+  manageUrl: httpUrlSchema.nullable(),
+  manageToken: z.string().nullable(),
 });
 export type RegistrationSubmissionResponse = z.infer<typeof registrationSubmissionResponseSchema>;
 
