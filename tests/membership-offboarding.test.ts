@@ -45,6 +45,9 @@ describe("membership access offboarding", () => {
     const userId = await insertUser(env.DB, "offboarding-user@example.test");
     const actor: AuthAdmin = { id: actorId, email: "offboarding-admin@example.test", role: "admin" };
     const workingGroupId = await insertWorkingGroup("Offboarding WG", "offboarding-wg@lists.pkic.org");
+    const organizationId = await insertOrganization(env.DB, "Offboarding Organization");
+    const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
+    await addRepresentative(env.DB, memberId, userId);
     await joinWorkingGroup(workingGroupId, userId, null);
 
     const [{ active_lists: activeListCount }] = await queryAll<{ active_lists: number }>(
@@ -59,6 +62,13 @@ describe("membership access offboarding", () => {
         env.DB,
         "SELECT left_at IS NOT NULL AS closed FROM working_group_members WHERE user_id = ?",
         userId,
+      ),
+    ).toEqual([{ closed: 1 }]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT left_at IS NOT NULL AS closed FROM organization_representatives WHERE member_id = ? AND user_id = ?",
+        [memberId, userId],
       ),
     ).toEqual([{ closed: 1 }]);
     const removals = await queryAll<{ google_group_email: string; idempotency_key: string }>(
@@ -80,6 +90,9 @@ describe("membership access offboarding", () => {
     const userId = await insertUser(env.DB, "rollback-user@example.test");
     const actor: AuthAdmin = { id: actorId, email: "rollback-admin@example.test", role: "admin" };
     const workingGroupId = await insertWorkingGroup("Rollback WG", "rollback-wg@lists.pkic.org");
+    const organizationId = await insertOrganization(env.DB, "Rollback Organization");
+    const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
+    await addRepresentative(env.DB, memberId, userId);
     await joinWorkingGroup(workingGroupId, userId, null);
     await env.DB.prepare(
       `CREATE TRIGGER reject_offboarding_audit
@@ -98,6 +111,12 @@ describe("membership access offboarding", () => {
       expect(await queryAll(env.DB, "SELECT left_at FROM working_group_members WHERE user_id = ?", userId)).toEqual([
         { left_at: null },
       ]);
+      expect(
+        await queryAll(env.DB, "SELECT left_at FROM organization_representatives WHERE member_id = ? AND user_id = ?", [
+          memberId,
+          userId,
+        ]),
+      ).toEqual([{ left_at: null }]);
       expect(await queryAll(env.DB, "SELECT id FROM google_groups_sync_queue WHERE user_id = ?", userId)).toHaveLength(
         0,
       );

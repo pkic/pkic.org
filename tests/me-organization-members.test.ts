@@ -82,18 +82,26 @@ describe("POST /api/v1/me/organization/members — self-service coworker enrollm
     });
 
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { memberId: string; userId: string; name: string; email: string };
+    const body = (await response.json()) as {
+      representativeId: string;
+      membershipId: string;
+      userId: string;
+      name: string;
+      email: string;
+    };
     expect(body.name).toBe("New Coworker");
     expect(body.email).toBe("coworker@example.test");
+    expect(body.membershipId).toBe(memberId);
 
     // The coworker gets an organization_representatives row against the
     // SAME aggregate, not a new members row.
-    const repRows = await queryAll<{ member_id: string; left_at: string | null }>(
+    const repRows = await queryAll<{ id: string; member_id: string; left_at: string | null }>(
       env.DB,
-      "SELECT member_id, left_at FROM organization_representatives WHERE user_id = ?",
+      "SELECT id, member_id, left_at FROM organization_representatives WHERE user_id = ?",
       body.userId,
     );
     expect(repRows).toHaveLength(1);
+    expect(body.representativeId).toBe(repRows[0].id);
     expect(repRows[0].member_id).toBe(memberId);
     expect(repRows[0].left_at).toBeNull();
 

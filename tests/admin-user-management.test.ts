@@ -8,6 +8,7 @@ import { onRequestPatch as patchUser } from "../functions/api/v1/admin/users/[us
 import { onRequestPost as anonymizeUser } from "../functions/api/v1/admin/users/[userId]/anonymize";
 import app from "../functions/router";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
+import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 
 let adminToken: string;
 
@@ -296,6 +297,33 @@ describe("admin user anonymization", () => {
     expect(row.last_name).toBeNull();
     expect(row.active).toBe(0);
     expect(row.pii_redacted_at).toBeTruthy();
+  });
+
+  it("closes active organization relationships so redacted users disappear from rosters and counts", async () => {
+    await setup();
+    const userId = await seedUser(env.DB, "representative-to-anonymize@example.test");
+    const organizationId = await insertOrganization(env.DB, "Anonymization Organization");
+    const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
+    await addRepresentative(env.DB, memberId, userId);
+
+    await anonymizeUser(
+      createContext(env, adminRequest(`/api/v1/admin/users/${userId}/anonymize`, "POST"), { userId }),
+    );
+
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT left_at IS NOT NULL AS closed FROM organization_representatives WHERE member_id = ? AND user_id = ?",
+        [memberId, userId],
+      ),
+    ).toEqual([{ closed: 1 }]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT COUNT(*) AS total FROM organization_representatives WHERE member_id = ? AND left_at IS NULL",
+        memberId,
+      ),
+    ).toEqual([{ total: 0 }]);
   });
 
   it("revokes all active sessions for the anonymized user", async () => {
