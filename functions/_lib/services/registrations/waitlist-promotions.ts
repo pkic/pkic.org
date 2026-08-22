@@ -46,7 +46,6 @@ export async function promoteEventWaitlistWithNotifications(
 ): Promise<WaitlistPromotionResult> {
   const result = emptyResult();
   const affected = new Set<string>();
-  const queuedRegistrationIds = new Set<string>();
   const maxOffers = payload.maxOffers ?? Number.POSITIVE_INFINITY;
 
   const days = payload.eventDayIds
@@ -78,39 +77,37 @@ export async function promoteEventWaitlistWithNotifications(
           ),
         prepareCommitStatements: async (promotion) => {
           const statements: StatementLike[] = [];
-          if (!queuedRegistrationIds.has(promotion.registration_id)) {
-            const day = await first<{ day_date: string }>(db, "SELECT day_date FROM event_days WHERE id = ?", [
-              promotion.event_day_id,
-            ]);
-            if (!day) throw new Error("Promoted event day no longer exists");
-            const currentWaitlist = await listDayWaitlistForRegistration(db, promotion.registration_id);
-            const dayWaitlist = [
-              ...currentWaitlist.filter((entry) => entry.dayDate !== day.day_date),
-              {
-                dayDate: day.day_date,
-                status: "offered" as const,
-                priorityLane: promotion.priority_lane,
-                offerExpiresAt: promotion.offer_expires_at,
-              },
-            ];
-            const email = await prepareRegistrationStatusEmail(db, {
-              event: payload.event,
-              registrationId: promotion.registration_id,
-              appBaseUrl: payload.appBaseUrl,
-              templateKey: "registration_waitlist_offer",
-              subject: `In-person spot available — ${payload.event.name}`,
-              noticeKind: "waitlist_offer",
-              outboxId:
-                `waitlist-offer:${payload.event.id}:${promotion.registration_id}:` +
-                `${promotion.event_day_id}:${promotion.offer_expires_at}`,
-              idempotencyKey:
-                `waitlist-offer:${payload.event.id}:${promotion.registration_id}:` +
-                `${promotion.event_day_id}:${promotion.offer_expires_at}`,
-              dayWaitlist,
-            });
-            statements.push(email.statement);
-            preparedOutboxId = email.outboxId;
-          }
+          const day = await first<{ day_date: string }>(db, "SELECT day_date FROM event_days WHERE id = ?", [
+            promotion.event_day_id,
+          ]);
+          if (!day) throw new Error("Promoted event day no longer exists");
+          const currentWaitlist = await listDayWaitlistForRegistration(db, promotion.registration_id);
+          const dayWaitlist = [
+            ...currentWaitlist.filter((entry) => entry.dayDate !== day.day_date),
+            {
+              dayDate: day.day_date,
+              status: "offered" as const,
+              priorityLane: promotion.priority_lane,
+              offerExpiresAt: promotion.offer_expires_at,
+            },
+          ];
+          const email = await prepareRegistrationStatusEmail(db, {
+            event: payload.event,
+            registrationId: promotion.registration_id,
+            appBaseUrl: payload.appBaseUrl,
+            templateKey: "registration_waitlist_offer",
+            subject: `In-person spot available — ${payload.event.name}`,
+            noticeKind: "waitlist_offer",
+            outboxId:
+              `waitlist-offer:${payload.event.id}:${promotion.registration_id}:` +
+              `${promotion.event_day_id}:${promotion.offer_expires_at}`,
+            idempotencyKey:
+              `waitlist-offer:${payload.event.id}:${promotion.registration_id}:` +
+              `${promotion.event_day_id}:${promotion.offer_expires_at}`,
+            dayWaitlist,
+          });
+          statements.push(email.statement);
+          preparedOutboxId = email.outboxId;
           return statements;
         },
       });
@@ -119,7 +116,6 @@ export async function promoteEventWaitlistWithNotifications(
       result.dayRegistrationOffers += 1;
       affected.add(promoted.registration_id);
       if (preparedOutboxId) {
-        queuedRegistrationIds.add(promoted.registration_id);
         result.outboxIds.push(preparedOutboxId);
       }
     }

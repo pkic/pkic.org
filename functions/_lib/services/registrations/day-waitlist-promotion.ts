@@ -5,13 +5,6 @@ import { countActiveOffersForDay, countConfirmedInPersonForDay } from "./day-wai
 import type { DayWaitlistRow } from "./day-waitlist-types";
 import { NON_CAPACITY_CONSUMING_DAY_WAITLIST_SQL } from "./day-waitlist-policy";
 
-const OFFERED_USER_EVENT_UNIQUE_ERROR =
-  "UNIQUE constraint failed: event_day_waitlist_entries.event_id, event_day_waitlist_entries.user_id";
-
-function isOfferedUserEventUniqueConflict(error: unknown): boolean {
-  return error instanceof Error && error.message.includes(OFFERED_USER_EVENT_UNIQUE_ERROR);
-}
-
 export async function expireDayWaitlistOffers(db: DatabaseLike, eventId: string): Promise<void> {
   const now = nowIso();
   await run(
@@ -22,18 +15,6 @@ export async function expireDayWaitlistOffers(db: DatabaseLike, eventId: string)
        AND offer_expires_at IS NOT NULL AND offer_expires_at <= ?`,
     [now, eventId, now],
   );
-}
-
-async function userHasActiveOffer(db: DatabaseLike, eventId: string, userId: string): Promise<boolean> {
-  const row = await first<{ total: number }>(
-    db,
-    `SELECT COUNT(*) AS total
-     FROM event_day_waitlist_entries
-     WHERE event_id = ? AND user_id = ? AND status = 'offered'
-       AND (offer_expires_at IS NULL OR offer_expires_at > ?)`,
-    [eventId, userId, nowIso()],
-  );
-  return Number(row?.total ?? 0) > 0;
 }
 
 export async function promoteDayWaitlistIfCapacity(
@@ -73,7 +54,6 @@ export async function promoteDayWaitlistIfCapacity(
   );
 
   for (const candidate of candidates) {
-    if (await userHasActiveOffer(db, payload.eventId, candidate.user_id)) continue;
     const now = nowIso();
     const offerExpiresAt = addHours(now, payload.claimWindowHours);
     const updateStatement = db
@@ -81,14 +61,6 @@ export async function promoteDayWaitlistIfCapacity(
         `UPDATE event_day_waitlist_entries
        SET status = 'offered', offer_expires_at = ?, updated_at = ?
        WHERE id = ? AND status = 'waiting'
-         AND NOT EXISTS (
-           SELECT 1
-           FROM event_day_waitlist_entries active_offer
-           WHERE active_offer.event_id = ?
-             AND active_offer.user_id = ?
-             AND active_offer.status = 'offered'
-             AND (active_offer.offer_expires_at IS NULL OR active_offer.offer_expires_at > ?)
-         )
          AND (
            (
              SELECT COUNT(*)
@@ -112,18 +84,7 @@ export async function promoteDayWaitlistIfCapacity(
            )
          ) < ?`,
       )
-      .bind(
-        offerExpiresAt,
-        now,
-        candidate.id,
-        payload.eventId,
-        candidate.user_id,
-        now,
-        payload.eventDayId,
-        payload.eventDayId,
-        now,
-        day.in_person_capacity,
-      );
+      .bind(offerExpiresAt, now, candidate.id, payload.eventDayId, payload.eventDayId, now, day.in_person_capacity);
     const promotion = { ...candidate, status: "offered" as const, offer_expires_at: offerExpiresAt };
     const commitGuard = payload.prepareCommitGuard?.(promotion);
     const additionalStatements = (await payload.prepareCommitStatements?.(promotion)) ?? [];
@@ -136,10 +97,7 @@ export async function promoteDayWaitlistIfCapacity(
       if ((updated.meta?.changes ?? 0) === 0) continue;
       return promotion;
     } catch (error) {
-      // The partial unique index is the authoritative cross-day invariant.
-      // A concurrent promotion for another day may win after this candidate
-      // was selected; skip it without reinterpreting unrelated D1 failures.
-      if (isOfferedUserEventUniqueConflict(error) || payload.isCommitConflict?.(error) === true) continue;
+      if (payload.isCommitConflict?.(error) === true) continue;
       throw error;
     }
   }

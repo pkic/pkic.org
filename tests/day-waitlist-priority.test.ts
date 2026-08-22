@@ -154,7 +154,7 @@ describe("day waitlist priorities", () => {
     expect(outbox[0].recipient_email).toBe("continuity@example.test");
   });
 
-  it("allows only one active offer per user across event days", async () => {
+  it("offers and notifies each available day independently", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
     await env.DB.prepare(
@@ -236,7 +236,7 @@ describe("day waitlist priorities", () => {
       signingSecret: "test-signing-secret",
     });
 
-    await promoteEventWaitlistWithNotifications(env.DB, {
+    const promotion = await promoteEventWaitlistWithNotifications(env.DB, {
       event,
       appBaseUrl: "https://app.test",
       claimWindowHours: 24,
@@ -260,11 +260,21 @@ describe("day waitlist priorities", () => {
     );
 
     expect(multiStatuses.find((row) => row.event_day_id === "d1")?.status).toBe("offered");
-    expect(multiStatuses.find((row) => row.event_day_id === "d2")?.status).toBe("waiting");
-    expect(backupStatuses.find((row) => row.event_day_id === "d2")?.status).toBe("offered");
+    expect(multiStatuses.find((row) => row.event_day_id === "d2")?.status).toBe("offered");
+    expect(backupStatuses.find((row) => row.event_day_id === "d2")?.status).toBe("waiting");
+    expect(promotion.dayRegistrationOffers).toBe(2);
+    expect(promotion.affectedRegistrations).toEqual([multi.registration.id]);
+    expect(promotion.outboxIds).toHaveLength(2);
+    await expect(
+      queryAll<{ total: number }>(
+        env.DB,
+        `SELECT COUNT(*) AS total FROM email_outbox
+         WHERE template_key = 'registration_waitlist_offer' AND recipient_email = 'multi@example.test'`,
+      ),
+    ).resolves.toEqual([{ total: 2 }]);
   });
 
-  it("enforces one active offer when different event days promote the same user concurrently", async () => {
+  it("allows different event days to promote the same user concurrently", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     await env.DB.prepare(
       `
@@ -333,14 +343,14 @@ describe("day waitlist priorities", () => {
       promoteDayWaitlistIfCapacity(env.DB, { eventId, eventDayId: "race-d1", claimWindowHours: 24 }),
       promoteDayWaitlistIfCapacity(env.DB, { eventId, eventDayId: "race-d2", claimWindowHours: 24 }),
     ]);
-    expect([first, second].filter(Boolean)).toHaveLength(1);
+    expect([first, second].filter(Boolean)).toHaveLength(2);
     const statuses = await queryAll<{ event_day_id: string; status: string }>(
       env.DB,
       "SELECT event_day_id, status FROM event_day_waitlist_entries WHERE registration_id = ? ORDER BY event_day_id",
       [multi.registration.id],
     );
-    expect(statuses.filter((row) => row.status === "offered")).toHaveLength(1);
-    expect(statuses.filter((row) => row.status === "waiting")).toHaveLength(1);
+    expect(statuses.filter((row) => row.status === "offered")).toHaveLength(2);
+    expect(statuses.filter((row) => row.status === "waiting")).toHaveLength(0);
   });
 
   it("rolls back the offer and audit when durable notification enqueue fails", async () => {

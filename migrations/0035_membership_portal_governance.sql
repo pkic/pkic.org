@@ -653,16 +653,6 @@ END;
 -- two concurrent registrations into the final seat or emailing stale state.
 ALTER TABLE event_days ADD COLUMN capacity_revision INTEGER NOT NULL DEFAULT 0;
 
--- Promotion candidates can be selected concurrently for different days.
--- D1 snapshots therefore cannot enforce this cross-day invariant with a
--- NOT EXISTS predicate alone: the database must reject the second offered
--- row for the same person and event. Promotion expires stale offers before
--- attempting the guarded write, so only the durable `offered` state belongs
--- in this additive partial index. This avoids a table rebuild.
-CREATE UNIQUE INDEX uq_event_day_waitlist_offered_user_event
-  ON event_day_waitlist_entries(event_id, user_id)
-  WHERE status = 'offered';
-
 CREATE TABLE event_day_capacity_guards (
   id                    TEXT NOT NULL PRIMARY KEY,
   event_day_id          TEXT NOT NULL,
