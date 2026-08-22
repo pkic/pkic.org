@@ -9,12 +9,14 @@ import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
 import {
   convertProposalToVote,
+  convertProposalToVoteForMember,
   insertEndorsementAndMaybeConvert,
   isStaleProposalTransition,
   prepareProposalTransitionGuard,
 } from "./proposal-conversion";
 import { getProposalRowOrThrow, minEndorsersFor, toProposalSummary, type ProposalSummary } from "./proposal-read";
 import { assertVotingCategory, resolveScope, type VoteScopeType, type VoteSummary, type VoteType } from "./shared";
+import { ACTIVE_VOTER_MEMBERSHIP_SQL, activeVoterMembershipBindings } from "./voter-eligibility";
 
 export {
   getProposalScopeForPermissionCheck,
@@ -62,12 +64,21 @@ export async function submitVoteProposal(
 
   const now = nowIso();
   const id = uuid();
-  await run(
+  const inserted = await run(
     db,
     `INSERT INTO vote_proposals
        (id, title, description, vote_type, scope_type, scope_id, proposed_by_user_id, eligible_categories,
         proposed_opens_at, proposed_closes_at, status, vote_id, rejection_reason, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open_for_endorsement', NULL, NULL, ?, ?)`,
+     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open_for_endorsement', NULL, NULL, ?, ?
+     WHERE ${ACTIVE_VOTER_MEMBERSHIP_SQL}
+       AND (
+         ? <> 'working_group'
+         OR EXISTS (
+           SELECT 1
+           FROM working_group_members wgm
+           WHERE wgm.working_group_id = ? AND wgm.user_id = ? AND wgm.left_at IS NULL
+         )
+       )`,
     [
       id,
       input.title,
@@ -81,8 +92,15 @@ export async function submitVoteProposal(
       input.proposedClosesAt ?? null,
       now,
       now,
+      ...activeVoterMembershipBindings(member),
+      input.scopeType,
+      scopeId,
+      member.userId,
     ],
   );
+  if (inserted.changes !== 1) {
+    throw new AppError(409, "MEMBERSHIP_CHANGED", "Voting eligibility changed; reload and retry");
+  }
   return toProposalSummary(db, await getProposalRowOrThrow(db, id));
 }
 
@@ -119,13 +137,13 @@ async function endorseVoteProposalOnce(
   if (existing) {
     const refreshed = await toProposalSummary(db, row);
     if (refreshed.endorsementCount >= refreshed.minEndorsersRequired) {
-      convertedVote = await convertProposalToVote(db, await getProposalRowOrThrow(db, proposalId));
+      convertedVote = await convertProposalToVoteForMember(db, await getProposalRowOrThrow(db, proposalId), member);
     }
   } else {
     convertedVote = await insertEndorsementAndMaybeConvert(
       db,
       row,
-      member.userId,
+      member,
       await minEndorsersFor(db, row.scope_type, row.scope_id),
     );
   }

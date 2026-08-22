@@ -21,7 +21,9 @@ import {
 } from "./helpers/membership";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { isIndividualMembershipCategory } from "../assets/shared/schemas/membership-categories";
-import { closeDueVotes } from "../functions/_lib/services/votes";
+import { closeDueVotes, endorseVoteProposal, submitBallot, submitVoteProposal } from "../functions/_lib/services/votes";
+import { requireMemberFromRequest } from "../functions/_lib/auth/member";
+import { gateNextBatch, gateNextRun } from "./helpers/d1-batch-gate";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -142,6 +144,11 @@ async function insertWgMembership(wgId: string, userId: string): Promise<void> {
   )
     .bind(crypto.randomUUID(), wgId, userId)
     .run();
+}
+
+async function resolveMember(userId: string, tokenId: string) {
+  const token = await createMemberSession(env.DB, userId, tokenId);
+  return requireMemberFromRequest(env.DB, request(token, "/api/v1/portal/votes"), env as any);
 }
 
 async function assignContextualRole(
@@ -561,6 +568,232 @@ describe("Voting system", () => {
       body: JSON.stringify({ choice: "opposed" }),
     });
     expect(newDelegateRes.status).toBe(409);
+  });
+
+  it("rejects a forum ballot when the delegate is replaced after eligibility is read", async () => {
+    const orgId = await insertOrganization("Delegate Race Corp");
+    const originalDelegateId = await insertMemberUser("A", orgId);
+    const replacementDelegateId = await insertMemberUser("A", orgId);
+    await setOrgContacts(orgId, originalDelegateId, originalDelegateId);
+
+    const createRes = await call(adminToken, "/api/v1/admin/votes", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Delegate Replacement Race",
+        voteType: "motion",
+        scopeType: "forum",
+        thresholdType: "simple_majority",
+        closesAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      }),
+    });
+    const { vote } = (await createRes.json()) as { vote: { id: string } };
+    const member = await resolveMember(originalDelegateId, "delegate-race-token");
+    const gate = gateNextRun(env.DB);
+    const ballot = submitBallot(gate.db, member, vote.id, "in_favor", null);
+
+    await gate.reached;
+    try {
+      await setOrgContacts(orgId, originalDelegateId, replacementDelegateId);
+    } finally {
+      gate.release();
+    }
+
+    await expect(ballot).rejects.toMatchObject({ status: 409, code: "VOTE_CHANGED" });
+    await expect(queryAll(env.DB, "SELECT id FROM vote_ballots WHERE vote_id = ?", vote.id)).resolves.toHaveLength(0);
+  });
+
+  it("rejects a working-group ballot when membership is removed after eligibility is read", async () => {
+    const wgId = await insertWorkingGroup("Ballot Membership Race WG", "ballot-membership-race-wg");
+    const voterId = await insertMemberUser("F");
+    await insertWgMembership(wgId, voterId);
+    const createRes = await call(adminToken, "/api/v1/admin/votes", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "WG Membership Removal Ballot Race",
+        voteType: "motion",
+        scopeType: "working_group",
+        scopeId: wgId,
+        thresholdType: "simple_majority",
+        closesAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      }),
+    });
+    const { vote } = (await createRes.json()) as { vote: { id: string } };
+    const member = await resolveMember(voterId, "wg-ballot-race-token");
+    const gate = gateNextRun(env.DB);
+    const ballot = submitBallot(gate.db, member, vote.id, "in_favor", null);
+
+    await gate.reached;
+    try {
+      await env.DB.prepare(
+        "UPDATE working_group_members SET left_at = datetime('now') WHERE working_group_id = ? AND user_id = ?",
+      )
+        .bind(wgId, voterId)
+        .run();
+    } finally {
+      gate.release();
+    }
+
+    await expect(ballot).rejects.toMatchObject({ status: 409, code: "VOTE_CHANGED" });
+    await expect(queryAll(env.DB, "SELECT id FROM vote_ballots WHERE vote_id = ?", vote.id)).resolves.toHaveLength(0);
+  });
+
+  it("rejects a ballot when the selected membership becomes non-voting after eligibility is read", async () => {
+    const wgId = await insertWorkingGroup("Ballot Category Race WG", "ballot-category-race-wg");
+    const voterId = await insertMemberUser("F");
+    await insertWgMembership(wgId, voterId);
+    const createRes = await call(adminToken, "/api/v1/admin/votes", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Membership Category Ballot Race",
+        voteType: "motion",
+        scopeType: "working_group",
+        scopeId: wgId,
+        thresholdType: "simple_majority",
+        closesAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      }),
+    });
+    const { vote } = (await createRes.json()) as { vote: { id: string } };
+    const member = await resolveMember(voterId, "category-ballot-race-token");
+    const gate = gateNextRun(env.DB);
+    const ballot = submitBallot(gate.db, member, vote.id, "in_favor", null);
+
+    await gate.reached;
+    try {
+      await env.DB.prepare(
+        "UPDATE member_category_assignments SET category_code = 'H1', updated_at = datetime('now') WHERE member_id = ?",
+      )
+        .bind(member.memberId)
+        .run();
+    } finally {
+      gate.release();
+    }
+
+    await expect(ballot).rejects.toMatchObject({ status: 409, code: "VOTE_CHANGED" });
+    await expect(queryAll(env.DB, "SELECT id FROM vote_ballots WHERE vote_id = ?", vote.id)).resolves.toHaveLength(0);
+  });
+
+  it("rejects a working-group proposal when membership is removed before its final insert", async () => {
+    const wgId = await insertWorkingGroup("Proposal Membership Race WG", "proposal-membership-race-wg", 2);
+    const proposerId = await insertMemberUser("F");
+    await insertWgMembership(wgId, proposerId);
+    const member = await resolveMember(proposerId, "wg-proposal-race-token");
+    const gate = gateNextRun(env.DB);
+    const proposal = submitVoteProposal(gate.db, member, {
+      title: "Stale WG Proposal",
+      description: "Must not survive membership removal",
+      voteType: "motion",
+      scopeType: "working_group",
+      scopeId: wgId,
+    });
+
+    await gate.reached;
+    try {
+      await env.DB.prepare(
+        "UPDATE working_group_members SET left_at = datetime('now') WHERE working_group_id = ? AND user_id = ?",
+      )
+        .bind(wgId, proposerId)
+        .run();
+    } finally {
+      gate.release();
+    }
+
+    await expect(proposal).rejects.toMatchObject({ status: 409, code: "MEMBERSHIP_CHANGED" });
+    await expect(
+      queryAll(env.DB, "SELECT id FROM vote_proposals WHERE title = 'Stale WG Proposal'"),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("rolls back a stale working-group endorsement and threshold conversion", async () => {
+    const wgId = await insertWorkingGroup("Endorsement Membership Race WG", "endorsement-membership-race-wg", 1);
+    const proposerId = await insertMemberUser("F");
+    const endorserId = await insertMemberUser("F");
+    await insertWgMembership(wgId, proposerId);
+    await insertWgMembership(wgId, endorserId);
+    const proposer = await resolveMember(proposerId, "wg-endorsement-proposer-token");
+    const created = await submitVoteProposal(env.DB, proposer, {
+      title: "Stale WG Endorsement",
+      description: "Must not convert after authority is removed",
+      voteType: "motion",
+      scopeType: "working_group",
+      scopeId: wgId,
+    });
+    const endorser = await resolveMember(endorserId, "wg-endorsement-race-token");
+    const gate = gateNextBatch(env.DB);
+    const endorsement = endorseVoteProposal(gate.db, endorser, created.id);
+
+    await gate.reached;
+    try {
+      await env.DB.prepare(
+        "UPDATE working_group_members SET left_at = datetime('now') WHERE working_group_id = ? AND user_id = ?",
+      )
+        .bind(wgId, endorserId)
+        .run();
+    } finally {
+      gate.release();
+    }
+
+    await expect(endorsement).rejects.toMatchObject({ status: 409, code: "MEMBERSHIP_CHANGED" });
+    await expect(
+      queryAll(env.DB, "SELECT id FROM vote_proposal_endorsements WHERE proposal_id = ?", created.id),
+    ).resolves.toHaveLength(0);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM votes WHERE source_proposal_id = ?", created.id),
+    ).resolves.toHaveLength(0);
+    await expect(
+      queryAll<{ status: string; transition_revision: number }>(
+        env.DB,
+        "SELECT status, transition_revision FROM vote_proposals WHERE id = ?",
+        created.id,
+      ),
+    ).resolves.toEqual([{ status: "open_for_endorsement", transition_revision: 0 }]);
+  });
+
+  it("does not convert an existing endorsement after the endorser loses working-group membership", async () => {
+    const wgId = await insertWorkingGroup("Existing Endorsement Race WG", "existing-endorsement-race-wg", 1);
+    const proposerId = await insertMemberUser("F");
+    const endorserId = await insertMemberUser("F");
+    await insertWgMembership(wgId, proposerId);
+    await insertWgMembership(wgId, endorserId);
+    const proposer = await resolveMember(proposerId, "existing-endorsement-proposer-token");
+    const created = await submitVoteProposal(env.DB, proposer, {
+      title: "Existing Stale WG Endorsement",
+      description: "An existing endorsement must not bypass live authority",
+      voteType: "motion",
+      scopeType: "working_group",
+      scopeId: wgId,
+    });
+    await env.DB.prepare(
+      `INSERT INTO vote_proposal_endorsements (id, proposal_id, endorser_user_id, endorsed_at)
+       VALUES (?, ?, ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), created.id, endorserId)
+      .run();
+    const endorser = await resolveMember(endorserId, "existing-endorsement-race-token");
+    const gate = gateNextBatch(env.DB);
+    const conversion = endorseVoteProposal(gate.db, endorser, created.id);
+
+    await gate.reached;
+    try {
+      await env.DB.prepare(
+        "UPDATE working_group_members SET left_at = datetime('now') WHERE working_group_id = ? AND user_id = ?",
+      )
+        .bind(wgId, endorserId)
+        .run();
+    } finally {
+      gate.release();
+    }
+
+    await expect(conversion).rejects.toMatchObject({ status: 409, code: "MEMBERSHIP_CHANGED" });
+    await expect(
+      queryAll(env.DB, "SELECT id FROM votes WHERE source_proposal_id = ?", created.id),
+    ).resolves.toHaveLength(0);
+    await expect(
+      queryAll<{ status: string; transition_revision: number }>(
+        env.DB,
+        "SELECT status, transition_revision FROM vote_proposals WHERE id = ?",
+        created.id,
+      ),
+    ).resolves.toEqual([{ status: "open_for_endorsement", transition_revision: 0 }]);
   });
 
   it("H-category members cannot cast a ballot at any level", async () => {

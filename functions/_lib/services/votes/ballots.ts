@@ -5,7 +5,7 @@ import { first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import { AppError } from "../../errors";
-import { resolveRepresentativeRoleHolders } from "../membership/representative-roles";
+import { REPRESENTATIVE_ROLE_IDS, resolveRepresentativeRoleHolders } from "../membership/representative-roles";
 import {
   getVoteRowOrThrow,
   eligibleCategoriesOf,
@@ -15,6 +15,7 @@ import {
   type BallotChoice,
 } from "./shared";
 import type { AuthMember, DatabaseLike, StatementLike } from "../../types";
+import { ACTIVE_VOTER_MEMBERSHIP_SQL, activeVoterMembershipBindings } from "./voter-eligibility";
 
 /** role-voting_delegate (user_roles, context_type='organization') falls back to role-primary_contact when unset. */
 export async function resolveVotingDelegateUserId(db: DatabaseLike, organizationId: string): Promise<string | null> {
@@ -112,7 +113,54 @@ export async function submitBallot(
              AND v.transition_revision = ?
              AND v.transition_processing_token IS NULL
              AND v.opens_at <= ?
-             AND v.closes_at > ?`,
+             AND v.closes_at > ?
+             AND ${ACTIVE_VOTER_MEMBERSHIP_SQL}
+             AND EXISTS (
+               SELECT 1
+               FROM members delegate_member
+               WHERE delegate_member.id = ?
+                 AND delegate_member.organization_id = ?
+                 AND delegate_member.status = 'active'
+                 AND COALESCE(
+                   (
+                     SELECT vd.user_id
+                     FROM user_roles vd
+                     JOIN users vdu ON vdu.id = vd.user_id AND vdu.active = 1
+                     JOIN organization_representatives vd_rep
+                       ON vd_rep.member_id = delegate_member.id
+                      AND vd_rep.user_id = vd.user_id
+                      AND vd_rep.left_at IS NULL
+                     WHERE vd.context_type = 'organization'
+                       AND vd.context_id = delegate_member.id
+                       AND vd.role_id = ?
+                       AND vd.revoked_at IS NULL
+                       AND (vd.expires_at IS NULL OR datetime(vd.expires_at) > datetime(?))
+                     LIMIT 1
+                   ),
+                   (
+                     SELECT pc.user_id
+                     FROM user_roles pc
+                     JOIN users pcu ON pcu.id = pc.user_id AND pcu.active = 1
+                     JOIN organization_representatives pc_rep
+                       ON pc_rep.member_id = delegate_member.id
+                      AND pc_rep.user_id = pc.user_id
+                      AND pc_rep.left_at IS NULL
+                     WHERE pc.context_type = 'organization'
+                       AND pc.context_id = delegate_member.id
+                       AND pc.role_id = ?
+                       AND pc.revoked_at IS NULL
+                       AND (pc.expires_at IS NULL OR datetime(pc.expires_at) > datetime(?))
+                     LIMIT 1
+                   )
+                 ) = ?
+             )
+             AND (
+               v.eligible_categories IS NULL
+               OR EXISTS (
+                 SELECT 1 FROM json_each(v.eligible_categories) category
+                 WHERE category.value = ?
+               )
+             )`,
         )
         .bind(
           uuid(),
@@ -126,6 +174,15 @@ export async function submitBallot(
           vote.transition_revision,
           now,
           now,
+          ...activeVoterMembershipBindings(member),
+          member.memberId,
+          member.organizationId,
+          REPRESENTATIVE_ROLE_IDS.votingDelegate,
+          now,
+          REPRESENTATIVE_ROLE_IDS.primaryContact,
+          now,
+          member.userId,
+          member.membershipCategory,
         ),
     );
     return;
@@ -159,7 +216,22 @@ export async function submitBallot(
            AND v.transition_revision = ?
            AND v.transition_processing_token IS NULL
            AND v.opens_at <= ?
-           AND v.closes_at > ?`,
+           AND v.closes_at > ?
+           AND ${ACTIVE_VOTER_MEMBERSHIP_SQL}
+           AND EXISTS (
+             SELECT 1
+             FROM working_group_members wgm
+             WHERE wgm.working_group_id = v.scope_id
+               AND wgm.user_id = ?
+               AND wgm.left_at IS NULL
+           )
+           AND (
+             v.eligible_categories IS NULL
+             OR EXISTS (
+               SELECT 1 FROM json_each(v.eligible_categories) category
+               WHERE category.value = ?
+             )
+           )`,
       )
       .bind(
         uuid(),
@@ -172,6 +244,9 @@ export async function submitBallot(
         vote.transition_revision,
         now,
         now,
+        ...activeVoterMembershipBindings(member),
+        member.userId,
+        member.membershipCategory,
       ),
   );
 }
