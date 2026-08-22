@@ -257,20 +257,14 @@ describe("consolidated pending migration upgrade", () => {
         legacyEventData: { pendingEventField: "kept" },
       },
     ]);
+    expect(db.prepare("SELECT id, organization_id, sponsorship_level, status FROM sponsors ORDER BY id").all()).toEqual(
+      [
+        { id: "sponsor-1", organization_id: "org-1", sponsorship_level: "Gold", status: "active" },
+        { id: "sponsor-2", organization_id: "org-2", sponsorship_level: "Silver", status: "pending" },
+      ],
+    );
     expect(
-      db
-        .prepare("SELECT id, organization_id, sponsorship_level, status FROM sponsors ORDER BY id")
-        .all(),
-    ).toEqual([
-      { id: "sponsor-1", organization_id: "org-1", sponsorship_level: "Gold", status: "active" },
-      { id: "sponsor-2", organization_id: "org-2", sponsorship_level: "Silver", status: "pending" },
-    ]);
-    expect(
-      db
-        .prepare(
-          "SELECT id, sponsor_id, event_id, sponsorship_level, status FROM sponsor_events ORDER BY id",
-        )
-        .all(),
+      db.prepare("SELECT id, sponsor_id, event_id, sponsorship_level, status FROM sponsor_events ORDER BY id").all(),
     ).toEqual([
       {
         id: "sponsor-event-1",
