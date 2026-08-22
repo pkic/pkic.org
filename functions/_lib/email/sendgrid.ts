@@ -4,6 +4,7 @@ import { logError } from "../logging";
 import type { Env } from "../types";
 
 export interface SendgridMessage {
+  outboxId: string;
   to: string;
   bcc?: string[];
   subject: string;
@@ -32,6 +33,10 @@ export async function sendViaSendgrid(env: Env, message: SendgridMessage): Promi
       {
         to: [{ email: message.to }],
         ...(message.bcc && message.bcc.length > 0 ? { bcc: message.bcc.map((email) => ({ email })) } : {}),
+        custom_args: {
+          outbox_id: message.outboxId,
+          ...(env.APP_BASE_URL ? { env_url: env.APP_BASE_URL } : {}),
+        },
       },
     ],
     from: { email: fromEmail, name: fromName },
@@ -50,7 +55,6 @@ export async function sendViaSendgrid(env: Env, message: SendgridMessage): Promi
         : []),
     ],
     categories: message.categories ?? [],
-    ...(env.APP_BASE_URL ? { custom_args: { env_url: env.APP_BASE_URL } } : {}),
   };
 
   if (message.attachments && message.attachments.length > 0) {
@@ -74,8 +78,8 @@ export async function sendViaSendgrid(env: Env, message: SendgridMessage): Promi
     });
   } catch {
     const details = providerFailureDetails("sendgrid", "send_email", null);
-    logError("SENDGRID_SEND_FAILED", details);
-    throw new AppError(502, "SENDGRID_SEND_FAILED", "SendGrid could not be reached", details);
+    logError("SENDGRID_DELIVERY_UNKNOWN", details);
+    throw new AppError(502, "SENDGRID_DELIVERY_UNKNOWN", "SendGrid delivery outcome is unknown", details);
   }
 
   if (!response.ok) {

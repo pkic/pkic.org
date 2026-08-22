@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
-import { EMAIL_OUTBOX_DUE_QUERY } from "../functions/_lib/email/outbox";
+import { EMAIL_OUTBOX_DUE_QUERY, EMAIL_OUTBOX_EXPIRED_LEASE_QUERY } from "../functions/_lib/email/outbox";
 import { GOOGLE_GROUPS_DUE_QUERY } from "../functions/_lib/services/google-groups";
 import { STORAGE_DELETION_DUE_QUERY } from "../functions/_lib/services/storage-deletion-outbox";
 import { BADGE_RENDER_DUE_QUERY } from "../functions/_lib/services/registration-badge-regeneration";
@@ -53,12 +53,16 @@ describe("durable external-effect due query plans", () => {
     );
   });
 
-  it("uses branch-specific indexes for email due and expired-lease rows", async () => {
+  it("uses dedicated indexes for email due rows and expired-lease quarantine", async () => {
     expectBoundedDuePlan(
-      await explain(EMAIL_OUTBOX_DUE_QUERY),
-      ["idx_email_outbox_due", "idx_email_outbox_expired_lease"],
+      await explain(EMAIL_OUTBOX_DUE_QUERY, [new Date().toISOString(), 20]),
+      ["idx_email_outbox_due"],
       "email_outbox",
     );
+    const now = new Date().toISOString();
+    const expiredPlan = await explain(EMAIL_OUTBOX_EXPIRED_LEASE_QUERY, [now, now, 20, now]);
+    expect(expiredPlan).toContain("idx_email_outbox_expired_lease");
+    expect(expiredPlan).not.toContain("USE TEMP B-TREE FOR ORDER BY");
   });
 
   it("uses branch-specific indexes for storage deletion due and expired-lease rows", async () => {

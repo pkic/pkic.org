@@ -7,6 +7,8 @@ export const adminEmailOutboxStatusSchema = z.enum([
   "queued",
   "sending",
   "sent",
+  "delivered",
+  "delivery_unknown",
   "failed",
   "retrying",
   "bounced",
@@ -70,3 +72,4 @@ export const adminEmailOutboxResponseSchema = paginatedResponseSchema("outbox", 
 
 export type AdminEmailOutboxRow = z.infer<typeof adminEmailOutboxRowSchema>;
 export type AdminEmailOutboxResponse = z.infer<typeof adminEmailOutboxResponseSchema>;
+export type AdminEmailOutboxStatus = z.infer<typeof adminEmailOutboxStatusSchema>;

@@ -9,6 +9,7 @@ import {
   queueEmail,
   processPendingOutbox,
   processSelectedOutbox,
+  resetFailedOutbox,
 } from "../functions/_lib/email/outbox";
 import {
   createTemplateVersion,
@@ -151,7 +152,7 @@ describe("email outbox batch processing", () => {
     ).toEqual([{ status: "sent" }]);
   });
 
-  it("recovers an expired sending lease but leaves a live lease untouched", async () => {
+  it("quarantines an expired sending lease without replaying it and leaves a live lease untouched", async () => {
     const fetchMock = makeSendgridMock();
     vi.stubGlobal("fetch", fetchMock);
     const [expiredId, liveId] = await queueN(env.DB, eventId, 2);
@@ -170,8 +171,8 @@ describe("email outbox batch processing", () => {
       ).bind(liveId),
     ]);
 
-    expect(await processPendingOutbox(env.DB, env, 10)).toEqual({ processed: 1, failed: 0 });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(await processPendingOutbox(env.DB, env, 10)).toEqual({ processed: 0, failed: 0 });
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(
       await queryAll<{ id: string; status: string; processing_token: string | null }>(
         env.DB,
@@ -180,10 +181,78 @@ describe("email outbox batch processing", () => {
       ),
     ).toEqual(
       [
-        { id: expiredId, status: "sent", processing_token: null },
+        { id: expiredId, status: "delivery_unknown", processing_token: null },
         { id: liveId, status: "sending", processing_token: "current" },
       ].sort((a, b) => a.id.localeCompare(b.id)),
     );
+  });
+
+  it("does not automatically replay a transport-ambiguous SendGrid request", async () => {
+    let sentPayload: unknown;
+    const fetchMock = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+      sentPayload = JSON.parse(String(init.body));
+      return Promise.reject(new Error("connection closed after request write"));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const [outboxId] = await queueN(env.DB, eventId, 1);
+
+    expect(await processPendingOutbox(env.DB, env, 10)).toEqual({ processed: 1, failed: 1 });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const sentCustomArgs = (
+      sentPayload as { personalizations: Array<{ custom_args: { outbox_id: string; env_url?: string } }> }
+    ).personalizations[0]?.custom_args;
+    expect(sentCustomArgs?.outbox_id).toBe(outboxId);
+    expect(
+      await queryAll<{ status: string; last_error: string }>(
+        env.DB,
+        "SELECT status, last_error FROM email_outbox WHERE id = ?",
+        [outboxId],
+      ),
+    ).toEqual([
+      {
+        status: "delivery_unknown",
+        last_error: expect.stringContaining("SENDGRID_DELIVERY_UNKNOWN"),
+      },
+    ]);
+
+    expect(await processPendingOutbox(env.DB, env, 10)).toEqual({ processed: 0, failed: 0 });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("persists an accepted request as delivery unknown when finalizing sent state fails", async () => {
+    const fetchMock = makeSendgridMock();
+    vi.stubGlobal("fetch", fetchMock);
+    const [outboxId] = await queueN(env.DB, eventId, 1);
+    await env.DB.prepare(
+      `CREATE TRIGGER reject_sent_finalization
+       BEFORE UPDATE OF status ON email_outbox
+       WHEN NEW.status = 'sent'
+       BEGIN
+         SELECT RAISE(ABORT, 'simulated sent finalization failure');
+       END`,
+    ).run();
+
+    expect(await processPendingOutbox(env.DB, env, 10)).toEqual({ processed: 1, failed: 1 });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(
+      await queryAll<{ status: string; provider_message_id: string | null }>(
+        env.DB,
+        "SELECT status, provider_message_id FROM email_outbox WHERE id = ?",
+        [outboxId],
+      ),
+    ).toEqual([{ status: "delivery_unknown", provider_message_id: "msg-1" }]);
+
+    await env.DB.prepare("DROP TRIGGER reject_sent_finalization").run();
+  });
+
+  it("requires an explicit reset before retrying a delivery-unknown row", async () => {
+    const [outboxId] = await queueN(env.DB, eventId, 1);
+    await env.DB.prepare("UPDATE email_outbox SET status = 'delivery_unknown' WHERE id = ?").bind(outboxId).run();
+
+    expect(await resetFailedOutbox(env.DB, [outboxId])).toEqual({ reset: 1 });
+    expect(
+      await queryAll<{ status: string }>(env.DB, "SELECT status FROM email_outbox WHERE id = ?", [outboxId]),
+    ).toEqual([{ status: "retrying" }]);
   });
 
   it("bulk-enqueues hundreds of emails without consuming one D1 query per recipient", async () => {
@@ -321,7 +390,7 @@ describe("email outbox batch processing", () => {
     // 1 backlog query + 5 shared render resources + 1 message template
     // + two state updates per email. This must grow by two statements per
     // row, not by reloading six templates for every concurrent recipient.
-    expect(budgeted.budget.usedQueries()).toBeLessThanOrEqual(27);
+    expect(budgeted.budget.usedQueries()).toBeLessThanOrEqual(28);
   });
 
   it("processSelectedOutbox only processes the specified ids", async () => {

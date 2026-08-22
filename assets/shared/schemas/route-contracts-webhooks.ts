@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { stripeCheckoutSessionIdSchema, stripeCurrencySchema, stripeEventEnvelopeSchema } from "./stripe";
 import { httpUrlSchema } from "./urls";
+import { databaseIdSchema } from "./identifiers";
 
 export const stripeWebhookEnvelopeSchema = stripeEventEnvelopeSchema;
 
@@ -17,6 +18,7 @@ export const sendgridEventSchema = z
     timestamp: z.number().int().positive().optional(),
     asm_group_id: z.number().int().positive().optional(),
     env_url: httpUrlSchema.optional(),
+    outbox_id: databaseIdSchema.optional(),
   })
   .passthrough();
 

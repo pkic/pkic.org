@@ -45,6 +45,8 @@ const STATUS_COLOR: Record<string, string> = {
   // outbox
   queued: "secondary",
   sending: "info",
+  delivered: "success",
+  delivery_unknown: "warning",
   failed: "danger",
   bounced: "danger",
   retrying: "warning",
@@ -72,6 +74,7 @@ const STATUS_LABEL: Record<string, string> = {
   rsvp_accepted: "RSVP accepted",
   rsvp_declined: "RSVP declined",
   rsvp_tentative: "RSVP tentative",
+  delivery_unknown: "Delivery unknown",
 };
 
 function formatStatus(status: string): string {

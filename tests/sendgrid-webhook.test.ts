@@ -74,6 +74,20 @@ async function seedSentOutbox(providerMessageId: string): Promise<void> {
     .run();
 }
 
+async function seedDeliveryUnknownOutbox(outboxId: string): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO email_outbox
+       (id, template_key, recipient_email, message_type, subject, payload_json, provider, provider_message_id,
+        status, attempts, send_after, last_error, created_at, updated_at, sent_at,
+        processing_token, lease_expires_at)
+     VALUES (?, 'test', 'recipient@example.test', 'transactional', 'Test', '{}', 'sendgrid', NULL,
+             'delivery_unknown', 1, datetime('now'), 'SENDGRID_DELIVERY_UNKNOWN', datetime('now'), datetime('now'), NULL,
+             'stale-token', datetime('now', '-1 minute'))`,
+  )
+    .bind(outboxId)
+    .run();
+}
+
 describe("SendGrid event webhook security", () => {
   beforeEach(async () => {
     await resetDb();
@@ -157,6 +171,54 @@ describe("SendGrid event webhook security", () => {
     ).toEqual([
       { provider_message_id: "message-2", status: "delivered" },
       { provider_message_id: "message-3", status: "sent" },
+    ]);
+  });
+
+  it("reconciles an ambiguous send by its signed stable outbox id", async () => {
+    const outboxId = crypto.randomUUID();
+    await seedDeliveryUnknownOutbox(outboxId);
+    const body = JSON.stringify([
+      {
+        event: "processed",
+        sg_message_id: "accepted-message.filter0",
+        sg_event_id: "accepted-event-1",
+        outbox_id: outboxId,
+        env_url: "https://pkic.org",
+      },
+    ]);
+    const signed = await signedWebhook(body);
+
+    const response = await callWebhook(
+      { ...env, APP_BASE_URL: "https://pkic.org", SENDGRID_WEBHOOK_VERIFICATION_KEY: signed.key } as Env,
+      body,
+      {
+        "X-Twilio-Email-Event-Webhook-Signature": signed.signature,
+        "X-Twilio-Email-Event-Webhook-Timestamp": signed.timestamp,
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(
+      await queryAll<{
+        status: string;
+        provider_message_id: string | null;
+        last_error: string | null;
+        processing_token: string | null;
+        lease_expires_at: string | null;
+      }>(
+        env.DB,
+        `SELECT status, provider_message_id, last_error, processing_token, lease_expires_at
+           FROM email_outbox WHERE id = ?`,
+        [outboxId],
+      ),
+    ).toEqual([
+      {
+        status: "sent",
+        provider_message_id: "accepted-message",
+        last_error: null,
+        processing_token: null,
+        lease_expires_at: null,
+      },
     ]);
   });
 

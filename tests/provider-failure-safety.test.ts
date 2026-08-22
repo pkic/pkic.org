@@ -20,6 +20,7 @@ const sendgridEnv = {
 } as Env;
 
 const sendgridMessage = {
+  outboxId: "provider-failure-test-outbox",
   to: "recipient@example.test",
   subject: "Subject",
   html: "<p>Body</p>",
@@ -70,7 +71,8 @@ describe("bounded provider failure handling", () => {
       operation: "send_email",
       status: null,
     });
-    expect((error as AppError).message).toBe("SendGrid could not be reached");
+    expect((error as AppError).code).toBe("SENDGRID_DELIVERY_UNKNOWN");
+    expect((error as AppError).message).toBe("SendGrid delivery outcome is unknown");
     expect(logOutput(errorLog)).not.toContain(PROVIDER_BODY_SENTINEL);
   });
 

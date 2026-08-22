@@ -3,6 +3,7 @@ import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
 import type { EmailMessageType } from "../../../../assets/shared/schemas/admin-email-templates";
+import type { AdminEmailOutboxStatus } from "../../../../assets/shared/schemas/admin-email-outbox";
 
 export interface OutboxListRow {
   id: string;
@@ -17,7 +18,7 @@ export interface OutboxListRow {
   message_type: EmailMessageType;
   provider: string;
   provider_message_id: string | null;
-  status: "queued" | "sending" | "sent" | "failed" | "retrying" | "bounced";
+  status: AdminEmailOutboxStatus;
   attempts: number;
   send_after: string;
   last_error: string | null;
@@ -51,7 +52,13 @@ export interface AdminEmailOutboxQueryResult {
   nextSendAfter: string | null;
 }
 
-function buildWhereClause(query: { status?: string; messageType?: string; q?: string; dueNow: boolean; now: string }): {
+function buildWhereClause(query: {
+  status?: AdminEmailOutboxStatus;
+  messageType?: string;
+  q?: string;
+  dueNow: boolean;
+  now: string;
+}): {
   where: string;
   bindings: unknown[];
 } {
@@ -89,7 +96,7 @@ function buildWhereClause(query: { status?: string; messageType?: string; q?: st
 export async function queryAdminEmailOutbox(
   db: DatabaseLike,
   query: {
-    status?: string;
+    status?: AdminEmailOutboxStatus;
     messageType?: string;
     dueNow: boolean;
     q?: string;
@@ -110,7 +117,8 @@ export async function queryAdminEmailOutbox(
       createdAt: "o.created_at",
     },
     `CASE o.status
-       WHEN 'failed' THEN 0 WHEN 'retrying' THEN 1 WHEN 'queued' THEN 2 WHEN 'sending' THEN 3 ELSE 4
+       WHEN 'failed' THEN 0 WHEN 'delivery_unknown' THEN 1 WHEN 'retrying' THEN 2
+       WHEN 'queued' THEN 3 WHEN 'sending' THEN 4 ELSE 5
      END ASC, COALESCE(o.sent_at, o.updated_at, o.created_at) DESC`,
     "o.id ASC",
   );

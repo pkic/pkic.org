@@ -1,5 +1,8 @@
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
-import type { AdminEmailOutboxResponse } from "../../../../assets/shared/schemas/admin-email-outbox";
+import type {
+  AdminEmailOutboxResponse,
+  AdminEmailOutboxStatus,
+} from "../../../../assets/shared/schemas/admin-email-outbox";
 import type { DatabaseLike } from "../../types";
 import { buildAdminEmailOutboxRows } from "./preview";
 import { queryAdminEmailOutbox } from "./query";
@@ -7,7 +10,7 @@ import { queryAdminEmailOutbox } from "./query";
 export async function listAdminEmailOutbox(
   db: DatabaseLike,
   query: {
-    status?: string;
+    status?: AdminEmailOutboxStatus;
     messageType?: string;
     dueNow: boolean;
     q?: string;
