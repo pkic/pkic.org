@@ -9,23 +9,9 @@ import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
+import type { AdminFormSummary, AdminFormsListQuery } from "../../../../assets/shared/schemas/admin-forms";
 
-export interface AdminFormSummaryRow {
-  id: string;
-  key: string;
-  scope_type: string;
-  scope_ref: string | null;
-  event_slug: string | null;
-  event_name: string | null;
-  purpose: string;
-  status: string;
-  title: string;
-  description: string | null;
-  created_at: string;
-  updated_at: string;
-  field_count: number;
-  submission_count: number;
-}
+export type AdminFormSummaryRow = AdminFormSummary;
 
 const FORMS_LIST_FROM = `
   FROM forms f
@@ -36,13 +22,7 @@ const FORMS_LIST_FROM = `
 
 export async function listAdminForms(
   db: DatabaseLike,
-  params: {
-    limit: number;
-    offset: number;
-    q?: string;
-    sort?: string;
-    purpose?: string;
-    status?: string;
+  params: AdminFormsListQuery & {
     eventId?: string;
     includeGlobal?: boolean;
   },

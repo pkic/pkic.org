@@ -51,7 +51,10 @@ import type {
   ProposalAccess as CanonicalProposalAccess,
 } from "../../shared/schemas/admin-event-proposals";
 import type { FormFieldDefinition as CanonicalFormFieldDefinition } from "../../shared/schemas/forms";
-import type { AdminFormSubmission as CanonicalAdminFormSubmission } from "../../shared/schemas/admin-forms";
+import type {
+  AdminFormSubmission as CanonicalAdminFormSubmission,
+  AdminFormSummary as CanonicalAdminEventFormSummary,
+} from "../../shared/schemas/admin-forms";
 import type { AdminMemberSummary as CanonicalAdminMemberSummary } from "../../shared/schemas/admin-members";
 import type {
   AdminVoteBallot as CanonicalAdminVoteBallot,
@@ -125,22 +128,7 @@ export interface AdminEventTerm {
   help_text: string | null;
 }
 
-export interface AdminEventFormSummary {
-  id: string;
-  key: string;
-  scope_type: string;
-  scope_ref: string | null;
-  event_slug?: string | null;
-  event_name?: string | null;
-  purpose: string;
-  status: string;
-  title: string;
-  description: string | null;
-  created_at: string;
-  updated_at: string;
-  field_count: number;
-  submission_count: number;
-}
+export type AdminEventFormSummary = CanonicalAdminEventFormSummary;
 
 export type AdminFormDetailField = CanonicalFormFieldDefinition;
 

@@ -3,15 +3,19 @@ import { api } from "../../../api";
 import { toast } from "../../../ui";
 import type { AdminEventFormSummary, AdminFormDetailField } from "../../../types";
 import {
+  FORM_FIELD_TYPES,
+  FORM_PURPOSES,
+  FORM_STATUSES,
+  type FormPurpose,
+  type FormStatus,
+} from "../../../../../shared/schemas/forms";
+import {
   buildFieldValidation,
   FieldConfigEditor,
   type FieldDraft,
   type FieldType,
   type VisualizationConfig,
 } from "./FormFieldConfigEditor";
-
-const PURPOSES = ["event_registration", "proposal_submission", "survey", "feedback", "application"];
-const FIELD_TYPES = ["text", "textarea", "select", "multi_select", "boolean", "number", "date", "email", "url"];
 
 export interface AdminFormDetail {
   form: AdminEventFormSummary;
@@ -20,10 +24,10 @@ export interface AdminFormDetail {
 
 interface FormDraft {
   key: string;
-  purpose: string;
+  purpose: FormPurpose;
   title: string;
   description: string;
-  status: string;
+  status: FormStatus;
   fields: FieldDraft[];
 }
 
@@ -278,10 +282,10 @@ export function FormEditor({
           <select
             class="form-select form-select-sm"
             value={draft.purpose}
-            onChange={(e) => setDraft({ ...draft, purpose: (e.target as HTMLSelectElement).value })}
+            onChange={(e) => setDraft({ ...draft, purpose: (e.target as HTMLSelectElement).value as FormPurpose })}
             disabled={mode === "edit"}
           >
-            {PURPOSES.map((purpose) => (
+            {FORM_PURPOSES.map((purpose) => (
               <option key={purpose} value={purpose}>
                 {purpose.replace(/_/g, " ")}
               </option>
@@ -302,11 +306,13 @@ export function FormEditor({
           <select
             class="form-select form-select-sm"
             value={draft.status}
-            onChange={(e) => setDraft({ ...draft, status: (e.target as HTMLSelectElement).value })}
+            onChange={(e) => setDraft({ ...draft, status: (e.target as HTMLSelectElement).value as FormStatus })}
           >
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-            <option value="archived">Archived</option>
+            {FORM_STATUSES.map((status) => (
+              <option key={status} value={status}>
+                {status[0].toUpperCase() + status.slice(1)}
+              </option>
+            ))}
           </select>
         </div>
       </div>
@@ -360,7 +366,7 @@ export function FormEditor({
                 value={field.fieldType}
                 onChange={(e) => updateField(index, { fieldType: (e.target as HTMLSelectElement).value as FieldType })}
               >
-                {FIELD_TYPES.map((type) => (
+                {FORM_FIELD_TYPES.map((type) => (
                   <option key={type} value={type}>
                     {type.replace(/_/g, " ")}
                   </option>

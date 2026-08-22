@@ -9,6 +9,7 @@ import {
 import { trimmedString } from "./api-common";
 import { addDuplicateStringIssues } from "./refinements";
 import { formFieldRulesSchema } from "./form-field-rules";
+import { formFieldTypeSchema, formPurposeSchema, formStatusSchema } from "./forms";
 
 export const FORM_SUBMISSIONS_SORT_COLUMNS = ["submitter", "status", "submitted_at"] as const;
 export const formSubmissionsSortValueSchema = sortColumnSchema(FORM_SUBMISSIONS_SORT_COLUMNS);
@@ -21,7 +22,7 @@ export const adminFormFieldInputSchema = z.object({
     .max(80)
     .regex(/^[a-z][a-z0-9_]*$/),
   label: trimmedString(1, 200),
-  fieldType: z.enum(["text", "textarea", "select", "multi_select", "boolean", "number", "date", "email", "url"]),
+  fieldType: formFieldTypeSchema,
   required: z.boolean().default(false),
   sortOrder: z.number().int().min(0).max(9999).default(0),
   options: z.array(z.string().trim().min(1).max(500)).max(200).optional(),
@@ -44,10 +45,10 @@ export const adminFormCreateSchema = z
       .min(1)
       .max(120)
       .regex(/^[a-z][a-z0-9-]*$/),
-    purpose: z.enum(["event_registration", "proposal_submission", "survey", "feedback", "application"]),
+    purpose: formPurposeSchema,
     title: trimmedString(2, 200),
     description: trimmedString(2, 1000).optional(),
-    status: z.enum(["active", "inactive", "archived"]).default("active"),
+    status: formStatusSchema.default("active"),
     fields: z.array(adminFormFieldInputSchema).max(50).default([]),
   })
   .superRefine(addDuplicateFormFieldIssues);
@@ -56,7 +57,7 @@ export const adminFormUpdateSchema = z
   .object({
     title: trimmedString(2, 200).optional(),
     description: trimmedString(2, 1000).nullable().optional(),
-    status: z.enum(["active", "inactive", "archived"]).optional(),
+    status: formStatusSchema.optional(),
     fields: z.array(adminFormFieldInputSchema).max(50).optional(),
   })
   .superRefine(addDuplicateFormFieldIssues);
@@ -75,9 +76,10 @@ export const ADMIN_FORMS_SORT_COLUMNS = [
 ] as const;
 
 export const adminFormsListQuerySchema = listQuerySchema(ADMIN_FORMS_SORT_COLUMNS, { limit: 200 }).extend({
-  purpose: z.enum(["event_registration", "proposal_submission", "survey", "feedback", "application"]).optional(),
-  status: z.enum(["active", "inactive", "archived"]).optional(),
+  purpose: formPurposeSchema.optional(),
+  status: formStatusSchema.optional(),
 });
+export type AdminFormsListQuery = z.infer<typeof adminFormsListQuerySchema>;
 
 export const adminFormSummarySchema = z.object({
   id: z.string(),
@@ -86,8 +88,8 @@ export const adminFormSummarySchema = z.object({
   scope_ref: z.string().nullable(),
   event_slug: z.string().nullable(),
   event_name: z.string().nullable(),
-  purpose: z.string(),
-  status: z.string(),
+  purpose: formPurposeSchema,
+  status: formStatusSchema,
   title: z.string(),
   description: z.string().nullable(),
   created_at: z.string(),
@@ -143,7 +145,12 @@ export const adminFormSubmissionStatSchema = z.object({
   entries: z.array(adminFormSubmissionStatEntrySchema),
 });
 
-const adminFormReferenceSchema = z.object({ id: z.string(), key: z.string(), title: z.string(), purpose: z.string() });
+const adminFormReferenceSchema = z.object({
+  id: z.string(),
+  key: z.string(),
+  title: z.string(),
+  purpose: formPurposeSchema,
+});
 
 export const adminFormSubmissionsResponseSchema = paginatedResponseSchema(
   "submissions",

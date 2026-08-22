@@ -10,6 +10,7 @@ import { adminEventsListResponseSchema, type AdminEventSummary } from "../../../
 import { adminFormsListResponseSchema, type AdminFormSummary } from "../../../shared/schemas/admin-forms";
 import type { PageInfo } from "../../../shared/schemas/pagination";
 import { workingGroupsListResponseSchema, type AdminWorkingGroupSummary } from "../../../shared/schemas/working-groups";
+import type { EventFormsPurpose, FormStatus } from "../../../shared/schemas/forms";
 import { api } from "../api";
 
 /**
@@ -47,8 +48,8 @@ export function activeAdminWorkingGroupCatalog(): typeof adminWorkingGroupCatalo
 
 export function adminEventFormCatalog(
   eventSlug: string,
-  purpose: "event_registration" | "proposal_submission",
-  status?: "active" | "inactive" | "archived",
+  purpose: EventFormsPurpose,
+  status?: FormStatus,
 ): AdminCatalog<AdminFormSummary, z.infer<typeof adminFormsListResponseSchema>> {
   return {
     endpoint: `/api/v1/admin/events/${encodeURIComponent(eventSlug)}/forms`,

@@ -6,13 +6,22 @@ import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { nowIso } from "../functions/_lib/utils/time";
 import { createManagedForm, updateManagedForm } from "../functions/_lib/services/forms";
+import { adminFormCreateSchema, adminFormsListQuerySchema } from "../assets/shared/schemas/admin-forms";
+import {
+  FORM_FIELD_TYPES,
+  FORM_PURPOSES,
+  FORM_STATUSES,
+  type FormFieldType,
+  type FormPurpose,
+  type FormStatus,
+} from "../assets/shared/schemas/forms";
 
 let ADMIN_TOKEN = "forms-admin-token";
 
 type FormFieldSeed = {
   key: string;
   label: string;
-  fieldType: "text" | "textarea" | "select" | "multi_select" | "boolean" | "number" | "date" | "email" | "url";
+  fieldType: FormFieldType;
   required?: boolean;
   sortOrder?: number;
   options?: string[];
@@ -53,10 +62,10 @@ async function insertForm(opts: {
   key: string;
   scopeType: "event" | "global";
   scopeRef: string | null;
-  purpose: "event_registration" | "proposal_submission" | "survey" | "feedback" | "application";
+  purpose: FormPurpose;
   title: string;
   description?: string | null;
-  status?: "active" | "inactive" | "archived";
+  status?: FormStatus;
   fields: FormFieldSeed[];
   submission?: {
     status?: "submitted" | "draft" | "withdrawn";
@@ -140,6 +149,36 @@ async function insertForm(opts: {
 describe("admin forms endpoints", () => {
   beforeEach(async () => {
     await resetDb();
+  });
+
+  it("uses one canonical form vocabulary for create and list contracts", () => {
+    for (const purpose of FORM_PURPOSES) {
+      expect(
+        adminFormCreateSchema.safeParse({
+          key: `form-${purpose.replace(/_/g, "-")}`,
+          purpose,
+          title: "Canonical form",
+        }).success,
+      ).toBe(true);
+      expect(adminFormsListQuerySchema.safeParse({ purpose }).success).toBe(true);
+    }
+    for (const status of FORM_STATUSES) {
+      expect(adminFormsListQuerySchema.safeParse({ status }).success).toBe(true);
+    }
+    for (const fieldType of FORM_FIELD_TYPES) {
+      expect(
+        adminFormCreateSchema.safeParse({
+          key: `form-${fieldType.replace(/_/g, "-")}`,
+          purpose: "survey",
+          title: "Canonical field",
+          fields: [{ key: "field", label: "Field", fieldType }],
+        }).success,
+      ).toBe(true);
+    }
+    expect(adminFormCreateSchema.safeParse({ key: "invalid", purpose: "future", title: "Invalid" }).success).toBe(
+      false,
+    );
+    expect(adminFormsListQuerySchema.safeParse({ status: "deleted" }).success).toBe(false);
   });
 
   it("lists event-scoped and global forms through the router", async () => {
