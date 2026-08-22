@@ -371,7 +371,11 @@ describe("Registration Email Change", () => {
         signingSecret,
       });
 
-      await updateRegistrationById(env.DB, { registrationId: other.registration.id, action: "cancel" }, "admin");
+      await updateRegistrationById(
+        env.DB,
+        { eventId: otherEventId, registrationId: other.registration.id, action: "cancel" },
+        "admin",
+      );
       expect(
         await first<{ pending_email: string | null; pending_email_change_registration_id: string | null }>(
           env.DB,
@@ -383,7 +387,11 @@ describe("Registration Email Change", () => {
         pending_email_change_registration_id: owner.registration.id,
       });
 
-      await updateRegistrationById(env.DB, { registrationId: owner.registration.id, action: "cancel" }, "admin");
+      await updateRegistrationById(
+        env.DB,
+        { eventId: ownerEventId, registrationId: owner.registration.id, action: "cancel" },
+        "admin",
+      );
       expect(
         await first<{ pending_email: string | null; pending_email_change_registration_id: string | null }>(
           env.DB,

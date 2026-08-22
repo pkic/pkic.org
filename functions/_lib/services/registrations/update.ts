@@ -2,7 +2,7 @@ import type { DatabaseLike } from "../../types";
 import type { ChangeRegistrationEmailParams } from "./change-email";
 import { prepareRegistrationEmailChange } from "./change-email";
 import { dayWaitlistOfferUnavailableError, isDayWaitlistOfferUnavailable, withDayCapacityRetry } from "./day-waitlist";
-import { getRegistrationById, getRegistrationByManageToken } from "./queries";
+import { getRegistrationByIdForEvent, getRegistrationByManageToken } from "./queries";
 import { prepareRegistrationStatusEmail, type RegistrationStatusEmailParams } from "./status-notifications";
 import type { RegistrationRecord } from "./types";
 import { buildRegistrationUpdate, type RegistrationUpdatePayload } from "./update-plan";
@@ -127,13 +127,13 @@ export async function updateRegistrationByManageTokenWithEmailChange(
 
 export async function updateRegistrationById(
   db: DatabaseLike,
-  payload: { registrationId: string } & RegistrationUpdatePayload,
+  payload: { eventId: string; registrationId: string } & RegistrationUpdatePayload,
   changedBy: string,
 ): Promise<RegistrationRecord> {
   return executeRegistrationUpdate(
     db,
     payload,
-    () => getRegistrationById(db, payload.registrationId),
+    () => getRegistrationByIdForEvent(db, payload.eventId, payload.registrationId),
     changedBy,
     async (built) => {
       await db.batch(built.statements);
@@ -144,13 +144,13 @@ export async function updateRegistrationById(
 
 export async function updateRegistrationByIdWithNotification(
   db: DatabaseLike,
-  payload: { registrationId: string; notification: UpdateNotification } & RegistrationUpdatePayload,
+  payload: { eventId: string; registrationId: string; notification: UpdateNotification } & RegistrationUpdatePayload,
   changedBy: string,
 ): Promise<{ registration: RegistrationRecord; outboxId: string }> {
   return executeRegistrationUpdate(
     db,
     payload,
-    () => getRegistrationById(db, payload.registrationId),
+    () => getRegistrationByIdForEvent(db, payload.eventId, payload.registrationId),
     changedBy,
     (built) => commitUpdateWithNotification(db, built, payload),
   );
@@ -158,13 +158,13 @@ export async function updateRegistrationByIdWithNotification(
 
 export async function updateRegistrationByIdWithEmailChange(
   db: DatabaseLike,
-  payload: { registrationId: string; emailChange: UpdateEmailChange } & RegistrationUpdatePayload,
+  payload: { eventId: string; registrationId: string; emailChange: UpdateEmailChange } & RegistrationUpdatePayload,
   changedBy: string,
 ): Promise<{ registration: RegistrationRecord; outboxId: string | null }> {
   return executeRegistrationUpdate(
     db,
     payload,
-    () => getRegistrationById(db, payload.registrationId),
+    () => getRegistrationByIdForEvent(db, payload.eventId, payload.registrationId),
     changedBy,
     (built) => commitUpdateWithEmailChange(db, built, payload),
   );

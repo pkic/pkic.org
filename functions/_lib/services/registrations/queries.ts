@@ -53,6 +53,25 @@ export async function getRegistrationById(db: DatabaseLike, registrationId: stri
   return registration;
 }
 
+/** Loads a registration only inside the event boundary authorized by the caller. */
+export async function getRegistrationByIdForEvent(
+  db: DatabaseLike,
+  eventId: string,
+  registrationId: string,
+): Promise<RegistrationRecord> {
+  const registration = await first<RegistrationRecord>(
+    db,
+    `SELECT ${REGISTRATION_COLUMNS}
+       FROM registrations
+      WHERE id = ? AND event_id = ?`,
+    [registrationId, eventId],
+  );
+  if (!registration) {
+    throw new AppError(404, "REGISTRATION_NOT_FOUND", "Registration not found for this event");
+  }
+  return registration;
+}
+
 export async function listRegistrationsForEvent(db: DatabaseLike, eventId: string): Promise<RegistrationRecord[]> {
   return all<RegistrationRecord>(
     db,

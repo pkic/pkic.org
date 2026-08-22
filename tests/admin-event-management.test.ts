@@ -439,7 +439,7 @@ describe("admin event management endpoints", () => {
     // Cancel via the service (simulates attendee or earlier admin action)
     const cancelled = await updateRegistrationById(
       env.DB,
-      { registrationId: created.registration.id, action: "cancel", waitlistClaimWindowHours: 24 },
+      { eventId: event.id, registrationId: created.registration.id, action: "cancel", waitlistClaimWindowHours: 24 },
       "admin:test",
     );
     expect(cancelled.status).toBe("cancelled");
@@ -457,7 +457,7 @@ describe("admin event management endpoints", () => {
     await expect(
       updateRegistrationById(
         env.DB,
-        { registrationId: created.registration.id, action: "cancel", waitlistClaimWindowHours: 24 },
+        { eventId: event.id, registrationId: created.registration.id, action: "cancel", waitlistClaimWindowHours: 24 },
         "admin:test",
       ),
     ).rejects.toMatchObject({ code: "ALREADY_CANCELLED" });
@@ -483,6 +483,60 @@ describe("admin event management endpoints", () => {
       )
     )[0];
     expect(row.cancelled_at).toBeNull();
+  });
+
+  it("does not let an event route mutate a registration owned by another event", async () => {
+    await setupAdmin();
+    const createEventResponse = await callAdmin("/api/v1/admin/events", {
+      method: "POST",
+      body: JSON.stringify({ slug: "other-event", name: "Other Event", timezone: "UTC" }),
+    });
+    expect(createEventResponse.status).toBe(201);
+
+    const otherEvent = await getEventBySlug(env.DB, "other-event");
+    const userId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, created_at, updated_at)
+       VALUES (?, 'cross-event@example.test', 'cross-event@example.test', datetime('now'), datetime('now'))`,
+    )
+      .bind(userId)
+      .run();
+    const created = await createRegistration(env.DB, {
+      event: otherEvent,
+      userId,
+      attendanceType: "in_person",
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+
+    const wrongEventPath = `/api/v1/admin/events/pqc-2026/registrations/${created.registration.id}`;
+    const ordinaryUpdate = await callAdmin(wrongEventPath, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "update", attendanceType: "virtual" }),
+    });
+    expect(ordinaryUpdate.status).toBe(404);
+
+    const emailUpdate = await callAdmin(wrongEventPath, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "update", email: "cross-event-new@example.test" }),
+    });
+    expect(emailUpdate.status).toBe(404);
+
+    expect(
+      await queryAll<{ attendance_type: string; status: string }>(
+        env.DB,
+        "SELECT attendance_type, status FROM registrations WHERE id = ?",
+        created.registration.id,
+      ),
+    ).toEqual([{ attendance_type: "in_person", status: "pending_email_confirmation" }]);
+    expect(
+      await queryAll<{ email: string; pending_email: string | null }>(
+        env.DB,
+        "SELECT email, pending_email FROM users WHERE id = ?",
+        userId,
+      ),
+    ).toEqual([{ email: "cross-event@example.test", pending_email: null }]);
   });
 
   it("rejects an admin scalar-only attendance change when day attendance is canonical", async () => {
@@ -805,6 +859,7 @@ describe("admin event management endpoints", () => {
     await updateRegistrationById(
       env.DB,
       {
+        eventId: event.id,
         registrationId: created.registration.id,
         action: "update",
         attendanceType: "virtual",
@@ -912,6 +967,7 @@ describe("admin event management endpoints", () => {
     await updateRegistrationById(
       env.DB,
       {
+        eventId: event.id,
         registrationId: later.registration.id,
         action: "update",
         attendanceType: "virtual",
@@ -923,6 +979,7 @@ describe("admin event management endpoints", () => {
     await updateRegistrationById(
       env.DB,
       {
+        eventId: event.id,
         registrationId: created.registration.id,
         action: "update",
         attendanceType: "on_demand",

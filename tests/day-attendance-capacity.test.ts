@@ -731,6 +731,7 @@ describe("day attendance capacity", () => {
     await updateRegistrationById(
       env.DB,
       {
+        eventId,
         registrationId: tueHolder.registration.id,
         action: "cancel",
         waitlistClaimWindowHours: 24,
@@ -901,6 +902,7 @@ describe("day attendance capacity", () => {
     await updateRegistrationById(
       env.DB,
       {
+        eventId: event.id,
         registrationId: holder.registration.id,
         action: "cancel",
         waitlistClaimWindowHours: 24,
@@ -919,6 +921,7 @@ describe("day attendance capacity", () => {
     await updateRegistrationById(
       env.DB,
       {
+        eventId: event.id,
         registrationId: confirmedWaiting.registration.id,
         action: "update",
         attendanceType: "in_person",

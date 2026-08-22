@@ -780,6 +780,7 @@ describe("registration workflows", () => {
     await updateRegistrationById(
       env.DB,
       {
+        eventId: event.id,
         registrationId: holder.registration.id,
         action: "cancel",
         waitlistClaimWindowHours: 24,
@@ -924,6 +925,7 @@ describe("registration workflows", () => {
         updateRegistrationById(
           env.DB,
           {
+            eventId,
             registrationId: created.registration.id,
             action: "cancel",
             waitlistClaimWindowHours: 24,
@@ -970,6 +972,7 @@ describe("registration workflows", () => {
     const updated = await updateRegistrationById(
       env.DB,
       {
+        eventId: event.id,
         registrationId: created.registration.id,
         action: "report_unauthorized",
         waitlistClaimWindowHours: 24,
