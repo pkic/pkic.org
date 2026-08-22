@@ -162,7 +162,9 @@ export const adminProposalReviewUpsertRouteSchema = {
 
 export const adminProposalReviewPatchRouteSchema = {
   tags: ["Admin proposal reviews"],
-  summary: "Update a proposal review",
+  summary: "Update my proposal review",
+  description:
+    "Updates only the authenticated reviewer's own review. Proposal managers and global administrators cannot edit another reviewer's review through this endpoint.",
   request: {
     params: proposalReviewIdParamsSchema,
     body: {

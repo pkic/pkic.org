@@ -61,7 +61,7 @@ export const PREVIEW_DEFAULTS: Record<string, unknown> = {
   ],
   // Custom answers
   customAnswerRows: [
-    { label: "Dietary requirements", displayValue: "Vegetarian" },
+    { label: "Session interests", displayValue: "Web PKI" },
     { label: "T-shirt size", displayValue: "M" },
   ],
   // Speaker / proposal

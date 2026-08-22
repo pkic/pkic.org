@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import type { AuthAdmin, DatabaseLike } from "../functions/_lib/types";
 import { env } from "cloudflare:workers";
-import { upsertProposalReview } from "../functions/_lib/services/proposal-reviews";
+import { updateProposalReview, upsertProposalReview } from "../functions/_lib/services/proposal-reviews";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import app from "../functions/router";
@@ -334,6 +334,89 @@ describe("proposal review and finalize", () => {
       [review.id],
     );
     expect(stored).toEqual({ reviewer_user_id: committeeOwnerId, score: 10 });
+  });
+
+  it("derives POST review ownership from authentication instead of caller-supplied fields", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, admin1Id, admin2Id } = await seedProposal(env.DB, eventId);
+    const ownerToken = await createAdminSession(env.DB, admin1Id, "token-review-owner-post-binding");
+    const otherReviewerToken = await createAdminSession(env.DB, admin2Id, "token-review-other-post-binding");
+
+    const ownerResponse = await callProposalReview(ownerToken, proposalId, "", {
+      method: "POST",
+      body: JSON.stringify({ recommendation: "accept", score: 9 }),
+    });
+    expect(ownerResponse.status).toBe(200);
+
+    const otherResponse = await callProposalReview(otherReviewerToken, proposalId, "", {
+      method: "POST",
+      body: JSON.stringify({
+        reviewer_user_id: admin1Id,
+        recommendation: "reject",
+        score: 1,
+      }),
+    });
+    expect(otherResponse.status).toBe(200);
+
+    const stored = await queryAll<{ reviewer_user_id: string; recommendation: string; score: number }>(
+      env.DB,
+      `SELECT reviewer_user_id, recommendation, score
+       FROM proposal_reviews
+       WHERE proposal_id = ?
+       ORDER BY reviewer_user_id ASC`,
+      [proposalId],
+    );
+    expect(stored).toEqual(
+      [
+        { reviewer_user_id: admin1Id, recommendation: "accept", score: 9 },
+        { reviewer_user_id: admin2Id, recommendation: "reject", score: 1 },
+      ].sort((left, right) => left.reviewer_user_id.localeCompare(right.reviewer_user_id)),
+    );
+  });
+
+  it("keeps the D1 update owner-bound when ownership changes after the service read", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, admin1Id, admin2Id } = await seedProposal(env.DB, eventId);
+    const actor: AuthAdmin = { id: admin1Id, email: "admin@pkic.org", role: "admin" };
+    await upsertProposalReview(env.DB, actor, proposalId, { recommendation: "accept", score: 9 });
+    const [review] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM proposal_reviews WHERE proposal_id = ? AND reviewer_user_id = ?",
+      [proposalId, admin1Id],
+    );
+
+    const baseDb: DatabaseLike = env.DB;
+    let ownershipChanged = false;
+    const racingDb: DatabaseLike = {
+      prepare: (query) => baseDb.prepare(query),
+      async batch(statements) {
+        if (!ownershipChanged) {
+          ownershipChanged = true;
+          await baseDb
+            .prepare("UPDATE proposal_reviews SET reviewer_user_id = ? WHERE id = ?")
+            .bind(admin2Id, review.id)
+            .run();
+        }
+        return baseDb.batch(statements);
+      },
+    };
+
+    await expect(updateProposalReview(racingDb, actor, proposalId, review.id, { score: 10 })).rejects.toMatchObject({
+      status: 409,
+      code: "PROPOSAL_REVIEW_CONFLICT",
+    });
+
+    const [stored] = await queryAll<{ reviewer_user_id: string; score: number }>(
+      env.DB,
+      "SELECT reviewer_user_id, score FROM proposal_reviews WHERE id = ?",
+      [review.id],
+    );
+    expect(stored).toEqual({ reviewer_user_id: admin2Id, score: 9 });
+    const [auditCount] = await queryAll<{ total: number }>(
+      env.DB,
+      "SELECT COUNT(*) AS total FROM audit_log WHERE action = 'proposal_review_upserted'",
+    );
+    expect(Number(auditCount.total)).toBe(1);
   });
 
   it("rejects review changes after a proposal decision", async () => {
