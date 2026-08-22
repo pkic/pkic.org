@@ -16,7 +16,7 @@ import {
   sortColumnSchema,
   sortColumnSchemaWithDefault,
 } from "./pagination";
-import { dayDateSchema, inviteeSchema } from "./registration";
+import { attendanceTypeSchema, dayDateSchema, inviteeSchema } from "./registration";
 import { sourceTypeSchema } from "./source";
 import { addDuplicateStringIssues } from "./refinements";
 import { proposalRecommendationSchema } from "./proposal-reviews";
@@ -425,7 +425,7 @@ export type AdminManageDayAttendanceInput = z.infer<typeof adminManageDayAttenda
 const campaignFilterSchema = z.object({
   audience: z.enum(["attendees", "speakers"]),
   attendeeStatus: adminEventRegistrationStatusFilterSchema.optional(),
-  attendanceType: z.enum(["all", "in_person", "virtual", "on_demand"]).optional(),
+  attendanceType: z.union([z.literal("all"), attendanceTypeSchema]).optional(),
   dayDate: z.string().trim().max(20).optional(),
   dayWaitlistStatus: z.enum(["all", "active", "waiting", "offered", "accepted", "none"]).optional(),
   speakerStatus: z.enum(["all", "confirmed", "invited", "pending"]).optional(),

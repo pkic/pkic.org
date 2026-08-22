@@ -1,4 +1,5 @@
 import type { FormField } from "../types";
+import type { AttendanceType } from "../../../shared/schemas/registration";
 import {
   isFormFieldVisible,
   parseFormFieldOptions,
@@ -18,7 +19,7 @@ export function isFieldVisible(
   rules: FieldRules,
   context: {
     dayAttendance: Array<{ attendanceType: string }>;
-    eventAttendanceType?: "in_person" | "virtual" | "on_demand";
+    eventAttendanceType?: AttendanceType;
   },
 ): boolean {
   return isFormFieldVisible(rules, {

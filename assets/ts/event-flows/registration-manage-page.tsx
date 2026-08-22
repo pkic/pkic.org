@@ -13,7 +13,7 @@ import { renderSharePanel, refreshSharePanelBadge } from "../shared/widgets/shar
 import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
 import { bootstrap, setStatus } from "./boot";
 import { wireHeadshotSection } from "./registration-manage-headshot";
-import { registrationManageSchema } from "../../shared/schemas/registration";
+import { registrationManageSchema, type AttendanceType } from "../../shared/schemas/registration";
 import { buildManageLinkRecoveryMessage, showPostAction, showResendManageLinkForm } from "./registration-manage-panels";
 import { setField, deriveEventAttendanceType, findSubmitButton } from "../shared/form/helpers";
 import {
@@ -427,9 +427,7 @@ async function main(): Promise<void> {
           registrationManageSchema.parse({
             action: "update",
             attendanceType:
-              dayAttendancePayload.length === 0
-                ? (registration.attendance_type as "in_person" | "virtual" | "on_demand")
-                : undefined,
+              dayAttendancePayload.length === 0 ? (registration.attendance_type as AttendanceType) : undefined,
             dayAttendance: dayAttendancePayload,
             customAnswers: customFieldsRendered ? readCustomFieldValues(form) : undefined,
             email: emailIsChanged ? emailValue : undefined,

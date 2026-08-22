@@ -3,6 +3,7 @@ import { AppError } from "../errors";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import type { DatabaseLike, StatementLike } from "../types";
+import type { AttendanceType } from "../../../assets/shared/schemas/registration";
 
 // Open-ended: any string that matches a configured attendance option value.
 export type DayAttendanceType = string;
@@ -138,9 +139,7 @@ function normalizeSelections(selections?: DayAttendanceSelection[]): DayAttendan
   return normalized;
 }
 
-export function deriveEventAttendanceType(
-  selections?: DayAttendanceSelection[],
-): "in_person" | "virtual" | "on_demand" | null {
+export function deriveEventAttendanceType(selections?: DayAttendanceSelection[]): AttendanceType | null {
   if (!selections || selections.length === 0) {
     return null;
   }

@@ -1,6 +1,7 @@
 import { first } from "../db/queries";
 import { AppError } from "../errors";
 import type { DatabaseLike, StatementLike } from "../types";
+import type { AttendanceType } from "../../../assets/shared/schemas/registration";
 import { prepareAuditLog } from "./audit";
 import { prepareConsentStatements } from "./consent";
 import { prepareAcceptInviteStatements, prepareRevokeDuplicateInvitesStatement, type InviteRecord } from "./invites";
@@ -28,7 +29,7 @@ export async function prepareRegistrationSubmission(
   payload: {
     eventId: string;
     user: FindOrCreateUserPayload;
-    attendanceType: "in_person" | "virtual" | "on_demand";
+    attendanceType: AttendanceType;
     dayAttendance?: DayAttendanceSelection[];
     sourceType: string;
     sourceRef?: string | null;

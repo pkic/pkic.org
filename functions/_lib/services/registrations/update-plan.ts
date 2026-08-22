@@ -21,10 +21,11 @@ import {
 } from "./day-waitlist";
 import { prepareUpsertAttendeeParticipantStatement } from "./participant-registration";
 import type { RegistrationRecord } from "./types";
+import type { AttendanceType } from "../../../../assets/shared/schemas/registration";
 
 export interface RegistrationUpdatePayload {
   action: "update" | "cancel" | "report_unauthorized";
-  attendanceType?: "in_person" | "virtual" | "on_demand";
+  attendanceType?: AttendanceType;
   dayAttendance?: DayAttendanceSelection[];
   /** Offered day seats are accepted only when the caller explicitly names them. */
   claimDayWaitlistOffers?: string[];

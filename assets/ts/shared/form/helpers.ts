@@ -1,3 +1,5 @@
+import type { AttendanceType } from "../../../shared/schemas/registration";
+
 /**
  * Common form-field and UI utilities shared across event-flow pages.
  */
@@ -60,9 +62,7 @@ export function setField(form: HTMLFormElement, name: string, value: string | nu
  * Derives a high-level attendance type from per-day attendance selections.
  * Used by both registration and registration-manage flows.
  */
-export function deriveEventAttendanceType(
-  values: Array<{ attendanceType: string }>,
-): "in_person" | "virtual" | "on_demand" | undefined {
+export function deriveEventAttendanceType(values: Array<{ attendanceType: string }>): AttendanceType | undefined {
   if (values.some((v) => v.attendanceType === "in_person")) return "in_person";
   if (values.some((v) => v.attendanceType === "virtual")) return "virtual";
   if (values.length > 0) return "on_demand";
