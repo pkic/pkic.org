@@ -34,6 +34,11 @@ import {
   removeAdminProposalSpeaker,
   removeProposalSpeakerByProposer,
 } from "../functions/_lib/services/proposal-speaker-removal";
+import {
+  getProposerManagedSpeakerContext,
+  updateProposalSpeakerByProposer,
+} from "../functions/_lib/services/proposer-speaker-profile";
+import { replaceProposalSpeakerHeadshot } from "../functions/_lib/services/proposal-speaker-headshot";
 import type { DatabaseLike } from "../functions/_lib/types";
 import {
   inviteSpeakerAndSubmitCapacityProposal,
@@ -81,6 +86,10 @@ class FakeUploadsBucket {
 
   async delete(key: string): Promise<void> {
     this.objects.delete(key);
+  }
+
+  keys(): string[] {
+    return [...this.objects.keys()];
   }
 }
 
@@ -758,6 +767,57 @@ describe("speaker self-management endpoints", () => {
     ).resolves.toHaveLength(0);
   });
 
+  it("rolls back speaker removal when its proposal headshot snapshot changes", async () => {
+    await setupWorkflow();
+    const { proposalId, proposalManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const originalKey = `proposal-headshots/${proposalId}/${coSpeakerUserId}/original.jpg`;
+    const replacementKey = `proposal-headshots/${proposalId}/${coSpeakerUserId}/replacement.jpg`;
+    await env.DB.prepare(
+      `UPDATE proposal_speakers
+       SET headshot_override_set = 1, headshot_r2_key = ?, headshot_updated_at = '2026-08-22T00:00:00.000Z'
+       WHERE proposal_id = ? AND user_id = ?`,
+    )
+      .bind(originalKey, proposalId, coSpeakerUserId)
+      .run();
+
+    const baseDb: DatabaseLike = env.DB;
+    let raced = false;
+    const racingDb: DatabaseLike = {
+      prepare: (query) => baseDb.prepare(query),
+      async batch(statements) {
+        if (!raced) {
+          raced = true;
+          await baseDb
+            .prepare("UPDATE proposal_speakers SET headshot_r2_key = ? WHERE proposal_id = ? AND user_id = ?")
+            .bind(replacementKey, proposalId, coSpeakerUserId)
+            .run();
+        }
+        return baseDb.batch(statements);
+      },
+    };
+
+    await expect(
+      removeProposalSpeakerByProposer(racingDb, {
+        manageToken: proposalManageToken,
+        signingSecret: env.INTERNAL_SIGNING_SECRET!,
+        userId: coSpeakerUserId,
+      }),
+    ).rejects.toMatchObject({ code: "PROPOSAL_SPEAKER_CONFLICT" });
+    await expect(
+      queryAll<{ headshot_r2_key: string | null }>(
+        env.DB,
+        "SELECT headshot_r2_key FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+        [proposalId, coSpeakerUserId],
+      ),
+    ).resolves.toEqual([{ headshot_r2_key: replacementKey }]);
+    await expect(
+      queryAll(env.DB, "SELECT object_key FROM storage_deletion_outbox WHERE object_key IN (?, ?)", [
+        originalKey,
+        replacementKey,
+      ]),
+    ).resolves.toHaveLength(0);
+  });
+
   it("POST confirm — confirms speaker participation with required consents", async () => {
     await setupWorkflow();
     const { speakerManageToken } = await inviteSpeakerAndSubmitProposal();
@@ -1100,6 +1160,50 @@ describe("speaker self-management endpoints", () => {
     await env.DB.prepare("DROP TRIGGER reject_proposer_speaker_audit").run();
   });
 
+  it("rejects a stale combined proposer profile and role update before capacity side effects", async () => {
+    await setupWorkflow();
+    const { proposalManageToken, coSpeakerUserId, proposalId } = await inviteSpeakerAndSubmitProposal();
+    const context = await getProposerManagedSpeakerContext(
+      env.DB,
+      proposalManageToken,
+      coSpeakerUserId,
+      env.INTERNAL_SIGNING_SECRET!,
+    );
+    const newerOverrides = '{"firstName":"Newer admin value"}';
+    const baseDb: DatabaseLike = env.DB;
+    let raced = false;
+    const racingDb: DatabaseLike = {
+      prepare: (query) => baseDb.prepare(query),
+      async batch(statements) {
+        if (!raced) {
+          raced = true;
+          await baseDb
+            .prepare("UPDATE proposal_speakers SET profile_overrides_json = ? WHERE id = ?")
+            .bind(newerOverrides, context.speaker.id)
+            .run();
+        }
+        return baseDb.batch(statements);
+      },
+    };
+
+    await expect(
+      updateProposalSpeakerByProposer(racingDb, {
+        ...context,
+        patch: { firstName: "Stale proposer value", role: "moderator" },
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
+    await expect(
+      queryAll<{ role: string; profile_overrides_json: string }>(
+        env.DB,
+        "SELECT role, profile_overrides_json FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+        [proposalId, coSpeakerUserId],
+      ),
+    ).resolves.toEqual([{ role: "co_speaker", profile_overrides_json: newerOverrides }]);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'speaker_profile_updated_by_proposer'"),
+    ).resolves.toHaveLength(0);
+  });
+
   it("rolls back a co-speaker user, participant, and email when the invite batch fails", async () => {
     await setupWorkflow();
     const { proposalManageToken, proposalId } = await inviteSpeakerAndSubmitProposal();
@@ -1343,6 +1447,63 @@ describe("speaker self-management endpoints", () => {
         [replacementPayload.r2Key],
       ),
     ).toEqual([{ object_key: replacementPayload.r2Key }]);
+  });
+
+  it("rejects a proposer headshot upload when the proposal closes before commit", async () => {
+    await setupWorkflow();
+    const { proposalManageToken, proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const { proposal, speaker } = await getProposerManagedSpeakerContext(
+      env.DB,
+      proposalManageToken,
+      coSpeakerUserId,
+      env.INTERNAL_SIGNING_SECRET!,
+    );
+    const bucket = new FakeUploadsBucket();
+    const baseDb: DatabaseLike = env.DB;
+    let raced = false;
+    const racingDb: DatabaseLike = {
+      prepare: (query) => baseDb.prepare(query),
+      async batch(statements) {
+        if (!raced) {
+          raced = true;
+          await baseDb
+            .prepare(
+              "UPDATE session_proposals SET status = 'withdrawn', updated_at = '2099-01-01T00:00:00.000Z' WHERE id = ?",
+            )
+            .bind(proposalId)
+            .run();
+        }
+        return baseDb.batch(statements);
+      },
+    };
+
+    await expect(
+      replaceProposalSpeakerHeadshot({
+        db: racingDb,
+        bucket: bucket as unknown as R2Bucket,
+        proposalId,
+        proposalSpeakerId: speaker.id,
+        speakerUserId: speaker.user_id,
+        previousOverrideSet: speaker.headshot_override_set,
+        previousOverrideKey: speaker.headshot_override_r2_key,
+        editableProposalSnapshot: { status: proposal.status, updatedAt: proposal.updated_at },
+        image: { buffer: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]).buffer, contentType: "image/jpeg" },
+        audit: {
+          actorType: "user",
+          actorId: proposal.proposer_user_id,
+          action: "speaker_headshot_uploaded_by_proposer",
+          scope: { type: "proposal", id: proposalId },
+        },
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
+    expect(bucket.keys()).toEqual([]);
+    await expect(
+      queryAll<{ headshot_override_set: number; headshot_r2_key: string | null }>(
+        env.DB,
+        "SELECT headshot_override_set, headshot_r2_key FROM proposal_speakers WHERE id = ?",
+        [speaker.id],
+      ),
+    ).resolves.toEqual([{ headshot_override_set: 0, headshot_r2_key: null }]);
   });
 
   it("speaker manage token uploads and serves a speaker headshot", async () => {

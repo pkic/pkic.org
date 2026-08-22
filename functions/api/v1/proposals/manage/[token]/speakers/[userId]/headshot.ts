@@ -50,6 +50,7 @@ async function onPut(c: AdminContext, params: HeadshotParams): Promise<Response>
     speakerUserId: speaker.user_id,
     previousOverrideSet: speaker.headshot_override_set,
     previousOverrideKey: speaker.headshot_override_r2_key,
+    editableProposalSnapshot: { status: proposal.status, updatedAt: proposal.updated_at },
     image,
     audit: {
       actorType: "user",
@@ -78,6 +79,7 @@ async function onDelete(c: AdminContext, params: HeadshotParams): Promise<Respon
     speakerUserId: speaker.user_id,
     previousOverrideSet: speaker.headshot_override_set,
     previousOverrideKey: speaker.headshot_override_r2_key,
+    editableProposalSnapshot: { status: proposal.status, updatedAt: proposal.updated_at },
     audit: {
       actorType: "user",
       actorId: proposal.proposer_user_id,

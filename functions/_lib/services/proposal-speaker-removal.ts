@@ -282,6 +282,7 @@ async function removeProposalSpeaker(
       .prepare(
         `DELETE FROM proposal_speakers
          WHERE id = ? AND proposal_id = ? AND user_id = ? AND role = ? AND status = ?
+           AND headshot_override_set = ? AND headshot_r2_key IS ?
            AND EXISTS (
              SELECT 1 FROM proposal_speakers roster
              WHERE roster.proposal_id = ? AND roster.id <> ? AND roster.status <> 'declined'
@@ -299,6 +300,8 @@ async function removeProposalSpeaker(
         context.speaker_user_id,
         context.speaker_role,
         context.speaker_status,
+        context.headshot_override_set,
+        context.headshot_override_r2_key,
         context.proposal_id,
         context.speaker_id,
         context.proposal_id,

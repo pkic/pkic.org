@@ -131,6 +131,14 @@ export async function updateProposalSpeakerByProposer(
   );
   const profileChanges = profileOverridesJson !== payload.speaker.profile_overrides_json;
   const roleChanges = payload.patch.role !== undefined && payload.patch.role !== payload.speaker.role;
+  if (roleChanges) {
+    assertProposalSpeakerRoleTransition({
+      currentProposerUserId: payload.proposal.proposer_user_id,
+      speakerUserId: payload.speaker.user_id,
+      nextRole: payload.patch.role!,
+    });
+    details.role = { from: payload.speaker.role, to: payload.patch.role };
+  }
   if (profileChanges && roleChanges) {
     statements.push(
       db
@@ -184,12 +192,24 @@ export async function updateProposalSpeakerByProposer(
         ),
     );
   }
+  if (profileChanges) {
+    // Keep the changes()-based guard immediately after the write it validates.
+    // Later capacity statements can also affect one row and must not mask a
+    // stale profile/role update.
+    statements.push(
+      prepareScopedAuditLogAfterOneChange(
+        db,
+        { type: "proposal", id: payload.proposal.id },
+        "user",
+        payload.proposal.proposer_user_id,
+        "speaker_profile_updated_by_proposer",
+        "proposal_speaker",
+        payload.speaker.id,
+        { proposalId: payload.proposal.id, speakerUserId: payload.speaker.user_id, ...details },
+      ),
+    );
+  }
   if (roleChanges) {
-    assertProposalSpeakerRoleTransition({
-      currentProposerUserId: payload.proposal.proposer_user_id,
-      speakerUserId: payload.speaker.user_id,
-      nextRole: payload.patch.role!,
-    });
     const roleChange = await prepareProposalSpeakerRoleChange(db, {
       proposalId: payload.proposal.id,
       eventId: payload.proposal.event_id,
@@ -202,7 +222,6 @@ export async function updateProposalSpeakerByProposer(
       nextRole: payload.patch.role as ProposalSpeakerRole,
     });
     if (!profileChanges) statements.push(roleChange.updateStatement);
-    details.role = { from: payload.speaker.role, to: payload.patch.role };
     if (!profileChanges) {
       statements.push(
         prepareScopedAuditLogAfterOneChange(
@@ -220,20 +239,6 @@ export async function updateProposalSpeakerByProposer(
     statements.push(...roleChange.capacityStatements);
   }
   if (statements.length === 0) return false;
-  if (profileChanges) {
-    statements.push(
-      prepareScopedAuditLogAfterOneChange(
-        db,
-        { type: "proposal", id: payload.proposal.id },
-        "user",
-        payload.proposal.proposer_user_id,
-        "speaker_profile_updated_by_proposer",
-        "proposal_speaker",
-        payload.speaker.id,
-        { proposalId: payload.proposal.id, speakerUserId: payload.speaker.user_id, ...details },
-      ),
-    );
-  }
   try {
     await db.batch(statements);
   } catch (error) {

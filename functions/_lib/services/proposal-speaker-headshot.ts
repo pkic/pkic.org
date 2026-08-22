@@ -14,7 +14,21 @@ interface ProposalSpeakerHeadshotContext {
   speakerUserId: string;
   previousOverrideSet: number;
   previousOverrideKey: string | null;
+  /** Optional proposer-authorized proposal snapshot; admins may manage closed proposals. */
+  editableProposalSnapshot?: { status: string; updatedAt: string };
   audit: HeadshotAudit;
+}
+
+function editableProposalGuard(input: ProposalSpeakerHeadshotContext): { sql: string; bindings: unknown[] } {
+  if (!input.editableProposalSnapshot) return { sql: "", bindings: [] };
+  return {
+    sql: ` AND EXISTS (
+             SELECT 1 FROM session_proposals sp
+             WHERE sp.id = proposal_speakers.proposal_id
+               AND sp.status = ? AND sp.updated_at = ? AND sp.deleted_at IS NULL
+           )`,
+    bindings: [input.editableProposalSnapshot.status, input.editableProposalSnapshot.updatedAt],
+  };
 }
 
 /** Store a proposal-roster override without mutating the account-wide user. */
@@ -40,13 +54,14 @@ export async function replaceProposalSpeakerHeadshot(
         }),
       prepareCommitStatements: () => {
         const deletion = prepareStorageDeletion(input.db, input.previousOverrideKey, at);
+        const proposalGuard = editableProposalGuard(input);
         return [
           input.db
             .prepare(
               `UPDATE proposal_speakers
                SET headshot_override_set = 1, headshot_r2_key = ?, headshot_updated_at = ?
                WHERE id = ? AND proposal_id = ? AND user_id = ?
-                 AND headshot_override_set = ? AND headshot_r2_key IS ?`,
+                 AND headshot_override_set = ? AND headshot_r2_key IS ?${proposalGuard.sql}`,
             )
             .bind(
               r2Key,
@@ -56,6 +71,7 @@ export async function replaceProposalSpeakerHeadshot(
               input.speakerUserId,
               input.previousOverrideSet,
               input.previousOverrideKey,
+              ...proposalGuard.bindings,
             ),
           prepareAuditLogAfterOneChange(
             input.db,
@@ -84,6 +100,7 @@ export async function replaceProposalSpeakerHeadshot(
 export async function removeProposalSpeakerHeadshot(input: ProposalSpeakerHeadshotContext): Promise<void> {
   const at = nowIso();
   const deletion = prepareStorageDeletion(input.db, input.previousOverrideKey, at);
+  const proposalGuard = editableProposalGuard(input);
   try {
     await input.db.batch([
       input.db
@@ -91,7 +108,7 @@ export async function removeProposalSpeakerHeadshot(input: ProposalSpeakerHeadsh
           `UPDATE proposal_speakers
            SET headshot_override_set = 1, headshot_r2_key = NULL, headshot_updated_at = ?
            WHERE id = ? AND proposal_id = ? AND user_id = ?
-             AND headshot_override_set = ? AND headshot_r2_key IS ?`,
+             AND headshot_override_set = ? AND headshot_r2_key IS ?${proposalGuard.sql}`,
         )
         .bind(
           at,
@@ -100,6 +117,7 @@ export async function removeProposalSpeakerHeadshot(input: ProposalSpeakerHeadsh
           input.speakerUserId,
           input.previousOverrideSet,
           input.previousOverrideKey,
+          ...proposalGuard.bindings,
         ),
       prepareAuditLogAfterOneChange(
         input.db,

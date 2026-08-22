@@ -17,8 +17,12 @@
 import { renderBadgeSvg, renderDonationBadgeSvg, type BadgeRole } from "./og-badge";
 import { first, all } from "../db/queries";
 import { fetchGravatar } from "./gravatar";
-import type { Env } from "../types";
+import type { DatabaseLike, Env } from "../types";
 import { fetchHeroImage, fetchStaticAsset, uint8ToBase64 } from "./og-badge-hero-image";
+import {
+  proposalSpeakerEffectiveHeadshotExpression,
+  proposalSpeakerEffectiveProfileColumns,
+} from "./proposal-speakers";
 
 type BadgeRenderEnv = Pick<Env, "DB" | "SPEAKER_UPLOADS_BUCKET" | "ASSETS" | "ASSETS_PUBLIC" | "IMAGES">;
 type BadgeCacheEnv = Pick<
@@ -123,6 +127,29 @@ interface CodeRow {
   code: string;
 }
 
+/** Load the proposal-scoped public speaker representation used by badge rendering. */
+export async function getProposalSpeakerBadgeRenderData(
+  db: DatabaseLike,
+  proposalId: string,
+  userId: string,
+): Promise<SpeakerRow | null> {
+  return first<SpeakerRow>(
+    db,
+    `SELECT ${proposalSpeakerEffectiveProfileColumns("u", "ps", "", ["firstName", "lastName", "organizationName", "jobTitle"])},
+            ${proposalSpeakerEffectiveHeadshotExpression("u", "ps")} AS headshot_r2_key,
+            e.name AS event_name,
+            e.starts_at, e.ends_at, e.settings_json,
+            COALESCE(ps.role, 'speaker') AS speaker_role
+     FROM session_proposals sp
+     JOIN users u ON u.id = ?
+     JOIN events e ON e.id = sp.event_id
+     LEFT JOIN proposal_speakers ps
+       ON ps.proposal_id = sp.id AND ps.user_id = u.id
+     WHERE sp.id = ? AND sp.deleted_at IS NULL`,
+    [userId, proposalId],
+  );
+}
+
 // ─── Core generation ─────────────────────────────────────────────────────────
 
 const R2_KEY_PREFIX = "og-badges/";
@@ -194,22 +221,7 @@ export async function generateBadgePng(code: string, env: BadgeRenderEnv, origin
     const userId = ref.created_by_user_id;
     if (!userId) return null;
 
-    const row = await first<SpeakerRow>(
-      env.DB,
-      `SELECT u.first_name, u.last_name, u.organization_name, u.job_title,
-              u.headshot_r2_key,
-              e.name    AS event_name,
-              e.starts_at, e.ends_at, e.settings_json,
-              COALESCE(ps.role, 'speaker') AS speaker_role
-       FROM   session_proposals sp
-       JOIN   users  u  ON u.id  = ?
-       JOIN   events e  ON e.id  = sp.event_id
-       LEFT   JOIN proposal_speakers ps
-              ON  ps.proposal_id = sp.id
-              AND ps.user_id     = u.id
-       WHERE  sp.id = ?`,
-      [userId, ref.owner_id],
-    );
+    const row = await getProposalSpeakerBadgeRenderData(env.DB, ref.owner_id, userId);
     if (!row) return null;
 
     const [headshotDataUrl, heroImageDataUrl] = await Promise.all([
