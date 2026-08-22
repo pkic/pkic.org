@@ -104,5 +104,4 @@ We value your feedback! Please share your thoughts via our [attendee survey](htt
 
 A heartfelt thank you to our **sponsors**, **speakers**, and **organizers**. Your support and contributions were instrumental in making this event a success. Together, we are building a more secure and quantum-resilient future.  
 
-{{< sponsors sponsoring="Post-Quantum Cryptography Conference Austin 2025" level="all" height="20" max-width="60" rows=true >}}
-
+{{< sponsors event-slug="pqc-conference-austin-us-2025" sponsoring="Post-Quantum Cryptography Conference Austin 2025" level="all" height="20" max-width="60" rows=true >}}

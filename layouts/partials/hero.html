@@ -131,6 +131,7 @@
       <div class="hero-sponsors-overlay position-absolute bottom-0 start-50 translate-middle-x w-100 d-none d-md-block pb-4 pt-5">
         {{ partial "sponsors/wall-app.html" (dict
           "mode" "strip"
+          "eventSlug" $.Params.sponsoringSlug
           "eventName" $.Params.sponsoring
           "minWeight" $minSponsorLevel
           "label" "Our Diamond & Titanium Sponsors"

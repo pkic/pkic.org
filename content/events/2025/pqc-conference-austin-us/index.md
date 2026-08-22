@@ -975,7 +975,7 @@ This conference was a premier gathering for decision-makers, technical leaders, 
 
 We are immensely grateful to our sponsors:
 
-{{< sponsors-level sponsoring="Post-Quantum Cryptography Conference Austin 2025" level="all" >}}
+{{< sponsors-level event-slug="pqc-conference-austin-us-2025" sponsoring="Post-Quantum Cryptography Conference Austin 2025" level="all" >}}
 
 ## Agenda
 
@@ -983,7 +983,7 @@ The conference featured a balanced program with strategic, informational, and ed
 
 {{< agenda >}}
 
-{{< sponsors sponsoring="Post-Quantum Cryptography Conference Austin 2025" level="Leader" height="20" max-width="60" >}}
+{{< sponsors event-slug="pqc-conference-austin-us-2025" sponsoring="Post-Quantum Cryptography Conference Austin 2025" level="Leader" height="20" max-width="60" >}}
 
 Please note that speakers were not permitted to promote products or services during their presentations. While commercials, workshops, and pitches included commercial information, the primary focus of the conference remained on educational content.
 

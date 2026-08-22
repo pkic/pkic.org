@@ -31,7 +31,7 @@ describe("bounded sponsor display transport", () => {
   it("uses one bounded, canonical-identity request for server-grouped displays", () => {
     const query = new URLSearchParams(
       sponsorQueryForTest({
-        eventSlug: "pqc-conference-amsterdam-nl-2026",
+        eventSlug: "pqc-conference-amsterdam-nl",
         eventName: "legacy name that must not override the slug",
         level: "Gold",
         minWeight: 5,
@@ -40,13 +40,13 @@ describe("bounded sponsor display transport", () => {
     );
     expect(query.get("limit")).toBe("200");
     expect(query.get("offset")).toBe("0");
-    expect(query.get("eventSlug")).toBe("pqc-conference-amsterdam-nl-2026");
+    expect(query.get("eventSlug")).toBe("pqc-conference-amsterdam-nl");
     expect(query.get("eventName")).toBeNull();
     expect(query.get("level")).toBe("Gold");
     expect(query.get("minWeight")).toBe("5");
     expect(query.get("sort")).toBe("-weight");
     expect(
-      new URLSearchParams(sponsorQueryForTest({ eventSlug: "pqc-conference-amsterdam-nl-2026" }, 200)).get("offset"),
+      new URLSearchParams(sponsorQueryForTest({ eventSlug: "pqc-conference-amsterdam-nl" }, 200)).get("offset"),
     ).toBe("200");
   });
 
