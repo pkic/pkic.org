@@ -7,7 +7,7 @@ import { UserPicker, type PickedUser } from "./UserPicker";
 import { LeadershipPositions } from "./LeadershipPositions";
 import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
 import { workingGroupsListResponseSchema } from "../../../../shared/schemas/working-groups";
-import { SYSTEM_ROLE_IDS } from "../../../../shared/schemas/access-control";
+import { roleAssignmentsListResponseSchema, SYSTEM_ROLE_IDS } from "../../../../shared/schemas/access-control";
 
 /**
  * "Create a new tab under the Access Control for chairs to set the chairs
@@ -209,10 +209,14 @@ export function Leadership() {
   async function load() {
     setLoading(true);
     try {
-      const [forumChairAssignments, forumViceChairAssignments] = await Promise.all([
-        api<{ assignments: RoleAssignment[] }>(`/api/v1/admin/roles/${SYSTEM_ROLE_IDS.forumChair}/assignments`),
-        api<{ assignments: RoleAssignment[] }>(`/api/v1/admin/roles/${SYSTEM_ROLE_IDS.forumViceChair}/assignments`),
+      const [forumChairRaw, forumViceChairRaw] = await Promise.all([
+        api<unknown>(`/api/v1/admin/roles/${SYSTEM_ROLE_IDS.forumChair}/assignments?limit=1&offset=0&sort=-created_at`),
+        api<unknown>(
+          `/api/v1/admin/roles/${SYSTEM_ROLE_IDS.forumViceChair}/assignments?limit=1&offset=0&sort=-created_at`,
+        ),
       ]);
+      const forumChairAssignments = roleAssignmentsListResponseSchema.parse(forumChairRaw);
+      const forumViceChairAssignments = roleAssignmentsListResponseSchema.parse(forumViceChairRaw);
 
       setForumChair(forumChairAssignments.assignments[0] ?? null);
       setForumViceChair(forumViceChairAssignments.assignments[0] ?? null);

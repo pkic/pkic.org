@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useState } from "preact/hooks";
-import { Spinner } from "../../../components/Spinner";
+import { useRef, useState } from "preact/hooks";
 import { api } from "../../api";
 import { fmt, toast } from "../../ui";
 import type { UserRoleAssignment } from "../../types";
@@ -7,34 +6,18 @@ import { UserPicker, type PickedUser } from "./UserPicker";
 import { ContextPicker, type PickedContext } from "./ContextPicker";
 import { adminRoleCatalog } from "../../services/catalogs";
 import { ServerSearchSelect } from "../../components/ServerSearchSelect";
+import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
+import { userRolesListResponseSchema } from "../../../../shared/schemas/access-control";
 
 /** Staff management: assign built-in roles, override individual permissions. */
 export function UserRoles() {
   const [user, setUser] = useState<PickedUser | null>(null);
-  const [assignments, setAssignments] = useState<UserRoleAssignment[]>([]);
-  const [loading, setLoading] = useState(false);
+  const tableRef = useRef<ApiTableActions | null>(null);
   const [roleId, setRoleId] = useState("");
   const [roleLabel, setRoleLabel] = useState<string>();
   const [context, setContext] = useState<PickedContext>({ contextType: null, contextId: null });
   const [expiresAt, setExpiresAt] = useState("");
   const [submitting, setSubmitting] = useState(false);
-
-  const loadAssignments = useCallback(async (userId: string) => {
-    setLoading(true);
-    try {
-      const data = await api<{ roles: UserRoleAssignment[] }>(`/api/v1/admin/users/${userId}/roles`);
-      setAssignments(data.roles);
-    } catch (e) {
-      toast((e as Error).message, "error");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (user) void loadAssignments(user.id);
-    else setAssignments([]);
-  }, [user, loadAssignments]);
 
   async function handleAssign(e: Event) {
     e.preventDefault();
@@ -57,7 +40,7 @@ export function UserRoles() {
       toast("Role assigned", "success");
       setContext({ contextType: null, contextId: null });
       setExpiresAt("");
-      await loadAssignments(user.id);
+      tableRef.current?.reload();
     } catch (err) {
       toast((err as Error).message, "error");
     } finally {
@@ -71,7 +54,7 @@ export function UserRoles() {
     try {
       await api(`/api/v1/admin/users/${user.id}/roles/${assignment.id}`, { method: "DELETE" });
       toast("Role revoked", "success");
-      await loadAssignments(user.id);
+      tableRef.current?.reload();
     } catch (e) {
       toast((e as Error).message, "error");
     }
@@ -127,46 +110,61 @@ export function UserRoles() {
               </div>
             </form>
 
-            {loading ? (
-              <Spinner />
-            ) : (
-              <table class="table table-sm table-hover mb-0">
-                <thead class="table-dark">
-                  <tr>
-                    <th>Role</th>
-                    <th>Context</th>
-                    <th>Expires</th>
-                    <th>Granted</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {assignments.length === 0 ? (
-                    <tr>
-                      <td colspan={5} class="text-center text-muted fst-italic py-3">
-                        No roles assigned
-                      </td>
-                    </tr>
-                  ) : (
-                    assignments.map((a) => (
-                      <tr key={a.id}>
-                        <td class="fw-semibold mono">{a.roleName}</td>
-                        <td class="small mono">
-                          {a.contextType ? `${a.contextType}:${a.contextId}` : <span class="text-muted">Global</span>}
-                        </td>
-                        <td class="small">{a.expiresAt ? fmt(a.expiresAt) : <span class="text-muted">Never</span>}</td>
-                        <td class="small mono">{fmt(a.createdAt)}</td>
-                        <td>
-                          <button class="btn btn-sm btn-outline-danger" onClick={() => void handleRevoke(a)}>
-                            Revoke
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            )}
+            <ApiDataTable<UserRoleAssignment>
+              endpoint={`/api/v1/admin/users/${user.id}/roles`}
+              responseSchema={userRolesListResponseSchema}
+              resolve={(response) => userRolesListResponseSchema.parse(response).roles}
+              resolvePage={(response) => userRolesListResponseSchema.parse(response).page}
+              paginate
+              initialPageSize={25}
+              initialSort="-created_at"
+              searchPlaceholder="Search role assignments…"
+              actionsRef={tableRef}
+              rowKey={(assignment) => assignment.id}
+              empty="No roles assigned"
+              columns={[
+                {
+                  header: "Role",
+                  cell: (assignment) => <span class="fw-semibold mono">{assignment.roleName}</span>,
+                  sort: { asc: "role_name", desc: "-role_name" },
+                },
+                {
+                  header: "Context",
+                  cell: (assignment) => (
+                    <span class="small mono">
+                      {assignment.contextType ? (
+                        `${assignment.contextType}:${assignment.contextId}`
+                      ) : (
+                        <span class="text-muted">Global</span>
+                      )}
+                    </span>
+                  ),
+                  sort: { asc: "context_type", desc: "-context_type" },
+                },
+                {
+                  header: "Expires",
+                  cell: (assignment) => (
+                    <span class="small">
+                      {assignment.expiresAt ? fmt(assignment.expiresAt) : <span class="text-muted">Never</span>}
+                    </span>
+                  ),
+                  sort: { asc: "expires_at", desc: "-expires_at" },
+                },
+                {
+                  header: "Granted",
+                  cell: (assignment) => <span class="small mono">{fmt(assignment.createdAt)}</span>,
+                  sort: { asc: "created_at", desc: "-created_at" },
+                },
+                {
+                  header: "",
+                  cell: (assignment) => (
+                    <button class="btn btn-sm btn-outline-danger" onClick={() => void handleRevoke(assignment)}>
+                      Revoke
+                    </button>
+                  ),
+                },
+              ]}
+            />
           </>
         )}
       </div>

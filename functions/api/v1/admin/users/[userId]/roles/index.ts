@@ -13,7 +13,7 @@ import {
 
 export const UserRolesList = openApiRoute(userRolesListRouteSchema, async (c: AdminContext, data) => {
   const actor = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  return json({ roles: await listUserRoleAssignments(requestDb(c), actor, data.params.userId) });
+  return json(await listUserRoleAssignments(requestDb(c), actor, data.params.userId, data.query));
 });
 
 export const UserRolesAssign = openApiRoute(userRolesAssignRouteSchema, async (c: AdminContext, data) => {

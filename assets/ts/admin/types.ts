@@ -67,6 +67,7 @@ import type {
   AdminMeetingSeries as CanonicalAdminMeetingSeries,
   MeetingResendResult as CanonicalMeetingResendResult,
 } from "../../shared/schemas/meeting-calendar";
+import type { PageInfo as CanonicalPageInfo } from "../../shared/schemas/pagination";
 import type {
   AdminEventStatsResponse as CanonicalEventStatsResponse,
   AdminStatsResponse as CanonicalStatsResponse,
@@ -295,3 +296,4 @@ export type AdminIcsFile = CanonicalAdminIcsFile;
 export type AdminMeetingSeries = CanonicalAdminMeetingSeries;
 
 export type MeetingResendResult = CanonicalMeetingResendResult;
+export type MeetingSeriesPageInfo = CanonicalPageInfo;

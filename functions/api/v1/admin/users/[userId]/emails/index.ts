@@ -17,8 +17,7 @@ export const UserEmailsList = openApiRoute(userEmailsListRouteSchema, async (c: 
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "users:read");
 
-  const emails = await listUserEmails(requestDb(c), data.params.userId);
-  return json({ emails });
+  return json(await listUserEmails(requestDb(c), data.params.userId, data.query));
 });
 
 export const UserEmailsAdd = openApiRoute(userEmailAddRouteSchema, async (c: AdminContext, data) => {

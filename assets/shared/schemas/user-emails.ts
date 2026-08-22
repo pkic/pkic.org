@@ -6,6 +6,7 @@
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { normalizedEmailSchema } from "./api-common";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 export const userIdEmailsParamsSchema = z.object({ userId: databaseIdSchema });
 export const userEmailIdParamsSchema = z.object({ userId: databaseIdSchema, emailId: databaseIdSchema });
@@ -18,16 +19,22 @@ export const userEmailResponseSchema = z.object({
   email: z.string(),
   createdAt: z.string(),
 });
+export type UserEmailRecord = z.infer<typeof userEmailResponseSchema>;
+
+export const ADMIN_USER_EMAILS_SORT_COLUMNS = ["email", "created_at"] as const;
+export const userEmailsListQuerySchema = listQuerySchema(ADMIN_USER_EMAILS_SORT_COLUMNS, { limit: 10 });
+export type UserEmailsListQuery = z.infer<typeof userEmailsListQuerySchema>;
+export const userEmailsListResponseSchema = paginatedResponseSchema("emails", userEmailResponseSchema);
 
 export const userEmailsListRouteSchema = {
   tags: ["Users"],
   summary: "List a user's secondary email addresses",
   description: "Admin/display/search only -- does not affect login. See user_emails table.",
-  request: { params: userIdEmailsParamsSchema },
+  request: { params: userIdEmailsParamsSchema, query: userEmailsListQuerySchema },
   responses: {
     "200": {
       description: "Secondary emails.",
-      content: { "application/json": { schema: z.object({ emails: z.array(userEmailResponseSchema) }) } },
+      content: { "application/json": { schema: userEmailsListResponseSchema } },
     },
   },
 };
