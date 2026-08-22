@@ -1,4 +1,4 @@
-import type { Sponsorship } from "../../types";
+import type { SponsorshipsListResponse } from "../../../../shared/schemas/admin-sponsorships";
 
 /**
  * Decomposes a company list row's `key` (built server-side in
@@ -14,13 +14,6 @@ export function companyDetailParams(key: string): Record<string, string> {
 }
 
 export const COMPANY_SPONSORSHIPS_PAGE_SIZE = 200;
-
-export interface CompanySponsorshipsPage {
-  limit: number;
-  offset: number;
-  total: number;
-  hasMore: boolean;
-}
 
 /** Builds the bounded, offset-paginated fetch URL for one company's sponsorships page. */
 export function buildCompanySponsorshipsUrl(
@@ -44,10 +37,10 @@ export function buildCompanySponsorshipsUrl(
  * never silently drops rows beyond the first page (PR #1 review Phase 7.2).
  */
 export function mergeCompanySponsorshipsPage(
-  previousSponsorships: Sponsorship[],
+  previousSponsorships: SponsorshipsListResponse["sponsorships"],
   offset: number,
-  fetched: { sponsorships: Sponsorship[]; page: CompanySponsorshipsPage },
-): { sponsorships: Sponsorship[]; page: CompanySponsorshipsPage } {
+  fetched: SponsorshipsListResponse,
+): SponsorshipsListResponse {
   return {
     sponsorships: offset === 0 ? fetched.sponsorships : [...previousSponsorships, ...fetched.sponsorships],
     page: fetched.page,

@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../api";
-import type { Sponsorship, SponsorshipCompany } from "../../types";
+import type { SponsorshipCompany } from "../../types";
 import {
-  buildCompanySponsorshipsUrl,
-  mergeCompanySponsorshipsPage,
-  type CompanySponsorshipsPage,
-} from "./companySponsorshipsPage";
+  sponsorshipResponseSchema,
+  sponsorshipsListResponseSchema,
+  type SponsorshipResponse,
+  type SponsorshipsListResponse,
+} from "../../../../shared/schemas/admin-sponsorships";
+import type { PageInfo } from "../../../../shared/schemas/pagination";
+import { buildCompanySponsorshipsUrl, mergeCompanySponsorshipsPage } from "./companySponsorshipsPage";
 
 /**
  * Company drill-down state: companies → that company's sponsorships →
@@ -18,8 +21,8 @@ import {
  */
 export function useCompanySponsorships(filters: { type: string; stage: string }) {
   const [selectedCompany, setSelectedCompany] = useState<SponsorshipCompany | null>(null);
-  const [companySponsorships, setCompanySponsorships] = useState<Sponsorship[]>([]);
-  const [companyPage, setCompanyPage] = useState<CompanySponsorshipsPage | null>(null);
+  const [companySponsorships, setCompanySponsorships] = useState<SponsorshipsListResponse["sponsorships"]>([]);
+  const [companyPage, setCompanyPage] = useState<PageInfo | null>(null);
   const [companyLoading, setCompanyLoading] = useState(false);
   const [companyLoadingMore, setCompanyLoadingMore] = useState(false);
   const [companyError, setCompanyError] = useState<string | null>(null);
@@ -49,7 +52,9 @@ export function useCompanySponsorships(filters: { type: string; stage: string })
       try {
         if (company.key.startsWith("sponsorship:")) {
           const id = company.key.slice("sponsorship:".length);
-          const data = await api<{ sponsorship: Sponsorship }>(`/api/v1/admin/sponsorships/${id}`);
+          const data: SponsorshipResponse = sponsorshipResponseSchema.parse(
+            await api(`/api/v1/admin/sponsorships/${id}`),
+          );
           if (requestId !== requestIdRef.current) return;
           setCompanySponsorships([data.sponsorship]);
           setCompanyPage(null);
@@ -57,7 +62,7 @@ export function useCompanySponsorships(filters: { type: string; stage: string })
           return;
         }
         const url = buildCompanySponsorshipsUrl(company.key, filters, offset);
-        const data = await api<{ sponsorships: Sponsorship[]; page: CompanySponsorshipsPage }>(url);
+        const data = sponsorshipsListResponseSchema.parse(await api(url));
         if (requestId !== requestIdRef.current) return;
         setCompanySponsorships((prev) => mergeCompanySponsorshipsPage(prev, offset, data).sponsorships);
         setCompanyPage(data.page);

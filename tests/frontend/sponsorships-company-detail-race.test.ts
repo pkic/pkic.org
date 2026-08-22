@@ -102,13 +102,19 @@ describe("useCompanySponsorships out-of-order responses (P7-R01)", () => {
     await act(async () => {
       pending[0].resolve(
         Response.json({
-          sponsorships: [sponsorship("a"), sponsorship("b")],
+          sponsorships: [
+            sponsorship("00000000-0000-4000-8000-000000000001"),
+            sponsorship("00000000-0000-4000-8000-000000000002"),
+          ],
           page: { limit: 200, offset: 0, total: 250, hasMore: true },
         }),
       );
       await flush();
     });
-    expect(latest.companySponsorships.map((s) => s.id)).toEqual(["a", "b"]);
+    expect(latest.companySponsorships.map((s) => s.id)).toEqual([
+      "00000000-0000-4000-8000-000000000001",
+      "00000000-0000-4000-8000-000000000002",
+    ]);
 
     // User clicks "Load more" — request A (offset=200, old filters) goes out
     // but does not resolve yet.
@@ -129,13 +135,13 @@ describe("useCompanySponsorships out-of-order responses (P7-R01)", () => {
     await act(async () => {
       pending[2].resolve(
         Response.json({
-          sponsorships: [sponsorship("closed-1")],
+          sponsorships: [sponsorship("00000000-0000-4000-8000-000000000003")],
           page: { limit: 200, offset: 0, total: 1, hasMore: false },
         }),
       );
       await flush();
     });
-    expect(latest.companySponsorships.map((s) => s.id)).toEqual(["closed-1"]);
+    expect(latest.companySponsorships.map((s) => s.id)).toEqual(["00000000-0000-4000-8000-000000000003"]);
 
     // A finally resolves, arriving after B. Without the request-generation
     // guard this would append A's (now-stale, old-filter) row onto B's
@@ -143,14 +149,14 @@ describe("useCompanySponsorships out-of-order responses (P7-R01)", () => {
     await act(async () => {
       pending[1].resolve(
         Response.json({
-          sponsorships: [sponsorship("c")],
+          sponsorships: [sponsorship("00000000-0000-4000-8000-000000000004")],
           page: { limit: 200, offset: 200, total: 250, hasMore: true },
         }),
       );
       await flush();
     });
 
-    expect(latest.companySponsorships.map((s) => s.id)).toEqual(["closed-1"]);
+    expect(latest.companySponsorships.map((s) => s.id)).toEqual(["00000000-0000-4000-8000-000000000003"]);
     expect(latest.companyPage).toEqual({ limit: 200, offset: 0, total: 1, hasMore: false });
     // The superseded "Load more" call must still clear its own loading flag —
     // being ignored for data purposes should not leave the spinner stuck on.

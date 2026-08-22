@@ -113,6 +113,32 @@ describe("Sponsorship sales pipeline", () => {
     expect(updated.sponsorship.renewalDate).toBe("2027-01-01");
   });
 
+  it("applies company-scoped filters used by the sponsorship drill-down", async () => {
+    const first = await seedOrganization("Drilldown First");
+    const second = await seedOrganization("Drilldown Second");
+
+    for (const organizationId of [first.organizationId, second.organizationId]) {
+      const response = await call(adminToken, "/api/v1/admin/sponsorships", {
+        method: "POST",
+        body: JSON.stringify({ sponsorType: "consortium", organizationId, tier: "Gold" }),
+      });
+      expect(response.status).toBe(201);
+    }
+
+    const response = await call(
+      adminToken,
+      `/api/v1/admin/sponsorships?organizationId=${encodeURIComponent(first.organizationId)}&limit=200&offset=0`,
+    );
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      sponsorships: Array<{ organizationId: string | null }>;
+      page: { total: number; hasMore: boolean };
+    };
+    expect(body.sponsorships).toHaveLength(1);
+    expect(body.sponsorships[0].organizationId).toBe(first.organizationId);
+    expect(body.page).toMatchObject({ total: 1, hasMore: false });
+  });
+
   it("advancing a consortium sponsorship to active writes organizations.sponsor_tier/sponsor_start_date, and lapsing clears them", async () => {
     const { organizationId } = await seedOrganization("Beta Inc");
     const createResponse = await call(adminToken, "/api/v1/admin/sponsorships", {
