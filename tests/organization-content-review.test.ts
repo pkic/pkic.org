@@ -106,6 +106,7 @@ async function addRepresentative(organizationId: string, email: string): Promise
 
 describe("Organization content moderation", () => {
   let adminToken: string;
+  let adminId: string;
 
   beforeEach(async () => {
     await resetDb();
@@ -113,7 +114,8 @@ describe("Organization content moderation", () => {
     const adminRow = (
       await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
     )[0];
-    adminToken = await createAdminSession(env.DB, adminRow.id, "admin-content-review-token");
+    adminId = adminRow.id;
+    adminToken = await createAdminSession(env.DB, adminId, "admin-content-review-token");
   });
 
   it("lets the primary contact submit a content change, queued as pending — live org row unchanged", async () => {
@@ -357,13 +359,69 @@ describe("Organization content moderation", () => {
     expect(orgRows[0].description).toBe("Approved description");
     expect(orgRows[0].website).toBe("https://example.test");
 
-    const reviewRows = await queryAll<{ status: string; reviewer_user_id: string }>(
+    const reviewRows = await queryAll<{ status: string; reviewer_user_id: string | null }>(
       env.DB,
       "SELECT status, reviewer_user_id FROM organization_content_reviews WHERE id = ?",
       review.id,
     );
     expect(reviewRows[0].status).toBe("approved");
-    expect(reviewRows[0].reviewer_user_id).toBeTruthy();
+    expect(reviewRows[0].reviewer_user_id).toBe(adminId);
+  });
+
+  it("keeps API-key audit identity out of nullable reviewer user foreign keys", async () => {
+    const apiKey = env.ADMIN_API_KEY ?? "test-admin-key";
+    const approvedOrg = await seedOrgWithContact("api-key-approved@example.test", "F");
+    const approvedToken = await createMemberSession(env.DB, approvedOrg.userId, "api-key-approved-token");
+    const approvedSubmission = await call(approvedToken, "/api/v1/me/organization", {
+      method: "PATCH",
+      body: JSON.stringify({ description: "Approved by API key" }),
+    });
+    const approvedReview = (await approvedSubmission.json()) as { review: { id: string } };
+
+    const approvedResponse = await call(
+      apiKey,
+      `/api/v1/admin/organizations/content-reviews/${approvedReview.review.id}/approve`,
+      { method: "POST" },
+    );
+    expect(approvedResponse.status).toBe(200);
+
+    const rejectedOrg = await seedOrgWithContact("api-key-rejected@example.test", "F");
+    const rejectedToken = await createMemberSession(env.DB, rejectedOrg.userId, "api-key-rejected-token");
+    const rejectedSubmission = await call(rejectedToken, "/api/v1/me/organization", {
+      method: "PATCH",
+      body: JSON.stringify({ description: "Rejected by API key" }),
+    });
+    const rejectedReview = (await rejectedSubmission.json()) as { review: { id: string } };
+
+    const rejectedResponse = await call(
+      apiKey,
+      `/api/v1/admin/organizations/content-reviews/${rejectedReview.review.id}/reject`,
+      { method: "POST", body: JSON.stringify({ reviewerNote: "Needs revision" }) },
+    );
+    expect(rejectedResponse.status).toBe(200);
+
+    expect(
+      await queryAll<{ id: string; status: string; reviewer_user_id: string | null }>(
+        env.DB,
+        `SELECT id, status, reviewer_user_id FROM organization_content_reviews
+         WHERE id IN (?, ?) ORDER BY status`,
+        [approvedReview.review.id, rejectedReview.review.id],
+      ),
+    ).toEqual([
+      { id: approvedReview.review.id, status: "approved", reviewer_user_id: null },
+      { id: rejectedReview.review.id, status: "rejected", reviewer_user_id: null },
+    ]);
+    expect(
+      await queryAll<{ action: string; actor_id: string | null }>(
+        env.DB,
+        `SELECT action, actor_id FROM audit_log
+         WHERE action IN ('organization_content_review_approved', 'organization_content_review_rejected')
+         ORDER BY action`,
+      ),
+    ).toEqual([
+      { action: "organization_content_review_approved", actor_id: "api-key" },
+      { action: "organization_content_review_rejected", actor_id: "api-key" },
+    ]);
   });
 
   it("staff admin can reject a pending review with a reason, leaving the live org row untouched", async () => {
@@ -514,6 +572,7 @@ describe("Organization content moderation", () => {
 
 describe("Secondary contact nomination & confirmation", () => {
   let adminToken: string;
+  let adminId: string;
 
   beforeEach(async () => {
     await resetDb();
@@ -521,7 +580,8 @@ describe("Secondary contact nomination & confirmation", () => {
     const adminRow = (
       await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
     )[0];
-    adminToken = await createAdminSession(env.DB, adminRow.id, "admin-secondary-contact-token");
+    adminId = adminRow.id;
+    adminToken = await createAdminSession(env.DB, adminId, "admin-secondary-contact-token");
   });
 
   it("lets the primary contact nominate a fellow representative, held pending until staff confirms", async () => {
@@ -558,12 +618,13 @@ describe("Secondary contact nomination & confirmation", () => {
     );
     expect(confirmResponse.status).toBe(200);
 
-    const secondaryAfter = await queryAll<{ user_id: string }>(
+    const secondaryAfter = await queryAll<{ user_id: string; granted_by_user_id: string | null }>(
       env.DB,
-      `SELECT user_id FROM user_roles WHERE context_type = 'organization' AND context_id = ? AND role_id = 'role-secondary_contact' AND revoked_at IS NULL`,
+      `SELECT user_id, granted_by_user_id FROM user_roles WHERE context_type = 'organization' AND context_id = ? AND role_id = 'role-secondary_contact' AND revoked_at IS NULL`,
       memberId,
     );
     expect(secondaryAfter[0].user_id).toBe(nomineeUserId);
+    expect(secondaryAfter[0].granted_by_user_id).toBe(adminId);
 
     const nominationAfter = await queryAll<{ total: number }>(
       env.DB,
@@ -571,6 +632,43 @@ describe("Secondary contact nomination & confirmation", () => {
       memberId,
     );
     expect(Number(nominationAfter[0].total)).toBe(0);
+  });
+
+  it("keeps API-key audit identity out of the nullable confirmed-contact grantor foreign key", async () => {
+    const {
+      organizationId,
+      memberId,
+      userId: primaryUserId,
+    } = await seedOrgWithContact("api-key-contact-primary@example.test", "F");
+    const nomineeUserId = await addRepresentative(organizationId, "api-key-contact-nominee@example.test");
+    const token = await createMemberSession(env.DB, primaryUserId, "api-key-contact-nominate-token");
+    const nominateResponse = await call(token, "/api/v1/me/organization/secondary-contact", {
+      method: "PATCH",
+      body: JSON.stringify({ userId: nomineeUserId }),
+    });
+    expect(nominateResponse.status).toBe(200);
+
+    const confirmResponse = await call(
+      env.ADMIN_API_KEY ?? "test-admin-key",
+      `/api/v1/admin/organizations/${organizationId}/confirm-secondary-contact`,
+      { method: "POST" },
+    );
+    expect(confirmResponse.status).toBe(200);
+    expect(
+      await queryAll<{ user_id: string; granted_by_user_id: string | null }>(
+        env.DB,
+        `SELECT user_id, granted_by_user_id FROM user_roles
+         WHERE context_type = 'organization' AND context_id = ?
+           AND role_id = 'role-secondary_contact' AND revoked_at IS NULL`,
+        memberId,
+      ),
+    ).toEqual([{ user_id: nomineeUserId, granted_by_user_id: null }]);
+    expect(
+      await queryAll<{ actor_id: string | null }>(
+        env.DB,
+        "SELECT actor_id FROM audit_log WHERE action = 'organization_secondary_contact_confirmed'",
+      ),
+    ).toEqual([{ actor_id: "api-key" }]);
   });
 
   it("rejects confirmation with 409 when there is no pending nomination", async () => {

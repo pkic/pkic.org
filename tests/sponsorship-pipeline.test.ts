@@ -20,6 +20,7 @@ import {
 } from "./helpers/membership";
 import { gateBatchGroup } from "./helpers/d1-batch-gate";
 import { advanceSponsorshipStage } from "../functions/_lib/services/sponsorship/admin-pipeline";
+import type { AuthAdmin } from "../functions/_lib/types";
 
 const NOTIFICATIONS = { appBaseUrl: "https://app.test", magicLinkTtlMinutes: 30 };
 
@@ -67,6 +68,7 @@ async function seedOrganization(name: string): Promise<{ organizationId: string;
 describe("Sponsorship sales pipeline", () => {
   let adminToken: string;
   let adminId: string;
+  let adminActor: AuthAdmin;
   let eventId: string;
 
   beforeEach(async () => {
@@ -76,6 +78,7 @@ describe("Sponsorship sales pipeline", () => {
       await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
     )[0];
     adminId = adminRow.id;
+    adminActor = { id: adminId, databaseUserId: adminId, email: "admin@pkic.org", role: "admin" };
     adminToken = await createAdminSession(env.DB, adminId, "admin-sponsorship-token");
   });
 
@@ -111,6 +114,40 @@ describe("Sponsorship sales pipeline", () => {
     expect(updateResponse.status).toBe(200);
     const updated = (await updateResponse.json()) as { sponsorship: { assignedToName: string; renewalDate: string } };
     expect(updated.sponsorship.renewalDate).toBe("2027-01-01");
+  });
+
+  it("keeps API-key audit identity out of nullable sponsorship-event user foreign keys", async () => {
+    const apiKey = env.ADMIN_API_KEY ?? "test-admin-key";
+    const createResponse = await call(apiKey, "/api/v1/admin/sponsorships", {
+      method: "POST",
+      body: JSON.stringify({ sponsorType: "event", nonMemberName: "API Key Sponsor", eventId }),
+    });
+    expect(createResponse.status).toBe(201);
+    const { sponsorship } = (await createResponse.json()) as { sponsorship: { id: string } };
+
+    const stageResponse = await call(apiKey, `/api/v1/admin/sponsorships/${sponsorship.id}/stage`, {
+      method: "PATCH",
+      body: JSON.stringify({ toStage: "negotiating" }),
+    });
+    expect(stageResponse.status).toBe(200);
+
+    expect(
+      await queryAll<{ actor_user_id: string | null }>(
+        env.DB,
+        "SELECT actor_user_id FROM sponsorship_events WHERE sponsorship_id = ? ORDER BY created_at, id",
+        sponsorship.id,
+      ),
+    ).toEqual([{ actor_user_id: null }, { actor_user_id: null }]);
+    expect(
+      await queryAll<{ action: string; actor_id: string | null }>(
+        env.DB,
+        "SELECT action, actor_id FROM audit_log WHERE entity_id = ? ORDER BY action",
+        sponsorship.id,
+      ),
+    ).toEqual([
+      { action: "sponsorship_created", actor_id: "api-key" },
+      { action: "sponsorship_stage_advanced", actor_id: "api-key" },
+    ]);
   });
 
   it("applies company-scoped filters used by the sponsorship drill-down", async () => {
@@ -175,6 +212,13 @@ describe("Sponsorship sales pipeline", () => {
     expect(eventsResponse.status).toBe(200);
     expect(eventsBody.events.map((e) => e.toStage)).toEqual(["active"]);
     expect(eventsBody.page).toEqual({ limit: 1, offset: 0, total: 2, hasMore: true });
+    expect(
+      await queryAll<{ actor_user_id: string | null }>(
+        env.DB,
+        "SELECT actor_user_id FROM sponsorship_events WHERE sponsorship_id = ?",
+        id,
+      ),
+    ).toEqual([{ actor_user_id: adminId }, { actor_user_id: adminId }]);
 
     const secondEventsResponse = await call(adminToken, `/api/v1/admin/sponsorships/${id}/events?limit=1&offset=1`);
     const secondEventsBody = (await secondEventsResponse.json()) as {
@@ -312,14 +356,14 @@ describe("Sponsorship sales pipeline", () => {
       advanceSponsorshipStage(concurrentDb, {
         id: sponsorship.id,
         toStage: "active",
-        actorUserId: adminId,
+        actor: adminActor,
         note: null,
         notifications: NOTIFICATIONS,
       }),
       advanceSponsorshipStage(concurrentDb, {
         id: sponsorship.id,
         toStage: "negotiating",
-        actorUserId: adminId,
+        actor: adminActor,
         note: null,
         notifications: NOTIFICATIONS,
       }),

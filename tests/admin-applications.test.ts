@@ -23,6 +23,7 @@ import { gateBatchGroup, gateNextBatch } from "./helpers/d1-batch-gate";
 import { updateMembershipSettings } from "../functions/_lib/services/membership-settings";
 import { runOnHoldReminders } from "../functions/_lib/services/membership/scheduled-jobs";
 import { updateAdminApplication } from "../functions/_lib/services/admin-applications";
+import type { AuthAdmin } from "../functions/_lib/types";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -75,12 +76,14 @@ async function createApplication(overrides: Record<string, unknown> = {}): Promi
 describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application fields)", () => {
   let adminToken: string;
   let adminId: string;
+  let adminActor: AuthAdmin;
 
   beforeEach(async () => {
     await resetDb();
     await seedEventAndAdmin(env.DB);
     const adminRow = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'"))[0];
     adminId = adminRow.id;
+    adminActor = { id: adminId, databaseUserId: adminId, email: "admin@pkic.org", role: "admin" };
     adminToken = await createAdminSession(env.DB, adminId, "admin-applications-token");
   });
 
@@ -140,8 +143,8 @@ describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application field
     const concurrentDb = gateBatchGroup(env.DB, 2);
 
     const outcomes = await Promise.allSettled([
-      updateAdminApplication(concurrentDb, id, adminId, { applicantName: "First Correction" }),
-      updateAdminApplication(concurrentDb, id, adminId, { applicantName: "Second Correction" }),
+      updateAdminApplication(concurrentDb, id, adminActor, { applicantName: "First Correction" }),
+      updateAdminApplication(concurrentDb, id, adminActor, { applicantName: "Second Correction" }),
     ]);
 
     expect(outcomes.filter((outcome) => outcome.status === "fulfilled")).toHaveLength(1);
@@ -241,6 +244,30 @@ describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application field
     expect(events[0].note).toContain("edited");
     expect(events[0].note).toContain("applicantName");
     expect(events[0].actor_user_id).toBe(adminId);
+  });
+
+  it("keeps API-key audit identity out of the nullable application-edit event user foreign key", async () => {
+    const { id } = await createApplication({ stage: "in_review" });
+    const response = await call(env.ADMIN_API_KEY ?? "test-admin-key", `/api/v1/admin/applications/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ applicantName: "API Key Correction" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(
+      await queryAll<{ actor_user_id: string | null }>(
+        env.DB,
+        "SELECT actor_user_id FROM member_application_events WHERE application_id = ?",
+        id,
+      ),
+    ).toEqual([{ actor_user_id: null }]);
+    expect(
+      await queryAll<{ actor_id: string | null }>(
+        env.DB,
+        "SELECT actor_id FROM audit_log WHERE action = 'application_edited' AND entity_id = ?",
+        id,
+      ),
+    ).toEqual([{ actor_id: "api-key" }]);
   });
 
   it("allows editing an already-approved application's details more than once (uq_member_application_events_approved must not reject the from_stage=to_stage='approved' marker event)", async () => {

@@ -204,6 +204,56 @@ describe("Voting system", () => {
     expect(body.vote.slug).toBe("adopt-new-bylaws");
   });
 
+  it("keeps API-key audit identity separate from nullable vote creator and nominator users", async () => {
+    const organizationId = await insertOrganization("API Key Delegate Org");
+    const delegateUserId = await insertMemberUser("A", organizationId);
+    await setOrgContacts(organizationId, delegateUserId, delegateUserId);
+    const closesAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+    const response = await call(env.ADMIN_API_KEY ?? "test-admin-key", "/api/v1/admin/votes", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "API Key Election",
+        voteType: "election",
+        scopeType: "forum",
+        thresholdType: "simple_majority",
+        closesAt,
+        candidates: [{ name: "Alice" }, { name: "Bob" }],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const { vote } = (await response.json()) as { vote: { id: string } };
+    expect(
+      await queryAll<{ created_by_user_id: string | null }>(
+        env.DB,
+        "SELECT created_by_user_id FROM votes WHERE id = ?",
+        vote.id,
+      ),
+    ).toEqual([{ created_by_user_id: null }]);
+    expect(
+      await queryAll<{ nominated_by_user_id: string | null }>(
+        env.DB,
+        "SELECT nominated_by_user_id FROM vote_candidates WHERE vote_id = ? ORDER BY sort_order",
+        vote.id,
+      ),
+    ).toEqual([{ nominated_by_user_id: null }, { nominated_by_user_id: null }]);
+    expect(
+      await queryAll<{ actor_id: string | null }>(
+        env.DB,
+        "SELECT actor_id FROM audit_log WHERE action = 'vote_created' AND entity_id = ?",
+        vote.id,
+      ),
+    ).toEqual([{ actor_id: "api-key" }]);
+    expect(
+      await queryAll<{ delegate_user_id: string; queued_outbox_id: string | null }>(
+        env.DB,
+        "SELECT delegate_user_id, queued_outbox_id FROM vote_delegate_notification_intents WHERE vote_id = ?",
+        vote.id,
+      ),
+    ).toEqual([{ delegate_user_id: delegateUserId, queued_outbox_id: null }]);
+  });
+
   it("pages, searches, filters, and sorts the admin ballot audit in D1", async () => {
     const closesAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     const createResponse = await call(adminToken, "/api/v1/admin/votes", {

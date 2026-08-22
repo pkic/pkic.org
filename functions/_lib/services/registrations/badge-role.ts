@@ -5,6 +5,7 @@ import {
   type AdminBadgeRolePatch,
 } from "../../../../assets/shared/schemas/participant-roles";
 import { requirePermission } from "../../auth/permissions";
+import { requireAdminDatabaseUserId } from "../../auth/admin-identity";
 import { batchFirst, batchRows } from "../../db/pagination";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike } from "../../types";
@@ -86,6 +87,7 @@ export async function setAdminRegistrationBadgeRole(
   requirePermission(actor, "events:manage", { type: "event", id: event.id });
   const current = await loadBadgeRole(db, event.id, input.registrationId);
   const newRole = input.patch.role && input.patch.role !== "attendee" ? input.patch.role : null;
+  const setterUserId = newRole ? requireAdminDatabaseUserId(actor) : null;
   const at = nowIso();
   const mutation = newRole
     ? db
@@ -96,7 +98,7 @@ export async function setAdminRegistrationBadgeRole(
            ON CONFLICT(registration_id) DO UPDATE SET
              role = excluded.role, set_by_user_id = excluded.set_by_user_id, updated_at = excluded.updated_at`,
         )
-        .bind(current.registration.id, newRole, actor.id, at, at)
+        .bind(current.registration.id, newRole, setterUserId, at, at)
     : db
         .prepare("DELETE FROM registration_badge_role_overrides WHERE registration_id = ?")
         .bind(current.registration.id);

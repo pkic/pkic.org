@@ -47,12 +47,14 @@ async function createApplication(overrides: Record<string, unknown> = {}): Promi
 
 describe("Application stage machine, communications, notes", () => {
   let adminToken: string;
+  let adminId: string;
 
   beforeEach(async () => {
     await resetDb();
     await seedEventAndAdmin(env.DB);
     const adminRow = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'"))[0];
-    adminToken = await createAdminSession(env.DB, adminRow.id, "app-stage-admin-token");
+    adminId = adminRow.id;
+    adminToken = await createAdminSession(env.DB, adminId, "app-stage-admin-token");
   });
 
   it("transitions pending -> in_review and records a member_application_events row", async () => {
@@ -66,8 +68,36 @@ describe("Application stage machine, communications, notes", () => {
     const rows = await queryAll<{ stage: string }>(env.DB, "SELECT stage FROM member_applications WHERE id = ?", id);
     expect(rows[0].stage).toBe("in_review");
 
-    const events = await queryAll(env.DB, "SELECT * FROM member_application_events WHERE application_id = ?", id);
-    expect(events).toHaveLength(1);
+    const events = await queryAll<{ actor_user_id: string | null }>(
+      env.DB,
+      "SELECT actor_user_id FROM member_application_events WHERE application_id = ?",
+      id,
+    );
+    expect(events).toEqual([{ actor_user_id: adminId }]);
+  });
+
+  it("keeps API-key audit identity out of the nullable application-event user foreign key", async () => {
+    const { id } = await createApplication();
+    const response = await call(env.ADMIN_API_KEY ?? "test-admin-key", `/api/v1/admin/applications/${id}/stage`, {
+      method: "PATCH",
+      body: JSON.stringify({ toStage: "in_review" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(
+      await queryAll<{ actor_user_id: string | null }>(
+        env.DB,
+        "SELECT actor_user_id FROM member_application_events WHERE application_id = ?",
+        id,
+      ),
+    ).toEqual([{ actor_user_id: null }]);
+    expect(
+      await queryAll<{ actor_id: string | null }>(
+        env.DB,
+        "SELECT actor_id FROM audit_log WHERE action = 'application_stage_transitioned' AND entity_id = ?",
+        id,
+      ),
+    ).toEqual([{ actor_id: "api-key" }]);
   });
 
   it("compare-and-set: two concurrent transitions from the same stage produce exactly one success and one 409, with exactly one event row", async () => {
@@ -226,6 +256,28 @@ describe("Application stage machine, communications, notes", () => {
     expect(outbox.length).toBeGreaterThan(0);
   });
 
+  it("rejects API-key application communications without side effects", async () => {
+    const { id } = await createApplication();
+    const response = await call(
+      env.ADMIN_API_KEY ?? "test-admin-key",
+      `/api/v1/admin/applications/${id}/communications`,
+      {
+        method: "POST",
+        body: JSON.stringify({ subject: "Must not send", body: "Synthetic actors cannot own this record." }),
+      },
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "USER_BACKED_ADMIN_REQUIRED" } });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM application_communications WHERE application_id = ?", id),
+    ).toHaveLength(0);
+    expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_type = 'member_application' AND entity_id = ?", id),
+    ).toHaveLength(0);
+  });
+
   it("adds an internal note that never queues an email", async () => {
     const { id } = await createApplication();
     const response = await call(adminToken, `/api/v1/admin/applications/${id}/notes`, {
@@ -244,6 +296,24 @@ describe("Application stage machine, communications, notes", () => {
 
     const outbox = await queryAll(env.DB, "SELECT id FROM email_outbox");
     expect(outbox).toHaveLength(0);
+  });
+
+  it("rejects API-key application notes without side effects", async () => {
+    const { id } = await createApplication();
+    const response = await call(env.ADMIN_API_KEY ?? "test-admin-key", `/api/v1/admin/applications/${id}/notes`, {
+      method: "POST",
+      body: JSON.stringify({ body: "Synthetic actors cannot own this note." }),
+    });
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "USER_BACKED_ADMIN_REQUIRED" } });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM application_communications WHERE application_id = ?", id),
+    ).toHaveLength(0);
+    expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_type = 'member_application' AND entity_id = ?", id),
+    ).toHaveLength(0);
   });
 
   it("keeps documents out of detail and lists them through the bounded admin subresource", async () => {

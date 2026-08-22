@@ -6,7 +6,8 @@
 import { first } from "../db/queries";
 import { nowIso } from "../utils/time";
 import { AppError } from "../errors";
-import type { DatabaseLike } from "../types";
+import { adminDatabaseUserId } from "../auth/admin-identity";
+import type { AuthAdmin, DatabaseLike } from "../types";
 import { prepareAuditLog } from "./audit";
 
 export interface MembershipSettingsRow {
@@ -57,10 +58,11 @@ export interface MembershipSettingsUpdateInput {
 export async function updateMembershipSettings(
   db: DatabaseLike,
   updates: MembershipSettingsUpdateInput,
-  actorUserId: string | null,
+  actor: AuthAdmin | null,
 ): Promise<MembershipSettingsRow> {
   const current = await getMembershipSettings(db);
   const now = nowIso();
+  const actorUserId = actor ? adminDatabaseUserId(actor) : null;
 
   const next: MembershipSettingsRow = {
     ...current,
@@ -99,12 +101,12 @@ export async function updateMembershipSettings(
     );
   await db.batch([
     update,
-    ...(actorUserId
+    ...(actor
       ? [
           prepareAuditLog(
             db,
             "admin",
-            actorUserId,
+            actor.id,
             "membership_settings_updated",
             "membership_settings",
             "default",

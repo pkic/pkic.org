@@ -52,7 +52,7 @@ export const SponsorshipsCreate = openApiRoute(sponsorshipCreateRouteSchema, asy
   requirePermission(admin, "sponsorships:write");
 
   const body = data.body;
-  const { id } = await createAdminSponsorship(db, admin.id, {
+  const { id } = await createAdminSponsorship(db, admin, {
     sponsorType: body.sponsorType,
     organizationId: body.organizationId ?? null,
     nonMemberName: body.nonMemberName ?? null,

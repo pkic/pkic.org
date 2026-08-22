@@ -14,6 +14,7 @@ import { initialRenewalActionDueAt } from "../functions/_lib/services/sponsorshi
 import { gateBatchGroup, gateNextBatch } from "./helpers/d1-batch-gate";
 import { advanceSponsorshipStage, updateAdminSponsorship } from "../functions/_lib/services/sponsorship/admin-pipeline";
 import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
+import type { AuthAdmin } from "../functions/_lib/types";
 
 const NOTIFICATIONS = { appBaseUrl: "https://app.test", magicLinkTtlMinutes: 30 };
 
@@ -57,6 +58,7 @@ async function seedActiveConsortiumSponsorship(params: {
 
 describe("Sponsorship renewal reminders & auto-lapse", () => {
   let staffUserId: string;
+  let staffActor: AuthAdmin;
   let organizationId: string;
 
   beforeEach(async () => {
@@ -65,6 +67,12 @@ describe("Sponsorship renewal reminders & auto-lapse", () => {
     staffUserId = (
       await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
     )[0].id;
+    staffActor = {
+      id: staffUserId,
+      databaseUserId: staffUserId,
+      email: "admin@pkic.org",
+      role: "admin",
+    };
 
     organizationId = crypto.randomUUID();
     await env.DB.prepare(
@@ -239,7 +247,7 @@ describe("Sponsorship renewal reminders & auto-lapse", () => {
     await advanceSponsorshipStage(env.DB, {
       id: sponsorshipId,
       toStage: "negotiating",
-      actorUserId: staffUserId,
+      actor: staffActor,
       note: "Renewal discussion reopened",
       notifications: NOTIFICATIONS,
     });
@@ -358,7 +366,7 @@ describe("Sponsorship renewal reminders & auto-lapse", () => {
         advanceSponsorshipStage(env.DB, {
           id: sponsorshipId,
           toStage: "active",
-          actorUserId: staffUserId,
+          actor: staffActor,
           note: "Invalid activation attempt",
           notifications: NOTIFICATIONS,
         }),
@@ -438,7 +446,7 @@ describe("Sponsorship renewal reminders & auto-lapse", () => {
     await advanceSponsorshipStage(env.DB, {
       id: sponsorshipId,
       toStage: "active",
-      actorUserId: staffUserId,
+      actor: staffActor,
       note: "Renewed",
       notifications: NOTIFICATIONS,
     });

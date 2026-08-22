@@ -4,6 +4,7 @@ import type {
   ProposalInternalComment,
 } from "../../../assets/shared/schemas/proposal-comments";
 import { getProposalAccessForEvent } from "../auth/proposal-access";
+import { requireAdminDatabaseUserId } from "../auth/admin-identity";
 import { queryPage } from "../db/pagination";
 import { first } from "../db/queries";
 import { buildD1TextSearchFilter } from "../db/search";
@@ -74,6 +75,7 @@ export async function addProposalComment(
   proposalId: string,
   comment: string,
 ): Promise<ProposalInternalComment> {
+  const authorUserId = requireAdminDatabaseUserId(actor);
   await requireProposalCommentAccess(db, actor, proposalId);
   const id = uuid();
   const now = nowIso();
@@ -84,7 +86,7 @@ export async function addProposalComment(
            id, proposal_id, author_user_id, comment, created_at, updated_at
          ) VALUES (?, ?, ?, ?, ?, ?)`,
       )
-      .bind(id, proposalId, actor.id, comment, now, now),
+      .bind(id, proposalId, authorUserId, comment, now, now),
     prepareAuditLog(db, "admin", actor.id, "proposal_internal_comment_added", "proposal", proposalId, {
       commentId: id,
     }),

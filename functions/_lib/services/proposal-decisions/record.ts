@@ -1,4 +1,5 @@
 import { prepareQueueEmailStatementWhen } from "../../email/outbox";
+import { requireAdminDatabaseUserId } from "../../auth/admin-identity";
 import { batchFirst } from "../../db/pagination";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
@@ -30,6 +31,7 @@ export async function recordProposalDecision(
   db: DatabaseLike,
   input: RecordProposalDecisionInput,
 ): Promise<RecordedProposalDecision> {
+  const decisionMakerUserId = requireAdminDatabaseUserId(input.actor);
   if (input.finalStatus === "needs-work" && !input.decisionNote?.trim()) {
     throw new AppError(
       400,
@@ -113,7 +115,7 @@ export async function recordProposalDecision(
         )
         .bind(
           decisionId,
-          input.actor.id,
+          decisionMakerUserId,
           input.finalStatus,
           input.decisionNote ?? null,
           input.minReviewsRequired,
@@ -147,7 +149,7 @@ export async function recordProposalDecision(
         )
         .bind(
           decisionId,
-          input.actor.id,
+          decisionMakerUserId,
           input.finalStatus,
           input.decisionNote ?? null,
           input.minReviewsRequired,

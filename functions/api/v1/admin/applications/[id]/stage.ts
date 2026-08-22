@@ -31,7 +31,7 @@ export const ApplicationStagePatch = openApiRoute(
     const result = await transitionApplicationStage(db, {
       applicationId,
       toStage: body.toStage,
-      actorUserId: admin.id,
+      actor: admin,
       onHoldSubtype: body.onHoldSubtype ?? null,
       note: body.note ?? null,
       notification: {

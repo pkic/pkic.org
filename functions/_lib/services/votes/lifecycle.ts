@@ -17,6 +17,7 @@ import {
   type AdminVoteBallotsListQuery,
 } from "../../../../assets/shared/schemas/votes-admin";
 import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
+import { adminDatabaseUserId } from "../../auth/admin-identity";
 import { prepareForumVoteDelegateNotificationIntents } from "./delegate-notification-intents";
 import {
   resolveScope,
@@ -88,6 +89,7 @@ export async function createVoteDirect(
   const id = uuid();
   const slug = await uniqueSlug(db, input.title);
   const status: VoteStatus = new Date(opensAt).getTime() <= Date.now() ? "open" : "scheduled";
+  const databaseUserId = adminDatabaseUserId(admin);
 
   // Build every statement first, execute once via db.batch() — the vote row
   // and its candidates are one atomic unit of work (PR #1 review §5.3): a
@@ -111,7 +113,7 @@ export async function createVoteDirect(
         input.voteType,
         input.scopeType,
         scopeId,
-        admin.id,
+        databaseUserId,
         input.eligibleCategories ? stringifyJson(input.eligibleCategories) : null,
         input.thresholdType,
         opensAt,
@@ -126,7 +128,7 @@ export async function createVoteDirect(
           `INSERT INTO vote_candidates (id, vote_id, user_id, candidate_name, candidate_bio, nominated_by_user_id, sort_order, eliminated_round, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
         )
-        .bind(uuid(), id, c.userId ?? null, c.name, c.bio ?? null, admin.id, i, now),
+        .bind(uuid(), id, c.userId ?? null, c.name, c.bio ?? null, databaseUserId, i, now),
     ),
     prepareAuditLog(
       db,

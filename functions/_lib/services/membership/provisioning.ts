@@ -85,6 +85,8 @@ export interface ProvisionMembershipInput {
   memberSince?: string | null;
   representatives: ProvisionRepresentativeInput[];
   workingGroupSlugs: string[];
+  /** Backing users.id for relational role-grant attribution; null for synthetic/system actors. */
+  grantedByUserId?: string | null;
   /** Reject (409) a representative who already holds/represents the target membership. Default true. */
   rejectExistingMembership?: boolean;
   /** Only assign primary/secondary contact roles when the organization has no existing holder yet (never silently reassign an already-contacted org's contacts). Default true. */
@@ -385,6 +387,7 @@ async function buildProvisionOrganizationTiedMemberships(
         memberId: aggregateId,
         userId: pending[0].user.id,
         roleId: REPRESENTATIVE_ROLE_IDS.primaryContact,
+        grantedByUserId: input.grantedByUserId,
         now,
       }),
     );
@@ -396,6 +399,7 @@ async function buildProvisionOrganizationTiedMemberships(
         memberId: aggregateId,
         userId: pending[1].user.id,
         roleId: REPRESENTATIVE_ROLE_IDS.secondaryContact,
+        grantedByUserId: input.grantedByUserId,
         now,
       }),
     );

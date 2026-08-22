@@ -10,7 +10,7 @@ import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 import { proposalFlagResponseSchema } from "../assets/shared/schemas/proposal-status";
 
 function decisionActor(id: string) {
-  return { id, email: "admin@pkic.org", role: "admin" };
+  return { id, databaseUserId: id, email: "admin@pkic.org", role: "admin" };
 }
 
 async function postProposalReview(proposalId: string, token: string, body: unknown): Promise<Response> {
@@ -90,6 +90,30 @@ async function getProposalRoleSources(proposalId: string): Promise<Array<{ user_
 describe("proposal finalize workflows", () => {
   beforeEach(async () => {
     await resetDb();
+  });
+
+  it("rejects a synthetic API-key actor at the decision service boundary", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId } = await seedProposalWithSpeaker(eventId);
+
+    await expect(
+      finalizeProposalDecision(env.DB, {
+        proposalId,
+        actor: { id: "api-key", databaseUserId: null, email: "api-key", role: "admin" },
+        finalStatus: "accepted",
+        minReviewsRequired: 0,
+      }),
+    ).rejects.toMatchObject({ status: 403, code: "USER_BACKED_ADMIN_REQUIRED" });
+    await expect(
+      queryAll(env.DB, "SELECT id FROM proposal_decisions WHERE proposal_id = ?", proposalId),
+    ).resolves.toHaveLength(0);
+    await expect(
+      queryAll(
+        env.DB,
+        "SELECT id FROM audit_log WHERE action = 'proposal_decision_recorded' AND entity_id = ?",
+        proposalId,
+      ),
+    ).resolves.toHaveLength(0);
   });
 
   it("accept: sets proposal status to accepted and activates proposal role sources", async () => {

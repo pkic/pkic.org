@@ -5,7 +5,8 @@ import {
   PRESENTATION_FILE_SIZE_HEADER,
 } from "../../../assets/shared/presentation-upload";
 import { AppError } from "../errors";
-import type { DatabaseLike, Env } from "../types";
+import type { AuthAdmin, DatabaseLike, Env } from "../types";
+import { adminDatabaseUserId } from "../auth/admin-identity";
 import { uuid } from "../utils/ids";
 import {
   getPresentationProposalContext,
@@ -28,6 +29,8 @@ export interface PresentationStorageContext {
   proposalId: string;
   proposalTitle: string;
 }
+
+type PresentationUploadActor = { type: "admin"; admin: AuthAdmin } | { type: "user"; userId: string };
 
 type PresentationUploadError = { error: { code: string; message: string }; status: number };
 
@@ -119,8 +122,7 @@ export async function uploadProposalPresentation(
   request: Request,
   context: PresentationProposalContext,
   payload: {
-    uploadedByUserId: string;
-    actorType: "admin" | "user";
+    actor: PresentationUploadActor;
     enforceDeadline: boolean;
   },
 ): Promise<string> {
@@ -146,17 +148,20 @@ export async function uploadProposalPresentation(
   const proposalId = storagePathSegment(context.id, "unknown", 64);
   const safeName = parsed.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100) || "presentation";
   const r2Key = `presentations/${eventSlug}/${proposalTitle}--${proposalId}/${Date.now()}-${uuid()}-${safeName}`;
+  const uploadedByUserId =
+    payload.actor.type === "admin" ? adminDatabaseUserId(payload.actor.admin) : payload.actor.userId;
+  const auditActorId = payload.actor.type === "admin" ? payload.actor.admin.id : payload.actor.userId;
   const prepared = preparePresentationVersionCreate(
     db,
     context.id,
     {
       r2Key,
-      uploadedByUserId: payload.uploadedByUserId,
+      uploadedByUserId,
       fileName: parsed.name,
       fileSize: parsed.size,
       mimeType: parsed.type,
     },
-    { actorType: payload.actorType, actorId: payload.uploadedByUserId, action: "presentation_uploaded" },
+    { actorType: payload.actor.type, actorId: auditActorId, action: "presentation_uploaded" },
   );
   await withStorageUploadCompensation({
     db,

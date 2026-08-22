@@ -14,8 +14,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   const proposal = await getPresentationProposalContext(requestDb(c), proposalId);
 
   await uploadProposalPresentation(requestDb(c), requirePresentationBucket(c.env), c.req.raw, proposal, {
-    uploadedByUserId: admin.id,
-    actorType: "admin",
+    actor: { type: "admin", admin },
     enforceDeadline: false,
   });
 

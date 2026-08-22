@@ -164,7 +164,7 @@ export async function runEcReviewBatch(db: DatabaseLike, env: Env, limit = 100):
     prepareApplicationStageTransition(db, application, {
       applicationId: application.id,
       toStage: "ec_review",
-      actorUserId: null,
+      actor: null,
       note: "Consultation window elapsed",
     }),
   );
@@ -275,7 +275,7 @@ export async function runEcWindowAutoApprove(
     try {
       await approveApplication(db, {
         applicationId: application.id,
-        actorUserId: null,
+        actor: null,
         approvalMode: "automatic_no_ec_objection",
         eventNote: "auto_approved_no_ec_objection",
         loginUrl,

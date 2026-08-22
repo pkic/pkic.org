@@ -30,7 +30,7 @@ export const ConsortiumMeetingIcsUploadPost = openApiRoute(
       bucket,
       meetingId,
       { scopeType: "consortium" },
-      { label, year, buffer, contentType, uploadedByUserId: admin.id },
+      { label, year, buffer, contentType, actor: admin },
     );
 
     return json({ icsFile }, 201);

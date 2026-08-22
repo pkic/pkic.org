@@ -724,6 +724,28 @@ describe("admin proposal endpoints", () => {
     expect(firstPage.page).toEqual({ limit: 1, offset: 0, total: 2, hasMore: true });
   });
 
+  it("keeps API-key comment reads available but rejects unattributable comment creation", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId } = await seedProposalWithReviews(env.DB, eventId);
+    const apiKey = env.ADMIN_API_KEY ?? "test-admin-key";
+
+    expect((await callAdminProposalComments(apiKey, proposalId)).status).toBe(200);
+    const response = await callAdminProposalComments(apiKey, proposalId, "", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ comment: "This must not be stored without a user identity." }),
+    });
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "USER_BACKED_ADMIN_REQUIRED" } });
+    await expect(
+      queryAll(env.DB, "SELECT id FROM proposal_internal_comments WHERE proposal_id = ?", [proposalId]),
+    ).resolves.toHaveLength(0);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'proposal_internal_comment_added'"),
+    ).resolves.toHaveLength(0);
+  });
+
   it("rolls back a proposal comment when its audit write fails", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);

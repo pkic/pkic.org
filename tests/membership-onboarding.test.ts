@@ -16,7 +16,7 @@ import { createApplicationFormSubmission, seedMemberApplication } from "./helper
 import { insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 import { approveApplication } from "../functions/_lib/services/membership/applications/approve";
 import { recordEcDecision } from "../functions/_lib/services/ec-review";
-import type { DatabaseLike } from "../functions/_lib/types";
+import type { AuthAdmin, DatabaseLike } from "../functions/_lib/types";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -62,12 +62,16 @@ async function createEcReviewApplication(
 
 describe("Post-approval onboarding", () => {
   let adminToken: string;
+  let adminId: string;
+  let adminActor: AuthAdmin;
 
   beforeEach(async () => {
     await resetDb();
     await seedEventAndAdmin(env.DB);
     const adminRow = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'"))[0];
-    adminToken = await createAdminSession(env.DB, adminRow.id, "onboarding-admin-token");
+    adminId = adminRow.id;
+    adminActor = { id: adminId, databaseUserId: adminId, email: "admin@pkic.org", role: "admin" };
+    adminToken = await createAdminSession(env.DB, adminId, "onboarding-admin-token");
     await seedWorkingGroup("pqc", "pqc@lists.pkic.org");
     await seedWorkingGroup("ca", "ca@lists.pkic.org");
   });
@@ -280,6 +284,14 @@ describe("Post-approval onboarding", () => {
     );
     expect(auditRows).toHaveLength(1);
     expect(auditRows[0]!.actor_type).toBe("admin");
+    expect(auditRows[0]!.actor_id).toBe(adminId);
+    expect(
+      await queryAll<{ actor_user_id: string | null }>(
+        env.DB,
+        "SELECT actor_user_id FROM member_application_events WHERE application_id = ? AND to_stage = 'approved'",
+        id,
+      ),
+    ).toEqual([{ actor_user_id: adminId }]);
 
     // Same `now` timestamp is used to build the stage-transition, the
     // email-outbox inserts, and the audit-log insert inside approve.ts's
@@ -296,6 +308,29 @@ describe("Post-approval onboarding", () => {
     );
     expect(claimEmail!.created_at).toBe(applicationApprovedAt);
     expect(auditRows[0]!.created_at).toBe(applicationApprovedAt);
+  });
+
+  it("keeps API-key audit identity out of the nullable approval-event user foreign key", async () => {
+    const { id } = await createEcReviewApplication();
+    const response = await call(env.ADMIN_API_KEY ?? "test-admin-key", `/api/v1/admin/applications/${id}/approve`, {
+      method: "POST",
+    });
+
+    expect(response.status).toBe(200);
+    expect(
+      await queryAll<{ actor_user_id: string | null }>(
+        env.DB,
+        "SELECT actor_user_id FROM member_application_events WHERE application_id = ? AND to_stage = 'approved'",
+        id,
+      ),
+    ).toEqual([{ actor_user_id: null }]);
+    expect(
+      await queryAll<{ actor_id: string | null }>(
+        env.DB,
+        "SELECT actor_id FROM audit_log WHERE action = 'application_approved' AND entity_id = ?",
+        id,
+      ),
+    ).toEqual([{ actor_id: "api-key" }]);
   });
 
   it("does not write an audit-log entry for the unattended EC-window auto-approve path (no admin actor)", async () => {
@@ -462,7 +497,7 @@ describe("Post-approval onboarding", () => {
     await expect(
       approveApplication(racingDb, {
         applicationId: id,
-        actorUserId: "admin-user-id",
+        actor: adminActor,
         approvalMode: "staff_override",
         loginUrl: "https://pkic.org/members/login/",
       }),

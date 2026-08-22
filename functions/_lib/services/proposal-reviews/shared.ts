@@ -5,6 +5,7 @@ import {
   PROPOSAL_DECIDABLE_STATUSES,
 } from "../../../../assets/shared/schemas/proposal-status";
 import { getProposalAccessForEvent, type ProposalAccess } from "../../auth/proposal-access";
+import { requireAdminDatabaseUserId } from "../../auth/admin-identity";
 import { batchFirst } from "../../db/pagination";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
@@ -134,6 +135,7 @@ export async function saveExistingProposalReview(
   next: ReviewAuditState,
   changes: Record<string, { from: unknown; to: unknown }>,
 ): Promise<ProposalReview> {
+  const reviewerUserId = requireAdminDatabaseUserId(actor);
   const now = nowIso();
   const [updated, , selected] = await db.batch([
     db
@@ -153,7 +155,7 @@ export async function saveExistingProposalReview(
         now,
         existing.id,
         proposalId,
-        actor.id,
+        reviewerUserId,
         existing.review_round,
         existing.recommendation,
         existing.score,
@@ -176,7 +178,7 @@ export async function saveExistingProposalReview(
       conditionBindings: [
         existing.id,
         proposalId,
-        actor.id,
+        reviewerUserId,
         next.reviewRound,
         next.recommendation,
         next.score,

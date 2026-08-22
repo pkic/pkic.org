@@ -1,4 +1,5 @@
 import type { ProposalReview, ProposalReviewPatch } from "../../../../assets/shared/schemas/proposal-reviews";
+import { requireAdminDatabaseUserId } from "../../auth/admin-identity";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike } from "../../types";
@@ -19,6 +20,7 @@ export async function updateProposalReview(
   reviewId: string,
   patch: ProposalReviewPatch,
 ): Promise<ProposalReview> {
+  const reviewerUserId = requireAdminDatabaseUserId(actor);
   const context = await getReviewContext(db, actor, proposalId);
   assertReviewWritable(context);
   const existing = await first<ProposalReview>(
@@ -28,7 +30,7 @@ export async function updateProposalReview(
     [reviewId, proposalId, context.reviewRound],
   );
   if (!existing) throw new AppError(404, "PROPOSAL_REVIEW_NOT_FOUND", "Proposal review not found");
-  if (existing.reviewer_user_id !== actor.id) {
+  if (existing.reviewer_user_id !== reviewerUserId) {
     throw new AppError(403, "FORBIDDEN", "Only the review owner may edit this review");
   }
 

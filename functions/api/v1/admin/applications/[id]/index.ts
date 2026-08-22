@@ -28,7 +28,7 @@ export const ApplicationDetailPatch = openApiRoute(applicationUpdateRouteSchema,
 
   const id = data.params.id;
   const body = data.body;
-  const detail = await updateAdminApplication(db, id, admin.id, body);
+  const detail = await updateAdminApplication(db, id, admin, body);
 
   return json(detail);
 });

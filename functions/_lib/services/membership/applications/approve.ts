@@ -38,7 +38,7 @@
  * machinery covers delivery, only the *queueing* needed to be atomic with
  * membership state.
  *
- * The audit-log insert is folded in only when `actorUserId` is set (the
+ * The audit-log insert is folded in only when an admin `actor` is set (the
  * interactive admin route always sets it; the unattended EC-window
  * auto-approve job passes `null` and intentionally writes no audit entry,
  * unchanged from its prior behavior).
@@ -63,6 +63,7 @@ import { buildProvisionOrganizationMembership } from "../provisioning";
 import { buildEnqueueGoogleGroupsSyncStatement } from "../../google-groups";
 import { resolveAutoSyncListEmails } from "../../mailing-lists";
 import { prepareQueueEmailStatement } from "../../../email/outbox";
+import { adminDatabaseUserId } from "../../../auth/admin-identity";
 import { prepareAuditLog } from "../../audit";
 import { resolveApprovalIcsAttachments } from "../../meeting-calendar";
 import {
@@ -71,7 +72,7 @@ import {
   buildOrgContactAssignedEmail,
 } from "../notifications";
 import { CA_WORKING_GROUP_SLUG, CA_ONLY_CATEGORY } from "../../working-groups";
-import type { DatabaseLike, StatementLike } from "../../../types";
+import type { AuthAdmin, DatabaseLike, StatementLike } from "../../../types";
 
 export interface ApproveApplicationResult {
   applicationId: string;
@@ -112,7 +113,8 @@ export async function approveApplication(
   db: DatabaseLike,
   params: {
     applicationId: string;
-    actorUserId: string | null;
+    /** `null` is reserved for unattended system approval. */
+    actor: AuthAdmin | null;
     approvalMode: ApplicationApprovalMode;
     eventNote?: string;
     loginUrl: string;
@@ -146,6 +148,7 @@ export async function approveApplication(
   );
   const jobTitle = typeof answers.job_title === "string" && answers.job_title.trim() ? answers.job_title.trim() : null;
   const links = typeof answers.linkedin === "string" && answers.linkedin.trim() ? [answers.linkedin.trim()] : [];
+  const databaseActorUserId = params.actor ? adminDatabaseUserId(params.actor) : null;
 
   // Everything below is built (not executed) and committed exactly once
   // at the end of this function: the provisioning statements, the
@@ -164,6 +167,7 @@ export async function approveApplication(
     membershipCategory: application.membership_category,
     representatives: [{ name: application.applicant_name, email: application.applicant_email, jobTitle, links }],
     workingGroupSlugs,
+    grantedByUserId: databaseActorUserId,
   });
   // Pure/synchronous — safe to call before the batch below commits, since
   // every id and decision it reports was already resolved by a pre-batch
@@ -204,7 +208,7 @@ export async function approveApplication(
         `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
          VALUES (?, ?, ?, CASE WHEN changes() = 1 THEN 'approved' ELSE NULL END, ?, ?, ?)`,
       )
-      .bind(uuid(), application.id, fromStage, params.actorUserId, params.eventNote ?? "Application approved", now),
+      .bind(uuid(), application.id, fromStage, databaseActorUserId, params.eventNote ?? "Application approved", now),
   );
 
   // Google Groups enqueue (real API client is in google-groups.ts; this
@@ -287,12 +291,12 @@ export async function approveApplication(
     outboxIds.push(contactEmail.id);
   }
 
-  if (params.actorUserId) {
+  if (params.actor) {
     statements.push(
       prepareAuditLog(
         db,
         "admin",
-        params.actorUserId,
+        params.actor.id,
         "application_approved",
         "member_application",
         application.id,

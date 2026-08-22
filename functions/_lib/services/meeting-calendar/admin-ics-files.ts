@@ -14,7 +14,8 @@ import {
   type MeetingSeriesScopeType,
   type AdminIcsFileSummary,
 } from "./shared";
-import type { DatabaseLike } from "../../types";
+import type { AuthAdmin, DatabaseLike } from "../../types";
+import { adminDatabaseUserId } from "../../auth/admin-identity";
 import { prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
 import {
   prepareStorageDeletion,
@@ -33,12 +34,13 @@ export async function uploadIcsFile(
   bucket: R2Bucket,
   seriesId: string,
   expected: { scopeType: MeetingSeriesScopeType; workingGroupId?: string },
-  input: { label: string; year: number; buffer: ArrayBuffer; contentType: string; uploadedByUserId: string | null },
+  input: { label: string; year: number; buffer: ArrayBuffer; contentType: string; actor: AuthAdmin },
 ): Promise<AdminIcsFileSummary> {
   await getSeriesForAdminOrThrow(db, seriesId, expected);
   const id = uuid();
   const now = nowIso();
   const r2Key = `meeting-ics/${seriesId}/${Date.now()}-${id}.ics`;
+  const uploadedByUserId = adminDatabaseUserId(input.actor);
 
   await withStorageUploadCompensation({
     db,
@@ -52,8 +54,8 @@ export async function uploadIcsFile(
           `INSERT INTO meeting_ics_files (id, series_id, label, year, r2_key, active, uploaded_by_user_id, created_at)
            VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
         )
-        .bind(id, seriesId, input.label, input.year, r2Key, input.uploadedByUserId, now),
-      prepareAuditLog(db, "admin", input.uploadedByUserId, "meeting_ics_file_uploaded", "meeting_ics_file", id, {
+        .bind(id, seriesId, input.label, input.year, r2Key, uploadedByUserId, now),
+      prepareAuditLog(db, "admin", input.actor.id, "meeting_ics_file_uploaded", "meeting_ics_file", id, {
         seriesId,
         r2Key,
         label: input.label,
@@ -68,7 +70,7 @@ export async function uploadIcsFile(
     year: input.year,
     r2Key,
     active: true,
-    uploadedByUserId: input.uploadedByUserId,
+    uploadedByUserId,
     createdAt: now,
   };
 }

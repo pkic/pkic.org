@@ -168,7 +168,7 @@ async function seed() {
   // Accept the proposal so uploads are allowed.
   await finalizeProposalDecision(env.DB, {
     proposalId: proposal.id,
-    actor: { id: adminRow.id, email: "admin@pkic.org", role: "admin" },
+    actor: { id: adminRow.id, databaseUserId: adminRow.id, email: "admin@pkic.org", role: "admin" },
     finalStatus: "accepted",
     minReviewsRequired: 0,
   });
@@ -267,6 +267,42 @@ describe("presentation versioning", () => {
       proposalId,
     );
     expect(auditRows).toEqual([{ actor_type: "admin", actor_id: adminUserId }]);
+  });
+
+  it("keeps API-key audit identity separate from the nullable presentation uploader user", async () => {
+    const { proposalId } = await seed();
+    const bucket = new FakePresentationBucket();
+    const upload = presentationRequest("api-key-upload.pdf");
+
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions`, {
+        method: "POST",
+        ...upload,
+        headers: {
+          authorization: `Bearer ${env.ADMIN_API_KEY ?? "test-admin-key"}`,
+          ...upload.headers,
+        },
+      }),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(200);
+    const versions = await queryAll<{ r2_key: string; uploaded_by_user_id: string | null }>(
+      env.DB,
+      "SELECT r2_key, uploaded_by_user_id FROM presentation_versions WHERE proposal_id = ?",
+      proposalId,
+    );
+    expect(versions).toHaveLength(1);
+    expect(versions[0].uploaded_by_user_id).toBeNull();
+    expect(bucket.keys()).toEqual([versions[0].r2_key]);
+    expect(
+      await queryAll<{ actor_id: string | null }>(
+        env.DB,
+        "SELECT actor_id FROM audit_log WHERE action = 'presentation_uploaded' AND entity_id = ?",
+        proposalId,
+      ),
+    ).toEqual([{ actor_id: "api-key" }]);
   });
 
   it("durably retains upload cleanup when D1 commit and immediate R2 compensation both fail", async () => {
@@ -444,7 +480,7 @@ describe("presentation versioning", () => {
     });
     await finalizeProposalDecision(env.DB, {
       proposalId: secondProposal.id,
-      actor: { id: adminUserId, email: "admin@pkic.org", role: "admin" },
+      actor: { id: adminUserId, databaseUserId: adminUserId, email: "admin@pkic.org", role: "admin" },
       finalStatus: "accepted",
       minReviewsRequired: 0,
     });
@@ -595,6 +631,39 @@ describe("presentation versioning", () => {
     const reviewBody = (await reviewRes.json()) as { version: { latestReview: { status: string; note: string } } };
     expect(reviewBody.version.latestReview.status).toBe("needs_revision");
     expect(reviewBody.version.latestReview.note).toBe("Please add speaker notes.");
+  });
+
+  it("rejects API-key presentation reviews before writing review or audit rows", async () => {
+    const { proposalId, speakerUserId } = await seed();
+    const version = await createPresentationVersion(env.DB, proposalId, {
+      r2Key: "presentations/api-key-review.pdf",
+      fileName: "api-key-review.pdf",
+      fileSize: 4,
+      mimeType: "application/pdf",
+      uploadedByUserId: speakerUserId,
+    });
+
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions/${version.id}/review`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${env.ADMIN_API_KEY ?? "test-admin-key"}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ status: "needs_revision", note: "Must not be attributable to a shared key." }),
+      }),
+      env,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "USER_BACKED_ADMIN_REQUIRED" } });
+    await expect(
+      queryAll(env.DB, "SELECT id FROM presentation_version_reviews WHERE version_id = ?", version.id),
+    ).resolves.toHaveLength(0);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'presentation_version_reviewed'"),
+    ).resolves.toHaveLength(0);
   });
 
   it("filters, sorts, and paginates presentation versions in D1", async () => {

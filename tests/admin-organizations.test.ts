@@ -56,6 +56,7 @@ function orgMemberBody(overrides: Record<string, unknown> = {}) {
 
 describe("Admin Organizations — membership category on the aggregate (Phase 1 §1.4)", () => {
   let adminToken: string;
+  let adminId: string;
 
   /** memberId here is the representative's own organization_representatives.id (see admin-organizations.ts). */
   async function createOrg(overrides: Record<string, unknown> = {}): Promise<{
@@ -99,13 +100,79 @@ describe("Admin Organizations — membership category on the aggregate (Phase 1 
     const adminRow = (
       await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
     )[0];
-    adminToken = await createAdminSession(env.DB, adminRow.id, "admin-orgs-token");
+    adminId = adminRow.id;
+    adminToken = await createAdminSession(env.DB, adminId, "admin-orgs-token");
   });
 
   it("creating an organization via the Interim Admin Tool sets its aggregate's category assignment", async () => {
-    const { organizationId } = await createOrg();
+    const { organizationId, userId } = await createOrg();
     const aggregateId = await aggregateIdFor(organizationId);
     expect(await categoryFor(aggregateId)).toBe("F");
+    expect(
+      await queryAll<{ granted_by_user_id: string | null }>(
+        env.DB,
+        `SELECT granted_by_user_id FROM user_roles
+         WHERE user_id = ? AND context_type = 'organization' AND context_id = ? AND role_id = 'role-primary_contact'`,
+        [userId, aggregateId],
+      ),
+    ).toEqual([{ granted_by_user_id: adminId }]);
+    expect(
+      await queryAll<{ actor_id: string | null }>(
+        env.DB,
+        "SELECT actor_id FROM audit_log WHERE action = 'member_created' AND entity_id = ?",
+        organizationId,
+      ),
+    ).toEqual([{ actor_id: adminId }]);
+  });
+
+  it("keeps API-key audit identity out of nullable representative-role grantor foreign keys", async () => {
+    const apiKey = env.ADMIN_API_KEY ?? "test-admin-key";
+    const createResponse = await call(apiKey, "/api/v1/admin/members", {
+      method: "POST",
+      body: JSON.stringify(
+        orgMemberBody({
+          organizationName: "API Key Organization",
+          representatives: [{ name: "API Key Primary", email: "api-key-primary@example.test" }],
+        }),
+      ),
+    });
+    expect(createResponse.status).toBe(201);
+    const created = (await createResponse.json()) as {
+      organizationId: string;
+      members: Array<{ userId: string }>;
+    };
+    const aggregateId = await aggregateIdFor(created.organizationId);
+
+    const addResponse = await call(apiKey, `/api/v1/admin/organizations/${created.organizationId}/members`, {
+      method: "POST",
+      body: JSON.stringify({ name: "API Key Secondary", email: "api-key-secondary@example.test" }),
+    });
+    expect(addResponse.status).toBe(201);
+    const added = (await addResponse.json()) as { representative: { userId: string } };
+
+    expect(
+      await queryAll<{ role_id: string; granted_by_user_id: string | null }>(
+        env.DB,
+        `SELECT role_id, granted_by_user_id FROM user_roles
+         WHERE user_id IN (?, ?) AND context_type = 'organization' AND context_id = ?
+         ORDER BY role_id`,
+        [created.members[0].userId, added.representative.userId, aggregateId],
+      ),
+    ).toEqual([
+      { role_id: "role-primary_contact", granted_by_user_id: null },
+      { role_id: "role-secondary_contact", granted_by_user_id: null },
+    ]);
+    expect(
+      await queryAll<{ action: string; actor_id: string | null }>(
+        env.DB,
+        `SELECT action, actor_id FROM audit_log
+         WHERE action IN ('member_created', 'organization_representative_added')
+         ORDER BY action`,
+      ),
+    ).toEqual([
+      { action: "member_created", actor_id: "api-key" },
+      { action: "organization_representative_added", actor_id: "api-key" },
+    ]);
   });
 
   it("GET org detail surfaces membershipCategory once at the top level, not per representative", async () => {

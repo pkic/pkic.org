@@ -10,7 +10,8 @@ import { buildD1TextSearchFilter } from "../db/search";
 import { resolveMappedOrderBy } from "../db/sort";
 import { buildProvisionOrganizationMembership } from "./membership/provisioning";
 import { prepareAuditLog } from "./audit";
-import type { DatabaseLike } from "../types";
+import { adminDatabaseUserId } from "../auth/admin-identity";
+import type { AuthAdmin, DatabaseLike } from "../types";
 
 export interface AdminMemberCreateRepresentative {
   name: string;
@@ -52,7 +53,7 @@ export interface AdminMemberSummary {
  */
 export async function createAdminMember(
   db: DatabaseLike,
-  actorUserId: string,
+  actor: AuthAdmin,
   input: AdminMemberCreateInput,
 ): Promise<{ organizationId: string | null; members: AdminMemberSummary[] }> {
   const { statements, buildResult } = await buildProvisionOrganizationMembership(db, {
@@ -68,10 +69,11 @@ export async function createAdminMember(
       links: rep.links,
     })),
     workingGroupSlugs: input.workingGroupSlugs,
+    grantedByUserId: adminDatabaseUserId(actor),
   });
   const result = buildResult();
   statements.push(
-    prepareAuditLog(db, "admin", actorUserId, "member_created", "organization", result.organizationId, {
+    prepareAuditLog(db, "admin", actor.id, "member_created", "organization", result.organizationId, {
       membershipCategory: input.membershipCategory,
       organizationName: input.organizationName ?? null,
       representativeEmails: input.representatives.map((representative) => representative.email),

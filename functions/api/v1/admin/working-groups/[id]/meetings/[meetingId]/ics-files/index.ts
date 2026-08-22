@@ -33,7 +33,7 @@ export const WgMeetingIcsUploadPost = openApiRoute(wgMeetingIcsUploadRouteSchema
     bucket,
     meetingId,
     { scopeType: "working_group", workingGroupId: wg.id },
-    { label, year, buffer, contentType, uploadedByUserId: admin.id },
+    { label, year, buffer, contentType, actor: admin },
   );
 
   return json({ icsFile }, 201);

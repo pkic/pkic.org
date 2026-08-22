@@ -2,7 +2,8 @@ import { first, all } from "../db/queries";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { AppError } from "../errors";
-import type { DatabaseLike, StatementLike } from "../types";
+import { requireAdminDatabaseUserId } from "../auth/admin-identity";
+import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "./audit";
 import type {
   PresentationVersion,
@@ -196,7 +197,7 @@ interface PresentationVersionCreateInput {
   fileName: string | null;
   fileSize: number | null;
   mimeType: string | null;
-  uploadedByUserId: string;
+  uploadedByUserId: string | null;
 }
 
 interface PresentationVersionAudit {
@@ -270,9 +271,10 @@ export async function reviewPresentationVersion(
   db: DatabaseLike,
   proposalId: string,
   versionId: string,
-  actorId: string,
+  actor: AuthAdmin,
   review: PresentationVersionReviewRequest,
 ): Promise<PresentationVersion> {
+  const reviewerUserId = requireAdminDatabaseUserId(actor);
   const version = await getPresentationVersion(db, versionId);
   if (version.proposalId !== proposalId) {
     throw new AppError(404, "VERSION_NOT_FOUND", "Presentation version not found");
@@ -284,8 +286,8 @@ export async function reviewPresentationVersion(
         `INSERT INTO presentation_version_reviews (id, version_id, reviewed_by_user_id, reviewed_at, status, note)
          VALUES (?, ?, ?, ?, ?, ?)`,
       )
-      .bind(uuid(), versionId, actorId, now, review.status, review.note?.trim() || null),
-    prepareAuditLog(db, "admin", actorId, "presentation_version_reviewed", "presentation_version", versionId, {
+      .bind(uuid(), versionId, reviewerUserId, now, review.status, review.note?.trim() || null),
+    prepareAuditLog(db, "admin", actor.id, "presentation_version_reviewed", "presentation_version", versionId, {
       proposalId,
       status: review.status,
     }),

@@ -314,12 +314,12 @@ describe("Membership scheduled jobs", () => {
     });
     expect((await runOnHoldReminders(env.DB, env as any)).remindersSent).toBe(1);
 
-    await transitionApplicationStage(env.DB, { applicationId: id, toStage: "in_review", actorUserId: null });
+    await transitionApplicationStage(env.DB, { applicationId: id, toStage: "in_review", actor: null });
     await transitionApplicationStage(env.DB, {
       applicationId: id,
       toStage: "on_hold",
       onHoldSubtype: "request_information",
-      actorUserId: null,
+      actor: null,
     });
     await env.DB.prepare("UPDATE member_applications SET stage_entered_at = datetime('now', '-5 days') WHERE id = ?")
       .bind(id)
@@ -347,12 +347,12 @@ describe("Membership scheduled jobs", () => {
     const staleRun = runOnHoldReminders(gate.db, env as any);
     await gate.reached;
 
-    await transitionApplicationStage(env.DB, { applicationId: id, toStage: "in_review", actorUserId: null });
+    await transitionApplicationStage(env.DB, { applicationId: id, toStage: "in_review", actor: null });
     await transitionApplicationStage(env.DB, {
       applicationId: id,
       toStage: "on_hold",
       onHoldSubtype: "request_org_application",
-      actorUserId: null,
+      actor: null,
     });
     gate.release();
 
@@ -378,12 +378,12 @@ describe("Membership scheduled jobs", () => {
     const staleRun = runOnHoldReminders(gate.db, env as any);
     await gate.reached;
 
-    await transitionApplicationStage(env.DB, { applicationId: id, toStage: "in_review", actorUserId: null });
+    await transitionApplicationStage(env.DB, { applicationId: id, toStage: "in_review", actor: null });
     await transitionApplicationStage(env.DB, {
       applicationId: id,
       toStage: "on_hold",
       onHoldSubtype: "request_org_application",
-      actorUserId: null,
+      actor: null,
     });
     await env.DB.prepare("UPDATE member_applications SET stage_entered_at = ? WHERE id = ?")
       .bind(originalStageEnteredAt, id)
@@ -416,12 +416,12 @@ describe("Membership scheduled jobs", () => {
     const staleRun = runOnHoldReminders(gate.db, env as any);
     await gate.reached;
 
-    await transitionApplicationStage(env.DB, { applicationId: id, toStage: "in_review", actorUserId: null });
+    await transitionApplicationStage(env.DB, { applicationId: id, toStage: "in_review", actor: null });
     await transitionApplicationStage(env.DB, {
       applicationId: id,
       toStage: "on_hold",
       onHoldSubtype: "request_org_email",
-      actorUserId: null,
+      actor: null,
     });
     await env.DB.prepare("UPDATE member_applications SET stage_entered_at = ? WHERE id = ?")
       .bind(originalStageEnteredAt, id)

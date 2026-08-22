@@ -39,7 +39,7 @@ export const MembersCreate = openApiRoute(membersCreateRouteSchema, async (c: Ad
   requirePermission(admin, "membership:write");
 
   const body = data.body;
-  const result = await createAdminMember(requestDb(c), admin.id, body);
+  const result = await createAdminMember(requestDb(c), admin, body);
 
   return json(result, 201);
 });

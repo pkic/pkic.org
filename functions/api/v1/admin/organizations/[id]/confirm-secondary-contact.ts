@@ -20,7 +20,7 @@ export const OrganizationConfirmSecondaryContactPost = openApiRoute(
     requirePermission(admin, "organizations:write");
 
     const id = data.params.id;
-    const result = await confirmSecondaryContact(db, admin.id, id);
+    const result = await confirmSecondaryContact(db, admin, id);
     if (result.outboxId) {
       c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, result.outboxId));
     }

@@ -16,6 +16,7 @@ import {
   type ReviewRow,
 } from "./model";
 import type { AuthAdmin, DatabaseLike } from "../../types";
+import { adminDatabaseUserId } from "../../auth/admin-identity";
 import { prepareStorageDeletion } from "../storage-deletion-outbox";
 import { serializeOrganizationContentValue } from "./fields";
 
@@ -158,6 +159,7 @@ export async function approveContentReview(
   }
 
   const now = nowIso();
+  const reviewerUserId = adminDatabaseUserId(admin);
   if (row.logo_staging_r2_key) {
     setClauses.push("logo_r2_key = ?");
     values.push(row.logo_staging_r2_key);
@@ -186,7 +188,7 @@ export async function approveContentReview(
            SET status = 'approved', reviewer_user_id = ?, reviewed_at = ?
            WHERE id = ? AND status = 'pending'`,
         )
-        .bind(admin.id, now, reviewId),
+        .bind(reviewerUserId, now, reviewId),
       queued.statement,
       prepareAuditLog(
         db,
@@ -213,7 +215,7 @@ export async function approveContentReview(
   }
 
   return {
-    review: toReviewSummary({ ...row, status: "approved", reviewer_user_id: admin.id, reviewed_at: now }),
+    review: toReviewSummary({ ...row, status: "approved", reviewer_user_id: reviewerUserId, reviewed_at: now }),
     organizationId: row.organization_id,
     organizationName: row.organization_name,
     submitterEmail: row.submitter_email,
@@ -244,6 +246,7 @@ export async function rejectContentReview(
   if (row.status !== "pending") throw new AppError(409, "NOT_PENDING", "Only a pending review can be rejected");
 
   const now = nowIso();
+  const reviewerUserId = adminDatabaseUserId(admin);
   const queued = prepareQueueEmailStatement(
     db,
     {
@@ -264,7 +267,7 @@ export async function rejectContentReview(
            SET status = 'rejected', reviewer_user_id = ?, reviewer_note = ?, reviewed_at = ?
            WHERE id = ? AND status = 'pending'`,
         )
-        .bind(admin.id, reviewerNote, now, reviewId),
+        .bind(reviewerUserId, reviewerNote, now, reviewId),
       db
         .prepare("UPDATE organizations SET logo_staging_r2_key = NULL WHERE id = ? AND logo_staging_r2_key = ?")
         .bind(row.organization_id, row.logo_staging_r2_key),
@@ -292,7 +295,7 @@ export async function rejectContentReview(
     review: toReviewSummary({
       ...row,
       status: "rejected",
-      reviewer_user_id: admin.id,
+      reviewer_user_id: reviewerUserId,
       reviewer_note: reviewerNote,
       reviewed_at: now,
     }),

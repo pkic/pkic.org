@@ -10,6 +10,7 @@ import { all } from "../db/queries";
 import { queryPage } from "../db/pagination";
 import { buildD1TextSearchFilter } from "../db/search";
 import { AppError } from "../errors";
+import { adminDatabaseUserId } from "../auth/admin-identity";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import {
@@ -41,7 +42,7 @@ import {
   type AdminApplicationSummary,
 } from "../../../assets/shared/schemas/admin-applications";
 import { resolveOrderBy } from "../db/sort";
-import type { DatabaseLike, StatementLike } from "../types";
+import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 
 type AdminApplicationSummaryRow = Pick<
   MemberApplicationRow,
@@ -232,7 +233,7 @@ export interface ApplicationEditInput {
 export async function updateAdminApplication(
   db: DatabaseLike,
   applicationId: string,
-  actorUserId: string,
+  actor: AuthAdmin,
   input: ApplicationEditInput,
 ): Promise<AdminApplicationDetail> {
   const application = await getMemberApplicationById(db, applicationId);
@@ -407,7 +408,7 @@ export async function updateAdminApplication(
       prepareAuditLogAfterOneChange(
         db,
         "admin",
-        actorUserId,
+        actor.id,
         "application_edited",
         "member_application",
         applicationId,
@@ -424,7 +425,7 @@ export async function updateAdminApplication(
           applicationId,
           application.stage,
           application.stage,
-          actorUserId,
+          adminDatabaseUserId(actor),
           `Application details edited: ${changedFields.join(", ")}`,
           now,
         ),

@@ -1,6 +1,7 @@
 import { uuid } from "../../utils/ids";
+import { adminDatabaseUserId } from "../../auth/admin-identity";
 import { prepareAuditLogAfterOneChange } from "../audit";
-import type { DatabaseLike, StatementLike } from "../../types";
+import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
 import { initialRenewalActionDueAt } from "./renewal-policy";
 
 export interface SponsorshipStageSubject {
@@ -51,8 +52,8 @@ export function prepareSponsorshipStageTransition(
   subject: SponsorshipStageSubject,
   input: {
     toStage: string;
-    actorType: "admin" | "system";
-    actorUserId: string | null;
+    /** `null` is reserved for unattended system transitions. */
+    actor: AuthAdmin | null;
     note: string | null;
     auditAction: string;
     now: string;
@@ -71,6 +72,8 @@ export function prepareSponsorshipStageTransition(
   const renewalGuardBindings = input.expectedRenewal
     ? [input.expectedRenewal.renewalDate, input.expectedRenewal.actionDueAt]
     : [];
+  const auditActorId = input.actor?.id ?? null;
+  const databaseActorUserId = input.actor ? adminDatabaseUserId(input.actor) : null;
   const statements: StatementLike[] = [
     db
       .prepare(
@@ -95,8 +98,8 @@ export function prepareSponsorshipStageTransition(
       ),
     prepareAuditLogAfterOneChange(
       db,
-      input.actorType,
-      input.actorUserId,
+      input.actor ? "admin" : "system",
+      auditActorId,
       input.auditAction,
       "sponsorship",
       subject.id,
@@ -108,7 +111,7 @@ export function prepareSponsorshipStageTransition(
         `INSERT INTO sponsorship_events (id, sponsorship_id, from_stage, to_stage, actor_user_id, note, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
-      .bind(uuid(), subject.id, fromStage, input.toStage, input.actorUserId, input.note, input.now),
+      .bind(uuid(), subject.id, fromStage, input.toStage, databaseActorUserId, input.note, input.now),
   ];
 
   if (subject.sponsor_type === "consortium" && subject.organization_id) {

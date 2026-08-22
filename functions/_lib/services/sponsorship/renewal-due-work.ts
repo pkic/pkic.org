@@ -171,8 +171,7 @@ export async function runSponsorshipDueWork(
     if (action.action === "auto-lapse") {
       const transition = prepareSponsorshipStageTransition(db, row, {
         toStage: "lapsed",
-        actorType: "system",
-        actorUserId: null,
+        actor: null,
         note: "Auto-lapsed — renewal date passed with no renewal action",
         auditAction: "sponsorship_auto_lapsed",
         now,

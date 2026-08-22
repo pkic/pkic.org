@@ -208,6 +208,45 @@ describe("Meeting calendar management", () => {
     expect(series?.icsFiles.some((f) => f.id === uploaded.icsFile.id)).toBe(true);
   });
 
+  it("keeps API-key audit identity separate from the nullable ICS uploader user", async () => {
+    const wgId = await insertWorkingGroup("API Key Calendar", "api-key-calendar");
+    const seriesId = await insertMeetingSeries("working_group", "API Key Calendar", wgId);
+    const formData = new FormData();
+    formData.append(
+      "file",
+      new File([new TextEncoder().encode("BEGIN:VCALENDAR\nEND:VCALENDAR")], "api-key.ics", {
+        type: "text/calendar",
+      }),
+    );
+    formData.append("label", "API key upload");
+    formData.append("year", "2026");
+
+    const response = await callMultipart(
+      env.ADMIN_API_KEY ?? "test-admin-key",
+      `/api/v1/admin/working-groups/${wgId}/meetings/${seriesId}/ics-files`,
+      formData,
+    );
+
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as { icsFile: { id: string; r2Key: string; uploadedByUserId: string | null } };
+    expect(body.icsFile.uploadedByUserId).toBeNull();
+    expect(await env.ASSETS_BUCKET!.get(body.icsFile.r2Key)).toBeTruthy();
+    expect(
+      await queryAll<{ uploaded_by_user_id: string | null }>(
+        env.DB,
+        "SELECT uploaded_by_user_id FROM meeting_ics_files WHERE id = ?",
+        body.icsFile.id,
+      ),
+    ).toEqual([{ uploaded_by_user_id: null }]);
+    expect(
+      await queryAll<{ actor_id: string | null }>(
+        env.DB,
+        "SELECT actor_id FROM audit_log WHERE action = 'meeting_ics_file_uploaded' AND entity_id = ?",
+        body.icsFile.id,
+      ),
+    ).toEqual([{ actor_id: "api-key" }]);
+  });
+
   it("rejects a file whose bytes are not an iCalendar document", async () => {
     const wgId = await insertWorkingGroup("Unsafe ICS", "unsafe-ics");
     const seriesId = await insertMeetingSeries("working_group", "Unsafe Upload", wgId);
@@ -305,7 +344,12 @@ describe("Meeting calendar management", () => {
           // A syntactically valid but non-existent user id — violates
           // meeting_ics_files.uploaded_by_user_id's FK, forcing the D1
           // insert to fail after the R2 put has already succeeded.
-          uploadedByUserId: "00000000-0000-4000-8000-000000000000",
+          actor: {
+            id: "invalid-uploader",
+            databaseUserId: "00000000-0000-4000-8000-000000000000",
+            email: "invalid-uploader@example.test",
+            role: "admin",
+          },
         },
       ),
     ).rejects.toThrow();
@@ -342,7 +386,12 @@ describe("Meeting calendar management", () => {
           year: 2026,
           buffer: new TextEncoder().encode("BEGIN:VCALENDAR\nEND:VCALENDAR").buffer,
           contentType: "text/calendar",
-          uploadedByUserId: "00000000-0000-4000-8000-000000000000",
+          actor: {
+            id: "invalid-uploader",
+            databaseUserId: "00000000-0000-4000-8000-000000000000",
+            email: "invalid-uploader@example.test",
+            role: "admin",
+          },
         },
       ),
     ).rejects.toThrow();

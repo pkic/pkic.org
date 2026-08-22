@@ -1,4 +1,5 @@
 import type { ProposalReview, ProposalReviewUpsert } from "../../../../assets/shared/schemas/proposal-reviews";
+import { requireAdminDatabaseUserId } from "../../auth/admin-identity";
 import { batchFirst } from "../../db/pagination";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
@@ -27,12 +28,13 @@ export async function upsertProposalReview(
   proposalId: string,
   payload: ProposalReviewUpsert,
 ): Promise<ProposalReview> {
+  const reviewerUserId = requireAdminDatabaseUserId(actor);
   const context = await getReviewContext(db, actor, proposalId);
   assertReviewWritable(context);
   const existing = await first<ProposalReview>(
     db,
     `SELECT ${REVIEW_COLUMNS} ${REVIEW_FROM} WHERE pr.proposal_id = ? AND pr.reviewer_user_id = ?`,
-    [proposalId, actor.id],
+    [proposalId, reviewerUserId],
   );
   const nextState: ReviewAuditState = {
     reviewRound: context.reviewRound,
@@ -61,7 +63,7 @@ export async function upsertProposalReview(
           .bind(
             reviewId,
             proposalId,
-            actor.id,
+            reviewerUserId,
             context.reviewRound,
             payload.recommendation,
             payload.score,

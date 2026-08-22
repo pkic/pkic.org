@@ -395,7 +395,7 @@ describe("proposal participants", () => {
 
     await finalizeProposalDecision(env.DB, {
       proposalId: proposal.id,
-      actor: { id: adminRow.id, email: "admin@pkic.org", role: "admin" },
+      actor: { id: adminRow.id, databaseUserId: adminRow.id, email: "admin@pkic.org", role: "admin" },
       finalStatus: "accepted",
       minReviewsRequired: 0,
     });
@@ -458,5 +458,52 @@ describe("proposal participants", () => {
         [eventId, speakerId],
       ),
     ).toEqual([{ status: "active" }]);
+
+    const apiKeyHeaders = {
+      authorization: `Bearer ${env.ADMIN_API_KEY ?? "test-admin-key"}`,
+      "content-type": "application/json",
+    };
+    const unattributableSet = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/events/pqc-2026/registrations/${registrationId}/badge-role`, {
+        method: "PATCH",
+        headers: apiKeyHeaders,
+        body: JSON.stringify({ role: "moderator" }),
+      }),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(unattributableSet.status).toBe(403);
+    await expect(unattributableSet.json()).resolves.toMatchObject({
+      error: { code: "USER_BACKED_ADMIN_REQUIRED" },
+    });
+    expect(
+      await queryAll<{ role: string; set_by_user_id: string }>(
+        env.DB,
+        "SELECT role, set_by_user_id FROM registration_badge_role_overrides WHERE registration_id = ?",
+        [registrationId],
+      ),
+    ).toEqual([{ role: "staff", set_by_user_id: adminRow.id }]);
+
+    const apiKeyClear = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/events/pqc-2026/registrations/${registrationId}/badge-role`, {
+        method: "PATCH",
+        headers: apiKeyHeaders,
+        body: JSON.stringify({ role: "attendee" }),
+      }),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(apiKeyClear.status).toBe(200);
+    await expect(
+      queryAll(env.DB, "SELECT role FROM registration_badge_role_overrides WHERE registration_id = ?", [
+        registrationId,
+      ]),
+    ).resolves.toHaveLength(0);
+    expect(
+      await queryAll<{ actor_id: string | null }>(
+        env.DB,
+        "SELECT actor_id FROM audit_log WHERE action = 'admin_badge_role_set' ORDER BY created_at, id",
+      ),
+    ).toEqual([{ actor_id: adminRow.id }, { actor_id: "api-key" }]);
   });
 });
