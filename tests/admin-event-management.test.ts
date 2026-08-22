@@ -409,6 +409,32 @@ describe("admin event management endpoints", () => {
     expect(invalidLimit.status).toBe(400);
   });
 
+  it("keeps API-key audit identity separate from an event-team grantor user", async () => {
+    await setupAdmin();
+    ADMIN_TOKEN = env.ADMIN_API_KEY ?? "test-admin-key";
+
+    const response = await callAdmin("/api/v1/admin/events/pqc-2026/permissions", {
+      method: "POST",
+      body: JSON.stringify({ userEmail: "api-key-organizer@example.test", permission: "organizer" }),
+    });
+
+    expect(response.status).toBe(201);
+    const payload = (await response.json()) as { permission: { id: string } };
+    expect(
+      await queryAll<{ granted_by_user_id: string | null }>(
+        env.DB,
+        "SELECT granted_by_user_id FROM user_roles WHERE id = ?",
+        payload.permission.id,
+      ),
+    ).toEqual([{ granted_by_user_id: null }]);
+    expect(
+      await queryAll<{ actor_id: string | null }>(
+        env.DB,
+        "SELECT actor_id FROM audit_log WHERE action = 'event_permission_granted' AND entity_type = 'event'",
+      ),
+    ).toEqual([{ actor_id: "api-key" }]);
+  });
+
   it("allows admin to reinstate a cancelled registration and rejects double-cancel", async () => {
     await setupAdmin();
 

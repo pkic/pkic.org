@@ -6,6 +6,7 @@ import { constantTimeEqual, sha256Hex } from "../utils/crypto";
 import { AUTH_SCOPES } from "./scopes";
 import { computeGrantsForUser } from "./permissions";
 import type { AuthAdmin, DatabaseLike, Env } from "../types";
+import { requireAdminDatabaseUserId } from "./admin-identity";
 import {
   AUTH_MAGIC_LINK_PURPOSES,
   getBearerToken,
@@ -206,7 +207,13 @@ export async function requireAdminFromRequest(
   // API key auth — no DB lookup needed, returns a synthetic admin identity.
   // Use constant-time comparison to avoid leaking the configured key via timing.
   if (env?.ADMIN_API_KEY && (await constantTimeEqual(token, env.ADMIN_API_KEY))) {
-    const admin = { id: "api-key", email: "api-key", role: "admin", scopes: [...AUTH_SCOPES] };
+    const admin = {
+      id: "api-key",
+      databaseUserId: null,
+      email: "api-key",
+      role: "admin",
+      scopes: [...AUTH_SCOPES],
+    };
     cacheAdminForRequest(request, admin, "api-key");
     return admin;
   }
@@ -236,13 +243,7 @@ export async function requireUserBackedAdminFromRequest(
   env?: Pick<Env, "ADMIN_API_KEY" | "INTERNAL_SIGNING_SECRET">,
 ): Promise<AuthAdmin> {
   const admin = await requireAdminFromRequest(db, request, env);
-  if (getCachedAdminAuthTransport(request) === "api-key") {
-    throw new AppError(
-      403,
-      "USER_BACKED_ADMIN_REQUIRED",
-      "This action requires an attributable admin session rather than the shared API key",
-    );
-  }
+  requireAdminDatabaseUserId(admin);
   return admin;
 }
 
@@ -282,6 +283,7 @@ export async function issueAdminSession(
   return {
     admin: {
       id: user.id,
+      databaseUserId: user.id,
       email: user.email,
       role: user.role,
       scopes: user.role === "admin" ? [...AUTH_SCOPES] : [],
@@ -310,6 +312,7 @@ export async function getAdminBySessionClaims(db: DatabaseLike, claims: AdminSes
 
   return {
     id: activeRow.user_id,
+    databaseUserId: activeRow.user_id,
     email: activeRow.email,
     role: activeRow.role,
     scopes: claims.scopes,
@@ -365,6 +368,7 @@ export async function prepareAdminMagicLink(
     token: magic.token,
     admin: {
       id: admin.id,
+      databaseUserId: admin.id,
       email: admin.email,
       role: admin.role,
     },
@@ -438,6 +442,7 @@ export async function verifyAdminMagicLink(
   return {
     admin: {
       id: row.user_id,
+      databaseUserId: row.user_id,
       email: row.email,
       role: row.role,
       scopes: row.role === "admin" ? [...AUTH_SCOPES] : [],

@@ -98,6 +98,30 @@ describe("permission_grants (Access grants)", () => {
     expect(rows[0].expires_at).toBe(expiresAt);
   });
 
+  it("keeps API-key audit identity out of the nullable grantor user foreign key", async () => {
+    const response = await call(env.ADMIN_API_KEY ?? "test-admin-key", "/api/v1/admin/access-grants", {
+      method: "POST",
+      body: JSON.stringify({ userId: staffUserId, permission: "donations:read" }),
+    });
+
+    expect(response.status).toBe(201);
+    const payload = (await response.json()) as { grant: { id: string } };
+    expect(
+      await queryAll<{ granted_by_user_id: string | null }>(
+        env.DB,
+        "SELECT granted_by_user_id FROM permission_grants WHERE id = ?",
+        payload.grant.id,
+      ),
+    ).toEqual([{ granted_by_user_id: null }]);
+    expect(
+      await queryAll<{ actor_id: string | null }>(
+        env.DB,
+        "SELECT actor_id FROM audit_log WHERE entity_id = ? AND action = 'access_grant_created'",
+        payload.grant.id,
+      ),
+    ).toEqual([{ actor_id: "api-key" }]);
+  });
+
   it("rolls back an access grant when its required audit record cannot be written", async () => {
     await env.DB.prepare(
       `CREATE TRIGGER fail_access_grant_audit

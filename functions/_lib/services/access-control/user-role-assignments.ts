@@ -6,6 +6,7 @@ import {
 } from "../../../../assets/shared/schemas/access-control";
 import { AppError } from "../../errors";
 import { hasPermission, requirePermission } from "../../auth/permissions";
+import { adminDatabaseUserId } from "../../auth/admin-identity";
 import { all, first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
@@ -169,7 +170,7 @@ export async function assignUserRole(
         memberId: contextId,
         userId,
         roleId: input.roleId,
-        grantedByUserId: actor.id,
+        grantedByUserId: adminDatabaseUserId(actor),
         assignmentId: id,
         now,
       })),
@@ -198,7 +199,7 @@ export async function assignUserRole(
           input.roleId,
           contextType,
           contextId,
-          actor.id,
+          adminDatabaseUserId(actor),
           role.single_holder_per_context,
           expiresAt,
           now,

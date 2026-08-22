@@ -5,6 +5,7 @@ import { enforceEmailTriggerRateLimits, enforceRateLimit } from "../rate-limit";
 import { getClientIp, getUserAgent, hashOptional, requireInternalSecret } from "../request";
 import type { AuthAdmin, AuthMember, DatabaseLike } from "../types";
 import { serializeAdminSessionCookie, signAdminSessionToken } from "./admin";
+import { publicAuthAdmin } from "./admin-identity";
 import { serializeMemberSessionCookie, signMemberSessionToken } from "./member";
 
 export interface MagicLinkRequestHttpContext {
@@ -104,7 +105,7 @@ export async function createAdminSessionEstablishedResponse(options: {
     state: options.state,
   });
   return createSessionEstablishedResponse(
-    { success: true, expiresAt: options.expiresAt, admin: options.admin },
+    { success: true, expiresAt: options.expiresAt, admin: publicAuthAdmin(options.admin) },
     serializeAdminSessionCookie(token, options.request),
   );
 }

@@ -7,6 +7,7 @@ import {
 } from "../../../../assets/shared/schemas/admin-events";
 import { buildPageInfo, type PageInfo } from "../../../../assets/shared/schemas/pagination";
 import { requirePermission } from "../../auth/permissions";
+import { adminDatabaseUserId } from "../../auth/admin-identity";
 import { queryPage } from "../../db/pagination";
 import { first } from "../../db/queries";
 import { buildD1TextSearchFilter } from "../../db/search";
@@ -129,7 +130,7 @@ export async function grantEventTeamRole(
              (id, user_id, role_id, context_type, context_id, granted_by_user_id, expires_at, created_at)
            VALUES (?, ?, ?, 'event', ?, ?, ?, ?)`,
         )
-        .bind(id, userId, roleId, event.id, actor.id, expiresAt, now),
+        .bind(id, userId, roleId, event.id, adminDatabaseUserId(actor), expiresAt, now),
       prepareAuditLog(
         db,
         "admin",

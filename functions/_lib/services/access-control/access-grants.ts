@@ -8,6 +8,7 @@ import {
 import { buildPageInfo, type PageInfo } from "../../../../assets/shared/schemas/pagination";
 import { AppError } from "../../errors";
 import { hasPermission, isPermission, requirePermission } from "../../auth/permissions";
+import { adminDatabaseUserId } from "../../auth/admin-identity";
 import { first } from "../../db/queries";
 import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
@@ -130,7 +131,7 @@ export async function createAccessGrant(
            (id, user_id, permission, context_type, context_id, granted_by_user_id, expires_at, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .bind(id, input.userId, input.permission, contextType, contextId, actor.id, expiresAt, now),
+      .bind(id, input.userId, input.permission, contextType, contextId, adminDatabaseUserId(actor), expiresAt, now),
     prepareAuditLog(
       db,
       "admin",

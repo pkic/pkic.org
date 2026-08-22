@@ -255,7 +255,13 @@ export interface AuthMember {
 }
 
 export interface AuthAdmin {
+  /** Stable textual identity used in audit records; synthetic actors such as `api-key` are valid. */
   id: string;
+  /**
+   * Backing `users.id` for relational attribution. `null` means this actor is
+   * authenticated but is not a database user.
+   */
+  databaseUserId?: string | null;
   email: string;
   role: string;
   scopes?: string[];

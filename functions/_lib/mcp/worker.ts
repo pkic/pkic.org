@@ -106,6 +106,7 @@ async function authorizationHeaderForMcp(
   const token = await signAdminSessionToken(env.INTERNAL_SIGNING_SECRET, {
     admin: {
       id: oauthProps.adminId,
+      databaseUserId: oauthProps.adminId,
       email: oauthProps.email,
       role: oauthProps.role,
       scopes: oauthProps.scopes,

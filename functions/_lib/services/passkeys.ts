@@ -435,6 +435,7 @@ export async function completePasskeyAuthentication(
     );
     const admin: AuthAdmin = {
       id: staffUser.id,
+      databaseUserId: staffUser.id,
       email: staffUser.email,
       role: staffUser.role,
       scopes: staffUser.role === "admin" ? [...AUTH_SCOPES] : [],
