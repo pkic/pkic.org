@@ -140,7 +140,7 @@ export async function saveExistingProposalReview(
       .prepare(
         `UPDATE proposal_reviews
          SET review_round = ?, recommendation = ?, score = ?, reviewer_comment = ?, applicant_note = ?, updated_at = ?
-         WHERE id = ? AND proposal_id = ? AND review_round = ? AND recommendation = ? AND score IS ?
+         WHERE id = ? AND proposal_id = ? AND reviewer_user_id = ? AND review_round = ? AND recommendation = ? AND score IS ?
            AND reviewer_comment IS ? AND applicant_note IS ? AND updated_at = ?
            AND EXISTS ${REVIEW_WRITABLE_PROPOSAL_SQL}`,
       )
@@ -153,6 +153,7 @@ export async function saveExistingProposalReview(
         now,
         existing.id,
         proposalId,
+        actor.id,
         existing.review_round,
         existing.recommendation,
         existing.score,
@@ -171,10 +172,11 @@ export async function saveExistingProposalReview(
       details: changes,
       createdAt: now,
       conditionSql:
-        "SELECT 1 FROM proposal_reviews WHERE id = ? AND proposal_id = ? AND review_round = ? AND recommendation = ? AND score IS ? AND reviewer_comment IS ? AND applicant_note IS ? AND updated_at = ? AND changes() = 1",
+        "SELECT 1 FROM proposal_reviews WHERE id = ? AND proposal_id = ? AND reviewer_user_id = ? AND review_round = ? AND recommendation = ? AND score IS ? AND reviewer_comment IS ? AND applicant_note IS ? AND updated_at = ? AND changes() = 1",
       conditionBindings: [
         existing.id,
         proposalId,
+        actor.id,
         next.reviewRound,
         next.recommendation,
         next.score,

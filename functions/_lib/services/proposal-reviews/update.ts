@@ -28,8 +28,8 @@ export async function updateProposalReview(
     [reviewId, proposalId, context.reviewRound],
   );
   if (!existing) throw new AppError(404, "PROPOSAL_REVIEW_NOT_FOUND", "Proposal review not found");
-  if (existing.reviewer_user_id !== actor.id && !context.access.canFinalize) {
-    throw new AppError(403, "FORBIDDEN", "Only the review owner or a proposal manager may edit this review");
+  if (existing.reviewer_user_id !== actor.id) {
+    throw new AppError(403, "FORBIDDEN", "Only the review owner may edit this review");
   }
 
   const next = {
