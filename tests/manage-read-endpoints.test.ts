@@ -53,11 +53,10 @@ describe("manage read endpoints", () => {
       resourceId: registrationId,
     });
 
-    const response = await getRegistration(
-      createContext(env, new Request(`https://app.test/api/v1/registrations/manage/${token}`), { token }),
-    );
+    const response = await callApp(new Request(`https://app.test/api/v1/registrations/manage/${token}`));
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store, max-age=0");
     const payload = (await response.json()) as { registration: { id: string; manage_link_secret?: string } };
     expect(payload.registration.id).toBe(registrationId);
     expect(payload.registration.manage_link_secret).toBeUndefined();
@@ -87,13 +86,10 @@ describe("manage read endpoints", () => {
       `),
     ]);
 
-    const response = await getRegistration(
-      createContext(env, new Request(`https://app.test/api/v1/registrations/manage/${tokenHash}`), {
-        token: tokenHash,
-      }),
-    );
+    const response = await callApp(new Request(`https://app.test/api/v1/registrations/manage/${tokenHash}`));
 
     expect(response.status).toBe(404);
+    expect(response.headers.get("cache-control")).toBe("no-store, max-age=0");
     const payload = (await response.json()) as { error: { code: string } };
     expect(payload.error.code).toBe("REGISTRATION_NOT_FOUND");
   });
