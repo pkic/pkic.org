@@ -148,6 +148,7 @@ describe("proposal review and finalize", () => {
 
     const listResponse = await callProposalReview(apiKey, proposalId);
     expect(listResponse.status).toBe(200);
+    await expect(listResponse.json()).resolves.toMatchObject({ myReview: null });
 
     const createResponse = await callProposalReview(apiKey, proposalId, "", {
       method: "POST",

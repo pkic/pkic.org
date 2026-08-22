@@ -2,20 +2,22 @@
  * Shared actor resolution for endpoints usable by either staff (AuthAdmin)
  * or ordinary members (AuthMember) holding the *same* underlying identity
  * concept (a `users.id` row) — today, just the passkey endpoints
- * (`/api/v1/auth/passkeys/*`, which are keyed on
+ * (`/api/v1/auth/passkeys/*`), which are keyed on
  * `passkey_credentials.user_id` regardless of which session type owns it.
  *
- * Tries the admin session first (cookie name `pkic_admin_session`, checked
- * by requireAdminFromRequest), then the member session (`pkic_member_session`)
- * — the two use distinct cookies/JWT `typ` claims, so at most one normally
- * resolves for a given browser. A generic 401 is thrown only if neither
+ * Tries a user-backed admin session first (cookie name `pkic_admin_session`),
+ * then the member session (`pkic_member_session`). Synthetic admin transports
+ * such as the shared API key cannot own passkeys and fail closed.
+ * The two sessions use distinct cookies/JWT `typ` claims, so at most one
+ * normally resolves for a given browser. A generic 401 is thrown only if neither
  * does, rather than surfacing whichever specific error came first, since
  * this endpoint is reachable from both the admin and member portal
  * frontends and neither error is more "correct" than the other from the
  * caller's point of view.
  */
 import { AppError } from "../errors";
-import { requireAdminFromRequest } from "./admin";
+import { requireUserBackedAdminFromRequest } from "./admin";
+import { requireAdminDatabaseUserId } from "./admin-identity";
 import { requireMemberFromRequest } from "./member";
 import type { DatabaseLike, Env } from "../types";
 
@@ -27,8 +29,8 @@ export async function requireAnyActorFromRequest(
   env?: Pick<Env, "ADMIN_API_KEY" | "INTERNAL_SIGNING_SECRET">,
 ): Promise<AuthActor> {
   try {
-    const admin = await requireAdminFromRequest(db, request, env);
-    return { kind: "admin", id: admin.id, email: admin.email };
+    const admin = await requireUserBackedAdminFromRequest(db, request, env);
+    return { kind: "admin", id: requireAdminDatabaseUserId(admin), email: admin.email };
   } catch (adminError) {
     // Only a 401 means "not this kind of actor" — fall through to the
     // member check. Anything else (e.g. a 500 from missing

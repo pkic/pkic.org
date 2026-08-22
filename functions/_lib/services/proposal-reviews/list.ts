@@ -1,5 +1,6 @@
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import type { ProposalReview, ProposalReviewsListQuery } from "../../../../assets/shared/schemas/proposal-reviews";
+import { adminDatabaseUserId } from "../../auth/admin-identity";
 import { batchFirst, buildOffsetPageStatements, decodeOffsetPageResults } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
@@ -21,6 +22,7 @@ export async function listProposalReviews(
   query: ProposalReviewsListQuery,
   minReviewsRequired: number,
 ) {
+  const reviewerUserId = adminDatabaseUserId(actor);
   const context = await getReviewContext(db, actor, proposalId);
   const search = query.q
     ? buildD1TextSearchFilter(query.q, [
@@ -80,7 +82,7 @@ export async function listProposalReviews(
         `SELECT ${REVIEW_COLUMNS} ${REVIEW_FROM}
          WHERE pr.proposal_id = ? AND pr.review_round = ? AND pr.reviewer_user_id = ?`,
       )
-      .bind(proposalId, context.reviewRound, actor.id),
+      .bind(proposalId, context.reviewRound, reviewerUserId),
   ]);
 
   const { rows: reviews, total } = decodeOffsetPageResults<ProposalReview>(pageResult, countResult);

@@ -132,6 +132,21 @@ describe("passkeys (WebAuthn)", () => {
     expect(body.challengeToken).toBeTruthy();
   });
 
+  it("rejects the shared API key from user-owned passkey endpoints", async () => {
+    const apiKey = env.ADMIN_API_KEY ?? "test-admin-key";
+    const beginResponse = await call("/api/v1/auth/passkeys/register/begin", { method: "POST" }, apiKey);
+    const listResponse = await call("/api/v1/auth/passkeys", {}, apiKey);
+
+    for (const response of [beginResponse, listResponse]) {
+      expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toMatchObject({ error: { code: "USER_BACKED_ADMIN_REQUIRED" } });
+    }
+    await expect(queryAll(env.DB, "SELECT id FROM passkey_credentials")).resolves.toHaveLength(0);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'passkey_registered'"),
+    ).resolves.toHaveLength(0);
+  });
+
   it("bounds active credentials consistently at registration and listing", async () => {
     for (let index = 0; index < MAX_PASSKEY_CREDENTIALS_PER_USER; index++) {
       await env.DB.prepare(

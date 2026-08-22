@@ -68,6 +68,7 @@ export const adminEmailTemplateVersionSchema = z.object({
   contentType: emailContentTypeSchema.optional(),
   messageType: emailMessageTypeSchema.optional(),
 });
+export type AdminEmailTemplateVersionInput = z.infer<typeof adminEmailTemplateVersionSchema>;
 
 /** Lifecycle states persisted by email_template_versions. */
 export const emailTemplateVersionStatusSchema = z.enum(["draft", "active", "archived"]);

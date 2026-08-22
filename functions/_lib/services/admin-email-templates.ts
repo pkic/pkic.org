@@ -1,13 +1,17 @@
 import {
   ADMIN_EMAIL_TEMPLATES_SORT_COLUMNS,
   type AdminEmailTemplateVersion,
+  type AdminEmailTemplateVersionInput,
   type EmailTemplateVersionStatus,
 } from "../../../assets/shared/schemas/admin-email-templates";
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
 import { queryPage } from "../db/pagination";
 import { buildD1TextSearchFilter } from "../db/search";
 import { resolveMappedOrderBy, resolveOrderBy } from "../db/sort";
-import type { DatabaseLike } from "../types";
+import { adminDatabaseUserId } from "../auth/admin-identity";
+import { buildTemplateVersionCreate } from "../email/templates";
+import type { AuthAdmin, DatabaseLike } from "../types";
+import { prepareAuditLog } from "./audit";
 
 interface TemplateSummaryRow {
   template_key: string;
@@ -23,6 +27,36 @@ interface ListQuery {
   sort?: string;
   limit: number;
   offset: number;
+}
+
+export async function createAdminEmailTemplateVersion(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  input: AdminEmailTemplateVersionInput & { templateKey: string },
+) {
+  const prepared = await buildTemplateVersionCreate(db, {
+    ...input,
+    createdByUserId: adminDatabaseUserId(actor),
+  });
+  await db.batch([
+    prepared.statement,
+    prepareAuditLog(
+      db,
+      "admin",
+      actor.id,
+      "email_template_version_created",
+      "email_template_version",
+      prepared.row.id,
+      {
+        templateKey: prepared.row.template_key,
+        version: prepared.row.version,
+        contentType: prepared.row.content_type,
+        messageType: prepared.row.message_type,
+      },
+      prepared.row.created_at,
+    ),
+  ]);
+  return prepared.row;
 }
 
 export async function listAdminEmailTemplates(db: DatabaseLike, query: ListQuery) {

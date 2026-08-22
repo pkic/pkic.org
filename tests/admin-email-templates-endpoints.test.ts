@@ -148,6 +148,90 @@ describe("admin email template endpoints", () => {
     expect(payload.text).toContain("Jordan");
   });
 
+  it("attributes a new template version to the real admin user and audit actor", async () => {
+    const { adminId } = await setupAdminTemplates();
+
+    const response = await callAdmin("/api/v1/admin/email-templates/attribution_test/versions", {
+      method: "POST",
+      body: JSON.stringify({ content: "Attribution test body", contentType: "markdown" }),
+    });
+
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as { version: { id: string } };
+    expect(
+      await queryAll<{ created_by_user_id: string | null }>(
+        env.DB,
+        "SELECT created_by_user_id FROM email_template_versions WHERE id = ?",
+        payload.version.id,
+      ),
+    ).toEqual([{ created_by_user_id: adminId }]);
+    expect(
+      await queryAll<{ actor_id: string | null }>(
+        env.DB,
+        "SELECT actor_id FROM audit_log WHERE action = 'email_template_version_created' AND entity_id = ?",
+        payload.version.id,
+      ),
+    ).toEqual([{ actor_id: adminId }]);
+  });
+
+  it("keeps API-key audit identity out of the nullable template creator foreign key", async () => {
+    await setupAdminTemplates();
+    ADMIN_TOKEN = env.ADMIN_API_KEY ?? "test-admin-key";
+
+    const response = await callAdmin("/api/v1/admin/email-templates/api_key_attribution_test/versions", {
+      method: "POST",
+      body: JSON.stringify({ content: "API-key attribution test body", contentType: "markdown" }),
+    });
+
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as { version: { id: string } };
+    expect(
+      await queryAll<{ created_by_user_id: string | null }>(
+        env.DB,
+        "SELECT created_by_user_id FROM email_template_versions WHERE id = ?",
+        payload.version.id,
+      ),
+    ).toEqual([{ created_by_user_id: null }]);
+    expect(
+      await queryAll<{ actor_id: string | null }>(
+        env.DB,
+        "SELECT actor_id FROM audit_log WHERE action = 'email_template_version_created' AND entity_id = ?",
+        payload.version.id,
+      ),
+    ).toEqual([{ actor_id: "api-key" }]);
+  });
+
+  it("rolls back a new template version when its audit row cannot be written", async () => {
+    await setupAdminTemplates();
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_email_template_version_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'email_template_version_created'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced email template audit failure');
+       END`,
+    ).run();
+
+    try {
+      const response = await callAdmin("/api/v1/admin/email-templates/audit_rollback_test/versions", {
+        method: "POST",
+        body: JSON.stringify({ content: "Must roll back", contentType: "markdown" }),
+      });
+      expect(response.status).toBe(500);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM email_template_versions WHERE template_key = 'audit_rollback_test'"),
+      ).toHaveLength(0);
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT id FROM audit_log WHERE action = 'email_template_version_created' AND entity_type = 'email_template_version'",
+        ),
+      ).toHaveLength(0);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_email_template_version_audit").run();
+    }
+  });
+
   it("creates a new version, activates it, and rejects unknown versions", async () => {
     await setupAdminTemplates();
 
