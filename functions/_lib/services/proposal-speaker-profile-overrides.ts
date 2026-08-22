@@ -12,6 +12,15 @@ export const PROPOSAL_PROFILE_FIELDS = {
 } as const;
 
 export type ProposalProfileField = keyof typeof PROPOSAL_PROFILE_FIELDS;
+export interface ProposalSpeakerAuthoritySnapshot {
+  proposalSpeakerId: string;
+  proposalId: string;
+  proposalStatus: string;
+  proposalUpdatedAt: string;
+  userId: string;
+  currentStatus: string;
+}
+
 export interface ProposalProfileValues {
   firstName: string | null;
   lastName: string | null;
@@ -22,14 +31,32 @@ export interface ProposalProfileValues {
 }
 export type ProposalProfilePatch = Partial<ProposalProfileValues>;
 
-export interface ProposalProfileOverrideSnapshot {
-  proposalSpeakerId: string;
-  proposalId: string;
-  proposalStatus: string;
-  proposalUpdatedAt: string;
-  userId: string;
-  currentStatus: string;
+export interface ProposalProfileOverrideSnapshot extends ProposalSpeakerAuthoritySnapshot {
   expectedProfileOverridesJson: string | null;
+}
+
+export function proposalSpeakerAuthorityCondition(context: ProposalSpeakerAuthoritySnapshot): {
+  sql: string;
+  bindings: unknown[];
+} {
+  return {
+    sql: `EXISTS (
+      SELECT 1
+        FROM proposal_speakers ps
+        JOIN session_proposals sp ON sp.id = ps.proposal_id
+       WHERE ps.id = ? AND ps.proposal_id = ? AND ps.user_id = ? AND ps.status = ?
+         AND sp.id = ? AND sp.status = ? AND sp.updated_at = ? AND sp.deleted_at IS NULL
+    )`,
+    bindings: [
+      context.proposalSpeakerId,
+      context.proposalId,
+      context.userId,
+      context.currentStatus,
+      context.proposalId,
+      context.proposalStatus,
+      context.proposalUpdatedAt,
+    ],
+  };
 }
 
 /**

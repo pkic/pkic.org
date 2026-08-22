@@ -4,12 +4,7 @@ import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { imageExtension, putUploadedImage } from "../utils/image-upload";
 import { first } from "../db/queries";
-import {
-  isAuditOneChangeGuardFailure,
-  prepareAuditLogAfterOneChange,
-  prepareAuditLogWhen,
-  type AuditScope,
-} from "./audit";
+import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange, type AuditScope } from "./audit";
 import { storedImageResponse } from "./image-response";
 import {
   prepareStorageDeletion,
@@ -36,6 +31,7 @@ export interface UserHeadshotContext {
   userId: string;
   previousKey: string | null;
   audit: HeadshotAudit;
+  commitGuard?: { sql: string; bindings: unknown[] };
   prepareAdditionalCommitStatements?: (at: string) => StatementLike[];
 }
 
@@ -95,29 +91,6 @@ export async function adminUserHeadshotResponse(db: DatabaseLike, bucket: R2Buck
   return privateUserHeadshotResponse(bucket, user.headshot_r2_key);
 }
 
-function conditionalHeadshotAuditStatement(
-  db: DatabaseLike,
-  userId: string,
-  audit: HeadshotAudit,
-  details: Record<string, unknown>,
-  at: string,
-  conditionSql: string,
-  conditionValues: unknown[],
-): StatementLike {
-  return prepareAuditLogWhen(db, {
-    actorType: audit.actorType,
-    actorId: audit.actorId,
-    action: audit.action,
-    entityType: audit.entityType ?? "user",
-    entityId: audit.entityId ?? userId,
-    details: { ...audit.details, ...details },
-    scope: audit.scope,
-    createdAt: at,
-    conditionSql: `SELECT 1 FROM users WHERE id = ? AND ${conditionSql}`,
-    conditionBindings: [userId, ...conditionValues],
-  });
-}
-
 async function headshotConflictError(db: DatabaseLike, userId: string): Promise<AppError> {
   const user = await first<{ id: string }>(db, "SELECT id FROM users WHERE id = ?", [userId]);
   return user
@@ -158,9 +131,9 @@ export async function replaceUserHeadshot(
           context.db
             .prepare(
               `UPDATE users SET headshot_r2_key = ?, headshot_updated_at = ?, updated_at = ?
-           WHERE id = ? AND headshot_r2_key IS ?`,
+           WHERE id = ? AND headshot_r2_key IS ?${context.commitGuard ? ` AND ${context.commitGuard.sql}` : ""}`,
             )
-            .bind(r2Key, at, at, context.userId, context.previousKey),
+            .bind(r2Key, at, at, context.userId, context.previousKey, ...(context.commitGuard?.bindings ?? [])),
           prepareAuditLogAfterOneChange(
             context.db,
             context.audit.actorType,
@@ -197,17 +170,19 @@ export async function removeUserHeadshot(context: Omit<UserHeadshotContext, "buc
     context.db
       .prepare(
         `UPDATE users SET headshot_r2_key = NULL, headshot_updated_at = ?, updated_at = ?
-         WHERE id = ? AND headshot_r2_key IS ?`,
+         WHERE id = ? AND headshot_r2_key IS ?${context.commitGuard ? ` AND ${context.commitGuard.sql}` : ""}`,
       )
-      .bind(at, at, context.userId, context.previousKey),
-    conditionalHeadshotAuditStatement(
+      .bind(at, at, context.userId, context.previousKey, ...(context.commitGuard?.bindings ?? [])),
+    prepareAuditLogAfterOneChange(
       context.db,
-      context.userId,
-      context.audit,
-      { previousKey: context.previousKey },
+      context.audit.actorType,
+      context.audit.actorId,
+      context.audit.action,
+      context.audit.entityType ?? "user",
+      context.audit.entityId ?? context.userId,
+      { ...context.audit.details, previousKey: context.previousKey },
       at,
-      "headshot_r2_key IS NULL AND headshot_updated_at = ?",
-      [at],
+      context.audit.scope,
     ),
     prepareBadgeRenderJobsForUser(context.db, context.userId, at),
     ...(context.prepareAdditionalCommitStatements?.(at) ?? []),
@@ -267,6 +242,7 @@ export async function commitUserHeadshotUpload(
     image: context.image,
     source: context.source,
     audit: context.audit,
+    commitGuard: context.commitGuard,
     prepareAdditionalCommitStatements: context.prepareAdditionalCommitStatements,
   });
   finalizeUserHeadshotChange(context, waitUntil);
@@ -292,6 +268,7 @@ export async function uploadUserHeadshotForRequest(
     image: { buffer: ArrayBuffer; contentType: string };
     source?: string;
     audit: HeadshotAudit;
+    commitGuard?: { sql: string; bindings: unknown[] };
     prepareAdditionalCommitStatements?: (at: string) => StatementLike[];
   },
 ): Promise<{ r2Key: string; origin: string }> {
@@ -309,6 +286,7 @@ export function removeUserHeadshotForRequest(
     userId: string;
     previousKey: string | null;
     audit: HeadshotAudit;
+    commitGuard?: { sql: string; bindings: unknown[] };
     prepareAdditionalCommitStatements?: (at: string) => StatementLike[];
   },
 ): Promise<void> {

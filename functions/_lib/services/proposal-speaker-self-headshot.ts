@@ -1,9 +1,10 @@
 import type { DatabaseLike, Env, StatementLike } from "../types";
 import { prepareAuditLogAfterOneChange } from "./audit";
 import { prepareStorageDeletion } from "./storage-deletion-outbox";
+import { proposalSpeakerAuthorityCondition } from "./proposal-speaker-profile-overrides";
 import { removeUserHeadshotForRequest, uploadUserHeadshotForRequest } from "./user-headshot";
 
-interface ProposalSpeakerSelfHeadshotContext {
+export interface ProposalSpeakerSelfHeadshotContext {
   db: DatabaseLike;
   env: Env;
   request: Request;
@@ -11,6 +12,9 @@ interface ProposalSpeakerSelfHeadshotContext {
   proposalId: string;
   proposalSpeakerId: string;
   userId: string;
+  proposalStatus: string;
+  proposalUpdatedAt: string;
+  currentStatus: string;
   accountHeadshotKey: string | null;
   proposalOverrideSet: number;
   proposalOverrideKey: string | null;
@@ -19,21 +23,16 @@ interface ProposalSpeakerSelfHeadshotContext {
 function prepareClearOverrideStatements(context: ProposalSpeakerSelfHeadshotContext, at: string): StatementLike[] {
   if (context.proposalOverrideSet !== 1) return [];
   const deletion = prepareStorageDeletion(context.db, context.proposalOverrideKey, at);
+  const authority = proposalSpeakerAuthorityCondition(context);
   return [
     context.db
       .prepare(
         `UPDATE proposal_speakers
          SET headshot_override_set = 0, headshot_r2_key = NULL, headshot_updated_at = NULL
-         WHERE id = ? AND proposal_id = ? AND user_id = ?
+         WHERE ${authority.sql}
            AND headshot_override_set = ? AND headshot_r2_key IS ?`,
       )
-      .bind(
-        context.proposalSpeakerId,
-        context.proposalId,
-        context.userId,
-        context.proposalOverrideSet,
-        context.proposalOverrideKey,
-      ),
+      .bind(...authority.bindings, context.proposalOverrideSet, context.proposalOverrideKey),
     prepareAuditLogAfterOneChange(
       context.db,
       "user",
@@ -65,6 +64,7 @@ export function uploadProposalSpeakerSelfHeadshot(
       scope: { type: "proposal", id: context.proposalId },
       details: { proposalId: context.proposalId, speakerUserId: context.userId },
     },
+    commitGuard: proposalSpeakerAuthorityCondition(context),
     prepareAdditionalCommitStatements: (at) => prepareClearOverrideStatements(context, at),
   });
 }
@@ -80,6 +80,7 @@ export function removeProposalSpeakerSelfHeadshot(context: ProposalSpeakerSelfHe
       scope: { type: "proposal", id: context.proposalId },
       details: { proposalId: context.proposalId, speakerUserId: context.userId },
     },
+    commitGuard: proposalSpeakerAuthorityCondition(context),
     prepareAdditionalCommitStatements: (at) => prepareClearOverrideStatements(context, at),
   });
 }

@@ -50,6 +50,9 @@ async function onPut(c: AdminContext, token: string): Promise<Response> {
       proposalId: proposal.id,
       proposalSpeakerId: speaker.id,
       userId: user.id,
+      proposalStatus: proposal.status,
+      proposalUpdatedAt: proposal.updated_at,
+      currentStatus: speaker.status,
       accountHeadshotKey: user.accountHeadshotR2Key,
       proposalOverrideSet: user.proposalHeadshotOverrideSet,
       proposalOverrideKey: user.proposalHeadshotOverrideKey,
@@ -65,6 +68,9 @@ async function onPut(c: AdminContext, token: string): Promise<Response> {
 
 async function onDelete(c: AdminContext, token: string): Promise<Response> {
   const { proposal, speaker, user } = await loadContext(c, token);
+  if (speaker.status === "declined") {
+    return json({ error: { code: "SPEAKER_DECLINED", message: "You have declined participation." } }, 403);
+  }
   await removeProposalSpeakerSelfHeadshot({
     db: requestDb(c),
     env: c.env,
@@ -73,6 +79,9 @@ async function onDelete(c: AdminContext, token: string): Promise<Response> {
     proposalId: proposal.id,
     proposalSpeakerId: speaker.id,
     userId: user.id,
+    proposalStatus: proposal.status,
+    proposalUpdatedAt: proposal.updated_at,
+    currentStatus: speaker.status,
     accountHeadshotKey: user.accountHeadshotR2Key,
     proposalOverrideSet: user.proposalHeadshotOverrideSet,
     proposalOverrideKey: user.proposalHeadshotOverrideKey,

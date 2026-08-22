@@ -67,7 +67,11 @@ export async function buildAddProposalSpeaker(
   );
   const speakerId =
     existingSpeaker?.id ?? (await sha256Hex(`proposal-speaker\0${payload.proposalId}\0${payload.userId}`)).slice(0, 32);
-  const manageLinkSecret = existingSpeaker?.manage_link_secret ?? newCapabilityLinkSecret();
+  const reinvitingDeclinedSpeaker = existingSpeaker?.status === "declined";
+  const manageLinkSecret =
+    reinvitingDeclinedSpeaker || !existingSpeaker?.manage_link_secret
+      ? newCapabilityLinkSecret()
+      : existingSpeaker.manage_link_secret;
   const inviteGeneration = (existingSpeaker?.invite_generation ?? 0) + (existingSpeaker?.status === "declined" ? 1 : 0);
   const status = isProposer ? "confirmed" : "invited";
   const sourceRevisionAdvance: 0 | 1 =
@@ -108,7 +112,10 @@ export async function buildAddProposalSpeaker(
          ON CONFLICT(proposal_id, user_id) DO UPDATE SET
            role = excluded.role,
            status = CASE WHEN proposal_speakers.status = 'declined' THEN 'invited' ELSE proposal_speakers.status END,
-           manage_link_secret = COALESCE(proposal_speakers.manage_link_secret, excluded.manage_link_secret),
+           manage_link_secret = CASE
+             WHEN proposal_speakers.status = 'declined' THEN excluded.manage_link_secret
+             ELSE COALESCE(proposal_speakers.manage_link_secret, excluded.manage_link_secret)
+           END,
            confirmed_at = COALESCE(proposal_speakers.confirmed_at, excluded.confirmed_at),
            invite_generation = CASE
              WHEN proposal_speakers.status = 'declined' THEN proposal_speakers.invite_generation + 1

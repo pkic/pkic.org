@@ -13,7 +13,7 @@ import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { createContext, deliveredEmailPayload, queryAll } from "./helpers/context";
 import { onRequestPost as adminRemindSpeaker } from "../functions/api/v1/admin/proposals/[proposalId]/speakers/[userId]/remind";
-import { getProposalByManageToken } from "../functions/_lib/services/proposals";
+import { getProposalByManageToken, getSpeakerByManageToken } from "../functions/_lib/services/proposals";
 import { updateSpeakerProfile } from "../functions/_lib/services/proposals-speaker-profile";
 import { inviteProposalSpeaker } from "../functions/_lib/services/proposal-speaker-invitations";
 import { getEventBySlug } from "../functions/_lib/services/events";
@@ -39,6 +39,10 @@ import {
   updateProposalSpeakerByProposer,
 } from "../functions/_lib/services/proposer-speaker-profile";
 import { replaceProposalSpeakerHeadshot } from "../functions/_lib/services/proposal-speaker-headshot";
+import {
+  removeProposalSpeakerSelfHeadshot,
+  uploadProposalSpeakerSelfHeadshot,
+} from "../functions/_lib/services/proposal-speaker-self-headshot";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { speakerSelfServiceReadResponseSchema } from "../assets/shared/schemas/speaker-self-service";
 import {
@@ -1604,14 +1608,25 @@ describe("speaker self-management endpoints", () => {
     const [firstInvite, concurrentInvite] = await Promise.all([invite(), invite()]);
     expect(firstInvite.outboxId).toBe(concurrentInvite.outboxId);
 
-    const [speaker] = await queryAll<{ id: string; status: string; invite_generation: number }>(
+    const [speaker] = await queryAll<{
+      id: string;
+      status: string;
+      invite_generation: number;
+      manage_link_secret: string;
+    }>(
       env.DB,
-      `SELECT id, status, invite_generation FROM proposal_speakers
+      `SELECT id, status, invite_generation, manage_link_secret FROM proposal_speakers
        WHERE proposal_id = ? AND user_id = ?`,
       proposalId,
       invitedUser.id,
     );
     expect(speaker).toMatchObject({ status: "invited", invite_generation: 0 });
+    const oldManageToken = await issueDatabaseCapability({
+      db: env.DB,
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+      purpose: "speaker_manage",
+      resourceId: speaker.id,
+    });
     expect(
       (
         await queryAll<{ count: number }>(
@@ -1654,12 +1669,79 @@ describe("speaker self-management endpoints", () => {
 
     const reinvite = await invite();
     expect(reinvite.outboxId).not.toBe(firstInvite.outboxId);
-    const [reinvitedSpeaker] = await queryAll<{ status: string; invite_generation: number }>(
-      env.DB,
-      "SELECT status, invite_generation FROM proposal_speakers WHERE id = ?",
-      speaker.id,
+    const [reinvitedSpeaker] = await queryAll<{
+      status: string;
+      invite_generation: number;
+      manage_link_secret: string;
+    }>(env.DB, "SELECT status, invite_generation, manage_link_secret FROM proposal_speakers WHERE id = ?", speaker.id);
+    expect(reinvitedSpeaker).toMatchObject({ status: "invited", invite_generation: 1 });
+    expect(reinvitedSpeaker.manage_link_secret).not.toBe(speaker.manage_link_secret);
+
+    const mountedEnv = { ...(env as any), SPEAKER_UPLOADS_BUCKET: new FakeUploadsBucket() };
+    const mounted = (request: Request) =>
+      app.fetch(request, mountedEnv, {
+        passThroughOnException: () => {},
+        waitUntil: () => {},
+      } as any);
+    const expectStaleCapability = async (request: Request) => {
+      const response = await mounted(request);
+      expect(response.status).toBe(404);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: "SPEAKER_TOKEN_NOT_FOUND" },
+      });
+    };
+    const staleTokenPath = `https://app.test/api/v1/proposals/speaker/${oldManageToken}`;
+    await expectStaleCapability(new Request(staleTokenPath));
+    await expectStaleCapability(
+      new Request(staleTokenPath, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "decline", reason: "stale token" }),
+      }),
     );
-    expect(reinvitedSpeaker).toEqual({ status: "invited", invite_generation: 1 });
+    await expectStaleCapability(
+      new Request(staleTokenPath, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ biography: "stale token" }),
+      }),
+    );
+
+    const staleHeadshotPath = `${staleTokenPath}/headshot`;
+    await expectStaleCapability(new Request(staleHeadshotPath));
+    const staleHeadshotForm = new FormData();
+    staleHeadshotForm.append(
+      "file",
+      new File([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], "headshot.jpg", { type: "image/jpeg" }),
+    );
+    await expectStaleCapability(new Request(staleHeadshotPath, { method: "PUT", body: staleHeadshotForm }));
+    await expectStaleCapability(new Request(staleHeadshotPath, { method: "DELETE" }));
+
+    const stalePresentationForm = new FormData();
+    stalePresentationForm.append(
+      "file",
+      new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], "presentation.pdf", { type: "application/pdf" }),
+    );
+    await expectStaleCapability(
+      new Request(`${staleTokenPath}/presentation`, { method: "PUT", body: stalePresentationForm }),
+    );
+    await expectStaleCapability(new Request(`${staleTokenPath}/presentation/download`));
+    await expectStaleCapability(
+      new Request(`${staleTokenPath}/reminders`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "pause_30d" }),
+      }),
+    );
+
+    const newManageToken = await issueDatabaseCapability({
+      db: env.DB,
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+      purpose: "speaker_manage",
+      resourceId: speaker.id,
+    });
+    const currentResponse = await mounted(new Request(`https://app.test/api/v1/proposals/speaker/${newManageToken}`));
+    expect(currentResponse.status).toBe(200);
     expect(
       (
         await queryAll<{ count: number }>(
@@ -1906,6 +1988,132 @@ describe("speaker self-management endpoints", () => {
 
     expect(serveResponse.status).toBe(200);
     expect(serveResponse.headers.get("content-type")).toBe("image/jpeg");
+  });
+
+  it("compensates a self headshot upload when roster authority is revoked before D1 commit", async () => {
+    await setupWorkflow();
+    const { speakerManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const { speaker, proposal, user } = await getSpeakerByManageToken(
+      env.DB,
+      speakerManageToken,
+      env.INTERNAL_SIGNING_SECRET!,
+    );
+    const [{ total: badgeJobsBeforeUpload }] = await queryAll<{ total: number }>(
+      env.DB,
+      "SELECT COUNT(*) AS total FROM badge_render_jobs",
+    );
+    const bucket = new FakeUploadsBucket();
+    const scopedEnv = { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket } as any;
+    const baseDb: DatabaseLike = env.DB;
+    let raced = false;
+    const racingDb: DatabaseLike = {
+      prepare: (query) => baseDb.prepare(query),
+      async batch(statements) {
+        if (!raced) {
+          raced = true;
+          await baseDb.prepare("UPDATE proposal_speakers SET status = 'declined' WHERE id = ?").bind(speaker.id).run();
+        }
+        return baseDb.batch(statements);
+      },
+    };
+
+    await expect(
+      uploadProposalSpeakerSelfHeadshot(
+        {
+          db: racingDb,
+          env: scopedEnv,
+          request: new Request("https://app.test/api/v1/proposals/speaker/race/headshot"),
+          waitUntil: () => {},
+          proposalId: proposal.id,
+          proposalSpeakerId: speaker.id,
+          userId: user.id,
+          proposalStatus: proposal.status,
+          proposalUpdatedAt: proposal.updated_at,
+          currentStatus: speaker.status,
+          accountHeadshotKey: user.accountHeadshotR2Key,
+          proposalOverrideSet: user.proposalHeadshotOverrideSet,
+          proposalOverrideKey: user.proposalHeadshotOverrideKey,
+        },
+        { buffer: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]).buffer, contentType: "image/jpeg" },
+      ),
+    ).rejects.toMatchObject({ status: 409, code: "HEADSHOT_CHANGED" });
+
+    expect(bucket.keys()).toEqual([]);
+    await expect(
+      queryAll<{ headshot_r2_key: string | null }>(env.DB, "SELECT headshot_r2_key FROM users WHERE id = ?", [
+        coSpeakerUserId,
+      ]),
+    ).resolves.toEqual([{ headshot_r2_key: null }]);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'headshot_uploaded_by_speaker'"),
+    ).resolves.toHaveLength(0);
+    await expect(
+      queryAll(env.DB, "SELECT object_key FROM storage_deletion_outbox WHERE object_key LIKE 'headshots/%'"),
+    ).resolves.toHaveLength(0);
+    await expect(queryAll(env.DB, "SELECT id FROM badge_render_jobs")).resolves.toHaveLength(badgeJobsBeforeUpload);
+  });
+
+  it("rolls back a self headshot delete when roster authority is revoked before D1 commit", async () => {
+    await setupWorkflow();
+    const { speakerManageToken } = await inviteSpeakerAndSubmitProposal();
+    const { speaker, proposal, user } = await getSpeakerByManageToken(
+      env.DB,
+      speakerManageToken,
+      env.INTERNAL_SIGNING_SECRET!,
+    );
+    const [{ total: badgeJobsBeforeDelete }] = await queryAll<{ total: number }>(
+      env.DB,
+      "SELECT COUNT(*) AS total FROM badge_render_jobs",
+    );
+    const existingKey = `headshots/${user.id}/existing.jpg`;
+    const bucket = new FakeUploadsBucket();
+    await bucket.put(existingKey, new Uint8Array([0xff, 0xd8, 0xff, 0xd9]).buffer, {
+      httpMetadata: { contentType: "image/jpeg" },
+    });
+    await env.DB.prepare("UPDATE users SET headshot_r2_key = ? WHERE id = ?").bind(existingKey, user.id).run();
+
+    const baseDb: DatabaseLike = env.DB;
+    let raced = false;
+    const racingDb: DatabaseLike = {
+      prepare: (query) => baseDb.prepare(query),
+      async batch(statements) {
+        if (!raced) {
+          raced = true;
+          await baseDb.prepare("UPDATE proposal_speakers SET status = 'declined' WHERE id = ?").bind(speaker.id).run();
+        }
+        return baseDb.batch(statements);
+      },
+    };
+
+    await expect(
+      removeProposalSpeakerSelfHeadshot({
+        db: racingDb,
+        env: { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket } as any,
+        request: new Request("https://app.test/api/v1/proposals/speaker/race/headshot"),
+        waitUntil: () => {},
+        proposalId: proposal.id,
+        proposalSpeakerId: speaker.id,
+        userId: user.id,
+        proposalStatus: proposal.status,
+        proposalUpdatedAt: proposal.updated_at,
+        currentStatus: speaker.status,
+        accountHeadshotKey: existingKey,
+        proposalOverrideSet: user.proposalHeadshotOverrideSet,
+        proposalOverrideKey: user.proposalHeadshotOverrideKey,
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "HEADSHOT_CHANGED" });
+
+    await expect(
+      queryAll<{ headshot_r2_key: string | null }>(env.DB, "SELECT headshot_r2_key FROM users WHERE id = ?", user.id),
+    ).resolves.toEqual([{ headshot_r2_key: existingKey }]);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'headshot_deleted_by_speaker'"),
+    ).resolves.toHaveLength(0);
+    await expect(
+      queryAll(env.DB, "SELECT object_key FROM storage_deletion_outbox WHERE object_key = ?", [existingKey]),
+    ).resolves.toHaveLength(0);
+    await expect(queryAll(env.DB, "SELECT id FROM badge_render_jobs")).resolves.toHaveLength(badgeJobsBeforeDelete);
+    expect(await bucket.get(existingKey)).not.toBeNull();
   });
 
   it("rejects MIME-spoofed headshots through both speaker capability surfaces", async () => {
