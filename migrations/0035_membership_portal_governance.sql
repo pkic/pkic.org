@@ -2352,17 +2352,38 @@ CREATE UNIQUE INDEX idx_vote_ballots_org_round ON vote_ballots(vote_id, organiza
 CREATE UNIQUE INDEX idx_vote_ballots_user_round ON vote_ballots(vote_id, user_id, round)
   WHERE organization_id IS NULL;
 
-CREATE TABLE vote_notification_deliveries (
+-- Cover the set-based forum-recipient snapshot without scanning inactive or
+-- individual membership aggregates on every vote opening/round transition.
+CREATE INDEX idx_members_active_organization_notifications
+  ON members(organization_id, id)
+  WHERE status = 'active' AND organization_id IS NOT NULL;
+
+-- Immutable event-time recipient snapshots. These are created atomically with
+-- the vote opening/round transition, so a later close, round advance, role
+-- change, or queue-worker failure cannot erase the notification obligation.
+CREATE TABLE vote_delegate_notification_intents (
   vote_id          TEXT NOT NULL REFERENCES votes(id),
   round            INTEGER NOT NULL,
-  organization_id  TEXT NOT NULL REFERENCES organizations(id),
-  delegate_user_id TEXT NOT NULL REFERENCES users(id),
-  queued_at         TEXT NOT NULL,
-  PRIMARY KEY (vote_id, round, organization_id, delegate_user_id)
+  organization_id  TEXT NOT NULL,
+  delegate_user_id TEXT NOT NULL,
+  recipient_email  TEXT NOT NULL,
+  delegate_name    TEXT NOT NULL,
+  organization_name TEXT NOT NULL,
+  vote_title       TEXT NOT NULL,
+  closes_at        TEXT NOT NULL,
+  created_at       TEXT NOT NULL,
+  queued_outbox_id TEXT,
+  queued_at        TEXT,
+  PRIMARY KEY (vote_id, round, organization_id)
 );
 
-CREATE INDEX idx_vote_notification_deliveries_vote_round
-  ON vote_notification_deliveries(vote_id, round);
+CREATE INDEX idx_vote_delegate_notification_intents_pending
+  ON vote_delegate_notification_intents(created_at, vote_id, round, organization_id)
+  WHERE queued_outbox_id IS NULL;
+
+CREATE UNIQUE INDEX uq_vote_delegate_notification_intents_outbox
+  ON vote_delegate_notification_intents(queued_outbox_id)
+  WHERE queued_outbox_id IS NOT NULL;
 
 CREATE TABLE vote_proposals (
   id                  TEXT PRIMARY KEY,

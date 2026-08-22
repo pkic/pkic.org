@@ -150,7 +150,7 @@ describe("Votes due-work (functions/_lib/services/votes-scheduled-jobs.ts)", () 
       await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'forum-vote-delegate-notify'"),
     ).toHaveLength(1);
     expect(
-      await queryAll(env.DB, "SELECT vote_id FROM vote_notification_deliveries WHERE vote_id = ?", vote.id),
+      await queryAll(env.DB, "SELECT vote_id FROM vote_delegate_notification_intents WHERE vote_id = ?", vote.id),
     ).toHaveLength(1);
   });
 
@@ -253,6 +253,9 @@ describe("Votes due-work (functions/_lib/services/votes-scheduled-jobs.ts)", () 
   });
 
   it("rolls back candidate elimination when election round advancement fails", async () => {
+    const delegateOrgId = await insertOrganization("Election Round Delegate Org");
+    const delegateUserId = await insertMemberUser("A", delegateOrgId);
+    await setOrgContacts(delegateOrgId, delegateUserId);
     const createRes = await call(adminToken, "/api/v1/admin/votes", {
       method: "POST",
       body: JSON.stringify({
@@ -307,6 +310,13 @@ describe("Votes due-work (functions/_lib/services/votes-scheduled-jobs.ts)", () 
       expect(await queryAll(env.DB, "SELECT status, current_round FROM votes WHERE id = ?", vote.id)).toEqual([
         { status: "open", current_round: 1 },
       ]);
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT round FROM vote_delegate_notification_intents WHERE vote_id = ? AND round = 2",
+          vote.id,
+        ),
+      ).toHaveLength(0);
       await env.DB.prepare("UPDATE votes SET transition_lease_expires_at = datetime('now', '-1 second') WHERE id = ?")
         .bind(vote.id)
         .run();
@@ -322,6 +332,15 @@ describe("Votes due-work (functions/_lib/services/votes-scheduled-jobs.ts)", () 
     expect(await queryAll(env.DB, "SELECT status, current_round FROM votes WHERE id = ?", vote.id)).toEqual([
       { status: "open", current_round: 2 },
     ]);
+    expect(
+      await queryAll(
+        env.DB,
+        `SELECT round, organization_id, delegate_user_id
+         FROM vote_delegate_notification_intents
+         WHERE vote_id = ? AND round = 2`,
+        vote.id,
+      ),
+    ).toEqual([{ round: 2, organization_id: delegateOrgId, delegate_user_id: delegateUserId }]);
   });
 
   it("defers the second closure under a low D1 budget and drains it on the next pass", async () => {
@@ -379,7 +398,10 @@ describe("Votes due-work (functions/_lib/services/votes-scheduled-jobs.ts)", () 
     await env.DB.prepare("UPDATE votes SET opens_at = datetime('now', '-1 second') WHERE id = ?").bind(vote.id).run();
 
     const concurrentDb = gateBatchGroup(env.DB, 2);
-    await Promise.all([runVotesDueWork(concurrentDb, env as any), runVotesDueWork(concurrentDb, env as any)]);
+    const results = await Promise.all([
+      runVotesDueWork(concurrentDb, env as any),
+      runVotesDueWork(concurrentDb, env as any),
+    ]);
 
     expect(
       await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'forum-vote-delegate-notify'"),
@@ -387,9 +409,12 @@ describe("Votes due-work (functions/_lib/services/votes-scheduled-jobs.ts)", () 
     expect(
       await queryAll(
         env.DB,
-        "SELECT vote_id FROM vote_notification_deliveries WHERE vote_id = ? AND round = 1",
+        "SELECT vote_id FROM vote_delegate_notification_intents WHERE vote_id = ? AND round = 1",
         vote.id,
       ),
     ).toHaveLength(1);
+    expect(results.reduce((total, result) => total + result.delegateNoticesQueued, 0)).toBe(1);
+    const retry = await runVotesDueWork(env.DB, env as any);
+    expect(retry.delegateNoticesQueued).toBe(0);
   });
 });

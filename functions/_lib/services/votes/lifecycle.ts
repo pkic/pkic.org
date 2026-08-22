@@ -13,6 +13,7 @@ import { resolveOrderBy } from "../../db/sort";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { ADMIN_VOTES_SORT_COLUMNS } from "../../../../assets/shared/schemas/votes-admin";
 import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
+import { prepareForumVoteDelegateNotificationIntents } from "./delegate-notification-intents";
 import {
   resolveScope,
   uniqueSlug,
@@ -137,6 +138,7 @@ export async function createVoteDirect(
       },
       now,
     ),
+    prepareForumVoteDelegateNotificationIntents(db, id, 1, now),
   ];
   await db.batch(statements);
 

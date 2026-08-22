@@ -144,9 +144,11 @@ export async function resolveRepresentativeRoleHolder(
 ): Promise<string | null> {
   const row = await first<RoleHolderRow>(
     db,
-    `SELECT user_id FROM user_roles
-     WHERE context_type = 'organization' AND context_id = ? AND role_id = ? AND revoked_at IS NULL
-       AND (expires_at IS NULL OR expires_at > ?)
+    `SELECT ur.user_id
+     FROM user_roles ur
+     JOIN users u ON u.id = ur.user_id AND u.active = 1
+     WHERE ur.context_type = 'organization' AND ur.context_id = ? AND ur.role_id = ? AND ur.revoked_at IS NULL
+       AND (ur.expires_at IS NULL OR datetime(ur.expires_at) > datetime(?))
      LIMIT 1`,
     [memberId, roleId, nowIso()],
   );
@@ -165,10 +167,12 @@ export async function resolveRepresentativeRoleHolders(
 ): Promise<RepresentativeRoleHolders> {
   const rows = await all<{ role_id: string; user_id: string }>(
     db,
-    `SELECT role_id, user_id FROM user_roles
-     WHERE context_type = 'organization' AND context_id = ? AND revoked_at IS NULL
-       AND (expires_at IS NULL OR expires_at > ?)
-       AND role_id IN (?, ?, ?)`,
+    `SELECT ur.role_id, ur.user_id
+     FROM user_roles ur
+     JOIN users u ON u.id = ur.user_id AND u.active = 1
+     WHERE ur.context_type = 'organization' AND ur.context_id = ? AND ur.revoked_at IS NULL
+       AND (ur.expires_at IS NULL OR datetime(ur.expires_at) > datetime(?))
+       AND ur.role_id IN (?, ?, ?)`,
     [
       memberId,
       nowIso(),

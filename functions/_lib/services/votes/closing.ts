@@ -28,8 +28,9 @@ export interface CloseDueVotesResult {
 }
 
 const VOTE_DUE_SELECTION_STATEMENTS = 2;
-const VOTE_MAX_CLOSE_STATEMENTS = 6;
-const VOTE_OPEN_STATEMENTS = 2;
+const VOTE_MIN_CLOSE_STATEMENTS = 4;
+const VOTE_MAX_CLOSE_STATEMENTS = 7;
+const VOTE_OPEN_STATEMENTS = 3;
 const MAX_DUE_VOTES_PER_PASS = 250;
 
 /**
@@ -47,7 +48,7 @@ export async function closeDueVotes(
 
   const budgetActionLimit = d1QueryBudget
     ? Math.floor(
-        Math.max(0, d1QueryBudget.remainingQueries() - VOTE_DUE_SELECTION_STATEMENTS) / VOTE_MAX_CLOSE_STATEMENTS,
+        Math.max(0, d1QueryBudget.remainingQueries() - VOTE_DUE_SELECTION_STATEMENTS) / VOTE_MIN_CLOSE_STATEMENTS,
       )
     : requestedLimit;
   const actionLimit = Math.min(requestedLimit, budgetActionLimit);
@@ -68,18 +69,19 @@ export async function closeDueVotes(
   }
 
   const remainingActionLimit = actionLimit - openCandidatesProcessed;
-  if (remainingActionLimit < 1 || !hasD1QueryCapacity(d1QueryBudget, 1 + VOTE_MAX_CLOSE_STATEMENTS)) {
+  if (remainingActionLimit < 1 || !hasD1QueryCapacity(d1QueryBudget, 1 + VOTE_MIN_CLOSE_STATEMENTS)) {
     return result;
   }
   const budgetCloseLimit = d1QueryBudget
-    ? Math.floor(Math.max(0, d1QueryBudget.remainingQueries() - 1) / VOTE_MAX_CLOSE_STATEMENTS)
+    ? Math.floor(Math.max(0, d1QueryBudget.remainingQueries() - 1) / VOTE_MIN_CLOSE_STATEMENTS)
     : remainingActionLimit;
   const closeLimit = Math.min(remainingActionLimit, budgetCloseLimit);
   if (closeLimit < 1) return result;
 
   const toClose = await all<VoteRow>(db, VOTE_CLOSE_DUE_QUERY, [now, now, closeLimit]);
   for (const vote of toClose) {
-    if (!hasD1QueryCapacity(d1QueryBudget, VOTE_MAX_CLOSE_STATEMENTS)) break;
+    const requiredStatements = vote.vote_type === "election" ? VOTE_MAX_CLOSE_STATEMENTS : VOTE_MIN_CLOSE_STATEMENTS;
+    if (!hasD1QueryCapacity(d1QueryBudget, requiredStatements)) continue;
     const claimed = await claimDueVote(db, vote, now);
     if (!claimed) continue;
     const outcome = await closeClaimedVote(db, claimed, now);

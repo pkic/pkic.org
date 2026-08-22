@@ -1,19 +1,17 @@
 /**
  * Ballot eligibility and submission. Split out of votes.ts.
  */
-import { all, first } from "../../db/queries";
+import { first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import { AppError } from "../../errors";
-import { REPRESENTATIVE_ROLE_IDS, resolveRepresentativeRoleHolders } from "../membership/representative-roles";
+import { resolveRepresentativeRoleHolders } from "../membership/representative-roles";
 import {
   getVoteRowOrThrow,
   eligibleCategoriesOf,
   assertVotingCategory,
-  toVoteSummary,
   MOTION_CHOICES,
   type VoteRow,
-  type VoteSummary,
   type BallotChoice,
 } from "./shared";
 import type { AuthMember, DatabaseLike, StatementLike } from "../../types";
@@ -26,129 +24,6 @@ export async function resolveVotingDelegateUserId(db: DatabaseLike, organization
   if (!org) return null;
   const holders = await resolveRepresentativeRoleHolders(db, org.member_id);
   return holders.votingDelegateUserId ?? holders.primaryContactUserId;
-}
-
-export interface ForumVoteDelegateRecipient {
-  organizationId: string;
-  organizationName: string;
-  delegateUserId: string;
-  delegateEmail: string;
-  delegateName: string;
-}
-
-/**
- * Every active member organization's resolved voting delegate for a forum
- * vote — used by the scheduled-jobs pass to queue
- * `forum-vote-delegate-notify` on initial open and on each round advance
- * ("When a vote opens, the portal notifies the current delegate by
- * email"). Returns null for non-forum votes.
- */
-export async function resolveForumVoteDelegateRecipients(
-  db: DatabaseLike,
-  voteId: string,
-): Promise<{ vote: VoteSummary; recipients: ForumVoteDelegateRecipient[] } | null> {
-  const row = await getVoteRowOrThrow(db, voteId);
-  if (row.scope_type !== "forum") return null;
-
-  const orgs = await all<{ id: string; name: string; delegate_user_id: string | null }>(
-    db,
-    `SELECT o.id, o.name,
-            COALESCE(vd.user_id, pc.user_id) AS delegate_user_id,
-            u.email AS delegate_email,
-            u.first_name AS delegate_first_name,
-            u.last_name AS delegate_last_name
-     FROM organizations o
-     JOIN members m ON m.organization_id = o.id AND m.status = 'active'
-     LEFT JOIN user_roles vd ON vd.context_type = 'organization' AND vd.context_id = m.id
-       AND vd.role_id = '${REPRESENTATIVE_ROLE_IDS.votingDelegate}' AND vd.revoked_at IS NULL
-     LEFT JOIN user_roles pc ON pc.context_type = 'organization' AND pc.context_id = m.id
-       AND pc.role_id = '${REPRESENTATIVE_ROLE_IDS.primaryContact}' AND pc.revoked_at IS NULL
-     LEFT JOIN users u ON u.id = COALESCE(vd.user_id, pc.user_id)`,
-  );
-
-  const recipients: ForumVoteDelegateRecipient[] = [];
-  for (const org of orgs) {
-    const delegateId = org.delegate_user_id;
-    if (!delegateId) continue;
-    const user = org as typeof org & {
-      delegate_email: string | null;
-      delegate_first_name: string | null;
-      delegate_last_name: string | null;
-    };
-    if (!user.delegate_email) continue;
-    recipients.push({
-      organizationId: org.id,
-      organizationName: org.name,
-      delegateUserId: delegateId,
-      delegateEmail: user.delegate_email,
-      delegateName:
-        [user.delegate_first_name, user.delegate_last_name].filter(Boolean).join(" ") || user.delegate_email,
-    });
-  }
-
-  return { vote: toVoteSummary(row), recipients };
-}
-
-export interface PendingForumVoteNotification extends ForumVoteDelegateRecipient {
-  voteId: string;
-  voteTitle: string;
-  round: number;
-  closesAt: string;
-}
-
-/**
- * Bounded, database-filtered delivery backlog. A delegate remains pending
- * until its outbox row and delivery marker commit in the same D1 batch.
- */
-export async function listPendingForumVoteNotifications(
-  db: DatabaseLike,
-  limit: number,
-): Promise<PendingForumVoteNotification[]> {
-  const rows = await all<{
-    vote_id: string;
-    vote_title: string;
-    round: number;
-    closes_at: string;
-    organization_id: string;
-    organization_name: string;
-    delegate_user_id: string;
-    delegate_email: string;
-    delegate_first_name: string | null;
-    delegate_last_name: string | null;
-  }>(
-    db,
-    `SELECT DISTINCT
-       v.id AS vote_id, v.title AS vote_title, v.current_round AS round, v.closes_at,
-       o.id AS organization_id, o.name AS organization_name,
-       u.id AS delegate_user_id, u.email AS delegate_email,
-       u.first_name AS delegate_first_name, u.last_name AS delegate_last_name
-     FROM votes v
-     JOIN organizations o
-     JOIN members m ON m.organization_id = o.id AND m.status = 'active'
-     LEFT JOIN user_roles vd ON vd.context_type = 'organization' AND vd.context_id = m.id
-       AND vd.role_id = '${REPRESENTATIVE_ROLE_IDS.votingDelegate}' AND vd.revoked_at IS NULL
-     LEFT JOIN user_roles pc ON pc.context_type = 'organization' AND pc.context_id = m.id
-       AND pc.role_id = '${REPRESENTATIVE_ROLE_IDS.primaryContact}' AND pc.revoked_at IS NULL
-     JOIN users u ON u.id = COALESCE(vd.user_id, pc.user_id)
-     LEFT JOIN vote_notification_deliveries d
-       ON d.vote_id = v.id AND d.round = v.current_round
-      AND d.organization_id = o.id AND d.delegate_user_id = u.id
-     WHERE v.scope_type = 'forum' AND v.status = 'open' AND d.vote_id IS NULL
-     ORDER BY v.opens_at ASC, v.id ASC, o.id ASC
-     LIMIT ?`,
-    [limit],
-  );
-  return rows.map((row) => ({
-    voteId: row.vote_id,
-    voteTitle: row.vote_title,
-    round: row.round,
-    closesAt: row.closes_at,
-    organizationId: row.organization_id,
-    organizationName: row.organization_name,
-    delegateUserId: row.delegate_user_id,
-    delegateEmail: row.delegate_email,
-    delegateName: [row.delegate_first_name, row.delegate_last_name].filter(Boolean).join(" ") || row.delegate_email,
-  }));
 }
 
 async function assertBallotChoiceValid(db: DatabaseLike, vote: VoteRow, choice: string): Promise<void> {

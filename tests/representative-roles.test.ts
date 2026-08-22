@@ -103,6 +103,48 @@ describe("representative role grants — singleton per organization", () => {
     });
   });
 
+  it("resolves only active, unexpired representative-role holders", async () => {
+    const orgId = await insertOrganization(env.DB);
+    const memberId = await seedOrganizationAggregate(env.DB, orgId, "A");
+    const primaryUser = await insertUser(env.DB);
+    const delegateUser = await insertUser(env.DB);
+    await addRepresentative(env.DB, memberId, primaryUser);
+    await addRepresentative(env.DB, memberId, delegateUser);
+    await assignRepresentativeRole(env.DB, memberId, primaryUser, REPRESENTATIVE_ROLE_IDS.primaryContact);
+    await assignRepresentativeRole(env.DB, memberId, delegateUser, REPRESENTATIVE_ROLE_IDS.votingDelegate);
+    await env.DB.prepare(
+      `UPDATE user_roles
+       SET expires_at = datetime('now', '+1 hour')
+       WHERE context_type = 'organization' AND context_id = ? AND role_id = ?`,
+    )
+      .bind(memberId, REPRESENTATIVE_ROLE_IDS.votingDelegate)
+      .run();
+
+    await expect(resolveRepresentativeRoleHolders(env.DB, memberId)).resolves.toMatchObject({
+      primaryContactUserId: primaryUser,
+      votingDelegateUserId: delegateUser,
+    });
+
+    await env.DB.prepare("UPDATE users SET active = 0 WHERE id = ?").bind(delegateUser).run();
+    await expect(resolveRepresentativeRoleHolders(env.DB, memberId)).resolves.toMatchObject({
+      primaryContactUserId: primaryUser,
+      votingDelegateUserId: null,
+    });
+
+    await env.DB.prepare("UPDATE users SET active = 1 WHERE id = ?").bind(delegateUser).run();
+    await env.DB.prepare(
+      `UPDATE user_roles
+       SET expires_at = datetime('now', '-1 minute')
+       WHERE context_type = 'organization' AND context_id = ? AND role_id = ?`,
+    )
+      .bind(memberId, REPRESENTATIVE_ROLE_IDS.votingDelegate)
+      .run();
+    await expect(resolveRepresentativeRoleHolders(env.DB, memberId)).resolves.toMatchObject({
+      primaryContactUserId: primaryUser,
+      votingDelegateUserId: null,
+    });
+  });
+
   it("does not constrain a non-singleton context-scoped role (role-event_volunteer) — multiple concurrent active grants allowed", async () => {
     const eventContextId = crypto.randomUUID();
     const userA = await insertUser(env.DB);
