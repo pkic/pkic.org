@@ -10,7 +10,7 @@
  *
  * This was previously seven near-identical copies of the same correlated
  * subquery independently inline in five files (directory.ts, leadership.ts,
- * wg-chair-digest.ts, admin-working-groups.ts, admin/users.ts) — PR #1
+ * wg-chair-digest.ts, admin-working-groups/read-model.ts, admin/users.ts) — PR #1
  * review, phase1-2-review-20260817.md blocker 2.
  *
  * "Earliest joined_at" is a display/listing tie-break, not a claim that
@@ -18,7 +18,7 @@
  * business-logic decision that depends on *all* of a user's affiliations
  * (e.g. working-group category eligibility) must check every membership,
  * not rely on this deterministic-but-arbitrary pick. See
- * admin-working-groups.ts's CA-category eligibility check, which uses
+ * admin-working-groups/member-access.ts's CA-category eligibility check, which uses
  * `findEligibleMemberById`'s full `activeMemberships` list instead of this
  * helper for exactly that reason.
  *

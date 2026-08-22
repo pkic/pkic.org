@@ -16,7 +16,11 @@ import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { isIndividualMembershipCategory } from "../assets/shared/schemas/membership-categories";
 import { insertOrganization, seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
-import { workingGroupsListResponseSchema } from "../assets/shared/schemas/working-groups";
+import {
+  workingGroupMembersListResponseSchema,
+  workingGroupResponseSchema,
+  workingGroupsListResponseSchema,
+} from "../assets/shared/schemas/working-groups";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -102,7 +106,7 @@ describe("admin working groups", () => {
       body: JSON.stringify({ name: "Test Working Group", description: "for tests" }),
     });
     expect(createResponse.status).toBe(201);
-    const created = (await createResponse.json()) as { workingGroup: { id: string; slug: string; active: boolean } };
+    const created = workingGroupResponseSchema.parse(await createResponse.json());
     expect(created.workingGroup.slug).toBe("test-working-group");
     expect(created.workingGroup.active).toBe(true);
 
@@ -169,14 +173,14 @@ describe("admin working groups", () => {
       method: "POST",
       body: JSON.stringify({ name: "Editable WG" }),
     });
-    const created = (await createResponse.json()) as { workingGroup: { id: string } };
+    const created = workingGroupResponseSchema.parse(await createResponse.json());
 
     const patchResponse = await call(adminToken, `/api/v1/admin/working-groups/${created.workingGroup.id}`, {
       method: "PATCH",
       body: JSON.stringify({ description: "updated", active: false }),
     });
     expect(patchResponse.status).toBe(200);
-    const patched = (await patchResponse.json()) as { workingGroup: { description: string; active: boolean } };
+    const patched = workingGroupResponseSchema.parse(await patchResponse.json());
     expect(patched.workingGroup.description).toBe("updated");
     expect(patched.workingGroup.active).toBe(false);
     const inactivePage = workingGroupsListResponseSchema.parse(
@@ -189,7 +193,7 @@ describe("admin working groups", () => {
       method: "PATCH",
       body: JSON.stringify({ active: true }),
     });
-    expect(((await reactivate.json()) as { workingGroup: { active: boolean } }).workingGroup.active).toBe(true);
+    expect(workingGroupResponseSchema.parse(await reactivate.json()).workingGroup.active).toBe(true);
   });
 
   it("adds and removes a member from a working group", async () => {
@@ -206,10 +210,7 @@ describe("admin working groups", () => {
       adminToken,
       `/api/v1/admin/working-groups/${wgId}/members?limit=1&sort=-name&q=wg-member`,
     );
-    const memberList = (await memberListResponse.json()) as {
-      members: Array<{ userId: string }>;
-      page: { total: number; hasMore: boolean };
-    };
+    const memberList = workingGroupMembersListResponseSchema.parse(await memberListResponse.json());
     expect(memberList.members.map((member) => member.userId)).toEqual([userId]);
     expect(memberList.page).toMatchObject({ total: 1, hasMore: false });
 
@@ -218,9 +219,9 @@ describe("admin working groups", () => {
     });
     expect(removeResponse.status).toBe(200);
 
-    const afterRemove = (await (await call(adminToken, `/api/v1/admin/working-groups/${wgId}/members`)).json()) as {
-      members: Array<{ userId: string }>;
-    };
+    const afterRemove = workingGroupMembersListResponseSchema.parse(
+      await (await call(adminToken, `/api/v1/admin/working-groups/${wgId}/members`)).json(),
+    );
     expect(afterRemove.members.some((m) => m.userId === userId)).toBe(false);
   });
 
