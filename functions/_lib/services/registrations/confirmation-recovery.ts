@@ -7,6 +7,7 @@ import type { EventRecord } from "../events";
 import { verifyDatabaseCapability } from "../capability-links";
 import { prepareRegistrationConfirmationEmail } from "./status-notifications";
 import { REGISTRATION_RECIPIENT_EMAIL_SQL } from "./recipient-email";
+import { isRegistrationTransitionConflict, prepareRegistrationTransitionGuard } from "./transition-guard";
 import { REGISTRATION_COLUMNS, registrationColumns, type RegistrationRecord } from "./types";
 
 export async function recoverRegistrationConfirmation(
@@ -81,14 +82,23 @@ export async function recoverRegistrationConfirmation(
     subject: `Confirm your registration for ${payload.event.name}`,
     recipientEmail: recipient.email,
   });
-  await db.batch([
-    db
-      .prepare(
-        `UPDATE registrations SET confirmation_reminder_sent_at = ?, updated_at = ?
-         WHERE id = ? AND status = 'pending_email_confirmation'`,
-      )
-      .bind(now, now, registration.id),
-    email.statement,
-  ]);
+  try {
+    await db.batch([
+      prepareRegistrationTransitionGuard(db, registration),
+      db
+        .prepare(
+          `UPDATE registrations SET confirmation_reminder_sent_at = ?, updated_at = ?
+           WHERE id = ? AND status = 'pending_email_confirmation'`,
+        )
+        .bind(now, now, registration.id),
+      email.statement,
+    ]);
+  } catch (error) {
+    // Public recovery is deliberately non-enumerating. A concurrent lifecycle
+    // change makes this recipient snapshot stale, so roll back the outbox and
+    // return the same no-op result as an unmatched email address.
+    if (isRegistrationTransitionConflict(error)) return null;
+    throw error;
+  }
   return { outboxId: email.outboxId };
 }

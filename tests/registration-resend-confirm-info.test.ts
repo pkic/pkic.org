@@ -18,6 +18,7 @@ import { onRequestPost as resendConfirmation } from "../functions/api/v1/events/
 import { issueDatabaseCapability, materializeQueuedCapabilityLinks } from "../functions/_lib/services/capability-links";
 import { getRegistrationByManageToken } from "../functions/_lib/services/registrations";
 import { callApi } from "./helpers/app";
+import { gateNextBatch } from "./helpers/d1-batch-gate";
 
 const signingSecret = "test-signing-secret";
 
@@ -256,6 +257,95 @@ describe("resend-confirmation endpoint", () => {
       ),
     );
     expect(staleResponse.status).toBe(200);
+  });
+
+  it("rolls back recovery when managed email change makes the recipient snapshot stale", async () => {
+    await seedEventAndAdmin(env.DB);
+    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    await seedWorkflowEmailTemplates(env.DB, admin.id);
+
+    const { confirmationToken, registrationId, manageToken } = await registerAttendee();
+    const oldRecipientBefore = (
+      await queryAll<{ total: number }>(
+        env.DB,
+        `SELECT COUNT(*) AS total FROM email_outbox
+         WHERE template_key = 'registration_confirm_email' AND recipient_email = ?`,
+        ["resendtest@pkic.org"],
+      )
+    )[0].total;
+
+    const gate = gateNextBatch(env.DB);
+    const staleRecovery = callApi(
+      { ...env, DB: gate.db },
+      "/api/v1/events/pqc-2026/registrations/resend-confirmation",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "resendtest@pkic.org" }),
+      },
+    );
+    await gate.reached;
+
+    const emailChange = await callApi(env, `/api/v1/registrations/manage/${encodeURIComponent(manageToken)}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "update", email: "resend-corrected@example.test" }),
+    });
+    expect(emailChange.status).toBe(200);
+    expect(await emailChange.json()).toEqual({ success: true, emailChanged: true });
+
+    gate.release();
+    const recoveryResponse = await staleRecovery;
+    expect(recoveryResponse.status).toBe(200);
+    expect(await recoveryResponse.json()).toEqual({ ok: true });
+
+    const oldRecipientAfter = (
+      await queryAll<{ total: number }>(
+        env.DB,
+        `SELECT COUNT(*) AS total FROM email_outbox
+         WHERE template_key = 'registration_confirm_email' AND recipient_email = ?`,
+        ["resendtest@pkic.org"],
+      )
+    )[0].total;
+    expect(oldRecipientAfter).toBe(oldRecipientBefore);
+
+    const correctedOutbox = await queryAll<{ payload_json: string }>(
+      env.DB,
+      `SELECT payload_json FROM email_outbox
+       WHERE template_key = 'registration_confirm_email' AND recipient_email = ?`,
+      ["resend-corrected@example.test"],
+    );
+    expect(correctedOutbox).toHaveLength(1);
+
+    const oldConfirmation = await callApi(env, "/api/v1/events/pqc-2026/registrations/confirm-email", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: registrationId, token: confirmationToken }),
+    });
+    expect(oldConfirmation.status).toBe(404);
+
+    const delivered = await materializeQueuedCapabilityLinks(
+      env.DB,
+      env,
+      JSON.parse(correctedOutbox[0].payload_json) as Record<string, unknown>,
+    );
+    const correctedToken = new URL(delivered.confirmationUrl as string).searchParams.get("token");
+    expect(correctedToken).toMatch(/^pkc1_/);
+
+    const correctedConfirmation = await callApi(env, "/api/v1/events/pqc-2026/registrations/confirm-email", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: registrationId, token: correctedToken }),
+    });
+    expect(correctedConfirmation.status).toBe(200);
+    expect(await correctedConfirmation.json()).toMatchObject({ success: true, manageToken: expect.any(String) });
+    await expect(
+      queryAll<{ email: string; pending_email: string | null }>(
+        env.DB,
+        "SELECT email, pending_email FROM users WHERE id = (SELECT user_id FROM registrations WHERE id = ?)",
+        [registrationId],
+      ),
+    ).resolves.toEqual([{ email: "resend-corrected@example.test", pending_email: null }]);
   });
 
   it("reactivates a cancelled registration when the attendee registers again", async () => {
