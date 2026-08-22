@@ -26,12 +26,12 @@ async function setup() {
   return { adminId, eventId, env };
 }
 
-function adminRequest(path: string, method: string, body?: unknown): Request {
+function adminRequest(path: string, method: string, body?: unknown, token = adminToken): Request {
   return new Request(`https://app.test${path}`, {
     method,
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${adminToken}`,
+      authorization: `Bearer ${token}`,
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
@@ -102,6 +102,137 @@ describe("admin user deactivation", () => {
     const data = (await response.json()) as { user: { role: string; active: boolean } };
     expect(data.user.role).toBe("guest");
     expect(data.user.active).toBe(false);
+  });
+
+  it("does not let a users:write-only staff actor promote another account to admin", async () => {
+    await setup();
+    const staffId = await seedUser(env.DB, "users-writer@example.test");
+    const targetId = await seedUser(env.DB, "promotion-target@example.test");
+    await env.DB.prepare(
+      `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+       VALUES (?, ?, 'users:write', ?, datetime('now'))`,
+    )
+      .bind(
+        crypto.randomUUID(),
+        staffId,
+        (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1"))[0].id,
+      )
+      .run();
+    const staffToken = await createAdminSession(env.DB, staffId, "users-writer-session");
+
+    const response = await app.fetch(
+      adminRequest(`/api/v1/admin/users/${targetId}`, "PATCH", { role: "admin" }, staffToken),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(403);
+    expect((await queryAll<{ role: string }>(env.DB, "SELECT role FROM users WHERE id = ?", targetId))[0].role).toBe(
+      "user",
+    );
+  });
+
+  it("rejects self-promotion even when the actor has access:grant", async () => {
+    await setup();
+    const staffId = await seedUser(env.DB, "self-promoter@example.test");
+    const adminId = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
+    )[0].id;
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+         VALUES (?, ?, 'users:write', ?, datetime('now'))`,
+      ).bind(crypto.randomUUID(), staffId, adminId),
+      env.DB.prepare(
+        `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+         VALUES (?, ?, 'access:grant', ?, datetime('now'))`,
+      ).bind(crypto.randomUUID(), staffId, adminId),
+    ]);
+    const staffToken = await createAdminSession(env.DB, staffId, "self-promoter-session");
+
+    const response = await app.fetch(
+      adminRequest(`/api/v1/admin/users/${staffId}`, "PATCH", { role: "admin" }, staffToken),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(403);
+    expect((await queryAll<{ role: string }>(env.DB, "SELECT role FROM users WHERE id = ?", staffId))[0].role).toBe(
+      "user",
+    );
+  });
+
+  it("allows a global admin to promote another account", async () => {
+    await setup();
+    const targetId = await seedUser(env.DB, "admin-promotion-target@example.test");
+
+    const response = await app.fetch(
+      adminRequest(`/api/v1/admin/users/${targetId}`, "PATCH", { role: "admin" }),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(200);
+    expect((await queryAll<{ role: string }>(env.DB, "SELECT role FROM users WHERE id = ?", targetId))[0].role).toBe(
+      "admin",
+    );
+  });
+
+  it("fails closed when the admin role permission bundle is missing", async () => {
+    await setup();
+    const targetId = await seedUser(env.DB, "misconfigured-promotion-target@example.test");
+    await env.DB.prepare(
+      "DELETE FROM role_permissions WHERE role_id = (SELECT id FROM roles WHERE name = 'admin')",
+    ).run();
+
+    const response = await app.fetch(
+      adminRequest(`/api/v1/admin/users/${targetId}`, "PATCH", { role: "admin" }),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(500);
+    expect((await queryAll<{ role: string }>(env.DB, "SELECT role FROM users WHERE id = ?", targetId))[0].role).toBe(
+      "user",
+    );
+  });
+
+  it("preserves users:write profile and email updates without access:grant", async () => {
+    await setup();
+    const staffId = await seedUser(env.DB, "profile-editor@example.test");
+    const targetId = await seedUser(env.DB, "email-before@example.test");
+    const adminId = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
+    )[0].id;
+    await env.DB.prepare(
+      `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+       VALUES (?, ?, 'users:write', ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), staffId, adminId)
+      .run();
+    const staffToken = await createAdminSession(env.DB, staffId, "profile-editor-session");
+
+    const response = await app.fetch(
+      adminRequest(
+        `/api/v1/admin/users/${targetId}`,
+        "PATCH",
+        { email: "email-after@example.test", biography: "Still editable by users:write staff." },
+        staffToken,
+      ),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(200);
+    expect(
+      (
+        await queryAll<{ email: string; biography: string | null }>(
+          env.DB,
+          "SELECT email, biography FROM users WHERE id = ?",
+          targetId,
+        )
+      )[0],
+    ).toEqual({ email: "email-after@example.test", biography: "Still editable by users:write staff." });
   });
 
   it("updates profile biography and links", async () => {

@@ -1,7 +1,8 @@
 import type { z } from "zod";
 import { adminUserUpdateSchema } from "../../../assets/shared/schemas/admin-users";
 import { serializeLinks } from "../../../assets/shared/schemas/links";
-import { first } from "../db/queries";
+import { all, first } from "../db/queries";
+import { hasPermission, requirePermission } from "../auth/permissions";
 import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 import { normalizeEmail } from "../validation";
@@ -68,6 +69,47 @@ function changedProfileFields(user: AdminUserUpdateRow, patch: UserProfilePatch)
     .map(([inputKey]) => inputKey);
 }
 
+/**
+ * The legacy users.role column is still an authorization boundary: role=admin
+ * is the global permission bypass. Keep its mutation subject to the same
+ * permission-bundle containment rule as assigning role-admin through
+ * user_roles, rather than allowing users:write to manufacture access:grant.
+ */
+async function requireLegacyRoleChangeAuthorization(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  targetUserId: string,
+  currentRole: string,
+  nextRole: string,
+): Promise<void> {
+  if (currentRole === nextRole) return;
+  if (actor.identityType === "user" && actor.id === targetUserId) {
+    throw new AppError(403, "FORBIDDEN", "You cannot change your own account role");
+  }
+
+  requirePermission(actor, "access:grant");
+
+  // role=admin is a global all-permissions role. Match assignUserRole's
+  // containment check so a scoped staff actor cannot grant a bundle broader
+  // than the permissions they themselves hold.
+  if (nextRole !== "admin") return;
+  const bundledPermissions = await all<{ permission: string }>(
+    db,
+    `SELECT rp.permission
+       FROM role_permissions rp
+       JOIN roles r ON r.id = rp.role_id
+      WHERE r.name = 'admin'`,
+  );
+  if (bundledPermissions.length === 0) {
+    throw new AppError(500, "ROLE_CONFIGURATION_INVALID", "The admin role has no configured permission bundle");
+  }
+  for (const { permission } of bundledPermissions) {
+    if (!hasPermission(actor, permission)) {
+      throw new AppError(403, "PERMISSION_REQUIRED", `Cannot grant the admin role without holding: ${permission}`);
+    }
+  }
+}
+
 /** Validates and commits an admin user update and its audit row atomically. */
 export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId: string, input: AdminUserUpdateInput) {
   if (userId === actor.id && input.role !== undefined && input.role !== "admin") {
@@ -92,6 +134,9 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
     throw new AppError(409, "IDENTITY_RETIRED", "A previously merged account cannot be modified or reactivated");
   }
 
+  const role = input.role ?? user.role;
+  await requireLegacyRoleChangeAuthorization(db, actor, user.id, user.role, role);
+
   let email = user.email;
   let promotedSecondaryEmail: string | null = null;
   if (input.email !== undefined) {
@@ -108,7 +153,6 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
       email = normalized;
     }
   }
-  const role = input.role ?? user.role;
   const active = input.active ?? Boolean(user.active);
   const isEcMember = input.isEcMember ?? Boolean(user.is_ec_member);
   const patch = profilePatch(input);
