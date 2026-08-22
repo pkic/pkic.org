@@ -10,7 +10,6 @@ import {
   resolveCapacityExemptReason,
   withDayCapacityRetry,
 } from "./day-waitlist";
-import { prepareUpsertAttendeeParticipantStatement } from "./participant-registration";
 import { getRegistrationById } from "./queries";
 import { prepareRegistrationStatusEmail, type RegistrationStatusEmailParams } from "./status-notifications";
 import type { RegistrationRecord } from "./types";
@@ -101,7 +100,6 @@ export async function forceRegistrationStatus(
       statements.push(...(waitlist?.statements ?? []));
     }
     statements.push(
-      prepareUpsertAttendeeParticipantStatement(db, updated),
       prepareAuditLog(
         db,
         "admin",

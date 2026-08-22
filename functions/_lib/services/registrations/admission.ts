@@ -9,7 +9,6 @@ import { buildRegistrationDayWaitlistSync, roleBasedCapacityExemptReason, withDa
 import { ADMIN_DAY_CAPACITY_EXEMPT_REASON_CODE } from "./day-waitlist-policy";
 import { getRegistrationById } from "./queries";
 import { prepareRegistrationStatusEmail, type RegistrationStatusEmailParams } from "./status-notifications";
-import { prepareUpsertAttendeeParticipantStatement } from "./participant-registration";
 import type { RegistrationRecord } from "./types";
 
 interface ExistingAttendanceRow {
@@ -168,7 +167,6 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
   statements.push(
     ...waitlist.statements,
     ...dayOverrideStatements,
-    prepareUpsertAttendeeParticipantStatement(db, updated),
     prepareAuditLog(db, "admin", payload.actorUserId, "registration_admitted", "registration", registration.id, {
       mode: payload.mode,
       reason: payload.reason,

@@ -13,7 +13,7 @@ import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 import { nowIso } from "../utils/time";
 import { parseLinksJson, serializeLinks } from "../../../assets/shared/schemas/links";
 import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
-import { prepareSyncProposalParticipantRoleWithCapacity, proposalParticipantStatus } from "./proposal-participants";
+import { prepareProposalRoleCapacityForSpeakerChange, proposalParticipantStatus } from "./proposal-role-capacity";
 import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
 import { isEventParticipantSourceConflict } from "./event-participant-source-revision";
 import {
@@ -298,7 +298,7 @@ export async function editAdminProposalSpeaker(
   }
   if (next.role !== current.role) {
     statements.push(
-      ...(await prepareSyncProposalParticipantRoleWithCapacity(db, {
+      ...(await prepareProposalRoleCapacityForSpeakerChange(db, {
         eventId: current.proposal_event_id,
         userId,
         proposalRole: next.role,

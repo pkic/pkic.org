@@ -267,7 +267,7 @@ describe("proposal decision review rounds", () => {
     ).resolves.toEqual([{ status: "cancelled" }]);
     const participants = await queryAll<{ status: string }>(
       env.DB,
-      "SELECT status FROM event_participants WHERE source_type = 'proposal' AND source_ref = ?",
+      "SELECT status FROM event_participant_role_sources WHERE source_type = 'proposal' AND source_ref = ?",
       [seeded.proposalId],
     );
     expect(participants.length).toBeGreaterThan(0);

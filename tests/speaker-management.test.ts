@@ -186,11 +186,11 @@ describe("speaker self-management endpoints", () => {
     await expect(
       queryAll<{ status: string }>(
         env.DB,
-        `SELECT status FROM event_participants
-         WHERE event_id = ? AND user_id = ? AND source_type = 'proposal' AND source_ref = ?`,
+        `SELECT status FROM event_participant_role_sources
+         WHERE event_id = ? AND user_id = ? AND source_kind = 'proposal_speaker' AND source_ref = ?`,
         [proposal.event_id, coSpeakerUserId, proposalId],
       ),
-    ).resolves.toSatisfy((rows: Array<{ status: string }>) => rows.every((row) => row.status === "inactive"));
+    ).resolves.toEqual([]);
     await expect(queryAll(env.DB, "SELECT id FROM users WHERE id = ?", [coSpeakerUserId])).resolves.toHaveLength(1);
     await expect(
       queryAll<{ scope_type: string | null; scope_id: string | null }>(
@@ -343,7 +343,8 @@ describe("speaker self-management endpoints", () => {
     ).resolves.toEqual([reminder.outboxId, invitation.outboxId].sort().map((id) => ({ id, status: "cancelled" })));
     const participants = await queryAll<{ status: string }>(
       env.DB,
-      "SELECT status FROM event_participants WHERE event_id = ? AND source_type = 'proposal' AND source_ref = ?",
+      `SELECT status FROM event_participant_role_sources
+       WHERE event_id = ? AND source_kind = 'proposal_speaker' AND source_ref = ?`,
       [proposal.event_id, proposalId],
     );
     expect(participants.length).toBeGreaterThan(0);
@@ -366,8 +367,8 @@ describe("speaker self-management endpoints", () => {
     );
     const participantsBefore = await queryAll<{ user_id: string; role: string; status: string }>(
       env.DB,
-      `SELECT user_id, role, status FROM event_participants
-       WHERE source_type = 'proposal' AND source_ref = ? ORDER BY user_id, role`,
+      `SELECT user_id, role, status FROM event_participant_role_sources
+       WHERE source_kind = 'proposal_speaker' AND source_ref = ? ORDER BY user_id, role`,
       [proposalId],
     );
     await env.DB.prepare(
@@ -401,8 +402,8 @@ describe("speaker self-management endpoints", () => {
     ).resolves.toEqual([{ status: "queued" }]);
     const participants = await queryAll<{ user_id: string; role: string; status: string }>(
       env.DB,
-      `SELECT user_id, role, status FROM event_participants
-       WHERE source_type = 'proposal' AND source_ref = ? ORDER BY user_id, role`,
+      `SELECT user_id, role, status FROM event_participant_role_sources
+       WHERE source_kind = 'proposal_speaker' AND source_ref = ? ORDER BY user_id, role`,
       [proposalId],
     );
     expect(participantsBefore.length).toBeGreaterThan(0);
@@ -538,9 +539,9 @@ describe("speaker self-management endpoints", () => {
     await expect(
       queryAll<{ user_id: string; role: string; subrole: string | null }>(
         env.DB,
-        `SELECT user_id, role, subrole FROM event_participants
+        `SELECT user_id, role, subrole FROM event_participant_role_sources
          WHERE event_id = (SELECT event_id FROM session_proposals WHERE id = ?)
-           AND source_type = 'proposal' AND source_ref = ? AND user_id = ?`,
+           AND source_kind = 'proposal_speaker' AND source_ref = ? AND user_id = ?`,
         [proposalId, proposalId, coSpeakerUserId],
       ),
     ).resolves.toEqual([{ user_id: coSpeakerUserId, role: "speaker", subrole: "co_speaker" }]);

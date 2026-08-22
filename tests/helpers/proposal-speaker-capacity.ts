@@ -154,14 +154,9 @@ export async function seedAcceptedSpeakerRegistration(input: {
     waitlistClaimWindowHours: 24,
     signingSecret: env.INTERNAL_SIGNING_SECRET!,
   });
-  await env.DB.batch([
-    env.DB.prepare("UPDATE session_proposals SET status = 'accepted', updated_at = datetime('now') WHERE id = ?").bind(
-      input.proposalId,
-    ),
-    env.DB.prepare(
-      "UPDATE event_participants SET status = 'active', updated_at = datetime('now') WHERE event_id = ? AND source_type = 'proposal' AND source_ref = ?",
-    ).bind(input.eventId, input.proposalId),
-  ]);
+  await env.DB.prepare("UPDATE session_proposals SET status = 'accepted', updated_at = datetime('now') WHERE id = ?")
+    .bind(input.proposalId)
+    .run();
   const speakerRegistration = await createRegistrationService(env.DB, {
     event,
     userId: input.speakerUserId,

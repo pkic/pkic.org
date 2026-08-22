@@ -5,7 +5,7 @@ import { isAuditOneChangeGuardFailure, prepareScopedAuditLog, prepareScopedAudit
 import { prepareConsentStatements, validateRequiredConsents } from "./consent";
 import { getRequiredTerms } from "./events";
 import { getSpeakerByManageToken } from "./proposals";
-import { prepareDeactivateProposalParticipantRolesWithCapacity } from "./proposal-participants";
+import { prepareProposalRoleCapacityForSpeakerRemoval } from "./proposal-role-capacity";
 import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
 import { isEventParticipantSourceConflict } from "./event-participant-source-revision";
 import { prepareUserProfileStatement, type UserProfilePatch } from "./users";
@@ -167,7 +167,7 @@ export async function declineSpeakerParticipation(
         { proposalId: speaker.proposal_id, reason: payload.reason ?? null },
         now,
       ),
-      ...(await prepareDeactivateProposalParticipantRolesWithCapacity(db, {
+      ...(await prepareProposalRoleCapacityForSpeakerRemoval(db, {
         eventId: proposal.event_id,
         userId: speaker.user_id,
         sourceRef: proposal.id,

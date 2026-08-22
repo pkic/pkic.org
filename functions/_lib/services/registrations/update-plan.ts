@@ -19,7 +19,6 @@ import {
   resolveCapacityExemptReason,
   type DayWaitlistLane,
 } from "./day-waitlist";
-import { prepareUpsertAttendeeParticipantStatement } from "./participant-registration";
 import type { RegistrationRecord } from "./types";
 import type { AttendanceType } from "../../../../assets/shared/schemas/registration";
 
@@ -108,7 +107,6 @@ export async function buildRegistrationUpdate(
         registrationId: registration.id,
         reasonCode: "registration_cancelled",
       }),
-      prepareUpsertAttendeeParticipantStatement(db, cancelled),
     ];
     const audit = prepareRegistrationUpdateAudit(db, registration, cancelled, payload);
     if (audit) statements.push(audit);
@@ -141,7 +139,6 @@ export async function buildRegistrationUpdate(
         registrationId: registration.id,
         reasonCode: "registration_cancelled",
       }),
-      prepareUpsertAttendeeParticipantStatement(db, updated),
     ];
     const audit = prepareRegistrationUpdateAudit(db, registration, updated, payload);
     if (audit) statements.push(audit);
@@ -292,7 +289,6 @@ export async function buildRegistrationUpdate(
     updated_at: now,
   };
   if (payload.profilePatch) statements.push(prepareUserProfileStatement(db, updated.user_id, payload.profilePatch));
-  statements.push(prepareUpsertAttendeeParticipantStatement(db, updated));
   const audit = prepareRegistrationUpdateAudit(db, registration, updated, payload);
   if (audit) statements.push(audit);
   return {

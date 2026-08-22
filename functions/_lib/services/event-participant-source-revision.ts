@@ -4,10 +4,10 @@ import type { DatabaseLike, StatementLike } from "../types";
 import { uuid } from "../utils/ids";
 
 /**
- * `event_participants` is a derived projection, so its complete event/user
- * source set must remain current until a projection rebuild commits. The
- * revision is read before the source query: a concurrent source edit then
- * makes this guarded batch retry rather than permitting a stale rebuild.
+ * Registration capacity depends on the complete proposal/direct role source
+ * set for an event/user. The revision is read before that source query: a
+ * concurrent source edit then makes the guarded batch retry rather than
+ * committing capacity derived from a stale source snapshot.
  */
 export async function getEventParticipantSourceRevision(
   db: DatabaseLike,

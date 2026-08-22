@@ -77,12 +77,22 @@ async function addReviews(eventId: string, proposalId: string, adminId: string, 
   return extraAdminIds;
 }
 
+async function getProposalRoleSources(proposalId: string): Promise<Array<{ user_id: string; status: string }>> {
+  return queryAll<{ user_id: string; status: string }>(
+    env.DB,
+    `SELECT user_id, status
+     FROM event_participant_role_sources
+     WHERE source_type = 'proposal' AND source_ref = ?`,
+    [proposalId],
+  );
+}
+
 describe("proposal finalize workflows", () => {
   beforeEach(async () => {
     await resetDb();
   });
 
-  it("accept: sets proposal status to accepted and activates participant records", async () => {
+  it("accept: sets proposal status to accepted and activates proposal role sources", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, proposerUserId, speakerUserId, adminUserId } = await seedProposalWithSpeaker(eventId);
 
@@ -100,17 +110,13 @@ describe("proposal finalize workflows", () => {
     );
     expect(proposalRow.status).toBe("accepted");
 
-    const participants = await queryAll<{ user_id: string; status: string }>(
-      env.DB,
-      "SELECT user_id, status FROM event_participants WHERE source_type = 'proposal' AND source_ref = ?",
-      [proposalId],
-    );
+    const participants = await getProposalRoleSources(proposalId);
     const active = participants.filter((p) => p.status === "active").map((p) => p.user_id);
     expect(active).toContain(proposerUserId);
     expect(active).toContain(speakerUserId);
   });
 
-  it("reject: sets proposal status to rejected and deactivates participants", async () => {
+  it("reject: sets proposal status to rejected and deactivates proposal role sources", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
 
@@ -128,11 +134,8 @@ describe("proposal finalize workflows", () => {
     );
     expect(proposalRow.status).toBe("rejected");
 
-    const participants = await queryAll<{ user_id: string; status: string }>(
-      env.DB,
-      "SELECT user_id, status FROM event_participants WHERE source_type = 'proposal' AND source_ref = ?",
-      [proposalId],
-    );
+    const participants = await getProposalRoleSources(proposalId);
+    expect(participants.length).toBeGreaterThan(0);
     for (const p of participants) {
       expect(p.status).toBe("inactive");
     }
@@ -245,11 +248,8 @@ describe("proposal finalize workflows", () => {
         await queryAll(env.DB, "SELECT id FROM proposal_decision_history WHERE proposal_id = ?", [proposalId]),
       ).toHaveLength(0);
       expect(await queryAll(env.DB, "SELECT id FROM email_outbox WHERE event_id = ?", [eventId])).toHaveLength(0);
-      const participants = await queryAll<{ status: string }>(
-        env.DB,
-        "SELECT status FROM event_participants WHERE source_type = 'proposal' AND source_ref = ?",
-        [proposalId],
-      );
+      const participants = await getProposalRoleSources(proposalId);
+      expect(participants.length).toBeGreaterThan(0);
       expect(participants.every(({ status }) => status === "inactive")).toBe(true);
     } finally {
       await env.DB.prepare("DROP TRIGGER IF EXISTS reject_proposal_decision_audit").run();
@@ -314,7 +314,7 @@ describe("proposal spam/duplicate/delete", () => {
     expect(row.status).toBe("duplicate");
   });
 
-  it("soft-delete: sets deleted_at and deactivates participants", async () => {
+  it("soft-delete: sets deleted_at and deactivates proposal role sources", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
     const adminToken = await createAdminSession(env.DB, adminUserId, "flag-delete-service-token");
@@ -330,11 +330,8 @@ describe("proposal spam/duplicate/delete", () => {
     expect(row.status).toBe("deleted");
     expect(row.deleted_at).not.toBeNull();
 
-    const participants = await queryAll<{ status: string }>(
-      env.DB,
-      "SELECT status FROM event_participants WHERE source_type = 'proposal' AND source_ref = ?",
-      [proposalId],
-    );
+    const participants = await getProposalRoleSources(proposalId);
+    expect(participants.length).toBeGreaterThan(0);
     for (const p of participants) {
       expect(p.status).toBe("inactive");
     }
@@ -402,15 +399,10 @@ describe("proposal spam/duplicate/delete", () => {
     expect(auditRows[0]?.action).toBe("proposal_deleted");
   });
 
-  it("rolls back proposal deletion and participant changes when its audit write fails", async () => {
+  it("rolls back proposal deletion when its audit write fails", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
     const adminToken = await createAdminSession(env.DB, adminUserId, "flag-delete-rollback-token");
-    await env.DB.prepare(
-      "UPDATE event_participants SET status = 'active' WHERE source_type = 'proposal' AND source_ref = ?",
-    )
-      .bind(proposalId)
-      .run();
     await env.DB.prepare(
       `CREATE TRIGGER reject_proposal_delete_audit
          BEFORE INSERT ON audit_log
@@ -429,12 +421,9 @@ describe("proposal spam/duplicate/delete", () => {
       [proposalId],
     );
     expect(proposal).toEqual({ status: "submitted", deleted_at: null });
-    const participants = await queryAll<{ status: string }>(
-      env.DB,
-      "SELECT status FROM event_participants WHERE source_type = 'proposal' AND source_ref = ?",
-      [proposalId],
-    );
-    expect(participants.every(({ status }) => status === "active")).toBe(true);
+    const participants = await getProposalRoleSources(proposalId);
+    expect(participants.length).toBeGreaterThan(0);
+    expect(participants.every(({ status }) => status === "inactive")).toBe(true);
   });
 
   it("does not audit a moderation compare-and-set that loses", async () => {

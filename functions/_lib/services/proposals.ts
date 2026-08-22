@@ -5,10 +5,7 @@ import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { prepareReferralConversionStatements } from "./referrals";
 import { prepareEngagementStatement } from "./engagement";
-import {
-  prepareProposalParticipantSourceCapacityStatements,
-  prepareUpsertProposalParticipant,
-} from "./proposal-participants";
+import { prepareProposalRoleCapacityForProposalStatus } from "./proposal-role-capacity";
 import {
   issueDatabaseCapability,
   newCapabilityLinkSecret,
@@ -123,13 +120,6 @@ export async function buildCreateProposal(
         proposal.updated_at,
         proposal.withdrawn_at,
       ),
-    prepareUpsertProposalParticipant(db, {
-      eventId: proposal.event_id,
-      userId: proposal.proposer_user_id,
-      proposalRole: "proposer",
-      sourceRef: proposal.id,
-      status: "inactive",
-    }),
     prepareEngagementStatement(db, {
       userId: proposal.proposer_user_id,
       eventId: proposal.event_id,
@@ -292,7 +282,7 @@ export async function updateProposalForVerifiedOwner(
           },
           now,
         ),
-        ...(await prepareProposalParticipantSourceCapacityStatements(db, {
+        ...(await prepareProposalRoleCapacityForProposalStatus(db, {
           eventId: proposal.event_id,
           sourceRef: proposal.id,
           nextStatus: "inactive",

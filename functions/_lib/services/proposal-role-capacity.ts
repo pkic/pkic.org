@@ -1,5 +1,3 @@
-import { nowIso } from "../utils/time";
-import { uuid } from "../utils/ids";
 import type { DatabaseLike, StatementLike } from "../types";
 import { all } from "../db/queries";
 import { prepareRoleCapacityReconciliationStatements } from "./registrations/role-capacity-reconciliation";
@@ -13,75 +11,39 @@ import {
   prepareProposalSpeakerRosterRevisionGuard,
 } from "./proposal-speaker-roster-revision";
 
-export interface ProposalParticipantMapping {
+export interface ProposalRoleMapping {
   role: EventParticipantRole;
   subrole: string | null;
 }
 
-export interface ProposalParticipantProjection extends ProposalParticipantMapping {
+interface ProposalRoleSourceState extends ProposalRoleMapping {
   sourceRef: string;
   proposalRole: ProposalSpeakerRole;
   status: "active" | "inactive";
 }
 
-export function participantRoleForProposalRole(role: ProposalSpeakerRole): ProposalParticipantMapping {
-  if (role === "moderator") return { role: "moderator", subrole: null };
-  if (role === "panelist") return { role: "panelist", subrole: null };
-  return { role: "speaker", subrole: role };
+export function participantRoleForProposalRole(role: ProposalSpeakerRole): ProposalRoleMapping {
+  switch (role) {
+    case "moderator":
+      return { role: "moderator", subrole: null };
+    case "panelist":
+      return { role: "panelist", subrole: null };
+    case "proposer":
+    case "speaker":
+    case "co_speaker":
+      return { role: "speaker", subrole: role };
+    default: {
+      const unsupportedRole: never = role;
+      throw new Error(`Unsupported proposal participant role: ${String(unsupportedRole)}`);
+    }
+  }
 }
 
 export function proposalParticipantStatus(proposalStatus: string, speakerStatus: string): "active" | "inactive" {
   return proposalStatus === "accepted" && speakerStatus !== "declined" ? "active" : "inactive";
 }
 
-export function prepareUpsertProposalParticipant(
-  db: DatabaseLike,
-  payload: {
-    eventId: string;
-    userId: string;
-    proposalRole: ProposalSpeakerRole;
-    sourceRef: string;
-    status?: "active" | "inactive";
-  },
-): StatementLike {
-  const participant = participantRoleForProposalRole(payload.proposalRole);
-  const now = nowIso();
-  return db
-    .prepare(
-      `INSERT INTO event_participants (
-        id, event_id, user_id, role, subrole, status, source_type, source_ref, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, 'proposal', ?, ?, ?)
-      ON CONFLICT(event_id, user_id, role, subrole)
-      DO UPDATE SET status = excluded.status, source_ref = excluded.source_ref, updated_at = excluded.updated_at
-      WHERE event_participants.source_type = 'proposal'`,
-    )
-    .bind(
-      uuid(),
-      payload.eventId,
-      payload.userId,
-      participant.role,
-      participant.subrole,
-      payload.status ?? "active",
-      payload.sourceRef,
-      now,
-      now,
-    );
-}
-
-export function prepareDeactivateProposalParticipantRoles(
-  db: DatabaseLike,
-  payload: { eventId: string; userId: string },
-): StatementLike {
-  return db
-    .prepare(
-      `UPDATE event_participants
-       SET status = 'inactive', updated_at = ?
-       WHERE event_id = ? AND user_id = ? AND source_type = 'proposal'`,
-    )
-    .bind(nowIso(), payload.eventId, payload.userId);
-}
-
-async function listProposalParticipantProjectionAfterChange(
+async function listProposalRoleSourcesAfterChange(
   db: DatabaseLike,
   payload: {
     eventId: string;
@@ -90,7 +52,7 @@ async function listProposalParticipantProjectionAfterChange(
     nextRole?: ProposalSpeakerRole;
     nextStatus: "active" | "inactive";
   },
-): Promise<ProposalParticipantProjection[]> {
+): Promise<ProposalRoleSourceState[]> {
   const sources = await all<{
     proposal_id: string;
     role: ProposalSpeakerRole;
@@ -122,7 +84,7 @@ async function listProposalParticipantProjectionAfterChange(
     });
   }
 
-  const byParticipantRole = new Map<string, ProposalParticipantProjection>();
+  const byParticipantRole = new Map<string, ProposalRoleSourceState>();
   for (const source of sources) {
     const participant = participantRoleForProposalRole(source.role);
     const key = `${participant.role}\u0000${participant.subrole ?? ""}`;
@@ -141,15 +103,11 @@ async function listProposalParticipantProjectionAfterChange(
 }
 
 /**
- * Rebuilds the proposal-owned event-participant projection for one person.
- *
- * The base table deliberately has one row per event/user/role/subrole, so it
- * cannot be a ledger of every accepted proposal source. The authoritative
- * source ledger is proposal_speakers joined to accepted session_proposals;
- * this composite rebuild selects one deterministic source reference for each
- * projected role and preserves every other accepted source in the process.
+ * Reconciles registration capacity after one proposal-role source changes.
+ * Proposal roles are read directly from proposal_speakers/session_proposals;
+ * event_participants remains the direct-role source and is never rebuilt.
  */
-export async function prepareProposalParticipantProjectionWithCapacity(
+export async function prepareProposalRoleCapacityAfterSourceChange(
   db: DatabaseLike,
   payload: {
     eventId: string;
@@ -164,34 +122,24 @@ export async function prepareProposalParticipantProjectionWithCapacity(
   // changes after this point, the post-mutation guard below rejects this
   // otherwise stale projection rebuild atomically.
   const sourceRevision = await getEventParticipantSourceRevision(db, payload.eventId, payload.userId);
-  const projection = await listProposalParticipantProjectionAfterChange(db, payload);
+  const sources = await listProposalRoleSourcesAfterChange(db, payload);
   return [
     prepareEventParticipantSourceRevisionGuard(db, {
       eventId: payload.eventId,
       userId: payload.userId,
       expectedRevision: sourceRevision + (payload.sourceRevisionAdvance ?? 1),
     }),
-    prepareDeactivateProposalParticipantRoles(db, payload),
-    ...projection.map((participant) =>
-      prepareUpsertProposalParticipant(db, {
-        eventId: payload.eventId,
-        userId: payload.userId,
-        proposalRole: participant.proposalRole,
-        sourceRef: participant.sourceRef,
-        status: participant.status,
-      }),
-    ),
     ...(await prepareRoleCapacityReconciliationStatements(db, {
       eventId: payload.eventId,
       userId: payload.userId,
-      activeProposalRoles: projection
+      activeProposalRoles: sources
         .filter((participant) => participant.status === "active")
         .map((participant) => participant.role),
     })),
   ];
 }
 
-export async function prepareSyncProposalParticipantRoleWithCapacity(
+export async function prepareProposalRoleCapacityForSpeakerChange(
   db: DatabaseLike,
   payload: {
     eventId: string;
@@ -202,7 +150,7 @@ export async function prepareSyncProposalParticipantRoleWithCapacity(
     sourceRevisionAdvance?: 0 | 1;
   },
 ): Promise<StatementLike[]> {
-  return prepareProposalParticipantProjectionWithCapacity(db, {
+  return prepareProposalRoleCapacityAfterSourceChange(db, {
     eventId: payload.eventId,
     userId: payload.userId,
     sourceRef: payload.sourceRef,
@@ -212,14 +160,14 @@ export async function prepareSyncProposalParticipantRoleWithCapacity(
   });
 }
 
-export async function prepareDeactivateProposalParticipantRolesWithCapacity(
+export async function prepareProposalRoleCapacityForSpeakerRemoval(
   db: DatabaseLike,
   payload: { eventId: string; userId: string; sourceRef: string; sourceRevisionAdvance?: 0 | 1 },
 ): Promise<StatementLike[]> {
-  return prepareProposalParticipantProjectionWithCapacity(db, { ...payload, nextStatus: "inactive" });
+  return prepareProposalRoleCapacityAfterSourceChange(db, { ...payload, nextStatus: "inactive" });
 }
 
-export async function prepareProposalParticipantSourceCapacityStatements(
+export async function prepareProposalRoleCapacityForProposalStatus(
   db: DatabaseLike,
   payload: { eventId: string; sourceRef: string; nextStatus: "active" | "inactive" },
 ): Promise<StatementLike[]> {
@@ -239,7 +187,7 @@ export async function prepareProposalParticipantSourceCapacityStatements(
   ];
   for (const speaker of speakers) {
     statements.push(
-      ...(await prepareProposalParticipantProjectionWithCapacity(db, {
+      ...(await prepareProposalRoleCapacityAfterSourceChange(db, {
         eventId: payload.eventId,
         userId: speaker.user_id,
         sourceRef: payload.sourceRef,

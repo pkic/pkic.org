@@ -137,7 +137,10 @@ describe("proposal participants", () => {
 
     const participantRoles = await queryAll<{ role: string }>(
       env.DB,
-      "SELECT role FROM event_participants WHERE event_id = (SELECT event_id FROM session_proposals WHERE id = ?) ORDER BY role",
+      `SELECT role FROM event_participant_role_sources
+       WHERE event_id = (SELECT event_id FROM session_proposals WHERE id = ?)
+         AND source_kind = 'proposal_speaker'
+       ORDER BY role`,
       [payload.proposalId],
     );
     expect(participantRoles.map((entry) => entry.role)).toContain("panelist");
@@ -363,7 +366,8 @@ describe("proposal participants", () => {
     const pendingParticipant = (
       await queryAll<{ status: string }>(
         env.DB,
-        "SELECT status FROM event_participants WHERE event_id = ? AND user_id = ? AND source_type = 'proposal' AND role = 'speaker'",
+        `SELECT status FROM event_participant_role_sources
+         WHERE event_id = ? AND user_id = ? AND source_kind = 'proposal_speaker' AND role = 'speaker'`,
         [eventId, speakerId],
       )
     )[0];
@@ -399,7 +403,8 @@ describe("proposal participants", () => {
     const acceptedParticipant = (
       await queryAll<{ status: string }>(
         env.DB,
-        "SELECT status FROM event_participants WHERE event_id = ? AND user_id = ? AND source_type = 'proposal' AND role = 'speaker'",
+        `SELECT status FROM event_participant_role_sources
+         WHERE event_id = ? AND user_id = ? AND source_kind = 'proposal_speaker' AND role = 'speaker'`,
         [eventId, speakerId],
       )
     )[0];
@@ -448,7 +453,8 @@ describe("proposal participants", () => {
     expect(
       await queryAll<{ status: string }>(
         env.DB,
-        "SELECT status FROM event_participants WHERE event_id = ? AND user_id = ? AND source_type = 'proposal' AND role = 'speaker'",
+        `SELECT status FROM event_participant_role_sources
+         WHERE event_id = ? AND user_id = ? AND source_kind = 'proposal_speaker' AND role = 'speaker'`,
         [eventId, speakerId],
       ),
     ).toEqual([{ status: "active" }]);

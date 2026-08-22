@@ -90,7 +90,7 @@ export async function roleBasedCapacityExemptReason(
   const row = await first<{ role: string }>(
     db,
     `SELECT role
-     FROM event_participants
+     FROM effective_event_participant_roles
      WHERE event_id = ? AND user_id = ? AND status = 'active'
        AND role IN (${ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL})
      ORDER BY CASE role WHEN 'organizer' THEN 1 WHEN 'speaker' THEN 2 WHEN 'moderator' THEN 3 ELSE 9 END
@@ -102,8 +102,8 @@ export async function roleBasedCapacityExemptReason(
 
 /**
  * Resolves the role exemption after one proposal participant source changes.
- * The participant statement is still part of the caller's atomic batch, so
- * this excludes the old source row and overlays the intended next role here.
+ * The source mutation is still part of the caller's atomic batch, so this
+ * reads direct roles and overlays the intended next proposal roles here.
  */
 export async function roleBasedCapacityExemptReasonAfterParticipantChange(
   db: DatabaseLike,
@@ -116,10 +116,10 @@ export async function roleBasedCapacityExemptReasonAfterParticipantChange(
   const rows = await all<{ role: string }>(
     db,
     `SELECT role
-     FROM event_participants
+     FROM event_participant_role_sources
      WHERE event_id = ? AND user_id = ? AND status = 'active'
        AND role IN (${ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL})
-       AND COALESCE(source_type, '') <> 'proposal'`,
+       AND source_kind = 'event_participant'`,
     [input.eventId, input.userId],
   );
   const roles = rows.map((row) => row.role);

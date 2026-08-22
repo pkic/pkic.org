@@ -507,10 +507,10 @@ describe("admin users list — type filter", () => {
     return userId;
   }
 
-  async function seedEventParticipant(eventId: string, email: string, eventCount = 1): Promise<string> {
+  async function seedEventParticipant(eventId: string, email: string, roleCount = 1): Promise<string> {
     const userId = await seedUser(env.DB, email);
-    const roles = ["attendee", "speaker", "moderator"];
-    for (let i = 0; i < eventCount; i++) {
+    const roles = ["speaker", "moderator", "organizer"];
+    for (let i = 0; i < roleCount; i++) {
       await env.DB.prepare(
         `INSERT INTO event_participants (id, event_id, user_id, role, status, created_at, updated_at)
          VALUES (?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`,
@@ -547,14 +547,14 @@ describe("admin users list — type filter", () => {
     expect(data.users[0].type).toBe("member");
   });
 
-  it("classifies a user with only an event_participants row as 'event_attendee', with the participation count", async () => {
+  it("classifies a user with direct event roles as an event attendee and counts distinct events", async () => {
     const { eventId } = await setup();
     await seedEventParticipant(eventId, "type-attendee@example.test", 2);
 
     const data = await listUsers("type=event_attendee&q=type-attendee@example.test");
     expect(data.users.map((u) => u.email)).toEqual(["type-attendee@example.test"]);
     expect(data.users[0].type).toBe("event_attendee");
-    expect(data.users[0].eventParticipationCount).toBe(2);
+    expect(data.users[0].eventParticipationCount).toBe(1);
   });
 
   it("classifies a bare user (no membership, no event participation) as 'contact_only'", async () => {

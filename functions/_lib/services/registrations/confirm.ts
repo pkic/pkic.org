@@ -3,7 +3,6 @@ import { first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { prepareEngagementStatement } from "../engagement";
 import { prepareRemoveAllDayWaitlistStatement, resolveCapacityExemptReason } from "./day-waitlist";
-import { prepareUpsertAttendeeParticipantStatement } from "./participant-registration";
 import { prepareAuditLog } from "../audit";
 import { prepareFinalizeEmailChange } from "./change-email";
 import {
@@ -186,7 +185,6 @@ export async function prepareConfirmRegistrationByToken(
     );
   }
   updateStatements.push(
-    prepareUpsertAttendeeParticipantStatement(db, { ...registration, status: newStatus }),
     prepareAuditLog(
       db,
       "user",

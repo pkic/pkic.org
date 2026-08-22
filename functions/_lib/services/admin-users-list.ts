@@ -44,9 +44,13 @@ export async function listAdminUsers(db: DatabaseLike, query: AdminUsersListQuer
   if (query.type === "member") {
     conditions.push("m.id IS NOT NULL");
   } else if (query.type === "event_attendee") {
-    conditions.push("m.id IS NULL AND EXISTS (SELECT 1 FROM event_participants ep WHERE ep.user_id = u.id)");
+    conditions.push(
+      "m.id IS NULL AND EXISTS (SELECT 1 FROM event_participant_role_sources ep WHERE ep.user_id = u.id)",
+    );
   } else if (query.type === "contact_only") {
-    conditions.push("m.id IS NULL AND NOT EXISTS (SELECT 1 FROM event_participants ep WHERE ep.user_id = u.id)");
+    conditions.push(
+      "m.id IS NULL AND NOT EXISTS (SELECT 1 FROM event_participant_role_sources ep WHERE ep.user_id = u.id)",
+    );
   }
   if (query.q) {
     const primary = buildD1TextSearchFilter(query.q, [
@@ -71,7 +75,9 @@ export async function listAdminUsers(db: DatabaseLike, query: AdminUsersListQuer
               COALESCE(rep.id, mi.id) AS member_id, mca.category_code AS member_category,
               COALESCE(m.status, mi.status) AS member_status,
               m.organization_id AS member_organization_id, o.name AS member_organization_name,
-              (SELECT COUNT(*) FROM event_participants ep WHERE ep.user_id = u.id) AS event_participation_count
+              (SELECT COUNT(DISTINCT ep.event_id)
+                 FROM event_participant_role_sources ep
+                WHERE ep.user_id = u.id) AS event_participation_count
        FROM users u
        ${representativeJoin}
        LEFT JOIN members m ON m.id = rep.member_id

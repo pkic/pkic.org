@@ -157,27 +157,10 @@ export async function generateBadgePng(code: string, env: BadgeRenderEnv, origin
               e.starts_at, e.ends_at, e.settings_json,
               COALESCE(bro.role, (
                 SELECT ep2.role
-                FROM   event_participants ep2
+                FROM   event_participant_badge_roles ep2
                 WHERE  ep2.event_id = r.event_id
                   AND  ep2.user_id  = r.user_id
-                  AND  ep2.role    != 'attendee'
-                  AND  ep2.status   = 'active'
-                  AND (
-                    ep2.source_type != 'proposal'
-                    OR EXISTS (
-                      SELECT 1
-                      FROM session_proposals sp2
-                      WHERE sp2.id = ep2.source_ref
-                        AND sp2.status = 'accepted'
-                    )
-                  )
-                ORDER BY CASE ep2.role
-                  WHEN 'speaker'   THEN 1
-                  WHEN 'moderator' THEN 2
-                  WHEN 'panelist'  THEN 3
-                  WHEN 'organizer' THEN 4
-                  ELSE 5
-                END
+                ORDER BY ep2.priority ASC, ep2.role ASC
                 LIMIT 1
               )) AS effective_role
        FROM   registrations r

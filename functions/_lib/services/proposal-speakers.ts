@@ -3,7 +3,7 @@ import { first } from "../db/queries";
 import { nowIso } from "../utils/time";
 import { sha256Hex } from "../utils/crypto";
 import { newCapabilityLinkSecret, queuedCapabilityToken, signCapabilityToken } from "./capability-links";
-import { prepareSyncProposalParticipantRoleWithCapacity, proposalParticipantStatus } from "./proposal-participants";
+import { prepareProposalRoleCapacityForSpeakerChange, proposalParticipantStatus } from "./proposal-role-capacity";
 import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
 import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
 import {
@@ -119,7 +119,7 @@ export async function buildAddProposalSpeaker(
   ];
   if (proposal) {
     statements.push(
-      ...(await prepareSyncProposalParticipantRoleWithCapacity(db, {
+      ...(await prepareProposalRoleCapacityForSpeakerChange(db, {
         eventId: proposal.event_id,
         userId: payload.userId,
         proposalRole: payload.role,
@@ -295,7 +295,7 @@ export async function prepareProposalSpeakerRoleChange(
     .bind(...bindings);
   return {
     updateStatement,
-    capacityStatements: await prepareSyncProposalParticipantRoleWithCapacity(db, {
+    capacityStatements: await prepareProposalRoleCapacityForSpeakerChange(db, {
       eventId: payload.eventId,
       userId: payload.userId,
       proposalRole: payload.nextRole,

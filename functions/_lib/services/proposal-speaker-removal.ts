@@ -20,10 +20,10 @@ import { buildEventEmailVariables, getEventById } from "./events";
 import { proposalManagePageUrl } from "./frontend-links";
 import { prepareCancelProposalEmails } from "./proposal-email-cancellation";
 import {
-  prepareDeactivateProposalParticipantRolesWithCapacity,
-  prepareSyncProposalParticipantRoleWithCapacity,
+  prepareProposalRoleCapacityForSpeakerRemoval,
+  prepareProposalRoleCapacityForSpeakerChange,
   proposalParticipantStatus,
-} from "./proposal-participants";
+} from "./proposal-role-capacity";
 import { getProposalByManageToken } from "./proposals";
 import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
 import { isEventParticipantSourceConflict } from "./event-participant-source-revision";
@@ -320,7 +320,7 @@ async function removeProposalSpeaker(
       },
       now,
     ),
-    ...(await prepareDeactivateProposalParticipantRolesWithCapacity(db, {
+    ...(await prepareProposalRoleCapacityForSpeakerRemoval(db, {
       eventId: context.event_id,
       userId: context.speaker_user_id,
       sourceRef: context.proposal_id,
@@ -329,7 +329,7 @@ async function removeProposalSpeaker(
 
   if (replacement) {
     statements.push(
-      ...(await prepareSyncProposalParticipantRoleWithCapacity(db, {
+      ...(await prepareProposalRoleCapacityForSpeakerChange(db, {
         eventId: context.event_id,
         userId: replacement.user_id,
         proposalRole: replacement.role,

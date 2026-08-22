@@ -180,12 +180,26 @@ CREATE INDEX idx_proposal_speakers_user_active
   ON proposal_speakers(user_id, created_at DESC, proposal_id)
   WHERE role <> 'proposer' AND status IN ('invited', 'confirmed');
 
--- `event_participants` is a projection of a speaker's source set across all
--- proposals for an event. Protect a prepared projection rebuild from a
--- concurrent change to another proposal source without treating the
--- projection table itself as the source of truth or rebuilding existing data.
--- Rows are created lazily by the source triggers; absent rows represent the
--- initial revision zero for legacy speakers.
+-- Source/effective-role reads start with a person and then join their proposal
+-- sources. Include every role/status because inactive sources remain relevant
+-- to provenance and event-participation history.
+CREATE INDEX idx_proposal_speakers_user_proposal_status_role
+  ON proposal_speakers(user_id, proposal_id, status, role);
+
+-- User classification counts distinct events across direct participant rows.
+-- The existing event/role/status index does not support a user-first lookup.
+CREATE INDEX idx_event_participants_user_event_status_role
+  ON event_participants(user_id, event_id, status, role);
+
+-- The participant-source view is correlated by user in admin classification
+-- and participation counts. Existing registration indexes are event-first.
+CREATE INDEX idx_registrations_user_event_status
+  ON registrations(user_id, event_id, status);
+
+-- Registration capacity depends on a person's complete proposal/direct role
+-- source set. Protect the source snapshot used to prepare a capacity change
+-- from a concurrent edit to another proposal or direct source. Revision rows
+-- are created lazily; an absent row represents revision zero.
 CREATE TABLE event_participant_source_revisions (
   event_id TEXT NOT NULL,
   user_id  TEXT NOT NULL,
@@ -204,10 +218,10 @@ CREATE TABLE event_participant_source_revision_guards (
   FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- Whole-proposal decisions enumerate a roster before rebuilding every
--- affected user's projection. Guard that roster separately so an added or
--- removed speaker cannot evade the per-user source guards by appearing only
--- after the enumeration.
+-- Whole-proposal decisions enumerate a roster before reconciling every
+-- affected user's registration capacity. Guard that roster separately so an
+-- added or removed speaker cannot evade the per-user source guards by
+-- appearing only after the enumeration.
 CREATE TABLE proposal_speaker_roster_revisions (
   proposal_id TEXT NOT NULL PRIMARY KEY,
   revision    INTEGER NOT NULL DEFAULT 0,
@@ -380,6 +394,127 @@ BEGIN
     )
   ON CONFLICT(event_id, user_id) DO UPDATE SET revision = event_participant_source_revisions.revision + 1;
 END;
+
+-- Preserve every authoritative role source without expanding the legacy
+-- event_participants uniqueness constraint or copying proposal data into it.
+-- Existing proposal projection rows are deliberately excluded; proposal_speakers
+-- joined to session_proposals is the normalized source of truth.
+CREATE VIEW event_participant_role_sources AS
+SELECT
+  'event_participant:' || ep.id AS source_key,
+  'event_participant' AS source_kind,
+  ep.id AS source_id,
+  ep.event_id,
+  ep.user_id,
+  ep.role,
+  ep.subrole,
+  ep.status,
+  ep.source_type,
+  ep.source_ref
+FROM event_participants ep
+WHERE COALESCE(ep.source_type, '') <> 'proposal'
+  AND (
+    ep.role <> 'attendee'
+    OR NOT EXISTS (
+      SELECT 1
+      FROM registrations registration_source
+      WHERE registration_source.event_id = ep.event_id
+        AND registration_source.user_id = ep.user_id
+    )
+  )
+UNION ALL
+SELECT
+  'registration:' || r.id AS source_key,
+  'registration' AS source_kind,
+  r.id AS source_id,
+  r.event_id,
+  r.user_id,
+  'attendee' AS role,
+  r.attendance_type AS subrole,
+  CASE r.status
+    WHEN 'registered' THEN 'active'
+    WHEN 'pending_email_confirmation' THEN 'invited'
+    WHEN 'waitlisted' THEN 'waitlisted'
+    ELSE 'inactive'
+  END AS status,
+  r.source_type,
+  r.source_ref
+FROM registrations r
+UNION ALL
+SELECT
+  'proposal_speaker:' || ps.id AS source_key,
+  'proposal_speaker' AS source_kind,
+  ps.id AS source_id,
+  sp.event_id,
+  ps.user_id,
+  CASE ps.role
+    WHEN 'moderator' THEN 'moderator'
+    WHEN 'panelist' THEN 'panelist'
+    WHEN 'proposer' THEN 'speaker'
+    WHEN 'speaker' THEN 'speaker'
+    WHEN 'co_speaker' THEN 'speaker'
+  END AS role,
+  CASE ps.role
+    WHEN 'moderator' THEN NULL
+    WHEN 'panelist' THEN NULL
+    WHEN 'proposer' THEN 'proposer'
+    WHEN 'speaker' THEN 'speaker'
+    WHEN 'co_speaker' THEN 'co_speaker'
+  END AS subrole,
+  CASE
+    WHEN sp.status = 'accepted' AND sp.deleted_at IS NULL AND ps.status <> 'declined' THEN 'active'
+    ELSE 'inactive'
+  END AS status,
+  'proposal' AS source_type,
+  ps.proposal_id AS source_ref
+FROM proposal_speakers ps
+JOIN session_proposals sp ON sp.id = ps.proposal_id
+WHERE ps.role IN ('proposer', 'speaker', 'co_speaker', 'moderator', 'panelist');
+
+-- Consumers that need a person's current role should not select an arbitrary
+-- source. Collapse sources only after preserving them above, and keep a role
+-- active while at least one authoritative source remains active.
+CREATE VIEW effective_event_participant_roles AS
+SELECT
+  event_id,
+  user_id,
+  role,
+  subrole,
+  CASE MAX(
+    CASE status
+      WHEN 'active' THEN 4
+      WHEN 'invited' THEN 3
+      WHEN 'waitlisted' THEN 2
+      ELSE 1
+    END
+  )
+    WHEN 4 THEN 'active'
+    WHEN 3 THEN 'invited'
+    WHEN 2 THEN 'waitlisted'
+    ELSE 'inactive'
+  END AS status,
+  COUNT(*) AS source_count,
+  SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active_source_count
+FROM event_participant_role_sources
+GROUP BY event_id, user_id, role, subrole;
+
+-- Badge-role precedence is one shared D1 read model used by admin and public
+-- badge paths instead of repeated CASE expressions in each consumer.
+CREATE VIEW event_participant_badge_roles AS
+SELECT
+  event_id,
+  user_id,
+  role,
+  CASE role
+    WHEN 'speaker' THEN 1
+    WHEN 'moderator' THEN 2
+    WHEN 'panelist' THEN 3
+    WHEN 'organizer' THEN 4
+    WHEN 'staff' THEN 5
+    ELSE 99
+  END AS priority
+FROM effective_event_participant_roles
+WHERE status = 'active' AND role <> 'attendee';
 
 -- Calendar replies describe one event day, not the entire registration. Keep
 -- that identity normalized so enforcement never infers a registration-wide

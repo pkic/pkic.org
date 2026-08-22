@@ -889,7 +889,7 @@ describe("registration workflows", () => {
     ).resolves.toEqual([{ status: "offered" }]);
   });
 
-  it("rolls back registration cancellation when its participant projection fails", async () => {
+  it("rolls back registration cancellation and its derived role when audit insertion fails", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     await env.DB.prepare(
       `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
@@ -911,11 +911,11 @@ describe("registration workflows", () => {
       signingSecret: "test-signing-secret",
     });
     await env.DB.prepare(
-      `CREATE TRIGGER reject_cancel_participant_projection
-       BEFORE UPDATE ON event_participants
-       WHEN NEW.event_id = '${eventId}' AND NEW.user_id = 'cancel-atomic-user'
+      `CREATE TRIGGER reject_cancel_registration_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'registration_cancel_atomic_test'
        BEGIN
-         SELECT RAISE(ABORT, 'forced participant projection failure');
+         SELECT RAISE(ABORT, 'forced registration audit failure');
        END`,
     ).run();
 
@@ -923,7 +923,12 @@ describe("registration workflows", () => {
       await expect(
         updateRegistrationById(
           env.DB,
-          { registrationId: created.registration.id, action: "cancel", waitlistClaimWindowHours: 24 },
+          {
+            registrationId: created.registration.id,
+            action: "cancel",
+            waitlistClaimWindowHours: 24,
+            auditActor: { type: "user", id: "cancel-atomic-user", action: "registration_cancel_atomic_test" },
+          },
           "test",
         ),
       ).rejects.toBeTruthy();
@@ -934,13 +939,14 @@ describe("registration workflows", () => {
       );
       const [participant] = await queryAll<{ status: string }>(
         env.DB,
-        "SELECT status FROM event_participants WHERE event_id = ? AND user_id = ? AND role = 'attendee'",
+        `SELECT status FROM effective_event_participant_roles
+         WHERE event_id = ? AND user_id = ? AND role = 'attendee'`,
         [eventId, "cancel-atomic-user"],
       );
       expect(registration).toEqual({ status: "registered", cancelled_at: null });
       expect(participant.status).toBe("active");
     } finally {
-      await env.DB.prepare("DROP TRIGGER reject_cancel_participant_projection").run();
+      await env.DB.prepare("DROP TRIGGER reject_cancel_registration_audit").run();
     }
   });
 

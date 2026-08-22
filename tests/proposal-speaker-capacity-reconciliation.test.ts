@@ -120,7 +120,8 @@ describe("proposal speaker capacity reconciliation", () => {
     await expect(
       queryAll(
         env.DB,
-        "SELECT id FROM event_participants WHERE event_id = ? AND user_id = ? AND source_type = 'proposal' AND status = 'active'",
+        `SELECT source_id FROM event_participant_role_sources
+         WHERE event_id = ? AND user_id = ? AND source_kind = 'proposal_speaker' AND status = 'active'`,
         [event.id, coSpeakerUserId],
       ),
     ).resolves.toHaveLength(0);
@@ -311,7 +312,8 @@ describe("proposal speaker capacity reconciliation", () => {
     await expect(
       queryAll(
         env.DB,
-        "SELECT role, subrole, status FROM event_participants WHERE event_id = ? AND user_id = ? AND source_type = 'proposal'",
+        `SELECT role, subrole, status FROM event_participant_role_sources
+         WHERE event_id = ? AND user_id = ? AND source_kind = 'proposal_speaker'`,
         [eventId, coSpeakerUserId],
       ),
     ).resolves.toContainEqual({ role: "moderator", subrole: null, status: "active" });
@@ -335,7 +337,8 @@ describe("proposal speaker capacity reconciliation", () => {
     await expect(
       queryAll(
         env.DB,
-        "SELECT role, subrole, status FROM event_participants WHERE event_id = ? AND user_id = ? AND source_type = 'proposal'",
+        `SELECT role, subrole, status FROM event_participant_role_sources
+         WHERE event_id = ? AND user_id = ? AND source_kind = 'proposal_speaker'`,
         [eventId, coSpeakerUserId],
       ),
     ).resolves.toContainEqual({ role: "panelist", subrole: null, status: "active" });
@@ -377,7 +380,9 @@ describe("proposal speaker capacity reconciliation", () => {
     await expect(
       queryAll(
         env.DB,
-        "SELECT role, subrole, status, source_ref FROM event_participants WHERE event_id = ? AND user_id = ? AND source_type = 'proposal' AND role = 'speaker' AND subrole = 'co_speaker'",
+        `SELECT role, subrole, status, source_ref FROM event_participant_role_sources
+         WHERE event_id = ? AND user_id = ? AND source_kind = 'proposal_speaker'
+           AND role = 'speaker' AND subrole = 'co_speaker'`,
         [eventId, coSpeakerUserId],
       ),
     ).resolves.toEqual([{ role: "speaker", subrole: "co_speaker", status: "active", source_ref: secondProposal.id }]);
@@ -455,9 +460,6 @@ describe("proposal speaker capacity reconciliation", () => {
     });
     await env.DB.batch([
       env.DB.prepare(
-        "UPDATE event_participants SET status = 'active' WHERE event_id = ? AND user_id = ? AND source_type = 'proposal' AND source_ref = ?",
-      ).bind(eventId, coSpeakerUserId, proposalId),
-      env.DB.prepare(
         "UPDATE registrations SET capacity_exempt_in_person = 1, capacity_exempt_reason = 'role:speaker' WHERE id = ?",
       ).bind(registrationId),
     ]);
@@ -472,13 +474,9 @@ describe("proposal speaker capacity reconciliation", () => {
   });
 
   it("re-arbitrates a stale exemption during self-service withdrawal", async () => {
-    const { proposalId, proposalManageToken, coSpeakerUserId } =
-      await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
+    const { proposalManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
     const registrationId = await seedPendingSpeakerRegistration({ eventId, speakerUserId: coSpeakerUserId });
     await env.DB.batch([
-      env.DB.prepare(
-        "UPDATE event_participants SET status = 'active' WHERE event_id = ? AND source_type = 'proposal' AND source_ref = ? AND user_id = ?",
-      ).bind(eventId, proposalId, coSpeakerUserId),
       env.DB.prepare(
         "UPDATE registrations SET capacity_exempt_in_person = 1, capacity_exempt_reason = 'role:speaker' WHERE id = ?",
       ).bind(registrationId),
@@ -503,9 +501,6 @@ describe("proposal speaker capacity reconciliation", () => {
     const proposal = await getProposalByManageToken(env.DB, proposalManageToken, env.INTERNAL_SIGNING_SECRET!);
     const registrationId = await seedPendingSpeakerRegistration({ eventId, speakerUserId: coSpeakerUserId });
     await env.DB.batch([
-      env.DB.prepare(
-        "UPDATE event_participants SET status = 'active' WHERE event_id = ? AND source_type = 'proposal' AND source_ref = ? AND user_id = ?",
-      ).bind(eventId, proposalId, coSpeakerUserId),
       env.DB.prepare(
         "UPDATE registrations SET capacity_exempt_in_person = 1, capacity_exempt_reason = 'role:speaker' WHERE id = ?",
       ).bind(registrationId),
@@ -552,9 +547,6 @@ describe("proposal speaker capacity reconciliation", () => {
         proposalId,
         coSpeakerUserId,
       ),
-      env.DB.prepare(
-        "UPDATE event_participants SET status = 'inactive' WHERE event_id = (SELECT event_id FROM session_proposals WHERE id = ?) AND source_type = 'proposal' AND source_ref = ? AND user_id = ?",
-      ).bind(proposalId, proposalId, coSpeakerUserId),
     ]);
     const proposerResponse = await app.fetch(
       new Request(

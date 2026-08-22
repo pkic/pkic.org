@@ -16,7 +16,7 @@ import {
 } from "./context";
 import type { RecordProposalDecisionInput, RecordedProposalDecision } from "./types";
 import { proposalDecisionSnapshotPredicate } from "./snapshot";
-import { prepareProposalParticipantSourceCapacityStatements } from "../proposal-participants";
+import { prepareProposalRoleCapacityForProposalStatus } from "../proposal-role-capacity";
 import { isRegistrationTransitionConflict, registrationChangedError } from "../registrations/transition-guard";
 import { isEventParticipantSourceConflict } from "../event-participant-source-revision";
 import { isProposalSpeakerRosterConflict } from "../proposal-speaker-roster-revision";
@@ -228,7 +228,7 @@ export async function recordProposalDecision(
         context.updated_at,
         ...condition.bindings,
       ),
-    ...(await prepareProposalParticipantSourceCapacityStatements(db, {
+    ...(await prepareProposalRoleCapacityForProposalStatus(db, {
       eventId: context.event_id,
       sourceRef: input.proposalId,
       nextStatus: input.finalStatus === "accepted" ? "active" : "inactive",

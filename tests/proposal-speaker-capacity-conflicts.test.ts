@@ -274,11 +274,16 @@ describe("proposal speaker capacity conflicts", () => {
       { status: "submitted" },
     ]);
     await expect(
-      queryAll(env.DB, "SELECT status FROM event_participants WHERE event_id = ? AND source_ref = ?", [
-        eventId,
-        proposalId,
-      ]),
-    ).resolves.toSatisfy((rows: Array<{ status: string }>) => rows.every((row) => row.status === "inactive"));
+      queryAll(
+        env.DB,
+        `SELECT status
+         FROM event_participant_role_sources
+         WHERE event_id = ? AND source_type = 'proposal' AND source_ref = ?`,
+        [eventId, proposalId],
+      ),
+    ).resolves.toSatisfy(
+      (rows: Array<{ status: string }>) => rows.length > 0 && rows.every((row) => row.status === "inactive"),
+    );
   });
 
   it("rolls back a speaker decline when another accepted proposal changes the same source set", async () => {

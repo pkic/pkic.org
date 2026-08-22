@@ -558,17 +558,9 @@ describe("admin proposal endpoints", () => {
     const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
     const { speakerId } = await seedProposalSpeaker(proposalId, { status: "declined" });
     const adminToken = await createAdminSession(env.DB, adminId, "token-admin-declined-speaker-role");
-    await env.DB.batch([
-      env.DB.prepare("UPDATE session_proposals SET status = 'accepted', updated_at = ? WHERE id = ?").bind(
-        "2028-01-01T00:00:00.000Z",
-        proposalId,
-      ),
-      env.DB.prepare(
-        `INSERT INTO event_participants (
-             id, event_id, user_id, role, subrole, status, source_type, source_ref, created_at, updated_at
-           ) VALUES (?, ?, ?, 'speaker', NULL, 'active', 'proposal', ?, datetime('now'), datetime('now'))`,
-      ).bind(crypto.randomUUID(), eventId, speakerId, proposalId),
-    ]);
+    await env.DB.prepare("UPDATE session_proposals SET status = 'accepted', updated_at = ? WHERE id = ?")
+      .bind("2028-01-01T00:00:00.000Z", proposalId)
+      .run();
 
     const response = await callAdminProposalSpeakers(adminToken, proposalId, `/${speakerId}`, {
       method: "PATCH",
@@ -579,15 +571,12 @@ describe("admin proposal endpoints", () => {
     expect(response.status).toBe(200);
     const participants = await queryAll<{ role: string; status: string }>(
       env.DB,
-      `SELECT role, status FROM event_participants
-       WHERE event_id = ? AND user_id = ? AND source_type = 'proposal'
+      `SELECT role, status FROM event_participant_role_sources
+       WHERE event_id = ? AND user_id = ? AND source_kind = 'proposal_speaker'
        ORDER BY role`,
       [eventId, speakerId],
     );
-    expect(participants).toEqual([
-      { role: "moderator", status: "inactive" },
-      { role: "speaker", status: "inactive" },
-    ]);
+    expect(participants).toEqual([{ role: "moderator", status: "inactive" }]);
   });
 
   it("searches proposal and review text", async () => {

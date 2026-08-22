@@ -16,7 +16,6 @@ import {
   withDayCapacityRetry,
   type PlannedDayWaitlistEntry,
 } from "./day-waitlist";
-import { prepareUpsertAttendeeParticipantStatement } from "./participant-registration";
 import { newCapabilityLinkSecret, signedOrQueuedCapability } from "../capability-links";
 import type { DatabaseLike, StatementLike } from "../../types";
 import type { RegistrationRecord } from "./types";
@@ -222,7 +221,6 @@ export async function buildCreateRegistration(
       configuredEventDays,
     })),
     ...waitlist.statements,
-    prepareUpsertAttendeeParticipantStatement(db, registration),
     prepareEngagementStatement(db, {
       userId: registration.user_id,
       eventId: registration.event_id,

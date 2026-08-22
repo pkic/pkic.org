@@ -6,7 +6,7 @@ import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 import { nowIso } from "../utils/time";
 import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
-import { prepareProposalParticipantSourceCapacityStatements } from "./proposal-participants";
+import { prepareProposalRoleCapacityForProposalStatus } from "./proposal-role-capacity";
 import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
 import { isEventParticipantSourceConflict } from "./event-participant-source-revision";
 import { isProposalSpeakerRosterConflict } from "./proposal-speaker-roster-revision";
@@ -83,7 +83,7 @@ export async function moderateProposal(
   ];
   if (action === "delete") {
     statements.push(
-      ...(await prepareProposalParticipantSourceCapacityStatements(db, {
+      ...(await prepareProposalRoleCapacityForProposalStatus(db, {
         eventId: proposal.event_id,
         sourceRef: proposal.id,
         nextStatus: "inactive",
