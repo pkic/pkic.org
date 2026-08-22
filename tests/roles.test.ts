@@ -147,6 +147,25 @@ describe("roles (Built-in and custom roles)", () => {
     expect((await call(staffToken, `/api/v1/admin/events/${eventBSlug}`)).status).toBe(403);
   });
 
+  it("keeps authorization with the same user when an email changes and does not transfer it on address reuse", async () => {
+    const organizerRole = await queryAll<{ id: string }>(env.DB, "SELECT id FROM roles WHERE name = 'event_organizer'");
+    await assignRole(staffUserId, organizerRole[0].id, adminId, { type: "event", id: eventAId });
+    const originalToken = await createAdminSession(env.DB, staffUserId, "staff-email-change-token");
+
+    await env.DB.prepare(
+      `UPDATE users
+          SET email = 'staff-renamed@example.test', normalized_email = 'staff-renamed@example.test', updated_at = datetime('now')
+        WHERE id = ?`,
+    )
+      .bind(staffUserId)
+      .run();
+    const replacementUserId = await insertUser("staff-roles@example.test");
+    const replacementToken = await createAdminSession(env.DB, replacementUserId, "replacement-address-token");
+
+    expect((await call(originalToken, `/api/v1/admin/events/${eventASlug}`)).status).toBe(200);
+    expect((await call(replacementToken, `/api/v1/admin/events/${eventASlug}`)).status).toBe(401);
+  });
+
   it("expired user_roles records are not honored", async () => {
     const organizerRole = await queryAll<{ id: string }>(env.DB, "SELECT id FROM roles WHERE name = 'event_organizer'");
     // Baseline unrelated role keeps the user eligible for a session even

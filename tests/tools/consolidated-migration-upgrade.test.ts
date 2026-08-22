@@ -60,7 +60,8 @@ function seedRepresentativePre0035State(db: DatabaseSync): void {
     INSERT INTO event_permissions
       (id, event_id, user_email, user_id, permission, granted_by_id, created_at)
     VALUES
-      ('permission-1', 'event-1', 'organizer@example.test', 'organizer-1', 'organizer', 'admin-1', '2025-01-02');
+      ('permission-1', 'event-1', 'organizer@example.test', 'organizer-1', 'organizer', 'admin-1', '2025-01-02'),
+      ('permission-2', 'event-1', 'preprovisioned@example.test', NULL, 'program_committee', 'admin-1', '2025-01-02');
 
     INSERT INTO sponsors
       (id, organization_id, sponsorship_level, status, data_json, created_at, updated_at)
@@ -115,6 +116,15 @@ describe("consolidated pending migration upgrade", () => {
 
     expect(db.prepare("PRAGMA integrity_check").get()).toEqual({ integrity_check: "ok" });
     expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    expect(
+      db
+        .prepare(
+          `SELECT u.normalized_email, ur.role_id
+             FROM user_roles ur JOIN users u ON u.id = ur.user_id
+            WHERE u.normalized_email = 'preprovisioned@example.test'`,
+        )
+        .all(),
+    ).toEqual([{ normalized_email: "preprovisioned@example.test", role_id: "role-program_committee" }]);
     expect(
       db
         .prepare(
@@ -277,13 +287,17 @@ describe("consolidated pending migration upgrade", () => {
     expect(
       db
         .prepare(
-          "SELECT name FROM sqlite_master WHERE type = 'index' AND name IN ('uq_user_roles_active_email_role_context', 'uq_user_roles_active_user_role_context') ORDER BY name",
+          "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'uq_user_roles_active_user_role_context'",
         )
         .all(),
-    ).toEqual([
-      { name: "uq_user_roles_active_email_role_context" },
-      { name: "uq_user_roles_active_user_role_context" },
-    ]);
+    ).toEqual([{ name: "uq_user_roles_active_user_role_context" }]);
+    expect(
+      db
+        .prepare("PRAGMA table_info(user_roles)")
+        .all()
+        .map((column: any) => ({ name: column.name, notnull: column.notnull }))
+        .filter((column) => column.name === "user_id" || column.name === "user_email"),
+    ).toEqual([{ name: "user_id", notnull: 1 }]);
     expect(db.prepare("SELECT review_round FROM session_proposals WHERE id = 'proposal-1'").get()).toEqual({
       review_round: 1,
     });

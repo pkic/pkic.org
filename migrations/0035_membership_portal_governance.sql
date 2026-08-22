@@ -1278,7 +1278,7 @@ CREATE INDEX idx_organization_representatives_user_active
 -- backfills (event_permissions → user_roles, users.role='admin' →
 -- user_roles), then drops event_permissions resolution.
 --
--- Two deviations from the original literal schema:
+-- One deviation from the original literal schema:
 --
 -- 1. `role_permissions` is a new table, not present anywhere in
 --    describes each built-in role's default permission bundle in prose only
@@ -1287,15 +1287,10 @@ CREATE INDEX idx_organization_representatives_user_active
 --    somewhere to actually store and edit the bundle. This is the same
 --    class of gap.
 --
--- 2. `user_roles.user_id` is nullable here (with a parallel `user_email`
---    column), not NOT NULL as shown in SQL sketch.
---    Resolution text requires the opposite of what SQL says: it
---    requires the new model to "preserve this pre-provisioning behavior,
---    since event organizers/PC members are often granted access before
---    their first login" — exactly the nullable-user_id + user_email pattern
---    `event_permissions` already used. A NOT NULL user_id makes that
---    impossible, so the nullable form (matching event_permissions, which
---    this migration backfills from) is what's implemented.
+-- Pre-provisioning creates a minimal `users` identity and binds authorization
+-- to its immutable ID. Email-only grants are deliberately not carried into
+-- the new model because authorization must not transfer if an address is
+-- later released and reused by another account.
 --
 -- `permission_grants` and `refresh_tokens` are created exactly as specified.
 
@@ -1325,8 +1320,7 @@ CREATE TABLE role_permissions (
 
 CREATE TABLE user_roles (
   id                 TEXT NOT NULL PRIMARY KEY,
-  user_id            TEXT,
-  user_email         TEXT,
+  user_id            TEXT NOT NULL,
   role_id            TEXT NOT NULL,
   context_type       TEXT,
   -- allowed: 'event' | 'working_group' | 'organization' | NULL (global)
@@ -1348,7 +1342,6 @@ CREATE TABLE user_roles (
 );
 
 CREATE INDEX idx_user_roles_user ON user_roles(user_id);
-CREATE INDEX idx_user_roles_email ON user_roles(user_email);
 CREATE INDEX idx_user_roles_context ON user_roles(context_type, context_id);
 CREATE INDEX idx_user_roles_role ON user_roles(role_id);
 CREATE UNIQUE INDEX uq_user_roles_single_holder_per_context
@@ -1395,15 +1388,10 @@ BEGIN
 END;
 
 -- Preserve the active-grant uniqueness that the legacy event_permissions
--- table enforced and extend it to every non-singleton role assignment. Two
--- partial indexes cover pre-provisioned email grants and account-bound grants.
-CREATE UNIQUE INDEX uq_user_roles_active_email_role_context
-  ON user_roles(role_id, COALESCE(context_type, ''), COALESCE(context_id, ''), lower(user_email))
-  WHERE revoked_at IS NULL AND single_holder_per_context = 0 AND user_email IS NOT NULL;
-
+-- table enforced and extend it to every non-singleton role assignment.
 CREATE UNIQUE INDEX uq_user_roles_active_user_role_context
   ON user_roles(role_id, COALESCE(context_type, ''), COALESCE(context_id, ''), user_id)
-  WHERE revoked_at IS NULL AND single_holder_per_context = 0 AND user_email IS NULL AND user_id IS NOT NULL;
+  WHERE revoked_at IS NULL AND single_holder_per_context = 0;
 
 CREATE TABLE permission_grants (
   id                 TEXT NOT NULL PRIMARY KEY,
@@ -1540,18 +1528,24 @@ INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES
 
 -- ── Backfill: users.role='admin' → user_roles ────────────────────────
 
-INSERT INTO user_roles (id, user_id, user_email, role_id, context_type, context_id, granted_by_user_id, expires_at, revoked_at, created_at)
-SELECT lower(hex(randomblob(16))), u.id, NULL, 'role-admin', NULL, NULL, NULL, NULL, NULL, datetime('now')
+INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, granted_by_user_id, expires_at, revoked_at, created_at)
+SELECT lower(hex(randomblob(16))), u.id, 'role-admin', NULL, NULL, NULL, NULL, NULL, datetime('now')
 FROM users u
 WHERE u.role = 'admin';
 
 -- ── Backfill: event_permissions → user_roles ─────────────────────────
 
-INSERT INTO user_roles (id, user_id, user_email, role_id, context_type, context_id, granted_by_user_id, expires_at, revoked_at, created_at)
+-- Preserve pre-provisioned grants without leaving authorization attached to
+-- a reusable string identifier.
+INSERT OR IGNORE INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+SELECT lower(hex(randomblob(16))), ep.user_email, lower(trim(ep.user_email)), 'user', 1, ep.created_at, ep.created_at
+FROM event_permissions ep
+WHERE ep.user_id IS NULL;
+
+INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, granted_by_user_id, expires_at, revoked_at, created_at)
 SELECT
   lower(hex(randomblob(16))),
-  ep.user_id,
-  ep.user_email,
+  COALESCE(ep.user_id, (SELECT u.id FROM users u WHERE u.normalized_email = lower(trim(ep.user_email)))),
   CASE ep.permission
     WHEN 'organizer' THEN 'role-event_organizer'
     WHEN 'program_committee' THEN 'role-program_committee'
