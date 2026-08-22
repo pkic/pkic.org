@@ -1,5 +1,7 @@
 import type { Hono } from "hono";
 import type { Env } from "../types";
+import { MCP_AUTHORIZE_MAX_BYTES, readBoundedFormData, readBoundedJsonBody } from "../http-body";
+import { isAppError } from "../errors";
 import { publicAuthAdmin } from "../auth/admin-identity";
 import {
   MCP_OAUTH_AUTHORIZE_PATH,
@@ -37,7 +39,16 @@ function jsonResponse(data: unknown, status = 200): Response {
 async function parseAuthorizePayload(request: Request): Promise<{ action: string; email: string; returnTo: string }> {
   const contentType = request.headers.get("content-type") ?? "";
   if (contentType.includes("application/json")) {
-    const body = (await request.json().catch(() => ({}))) as {
+    let parsed: unknown;
+    try {
+      parsed = await readBoundedJsonBody(request, MCP_AUTHORIZE_MAX_BYTES);
+    } catch (error) {
+      if (isAppError(error) && error.code === "REQUEST_BODY_TOO_LARGE") {
+        throw error;
+      }
+      parsed = {};
+    }
+    const body = parsed as {
       action?: unknown;
       email?: unknown;
       return_to?: unknown;
@@ -50,7 +61,7 @@ async function parseAuthorizePayload(request: Request): Promise<{ action: string
     };
   }
 
-  const formData = await request.formData();
+  const formData = await readBoundedFormData(request, MCP_AUTHORIZE_MAX_BYTES);
   return {
     action: String(formData.get("action") ?? ""),
     email: String(formData.get("email") ?? "").trim(),
@@ -143,7 +154,18 @@ async function handleVerifyApi(request: Request, env: McpOAuthEnv): Promise<Resp
     if (request.method !== "POST") {
       return new Response("Method not allowed", { status: 405 });
     }
-    const body = (await request.json().catch(() => ({}))) as { token?: unknown };
+    let parsed: unknown;
+    try {
+      parsed = await readBoundedJsonBody(request, MCP_AUTHORIZE_MAX_BYTES);
+    } catch (error) {
+      if (isAppError(error) && error.code === "REQUEST_BODY_TOO_LARGE") {
+        throw error;
+      }
+      parsed = {};
+    }
+    const body = parsed as {
+      token?: unknown;
+    };
     const token = typeof body.token === "string" ? body.token : "";
     const verifyRequest = new Request(`${request.url}?token=${encodeURIComponent(token)}`, {
       method: "GET",

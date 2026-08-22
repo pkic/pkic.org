@@ -5,6 +5,9 @@ export const STRIPE_WEBHOOK_MAX_BYTES = 1024 * 1024;
 export const SENDGRID_WEBHOOK_MAX_BYTES = 2 * 1024 * 1024;
 export const INTERNAL_CALENDAR_RSVP_MAX_BYTES = 384 * 1024;
 export const MULTIPART_OVERHEAD_MAX_BYTES = 256 * 1024;
+export const JSON_REQUEST_MAX_BYTES = 2 * 1024 * 1024;
+export const MCP_AUTHORIZE_MAX_BYTES = 64 * 1024;
+export const LEGACY_FORM_MAX_BYTES = 256 * 1024;
 
 function declaredContentLength(request: Request): number | null {
   const value = request.headers.get("content-length");
@@ -42,6 +45,60 @@ export async function readBoundedTextBody(request: Request, maxBytes: number): P
     if (error instanceof AppError) throw error;
     throw new AppError(400, "INVALID_UTF8", "Request body must be valid UTF-8");
   }
+}
+
+/** Parse JSON only after the shared streaming byte limit has been enforced. */
+export async function readBoundedJsonBody(request: Request, maxBytes: number): Promise<unknown> {
+  let text: string;
+  try {
+    text = await readBoundedTextBody(request, maxBytes);
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    throw new AppError(400, "INVALID_JSON", "Request body must be valid JSON");
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new AppError(400, "INVALID_JSON", "Request body must be valid JSON");
+  }
+}
+
+/**
+ * Materialize legacy form requests only after one bounded read. This keeps
+ * urlencoded and multipart callers on the same request-size boundary.
+ */
+export async function readBoundedFormData(request: Request, maxBytes: number): Promise<FormData> {
+  const contentType = request.headers.get("content-type") ?? "";
+  const lowerContentType = contentType.toLowerCase();
+  const bytes = await readBoundedBody(request, maxBytes);
+
+  if (lowerContentType.includes("multipart/form-data")) {
+    const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+    if (!(boundaryMatch?.[1] || boundaryMatch?.[2])) {
+      throw new AppError(400, "INVALID_MULTIPART", "Could not parse multipart boundary");
+    }
+    try {
+      return await new Response(bytes.buffer as ArrayBuffer, {
+        headers: { "Content-Type": contentType },
+      }).formData();
+    } catch {
+      throw new AppError(400, "INVALID_MULTIPART", "Could not parse multipart upload");
+    }
+  }
+
+  if (lowerContentType.includes("application/x-www-form-urlencoded")) {
+    let text: string;
+    try {
+      text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch {
+      throw new AppError(400, "INVALID_UTF8", "Request body must be valid UTF-8");
+    }
+    const formData = new FormData();
+    for (const [key, value] of new URLSearchParams(text)) formData.append(key, value);
+    return formData;
+  }
+
+  throw new AppError(400, "INVALID_CONTENT_TYPE", "Request must be a supported form submission");
 }
 
 /**

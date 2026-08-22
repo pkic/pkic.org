@@ -18,7 +18,7 @@ import { withStorageUploadCompensation } from "./storage-deletion-outbox";
 const ALLOWED_PRESENTATION_TYPES = new Set<string>(ALLOWED_PRESENTATION_MIME_TYPES);
 
 export interface PresentationUpload {
-  body: ReadableStream;
+  body: ReadableStream<Uint8Array>;
   name: string;
   size: number;
   type: string;
@@ -168,13 +168,44 @@ export async function uploadProposalPresentation(
     bucket,
     bucketName: "speaker_uploads",
     objectKey: r2Key,
-    upload: () =>
-      storePresentationFile(
+    upload: async () => {
+      // FixedLengthStream keeps the R2 object uncommitted until exactly the
+      // declared number of bytes has arrived. The counting transform rejects
+      // oversized or dishonest streams before they reach R2 and preserves a
+      // route-specific error contract for the API response.
+      let total = 0;
+      const counted = new TransformStream<Uint8Array, Uint8Array>({
+        transform(chunk, controller) {
+          total += chunk.byteLength;
+          if (total > MAX_PRESENTATION_BYTES) {
+            throw new AppError(413, "FILE_TOO_LARGE", "Presentation must be 100 MB or smaller.");
+          }
+          if (total > parsed.size) {
+            throw new AppError(400, "FILE_SIZE_MISMATCH", "Presentation file size does not match the request.");
+          }
+          controller.enqueue(chunk);
+        },
+        flush() {
+          if (total !== parsed.size) {
+            throw new AppError(400, "FILE_SIZE_MISMATCH", "Presentation file size does not match the request.");
+          }
+        },
+      });
+      const fixed = new FixedLengthStream(parsed.size);
+      const putPromise = storePresentationFile(
         bucket,
         { eventSlug: context.event_slug, proposalId: context.id, proposalTitle: context.title },
-        parsed,
+        { ...parsed, body: fixed.readable },
         r2Key,
-      ),
+      );
+      try {
+        await parsed.body.pipeThrough(counted).pipeTo(fixed.writable);
+      } catch (error) {
+        await putPromise.catch(() => undefined);
+        throw error;
+      }
+      return await putPromise;
+    },
     prepareCommitStatements: () => prepared.statements,
   });
   return r2Key;

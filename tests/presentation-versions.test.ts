@@ -368,7 +368,73 @@ describe("presentation versioning", () => {
     expect(bucket.putCalls).toBe(0);
   });
 
-  it("streams a large presentation without buffering it", async () => {
+  it("rejects a short dishonest stream without committing an R2 object", async () => {
+    const { speakerToken, proposalId } = await seed();
+    const bucket = new FakePresentationBucket();
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array([1, 2, 3]));
+        controller.close();
+      },
+    });
+
+    const res = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+        method: "PUT",
+        headers: {
+          "content-type": "application/pdf",
+          [PRESENTATION_FILE_NAME_HEADER]: encodeURIComponent("short.pdf"),
+          [PRESENTATION_FILE_SIZE_HEADER]: "4",
+        },
+        body,
+      }),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({ error: { code: "FILE_SIZE_MISMATCH" } });
+    expect(bucket.keys()).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM presentation_versions WHERE proposal_id = ?", proposalId),
+    ).toHaveLength(0);
+  });
+
+  it("rejects an oversized chunked presentation before any R2 write", async () => {
+    const { speakerToken, proposalId } = await seed();
+    const bucket = new FakePresentationBucket();
+    const oversizedChunk = new Uint8Array(MAX_PRESENTATION_BYTES + 1);
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(oversizedChunk);
+        controller.close();
+      },
+    });
+
+    const res = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+        method: "PUT",
+        headers: {
+          "content-type": "application/pdf",
+          [PRESENTATION_FILE_NAME_HEADER]: encodeURIComponent("oversized.pdf"),
+          [PRESENTATION_FILE_SIZE_HEADER]: String(MAX_PRESENTATION_BYTES),
+        },
+        body,
+      }),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(res.status).toBe(413);
+    await expect(res.json()).resolves.toMatchObject({ error: { code: "FILE_TOO_LARGE" } });
+    expect(bucket.putCalls).toBe(1);
+    expect(bucket.keys()).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM presentation_versions WHERE proposal_id = ?", proposalId),
+    ).toHaveLength(0);
+  });
+
+  it("streams a large presentation with bounded size verification", async () => {
     const { speakerToken } = await seed();
     const bucket = new CountingPresentationBucket();
     const uploadSize = 95 * 1024 * 1024;

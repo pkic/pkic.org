@@ -11,6 +11,7 @@
 import { OpenAPIRoute } from "chanfana";
 import { getConfig } from "../../../../_lib/config";
 import { AppError } from "../../../../_lib/errors";
+import { JSON_REQUEST_MAX_BYTES, readBoundedJsonBody } from "../../../../_lib/http-body";
 import { json } from "../../../../_lib/http";
 import { enforceRateLimit } from "../../../../_lib/rate-limit";
 import { getClientIp } from "../../../../_lib/request";
@@ -35,12 +36,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   // Field-level 422 (not the codebase's usual 400 VALIDATION_ERROR):
   // this public application endpoint specifically must return
   // 422 Unprocessable Entity for missing/invalid required fields.
-  let rawBody: unknown;
-  try {
-    rawBody = await c.req.raw.json();
-  } catch {
-    throw new AppError(400, "INVALID_JSON", "Request body must be valid JSON");
-  }
+  const rawBody = await readBoundedJsonBody(c.req.raw, JSON_REQUEST_MAX_BYTES);
   const parsed = memberApplicationCreateSchema.safeParse(rawBody);
   if (!parsed.success) {
     throw new AppError(422, "VALIDATION_ERROR", "Invalid application payload", parsed.error.flatten());

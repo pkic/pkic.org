@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { onRequestPost } from "../functions/api/v1/forms";
 import { createContext, createTestRateLimiter } from "./helpers/context";
 import type { Env } from "../functions/_lib/types";
+import { LEGACY_FORM_MAX_BYTES } from "../functions/_lib/http-body";
 
 const originalFetch = globalThis.fetch;
 
@@ -150,6 +151,21 @@ describe("POST /api/v1/forms", () => {
       body: JSON.stringify(VALID_FIELDS),
     });
     const response = await onRequestPost(createContext(env, request, {}));
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("https://pkic.org/join/?status=error");
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects an oversized legacy form before calling GitHub", async () => {
+    const env = makeEnv();
+    const request = makeFormRequest(
+      "https://pkic.org/api/v1/forms",
+      { ...VALID_FIELDS, padding: "x".repeat(LEGACY_FORM_MAX_BYTES) },
+      { referer: "https://pkic.org/join/" },
+    );
+
+    const response = await onRequestPost(createContext(env, request, {}));
+
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe("https://pkic.org/join/?status=error");
     expect(globalThis.fetch).not.toHaveBeenCalled();

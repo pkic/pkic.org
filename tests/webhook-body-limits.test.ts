@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { env as workerEnv } from "cloudflare:workers";
 import app from "../functions/router";
-import { SENDGRID_WEBHOOK_MAX_BYTES, STRIPE_WEBHOOK_MAX_BYTES, readBoundedBody } from "../functions/_lib/http-body";
+import {
+  MCP_AUTHORIZE_MAX_BYTES,
+  SENDGRID_WEBHOOK_MAX_BYTES,
+  STRIPE_WEBHOOK_MAX_BYTES,
+  readBoundedBody,
+} from "../functions/_lib/http-body";
 import type { Env } from "../functions/_lib/types";
 import { OPENAPI_JSON_MAX_BYTES } from "../functions/_lib/openapi/route";
 
@@ -88,4 +93,22 @@ describe("webhook request body limits", () => {
   it("rejects oversized JSON bodies through the shared OpenAPI route boundary", async () => {
     expect(await call("/api/v1/donations/checkout", OPENAPI_JSON_MAX_BYTES + 1)).toMatchObject({ status: 413 });
   });
+
+  it.each(["application/json", "application/x-www-form-urlencoded"])(
+    "rejects oversized MCP OAuth %s bodies before authorization processing",
+    async (contentType) => {
+      const response = await app.fetch(
+        new Request("https://pkic.org/api/v1/oauth/authorize", {
+          method: "POST",
+          headers: { "content-type": contentType },
+          body: new Uint8Array(MCP_AUTHORIZE_MAX_BYTES + 1),
+        }),
+        env as any,
+        executionContext(),
+      );
+
+      expect(response.status).toBe(413);
+      await expect(response.json()).resolves.toMatchObject({ error: { code: "REQUEST_BODY_TOO_LARGE" } });
+    },
+  );
 });
