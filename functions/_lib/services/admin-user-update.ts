@@ -5,7 +5,7 @@ import { first } from "../db/queries";
 import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 import { normalizeEmail } from "../validation";
-import { prepareAuditLog } from "./audit";
+import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
 import { prepareUserProfileStatement, type UserProfilePatch } from "./users";
 import { buildUserAccessOffboardingStatements } from "./membership/offboarding";
 import { findUserEmailOwner } from "./user-emails";
@@ -120,6 +120,9 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
     ...(input.active !== undefined && active !== Boolean(user.active) ? ["active"] : []),
     ...(input.isEcMember !== undefined && isEcMember !== Boolean(user.is_ec_member) ? ["isEcMember"] : []),
   ];
+  if (changedFields.length === 0) {
+    return { id: user.id, email, role, active, isEcMember };
+  }
   const statements: StatementLike[] = [];
   const at = new Date().toISOString();
   if (promotedSecondaryEmail) {
@@ -129,16 +132,27 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
         .bind(user.id, promotedSecondaryEmail),
     );
   }
-  if (Object.keys(patch).length > 0) statements.push(prepareUserProfileStatement(db, user.id, patch));
   statements.push(
     db
       .prepare(
         `UPDATE users
          SET email = ?, normalized_email = ?, role = ?, active = ?, is_ec_member = ?, updated_at = ?
-         WHERE id = ?`,
+         WHERE id = ?
+           AND pii_redacted_at IS NULL
+           AND merged_into_user_id IS NULL
+           AND updated_at = ?`,
       )
-      .bind(email, normalizeEmail(email), role, active ? 1 : 0, isEcMember ? 1 : 0, at, user.id),
+      .bind(email, normalizeEmail(email), role, active ? 1 : 0, isEcMember ? 1 : 0, at, user.id, user.updated_at),
+    prepareAuditLogAfterOneChange(db, "admin", actor.id, "user_updated", "user", user.id, {
+      changedFields,
+      ...(role !== user.role ? { role: { from: user.role, to: role } } : {}),
+      ...(active !== Boolean(user.active) ? { active: { from: Boolean(user.active), to: active } } : {}),
+      ...(isEcMember !== Boolean(user.is_ec_member)
+        ? { isEcMember: { from: Boolean(user.is_ec_member), to: isEcMember } }
+        : {}),
+    }),
   );
+  if (Object.keys(patch).length > 0) statements.push(prepareUserProfileStatement(db, user.id, patch));
   if (user.active === 1 && !active) {
     statements.push(
       db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(at, user.id),
@@ -150,18 +164,22 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
       })),
     );
   }
-  if (changedFields.length > 0) {
-    statements.push(
-      prepareAuditLog(db, "admin", actor.id, "user_updated", "user", user.id, {
-        changedFields,
-        ...(role !== user.role ? { role: { from: user.role, to: role } } : {}),
-        ...(active !== Boolean(user.active) ? { active: { from: Boolean(user.active), to: active } } : {}),
-        ...(isEcMember !== Boolean(user.is_ec_member)
-          ? { isEcMember: { from: Boolean(user.is_ec_member), to: isEcMember } }
-          : {}),
-      }),
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    if (!isAuditOneChangeGuardFailure(error)) throw error;
+    const current = await first<{ pii_redacted_at: string | null; merged_into_user_id: string | null }>(
+      db,
+      "SELECT pii_redacted_at, merged_into_user_id FROM users WHERE id = ?",
+      [user.id],
     );
+    if (current?.pii_redacted_at) {
+      throw new AppError(409, "ALREADY_ANONYMIZED", "An anonymized account cannot be modified");
+    }
+    if (current?.merged_into_user_id) {
+      throw new AppError(409, "IDENTITY_RETIRED", "A previously merged account cannot be modified or reactivated");
+    }
+    throw new AppError(409, "USER_UPDATE_CONFLICT", "The user changed while this update was being prepared");
   }
-  await db.batch(statements);
   return { id: user.id, email, role, active, isEcMember };
 }

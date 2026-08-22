@@ -2,7 +2,7 @@ import { first } from "../db/queries";
 import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 import { nowIso } from "../utils/time";
-import { prepareAuditLog } from "./audit";
+import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
 import { prepareStorageDeletion } from "./storage-deletion-outbox";
 import { buildUserAccessOffboardingStatements } from "./membership/offboarding";
 import { prepareBadgeRenderJobsForUser } from "./badge-render-job-statements";
@@ -37,9 +37,13 @@ export async function anonymizeAdminUser(db: DatabaseLike, actor: AuthAdmin, use
              job_title = NULL, biography = NULL, links_json = NULL, data_json = NULL,
              headshot_r2_key = NULL, headshot_updated_at = NULL,
              role = 'user', active = 0, is_ec_member = 0, pii_redacted_at = ?, updated_at = ?
-         WHERE id = ? AND pii_redacted_at IS NULL`,
+         WHERE id = ? AND pii_redacted_at IS NULL AND updated_at = ?`,
       )
-      .bind(redactedEmail, redactedEmail, at, at, user.id),
+      .bind(redactedEmail, redactedEmail, at, at, user.id, user.updated_at),
+    prepareAuditLogAfterOneChange(db, "admin", actor.id, "user_anonymized", "user", user.id, {
+      authenticationRevoked: true,
+      profileRedacted: true,
+    }),
     db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(at, user.id),
     db.prepare("UPDATE refresh_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(at, user.id),
     db
@@ -66,16 +70,22 @@ export async function anonymizeAdminUser(db: DatabaseLike, actor: AuthAdmin, use
       at,
     })),
     prepareBadgeRenderJobsForUser(db, user.id, at),
-    prepareAuditLog(db, "admin", actor.id, "user_anonymized", "user", user.id, {
-      authenticationRevoked: true,
-      profileRedacted: true,
-    }),
   ];
   const deletion = prepareStorageDeletion(db, user.headshot_r2_key, at, "speaker_uploads");
   if (deletion) statements.push(deletion);
-  const [updateResult] = await db.batch(statements);
-  if ((updateResult.meta?.changes ?? 0) !== 1) {
-    throw new AppError(409, "ALREADY_ANONYMIZED", "User has already been anonymized");
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    if (!isAuditOneChangeGuardFailure(error)) throw error;
+    const current = await first<{ pii_redacted_at: string | null }>(
+      db,
+      "SELECT pii_redacted_at FROM users WHERE id = ?",
+      [user.id],
+    );
+    if (current?.pii_redacted_at) {
+      throw new AppError(409, "ALREADY_ANONYMIZED", "User has already been anonymized");
+    }
+    throw new AppError(409, "ANONYMIZATION_CONFLICT", "The user changed while anonymization was being prepared");
   }
   return { userId: user.id, previousHeadshotKey: user.headshot_r2_key };
 }

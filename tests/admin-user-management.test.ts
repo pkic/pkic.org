@@ -11,6 +11,9 @@ import { buildCreateIndividualMemberStatements } from "../functions/_lib/service
 import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 import { signCapabilityToken } from "../functions/_lib/services/capability-links";
 import { confirmRegistrationByToken, getRegistrationByManageToken } from "../functions/_lib/services/registrations";
+import { updateAdminUser } from "../functions/_lib/services/admin-user-update";
+import { anonymizeAdminUser } from "../functions/_lib/services/admin-user-anonymize";
+import { gateNextBatch } from "./helpers/d1-batch-gate";
 
 let adminToken: string;
 
@@ -483,6 +486,75 @@ describe("admin user anonymization", () => {
     await expect(
       anonymizeUser(createContext(env, adminRequest(`/api/v1/admin/users/${userId}/anonymize`, "POST"), { userId })),
     ).rejects.toMatchObject({ code: "ALREADY_ANONYMIZED" });
+  });
+
+  it("rolls back a stale admin update that loses to anonymization", async () => {
+    const { adminId } = await setup();
+    const userId = await seedUser(env.DB, "race-update@example.test");
+    await env.DB.prepare("UPDATE users SET biography = ? WHERE id = ?").bind("Private biography", userId).run();
+
+    const gate = gateNextBatch(env.DB);
+    const staleUpdate = updateAdminUser(gate.db, { id: adminId, email: "admin@pkic.org", role: "admin" }, userId, {
+      email: "restored@example.test",
+      biography: "Stale restored biography",
+      active: false,
+    });
+    await gate.reached;
+
+    await anonymizeAdminUser(env.DB, { id: adminId, email: "admin@pkic.org", role: "admin" }, userId);
+    gate.release();
+
+    await expect(staleUpdate).rejects.toMatchObject({ code: "ALREADY_ANONYMIZED" });
+    const [user] = await queryAll<{
+      email: string;
+      biography: string | null;
+      pending_email: string | null;
+      active: number;
+      pii_redacted_at: string | null;
+    }>(env.DB, "SELECT email, biography, pending_email, active, pii_redacted_at FROM users WHERE id = ?", userId);
+    expect(user.email).toBe(`redacted-${userId}@anonymized.invalid`);
+    expect(user.biography).toBeNull();
+    expect(user.pending_email).toBeNull();
+    expect(user.active).toBe(0);
+    expect(user.pii_redacted_at).toBeTruthy();
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_id = ? AND action = 'user_updated'", userId),
+    ).toHaveLength(0);
+  });
+
+  it("rolls back stale anonymization when an admin update wins the race", async () => {
+    const { adminId } = await setup();
+    const userId = await seedUser(env.DB, "race-anonymize@example.test");
+    const gate = gateNextBatch(env.DB);
+    const staleAnonymization = anonymizeAdminUser(
+      gate.db,
+      { id: adminId, email: "admin@pkic.org", role: "admin" },
+      userId,
+    );
+    await gate.reached;
+
+    await updateAdminUser(env.DB, { id: adminId, email: "admin@pkic.org", role: "admin" }, userId, {
+      email: "race-winner@example.test",
+      biography: "Winner biography",
+    });
+    gate.release();
+
+    await expect(staleAnonymization).rejects.toMatchObject({ code: "ANONYMIZATION_CONFLICT" });
+    const [user] = await queryAll<{
+      email: string;
+      biography: string | null;
+      active: number;
+      pii_redacted_at: string | null;
+    }>(env.DB, "SELECT email, biography, active, pii_redacted_at FROM users WHERE id = ?", userId);
+    expect(user).toEqual({
+      email: "race-winner@example.test",
+      biography: "Winner biography",
+      active: 1,
+      pii_redacted_at: null,
+    });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_id = ? AND action = 'user_anonymized'", userId),
+    ).toHaveLength(0);
   });
 
   it("refuses to anonymize the calling admin's own account", async () => {
