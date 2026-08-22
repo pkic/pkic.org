@@ -283,10 +283,7 @@ export async function buildRegistrationUpdate(
     });
     dayAttendanceChanged = dayAttendanceStatements.length > 0;
     statements.unshift(...waitlist.guardStatements);
-    statements.push(
-      ...dayAttendanceStatements,
-      ...waitlist.statements,
-    );
+    statements.push(...dayAttendanceStatements, ...waitlist.statements);
     const claimedInPersonDates = new Set(
       payload.dayAttendance
         .filter(

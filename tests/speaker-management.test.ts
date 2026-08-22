@@ -1098,9 +1098,9 @@ describe("speaker self-management endpoints", () => {
 
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toMatchObject({ error: { code: "PROPOSAL_CLOSED" } });
-    await expect(
-      queryAll(env.DB, "SELECT first_name FROM users WHERE id = ?", [coSpeakerUserId]),
-    ).resolves.toEqual([{ first_name: "Co" }]);
+    await expect(queryAll(env.DB, "SELECT first_name FROM users WHERE id = ?", [coSpeakerUserId])).resolves.toEqual([
+      { first_name: "Co" },
+    ]);
   });
 
   it("rejects a stale speaker profile patch without clearing a newer proposal override", async () => {
@@ -1183,9 +1183,9 @@ describe("speaker self-management endpoints", () => {
         },
       ),
     ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
-    await expect(
-      queryAll(env.DB, "SELECT first_name FROM users WHERE id = ?", [coSpeakerUserId]),
-    ).resolves.toEqual([{ first_name: "Co" }]);
+    await expect(queryAll(env.DB, "SELECT first_name FROM users WHERE id = ?", [coSpeakerUserId])).resolves.toEqual([
+      { first_name: "Co" },
+    ]);
   });
 
   it("proposal manage token updates speaker profile fields", async () => {
