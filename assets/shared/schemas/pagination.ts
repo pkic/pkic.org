@@ -9,6 +9,10 @@ import { z } from "zod";
 export const DEFAULT_PAGE_LIMIT = 50;
 export const DEFAULT_PAGE_OFFSET = 0;
 export const MAX_PAGE_LIMIT = 200;
+// Offset pagination is retained for the current API, but SQLite must scan and
+// discard every skipped row. Keep one shared upper bound until high-volume
+// collections move to cursor pagination.
+export const MAX_PAGE_OFFSET = 10_000;
 
 export interface PaginationDefaults {
   limit?: number;
@@ -26,12 +30,12 @@ export function paginationQuerySchemaWithDefaults(defaults: PaginationDefaults =
   if (!Number.isInteger(limit) || limit < 1 || limit > MAX_PAGE_LIMIT) {
     throw new RangeError(`Default page limit must be an integer from 1 through ${MAX_PAGE_LIMIT}`);
   }
-  if (!Number.isInteger(offset) || offset < 0) {
-    throw new RangeError("Default page offset must be a non-negative integer");
+  if (!Number.isInteger(offset) || offset < 0 || offset > MAX_PAGE_OFFSET) {
+    throw new RangeError(`Default page offset must be an integer from 0 through ${MAX_PAGE_OFFSET}`);
   }
   return z.object({
     limit: z.coerce.number().int().min(1).max(MAX_PAGE_LIMIT).default(limit),
-    offset: z.coerce.number().int().min(0).default(offset),
+    offset: z.coerce.number().int().min(0).max(MAX_PAGE_OFFSET).default(offset),
   });
 }
 
@@ -55,7 +59,7 @@ export const searchableQuerySchema = paginationQuerySchema.merge(searchQuerySche
 
 export const pageInfoSchema = z.object({
   limit: z.number().int().min(1).max(200),
-  offset: z.number().int().min(0),
+  offset: z.number().int().min(0).max(MAX_PAGE_OFFSET),
   total: z.number().int().min(0),
   hasMore: z.boolean(),
 });

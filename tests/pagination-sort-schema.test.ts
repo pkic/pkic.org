@@ -8,6 +8,7 @@
 import { describe, expect, it } from "vitest";
 import {
   listQuerySchema,
+  MAX_PAGE_OFFSET,
   pageInfoSchema,
   paginationQuerySchemaWithDefaults,
   searchQuerySchema,
@@ -130,10 +131,16 @@ describe("shared list/search contract", () => {
   it("rejects invalid defaults when a route contract is declared", () => {
     expect(() => paginationQuerySchemaWithDefaults({ limit: 201 })).toThrow(RangeError);
     expect(() => paginationQuerySchemaWithDefaults({ offset: -1 })).toThrow(RangeError);
+    expect(() => paginationQuerySchemaWithDefaults({ offset: MAX_PAGE_OFFSET + 1 })).toThrow(RangeError);
   });
 
   it("rejects collection limits above the shared D1-safe maximum", () => {
     expect(schema.safeParse({ limit: 201 }).success).toBe(false);
+  });
+
+  it("rejects offsets that would force an excessive D1 skip scan", () => {
+    expect(schema.parse({ offset: MAX_PAGE_OFFSET }).offset).toBe(MAX_PAGE_OFFSET);
+    expect(schema.safeParse({ offset: MAX_PAGE_OFFSET + 1 }).success).toBe(false);
   });
 
   it("rejects empty search and values over the bounded search budget", () => {
