@@ -10,9 +10,10 @@ import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveOrderBy } from "../../db/sort";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { parseJsonSafe } from "../../utils/json";
-import { extractDietarySelections } from "../../utils/registration-dietary";
+import { extractDietarySelections, getDietaryFieldKeys } from "../../utils/registration-dietary";
 import { getActiveFormByPurpose } from "../forms";
 import { getAttendanceStatusByType, type AttendanceStatusCount } from "./admin-statistics";
+import { getDietaryCounts } from "./admin-dietary";
 import {
   EVENT_REGISTRATIONS_SORT_COLUMNS,
   type AdminEventRegistrationsQuery,
@@ -329,7 +330,7 @@ export async function listAdminEventRegistrations(
     };
   });
 
-  const [statRows, bouncedCountRow, consentCountRow, dietaryRows, attendanceStatusByType] = await Promise.all([
+  const [statRows, bouncedCountRow, consentCountRow, dietaryCounts, attendanceStatusByType] = await Promise.all([
     // Aggregate stats always cover all registrations for the event (unfiltered)
     all<{ attendance_type: string; status: string; count: number }>(
       db,
@@ -352,14 +353,7 @@ export async function listAdminEventRegistrations(
        WHERE event_id = ? AND term_key = 'sponsor-data-sharing'`,
       [eventId],
     ),
-    all<{ custom_answers_json: string | null }>(
-      db,
-      `SELECT r.custom_answers_json
-       FROM registrations r
-       WHERE r.event_id = ? AND r.status IN ('registered')
-         AND r.custom_answers_json IS NOT NULL`,
-      [eventId],
-    ),
+    getDietaryCounts(db, eventId, getDietaryFieldKeys(registrationForm?.fields)),
     getAttendanceStatusByType(db, eventId),
   ]);
 
@@ -372,17 +366,6 @@ export async function listAdminEventRegistrations(
     }
     // Keep the full per-status totals
     byStatus[row.status] = (byStatus[row.status] ?? 0) + Number(row.count);
-  }
-
-  const dietaryCounts: Record<string, number> = {};
-  for (const row of dietaryRows) {
-    const items = extractDietarySelections(
-      parseJsonSafe<Record<string, unknown> | null>(row.custom_answers_json, null),
-      registrationForm?.fields,
-    );
-    for (const item of items) {
-      dietaryCounts[item] = (dietaryCounts[item] ?? 0) + 1;
-    }
   }
 
   return {
