@@ -170,14 +170,26 @@ describe("secondary user emails", () => {
   it("enforces email reservations and disables partial identity markers in D1", async () => {
     const userA = await insertUser("guard-a@example.test");
     const userB = await insertUser("guard-b@example.test");
+    const [{ id: eventId }] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM events LIMIT 1");
+    const registrationId = crypto.randomUUID();
     await env.DB.prepare(
       "INSERT INTO user_emails (id, user_id, email, normalized_email, created_at) VALUES (?, ?, ?, ?, datetime('now'))",
     )
       .bind(crypto.randomUUID(), userA, "guard-alias@example.test", "guard-alias@example.test")
       .run();
+    await env.DB.prepare(
+      `INSERT INTO registrations
+         (id, event_id, user_id, status, attendance_type, source_type,
+          confirmation_link_secret, manage_link_secret, created_at, updated_at)
+       VALUES (?, ?, ?, 'pending_email_confirmation', 'virtual', 'admin', ?, ?, datetime('now'), datetime('now'))`,
+    )
+      .bind(registrationId, eventId, userB, crypto.randomUUID(), crypto.randomUUID())
+      .run();
 
     await expect(
-      env.DB.prepare("UPDATE users SET pending_email = ? WHERE id = ?").bind("guard-alias@example.test", userB).run(),
+      env.DB.prepare("UPDATE users SET pending_email = ?, pending_email_change_registration_id = ? WHERE id = ?")
+        .bind("guard-alias@example.test", registrationId, userB)
+        .run(),
     ).rejects.toThrow("EMAIL_TAKEN");
     await expect(
       env.DB.prepare("UPDATE users SET normalized_email = ?, email = ? WHERE id = ?")

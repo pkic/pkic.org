@@ -32,6 +32,7 @@ export async function anonymizeAdminUser(db: DatabaseLike, actor: AuthAdmin, use
       .prepare(
         `UPDATE users
          SET email = ?, normalized_email = ?, pending_email = NULL, pending_email_expires_at = NULL,
+             pending_email_change_registration_id = NULL,
              first_name = NULL, last_name = NULL, preferred_name = NULL, organization_name = NULL,
              job_title = NULL, biography = NULL, links_json = NULL, data_json = NULL,
              headshot_r2_key = NULL, headshot_updated_at = NULL,
@@ -41,6 +42,17 @@ export async function anonymizeAdminUser(db: DatabaseLike, actor: AuthAdmin, use
       .bind(redactedEmail, redactedEmail, at, at, user.id),
     db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(at, user.id),
     db.prepare("UPDATE refresh_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(at, user.id),
+    db
+      .prepare(
+        `UPDATE registrations
+            SET confirmation_link_secret = NULL,
+                pending_confirmation_deadline_at = NULL,
+                confirmation_reminder_sent_at = NULL,
+                manage_link_secret = lower(hex(randomblob(32))),
+                updated_at = ?
+          WHERE user_id = ?`,
+      )
+      .bind(at, user.id),
     db.prepare("UPDATE user_roles SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(at, user.id),
     db
       .prepare("UPDATE permission_grants SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL")

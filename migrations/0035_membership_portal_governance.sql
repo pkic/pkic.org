@@ -2093,6 +2093,36 @@ As part of our transition to the new PKI Consortium member portal, an account ha
 -- or passkey authentication, which continue to resolve strictly off
 -- `users.normalized_email`.
 --
+-- Migration 0020 stored a pending account email on users, while the proof
+-- capability lives on one registration. Record that owning registration so a
+-- different registration capability for the same user cannot promote it.
+-- A direct FK here would create a users -> registrations -> users cycle and
+-- make routine fixture/data cleanup order-dependent. The owner trigger below
+-- enforces the same live-row relationship without introducing that cycle.
+ALTER TABLE users ADD COLUMN pending_email_change_registration_id TEXT;
+
+CREATE UNIQUE INDEX uq_users_pending_email_change_registration
+  ON users(pending_email_change_registration_id)
+  WHERE pending_email_change_registration_id IS NOT NULL;
+
+-- Preserve an in-flight pre-0035 request when its owner is unambiguous. Rows
+-- with multiple pending registrations remain unbound and therefore cannot be
+-- promoted automatically; staff can recover those exceptional legacy cases.
+UPDATE users
+   SET pending_email_change_registration_id = (
+     SELECT MIN(r.id)
+       FROM registrations r
+      WHERE r.user_id = users.id
+        AND r.status = 'pending_email_confirmation'
+   )
+ WHERE pending_email IS NOT NULL
+   AND 1 = (
+     SELECT COUNT(*)
+       FROM registrations r
+      WHERE r.user_id = users.id
+        AND r.status = 'pending_email_confirmation'
+   );
+
 CREATE TABLE user_emails (
   id               TEXT NOT NULL PRIMARY KEY,
   user_id          TEXT NOT NULL REFERENCES users(id),
@@ -2176,6 +2206,36 @@ BEFORE UPDATE OF pending_email ON users
 WHEN OLD.pending_email IS NOT NULL
  AND NEW.pending_email IS NOT NULL
  AND OLD.pending_email != NEW.pending_email
+BEGIN
+  SELECT RAISE(ABORT, 'EMAIL_CHANGE_ALREADY_PENDING');
+END;
+
+CREATE TRIGGER trg_users_pending_email_binding_consistency
+BEFORE UPDATE OF pending_email, pending_email_change_registration_id ON users
+WHEN (NEW.pending_email IS NULL) != (NEW.pending_email_change_registration_id IS NULL)
+BEGIN
+  SELECT RAISE(ABORT, 'EMAIL_CHANGE_BINDING_REQUIRED');
+END;
+
+CREATE TRIGGER trg_users_pending_email_binding_owner
+BEFORE UPDATE OF pending_email, pending_email_change_registration_id ON users
+WHEN NEW.pending_email_change_registration_id IS NOT NULL
+ AND NOT EXISTS (
+   SELECT 1
+     FROM registrations r
+    WHERE r.id = NEW.pending_email_change_registration_id
+      AND r.user_id = NEW.id
+      AND r.status = 'pending_email_confirmation'
+ )
+BEGIN
+  SELECT RAISE(ABORT, 'EMAIL_CHANGE_REGISTRATION_INVALID');
+END;
+
+CREATE TRIGGER trg_users_pending_email_binding_no_overwrite
+BEFORE UPDATE OF pending_email_change_registration_id ON users
+WHEN OLD.pending_email_change_registration_id IS NOT NULL
+ AND NEW.pending_email_change_registration_id IS NOT NULL
+ AND OLD.pending_email_change_registration_id != NEW.pending_email_change_registration_id
 BEGIN
   SELECT RAISE(ABORT, 'EMAIL_CHANGE_ALREADY_PENDING');
 END;

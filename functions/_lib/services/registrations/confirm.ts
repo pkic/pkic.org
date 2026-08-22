@@ -29,7 +29,13 @@ export function isStaleRegistrationTransition(error: unknown): boolean {
 
 export async function prepareConfirmRegistrationByToken(
   db: DatabaseLike,
-  payload: { token: string; registrationId?: string | null; waitlistClaimWindowHours: number; signingSecret: string },
+  payload: {
+    token: string;
+    registrationId?: string | null;
+    eventId?: string | null;
+    waitlistClaimWindowHours: number;
+    signingSecret: string;
+  },
 ): Promise<PreparedRegistrationConfirmation> {
   const verified = await verifyDatabaseCapability({
     db,
@@ -51,8 +57,20 @@ export async function prepareConfirmRegistrationByToken(
     `SELECT ${REGISTRATION_COLUMNS} FROM registrations
      WHERE id = ?
        AND status = 'pending_email_confirmation'
-       AND (? IS NULL OR id = ?)`,
-    [verified.resourceId, payload.registrationId ?? null, payload.registrationId ?? null],
+       AND (? IS NULL OR id = ?)
+       AND (? IS NULL OR event_id = ?)
+       AND EXISTS (
+         SELECT 1 FROM users
+          WHERE users.id = registrations.user_id
+            AND users.pii_redacted_at IS NULL
+       )`,
+    [
+      verified.resourceId,
+      payload.registrationId ?? null,
+      payload.registrationId ?? null,
+      payload.eventId ?? null,
+      payload.eventId ?? null,
+    ],
   );
   if (!registration) {
     throw new AppError(404, "CONFIRM_TOKEN_INVALID", "Invalid or already-used confirmation token");
@@ -67,16 +85,21 @@ export async function prepareConfirmRegistrationByToken(
   // appeared after initiation), clear the pending_email reservation so the
   // user is not stuck and can retry from the manage URL.
   const emailFinalizeStatements: StatementLike[] = [];
-  const user = await first<{ pending_email: string | null; normalized_email: string }>(
+  const user = await first<{
+    pending_email: string | null;
+    pending_email_change_registration_id: string | null;
+    normalized_email: string;
+  }>(
     db,
-    "SELECT pending_email, normalized_email FROM users WHERE id = ?",
+    `SELECT pending_email, pending_email_change_registration_id, normalized_email
+       FROM users WHERE id = ?`,
     [registration.user_id],
   );
   if (!user) {
     throw new AppError(500, "USER_NOT_FOUND", "Associated user record is missing");
   }
   let inviteEmail = user?.normalized_email ?? null;
-  if (user?.pending_email) {
+  if (user.pending_email && user.pending_email_change_registration_id === registration.id) {
     try {
       const emailResult = await prepareFinalizeEmailChange(db, {
         userId: registration.user_id,
@@ -93,10 +116,12 @@ export async function prepareConfirmRegistrationByToken(
         await db.batch([
           db
             .prepare(
-              `UPDATE users SET pending_email = NULL, pending_email_expires_at = NULL, updated_at = ?
-               WHERE id = ? AND pending_email = ?`,
+              `UPDATE users
+                  SET pending_email = NULL, pending_email_expires_at = NULL,
+                      pending_email_change_registration_id = NULL, updated_at = ?
+                WHERE id = ? AND pending_email = ? AND pending_email_change_registration_id = ?`,
             )
-            .bind(now, registration.user_id, user.pending_email),
+            .bind(now, registration.user_id, user.pending_email, registration.id),
           prepareAuditLog(
             db,
             "system",

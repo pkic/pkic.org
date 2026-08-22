@@ -25,7 +25,14 @@ export async function getRegistrationByManageToken(
   }
   const registration = await first<RegistrationRecord>(
     db,
-    `SELECT ${REGISTRATION_COLUMNS} FROM registrations WHERE id = ?`,
+    `SELECT ${REGISTRATION_COLUMNS}
+       FROM registrations
+      WHERE id = ?
+        AND EXISTS (
+          SELECT 1 FROM users
+           WHERE users.id = registrations.user_id
+             AND users.pii_redacted_at IS NULL
+        )`,
     [verified.resourceId],
   );
   if (!registration) {

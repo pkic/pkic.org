@@ -4,6 +4,8 @@ import type { DatabaseLike } from "../../types";
 import { queuedCapabilityToken } from "../capability-links";
 import { buildEventEmailVariables, type EventRecord } from "../events";
 import { registrationManagePageUrl } from "../frontend-links";
+import { normalizeEmail } from "../../validation";
+import { REGISTRATION_RECIPIENT_EMAIL_SQL } from "./recipient-email";
 
 interface RegistrationManageLinkMatch {
   registration_id: string;
@@ -24,6 +26,7 @@ export async function queueRegistrationManageLinkRecovery(
   email: string,
   appBaseUrl: string,
 ): Promise<string | null> {
+  const normalizedEmail = normalizeEmail(email);
   const registration = await first<RegistrationManageLinkMatch>(
     db,
     `SELECT
@@ -31,18 +34,21 @@ export async function queueRegistrationManageLinkRecovery(
        r.status AS registration_status,
        r.updated_at AS registration_updated_at,
        u.id AS user_id,
-       u.email,
+       ${REGISTRATION_RECIPIENT_EMAIL_SQL} AS email,
        u.normalized_email,
        u.first_name,
        u.last_name,
        u.updated_at AS user_updated_at
      FROM users u
      JOIN registrations r ON r.user_id = u.id
-     WHERE u.normalized_email = ?
+     WHERE (
+         u.normalized_email = ?
+         OR (u.pending_email_change_registration_id = r.id AND u.pending_email = ?)
+       )
        AND r.event_id = ?
      ORDER BY r.created_at DESC
      LIMIT 1`,
-    [email, event.id],
+    [normalizedEmail, normalizedEmail, event.id],
   );
   if (!registration) return null;
 
@@ -75,14 +81,19 @@ export async function queueRegistrationManageLinkRecovery(
               FROM registrations r
               JOIN users u ON u.id = r.user_id
              WHERE r.id = ? AND r.event_id = ? AND r.updated_at = ?
-               AND u.id = ? AND u.normalized_email = ? AND u.updated_at = ?`,
+               AND u.id = ? AND u.updated_at = ?
+               AND (
+                 u.normalized_email = ?
+                 OR (u.pending_email_change_registration_id = r.id AND u.pending_email = ?)
+               )`,
       bindings: [
         registration.registration_id,
         event.id,
         registration.registration_updated_at,
         registration.user_id,
-        registration.normalized_email,
         registration.user_updated_at,
+        normalizedEmail,
+        normalizedEmail,
       ],
     },
   );

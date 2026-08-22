@@ -78,7 +78,13 @@ export async function prepareRegistrationEmailChange(
     email: string;
     normalized_email: string;
     pending_email: string | null;
-  }>(db, "SELECT id, email, normalized_email, pending_email FROM users WHERE id = ?", [registration.user_id]);
+    pending_email_change_registration_id: string | null;
+  }>(
+    db,
+    `SELECT id, email, normalized_email, pending_email, pending_email_change_registration_id
+       FROM users WHERE id = ?`,
+    [registration.user_id],
+  );
   if (!currentUser) {
     throw new AppError(500, "USER_NOT_FOUND", "Associated user record is missing");
   }
@@ -134,13 +140,6 @@ export async function prepareRegistrationEmailChange(
   const statements: StatementLike[] = [
     db
       .prepare(
-        `UPDATE users
-         SET pending_email = ?, pending_email_expires_at = ?, updated_at = ?
-         WHERE id = ?`,
-      )
-      .bind(pendingEmailToStore, pendingEmailExpiresAt, now, currentUser.id),
-    db
-      .prepare(
         `UPDATE registrations
          SET status = 'pending_email_confirmation',
              confirmation_link_secret = ?,
@@ -151,6 +150,14 @@ export async function prepareRegistrationEmailChange(
          WHERE id = ?`,
       )
       .bind(confirmationLinkSecret, confirmationDeadlineAt, now, registration.id),
+    db
+      .prepare(
+        `UPDATE users
+         SET pending_email = ?, pending_email_expires_at = ?,
+             pending_email_change_registration_id = ?, updated_at = ?
+         WHERE id = ?`,
+      )
+      .bind(pendingEmailToStore, pendingEmailExpiresAt, registration.id, now, currentUser.id),
   ];
   if (params.auditActor) {
     statements.push(
@@ -258,12 +265,24 @@ export async function prepareFinalizeEmailChange(
     normalized_email: string;
     pending_email: string | null;
     pending_email_expires_at: string | null;
-  }>(db, "SELECT id, email, normalized_email, pending_email, pending_email_expires_at FROM users WHERE id = ?", [
-    params.userId,
-  ]);
+    pending_email_change_registration_id: string | null;
+  }>(
+    db,
+    `SELECT id, email, normalized_email, pending_email, pending_email_expires_at,
+            pending_email_change_registration_id
+       FROM users WHERE id = ?`,
+    [params.userId],
+  );
 
   if (!user || !user.pending_email) {
     throw new AppError(400, "NO_PENDING_EMAIL", "No pending email change found for this user");
+  }
+  if (user.pending_email_change_registration_id !== params.registrationId) {
+    throw new AppError(
+      409,
+      "EMAIL_CHANGE_REGISTRATION_MISMATCH",
+      "This confirmation link does not belong to the pending email change",
+    );
   }
 
   // Check expiration
@@ -271,8 +290,11 @@ export async function prepareFinalizeEmailChange(
     // Clear expired pending email
     await run(
       db,
-      "UPDATE users SET pending_email = NULL, pending_email_expires_at = NULL WHERE id = ? AND pending_email = ?",
-      [user.id, user.pending_email],
+      `UPDATE users
+          SET pending_email = NULL, pending_email_expires_at = NULL,
+              pending_email_change_registration_id = NULL
+        WHERE id = ? AND pending_email = ? AND pending_email_change_registration_id = ?`,
+      [user.id, user.pending_email, params.registrationId],
     );
     throw new AppError(410, "PENDING_EMAIL_EXPIRED", "Email confirmation link has expired");
   }
@@ -300,10 +322,11 @@ export async function prepareFinalizeEmailChange(
         `UPDATE users
             SET email = ?, normalized_email = ?,
                 pending_email = NULL, pending_email_expires_at = NULL,
+                pending_email_change_registration_id = NULL,
                 updated_at = ?
-          WHERE id = ?`,
+          WHERE id = ? AND pending_email = ? AND pending_email_change_registration_id = ?`,
       )
-      .bind(user.pending_email, newNormalized, now, user.id),
+      .bind(user.pending_email, newNormalized, now, user.id, user.pending_email, params.registrationId),
   );
 
   return {
@@ -311,6 +334,23 @@ export async function prepareFinalizeEmailChange(
     finalEmail: user.pending_email,
     statements: stmts,
   };
+}
+
+/** Clears only the email-change request owned by this registration. */
+export function prepareClearRegistrationEmailChangeStatement(
+  db: DatabaseLike,
+  registrationId: string,
+  userId: string,
+  at = nowIso(),
+): StatementLike {
+  return db
+    .prepare(
+      `UPDATE users
+          SET pending_email = NULL, pending_email_expires_at = NULL,
+              pending_email_change_registration_id = NULL, updated_at = ?
+        WHERE id = ? AND pending_email_change_registration_id = ?`,
+    )
+    .bind(at, userId, registrationId);
 }
 
 export async function finalizeEmailChange(

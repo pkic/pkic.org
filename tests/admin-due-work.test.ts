@@ -114,6 +114,61 @@ describe("admin due-work read model", () => {
     expect(payload.items.map((item) => item.title)).toEqual(["Reminder 000", "Reminder 001"]);
   });
 
+  it("shows a pending address only on the registration that owns its email change", async () => {
+    const [{ id: firstEventId }] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM events WHERE slug = 'pqc-2026'",
+    );
+    const secondEventId = crypto.randomUUID();
+    const userId = crypto.randomUUID();
+    const ownerRegistrationId = crypto.randomUUID();
+    const otherRegistrationId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO events
+           (id, slug, name, timezone, starts_at, registration_mode, invite_limit_attendee,
+            settings_json, created_at, updated_at)
+         VALUES (?, ?, 'Second Event', 'UTC', '2026-12-05T08:00:00.000Z',
+                 'invite_or_open', 5, '{}', datetime('now'), datetime('now'))`,
+      ).bind(secondEventId, `due-work-${secondEventId}`),
+      env.DB.prepare(
+        `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+         VALUES (?, 'due-primary@example.test', 'due-primary@example.test', 1, datetime('now'), datetime('now'))`,
+      ).bind(userId),
+      env.DB.prepare(
+        `INSERT INTO registrations
+           (id, event_id, user_id, status, attendance_type, source_type,
+            confirmation_link_secret, manage_link_secret, pending_confirmation_deadline_at,
+            created_at, updated_at)
+         VALUES (?, ?, ?, 'pending_email_confirmation', 'virtual', 'open', ?, ?,
+                 datetime('now', '+30 days'), datetime('now', '-30 days'), datetime('now', '-30 days'))`,
+      ).bind(ownerRegistrationId, firstEventId, userId, crypto.randomUUID(), crypto.randomUUID()),
+      env.DB.prepare(
+        `INSERT INTO registrations
+           (id, event_id, user_id, status, attendance_type, source_type,
+            confirmation_link_secret, manage_link_secret, pending_confirmation_deadline_at,
+            created_at, updated_at)
+         VALUES (?, ?, ?, 'pending_email_confirmation', 'virtual', 'open', ?, ?,
+                 datetime('now', '+30 days'), datetime('now', '-29 days'), datetime('now', '-29 days'))`,
+      ).bind(otherRegistrationId, secondEventId, userId, crypto.randomUUID(), crypto.randomUUID()),
+    ]);
+    await env.DB.prepare(
+      `UPDATE users
+          SET pending_email = 'due-pending@example.test', pending_email_expires_at = datetime('now', '+1 day'),
+              pending_email_change_registration_id = ?
+        WHERE id = ?`,
+    )
+      .bind(ownerRegistrationId, userId)
+      .run();
+
+    const response = await call("/api/v1/admin/due-work?bucket=reminders&reminderLimit=10&limit=25&sort=dueAt");
+    expect(response.status).toBe(200);
+    const payload = adminDueWorkListResponseSchema.parse(await response.json());
+    expect(payload.items.map((item) => item.title)).toEqual(
+      expect.arrayContaining(["due-pending@example.test", "due-primary@example.test"]),
+    );
+  });
+
   it("bounds historical cleanup candidate discovery with an explicit cleanup limit", async () => {
     const statements = Array.from({ length: 150 }, (_, index) => {
       const suffix = String(index).padStart(3, "0");

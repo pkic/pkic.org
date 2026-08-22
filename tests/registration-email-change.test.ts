@@ -3,9 +3,17 @@ import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { uuid } from "../functions/_lib/utils/ids";
 import { nowIso, addHours } from "../functions/_lib/utils/time";
-import { changeRegistrationEmail, finalizeEmailChange } from "../functions/_lib/services/registrations";
-import { createRegistration } from "../functions/_lib/services/registrations";
+import {
+  changeRegistrationEmail,
+  confirmRegistrationByToken,
+  createRegistration,
+  finalizeEmailChange,
+  updateRegistrationById,
+  updateRegistrationByManageToken,
+} from "../functions/_lib/services/registrations";
 import { findOrCreateUser } from "../functions/_lib/services/users";
+import { signCapabilityToken } from "../functions/_lib/services/capability-links";
+import { getRegistrationConfirmationInfo } from "../functions/_lib/services/registrations/confirmation-info";
 import { first, run } from "../functions/_lib/db/queries";
 
 describe("Registration Email Change", () => {
@@ -24,6 +32,21 @@ describe("Registration Email Change", () => {
       [eventId, `event-${eventId.slice(0, 8)}`, "Test Event", "Europe/Amsterdam", "invite_or_open", 5, "{}", now, now],
     );
     return eventId;
+  }
+
+  async function reservePendingEmail(
+    userId: string,
+    registrationId: string,
+    email: string,
+    expiresAt: string,
+  ): Promise<void> {
+    await run(
+      env.DB,
+      `UPDATE users
+          SET pending_email = ?, pending_email_expires_at = ?, pending_email_change_registration_id = ?
+        WHERE id = ?`,
+      [email, expiresAt, registrationId, userId],
+    );
   }
 
   describe("changeRegistrationEmail", () => {
@@ -195,6 +218,222 @@ describe("Registration Email Change", () => {
     });
   });
 
+  describe("registration ownership", () => {
+    it("keeps self-service attendance edits pending until email confirmation", async () => {
+      const signingSecret = "test-signing-secret";
+      const eventId = await createTestEvent();
+      const dayDate = "2026-12-01";
+      await run(
+        env.DB,
+        `INSERT INTO event_days
+           (id, event_id, day_date, label, sort_order, created_at, updated_at)
+         VALUES (?, ?, ?, 'Conference day', 1, datetime('now'), datetime('now'))`,
+        [uuid(), eventId, dayDate],
+      );
+      const user = await findOrCreateUser(env.DB, { email: "pending-edit@example.com" });
+      const created = await createRegistration(env.DB, {
+        event: { id: eventId },
+        userId: user.id,
+        attendanceType: "virtual",
+        sourceType: "web",
+        confirmationTtlHours: 24,
+        signingSecret,
+      });
+      const manageToken = await signCapabilityToken({
+        signingSecret,
+        linkSecret: created.registration.manage_link_secret,
+        purpose: "registration_manage",
+        resourceId: created.registration.id,
+      });
+
+      const updated = await updateRegistrationByManageToken(env.DB, {
+        manageToken,
+        signingSecret,
+        action: "update",
+        attendanceType: "in_person",
+        dayAttendance: [{ dayDate, attendanceType: "in_person" }],
+      });
+
+      expect(updated.status).toBe("pending_email_confirmation");
+      expect(
+        await first<{ status: string; confirmation_link_secret: string | null }>(
+          env.DB,
+          "SELECT status, confirmation_link_secret FROM registrations WHERE id = ?",
+          [created.registration.id],
+        ),
+      ).toEqual({
+        status: "pending_email_confirmation",
+        confirmation_link_secret: created.registration.confirmation_link_secret,
+      });
+    });
+
+    it("allows only the owning registration confirmation to promote the pending email", async () => {
+      const signingSecret = "test-signing-secret";
+      const ownerEventId = await createTestEvent();
+      const otherEventId = await createTestEvent();
+      const user = await findOrCreateUser(env.DB, { email: "bound-original@example.com" });
+      const owner = await createRegistration(env.DB, {
+        event: { id: ownerEventId },
+        userId: user.id,
+        attendanceType: "virtual",
+        sourceType: "web",
+        confirmationTtlHours: 24,
+        signingSecret,
+      });
+      const other = await createRegistration(env.DB, {
+        event: { id: otherEventId },
+        userId: user.id,
+        attendanceType: "virtual",
+        sourceType: "web",
+        confirmationTtlHours: 24,
+        signingSecret,
+      });
+      const change = await changeRegistrationEmail(env.DB, {
+        registrationId: owner.registration.id,
+        newEmail: "bound-new@example.com",
+        confirmationTtlHours: 24,
+        signingSecret,
+      });
+      expect(other.confirmationToken).not.toBeNull();
+      expect(
+        await getRegistrationConfirmationInfo(env.DB, `event-${ownerEventId.slice(0, 8)}`, owner.registration.id),
+      ).toMatchObject({ email: "bound-new@example.com" });
+      expect(
+        await getRegistrationConfirmationInfo(env.DB, `event-${otherEventId.slice(0, 8)}`, other.registration.id),
+      ).toMatchObject({ email: "bound-original@example.com" });
+
+      await confirmRegistrationByToken(env.DB, {
+        token: other.confirmationToken!,
+        waitlistClaimWindowHours: 24,
+        signingSecret,
+      });
+
+      expect(
+        await first<{
+          email: string;
+          pending_email: string | null;
+          pending_email_change_registration_id: string | null;
+        }>(env.DB, "SELECT email, pending_email, pending_email_change_registration_id FROM users WHERE id = ?", [
+          user.id,
+        ]),
+      ).toEqual({
+        email: "bound-original@example.com",
+        pending_email: "bound-new@example.com",
+        pending_email_change_registration_id: owner.registration.id,
+      });
+
+      await confirmRegistrationByToken(env.DB, {
+        token: change.confirmationToken,
+        waitlistClaimWindowHours: 24,
+        signingSecret,
+      });
+
+      expect(
+        await first<{
+          email: string;
+          pending_email: string | null;
+          pending_email_change_registration_id: string | null;
+        }>(env.DB, "SELECT email, pending_email, pending_email_change_registration_id FROM users WHERE id = ?", [
+          user.id,
+        ]),
+      ).toEqual({
+        email: "bound-new@example.com",
+        pending_email: null,
+        pending_email_change_registration_id: null,
+      });
+    });
+
+    it("does not let cancelling another registration clear the pending email change", async () => {
+      const signingSecret = "test-signing-secret";
+      const ownerEventId = await createTestEvent();
+      const otherEventId = await createTestEvent();
+      const user = await findOrCreateUser(env.DB, { email: "cancel-original@example.com" });
+      const owner = await createRegistration(env.DB, {
+        event: { id: ownerEventId },
+        userId: user.id,
+        attendanceType: "virtual",
+        sourceType: "web",
+        confirmationTtlHours: 24,
+        signingSecret,
+      });
+      const other = await createRegistration(env.DB, {
+        event: { id: otherEventId },
+        userId: user.id,
+        attendanceType: "virtual",
+        sourceType: "web",
+        confirmationTtlHours: 24,
+        signingSecret,
+      });
+      await changeRegistrationEmail(env.DB, {
+        registrationId: owner.registration.id,
+        newEmail: "cancel-new@example.com",
+        confirmationTtlHours: 24,
+        signingSecret,
+      });
+
+      await updateRegistrationById(env.DB, { registrationId: other.registration.id, action: "cancel" }, "admin");
+      expect(
+        await first<{ pending_email: string | null; pending_email_change_registration_id: string | null }>(
+          env.DB,
+          "SELECT pending_email, pending_email_change_registration_id FROM users WHERE id = ?",
+          [user.id],
+        ),
+      ).toEqual({
+        pending_email: "cancel-new@example.com",
+        pending_email_change_registration_id: owner.registration.id,
+      });
+
+      await updateRegistrationById(env.DB, { registrationId: owner.registration.id, action: "cancel" }, "admin");
+      expect(
+        await first<{ pending_email: string | null; pending_email_change_registration_id: string | null }>(
+          env.DB,
+          "SELECT pending_email, pending_email_change_registration_id FROM users WHERE id = ?",
+          [user.id],
+        ),
+      ).toEqual({ pending_email: null, pending_email_change_registration_id: null });
+    });
+
+    it("rejects a confirmation through the wrong event before touching the pending change", async () => {
+      const signingSecret = "test-signing-secret";
+      const eventId = await createTestEvent();
+      const wrongEventId = await createTestEvent();
+      const user = await findOrCreateUser(env.DB, { email: "event-bound-original@example.com" });
+      const created = await createRegistration(env.DB, {
+        event: { id: eventId },
+        userId: user.id,
+        attendanceType: "virtual",
+        sourceType: "web",
+        confirmationTtlHours: 24,
+        signingSecret,
+      });
+      const change = await changeRegistrationEmail(env.DB, {
+        registrationId: created.registration.id,
+        newEmail: "event-bound-new@example.com",
+        confirmationTtlHours: 24,
+        signingSecret,
+      });
+
+      await expect(
+        confirmRegistrationByToken(env.DB, {
+          token: change.confirmationToken,
+          eventId: wrongEventId,
+          waitlistClaimWindowHours: 24,
+          signingSecret,
+        }),
+      ).rejects.toMatchObject({ code: "CONFIRM_TOKEN_INVALID" });
+      expect(
+        await first<{ pending_email: string | null; pending_email_change_registration_id: string | null }>(
+          env.DB,
+          "SELECT pending_email, pending_email_change_registration_id FROM users WHERE id = ?",
+          [user.id],
+        ),
+      ).toEqual({
+        pending_email: "event-bound-new@example.com",
+        pending_email_change_registration_id: created.registration.id,
+      });
+    });
+  });
+
   describe("finalizeEmailChange", () => {
     it("finalizes email change and clears pending email", async () => {
       const eventId = await createTestEvent();
@@ -212,11 +451,7 @@ describe("Registration Email Change", () => {
 
       // Set pending email
       const now = nowIso();
-      await run(env.DB, `UPDATE users SET pending_email = ?, pending_email_expires_at = ? WHERE id = ?`, [
-        "pending@example.com",
-        addHours(now, 24),
-        user.id,
-      ]);
+      await reservePendingEmail(user.id, reg.id, "pending@example.com", addHours(now, 24));
 
       const result = await finalizeEmailChange(env.DB, {
         userId: user.id,
@@ -251,11 +486,7 @@ describe("Registration Email Change", () => {
         "INSERT INTO user_emails (id, user_id, email, normalized_email, created_at) VALUES (?, ?, ?, ?, ?)",
         [uuid(), user.id, "promoted@example.com", "promoted@example.com", nowIso()],
       );
-      await run(env.DB, "UPDATE users SET pending_email = ?, pending_email_expires_at = ? WHERE id = ?", [
-        "promoted@example.com",
-        addHours(nowIso(), 24),
-        user.id,
-      ]);
+      await reservePendingEmail(user.id, registration.id, "promoted@example.com", addHours(nowIso(), 24));
 
       await finalizeEmailChange(env.DB, {
         userId: user.id,
@@ -289,11 +520,7 @@ describe("Registration Email Change", () => {
       });
 
       const now = nowIso();
-      await run(env.DB, `UPDATE users SET pending_email = ?, pending_email_expires_at = ? WHERE id = ?`, [
-        "expired@example.com",
-        addHours(now, -1),
-        user.id,
-      ]);
+      await reservePendingEmail(user.id, reg.id, "expired@example.com", addHours(now, -1));
 
       await expect(
         finalizeEmailChange(env.DB, {
@@ -339,13 +566,9 @@ describe("Registration Email Change", () => {
       });
 
       const now = nowIso();
-      await expect(
-        run(env.DB, `UPDATE users SET pending_email = ?, pending_email_expires_at = ? WHERE id = ?`, [
-          "merge2@example.com",
-          addHours(now, 24),
-          user1.id,
-        ]),
-      ).rejects.toThrow("EMAIL_TAKEN");
+      await expect(reservePendingEmail(user1.id, reg1.id, "merge2@example.com", addHours(now, 24))).rejects.toThrow(
+        "EMAIL_TAKEN",
+      );
 
       expect(await first<{ email: string }>(env.DB, "SELECT email FROM users WHERE id = ?", [user1.id])).toEqual({
         email: "merge1@example.com",
@@ -377,13 +600,9 @@ describe("Registration Email Change", () => {
       });
 
       const now = nowIso();
-      await expect(
-        run(env.DB, `UPDATE users SET pending_email = ?, pending_email_expires_at = ? WHERE id = ?`, [
-          "taken@example.com",
-          addHours(now, 24),
-          user4.id,
-        ]),
-      ).rejects.toThrow("EMAIL_TAKEN");
+      await expect(reservePendingEmail(user4.id, reg4.id, "taken@example.com", addHours(now, 24))).rejects.toThrow(
+        "EMAIL_TAKEN",
+      );
       expect(
         await first<{ status: string }>(env.DB, "SELECT status FROM registrations WHERE id = ?", [reg4.id]),
       ).toEqual({ status: "pending_email_confirmation" });
@@ -485,12 +704,16 @@ describe("Registration Email Change", () => {
     it("rejects when another user has reserved the same email via pending_email", async () => {
       const eventId = await createTestEvent();
       const reserver = await findOrCreateUser(env.DB, { email: "reserver@example.com" });
+      const { registration: reserverRegistration } = await createRegistration(env.DB, {
+        event: { id: eventId },
+        userId: reserver.id,
+        attendanceType: "in_person",
+        sourceType: "web",
+        confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
+      });
       const now = nowIso();
-      await run(env.DB, "UPDATE users SET pending_email = ?, pending_email_expires_at = ? WHERE id = ?", [
-        "contested@example.com",
-        addHours(now, 24),
-        reserver.id,
-      ]);
+      await reservePendingEmail(reserver.id, reserverRegistration.id, "contested@example.com", addHours(now, 24));
 
       const user = await findOrCreateUser(env.DB, { email: "second@example.com" });
       const { registration: reg } = await createRegistration(env.DB, {
@@ -559,11 +782,7 @@ describe("Registration Email Change", () => {
         signingSecret: "test-signing-secret",
       });
       const now = nowIso();
-      await run(env.DB, "UPDATE users SET pending_email = ?, pending_email_expires_at = ? WHERE id = ?", [
-        "validation-new@example.com",
-        addHours(now, 24),
-        user.id,
-      ]);
+      await reservePendingEmail(user.id, reg.id, "validation-new@example.com", addHours(now, 24));
 
       await expect(
         finalizeEmailChange(env.DB, {

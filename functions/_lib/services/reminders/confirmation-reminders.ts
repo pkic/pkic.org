@@ -16,6 +16,7 @@ import { prepareBulkQueueInviteEmailChunkStatements } from "../../email/outbox";
 import { batchStatements } from "./shared";
 import type { DatabaseLike } from "../../types";
 import { queuedCapabilityToken } from "../capability-links";
+import { REGISTRATION_RECIPIENT_EMAIL_SQL } from "../registrations/recipient-email";
 
 export async function runConfirmationReminders(
   db: DatabaseLike,
@@ -53,7 +54,7 @@ export async function runConfirmationReminders(
           db,
           `SELECT
            r.id, r.event_id, u.id AS user_id, u.first_name, u.last_name,
-           COALESCE(u.pending_email, u.email) AS email,
+           ${REGISTRATION_RECIPIENT_EMAIL_SQL} AS email,
            r.confirmation_link_secret,
            r.confirmation_reminder_sent_at, r.pending_confirmation_deadline_at, r.created_at,
            e.name AS event_name, e.slug AS event_slug, e.base_path AS event_base_path,
@@ -101,14 +102,14 @@ export async function runConfirmationReminders(
           reminderIntervalDays: pendingConfirmationIntervalDays,
           reason: "pending_email_confirmation_timeout",
         }),
-        // Clear pending_email if no other pending-confirmation registration exists (registration above is already cancelled in this batch).
         db
           .prepare(
-            `UPDATE users SET pending_email = NULL, pending_email_expires_at = NULL, updated_at = ?
-             WHERE id = ? AND pending_email IS NOT NULL
-               AND NOT EXISTS (SELECT 1 FROM registrations WHERE user_id = ? AND status = 'pending_email_confirmation')`,
+            `UPDATE users
+                SET pending_email = NULL, pending_email_expires_at = NULL,
+                    pending_email_change_registration_id = NULL, updated_at = ?
+              WHERE id = ? AND pending_email_change_registration_id = ?`,
           )
-          .bind(nowValue, row.user_id, row.user_id),
+          .bind(nowValue, row.user_id, row.id),
       ]),
     );
 
@@ -129,7 +130,8 @@ export async function runConfirmationReminders(
         appBaseUrl,
         templateKey: "registration_updated",
         subject: `Registration cancelled due to missing email confirmation — ${event.name}`,
-        // row.email is COALESCE(pending_email, email) — the original bounces.
+        // The pending address is selected only for the registration that owns
+        // the email-change request; unrelated registrations keep the primary.
         recipientEmailOverride: row.email,
       });
     }
@@ -142,7 +144,7 @@ export async function runConfirmationReminders(
           db,
           `SELECT
            r.id, r.event_id, u.id AS user_id, u.first_name, u.last_name,
-           COALESCE(u.pending_email, u.email) AS email,
+           ${REGISTRATION_RECIPIENT_EMAIL_SQL} AS email,
            r.confirmation_link_secret,
            r.confirmation_reminder_sent_at, r.pending_confirmation_deadline_at, r.created_at,
            e.name AS event_name, e.slug AS event_slug, e.base_path AS event_base_path,
@@ -263,13 +265,14 @@ export async function runConfirmationReminders(
       const deadline = pendingConfirmationDeadline(row);
       return [
         db.prepare(`UPDATE registrations SET confirmation_reminder_sent_at = ? WHERE id = ?`).bind(now, row.id),
-        // Extend (never shorten) pending_email_expires_at to the deadline so reminder
-        // links stay clickable and a shorter-deadline registration can't clobber a longer one.
+        // Extend only the request owned by this registration.
         db
           .prepare(
-            `UPDATE users SET pending_email_expires_at = ?, updated_at = ? WHERE id = ? AND pending_email IS NOT NULL AND (pending_email_expires_at IS NULL OR pending_email_expires_at < ?)`,
+            `UPDATE users SET pending_email_expires_at = ?, updated_at = ?
+              WHERE id = ? AND pending_email_change_registration_id = ?
+                AND (pending_email_expires_at IS NULL OR pending_email_expires_at < ?)`,
           )
-          .bind(deadline, now, row.user_id, deadline),
+          .bind(deadline, now, row.user_id, row.id, deadline),
       ];
     });
 

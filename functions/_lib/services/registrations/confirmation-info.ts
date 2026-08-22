@@ -1,5 +1,6 @@
 import { first } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
+import { REGISTRATION_RECIPIENT_EMAIL_SQL } from "./recipient-email";
 
 export interface RegistrationConfirmationInfo {
   first_name: string | null;
@@ -16,7 +17,7 @@ export function getRegistrationConfirmationInfo(
 ): Promise<RegistrationConfirmationInfo | null> {
   return first<RegistrationConfirmationInfo>(
     db,
-    `SELECT u.first_name, u.last_name, u.email, u.organization_name,
+    `SELECT u.first_name, u.last_name, ${REGISTRATION_RECIPIENT_EMAIL_SQL} AS email, u.organization_name,
             e.name AS event_name
        FROM registrations r
        JOIN users u ON u.id = r.user_id

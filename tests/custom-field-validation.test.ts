@@ -271,7 +271,7 @@ describe("custom field validation", () => {
       )
     )[0];
     const details = JSON.parse(auditRow.details_json) as Record<string, { from: unknown; to: unknown }>;
-    expect(details.status).toEqual({ from: "pending_email_confirmation", to: "registered" });
+    expect(details.status).toEqual({ from: "pending_email_confirmation", to: "pending_email_confirmation" });
     expect(details.attendanceType).toEqual({ from: "in_person", to: "in_person" });
     expect(details.customAnswers).toEqual({
       from: {

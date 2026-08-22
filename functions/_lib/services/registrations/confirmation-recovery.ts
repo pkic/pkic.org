@@ -6,6 +6,7 @@ import { normalizeEmail } from "../../validation";
 import type { EventRecord } from "../events";
 import { verifyDatabaseCapability } from "../capability-links";
 import { prepareRegistrationConfirmationEmail } from "./status-notifications";
+import { REGISTRATION_RECIPIENT_EMAIL_SQL } from "./recipient-email";
 import { REGISTRATION_COLUMNS, registrationColumns, type RegistrationRecord } from "./types";
 
 export async function recoverRegistrationConfirmation(
@@ -38,13 +39,18 @@ export async function recoverRegistrationConfirmation(
     }
   }
   if (!registration && payload.email) {
+    const normalizedEmail = normalizeEmail(payload.email);
     registration = await first<RegistrationRecord>(
       db,
       `SELECT ${registrationColumns("r")}
        FROM registrations r JOIN users u ON u.id = r.user_id
-       WHERE r.event_id = ? AND r.status = 'pending_email_confirmation' AND u.normalized_email = ?
+       WHERE r.event_id = ? AND r.status = 'pending_email_confirmation'
+         AND (
+           u.normalized_email = ?
+           OR (u.pending_email_change_registration_id = r.id AND u.pending_email = ?)
+         )
        ORDER BY r.created_at DESC LIMIT 1`,
-      [payload.event.id, normalizeEmail(payload.email)],
+      [payload.event.id, normalizedEmail, normalizedEmail],
     );
   }
   if (!registration) {
@@ -57,6 +63,15 @@ export async function recoverRegistrationConfirmation(
   }
 
   const now = nowIso();
+  const recipient = await first<{ email: string }>(
+    db,
+    `SELECT ${REGISTRATION_RECIPIENT_EMAIL_SQL} AS email
+       FROM registrations r
+       JOIN users u ON u.id = r.user_id
+      WHERE r.id = ? AND u.id = ?`,
+    [registration.id, registration.user_id],
+  );
+  if (!recipient) throw new AppError(500, "USER_NOT_FOUND", "Associated user record is missing");
   const email = await prepareRegistrationConfirmationEmail(db, {
     event: payload.event,
     registrationId: registration.id,
@@ -64,6 +79,7 @@ export async function recoverRegistrationConfirmation(
     appBaseUrl: payload.appBaseUrl,
     confirmationTtlHours: payload.confirmationTtlHours,
     subject: `Confirm your registration for ${payload.event.name}`,
+    recipientEmail: recipient.email,
   });
   await db.batch([
     db

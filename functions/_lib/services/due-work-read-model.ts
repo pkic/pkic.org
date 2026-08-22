@@ -3,6 +3,7 @@ import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
 import { buildD1TextSearchFilter } from "../db/search";
 import type { AdminDueWorkRow, AdminDueWorkTab } from "../../../assets/shared/schemas/admin-due-work";
 import type { DatabaseLike, Env } from "../types";
+import { REGISTRATION_RECIPIENT_EMAIL_SQL } from "./registrations/recipient-email";
 
 const ONE_DAY_MS = 86_400_000;
 
@@ -222,9 +223,9 @@ const DUE_WORK_CTE = `
            r.id AS source_id,
            'reminders' AS bucket,
            'Registration Confirmation' AS type_label,
-           COALESCE(NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), COALESCE(u.pending_email, u.email)) AS title,
+           COALESCE(NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), ${REGISTRATION_RECIPIENT_EMAIL_SQL}) AS title,
            CASE WHEN NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), '') IS NULL
-             THEN NULL ELSE COALESCE(u.pending_email, u.email) END AS subtitle,
+             THEN NULL ELSE ${REGISTRATION_RECIPIENT_EMAIL_SQL} END AS subtitle,
            e.name || ' | ' || e.slug || ' | registration_confirmation_reminder | #' ||
              (MAX(0, MIN(cfg.max_confirmation_reminders - 1,
                CAST(((julianday(cfg.now_at) - julianday(r.created_at)) / cfg.confirmation_interval_days) AS INTEGER) - 1)) + 1) AS context,

@@ -13,6 +13,7 @@ import {
 import { getRegistrationById } from "./queries";
 import { prepareRegistrationStatusEmail, type RegistrationStatusEmailParams } from "./status-notifications";
 import type { RegistrationRecord } from "./types";
+import { prepareClearRegistrationEmailChangeStatement } from "./change-email";
 
 type ForceStatusNotification = Omit<
   RegistrationStatusEmailParams,
@@ -95,6 +96,7 @@ export async function forceRegistrationStatus(
           reasonCode: "registration_cancelled",
           reasonNote: "admin_force_status",
         }),
+        prepareClearRegistrationEmailChangeStatement(db, registration.id, registration.user_id, now),
       );
     } else {
       statements.push(...(waitlist?.statements ?? []));

@@ -9,6 +9,8 @@ import { onRequestPost as anonymizeUser } from "../functions/api/v1/admin/users/
 import app from "../functions/router";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
+import { signCapabilityToken } from "../functions/_lib/services/capability-links";
+import { confirmRegistrationByToken, getRegistrationByManageToken } from "../functions/_lib/services/registrations";
 
 let adminToken: string;
 
@@ -348,7 +350,33 @@ describe("admin user anonymization", () => {
   it("removes alternate identities and credentials and revokes durable access tokens", async () => {
     await setup();
     const userId = await seedUser(env.DB, "credentials@example.test");
+    const [{ id: eventId }] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM events ORDER BY created_at LIMIT 1",
+    );
+    const registrationId = crypto.randomUUID();
+    const confirmationLinkSecret = crypto.randomUUID();
+    const manageLinkSecret = crypto.randomUUID();
+    const signingSecret = "anonymization-capability-secret";
+    const confirmationToken = await signCapabilityToken({
+      signingSecret,
+      linkSecret: confirmationLinkSecret,
+      purpose: "registration_confirm",
+      resourceId: registrationId,
+    });
+    const manageToken = await signCapabilityToken({
+      signingSecret,
+      linkSecret: manageLinkSecret,
+      purpose: "registration_manage",
+      resourceId: registrationId,
+    });
     await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO registrations
+           (id, event_id, user_id, status, attendance_type, source_type,
+            confirmation_link_secret, manage_link_secret, created_at, updated_at)
+         VALUES (?, ?, ?, 'pending_email_confirmation', 'virtual', 'admin', ?, ?, datetime('now'), datetime('now'))`,
+      ).bind(registrationId, eventId, userId, confirmationLinkSecret, manageLinkSecret),
       env.DB.prepare(
         "INSERT INTO user_emails (id, user_id, email, normalized_email, created_at) VALUES (?, ?, ?, ?, datetime('now'))",
       ).bind(crypto.randomUUID(), userId, "alias@example.test", "alias@example.test"),
@@ -367,9 +395,10 @@ describe("admin user anonymization", () => {
       ).bind(crypto.randomUUID(), userId, `refresh-${crypto.randomUUID()}`),
       env.DB.prepare(
         `UPDATE users SET pending_email = 'pending@example.test', pending_email_expires_at = datetime('now', '+1 day'),
+                            pending_email_change_registration_id = ?,
                             role = 'admin', is_ec_member = 1
            WHERE id = ?`,
-      ).bind(userId),
+      ).bind(registrationId, userId),
     ]);
 
     await anonymizeUser(
@@ -388,6 +417,27 @@ describe("admin user anonymization", () => {
       is_ec_member: number;
     }>(env.DB, "SELECT pending_email, role, is_ec_member FROM users WHERE id = ?", userId);
     expect(user).toMatchObject({ pending_email: null, role: "user", is_ec_member: 0 });
+    const [registration] = await queryAll<{
+      confirmation_link_secret: string | null;
+      manage_link_secret: string;
+      status: string;
+    }>(
+      env.DB,
+      "SELECT confirmation_link_secret, manage_link_secret, status FROM registrations WHERE id = ?",
+      registrationId,
+    );
+    expect(registration).toMatchObject({ confirmation_link_secret: null, status: "pending_email_confirmation" });
+    expect(registration.manage_link_secret).not.toBe(manageLinkSecret);
+    await expect(getRegistrationByManageToken(env.DB, manageToken, signingSecret)).rejects.toMatchObject({
+      code: "REGISTRATION_NOT_FOUND",
+    });
+    await expect(
+      confirmRegistrationByToken(env.DB, {
+        token: confirmationToken,
+        waitlistClaimWindowHours: 24,
+        signingSecret,
+      }),
+    ).rejects.toMatchObject({ code: "CONFIRM_TOKEN_INVALID" });
   });
 
   it("durably queues deletion of the prior headshot while clearing its pointer", async () => {

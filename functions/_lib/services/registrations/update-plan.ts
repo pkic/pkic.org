@@ -21,6 +21,7 @@ import {
 } from "./day-waitlist";
 import type { RegistrationRecord } from "./types";
 import type { AttendanceType } from "../../../../assets/shared/schemas/registration";
+import { prepareClearRegistrationEmailChangeStatement } from "./change-email";
 
 export interface RegistrationUpdatePayload {
   action: "update" | "cancel" | "report_unauthorized";
@@ -107,6 +108,7 @@ export async function buildRegistrationUpdate(
         registrationId: registration.id,
         reasonCode: "registration_cancelled",
       }),
+      prepareClearRegistrationEmailChangeStatement(db, registration.id, registration.user_id, now),
     ];
     const audit = prepareRegistrationUpdateAudit(db, registration, cancelled, payload);
     if (audit) statements.push(audit);
@@ -139,6 +141,7 @@ export async function buildRegistrationUpdate(
         registrationId: registration.id,
         reasonCode: "registration_cancelled",
       }),
+      prepareClearRegistrationEmailChangeStatement(db, registration.id, registration.user_id, now),
     ];
     const audit = prepareRegistrationUpdateAudit(db, registration, updated, payload);
     if (audit) statements.push(audit);
@@ -198,11 +201,16 @@ export async function buildRegistrationUpdate(
   const hasPerDayAttendanceInput = Boolean(payload.dayAttendance?.length);
   const hasPerDayAttendanceContext = hasPerDayAttendanceInput || previousInPersonDayIds.length > 0;
   let newStatus = isCancelled ? "registered" : registration.status;
-  if (hasPerDayAttendanceContext || capacityExemptReason) {
-    newStatus = "registered";
-  } else if (effectiveAttendanceType !== registration.attendance_type) {
-    if (effectiveAttendanceType === "in_person" || registration.attendance_type === "in_person") {
+  // Profile and attendance edits must not double as email verification. The
+  // confirmation capability is the only self-service transition out of this
+  // state; explicit admin status changes use forceRegistrationStatus instead.
+  if (registration.status !== "pending_email_confirmation") {
+    if (hasPerDayAttendanceContext || capacityExemptReason) {
       newStatus = "registered";
+    } else if (effectiveAttendanceType !== registration.attendance_type) {
+      if (effectiveAttendanceType === "in_person" || registration.attendance_type === "in_person") {
+        newStatus = "registered";
+      }
     }
   }
   const now = nowIso();
