@@ -15,6 +15,7 @@ import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createApplicationFormSubmission, seedMemberApplication } from "./helpers/member-applications";
 import { insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 import { approveApplication } from "../functions/_lib/services/membership/applications/approve";
+import { recordEcDecision } from "../functions/_lib/services/ec-review";
 import type { DatabaseLike } from "../functions/_lib/types";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
@@ -125,6 +126,39 @@ describe("Post-approval onboarding", () => {
 
     const appRows = await queryAll<{ stage: string }>(env.DB, "SELECT stage FROM member_applications WHERE id = ?", id);
     expect(appRows[0].stage).toBe("approved");
+  });
+
+  it("preserves explicit staff approval as an override when an EC decline already exists", async () => {
+    const { id } = await createEcReviewApplication();
+    const ecUserId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, role, active, is_ec_member, created_at, updated_at)
+       VALUES (?, 'staff-override-ec@example.test', 'staff-override-ec@example.test', 'user', 1, 1,
+               datetime('now'), datetime('now'))`,
+    )
+      .bind(ecUserId)
+      .run();
+    await recordEcDecision(env.DB, {
+      applicationId: id,
+      ecMemberUserId: ecUserId,
+      decision: "decline",
+      reason: "Staff will resolve this decline manually",
+    });
+
+    const response = await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { memberId: string };
+    expect(
+      await queryAll(env.DB, "SELECT stage, transition_revision FROM member_applications WHERE id = ?", id),
+    ).toEqual([{ stage: "approved", transition_revision: 2 }]);
+    expect(await queryAll(env.DB, "SELECT decision FROM ec_decisions WHERE application_id = ?", id)).toEqual([
+      { decision: "decline" },
+    ]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'application_approved' AND entity_id = ?", id),
+    ).toHaveLength(1);
+    expect(await queryAll(env.DB, "SELECT id FROM members WHERE id = ?", body.memberId)).toHaveLength(1);
   });
 
   it("carries job_title/linkedin from the application's answers into the provisioned user (Fix 5b)", async () => {
@@ -429,6 +463,7 @@ describe("Post-approval onboarding", () => {
       approveApplication(racingDb, {
         applicationId: id,
         actorUserId: "admin-user-id",
+        approvalMode: "staff_override",
         loginUrl: "https://pkic.org/members/login/",
       }),
     ).rejects.toMatchObject({ status: 409 });

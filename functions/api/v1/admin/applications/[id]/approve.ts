@@ -32,6 +32,7 @@ export const ApplicationApprovePost = openApiRoute(applicationApproveRouteSchema
   const result = await approveApplication(db, {
     applicationId,
     actorUserId: admin.id,
+    approvalMode: "staff_override",
     loginUrl,
     sendOrgContactAssignedEmail: true,
   });

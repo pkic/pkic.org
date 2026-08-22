@@ -13,7 +13,7 @@ import { AppError } from "../errors";
 import { getMemberApplicationById } from "./membership/applications/queries";
 import type { DatabaseLike } from "../types";
 import type { EcDecisionValue } from "../../../assets/shared/schemas/ec-review";
-import { prepareAuditLog } from "./audit";
+import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
 
 export type { EcDecisionValue };
 
@@ -76,14 +76,47 @@ export async function recordEcDecision(
     actorId: params.ecMemberUserId,
     action: "ec_decision_recorded",
   };
-  await db.batch([
-    decisionStatement,
-    prepareAuditLog(db, audit.actorType, audit.actorId, audit.action, "member_application", params.applicationId, {
-      ecMemberUserId: params.ecMemberUserId,
-      decision: params.decision,
-      reason: params.reason ?? null,
-    }),
-  ]);
+  try {
+    await db.batch([
+      // Serialize decisions with every stage-changing command through the
+      // application row. A concurrent approval changes stage/revision; a
+      // decision changes revision, invalidating any approval snapshot that
+      // was prepared before this decision committed.
+      db
+        .prepare(
+          `UPDATE member_applications
+           SET transition_revision = transition_revision + 1, updated_at = ?
+           WHERE id = ? AND stage = 'ec_review' AND transition_revision = ?`,
+        )
+        .bind(now, application.id, application.transition_revision),
+      // This must remain immediately after the CAS: changes() turns a lost
+      // race into a statement failure, rolling back the audit and decision.
+      prepareAuditLogAfterOneChange(
+        db,
+        audit.actorType,
+        audit.actorId,
+        audit.action,
+        "member_application",
+        params.applicationId,
+        {
+          ecMemberUserId: params.ecMemberUserId,
+          decision: params.decision,
+          reason: params.reason ?? null,
+        },
+        now,
+      ),
+      decisionStatement,
+    ]);
+  } catch (error) {
+    if (isAuditOneChangeGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "APPLICATION_NOT_IN_EC_REVIEW",
+        "Application left EC review or changed while the decision was being prepared",
+      );
+    }
+    throw error;
+  }
   if (existing) {
     return {
       id,

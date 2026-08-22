@@ -276,13 +276,18 @@ export async function runEcWindowAutoApprove(
       await approveApplication(db, {
         applicationId: application.id,
         actorUserId: null,
+        approvalMode: "automatic_no_ec_objection",
         eventNote: "auto_approved_no_ec_objection",
         loginUrl,
       });
     } catch (error) {
-      // A staff edit after the due-row read increments transition_revision.
-      // The approval command rolls back fully, and the next independent cron
-      // invocation re-evaluates the current application snapshot.
+      // A staff edit or EC decision after the due-row read increments
+      // transition_revision. The approval command rolls back fully; a
+      // decline is held now, while other changes are re-evaluated next run.
+      if (isAppError(error) && error.code === "APPLICATION_EC_DECLINED") {
+        heldForDecline++;
+        continue;
+      }
       if (isAppError(error) && error.code === "APPLICATION_ALREADY_APPROVED") continue;
       throw error;
     }
