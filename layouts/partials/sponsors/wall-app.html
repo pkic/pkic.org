@@ -8,6 +8,7 @@
     .eventName     — event name string (matches the old `sponsoring` shortcode
                       param exactly, e.g. "Post-Quantum Cryptography Conference
                       Austin 2025"); omit for the general/consortium-only context
+    .eventSlug     — stable canonical event slug; preferred over eventName when known
     .level         — exact tier filter, or "all" (default "all")
     .height / .maxHeight / .maxWidth — grid mode logo sizing (px, scaled by tier weight)
     .rows          — grid mode: wrap each tier band in its own row (bool)
@@ -21,6 +22,7 @@
   data-module="member-flows/sponsors-wall"
   data-api-base="/api/v1"
   data-mode="{{ .mode | default "grid" }}"
+  {{ with .eventSlug }}data-event-slug="{{ . }}"{{ end }}
   {{ with .eventName }}data-event-name="{{ . }}"{{ end }}
   data-level="{{ .level | default "all" }}"
   {{ with .height }}data-height="{{ . }}"{{ end }}

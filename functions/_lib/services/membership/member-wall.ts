@@ -2,7 +2,7 @@ import type { MemberWallEntry } from "../../../../assets/shared/schemas/members-
 import { sanitizeLegacyHttpOrSameOriginUrl } from "../../../../assets/shared/schemas/urls";
 import { all } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
-import { PUBLIC_SPONSOR_READ_MODEL_SQL } from "../public-sponsors";
+import { buildPublicSponsorReadModel } from "../public-sponsors";
 
 interface MemberWallRow extends Omit<MemberWallEntry, "href" | "logoUrl"> {
   href: string | null;
@@ -15,9 +15,10 @@ interface MemberWallRow extends Omit<MemberWallEntry, "href" | "logoUrl"> {
  * are all resolved in D1; the browser receives display-ready entries.
  */
 export async function listMemberWall(db: DatabaseLike, memberLimit: number): Promise<MemberWallEntry[]> {
+  const readModel = buildPublicSponsorReadModel();
   const rows = await all<MemberWallRow>(
     db,
-    `${PUBLIC_SPONSOR_READ_MODEL_SQL},
+    `${readModel.sql},
      active_member_organizations AS (
        SELECT DISTINCT o.id, o.slug, o.name, o.website, o.slogan, o.logo_r2_key
          FROM members m
@@ -71,7 +72,7 @@ export async function listMemberWall(db: DatabaseLike, memberLimit: number): Pro
        FROM ranked_entries
       WHERE display_rank <= ?
       ORDER BY display_rank`,
-    ["", memberLimit],
+    [...readModel.bindings, memberLimit],
   );
 
   return rows.map((row) => ({

@@ -1,6 +1,7 @@
 {{/* Usage: sponsors-strip sponsoring="EVENT_NAME" minWeight="5" class="..." linkClass="..." logoClass="..." */}}
 {{ partial "sponsors/wall-app.html" (dict
   "mode" "strip"
+  "eventSlug" (.Get "event-slug")
   "eventName" (.Get "sponsoring")
   "minWeight" (.Get "minWeight" | default 5)
   "containerClass" (.Get "class" | default "d-flex justify-content-center align-items-center flex-wrap gap-4 my-4")

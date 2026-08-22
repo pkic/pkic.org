@@ -1,10 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { PublicSponsor } from "../../assets/shared/schemas/public-sponsors";
-import {
-  loadProgressiveSponsorPages,
-  sponsorWeightClass,
-  sponsorWeightsDescending,
-} from "../../assets/ts/member-flows/sponsors-wall";
+import { sponsorWeightClass, sponsorWeightsDescending } from "../../assets/ts/member-flows/sponsors-wall";
+import { mergeSponsorDisplayPages, sponsorQueryForTest } from "../../assets/ts/member-flows/sponsors-wall-data";
 
 function sponsor(weight: number): PublicSponsor {
   return {
@@ -30,101 +27,46 @@ describe("sponsorWeightsDescending", () => {
   });
 });
 
-describe("progressive sponsor pagination", () => {
-  it("renders every sponsor beyond row 200 while preserving server filters and sort", async () => {
-    const records = Array.from({ length: 201 }, (_, index) => ({
-      ...sponsor(8),
-      id: index.toString(16).padStart(32, "0"),
-      name: `Sponsor ${index}`,
-    }));
-    const requests: URL[] = [];
-    const publishedSizes: number[] = [];
-    const controller = new AbortController();
-
-    const result = await loadProgressiveSponsorPages({
-      endpoint: "/api/v1/sponsors",
-      query: new URLSearchParams({ eventName: "Amsterdam 2026", level: "Gold", minWeight: "5", sort: "-weight" }),
-      signal: controller.signal,
-      load: async (url) => {
-        const request = new URL(url, "https://pkic.org");
-        requests.push(request);
-        const limit = Number(request.searchParams.get("limit"));
-        const offset = Number(request.searchParams.get("offset"));
-        const page = records.slice(offset, offset + limit);
-        return {
-          sponsors: page,
-          page: { limit, offset, total: records.length, hasMore: offset + page.length < records.length },
-        };
-      },
-      onPage: (items) => publishedSizes.push(items.length),
-    });
-
-    expect(result).toHaveLength(201);
-    expect(publishedSizes).toEqual([100, 200, 201]);
-    expect(requests.map((request) => request.searchParams.get("offset"))).toEqual(["0", "100", "200"]);
-    expect(requests.every((request) => request.searchParams.get("eventName") === "Amsterdam 2026")).toBe(true);
-    expect(requests.every((request) => request.searchParams.get("level") === "Gold")).toBe(true);
-    expect(requests.every((request) => request.searchParams.get("minWeight") === "5")).toBe(true);
-    expect(requests.every((request) => request.searchParams.get("sort") === "-weight")).toBe(true);
-  });
-
-  it("stops at an intentional strip limit instead of silently treating it as a complete catalogue", async () => {
-    const records = Array.from({ length: 150 }, (_, index) => ({
-      ...sponsor(8),
-      id: index.toString(16).padStart(32, "0"),
-    }));
-    const controller = new AbortController();
-    let calls = 0;
-    const result = await loadProgressiveSponsorPages({
-      endpoint: "/api/v1/sponsors",
-      query: new URLSearchParams({ sort: "-weight" }),
-      maxItems: 12,
-      signal: controller.signal,
-      load: async (url) => {
-        calls += 1;
-        const request = new URL(url, "https://pkic.org");
-        const limit = Number(request.searchParams.get("limit"));
-        return {
-          sponsors: records.slice(0, limit),
-          page: { limit, offset: 0, total: records.length, hasMore: true },
-        };
-      },
-      onPage: () => {},
-    });
-
-    expect(result).toHaveLength(12);
-    expect(calls).toBe(1);
-  });
-
-  it("treats an explicit zero limit as an empty result without making a request", async () => {
-    const controller = new AbortController();
-    const onPage = vi.fn();
-    const load = vi.fn();
-    const result = await loadProgressiveSponsorPages({
-      endpoint: "/api/v1/sponsors",
-      query: new URLSearchParams(),
-      maxItems: 0,
-      signal: controller.signal,
-      load,
-      onPage,
-    });
-
-    expect(result).toEqual([]);
-    expect(load).not.toHaveBeenCalled();
-    expect(onPage).toHaveBeenCalledWith([]);
-  });
-
-  it("rejects invalid item limits instead of issuing an unbounded or malformed request", async () => {
-    const controller = new AbortController();
-    await expect(
-      loadProgressiveSponsorPages({
-        endpoint: "/api/v1/sponsors",
-        query: new URLSearchParams(),
-        maxItems: Number.NaN,
-        signal: controller.signal,
-        load: async () => ({ sponsors: [], page: { limit: 1, offset: 0, total: 0, hasMore: false } }),
-        onPage: () => {},
+describe("bounded sponsor display transport", () => {
+  it("uses one bounded, canonical-identity request for server-grouped displays", () => {
+    const query = new URLSearchParams(
+      sponsorQueryForTest({
+        eventSlug: "pqc-conference-amsterdam-nl-2026",
+        eventName: "legacy name that must not override the slug",
+        level: "Gold",
+        minWeight: 5,
+        sort: "-weight",
       }),
-    ).rejects.toThrow("non-negative safe integer");
+    );
+    expect(query.get("limit")).toBe("200");
+    expect(query.get("offset")).toBe("0");
+    expect(query.get("eventSlug")).toBe("pqc-conference-amsterdam-nl-2026");
+    expect(query.get("eventName")).toBeNull();
+    expect(query.get("level")).toBe("Gold");
+    expect(query.get("minWeight")).toBe("5");
+    expect(query.get("sort")).toBe("-weight");
+    expect(
+      new URLSearchParams(sponsorQueryForTest({ eventSlug: "pqc-conference-amsterdam-nl-2026" }, 200)).get("offset"),
+    ).toBe("200");
+  });
+
+  it("caps a strip request even when the shortcode omits maxItems", () => {
+    const query = new URLSearchParams(sponsorQueryForTest({ sort: "-weight" }));
+    expect(Number(query.get("limit"))).toBe(200);
+    expect(Number(query.get("offset"))).toBe(0);
+  });
+
+  it("merges only an explicitly requested next server page and preserves hasMore", () => {
+    const first = {
+      groups: [{ weight: 8, tierName: "Leader", sponsors: [sponsor(8)] }],
+      page: { limit: 200, offset: 0, total: 201, hasMore: true },
+    };
+    const next = {
+      groups: [{ weight: 8, tierName: "Leader", sponsors: [sponsor(8)] }],
+      page: { limit: 200, offset: 1, total: 201, hasMore: false },
+    };
+    const merged = mergeSponsorDisplayPages(first, next);
+    expect(merged.groups[0]?.sponsors).toHaveLength(2);
+    expect(merged.page).toEqual(next.page);
   });
 });

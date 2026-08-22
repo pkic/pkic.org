@@ -5,6 +5,8 @@ import { resetDb } from "./helpers/reset-db";
 import { createContext } from "./helpers/context";
 import { handleError } from "../functions/_lib/http";
 import { onRequestGet as getSponsorLogo } from "../functions/api/v1/sponsors/[id]/logo";
+import { listPublicSponsors } from "../functions/_lib/services/public-sponsors";
+import { buildPublicSponsorPageQuery } from "../functions/_lib/services/public-sponsors";
 
 async function callEndpoint(handler: (c: any) => Promise<Response>, ctx: any): Promise<Response> {
   try {
@@ -145,6 +147,12 @@ describe("GET /api/v1/sponsors (public consortium + event sponsors)", () => {
     ]);
     expect(body.page.total).toBe(2);
 
+    const descending = await callSponsorsList(
+      "https://pkic.org/api/v1/sponsors?q=diamond&level=Diamond&minWeight=5&sort=-name",
+    );
+    const descendingBody = (await descending.json()) as { sponsors: Array<{ name: string }> };
+    expect(descendingBody.sponsors.map(({ name }) => name)).toEqual(["Gamma Diamond", "Alpha Diamond"]);
+
     const invalidSort = await callSponsorsList("https://pkic.org/api/v1/sponsors?sort=raw_sql");
     expect(invalidSort.status).toBe(400);
   });
@@ -220,6 +228,84 @@ describe("GET /api/v1/sponsors (public consortium + event sponsors)", () => {
     };
     expect(body.sponsors).toHaveLength(1);
     expect(body.sponsors[0]).toMatchObject({ name: "Dual Sponsor Org", tier: "Titanium", eventTier: "Leader" });
+  });
+
+  it("uses eventSlug as the canonical identity and keeps eventName as a legacy fallback", async () => {
+    const firstEventId = crypto.randomUUID();
+    const secondEventId = crypto.randomUUID();
+    await seedEvent({ id: firstEventId, slug: "same-name-first", name: "Same Conference" });
+    await seedEvent({ id: secondEventId, slug: "same-name-second", name: "Same Conference" });
+    await seedEventSponsorship({ eventId: firstEventId, nonMemberName: "First Event Sponsor", tier: "Leader" });
+    await seedEventSponsorship({ eventId: secondEventId, nonMemberName: "Second Event Sponsor", tier: "Leader" });
+
+    const canonical = await callSponsorsList("https://pkic.org/api/v1/sponsors?eventSlug=same-name-first");
+    const canonicalBody = (await canonical.json()) as { sponsors: Array<{ name: string }> };
+    expect(canonicalBody.sponsors.map((s) => s.name)).toEqual(["First Event Sponsor"]);
+
+    const legacy = await callSponsorsList("https://pkic.org/api/v1/sponsors?eventName=Same%20Conference");
+    expect(legacy.status).toBe(400);
+    const legacyBody = (await legacy.json()) as { error?: { code?: string } };
+    expect(legacyBody.error?.code).toBe("AMBIGUOUS_EVENT_NAME");
+
+    const staleSlug = await callSponsorsList(
+      "https://pkic.org/api/v1/sponsors?eventSlug=deleted-event&eventName=Same%20Conference",
+    );
+    const staleSlugBody = (await staleSlug.json()) as { sponsors: unknown[] };
+    expect(staleSlugBody.sponsors).toHaveLength(0);
+  });
+
+  it("returns bounded server-grouped rows for grid and level displays", async () => {
+    await seedOrganization({ id: crypto.randomUUID(), name: "Display Diamond", sponsorTier: "Diamond" });
+    await seedOrganization({ id: crypto.randomUUID(), name: "Display Gold", sponsorTier: "Gold" });
+    const response = await callSponsorsList("https://pkic.org/api/v1/sponsors/display?limit=1");
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      groups: Array<{ weight: number; tierName: string; sponsors: Array<{ name: string }> }>;
+      page: { limit: number; total: number; hasMore: boolean };
+    };
+    expect(body.page).toMatchObject({ limit: 1, total: 2, hasMore: true });
+    expect(body.groups).toHaveLength(1);
+    expect(body.groups[0]?.sponsors).toHaveLength(1);
+    expect(body.groups[0]?.tierName).toBe("Diamond");
+  });
+
+  it("reports the exact total even when a bounded page starts beyond the final row", async () => {
+    await seedOrganization({ id: crypto.randomUUID(), name: "One Sponsor", sponsorTier: "Diamond" });
+    const response = await callSponsorsList("https://pkic.org/api/v1/sponsors?limit=2&offset=100");
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      sponsors: unknown[];
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
+    expect(body.sponsors).toHaveLength(0);
+    expect(body.page).toEqual({ limit: 2, offset: 100, total: 1, hasMore: false });
+  });
+
+  it("runs the sponsor projection and total as one D1 statement", async () => {
+    await seedOrganization({ id: crypto.randomUUID(), name: "One Pass Sponsor", sponsorTier: "Diamond" });
+    let prepareCalls = 0;
+    const countingDb = {
+      ...env.DB,
+      prepare(sql: string) {
+        prepareCalls += 1;
+        return env.DB.prepare(sql);
+      },
+    };
+    const response = await listPublicSponsors(countingDb, { limit: 1, offset: 0 });
+    expect(response.page.total).toBe(1);
+    expect(prepareCalls).toBe(1);
+  });
+
+  it("materializes the filtered projection once for page rows and the total row", async () => {
+    const query = buildPublicSponsorPageQuery(
+      { limit: 200, offset: 0 },
+      { sql: "WHERE effective_weight > 0", bindings: [] },
+      "ORDER BY effective_weight DESC, name ASC, id ASC",
+    );
+    const plan = await env.DB.prepare(query.sql.replace(/^\s*WITH/, "EXPLAIN QUERY PLAN WITH"))
+      .bind(...query.bindings)
+      .all<{ detail: string }>();
+    expect(plan.results.filter(({ detail }) => detail.includes("MATERIALIZE filtered"))).toHaveLength(1);
   });
 
   it("adds a non-member event sponsor as its own record, separate from any consortium sponsors", async () => {

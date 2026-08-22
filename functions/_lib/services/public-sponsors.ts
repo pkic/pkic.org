@@ -1,9 +1,9 @@
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
-import type { SponsorsListResponse } from "../../../assets/shared/schemas/public-sponsors";
+import type { SponsorsDisplayResponse, SponsorsListResponse } from "../../../assets/shared/schemas/public-sponsors";
 import { sanitizeLegacyHttpUrl } from "../../../assets/shared/schemas/urls";
-import { queryPage } from "../db/pagination";
 import { buildD1TextSearchFilter } from "../db/search";
 import { resolveMappedOrderBy } from "../db/sort";
+import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
 
 /**
@@ -11,13 +11,9 @@ import type { DatabaseLike } from "../types";
  * filtered, sorted, counted, and paged in D1. Tier display weights come from
  * sponsorship_tier_catalog rather than a frontend constant.
  */
-export const PUBLIC_SPONSOR_READ_MODEL_SQL = `
+const PUBLIC_SPONSOR_READ_MODEL_CTE = `
   WITH selected_event AS (
-    SELECT id
-      FROM events
-     WHERE lower(replace(name, ' - ', ' ')) = lower(replace(?, ' - ', ' '))
-     ORDER BY starts_at DESC, id ASC
-     LIMIT 1
+    __SELECTED_EVENT__
   ), consortium_rows AS (
     SELECT 'org:' || o.id AS sponsor_key,
            o.id,
@@ -99,6 +95,43 @@ export const PUBLIC_SPONSOR_READ_MODEL_SQL = `
        AND event_tier.active = 1
   )`;
 
+export interface PublicSponsorEventIdentity {
+  eventSlug?: string;
+  /** Legacy fallback for callers that have not migrated to the stable canonical slug. */
+  eventName?: string;
+}
+
+/**
+ * Select an event by stable canonical slug whenever available. Name matching is
+ * deliberately retained only as a compatibility fallback for old shortcodes;
+ * it is not used when a slug is supplied, so renamed/duplicate events cannot
+ * silently redirect a sponsorship wall.
+ */
+export function buildPublicSponsorReadModel(identity: PublicSponsorEventIdentity = {}): {
+  sql: string;
+  bindings: unknown[];
+} {
+  if (identity.eventSlug) {
+    return {
+      sql: PUBLIC_SPONSOR_READ_MODEL_CTE.replace("__SELECTED_EVENT__", "SELECT id FROM events WHERE slug = ? LIMIT 1"),
+      bindings: [identity.eventSlug],
+    };
+  }
+  if (identity.eventName) {
+    return {
+      sql: PUBLIC_SPONSOR_READ_MODEL_CTE.replace(
+        "__SELECTED_EVENT__",
+        "SELECT id FROM events WHERE lower(replace(name, ' - ', ' ')) = lower(replace(?, ' - ', ' ')) ORDER BY starts_at DESC, id ASC LIMIT 1",
+      ),
+      bindings: [identity.eventName],
+    };
+  }
+  return {
+    sql: PUBLIC_SPONSOR_READ_MODEL_CTE.replace("__SELECTED_EVENT__", "SELECT id FROM events WHERE 0"),
+    bindings: [],
+  };
+}
+
 interface SponsorRow {
   id: string;
   name: string;
@@ -111,14 +144,28 @@ interface SponsorRow {
   effective_weight: number;
 }
 
-interface PublicSponsorListOptions {
-  eventName?: string;
+export interface PublicSponsorListOptions extends PublicSponsorEventIdentity {
   level?: string;
   minWeight?: number;
   limit: number;
   offset: number;
   q?: string;
   sort?: string;
+}
+
+async function rejectAmbiguousLegacyEventName(db: DatabaseLike, eventName?: string): Promise<void> {
+  if (!eventName) return;
+  const matches = await db
+    .prepare("SELECT id FROM events WHERE lower(replace(name, ' - ', ' ')) = lower(replace(?, ' - ', ' ')) LIMIT 2")
+    .bind(eventName)
+    .all<{ id: string }>();
+  if (matches.results.length > 1) {
+    throw new AppError(
+      400,
+      "AMBIGUOUS_EVENT_NAME",
+      "eventName matches multiple events; provide the canonical eventSlug instead.",
+    );
+  }
 }
 
 function buildFilter(options: PublicSponsorListOptions): { sql: string; bindings: unknown[] } {
@@ -142,10 +189,83 @@ function buildFilter(options: PublicSponsorListOptions): { sql: string; bindings
   return { sql: `WHERE ${clauses.join(" AND ")}`, bindings };
 }
 
+interface SponsorPageRow extends SponsorRow {
+  total_count: number;
+  page_marker: number;
+  page_position: number | null;
+}
+
+export function buildPublicSponsorPageQuery(
+  options: PublicSponsorListOptions,
+  filter: { sql: string; bindings: unknown[] },
+  orderBy: string,
+): { sql: string; bindings: unknown[] } {
+  const readModel = buildPublicSponsorReadModel(options);
+  const orderExpression = orderBy.replace(/^ORDER\s+BY\s+/i, "");
+  return {
+    sql: `${readModel.sql}, filtered AS MATERIALIZED (
+    SELECT id, name, website, logo_r2_key, sponsorship_logo_r2_key,
+           tier, event_tier, effective_tier, effective_weight
+      FROM enriched_sponsors
+      ${filter.sql}
+  ), page_rows AS (
+    SELECT id, name, website, logo_r2_key, sponsorship_logo_r2_key,
+           tier, event_tier, effective_tier, effective_weight,
+           COUNT(*) OVER() AS total_count,
+           ROW_NUMBER() OVER (ORDER BY ${orderExpression}) AS page_position,
+           0 AS page_marker
+      FROM filtered
+     ${orderBy}
+     LIMIT ? OFFSET ?
+  ), total_row AS (
+    SELECT NULL AS id, NULL AS name, NULL AS website, NULL AS logo_r2_key,
+           NULL AS sponsorship_logo_r2_key, NULL AS tier, NULL AS event_tier,
+           NULL AS effective_tier, NULL AS effective_weight,
+           COUNT(*) AS total_count, NULL AS page_position, 1 AS page_marker
+      FROM filtered
+  )
+  SELECT id, name, website, logo_r2_key, sponsorship_logo_r2_key,
+         tier, event_tier, effective_tier, effective_weight,
+         total_count, page_position, page_marker
+    FROM page_rows
+  UNION ALL
+  SELECT id, name, website, logo_r2_key, sponsorship_logo_r2_key,
+         tier, event_tier, effective_tier, effective_weight,
+         total_count, page_position, page_marker
+    FROM total_row
+   ORDER BY page_marker, page_position`,
+    bindings: [...readModel.bindings, ...filter.bindings, options.limit, options.offset],
+  };
+}
+
+/**
+ * Executes the sponsor projection once. The final total row makes the total
+ * available even when the requested offset is beyond the final page, without
+ * issuing queryPage's second full CTE evaluation.
+ */
+async function querySponsorPage(
+  db: DatabaseLike,
+  options: PublicSponsorListOptions,
+  filter: { sql: string; bindings: unknown[] },
+  orderBy: string,
+): Promise<{ rows: SponsorRow[]; total: number }> {
+  const query = buildPublicSponsorPageQuery(options, filter, orderBy);
+  const result = await db
+    .prepare(query.sql)
+    .bind(...query.bindings)
+    .all<SponsorPageRow>();
+  const totalRow = result.results.find((row) => row.page_marker === 1);
+  return {
+    rows: result.results.filter((row) => row.page_marker === 0),
+    total: Number(totalRow?.total_count ?? result.results[0]?.total_count ?? 0),
+  };
+}
+
 export async function listPublicSponsors(
   db: DatabaseLike,
   options: PublicSponsorListOptions,
 ): Promise<SponsorsListResponse> {
+  await rejectAmbiguousLegacyEventName(db, options.eventName && !options.eventSlug ? options.eventName : undefined);
   const filter = buildFilter(options);
   const orderBy = resolveMappedOrderBy(
     options.sort,
@@ -153,19 +273,7 @@ export async function listPublicSponsors(
     "effective_weight DESC",
     "name ASC, id ASC",
   );
-  const eventName = options.eventName ?? "";
-
-  const { rows, total } = await queryPage<SponsorRow>(db, {
-    sql: `${PUBLIC_SPONSOR_READ_MODEL_SQL}
-            SELECT id, name, website, logo_r2_key, sponsorship_logo_r2_key,
-                   tier, event_tier, effective_tier, effective_weight
-              FROM enriched_sponsors
-              ${filter.sql}`,
-    bindings: [eventName, ...filter.bindings],
-    orderBy,
-    limit: options.limit,
-    offset: options.offset,
-  });
+  const { rows, total } = await querySponsorPage(db, options, filter, orderBy);
 
   const sponsors = rows.map((row) => ({
     id: row.id,
@@ -182,6 +290,27 @@ export async function listPublicSponsors(
     weight: row.effective_weight,
   }));
   return { sponsors, page: buildPageInfo(options.limit, options.offset, total, sponsors.length) };
+}
+
+export async function listPublicSponsorDisplay(
+  db: DatabaseLike,
+  options: PublicSponsorListOptions,
+): Promise<SponsorsDisplayResponse> {
+  const response = await listPublicSponsors(db, options);
+  const groups = new Map<number, { weight: number; tierName: string; sponsors: typeof response.sponsors }>();
+  for (const sponsor of response.sponsors) {
+    const group = groups.get(sponsor.weight) ?? {
+      weight: sponsor.weight,
+      tierName: sponsor.effectiveTier,
+      sponsors: [],
+    };
+    group.sponsors.push(sponsor);
+    groups.set(sponsor.weight, group);
+  }
+  return {
+    groups: [...groups.values()].sort((a, b) => b.weight - a.weight),
+    page: response.page,
+  };
 }
 
 /** `id` is a sponsorship id; organization logos use GET /api/v1/members/:id/logo. */

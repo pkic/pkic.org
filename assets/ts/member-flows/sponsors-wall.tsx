@@ -33,10 +33,11 @@
  * visual mode.
  */
 import { render } from "preact";
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { getJson } from "../shared/api-client";
 import { memberWallResponseSchema, type MemberWallEntry } from "../../shared/schemas/members-directory";
-import { sponsorsListResponseSchema, type PublicSponsor } from "../../shared/schemas/public-sponsors";
+import type { PublicSponsor } from "../../shared/schemas/public-sponsors";
+import { SPONSOR_DISPLAY_LIMIT, useSponsorDisplay, useSponsorList } from "./sponsors-wall-data";
 
 const API_BASE_FALLBACK = "/api/v1";
 
@@ -82,101 +83,6 @@ function SponsorLogo({
   );
 }
 
-function useSponsors(
-  apiBase: string,
-  options: {
-    eventName?: string;
-    level?: string;
-    minWeight?: number;
-    limit?: number;
-    sort?: "name" | "-weight";
-  },
-): { sponsors: PublicSponsor[] | null; error: string | null } {
-  const [sponsors, setSponsors] = useState<PublicSponsor[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    setSponsors(null);
-    setError(null);
-    async function load() {
-      try {
-        const query = new URLSearchParams({ sort: options.sort ?? "-weight" });
-        if (options.eventName) query.set("eventName", options.eventName);
-        if (options.level) query.set("level", options.level);
-        if (options.minWeight !== undefined) query.set("minWeight", String(options.minWeight));
-        await loadProgressiveSponsorPages({
-          endpoint: `${apiBase}/sponsors`,
-          query,
-          maxItems: options.limit,
-          signal: controller.signal,
-          load: (url, signal) => getJson<unknown>(url, { signal }),
-          onPage: setSponsors,
-        });
-      } catch (e) {
-        if (!controller.signal.aborted) {
-          setSponsors(null);
-          setError((e as Error).message);
-          console.error("[sponsors-wall]", e);
-        }
-      }
-    }
-    void load();
-    return () => {
-      controller.abort();
-    };
-  }, [apiBase, options.eventName, options.level, options.minWeight, options.limit, options.sort]);
-
-  return { sponsors, error };
-}
-
-const SPONSOR_PAGE_SIZE = 100;
-
-/** Fetches bounded server pages and publishes each accumulated display page. */
-export async function loadProgressiveSponsorPages({
-  endpoint,
-  query,
-  maxItems,
-  signal,
-  load,
-  onPage,
-}: {
-  endpoint: string;
-  query: URLSearchParams;
-  maxItems?: number;
-  signal: AbortSignal;
-  load: (url: string, signal: AbortSignal) => Promise<unknown>;
-  onPage: (sponsors: PublicSponsor[]) => void;
-}): Promise<PublicSponsor[]> {
-  if (maxItems !== undefined && (!Number.isSafeInteger(maxItems) || maxItems < 0)) {
-    throw new RangeError("Sponsor item limit must be a non-negative safe integer.");
-  }
-  const sponsors: PublicSponsor[] = [];
-  let offset = 0;
-
-  if (maxItems === 0) {
-    onPage([]);
-    return sponsors;
-  }
-
-  while (!signal.aborted && (maxItems === undefined || sponsors.length < maxItems)) {
-    const remaining = maxItems === undefined ? SPONSOR_PAGE_SIZE : Math.max(0, maxItems - sponsors.length);
-    const limit = Math.min(SPONSOR_PAGE_SIZE, remaining || SPONSOR_PAGE_SIZE);
-    const pageQuery = new URLSearchParams(query);
-    pageQuery.set("limit", String(limit));
-    pageQuery.set("offset", String(offset));
-    const page = sponsorsListResponseSchema.parse(await load(`${endpoint}?${pageQuery.toString()}`, signal));
-    if (page.page.offset !== offset) throw new Error("Sponsor API returned an unexpected page offset.");
-
-    sponsors.push(...page.sponsors);
-    onPage([...sponsors]);
-    if (!page.page.hasMore || page.sponsors.length === 0) break;
-    offset += page.sponsors.length;
-  }
-
-  return sponsors;
-}
-
 function SponsorLoadError({ message }: { message: string }) {
   return (
     <p class="text-danger small mb-0" role="alert">
@@ -185,10 +91,20 @@ function SponsorLoadError({ message }: { message: string }) {
   );
 }
 
+function SponsorLoadMore({ hasMore, loading, onClick }: { hasMore: boolean; loading: boolean; onClick: () => void }) {
+  if (!hasMore) return null;
+  return (
+    <button type="button" class="btn btn-outline-secondary mt-3" onClick={onClick} disabled={loading}>
+      {loading ? "Loading sponsors…" : "Load more sponsors"}
+    </button>
+  );
+}
+
 // ── Grid mode (sponsors.html / grid.html) ──────────────────────────────────
 
 function GridMode({
   apiBase,
+  eventSlug,
   eventName,
   level,
   height,
@@ -198,6 +114,7 @@ function GridMode({
   logoClass,
 }: {
   apiBase: string;
+  eventSlug?: string;
   eventName?: string;
   level: string;
   height?: number;
@@ -206,27 +123,19 @@ function GridMode({
   rows: boolean;
   logoClass?: string;
 }) {
-  const { sponsors, error } = useSponsors(apiBase, { eventName, level, sort: "-weight" });
-
-  const buckets = useMemo(() => {
-    if (!sponsors) return null;
-    const byWeight = new Map<number, PublicSponsor[]>();
-    for (const s of sponsors) {
-      const w = s.weight;
-      if (!byWeight.has(w)) byWeight.set(w, []);
-      byWeight.get(w)!.push(s);
-    }
-    return byWeight;
-  }, [sponsors]);
+  const { display, error, loadingMore, loadMore } = useSponsorDisplay(apiBase, {
+    eventSlug,
+    eventName,
+    level,
+    sort: "-weight",
+  });
 
   if (error) return <SponsorLoadError message={error} />;
-  if (!buckets || buckets.size === 0) return null;
+  if (!display || display.groups.length === 0) return null;
 
-  const weights = sponsorWeightsDescending(sponsors ?? []);
-
-  const items = weights.map((w) => (
+  const items = display.groups.map(({ weight: w, sponsors }) => (
     <>
-      {buckets.get(w)!.map((s) => {
+      {sponsors.map((s) => {
         const sizeClasses = [
           sponsorWeightClass(w),
           height === 20 ? "sponsor-grid-height-20" : "",
@@ -247,34 +156,42 @@ function GridMode({
     </>
   ));
 
-  return <div class="sponsors-list">{rows ? items.map((row, i) => <div key={i}>{row}</div>) : items}</div>;
+  return (
+    <>
+      <div class="sponsors-list">{rows ? items.map((row, i) => <div key={i}>{row}</div>) : items}</div>
+      <SponsorLoadMore hasMore={display.page.hasMore} loading={loadingMore} onClick={() => void loadMore()} />
+    </>
+  );
 }
 
 // ── Level mode (sponsors-level.html) ───────────────────────────────────────
 
-function LevelMode({ apiBase, eventName, level }: { apiBase: string; eventName?: string; level: string }) {
-  const { sponsors, error } = useSponsors(apiBase, { eventName, level, sort: "-weight" });
-
-  const groups = useMemo(() => {
-    if (!sponsors) return null;
-    const byWeight = new Map<number, { tierName: string; sponsors: PublicSponsor[] }>();
-    for (const s of sponsors) {
-      const tier = s.effectiveTier;
-      const w = s.weight;
-      if (!byWeight.has(w)) byWeight.set(w, { tierName: tier, sponsors: [] });
-      byWeight.get(w)!.sponsors.push(s);
-    }
-    return Array.from(byWeight.entries()).sort((a, b) => b[0] - a[0]);
-  }, [sponsors]);
+function LevelMode({
+  apiBase,
+  eventSlug,
+  eventName,
+  level,
+}: {
+  apiBase: string;
+  eventSlug?: string;
+  eventName?: string;
+  level: string;
+}) {
+  const { display, error, loadingMore, loadMore } = useSponsorDisplay(apiBase, {
+    eventSlug,
+    eventName,
+    level,
+    sort: "-weight",
+  });
 
   if (error) return <SponsorLoadError message={error} />;
-  if (!groups || groups.length === 0) return null;
+  if (!display || display.groups.length === 0) return null;
 
   return (
     <div class="sponsors container text-center">
-      {groups.map(([w, group]) => (
-        <div key={w} class="row justify-content-center">
-          <div data-weight={w} class="col border-top border-light-subtle m-2 position-relative">
+      {display.groups.map((group) => (
+        <div key={group.weight} class="row justify-content-center">
+          <div data-weight={group.weight} class="col border-top border-light-subtle m-2 position-relative">
             <span class="sponsor-level position-absolute top-0 start-50 translate-middle bg-white px-2">
               {group.tierName}
             </span>
@@ -286,7 +203,7 @@ function LevelMode({ apiBase, eventName, level }: { apiBase: string; eventName?:
                     level={group.tierName}
                     eventName={eventName}
                     logoClass="sponsor-logo"
-                    sizeClass={sponsorWeightClass(w)}
+                    sizeClass={sponsorWeightClass(group.weight)}
                   />
                 </div>
               ))}
@@ -294,6 +211,7 @@ function LevelMode({ apiBase, eventName, level }: { apiBase: string; eventName?:
           </div>
         </div>
       ))}
+      <SponsorLoadMore hasMore={display.page.hasMore} loading={loadingMore} onClick={() => void loadMore()} />
     </div>
   );
 }
@@ -302,6 +220,7 @@ function LevelMode({ apiBase, eventName, level }: { apiBase: string; eventName?:
 
 function StripMode({
   apiBase,
+  eventSlug,
   eventName,
   minWeight,
   containerClass,
@@ -312,6 +231,7 @@ function StripMode({
   maxItems,
 }: {
   apiBase: string;
+  eventSlug?: string;
   eventName?: string;
   minWeight: number;
   containerClass: string;
@@ -321,10 +241,11 @@ function StripMode({
   labelClass?: string;
   maxItems?: number;
 }) {
-  const { sponsors, error } = useSponsors(apiBase, {
+  const { sponsors, error } = useSponsorList(apiBase, {
+    eventSlug,
     eventName,
     minWeight,
-    limit: maxItems,
+    limit: maxItems ?? SPONSOR_DISPLAY_LIMIT,
     sort: "-weight",
   });
   const sorted = sponsors?.map((s) => ({ s, weight: s.weight })) ?? null;
@@ -434,12 +355,13 @@ function WallMode({ apiBase, memberLimit }: { apiBase: string; memberLimit: numb
 function main(): void {
   document.querySelectorAll<HTMLElement>("[data-sponsors-wall]").forEach((root) => {
     const apiBase = root.dataset.apiBase ?? API_BASE_FALLBACK;
+    const eventSlug = root.dataset.eventSlug || undefined;
     const eventName = root.dataset.eventName || undefined;
     const level = root.dataset.level ?? "all";
     const mode = root.dataset.mode ?? "grid";
 
     if (mode === "level") {
-      render(<LevelMode apiBase={apiBase} eventName={eventName} level={level} />, root);
+      render(<LevelMode apiBase={apiBase} eventSlug={eventSlug} eventName={eventName} level={level} />, root);
       return;
     }
 
@@ -452,6 +374,7 @@ function main(): void {
       render(
         <StripMode
           apiBase={apiBase}
+          eventSlug={eventSlug}
           eventName={eventName}
           minWeight={Number(root.dataset.minWeight ?? 5)}
           containerClass={
@@ -471,6 +394,7 @@ function main(): void {
     render(
       <GridMode
         apiBase={apiBase}
+        eventSlug={eventSlug}
         eventName={eventName}
         level={level}
         height={root.dataset.height ? Number(root.dataset.height) : undefined}

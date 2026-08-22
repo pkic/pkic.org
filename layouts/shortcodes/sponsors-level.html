@@ -1,6 +1,7 @@
 {{/* {{< sponsors-level sponsoring="<event name>" level="all" >}} */}}
 {{ partial "sponsors/wall-app.html" (dict
   "mode" "level"
+  "eventSlug" (.Get "event-slug")
   "eventName" (.Get "sponsoring")
   "level" (.Get "level" | default "all")
 ) }}
