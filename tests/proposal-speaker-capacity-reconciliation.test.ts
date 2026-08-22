@@ -363,7 +363,7 @@ describe("proposal speaker capacity reconciliation", () => {
     await addProposalSpeaker(env.DB, { proposalId: secondProposal.id, userId: coSpeakerUserId, role: "co_speaker" });
     await finalizeProposalDecision(env.DB, {
       proposalId: secondProposal.id,
-      actor: { id: adminUserId, databaseUserId: adminUserId, email: "admin@pkic.org", role: "admin" },
+      actor: { identityType: "user", id: adminUserId, email: "admin@pkic.org", role: "admin" },
       finalStatus: "accepted",
       minReviewsRequired: 0,
     });
@@ -399,7 +399,7 @@ describe("proposal speaker capacity reconciliation", () => {
 
     await finalizeProposalDecision(env.DB, {
       proposalId,
-      actor: { id: adminUserId, databaseUserId: adminUserId, email: "admin@pkic.org", role: "admin" },
+      actor: { identityType: "user", id: adminUserId, email: "admin@pkic.org", role: "admin" },
       finalStatus: "accepted",
       minReviewsRequired: 0,
     });
@@ -425,7 +425,7 @@ describe("proposal speaker capacity reconciliation", () => {
     const registrationId = await seedPendingSpeakerRegistration({ eventId, speakerUserId: coSpeakerUserId });
     await finalizeProposalDecision(env.DB, {
       proposalId,
-      actor: { id: adminUserId, databaseUserId: adminUserId, email: "admin@pkic.org", role: "admin" },
+      actor: { identityType: "user", id: adminUserId, email: "admin@pkic.org", role: "admin" },
       finalStatus: "accepted",
       minReviewsRequired: 0,
     });
@@ -434,7 +434,7 @@ describe("proposal speaker capacity reconciliation", () => {
       await expect(
         finalizeProposalDecision(env.DB, {
           proposalId,
-          actor: { id: adminUserId, databaseUserId: adminUserId, email: "admin@pkic.org", role: "admin" },
+          actor: { identityType: "user", id: adminUserId, email: "admin@pkic.org", role: "admin" },
           finalStatus,
           decisionNote: finalStatus === "needs-work" ? "This transition is intentionally forbidden." : undefined,
           minReviewsRequired: 0,
@@ -453,7 +453,7 @@ describe("proposal speaker capacity reconciliation", () => {
     const registrationId = await seedPendingSpeakerRegistration({ eventId, speakerUserId: coSpeakerUserId });
     await finalizeProposalDecision(env.DB, {
       proposalId,
-      actor: { id: adminUserId, databaseUserId: adminUserId, email: "admin@pkic.org", role: "admin" },
+      actor: { identityType: "user", id: adminUserId, email: "admin@pkic.org", role: "admin" },
       finalStatus: "needs-work",
       decisionNote: "Please revise the proposal.",
       minReviewsRequired: 0,
@@ -466,7 +466,7 @@ describe("proposal speaker capacity reconciliation", () => {
 
     await finalizeProposalDecision(env.DB, {
       proposalId,
-      actor: { id: adminUserId, databaseUserId: adminUserId, email: "admin@pkic.org", role: "admin" },
+      actor: { identityType: "user", id: adminUserId, email: "admin@pkic.org", role: "admin" },
       finalStatus: "rejected",
       minReviewsRequired: 0,
     });

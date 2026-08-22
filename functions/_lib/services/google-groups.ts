@@ -18,6 +18,7 @@ export type {
 export { GOOGLE_GROUPS_SYNC_ACTIONS, GOOGLE_GROUPS_SYNC_STATUSES } from "./google-groups/contracts";
 export { isGoogleGroupsSyncConfigured } from "./google-groups/directory-client";
 export { processGoogleGroupsSyncQueue } from "./google-groups/process-sync-queue";
+export { drainGoogleGroupsEnrollmentNotificationIntents } from "./google-groups/enrollment-notifications";
 export {
   buildEnqueueGoogleGroupsSyncStatement,
   claimPendingGoogleGroupsSyncRows,

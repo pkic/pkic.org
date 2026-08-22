@@ -494,14 +494,23 @@ describe("admin user anonymization", () => {
     await env.DB.prepare("UPDATE users SET biography = ? WHERE id = ?").bind("Private biography", userId).run();
 
     const gate = gateNextBatch(env.DB);
-    const staleUpdate = updateAdminUser(gate.db, { id: adminId, email: "admin@pkic.org", role: "admin" }, userId, {
-      email: "restored@example.test",
-      biography: "Stale restored biography",
-      active: false,
-    });
+    const staleUpdate = updateAdminUser(
+      gate.db,
+      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" },
+      userId,
+      {
+        email: "restored@example.test",
+        biography: "Stale restored biography",
+        active: false,
+      },
+    );
     await gate.reached;
 
-    await anonymizeAdminUser(env.DB, { id: adminId, email: "admin@pkic.org", role: "admin" }, userId);
+    await anonymizeAdminUser(
+      env.DB,
+      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" },
+      userId,
+    );
     gate.release();
 
     await expect(staleUpdate).rejects.toMatchObject({ code: "ALREADY_ANONYMIZED" });
@@ -528,15 +537,20 @@ describe("admin user anonymization", () => {
     const gate = gateNextBatch(env.DB);
     const staleAnonymization = anonymizeAdminUser(
       gate.db,
-      { id: adminId, email: "admin@pkic.org", role: "admin" },
+      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" },
       userId,
     );
     await gate.reached;
 
-    await updateAdminUser(env.DB, { id: adminId, email: "admin@pkic.org", role: "admin" }, userId, {
-      email: "race-winner@example.test",
-      biography: "Winner biography",
-    });
+    await updateAdminUser(
+      env.DB,
+      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" },
+      userId,
+      {
+        email: "race-winner@example.test",
+        biography: "Winner biography",
+      },
+    );
     gate.release();
 
     await expect(staleAnonymization).rejects.toMatchObject({ code: "ANONYMIZATION_CONFLICT" });

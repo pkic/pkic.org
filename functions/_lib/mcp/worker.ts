@@ -5,6 +5,7 @@ import { createMcpHandler } from "agents/mcp";
 import { WorkerEntrypoint } from "cloudflare:workers";
 import type { Hono } from "hono";
 import { signAdminSessionToken } from "../auth/admin";
+import { createUserBackedAuthAdmin } from "../auth/admin-identity";
 import { AUTH_SCOPES } from "../auth/scopes";
 import { filterOpenApiSpecForMcp } from "../openapi/mcp";
 import type { Env } from "../types";
@@ -12,6 +13,7 @@ import {
   MCP_OAUTH_AUTHORIZE_PATH,
   MCP_OAUTH_REGISTER_PATH,
   MCP_OAUTH_TOKEN_PATH,
+  parseMcpOauthProps,
   resolveMcpExternalToken,
   type McpOAuthEnv,
   type McpOAuthProps,
@@ -95,25 +97,24 @@ async function authorizationHeaderForMcp(
     return request.headers.get("authorization");
   }
 
-  if (oauthProps.authTransport === "api-key") {
+  if (oauthProps.identityType === "service") {
     return request.headers.get("authorization");
   }
 
-  if (!env.INTERNAL_SIGNING_SECRET || !oauthProps.sessionId || !oauthProps.sessionExpiresAt) {
+  if (!env.INTERNAL_SIGNING_SECRET) {
     return null;
   }
 
   const token = await signAdminSessionToken(env.INTERNAL_SIGNING_SECRET, {
-    admin: {
-      id: oauthProps.adminId,
-      databaseUserId: oauthProps.adminId,
+    admin: createUserBackedAuthAdmin({
+      id: oauthProps.id,
       email: oauthProps.email,
       role: oauthProps.role,
       scopes: oauthProps.scopes,
       sessionId: oauthProps.sessionId,
       expiresAt: oauthProps.sessionExpiresAt,
       state: oauthProps.state ?? null,
-    },
+    }),
     sessionId: oauthProps.sessionId,
     expiresAt: oauthProps.sessionExpiresAt,
     state: oauthProps.state ?? null,
@@ -147,7 +148,7 @@ export function createMcpWorkerFetch(
 
   class McpApiHandler extends WorkerEntrypoint<McpOAuthEnv> {
     fetch(request: Request): Promise<Response> {
-      return mcpResponse(request, this.env, this.ctx, this.ctx.props as McpOAuthProps | undefined);
+      return mcpResponse(request, this.env, this.ctx, parseMcpOauthProps(this.ctx.props));
     }
   }
 

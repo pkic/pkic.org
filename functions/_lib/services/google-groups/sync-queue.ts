@@ -235,6 +235,7 @@ export async function failGoogleGroupsSyncClaimForMissingUser(
 export async function completeGoogleGroupsDirectoryEffect(
   db: DatabaseLike,
   claim: ClaimedGoogleGroupsSyncRow,
+  notificationStatements: StatementLike[] = [],
 ): Promise<{ finalizedClaim: boolean; fulfilledCurrentDesiredState: boolean }> {
   const at = nowIso();
   const results = await db.batch([
@@ -290,6 +291,7 @@ export async function completeGoogleGroupsDirectoryEffect(
           WHERE user_id = ? AND google_group_email = ?`,
       )
       .bind(claim.user_id, claim.google_group_email),
+    ...notificationStatements,
   ]);
   const finalizedClaim = (results[0]?.meta?.changes ?? 0) === 1;
   const reconciledCurrentDesiredState =

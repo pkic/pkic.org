@@ -9,6 +9,7 @@ import type { AuthAdmin } from "../functions/_lib/types";
 import { proposalPermissionForRequest } from "../functions/_lib/auth/proposal-route-policy";
 
 const actor = (permissions: string[]): AuthAdmin => ({
+  identityType: "user",
   id: "staff-1",
   email: "staff@example.test",
   role: "user",

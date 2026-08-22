@@ -749,8 +749,10 @@ describe("Membership scheduled jobs", () => {
     const budgeted = createD1QueryBudgetedDatabase(env.DB, 29);
 
     expect(await runGoogleGroupsSyncPass(budgeted.db, env as any, 1, budgeted.budget)).toEqual({
+      processed: 0,
       succeeded: 0,
       failed: 0,
+      skippedUnconfigured: false,
       deferredForBudget: true,
     });
     expect(budgeted.budget.usedQueries()).toBe(0);

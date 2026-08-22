@@ -284,6 +284,7 @@ describe("permission_grants (Access grants)", () => {
     // exercises the same hasPermission() function real endpoints call,
     // directly — see functions/_lib/auth/permissions.ts.
     const actor: AuthAdmin = {
+      identityType: "user",
       id: "wg-chair-user",
       email: "chair@example.test",
       role: "user",
@@ -296,6 +297,7 @@ describe("permission_grants (Access grants)", () => {
 
   it("caps even a global admin by delegated OAuth scopes when the token is scope-restricted", () => {
     const delegatedAdmin: AuthAdmin = {
+      identityType: "user",
       id: "oauth-admin",
       email: "oauth-admin@example.test",
       role: "admin",

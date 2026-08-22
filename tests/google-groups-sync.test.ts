@@ -17,6 +17,7 @@ import {
   processGoogleGroupsSyncQueue,
   MAX_SYNC_ATTEMPTS,
 } from "../functions/_lib/services/google-groups";
+import { drainGoogleGroupsEnrollmentNotificationIntents } from "../functions/_lib/services/google-groups";
 import { queryAll } from "./helpers/context";
 
 async function insertUser(email: string): Promise<string> {
@@ -317,6 +318,234 @@ describe("Google Groups sync", () => {
       processed: 2,
       succeeded: 2,
       failed: 0,
+    });
+  });
+
+  it("commits one durable enrollment intent with queue completion and drains it once", async () => {
+    const userId = await insertUser("gg-durable-notification@example.test");
+    const queueId = await enqueueGoogleGroupsSync(env.DB, {
+      userId,
+      googleGroupEmail: "pqc@lists.pkic.org",
+      action: "add_to_list",
+    });
+    stubGoogleFetch(200);
+    const serviceAccountEnv = await fakeServiceAccountEnv();
+
+    expect(await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv, 10)).toMatchObject({
+      processed: 1,
+      succeeded: 1,
+      failed: 0,
+    });
+
+    const firstRows = await queryAll<{ queue_id: string; google_group_email: string; queued_outbox_id: string | null }>(
+      env.DB,
+      "SELECT queue_id, google_group_email, queued_outbox_id FROM google_groups_enrollment_notification_intents",
+    );
+    expect(firstRows).toHaveLength(1);
+    expect(firstRows[0]).toMatchObject({
+      queue_id: queueId,
+      google_group_email: "pqc@lists.pkic.org",
+      queued_outbox_id: null,
+    });
+    expect(await drainGoogleGroupsEnrollmentNotificationIntents(env.DB, 10)).toBe(1);
+    expect(await drainGoogleGroupsEnrollmentNotificationIntents(env.DB, 10)).toBe(0);
+    const outbox = await queryAll<{ idempotency_key: string; payload_json: string }>(
+      env.DB,
+      "SELECT idempotency_key, payload_json FROM email_outbox WHERE template_key = 'mailing-list-enrolled'",
+    );
+    expect(outbox).toHaveLength(1);
+    expect(outbox[0].idempotency_key).toMatch(new RegExp(`^google-groups:enrollment:[^:]+:${userId}$`));
+    expect(JSON.parse(outbox[0].payload_json)).toMatchObject({ lists: ["pqc@lists.pkic.org"] });
+
+    expect(await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv, 10)).toMatchObject({ processed: 0 });
+    expect(await queryAll(env.DB, "SELECT queue_id FROM google_groups_enrollment_notification_intents")).toHaveLength(
+      1,
+    );
+  });
+
+  it("groups successful list additions for one user into one enrollment email", async () => {
+    const userId = await insertUser("gg-grouped-notification@example.test");
+    await enqueueGoogleGroupsSync(env.DB, {
+      userId,
+      googleGroupEmail: "pqc@lists.pkic.org",
+      action: "add_to_list",
+    });
+    await enqueueGoogleGroupsSync(env.DB, {
+      userId,
+      googleGroupEmail: "ca@lists.pkic.org",
+      action: "add_to_list",
+    });
+    stubGoogleFetch(200);
+    expect(await processGoogleGroupsSyncQueue(env.DB, await fakeServiceAccountEnv(), 10)).toMatchObject({
+      succeeded: 2,
+    });
+    expect(await drainGoogleGroupsEnrollmentNotificationIntents(env.DB, 10)).toBe(2);
+    const outbox = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key = 'mailing-list-enrolled'",
+    );
+    expect(outbox).toHaveLength(1);
+    expect(JSON.parse(outbox[0].payload_json)).toMatchObject({
+      lists: ["pqc@lists.pkic.org", "ca@lists.pkic.org"],
+    });
+  });
+
+  it("does not split one user's grouped enrollment email at the user limit boundary", async () => {
+    const firstUserId = await insertUser("gg-group-boundary-a@example.test");
+    const secondUserId = await insertUser("gg-group-boundary-b@example.test");
+    for (const googleGroupEmail of ["boundary-a-1@lists.pkic.org", "boundary-a-2@lists.pkic.org"]) {
+      await enqueueGoogleGroupsSync(env.DB, { userId: firstUserId, googleGroupEmail, action: "add_to_list" });
+    }
+    await enqueueGoogleGroupsSync(env.DB, {
+      userId: secondUserId,
+      googleGroupEmail: "boundary-b-1@lists.pkic.org",
+      action: "add_to_list",
+    });
+    stubGoogleFetch(200);
+    expect(await processGoogleGroupsSyncQueue(env.DB, await fakeServiceAccountEnv(), 10)).toMatchObject({
+      succeeded: 3,
+    });
+
+    expect(await drainGoogleGroupsEnrollmentNotificationIntents(env.DB, 1)).toBe(2);
+    const outbox = await queryAll<{ recipient_email: string; payload_json: string }>(
+      env.DB,
+      "SELECT recipient_email, payload_json FROM email_outbox WHERE template_key = 'mailing-list-enrolled'",
+    );
+    expect(outbox).toHaveLength(1);
+    expect(outbox[0].recipient_email).toBe("gg-group-boundary-a@example.test");
+    expect(JSON.parse(outbox[0].payload_json).lists.sort()).toEqual(
+      ["boundary-a-1@lists.pkic.org", "boundary-a-2@lists.pkic.org"].sort(),
+    );
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT queue_id FROM google_groups_enrollment_notification_intents WHERE queued_outbox_id IS NULL",
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("keeps a newly completed sync pass out of an earlier grouped enrollment email", async () => {
+    const userId = await insertUser("gg-interleaved-notification@example.test");
+    for (const googleGroupEmail of ["interleaved-a-1@lists.pkic.org", "interleaved-a-2@lists.pkic.org"]) {
+      await enqueueGoogleGroupsSync(env.DB, { userId, googleGroupEmail, action: "add_to_list" });
+    }
+    stubGoogleFetch(200);
+    const serviceAccountEnv = await fakeServiceAccountEnv();
+    await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv, 10);
+
+    // A later invocation gets a different stable pass identity. This models a
+    // new successful add arriving between two concurrent drain selections.
+    await enqueueGoogleGroupsSync(env.DB, {
+      userId,
+      googleGroupEmail: "interleaved-b@lists.pkic.org",
+      action: "add_to_list",
+    });
+    stubGoogleFetch(200);
+    await processGoogleGroupsSyncQueue(env.DB, serviceAccountEnv, 10);
+
+    expect(await drainGoogleGroupsEnrollmentNotificationIntents(env.DB, 1)).toBe(2);
+    const firstOutbox = await queryAll<{ idempotency_key: string; payload_json: string }>(
+      env.DB,
+      "SELECT idempotency_key, payload_json FROM email_outbox WHERE template_key = 'mailing-list-enrolled' ORDER BY created_at",
+    );
+    expect(firstOutbox).toHaveLength(1);
+    expect(JSON.parse(firstOutbox[0].payload_json).lists).toEqual([
+      "interleaved-a-1@lists.pkic.org",
+      "interleaved-a-2@lists.pkic.org",
+    ]);
+
+    expect(await drainGoogleGroupsEnrollmentNotificationIntents(env.DB, 1)).toBe(1);
+    const allOutbox = await queryAll<{ idempotency_key: string; payload_json: string }>(
+      env.DB,
+      "SELECT idempotency_key, payload_json FROM email_outbox WHERE template_key = 'mailing-list-enrolled' ORDER BY created_at",
+    );
+    expect(allOutbox).toHaveLength(2);
+    expect(new Set(allOutbox.map((row) => row.idempotency_key)).size).toBe(2);
+    expect(JSON.parse(allOutbox[1].payload_json).lists).toEqual(["interleaved-b@lists.pkic.org"]);
+  });
+
+  it("rolls queue completion and notification intent back together when the outbox insert fails", async () => {
+    const userId = await insertUser("gg-atomic-notification@example.test");
+    const queueId = await enqueueGoogleGroupsSync(env.DB, {
+      userId,
+      googleGroupEmail: "pqc@lists.pkic.org",
+      action: "add_to_list",
+    });
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_google_groups_notification_intent
+         BEFORE INSERT ON google_groups_enrollment_notification_intents
+       BEGIN
+         SELECT RAISE(ABORT, 'forced Google Groups notification intent failure');
+       END`,
+    ).run();
+    stubGoogleFetch(200);
+
+    const failed = await processGoogleGroupsSyncQueue(env.DB, await fakeServiceAccountEnv(), 10);
+    expect(failed).toMatchObject({ processed: 1, succeeded: 0, failed: 1 });
+    expect(await queryAll(env.DB, "SELECT status FROM google_groups_sync_queue WHERE id = ?", queueId)).toEqual([
+      { status: "pending" },
+    ]);
+    expect(await queryAll(env.DB, "SELECT queue_id FROM google_groups_enrollment_notification_intents")).toEqual([]);
+
+    await env.DB.prepare("DROP TRIGGER fail_google_groups_notification_intent").run();
+    await env.DB.prepare("UPDATE google_groups_sync_queue SET next_attempt_at = datetime('now') WHERE id = ?")
+      .bind(queueId)
+      .run();
+    stubGoogleFetch(409);
+    expect(await processGoogleGroupsSyncQueue(env.DB, await fakeServiceAccountEnv(), 10)).toMatchObject({
+      processed: 1,
+      succeeded: 1,
+      failed: 0,
+    });
+    expect(await queryAll(env.DB, "SELECT status FROM google_groups_sync_queue WHERE id = ?", queueId)).toEqual([
+      { status: "completed" },
+    ]);
+    expect(await queryAll(env.DB, "SELECT queue_id FROM google_groups_enrollment_notification_intents")).toHaveLength(
+      1,
+    );
+  });
+
+  it("commits a deterministic WG calendar intent alongside the enrollment intent", async () => {
+    const userId = await insertUser("gg-calendar-notification@example.test");
+    const workingGroupId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO working_groups
+         (id, name, slug, description, mailing_list_email, active, created_at, updated_at)
+       VALUES (?, 'Post-Quantum Cryptography Working Group', 'pqc', NULL, 'pqc@lists.pkic.org', 1, datetime('now'), datetime('now'))`,
+    )
+      .bind(workingGroupId)
+      .run();
+    const seriesId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO meeting_series (id, name, scope_type, working_group_id, active, created_at, updated_at)
+       VALUES (?, 'PQC WG Meeting', 'working_group', ?, 1, datetime('now'), datetime('now'))`,
+    )
+      .bind(seriesId, workingGroupId)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO meeting_ics_files (id, series_id, label, year, r2_key, active, created_at)
+       VALUES (?, ?, '09:00 CET', 2026, 'calendar/pqc-2026.ics', 1, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), seriesId)
+      .run();
+    const queueId = await enqueueGoogleGroupsSync(env.DB, {
+      userId,
+      googleGroupEmail: "pqc@lists.pkic.org",
+      action: "add_to_list",
+    });
+
+    stubGoogleFetch(200);
+    expect(await processGoogleGroupsSyncQueue(env.DB, await fakeServiceAccountEnv(), 10)).toMatchObject({
+      succeeded: 1,
+    });
+    const calendar = await queryAll<{ idempotency_key: string; payload_json: string }>(
+      env.DB,
+      "SELECT idempotency_key, payload_json FROM email_outbox WHERE idempotency_key = ?",
+      `google-groups:calendar:${queueId}`,
+    );
+    expect(calendar).toHaveLength(1);
+    expect(JSON.parse(calendar[0].payload_json)).toMatchObject({
+      workingGroupName: "Post-Quantum Cryptography Working Group",
     });
   });
 

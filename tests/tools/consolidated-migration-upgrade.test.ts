@@ -166,6 +166,28 @@ describe("consolidated pending migration upgrade", () => {
       { id: "org-1", normalized_name: "acme corp", sponsor_tier: "Gold" },
       { id: "org-2", normalized_name: "pending corp", sponsor_tier: null },
     ]);
+    expect(
+      db
+        .prepare(
+          `SELECT name FROM sqlite_master
+           WHERE type = 'table' AND name = 'organization_content_review_notification_intents'`,
+        )
+        .all(),
+    ).toEqual([{ name: "organization_content_review_notification_intents" }]);
+    expect(
+      db
+        .prepare(
+          `SELECT name FROM sqlite_master
+           WHERE type = 'index' AND name IN (
+             'idx_org_content_review_notification_intents_pending',
+             'uq_org_content_review_notification_intents_outbox'
+           ) ORDER BY name`,
+        )
+        .all(),
+    ).toEqual([
+      { name: "idx_org_content_review_notification_intents_pending" },
+      { name: "uq_org_content_review_notification_intents_outbox" },
+    ]);
 
     const roles = db
       .prepare("SELECT user_id, role_id, context_type, context_id FROM user_roles ORDER BY role_id")

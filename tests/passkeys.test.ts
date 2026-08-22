@@ -15,6 +15,7 @@ import { queryAll } from "./helpers/context";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { MAX_PASSKEY_CREDENTIALS_PER_USER } from "../assets/shared/constants/passkeys";
 import { persistVerifiedPasskeyCredential } from "../functions/_lib/services/passkeys";
+import { passkeyAuthenticateCompleteResponseSchema } from "../assets/shared/schemas/passkeys";
 import {
   buildAuthenticationResponse,
   buildRegistrationResponse,
@@ -269,9 +270,12 @@ describe("passkeys (WebAuthn)", () => {
       body: JSON.stringify({ challengeToken: begin.challengeToken, response: assertion }),
     });
     expect(completeResponse.status).toBe(200);
-    const body = (await completeResponse.json()) as { success: boolean; admin: { id: string } };
+    const body = passkeyAuthenticateCompleteResponseSchema.parse(await completeResponse.json());
     expect(body.success).toBe(true);
     expect(body.admin.id).toBe(userId);
+    expect(body.admin).not.toHaveProperty("identityType");
+    expect(body.admin).not.toHaveProperty("sessionId");
+    expect(body.admin).not.toHaveProperty("state");
     const adminCookie = completeResponse.headers.get("set-cookie") ?? "";
     expect(adminCookie).toContain("pkic_admin_session=");
     expect(adminCookie).toContain("Path=/api/v1");

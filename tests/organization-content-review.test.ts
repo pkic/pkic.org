@@ -18,6 +18,13 @@ import { resetDb } from "./helpers/reset-db";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { processPendingStorageDeletions } from "../functions/_lib/services/storage-deletion-outbox";
+import { runScheduledDueWork } from "../functions/_lib/services/scheduled-due-work";
+import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
+import {
+  drainOrganizationContentReviewNotificationIntents,
+  listPendingOrganizationContentReviewNotificationIntents,
+  submitOrgContentChange,
+} from "../functions/_lib/services/organization-content";
 import {
   insertUser,
   insertOrganization,
@@ -142,6 +149,28 @@ describe("Organization content moderation", () => {
     );
     expect(reviewRows).toHaveLength(1);
     expect(reviewRows[0].status).toBe("pending");
+
+    expect(
+      await queryAll<{
+        recipient_email: string;
+        organization_name: string;
+        submitter_name: string;
+        queued_outbox_id: string | null;
+      }>(
+        env.DB,
+        `SELECT recipient_email, organization_name, submitter_name, queued_outbox_id
+         FROM organization_content_review_notification_intents
+         WHERE review_id = (SELECT id FROM organization_content_reviews WHERE organization_id = ?)`,
+        organizationId,
+      ),
+    ).toEqual([
+      {
+        recipient_email: "admin@pkic.org",
+        organization_name: `Org for primary@example.test`,
+        submitter_name: "primary@example.test",
+        queued_outbox_id: expect.any(String),
+      },
+    ]);
   });
 
   it("rejects a non-contact representative's submission with 403", async () => {
@@ -156,6 +185,133 @@ describe("Organization content moderation", () => {
     expect(response.status).toBe(403);
     const body = (await response.json()) as { error: { code: string } };
     expect(body.error.code).toBe("NOT_ORG_CONTACT");
+  });
+
+  it("creates a reviewer intent for a logo-only submission", async () => {
+    const { organizationId, userId } = await seedOrgWithContact("logo-only@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "logo-only-token");
+    const bucket = new FakeAssetsBucket();
+
+    const response = await app.fetch(logoUploadRequest(token), { ...(env as any), ASSETS_BUCKET: bucket }, {
+      passThroughOnException: () => {},
+      waitUntil: () => {},
+    } as any);
+    expect(response.status).toBe(200);
+
+    expect(
+      await queryAll<{ proposed_changes_json: string; logo_staging_r2_key: string | null; status: string }>(
+        env.DB,
+        `SELECT proposed_changes_json, logo_staging_r2_key, status
+         FROM organization_content_reviews WHERE organization_id = ?`,
+        organizationId,
+      ),
+    ).toEqual([
+      {
+        proposed_changes_json: "{}",
+        logo_staging_r2_key: expect.stringMatching(new RegExp(`^org-logos/${organizationId}/staging-`)),
+        status: "pending",
+      },
+    ]);
+    expect(
+      await queryAll<{ recipient_email: string }>(
+        env.DB,
+        `SELECT recipient_email
+         FROM organization_content_review_notification_intents
+         WHERE review_id = (SELECT id FROM organization_content_reviews WHERE organization_id = ?)`,
+        organizationId,
+      ),
+    ).toEqual([{ recipient_email: "admin@pkic.org" }]);
+  });
+
+  it("snapshots only active permitted recipients and immutable review context", async () => {
+    const { organizationId, userId } = await seedOrgWithContact("snapshot-submit@example.test", "F");
+    const permittedUserId = await insertUser(env.DB, "content-reviewer@example.test");
+    const inactiveUserId = await insertUser(env.DB, "inactive-reviewer@example.test");
+    const unrelatedUserId = await insertUser(env.DB, "unrelated-reviewer@example.test");
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+           VALUES (?, ?, 'organizations:content-review', ?, datetime('now'))`,
+      ).bind(crypto.randomUUID(), permittedUserId, adminId),
+      env.DB.prepare(
+        `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+           VALUES (?, ?, 'organizations:content-review', ?, datetime('now'))`,
+      ).bind(crypto.randomUUID(), inactiveUserId, adminId),
+      env.DB.prepare("UPDATE users SET active = 0 WHERE id = ?").bind(inactiveUserId),
+    ]);
+    const token = await createMemberSession(env.DB, userId, "snapshot-submit-token");
+    const response = await call(token, "/api/v1/me/organization", {
+      method: "PATCH",
+      body: JSON.stringify({ slogan: "Snapshot this" }),
+    });
+    expect(response.status).toBe(200);
+
+    const [review] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM organization_content_reviews WHERE organization_id = ?",
+      organizationId,
+    );
+    await env.DB.batch([
+      env.DB.prepare("UPDATE organizations SET name = 'Renamed after submission' WHERE id = ?").bind(organizationId),
+      env.DB.prepare("UPDATE users SET email = 'changed-after-submission@example.test' WHERE id = ?").bind(userId),
+    ]);
+
+    expect(
+      await queryAll<{
+        recipient_email: string;
+        organization_name: string;
+        submitter_name: string;
+        review_url: string;
+      }>(
+        env.DB,
+        `SELECT recipient_email, organization_name, submitter_name, review_url
+         FROM organization_content_review_notification_intents
+         WHERE review_id = ? ORDER BY recipient_email`,
+        review.id,
+      ),
+    ).toEqual([
+      {
+        recipient_email: "admin@pkic.org",
+        organization_name: "Org for snapshot-submit@example.test",
+        submitter_name: "snapshot-submit@example.test",
+        review_url: "https://app.test/admin/#/organizations/content-reviews",
+      },
+      {
+        recipient_email: "content-reviewer@example.test",
+        organization_name: "Org for snapshot-submit@example.test",
+        submitter_name: "snapshot-submit@example.test",
+        review_url: "https://app.test/admin/#/organizations/content-reviews",
+      },
+    ]);
+    expect(unrelatedUserId).not.toBe(permittedUserId);
+  });
+
+  it("does not duplicate reviewer intents when a logo is attached to a pending content review", async () => {
+    const { organizationId, userId } = await seedOrgWithContact("content-then-logo@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "content-then-logo-token");
+    expect(
+      (
+        await call(token, "/api/v1/me/organization", {
+          method: "PATCH",
+          body: JSON.stringify({ slogan: "Content first" }),
+        })
+      ).status,
+    ).toBe(200);
+    const bucket = new FakeAssetsBucket();
+    const logoResponse = await app.fetch(logoUploadRequest(token), { ...(env as any), ASSETS_BUCKET: bucket }, {
+      passThroughOnException: () => {},
+      waitUntil: () => {},
+    } as any);
+    expect(logoResponse.status).toBe(200);
+    expect(
+      await queryAll<{ count: number }>(
+        env.DB,
+        `SELECT COUNT(*) AS count
+         FROM organization_content_review_notification_intents
+         WHERE review_id = (SELECT id FROM organization_content_reviews WHERE organization_id = ?)`,
+        organizationId,
+      ),
+    ).toEqual([{ count: 1 }]);
   });
 
   it("removes a staged logo when the D1 commit fails after the R2 upload", async () => {
@@ -257,6 +413,37 @@ describe("Organization content moderation", () => {
     ).toEqual([{ status: "deleted" }]);
   });
 
+  it("rolls back the review when reviewer-intent creation fails", async () => {
+    const { organizationId, userId } = await seedOrgWithContact("intent-rollback@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "intent-rollback-token");
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_content_review_notification_intent
+       BEFORE INSERT ON organization_content_review_notification_intents
+       BEGIN
+         SELECT RAISE(ABORT, 'forced content review notification failure');
+       END`,
+    ).run();
+
+    try {
+      const response = await call(token, "/api/v1/me/organization", {
+        method: "PATCH",
+        body: JSON.stringify({ description: "Must roll back" }),
+      });
+      expect(response.status).toBe(500);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM organization_content_reviews WHERE organization_id = ?", organizationId),
+      ).toHaveLength(0);
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT review_id FROM organization_content_review_notification_intents WHERE review_id IN (SELECT id FROM organization_content_reviews)",
+        ),
+      ).toEqual([]);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_content_review_notification_intent").run();
+    }
+  });
+
   it("rejects a second submission while one is already pending with 409", async () => {
     const { userId } = await seedOrgWithContact("primary3@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "double-submit-token");
@@ -294,6 +481,197 @@ describe("Organization content moderation", () => {
         organizationId,
       ),
     ).toHaveLength(1);
+  });
+
+  it("drains reviewer intents exactly once with deterministic outbox identity", async () => {
+    const { organizationId, memberId, userId } = await seedOrgWithContact("intent-drain@example.test", "F");
+    await submitOrgContentChange(
+      env.DB,
+      {
+        userId,
+        email: "intent-drain@example.test",
+        memberId,
+        organizationId,
+        membershipCategory: "F",
+        isEcMember: false,
+        activeMemberships: [],
+      },
+      { slogan: "Queue me" },
+      "https://app.test/admin/#/organizations/content-reviews",
+    );
+    const [review] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM organization_content_reviews WHERE organization_id = ?",
+      organizationId,
+    );
+
+    const [existingIntent] = await queryAll<{ queued_outbox_id: string | null }>(
+      env.DB,
+      "SELECT queued_outbox_id FROM organization_content_review_notification_intents WHERE review_id = ?",
+      review.id,
+    );
+    if (existingIntent?.queued_outbox_id) {
+      await env.DB.batch([
+        env.DB.prepare("DELETE FROM email_outbox WHERE id = ?").bind(existingIntent.queued_outbox_id),
+        env.DB.prepare(
+          "UPDATE organization_content_review_notification_intents SET queued_outbox_id = NULL, queued_at = NULL WHERE review_id = ?",
+        ).bind(review.id),
+      ]);
+    }
+
+    const pending = await listPendingOrganizationContentReviewNotificationIntents(env.DB, 10);
+    expect(pending).toHaveLength(1);
+    const first = await drainOrganizationContentReviewNotificationIntents(env.DB, 10);
+    expect(first.queued).toBe(1);
+    expect(first.outboxIds).toHaveLength(1);
+    expect(await drainOrganizationContentReviewNotificationIntents(env.DB, 10)).toEqual({ queued: 0, outboxIds: [] });
+    expect(
+      await queryAll<{ id: string; idempotency_key: string; recipient_email: string }>(
+        env.DB,
+        `SELECT id, idempotency_key, recipient_email FROM email_outbox
+         WHERE template_key = 'org-content-submitted'`,
+      ),
+    ).toEqual([
+      {
+        id: first.outboxIds[0],
+        idempotency_key: `organization-content-review-submitted:${review.id}:admin@pkic.org`,
+        recipient_email: "admin@pkic.org",
+      },
+    ]);
+    expect(
+      await queryAll<{ queued_outbox_id: string | null }>(
+        env.DB,
+        "SELECT queued_outbox_id FROM organization_content_review_notification_intents WHERE review_id = ?",
+        review.id,
+      ),
+    ).toEqual([{ queued_outbox_id: first.outboxIds[0] }]);
+  });
+
+  it("leaves reviewer intents pending when the outbox batch fails, then retries", async () => {
+    const { memberId, organizationId, userId } = await seedOrgWithContact("intent-retry@example.test", "F");
+    await submitOrgContentChange(
+      env.DB,
+      {
+        userId,
+        email: "intent-retry@example.test",
+        memberId,
+        organizationId,
+        membershipCategory: "F",
+        isEcMember: false,
+        activeMemberships: [],
+      },
+      { slogan: "Retry me" },
+      "https://app.test/admin/#/organizations/content-reviews",
+    );
+    expect(await listPendingOrganizationContentReviewNotificationIntents(env.DB, 10)).toHaveLength(1);
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_content_review_notification_outbox
+       BEFORE INSERT ON email_outbox
+       WHEN NEW.template_key = 'org-content-submitted'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced content review outbox failure');
+       END`,
+    ).run();
+
+    try {
+      await expect(drainOrganizationContentReviewNotificationIntents(env.DB, 10)).rejects.toThrow(
+        "forced content review outbox failure",
+      );
+      expect(await listPendingOrganizationContentReviewNotificationIntents(env.DB, 10)).toHaveLength(1);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'org-content-submitted'"),
+      ).toEqual([]);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_content_review_notification_outbox").run();
+    }
+
+    await expect(drainOrganizationContentReviewNotificationIntents(env.DB, 10)).resolves.toMatchObject({ queued: 1 });
+  });
+
+  it("rolls back intent marking and converges concurrent drains", async () => {
+    const { memberId, organizationId, userId } = await seedOrgWithContact("intent-mark-race@example.test", "F");
+    await submitOrgContentChange(
+      env.DB,
+      {
+        userId,
+        email: "intent-mark-race@example.test",
+        memberId,
+        organizationId,
+        membershipCategory: "F",
+        isEcMember: false,
+        activeMemberships: [],
+      },
+      { slogan: "Mark race" },
+      "https://app.test/admin/#/organizations/content-reviews",
+    );
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_content_review_notification_mark
+       BEFORE UPDATE ON organization_content_review_notification_intents
+       WHEN NEW.queued_outbox_id IS NOT NULL
+       BEGIN
+         SELECT RAISE(ABORT, 'forced content review notification mark failure');
+       END`,
+    ).run();
+
+    try {
+      await expect(drainOrganizationContentReviewNotificationIntents(env.DB, 10)).rejects.toThrow(
+        "forced content review notification mark failure",
+      );
+      expect(await listPendingOrganizationContentReviewNotificationIntents(env.DB, 10)).toHaveLength(1);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'org-content-submitted'"),
+      ).toEqual([]);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_content_review_notification_mark").run();
+    }
+
+    const results = await Promise.all([
+      drainOrganizationContentReviewNotificationIntents(env.DB, 10),
+      drainOrganizationContentReviewNotificationIntents(env.DB, 10),
+    ]);
+    expect(results.reduce((total, result) => total + result.queued, 0)).toBe(1);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'org-content-submitted'"),
+    ).toHaveLength(1);
+    expect(await listPendingOrganizationContentReviewNotificationIntents(env.DB, 10)).toEqual([]);
+  });
+
+  it("skips reviewer draining under a low shared D1 budget and still runs downstream selections", async () => {
+    const { memberId, organizationId, userId } = await seedOrgWithContact("low-budget@example.test", "F");
+    await submitOrgContentChange(
+      env.DB,
+      {
+        userId,
+        email: "low-budget@example.test",
+        memberId,
+        organizationId,
+        membershipCategory: "F",
+        isEcMember: false,
+        activeMemberships: [],
+      },
+      { slogan: "Wait for the next pass" },
+      "https://app.test/admin/#/organizations/content-reviews",
+    );
+    const budgeted = createD1QueryBudgetedDatabase(env.DB, 6);
+    const result = await runScheduledDueWork(
+      {
+        ...env,
+        APP_BASE_URL: "https://app.test",
+        SCHEDULED_REMINDER_LIMIT: "0",
+        SCHEDULED_OUTBOX_LIMIT: "1",
+        SCHEDULED_STORAGE_DELETION_LIMIT: "1",
+        SCHEDULED_BADGE_RENDER_LIMIT: "1",
+        SCHEDULED_WAITLIST_PROMOTION_LIMIT: "0",
+        SCHEDULED_DUE_WORK_MAX_PASSES: "1",
+        SCHEDULED_DUE_WORK_MAX_MS: "120000",
+      },
+      { d1QueryBudget: budgeted.budget },
+    );
+
+    expect(result.passes).toHaveLength(1);
+    expect(result.stoppedReason).toBe("caught_up");
+    expect(budgeted.budget.usedQueries()).toBeLessThanOrEqual(6);
+    expect(await listPendingOrganizationContentReviewNotificationIntents(env.DB, 10)).toHaveLength(1);
   });
 
   it("lets the submitter withdraw a pending review, freeing them to resubmit", async () => {

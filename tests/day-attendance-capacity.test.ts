@@ -439,7 +439,7 @@ describe("day attendance capacity", () => {
     )[0];
     await updateAdminRegistrationDayAttendance(
       env.DB,
-      { id: admin.id, email: admin.email, role: "admin" },
+      { identityType: "user", id: admin.id, email: admin.email, role: "admin" },
       {
         eventSlug: event.slug,
         registrationId: attendee.registration.id,
@@ -465,7 +465,7 @@ describe("day attendance capacity", () => {
 
     await updateAdminRegistrationDayAttendance(
       env.DB,
-      { id: admin.id, email: admin.email, role: "admin" },
+      { identityType: "user", id: admin.id, email: admin.email, role: "admin" },
       {
         eventSlug: event.slug,
         registrationId: attendee.registration.id,

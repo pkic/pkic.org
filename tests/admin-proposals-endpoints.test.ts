@@ -531,7 +531,7 @@ describe("admin proposal endpoints", () => {
     await expect(
       editAdminProposalSpeaker(
         racingDb,
-        { id: adminId, email: "admin@pkic.org", role: "admin" },
+        { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" },
         proposalId,
         speakerId,
         { biography: "This stale biography must not be stored.", role: "moderator" },

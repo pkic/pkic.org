@@ -4,7 +4,8 @@ import { findInviteByToken, acceptInvite } from "../../../../_lib/services/invit
 import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
 import { commitRegistrationSubmission } from "../../../../_lib/services/registration-submission";
 import { prepareValidatedAttendeeRegistration } from "../../../../_lib/services/attendee-registration";
-import { trySeedGravatarThenPrerender } from "../../../../_lib/services/og-badge-prerender";
+import { prepareBadgeRenderJob } from "../../../../_lib/services/badge-render-job-statements";
+import { seedGravatarAndProcessBadgeRenderJob } from "../../../../_lib/services/registration-badge-regeneration";
 import { proposalPageUrl } from "../../../../_lib/services/frontend-links";
 import { inviteAcceptAttendeeSchema } from "../../../../../assets/shared/schemas/registration";
 import { inviteAcceptRouteSchema, inviteCapabilityQuerySchema } from "../../../../../assets/shared/schemas/invites";
@@ -59,9 +60,14 @@ async function acceptInviteRequest(
     confirmationTtlHours: config.confirmationLinkTtlHours,
     referralCodeLength: config.referralCodeLength,
   });
-  await commitRegistrationSubmission(db, prepared);
+  const badgeRenderJob = prepareBadgeRenderJob(db, prepared.referralCode);
+  await commitRegistrationSubmission(db, prepared, [badgeRenderJob.statement]);
   c.executionCtx.waitUntil(
-    trySeedGravatarThenPrerender(prepared.user.id, prepared.user.email, prepared.referralCode, c.env, appBaseUrl),
+    seedGravatarAndProcessBadgeRenderJob(db, c.env, {
+      userId: prepared.user.id,
+      email: prepared.user.email,
+      jobId: badgeRenderJob.id,
+    }),
   );
 
   return json({

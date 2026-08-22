@@ -345,8 +345,8 @@ describe("Meeting calendar management", () => {
           // meeting_ics_files.uploaded_by_user_id's FK, forcing the D1
           // insert to fail after the R2 put has already succeeded.
           actor: {
-            id: "invalid-uploader",
-            databaseUserId: "00000000-0000-4000-8000-000000000000",
+            identityType: "user",
+            id: "00000000-0000-4000-8000-000000000000",
             email: "invalid-uploader@example.test",
             role: "admin",
           },
@@ -387,8 +387,8 @@ describe("Meeting calendar management", () => {
           buffer: new TextEncoder().encode("BEGIN:VCALENDAR\nEND:VCALENDAR").buffer,
           contentType: "text/calendar",
           actor: {
-            id: "invalid-uploader",
-            databaseUserId: "00000000-0000-4000-8000-000000000000",
+            identityType: "user",
+            id: "00000000-0000-4000-8000-000000000000",
             email: "invalid-uploader@example.test",
             role: "admin",
           },

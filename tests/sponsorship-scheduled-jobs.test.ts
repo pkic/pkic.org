@@ -69,7 +69,7 @@ describe("Sponsorship renewal reminders & auto-lapse", () => {
     )[0].id;
     staffActor = {
       id: staffUserId,
-      databaseUserId: staffUserId,
+      identityType: "user",
       email: "admin@pkic.org",
       role: "admin",
     };

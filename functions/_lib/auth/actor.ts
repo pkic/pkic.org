@@ -17,7 +17,6 @@
  */
 import { AppError } from "../errors";
 import { requireUserBackedAdminFromRequest } from "./admin";
-import { requireAdminDatabaseUserId } from "./admin-identity";
 import { requireMemberFromRequest } from "./member";
 import type { DatabaseLike, Env } from "../types";
 
@@ -30,7 +29,7 @@ export async function requireAnyActorFromRequest(
 ): Promise<AuthActor> {
   try {
     const admin = await requireUserBackedAdminFromRequest(db, request, env);
-    return { kind: "admin", id: requireAdminDatabaseUserId(admin), email: admin.email };
+    return { kind: "admin", id: admin.id, email: admin.email };
   } catch (adminError) {
     // Only a 401 means "not this kind of actor" — fall through to the
     // member check. Anything else (e.g. a 500 from missing

@@ -3,10 +3,11 @@ import { requestDb, type AdminContext } from "../db/context";
 import { jsonNoStore } from "../http";
 import { enforceEmailTriggerRateLimits, enforceRateLimit } from "../rate-limit";
 import { getClientIp, getUserAgent, hashOptional, requireInternalSecret } from "../request";
-import type { AuthAdmin, AuthMember, DatabaseLike } from "../types";
+import type { AuthMember, DatabaseLike, UserBackedAuthAdmin } from "../types";
 import { serializeAdminSessionCookie, signAdminSessionToken } from "./admin";
 import { publicAuthAdmin } from "./admin-identity";
 import { serializeMemberSessionCookie, signMemberSessionToken } from "./member";
+import { adminSessionEstablishedResponseSchema } from "../../../assets/shared/schemas/admin-auth";
 
 export interface MagicLinkRequestHttpContext {
   db: DatabaseLike;
@@ -93,7 +94,7 @@ export function createSessionEstablishedResponse(body: unknown, serializedCookie
 export async function createAdminSessionEstablishedResponse(options: {
   secret: string;
   request: Request;
-  admin: AuthAdmin;
+  admin: UserBackedAuthAdmin;
   sessionId: string;
   expiresAt: string;
   state?: string | null;
@@ -105,7 +106,11 @@ export async function createAdminSessionEstablishedResponse(options: {
     state: options.state,
   });
   return createSessionEstablishedResponse(
-    { success: true, expiresAt: options.expiresAt, admin: publicAuthAdmin(options.admin) },
+    adminSessionEstablishedResponseSchema.parse({
+      success: true,
+      expiresAt: options.expiresAt,
+      admin: publicAuthAdmin(options.admin),
+    }),
     serializeAdminSessionCookie(token, options.request),
   );
 }

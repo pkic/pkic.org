@@ -7,13 +7,14 @@ import {
   verifyAdminSessionToken,
 } from "../functions/_lib/auth/admin";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../functions/_lib/types";
+import { createUserBackedAuthAdmin } from "../functions/_lib/auth/admin-identity";
 
 const signingSecret = "test-admin-signing-secret";
 const adminTokenExpiresAt = "2999-01-01T00:00:00.000Z";
 
 async function createAdminToken(state?: string | null): Promise<string> {
   return signAdminSessionToken(signingSecret, {
-    admin: { id: "admin-user", email: "admin@example.test", role: "admin" },
+    admin: createUserBackedAuthAdmin({ id: "admin-user", email: "admin@example.test", role: "admin" }),
     sessionId: "admin-session",
     expiresAt: adminTokenExpiresAt,
     state,
@@ -171,7 +172,11 @@ describe("D1 read replication", () => {
     const request = new Request("https://app.test/admin", {
       headers: { authorization: "Bearer stale-token" },
     });
-    const admin: AuthAdmin = { id: "admin-user", email: "admin@example.test", role: "admin" };
+    const admin: AuthAdmin = createUserBackedAuthAdmin({
+      id: "admin-user",
+      email: "admin@example.test",
+      role: "admin",
+    });
     const throwingDb: DatabaseLike = {
       prepare() {
         throw new Error("unexpected DB lookup");

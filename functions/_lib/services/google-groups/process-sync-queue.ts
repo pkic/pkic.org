@@ -1,7 +1,9 @@
 import { logError, logInfo } from "../../logging";
 import type { DatabaseLike } from "../../types";
+import { uuid } from "../../utils/ids";
 import type { GoogleServiceAccountEnv, ProcessGoogleGroupsSyncResult } from "./contracts";
 import { createGoogleGroupsDirectoryClient, isGoogleGroupsSyncConfigured } from "./directory-client";
+import { prepareGoogleGroupsSyncNotificationStatements } from "./notification-intents";
 import {
   claimPendingGoogleGroupsSyncRows,
   completeGoogleGroupsDirectoryEffect,
@@ -32,6 +34,10 @@ export async function processGoogleGroupsSyncQueue(
   env: GoogleServiceAccountEnv,
   limit = 25,
 ): Promise<ProcessGoogleGroupsSyncResult> {
+  // Every invocation owns one stable batch identity. Enrollment intents from
+  // this pass can therefore be grouped into exactly one email per user while
+  // overlapping passes remain separate, preserving the prior per-pass UX.
+  const syncPassId = uuid();
   if (!isGoogleGroupsSyncConfigured(env)) {
     logInfo("google_groups_sync_skipped_unconfigured", {
       reason:
@@ -77,7 +83,13 @@ export async function processGoogleGroupsSyncQueue(
         googleGroupEmail: claim.google_group_email,
         memberEmail,
       });
-      const completion = await completeGoogleGroupsDirectoryEffect(db, claim);
+      const notificationStatements = await prepareGoogleGroupsSyncNotificationStatements(
+        db,
+        claim,
+        memberEmail,
+        syncPassId,
+      );
+      const completion = await completeGoogleGroupsDirectoryEffect(db, claim, notificationStatements);
       if (!completion.finalizedClaim && !completion.fulfilledCurrentDesiredState) continue;
 
       succeeded++;

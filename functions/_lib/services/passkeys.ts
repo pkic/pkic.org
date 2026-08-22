@@ -23,10 +23,11 @@ import { findEligibleMemberById } from "../auth/member";
 import { prepareSessionRow } from "../auth/session-engine";
 import { resolveMemberSessionTtlHours } from "../auth/session-policy";
 import { AUTH_SCOPES } from "../auth/scopes";
+import { createUserBackedAuthAdmin } from "../auth/admin-identity";
 import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "./audit";
 import { MAX_PASSKEY_CREDENTIALS_PER_USER } from "../../../assets/shared/constants/passkeys";
 import type { authenticationResponseSchema, registrationResponseSchema } from "../../../assets/shared/schemas/passkeys";
-import type { AuthAdmin, AuthMember, DatabaseLike, Env, StatementLike } from "../types";
+import type { AuthMember, DatabaseLike, Env, StatementLike, UserBackedAuthAdmin } from "../types";
 import {
   issuePasskeyChallengeToken,
   passkeyChallengeAlreadyUsedError,
@@ -304,7 +305,7 @@ export async function beginPasskeyAuthentication(
 }
 
 export type PasskeyAuthenticationResult =
-  | { kind: "admin"; admin: AuthAdmin; sessionId: string; expiresAt: string }
+  | { kind: "admin"; admin: UserBackedAuthAdmin; sessionId: string; expiresAt: string }
   | { kind: "member"; member: AuthMember; sessionId: string; expiresAt: string };
 
 export async function completePasskeyAuthentication(
@@ -433,13 +434,12 @@ export async function completePasskeyAuthentication(
       staffUser.id,
       PASSKEY_SESSION_TTL_HOURS,
     );
-    const admin: AuthAdmin = {
+    const admin = createUserBackedAuthAdmin({
       id: staffUser.id,
-      databaseUserId: staffUser.id,
       email: staffUser.email,
       role: staffUser.role,
       scopes: staffUser.role === "admin" ? [...AUTH_SCOPES] : [],
-    };
+    });
     await persistAuthentication({
       actorType: "admin",
       actorId: admin.id,

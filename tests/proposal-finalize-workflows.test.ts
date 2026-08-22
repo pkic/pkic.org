@@ -10,7 +10,7 @@ import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 import { proposalFlagResponseSchema } from "../assets/shared/schemas/proposal-status";
 
 function decisionActor(id: string) {
-  return { id, databaseUserId: id, email: "admin@pkic.org", role: "admin" };
+  return { identityType: "user" as const, id, email: "admin@pkic.org", role: "admin" };
 }
 
 async function postProposalReview(proposalId: string, token: string, body: unknown): Promise<Response> {
@@ -99,7 +99,7 @@ describe("proposal finalize workflows", () => {
     await expect(
       finalizeProposalDecision(env.DB, {
         proposalId,
-        actor: { id: "api-key", databaseUserId: null, email: "api-key", role: "admin" },
+        actor: { identityType: "service", id: "api-key", email: "api-key", role: "admin" },
         finalStatus: "accepted",
         minReviewsRequired: 0,
       }),

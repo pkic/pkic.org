@@ -1,4 +1,4 @@
-import { first, run } from "../../db/queries";
+import { first } from "../../db/queries";
 import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
@@ -26,6 +26,7 @@ import {
 } from "./model";
 import type { AuthMember, DatabaseLike, StatementLike } from "../../types";
 import { prepareStorageDeletion } from "../storage-deletion-outbox";
+import { prepareOrganizationContentReviewNotificationIntents } from "./notifications";
 
 export async function getMyOrganizationProfile(db: DatabaseLike, member: AuthMember) {
   if (!member.organizationId) {
@@ -72,6 +73,7 @@ export async function submitOrgContentChange(
   db: DatabaseLike,
   member: AuthMember,
   input: ContentReviewFieldInput,
+  reviewUrl: string,
 ): Promise<SubmitContentChangeResult> {
   const org = await requireOrgContact(db, member);
   if (await fetchPendingReview(db, org.id)) {
@@ -91,13 +93,16 @@ export async function submitOrgContentChange(
   const id = uuid();
   const proposedChangesJson = JSON.stringify(changedFields);
   try {
-    await run(
-      db,
-      `INSERT INTO organization_content_reviews
-         (id, organization_id, submitted_by_user_id, proposed_changes_json, logo_staging_r2_key, status, submitted_at, created_at)
-       VALUES (?, ?, ?, ?, NULL, 'pending', ?, ?)`,
-      [id, org.id, member.userId, proposedChangesJson, now, now],
-    );
+    await db.batch([
+      db
+        .prepare(
+          `INSERT INTO organization_content_reviews
+             (id, organization_id, submitted_by_user_id, proposed_changes_json, logo_staging_r2_key, status, submitted_at, created_at)
+           VALUES (?, ?, ?, ?, NULL, 'pending', ?, ?)`,
+        )
+        .bind(id, org.id, member.userId, proposedChangesJson, now, now),
+      prepareOrganizationContentReviewNotificationIntents(db, id, org.id, member.email, reviewUrl, now),
+    ]);
   } catch (error) {
     if (!isPendingReviewUniqueConflict(error)) throw error;
     throw new AppError(
@@ -205,6 +210,7 @@ export async function prepareAuthorizedOrganizationLogoStage(
   member: AuthMember,
   organizationId: string,
   r2Key: string,
+  reviewUrl: string,
 ): Promise<PreparedOrganizationLogoStage> {
   const now = nowIso();
   const existingPending = await fetchPendingReview(db, organizationId);
@@ -233,6 +239,7 @@ export async function prepareAuthorizedOrganizationLogoStage(
     };
   }
 
+  const reviewId = uuid();
   return {
     previousStagingKey,
     statements: [
@@ -242,10 +249,11 @@ export async function prepareAuthorizedOrganizationLogoStage(
              (id, organization_id, submitted_by_user_id, proposed_changes_json, logo_staging_r2_key, status, submitted_at, created_at)
            VALUES (?, ?, ?, '{}', ?, 'pending', ?, ?)`,
         )
-        .bind(uuid(), organizationId, member.userId, r2Key, now, now),
+        .bind(reviewId, organizationId, member.userId, r2Key, now, now),
       db
         .prepare("UPDATE organizations SET logo_staging_r2_key = ?, updated_at = ? WHERE id = ?")
         .bind(r2Key, now, organizationId),
+      prepareOrganizationContentReviewNotificationIntents(db, reviewId, organizationId, member.email, reviewUrl, now),
     ],
     mapCommitError(error) {
       return isPendingReviewUniqueConflict(error)

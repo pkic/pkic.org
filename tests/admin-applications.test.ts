@@ -83,7 +83,7 @@ describe("PATCH /api/v1/admin/applications/:id (Fix 3 — edit application field
     await seedEventAndAdmin(env.DB);
     const adminRow = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'"))[0];
     adminId = adminRow.id;
-    adminActor = { id: adminId, databaseUserId: adminId, email: "admin@pkic.org", role: "admin" };
+    adminActor = { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" };
     adminToken = await createAdminSession(env.DB, adminId, "admin-applications-token");
   });
 
@@ -561,6 +561,27 @@ describe("POST /api/v1/admin/applications/:id/communications", () => {
         id,
       ),
     ).toHaveLength(1);
+  });
+
+  it("rejects API-key communications at the user-attribution service boundary", async () => {
+    const { id } = await createApplication({ applicant_email: "service-actor@example.test" });
+    const response = await call(
+      env.ADMIN_API_KEY ?? "test-admin-key",
+      `/api/v1/admin/applications/${id}/communications`,
+      {
+        method: "POST",
+        body: JSON.stringify({ subject: "Not attributable", body: "This must not be queued." }),
+      },
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "USER_BACKED_ADMIN_REQUIRED" } });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM application_communications WHERE application_id = ?", id),
+    ).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE recipient_email = ?", "service-actor@example.test"),
+    ).toHaveLength(0);
   });
 
   it("rolls back the communication and email intent when audit fails", async () => {

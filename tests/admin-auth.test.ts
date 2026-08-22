@@ -7,6 +7,10 @@ import { onRequestPost as requestLink } from "../functions/api/v1/admin/auth/req
 import { onRequestGet as session } from "../functions/api/v1/admin/auth/session";
 import { onRequestPost as verifyLink } from "../functions/api/v1/admin/auth/verify-link";
 import { createContext, createTestRateLimiter, seedEventAndAdmin, queryAll } from "./helpers/context";
+import {
+  adminAuthSessionResponseSchema,
+  adminSessionEstablishedResponseSchema,
+} from "../assets/shared/schemas/admin-auth";
 
 function extractTokenFromMagicLinkPayload(payloadJson: string): string {
   const payload = JSON.parse(payloadJson) as { magicLinkUrl: string };
@@ -53,6 +57,17 @@ describe("admin magic-link auth", () => {
         {},
       ),
     );
+
+    const established = adminSessionEstablishedResponseSchema.parse(await verifyResponse.clone().json());
+    expect(established.admin).toMatchObject({
+      email: "admin@pkic.org",
+      scopes: expect.any(Array),
+      grants: [],
+      expiresAt: null,
+    });
+    expect(established.admin).not.toHaveProperty("identityType");
+    expect(established.admin).not.toHaveProperty("sessionId");
+    expect(established.admin).not.toHaveProperty("state");
 
     expect(verifyResponse.status).toBe(200);
     const setCookie = verifyResponse.headers.get("set-cookie") ?? "";
@@ -314,7 +329,11 @@ describe("admin magic-link auth", () => {
       ),
     );
     expect(sessionResponse.status).toBe(200);
-    await expect(sessionResponse.json()).resolves.toMatchObject({ admin: { email: "admin@pkic.org" } });
+    const sessionBody = adminAuthSessionResponseSchema.parse(await sessionResponse.json());
+    expect(sessionBody.admin).toMatchObject({ email: "admin@pkic.org", scopes: expect.any(Array), grants: [] });
+    expect(sessionBody.admin).not.toHaveProperty("identityType");
+    expect(sessionBody.admin).not.toHaveProperty("sessionId");
+    expect(sessionBody.admin).not.toHaveProperty("state");
 
     const logoutResponse = await logout(
       createContext(

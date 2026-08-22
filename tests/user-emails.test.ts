@@ -90,7 +90,7 @@ describe("secondary user emails", () => {
 
   it("rolls back secondary-email mutations when their audit cannot commit", async () => {
     const userId = await insertUser("atomic-email@example.test");
-    const actor = { id: adminId, email: "admin@pkic.org", role: "admin" } as const;
+    const actor = { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" } as const;
     await env.DB.prepare(
       `CREATE TRIGGER reject_user_email_audit
        BEFORE INSERT ON audit_log
@@ -147,8 +147,18 @@ describe("secondary user emails", () => {
   it("uses the same ownership boundary when an admin changes a primary email", async () => {
     const userA = await insertUser("primary-a@example.test");
     const userB = await insertUser("primary-b@example.test");
-    await addUserEmail(env.DB, { id: adminId, email: "admin@pkic.org", role: "admin" }, userA, "alias-a@example.test");
-    await addUserEmail(env.DB, { id: adminId, email: "admin@pkic.org", role: "admin" }, userB, "alias-b@example.test");
+    await addUserEmail(
+      env.DB,
+      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" },
+      userA,
+      "alias-a@example.test",
+    );
+    await addUserEmail(
+      env.DB,
+      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" },
+      userB,
+      "alias-b@example.test",
+    );
 
     const crossAccount = await call(adminToken, `/api/v1/admin/users/${userA}`, {
       method: "PATCH",

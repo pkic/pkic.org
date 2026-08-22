@@ -109,6 +109,53 @@ interface EmailRow {
   email: string;
 }
 
+interface PermissionRecipientRow {
+  id: string;
+  email: string;
+}
+
+/**
+ * Shared staff-recipient predicate. Authorization and notification fan-out
+ * must use the same global-admin, role-permission, and direct-grant rules.
+ * Inactive identities cannot authenticate as staff and are therefore not
+ * intended notification recipients.
+ */
+export function staffPermissionPredicate(userAlias = "u"): string {
+  return `(
+    ${userAlias}.role = 'admin'
+    OR EXISTS (
+      SELECT 1
+      FROM user_roles ur
+      JOIN role_permissions rp ON rp.role_id = ur.role_id
+      WHERE ur.user_id = ${userAlias}.id
+        AND rp.permission = ?
+        AND ur.revoked_at IS NULL
+        AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    )
+    OR EXISTS (
+      SELECT 1
+      FROM permission_grants pg
+      WHERE pg.user_id = ${userAlias}.id
+        AND pg.permission = ?
+        AND pg.revoked_at IS NULL
+        AND (pg.expires_at IS NULL OR pg.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    )
+  )`;
+}
+
+export async function findUserPermissionRecipients(
+  db: DatabaseLike,
+  permission: string,
+): Promise<PermissionRecipientRow[]> {
+  return all<PermissionRecipientRow>(
+    db,
+    `SELECT DISTINCT u.id, u.email
+     FROM users u
+     WHERE u.active = 1 AND ${staffPermissionPredicate("u")}`,
+    [permission, permission],
+  );
+}
+
 /**
  * Every user who can act on `permission` — role='admin' (always, matching
  * hasPermission's bypass) plus every user_roles/permission_grants holder,

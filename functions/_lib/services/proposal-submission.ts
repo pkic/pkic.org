@@ -19,6 +19,7 @@ import {
   eventParticipantSourceConflictError,
   isEventParticipantSourceConflict,
 } from "./event-participant-source-revision";
+import { prepareBadgeRenderJob } from "./badge-render-job-statements";
 
 type ProposalCreateInput = z.infer<typeof proposalCreateSchema>;
 
@@ -43,6 +44,7 @@ export interface ProposalSubmissionResult {
   shareUrl: string;
   proposer: UserRecord;
   outboxIds: string[];
+  badgeRenderJobId: string;
 }
 
 function profileWrite(profile: ProposalCreateInput["proposer"] | ProposalCreateInput["speakers"][number]) {
@@ -129,6 +131,8 @@ export async function submitProposal(
     length: input.referralCodeLength,
   });
   statements.push(referral.statement);
+  const badgeRenderJob = prepareBadgeRenderJob(db, referral.code);
+  statements.push(badgeRenderJob.statement);
 
   const allPeople = [proposer, ...coSpeakers.map(({ user }) => user)];
   const speakerLineupText = allPeople
@@ -217,5 +221,6 @@ export async function submitProposal(
     shareUrl: `${input.appBaseUrl}/r/${referral.code}`,
     proposer,
     outboxIds,
+    badgeRenderJobId: badgeRenderJob.id,
   };
 }

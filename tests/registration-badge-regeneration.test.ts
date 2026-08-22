@@ -7,7 +7,9 @@ import {
   processBadgeRenderJobById,
   processPendingBadgeRenders,
   requestRegistrationBadgeRegeneration,
+  seedGravatarAndProcessBadgeRenderJob,
 } from "../functions/_lib/services/registration-badge-regeneration";
+import { prepareBadgeRenderJob } from "../functions/_lib/services/badge-render-job-statements";
 import type { AuthAdmin, Env } from "../functions/_lib/types";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
@@ -50,7 +52,7 @@ async function seedRegistrationWithReferral(): Promise<{
     "SELECT id, email, role FROM users WHERE normalized_email = 'admin@pkic.org'",
   );
   return {
-    actor: admin,
+    actor: { identityType: "user", ...admin },
     event: await getEventBySlug(env.DB, "pqc-2026"),
     registrationId,
     referralCode,
@@ -240,6 +242,26 @@ describe("registration badge regeneration", () => {
     expect(await queryAll(env.DB, "SELECT status, attempts, last_error FROM badge_render_jobs")).toEqual([
       { status: "rendered", attempts: 1, last_error: null },
     ]);
+  });
+
+  it("keeps an initial render intent retryable when eager background rendering fails", async () => {
+    const seeded = await seedRegistrationWithReferral();
+    const job = prepareBadgeRenderJob(env.DB, seeded.referralCode);
+    await env.DB.batch([job.statement]);
+    const render = vi.fn().mockRejectedValue(new Error("initial R2 failure"));
+
+    await expect(
+      seedGravatarAndProcessBadgeRenderJob(
+        env.DB,
+        env,
+        { userId: seeded.userId, email: "badge@example.test", jobId: job.id },
+        render,
+      ),
+    ).resolves.toBe(false);
+
+    expect(
+      await queryAll(env.DB, "SELECT status, attempts, last_error FROM badge_render_jobs WHERE id = ?", job.id),
+    ).toEqual([{ status: "retrying", attempts: 1, last_error: "initial R2 failure" }]);
   });
 
   it("rolls back the render intent when its audit record cannot be committed", async () => {

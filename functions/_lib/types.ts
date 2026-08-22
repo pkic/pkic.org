@@ -254,14 +254,9 @@ export interface AuthMember {
   expiresAt?: string;
 }
 
-export interface AuthAdmin {
-  /** Stable textual identity used in audit records; synthetic actors such as `api-key` are valid. */
+interface AuthAdminBase {
+  /** Stable identity used in audit records and authorization decisions. */
   id: string;
-  /**
-   * Backing `users.id` for relational attribution. `null` means this actor is
-   * authenticated but is not a database user.
-   */
-  databaseUserId?: string | null;
   email: string;
   role: string;
   scopes?: string[];
@@ -274,7 +269,24 @@ export interface AuthAdmin {
    * went through requireAdminFromRequest's session/API-key path.
    */
   grants?: PermissionGrant[];
+}
+
+/** A staff actor whose canonical id is also a real users(id) value. */
+export interface UserBackedAuthAdmin extends AuthAdminBase {
+  identityType: "user";
   sessionId?: string;
   expiresAt?: string;
   state?: string | null;
 }
+
+/** An authenticated non-user actor, such as the shared administrative API key. */
+export interface ServiceAuthAdmin extends AuthAdminBase {
+  identityType: "service";
+}
+
+/**
+ * Authenticated staff is deliberately discriminated by identity provenance.
+ * The single `id` is canonical: it is a users(id) only for the `user` branch,
+ * and an audit identity only for the `service` branch.
+ */
+export type AuthAdmin = UserBackedAuthAdmin | ServiceAuthAdmin;

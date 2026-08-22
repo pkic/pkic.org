@@ -4,8 +4,7 @@
  */
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { json } from "../../../../../_lib/http";
-import { requireUserBackedAdminFromRequest } from "../../../../../_lib/auth/admin";
-import { requireAdminDatabaseUserId } from "../../../../../_lib/auth/admin-identity";
+import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { addApplicationNoteWithAudit } from "../../../../../_lib/services/membership/applications/communications";
 import { applicationNoteCreateRouteSchema } from "../../../../../../assets/shared/schemas/admin-applications";
@@ -13,13 +12,13 @@ import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 export const ApplicationNotesPost = openApiRoute(applicationNoteCreateRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
-  const admin = await requireUserBackedAdminFromRequest(db, c.req.raw, c.env);
+  const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
   requirePermission(admin, "membership:write");
 
   const body = data.body;
   const note = await addApplicationNoteWithAudit(db, {
     applicationId: data.params.id,
-    actorUserId: requireAdminDatabaseUserId(admin),
+    actor: admin,
     body: body.body,
   });
   return json(note, 201);

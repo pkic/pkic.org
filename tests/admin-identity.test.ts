@@ -1,32 +1,43 @@
 import { describe, expect, it } from "vitest";
 import {
   adminDatabaseUserId,
+  createServiceAuthAdmin,
+  createUserBackedAuthAdmin,
+  isUserBackedAuthAdmin,
   publicAuthAdmin,
   requireAdminDatabaseUserId,
 } from "../functions/_lib/auth/admin-identity";
-import type { AuthAdmin } from "../functions/_lib/types";
 
 describe("admin identity boundaries", () => {
-  it("keeps database attribution internal to a user-backed admin", () => {
-    const actor: AuthAdmin = {
-      id: "audit-admin",
-      databaseUserId: "user-admin",
+  it("uses one canonical id for a user-backed admin", () => {
+    const actor = createUserBackedAuthAdmin({
+      id: "user-admin",
       email: "admin@example.test",
       role: "admin",
-    };
+      scopes: ["admin:read"],
+      grants: [{ permission: "admin:read", contextType: null, contextId: null }],
+      sessionId: "private-session-id",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      state: "private-bookmark",
+    });
 
+    expect(isUserBackedAuthAdmin(actor)).toBe(true);
     expect(adminDatabaseUserId(actor)).toBe("user-admin");
     expect(requireAdminDatabaseUserId(actor)).toBe("user-admin");
     expect(publicAuthAdmin(actor)).toEqual({
-      id: "audit-admin",
+      id: "user-admin",
       email: "admin@example.test",
       role: "admin",
+      scopes: ["admin:read"],
+      grants: [{ permission: "admin:read", contextType: null, contextId: null }],
+      expiresAt: "2099-01-01T00:00:00.000Z",
     });
   });
 
   it("supports synthetic audit actors only for nullable database attribution", () => {
-    const actor: AuthAdmin = { id: "api-key", databaseUserId: null, email: "api-key", role: "admin" };
+    const actor = createServiceAuthAdmin({ id: "api-key", email: "api-key", role: "admin" });
 
+    expect(isUserBackedAuthAdmin(actor)).toBe(false);
     expect(adminDatabaseUserId(actor)).toBeNull();
     expect(() => requireAdminDatabaseUserId(actor)).toThrow();
     try {
@@ -36,14 +47,21 @@ describe("admin identity boundaries", () => {
     }
   });
 
-  it("fails closed when a caller omits the database identity classification", () => {
-    const unclassified: AuthAdmin = { id: "legacy-admin", email: "admin@example.test", role: "admin" };
+  it("does not expose service provenance or internal auth state", () => {
+    const actor = createServiceAuthAdmin({
+      id: "api-key",
+      email: "api-key",
+      role: "admin",
+      scopes: ["admin:read"],
+    });
 
-    expect(() => adminDatabaseUserId(unclassified)).toThrow();
-    try {
-      adminDatabaseUserId(unclassified);
-    } catch (error) {
-      expect(error).toMatchObject({ status: 500, code: "ADMIN_IDENTITY_UNCLASSIFIED" });
-    }
+    expect(publicAuthAdmin(actor)).toEqual({
+      id: "api-key",
+      email: "api-key",
+      role: "admin",
+      scopes: ["admin:read"],
+      grants: [],
+      expiresAt: null,
+    });
   });
 });

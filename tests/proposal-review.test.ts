@@ -400,7 +400,7 @@ describe("proposal review and finalize", () => {
   it("keeps the D1 update owner-bound when ownership changes after the service read", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, admin1Id, admin2Id } = await seedProposal(env.DB, eventId);
-    const actor: AuthAdmin = { id: admin1Id, databaseUserId: admin1Id, email: "admin@pkic.org", role: "admin" };
+    const actor: AuthAdmin = { identityType: "user", id: admin1Id, email: "admin@pkic.org", role: "admin" };
     await upsertProposalReview(env.DB, actor, proposalId, { recommendation: "accept", score: 9 });
     const [review] = await queryAll<{ id: string }>(
       env.DB,
@@ -459,7 +459,7 @@ describe("proposal review and finalize", () => {
   it("does not create a review when finalization wins immediately before the write", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, admin1Id } = await seedProposal(env.DB, eventId);
-    const actor: AuthAdmin = { id: admin1Id, databaseUserId: admin1Id, email: "admin@pkic.org", role: "admin" };
+    const actor: AuthAdmin = { identityType: "user", id: admin1Id, email: "admin@pkic.org", role: "admin" };
     const baseDb: DatabaseLike = env.DB;
     let injectedFinalization = false;
     const racingDb: DatabaseLike = {
@@ -498,7 +498,7 @@ describe("proposal review and finalize", () => {
   it("does not update a review when finalization wins immediately before the write", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, admin1Id } = await seedProposal(env.DB, eventId);
-    const actor: AuthAdmin = { id: admin1Id, databaseUserId: admin1Id, email: "admin@pkic.org", role: "admin" };
+    const actor: AuthAdmin = { identityType: "user", id: admin1Id, email: "admin@pkic.org", role: "admin" };
     await upsertProposalReview(env.DB, actor, proposalId, { recommendation: "accept", score: 9 });
 
     const baseDb: DatabaseLike = env.DB;

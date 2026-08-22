@@ -55,7 +55,7 @@ async function setup() {
   )
     .bind(organizationId)
     .run();
-  const actor: AuthAdmin = { id: adminId, email: "admin@pkic.org", role: "admin" };
+  const actor: AuthAdmin = { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" };
   return { actor, organizationId };
 }
 

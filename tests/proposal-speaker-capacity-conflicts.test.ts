@@ -234,7 +234,7 @@ describe("proposal speaker capacity conflicts", () => {
     await expect(
       finalizeProposalDecision(racingDb, {
         proposalId,
-        actor: { id: admin.id, databaseUserId: admin.id, email: admin.email, role: "admin" },
+        actor: { identityType: "user", id: admin.id, email: admin.email, role: "admin" },
         finalStatus: "accepted",
         minReviewsRequired: 0,
       }),
@@ -265,7 +265,7 @@ describe("proposal speaker capacity conflicts", () => {
     await expect(
       finalizeProposalDecision(racingDb, {
         proposalId,
-        actor: { id: admin.id, databaseUserId: admin.id, email: admin.email, role: "admin" },
+        actor: { identityType: "user", id: admin.id, email: admin.email, role: "admin" },
         finalStatus: "accepted",
         minReviewsRequired: 0,
       }),
@@ -314,7 +314,7 @@ describe("proposal speaker capacity conflicts", () => {
     });
     await finalizeProposalDecision(env.DB, {
       proposalId: secondProposal.id,
-      actor: { id: admin.id, databaseUserId: admin.id, email: admin.email, role: "admin" },
+      actor: { identityType: "user", id: admin.id, email: admin.email, role: "admin" },
       finalStatus: "accepted",
       minReviewsRequired: 0,
     });

@@ -8,10 +8,12 @@
  */
 import { json } from "../../../../_lib/http";
 import { requireMemberFromRequest } from "../../../../_lib/auth/member";
+import { getConfig } from "../../../../_lib/config";
 import { AppError } from "../../../../_lib/errors";
 import { imageExtension, putUploadedImage, readValidatedUploadedImage } from "../../../../_lib/utils/image-upload";
 import {
   prepareAuthorizedOrganizationLogoStage,
+  processOrganizationContentReviewNotificationsBackground,
   requireOrgContact,
 } from "../../../../_lib/services/organization-content";
 import { myOrganizationLogoUploadRouteSchema } from "../../../../../assets/shared/schemas/me";
@@ -35,7 +37,8 @@ export const MeOrganizationLogoPost = openApiRoute(myOrganizationLogoUploadRoute
   const image = await readValidatedUploadedImage(c.req.raw, "Logo");
   const ext = imageExtension(image.contentType);
   const r2Key = `org-logos/${organization.id}/staging-${crypto.randomUUID()}.${ext}`;
-  const prepared = await prepareAuthorizedOrganizationLogoStage(db, member, organization.id, r2Key);
+  const reviewUrl = `${getConfig(c.env, c.req.raw).appBaseUrl}/admin/#/organizations/content-reviews`;
+  const prepared = await prepareAuthorizedOrganizationLogoStage(db, member, organization.id, r2Key, reviewUrl);
 
   try {
     await withStorageUploadCompensation({
@@ -54,6 +57,8 @@ export const MeOrganizationLogoPost = openApiRoute(myOrganizationLogoUploadRoute
   if (previousStagingKey && previousStagingKey !== r2Key) {
     c.executionCtx.waitUntil(processStorageDeletionForKey(db, c.env, previousStagingKey, "assets"));
   }
+
+  c.executionCtx.waitUntil(processOrganizationContentReviewNotificationsBackground(db, c.env));
 
   return json({ success: true, r2Key });
 });

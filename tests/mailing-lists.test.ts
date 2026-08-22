@@ -171,7 +171,13 @@ describe("Managed mailing list configuration", () => {
       .bind(sessionId, staffUserId, tokenHash, expiresAt, now)
       .run();
     const staffToken = await signAdminSessionToken(env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret", {
-      admin: { id: staffUserId, email: "staff-ml@example.test", role: "user", scopes: [] },
+      admin: {
+        identityType: "user",
+        id: staffUserId,
+        email: "staff-ml@example.test",
+        role: "user",
+        scopes: [],
+      },
       sessionId,
       expiresAt,
       scopes: [],

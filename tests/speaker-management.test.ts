@@ -657,7 +657,7 @@ describe("speaker self-management endpoints", () => {
 
     await expect(
       removeAdminProposalSpeaker(racingDb, {
-        actor: { id: adminUserId, email: "admin@pkic.org", role: "admin" },
+        actor: { identityType: "user", id: adminUserId, email: "admin@pkic.org", role: "admin" },
         proposalId,
         userId: before.proposer_user_id,
         replacementProposerUserId: coSpeakerUserId,

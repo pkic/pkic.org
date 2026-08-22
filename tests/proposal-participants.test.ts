@@ -126,6 +126,17 @@ describe("proposal participants", () => {
     expect(response.status).toBe(200);
     const payload = (await response.json()) as { proposalId: string };
 
+    expect(
+      await queryAll<{ id: string }>(
+        env.DB,
+        `SELECT brj.id
+           FROM badge_render_jobs brj
+           JOIN referral_codes rc ON rc.code = brj.referral_code
+          WHERE rc.owner_type = 'proposal' AND rc.owner_id = ?`,
+        [payload.proposalId],
+      ),
+    ).toHaveLength(1);
+
     const roles = await queryAll<{ role: string }>(
       env.DB,
       "SELECT role FROM proposal_speakers WHERE proposal_id = ? ORDER BY role",
@@ -268,6 +279,7 @@ describe("proposal participants", () => {
       ).toHaveLength(0);
       expect(await queryAll(env.DB, "SELECT id FROM consent_acceptances")).toHaveLength(0);
       expect(await queryAll(env.DB, "SELECT code FROM referral_codes")).toHaveLength(0);
+      expect(await queryAll(env.DB, "SELECT id FROM badge_render_jobs")).toHaveLength(0);
       expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
     } finally {
       await env.DB.prepare("DROP TRIGGER IF EXISTS reject_proposal_submission_email").run();
@@ -395,7 +407,7 @@ describe("proposal participants", () => {
 
     await finalizeProposalDecision(env.DB, {
       proposalId: proposal.id,
-      actor: { id: adminRow.id, databaseUserId: adminRow.id, email: "admin@pkic.org", role: "admin" },
+      actor: { identityType: "user", id: adminRow.id, email: "admin@pkic.org", role: "admin" },
       finalStatus: "accepted",
       minReviewsRequired: 0,
     });

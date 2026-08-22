@@ -11,6 +11,7 @@
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { successResponseSchema } from "./api-common";
+import { publicAuthAdminSchema } from "./admin-auth";
 
 export const passkeyIdParamsSchema = z.object({ id: databaseIdSchema });
 
@@ -73,7 +74,7 @@ export const passkeysListResponseSchema = z.object({ passkeys: z.array(passkeySu
 
 export const passkeyAuthenticateCompleteResponseSchema = successResponseSchema.extend({
   expiresAt: z.string(),
-  admin: z.object({ id: z.string(), email: z.string(), role: z.string() }),
+  admin: publicAuthAdminSchema,
 });
 
 export const passkeyRegisterBeginRouteSchema = {

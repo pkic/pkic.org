@@ -4,6 +4,8 @@ import {
   type OAuthHelpers,
   type ResolveExternalTokenInput,
 } from "@cloudflare/workers-oauth-provider";
+import { z } from "zod";
+import { permissionSchema } from "../../../assets/shared/schemas/permissions";
 import {
   getAdminBySessionClaims,
   getCachedAdminAuthTransport,
@@ -13,6 +15,7 @@ import {
   verifyAdminMagicLink,
   verifyAdminSessionToken,
 } from "../auth/admin";
+import { createUserBackedAuthAdmin } from "../auth/admin-identity";
 import { AUTH_MAGIC_LINK_PURPOSES, isSecureRequest, parseCookieHeader } from "../auth/session-engine";
 import { first, run } from "../db/queries";
 import { AUTH_SCOPES, grantableScopesForActor, type AuthScope } from "../auth/scopes";
@@ -23,7 +26,7 @@ import { getClientIp, getUserAgent, hashOptional, requireInternalSecret } from "
 import { enforceRateLimit } from "../rate-limit";
 import { writeAuditLog } from "../services/audit";
 import { sha256Hex } from "../utils/crypto";
-import type { AuthAdmin, Env } from "../types";
+import type { AuthAdmin, Env, UserBackedAuthAdmin } from "../types";
 
 export const MCP_OAUTH_AUTHORIZE_PATH = "/api/v1/oauth/authorize";
 export const MCP_OAUTH_VERIFY_API_PATH = "/api/v1/oauth/verify-link";
@@ -37,17 +40,46 @@ const MCP_OAUTH_LOGIN_COOKIE_MAX_AGE_SECONDS = 10 * 60;
 
 const AUTH_SCOPE_SET = new Set<string>(AUTH_SCOPES);
 
-export type McpOAuthTransport = "oauth" | "bearer" | "cookie" | "api-key";
+const mcpOAuthPropsBaseSchema = {
+  id: z.string().min(1),
+  email: z.string().min(1),
+  role: z.string().min(1),
+  scopes: z.array(permissionSchema),
+};
 
-export interface McpOAuthProps {
-  adminId: string;
-  email: string;
-  role: string;
-  scopes: AuthScope[];
-  sessionId?: string;
-  sessionExpiresAt?: string;
-  state?: string | null;
-  authTransport: McpOAuthTransport;
+export const mcpOAuthPropsSchema = z.discriminatedUnion("identityType", [
+  z
+    .object({
+      identityType: z.literal("user"),
+      ...mcpOAuthPropsBaseSchema,
+      sessionId: z.string().min(1),
+      sessionExpiresAt: z.string().min(1),
+      state: z.string().nullable(),
+      authTransport: z.enum(["oauth", "bearer", "cookie"]),
+    })
+    .strict(),
+  z
+    .object({
+      identityType: z.literal("service"),
+      ...mcpOAuthPropsBaseSchema,
+      authTransport: z.literal("api-key"),
+    })
+    .strict(),
+]);
+
+export type McpOAuthProps = z.infer<typeof mcpOAuthPropsSchema>;
+export type McpUserOAuthProps = Extract<McpOAuthProps, { identityType: "user" }>;
+export type McpServiceOAuthProps = Extract<McpOAuthProps, { identityType: "service" }>;
+export type UserMcpOAuthTransport = McpUserOAuthProps["authTransport"];
+export type McpOAuthTransport = McpOAuthProps["authTransport"];
+
+export function parseMcpOauthProps(value: unknown): McpOAuthProps | undefined {
+  if (value === undefined) return undefined;
+  const parsed = mcpOAuthPropsSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new AppError(500, "MCP_AUTH_PROPS_INVALID", "The MCP authorization context is invalid");
+  }
+  return parsed.data;
 }
 
 export type McpOAuthEnv = Env & {
@@ -116,11 +148,26 @@ export function buildMcpOauthProps(
   scopes: readonly AuthScope[],
   authTransport: McpOAuthTransport,
 ): McpOAuthProps {
+  const shared = { id: admin.id, email: admin.email, role: admin.role, scopes: [...scopes] };
+
+  if (admin.identityType === "service") {
+    if (authTransport !== "api-key") {
+      throw new AppError(500, "MCP_AUTH_TRANSPORT_INVALID", "A service actor must use the API-key transport");
+    }
+    return { identityType: "service", ...shared, authTransport };
+  }
+
+  if (authTransport === "api-key" || !admin.sessionId || !admin.expiresAt) {
+    throw new AppError(
+      500,
+      "MCP_AUTH_TRANSPORT_INVALID",
+      "A user-backed MCP actor requires a session-backed transport",
+    );
+  }
+
   return {
-    adminId: admin.id,
-    email: admin.email,
-    role: admin.role,
-    scopes: [...scopes],
+    identityType: "user",
+    ...shared,
     sessionId: admin.sessionId,
     sessionExpiresAt: admin.expiresAt,
     state: admin.state ?? null,
@@ -221,7 +268,7 @@ export async function parseOauthRequestFromReturnTo(
   return oauthProvider.parseAuthRequest(new Request(url, { method: "GET", headers: request.headers }));
 }
 
-export async function requireMcpOauthAdmin(request: Request, env: Env): Promise<AuthAdmin | null> {
+export async function requireMcpOauthAdmin(request: Request, env: Env): Promise<UserBackedAuthAdmin | null> {
   const token = getMcpOauthLoginToken(request);
   if (!token || !env.INTERNAL_SIGNING_SECRET) {
     return null;
@@ -369,7 +416,7 @@ export async function sendMcpAuthorizeMagicLink(options: {
 export async function verifyMcpAuthorizeMagicLink(
   request: Request,
   env: Env,
-): Promise<{ admin: AuthAdmin; sessionToken: string; expiresAt: string; returnTo: string }> {
+): Promise<{ admin: UserBackedAuthAdmin; sessionToken: string; expiresAt: string; returnTo: string }> {
   const token = new URL(request.url).searchParams.get("token");
   if (!token) {
     throw new AppError(400, "MAGIC_LINK_INVALID", "Missing admin magic link token");
@@ -388,12 +435,14 @@ export async function verifyMcpAuthorizeMagicLink(
     purpose: AUTH_MAGIC_LINK_PURPOSES.mcpOauth,
   });
 
-  const admin: AuthAdmin = {
-    ...verified.admin,
+  const admin = createUserBackedAuthAdmin({
+    id: verified.admin.id,
+    email: verified.admin.email,
+    role: verified.admin.role,
     scopes: [...AUTH_SCOPES],
     sessionId: verified.sessionId,
     expiresAt: verified.expiresAt,
-  };
+  });
   const sessionToken = await signAdminSessionToken(secret, {
     admin,
     sessionId: verified.sessionId,

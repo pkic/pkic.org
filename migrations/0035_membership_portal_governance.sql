@@ -1868,6 +1868,29 @@ BEGIN
      AND id != NEW.id AND status IN ('pending', 'processing');
 END;
 
+-- A provider-successful add must retain its enrollment notification until a
+-- later bounded drain can group the successful lists for one member into the
+-- same user-visible email the original sync pass emitted. The queue row is
+-- the idempotent source identity; the outbox row is written only when this
+-- intent is drained.
+CREATE TABLE google_groups_enrollment_notification_intents (
+  queue_id          TEXT NOT NULL PRIMARY KEY,
+  user_id           TEXT NOT NULL,
+  sync_pass_id      TEXT NOT NULL,
+  google_group_email TEXT NOT NULL,
+  recipient_email   TEXT NOT NULL,
+  member_name       TEXT NOT NULL,
+  created_at        TEXT NOT NULL,
+  queued_outbox_id  TEXT,
+  queued_at         TEXT,
+  FOREIGN KEY(queue_id) REFERENCES google_groups_sync_queue(id),
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+CREATE INDEX idx_google_groups_enrollment_intents_pending
+  ON google_groups_enrollment_notification_intents(sync_pass_id, user_id, created_at, queue_id)
+  WHERE queued_outbox_id IS NULL;
+
 -- ── Membership workflow settings ───────────────────────────────────
 -- Single configurable row (id is always 'default') rather than a generic
 -- key-value table — every setting is a distinct, typed field the
@@ -2350,6 +2373,34 @@ CREATE INDEX idx_org_content_reviews_status ON organization_content_reviews(stat
 CREATE UNIQUE INDEX uq_org_content_reviews_one_pending
   ON organization_content_reviews(organization_id)
   WHERE status = 'pending';
+
+-- Immutable event-time recipient snapshots for reviewer notifications. The
+-- review may be withdrawn or the staff roster may change before the queued
+-- email is drained; neither change should lose or retarget the submission
+-- notice. The exact email is the logical recipient key, matching the
+-- existing permission fan-out's distinct-email behavior.
+CREATE TABLE organization_content_review_notification_intents (
+  review_id           TEXT NOT NULL,
+  recipient_email     TEXT NOT NULL,
+  recipient_user_id   TEXT,
+  organization_name   TEXT NOT NULL,
+  submitter_name      TEXT NOT NULL,
+  review_url          TEXT NOT NULL,
+  created_at          TEXT NOT NULL,
+  queued_outbox_id    TEXT,
+  queued_at           TEXT,
+  PRIMARY KEY (review_id, recipient_email),
+  FOREIGN KEY(review_id) REFERENCES organization_content_reviews(id) ON DELETE CASCADE,
+  FOREIGN KEY(recipient_user_id) REFERENCES users(id)
+);
+
+CREATE INDEX idx_org_content_review_notification_intents_pending
+  ON organization_content_review_notification_intents(created_at, review_id, recipient_email)
+  WHERE queued_outbox_id IS NULL;
+
+CREATE UNIQUE INDEX uq_org_content_review_notification_intents_outbox
+  ON organization_content_review_notification_intents(queued_outbox_id)
+  WHERE queued_outbox_id IS NOT NULL;
 
 CREATE TABLE organization_content_review_transition_guards (
   id                TEXT NOT NULL PRIMARY KEY,

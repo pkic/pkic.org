@@ -43,7 +43,12 @@ describe("membership access offboarding", () => {
   it("atomically deactivates a user, closes every active WG seat, and enqueues one deterministic removal per managed list", async () => {
     const actorId = await insertUser(env.DB, "offboarding-admin@example.test");
     const userId = await insertUser(env.DB, "offboarding-user@example.test");
-    const actor: AuthAdmin = { id: actorId, email: "offboarding-admin@example.test", role: "admin" };
+    const actor: AuthAdmin = {
+      identityType: "user",
+      id: actorId,
+      email: "offboarding-admin@example.test",
+      role: "admin",
+    };
     const workingGroupId = await insertWorkingGroup("Offboarding WG", "offboarding-wg@lists.pkic.org");
     const organizationId = await insertOrganization(env.DB, "Offboarding Organization");
     const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
@@ -88,7 +93,12 @@ describe("membership access offboarding", () => {
   it("rolls back access closure and queueing when the deactivation audit cannot commit", async () => {
     const actorId = await insertUser(env.DB, "rollback-admin@example.test");
     const userId = await insertUser(env.DB, "rollback-user@example.test");
-    const actor: AuthAdmin = { id: actorId, email: "rollback-admin@example.test", role: "admin" };
+    const actor: AuthAdmin = {
+      identityType: "user",
+      id: actorId,
+      email: "rollback-admin@example.test",
+      role: "admin",
+    };
     const workingGroupId = await insertWorkingGroup("Rollback WG", "rollback-wg@lists.pkic.org");
     const organizationId = await insertOrganization(env.DB, "Rollback Organization");
     const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
@@ -159,7 +169,12 @@ describe("membership access offboarding", () => {
   it("rejects a stale WG add plan after deactivation commits", async () => {
     const actorId = await insertUser(env.DB, "stale-add-admin@example.test");
     const userId = await insertUser(env.DB, "stale-add-user@example.test");
-    const actor: AuthAdmin = { id: actorId, email: "stale-add-admin@example.test", role: "admin" };
+    const actor: AuthAdmin = {
+      identityType: "user",
+      id: actorId,
+      email: "stale-add-admin@example.test",
+      role: "admin",
+    };
     const workingGroupId = await insertWorkingGroup("Stale add WG", "stale-add@lists.pkic.org");
     const workingGroup: WorkingGroupRow = {
       id: workingGroupId,

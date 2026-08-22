@@ -507,7 +507,7 @@ describe("day waitlist priorities", () => {
     await expect(
       updateAdminRegistrationDayAttendance(
         env.DB,
-        { id: admin.id, email: admin.email, role: "admin" },
+        { identityType: "user", id: admin.id, email: admin.email, role: "admin" },
         {
           eventSlug: event.slug,
           registrationId: organizer.registration.id,

@@ -5,6 +5,7 @@ import { onRequestPost as createRegistration } from "../functions/api/v1/events/
 import { onRequestPost as confirmEmail } from "../functions/api/v1/events/[eventSlug]/registrations/confirm-email";
 import { onRequestPatch as manageRegistration } from "../functions/api/v1/registrations/manage/[token]";
 import { onRequestPost as createInvites } from "../functions/api/v1/events/[eventSlug]/invites";
+import { onRequestPost as acceptInviteRegistration } from "../functions/api/v1/invites/[token]/accept";
 import { createContext, deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { getEventBySlug } from "../functions/_lib/services/events";
@@ -75,8 +76,18 @@ describe("registration workflows", () => {
     );
 
     expect(createResponse.status).toBe(200);
-    const createdPayload = (await createResponse.json()) as { status: string };
+    const createdPayload = (await createResponse.json()) as { registrationId: string; status: string };
     expect(createdPayload.status).toBe("pending_email_confirmation");
+    expect(
+      await queryAll<{ id: string }>(
+        env.DB,
+        `SELECT brj.id
+           FROM badge_render_jobs brj
+           JOIN referral_codes rc ON rc.code = brj.referral_code
+          WHERE rc.owner_type = 'registration' AND rc.owner_id = ?`,
+        [createdPayload.registrationId],
+      ),
+    ).toHaveLength(1);
 
     const outbox = await queryAll<{ payload_json: string }>(
       env.DB,
@@ -371,6 +382,51 @@ describe("registration workflows", () => {
     expect(rows[0].registration_status).toBe("registered");
     expect(rows[0].invite_id).toBe(invite.id);
     expect(rows[0].invite_status).toBe("accepted");
+  });
+
+  it("commits an invite-acceptance badge render intent with the registration", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const createdInvite = await createInvite(env.DB, {
+      eventId,
+      inviteeEmail: "durable-invite-badge@pkic.org",
+      inviteeFirstName: "Durable",
+      inviteType: "attendee",
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+    });
+
+    const response = await acceptInviteRegistration(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/invites/${createdInvite.token}/accept`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            firstName: "Durable",
+            lastName: "Invite",
+            email: "durable-invite-badge@pkic.org",
+            attendanceType: "virtual",
+            consents: [
+              { termKey: "privacy-policy", version: "v1" },
+              { termKey: "code-of-conduct", version: "v1" },
+            ],
+          }),
+        }),
+        { token: createdInvite.token },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as { registrationId: string };
+    expect(
+      await queryAll<{ id: string }>(
+        env.DB,
+        `SELECT brj.id
+           FROM badge_render_jobs brj
+           JOIN referral_codes rc ON rc.code = brj.referral_code
+          WHERE rc.owner_type = 'registration' AND rc.owner_id = ?`,
+        [payload.registrationId],
+      ),
+    ).toHaveLength(1);
   });
 
   it("keeps the invite token as the source of truth when confirmation email matches a different invite", async () => {

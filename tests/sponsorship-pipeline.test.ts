@@ -78,7 +78,7 @@ describe("Sponsorship sales pipeline", () => {
       await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
     )[0];
     adminId = adminRow.id;
-    adminActor = { id: adminId, databaseUserId: adminId, email: "admin@pkic.org", role: "admin" };
+    adminActor = { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" };
     adminToken = await createAdminSession(env.DB, adminId, "admin-sponsorship-token");
   });
 

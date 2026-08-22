@@ -16,7 +16,7 @@ import { resetDb } from "./helpers/reset-db";
 import { proposalReviewsListResponseSchema } from "../assets/shared/schemas/proposal-reviews";
 
 function decisionActor(id: string) {
-  return { id, databaseUserId: id, email: "admin@pkic.org", role: "admin" };
+  return { identityType: "user" as const, id, email: "admin@pkic.org", role: "admin" };
 }
 
 interface SeededDecisionWorkflow {
@@ -128,8 +128,8 @@ describe("proposal decision review rounds", () => {
       recordProposalDecision(env.DB, {
         proposalId: seeded.proposalId,
         actor: {
+          identityType: "user",
           id: seeded.adminId,
-          databaseUserId: seeded.adminId,
           email: "admin@pkic.org",
           role: "user",
           grants: [],
