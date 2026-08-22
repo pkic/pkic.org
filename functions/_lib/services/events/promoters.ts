@@ -3,10 +3,11 @@ import {
   EVENT_PROMOTER_SORT_COLUMNS,
   EVENT_REFERRAL_CODE_SORT_COLUMNS,
   type EventPromoter,
+  type EventPromotersListQuery,
   type EventPromotersListResponse,
   type EventReferralCode,
 } from "../../../../assets/shared/schemas/admin-event-promoters";
-import { batchFirst, batchRows } from "../../db/pagination";
+import { batchFirst, buildOffsetPageStatements, decodeOffsetPageResults } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
@@ -113,7 +114,7 @@ const PROMOTER_SELECT_COLUMNS = `user_id, email, first_name, last_name, organiza
 export async function listEventPromotionActivity(
   db: DatabaseLike,
   event: { id: string; slug: string },
-  params: { view: "promoters" | "codes"; limit: number; offset: number; q?: string; sort?: string },
+  params: EventPromotersListQuery,
 ): Promise<EventPromotersListResponse> {
   const promoterSearch = params.q
     ? buildD1TextSearchFilter(params.q, ["email", "first_name", "last_name", "organization"])
@@ -134,28 +135,24 @@ export async function listEventPromotionActivity(
     "rc.code ASC",
   );
 
-  const pageStatement =
+  const pageQuery =
     params.view === "promoters"
-      ? db
-          .prepare(
-            `${PROMOTER_READ_MODEL} SELECT ${PROMOTER_SELECT_COLUMNS} FROM promoter_rows WHERE 1 = 1 ${promoterSearch ? `AND ${promoterSearch.sql}` : ""} ${promoterOrder} LIMIT ? OFFSET ?`,
-          )
-          .bind(event.id, event.id, ...(promoterSearch?.bindings ?? []), params.limit, params.offset)
-      : db
-          .prepare(`${REFERRAL_CODE_SELECT} ${codeSearch ? `AND ${codeSearch.sql}` : ""} ${codeOrder} LIMIT ? OFFSET ?`)
-          .bind(event.id, ...(codeSearch?.bindings ?? []), params.limit, params.offset);
-  const countStatement =
-    params.view === "promoters"
-      ? db
-          .prepare(
-            `${PROMOTER_READ_MODEL} SELECT COUNT(*) AS total FROM promoter_rows WHERE 1 = 1 ${promoterSearch ? `AND ${promoterSearch.sql}` : ""}`,
-          )
-          .bind(event.id, event.id, ...(promoterSearch?.bindings ?? []))
-      : db
-          .prepare(
-            `SELECT COUNT(*) AS total FROM (${REFERRAL_CODE_SELECT} ${codeSearch ? `AND ${codeSearch.sql}` : ""})`,
-          )
-          .bind(event.id, ...(codeSearch?.bindings ?? []));
+      ? {
+          sql: `${PROMOTER_READ_MODEL} SELECT ${PROMOTER_SELECT_COLUMNS} FROM promoter_rows
+                WHERE 1 = 1 ${promoterSearch ? `AND ${promoterSearch.sql}` : ""}`,
+          bindings: [event.id, event.id, ...(promoterSearch?.bindings ?? [])],
+          orderBy: promoterOrder,
+          limit: params.limit,
+          offset: params.offset,
+        }
+      : {
+          sql: `${REFERRAL_CODE_SELECT} ${codeSearch ? `AND ${codeSearch.sql}` : ""}`,
+          bindings: [event.id, ...(codeSearch?.bindings ?? [])],
+          orderBy: codeOrder,
+          limit: params.limit,
+          offset: params.offset,
+        };
+  const [pageStatement, countStatement] = buildOffsetPageStatements(db, pageQuery);
 
   const [pageResult, countResult, summaryResult, codeCountResult] = await db.batch([
     pageStatement,
@@ -175,9 +172,9 @@ export async function listEventPromotionActivity(
     db.prepare("SELECT COUNT(*) AS total FROM referral_codes WHERE event_id = ?").bind(event.id),
   ]);
 
-  const promoters = params.view === "promoters" ? batchRows<EventPromoter>(pageResult) : [];
-  const referralCodes = params.view === "codes" ? batchRows<EventReferralCode>(pageResult) : [];
-  const total = batchFirst<{ total: number }>(countResult)?.total ?? 0;
+  const { rows: pageRows, total } = decodeOffsetPageResults<EventPromoter | EventReferralCode>(pageResult, countResult);
+  const promoters = params.view === "promoters" ? (pageRows as EventPromoter[]) : [];
+  const referralCodes = params.view === "codes" ? (pageRows as EventReferralCode[]) : [];
   const summary = batchFirst<SummaryRow>(summaryResult);
   return {
     eventSlug: event.slug,

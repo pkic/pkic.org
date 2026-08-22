@@ -13,6 +13,7 @@ import { getRegistrationDayAttendance } from "../event-days";
 import { listDayWaitlistForRegistration } from "./day-waitlist";
 import type { DatabaseLike, StatementLike } from "../../types";
 import type { UserProfilePatch } from "../users";
+import { REGISTRATION_RECIPIENT_EMAIL_SQL } from "./recipient-email";
 import { REGISTRATION_COLUMNS, type RegistrationRecord } from "./types";
 
 interface UserRow {
@@ -65,8 +66,12 @@ async function loadRegistrationEmailContext(
   if (!registration) throw new AppError(404, "REGISTRATION_NOT_FOUND", "Registration not found");
   const storedUser = await first<UserRow>(
     db,
-    "SELECT id, email, first_name, last_name, organization_name, job_title FROM users WHERE id = ?",
-    [registration.user_id],
+    `SELECT u.id, ${REGISTRATION_RECIPIENT_EMAIL_SQL} AS email,
+            u.first_name, u.last_name, u.organization_name, u.job_title
+       FROM registrations r
+       JOIN users u ON u.id = r.user_id
+      WHERE r.id = ? AND r.event_id = ?`,
+    [registration.id, eventId],
   );
   if (!storedUser) throw new AppError(404, "USER_NOT_FOUND", "Associated user record is missing");
   const patch = overrides.profilePatch;

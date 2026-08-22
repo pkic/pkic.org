@@ -10,6 +10,7 @@ export const adminDueWorkListQuerySchema = listQuerySchema(ADMIN_DUE_WORK_SORT_C
   includeRetention: booleanQueryFlagSchema.default(false),
   reminderLimit: z.coerce.number().int().min(1).max(500).default(120),
   outboxLimit: z.coerce.number().int().min(1).max(500).default(120),
+  cleanupLimit: z.coerce.number().int().min(1).max(500).default(120),
 });
 
 export const adminDueWorkRowSchema = z.object({
@@ -44,7 +45,7 @@ export const adminDueWorkListRouteSchema = {
   tags: ["Admin due work"],
   summary: "List the bounded due-work batch",
   description:
-    "Returns one server-owned, filterable/sortable/pageable projection of due outbox, reminder, and optional retention work. Candidate limits match the manual job controls.",
+    "Returns one server-owned, filterable/sortable/pageable projection of due outbox, reminder, and optional retention work. Each source has an explicit candidate limit so historical D1 data is not joined into an unbounded Worker read model.",
   request: { query: adminDueWorkListQuerySchema },
   responses: {
     "200": {

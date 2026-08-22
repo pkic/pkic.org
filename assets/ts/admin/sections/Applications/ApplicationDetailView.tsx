@@ -34,7 +34,7 @@ export function ApplicationDetailView({ applicationId, onBack }: { applicationId
           <ApplicationOverviewCard detail={detail} onSave={saveEdit} />
           <ApplicationAnswersCard detail={detail} />
           <ApplicationTransitionCard detail={detail} onApprove={approve} onTransition={transition} />
-          <ApplicationDocumentsCard detail={detail} />
+          <ApplicationDocumentsCard applicationId={detail.id} />
         </div>
 
         <div class="col-md-6">

@@ -362,6 +362,105 @@ describe("admin user headshot upload", () => {
         [targetUserId],
       ),
     ).toHaveLength(1);
+    expect(
+      await queryAll<{ object_key: string }>(
+        env.DB,
+        "SELECT object_key FROM storage_deletion_outbox WHERE bucket = 'speaker_uploads' ORDER BY object_key",
+      ),
+    ).toEqual([{ object_key: oldKey }]);
+  });
+
+  it("removes a new headshot when its audited pointer commit fails", async () => {
+    const { adminId, targetUserId } = await setup();
+    const bucket = new FakeUploadsBucket();
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_headshot_upload_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'headshot_uploaded'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced headshot audit failure');
+       END`,
+    ).run();
+
+    try {
+      await expect(
+        replaceUserHeadshot({
+          db: env.DB,
+          bucket: bucket as unknown as R2Bucket,
+          userId: targetUserId,
+          previousKey: null,
+          image: { buffer: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]).buffer, contentType: "image/jpeg" },
+          audit: { actorType: "admin", actorId: adminId, action: "headshot_uploaded" },
+        }),
+      ).rejects.toThrow("forced headshot audit failure");
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_headshot_upload_audit").run();
+    }
+
+    expect(bucket.keys()).toEqual([]);
+    expect(
+      await queryAll<{ headshot_r2_key: string | null }>(env.DB, "SELECT headshot_r2_key FROM users WHERE id = ?", [
+        targetUserId,
+      ]),
+    ).toEqual([{ headshot_r2_key: null }]);
+    expect(
+      await queryAll(env.DB, "SELECT object_key FROM storage_deletion_outbox WHERE bucket = 'speaker_uploads'"),
+    ).toEqual([]);
+  });
+
+  it("retains a failed headshot compensation for durable retry", async () => {
+    const { adminId, targetUserId } = await setup();
+    const bucket = new FailingDeleteUploadsBucket();
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_headshot_upload_audit_retry
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'headshot_uploaded'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced headshot audit failure');
+       END`,
+    ).run();
+
+    try {
+      await expect(
+        replaceUserHeadshot({
+          db: env.DB,
+          bucket: bucket as unknown as R2Bucket,
+          userId: targetUserId,
+          previousKey: null,
+          image: { buffer: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]).buffer, contentType: "image/jpeg" },
+          audit: { actorType: "admin", actorId: adminId, action: "headshot_uploaded" },
+        }),
+      ).rejects.toThrow("forced headshot audit failure");
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_headshot_upload_audit_retry").run();
+    }
+
+    const [storedKey] = bucket.keys();
+    expect(storedKey).toMatch(new RegExp(`^headshots/${targetUserId}/`));
+    expect(
+      await queryAll<{ object_key: string; status: string }>(
+        env.DB,
+        "SELECT object_key, status FROM storage_deletion_outbox WHERE bucket = 'speaker_uploads'",
+      ),
+    ).toEqual([{ object_key: storedKey, status: "queued" }]);
+    expect(
+      await queryAll<{ headshot_r2_key: string | null }>(env.DB, "SELECT headshot_r2_key FROM users WHERE id = ?", [
+        targetUserId,
+      ]),
+    ).toEqual([{ headshot_r2_key: null }]);
+
+    await env.DB.prepare("UPDATE storage_deletion_outbox SET next_attempt_at = datetime('now') WHERE object_key = ?")
+      .bind(storedKey)
+      .run();
+    await expect(
+      processPendingStorageDeletions(env.DB, { SPEAKER_UPLOADS_BUCKET: bucket as unknown as R2Bucket }, 10),
+    ).resolves.toEqual({ processed: 1, failed: 0 });
+    expect(bucket.keys()).toEqual([]);
+    expect(
+      await queryAll<{ status: string }>(env.DB, "SELECT status FROM storage_deletion_outbox WHERE object_key = ?", [
+        storedKey,
+      ]),
+    ).toEqual([{ status: "deleted" }]);
   });
 
   it("revokes the public URL immediately and retries a failed R2 deletion", async () => {

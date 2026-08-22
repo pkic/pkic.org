@@ -3,8 +3,7 @@ import { encodeBoundedCsv } from "../../csv";
 import { all } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
-import { parseJsonSafe } from "../../utils/json";
-import { extractDietarySelections } from "../../utils/registration-dietary";
+import { formatCustomAnswerValue, parseCustomAnswerRecord } from "../../utils/custom-answer-display";
 import { writeAuditLog } from "../audit";
 
 interface ExportRow {
@@ -60,13 +59,10 @@ export async function buildAdminRegistrationCsv(
     "Source",
     "Registered at",
     "Sponsor consent",
-    "Dietary requirements",
+    ...(formFields ?? []).map((field) => field.label),
   ];
   const dataRows = rows.map((row) => {
-    const dietary = extractDietarySelections(
-      parseJsonSafe<Record<string, unknown> | null>(row.custom_answers_json, null),
-      formFields,
-    ).join("; ");
+    const customAnswers = parseCustomAnswerRecord(row.custom_answers_json);
     return [
       row.id,
       row.display_name,
@@ -78,7 +74,7 @@ export async function buildAdminRegistrationCsv(
       row.source_type,
       row.created_at,
       row.sponsor_consent ? "Yes" : "No",
-      dietary,
+      ...(formFields ?? []).map((field) => formatCustomAnswerValue(customAnswers?.[field.key], field)),
     ];
   });
   return { csv: encodeBoundedCsv([header, ...dataRows], limits.maxBytes), recordCount: rows.length };

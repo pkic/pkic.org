@@ -16,7 +16,7 @@ import { resetDb } from "./helpers/reset-db";
 import { proposalReviewsListResponseSchema } from "../assets/shared/schemas/proposal-reviews";
 
 function decisionActor(id: string) {
-  return { id, email: "admin@pkic.org", role: "admin" };
+  return { identityType: "user" as const, id, email: "admin@pkic.org", role: "admin" };
 }
 
 interface SeededDecisionWorkflow {
@@ -127,7 +127,13 @@ describe("proposal decision review rounds", () => {
     await expect(
       recordProposalDecision(env.DB, {
         proposalId: seeded.proposalId,
-        actor: { id: seeded.adminId, email: "admin@pkic.org", role: "user", grants: [] },
+        actor: {
+          identityType: "user",
+          id: seeded.adminId,
+          email: "admin@pkic.org",
+          role: "user",
+          grants: [],
+        },
         finalStatus: "accepted",
         minReviewsRequired: 0,
       }),
@@ -267,7 +273,7 @@ describe("proposal decision review rounds", () => {
     ).resolves.toEqual([{ status: "cancelled" }]);
     const participants = await queryAll<{ status: string }>(
       env.DB,
-      "SELECT status FROM event_participants WHERE source_type = 'proposal' AND source_ref = ?",
+      "SELECT status FROM event_participant_role_sources WHERE source_type = 'proposal' AND source_ref = ?",
       [seeded.proposalId],
     );
     expect(participants.length).toBeGreaterThan(0);

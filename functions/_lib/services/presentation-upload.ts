@@ -5,14 +5,15 @@ import {
   PRESENTATION_FILE_SIZE_HEADER,
 } from "../../../assets/shared/presentation-upload";
 import { AppError } from "../errors";
-import type { DatabaseLike, Env } from "../types";
+import type { AuthAdmin, DatabaseLike, Env } from "../types";
+import { adminDatabaseUserId } from "../auth/admin-identity";
 import { uuid } from "../utils/ids";
 import {
   getPresentationProposalContext,
-  recordPresentationUpload,
+  preparePresentationVersionCreate,
   type PresentationProposalContext,
 } from "./presentation-versions";
-import { registerStorageUploadCompensation } from "./storage-deletion-outbox";
+import { withStorageUploadCompensation } from "./storage-deletion-outbox";
 
 const ALLOWED_PRESENTATION_TYPES = new Set<string>(ALLOWED_PRESENTATION_MIME_TYPES);
 
@@ -28,6 +29,8 @@ export interface PresentationStorageContext {
   proposalId: string;
   proposalTitle: string;
 }
+
+type PresentationUploadActor = { type: "admin"; admin: AuthAdmin } | { type: "user"; userId: string };
 
 type PresentationUploadError = { error: { code: string; message: string }; status: number };
 
@@ -100,7 +103,6 @@ export async function storePresentationFile(
     preparedR2Key ?? `presentations/${eventSlug}/${proposalTitle}--${proposalId}/${Date.now()}-${uuid()}-${safeName}`;
   const stored = await bucket.put(r2Key, upload.body, { httpMetadata: { contentType: upload.type } });
   if (stored.size !== upload.size) {
-    await bucket.delete(r2Key);
     throw new AppError(400, "FILE_SIZE_MISMATCH", "Presentation file size does not match the request.");
   }
   return r2Key;
@@ -120,8 +122,7 @@ export async function uploadProposalPresentation(
   request: Request,
   context: PresentationProposalContext,
   payload: {
-    uploadedByUserId: string;
-    actorType: "admin" | "user";
+    actor: PresentationUploadActor;
     enforceDeadline: boolean;
   },
 ): Promise<string> {
@@ -147,22 +148,35 @@ export async function uploadProposalPresentation(
   const proposalId = storagePathSegment(context.id, "unknown", 64);
   const safeName = parsed.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100) || "presentation";
   const r2Key = `presentations/${eventSlug}/${proposalTitle}--${proposalId}/${Date.now()}-${uuid()}-${safeName}`;
-  await registerStorageUploadCompensation(db, r2Key, "speaker_uploads");
-  await storePresentationFile(
-    bucket,
-    { eventSlug: context.event_slug, proposalId: context.id, proposalTitle: context.title },
-    parsed,
-    r2Key,
+  const uploadedByUserId =
+    payload.actor.type === "admin" ? adminDatabaseUserId(payload.actor.admin) : payload.actor.userId;
+  const auditActorId = payload.actor.type === "admin" ? payload.actor.admin.id : payload.actor.userId;
+  const prepared = preparePresentationVersionCreate(
+    db,
+    context.id,
+    {
+      r2Key,
+      uploadedByUserId,
+      fileName: parsed.name,
+      fileSize: parsed.size,
+      mimeType: parsed.type,
+    },
+    { actorType: payload.actor.type, actorId: auditActorId, action: "presentation_uploaded" },
   );
-  await recordPresentationUpload(
+  await withStorageUploadCompensation({
     db,
     bucket,
-    context.id,
-    r2Key,
-    payload.uploadedByUserId,
-    { fileName: parsed.name, fileSize: parsed.size, mimeType: parsed.type },
-    { actorType: payload.actorType, action: "presentation_uploaded" },
-  );
+    bucketName: "speaker_uploads",
+    objectKey: r2Key,
+    upload: () =>
+      storePresentationFile(
+        bucket,
+        { eventSlug: context.event_slug, proposalId: context.id, proposalTitle: context.title },
+        parsed,
+        r2Key,
+      ),
+    prepareCommitStatements: () => prepared.statements,
+  });
   return r2Key;
 }
 

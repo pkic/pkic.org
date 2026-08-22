@@ -12,6 +12,7 @@ import { uuid } from "../../../utils/ids";
 import { nowIso } from "../../../utils/time";
 import { AppError } from "../../../errors";
 import { prepareQueueEmailStatement, type QueueEmailPayload } from "../../../email/outbox";
+import { adminDatabaseUserId } from "../../../auth/admin-identity";
 import { prepareAuditLog } from "../../audit";
 import { prepareReleaseApplicationDomainClaim } from "../organization-domain-claims";
 import {
@@ -20,7 +21,7 @@ import {
   type ApplicationStage,
 } from "../../../../../assets/shared/schemas/member-applications";
 import { getMemberApplicationById, type MemberApplicationRow } from "./queries";
-import type { DatabaseLike, StatementLike } from "../../../types";
+import type { AuthAdmin, DatabaseLike, StatementLike } from "../../../types";
 
 export { ON_HOLD_SUBTYPES, allowedTransitions };
 export type OnHoldSubtype = (typeof ON_HOLD_SUBTYPES)[number];
@@ -73,7 +74,8 @@ export interface StageTransitionNotification {
 export interface StageTransitionParams {
   applicationId: string;
   toStage: string;
-  actorUserId: string | null;
+  /** `null` is reserved for unattended system transitions. */
+  actor: AuthAdmin | null;
   onHoldSubtype?: string | null;
   note?: string | null;
   notification?: StageTransitionNotification;
@@ -125,6 +127,8 @@ export function prepareApplicationStageTransition(
   const now = nowIso();
   const nextOnHoldSubtype = params.toStage === "on_hold" ? (params.onHoldSubtype as string) : null;
   const fromStage = application.stage;
+  const auditActorId = params.actor?.id ?? null;
+  const databaseActorUserId = params.actor ? adminDatabaseUserId(params.actor) : null;
 
   const suggestedEmailTemplateKey =
     params.toStage === "on_hold"
@@ -177,7 +181,7 @@ export function prepareApplicationStageTransition(
         `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
          VALUES (?, ?, ?, CASE WHEN changes() = 1 THEN ? ELSE NULL END, ?, ?, ?)`,
       )
-      .bind(uuid(), application.id, fromStage, params.toStage, params.actorUserId, params.note ?? null, now),
+      .bind(uuid(), application.id, fromStage, params.toStage, databaseActorUserId, params.note ?? null, now),
   ];
 
   const outboxIds: string[] = [];
@@ -192,8 +196,8 @@ export function prepareApplicationStageTransition(
   statements.push(
     prepareAuditLog(
       db,
-      params.actorUserId ? "admin" : "system",
-      params.actorUserId,
+      params.actor ? "admin" : "system",
+      auditActorId,
       "application_stage_transitioned",
       "member_application",
       application.id,

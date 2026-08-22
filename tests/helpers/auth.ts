@@ -1,6 +1,7 @@
 import { sha256Hex } from "../../functions/_lib/utils/crypto";
 import { nowIso, addHours } from "../../functions/_lib/utils/time";
 import { signAdminSessionToken } from "../../functions/_lib/auth/admin";
+import { createUserBackedAuthAdmin } from "../../functions/_lib/auth/admin-identity";
 import { signMemberSessionToken } from "../../functions/_lib/auth/member";
 import { AUTH_SCOPES } from "../../functions/_lib/auth/scopes";
 import { first } from "../../functions/_lib/db/queries";
@@ -43,7 +44,12 @@ export async function createAdminSession(
   const email = userRow?.email ?? "admin@example.test";
 
   return signAdminSessionToken(signingSecret, {
-    admin: { id: adminUserId, email, role, scopes: role === "admin" ? [...AUTH_SCOPES] : [] },
+    admin: createUserBackedAuthAdmin({
+      id: adminUserId,
+      email,
+      role,
+      scopes: role === "admin" ? [...AUTH_SCOPES] : [],
+    }),
     sessionId,
     expiresAt,
   });

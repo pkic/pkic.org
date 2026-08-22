@@ -23,7 +23,17 @@ interface OutboxFilters {
   q: string;
 }
 
-const STATUS_DESC_ORDER = ["failed", "retrying", "queued", "sending", "sent", "transactional", "promotional"];
+const STATUS_DESC_ORDER = [
+  "failed",
+  "delivery_unknown",
+  "retrying",
+  "queued",
+  "sending",
+  "sent",
+  "delivered",
+  "transactional",
+  "promotional",
+];
 
 function sortedBadgeEntries(items: Record<string, number>): Array<[string, number]> {
   return Object.entries(items).sort(([a], [b]) => {
@@ -226,7 +236,7 @@ export function Email() {
 
   const visibleSelected = outboxData?.outbox.filter((r) => selectedIds.has(r.id)) ?? [];
   const processableSelected = visibleSelected.filter(isOutboxDueNow);
-  const failedSelected = visibleSelected.filter((r) => r.status === "failed");
+  const resettableSelected = visibleSelected.filter((r) => r.status === "failed" || r.status === "delivery_unknown");
   const selectAllState =
     outboxData && outboxData.outbox.length > 0 && visibleSelected.length === outboxData.outbox.length
       ? "all"
@@ -280,7 +290,7 @@ export function Email() {
         method: "POST",
         body: JSON.stringify(ids?.length ? { ids } : {}),
       });
-      toast(`Reset ${r.reset ?? 0} failed, sent ${r.processed ?? 0}`, "success");
+      toast(`Reset ${r.reset ?? 0} failed or unknown, sent ${r.processed ?? 0}`, "success");
       void load();
     } catch (e) {
       toast((e as Error).message, "error");
@@ -316,7 +326,7 @@ export function Email() {
           <div>
             <strong>Email Outbox</strong>
             <p class="mb-0 text-muted small">
-              Inspect queued, retrying, sent, and failed email rows with recipient, subject, and delivery context.
+              Inspect queued, retrying, sent, delivered, failed, and delivery-unknown email rows.
             </p>
           </div>
           <div class="d-flex gap-2 flex-wrap">
@@ -345,7 +355,11 @@ export function Email() {
               <option value="retrying">Retrying</option>
               <option value="sending">Sending</option>
               <option value="sent">Sent</option>
+              <option value="delivered">Delivered</option>
+              <option value="delivery_unknown">Delivery unknown</option>
               <option value="failed">Failed</option>
+              <option value="bounced">Bounced</option>
+              <option value="cancelled">Cancelled</option>
             </select>
           </div>
           <div class="col-md-3">
@@ -420,8 +434,8 @@ export function Email() {
               <div class="small">
                 Due now: {ob.summary.dueNow}.{" "}
                 {visibleSelected.length > 0
-                  ? `${visibleSelected.length} selected. ${processableSelected.length} can be processed, ${failedSelected.length} can be reset.`
-                  : "Select visible rows to process due queued/retrying emails or reset failed ones."}
+                  ? `${visibleSelected.length} selected. ${processableSelected.length} can be processed, ${resettableSelected.length} can be reset.`
+                  : "Select visible rows to process due queued/retrying emails or explicitly reset failed/unknown ones."}
               </div>
             </div>
             <div class="d-flex flex-wrap gap-2 align-items-end">
@@ -470,13 +484,13 @@ export function Email() {
               </button>
               <button
                 class="btn btn-sm btn-outline-danger"
-                disabled={failedSelected.length === 0}
-                onClick={() => void doResetFailed(failedSelected.map((r) => r.id))}
+                disabled={resettableSelected.length === 0}
+                onClick={() => void doResetFailed(resettableSelected.map((r) => r.id))}
               >
-                Reset selected failed
+                Reset selected failed/unknown
               </button>
               <button class="btn btn-sm btn-danger" onClick={() => void doResetFailed()}>
-                Reset all failed
+                Reset all failed/unknown
               </button>
             </div>
           </div>

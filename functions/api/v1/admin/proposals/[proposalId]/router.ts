@@ -48,10 +48,11 @@ app.onError((error, _c) => handleError(error));
 export const openapi = fromHono(app);
 
 /**
- * Floor gate for the whole /admin/proposals/:proposalId/** subtree
- * (detail, audit log, comments, reviews, speakers, presentation uploads/
- * downloads, reminder emails) — requires at least proposals:read, globally
- * or scoped to the proposal's event, matching the same permission
+ * Contextual gate for the whole /admin/proposals/:proposalId/** subtree.
+ * Detail reads require proposals:read; audit, comments, and reviews require
+ * proposals:score because their payloads can contain private reviewer notes;
+ * other writes require proposals:manage. Permissions may be global or scoped
+ * to the proposal's event, matching the same permission
  * events/[eventSlug]/proposals.ts already requires to list an event's
  * proposals. Several handlers in this subtree (audit-log.ts,
  * remind-speakers.ts, remind-presentation.ts, speakers/[userId]/remind*.ts,
@@ -61,9 +62,7 @@ export const openapi = fromHono(app);
  * could read or act on any event's proposals. Handlers that need a
  * stricter bar (patch.ts/finalize.ts's canFinalize, comments.ts/
  * reviews.ts's canReview via getProposalAccessForEvent) keep their own
- * additional check on top; canFinalize/canReview are always a subset of
- * proposals:read for every seeded role, so this floor doesn't change
- * behavior for any caller who was already able to reach those checks.
+ * additional check on top.
  */
 async function requireProposalAccess(c: Context<RequestDbContext>, next: Next): Promise<void> {
   const admin = getCachedAdminForRequest(c.req.raw);

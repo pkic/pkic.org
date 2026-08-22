@@ -1,11 +1,11 @@
 import { eventSlugParamsSchema, successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
-import { listQuerySchema } from "./pagination";
 import { adminRegistrationDetailResponseSchema } from "./admin-registration-detail";
 import { z } from "zod";
 import { httpUrlSchema } from "./urls";
 import { registrationManageSchema } from "./registration";
 import { ADMIN_EVENT_REGISTRATION_STATUSES, adminEventRegistrationStatusSchema } from "./admin-events";
+import { scopedAuditLogListQuerySchema, scopedAuditLogResponseSchema } from "./audit-log";
 
 export const ADMIN_REGISTRATION_FORCE_STATUSES = ADMIN_EVENT_REGISTRATION_STATUSES;
 export const adminRegistrationForceStatusSchema = adminEventRegistrationStatusSchema;
@@ -27,10 +27,13 @@ export const adminRegistrationAuditLogRouteSchema = {
   description: "Returns recent audit events attached to a registration in the requested event.",
   request: {
     params: eventSlugParamsSchema.extend({ registrationId: databaseIdSchema }),
-    query: listQuerySchema(["createdAt", "action", "actor"] as const),
+    query: scopedAuditLogListQuerySchema,
   },
   responses: {
-    "200": { description: "Registration audit log entries." },
+    "200": {
+      description: "Registration audit log entries.",
+      content: { "application/json": { schema: scopedAuditLogResponseSchema } },
+    },
     "401": { description: "Admin authorization required." },
     "404": { description: "Event or registration not found." },
   },

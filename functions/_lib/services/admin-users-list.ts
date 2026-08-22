@@ -44,9 +44,13 @@ export async function listAdminUsers(db: DatabaseLike, query: AdminUsersListQuer
   if (query.type === "member") {
     conditions.push("m.id IS NOT NULL");
   } else if (query.type === "event_attendee") {
-    conditions.push("m.id IS NULL AND EXISTS (SELECT 1 FROM event_participants ep WHERE ep.user_id = u.id)");
+    conditions.push(
+      "m.id IS NULL AND EXISTS (SELECT 1 FROM event_participant_role_sources ep WHERE ep.user_id = u.id)",
+    );
   } else if (query.type === "contact_only") {
-    conditions.push("m.id IS NULL AND NOT EXISTS (SELECT 1 FROM event_participants ep WHERE ep.user_id = u.id)");
+    conditions.push(
+      "m.id IS NULL AND NOT EXISTS (SELECT 1 FROM event_participant_role_sources ep WHERE ep.user_id = u.id)",
+    );
   }
   if (query.q) {
     const primary = buildD1TextSearchFilter(query.q, [
@@ -65,15 +69,15 @@ export async function listAdminUsers(db: DatabaseLike, query: AdminUsersListQuer
   const listWhere = where.replace(/\bm\.id\b/g, "COALESCE(m.id, mi.id)");
   const representativeJoin = deterministicRepresentativeJoinSql("u.id");
   const orderBy = resolveOrderBy(query.sort, ADMIN_USERS_SORT_COLUMNS, "ORDER BY u.role ASC, u.email ASC", "u.id ASC");
-  const { rows: users, total } = await queryPage<UserRow>(
-    db,
-    {
-      sql: `SELECT u.id, u.email, u.first_name, u.last_name, u.organization_name, u.role, u.active, u.created_at,
+  const { rows: users, total } = await queryPage<UserRow>(db, {
+    sql: `SELECT u.id, u.email, u.first_name, u.last_name, u.organization_name, u.role, u.active, u.created_at,
               u.links_json,
               COALESCE(rep.id, mi.id) AS member_id, mca.category_code AS member_category,
               COALESCE(m.status, mi.status) AS member_status,
               m.organization_id AS member_organization_id, o.name AS member_organization_name,
-              (SELECT COUNT(*) FROM event_participants ep WHERE ep.user_id = u.id) AS event_participation_count
+              (SELECT COUNT(DISTINCT ep.event_id)
+                 FROM event_participant_role_sources ep
+                WHERE ep.user_id = u.id) AS event_participation_count
        FROM users u
        ${representativeJoin}
        LEFT JOIN members m ON m.id = rep.member_id
@@ -81,19 +85,12 @@ export async function listAdminUsers(db: DatabaseLike, query: AdminUsersListQuer
        LEFT JOIN organizations o ON o.id = m.organization_id
        LEFT JOIN member_category_assignments mca ON mca.member_id = COALESCE(m.id, mi.id)
        ${listWhere}
-       ${orderBy}
-       LIMIT ? OFFSET ?`,
-      bindings: [...bindings, query.limit, query.offset],
-    },
-    {
-      sql: `SELECT COUNT(*) AS total FROM users u
-       ${representativeJoin}
-       LEFT JOIN members m ON m.id = rep.member_id
-       LEFT JOIN members mi ON mi.user_id = u.id
-       ${listWhere}`,
-      bindings,
-    },
-  );
+       `,
+    bindings,
+    orderBy,
+    limit: query.limit,
+    offset: query.offset,
+  });
 
   const results = users.map(({ links_json: linksJson, event_participation_count: participationCount, ...row }) => ({
     ...row,

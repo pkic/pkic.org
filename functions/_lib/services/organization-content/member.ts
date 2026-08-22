@@ -1,4 +1,4 @@
-import { first, run } from "../../db/queries";
+import { first } from "../../db/queries";
 import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
@@ -24,8 +24,9 @@ import {
   type ContentReviewFieldInput,
   type ReviewRow,
 } from "./model";
-import type { AuthMember, DatabaseLike } from "../../types";
+import type { AuthMember, DatabaseLike, StatementLike } from "../../types";
 import { prepareStorageDeletion } from "../storage-deletion-outbox";
+import { prepareOrganizationContentReviewNotificationIntents } from "./notifications";
 
 export async function getMyOrganizationProfile(db: DatabaseLike, member: AuthMember) {
   if (!member.organizationId) {
@@ -72,6 +73,7 @@ export async function submitOrgContentChange(
   db: DatabaseLike,
   member: AuthMember,
   input: ContentReviewFieldInput,
+  reviewUrl: string,
 ): Promise<SubmitContentChangeResult> {
   const org = await requireOrgContact(db, member);
   if (await fetchPendingReview(db, org.id)) {
@@ -91,13 +93,16 @@ export async function submitOrgContentChange(
   const id = uuid();
   const proposedChangesJson = JSON.stringify(changedFields);
   try {
-    await run(
-      db,
-      `INSERT INTO organization_content_reviews
-         (id, organization_id, submitted_by_user_id, proposed_changes_json, logo_staging_r2_key, status, submitted_at, created_at)
-       VALUES (?, ?, ?, ?, NULL, 'pending', ?, ?)`,
-      [id, org.id, member.userId, proposedChangesJson, now, now],
-    );
+    await db.batch([
+      db
+        .prepare(
+          `INSERT INTO organization_content_reviews
+             (id, organization_id, submitted_by_user_id, proposed_changes_json, logo_staging_r2_key, status, submitted_at, created_at)
+           VALUES (?, ?, ?, ?, NULL, 'pending', ?, ?)`,
+        )
+        .bind(id, org.id, member.userId, proposedChangesJson, now, now),
+      prepareOrganizationContentReviewNotificationIntents(db, id, org.id, member.email, reviewUrl, now),
+    ]);
   } catch (error) {
     if (!isPendingReviewUniqueConflict(error)) throw error;
     throw new AppError(
@@ -152,17 +157,13 @@ export async function listMyOrganizationReviews(
     "submitted_at DESC",
     "id DESC",
   );
-  const { rows, total } = await queryPage<ReviewRow>(
-    db,
-    {
-      sql: `SELECT ${REVIEW_COLUMNS} FROM organization_content_reviews ${where} ${orderBy} LIMIT ? OFFSET ?`,
-      bindings: [...bindings, params.limit, params.offset],
-    },
-    {
-      sql: `SELECT COUNT(*) AS total FROM organization_content_reviews ${where}`,
-      bindings,
-    },
-  );
+  const { rows, total } = await queryPage<ReviewRow>(db, {
+    sql: `SELECT ${REVIEW_COLUMNS} FROM organization_content_reviews ${where}`,
+    bindings,
+    orderBy,
+    limit: params.limit,
+    offset: params.offset,
+  });
   return { reviews: rows.map(toReviewSummary), total };
 }
 
@@ -197,51 +198,67 @@ export async function withdrawMyOrganizationReview(db: DatabaseLike, member: Aut
   return { id: reviewId, staleLogoStagingR2Key: review.logo_staging_r2_key };
 }
 
-export async function stageOrganizationLogo(db: DatabaseLike, member: AuthMember, r2Key: string) {
-  const org = await requireOrgContact(db, member);
+export interface PreparedOrganizationLogoStage {
+  previousStagingKey: string | null;
+  statements: StatementLike[];
+  mapCommitError(error: unknown): unknown;
+}
+
+/** Builds the atomic staging mutation after the caller has authorized the organization contact. */
+export async function prepareAuthorizedOrganizationLogoStage(
+  db: DatabaseLike,
+  member: AuthMember,
+  organizationId: string,
+  r2Key: string,
+  reviewUrl: string,
+): Promise<PreparedOrganizationLogoStage> {
   const now = nowIso();
-  const existingPending = await fetchPendingReview(db, org.id);
+  const existingPending = await fetchPendingReview(db, organizationId);
   const previousStagingKey = existingPending?.logo_staging_r2_key ?? null;
 
   if (existingPending) {
-    try {
-      const statements = [
-        prepareReviewTransitionGuard(db, existingPending),
-        db
-          .prepare(
-            "UPDATE organization_content_reviews SET logo_staging_r2_key = ? WHERE id = ? AND status = 'pending'",
-          )
-          .bind(r2Key, existingPending.id),
-        db
-          .prepare("UPDATE organizations SET logo_staging_r2_key = ?, updated_at = ? WHERE id = ?")
-          .bind(r2Key, now, org.id),
-      ];
-      const deletion = prepareStorageDeletion(db, previousStagingKey, now, "assets");
-      if (deletion) statements.push(deletion);
-      await db.batch(statements);
-    } catch (error) {
-      if (!isStaleContentReviewTransition(error)) throw error;
-      throw new AppError(409, "REVIEW_CHANGED", "The pending review changed; please retry the logo upload");
-    }
-  } else {
-    try {
-      await db.batch([
-        db
-          .prepare(
-            `INSERT INTO organization_content_reviews
-               (id, organization_id, submitted_by_user_id, proposed_changes_json, logo_staging_r2_key, status, submitted_at, created_at)
-             VALUES (?, ?, ?, '{}', ?, 'pending', ?, ?)`,
-          )
-          .bind(uuid(), org.id, member.userId, r2Key, now, now),
-        db
-          .prepare("UPDATE organizations SET logo_staging_r2_key = ?, updated_at = ? WHERE id = ?")
-          .bind(r2Key, now, org.id),
-      ]);
-    } catch (error) {
-      if (!isPendingReviewUniqueConflict(error)) throw error;
-      throw new AppError(409, "REVIEW_CHANGED", "A pending review was created; please retry the logo upload");
-    }
+    const statements = [
+      prepareReviewTransitionGuard(db, existingPending),
+      db
+        .prepare("UPDATE organization_content_reviews SET logo_staging_r2_key = ? WHERE id = ? AND status = 'pending'")
+        .bind(r2Key, existingPending.id),
+      db
+        .prepare("UPDATE organizations SET logo_staging_r2_key = ?, updated_at = ? WHERE id = ?")
+        .bind(r2Key, now, organizationId),
+    ];
+    const deletion = prepareStorageDeletion(db, previousStagingKey, now, "assets");
+    if (deletion) statements.push(deletion);
+    return {
+      previousStagingKey,
+      statements,
+      mapCommitError(error) {
+        return isStaleContentReviewTransition(error)
+          ? new AppError(409, "REVIEW_CHANGED", "The pending review changed; please retry the logo upload")
+          : error;
+      },
+    };
   }
 
-  return { previousStagingKey };
+  const reviewId = uuid();
+  return {
+    previousStagingKey,
+    statements: [
+      db
+        .prepare(
+          `INSERT INTO organization_content_reviews
+             (id, organization_id, submitted_by_user_id, proposed_changes_json, logo_staging_r2_key, status, submitted_at, created_at)
+           VALUES (?, ?, ?, '{}', ?, 'pending', ?, ?)`,
+        )
+        .bind(reviewId, organizationId, member.userId, r2Key, now, now),
+      db
+        .prepare("UPDATE organizations SET logo_staging_r2_key = ?, updated_at = ? WHERE id = ?")
+        .bind(r2Key, now, organizationId),
+      prepareOrganizationContentReviewNotificationIntents(db, reviewId, organizationId, member.email, reviewUrl, now),
+    ],
+    mapCommitError(error) {
+      return isPendingReviewUniqueConflict(error)
+        ? new AppError(409, "REVIEW_CHANGED", "A pending review was created; please retry the logo upload")
+        : error;
+    },
+  };
 }

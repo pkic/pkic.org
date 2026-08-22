@@ -149,14 +149,13 @@ export async function listPublicMembers(
     "m.id ASC",
   );
 
-  const { rows, total } = await queryPage<DirectoryRow>(
-    db,
-    {
-      sql: `${DIRECTORY_SELECT}${extraWhere} ${orderBy} LIMIT ? OFFSET ?`,
-      bindings: [...args, params.limit, params.offset],
-    },
-    { sql: `SELECT COUNT(*) AS total FROM (${DIRECTORY_SELECT}${extraWhere})`, bindings: args },
-  );
+  const { rows, total } = await queryPage<DirectoryRow>(db, {
+    sql: `${DIRECTORY_SELECT}${extraWhere}`,
+    bindings: args,
+    orderBy,
+    limit: params.limit,
+    offset: params.offset,
+  });
 
   return { members: rows.map(toSummary), total };
 }

@@ -16,17 +16,17 @@ import {
   withDayCapacityRetry,
   type PlannedDayWaitlistEntry,
 } from "./day-waitlist";
-import { prepareUpsertAttendeeParticipantStatement } from "./participant-registration";
 import { newCapabilityLinkSecret, signedOrQueuedCapability } from "../capability-links";
 import type { DatabaseLike, StatementLike } from "../../types";
 import type { RegistrationRecord } from "./types";
+import type { AttendanceType } from "../../../../assets/shared/schemas/registration";
 
 const DEFAULT_PENDING_CONFIRMATION_DEADLINE_HOURS = 14 * 24;
 
 export interface CreateRegistrationPayload {
   event: { id: string };
   userId: string;
-  attendanceType: "in_person" | "virtual" | "on_demand";
+  attendanceType: AttendanceType;
   dayAttendance?: DayAttendanceSelection[];
   sourceType: string;
   sourceRef?: string | null;
@@ -221,7 +221,6 @@ export async function buildCreateRegistration(
       configuredEventDays,
     })),
     ...waitlist.statements,
-    prepareUpsertAttendeeParticipantStatement(db, registration),
     prepareEngagementStatement(db, {
       userId: registration.user_id,
       eventId: registration.event_id,

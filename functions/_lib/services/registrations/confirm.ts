@@ -1,10 +1,8 @@
 import { AppError } from "../../errors";
 import { first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
-import { uuid } from "../../utils/ids";
 import { prepareEngagementStatement } from "../engagement";
-import { resolveCapacityExemptReason } from "./day-waitlist";
-import { prepareUpsertAttendeeParticipantStatement } from "./participant-registration";
+import { prepareRemoveAllDayWaitlistStatement, resolveCapacityExemptReason } from "./day-waitlist";
 import { prepareAuditLog } from "../audit";
 import { prepareFinalizeEmailChange } from "./change-email";
 import {
@@ -16,6 +14,7 @@ import { INVITE_COLUMNS, type InviteRecord } from "../invite-types";
 import { signCapabilityToken, verifyDatabaseCapability } from "../capability-links";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { REGISTRATION_COLUMNS, type RegistrationRecord } from "./types";
+import { isRegistrationTransitionConflict, prepareRegistrationTransitionGuard } from "./transition-guard";
 
 export interface PreparedRegistrationConfirmation {
   registration: RegistrationRecord;
@@ -24,22 +23,19 @@ export interface PreparedRegistrationConfirmation {
   statements: StatementLike[];
 }
 
-function prepareRegistrationTransitionGuard(db: DatabaseLike, registration: RegistrationRecord): StatementLike {
-  return db
-    .prepare(
-      `INSERT INTO registration_transition_guards (id, registration_id, expected_revision)
-       VALUES (?, ?, ?)`,
-    )
-    .bind(uuid(), registration.id, registration.transition_revision);
-}
-
 export function isStaleRegistrationTransition(error: unknown): boolean {
-  return error instanceof Error && error.message.includes("REGISTRATION_CHANGED");
+  return isRegistrationTransitionConflict(error);
 }
 
 export async function prepareConfirmRegistrationByToken(
   db: DatabaseLike,
-  payload: { token: string; registrationId?: string | null; waitlistClaimWindowHours: number; signingSecret: string },
+  payload: {
+    token: string;
+    registrationId?: string | null;
+    eventId?: string | null;
+    waitlistClaimWindowHours: number;
+    signingSecret: string;
+  },
 ): Promise<PreparedRegistrationConfirmation> {
   const verified = await verifyDatabaseCapability({
     db,
@@ -61,8 +57,20 @@ export async function prepareConfirmRegistrationByToken(
     `SELECT ${REGISTRATION_COLUMNS} FROM registrations
      WHERE id = ?
        AND status = 'pending_email_confirmation'
-       AND (? IS NULL OR id = ?)`,
-    [verified.resourceId, payload.registrationId ?? null, payload.registrationId ?? null],
+       AND (? IS NULL OR id = ?)
+       AND (? IS NULL OR event_id = ?)
+       AND EXISTS (
+         SELECT 1 FROM users
+          WHERE users.id = registrations.user_id
+            AND users.pii_redacted_at IS NULL
+       )`,
+    [
+      verified.resourceId,
+      payload.registrationId ?? null,
+      payload.registrationId ?? null,
+      payload.eventId ?? null,
+      payload.eventId ?? null,
+    ],
   );
   if (!registration) {
     throw new AppError(404, "CONFIRM_TOKEN_INVALID", "Invalid or already-used confirmation token");
@@ -76,28 +84,28 @@ export async function prepareConfirmRegistrationByToken(
   // If finalization fails (e.g. EMAIL_TAKEN by a squatting account that
   // appeared after initiation), clear the pending_email reservation so the
   // user is not stuck and can retry from the manage URL.
-  let emailMergeNote: { merged: boolean; mergedWithId: string | null } | null = null;
   const emailFinalizeStatements: StatementLike[] = [];
-  const user = await first<{ pending_email: string | null; normalized_email: string }>(
+  const user = await first<{
+    pending_email: string | null;
+    pending_email_change_registration_id: string | null;
+    normalized_email: string;
+  }>(
     db,
-    "SELECT pending_email, normalized_email FROM users WHERE id = ?",
+    `SELECT pending_email, pending_email_change_registration_id, normalized_email
+       FROM users WHERE id = ?`,
     [registration.user_id],
   );
   if (!user) {
     throw new AppError(500, "USER_NOT_FOUND", "Associated user record is missing");
   }
   let inviteEmail = user?.normalized_email ?? null;
-  if (user?.pending_email) {
+  if (user.pending_email && user.pending_email_change_registration_id === registration.id) {
     try {
       const emailResult = await prepareFinalizeEmailChange(db, {
         userId: registration.user_id,
         eventId: registration.event_id,
         registrationId: registration.id,
       });
-      emailMergeNote = {
-        merged: !!emailResult.mergedWithRegistrationId,
-        mergedWithId: emailResult.mergedWithRegistrationId,
-      };
       inviteEmail = emailResult.finalEmail;
       emailFinalizeStatements.push(...emailResult.statements);
     } catch (err) {
@@ -108,10 +116,12 @@ export async function prepareConfirmRegistrationByToken(
         await db.batch([
           db
             .prepare(
-              `UPDATE users SET pending_email = NULL, pending_email_expires_at = NULL, updated_at = ?
-               WHERE id = ?`,
+              `UPDATE users
+                  SET pending_email = NULL, pending_email_expires_at = NULL,
+                      pending_email_change_registration_id = NULL, updated_at = ?
+                WHERE id = ? AND pending_email = ? AND pending_email_change_registration_id = ?`,
             )
-            .bind(now, registration.user_id),
+            .bind(now, registration.user_id, user.pending_email, registration.id),
           prepareAuditLog(
             db,
             "system",
@@ -170,6 +180,18 @@ export async function prepareConfirmRegistrationByToken(
         registration.id,
       ),
   ];
+  // A role-based attendee does not consume day capacity. Remove any waiting
+  // or offered rows atomically with confirmation so a stale row cannot later
+  // be promoted as though this registration still needed a seat.
+  if (capacityExemptReason) {
+    updateStatements.push(
+      prepareRemoveAllDayWaitlistStatement(db, {
+        registrationId: registration.id,
+        reasonCode: "capacity_exempt",
+        reasonNote: capacityExemptReason,
+      }),
+    );
+  }
   if (matchingInvite) {
     updateStatements.push(...prepareAcceptInviteStatements(db, matchingInvite));
   }
@@ -183,7 +205,6 @@ export async function prepareConfirmRegistrationByToken(
     );
   }
   updateStatements.push(
-    prepareUpsertAttendeeParticipantStatement(db, { ...registration, status: newStatus }),
     prepareAuditLog(
       db,
       "user",
@@ -199,7 +220,6 @@ export async function prepareConfirmRegistrationByToken(
           inviteId: matchingInvite.id,
           inviteAcceptedVia: "registration_confirmation",
         }),
-        ...(emailMergeNote && { emailMerge: emailMergeNote }),
       },
       now,
       `registration_email_confirmed:${registration.id}`,

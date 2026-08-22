@@ -1,6 +1,7 @@
 import { render } from "preact";
 import { useLayoutEffect, useRef } from "preact/hooks";
 import type { FormField } from "../types";
+import type { AttendanceType } from "../../../shared/schemas/registration";
 import { isFieldVisible, readRules, type FieldRules } from "../form/custom-field-rules";
 import { CustomFieldInput } from "../form/custom-field-widgets";
 
@@ -8,7 +9,7 @@ type FieldValue = string | number | boolean | string[] | { start: string; end: s
 
 interface VisibilityContext {
   dayAttendance: Array<{ attendanceType: string }>;
-  eventAttendanceType?: "in_person" | "virtual" | "on_demand";
+  eventAttendanceType?: AttendanceType;
 }
 
 // ── Preact components ─────────────────────────────────────────────────────

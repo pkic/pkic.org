@@ -20,7 +20,7 @@ export const ApplicationCommunicationsPost = openApiRoute(
     const body = data.body;
     const result = await sendApplicationCommunication(db, {
       applicationId: data.params.id,
-      actorUserId: admin.id,
+      actor: admin,
       subject: body.subject,
       body: body.body,
       templateKey: body.templateKey ?? null,

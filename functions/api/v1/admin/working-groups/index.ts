@@ -5,7 +5,8 @@
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../_lib/auth/permissions";
-import { listAdminWorkingGroups, createWorkingGroup } from "../../../../_lib/services/admin-working-groups";
+import { createWorkingGroup } from "../../../../_lib/services/admin-working-groups/create";
+import { listAdminWorkingGroups } from "../../../../_lib/services/admin-working-groups/read-model";
 import {
   workingGroupCreateRouteSchema,
   workingGroupsListRouteSchema,

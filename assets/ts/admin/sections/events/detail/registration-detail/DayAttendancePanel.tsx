@@ -3,8 +3,9 @@ import { DataTable } from "../../../../../components/Table";
 import { api } from "../../../../api";
 import { fmt, toast } from "../../../../ui";
 import type { AdminEventDay } from "../../../../types";
+import type { AttendanceType } from "../../../../../../shared/schemas/registration";
 
-type DayOption = "none" | "in_person" | "virtual" | "on_demand";
+type DayOption = "none" | AttendanceType;
 
 const DAY_OPTIONS: { value: DayOption; label: string }[] = [
   { value: "none", label: "Not attending" },

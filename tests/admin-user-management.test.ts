@@ -8,6 +8,12 @@ import { onRequestPatch as patchUser } from "../functions/api/v1/admin/users/[us
 import { onRequestPost as anonymizeUser } from "../functions/api/v1/admin/users/[userId]/anonymize";
 import app from "../functions/router";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
+import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
+import { signCapabilityToken } from "../functions/_lib/services/capability-links";
+import { confirmRegistrationByToken, getRegistrationByManageToken } from "../functions/_lib/services/registrations";
+import { updateAdminUser } from "../functions/_lib/services/admin-user-update";
+import { anonymizeAdminUser } from "../functions/_lib/services/admin-user-anonymize";
+import { gateNextBatch } from "./helpers/d1-batch-gate";
 
 let adminToken: string;
 
@@ -298,6 +304,33 @@ describe("admin user anonymization", () => {
     expect(row.pii_redacted_at).toBeTruthy();
   });
 
+  it("closes active organization relationships so redacted users disappear from rosters and counts", async () => {
+    await setup();
+    const userId = await seedUser(env.DB, "representative-to-anonymize@example.test");
+    const organizationId = await insertOrganization(env.DB, "Anonymization Organization");
+    const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
+    await addRepresentative(env.DB, memberId, userId);
+
+    await anonymizeUser(
+      createContext(env, adminRequest(`/api/v1/admin/users/${userId}/anonymize`, "POST"), { userId }),
+    );
+
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT left_at IS NOT NULL AS closed FROM organization_representatives WHERE member_id = ? AND user_id = ?",
+        [memberId, userId],
+      ),
+    ).toEqual([{ closed: 1 }]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT COUNT(*) AS total FROM organization_representatives WHERE member_id = ? AND left_at IS NULL",
+        memberId,
+      ),
+    ).toEqual([{ total: 0 }]);
+  });
+
   it("revokes all active sessions for the anonymized user", async () => {
     await setup();
     const userId = await seedUser(env.DB, "session-holder@example.test");
@@ -320,7 +353,33 @@ describe("admin user anonymization", () => {
   it("removes alternate identities and credentials and revokes durable access tokens", async () => {
     await setup();
     const userId = await seedUser(env.DB, "credentials@example.test");
+    const [{ id: eventId }] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM events ORDER BY created_at LIMIT 1",
+    );
+    const registrationId = crypto.randomUUID();
+    const confirmationLinkSecret = crypto.randomUUID();
+    const manageLinkSecret = crypto.randomUUID();
+    const signingSecret = "anonymization-capability-secret";
+    const confirmationToken = await signCapabilityToken({
+      signingSecret,
+      linkSecret: confirmationLinkSecret,
+      purpose: "registration_confirm",
+      resourceId: registrationId,
+    });
+    const manageToken = await signCapabilityToken({
+      signingSecret,
+      linkSecret: manageLinkSecret,
+      purpose: "registration_manage",
+      resourceId: registrationId,
+    });
     await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO registrations
+           (id, event_id, user_id, status, attendance_type, source_type,
+            confirmation_link_secret, manage_link_secret, created_at, updated_at)
+         VALUES (?, ?, ?, 'pending_email_confirmation', 'virtual', 'admin', ?, ?, datetime('now'), datetime('now'))`,
+      ).bind(registrationId, eventId, userId, confirmationLinkSecret, manageLinkSecret),
       env.DB.prepare(
         "INSERT INTO user_emails (id, user_id, email, normalized_email, created_at) VALUES (?, ?, ?, ?, datetime('now'))",
       ).bind(crypto.randomUUID(), userId, "alias@example.test", "alias@example.test"),
@@ -339,9 +398,10 @@ describe("admin user anonymization", () => {
       ).bind(crypto.randomUUID(), userId, `refresh-${crypto.randomUUID()}`),
       env.DB.prepare(
         `UPDATE users SET pending_email = 'pending@example.test', pending_email_expires_at = datetime('now', '+1 day'),
+                            pending_email_change_registration_id = ?,
                             role = 'admin', is_ec_member = 1
            WHERE id = ?`,
-      ).bind(userId),
+      ).bind(registrationId, userId),
     ]);
 
     await anonymizeUser(
@@ -360,6 +420,27 @@ describe("admin user anonymization", () => {
       is_ec_member: number;
     }>(env.DB, "SELECT pending_email, role, is_ec_member FROM users WHERE id = ?", userId);
     expect(user).toMatchObject({ pending_email: null, role: "user", is_ec_member: 0 });
+    const [registration] = await queryAll<{
+      confirmation_link_secret: string | null;
+      manage_link_secret: string;
+      status: string;
+    }>(
+      env.DB,
+      "SELECT confirmation_link_secret, manage_link_secret, status FROM registrations WHERE id = ?",
+      registrationId,
+    );
+    expect(registration).toMatchObject({ confirmation_link_secret: null, status: "pending_email_confirmation" });
+    expect(registration.manage_link_secret).not.toBe(manageLinkSecret);
+    await expect(getRegistrationByManageToken(env.DB, manageToken, signingSecret)).rejects.toMatchObject({
+      code: "REGISTRATION_NOT_FOUND",
+    });
+    await expect(
+      confirmRegistrationByToken(env.DB, {
+        token: confirmationToken,
+        waitlistClaimWindowHours: 24,
+        signingSecret,
+      }),
+    ).rejects.toMatchObject({ code: "CONFIRM_TOKEN_INVALID" });
   });
 
   it("durably queues deletion of the prior headshot while clearing its pointer", async () => {
@@ -405,6 +486,89 @@ describe("admin user anonymization", () => {
     await expect(
       anonymizeUser(createContext(env, adminRequest(`/api/v1/admin/users/${userId}/anonymize`, "POST"), { userId })),
     ).rejects.toMatchObject({ code: "ALREADY_ANONYMIZED" });
+  });
+
+  it("rolls back a stale admin update that loses to anonymization", async () => {
+    const { adminId } = await setup();
+    const userId = await seedUser(env.DB, "race-update@example.test");
+    await env.DB.prepare("UPDATE users SET biography = ? WHERE id = ?").bind("Private biography", userId).run();
+
+    const gate = gateNextBatch(env.DB);
+    const staleUpdate = updateAdminUser(
+      gate.db,
+      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" },
+      userId,
+      {
+        email: "restored@example.test",
+        biography: "Stale restored biography",
+        active: false,
+      },
+    );
+    await gate.reached;
+
+    await anonymizeAdminUser(
+      env.DB,
+      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" },
+      userId,
+    );
+    gate.release();
+
+    await expect(staleUpdate).rejects.toMatchObject({ code: "ALREADY_ANONYMIZED" });
+    const [user] = await queryAll<{
+      email: string;
+      biography: string | null;
+      pending_email: string | null;
+      active: number;
+      pii_redacted_at: string | null;
+    }>(env.DB, "SELECT email, biography, pending_email, active, pii_redacted_at FROM users WHERE id = ?", userId);
+    expect(user.email).toBe(`redacted-${userId}@anonymized.invalid`);
+    expect(user.biography).toBeNull();
+    expect(user.pending_email).toBeNull();
+    expect(user.active).toBe(0);
+    expect(user.pii_redacted_at).toBeTruthy();
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_id = ? AND action = 'user_updated'", userId),
+    ).toHaveLength(0);
+  });
+
+  it("rolls back stale anonymization when an admin update wins the race", async () => {
+    const { adminId } = await setup();
+    const userId = await seedUser(env.DB, "race-anonymize@example.test");
+    const gate = gateNextBatch(env.DB);
+    const staleAnonymization = anonymizeAdminUser(
+      gate.db,
+      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" },
+      userId,
+    );
+    await gate.reached;
+
+    await updateAdminUser(
+      env.DB,
+      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" },
+      userId,
+      {
+        email: "race-winner@example.test",
+        biography: "Winner biography",
+      },
+    );
+    gate.release();
+
+    await expect(staleAnonymization).rejects.toMatchObject({ code: "ANONYMIZATION_CONFLICT" });
+    const [user] = await queryAll<{
+      email: string;
+      biography: string | null;
+      active: number;
+      pii_redacted_at: string | null;
+    }>(env.DB, "SELECT email, biography, active, pii_redacted_at FROM users WHERE id = ?", userId);
+    expect(user).toEqual({
+      email: "race-winner@example.test",
+      biography: "Winner biography",
+      active: 1,
+      pii_redacted_at: null,
+    });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_id = ? AND action = 'user_anonymized'", userId),
+    ).toHaveLength(0);
   });
 
   it("refuses to anonymize the calling admin's own account", async () => {
@@ -479,10 +643,10 @@ describe("admin users list — type filter", () => {
     return userId;
   }
 
-  async function seedEventParticipant(eventId: string, email: string, eventCount = 1): Promise<string> {
+  async function seedEventParticipant(eventId: string, email: string, roleCount = 1): Promise<string> {
     const userId = await seedUser(env.DB, email);
-    const roles = ["attendee", "speaker", "moderator"];
-    for (let i = 0; i < eventCount; i++) {
+    const roles = ["speaker", "moderator", "organizer"];
+    for (let i = 0; i < roleCount; i++) {
       await env.DB.prepare(
         `INSERT INTO event_participants (id, event_id, user_id, role, status, created_at, updated_at)
          VALUES (?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`,
@@ -519,14 +683,14 @@ describe("admin users list — type filter", () => {
     expect(data.users[0].type).toBe("member");
   });
 
-  it("classifies a user with only an event_participants row as 'event_attendee', with the participation count", async () => {
+  it("classifies a user with direct event roles as an event attendee and counts distinct events", async () => {
     const { eventId } = await setup();
     await seedEventParticipant(eventId, "type-attendee@example.test", 2);
 
     const data = await listUsers("type=event_attendee&q=type-attendee@example.test");
     expect(data.users.map((u) => u.email)).toEqual(["type-attendee@example.test"]);
     expect(data.users[0].type).toBe("event_attendee");
-    expect(data.users[0].eventParticipationCount).toBe(2);
+    expect(data.users[0].eventParticipationCount).toBe(1);
   });
 
   it("classifies a bare user (no membership, no event participation) as 'contact_only'", async () => {

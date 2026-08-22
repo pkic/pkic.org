@@ -55,6 +55,7 @@ async function onPut(c: AdminContext, params: HeadshotParams): Promise<Response>
         action: "speaker_headshot_uploaded_by_proposer",
         entityType: "proposal_speaker",
         entityId: speaker.id,
+        scope: { type: "proposal", id: proposal.id },
         details: { proposalId: proposal.id, speakerUserId: speaker.user_id },
       },
     },
@@ -77,6 +78,7 @@ async function onDelete(c: AdminContext, params: HeadshotParams): Promise<Respon
       action: "speaker_headshot_deleted_by_proposer",
       entityType: "proposal_speaker",
       entityId: speaker.id,
+      scope: { type: "proposal", id: proposal.id },
       details: { proposalId: proposal.id, speakerUserId: speaker.user_id },
     },
   });

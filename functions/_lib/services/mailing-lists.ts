@@ -73,14 +73,13 @@ export async function listMailingLists(
     "ORDER BY list_type ASC, email ASC",
     "id ASC",
   );
-  const { rows, total } = await queryPage<MailingListRow>(
-    db,
-    {
-      sql: `SELECT ${MAILING_LIST_COLUMNS} FROM mailing_lists ${where} ${orderBy} LIMIT ? OFFSET ?`,
-      bindings: [...bindings, query.limit, query.offset],
-    },
-    { sql: `SELECT COUNT(*) AS total FROM mailing_lists ${where}`, bindings },
-  );
+  const { rows, total } = await queryPage<MailingListRow>(db, {
+    sql: `SELECT ${MAILING_LIST_COLUMNS} FROM mailing_lists ${where}`,
+    bindings,
+    orderBy,
+    limit: query.limit,
+    offset: query.offset,
+  });
   return { mailingLists: rows.map(toMailingList), total };
 }
 

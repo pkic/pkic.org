@@ -3,7 +3,7 @@
  */
 import { json } from "../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
-import { removeMemberFromWorkingGroup } from "../../../../../../_lib/services/admin-working-groups";
+import { removeMemberFromWorkingGroup } from "../../../../../../_lib/services/admin-working-groups/member-access";
 import { workingGroupMemberRemoveRouteSchema } from "../../../../../../../assets/shared/schemas/working-groups";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../../_lib/openapi/route";

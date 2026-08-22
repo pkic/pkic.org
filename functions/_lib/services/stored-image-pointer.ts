@@ -4,12 +4,12 @@ import type { DatabaseLike } from "../types";
 import { uuid } from "../utils/ids";
 import { imageExtension, putUploadedImage } from "../utils/image-upload";
 import { nowIso } from "../utils/time";
-import { prepareAuditLogWhen } from "./audit";
+import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange, prepareAuditLogWhen } from "./audit";
 import {
-  enqueueStorageDeletion,
   prepareStorageDeletion,
   processStorageDeletionForKey,
   type StorageBucketName,
+  withStorageUploadCompensation,
 } from "./storage-deletion-outbox";
 
 export interface StoredImagePointerRow {
@@ -72,39 +72,41 @@ export async function replaceStoredImagePointer(input: {
   input.validateRow?.(row);
   const at = nowIso();
   const r2Key = `${input.definition.keyPrefix}/${row.id}/${uuid()}.${imageExtension(input.image.contentType)}`;
-  await putUploadedImage(input.bucket, r2Key, input.image, "logo");
   try {
-    const statements = [
-      input.db
-        .prepare(
-          `UPDATE ${input.definition.table}
+    await withStorageUploadCompensation({
+      db: input.db,
+      bucket: input.bucket,
+      bucketName: input.bucketName,
+      objectKey: r2Key,
+      upload: () => putUploadedImage(input.bucket, r2Key, input.image, "logo"),
+      prepareCommitStatements: () => {
+        const statements = [
+          input.db
+            .prepare(
+              `UPDATE ${input.definition.table}
               SET ${input.definition.pointerColumn} = ?, updated_at = ?
             WHERE id = ? AND ${input.definition.pointerColumn} IS ?`,
-        )
-        .bind(r2Key, at, row.id, row.object_key),
-      prepareAuditLogWhen(input.db, {
-        actorType: input.audit.actorType,
-        actorId: input.audit.actorId,
-        action: input.audit.action,
-        entityType: input.definition.entityType,
-        entityId: row.id,
-        details: { ...input.audit.details, r2Key },
-        createdAt: at,
-        conditionSql: `SELECT 1 FROM ${input.definition.table} WHERE id = ? AND ${input.definition.pointerColumn} = ?`,
-        conditionBindings: [row.id, r2Key],
-      }),
-    ];
-    const deletion = prepareStorageDeletion(input.db, row.object_key, at, input.bucketName);
-    if (deletion) statements.push(deletion);
-    const [updated] = await input.db.batch(statements);
-    if ((updated.meta?.changes ?? 0) !== 1) {
-      throw new AppError(409, "IMAGE_CHANGED", "The stored image changed while this request was processed");
-    }
+            )
+            .bind(r2Key, at, row.id, row.object_key),
+          prepareAuditLogAfterOneChange(
+            input.db,
+            input.audit.actorType,
+            input.audit.actorId,
+            input.audit.action,
+            input.definition.entityType,
+            row.id,
+            { ...input.audit.details, r2Key },
+            at,
+          ),
+        ];
+        const deletion = prepareStorageDeletion(input.db, row.object_key, at, input.bucketName);
+        if (deletion) statements.push(deletion);
+        return statements;
+      },
+    });
   } catch (error) {
-    try {
-      await input.bucket.delete(r2Key);
-    } catch {
-      await enqueueStorageDeletion(input.db, r2Key, input.bucketName);
+    if (isAuditOneChangeGuardFailure(error)) {
+      throw new AppError(409, "IMAGE_CHANGED", "The stored image changed while this request was processed");
     }
     throw error;
   }

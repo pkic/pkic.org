@@ -11,14 +11,9 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
-import { createContext, deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
-import { createAdminSession } from "./helpers/auth";
-import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
-import { onRequestPost as inviteSpeakersBulk } from "../functions/api/v1/admin/events/[eventSlug]/invites/speakers/bulk";
-import { onRequestPost as previewSpeakerInvites } from "../functions/api/v1/admin/events/[eventSlug]/invites/speakers/preview";
+import { createContext, deliveredEmailPayload, queryAll } from "./helpers/context";
 import { onRequestPost as adminRemindSpeaker } from "../functions/api/v1/admin/proposals/[proposalId]/speakers/[userId]/remind";
-import { onRequestPost as submitProposal } from "../functions/api/v1/events/[eventSlug]/proposals";
-import { addProposalSpeaker, getProposalByManageToken } from "../functions/_lib/services/proposals";
+import { getProposalByManageToken } from "../functions/_lib/services/proposals";
 import { inviteProposalSpeaker } from "../functions/_lib/services/proposal-speaker-invitations";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { onRequestGet as speakerGet } from "../functions/api/v1/proposals/speaker/[token]";
@@ -39,6 +34,10 @@ import {
   removeProposalSpeakerByProposer,
 } from "../functions/_lib/services/proposal-speaker-removal";
 import type { DatabaseLike } from "../functions/_lib/types";
+import {
+  inviteSpeakerAndSubmitCapacityProposal,
+  setupProposalSpeakerCapacityWorkflow,
+} from "./helpers/proposal-speaker-capacity";
 
 interface StoredObject {
   body: ArrayBuffer;
@@ -88,10 +87,9 @@ let fetchMock: ReturnType<typeof vi.fn>;
 let adminSessionToken: string;
 
 async function setupWorkflow() {
-  const { eventId } = await seedEventAndAdmin(env.DB);
+  const { eventId, adminSessionToken: sessionToken } = await setupProposalSpeakerCapacityWorkflow();
   const adminUser = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
-  await seedWorkflowEmailTemplates(env.DB, adminUser.id);
-  adminSessionToken = await createAdminSession(env.DB, adminUser.id, "test-admin-token");
+  adminSessionToken = sessionToken;
   return { eventId, adminUserId: adminUser.id };
 }
 
@@ -101,112 +99,7 @@ async function inviteSpeakerAndSubmitProposal(): Promise<{
   coSpeakerUserId: string;
   proposalManageToken: string;
 }> {
-  // Invite a speaker via admin
-  const invites = [{ email: "speaker@example.test", firstName: "Speaker", lastName: "Test", sourceType: "direct" }];
-  const previewResponse = await previewSpeakerInvites(
-    createContext(
-      env,
-      new Request("https://app.test/api/v1/admin/events/pqc-2026/invites/speakers/preview", {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
-        body: JSON.stringify({ invites }),
-      }),
-      { eventSlug: "pqc-2026" },
-    ),
-  );
-  const preview = (await previewResponse.json()) as { previewToken: string; inviteDigest: string };
-  const inviteResponse = await inviteSpeakersBulk(
-    createContext(
-      env,
-      new Request("https://app.test/api/v1/admin/events/pqc-2026/invites/speakers/bulk", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${adminSessionToken}`,
-        },
-        body: JSON.stringify({
-          invites,
-          previewToken: preview.previewToken,
-          inviteDigest: preview.inviteDigest,
-        }),
-      }),
-      { eventSlug: "pqc-2026" },
-    ),
-  );
-  expect(inviteResponse.status).toBe(200);
-  await inviteResponse.json();
-  const invite = (
-    await queryAll<{ id: string }>(
-      env.DB,
-      "SELECT id FROM invites WHERE invitee_email = ? AND invite_type = 'speaker' ORDER BY created_at DESC LIMIT 1",
-      "speaker@example.test",
-    )
-  )[0];
-  const inviteToken = await issueDatabaseCapability({
-    db: env.DB,
-    signingSecret: env.INTERNAL_SIGNING_SECRET!,
-    purpose: "invite",
-    resourceId: invite.id,
-  });
-
-  // Submit a proposal with the invite
-  const proposalResponse = await submitProposal(
-    createContext(
-      env,
-      new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          inviteToken,
-          proposer: {
-            firstName: "Speaker",
-            lastName: "Test",
-            email: "speaker@example.test",
-            organizationName: "Test Corp",
-            jobTitle: "Engineer",
-            bio: "Experienced speaker in post-quantum cryptography.",
-          },
-          proposal: {
-            type: "talk",
-            title: "Post-Quantum Migration Strategies",
-            abstract:
-              "A practical guide to migrating enterprise PKI to quantum-safe algorithms covering risk assessment, dual-stack rollout, and governance frameworks.",
-          },
-          consents: [{ termKey: "speaker-terms", version: "v1" }],
-        }),
-      }),
-      { eventSlug: "pqc-2026" },
-    ),
-  );
-  expect(proposalResponse.status).toBe(200);
-  const { proposalId, manageToken } = (await proposalResponse.json()) as { proposalId: string; manageToken: string };
-
-  // Get the proposer's user ID
-  const users = await queryAll<{ id: string }>(
-    env.DB,
-    "SELECT id FROM users WHERE email = 'speaker@example.test' LIMIT 1",
-  );
-  expect(users.length).toBe(1);
-
-  // The proposer is already added as a speaker with role "proposer" during
-  // proposal submission. We can't get the raw token from the DB (it's hashed).
-  // Instead, create a fresh speaker entry for an additional co-speaker user
-  // so we can test the speaker management endpoint with their known token.
-  const coSpeakerUser = await findOrCreateUser(env.DB, {
-    email: "cospeaker@example.test",
-    firstName: "Co",
-    lastName: "Speaker",
-    organizationName: "Co Corp",
-    jobTitle: "CTO",
-  });
-  const { manageToken: speakerManageToken } = await addProposalSpeaker(env.DB, {
-    proposalId,
-    userId: coSpeakerUser.id,
-    role: "co_speaker",
-    signingSecret: env.INTERNAL_SIGNING_SECRET!,
-  });
-
-  return { speakerManageToken, proposalId, coSpeakerUserId: coSpeakerUser.id, proposalManageToken: manageToken };
+  return inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
 }
 
 describe("speaker self-management endpoints", () => {
@@ -293,18 +186,36 @@ describe("speaker self-management endpoints", () => {
     await expect(
       queryAll<{ status: string }>(
         env.DB,
-        `SELECT status FROM event_participants
-         WHERE event_id = ? AND user_id = ? AND source_type = 'proposal' AND source_ref = ?`,
+        `SELECT status FROM event_participant_role_sources
+         WHERE event_id = ? AND user_id = ? AND source_kind = 'proposal_speaker' AND source_ref = ?`,
         [proposal.event_id, coSpeakerUserId, proposalId],
       ),
-    ).resolves.toSatisfy((rows: Array<{ status: string }>) => rows.every((row) => row.status === "inactive"));
+    ).resolves.toEqual([]);
     await expect(queryAll(env.DB, "SELECT id FROM users WHERE id = ?", [coSpeakerUserId])).resolves.toHaveLength(1);
     await expect(
-      queryAll(
+      queryAll<{ scope_type: string | null; scope_id: string | null }>(
         env.DB,
-        "SELECT id FROM audit_log WHERE entity_type = 'proposal_speaker' AND action = 'proposal_speaker_removed'",
+        `SELECT scope_type, scope_id FROM audit_log
+         WHERE entity_type = 'proposal_speaker' AND action = 'proposal_speaker_removed'`,
       ),
-    ).resolves.toHaveLength(1);
+    ).resolves.toEqual([{ scope_type: "proposal", scope_id: proposalId }]);
+
+    const auditResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/audit-log`, {
+        headers: { authorization: `Bearer ${adminSessionToken}` },
+      }),
+      env,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(auditResponse.status).toBe(200);
+    const auditBody = (await auditResponse.json()) as {
+      auditLog: Array<{ action: string; entity_id: string | null }>;
+    };
+    expect(auditBody.auditLog).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ action: "proposal_speaker_removed", entity_id: expect.any(String) }),
+      ]),
+    );
 
     const staleCapability = await speakerGet(
       createContext(env, new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`), {
@@ -432,7 +343,8 @@ describe("speaker self-management endpoints", () => {
     ).resolves.toEqual([reminder.outboxId, invitation.outboxId].sort().map((id) => ({ id, status: "cancelled" })));
     const participants = await queryAll<{ status: string }>(
       env.DB,
-      "SELECT status FROM event_participants WHERE event_id = ? AND source_type = 'proposal' AND source_ref = ?",
+      `SELECT status FROM event_participant_role_sources
+       WHERE event_id = ? AND source_kind = 'proposal_speaker' AND source_ref = ?`,
       [proposal.event_id, proposalId],
     );
     expect(participants.length).toBeGreaterThan(0);
@@ -455,8 +367,8 @@ describe("speaker self-management endpoints", () => {
     );
     const participantsBefore = await queryAll<{ user_id: string; role: string; status: string }>(
       env.DB,
-      `SELECT user_id, role, status FROM event_participants
-       WHERE source_type = 'proposal' AND source_ref = ? ORDER BY user_id, role`,
+      `SELECT user_id, role, status FROM event_participant_role_sources
+       WHERE source_kind = 'proposal_speaker' AND source_ref = ? ORDER BY user_id, role`,
       [proposalId],
     );
     await env.DB.prepare(
@@ -490,8 +402,8 @@ describe("speaker self-management endpoints", () => {
     ).resolves.toEqual([{ status: "queued" }]);
     const participants = await queryAll<{ user_id: string; role: string; status: string }>(
       env.DB,
-      `SELECT user_id, role, status FROM event_participants
-       WHERE source_type = 'proposal' AND source_ref = ? ORDER BY user_id, role`,
+      `SELECT user_id, role, status FROM event_participant_role_sources
+       WHERE source_kind = 'proposal_speaker' AND source_ref = ? ORDER BY user_id, role`,
       [proposalId],
     );
     expect(participantsBefore.length).toBeGreaterThan(0);
@@ -627,9 +539,9 @@ describe("speaker self-management endpoints", () => {
     await expect(
       queryAll<{ user_id: string; role: string; subrole: string | null }>(
         env.DB,
-        `SELECT user_id, role, subrole FROM event_participants
+        `SELECT user_id, role, subrole FROM event_participant_role_sources
          WHERE event_id = (SELECT event_id FROM session_proposals WHERE id = ?)
-           AND source_type = 'proposal' AND source_ref = ? AND user_id = ?`,
+           AND source_kind = 'proposal_speaker' AND source_ref = ? AND user_id = ?`,
         [proposalId, proposalId, coSpeakerUserId],
       ),
     ).resolves.toEqual([{ user_id: coSpeakerUserId, role: "speaker", subrole: "co_speaker" }]);
@@ -706,7 +618,7 @@ describe("speaker self-management endpoints", () => {
     );
 
     expect(response.status).toBe(409);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: "REPLACEMENT_PROPOSER_INELIGIBLE" } });
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "LAST_SPEAKER_REQUIRED" } });
     await expect(
       queryAll<{ proposer_user_id: string; manage_link_secret: string }>(
         env.DB,
@@ -745,7 +657,7 @@ describe("speaker self-management endpoints", () => {
 
     await expect(
       removeAdminProposalSpeaker(racingDb, {
-        actor: { id: adminUserId, email: "admin@pkic.org", role: "admin" },
+        actor: { identityType: "user", id: adminUserId, email: "admin@pkic.org", role: "admin" },
         proposalId,
         userId: before.proposer_user_id,
         replacementProposerUserId: coSpeakerUserId,

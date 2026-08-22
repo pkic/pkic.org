@@ -12,6 +12,7 @@ import { normalizeEmail } from "../validation";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { AppError } from "../errors";
+import type { AddedCoworker } from "../../../assets/shared/schemas/me";
 import { buildFindOrCreateUserStatement } from "./users";
 import { isActiveRepresentative, buildAddRepresentativeStatement } from "./membership/representatives";
 import {
@@ -21,13 +22,6 @@ import {
   buildRevokeRepresentativeRoleStatement,
 } from "./membership/representative-roles";
 import type { AuthMember, DatabaseLike } from "../types";
-
-export interface AddedCoworker {
-  memberId: string;
-  userId: string;
-  name: string;
-  email: string;
-}
 
 async function requireOrgContact(db: DatabaseLike, member: AuthMember): Promise<void> {
   if (!member.organizationId) {
@@ -91,7 +85,8 @@ export async function addCoworker(
   await db.batch(statements);
 
   return {
-    memberId: representativeId,
+    representativeId,
+    membershipId: member.memberId,
     userId: user.id,
     name: input.name.trim(),
     email: user.email,

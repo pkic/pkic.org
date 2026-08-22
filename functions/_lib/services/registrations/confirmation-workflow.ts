@@ -49,6 +49,7 @@ async function confirmRegistrationWithNotificationOnce(
   const prepared = await prepareConfirmRegistrationByToken(db, {
     token: payload.token,
     registrationId: payload.registrationId,
+    eventId: payload.event.id,
     waitlistClaimWindowHours: payload.waitlistClaimWindowHours,
     signingSecret: payload.signingSecret,
   });

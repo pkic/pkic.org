@@ -92,25 +92,9 @@ export function BadgeRolePanel({ slug, regId }: { slug: string; regId: string })
 // ─── Audit log ────────────────────────────────────────────────────────────────
 
 export function RegistrationAuditLogSection({ slug, regId }: { slug: string; regId: string }) {
-  const { data: entries, loading } = useData(
-    () =>
-      api<{
-        auditLog: Array<{
-          created_at: string;
-          actor_type: string;
-          actor_display?: string;
-          actor_id?: string;
-          action: string;
-          details?: Record<string, unknown>;
-        }>;
-      }>(`/api/v1/admin/events/${slug}/registrations/${regId}/audit-log`).then((d) => d.auditLog ?? []),
-    [slug, regId],
-  );
-
   return (
     <AuditLogTable
-      entries={entries ?? undefined}
-      loading={loading}
+      endpoint={`/api/v1/admin/events/${slug}/registrations/${regId}/audit-log`}
       actionCell={(entry) => <code class="small">{entry.action}</code>}
       detailsCell={(entry) =>
         entry.details ? (

@@ -25,10 +25,9 @@ async function callEndpoint(handler: (c: any) => Promise<Response>, ctx: any): P
   }
 }
 
-// GET /api/v1/members is validated by openApiRoute/chanfana (data.query),
-// so it must be exercised through the real router — not by calling its
-// onRequestGet handler directly, which would leave data.query unpopulated.
-async function callMembersList(url: string): Promise<Response> {
+// Public list routes are validated by openApiRoute/chanfana, so exercise them
+// through the mounted router to include validation and middleware behavior.
+async function callPublicApi(url: string): Promise<Response> {
   return app.fetch(new Request(url), env as any, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
 }
 
@@ -107,7 +106,7 @@ describe("GET /api/v1/members (public directory)", () => {
     });
     await seedIndividualMember({ userId: crypto.randomUUID(), status: "inactive" });
 
-    const response = await callMembersList("https://pkic.org/api/v1/members");
+    const response = await callPublicApi("https://pkic.org/api/v1/members");
 
     expect(response.status).toBe(200);
     const body = membersListResponseSchema.parse(await response.json());
@@ -129,7 +128,7 @@ describe("GET /api/v1/members (public directory)", () => {
     const secondUserId = await insertUser(env.DB);
     await addRepresentativeRow(env.DB, memberId, secondUserId);
 
-    const response = await callMembersList("https://pkic.org/api/v1/members");
+    const response = await callPublicApi("https://pkic.org/api/v1/members");
     const body = membersListResponseSchema.parse(await response.json());
     expect(body.page.total).toBe(1);
   });
@@ -147,7 +146,7 @@ describe("GET /api/v1/members (public directory)", () => {
       .bind("Real column description", "https://real-column.test", "Real slogan", organizationId)
       .run();
 
-    const response = await callMembersList("https://pkic.org/api/v1/members");
+    const response = await callPublicApi("https://pkic.org/api/v1/members");
     const body = (await response.json()) as {
       members: Array<{ website: string | null; description: string | null; slogan: string | null }>;
     };
@@ -165,7 +164,7 @@ describe("GET /api/v1/members (public directory)", () => {
       dataJson: JSON.stringify({ website: "javascript:alert(1)", logoUrl: "//evil.example/logo.svg" }),
     });
 
-    const response = await callMembersList("https://pkic.org/api/v1/members");
+    const response = await callPublicApi("https://pkic.org/api/v1/members");
     expect(response.status).toBe(200);
     const body = membersListResponseSchema.parse(await response.json());
     expect(body.members[0].website).toBeNull();
@@ -186,7 +185,7 @@ describe("GET /api/v1/members (public directory)", () => {
       status: "active",
     });
 
-    const response = await callMembersList("https://pkic.org/api/v1/members?q=acme");
+    const response = await callPublicApi("https://pkic.org/api/v1/members?q=acme");
     const body = membersListResponseSchema.parse(await response.json());
     expect(body.page.total).toBe(1);
     expect(body.members[0].name).toBe("Acme Cryptography");
@@ -201,11 +200,11 @@ describe("GET /api/v1/members (public directory)", () => {
     });
     await seedIndividualMember({ userId: crypto.randomUUID(), status: "active", tier: "H6" });
 
-    const orgOnly = await callMembersList("https://pkic.org/api/v1/members?group=organization");
+    const orgOnly = await callPublicApi("https://pkic.org/api/v1/members?group=organization");
     const orgBody = membersListResponseSchema.parse(await orgOnly.json());
     expect(orgBody.page.total).toBe(1);
 
-    const independentOnly = await callMembersList("https://pkic.org/api/v1/members?group=independent");
+    const independentOnly = await callPublicApi("https://pkic.org/api/v1/members?group=independent");
     const independentBody = membersListResponseSchema.parse(await independentOnly.json());
     expect(independentBody.page.total).toBe(1);
   });
@@ -220,7 +219,7 @@ describe("GET /api/v1/members (public directory)", () => {
       });
     }
 
-    const response = await callMembersList("https://pkic.org/api/v1/members?sort=-name&limit=1&offset=1");
+    const response = await callPublicApi("https://pkic.org/api/v1/members?sort=-name&limit=1&offset=1");
     expect(response.status).toBe(200);
     const body = membersListResponseSchema.parse(await response.json());
     expect(body.members.map(({ name }) => name)).toEqual(["Beta Org"]);
@@ -228,7 +227,7 @@ describe("GET /api/v1/members (public directory)", () => {
   });
 
   it("uses the shared maximum page size", async () => {
-    const response = await callMembersList("https://pkic.org/api/v1/members?limit=500");
+    const response = await callPublicApi("https://pkic.org/api/v1/members?limit=500");
     expect(response.status).toBe(400);
   });
 });
@@ -273,7 +272,7 @@ describe("GET /api/v1/members/wall", () => {
                'sponsor-logos/external.svg', 'Gold', 'active', datetime('now'), datetime('now'))`,
     ).run();
 
-    const response = await callMembersList("https://pkic.org/api/v1/members/wall?memberLimit=1");
+    const response = await callPublicApi("https://pkic.org/api/v1/members/wall?memberLimit=1");
     expect(response.status).toBe(200);
     const body = memberWallResponseSchema.parse(await response.json());
     expect(body.entries).toHaveLength(3);
@@ -287,7 +286,7 @@ describe("GET /api/v1/members/wall", () => {
   });
 
   it("rejects an unbounded member limit", async () => {
-    const response = await callMembersList("https://pkic.org/api/v1/members/wall?memberLimit=999999");
+    const response = await callPublicApi("https://pkic.org/api/v1/members/wall?memberLimit=999999");
     expect(response.status).toBe(400);
   });
 
@@ -300,7 +299,7 @@ describe("GET /api/v1/members/wall", () => {
                'sponsor-logos/unsafe.svg', 'Gold', 'active', datetime('now'), datetime('now'))`,
     ).run();
 
-    const response = await callMembersList("https://pkic.org/api/v1/members/wall");
+    const response = await callPublicApi("https://pkic.org/api/v1/members/wall");
     expect(response.status).toBe(200);
     const body = memberWallResponseSchema.parse(await response.json());
     expect(body.entries).toContainEqual(
@@ -564,7 +563,7 @@ describe("GET /api/v1/members/:id/logo", () => {
       id: string;
     }>();
 
-    const listResponse = await callMembersList("https://pkic.org/api/v1/members");
+    const listResponse = await callPublicApi("https://pkic.org/api/v1/members");
     const listBody = (await listResponse.json()) as { members: Array<{ id: string; logoUrl: string | null }> };
     expect(listBody.members[0].logoUrl).toBe(`/api/v1/members/${memberRow!.id}/logo`);
 
@@ -670,17 +669,14 @@ describe("GET /api/v1/working-groups/:id", () => {
       ).bind(crypto.randomUUID(), wgId, userId),
     ]);
 
-    const response = await callEndpoint(
-      getWorkingGroup,
-      createContext(env, getRequest("https://pkic.org/api/v1/working-groups/pqc"), { id: "pqc" }),
-    );
+    const response = await callPublicApi("https://pkic.org/api/v1/working-groups/pqc");
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as { slug: string };
     expect(body.slug).toBe("pqc");
     expect(body).not.toHaveProperty("members");
 
-    const listResponse = await callMembersList("https://pkic.org/api/v1/working-groups/pqc/members?limit=1&sort=name");
+    const listResponse = await callPublicApi("https://pkic.org/api/v1/working-groups/pqc/members?limit=1&sort=name");
     expect(listResponse.status).toBe(200);
     const roster = publicWorkingGroupMembersListResponseSchema.parse(await listResponse.json());
     expect(roster.members).toEqual([{ name: "Wg Member", organizationName: null }]);
@@ -707,13 +703,26 @@ describe("GET /api/v1/working-groups/:id", () => {
       ]);
     }
 
-    const response = await callMembersList("https://pkic.org/api/v1/working-groups/pqc/members?q=other&sort=name");
+    const response = await callPublicApi("https://pkic.org/api/v1/working-groups/pqc/members?q=other&sort=name");
     const body = publicWorkingGroupMembersListResponseSchema.parse(await response.json());
     expect(body.members.map((member) => member.name)).toEqual(["Bob Other"]);
     expect(body.page.total).toBe(1);
 
-    const invalid = await callMembersList("https://pkic.org/api/v1/working-groups/pqc/members?sort=email");
+    const invalid = await callPublicApi("https://pkic.org/api/v1/working-groups/pqc/members?sort=email");
     expect(invalid.status).toBe(400);
+  });
+
+  it("returns 404 for inactive working-group detail and rosters by slug and UUID", async () => {
+    const wgId = crypto.randomUUID();
+    await seedWorkingGroup({ id: wgId, name: "Retired Working Group", slug: "retired", active: 0 });
+
+    for (const idOrSlug of ["retired", wgId]) {
+      const detailResponse = await callPublicApi(`https://pkic.org/api/v1/working-groups/${idOrSlug}`);
+      expect(detailResponse.status).toBe(404);
+
+      const membersResponse = await callPublicApi(`https://pkic.org/api/v1/working-groups/${idOrSlug}/members`);
+      expect(membersResponse.status).toBe(404);
+    }
   });
 
   it("returns the chair and vice chair resolved from user_roles, not the static YAML frontmatter", async () => {
@@ -886,11 +895,11 @@ describe("GET /api/v1/working-groups/:id", () => {
     expect(body.chair?.linkedin).toBeNull();
   });
 
-  it("returns 404 for an unknown working group", async () => {
-    const response = await callEndpoint(
-      getWorkingGroup,
-      createContext(env, getRequest("https://pkic.org/api/v1/working-groups/does-not-exist"), { id: "does-not-exist" }),
-    );
-    expect(response.status).toBe(404);
+  it("returns 404 for unknown working-group detail and roster routes", async () => {
+    const detailResponse = await callPublicApi("https://pkic.org/api/v1/working-groups/does-not-exist");
+    expect(detailResponse.status).toBe(404);
+
+    const membersResponse = await callPublicApi("https://pkic.org/api/v1/working-groups/does-not-exist/members");
+    expect(membersResponse.status).toBe(404);
   });
 });

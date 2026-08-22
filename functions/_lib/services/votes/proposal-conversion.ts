@@ -4,6 +4,7 @@ import { prepareAuditLog } from "../audit";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
+import { prepareForumVoteDelegateNotificationIntents } from "./delegate-notification-intents";
 import type { ProposalRow } from "./proposal-read";
 import {
   getVoteRowOrThrow,
@@ -138,6 +139,7 @@ export async function convertProposalToVote(
       ),
     );
   }
+  statements.push(prepareForumVoteDelegateNotificationIntents(db, fields.id, 1, fields.now));
 
   let results;
   try {
@@ -176,6 +178,7 @@ export async function insertEndorsementAndMaybeConvert(
       .bind(uuid(), proposal.id, endorserUserId, nowIso()),
     voteInsert,
     updateStatus,
+    prepareForumVoteDelegateNotificationIntents(db, fields.id, 1, fields.now),
   ]);
   if ((results[2]?.meta?.changes ?? 0) > 0) {
     return toVoteSummary(await getVoteRowOrThrow(db, fields.id));

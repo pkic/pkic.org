@@ -55,7 +55,7 @@ describe("invite lifecycle aggregate", () => {
       resendInviteByAdmin(env.DB, {
         event,
         inviteId,
-        admin: { id: "admin", email: "admin@pkic.org", role: "admin" },
+        admin: { identityType: "service", id: "admin", email: "admin@pkic.org", role: "admin" },
         appBaseUrl: "https://app.test",
       }),
     ).rejects.toThrow("forced invite resend audit failure");
@@ -77,7 +77,7 @@ describe("invite lifecycle aggregate", () => {
     await resendInviteByAdmin(env.DB, {
       event,
       inviteId,
-      admin: { id: "admin", email: "admin@pkic.org", role: "admin" },
+      admin: { identityType: "service", id: "admin", email: "admin@pkic.org", role: "admin" },
       appBaseUrl: "https://app.test",
     });
 

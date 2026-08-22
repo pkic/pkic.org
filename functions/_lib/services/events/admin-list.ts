@@ -1,4 +1,4 @@
-import { EVENTS_LIST_SORT_COLUMNS } from "../../../../assets/shared/schemas/admin-events";
+import { EVENTS_LIST_SORT_COLUMNS, type AdminEventsListQuery } from "../../../../assets/shared/schemas/admin-events";
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
@@ -24,10 +24,7 @@ interface EventWithStats {
   pending_invites: number;
 }
 
-export async function listAdminEvents(
-  db: DatabaseLike,
-  query: { q?: string; sort?: string; limit: number; offset: number },
-) {
+export async function listAdminEvents(db: DatabaseLike, query: AdminEventsListQuery) {
   const orderBy = resolveOrderBy(
     query.sort,
     EVENTS_LIST_SORT_COLUMNS,
@@ -37,10 +34,8 @@ export async function listAdminEvents(
   const search = query.q ? buildD1TextSearchFilter(query.q, ["e.name", "e.slug"]) : null;
   const where = search ? `WHERE ${search.sql}` : "";
   const bindings = search?.bindings ?? [];
-  const { rows: events, total } = await queryPage<EventWithStats>(
-    db,
-    {
-      sql: `WITH registration_counts AS (
+  const { rows: events, total } = await queryPage<EventWithStats>(db, {
+    sql: `WITH registration_counts AS (
          SELECT event_id,
                 COUNT(*) AS total_registrations,
                 SUM(CASE WHEN status = 'registered' THEN 1 ELSE 0 END) AS confirmed_registrations
@@ -73,13 +68,12 @@ export async function listAdminEvents(
        FROM events e
        LEFT JOIN registration_counts ON registration_counts.event_id = e.id
        LEFT JOIN invite_counts ON invite_counts.event_id = e.id
-       ${where}
-       ${orderBy}
-       LIMIT ? OFFSET ?`,
-      bindings: [...bindings, query.limit, query.offset],
-    },
-    { sql: `SELECT COUNT(*) AS total FROM events e ${where}`, bindings },
-  );
+       ${where}`,
+    bindings,
+    orderBy,
+    limit: query.limit,
+    offset: query.offset,
+  });
   return {
     events,
     page: buildPageInfo(query.limit, query.offset, total, events.length),

@@ -283,10 +283,19 @@ describe("admin event management endpoints", () => {
 
     expect(permissionResponse.status).toBe(201);
     const permissionPayload = (await permissionResponse.json()) as {
-      permission: { user_email: string; permission: string };
+      permission: { id: string; user_email: string; permission: string };
     };
     expect(permissionPayload.permission.user_email).toBe("organizer@example.test");
     expect(permissionPayload.permission.permission).toBe("organizer");
+    expect(
+      await queryAll<{ normalized_email: string }>(
+        env.DB,
+        `SELECT u.normalized_email
+           FROM user_roles ur JOIN users u ON u.id = ur.user_id
+          WHERE ur.id = ?`,
+        permissionPayload.permission.id,
+      ),
+    ).toEqual([{ normalized_email: "organizer@example.test" }]);
 
     const duplicatePermissionResponse = await callAdmin("/api/v1/admin/events/pqc-2026/permissions", {
       method: "POST",
@@ -400,6 +409,32 @@ describe("admin event management endpoints", () => {
     expect(invalidLimit.status).toBe(400);
   });
 
+  it("keeps API-key audit identity separate from an event-team grantor user", async () => {
+    await setupAdmin();
+    ADMIN_TOKEN = env.ADMIN_API_KEY ?? "test-admin-key";
+
+    const response = await callAdmin("/api/v1/admin/events/pqc-2026/permissions", {
+      method: "POST",
+      body: JSON.stringify({ userEmail: "api-key-organizer@example.test", permission: "organizer" }),
+    });
+
+    expect(response.status).toBe(201);
+    const payload = (await response.json()) as { permission: { id: string } };
+    expect(
+      await queryAll<{ granted_by_user_id: string | null }>(
+        env.DB,
+        "SELECT granted_by_user_id FROM user_roles WHERE id = ?",
+        payload.permission.id,
+      ),
+    ).toEqual([{ granted_by_user_id: null }]);
+    expect(
+      await queryAll<{ actor_id: string | null }>(
+        env.DB,
+        "SELECT actor_id FROM audit_log WHERE action = 'event_permission_granted' AND entity_type = 'event'",
+      ),
+    ).toEqual([{ actor_id: "api-key" }]);
+  });
+
   it("allows admin to reinstate a cancelled registration and rejects double-cancel", async () => {
     await setupAdmin();
 
@@ -430,7 +465,7 @@ describe("admin event management endpoints", () => {
     // Cancel via the service (simulates attendee or earlier admin action)
     const cancelled = await updateRegistrationById(
       env.DB,
-      { registrationId: created.registration.id, action: "cancel", waitlistClaimWindowHours: 24 },
+      { eventId: event.id, registrationId: created.registration.id, action: "cancel", waitlistClaimWindowHours: 24 },
       "admin:test",
     );
     expect(cancelled.status).toBe("cancelled");
@@ -448,7 +483,7 @@ describe("admin event management endpoints", () => {
     await expect(
       updateRegistrationById(
         env.DB,
-        { registrationId: created.registration.id, action: "cancel", waitlistClaimWindowHours: 24 },
+        { eventId: event.id, registrationId: created.registration.id, action: "cancel", waitlistClaimWindowHours: 24 },
         "admin:test",
       ),
     ).rejects.toMatchObject({ code: "ALREADY_CANCELLED" });
@@ -474,6 +509,109 @@ describe("admin event management endpoints", () => {
       )
     )[0];
     expect(row.cancelled_at).toBeNull();
+  });
+
+  it("does not let an event route mutate a registration owned by another event", async () => {
+    await setupAdmin();
+    const createEventResponse = await callAdmin("/api/v1/admin/events", {
+      method: "POST",
+      body: JSON.stringify({ slug: "other-event", name: "Other Event", timezone: "UTC" }),
+    });
+    expect(createEventResponse.status).toBe(201);
+
+    const otherEvent = await getEventBySlug(env.DB, "other-event");
+    const userId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, created_at, updated_at)
+       VALUES (?, 'cross-event@example.test', 'cross-event@example.test', datetime('now'), datetime('now'))`,
+    )
+      .bind(userId)
+      .run();
+    const created = await createRegistration(env.DB, {
+      event: otherEvent,
+      userId,
+      attendanceType: "in_person",
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+
+    const wrongEventPath = `/api/v1/admin/events/pqc-2026/registrations/${created.registration.id}`;
+    const ordinaryUpdate = await callAdmin(wrongEventPath, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "update", attendanceType: "virtual" }),
+    });
+    expect(ordinaryUpdate.status).toBe(404);
+
+    const emailUpdate = await callAdmin(wrongEventPath, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "update", email: "cross-event-new@example.test" }),
+    });
+    expect(emailUpdate.status).toBe(404);
+
+    expect(
+      await queryAll<{ attendance_type: string; status: string }>(
+        env.DB,
+        "SELECT attendance_type, status FROM registrations WHERE id = ?",
+        created.registration.id,
+      ),
+    ).toEqual([{ attendance_type: "in_person", status: "pending_email_confirmation" }]);
+    expect(
+      await queryAll<{ email: string; pending_email: string | null }>(
+        env.DB,
+        "SELECT email, pending_email FROM users WHERE id = ?",
+        userId,
+      ),
+    ).toEqual([{ email: "cross-event@example.test", pending_email: null }]);
+  });
+
+  it("rejects an admin scalar-only attendance change when day attendance is canonical", async () => {
+    const { baseEventId } = await setupAdmin();
+    const userId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
+         VALUES ('admin-scalar-day', ?, '2026-12-01', 'Day 1', 1, 0, datetime('now'), datetime('now'))`,
+      ).bind(baseEventId),
+      env.DB.prepare(
+        `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+         VALUES (?, 'admin-scalar@example.test', 'admin-scalar@example.test', 'Admin', 'Scalar', datetime('now'), datetime('now'))`,
+      ).bind(userId),
+    ]);
+
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const created = await createRegistration(env.DB, {
+      event,
+      userId,
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+
+    const response = await callAdmin(`/api/v1/admin/events/pqc-2026/registrations/${created.registration.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "update", attendanceType: "virtual" }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "DAY_ATTENDANCE_REQUIRED" },
+    });
+    await expect(
+      queryAll<{ attendance_type: string }>(env.DB, "SELECT attendance_type FROM registrations WHERE id = ?", [
+        created.registration.id,
+      ]),
+    ).resolves.toEqual([{ attendance_type: "in_person" }]);
+    await expect(
+      queryAll<{ attendance_type: string }>(
+        env.DB,
+        `SELECT rda.attendance_type FROM registration_day_attendance rda
+         WHERE rda.registration_id = ?`,
+        [created.registration.id],
+      ),
+    ).resolves.toEqual([{ attendance_type: "in_person" }]);
   });
 
   it("separates accepted attendees from active day waitlists in both event statistics views", async () => {
@@ -747,6 +885,7 @@ describe("admin event management endpoints", () => {
     await updateRegistrationById(
       env.DB,
       {
+        eventId: event.id,
         registrationId: created.registration.id,
         action: "update",
         attendanceType: "virtual",
@@ -854,6 +993,7 @@ describe("admin event management endpoints", () => {
     await updateRegistrationById(
       env.DB,
       {
+        eventId: event.id,
         registrationId: later.registration.id,
         action: "update",
         attendanceType: "virtual",
@@ -865,6 +1005,7 @@ describe("admin event management endpoints", () => {
     await updateRegistrationById(
       env.DB,
       {
+        eventId: event.id,
         registrationId: created.registration.id,
         action: "update",
         attendanceType: "on_demand",

@@ -14,6 +14,12 @@ import { buildEventEmailVariables } from "./events";
 import { proposalManagePageUrl, speakerManagePageUrl } from "./frontend-links";
 import { queuedCapabilityToken } from "./capability-links";
 import { requireConfiguredSessionType } from "./events";
+import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
+import {
+  eventParticipantSourceConflictError,
+  isEventParticipantSourceConflict,
+} from "./event-participant-source-revision";
+import { prepareBadgeRenderJob } from "./badge-render-job-statements";
 
 type ProposalCreateInput = z.infer<typeof proposalCreateSchema>;
 
@@ -38,6 +44,7 @@ export interface ProposalSubmissionResult {
   shareUrl: string;
   proposer: UserRecord;
   outboxIds: string[];
+  badgeRenderJobId: string;
 }
 
 function profileWrite(profile: ProposalCreateInput["proposer"] | ProposalCreateInput["speakers"][number]) {
@@ -124,6 +131,8 @@ export async function submitProposal(
     length: input.referralCodeLength,
   });
   statements.push(referral.statement);
+  const badgeRenderJob = prepareBadgeRenderJob(db, referral.code);
+  statements.push(badgeRenderJob.statement);
 
   const allPeople = [proposer, ...coSpeakers.map(({ user }) => user)];
   const speakerLineupText = allPeople
@@ -195,7 +204,13 @@ export async function submitProposal(
   statements.push(proposerEmail.statement);
   outboxIds.push(proposerEmail.id);
 
-  await db.batch(statements);
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    if (isRegistrationTransitionConflict(error)) throw registrationChangedError();
+    if (isEventParticipantSourceConflict(error)) throw eventParticipantSourceConflictError();
+    throw error;
+  }
 
   return {
     proposalId: created.proposal.id,
@@ -206,5 +221,6 @@ export async function submitProposal(
     shareUrl: `${input.appBaseUrl}/r/${referral.code}`,
     proposer,
     outboxIds,
+    badgeRenderJobId: badgeRenderJob.id,
   };
 }

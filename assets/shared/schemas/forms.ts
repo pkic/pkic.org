@@ -4,12 +4,44 @@ import { eventSlugParamsSchema } from "./api-common";
 import { formFieldOptionsSchema, formFieldRulesSchema } from "./form-field-rules";
 import { proposalTypeSchema } from "./proposal-management";
 
+export const FORM_PURPOSES = [
+  "event_registration",
+  "proposal_submission",
+  "survey",
+  "feedback",
+  "application",
+] as const;
+export const formPurposeSchema = z.enum(FORM_PURPOSES);
+export type FormPurpose = z.infer<typeof formPurposeSchema>;
+
+export const EVENT_FORM_PURPOSES = ["event_registration", "proposal_submission"] as const;
+export const eventFormsPurposeSchema = z.enum(EVENT_FORM_PURPOSES);
+export type EventFormsPurpose = z.infer<typeof eventFormsPurposeSchema>;
+
+export const FORM_STATUSES = ["active", "inactive", "archived"] as const;
+export const formStatusSchema = z.enum(FORM_STATUSES);
+export type FormStatus = z.infer<typeof formStatusSchema>;
+
+export const FORM_FIELD_TYPES = [
+  "text",
+  "textarea",
+  "select",
+  "multi_select",
+  "boolean",
+  "number",
+  "date",
+  "email",
+  "url",
+] as const;
+export const formFieldTypeSchema = z.enum(FORM_FIELD_TYPES);
+export type FormFieldType = z.infer<typeof formFieldTypeSchema>;
+
 /** Canonical form-field read model shared by API responses and frontends. */
 export const formFieldDefinitionSchema = z.object({
   id: databaseIdSchema,
   key: z.string(),
   label: z.string(),
-  fieldType: z.string(),
+  fieldType: formFieldTypeSchema,
   required: z.boolean(),
   options: formFieldOptionsSchema.nullable(),
   validation: formFieldRulesSchema.nullable(),
@@ -27,7 +59,6 @@ export const activeFormSummarySchema = z.object({
 export type FormFieldDefinition = z.infer<typeof formFieldDefinitionSchema>;
 export type ActiveFormSummary = z.infer<typeof activeFormSummarySchema>;
 
-export const eventFormsPurposeSchema = z.enum(["event_registration", "proposal_submission"]);
 export const eventAudienceSchema = z.enum(["attendee", "speaker"]);
 
 export const eventFormsQuerySchema = z.object({
@@ -90,7 +121,6 @@ export const eventTermsGetRouteSchema = {
   },
 };
 
-export type EventFormsPurpose = z.infer<typeof eventFormsPurposeSchema>;
 export type EventFormsResponse = z.infer<typeof eventFormsResponseSchema>;
 export type RequiredTerm = z.infer<typeof requiredTermSchema>;
 

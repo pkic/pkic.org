@@ -1,18 +1,23 @@
 import { all, first } from "../../db/queries";
 import { parseJsonSafe } from "../../utils/json";
 import type { DatabaseLike } from "../../types";
-import type { FormFieldDefinition } from "../../../../assets/shared/schemas/forms";
+import type {
+  FormFieldDefinition,
+  FormFieldType,
+  FormPurpose,
+  FormStatus,
+} from "../../../../assets/shared/schemas/forms";
 import { parseFormFieldOptions, parseFormFieldRules } from "../../../../assets/shared/schemas/form-field-rules";
 
-export type { FormFieldDefinition } from "../../../../assets/shared/schemas/forms";
+export type { FormFieldDefinition, FormPurpose } from "../../../../assets/shared/schemas/forms";
 
 export interface FormRow {
   id: string;
   key: string;
   scope_type: string;
   scope_ref: string | null;
-  purpose: string;
-  status: string;
+  purpose: FormPurpose;
+  status: FormStatus;
   title: string;
   description: string | null;
   created_at?: string;
@@ -30,7 +35,7 @@ export interface FormFieldRow {
   id: string;
   key: string;
   label: string;
-  field_type: string;
+  field_type: FormFieldType;
   required: number;
   options_json: string | null;
   validation_json: string | null;
@@ -42,14 +47,12 @@ export interface ManagedFormWithFields {
   fields: FormFieldRow[];
 }
 
-export type FormPurpose = "event_registration" | "proposal_submission" | "application";
-
 export interface ActiveFormDefinition {
   id: string;
   key: string;
   scopeType: string;
   scopeRef: string | null;
-  purpose: string;
+  purpose: FormPurpose;
   title: string;
   description: string | null;
   fields: FormFieldDefinition[];
@@ -95,7 +98,7 @@ export async function getManagedFormWithFields(
   return { form, fields: await loadFormFieldRows(db, form.id) };
 }
 
-async function findActiveForm(db: DatabaseLike, eventId: string, purpose: string): Promise<FormRow | null> {
+async function findActiveForm(db: DatabaseLike, eventId: string, purpose: FormPurpose): Promise<FormRow | null> {
   const event = await first<{ settings_json: string }>(db, "SELECT settings_json FROM events WHERE id = ?", [eventId]);
   if (event) {
     const settings = parseJsonSafe<EventSettings>(event.settings_json, {});

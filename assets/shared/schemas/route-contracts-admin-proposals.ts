@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { scopedAuditLogListQuerySchema, scopedAuditLogResponseSchema } from "./audit-log";
 import {
   presentationVersionIdParamsSchema,
   proposalIdParamsSchema,
@@ -15,7 +16,6 @@ import {
   proposalSpeakerRemovalRequestSchema,
   proposalSpeakerRemovalResponseSchema,
 } from "./proposal-management";
-import { listQuerySchema } from "./pagination";
 import {
   adminProposalSpeakerPatchResponseSchema,
   adminProposalSpeakersResponseSchema,
@@ -162,7 +162,9 @@ export const adminProposalReviewUpsertRouteSchema = {
 
 export const adminProposalReviewPatchRouteSchema = {
   tags: ["Admin proposal reviews"],
-  summary: "Update a proposal review",
+  summary: "Update my proposal review",
+  description:
+    "Updates only the authenticated reviewer's own review. Proposal managers and global administrators cannot edit another reviewer's review through this endpoint.",
   request: {
     params: proposalReviewIdParamsSchema,
     body: {
@@ -238,11 +240,15 @@ export const adminProposalAuditLogRouteSchema = {
   description: "Returns recent audit events attached to a proposal, its reviews, and its speaker records.",
   request: {
     params: proposalIdParamsSchema,
-    query: listQuerySchema(["createdAt", "action", "actor"] as const),
+    query: scopedAuditLogListQuerySchema,
   },
   responses: {
-    "200": { description: "Proposal audit log entries." },
+    "200": {
+      description: "Proposal audit log entries.",
+      content: { "application/json": { schema: scopedAuditLogResponseSchema } },
+    },
     "401": { description: "Admin authorization required." },
+    "403": { description: "Proposal scoring permission required." },
     "404": { description: "Proposal not found." },
   },
 };

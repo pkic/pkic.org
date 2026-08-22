@@ -13,52 +13,13 @@
  */
 import type { Env } from "../types";
 import { logError } from "../logging";
+import { emailDomainOf, isPersonalEmailDomain } from "../../../assets/shared/constants/email-domains";
 
 const GITHUB_ISSUES_URL = "https://api.github.com/repos/pkic/members/issues";
 
 const SPONSOR_INTEREST_SUBJECT = "Sponsor interest";
 
 const DUPLICATE_REVIEW_LABEL = "Review & Add to Mailing Lists";
-
-const PUBLIC_EMAIL_DOMAINS = new Set([
-  "gmail.com",
-  "googlemail.com",
-  "proton.me",
-  "protonmail.com",
-  "protonmail.ch",
-  "pm.me",
-  "hotmail.com",
-  "hotmail.co.uk",
-  "hotmail.fr",
-  "hotmail.it",
-  "hotmail.de",
-  "outlook.com",
-  "live.com",
-  "msn.com",
-  "live.co.uk",
-  "yahoo.com",
-  "yahoo.co.uk",
-  "yahoo.fr",
-  "yahoo.de",
-  "yahoo.it",
-  "ymail.com",
-  "icloud.com",
-  "me.com",
-  "mac.com",
-  "aol.com",
-  "aim.com",
-  "mail.com",
-  "gmx.com",
-  "gmx.net",
-  "gmx.de",
-  "yandex.com",
-  "yandex.ru",
-  "zoho.com",
-  "tutanota.com",
-  "tuta.io",
-  "fastmail.com",
-  "fastmail.fm",
-]);
 
 const EXCLUDE_LABELS = new Set(["close application", "rejected", "withdrew", "spam"]);
 
@@ -74,12 +35,6 @@ interface GitHubIssue {
 
 function fieldToString(value: FormDataEntryValue | null): string {
   return typeof value === "string" ? value.trim() : "";
-}
-
-/** Domain is everything after the last "@" — matches the extraction in assets/js/form.js. */
-function emailDomainOf(email: string): string {
-  const atIndex = email.lastIndexOf("@");
-  return atIndex === -1 ? "" : email.slice(atIndex + 1).toLowerCase();
 }
 
 export async function submitMembershipForm(formData: FormData, env: Env): Promise<void> {
@@ -109,7 +64,7 @@ export async function submitMembershipForm(formData: FormData, env: Env): Promis
   const labels = [subject];
   if (subject !== SPONSOR_INTEREST_SUBJECT) {
     const emailDomain = emailDomainOf(email);
-    if (emailDomain && !PUBLIC_EMAIL_DOMAINS.has(emailDomain)) {
+    if (emailDomain && !isPersonalEmailDomain(emailDomain)) {
       const domainExists = await checkEmailDomainDuplicate(emailDomain, githubToken);
       if (domainExists) {
         labels.push(DUPLICATE_REVIEW_LABEL);

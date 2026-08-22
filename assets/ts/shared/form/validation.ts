@@ -1,42 +1,6 @@
 import { clearFieldErrors, findFieldErrorTarget } from "./validation-map";
 import { normalizedEmailSchema } from "../../../shared/schemas/api-common";
-
-// Domains that are common personal / consumer email providers.
-// When detected, we show an inline advisory — we do NOT block the submission.
-const PERSONAL_EMAIL_DOMAINS = new Set([
-  "gmail.com",
-  "googlemail.com",
-  "hotmail.com",
-  "hotmail.co.uk",
-  "hotmail.fr",
-  "hotmail.de",
-  "outlook.com",
-  "outlook.co.uk",
-  "live.com",
-  "live.co.uk",
-  "live.nl",
-  "live.de",
-  "msn.com",
-  "yahoo.com",
-  "yahoo.co.uk",
-  "yahoo.fr",
-  "yahoo.de",
-  "icloud.com",
-  "me.com",
-  "mac.com",
-  "aol.com",
-  "protonmail.com",
-  "proton.me",
-  "tutanota.com",
-  "tuta.io",
-  "gmx.com",
-  "gmx.de",
-  "gmx.net",
-  "mail.com",
-  "yandex.com",
-  "yandex.ru",
-  "zoho.com",
-]);
+import { isPersonalEmailAddress } from "../../../shared/constants/email-domains";
 
 /**
  * Shows or hides the [data-email-warning] hint element based on whether
@@ -45,8 +9,7 @@ const PERSONAL_EMAIL_DOMAINS = new Set([
  */
 function applyEmailWarning(field: HTMLInputElement, form: HTMLFormElement): void {
   const warningEl = form.querySelector<HTMLElement>("[data-email-warning]");
-  const domain = field.value.trim().split("@")[1]?.toLowerCase() ?? "";
-  const isPersonal = domain.length > 0 && PERSONAL_EMAIL_DOMAINS.has(domain);
+  const isPersonal = isPersonalEmailAddress(field.value);
 
   if (isPersonal) {
     // data attribute lets CSS neutralise Bootstrap's green :valid ring

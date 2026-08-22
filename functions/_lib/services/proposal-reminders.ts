@@ -3,7 +3,7 @@ import { prepareQueueEmailStatement } from "../email/outbox";
 import { AppError } from "../errors";
 import type { DatabaseLike, StatementLike } from "../types";
 import { nowIso } from "../utils/time";
-import { prepareAuditLog } from "./audit";
+import { prepareScopedAuditLog } from "./audit";
 import { buildEventEmailVariables, getEventById } from "./events";
 import { speakerManagePageUrl, speakerPresentationPageUrl } from "./frontend-links";
 import { queuedCapabilityToken } from "./capability-links";
@@ -129,8 +129,9 @@ export async function sendAdminProposalSpeakerReminders(
     outboxIds.push(queued.id);
     statements.push(
       queued.statement,
-      prepareAuditLog(
+      prepareScopedAuditLog(
         db,
+        { type: "proposal", id: proposal.id },
         "admin",
         payload.actorUserId,
         payload.kind === "profile" ? "speaker_profile_request_resent" : "presentation_upload_request_sent",
@@ -228,8 +229,9 @@ export async function remindProposalSpeakerByProposer(
          WHERE id = ?`,
       )
       .bind(now, speaker.proposal_speaker_id),
-    prepareAuditLog(
+    prepareScopedAuditLog(
       db,
+      { type: "proposal", id: payload.proposal.id },
       "user",
       payload.proposal.proposer_user_id,
       "co_speaker_reminded_by_proposer",

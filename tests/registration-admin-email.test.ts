@@ -3,8 +3,9 @@ import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { getEventBySlug } from "../functions/_lib/services/events";
-import { createRegistration } from "../functions/_lib/services/registrations";
+import { changeRegistrationEmail, createRegistration } from "../functions/_lib/services/registrations";
 import { resendRegistrationEmail } from "../functions/_lib/services/registrations/resend-confirmation";
+import { queueRegistrationStatusEmail } from "../functions/_lib/services/registrations/status-notifications";
 
 async function seedPendingRegistration(): Promise<{ registrationId: string; adminId: string }> {
   const { eventId } = await seedEventAndAdmin(env.DB);
@@ -109,5 +110,42 @@ describe("admin registration email resend", () => {
         )
       )[0]?.count,
     ).toBe(0);
+    await env.DB.prepare("DROP TRIGGER reject_registration_resend_audit").run();
+  });
+
+  it("uses the registration-owned pending address across shared status and resend emails", async () => {
+    const { registrationId, adminId } = await seedPendingRegistration();
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    await changeRegistrationEmail(env.DB, {
+      registrationId,
+      newEmail: "resend-pending@example.test",
+      confirmationTtlHours: 48,
+      signingSecret: env.INTERNAL_SIGNING_SECRET,
+    });
+
+    const statusEmail = await queueRegistrationStatusEmail(env.DB, {
+      event,
+      registrationId,
+      appBaseUrl: "https://app.test",
+      templateKey: "registration_updated",
+      subject: `Registration updated for ${event.name}`,
+    });
+    const resent = await resendRegistrationEmail(env.DB, {
+      registrationId,
+      event,
+      actorUserId: adminId,
+      appBaseUrl: "https://app.test",
+      confirmationTtlHours: 48,
+      internalSigningSecret: env.INTERNAL_SIGNING_SECRET,
+    });
+
+    expect(
+      await queryAll<{ recipient_email: string }>(
+        env.DB,
+        "SELECT recipient_email FROM email_outbox WHERE id IN (?, ?) ORDER BY id",
+        statusEmail.outboxId,
+        resent.outboxId,
+      ),
+    ).toEqual([{ recipient_email: "resend-pending@example.test" }, { recipient_email: "resend-pending@example.test" }]);
   });
 });

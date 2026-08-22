@@ -89,7 +89,9 @@ export const registrationHeadshotDeleteRouteSchema = {
 
 export const adminHeadshotUploadResponseSchema = headshotUploadResponseSchema.omit({ headshotUrl: true });
 
-export const attendanceTypeSchema = z.enum(["in_person", "virtual", "on_demand"]);
+export const ATTENDANCE_TYPES = ["in_person", "virtual", "on_demand"] as const;
+export const attendanceTypeSchema = z.enum(ATTENDANCE_TYPES);
+export type AttendanceType = (typeof ATTENDANCE_TYPES)[number];
 
 /**
  * Application lifecycle statuses after migration 0030. The deployed base

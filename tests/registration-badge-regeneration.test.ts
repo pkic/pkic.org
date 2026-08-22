@@ -7,7 +7,9 @@ import {
   processBadgeRenderJobById,
   processPendingBadgeRenders,
   requestRegistrationBadgeRegeneration,
+  seedGravatarAndProcessBadgeRenderJob,
 } from "../functions/_lib/services/registration-badge-regeneration";
+import { prepareBadgeRenderJob } from "../functions/_lib/services/badge-render-job-statements";
 import type { AuthAdmin, Env } from "../functions/_lib/types";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
@@ -50,7 +52,7 @@ async function seedRegistrationWithReferral(): Promise<{
     "SELECT id, email, role FROM users WHERE normalized_email = 'admin@pkic.org'",
   );
   return {
-    actor: admin,
+    actor: { identityType: "user", ...admin },
     event: await getEventBySlug(env.DB, "pqc-2026"),
     registrationId,
     referralCode,
@@ -101,9 +103,57 @@ describe("registration badge regeneration", () => {
     expect(
       await queryAll(env.DB, "SELECT id, status FROM badge_render_jobs WHERE referral_code = ?", seeded.referralCode),
     ).toEqual([{ id: `badge:${seeded.referralCode}`, status: "queued" }]);
+    expect(
+      await queryAll(env.DB, "SELECT actor_type, action FROM audit_log WHERE entity_id = ?", seeded.userId),
+    ).toEqual([{ actor_type: "system", action: "headshot_seeded_gravatar" }]);
     expect(await queryAll(env.DB, "SELECT id FROM storage_deletion_outbox WHERE object_key = ?", r2Key!)).toHaveLength(
       0,
     );
+  });
+
+  it("cleans up a speculative Gravatar when another headshot wins the pointer race", async () => {
+    const seeded = await seedRegistrationWithReferral();
+    const stored = new Map<string, ArrayBuffer>();
+    const winnerKey = `headshots/${seeded.userId}/winner.jpg`;
+    const bucket = {
+      put: async (key: string, value: ArrayBuffer) => {
+        stored.set(key, value);
+        await env.DB.prepare("UPDATE users SET headshot_r2_key = ? WHERE id = ?").bind(winnerKey, seeded.userId).run();
+        return { size: value.byteLength };
+      },
+      delete: async (key: string) => {
+        stored.delete(key);
+      },
+    } as unknown as R2Bucket;
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), { headers: { "content-type": "image/jpeg" } }),
+        ),
+    );
+
+    await expect(
+      fetchGravatar(seeded.userId, "badge@example.test", {
+        DB: env.DB,
+        SPEAKER_UPLOADS_BUCKET: bucket,
+      }),
+    ).resolves.toBeNull();
+
+    expect(stored.size).toBe(0);
+    expect(await queryAll(env.DB, "SELECT headshot_r2_key FROM users WHERE id = ?", seeded.userId)).toEqual([
+      { headshot_r2_key: winnerKey },
+    ]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM badge_render_jobs WHERE referral_code = ?", seeded.referralCode),
+    ).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'headshot_seeded_gravatar' AND entity_id = ?", [
+        seeded.userId,
+      ]),
+    ).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM storage_deletion_outbox")).toEqual([]);
   });
 
   it("atomically records an audited render intent before executing the R2 effect", async () => {
@@ -192,6 +242,26 @@ describe("registration badge regeneration", () => {
     expect(await queryAll(env.DB, "SELECT status, attempts, last_error FROM badge_render_jobs")).toEqual([
       { status: "rendered", attempts: 1, last_error: null },
     ]);
+  });
+
+  it("keeps an initial render intent retryable when eager background rendering fails", async () => {
+    const seeded = await seedRegistrationWithReferral();
+    const job = prepareBadgeRenderJob(env.DB, seeded.referralCode);
+    await env.DB.batch([job.statement]);
+    const render = vi.fn().mockRejectedValue(new Error("initial R2 failure"));
+
+    await expect(
+      seedGravatarAndProcessBadgeRenderJob(
+        env.DB,
+        env,
+        { userId: seeded.userId, email: "badge@example.test", jobId: job.id },
+        render,
+      ),
+    ).resolves.toBe(false);
+
+    expect(
+      await queryAll(env.DB, "SELECT status, attempts, last_error FROM badge_render_jobs WHERE id = ?", job.id),
+    ).toEqual([{ status: "retrying", attempts: 1, last_error: "initial R2 failure" }]);
   });
 
   it("rolls back the render intent when its audit record cannot be committed", async () => {

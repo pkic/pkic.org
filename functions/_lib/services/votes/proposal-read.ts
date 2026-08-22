@@ -197,14 +197,13 @@ async function queryProposalPage(
     "created_at DESC",
     "id ASC",
   );
-  const { rows, total } = await queryPage<ProposalRow>(
-    db,
-    {
-      sql: `SELECT ${PROPOSAL_ROW_COLUMNS} FROM vote_proposals ${where} ${orderBy} LIMIT ? OFFSET ?`,
-      bindings: [...bindings, params.limit, params.offset],
-    },
-    { sql: `SELECT COUNT(*) AS total FROM vote_proposals ${where}`, bindings },
-  );
+  const { rows, total } = await queryPage<ProposalRow>(db, {
+    sql: `SELECT ${PROPOSAL_ROW_COLUMNS} FROM vote_proposals ${where}`,
+    bindings,
+    orderBy,
+    limit: params.limit,
+    offset: params.offset,
+  });
   return { proposals: await toProposalSummaries(db, rows), total };
 }
 

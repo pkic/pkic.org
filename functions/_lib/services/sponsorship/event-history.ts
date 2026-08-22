@@ -60,7 +60,6 @@ export async function listSponsorshipEvents(
   const searchSql = search ? `AND ${search.sql}` : "";
   const bindings = [sponsorshipId, ...(search?.bindings ?? [])];
   const from = `FROM sponsorship_events se LEFT JOIN users u ON u.id = se.actor_user_id`;
-  const countFrom = search ? from : "FROM sponsorship_events se";
   const descending = query.sort.startsWith("-");
   const orderBy = resolveMappedOrderBy(
     query.sort,
@@ -68,23 +67,18 @@ export async function listSponsorshipEvents(
     "se.created_at DESC",
     `se.id ${descending ? "DESC" : "ASC"}`,
   );
-  const { rows, total } = await queryPage<SponsorshipEventRow>(
-    db,
-    {
-      sql: `SELECT se.id, se.from_stage, se.to_stage, se.actor_user_id,
+  const { rows, total } = await queryPage<SponsorshipEventRow>(db, {
+    sql: `SELECT se.id, se.from_stage, se.to_stage, se.actor_user_id,
                    COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS actor_name,
                    se.note, se.created_at
             ${from}
             WHERE se.sponsorship_id = ? ${searchSql}
-            ${orderBy}
-            LIMIT ? OFFSET ?`,
-      bindings: [...bindings, query.limit, query.offset],
-    },
-    {
-      sql: `SELECT COUNT(*) AS total ${countFrom} WHERE se.sponsorship_id = ? ${searchSql}`,
-      bindings,
-    },
-  );
+            `,
+    bindings,
+    orderBy,
+    limit: query.limit,
+    offset: query.offset,
+  });
   const events = rows.map(toSponsorshipEvent);
   return { events, page: buildPageInfo(query.limit, query.offset, total, events.length) };
 }

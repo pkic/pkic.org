@@ -101,6 +101,7 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
       : null;
   const emailChanged = Boolean(currentUser && body.email && body.email.trim().toLowerCase() !== currentUser);
   const updatePayload = {
+    eventId: event.id,
     registrationId,
     action: body.action,
     attendanceType: body.attendanceType,

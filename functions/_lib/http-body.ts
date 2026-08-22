@@ -4,6 +4,7 @@ import { readBoundedStream } from "./utils/bounded-stream";
 export const STRIPE_WEBHOOK_MAX_BYTES = 1024 * 1024;
 export const SENDGRID_WEBHOOK_MAX_BYTES = 2 * 1024 * 1024;
 export const INTERNAL_CALENDAR_RSVP_MAX_BYTES = 384 * 1024;
+export const MULTIPART_OVERHEAD_MAX_BYTES = 256 * 1024;
 
 function declaredContentLength(request: Request): number | null {
   const value = request.headers.get("content-length");
@@ -40,5 +41,32 @@ export async function readBoundedTextBody(request: Request, maxBytes: number): P
   } catch (error) {
     if (error instanceof AppError) throw error;
     throw new AppError(400, "INVALID_UTF8", "Request body must be valid UTF-8");
+  }
+}
+
+/**
+ * Parses one bounded multipart body without trusting Content-Length. The
+ * streaming counter rejects chunked or dishonest requests before FormData
+ * parsing can retain an unbounded payload.
+ */
+export async function readBoundedMultipartFormData(request: Request, maxFileBytes: number): Promise<FormData> {
+  const contentType = request.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().includes("multipart/form-data")) {
+    throw new AppError(400, "INVALID_CONTENT_TYPE", "Request must be multipart/form-data");
+  }
+  const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+  if (!(boundaryMatch?.[1] || boundaryMatch?.[2])) {
+    throw new AppError(400, "INVALID_MULTIPART", "Could not parse multipart boundary");
+  }
+
+  try {
+    const bytes = await readBoundedBody(request, maxFileBytes + MULTIPART_OVERHEAD_MAX_BYTES);
+    // readBoundedBody owns one exactly-sized Uint8Array, so its backing buffer
+    // can be transferred to the parser without a second full-body copy.
+    const body = bytes.buffer as ArrayBuffer;
+    return await new Response(body, { headers: { "Content-Type": contentType } }).formData();
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    throw new AppError(400, "INVALID_MULTIPART", "Could not parse multipart upload");
   }
 }

@@ -10,6 +10,13 @@ import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { ecDecisionCreateSchema, ecDecisionValueSchema } from "./ec-review";
 import { httpUrlSchema } from "./urls";
 import { workingGroupLabelSchema } from "./working-groups";
+import {
+  adminApplicationDocumentSchema,
+  adminApplicationDocumentsListResponseSchema,
+  applicationDocumentsListQuerySchema,
+} from "./application-documents";
+
+export { adminApplicationDocumentSchema, adminApplicationDocumentsListResponseSchema } from "./application-documents";
 
 /** Allowlisted sort columns for GET /api/v1/admin/applications — see listAdminApplications. */
 export const ADMIN_APPLICATIONS_SORT_COLUMNS = [
@@ -79,15 +86,6 @@ export const adminApplicationEcDecisionSchema = z.object({
   createdAt: z.string(),
 });
 
-export const adminApplicationDocumentSchema = z.object({
-  id: z.string(),
-  filename: z.string(),
-  mimeType: z.string(),
-  fileSizeBytes: z.number().int().nonnegative(),
-  uploadedAt: z.string(),
-  uploadedByEmail: z.string(),
-});
-
 export const adminApplicationDetailSchema = adminApplicationSummarySchema.extend({
   stageEnteredAt: z.string(),
   answers: z.record(z.string(), z.unknown()),
@@ -96,7 +94,6 @@ export const adminApplicationDetailSchema = adminApplicationSummarySchema.extend
   communications: z.array(adminApplicationCommunicationSchema),
   concerns: z.array(adminApplicationConcernSchema),
   ecDecisions: z.array(adminApplicationEcDecisionSchema),
-  documents: z.array(adminApplicationDocumentSchema),
 });
 export type AdminApplicationDetail = z.infer<typeof adminApplicationDetailSchema>;
 export type AdminApplicationEvent = z.infer<typeof adminApplicationEventSchema>;
@@ -283,9 +280,15 @@ export const applicationUpdateRouteSchema = {
 export const adminApplicationDocumentsListRouteSchema = {
   tags: ["Membership"],
   summary: "List all documents uploaded for an application (staff)",
-  request: { params: z.object({ id: z.string() }) },
+  request: {
+    params: z.object({ id: databaseIdSchema }),
+    query: applicationDocumentsListQuerySchema,
+  },
   responses: {
-    "200": { description: "Documents." },
+    "200": {
+      description: "Documents.",
+      content: { "application/json": { schema: adminApplicationDocumentsListResponseSchema } },
+    },
     "404": { description: "Application not found." },
   },
 };

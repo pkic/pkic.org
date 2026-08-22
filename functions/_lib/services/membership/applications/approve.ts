@@ -38,7 +38,7 @@
  * machinery covers delivery, only the *queueing* needed to be atomic with
  * membership state.
  *
- * The audit-log insert is folded in only when `actorUserId` is set (the
+ * The audit-log insert is folded in only when an admin `actor` is set (the
  * interactive admin route always sets it; the unattended EC-window
  * auto-approve job passes `null` and intentionally writes no audit entry,
  * unchanged from its prior behavior).
@@ -63,6 +63,7 @@ import { buildProvisionOrganizationMembership } from "../provisioning";
 import { buildEnqueueGoogleGroupsSyncStatement } from "../../google-groups";
 import { resolveAutoSyncListEmails } from "../../mailing-lists";
 import { prepareQueueEmailStatement } from "../../../email/outbox";
+import { adminDatabaseUserId } from "../../../auth/admin-identity";
 import { prepareAuditLog } from "../../audit";
 import { resolveApprovalIcsAttachments } from "../../meeting-calendar";
 import {
@@ -71,7 +72,7 @@ import {
   buildOrgContactAssignedEmail,
 } from "../notifications";
 import { CA_WORKING_GROUP_SLUG, CA_ONLY_CATEGORY } from "../../working-groups";
-import type { DatabaseLike, StatementLike } from "../../../types";
+import type { AuthAdmin, DatabaseLike, StatementLike } from "../../../types";
 
 export interface ApproveApplicationResult {
   applicationId: string;
@@ -88,6 +89,9 @@ export interface ApproveApplicationResult {
   /** IDs of email_outbox rows queued in the same batch as membership provisioning — pass each to `processOutboxByIdBackground` after this commits. */
   outboxIds: string[];
 }
+
+/** Staff may resolve an EC decline explicitly; unattended approval may never override one. */
+export type ApplicationApprovalMode = "staff_override" | "automatic_no_ec_objection";
 
 const MAX_APPLICATION_WORKING_GROUPS = 20;
 
@@ -109,7 +113,9 @@ export async function approveApplication(
   db: DatabaseLike,
   params: {
     applicationId: string;
-    actorUserId: string | null;
+    /** `null` is reserved for unattended system approval. */
+    actor: AuthAdmin | null;
+    approvalMode: ApplicationApprovalMode;
     eventNote?: string;
     loginUrl: string;
     /** Route caller sends this once a contact role is assigned; the unattended auto-approve job never did, unchanged. */
@@ -142,6 +148,7 @@ export async function approveApplication(
   );
   const jobTitle = typeof answers.job_title === "string" && answers.job_title.trim() ? answers.job_title.trim() : null;
   const links = typeof answers.linkedin === "string" && answers.linkedin.trim() ? [answers.linkedin.trim()] : [];
+  const databaseActorUserId = params.actor ? adminDatabaseUserId(params.actor) : null;
 
   // Everything below is built (not executed) and committed exactly once
   // at the end of this function: the provisioning statements, the
@@ -160,6 +167,7 @@ export async function approveApplication(
     membershipCategory: application.membership_category,
     representatives: [{ name: application.applicant_name, email: application.applicant_email, jobTitle, links }],
     workingGroupSlugs,
+    grantedByUserId: databaseActorUserId,
   });
   // Pure/synchronous — safe to call before the batch below commits, since
   // every id and decision it reports was already resolved by a pre-batch
@@ -169,6 +177,7 @@ export async function approveApplication(
 
   const now = nowIso();
   const fromStage = application.stage;
+  const requireNoEcDecline = params.approvalMode === "automatic_no_ec_objection";
   const statements: StatementLike[] = [...provisioning.statements];
 
   // Compare-and-set: only applies if the application is still in ec_review,
@@ -187,15 +196,19 @@ export async function approveApplication(
         `UPDATE member_applications
          SET stage = 'approved', stage_entered_at = ?, transition_revision = transition_revision + 1,
              on_hold_reminder_sent_at = NULL, updated_at = ?
-         WHERE id = ? AND stage = ? AND transition_revision = ?`,
+         WHERE id = ? AND stage = ? AND transition_revision = ?
+           AND (? = 0 OR NOT EXISTS (
+             SELECT 1 FROM ec_decisions
+             WHERE application_id = member_applications.id AND decision = 'decline'
+           ))`,
       )
-      .bind(now, now, application.id, fromStage, application.transition_revision),
+      .bind(now, now, application.id, fromStage, application.transition_revision, requireNoEcDecline ? 1 : 0),
     db
       .prepare(
         `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
          VALUES (?, ?, ?, CASE WHEN changes() = 1 THEN 'approved' ELSE NULL END, ?, ?, ?)`,
       )
-      .bind(uuid(), application.id, fromStage, params.actorUserId, params.eventNote ?? "Application approved", now),
+      .bind(uuid(), application.id, fromStage, databaseActorUserId, params.eventNote ?? "Application approved", now),
   );
 
   // Google Groups enqueue (real API client is in google-groups.ts; this
@@ -278,12 +291,12 @@ export async function approveApplication(
     outboxIds.push(contactEmail.id);
   }
 
-  if (params.actorUserId) {
+  if (params.actor) {
     statements.push(
       prepareAuditLog(
         db,
         "admin",
-        params.actorUserId,
+        params.actor.id,
         "application_approved",
         "member_application",
         application.id,
@@ -303,6 +316,24 @@ export async function approveApplication(
     // translating either expected race to 409. Unrelated database failures
     // are rethrown unchanged.
     const current = await getMemberApplicationById(db, application.id);
+    if (
+      requireNoEcDecline &&
+      err instanceof Error &&
+      err.message.includes("NOT NULL constraint failed: member_application_events.to_stage")
+    ) {
+      const decline = await first<{ id: string }>(
+        db,
+        "SELECT id FROM ec_decisions WHERE application_id = ? AND decision = 'decline' LIMIT 1",
+        [application.id],
+      );
+      if (decline) {
+        throw new AppError(
+          409,
+          "APPLICATION_EC_DECLINED",
+          "Application has an Executive Council decline and cannot be automatically approved",
+        );
+      }
+    }
     if (current && (current.stage !== "ec_review" || current.transition_revision !== application.transition_revision)) {
       throw new AppError(
         409,

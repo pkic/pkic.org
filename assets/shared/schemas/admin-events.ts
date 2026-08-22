@@ -16,7 +16,7 @@ import {
   sortColumnSchema,
   sortColumnSchemaWithDefault,
 } from "./pagination";
-import { dayDateSchema, inviteeSchema } from "./registration";
+import { attendanceTypeSchema, dayDateSchema, inviteeSchema } from "./registration";
 import { sourceTypeSchema } from "./source";
 import { addDuplicateStringIssues } from "./refinements";
 import { proposalRecommendationSchema } from "./proposal-reviews";
@@ -43,10 +43,12 @@ export const adminEventProposalsQuerySchema = listQuerySchema(EVENT_PROPOSALS_SO
   recommendation: proposalRecommendationSchema.optional(),
   deleted: z.literal("1").optional(),
 });
+export type AdminEventProposalsQuery = z.infer<typeof adminEventProposalsQuerySchema>;
 
 export const EVENTS_LIST_SORT_COLUMNS = ["name", "starts_at", "registration_mode", "total_registrations"] as const;
 export const eventsListSortValueSchema = sortColumnSchema(EVENTS_LIST_SORT_COLUMNS);
 export const adminEventsListQuerySchema = searchableListQuerySchema(eventsListSortValueSchema);
+export type AdminEventsListQuery = z.infer<typeof adminEventsListQuerySchema>;
 
 export const adminEventSummarySchema = z.object({
   id: eventIdSchema,
@@ -72,8 +74,8 @@ export const eventTeamPermissionSchema = z.enum(["organizer", "program_committee
 export type EventTeamPermission = z.infer<typeof eventTeamPermissionSchema>;
 export const adminEventTeamListItemSchema = z.object({
   id: z.string(),
-  user_email: z.string().nullable(),
-  user_id: z.string().nullable(),
+  user_email: z.string(),
+  user_id: z.string(),
   permission: eventTeamPermissionSchema,
   granted_by_id: z.string().nullable(),
   expires_at: z.string().nullable(),
@@ -131,7 +133,6 @@ export const adminEventRegistrationSummarySchema = adminRegistrationRecordContex
   has_bounced: z.boolean(),
   sponsor_consent: z.boolean(),
   custom_answers_json: z.string().nullable(),
-  dietary_restrictions: z.array(z.string()).nullable(),
   dayWaitlistSummary: z.string().nullable(),
   dayWaitlistCount: z.number(),
   attendanceChangeHistory: z.array(adminEventRegistrationAttendanceChangeSchema),
@@ -149,7 +150,6 @@ export const adminEventRegistrationsListResponseSchema = paginatedResponseSchema
     byStatus: z.record(z.string(), z.number()),
     bouncedCount: z.number(),
     consentCount: z.number(),
-    dietaryCounts: z.record(z.string(), z.number()),
   }),
 });
 export type AdminEventRegistrationsListResponse = z.infer<typeof adminEventRegistrationsListResponseSchema>;
@@ -160,6 +160,7 @@ export const adminEventInvitesListQuerySchema = searchableListQuerySchema(eventI
   status: z.enum(["sent", "accepted", "declined", "expired", "revoked"]).optional(),
   type: z.enum(["attendee", "speaker"]).optional(),
 });
+export type AdminEventInvitesListQuery = z.infer<typeof adminEventInvitesListQuerySchema>;
 export const adminEventInviteSummarySchema = z.object({
   id: z.string(),
   invitee_email: z.string(),
@@ -425,7 +426,7 @@ export type AdminManageDayAttendanceInput = z.infer<typeof adminManageDayAttenda
 const campaignFilterSchema = z.object({
   audience: z.enum(["attendees", "speakers"]),
   attendeeStatus: adminEventRegistrationStatusFilterSchema.optional(),
-  attendanceType: z.enum(["all", "in_person", "virtual", "on_demand"]).optional(),
+  attendanceType: z.union([z.literal("all"), attendanceTypeSchema]).optional(),
   dayDate: z.string().trim().max(20).optional(),
   dayWaitlistStatus: z.enum(["all", "active", "waiting", "offered", "accepted", "none"]).optional(),
   speakerStatus: z.enum(["all", "confirmed", "invited", "pending"]).optional(),

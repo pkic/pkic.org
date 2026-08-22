@@ -81,10 +81,18 @@ CREATE UNIQUE INDEX uq_engagement_events_idempotency_key
 -- state transition it describes. Most audit entries remain append-only and
 -- omit this key; transactional workflows can opt into exactly-once logging.
 ALTER TABLE audit_log ADD COLUMN idempotency_key TEXT;
+-- Child records can be deleted while their audit history must remain visible
+-- from the owning aggregate. Store that immutable read scope on the audit row
+-- instead of reconstructing it by joining mutable/live child tables.
+ALTER TABLE audit_log ADD COLUMN scope_type TEXT;
+ALTER TABLE audit_log ADD COLUMN scope_id TEXT;
 
 CREATE UNIQUE INDEX uq_audit_log_idempotency_key
   ON audit_log(idempotency_key)
   WHERE idempotency_key IS NOT NULL;
+
+CREATE INDEX idx_audit_log_scope
+  ON audit_log(scope_type, scope_id, created_at DESC, id);
 
 -- Domain retries must not enqueue duplicate external side effects. Callers
 -- that can identify a one-shot notification provide this nullable key and a
@@ -171,6 +179,342 @@ CREATE INDEX idx_invites_recovery_email_created
 CREATE INDEX idx_proposal_speakers_user_active
   ON proposal_speakers(user_id, created_at DESC, proposal_id)
   WHERE role <> 'proposer' AND status IN ('invited', 'confirmed');
+
+-- Source/effective-role reads start with a person and then join their proposal
+-- sources. Include every role/status because inactive sources remain relevant
+-- to provenance and event-participation history.
+CREATE INDEX idx_proposal_speakers_user_proposal_status_role
+  ON proposal_speakers(user_id, proposal_id, status, role);
+
+-- User classification counts distinct events across direct participant rows.
+-- The existing event/role/status index does not support a user-first lookup.
+CREATE INDEX idx_event_participants_user_event_status_role
+  ON event_participants(user_id, event_id, status, role);
+
+-- The participant-source view is correlated by user in admin classification
+-- and participation counts. Existing registration indexes are event-first.
+CREATE INDEX idx_registrations_user_event_status
+  ON registrations(user_id, event_id, status);
+
+-- Registration capacity depends on a person's complete proposal/direct role
+-- source set. Protect the source snapshot used to prepare a capacity change
+-- from a concurrent edit to another proposal or direct source. Revision rows
+-- are created lazily; an absent row represents revision zero.
+CREATE TABLE event_participant_source_revisions (
+  event_id TEXT NOT NULL,
+  user_id  TEXT NOT NULL,
+  revision INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(event_id, user_id),
+  FOREIGN KEY(event_id) REFERENCES events(id) ON DELETE CASCADE,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE event_participant_source_revision_guards (
+  id                TEXT NOT NULL PRIMARY KEY,
+  event_id          TEXT NOT NULL,
+  user_id           TEXT NOT NULL,
+  expected_revision INTEGER NOT NULL,
+  FOREIGN KEY(event_id) REFERENCES events(id) ON DELETE CASCADE,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Whole-proposal decisions enumerate a roster before reconciling every
+-- affected user's registration capacity. Guard that roster separately so an
+-- added or removed speaker cannot evade the per-user source guards by
+-- appearing only after the enumeration.
+CREATE TABLE proposal_speaker_roster_revisions (
+  proposal_id TEXT NOT NULL PRIMARY KEY,
+  revision    INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY(proposal_id) REFERENCES session_proposals(id) ON DELETE CASCADE
+);
+
+CREATE TABLE proposal_speaker_roster_revision_guards (
+  id                TEXT NOT NULL PRIMARY KEY,
+  proposal_id       TEXT NOT NULL,
+  expected_revision INTEGER NOT NULL,
+  FOREIGN KEY(proposal_id) REFERENCES session_proposals(id) ON DELETE CASCADE
+);
+
+CREATE TRIGGER trg_event_participant_source_revision_guard_validate
+BEFORE INSERT ON event_participant_source_revision_guards
+FOR EACH ROW
+BEGIN
+  SELECT CASE
+    WHEN COALESCE((
+      SELECT revision
+      FROM event_participant_source_revisions
+      WHERE event_id = NEW.event_id AND user_id = NEW.user_id
+    ), 0) <> NEW.expected_revision
+    THEN RAISE(ABORT, 'EVENT_PARTICIPANT_SOURCE_CHANGED')
+  END;
+END;
+
+CREATE TRIGGER trg_event_participant_source_revision_guard_delete
+AFTER INSERT ON event_participant_source_revision_guards
+FOR EACH ROW
+BEGIN
+  DELETE FROM event_participant_source_revision_guards WHERE id = NEW.id;
+END;
+
+CREATE TRIGGER trg_proposal_speaker_roster_revision_guard_validate
+BEFORE INSERT ON proposal_speaker_roster_revision_guards
+FOR EACH ROW
+BEGIN
+  SELECT CASE
+    WHEN COALESCE((
+      SELECT revision FROM proposal_speaker_roster_revisions WHERE proposal_id = NEW.proposal_id
+    ), 0) <> NEW.expected_revision
+    THEN RAISE(ABORT, 'PROPOSAL_SPEAKER_ROSTER_CHANGED')
+  END;
+END;
+
+CREATE TRIGGER trg_proposal_speaker_roster_revision_guard_delete
+AFTER INSERT ON proposal_speaker_roster_revision_guards
+FOR EACH ROW
+BEGIN
+  DELETE FROM proposal_speaker_roster_revision_guards WHERE id = NEW.id;
+END;
+
+CREATE TRIGGER trg_proposal_speaker_source_revision_insert
+AFTER INSERT ON proposal_speakers
+FOR EACH ROW
+BEGIN
+  INSERT INTO event_participant_source_revisions (event_id, user_id, revision)
+  SELECT event_id, NEW.user_id, 1
+  FROM session_proposals
+  WHERE id = NEW.proposal_id
+  ON CONFLICT(event_id, user_id) DO UPDATE SET revision = event_participant_source_revisions.revision + 1;
+  INSERT INTO proposal_speaker_roster_revisions (proposal_id, revision)
+  VALUES (NEW.proposal_id, 1)
+  ON CONFLICT(proposal_id) DO UPDATE SET revision = proposal_speaker_roster_revisions.revision + 1;
+END;
+
+CREATE TRIGGER trg_proposal_speaker_source_revision_delete
+AFTER DELETE ON proposal_speakers
+FOR EACH ROW
+BEGIN
+  INSERT INTO event_participant_source_revisions (event_id, user_id, revision)
+  SELECT event_id, OLD.user_id, 1
+  FROM session_proposals
+  WHERE id = OLD.proposal_id
+  ON CONFLICT(event_id, user_id) DO UPDATE SET revision = event_participant_source_revisions.revision + 1;
+  INSERT INTO proposal_speaker_roster_revisions (proposal_id, revision)
+  VALUES (OLD.proposal_id, 1)
+  ON CONFLICT(proposal_id) DO UPDATE SET revision = proposal_speaker_roster_revisions.revision + 1;
+END;
+
+CREATE TRIGGER trg_proposal_speaker_source_revision_update
+AFTER UPDATE OF role, status ON proposal_speakers
+FOR EACH ROW
+WHEN OLD.role IS NOT NEW.role
+  OR OLD.status IS NOT NEW.status
+BEGIN
+  INSERT INTO event_participant_source_revisions (event_id, user_id, revision)
+  SELECT event_id, NEW.user_id, 1
+  FROM session_proposals
+  WHERE id = NEW.proposal_id
+  ON CONFLICT(event_id, user_id) DO UPDATE SET revision = event_participant_source_revisions.revision + 1;
+  INSERT INTO proposal_speaker_roster_revisions (proposal_id, revision)
+  VALUES (NEW.proposal_id, 1)
+  ON CONFLICT(proposal_id) DO UPDATE SET revision = proposal_speaker_roster_revisions.revision + 1;
+END;
+
+CREATE TRIGGER trg_session_proposal_source_revision_update
+AFTER UPDATE OF status, deleted_at ON session_proposals
+FOR EACH ROW
+WHEN OLD.status IS NOT NEW.status
+  OR OLD.deleted_at IS NOT NEW.deleted_at
+BEGIN
+  INSERT INTO event_participant_source_revisions (event_id, user_id, revision)
+  SELECT NEW.event_id, ps.user_id, 1
+  FROM proposal_speakers ps
+  WHERE ps.proposal_id = NEW.id
+  ON CONFLICT(event_id, user_id) DO UPDATE SET revision = event_participant_source_revisions.revision + 1;
+END;
+
+-- Proposal/source ownership is a durable identity, not an editable workflow
+-- attribute. Moving it would require atomically revising two source sets, so
+-- fail closed instead of silently allowing an unsupported relationship move.
+CREATE TRIGGER trg_proposal_speaker_identity_immutable
+BEFORE UPDATE OF proposal_id, user_id ON proposal_speakers
+FOR EACH ROW
+WHEN OLD.proposal_id IS NOT NEW.proposal_id OR OLD.user_id IS NOT NEW.user_id
+BEGIN
+  SELECT RAISE(ABORT, 'PROPOSAL_SPEAKER_IDENTITY_IMMUTABLE');
+END;
+
+CREATE TRIGGER trg_session_proposal_event_identity_immutable
+BEFORE UPDATE OF event_id ON session_proposals
+FOR EACH ROW
+WHEN OLD.event_id IS NOT NEW.event_id
+BEGIN
+  SELECT RAISE(ABORT, 'SESSION_PROPOSAL_EVENT_IMMUTABLE');
+END;
+
+-- Non-proposal participant sources (for example organizer or staff roles)
+-- also determine registration capacity exemption. Their writes share the
+-- event/user source revision, while proposal-projection maintenance is
+-- deliberately excluded to avoid self-invalidating a rebuild.
+CREATE TRIGGER trg_event_participant_manual_source_revision_insert
+AFTER INSERT ON event_participants
+FOR EACH ROW
+WHEN COALESCE(NEW.source_type, '') <> 'proposal'
+BEGIN
+  INSERT INTO event_participant_source_revisions (event_id, user_id, revision)
+  VALUES (NEW.event_id, NEW.user_id, 1)
+  ON CONFLICT(event_id, user_id) DO UPDATE SET revision = event_participant_source_revisions.revision + 1;
+END;
+
+CREATE TRIGGER trg_event_participant_manual_source_revision_delete
+AFTER DELETE ON event_participants
+FOR EACH ROW
+WHEN COALESCE(OLD.source_type, '') <> 'proposal'
+BEGIN
+  INSERT INTO event_participant_source_revisions (event_id, user_id, revision)
+  VALUES (OLD.event_id, OLD.user_id, 1)
+  ON CONFLICT(event_id, user_id) DO UPDATE SET revision = event_participant_source_revisions.revision + 1;
+END;
+
+CREATE TRIGGER trg_event_participant_manual_source_revision_update
+AFTER UPDATE OF event_id, user_id, role, subrole, status, source_type ON event_participants
+FOR EACH ROW
+WHEN COALESCE(OLD.source_type, '') <> 'proposal' OR COALESCE(NEW.source_type, '') <> 'proposal'
+BEGIN
+  INSERT INTO event_participant_source_revisions (event_id, user_id, revision)
+  SELECT OLD.event_id, OLD.user_id, 1
+  WHERE COALESCE(OLD.source_type, '') <> 'proposal'
+  ON CONFLICT(event_id, user_id) DO UPDATE SET revision = event_participant_source_revisions.revision + 1;
+  INSERT INTO event_participant_source_revisions (event_id, user_id, revision)
+  SELECT NEW.event_id, NEW.user_id, 1
+  WHERE COALESCE(NEW.source_type, '') <> 'proposal'
+    AND (
+      COALESCE(OLD.source_type, '') = 'proposal'
+      OR NEW.event_id IS NOT OLD.event_id
+      OR NEW.user_id IS NOT OLD.user_id
+    )
+  ON CONFLICT(event_id, user_id) DO UPDATE SET revision = event_participant_source_revisions.revision + 1;
+END;
+
+-- Preserve every authoritative role source without expanding the legacy
+-- event_participants uniqueness constraint or copying proposal data into it.
+-- Existing proposal projection rows are deliberately excluded; proposal_speakers
+-- joined to session_proposals is the normalized source of truth.
+CREATE VIEW event_participant_role_sources AS
+SELECT
+  'event_participant:' || ep.id AS source_key,
+  'event_participant' AS source_kind,
+  ep.id AS source_id,
+  ep.event_id,
+  ep.user_id,
+  ep.role,
+  ep.subrole,
+  ep.status,
+  ep.source_type,
+  ep.source_ref
+FROM event_participants ep
+WHERE COALESCE(ep.source_type, '') <> 'proposal'
+  AND (
+    ep.role <> 'attendee'
+    OR NOT EXISTS (
+      SELECT 1
+      FROM registrations registration_source
+      WHERE registration_source.event_id = ep.event_id
+        AND registration_source.user_id = ep.user_id
+    )
+  )
+UNION ALL
+SELECT
+  'registration:' || r.id AS source_key,
+  'registration' AS source_kind,
+  r.id AS source_id,
+  r.event_id,
+  r.user_id,
+  'attendee' AS role,
+  r.attendance_type AS subrole,
+  CASE r.status
+    WHEN 'registered' THEN 'active'
+    WHEN 'pending_email_confirmation' THEN 'invited'
+    WHEN 'waitlisted' THEN 'waitlisted'
+    ELSE 'inactive'
+  END AS status,
+  r.source_type,
+  r.source_ref
+FROM registrations r
+UNION ALL
+SELECT
+  'proposal_speaker:' || ps.id AS source_key,
+  'proposal_speaker' AS source_kind,
+  ps.id AS source_id,
+  sp.event_id,
+  ps.user_id,
+  CASE ps.role
+    WHEN 'moderator' THEN 'moderator'
+    WHEN 'panelist' THEN 'panelist'
+    WHEN 'proposer' THEN 'speaker'
+    WHEN 'speaker' THEN 'speaker'
+    WHEN 'co_speaker' THEN 'speaker'
+  END AS role,
+  CASE ps.role
+    WHEN 'moderator' THEN NULL
+    WHEN 'panelist' THEN NULL
+    WHEN 'proposer' THEN 'proposer'
+    WHEN 'speaker' THEN 'speaker'
+    WHEN 'co_speaker' THEN 'co_speaker'
+  END AS subrole,
+  CASE
+    WHEN sp.status = 'accepted' AND sp.deleted_at IS NULL AND ps.status <> 'declined' THEN 'active'
+    ELSE 'inactive'
+  END AS status,
+  'proposal' AS source_type,
+  ps.proposal_id AS source_ref
+FROM proposal_speakers ps
+JOIN session_proposals sp ON sp.id = ps.proposal_id
+WHERE ps.role IN ('proposer', 'speaker', 'co_speaker', 'moderator', 'panelist');
+
+-- Consumers that need a person's current role should not select an arbitrary
+-- source. Collapse sources only after preserving them above, and keep a role
+-- active while at least one authoritative source remains active.
+CREATE VIEW effective_event_participant_roles AS
+SELECT
+  event_id,
+  user_id,
+  role,
+  subrole,
+  CASE MAX(
+    CASE status
+      WHEN 'active' THEN 4
+      WHEN 'invited' THEN 3
+      WHEN 'waitlisted' THEN 2
+      ELSE 1
+    END
+  )
+    WHEN 4 THEN 'active'
+    WHEN 3 THEN 'invited'
+    WHEN 2 THEN 'waitlisted'
+    ELSE 'inactive'
+  END AS status,
+  COUNT(*) AS source_count,
+  SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active_source_count
+FROM event_participant_role_sources
+GROUP BY event_id, user_id, role, subrole;
+
+-- Badge-role precedence is one shared D1 read model used by admin and public
+-- badge paths instead of repeated CASE expressions in each consumer.
+CREATE VIEW event_participant_badge_roles AS
+SELECT
+  event_id,
+  user_id,
+  role,
+  CASE role
+    WHEN 'speaker' THEN 1
+    WHEN 'moderator' THEN 2
+    WHEN 'panelist' THEN 3
+    WHEN 'organizer' THEN 4
+    WHEN 'staff' THEN 5
+    ELSE 99
+  END AS priority
+FROM effective_event_participant_roles
+WHERE status = 'active' AND role <> 'attendee';
 
 -- Calendar replies describe one event day, not the entire registration. Keep
 -- that identity normalized so enforcement never infers a registration-wide
@@ -463,8 +807,7 @@ CREATE INDEX idx_referral_conversions_code_created
 -- Three groups of tables, each pulled forward from an endpoint that needs them now:
 --
 -- 1. member_applications / member_application_events / application_documents
---    — defined in application_documents, but
---    required immediately by POST /api/v1/members/applications.
+--    — required immediately by POST /api/v1/members/applications.
 --
 -- 2. sponsorships / sponsorship_events —
 --    required immediately by POST /api/v1/sponsorship/inquiries and
@@ -583,12 +926,43 @@ CREATE TABLE application_documents (
   filename          TEXT NOT NULL,
   mime_type         TEXT NOT NULL,
   file_size_bytes   INTEGER NOT NULL,
+  content_sha256    TEXT NOT NULL,
   uploaded_at       TEXT NOT NULL,
+  idempotency_key_hash TEXT,
   FOREIGN KEY(application_id) REFERENCES member_applications(id)
 );
 
 CREATE INDEX idx_application_documents_app
-  ON application_documents(application_id, uploaded_at, id);
+  ON application_documents(application_id, uploaded_at DESC, id ASC);
+CREATE UNIQUE INDEX uq_application_documents_idempotency
+  ON application_documents(application_id, idempotency_key_hash)
+  WHERE idempotency_key_hash IS NOT NULL;
+
+-- A guarded document insert may intentionally affect zero rows when a count,
+-- aggregate-byte, or idempotency condition loses a race. Turn that outcome
+-- into one domain-specific batch failure before audit/storage fallout can
+-- commit; the transient guard row removes itself after validation.
+CREATE TABLE application_document_insert_guards (
+  id          TEXT NOT NULL PRIMARY KEY,
+  document_id TEXT NOT NULL
+);
+
+CREATE TRIGGER validate_application_document_insert_guard
+BEFORE INSERT ON application_document_insert_guards
+FOR EACH ROW
+BEGIN
+  SELECT CASE
+    WHEN NOT EXISTS (SELECT 1 FROM application_documents WHERE id = NEW.document_id)
+    THEN RAISE(ABORT, 'APPLICATION_DOCUMENT_INSERT_REJECTED')
+  END;
+END;
+
+CREATE TRIGGER apply_application_document_insert_guard
+AFTER INSERT ON application_document_insert_guards
+FOR EACH ROW
+BEGIN
+  DELETE FROM application_document_insert_guards WHERE id = NEW.id;
+END;
 
 -- ── Sponsorships ──────────────────────────────────────────────
 
@@ -904,7 +1278,7 @@ CREATE INDEX idx_organization_representatives_user_active
 -- backfills (event_permissions → user_roles, users.role='admin' →
 -- user_roles), then drops event_permissions resolution.
 --
--- Two deviations from the original literal schema:
+-- One deviation from the original literal schema:
 --
 -- 1. `role_permissions` is a new table, not present anywhere in
 --    describes each built-in role's default permission bundle in prose only
@@ -913,15 +1287,10 @@ CREATE INDEX idx_organization_representatives_user_active
 --    somewhere to actually store and edit the bundle. This is the same
 --    class of gap.
 --
--- 2. `user_roles.user_id` is nullable here (with a parallel `user_email`
---    column), not NOT NULL as shown in SQL sketch.
---    Resolution text requires the opposite of what SQL says: it
---    requires the new model to "preserve this pre-provisioning behavior,
---    since event organizers/PC members are often granted access before
---    their first login" — exactly the nullable-user_id + user_email pattern
---    `event_permissions` already used. A NOT NULL user_id makes that
---    impossible, so the nullable form (matching event_permissions, which
---    this migration backfills from) is what's implemented.
+-- Pre-provisioning creates a minimal `users` identity and binds authorization
+-- to its immutable ID. Email-only grants are deliberately not carried into
+-- the new model because authorization must not transfer if an address is
+-- later released and reused by another account.
 --
 -- `permission_grants` and `refresh_tokens` are created exactly as specified.
 
@@ -951,8 +1320,7 @@ CREATE TABLE role_permissions (
 
 CREATE TABLE user_roles (
   id                 TEXT NOT NULL PRIMARY KEY,
-  user_id            TEXT,
-  user_email         TEXT,
+  user_id            TEXT NOT NULL,
   role_id            TEXT NOT NULL,
   context_type       TEXT,
   -- allowed: 'event' | 'working_group' | 'organization' | NULL (global)
@@ -974,23 +1342,56 @@ CREATE TABLE user_roles (
 );
 
 CREATE INDEX idx_user_roles_user ON user_roles(user_id);
-CREATE INDEX idx_user_roles_email ON user_roles(user_email);
 CREATE INDEX idx_user_roles_context ON user_roles(context_type, context_id);
 CREATE INDEX idx_user_roles_role ON user_roles(role_id);
 CREATE UNIQUE INDEX uq_user_roles_single_holder_per_context
   ON user_roles(context_type, context_id, role_id)
   WHERE revoked_at IS NULL AND single_holder_per_context = 1;
 
--- Preserve the active-grant uniqueness that the legacy event_permissions
--- table enforced and extend it to every non-singleton role assignment. Two
--- partial indexes cover pre-provisioned email grants and account-bound grants.
-CREATE UNIQUE INDEX uq_user_roles_active_email_role_context
-  ON user_roles(role_id, COALESCE(context_type, ''), COALESCE(context_id, ''), lower(user_email))
-  WHERE revoked_at IS NULL AND single_holder_per_context = 0 AND user_email IS NOT NULL;
+-- Representative designations are relationship-owned facts: an organization
+-- role grant is valid only while its user has an active
+-- organization_representatives row for the same members aggregate. Keep this
+-- invariant at the D1 write boundary as well as in the service preflight. The
+-- trigger is deliberately aborting rather than silently filtering an INSERT,
+-- so a stale preflight cannot revoke the current holder and report success
+-- without installing the replacement.
+CREATE TRIGGER trg_user_roles_representative_requires_active
+BEFORE INSERT ON user_roles
+WHEN NEW.context_type = 'organization'
+  AND NEW.role_id IN ('role-primary_contact', 'role-secondary_contact', 'role-voting_delegate')
+  AND NEW.revoked_at IS NULL
+  AND NOT EXISTS (
+    SELECT 1
+    FROM organization_representatives rep
+    WHERE rep.member_id = NEW.context_id
+      AND rep.user_id = NEW.user_id
+      AND rep.left_at IS NULL
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'representative role requires an active representative');
+END;
 
+CREATE TRIGGER trg_user_roles_representative_update_requires_active
+BEFORE UPDATE OF user_id, role_id, context_type, context_id, revoked_at ON user_roles
+WHEN NEW.context_type = 'organization'
+  AND NEW.role_id IN ('role-primary_contact', 'role-secondary_contact', 'role-voting_delegate')
+  AND NEW.revoked_at IS NULL
+  AND NOT EXISTS (
+    SELECT 1
+    FROM organization_representatives rep
+    WHERE rep.member_id = NEW.context_id
+      AND rep.user_id = NEW.user_id
+      AND rep.left_at IS NULL
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'representative role requires an active representative');
+END;
+
+-- Preserve the active-grant uniqueness that the legacy event_permissions
+-- table enforced and extend it to every non-singleton role assignment.
 CREATE UNIQUE INDEX uq_user_roles_active_user_role_context
   ON user_roles(role_id, COALESCE(context_type, ''), COALESCE(context_id, ''), user_id)
-  WHERE revoked_at IS NULL AND single_holder_per_context = 0 AND user_email IS NULL AND user_id IS NOT NULL;
+  WHERE revoked_at IS NULL AND single_holder_per_context = 0;
 
 CREATE TABLE permission_grants (
   id                 TEXT NOT NULL PRIMARY KEY,
@@ -1127,18 +1528,24 @@ INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES
 
 -- ── Backfill: users.role='admin' → user_roles ────────────────────────
 
-INSERT INTO user_roles (id, user_id, user_email, role_id, context_type, context_id, granted_by_user_id, expires_at, revoked_at, created_at)
-SELECT lower(hex(randomblob(16))), u.id, NULL, 'role-admin', NULL, NULL, NULL, NULL, NULL, datetime('now')
+INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, granted_by_user_id, expires_at, revoked_at, created_at)
+SELECT lower(hex(randomblob(16))), u.id, 'role-admin', NULL, NULL, NULL, NULL, NULL, datetime('now')
 FROM users u
 WHERE u.role = 'admin';
 
 -- ── Backfill: event_permissions → user_roles ─────────────────────────
 
-INSERT INTO user_roles (id, user_id, user_email, role_id, context_type, context_id, granted_by_user_id, expires_at, revoked_at, created_at)
+-- Preserve pre-provisioned grants without leaving authorization attached to
+-- a reusable string identifier.
+INSERT OR IGNORE INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+SELECT lower(hex(randomblob(16))), ep.user_email, lower(trim(ep.user_email)), 'user', 1, ep.created_at, ep.created_at
+FROM event_permissions ep
+WHERE ep.user_id IS NULL;
+
+INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, granted_by_user_id, expires_at, revoked_at, created_at)
 SELECT
   lower(hex(randomblob(16))),
-  ep.user_id,
-  ep.user_email,
+  COALESCE(ep.user_id, (SELECT u.id FROM users u WHERE u.normalized_email = lower(trim(ep.user_email)))),
   CASE ep.permission
     WHEN 'organizer' THEN 'role-event_organizer'
     WHEN 'program_committee' THEN 'role-program_committee'
@@ -1147,7 +1554,11 @@ SELECT
   END,
   'event',
   ep.event_id,
-  ep.granted_by_id,
+  CASE
+    WHEN EXISTS (SELECT 1 FROM users grantor WHERE grantor.id = ep.granted_by_id)
+      THEN ep.granted_by_id
+    ELSE NULL
+  END,
   NULL,
   NULL,
   ep.created_at
@@ -1457,6 +1868,29 @@ BEGIN
      AND id != NEW.id AND status IN ('pending', 'processing');
 END;
 
+-- A provider-successful add must retain its enrollment notification until a
+-- later bounded drain can group the successful lists for one member into the
+-- same user-visible email the original sync pass emitted. The queue row is
+-- the idempotent source identity; the outbox row is written only when this
+-- intent is drained.
+CREATE TABLE google_groups_enrollment_notification_intents (
+  queue_id          TEXT NOT NULL PRIMARY KEY,
+  user_id           TEXT NOT NULL,
+  sync_pass_id      TEXT NOT NULL,
+  google_group_email TEXT NOT NULL,
+  recipient_email   TEXT NOT NULL,
+  member_name       TEXT NOT NULL,
+  created_at        TEXT NOT NULL,
+  queued_outbox_id  TEXT,
+  queued_at         TEXT,
+  FOREIGN KEY(queue_id) REFERENCES google_groups_sync_queue(id),
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+CREATE INDEX idx_google_groups_enrollment_intents_pending
+  ON google_groups_enrollment_notification_intents(sync_pass_id, user_id, created_at, queue_id)
+  WHERE queued_outbox_id IS NULL;
+
 -- ── Membership workflow settings ───────────────────────────────────
 -- Single configurable row (id is always 'default') rather than a generic
 -- key-value table — every setting is a distinct, typed field the
@@ -1669,7 +2103,7 @@ As part of our transition to the new PKI Consortium member portal, an account ha
     'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
   );
 
--- Section: Secondary email addresses + user merge support
+-- Section: Secondary email addresses
 --
 -- Follow-up to a real, visible problem from the YAML->D1 migration:
 -- Google Groups roster CSVs used different email addresses than
@@ -1677,7 +2111,8 @@ As part of our transition to the new PKI Consortium member portal, an account ha
 -- got their own bare `users` rows created rather than being recognized as
 -- the same person -- real staff/members show up more than once in the
 -- Users admin list, with no way to record "this account also goes by this
--- other email" or clean up the duplicates already sitting in D1.
+-- other email". Alternate addresses are deliberately non-authenticating
+-- metadata; this migration does not attempt irreversible identity merges.
 --
 -- `users.email`/`normalized_email` remain the sole login-identifying
 -- columns (NOT NULL UNIQUE, unchanged) -- this table only adds
@@ -1685,10 +2120,35 @@ As part of our transition to the new PKI Consortium member portal, an account ha
 -- or passkey authentication, which continue to resolve strictly off
 -- `users.normalized_email`.
 --
--- The merge tool built against this table reuses `users.merged_into_user_id`,
--- which already exists (migration 0020_pending_email_change.sql) for a
--- different collision scenario (registration email-change finalization) --
--- no new column needed there, just a second write path.
+-- Migration 0020 stored a pending account email on users, while the proof
+-- capability lives on one registration. Record that owning registration so a
+-- different registration capability for the same user cannot promote it.
+-- A direct FK here would create a users -> registrations -> users cycle and
+-- make routine fixture/data cleanup order-dependent. The owner trigger below
+-- enforces the same live-row relationship without introducing that cycle.
+ALTER TABLE users ADD COLUMN pending_email_change_registration_id TEXT;
+
+CREATE UNIQUE INDEX uq_users_pending_email_change_registration
+  ON users(pending_email_change_registration_id)
+  WHERE pending_email_change_registration_id IS NOT NULL;
+
+-- Preserve an in-flight pre-0035 request when its owner is unambiguous. Rows
+-- with multiple pending registrations remain unbound and therefore cannot be
+-- promoted automatically; staff can recover those exceptional legacy cases.
+UPDATE users
+   SET pending_email_change_registration_id = (
+     SELECT MIN(r.id)
+       FROM registrations r
+      WHERE r.user_id = users.id
+        AND r.status = 'pending_email_confirmation'
+   )
+ WHERE pending_email IS NOT NULL
+   AND 1 = (
+     SELECT COUNT(*)
+       FROM registrations r
+      WHERE r.user_id = users.id
+        AND r.status = 'pending_email_confirmation'
+   );
 
 CREATE TABLE user_emails (
   id               TEXT NOT NULL PRIMARY KEY,
@@ -1699,6 +2159,124 @@ CREATE TABLE user_emails (
 );
 
 CREATE INDEX idx_user_emails_user ON user_emails(user_id);
+
+-- An email is one global reservation whether it is primary, secondary, or
+-- pending verification. Application checks provide useful 409 responses;
+-- these triggers close cross-table races at the database boundary.
+CREATE TRIGGER trg_user_emails_reservation_insert
+BEFORE INSERT ON user_emails
+WHEN EXISTS (
+  SELECT 1 FROM users
+   WHERE normalized_email = NEW.normalized_email
+      OR pending_email = NEW.normalized_email
+)
+BEGIN
+  SELECT RAISE(ABORT, 'EMAIL_TAKEN');
+END;
+
+CREATE TRIGGER trg_user_emails_reservation_update
+BEFORE UPDATE OF user_id, normalized_email ON user_emails
+WHEN EXISTS (
+  SELECT 1 FROM users
+   WHERE normalized_email = NEW.normalized_email
+      OR pending_email = NEW.normalized_email
+)
+BEGIN
+  SELECT RAISE(ABORT, 'EMAIL_TAKEN');
+END;
+
+CREATE TRIGGER trg_users_primary_email_reservation_insert
+BEFORE INSERT ON users
+WHEN EXISTS (
+  SELECT 1 FROM user_emails WHERE normalized_email = NEW.normalized_email
+)
+OR EXISTS (
+  SELECT 1 FROM users
+   WHERE pending_email = NEW.normalized_email
+)
+BEGIN
+  SELECT RAISE(ABORT, 'EMAIL_TAKEN');
+END;
+
+CREATE TRIGGER trg_users_primary_email_reservation_update
+BEFORE UPDATE OF normalized_email ON users
+WHEN EXISTS (
+  SELECT 1 FROM user_emails WHERE normalized_email = NEW.normalized_email
+)
+OR EXISTS (
+  SELECT 1 FROM users
+   WHERE id != NEW.id AND pending_email = NEW.normalized_email
+)
+BEGIN
+  SELECT RAISE(ABORT, 'EMAIL_TAKEN');
+END;
+
+CREATE TRIGGER trg_users_pending_email_reservation_update
+BEFORE UPDATE OF pending_email ON users
+WHEN NEW.pending_email IS NOT NULL
+ AND (
+   EXISTS (
+     SELECT 1 FROM users
+      WHERE id != NEW.id AND normalized_email = NEW.pending_email
+   )
+   OR EXISTS (
+     SELECT 1 FROM user_emails
+      WHERE user_id != NEW.id AND normalized_email = NEW.pending_email
+   )
+ )
+BEGIN
+  SELECT RAISE(ABORT, 'EMAIL_TAKEN');
+END;
+
+CREATE TRIGGER trg_users_pending_email_no_overwrite
+BEFORE UPDATE OF pending_email ON users
+WHEN OLD.pending_email IS NOT NULL
+ AND NEW.pending_email IS NOT NULL
+ AND OLD.pending_email != NEW.pending_email
+BEGIN
+  SELECT RAISE(ABORT, 'EMAIL_CHANGE_ALREADY_PENDING');
+END;
+
+CREATE TRIGGER trg_users_pending_email_binding_consistency
+BEFORE UPDATE OF pending_email, pending_email_change_registration_id ON users
+WHEN (NEW.pending_email IS NULL) != (NEW.pending_email_change_registration_id IS NULL)
+BEGIN
+  SELECT RAISE(ABORT, 'EMAIL_CHANGE_BINDING_REQUIRED');
+END;
+
+CREATE TRIGGER trg_users_pending_email_binding_owner
+BEFORE UPDATE OF pending_email, pending_email_change_registration_id ON users
+WHEN NEW.pending_email_change_registration_id IS NOT NULL
+ AND NOT EXISTS (
+   SELECT 1
+     FROM registrations r
+    WHERE r.id = NEW.pending_email_change_registration_id
+      AND r.user_id = NEW.id
+      AND r.status = 'pending_email_confirmation'
+ )
+BEGIN
+  SELECT RAISE(ABORT, 'EMAIL_CHANGE_REGISTRATION_INVALID');
+END;
+
+CREATE TRIGGER trg_users_pending_email_binding_no_overwrite
+BEFORE UPDATE OF pending_email_change_registration_id ON users
+WHEN OLD.pending_email_change_registration_id IS NOT NULL
+ AND NEW.pending_email_change_registration_id IS NOT NULL
+ AND OLD.pending_email_change_registration_id != NEW.pending_email_change_registration_id
+BEGIN
+  SELECT RAISE(ABORT, 'EMAIL_CHANGE_ALREADY_PENDING');
+END;
+
+-- Identity consolidation is intentionally not a generic database operation.
+-- Existing legacy markers remain readable, but new partial merges must fail
+-- closed until a dedicated reconciliation product can prove every live and
+-- historical ownership rule.
+CREATE TRIGGER trg_user_identity_merge_disabled
+BEFORE UPDATE OF merged_into_user_id ON users
+WHEN OLD.merged_into_user_id IS NOT NEW.merged_into_user_id
+BEGIN
+  SELECT RAISE(ABORT, 'USER_IDENTITY_MERGE_DISABLED');
+END;
 
 -- Section: WG/forum vice chairs
 --
@@ -1795,6 +2373,34 @@ CREATE INDEX idx_org_content_reviews_status ON organization_content_reviews(stat
 CREATE UNIQUE INDEX uq_org_content_reviews_one_pending
   ON organization_content_reviews(organization_id)
   WHERE status = 'pending';
+
+-- Immutable event-time recipient snapshots for reviewer notifications. The
+-- review may be withdrawn or the staff roster may change before the queued
+-- email is drained; neither change should lose or retarget the submission
+-- notice. The exact email is the logical recipient key, matching the
+-- existing permission fan-out's distinct-email behavior.
+CREATE TABLE organization_content_review_notification_intents (
+  review_id           TEXT NOT NULL,
+  recipient_email     TEXT NOT NULL,
+  recipient_user_id   TEXT,
+  organization_name   TEXT NOT NULL,
+  submitter_name      TEXT NOT NULL,
+  review_url          TEXT NOT NULL,
+  created_at          TEXT NOT NULL,
+  queued_outbox_id    TEXT,
+  queued_at           TEXT,
+  PRIMARY KEY (review_id, recipient_email),
+  FOREIGN KEY(review_id) REFERENCES organization_content_reviews(id) ON DELETE CASCADE,
+  FOREIGN KEY(recipient_user_id) REFERENCES users(id)
+);
+
+CREATE INDEX idx_org_content_review_notification_intents_pending
+  ON organization_content_review_notification_intents(created_at, review_id, recipient_email)
+  WHERE queued_outbox_id IS NULL;
+
+CREATE UNIQUE INDEX uq_org_content_review_notification_intents_outbox
+  ON organization_content_review_notification_intents(queued_outbox_id)
+  WHERE queued_outbox_id IS NOT NULL;
 
 CREATE TABLE organization_content_review_transition_guards (
   id                TEXT NOT NULL PRIMARY KEY,
@@ -2060,6 +2666,11 @@ WHERE NOT EXISTS (
   SELECT 1 FROM sponsorships sp
   WHERE sp.event_id = se.event_id
     AND sp.sponsor_type = 'event'
+    -- The legacy UNIQUE(event_id, sponsor_id, sponsorship_level) permits
+    -- multiple tiers for one sponsor/event. Include the tier in the
+    -- idempotency key so a later tier is not silently discarded before the
+    -- legacy source tables are dropped below.
+    AND sp.tier = se.sponsorship_level
     AND (sp.organization_id = s.organization_id OR (sp.organization_id IS NULL AND s.organization_id IS NULL))
 );
 
@@ -2289,6 +2900,9 @@ CREATE TABLE votes (
   opens_at              TEXT NOT NULL,
   closes_at             TEXT NOT NULL,
   current_round         INTEGER NOT NULL DEFAULT 1,
+  transition_revision   INTEGER NOT NULL DEFAULT 0,
+  transition_processing_token TEXT,
+  transition_lease_expires_at TEXT,
   status                TEXT NOT NULL,
   -- allowed: scheduled | open | closed | cancelled
   result_json           TEXT,
@@ -2301,7 +2915,8 @@ CREATE TABLE votes (
 );
 
 CREATE INDEX idx_votes_scope ON votes(scope_type, scope_id);
-CREATE INDEX idx_votes_status_closes_at ON votes(status, closes_at);
+CREATE INDEX idx_votes_status_opens_at ON votes(status, opens_at, id);
+CREATE INDEX idx_votes_status_closes_at ON votes(status, closes_at, id);
 CREATE INDEX idx_votes_visibility ON votes(visibility, closes_at);
 
 CREATE TABLE vote_candidates (
@@ -2319,6 +2934,9 @@ CREATE TABLE vote_candidates (
 );
 
 CREATE INDEX idx_vote_candidates_vote ON vote_candidates(vote_id);
+CREATE INDEX idx_vote_candidates_standing
+  ON vote_candidates(vote_id, sort_order, id)
+  WHERE eliminated_round IS NULL;
 
 CREATE TABLE vote_ballots (
   id              TEXT NOT NULL PRIMARY KEY,
@@ -2335,7 +2953,13 @@ CREATE TABLE vote_ballots (
   ip_hash         TEXT
 );
 
-CREATE INDEX idx_vote_ballots_vote_round ON vote_ballots(vote_id, round);
+-- Cover scheduled tally aggregation without loading every ballot row or
+-- returning to the table for each choice.
+CREATE INDEX idx_vote_ballots_vote_round ON vote_ballots(vote_id, round, choice);
+-- Cover the staff ballot audit's bounded default order without sorting every
+-- ballot for the vote before applying LIMIT/OFFSET.
+CREATE INDEX idx_vote_ballots_vote_audit_page
+  ON vote_ballots(vote_id, round, submitted_at, id);
 -- Forum-level: one ballot per organization per round.
 CREATE UNIQUE INDEX idx_vote_ballots_org_round ON vote_ballots(vote_id, organization_id, round)
   WHERE organization_id IS NOT NULL;
@@ -2343,17 +2967,38 @@ CREATE UNIQUE INDEX idx_vote_ballots_org_round ON vote_ballots(vote_id, organiza
 CREATE UNIQUE INDEX idx_vote_ballots_user_round ON vote_ballots(vote_id, user_id, round)
   WHERE organization_id IS NULL;
 
-CREATE TABLE vote_notification_deliveries (
+-- Cover the set-based forum-recipient snapshot without scanning inactive or
+-- individual membership aggregates on every vote opening/round transition.
+CREATE INDEX idx_members_active_organization_notifications
+  ON members(organization_id, id)
+  WHERE status = 'active' AND organization_id IS NOT NULL;
+
+-- Immutable event-time recipient snapshots. These are created atomically with
+-- the vote opening/round transition, so a later close, round advance, role
+-- change, or queue-worker failure cannot erase the notification obligation.
+CREATE TABLE vote_delegate_notification_intents (
   vote_id          TEXT NOT NULL REFERENCES votes(id),
   round            INTEGER NOT NULL,
-  organization_id  TEXT NOT NULL REFERENCES organizations(id),
-  delegate_user_id TEXT NOT NULL REFERENCES users(id),
-  queued_at         TEXT NOT NULL,
-  PRIMARY KEY (vote_id, round, organization_id, delegate_user_id)
+  organization_id  TEXT NOT NULL,
+  delegate_user_id TEXT NOT NULL,
+  recipient_email  TEXT NOT NULL,
+  delegate_name    TEXT NOT NULL,
+  organization_name TEXT NOT NULL,
+  vote_title       TEXT NOT NULL,
+  closes_at        TEXT NOT NULL,
+  created_at       TEXT NOT NULL,
+  queued_outbox_id TEXT,
+  queued_at        TEXT,
+  PRIMARY KEY (vote_id, round, organization_id)
 );
 
-CREATE INDEX idx_vote_notification_deliveries_vote_round
-  ON vote_notification_deliveries(vote_id, round);
+CREATE INDEX idx_vote_delegate_notification_intents_pending
+  ON vote_delegate_notification_intents(created_at, vote_id, round, organization_id)
+  WHERE queued_outbox_id IS NULL;
+
+CREATE UNIQUE INDEX uq_vote_delegate_notification_intents_outbox
+  ON vote_delegate_notification_intents(queued_outbox_id)
+  WHERE queued_outbox_id IS NOT NULL;
 
 CREATE TABLE vote_proposals (
   id                  TEXT PRIMARY KEY,
@@ -2767,6 +3412,44 @@ CREATE INDEX idx_storage_deletion_outbox_expired_lease
   ON storage_deletion_outbox(lease_expires_at, created_at, id)
   WHERE status = 'deleting';
 
+-- An upload may only become durable while its pre-registered compensation
+-- row is still queued and unclaimed. The transient guard makes that check
+-- and cancellation one atomic statement inside the caller's D1 batch.
+CREATE TABLE storage_upload_commit_guards (
+  id         TEXT NOT NULL PRIMARY KEY,
+  bucket     TEXT NOT NULL,
+  object_key TEXT NOT NULL
+);
+
+CREATE TRIGGER validate_storage_upload_commit_guard
+BEFORE INSERT ON storage_upload_commit_guards
+FOR EACH ROW
+BEGIN
+  SELECT CASE
+    WHEN NOT EXISTS (
+      SELECT 1
+      FROM storage_deletion_outbox
+      WHERE bucket = NEW.bucket
+        AND object_key = NEW.object_key
+        AND status IN ('queued', 'retrying')
+        AND processing_token IS NULL
+    )
+    THEN RAISE(ABORT, 'STORAGE_UPLOAD_COMPENSATION_UNAVAILABLE')
+  END;
+END;
+
+CREATE TRIGGER apply_storage_upload_commit_guard
+AFTER INSERT ON storage_upload_commit_guards
+FOR EACH ROW
+BEGIN
+  DELETE FROM storage_deletion_outbox
+  WHERE bucket = NEW.bucket
+    AND object_key = NEW.object_key
+    AND status IN ('queued', 'retrying')
+    AND processing_token IS NULL;
+  DELETE FROM storage_upload_commit_guards WHERE id = NEW.id;
+END;
+
 -- Badge rendering writes to R2 and therefore cannot be committed atomically
 -- with its admin audit record. Persist the render intent in D1 first, then let
 -- the request and scheduled worker retry the idempotent R2 overwrite.
@@ -2803,6 +3486,12 @@ CREATE INDEX IF NOT EXISTS idx_consent_acceptances_registration_term
 -- Admin attendee export filters by event/status and emits chronological rows.
 CREATE INDEX IF NOT EXISTS idx_registrations_event_status_created
   ON registrations(event_id, status, created_at);
+
+-- Retention due-work discovers the oldest eligible events before joining their
+-- registrations. The dynamic per-policy retention predicate cannot be indexed,
+-- but this index supports the event ordering and avoids an unrelated table sort.
+CREATE INDEX IF NOT EXISTS idx_events_ends_at_id
+  ON events(ends_at, id);
 
 -- The form response read model excludes registrations/proposals that already
 -- have normalized answers. Match the complete correlated lookup so D1 does

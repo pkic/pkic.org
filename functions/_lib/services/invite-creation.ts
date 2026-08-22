@@ -286,21 +286,19 @@ export async function getInviteInviterSummary(
   inviteId: string,
   visibleLimit = 5,
 ): Promise<{ inviters: InviteInviterInfo[]; total: number }> {
-  const result = await queryPage<InviteInviterInfo>(
-    db,
-    {
-      sql: `SELECT ii.inviter_user_id AS userId,
+  const result = await queryPage<InviteInviterInfo>(db, {
+    sql: `SELECT ii.inviter_user_id AS userId,
                    u.first_name AS firstName,
                    u.last_name AS lastName,
                    u.organization_name AS organizationName
             FROM invite_inviters ii
             JOIN users u ON u.id = ii.inviter_user_id
             WHERE ii.invite_id = ?
-            ORDER BY ii.invited_at ASC, ii.id ASC
-            LIMIT ?`,
-      bindings: [inviteId, visibleLimit],
-    },
-    { sql: "SELECT COUNT(*) AS total FROM invite_inviters WHERE invite_id = ?", bindings: [inviteId] },
-  );
+            `,
+    bindings: [inviteId],
+    orderBy: "ORDER BY ii.invited_at ASC, ii.id ASC",
+    limit: visibleLimit,
+    offset: 0,
+  });
   return { inviters: result.rows, total: result.total };
 }

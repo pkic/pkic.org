@@ -53,6 +53,7 @@ export async function promoteDayWaitlistIfCapacity(
      JOIN registrations r ON r.id = w.registration_id
      WHERE w.event_id = ? AND w.event_day_id = ? AND w.status = 'waiting'
        AND r.status IN ('pending_email_confirmation', 'registered')
+       AND r.capacity_exempt_in_person = 0
      ORDER BY CASE w.priority_lane WHEN 'continuity' THEN 1 ELSE 2 END ASC, w.position ASC`,
     [payload.eventId, payload.eventDayId],
   );

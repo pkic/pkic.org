@@ -5,9 +5,10 @@ import { first } from "../db/queries";
 import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 import { normalizeEmail } from "../validation";
-import { prepareAuditLog } from "./audit";
+import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
 import { prepareUserProfileStatement, type UserProfilePatch } from "./users";
 import { buildUserAccessOffboardingStatements } from "./membership/offboarding";
+import { findUserEmailOwner } from "./user-emails";
 
 type AdminUserUpdateInput = z.infer<typeof adminUserUpdateSchema>;
 
@@ -25,6 +26,7 @@ interface AdminUserUpdateRow {
   active: number;
   is_ec_member: number;
   pii_redacted_at: string | null;
+  merged_into_user_id: string | null;
   updated_at: string;
 }
 
@@ -77,7 +79,8 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
   const user = await first<AdminUserUpdateRow>(
     db,
     `SELECT id, email, first_name, last_name, preferred_name, organization_name,
-            job_title, biography, links_json, role, active, is_ec_member, pii_redacted_at, updated_at
+            job_title, biography, links_json, role, active, is_ec_member, pii_redacted_at,
+            merged_into_user_id, updated_at
      FROM users WHERE id = ?`,
     [userId],
   );
@@ -85,19 +88,23 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
   if (user.pii_redacted_at) {
     throw new AppError(409, "ALREADY_ANONYMIZED", "An anonymized account cannot be modified");
   }
+  if (user.merged_into_user_id) {
+    throw new AppError(409, "IDENTITY_RETIRED", "A previously merged account cannot be modified or reactivated");
+  }
 
   let email = user.email;
+  let promotedSecondaryEmail: string | null = null;
   if (input.email !== undefined) {
     const normalized = normalizeEmail(input.email);
     if (normalized !== normalizeEmail(user.email)) {
-      if (
-        await first<{ id: string }>(db, "SELECT id FROM users WHERE normalized_email = ? AND id != ?", [
-          normalized,
-          user.id,
-        ])
-      ) {
+      const owner = await findUserEmailOwner(db, normalized);
+      if (owner && owner.userId !== user.id) {
         throw new AppError(409, "EMAIL_ALREADY_IN_USE", "Another account already uses that email address");
       }
+      if (owner?.kind === "pending") {
+        throw new AppError(409, "EMAIL_CHANGE_PENDING", "That email address has a pending verification request");
+      }
+      if (owner?.kind === "secondary") promotedSecondaryEmail = normalized;
       email = normalized;
     }
   }
@@ -113,18 +120,39 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
     ...(input.active !== undefined && active !== Boolean(user.active) ? ["active"] : []),
     ...(input.isEcMember !== undefined && isEcMember !== Boolean(user.is_ec_member) ? ["isEcMember"] : []),
   ];
+  if (changedFields.length === 0) {
+    return { id: user.id, email, role, active, isEcMember };
+  }
   const statements: StatementLike[] = [];
   const at = new Date().toISOString();
-  if (Object.keys(patch).length > 0) statements.push(prepareUserProfileStatement(db, user.id, patch));
+  if (promotedSecondaryEmail) {
+    statements.push(
+      db
+        .prepare("DELETE FROM user_emails WHERE user_id = ? AND normalized_email = ?")
+        .bind(user.id, promotedSecondaryEmail),
+    );
+  }
   statements.push(
     db
       .prepare(
         `UPDATE users
          SET email = ?, normalized_email = ?, role = ?, active = ?, is_ec_member = ?, updated_at = ?
-         WHERE id = ?`,
+         WHERE id = ?
+           AND pii_redacted_at IS NULL
+           AND merged_into_user_id IS NULL
+           AND updated_at = ?`,
       )
-      .bind(email, normalizeEmail(email), role, active ? 1 : 0, isEcMember ? 1 : 0, at, user.id),
+      .bind(email, normalizeEmail(email), role, active ? 1 : 0, isEcMember ? 1 : 0, at, user.id, user.updated_at),
+    prepareAuditLogAfterOneChange(db, "admin", actor.id, "user_updated", "user", user.id, {
+      changedFields,
+      ...(role !== user.role ? { role: { from: user.role, to: role } } : {}),
+      ...(active !== Boolean(user.active) ? { active: { from: Boolean(user.active), to: active } } : {}),
+      ...(isEcMember !== Boolean(user.is_ec_member)
+        ? { isEcMember: { from: Boolean(user.is_ec_member), to: isEcMember } }
+        : {}),
+    }),
   );
+  if (Object.keys(patch).length > 0) statements.push(prepareUserProfileStatement(db, user.id, patch));
   if (user.active === 1 && !active) {
     statements.push(
       db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(at, user.id),
@@ -136,18 +164,22 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
       })),
     );
   }
-  if (changedFields.length > 0) {
-    statements.push(
-      prepareAuditLog(db, "admin", actor.id, "user_updated", "user", user.id, {
-        changedFields,
-        ...(role !== user.role ? { role: { from: user.role, to: role } } : {}),
-        ...(active !== Boolean(user.active) ? { active: { from: Boolean(user.active), to: active } } : {}),
-        ...(isEcMember !== Boolean(user.is_ec_member)
-          ? { isEcMember: { from: Boolean(user.is_ec_member), to: isEcMember } }
-          : {}),
-      }),
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    if (!isAuditOneChangeGuardFailure(error)) throw error;
+    const current = await first<{ pii_redacted_at: string | null; merged_into_user_id: string | null }>(
+      db,
+      "SELECT pii_redacted_at, merged_into_user_id FROM users WHERE id = ?",
+      [user.id],
     );
+    if (current?.pii_redacted_at) {
+      throw new AppError(409, "ALREADY_ANONYMIZED", "An anonymized account cannot be modified");
+    }
+    if (current?.merged_into_user_id) {
+      throw new AppError(409, "IDENTITY_RETIRED", "A previously merged account cannot be modified or reactivated");
+    }
+    throw new AppError(409, "USER_UPDATE_CONFLICT", "The user changed while this update was being prepared");
   }
-  await db.batch(statements);
   return { id: user.id, email, role, active, isEcMember };
 }

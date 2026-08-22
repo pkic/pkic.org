@@ -264,19 +264,15 @@ export async function listMyApplications(
     stage: string;
     membership_category: string;
     created_at: string;
-  }>(
-    db,
-    {
-      sql: `SELECT id, stage, membership_category, created_at
+  }>(db, {
+    sql: `SELECT id, stage, membership_category, created_at
             FROM member_applications
-            WHERE applicant_email = ?${where} ${orderBy} LIMIT ? OFFSET ?`,
-      bindings: [...bindings, params.limit, params.offset],
-    },
-    {
-      sql: `SELECT COUNT(*) AS total FROM member_applications WHERE applicant_email = ?${where}`,
-      bindings,
-    },
-  );
+            WHERE applicant_email = ?${where}`,
+    bindings,
+    orderBy,
+    limit: params.limit,
+    offset: params.offset,
+  });
   return {
     applications: result.rows.map((row) => ({
       id: row.id,

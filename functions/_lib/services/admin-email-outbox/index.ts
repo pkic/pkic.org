@@ -1,20 +1,15 @@
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
-import type { AdminEmailOutboxResponse } from "../../../../assets/shared/schemas/admin-email-outbox";
+import type {
+  AdminEmailOutboxResponse,
+  AdminEmailOutboxQuery,
+} from "../../../../assets/shared/schemas/admin-email-outbox";
 import type { DatabaseLike } from "../../types";
 import { buildAdminEmailOutboxRows } from "./preview";
 import { queryAdminEmailOutbox } from "./query";
 
 export async function listAdminEmailOutbox(
   db: DatabaseLike,
-  query: {
-    status?: string;
-    messageType?: string;
-    dueNow: boolean;
-    q?: string;
-    sort?: string;
-    limit: number;
-    offset: number;
-  },
+  query: AdminEmailOutboxQuery,
 ): Promise<AdminEmailOutboxResponse> {
   const result = await queryAdminEmailOutbox(db, query);
   const outbox = await buildAdminEmailOutboxRows(db, result.rows);

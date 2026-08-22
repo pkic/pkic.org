@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import type { AuthAdmin, DatabaseLike } from "../functions/_lib/types";
 import { env } from "cloudflare:workers";
-import { upsertProposalReview } from "../functions/_lib/services/proposal-reviews";
+import { updateProposalReview, upsertProposalReview } from "../functions/_lib/services/proposal-reviews";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import app from "../functions/router";
@@ -80,11 +80,17 @@ describe("proposal review and finalize", () => {
 
     expect(createResponse.status).toBe(200);
 
-    const createdAuditRows = await queryAll<{ details_json: string }>(
+    const createdAuditRows = await queryAll<{
+      details_json: string;
+      scope_type: string | null;
+      scope_id: string | null;
+    }>(
       env.DB,
-      "SELECT details_json FROM audit_log WHERE action = 'proposal_review_upserted' ORDER BY created_at ASC",
+      `SELECT details_json, scope_type, scope_id
+       FROM audit_log WHERE action = 'proposal_review_upserted' ORDER BY created_at ASC`,
     );
     expect(createdAuditRows).toHaveLength(1);
+    expect(createdAuditRows[0]).toMatchObject({ scope_type: "proposal", scope_id: proposalId });
     expect(JSON.parse(createdAuditRows[0].details_json)).toMatchObject({
       recommendation: { from: null, to: "accept" },
       score: { from: null, to: 9 },
@@ -117,16 +123,45 @@ describe("proposal review and finalize", () => {
 
     expect(patchResponse.status).toBe(200);
 
-    const patchedAuditRows = await queryAll<{ details_json: string }>(
+    const patchedAuditRows = await queryAll<{
+      details_json: string;
+      scope_type: string | null;
+      scope_id: string | null;
+    }>(
       env.DB,
-      "SELECT details_json FROM audit_log WHERE action = 'proposal_review_upserted' ORDER BY created_at ASC",
+      `SELECT details_json, scope_type, scope_id
+       FROM audit_log WHERE action = 'proposal_review_upserted' ORDER BY created_at ASC`,
     );
     expect(patchedAuditRows).toHaveLength(2);
+    expect(patchedAuditRows[1]).toMatchObject({ scope_type: "proposal", scope_id: proposalId });
     expect(JSON.parse(patchedAuditRows[1].details_json)).toMatchObject({
       score: { from: 9, to: 10 },
       reviewerComment: { from: "Good", to: "Excellent" },
       applicantNote: { from: null, to: "Ready for acceptance" },
     });
+  });
+
+  it("rejects API-key review mutations without creating another user's review", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId } = await seedProposal(env.DB, eventId);
+    const apiKey = env.ADMIN_API_KEY ?? "test-admin-key";
+
+    const listResponse = await callProposalReview(apiKey, proposalId);
+    expect(listResponse.status).toBe(200);
+    await expect(listResponse.json()).resolves.toMatchObject({ myReview: null });
+
+    const createResponse = await callProposalReview(apiKey, proposalId, "", {
+      method: "POST",
+      body: JSON.stringify({ recommendation: "accept", score: 9 }),
+    });
+    expect(createResponse.status).toBe(403);
+    await expect(createResponse.json()).resolves.toMatchObject({ error: { code: "USER_BACKED_ADMIN_REQUIRED" } });
+    await expect(
+      queryAll(env.DB, "SELECT id FROM proposal_reviews WHERE proposal_id = ?", proposalId),
+    ).resolves.toHaveLength(0);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'proposal_review_upserted'"),
+    ).resolves.toHaveLength(0);
   });
 
   it("rolls back a review create when the audit write fails", async () => {
@@ -255,6 +290,158 @@ describe("proposal review and finalize", () => {
     expect(response.status).toBe(403);
   });
 
+  it("keeps review PATCH owner-only for committee reviewers, moderators, and global admins", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, admin1Id } = await seedProposal(env.DB, eventId);
+    const committeeOwnerId = crypto.randomUUID();
+    const committeeEditorId = crypto.randomUUID();
+    const moderatorId = crypto.randomUUID();
+
+    await env.DB.batch([
+      ...[
+        [committeeOwnerId, "committee-owner@pkic.org"],
+        [committeeEditorId, "committee-editor@pkic.org"],
+        [moderatorId, "moderator-owner-test@pkic.org"],
+      ].map(([id, email]) =>
+        env.DB.prepare(
+          `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+             VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+        ).bind(id, email, email),
+      ),
+      ...[
+        [committeeOwnerId, "role-program_committee"],
+        [committeeEditorId, "role-program_committee"],
+        [moderatorId, "role-event_moderator"],
+      ].map(([userId, roleId]) =>
+        env.DB.prepare(
+          `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, granted_by_user_id, created_at)
+             VALUES (?, ?, ?, 'event', ?, ?, datetime('now'))`,
+        ).bind(crypto.randomUUID(), userId, roleId, eventId, admin1Id),
+      ),
+    ]);
+
+    const ownerToken = await createAdminSession(env.DB, committeeOwnerId, "token-review-owner-committee");
+    const editorToken = await createAdminSession(env.DB, committeeEditorId, "token-review-editor-committee");
+    const moderatorToken = await createAdminSession(env.DB, moderatorId, "token-review-editor-moderator");
+    const globalAdminToken = await createAdminSession(env.DB, admin1Id, "token-review-editor-global-admin");
+
+    const createResponse = await callProposalReview(ownerToken, proposalId, "", {
+      method: "POST",
+      body: JSON.stringify({ recommendation: "accept", score: 9 }),
+    });
+    expect(createResponse.status).toBe(200);
+
+    const [review] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM proposal_reviews WHERE proposal_id = ? AND reviewer_user_id = ?",
+      [proposalId, committeeOwnerId],
+    );
+
+    const ownerPatch = await callProposalReview(ownerToken, proposalId, `/${review.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ score: 10 }),
+    });
+    expect(ownerPatch.status).toBe(200);
+
+    for (const token of [editorToken, moderatorToken, globalAdminToken]) {
+      const response = await callProposalReview(token, proposalId, `/${review.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ score: 1 }),
+      });
+      expect(response.status).toBe(403);
+    }
+
+    const [stored] = await queryAll<{ reviewer_user_id: string; score: number }>(
+      env.DB,
+      "SELECT reviewer_user_id, score FROM proposal_reviews WHERE id = ?",
+      [review.id],
+    );
+    expect(stored).toEqual({ reviewer_user_id: committeeOwnerId, score: 10 });
+  });
+
+  it("derives POST review ownership from authentication instead of caller-supplied fields", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, admin1Id, admin2Id } = await seedProposal(env.DB, eventId);
+    const ownerToken = await createAdminSession(env.DB, admin1Id, "token-review-owner-post-binding");
+    const otherReviewerToken = await createAdminSession(env.DB, admin2Id, "token-review-other-post-binding");
+
+    const ownerResponse = await callProposalReview(ownerToken, proposalId, "", {
+      method: "POST",
+      body: JSON.stringify({ recommendation: "accept", score: 9 }),
+    });
+    expect(ownerResponse.status).toBe(200);
+
+    const otherResponse = await callProposalReview(otherReviewerToken, proposalId, "", {
+      method: "POST",
+      body: JSON.stringify({
+        reviewer_user_id: admin1Id,
+        recommendation: "reject",
+        score: 1,
+      }),
+    });
+    expect(otherResponse.status).toBe(200);
+
+    const stored = await queryAll<{ reviewer_user_id: string; recommendation: string; score: number }>(
+      env.DB,
+      `SELECT reviewer_user_id, recommendation, score
+       FROM proposal_reviews
+       WHERE proposal_id = ?
+       ORDER BY reviewer_user_id ASC`,
+      [proposalId],
+    );
+    expect(stored).toEqual(
+      [
+        { reviewer_user_id: admin1Id, recommendation: "accept", score: 9 },
+        { reviewer_user_id: admin2Id, recommendation: "reject", score: 1 },
+      ].sort((left, right) => left.reviewer_user_id.localeCompare(right.reviewer_user_id)),
+    );
+  });
+
+  it("keeps the D1 update owner-bound when ownership changes after the service read", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, admin1Id, admin2Id } = await seedProposal(env.DB, eventId);
+    const actor: AuthAdmin = { identityType: "user", id: admin1Id, email: "admin@pkic.org", role: "admin" };
+    await upsertProposalReview(env.DB, actor, proposalId, { recommendation: "accept", score: 9 });
+    const [review] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM proposal_reviews WHERE proposal_id = ? AND reviewer_user_id = ?",
+      [proposalId, admin1Id],
+    );
+
+    const baseDb: DatabaseLike = env.DB;
+    let ownershipChanged = false;
+    const racingDb: DatabaseLike = {
+      prepare: (query) => baseDb.prepare(query),
+      async batch(statements) {
+        if (!ownershipChanged) {
+          ownershipChanged = true;
+          await baseDb
+            .prepare("UPDATE proposal_reviews SET reviewer_user_id = ? WHERE id = ?")
+            .bind(admin2Id, review.id)
+            .run();
+        }
+        return baseDb.batch(statements);
+      },
+    };
+
+    await expect(updateProposalReview(racingDb, actor, proposalId, review.id, { score: 10 })).rejects.toMatchObject({
+      status: 409,
+      code: "PROPOSAL_REVIEW_CONFLICT",
+    });
+
+    const [stored] = await queryAll<{ reviewer_user_id: string; score: number }>(
+      env.DB,
+      "SELECT reviewer_user_id, score FROM proposal_reviews WHERE id = ?",
+      [review.id],
+    );
+    expect(stored).toEqual({ reviewer_user_id: admin2Id, score: 9 });
+    const [auditCount] = await queryAll<{ total: number }>(
+      env.DB,
+      "SELECT COUNT(*) AS total FROM audit_log WHERE action = 'proposal_review_upserted'",
+    );
+    expect(Number(auditCount.total)).toBe(1);
+  });
+
   it("rejects review changes after a proposal decision", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, admin1Id } = await seedProposal(env.DB, eventId);
@@ -272,7 +459,7 @@ describe("proposal review and finalize", () => {
   it("does not create a review when finalization wins immediately before the write", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, admin1Id } = await seedProposal(env.DB, eventId);
-    const actor: AuthAdmin = { id: admin1Id, email: "admin@pkic.org", role: "admin" };
+    const actor: AuthAdmin = { identityType: "user", id: admin1Id, email: "admin@pkic.org", role: "admin" };
     const baseDb: DatabaseLike = env.DB;
     let injectedFinalization = false;
     const racingDb: DatabaseLike = {
@@ -311,7 +498,7 @@ describe("proposal review and finalize", () => {
   it("does not update a review when finalization wins immediately before the write", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, admin1Id } = await seedProposal(env.DB, eventId);
-    const actor: AuthAdmin = { id: admin1Id, email: "admin@pkic.org", role: "admin" };
+    const actor: AuthAdmin = { identityType: "user", id: admin1Id, email: "admin@pkic.org", role: "admin" };
     await upsertProposalReview(env.DB, actor, proposalId, { recommendation: "accept", score: 9 });
 
     const baseDb: DatabaseLike = env.DB;

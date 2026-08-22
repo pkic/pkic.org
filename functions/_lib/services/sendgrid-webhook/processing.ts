@@ -12,16 +12,19 @@ const EVENT_ACTIONS: Readonly<Record<string, string>> = {
   spamreport: "email_spam_report",
   unsubscribe: "email_unsubscribe",
   group_unsubscribe: "email_unsubscribe",
+  processed: "email_processed",
   delivered: "email_delivered",
 };
 
 interface NormalizedSendgridEvent {
   baseId: string;
+  outboxId: string | null;
   eventType: string;
   action: string;
   sequence: number;
   hardFailure: number;
   delivered: number;
+  accepted: number;
   registrationFailure: number;
   errorText: string | null;
   email: string | null;
@@ -78,17 +81,25 @@ function normalizeEvent(event: SendgridEvent, sequence: number): NormalizedSendg
 
   return {
     baseId,
+    outboxId: event.outbox_id ?? null,
     eventType: event.event,
     action: event.event === "bounce" && !hardFailure ? "email_soft_bounce" : action,
     sequence,
     hardFailure: hardFailure ? 1 : 0,
     delivered: event.event === "delivered" ? 1 : 0,
+    accepted: event.event === "processed" ? 1 : 0,
     registrationFailure: hardFailure ? 1 : 0,
     errorText: hardFailure || softFailure ? errorText : null,
     email: event.email ?? null,
     unsubscribeChannel,
     unsubscribeReason: event.event === "spamreport" ? "spam_report" : unsubscribeChannel ? "unsubscribed" : null,
-    detailsJson: stringifyJson({ email: event.email ?? null, reason, baseId, channel: unsubscribeChannel }),
+    detailsJson: stringifyJson({
+      email: event.email ?? null,
+      reason,
+      baseId,
+      outboxId: event.outbox_id ?? null,
+      channel: unsubscribeChannel,
+    }),
     occurredAt,
     idempotencyKey: `sendgrid:${eventIdentity}`,
   };
@@ -97,11 +108,13 @@ function normalizeEvent(event: SendgridEvent, sequence: number): NormalizedSendg
 const JSON_EVENT_ROWS = `
   SELECT
     json_extract(value, '$.baseId') AS base_id,
+    json_extract(value, '$.outboxId') AS outbox_id,
     json_extract(value, '$.eventType') AS event_type,
     json_extract(value, '$.action') AS action,
     CAST(json_extract(value, '$.sequence') AS INTEGER) AS sequence,
     CAST(json_extract(value, '$.hardFailure') AS INTEGER) AS hard_failure,
     CAST(json_extract(value, '$.delivered') AS INTEGER) AS delivered,
+    CAST(json_extract(value, '$.accepted') AS INTEGER) AS accepted,
     CAST(json_extract(value, '$.registrationFailure') AS INTEGER) AS registration_failure,
     json_extract(value, '$.errorText') AS error_text,
     json_extract(value, '$.email') AS email,
@@ -115,32 +128,71 @@ const JSON_EVENT_ROWS = `
 
 function prepareEventBatchStatements(env: Env, jsonRows: string) {
   const updateOutbox = env.DB.prepare(
-    `WITH event_rows AS (${JSON_EVENT_ROWS}),
-     rollup AS (
-       SELECT base_id,
-              MAX(hard_failure) AS hard_failure,
-              MAX(delivered) AS delivered,
-              COALESCE(
-                (SELECT error_text FROM event_rows latest_hard
-                 WHERE latest_hard.base_id = grouped.base_id AND latest_hard.hard_failure = 1
-                 ORDER BY latest_hard.sequence DESC LIMIT 1),
-                (SELECT error_text FROM event_rows latest_error
-                 WHERE latest_error.base_id = grouped.base_id AND latest_error.error_text IS NOT NULL
-                 ORDER BY latest_error.sequence DESC LIMIT 1)
-              ) AS final_error
-       FROM event_rows grouped
-       WHERE hard_failure = 1 OR delivered = 1 OR error_text IS NOT NULL
-       GROUP BY base_id
-     )
+    `WITH event_rows AS (${JSON_EVENT_ROWS})
      UPDATE email_outbox
      SET status = CASE
-           WHEN (SELECT hard_failure FROM rollup WHERE base_id = provider_message_id) = 1 THEN 'bounced'
-           WHEN (SELECT delivered FROM rollup WHERE base_id = provider_message_id) = 1 AND status = 'sent' THEN 'delivered'
+           WHEN (SELECT MAX(hard_failure) FROM event_rows
+                  WHERE outbox_id = email_outbox.id OR base_id = email_outbox.provider_message_id) = 1 THEN 'bounced'
+           WHEN (SELECT MAX(delivered) FROM event_rows
+                  WHERE outbox_id = email_outbox.id OR base_id = email_outbox.provider_message_id) = 1 THEN 'delivered'
+           WHEN (SELECT MAX(accepted) FROM event_rows
+                  WHERE outbox_id = email_outbox.id OR base_id = email_outbox.provider_message_id) = 1
+                AND status IN ('sending', 'delivery_unknown') THEN 'sent'
            ELSE status
          END,
-         last_error = COALESCE((SELECT final_error FROM rollup WHERE base_id = provider_message_id), last_error),
+         provider_message_id = COALESCE(
+           provider_message_id,
+           (SELECT base_id FROM event_rows
+             WHERE outbox_id = email_outbox.id
+             ORDER BY sequence DESC LIMIT 1)
+         ),
+         sent_at = CASE
+           WHEN (SELECT MAX(accepted + delivered) FROM event_rows
+                  WHERE outbox_id = email_outbox.id OR base_id = email_outbox.provider_message_id) > 0
+             THEN COALESCE(sent_at, (SELECT occurred_at FROM event_rows
+                                     WHERE outbox_id = email_outbox.id OR base_id = email_outbox.provider_message_id
+                                     ORDER BY sequence DESC LIMIT 1))
+           ELSE sent_at
+         END,
+         last_error = CASE
+           WHEN (SELECT MAX(hard_failure) FROM event_rows
+                  WHERE outbox_id = email_outbox.id OR base_id = email_outbox.provider_message_id) = 1
+             THEN (SELECT error_text FROM event_rows
+                    WHERE (outbox_id = email_outbox.id OR base_id = email_outbox.provider_message_id)
+                      AND error_text IS NOT NULL
+                    ORDER BY hard_failure DESC, sequence DESC LIMIT 1)
+           WHEN (SELECT MAX(accepted + delivered) FROM event_rows
+                  WHERE outbox_id = email_outbox.id OR base_id = email_outbox.provider_message_id) > 0 THEN NULL
+           ELSE COALESCE(
+             (SELECT error_text FROM event_rows
+               WHERE (outbox_id = email_outbox.id OR base_id = email_outbox.provider_message_id)
+                 AND error_text IS NOT NULL
+               ORDER BY sequence DESC LIMIT 1),
+             last_error
+           )
+         END,
+         processing_token = CASE
+           WHEN (SELECT MAX(hard_failure + delivered + accepted) FROM event_rows
+                  WHERE outbox_id = email_outbox.id OR base_id = email_outbox.provider_message_id) > 0
+             THEN NULL
+           ELSE processing_token
+         END,
+         lease_expires_at = CASE
+           WHEN (SELECT MAX(hard_failure + delivered + accepted) FROM event_rows
+                  WHERE outbox_id = email_outbox.id OR base_id = email_outbox.provider_message_id) > 0
+             THEN NULL
+           ELSE lease_expires_at
+         END,
          updated_at = datetime('now')
-     WHERE provider_message_id IN (SELECT base_id FROM rollup)`,
+     WHERE id IN (
+             SELECT outbox_id FROM event_rows
+              WHERE outbox_id IS NOT NULL
+                AND (hard_failure = 1 OR delivered = 1 OR accepted = 1 OR error_text IS NOT NULL)
+           )
+        OR provider_message_id IN (
+             SELECT base_id FROM event_rows
+              WHERE hard_failure = 1 OR delivered = 1 OR accepted = 1 OR error_text IS NOT NULL
+           )`,
   ).bind(jsonRows);
 
   const insertUnsubscribes = env.DB.prepare(
@@ -160,7 +212,8 @@ function prepareEventBatchStatements(env: Env, jsonRows: string) {
      SELECT lower(hex(randomblob(16))), 'system', NULL, event_rows.action, 'email_outbox', email_outbox.id,
             event_rows.details_json, event_rows.occurred_at, event_rows.idempotency_key
      FROM event_rows
-     JOIN email_outbox ON email_outbox.provider_message_id = event_rows.base_id`,
+     JOIN email_outbox ON email_outbox.provider_message_id = event_rows.base_id
+                       OR email_outbox.id = event_rows.outbox_id`,
   ).bind(jsonRows);
 
   const insertRegistrationAudits = env.DB.prepare(
@@ -172,6 +225,7 @@ function prepareEventBatchStatements(env: Env, jsonRows: string) {
             event_rows.idempotency_key || ':registration:' || registrations.id
      FROM event_rows
      JOIN email_outbox ON email_outbox.provider_message_id = event_rows.base_id
+                       OR email_outbox.id = event_rows.outbox_id
      JOIN registrations ON registrations.event_id = email_outbox.event_id
                        AND registrations.user_id = email_outbox.recipient_user_id
                        AND registrations.status = 'pending_email_confirmation'

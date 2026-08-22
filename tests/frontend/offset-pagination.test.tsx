@@ -9,6 +9,7 @@ import { eventPromotersListResponseSchema } from "../../assets/shared/schemas/ad
 import { donationPromotersListResponseSchema } from "../../assets/shared/schemas/admin-donations";
 import { pageInfoSchema } from "../../assets/shared/schemas/pagination";
 import { ApiDataTable } from "../../assets/ts/admin/components/ApiDataTable";
+import { ApplicationDocumentsCard } from "../../assets/ts/admin/sections/Applications/ApplicationDocumentsCard";
 import { Donations } from "../../assets/ts/admin/sections/Donations";
 import { Email } from "../../assets/ts/admin/sections/Email";
 import { DueWorkTable } from "../../assets/ts/admin/sections/due-work/DueWorkTable";
@@ -214,6 +215,47 @@ describe("canonical offset pagination", () => {
     await settle();
     expect(requests.at(-1)?.searchParams.get("status")).toBe("closed");
     expect(requests.at(-1)?.searchParams.get("offset")).toBe("0");
+  });
+
+  it("loads application documents through the shared server-side table contract", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        requests.push(url);
+        const offset = Number(url.searchParams.get("offset") ?? 0);
+        return jsonResponse({
+          documents: [
+            {
+              id: offset === 0 ? "00000000-0000-4000-8000-000000000001" : "00000000-0000-4000-8000-000000000002",
+              filename: offset === 0 ? "first.pdf" : "second.pdf",
+              mimeType: "application/pdf",
+              fileSizeBytes: 2048,
+              uploadedAt: "2026-08-21T08:00:00.000Z",
+              uploadedByEmail: "applicant@example.test",
+            },
+          ],
+          page: { limit: 10, offset, total: 11, hasMore: offset === 0 },
+        });
+      }),
+    );
+
+    const container = mount(<ApplicationDocumentsCard applicationId="00000000-0000-4000-8000-000000000010" />);
+    await settle();
+
+    expect(requests.at(-1)?.pathname).toBe("/api/v1/admin/applications/00000000-0000-4000-8000-000000000010/documents");
+    expect(requests.at(-1)?.searchParams.get("limit")).toBe("10");
+    expect(requests.at(-1)?.searchParams.get("offset")).toBe("0");
+    expect(requests.at(-1)?.searchParams.get("sort")).toBe("-uploadedAt");
+    expect(container.textContent).toContain("first.pdf");
+    expect(container.textContent).not.toContain("second.pdf");
+
+    void act(() => nextButton(container).click());
+    await settle();
+    expect(requests.at(-1)?.searchParams.get("offset")).toBe("10");
+    expect(container.textContent).toContain("second.pdf");
+    expect(container.textContent).not.toContain("first.pdf");
   });
 
   it("uses the shared pager for donation and event promoter collections", async () => {

@@ -1,5 +1,6 @@
 import type { Hono } from "hono";
 import type { Env } from "../types";
+import { publicAuthAdmin } from "../auth/admin-identity";
 import {
   MCP_OAUTH_AUTHORIZE_PATH,
   MCP_OAUTH_VERIFY_API_PATH,
@@ -153,7 +154,7 @@ async function handleVerifyApi(request: Request, env: McpOAuthEnv): Promise<Resp
       success: true,
       expiresAt: verified.expiresAt,
       returnTo: verified.returnTo,
-      admin: verified.admin,
+      admin: publicAuthAdmin(verified.admin),
     });
     response.headers.append("Set-Cookie", serializeMcpOauthLoginCookie(verified.sessionToken, request));
     return response;

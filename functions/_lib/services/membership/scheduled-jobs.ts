@@ -14,21 +14,14 @@ import {
   prepareQueueEmailStatement,
   prepareQueueEmailStatementWhen,
   processOutboxByIdBackground,
-  queueEmail,
 } from "../../email/outbox";
 import { getMembershipSettings } from "../membership-settings";
 import { prepareApplicationStageTransition } from "./applications/transition";
 import { runOnHoldReminders } from "./on-hold-reminders";
 import type { MemberApplicationRow } from "./applications/queries";
 import { approveApplication } from "./applications/approve";
-import { processGoogleGroupsSyncQueue } from "../google-groups";
-import { resolveWgJoinCalendarInviteByMailingListEmail } from "../meeting-calendar";
-import {
-  buildConsultationBatchEmail,
-  buildEcReviewBatchEmail,
-  buildMailingListEnrolledEmail,
-  buildWgCalendarInviteEmail,
-} from "./notifications";
+import { drainGoogleGroupsEnrollmentNotificationIntents, processGoogleGroupsSyncQueue } from "../google-groups";
+import { buildConsultationBatchEmail, buildEcReviewBatchEmail } from "./notifications";
 import { logInfo } from "../../logging";
 import type { DatabaseLike, Env } from "../../types";
 import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
@@ -164,7 +157,7 @@ export async function runEcReviewBatch(db: DatabaseLike, env: Env, limit = 100):
     prepareApplicationStageTransition(db, application, {
       applicationId: application.id,
       toStage: "ec_review",
-      actorUserId: null,
+      actor: null,
       note: "Consultation window elapsed",
     }),
   );
@@ -275,14 +268,19 @@ export async function runEcWindowAutoApprove(
     try {
       await approveApplication(db, {
         applicationId: application.id,
-        actorUserId: null,
+        actor: null,
+        approvalMode: "automatic_no_ec_objection",
         eventNote: "auto_approved_no_ec_objection",
         loginUrl,
       });
     } catch (error) {
-      // A staff edit after the due-row read increments transition_revision.
-      // The approval command rolls back fully, and the next independent cron
-      // invocation re-evaluates the current application snapshot.
+      // A staff edit or EC decision after the due-row read increments
+      // transition_revision. The approval command rolls back fully; a
+      // decline is held now, while other changes are re-evaluated next run.
+      if (isAppError(error) && error.code === "APPLICATION_EC_DECLINED") {
+        heldForDecline++;
+        continue;
+      }
       if (isAppError(error) && error.code === "APPLICATION_ALREADY_APPROVED") continue;
       throw error;
     }
@@ -299,17 +297,15 @@ const MAX_GOOGLE_GROUPS_SYNC_PER_PASS = 25;
 const GOOGLE_GROUPS_SYNC_RESERVE_HEADROOM_STATEMENTS = 20;
 
 /**
- * The queue processor's D1 upper bound for N claimed rows is 3 + 4N:
- * due-list, re-list-and-claim batch (1 + N), actionable-claim load, and a
- * three-statement finalization batch for every successfully applied row.
- * The missing-user/failure paths use fewer statements. The notification
- * follow-up is at most 6N: user read + enrollment outbox row per completed
- * add, then at most three calendar reads and one invite outbox row for that
- * add's group. The durable desired-state queue admits at most one completed
- * add per claimed row, so those bounds compose.
+ * The queue processor plus durable notification drain has a conservative
+ * upper bound of 3 + 13N D1 statements for N claimed rows: due-list,
+ * re-list-and-claim batch, actionable-claim load, recipient/calendar reads,
+ * five-statement completion batches, and a bounded three-statement-per-user
+ * enrollment drain. The missing-user/failure paths use fewer statements, and
+ * the durable desired-state queue admits at most one completed add per row.
  */
 function googleGroupsSyncReserveStatements(limit: number): number {
-  return 3 + 4 * limit + 6 * limit + GOOGLE_GROUPS_SYNC_RESERVE_HEADROOM_STATEMENTS;
+  return 3 + 13 * limit + GOOGLE_GROUPS_SYNC_RESERVE_HEADROOM_STATEMENTS;
 }
 
 export async function runGoogleGroupsSyncPass(
@@ -317,52 +313,30 @@ export async function runGoogleGroupsSyncPass(
   env: Env,
   limit = MAX_GOOGLE_GROUPS_SYNC_PER_PASS,
   d1QueryBudget?: D1QueryBudget,
-): Promise<{ succeeded: number; failed: number; deferredForBudget: boolean }> {
+): Promise<{
+  processed: number;
+  succeeded: number;
+  failed: number;
+  skippedUnconfigured: boolean;
+  deferredForBudget: boolean;
+}> {
   const boundedLimit = Math.max(0, Math.min(MAX_GOOGLE_GROUPS_SYNC_PER_PASS, Math.floor(limit)));
   const reserveStatements = googleGroupsSyncReserveStatements(boundedLimit);
   if (boundedLimit === 0 || !hasD1QueryCapacity(d1QueryBudget, reserveStatements)) {
-    return { succeeded: 0, failed: 0, deferredForBudget: boundedLimit > 0 };
+    return { processed: 0, succeeded: 0, failed: 0, skippedUnconfigured: false, deferredForBudget: boundedLimit > 0 };
   }
   const result = await processGoogleGroupsSyncQueue(db, env, boundedLimit);
-
-  for (const [userId, groupEmails] of Object.entries(result.completedAddsByUser)) {
-    const user = await all<{ email: string; first_name: string | null; last_name: string | null }>(
-      db,
-      `SELECT email, first_name, last_name FROM users WHERE id = ?`,
-      [userId],
-    );
-    const row = user[0];
-    if (!row) continue;
-
-    const memberName = [row.first_name, row.last_name].filter(Boolean).join(" ") || row.email;
-
-    // Enqueue only (PR #1 review §9.1) — no synchronous send per recipient.
-    await queueEmail(db, buildMailingListEnrolledEmail({ recipientEmail: row.email, memberName, lists: groupEmails }));
-
-    // "Member joins a WG" trigger: attach that WG's active ICS
-    // variants to a wg-calendar-invite email. groupEmails may include
-    // non-WG lists (e.g. pkic@/consultation@) alongside a WG's mailing
-    // list — resolveWgJoinCalendarInviteByMailingListEmail returns null
-    // for those, and for a WG with no active series/files yet.
-    for (const groupEmail of groupEmails) {
-      const invite = await resolveWgJoinCalendarInviteByMailingListEmail(db, groupEmail);
-      if (!invite) continue;
-
-      await queueEmail(
-        db,
-        buildWgCalendarInviteEmail({
-          recipientEmail: row.email,
-          memberName,
-          workingGroupName: invite.workingGroupName,
-          attachments: invite.attachments,
-        }),
-      );
-    }
-  }
+  await drainGoogleGroupsEnrollmentNotificationIntents(db, boundedLimit);
 
   if (result.skippedUnconfigured) {
     logInfo("membership_scheduled_jobs_google_groups_unconfigured", {});
   }
 
-  return { succeeded: result.succeeded, failed: result.failed, deferredForBudget: false };
+  return {
+    processed: result.processed,
+    succeeded: result.succeeded,
+    failed: result.failed,
+    skippedUnconfigured: result.skippedUnconfigured,
+    deferredForBudget: false,
+  };
 }

@@ -7,7 +7,8 @@
  * Google Groups sync enqueue is identical either way, only the caller's
  * authorization differs.
  */
-import { first } from "../db/queries";
+import { all, first } from "../db/queries";
+import { buildD1JsonMembershipFilter } from "../db/json-membership";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { AppError } from "../errors";
@@ -25,12 +26,32 @@ export interface WorkingGroupRow {
   active: number;
 }
 
+const WORKING_GROUP_SELECT_COLUMNS = "id, slug, name, mailing_list_email, active";
+
 export async function getWorkingGroupBySlugOrId(db: DatabaseLike, wgIdOrSlug: string): Promise<WorkingGroupRow | null> {
   return first<WorkingGroupRow>(
     db,
-    `SELECT id, slug, name, mailing_list_email, active FROM working_groups WHERE id = ? OR slug = ?`,
+    `SELECT ${WORKING_GROUP_SELECT_COLUMNS} FROM working_groups WHERE id = ? OR slug = ?`,
     [wgIdOrSlug, wgIdOrSlug],
   );
+}
+
+/** Resolves a bounded slug set once, preserving request order while dropping unknown and duplicate slugs. */
+export async function getWorkingGroupsBySlugs(db: DatabaseLike, slugs: readonly string[]): Promise<WorkingGroupRow[]> {
+  const uniqueSlugs = [...new Set(slugs)];
+  if (uniqueSlugs.length === 0) return [];
+
+  const filter = buildD1JsonMembershipFilter("slug", uniqueSlugs);
+  const rows = await all<WorkingGroupRow>(
+    db,
+    `SELECT ${WORKING_GROUP_SELECT_COLUMNS} FROM working_groups WHERE ${filter.sql}`,
+    filter.bindings,
+  );
+  const bySlug = new Map(rows.map((row) => [row.slug, row]));
+  return uniqueSlugs.flatMap((slug) => {
+    const row = bySlug.get(slug);
+    return row ? [row] : [];
+  });
 }
 
 /**

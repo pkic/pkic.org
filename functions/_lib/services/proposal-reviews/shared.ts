@@ -5,6 +5,7 @@ import {
   PROPOSAL_DECIDABLE_STATUSES,
 } from "../../../../assets/shared/schemas/proposal-status";
 import { getProposalAccessForEvent, type ProposalAccess } from "../../auth/proposal-access";
+import { requireAdminDatabaseUserId } from "../../auth/admin-identity";
 import { batchFirst } from "../../db/pagination";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
@@ -134,13 +135,14 @@ export async function saveExistingProposalReview(
   next: ReviewAuditState,
   changes: Record<string, { from: unknown; to: unknown }>,
 ): Promise<ProposalReview> {
+  const reviewerUserId = requireAdminDatabaseUserId(actor);
   const now = nowIso();
   const [updated, , selected] = await db.batch([
     db
       .prepare(
         `UPDATE proposal_reviews
          SET review_round = ?, recommendation = ?, score = ?, reviewer_comment = ?, applicant_note = ?, updated_at = ?
-         WHERE id = ? AND proposal_id = ? AND review_round = ? AND recommendation = ? AND score IS ?
+         WHERE id = ? AND proposal_id = ? AND reviewer_user_id = ? AND review_round = ? AND recommendation = ? AND score IS ?
            AND reviewer_comment IS ? AND applicant_note IS ? AND updated_at = ?
            AND EXISTS ${REVIEW_WRITABLE_PROPOSAL_SQL}`,
       )
@@ -153,6 +155,7 @@ export async function saveExistingProposalReview(
         now,
         existing.id,
         proposalId,
+        reviewerUserId,
         existing.review_round,
         existing.recommendation,
         existing.score,
@@ -167,13 +170,15 @@ export async function saveExistingProposalReview(
       action: "proposal_review_upserted",
       entityType: "proposal_review",
       entityId: existing.id,
+      scope: { type: "proposal", id: proposalId },
       details: changes,
       createdAt: now,
       conditionSql:
-        "SELECT 1 FROM proposal_reviews WHERE id = ? AND proposal_id = ? AND review_round = ? AND recommendation = ? AND score IS ? AND reviewer_comment IS ? AND applicant_note IS ? AND updated_at = ? AND changes() = 1",
+        "SELECT 1 FROM proposal_reviews WHERE id = ? AND proposal_id = ? AND reviewer_user_id = ? AND review_round = ? AND recommendation = ? AND score IS ? AND reviewer_comment IS ? AND applicant_note IS ? AND updated_at = ? AND changes() = 1",
       conditionBindings: [
         existing.id,
         proposalId,
+        reviewerUserId,
         next.reviewRound,
         next.recommendation,
         next.score,

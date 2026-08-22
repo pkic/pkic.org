@@ -3,10 +3,8 @@
  */
 import { json } from "../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
-import {
-  addMemberToWorkingGroup,
-  listAdminWorkingGroupMembers,
-} from "../../../../../../_lib/services/admin-working-groups";
+import { addMemberToWorkingGroup } from "../../../../../../_lib/services/admin-working-groups/member-access";
+import { listAdminWorkingGroupMembers } from "../../../../../../_lib/services/admin-working-groups/read-model";
 import {
   workingGroupMemberAddRouteSchema,
   workingGroupMembersListRouteSchema,

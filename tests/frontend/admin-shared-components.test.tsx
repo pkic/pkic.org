@@ -30,6 +30,7 @@ afterEach(() => {
     void act(() => render(null, container));
     container.remove();
   }
+  vi.unstubAllGlobals();
 });
 
 describe("shared admin presentation components", () => {
@@ -201,21 +202,42 @@ describe("shared admin presentation components", () => {
     expect(onChange).toHaveBeenCalledWith("approved");
   });
 
-  it("renders shared audit columns while preserving domain-specific cells", () => {
+  it("renders shared audit columns while preserving domain-specific cells", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              auditLog: [
+                {
+                  id: "audit-1",
+                  created_at: "2026-08-21T10:00:00.000Z",
+                  actor_type: "system",
+                  actor_id: null,
+                  actor_display: null,
+                  action: "updated",
+                  entity_type: "proposal",
+                  entity_id: "proposal-1",
+                  details: { field: "title" },
+                },
+              ],
+              page: { limit: 50, offset: 0, total: 1, hasMore: false },
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+      ),
+    );
     const container = mount(
       <AuditLogTable
-        entries={[
-          {
-            id: "audit-1",
-            created_at: "2026-08-21T10:00:00.000Z",
-            actor_type: "system",
-            action: "updated",
-          },
-        ]}
+        endpoint="/api/v1/admin/proposals/proposal-1/audit-log"
         actionCell={(entry) => <strong>{entry.action}</strong>}
         detailsCell={() => <span>domain details</span>}
       />,
     );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
     expect(container.textContent).toContain("System");
     expect(container.querySelector("strong")?.textContent).toBe("updated");
     expect(container.textContent).toContain("domain details");

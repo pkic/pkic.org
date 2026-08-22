@@ -119,7 +119,6 @@ describe("canonical shared schema composition", () => {
       has_bounced: false,
       sponsor_consent: true,
       custom_answers_json: null,
-      dietary_restrictions: null,
       dayWaitlistSummary: null,
       dayWaitlistCount: 0,
       attendanceChangeHistory: [],
@@ -255,7 +254,6 @@ describe("canonical shared schema composition", () => {
           byStatus: {},
           bouncedCount: 0,
           consentCount: 0,
-          dietaryCounts: {},
         },
       }).success,
     ).toBe(true);

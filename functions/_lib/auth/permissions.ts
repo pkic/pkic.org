@@ -6,7 +6,6 @@
  * can further restrict (never expand) those effective permissions.
  */
 import { all } from "../db/queries";
-import { normalizeEmail } from "../validation";
 import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike, PermissionGrant } from "../types";
 import { PERMISSION_DENIED_MESSAGE } from "../../../assets/shared/auth-errors";
@@ -35,9 +34,9 @@ interface GrantRow {
 /**
  * Resolves the full set of contextual permissions for a user from
  * `user_roles` (via `role_permissions`) and `permission_grants`, excluding
- * expired/revoked rows. Matches `user_roles` rows by `user_id` OR (when
- * `user_id IS NULL`) by normalized email, preserving the pre-provisioning
- * pattern `event_permissions` used (see consolidated migration 0035).
+ * expired/revoked rows. Roles are bound only to immutable `user_id` values;
+ * pre-provisioning creates a minimal user rather than attaching authorization
+ * to a reusable email address (see consolidated migration 0035).
  *
  * Called on every authenticated admin request — see requireAdminFromRequest
  * in ./admin.ts. This is a deliberate deviation from "no DB query on
@@ -46,19 +45,13 @@ interface GrantRow {
  * same lookup gives real-time (not eventually-consistent, ≤15-minute)
  * revocation at no extra request-path cost.
  */
-export async function computeGrantsForUser(
-  db: DatabaseLike,
-  userId: string,
-  email: string,
-): Promise<PermissionGrant[]> {
-  const normalizedEmail = normalizeEmail(email);
-
+export async function computeGrantsForUser(db: DatabaseLike, userId: string): Promise<PermissionGrant[]> {
   const rows = await all<GrantRow>(
     db,
     `SELECT rp.permission AS permission, ur.context_type AS context_type, ur.context_id AS context_id
      FROM user_roles ur
      JOIN role_permissions rp ON rp.role_id = ur.role_id
-     WHERE (ur.user_id = ? OR (ur.user_id IS NULL AND ur.user_email = ?))
+     WHERE ur.user_id = ?
        AND ur.revoked_at IS NULL
        AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
      UNION ALL
@@ -67,7 +60,7 @@ export async function computeGrantsForUser(
      WHERE pg.user_id = ?
        AND pg.revoked_at IS NULL
        AND (pg.expires_at IS NULL OR pg.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
-    [userId, normalizedEmail, userId],
+    [userId, userId],
   );
 
   return rows.map((row) => ({
@@ -114,6 +107,53 @@ export function requirePermission(actor: AuthAdmin, permission: string, context?
 
 interface EmailRow {
   email: string;
+}
+
+interface PermissionRecipientRow {
+  id: string;
+  email: string;
+}
+
+/**
+ * Shared staff-recipient predicate. Authorization and notification fan-out
+ * must use the same global-admin, role-permission, and direct-grant rules.
+ * Inactive identities cannot authenticate as staff and are therefore not
+ * intended notification recipients.
+ */
+export function staffPermissionPredicate(userAlias = "u"): string {
+  return `(
+    ${userAlias}.role = 'admin'
+    OR EXISTS (
+      SELECT 1
+      FROM user_roles ur
+      JOIN role_permissions rp ON rp.role_id = ur.role_id
+      WHERE ur.user_id = ${userAlias}.id
+        AND rp.permission = ?
+        AND ur.revoked_at IS NULL
+        AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    )
+    OR EXISTS (
+      SELECT 1
+      FROM permission_grants pg
+      WHERE pg.user_id = ${userAlias}.id
+        AND pg.permission = ?
+        AND pg.revoked_at IS NULL
+        AND (pg.expires_at IS NULL OR pg.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    )
+  )`;
+}
+
+export async function findUserPermissionRecipients(
+  db: DatabaseLike,
+  permission: string,
+): Promise<PermissionRecipientRow[]> {
+  return all<PermissionRecipientRow>(
+    db,
+    `SELECT DISTINCT u.id, u.email
+     FROM users u
+     WHERE u.active = 1 AND ${staffPermissionPredicate("u")}`,
+    [permission, permission],
+  );
 }
 
 /**

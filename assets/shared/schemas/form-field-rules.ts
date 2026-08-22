@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { httpUrlSchema } from "./urls";
+import { attendanceTypeSchema, type AttendanceType } from "./registration";
 
-const attendanceTypeSchema = z.enum(["in_person", "virtual", "on_demand"]);
 const visualizationSchema = z.enum(["auto", "bar", "pie", "wordcloud", "list"]);
 const formFieldFormatSchema = z.enum([
   "iso_country",
@@ -236,7 +236,7 @@ export function isAllowedProfileUrl(value: string, allowedDomains?: readonly str
 
 export interface FormFieldVisibilityContext {
   dayAttendanceTypes?: readonly string[];
-  eventAttendanceType?: "in_person" | "virtual" | "on_demand";
+  eventAttendanceType?: AttendanceType;
 }
 
 export function isFormFieldVisible(rules: FormFieldRules, context: FormFieldVisibilityContext): boolean {

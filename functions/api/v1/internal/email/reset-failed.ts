@@ -7,9 +7,10 @@ import { adminResetFailedOutboxSchema } from "../../../../../assets/shared/schem
 /**
  * POST /api/v1/internal/email/reset-failed
  *
- * Resets `failed` outbox records back to `retrying` status (with attempts=0)
- * so they are picked up by the next processPendingOutbox cycle, and then
- * immediately triggers that cycle so the emails are sent without further delay.
+ * Explicitly resets `failed` or `delivery_unknown` outbox records back to
+ * `retrying` (with attempts=0), then triggers processing. Unknown outcomes
+ * are never replayed automatically because SendGrid may already have accepted
+ * the original request.
  *
  * Body (all optional):
  *   { ids?: string[] }   — limit reset to specific outbox IDs; omit to reset all

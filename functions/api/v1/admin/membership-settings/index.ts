@@ -39,7 +39,7 @@ export const MembershipSettingsUpdate = openApiRoute(
     const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
     requirePermission(admin, "membership:write");
     const body = data.body;
-    const settings = await updateMembershipSettings(requestDb(c), body, admin.id);
+    const settings = await updateMembershipSettings(requestDb(c), body, admin);
     return json(toResponse(settings));
   },
 );

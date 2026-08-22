@@ -19,6 +19,14 @@ export function computeMotionResult(
   for (const b of ballots) {
     if (b.choice in counts) counts[b.choice as BallotChoice] += 1;
   }
+  return computeMotionResultFromCounts(thresholdType, counts);
+}
+
+export function computeMotionResultFromCounts(
+  thresholdType: "simple_majority" | "supermajority",
+  counts: Record<BallotChoice, number>,
+): MotionResult {
+  const totalBallots = counts.in_favor + counts.opposed + counts.abstain;
   const decisive = counts.in_favor + counts.opposed;
   // Integer cross-multiplication avoids floating-point edge cases at
   // exactly 2/3. Simple majority is ">50% of ballots cast" (strict);
@@ -32,7 +40,7 @@ export function computeMotionResult(
     decisive > 0 &&
     (thresholdType === "supermajority" ? counts.in_favor * 3 >= decisive * 2 : counts.in_favor * 2 > decisive);
   const outcome: "passed" | "failed" = passed ? "passed" : "failed";
-  return { thresholdType, counts, totalBallots: ballots.length, outcome };
+  return { thresholdType, counts, totalBallots, outcome };
 }
 
 export interface ElectionRoundTally {
@@ -57,19 +65,30 @@ export function tallyElectionRound(
   for (const b of ballots) {
     if (b.choice in counts) counts[b.choice] += 1;
   }
-  const total = ballots.length;
+  return tallyElectionRoundFromCounts(round, standingCandidateIds, counts);
+}
+
+export function tallyElectionRoundFromCounts(
+  round: number,
+  standingCandidateIds: string[],
+  counts: Record<string, number>,
+): ElectionRoundTally {
+  const normalizedCounts: Record<string, number> = Object.fromEntries(
+    standingCandidateIds.map((id) => [id, Math.max(0, Math.floor(counts[id] ?? 0))]),
+  );
+  const total = Object.values(normalizedCounts).reduce((sum, count) => sum + count, 0);
 
   if (standingCandidateIds.length === 1) {
-    return { round, counts, eliminatedCandidateIds: [], winnerCandidateId: standingCandidateIds[0] };
+    return { round, counts: normalizedCounts, eliminatedCandidateIds: [], winnerCandidateId: standingCandidateIds[0] };
   }
 
-  const winner = standingCandidateIds.find((id) => total > 0 && counts[id] / total > 0.5) ?? null;
+  const winner = standingCandidateIds.find((id) => total > 0 && normalizedCounts[id] / total > 0.5) ?? null;
   if (winner) {
-    return { round, counts, eliminatedCandidateIds: [], winnerCandidateId: winner };
+    return { round, counts: normalizedCounts, eliminatedCandidateIds: [], winnerCandidateId: winner };
   }
 
-  const lowest = Math.min(...standingCandidateIds.map((id) => counts[id]));
-  const lowestIds = standingCandidateIds.filter((id) => counts[id] === lowest);
+  const lowest = Math.min(...standingCandidateIds.map((id) => normalizedCounts[id]));
+  const lowestIds = standingCandidateIds.filter((id) => normalizedCounts[id] === lowest);
   const eliminatedCandidateIds = lowestIds.length === standingCandidateIds.length ? [] : lowestIds;
-  return { round, counts, eliminatedCandidateIds, winnerCandidateId: null };
+  return { round, counts: normalizedCounts, eliminatedCandidateIds, winnerCandidateId: null };
 }

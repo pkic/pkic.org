@@ -56,11 +56,39 @@ describe("Membership workflow settings", () => {
     expect(body.consultationWindowDays).toBe(10);
     expect(body.ecReviewWindowDays).toBe(7);
 
-    const rows = await queryAll<{ consultation_window_days: number }>(
+    const rows = await queryAll<{ consultation_window_days: number; updated_by_user_id: string | null }>(
       env.DB,
-      "SELECT consultation_window_days FROM membership_settings WHERE id = 'default'",
+      "SELECT consultation_window_days, updated_by_user_id FROM membership_settings WHERE id = 'default'",
     );
     expect(rows[0].consultation_window_days).toBe(10);
+    expect(rows[0].updated_by_user_id).toBe(adminId);
+    expect(
+      await queryAll<{ actor_id: string | null }>(
+        env.DB,
+        "SELECT actor_id FROM audit_log WHERE action = 'membership_settings_updated'",
+      ),
+    ).toEqual([{ actor_id: adminId }]);
+  });
+
+  it("keeps API-key audit identity out of the nullable settings updater foreign key", async () => {
+    const response = await call(env.ADMIN_API_KEY ?? "test-admin-key", "/api/v1/admin/membership-settings", {
+      method: "PATCH",
+      body: JSON.stringify({ consultationWindowDays: 12 }),
+    });
+    expect(response.status).toBe(200);
+
+    expect(
+      await queryAll<{ consultation_window_days: number; updated_by_user_id: string | null }>(
+        env.DB,
+        "SELECT consultation_window_days, updated_by_user_id FROM membership_settings WHERE id = 'default'",
+      ),
+    ).toEqual([{ consultation_window_days: 12, updated_by_user_id: null }]);
+    expect(
+      await queryAll<{ actor_id: string | null }>(
+        env.DB,
+        "SELECT actor_id FROM audit_log WHERE action = 'membership_settings_updated'",
+      ),
+    ).toEqual([{ actor_id: "api-key" }]);
   });
 
   it("resetDb() does not wipe the singleton settings row (it is system reference data)", async () => {

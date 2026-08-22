@@ -8,9 +8,16 @@
  * so no due-work-side change was needed for §9.1 here beyond the
  * enqueue-only fix below.
  */
-import { prepareQueueEmailStatement } from "../email/outbox";
+import { prepareBulkQueueEmailChunkStatements, type BulkEmailQueueRow } from "../email/outbox";
+import { hasD1QueryCapacity, type D1QueryBudget } from "../db/query-budget";
 import { nowIso } from "../utils/time";
-import { closeDueVotes, listPendingForumVoteNotifications } from "./votes";
+import { sha256Hex } from "../utils/crypto";
+import {
+  closeDueVotes,
+  listPendingForumVoteNotificationIntents,
+  prepareMarkVoteNotificationIntentsQueued,
+  type PreparedVoteNotificationDelivery,
+} from "./votes";
 import type { DatabaseLike, Env } from "../types";
 
 export interface VotesDueWorkResult {
@@ -20,47 +27,77 @@ export interface VotesDueWorkResult {
   delegateNoticesQueued: number;
 }
 
-export async function runVotesDueWork(db: DatabaseLike, env: Env): Promise<VotesDueWorkResult> {
-  const result = await closeDueVotes(db);
-  const notificationLimit = Math.max(1, Number.parseInt(env.SCHEDULED_VOTE_NOTIFICATION_LIMIT ?? "100", 10) || 100);
-  const pending = await listPendingForumVoteNotifications(db, notificationLimit);
+export async function runVotesDueWork(
+  db: DatabaseLike,
+  env: Env,
+  transitionLimit = 50,
+  d1QueryBudget?: D1QueryBudget,
+): Promise<VotesDueWorkResult> {
+  const result = await closeDueVotes(db, transitionLimit, d1QueryBudget);
+  const parsedNotificationLimit = Number.parseInt(env.SCHEDULED_VOTE_NOTIFICATION_LIMIT ?? "100", 10);
+  const configuredNotificationLimit = Math.min(
+    500,
+    Math.max(0, Number.isFinite(parsedNotificationLimit) ? parsedNotificationLimit : 100),
+  );
+  const budgetNotificationLimit = d1QueryBudget
+    ? Math.floor(Math.max(0, d1QueryBudget.remainingQueries() - 1) / 2)
+    : configuredNotificationLimit;
+  const notificationLimit = Math.min(configuredNotificationLimit, budgetNotificationLimit);
+  if (notificationLimit < 1 || !hasD1QueryCapacity(d1QueryBudget, 1)) {
+    return {
+      opened: result.opened.length,
+      closed: result.closed.length,
+      roundsAdvanced: result.roundsAdvanced.length,
+      delegateNoticesQueued: 0,
+    };
+  }
+  const pending = await listPendingForumVoteNotificationIntents(db, notificationLimit);
   const queuedAt = nowIso();
-  const statements = pending.flatMap((recipient) => {
-    const email = prepareQueueEmailStatement(
-      db,
-      {
-        templateKey: "forum-vote-delegate-notify",
-        recipientUserId: recipient.delegateUserId,
-        recipientEmail: recipient.delegateEmail,
-        messageType: "transactional",
-        subject: `Forum vote open: ${recipient.voteTitle}`,
-        data: {
-          delegateName: recipient.delegateName,
-          organizationName: recipient.organizationName,
-          voteTitle: recipient.voteTitle,
-          closesAt: recipient.closesAt,
-          voteUrl: `/portal/votes/${recipient.voteId}`,
-        },
-      },
-      queuedAt,
-    );
-    return [
-      email.statement,
-      db
-        .prepare(
-          `INSERT INTO vote_notification_deliveries
-             (vote_id, round, organization_id, delegate_user_id, queued_at)
-           VALUES (?, ?, ?, ?, ?)`,
-        )
-        .bind(recipient.voteId, recipient.round, recipient.organizationId, recipient.delegateUserId, queuedAt),
-    ];
-  });
-  if (statements.length > 0) await db.batch(statements);
+  const preparedRecipients = await Promise.all(
+    pending.map(async (recipient) => {
+      const operationKey = `forum-vote-delegate-notify:${recipient.voteId}:${recipient.round}:${recipient.organizationId}`;
+      return { recipient, operationKey, outboxId: (await sha256Hex(operationKey)).slice(0, 32) };
+    }),
+  );
+  const emailRows: BulkEmailQueueRow[] = preparedRecipients.map(({ recipient, operationKey, outboxId }) => ({
+    outboxId,
+    idempotencyKey: operationKey,
+    templateKey: "forum-vote-delegate-notify",
+    recipientUserId: recipient.delegateUserId,
+    recipientEmail: recipient.delegateEmail,
+    messageType: "transactional",
+    subject: `Forum vote open: ${recipient.voteTitle}`,
+    data: {
+      delegateName: recipient.delegateName,
+      organizationName: recipient.organizationName,
+      voteTitle: recipient.voteTitle,
+      closesAt: recipient.closesAt,
+      voteUrl: `/portal/votes/${recipient.voteId}`,
+    },
+  }));
+  const deliveries: PreparedVoteNotificationDelivery[] = preparedRecipients.map(
+    ({ recipient, operationKey, outboxId }) => ({
+      voteId: recipient.voteId,
+      round: recipient.round,
+      organizationId: recipient.organizationId,
+      outboxId,
+      idempotencyKey: operationKey,
+    }),
+  );
+  const emailStatements = prepareBulkQueueEmailChunkStatements(db, emailRows, queuedAt).map((chunk) => chunk.statement);
+  const markStatements = prepareMarkVoteNotificationIntentsQueued(db, deliveries, queuedAt);
+  let delegateNoticesQueued = 0;
+  if (emailStatements.length + markStatements.length > 0) {
+    const batchResults = await db.batch([...emailStatements, ...markStatements]);
+    delegateNoticesQueued = batchResults
+      .slice(emailStatements.length)
+      .reduce((total, result) => total + Number(result.meta?.changes ?? 0), 0);
+  }
 
   return {
     opened: result.opened.length,
     closed: result.closed.length,
     roundsAdvanced: result.roundsAdvanced.length,
-    delegateNoticesQueued: pending.length,
+    delegateNoticesQueued,
   };
 }

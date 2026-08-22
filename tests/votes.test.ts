@@ -158,6 +158,17 @@ async function assignContextualRole(
     .run();
 }
 
+async function automaticAuditActionsForVote(voteId: string): Promise<Array<{ action: string; actor_type: string }>> {
+  return queryAll<{ action: string; actor_type: string }>(
+    env.DB,
+    `SELECT action, actor_type
+     FROM audit_log
+     WHERE entity_type = 'vote' AND entity_id = ? AND action LIKE 'vote_%_automatically'
+     ORDER BY action ASC`,
+    voteId,
+  );
+}
+
 describe("Voting system", () => {
   let adminToken: string;
   let adminId: string;
@@ -191,6 +202,130 @@ describe("Voting system", () => {
     const body = (await res.json()) as { vote: { id: string; status: string; slug: string } };
     expect(body.vote.status).toBe("open");
     expect(body.vote.slug).toBe("adopt-new-bylaws");
+  });
+
+  it("keeps API-key audit identity separate from nullable vote creator and nominator users", async () => {
+    const organizationId = await insertOrganization("API Key Delegate Org");
+    const delegateUserId = await insertMemberUser("A", organizationId);
+    await setOrgContacts(organizationId, delegateUserId, delegateUserId);
+    const closesAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+    const response = await call(env.ADMIN_API_KEY ?? "test-admin-key", "/api/v1/admin/votes", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "API Key Election",
+        voteType: "election",
+        scopeType: "forum",
+        thresholdType: "simple_majority",
+        closesAt,
+        candidates: [{ name: "Alice" }, { name: "Bob" }],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const { vote } = (await response.json()) as { vote: { id: string } };
+    expect(
+      await queryAll<{ created_by_user_id: string | null }>(
+        env.DB,
+        "SELECT created_by_user_id FROM votes WHERE id = ?",
+        vote.id,
+      ),
+    ).toEqual([{ created_by_user_id: null }]);
+    expect(
+      await queryAll<{ nominated_by_user_id: string | null }>(
+        env.DB,
+        "SELECT nominated_by_user_id FROM vote_candidates WHERE vote_id = ? ORDER BY sort_order",
+        vote.id,
+      ),
+    ).toEqual([{ nominated_by_user_id: null }, { nominated_by_user_id: null }]);
+    expect(
+      await queryAll<{ actor_id: string | null }>(
+        env.DB,
+        "SELECT actor_id FROM audit_log WHERE action = 'vote_created' AND entity_id = ?",
+        vote.id,
+      ),
+    ).toEqual([{ actor_id: "api-key" }]);
+    expect(
+      await queryAll<{ delegate_user_id: string; queued_outbox_id: string | null }>(
+        env.DB,
+        "SELECT delegate_user_id, queued_outbox_id FROM vote_delegate_notification_intents WHERE vote_id = ?",
+        vote.id,
+      ),
+    ).toEqual([{ delegate_user_id: delegateUserId, queued_outbox_id: null }]);
+  });
+
+  it("pages, searches, filters, and sorts the admin ballot audit in D1", async () => {
+    const closesAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const createResponse = await call(adminToken, "/api/v1/admin/votes", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Bounded ballot audit",
+        voteType: "motion",
+        scopeType: "forum",
+        thresholdType: "simple_majority",
+        closesAt,
+      }),
+    });
+    const { vote } = (await createResponse.json()) as { vote: { id: string } };
+    const voters = await Promise.all([
+      insertUser("ballot-a@example.test"),
+      insertUser("ballot-b@example.test"),
+      insertUser("ballot-c@example.test"),
+    ]);
+    const ballotIds = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO vote_ballots (id, vote_id, user_id, organization_id, choice, round, submitted_at)
+         VALUES (?, ?, ?, NULL, 'in_favor', 1, '2026-01-01T00:00:00.000Z')`,
+      ).bind(ballotIds[0], vote.id, voters[0]),
+      env.DB.prepare(
+        `INSERT INTO vote_ballots (id, vote_id, user_id, organization_id, choice, round, submitted_at)
+         VALUES (?, ?, ?, NULL, 'opposed', 1, '2026-01-01T00:01:00.000Z')`,
+      ).bind(ballotIds[1], vote.id, voters[1]),
+      env.DB.prepare(
+        `INSERT INTO vote_ballots (id, vote_id, user_id, organization_id, choice, round, submitted_at)
+         VALUES (?, ?, ?, NULL, 'in_favor', 2, '2026-01-01T00:02:00.000Z')`,
+      ).bind(ballotIds[2], vote.id, voters[2]),
+    ]);
+
+    const firstPage = await call(adminToken, `/api/v1/admin/votes/${vote.id}/ballots?limit=2&offset=0`);
+    expect(firstPage.status).toBe(200);
+    await expect(firstPage.json()).resolves.toMatchObject({
+      ballots: [{ id: ballotIds[0] }, { id: ballotIds[1] }],
+      page: { limit: 2, offset: 0, total: 3, hasMore: true },
+    });
+
+    const finalPage = await call(adminToken, `/api/v1/admin/votes/${vote.id}/ballots?limit=2&offset=2`);
+    await expect(finalPage.json()).resolves.toMatchObject({
+      ballots: [{ id: ballotIds[2] }],
+      page: { limit: 2, offset: 2, total: 3, hasMore: false },
+    });
+
+    const searched = await call(adminToken, `/api/v1/admin/votes/${vote.id}/ballots?q=opposed`);
+    await expect(searched.json()).resolves.toMatchObject({ ballots: [{ id: ballotIds[1] }], page: { total: 1 } });
+
+    const roundTwo = await call(adminToken, `/api/v1/admin/votes/${vote.id}/ballots?round=2`);
+    await expect(roundTwo.json()).resolves.toMatchObject({ ballots: [{ id: ballotIds[2] }], page: { total: 1 } });
+
+    const descending = await call(adminToken, `/api/v1/admin/votes/${vote.id}/ballots?sort=-submittedAt`);
+    await expect(descending.json()).resolves.toMatchObject({
+      ballots: [{ id: ballotIds[2] }, { id: ballotIds[1] }, { id: ballotIds[0] }],
+    });
+
+    const invalidSort = await call(adminToken, `/api/v1/admin/votes/${vote.id}/ballots?sort=unknown`);
+    expect(invalidSort.status).toBe(400);
+
+    const plan = await queryAll<{ detail: string }>(
+      env.DB,
+      `EXPLAIN QUERY PLAN
+       SELECT id, user_id, organization_id, choice, round, submitted_at
+       FROM vote_ballots
+       WHERE vote_id = ?
+       ORDER BY round ASC, submitted_at ASC, id ASC
+       LIMIT ? OFFSET ?`,
+      [vote.id, 2, 0],
+    );
+    expect(plan.some((row) => row.detail.includes("idx_vote_ballots_vote_audit_page"))).toBe(true);
   });
 
   it("election votes require >=2 candidates, and successive_elimination requires >=3", async () => {
@@ -282,6 +417,62 @@ describe("Voting system", () => {
     } finally {
       await env.DB.prepare("DROP TRIGGER IF EXISTS reject_vote_created_audit").run();
     }
+  });
+
+  it("returns a CAS conflict when an admin update races with a claimed lifecycle transition", async () => {
+    const createRes = await call(adminToken, "/api/v1/admin/votes", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Claimed Vote",
+        voteType: "motion",
+        scopeType: "forum",
+        thresholdType: "simple_majority",
+        closesAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      }),
+    });
+    const { vote } = (await createRes.json()) as { vote: { id: string } };
+    await env.DB.prepare(
+      `UPDATE votes
+       SET transition_processing_token = ?, transition_lease_expires_at = ?
+       WHERE id = ?`,
+    )
+      .bind(crypto.randomUUID(), new Date(Date.now() + 60_000).toISOString(), vote.id)
+      .run();
+
+    const updateRes = await call(adminToken, `/api/v1/admin/votes/${vote.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ title: "Must Not Win The Race" }),
+    });
+
+    expect(updateRes.status).toBe(409);
+    expect((await updateRes.json()) as { error: { code: string } }).toMatchObject({
+      error: { code: "VOTE_CHANGED" },
+    });
+    const visibilityRes = await call(adminToken, `/api/v1/admin/votes/${vote.id}/visibility`, {
+      method: "PATCH",
+      body: JSON.stringify({ visibility: "public" }),
+    });
+    expect(visibilityRes.status).toBe(409);
+    expect((await visibilityRes.json()) as { error: { code: string } }).toMatchObject({
+      error: { code: "VOTE_CHANGED" },
+    });
+    await expect(queryAll<{ title: string }>(env.DB, "SELECT title FROM votes WHERE id = ?", vote.id)).resolves.toEqual(
+      [{ title: "Claimed Vote" }],
+    );
+    await expect(
+      queryAll(
+        env.DB,
+        "SELECT id FROM audit_log WHERE entity_type = 'vote' AND entity_id = ? AND action = 'vote_updated'",
+        vote.id,
+      ),
+    ).resolves.toHaveLength(0);
+    await expect(
+      queryAll(
+        env.DB,
+        "SELECT id FROM audit_log WHERE entity_type = 'vote' AND entity_id = ? AND action = 'vote_visibility_updated'",
+        vote.id,
+      ),
+    ).resolves.toHaveLength(0);
   });
 
   it("a WG chair (context-scoped votes:create) can create a vote for their own WG but not another WG", async () => {
@@ -434,7 +625,107 @@ describe("Voting system", () => {
     expect(memberRes.status).toBe(200);
   });
 
+  it("rejects a ballot after closes_at even while the lifecycle status still says open", async () => {
+    const wgId = await insertWorkingGroup("Elapsed Ballot WG", "elapsed-ballot-wg");
+    const voterId = await insertMemberUser("F");
+    await insertWgMembership(wgId, voterId);
+    const createRes = await call(adminToken, "/api/v1/admin/votes", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Elapsed Ballot",
+        voteType: "motion",
+        scopeType: "working_group",
+        scopeId: wgId,
+        thresholdType: "simple_majority",
+        closesAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      }),
+    });
+    const { vote } = (await createRes.json()) as { vote: { id: string } };
+    await env.DB.prepare("UPDATE votes SET closes_at = ? WHERE id = ?")
+      .bind(new Date(Date.now() - 1000).toISOString(), vote.id)
+      .run();
+
+    const voterToken = await createMemberSession(env.DB, voterId, "elapsed-ballot-token");
+    const ballotRes = await call(voterToken, `/api/v1/portal/votes/${vote.id}/ballots`, {
+      method: "POST",
+      body: JSON.stringify({ choice: "in_favor" }),
+    });
+
+    expect(ballotRes.status).toBe(409);
+    expect((await ballotRes.json()) as { error: { code: string } }).toMatchObject({
+      error: { code: "VOTE_NOT_OPEN" },
+    });
+    await expect(queryAll(env.DB, "SELECT id FROM vote_ballots WHERE vote_id = ?", vote.id)).resolves.toHaveLength(0);
+  });
+
+  it("rejects a ballot after the close transition claims the tally snapshot", async () => {
+    const wgId = await insertWorkingGroup("Claimed Ballot WG", "claimed-ballot-wg");
+    const voterId = await insertMemberUser("F");
+    await insertWgMembership(wgId, voterId);
+    const createRes = await call(adminToken, "/api/v1/admin/votes", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Claimed Ballot",
+        voteType: "motion",
+        scopeType: "working_group",
+        scopeId: wgId,
+        thresholdType: "simple_majority",
+        closesAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      }),
+    });
+    const { vote } = (await createRes.json()) as { vote: { id: string } };
+    await env.DB.prepare(
+      `UPDATE votes
+       SET transition_processing_token = ?, transition_lease_expires_at = ?,
+           transition_revision = transition_revision + 1
+       WHERE id = ?`,
+    )
+      .bind(crypto.randomUUID(), new Date(Date.now() + 60_000).toISOString(), vote.id)
+      .run();
+
+    const voterToken = await createMemberSession(env.DB, voterId, "claimed-ballot-token");
+    const ballotRes = await call(voterToken, `/api/v1/portal/votes/${vote.id}/ballots`, {
+      method: "POST",
+      body: JSON.stringify({ choice: "in_favor" }),
+    });
+
+    expect(ballotRes.status).toBe(409);
+    expect((await ballotRes.json()) as { error: { code: string } }).toMatchObject({
+      error: { code: "VOTE_CHANGED" },
+    });
+    await expect(queryAll(env.DB, "SELECT id FROM vote_ballots WHERE vote_id = ?", vote.id)).resolves.toHaveLength(0);
+  });
+
   // ── Tallying / closing ────────────────────────────────────────────────
+
+  it("opens a scheduled vote with one system audit action", async () => {
+    const createRes = await call(adminToken, "/api/v1/admin/votes", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Scheduled Automatic Open",
+        voteType: "motion",
+        scopeType: "forum",
+        thresholdType: "simple_majority",
+        opensAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        closesAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+      }),
+    });
+    const { vote } = (await createRes.json()) as { vote: { id: string; status: string } };
+    expect(vote.status).toBe("scheduled");
+    await env.DB.prepare("UPDATE votes SET opens_at = ? WHERE id = ?")
+      .bind(new Date(Date.now() - 1000).toISOString(), vote.id)
+      .run();
+
+    const result = await closeDueVotes(env.DB);
+
+    expect(result.opened).toEqual([vote.id]);
+    await expect(
+      queryAll<{ status: string }>(env.DB, "SELECT status FROM votes WHERE id = ?", vote.id),
+    ).resolves.toEqual([{ status: "open" }]);
+    await expect(automaticAuditActionsForVote(vote.id)).resolves.toEqual([
+      { action: "vote_opened_automatically", actor_type: "system" },
+    ]);
+  });
 
   it("closeDueVotes finalizes a simple_majority motion as passed or failed", async () => {
     const wgId = await insertWorkingGroup("Tally WG", "tally-wg");
@@ -482,6 +773,9 @@ describe("Voting system", () => {
     const result = JSON.parse(rows[0].result_json);
     expect(result.outcome).toBe("passed");
     expect(result.counts).toEqual({ in_favor: 2, opposed: 1, abstain: 0 });
+    await expect(automaticAuditActionsForVote(vote.id)).resolves.toEqual([
+      { action: "vote_closed_automatically", actor_type: "system" },
+    ]);
   });
 
   it("successive_elimination election advances a round when nobody has a majority, then closes with a winner", async () => {
@@ -538,6 +832,9 @@ describe("Voting system", () => {
     );
     expect(afterRound1[0].status).toBe("open");
     expect(afterRound1[0].current_round).toBe(2);
+    await expect(automaticAuditActionsForVote(vote.id)).resolves.toEqual([
+      { action: "vote_round_advanced_automatically", actor_type: "system" },
+    ]);
 
     const eliminated = await queryAll<{ eliminated_round: number | null }>(
       env.DB,
@@ -568,6 +865,10 @@ describe("Voting system", () => {
     expect(final[0].status).toBe("closed");
     const result = JSON.parse(final[0].result_json);
     expect(result.winnerCandidateId).toBe(alice.id);
+    await expect(automaticAuditActionsForVote(vote.id)).resolves.toEqual([
+      { action: "vote_closed_automatically", actor_type: "system" },
+      { action: "vote_round_advanced_automatically", actor_type: "system" },
+    ]);
   });
 
   // ── Vote proposals (Path B — endorsement) ─────────────────────────────

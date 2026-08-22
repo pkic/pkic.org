@@ -19,7 +19,7 @@ export const OrganizationAddRepresentative = openApiRoute(
 
     const organizationId = data.params.id;
     const body = data.body;
-    const representative = await addOrganizationRepresentative(requestDb(c), admin.id, organizationId, body);
+    const representative = await addOrganizationRepresentative(requestDb(c), admin, organizationId, body);
 
     return json({ representative }, 201);
   },

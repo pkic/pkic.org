@@ -112,7 +112,7 @@ export async function updateManagedRegistration(
     const result = input.isAdminManageJwt
       ? await updateRegistrationByIdWithEmailChange(
           db,
-          { ...updatePayload, registrationId: current.id, emailChange },
+          { ...updatePayload, eventId: current.event_id, registrationId: current.id, emailChange },
           "admin",
         )
       : await updateRegistrationByManageTokenWithEmailChange(db, {
@@ -127,7 +127,7 @@ export async function updateManagedRegistration(
   const result = input.isAdminManageJwt
     ? await updateRegistrationByIdWithNotification(
         db,
-        { ...updatePayload, registrationId: current.id, notification },
+        { ...updatePayload, eventId: current.event_id, registrationId: current.id, notification },
         "admin",
       )
     : await updateRegistrationByManageTokenWithNotification(db, {

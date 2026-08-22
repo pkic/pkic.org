@@ -4,6 +4,7 @@
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { AppError } from "../../errors";
+import { adminDatabaseUserId } from "../../auth/admin-identity";
 import { eventSponsorTierHasAttendeeAccess } from "./event-tiers";
 import { getAdminSponsorship, type AdminSponsorshipRow } from "./admin-read-model";
 import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
@@ -15,7 +16,7 @@ import {
   SPONSORSHIP_PIPELINE_STAGES,
   type SponsorshipPipelineStage,
 } from "../../../../assets/shared/schemas/admin-sponsorships";
-import type { DatabaseLike, StatementLike } from "../../types";
+import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
 
 export { SPONSORSHIP_PIPELINE_STAGES };
 export type { SponsorshipPipelineStage };
@@ -36,7 +37,7 @@ export interface CreateAdminSponsorshipInput {
 
 export async function createAdminSponsorship(
   db: DatabaseLike,
-  actorUserId: string,
+  actor: AuthAdmin,
   input: CreateAdminSponsorshipInput,
 ): Promise<{ id: string }> {
   const id = uuid();
@@ -71,11 +72,11 @@ export async function createAdminSponsorship(
         `INSERT INTO sponsorship_events (id, sponsorship_id, from_stage, to_stage, actor_user_id, note, created_at)
          VALUES (?, ?, NULL, 'new_inquiry', ?, 'Created by staff', ?)`,
       )
-      .bind(uuid(), id, actorUserId, now),
+      .bind(uuid(), id, adminDatabaseUserId(actor), now),
     prepareAuditLog(
       db,
       "admin",
-      actorUserId,
+      actor.id,
       "sponsorship_created",
       "sponsorship",
       id,
@@ -206,7 +207,7 @@ export async function advanceSponsorshipStage(
   params: {
     id: string;
     toStage: string;
-    actorUserId: string;
+    actor: AuthAdmin;
     note: string | null;
     notifications: { appBaseUrl: string; magicLinkTtlMinutes: number };
   },
@@ -244,8 +245,7 @@ export async function advanceSponsorshipStage(
   const now = nowIso();
   const preparedTransition = prepareSponsorshipStageTransition(db, existing, {
     toStage: params.toStage,
-    actorType: "admin",
-    actorUserId: params.actorUserId,
+    actor: params.actor,
     note: params.note,
     auditAction: "sponsorship_stage_advanced",
     now,

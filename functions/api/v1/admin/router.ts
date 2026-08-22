@@ -7,6 +7,7 @@ import {
   serializeAdminSessionCookie,
   signAdminSessionToken,
 } from "../../../_lib/auth/admin";
+import { isUserBackedAuthAdmin } from "../../../_lib/auth/admin-identity";
 import { enforceAdminRouteAuthorization } from "../../../_lib/auth/admin-route-policy";
 import { handleError } from "../../../_lib/http";
 import { REQUEST_DB_CONTEXT_KEY, type RequestDbContext } from "../../../_lib/db/context";
@@ -74,7 +75,15 @@ async function rotateAdminToken(c: Context<RequestDbContext>, sessionDb: Databas
   const state = sessionDb.getBookmark?.();
   const admin = getCachedAdminForRequest(c.req.raw);
   const transport = getCachedAdminAuthTransport(c.req.raw);
-  if (!state || !admin?.sessionId || !admin.expiresAt || !c.env.INTERNAL_SIGNING_SECRET || transport === "api-key") {
+  if (
+    !state ||
+    !admin ||
+    !isUserBackedAuthAdmin(admin) ||
+    !admin.sessionId ||
+    !admin.expiresAt ||
+    !c.env.INTERNAL_SIGNING_SECRET ||
+    transport === "api-key"
+  ) {
     return;
   }
 
@@ -121,7 +130,8 @@ async function useRequestScopedD1Session(c: Context<RequestDbContext>, next: Nex
     enforceAdminAuthorization(c);
   }
   // Validate state bookmark: must be a reasonable string (null is ok for default session)
-  const bookmark = admin.state ? (admin.state.length > 0 && admin.state.length < 1024 ? admin.state : null) : null;
+  const state = isUserBackedAuthAdmin(admin) ? admin.state : null;
+  const bookmark = state ? (state.length > 0 && state.length < 1024 ? state : null) : null;
   const sessionDb = readReplicaDb(primaryDb, bookmark);
   c.set(REQUEST_DB_CONTEXT_KEY, sessionDb);
   await next();

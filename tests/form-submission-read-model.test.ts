@@ -68,7 +68,7 @@ async function insertRegistration(options: {
   userId: string;
   status: "registered" | "cancelled";
   attendanceType: "virtual" | "in_person";
-  answer: string;
+  answer: unknown;
 }): Promise<string> {
   const id = crypto.randomUUID();
   await env.DB.prepare(
@@ -121,7 +121,7 @@ async function backfillSourceAnswer(options: {
   contextType: "registration" | "proposal";
   contextRef: string;
   fieldKey: string;
-  answer: string;
+  answer: unknown;
 }): Promise<void> {
   const submissionId = crypto.randomUUID();
   await env.DB.batch([
@@ -308,6 +308,70 @@ describe("form-submission read-model population", () => {
       status: "accepted",
       q: "needle",
     });
+  });
+
+  it("preserves boolean labels and skips malformed legacy answer JSON", async () => {
+    const formId = await insertForm("boolean-population", "event_registration", "food");
+    const trueUser = await insertUser("boolean-true@example.test");
+    const falseUser = await insertUser("boolean-false@example.test");
+    const backfilledUser = await insertUser("boolean-backfilled@example.test");
+    const malformedUser = await insertUser("boolean-malformed@example.test");
+
+    await insertRegistration({
+      eventId,
+      userId: trueUser,
+      status: "registered",
+      attendanceType: "virtual",
+      answer: true,
+    });
+    await insertRegistration({
+      eventId,
+      userId: falseUser,
+      status: "registered",
+      attendanceType: "virtual",
+      answer: false,
+    });
+    const backfilledRegistration = await insertRegistration({
+      eventId,
+      userId: backfilledUser,
+      status: "registered",
+      attendanceType: "virtual",
+      answer: "replaced",
+    });
+    await backfillSourceAnswer({
+      formId,
+      contextType: "registration",
+      contextRef: backfilledRegistration,
+      fieldKey: "food",
+      answer: true,
+    });
+    const malformedRegistration = await insertRegistration({
+      eventId,
+      userId: malformedUser,
+      status: "registered",
+      attendanceType: "virtual",
+      answer: true,
+    });
+    await env.DB.prepare("UPDATE registrations SET custom_answers_json = ? WHERE id = ?")
+      .bind("{malformed-json", malformedRegistration)
+      .run();
+
+    const response = await adminGet(
+      "/api/v1/admin/forms/boolean-population/submissions/stats?eventSlug=pqc-2026&status=registered",
+    );
+    expect(response.status).toBe(200);
+    const result = adminFormSubmissionStatsResponseSchema.parse(await response.json());
+    expect(result.total).toBe(4);
+    expect(result.stats).toEqual([
+      expect.objectContaining({
+        fieldKey: "food",
+        totalAnswers: 3,
+        entries: [
+          { label: "Yes", count: 2, percent: 67, weight: 1 },
+          { label: "No", count: 1, percent: 33, weight: 0.5 },
+        ],
+      }),
+    ]);
   });
 
   it("rejects an event slug that conflicts with an event-scoped form", async () => {

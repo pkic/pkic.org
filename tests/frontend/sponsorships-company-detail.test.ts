@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
+import { sponsorshipsListResponseSchema } from "../../assets/shared/schemas/admin-sponsorships";
 import {
   companyDetailParams,
   buildCompanySponsorshipsUrl,
@@ -103,5 +104,34 @@ describe("mergeCompanySponsorshipsPage", () => {
     expect(result.sponsorships).toHaveLength(200);
     expect(result.page.total).toBe(250);
     expect(result.page.hasMore).toBe(true);
+  });
+});
+
+describe("company sponsorship response contract", () => {
+  const validResponse = {
+    sponsorships: [sponsorship("00000000-0000-4000-8000-000000000001")],
+    page: { limit: 200, offset: 0, total: 1, hasMore: false },
+  };
+
+  it("accepts the canonical paginated sponsorship response", () => {
+    expect(sponsorshipsListResponseSchema.safeParse(validResponse).success).toBe(true);
+  });
+
+  it("rejects a malformed page envelope", () => {
+    expect(
+      sponsorshipsListResponseSchema.safeParse({
+        ...validResponse,
+        page: { limit: 200, offset: -1, total: 1, hasMore: false },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a malformed sponsorship row", () => {
+    expect(
+      sponsorshipsListResponseSchema.safeParse({
+        ...validResponse,
+        sponsorships: [{ ...validResponse.sponsorships[0], pipelineStage: "not-a-stage" }],
+      }).success,
+    ).toBe(false);
   });
 });

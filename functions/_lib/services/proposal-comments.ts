@@ -4,6 +4,7 @@ import type {
   ProposalInternalComment,
 } from "../../../assets/shared/schemas/proposal-comments";
 import { getProposalAccessForEvent } from "../auth/proposal-access";
+import { requireAdminDatabaseUserId } from "../auth/admin-identity";
 import { queryPage } from "../db/pagination";
 import { first } from "../db/queries";
 import { buildD1TextSearchFilter } from "../db/search";
@@ -55,21 +56,16 @@ export async function listProposalComments(
     "pc.created_at DESC",
     "pc.id ASC",
   );
-  const { rows, total } = await queryPage<ProposalInternalComment>(
-    db,
-    {
-      sql: `SELECT ${COMMENT_COLUMNS}
+  const { rows, total } = await queryPage<ProposalInternalComment>(db, {
+    sql: `SELECT ${COMMENT_COLUMNS}
             ${from}
             WHERE pc.proposal_id = ? ${searchSql}
-            ${orderBy}
-            LIMIT ? OFFSET ?`,
-      bindings: [...bindings, query.limit, query.offset],
-    },
-    {
-      sql: `SELECT COUNT(*) AS total ${from} WHERE pc.proposal_id = ? ${searchSql}`,
-      bindings,
-    },
-  );
+            `,
+    bindings,
+    orderBy,
+    limit: query.limit,
+    offset: query.offset,
+  });
   return { comments: rows, page: buildPageInfo(query.limit, query.offset, total, rows.length) };
 }
 
@@ -79,6 +75,7 @@ export async function addProposalComment(
   proposalId: string,
   comment: string,
 ): Promise<ProposalInternalComment> {
+  const authorUserId = requireAdminDatabaseUserId(actor);
   await requireProposalCommentAccess(db, actor, proposalId);
   const id = uuid();
   const now = nowIso();
@@ -89,7 +86,7 @@ export async function addProposalComment(
            id, proposal_id, author_user_id, comment, created_at, updated_at
          ) VALUES (?, ?, ?, ?, ?, ?)`,
       )
-      .bind(id, proposalId, actor.id, comment, now, now),
+      .bind(id, proposalId, authorUserId, comment, now, now),
     prepareAuditLog(db, "admin", actor.id, "proposal_internal_comment_added", "proposal", proposalId, {
       commentId: id,
     }),

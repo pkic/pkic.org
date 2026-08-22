@@ -5,6 +5,7 @@ import {
   type AdminBadgeRolePatch,
 } from "../../../../assets/shared/schemas/participant-roles";
 import { requirePermission } from "../../auth/permissions";
+import { requireAdminDatabaseUserId } from "../../auth/admin-identity";
 import { batchFirst, batchRows } from "../../db/pagination";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike } from "../../types";
@@ -12,14 +13,6 @@ import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
 import { getEventBySlug } from "../events";
 import { prepareBadgeRenderJobsForUser } from "../badge-render-job-statements";
-
-const ROLE_PRIORITY: Record<string, number> = {
-  speaker: 1,
-  moderator: 2,
-  panelist: 3,
-  organizer: 4,
-  staff: 5,
-};
 
 interface RegistrationRow {
   id: string;
@@ -36,8 +29,7 @@ function toAdminBadgeRole(value: string | null | undefined): AdminBadgeRole | nu
 }
 
 function resolveAutoRole(rows: ParticipantRow[]): AdminBadgeRole {
-  const selected = [...rows].sort((a, b) => (ROLE_PRIORITY[a.role] ?? 99) - (ROLE_PRIORITY[b.role] ?? 99))[0]?.role;
-  return toAdminBadgeRole(selected) ?? "attendee";
+  return toAdminBadgeRole(rows[0]?.role) ?? "attendee";
 }
 
 async function loadBadgeRole(db: DatabaseLike, eventId: string, registrationId: string) {
@@ -54,12 +46,9 @@ async function loadBadgeRole(db: DatabaseLike, eventId: string, registrationId: 
       .prepare(
         `SELECT ep.role
            FROM registrations r
-           JOIN event_participants ep ON ep.event_id = r.event_id AND ep.user_id = r.user_id
-           LEFT JOIN session_proposals sp
-             ON ep.source_type = 'proposal' AND ep.source_ref = sp.id
+           JOIN event_participant_badge_roles ep ON ep.event_id = r.event_id AND ep.user_id = r.user_id
           WHERE r.id = ? AND r.event_id = ?
-            AND ep.role != 'attendee' AND ep.status = 'active'
-            AND (ep.source_type != 'proposal' OR sp.status = 'accepted')`,
+          ORDER BY ep.priority ASC, ep.role ASC`,
       )
       .bind(registrationId, eventId),
   ]);
@@ -98,6 +87,7 @@ export async function setAdminRegistrationBadgeRole(
   requirePermission(actor, "events:manage", { type: "event", id: event.id });
   const current = await loadBadgeRole(db, event.id, input.registrationId);
   const newRole = input.patch.role && input.patch.role !== "attendee" ? input.patch.role : null;
+  const setterUserId = newRole ? requireAdminDatabaseUserId(actor) : null;
   const at = nowIso();
   const mutation = newRole
     ? db
@@ -108,7 +98,7 @@ export async function setAdminRegistrationBadgeRole(
            ON CONFLICT(registration_id) DO UPDATE SET
              role = excluded.role, set_by_user_id = excluded.set_by_user_id, updated_at = excluded.updated_at`,
         )
-        .bind(current.registration.id, newRole, actor.id, at, at)
+        .bind(current.registration.id, newRole, setterUserId, at, at)
     : db
         .prepare("DELETE FROM registration_badge_role_overrides WHERE registration_id = ?")
         .bind(current.registration.id);

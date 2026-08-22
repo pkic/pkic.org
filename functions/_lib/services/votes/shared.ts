@@ -57,6 +57,9 @@ export interface VoteRow {
   opens_at: string;
   closes_at: string;
   current_round: number;
+  transition_revision: number;
+  transition_processing_token: string | null;
+  transition_lease_expires_at: string | null;
   status: VoteStatus;
   result_json: string | null;
   visibility: VoteVisibility;
@@ -68,8 +71,9 @@ export interface VoteRow {
 /** Canonical explicit projection for every query that hydrates a complete VoteRow. */
 export const VOTE_ROW_COLUMNS =
   "id, slug, title, description, vote_type, scope_type, scope_id, created_by_user_id, proposed_by_user_id, " +
-  "eligible_categories, threshold_type, opens_at, closes_at, current_round, status, result_json, visibility, " +
-  "public_detail_level, created_at, updated_at";
+  "eligible_categories, threshold_type, opens_at, closes_at, current_round, transition_revision, " +
+  "transition_processing_token, transition_lease_expires_at, status, result_json, visibility, public_detail_level, " +
+  "created_at, updated_at";
 
 export interface CandidateRow {
   id: string;
@@ -82,6 +86,9 @@ export interface CandidateRow {
   eliminated_round: number | null;
   created_at: string;
 }
+
+export const VOTE_CANDIDATE_COLUMNS =
+  "id, vote_id, user_id, candidate_name, candidate_bio, nominated_by_user_id, sort_order, eliminated_round, created_at";
 
 export function slugify(value: string): string {
   return value
@@ -173,7 +180,7 @@ export function toVoteSummary(row: VoteRow): VoteSummary {
 export async function getCandidates(db: DatabaseLike, voteId: string): Promise<CandidateSummary[]> {
   const rows = await all<CandidateRow>(
     db,
-    `SELECT * FROM vote_candidates WHERE vote_id = ? ORDER BY sort_order ASC, created_at ASC`,
+    `SELECT ${VOTE_CANDIDATE_COLUMNS} FROM vote_candidates WHERE vote_id = ? ORDER BY sort_order ASC, created_at ASC`,
     [voteId],
   );
   return rows.map(toCandidateSummary);
@@ -190,7 +197,10 @@ export async function getCandidatesForVotes(
   const voteFilter = buildD1JsonMembershipFilter("vote_id", voteIds);
   const rows = await all<CandidateRow>(
     db,
-    `SELECT * FROM vote_candidates WHERE ${voteFilter.sql} ORDER BY vote_id, sort_order ASC, created_at ASC`,
+    `SELECT ${VOTE_CANDIDATE_COLUMNS}
+     FROM vote_candidates
+     WHERE ${voteFilter.sql}
+     ORDER BY vote_id, sort_order ASC, created_at ASC`,
     voteFilter.bindings,
   );
   for (const row of rows) {

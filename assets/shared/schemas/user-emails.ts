@@ -1,7 +1,7 @@
 /**
- * Secondary email addresses (`user_emails`) and the user-merge tool.
+ * Secondary email addresses (`user_emails`).
  * Backs `GET/POST /api/v1/admin/users/:userId/emails`,
- * `DELETE .../:emailId`, and `POST /api/v1/admin/users/:userId/merge`.
+ * and `DELETE .../:emailId`.
  */
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
@@ -55,39 +55,5 @@ export const userEmailRemoveRouteSchema = {
   responses: {
     "200": { description: "Secondary email removed." },
     "404": { description: "Secondary email not found for this user." },
-  },
-};
-
-export const userMergeSchema = z.object({ sourceUserId: databaseIdSchema });
-
-export const userMergeResponseSchema = z.object({
-  survivorId: databaseIdSchema,
-  mergedFromUserId: databaseIdSchema,
-  mergedFromEmail: z.string(),
-});
-
-export const userMergeRouteSchema = {
-  tags: ["Users"],
-  summary: "Merge another user account into this one",
-  description:
-    "Reassigns working_group_members/members/user_roles/permission_grants/passkey_credentials from the source " +
-    "account, adds its original email as a secondary email on the survivor, and anonymizes the source account " +
-    "(tagged via users.merged_into_user_id). Registrations, donations, proposals, audit log, and email_outbox " +
-    "entries are deliberately left pointing at the (now-anonymized) source account id, matching the precedent " +
-    "already set by finalizeEmailChange's own registration-only reassignment.",
-  request: {
-    params: z.object({ userId: databaseIdSchema }),
-    body: { content: { "application/json": { schema: userMergeSchema } }, required: true },
-  },
-  responses: {
-    "200": {
-      description: "Accounts merged.",
-      content: { "application/json": { schema: userMergeResponseSchema } },
-    },
-    "404": { description: "Survivor or source user not found." },
-    "409": {
-      description:
-        "Same user given twice, either account is already merged into another, or both accounts hold a membership.",
-    },
   },
 };

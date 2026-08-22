@@ -7,6 +7,7 @@ import { prepareAuditLog } from "./audit";
 import { resolveAppBaseUrl } from "../config";
 import { createDurableJobLease } from "../jobs/lease";
 import type { EventRecord } from "./events";
+import { fetchGravatar } from "./gravatar";
 import { renderAndCacheBadge } from "./og-badge-prerender";
 import { prepareBadgeRenderJob } from "./badge-render-job-statements";
 export { prepareBadgeRenderJobsForUser } from "./badge-render-job-statements";
@@ -173,6 +174,17 @@ export async function processBadgeRenderJobById(
     [jobId, nowIso(), nowIso()],
   );
   return job ? processBadgeRenderJob(db, env, job, render) : true;
+}
+
+/** Seeds an optional first headshot before processing an already-durable initial render intent. */
+export async function seedGravatarAndProcessBadgeRenderJob(
+  db: DatabaseLike,
+  env: Env,
+  payload: { userId: string; email: string; jobId: string },
+  render: BadgeRenderer = renderAndCacheBadge,
+): Promise<boolean> {
+  await fetchGravatar(payload.userId, payload.email, env);
+  return processBadgeRenderJobById(db, env, payload.jobId, render);
 }
 
 export async function processPendingBadgeRenders(

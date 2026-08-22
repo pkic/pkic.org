@@ -17,6 +17,7 @@ import type { EmailContentType, EmailMessageType } from "../../../assets/shared/
 import type { CalendarPayload } from "./outbox-queue";
 import { createDurableJobLease } from "../jobs/lease";
 import { resolveImageAttachmentFormat } from "../utils/image-format";
+import type { AdminEmailOutboxStatus } from "../../../assets/shared/schemas/admin-email-outbox";
 
 export * from "./outbox-queue";
 
@@ -42,7 +43,7 @@ interface OutboxRow {
   message_type: EmailMessageType;
   provider: string;
   provider_message_id: string | null;
-  status: "queued" | "sending" | "sent" | "failed" | "retrying" | "bounced";
+  status: AdminEmailOutboxStatus;
   attempts: number;
   send_after: string;
   last_error: string | null;
@@ -58,15 +59,25 @@ const OUTBOX_ROW_COLUMNS = `id, event_id, template_key, template_version, recipi
   last_error, created_at, updated_at, sent_at, processing_token, lease_expires_at`;
 
 export const EMAIL_OUTBOX_DUE_QUERY = `
-  SELECT ${OUTBOX_ROW_COLUMNS}, send_after AS due_at
+  SELECT ${OUTBOX_ROW_COLUMNS}
     FROM email_outbox
    WHERE status IN ('queued', 'retrying') AND send_after <= ?
-  UNION ALL
-  SELECT ${OUTBOX_ROW_COLUMNS}, lease_expires_at AS due_at
-    FROM email_outbox
-   WHERE status = 'sending' AND lease_expires_at <= ?
-  ORDER BY due_at, created_at, id
+  ORDER BY send_after, created_at, id
   LIMIT ?`;
+
+export const EMAIL_OUTBOX_EXPIRED_LEASE_QUERY = `
+  UPDATE email_outbox
+     SET status = 'delivery_unknown', attempts = attempts + 1,
+         last_error = 'SENDGRID_DELIVERY_UNKNOWN: Send interrupted before its delivery outcome was persisted',
+         processing_token = NULL, lease_expires_at = NULL, updated_at = ?
+   WHERE id IN (
+     SELECT id
+       FROM email_outbox
+      WHERE status = 'sending' AND lease_expires_at <= ?
+      ORDER BY lease_expires_at, created_at, id
+      LIMIT ?
+   )
+     AND status = 'sending' AND lease_expires_at <= ?`;
 
 type ResolvedEmailTemplate = Awaited<ReturnType<typeof resolveTemplate>>;
 
@@ -108,6 +119,17 @@ function outboxRetryAt(attempts: number): string {
   return new Date(Date.now() + delayMs).toISOString();
 }
 
+function outboxErrorMessage(error: unknown): string {
+  const message =
+    error instanceof AppError
+      ? `${error.code}: ${error.message}`
+      : error instanceof Error
+        ? error.message
+        : "Unknown email send error";
+  const details = error instanceof AppError && error.details ? ` | details: ${stringifyJson(error.details)}` : "";
+  return message + details;
+}
+
 function resolveEmailBaseUrl(payload: Record<string, unknown>, env: Env): string {
   if (typeof payload.__baseUrl === "string" && payload.__baseUrl) {
     const explicitBaseUrl = payload.__baseUrl;
@@ -125,11 +147,8 @@ async function claimOutboxForSending(db: DatabaseLike, outboxId: string): Promis
      SET status = 'sending', processing_token = ?, lease_expires_at = ?, updated_at = ?
      WHERE id = ?
        AND send_after <= ?
-       AND (
-         status IN ('queued', 'retrying')
-         OR (status = 'sending' AND lease_expires_at <= ?)
-       )`,
-    [lease.token, lease.expiresAt, lease.claimedAt, outboxId, lease.claimedAt, lease.claimedAt],
+       AND status IN ('queued', 'retrying')`,
+    [lease.token, lease.expiresAt, lease.claimedAt, outboxId, lease.claimedAt],
   );
   return claimed.changes === 1 ? lease.token : null;
 }
@@ -164,14 +183,6 @@ async function markOutboxFailed(
     error instanceof AppError &&
     (error.code === "CAPABILITY_RESOURCE_STALE" || error.code === "CAPABILITY_DESCRIPTOR_INVALID");
   const status = nonRetryable ? "failed" : getOutboxStatusForRetry(attempts);
-  const message =
-    error instanceof AppError
-      ? `${error.code}: ${error.message}`
-      : error instanceof Error
-        ? error.message
-        : "Unknown email send error";
-  const details = error instanceof AppError && error.details ? ` | details: ${stringifyJson(error.details)}` : "";
-
   await run(
     db,
     `UPDATE email_outbox
@@ -181,13 +192,45 @@ async function markOutboxFailed(
     [
       attempts,
       status,
-      message + details,
+      outboxErrorMessage(error),
       status === "retrying" ? outboxRetryAt(attempts) : row.send_after,
       nowIso(),
       row.id,
       processingToken,
     ],
   );
+}
+
+async function markOutboxDeliveryUnknown(
+  db: DatabaseLike,
+  row: OutboxRow,
+  processingToken: string,
+  error: unknown,
+  messageId: string | null | undefined,
+  templateVersion: number,
+): Promise<void> {
+  await run(
+    db,
+    `UPDATE email_outbox
+     SET attempts = ?, status = 'delivery_unknown', template_version = ?,
+         provider_message_id = COALESCE(?, provider_message_id), last_error = ?,
+         processing_token = NULL, lease_expires_at = NULL, updated_at = ?
+     WHERE id = ? AND status = 'sending' AND processing_token = ?`,
+    [
+      row.attempts + 1,
+      templateVersion,
+      messageId ?? null,
+      outboxErrorMessage(error),
+      nowIso(),
+      row.id,
+      processingToken,
+    ],
+  );
+}
+
+async function quarantineExpiredOutboxLeases(db: DatabaseLike, limit: number): Promise<void> {
+  const now = nowIso();
+  await run(db, EMAIL_OUTBOX_EXPIRED_LEASE_QUERY, [now, now, limit, now]);
 }
 
 async function processOutboxRow(
@@ -209,6 +252,9 @@ async function processOutboxRow(
   const processingToken = await claimOutboxForSending(db, row.id);
   if (!processingToken) return false;
 
+  let acceptedMessageId: string | null | undefined;
+  let resolvedTemplateVersion = 0;
+
   try {
     const storedPayload = parseJsonSafe<Record<string, unknown>>(row.payload_json, {});
     const payload = await materializeQueuedCapabilityLinks(db, env, storedPayload);
@@ -220,7 +266,6 @@ async function processOutboxRow(
         ? payload.__adminCampaignBodyContent
         : null;
 
-    let templateVersion = 0;
     let subject: string;
     let contentWithCustom: string;
     let resolvedContentType: EmailContentType;
@@ -232,7 +277,7 @@ async function processOutboxRow(
       resolvedContentType = "markdown";
     } else {
       const template = await resolveTemplateOnce(db, context, row.template_key);
-      templateVersion = template.version;
+      resolvedTemplateVersion = template.version;
       resolvedContentType = template.contentType as EmailContentType;
       const customText =
         typeof payload.__adminCampaignCustomText === "string" ? payload.__adminCampaignCustomText : null;
@@ -308,7 +353,8 @@ async function processOutboxRow(
       ? payload.__bccRecipients.filter((item): item is string => typeof item === "string" && item.includes("@"))
       : undefined;
 
-    const messageId = await sendViaSendgrid(env, {
+    acceptedMessageId = await sendViaSendgrid(env, {
+      outboxId: row.id,
       to: row.recipient_email,
       bcc: bccRecipients,
       subject,
@@ -323,10 +369,16 @@ async function processOutboxRow(
       attachments,
     });
 
-    await markOutboxSent(db, row, processingToken, messageId, templateVersion);
+    await markOutboxSent(db, row, processingToken, acceptedMessageId, resolvedTemplateVersion);
     return true;
   } catch (error) {
-    await markOutboxFailed(db, row, processingToken, error);
+    const deliveryUnknown =
+      acceptedMessageId !== undefined || (error instanceof AppError && error.code === "SENDGRID_DELIVERY_UNKNOWN");
+    if (deliveryUnknown) {
+      await markOutboxDeliveryUnknown(db, row, processingToken, error, acceptedMessageId, resolvedTemplateVersion);
+    } else {
+      await markOutboxFailed(db, row, processingToken, error);
+    }
     throw error;
   }
 }
@@ -374,7 +426,8 @@ export async function processPendingOutbox(
   env: Env,
   limit = 20,
 ): Promise<{ processed: number; failed: number }> {
-  const rows = await all<OutboxRow>(db, EMAIL_OUTBOX_DUE_QUERY, [nowIso(), nowIso(), limit]);
+  await quarantineExpiredOutboxLeases(db, limit);
+  const rows = await all<OutboxRow>(db, EMAIL_OUTBOX_DUE_QUERY, [nowIso(), limit]);
 
   return processInChunks(db, env, rows);
 }
@@ -388,18 +441,16 @@ export async function summarizePendingOutbox(
     `SELECT status, COUNT(*) AS count
      FROM email_outbox
      WHERE send_after <= ?
-       AND (status IN ('queued', 'retrying') OR (status = 'sending' AND lease_expires_at <= ?))
+       AND status IN ('queued', 'retrying')
      GROUP BY status`,
-    [now, now],
+    [now],
   );
 
   const nextRow = await first<{ send_after: string | null }>(
     db,
     `SELECT MIN(send_after) AS send_after
      FROM email_outbox
-     WHERE status IN ('queued', 'retrying')
-        OR (status = 'sending' AND lease_expires_at <= ?)`,
-    [now],
+     WHERE status IN ('queued', 'retrying')`,
   );
 
   return {
@@ -424,9 +475,9 @@ export async function processSelectedOutbox(
     `SELECT ${OUTBOX_ROW_COLUMNS} FROM email_outbox
      WHERE ${idFilter.sql}
        AND send_after <= ?
-       AND (status IN ('queued', 'retrying') OR (status = 'sending' AND lease_expires_at <= ?))
+       AND status IN ('queued', 'retrying')
      ORDER BY created_at ASC`,
-    [...idFilter.bindings, nowIso(), nowIso()],
+    [...idFilter.bindings, nowIso()],
   );
 
   const results = await processInChunks(db, env, rows);
@@ -455,11 +506,11 @@ export async function processPendingOutboxBackground(db: DatabaseLike, env: Env,
 }
 
 /**
- * Resets failed outbox records back to 'retrying' so they can be picked up
- * by processPendingOutbox on the next retry cycle.
+ * Resets failed or delivery-unknown outbox records back to 'retrying' after
+ * an operator has decided that replaying the external side effect is safe.
  *
  * @param db    - D1 database binding
- * @param ids   - Optional list of outbox IDs to reset. If omitted, resets ALL failed rows.
+ * @param ids   - Optional list of outbox IDs to reset. If omitted, resets all failed/unknown rows.
  * @returns     - Number of rows reset.
  */
 export async function resetFailedOutbox(db: DatabaseLike, ids?: string[]): Promise<{ reset: number }> {
@@ -470,7 +521,7 @@ export async function resetFailedOutbox(db: DatabaseLike, ids?: string[]): Promi
       db,
       `UPDATE email_outbox
        SET status = 'retrying', attempts = 0, send_after = ?, updated_at = ?
-       WHERE status = 'failed' AND ${idFilter.sql}`,
+       WHERE status IN ('failed', 'delivery_unknown') AND ${idFilter.sql}`,
       [now, now, ...idFilter.bindings],
     );
     return { reset: result.changes };
@@ -480,7 +531,7 @@ export async function resetFailedOutbox(db: DatabaseLike, ids?: string[]): Promi
     db,
     `UPDATE email_outbox
      SET status = 'retrying', attempts = 0, send_after = ?, updated_at = ?
-     WHERE status = 'failed'`,
+     WHERE status IN ('failed', 'delivery_unknown')`,
     [now, now],
   );
   return { reset: result.changes };

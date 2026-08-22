@@ -7,7 +7,7 @@ import {
   MCP_EXTENSION,
 } from "../functions/_lib/openapi/mcp";
 import type { AuthAdmin } from "../functions/_lib/types";
-import { normalizeMcpOauthScopes } from "../functions/_lib/mcp/oauth";
+import { buildMcpOauthProps, normalizeMcpOauthScopes, parseMcpOauthProps } from "../functions/_lib/mcp/oauth";
 
 const mcpWriteMetadata = {
   expose: true,
@@ -153,6 +153,56 @@ describe("OpenAPI auth decoration", () => {
 });
 
 describe("MCP scope delegation", () => {
+  it("keeps service and user transports in representable, validated states", () => {
+    const serviceActor: AuthAdmin = {
+      identityType: "service",
+      id: "api-key",
+      email: "api-key",
+      role: "admin",
+    };
+    expect(buildMcpOauthProps(serviceActor, ["admin:read"], "api-key")).toEqual({
+      identityType: "service",
+      id: "api-key",
+      email: "api-key",
+      role: "admin",
+      scopes: ["admin:read"],
+      authTransport: "api-key",
+    });
+    expect(() => buildMcpOauthProps(serviceActor, ["admin:read"], "bearer")).toThrowError(
+      expect.objectContaining({ code: "MCP_AUTH_TRANSPORT_INVALID" }),
+    );
+
+    expect(() =>
+      parseMcpOauthProps({
+        identityType: "service",
+        id: "api-key",
+        email: "api-key",
+        role: "admin",
+        scopes: ["admin:read"],
+        authTransport: "api-key",
+        sessionId: "impossible-service-session",
+      }),
+    ).toThrowError(expect.objectContaining({ code: "MCP_AUTH_PROPS_INVALID" }));
+
+    const userActor: AuthAdmin = {
+      identityType: "user",
+      id: "user-1",
+      email: "user@example.test",
+      role: "admin",
+      sessionId: "session-1",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+    };
+    expect(buildMcpOauthProps(userActor, ["admin:read"], "oauth")).toMatchObject({
+      identityType: "user",
+      id: "user-1",
+      authTransport: "oauth",
+      sessionId: "session-1",
+    });
+    expect(() => buildMcpOauthProps(userActor, ["admin:read"], "api-key")).toThrowError(
+      expect.objectContaining({ code: "MCP_AUTH_TRANSPORT_INVALID" }),
+    );
+  });
+
   it("does not turn an explicitly invalid scope list into full access", () => {
     expect(normalizeMcpOauthScopes(["not-a-real-permission"])).toEqual([]);
     expect(normalizeMcpOauthScopes([], ["proposals:read"])).toEqual(["proposals:read"]);
@@ -160,6 +210,7 @@ describe("MCP scope delegation", () => {
 
   it("only grants scopes already held by a scoped actor", () => {
     const actor: AuthAdmin = {
+      identityType: "user",
       id: "user-1",
       email: "reviewer@example.test",
       role: "user",
@@ -172,6 +223,7 @@ describe("MCP scope delegation", () => {
 
   it("treats current unscoped admins as fully delegable until admin sessions are scoped", () => {
     const actor: AuthAdmin = {
+      identityType: "user",
       id: "admin-1",
       email: "admin@example.test",
       role: "admin",

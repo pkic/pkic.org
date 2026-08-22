@@ -14,6 +14,7 @@ import type { EventRecord } from "./events";
 import type { DatabaseLike } from "../types";
 import type { FormFieldDefinition } from "./forms/read";
 import type { EmailMessageType } from "../../../assets/shared/schemas/admin-email-templates";
+import type { AttendanceType } from "../../../assets/shared/schemas/registration";
 import { adminEventCampaignPreviewSchema } from "../../../assets/shared/schemas/admin-events";
 import type { z } from "zod";
 import { resolveTemplate } from "../email/templates";
@@ -32,7 +33,7 @@ export interface CampaignRecipient {
 export interface CampaignAudienceFilter {
   audience: "attendees" | "speakers";
   attendeeStatus?: "all" | "registered" | "pending_email_confirmation" | "cancelled";
-  attendanceType?: "all" | "in_person" | "virtual" | "on_demand";
+  attendanceType?: "all" | AttendanceType;
   dayDate?: string;
   dayWaitlistStatus?: "all" | "active" | "waiting" | "offered" | "accepted" | "none";
   speakerStatus?: "all" | "confirmed" | "invited" | "pending";

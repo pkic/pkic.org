@@ -3,7 +3,7 @@ import { all, first, run } from "../db/queries";
 import { sha256Hex } from "../utils/crypto";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
-import type { DatabaseLike } from "../types";
+import type { DatabaseLike, StatementLike } from "../types";
 import type { EmailContentType, EmailMessageType } from "../../../assets/shared/schemas/admin-email-templates";
 
 const TEMPLATE_CACHE_TTL_MS = 60_000;
@@ -55,10 +55,14 @@ export interface TemplateVersionRow {
   created_at: string;
 }
 
+const TEMPLATE_VERSION_COLUMNS =
+  "id, template_key, version, subject_template, body, content_type, message_type, r2_object_key, " +
+  "checksum_sha256, status, created_by_user_id, created_at";
+
 export async function listTemplateVersions(db: DatabaseLike): Promise<TemplateVersionRow[]> {
   return all<TemplateVersionRow>(
     db,
-    `SELECT * FROM email_template_versions
+    `SELECT ${TEMPLATE_VERSION_COLUMNS} FROM email_template_versions
      ORDER BY template_key ASC, version DESC`,
   );
 }
@@ -81,17 +85,19 @@ async function getNextVersion(db: DatabaseLike, templateKey: string): Promise<nu
   return Number(row?.max_version ?? 0) + 1;
 }
 
-export async function createTemplateVersion(
+export interface TemplateVersionCreateInput {
+  templateKey: string;
+  content: string;
+  contentType?: EmailContentType;
+  subjectTemplate?: string | null;
+  messageType?: EmailMessageType | null;
+  createdByUserId: string | null;
+}
+
+export async function buildTemplateVersionCreate(
   db: DatabaseLike,
-  payload: {
-    templateKey: string;
-    content: string;
-    contentType?: EmailContentType;
-    subjectTemplate?: string | null;
-    messageType?: EmailMessageType | null;
-    createdByUserId: string;
-  },
-): Promise<TemplateVersionRow> {
+  payload: TemplateVersionCreateInput,
+): Promise<{ row: TemplateVersionRow; statement: StatementLike }> {
   const version = await getNextVersion(db, payload.templateKey);
   const checksum = await sha256Hex(payload.content);
 
@@ -110,13 +116,14 @@ export async function createTemplateVersion(
     created_at: nowIso(),
   };
 
-  await run(
-    db,
-    `INSERT INTO email_template_versions (
-      id, template_key, version, subject_template, body, content_type, message_type, r2_object_key,
-      checksum_sha256, status, created_by_user_id, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
+  const statement = db
+    .prepare(
+      `INSERT INTO email_template_versions (
+        id, template_key, version, subject_template, body, content_type, message_type, r2_object_key,
+        checksum_sha256, status, created_by_user_id, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .bind(
       row.id,
       row.template_key,
       row.version,
@@ -129,10 +136,18 @@ export async function createTemplateVersion(
       row.status,
       row.created_by_user_id,
       row.created_at,
-    ],
-  );
+    );
 
-  return row;
+  return { row, statement };
+}
+
+export async function createTemplateVersion(
+  db: DatabaseLike,
+  payload: TemplateVersionCreateInput,
+): Promise<TemplateVersionRow> {
+  const prepared = await buildTemplateVersionCreate(db, payload);
+  await prepared.statement.run();
+  return prepared.row;
 }
 
 export async function activateTemplateVersion(
@@ -141,7 +156,7 @@ export async function activateTemplateVersion(
 ): Promise<void> {
   const target = await first<TemplateVersionRow>(
     db,
-    "SELECT * FROM email_template_versions WHERE template_key = ? AND version = ?",
+    `SELECT ${TEMPLATE_VERSION_COLUMNS} FROM email_template_versions WHERE template_key = ? AND version = ?`,
     [payload.templateKey, payload.version],
   );
 
@@ -192,7 +207,9 @@ export async function resolveTemplateSet(
          SELECT CAST(value AS TEXT) AS template_key FROM json_each(?)
        ),
        ranked AS (
-         SELECT etv.*,
+         SELECT etv.id, etv.template_key, etv.version, etv.subject_template, etv.body,
+                etv.content_type, etv.message_type, etv.r2_object_key, etv.checksum_sha256,
+                etv.status, etv.created_by_user_id, etv.created_at,
                 ROW_NUMBER() OVER (PARTITION BY etv.template_key ORDER BY etv.version DESC) AS active_rank
          FROM email_template_versions etv
          JOIN requested r ON r.template_key = etv.template_key

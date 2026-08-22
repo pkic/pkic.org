@@ -153,8 +153,8 @@ export type WorkingGroupDetail = z.infer<typeof workingGroupDetailSchema>;
 
 export const workingGroupDetailRouteSchema = {
   tags: ["Working Groups"],
-  summary: "Working group detail",
-  description: "Working-group metadata and leadership. :id accepts either the working-group UUID or its slug.",
+  summary: "Active working-group detail",
+  description: "Active working-group metadata and leadership. :id accepts either the working-group UUID or its slug.",
   request: { params: z.object({ id: z.string() }) },
   responses: {
     "200": {
@@ -177,8 +177,8 @@ export const publicWorkingGroupMembersListResponseSchema = paginatedResponseSche
 );
 export const publicWorkingGroupMembersListRouteSchema = {
   tags: ["Working Groups"],
-  summary: "List public working-group members",
-  description: "Paginated, searchable public roster. :wgId accepts a working-group id or slug.",
+  summary: "List active working-group members",
+  description: "Paginated, searchable public roster for an active group. :wgId accepts a working-group id or slug.",
   request: {
     params: z.object({ wgId: z.string().trim().min(1).max(200) }),
     query: publicWorkingGroupMembersListQuerySchema,

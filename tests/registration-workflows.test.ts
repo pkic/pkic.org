@@ -5,6 +5,7 @@ import { onRequestPost as createRegistration } from "../functions/api/v1/events/
 import { onRequestPost as confirmEmail } from "../functions/api/v1/events/[eventSlug]/registrations/confirm-email";
 import { onRequestPatch as manageRegistration } from "../functions/api/v1/registrations/manage/[token]";
 import { onRequestPost as createInvites } from "../functions/api/v1/events/[eventSlug]/invites";
+import { onRequestPost as acceptInviteRegistration } from "../functions/api/v1/invites/[token]/accept";
 import { createContext, deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { getEventBySlug } from "../functions/_lib/services/events";
@@ -75,8 +76,18 @@ describe("registration workflows", () => {
     );
 
     expect(createResponse.status).toBe(200);
-    const createdPayload = (await createResponse.json()) as { status: string };
+    const createdPayload = (await createResponse.json()) as { registrationId: string; status: string };
     expect(createdPayload.status).toBe("pending_email_confirmation");
+    expect(
+      await queryAll<{ id: string }>(
+        env.DB,
+        `SELECT brj.id
+           FROM badge_render_jobs brj
+           JOIN referral_codes rc ON rc.code = brj.referral_code
+          WHERE rc.owner_type = 'registration' AND rc.owner_id = ?`,
+        [createdPayload.registrationId],
+      ),
+    ).toHaveLength(1);
 
     const outbox = await queryAll<{ payload_json: string }>(
       env.DB,
@@ -371,6 +382,51 @@ describe("registration workflows", () => {
     expect(rows[0].registration_status).toBe("registered");
     expect(rows[0].invite_id).toBe(invite.id);
     expect(rows[0].invite_status).toBe("accepted");
+  });
+
+  it("commits an invite-acceptance badge render intent with the registration", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const createdInvite = await createInvite(env.DB, {
+      eventId,
+      inviteeEmail: "durable-invite-badge@pkic.org",
+      inviteeFirstName: "Durable",
+      inviteType: "attendee",
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+    });
+
+    const response = await acceptInviteRegistration(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/invites/${createdInvite.token}/accept`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            firstName: "Durable",
+            lastName: "Invite",
+            email: "durable-invite-badge@pkic.org",
+            attendanceType: "virtual",
+            consents: [
+              { termKey: "privacy-policy", version: "v1" },
+              { termKey: "code-of-conduct", version: "v1" },
+            ],
+          }),
+        }),
+        { token: createdInvite.token },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as { registrationId: string };
+    expect(
+      await queryAll<{ id: string }>(
+        env.DB,
+        `SELECT brj.id
+           FROM badge_render_jobs brj
+           JOIN referral_codes rc ON rc.code = brj.referral_code
+          WHERE rc.owner_type = 'registration' AND rc.owner_id = ?`,
+        [payload.registrationId],
+      ),
+    ).toHaveLength(1);
   });
 
   it("keeps the invite token as the source of truth when confirmation email matches a different invite", async () => {
@@ -780,6 +836,7 @@ describe("registration workflows", () => {
     await updateRegistrationById(
       env.DB,
       {
+        eventId: event.id,
         registrationId: holder.registration.id,
         action: "cancel",
         waitlistClaimWindowHours: 24,
@@ -889,7 +946,7 @@ describe("registration workflows", () => {
     ).resolves.toEqual([{ status: "offered" }]);
   });
 
-  it("rolls back registration cancellation when its participant projection fails", async () => {
+  it("rolls back registration cancellation and its derived role when audit insertion fails", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     await env.DB.prepare(
       `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
@@ -911,11 +968,11 @@ describe("registration workflows", () => {
       signingSecret: "test-signing-secret",
     });
     await env.DB.prepare(
-      `CREATE TRIGGER reject_cancel_participant_projection
-       BEFORE UPDATE ON event_participants
-       WHEN NEW.event_id = '${eventId}' AND NEW.user_id = 'cancel-atomic-user'
+      `CREATE TRIGGER reject_cancel_registration_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'registration_cancel_atomic_test'
        BEGIN
-         SELECT RAISE(ABORT, 'forced participant projection failure');
+         SELECT RAISE(ABORT, 'forced registration audit failure');
        END`,
     ).run();
 
@@ -923,7 +980,13 @@ describe("registration workflows", () => {
       await expect(
         updateRegistrationById(
           env.DB,
-          { registrationId: created.registration.id, action: "cancel", waitlistClaimWindowHours: 24 },
+          {
+            eventId,
+            registrationId: created.registration.id,
+            action: "cancel",
+            waitlistClaimWindowHours: 24,
+            auditActor: { type: "user", id: "cancel-atomic-user", action: "registration_cancel_atomic_test" },
+          },
           "test",
         ),
       ).rejects.toBeTruthy();
@@ -934,13 +997,14 @@ describe("registration workflows", () => {
       );
       const [participant] = await queryAll<{ status: string }>(
         env.DB,
-        "SELECT status FROM event_participants WHERE event_id = ? AND user_id = ? AND role = 'attendee'",
+        `SELECT status FROM effective_event_participant_roles
+         WHERE event_id = ? AND user_id = ? AND role = 'attendee'`,
         [eventId, "cancel-atomic-user"],
       );
       expect(registration).toEqual({ status: "registered", cancelled_at: null });
       expect(participant.status).toBe("active");
     } finally {
-      await env.DB.prepare("DROP TRIGGER reject_cancel_participant_projection").run();
+      await env.DB.prepare("DROP TRIGGER reject_cancel_registration_audit").run();
     }
   });
 
@@ -964,6 +1028,7 @@ describe("registration workflows", () => {
     const updated = await updateRegistrationById(
       env.DB,
       {
+        eventId: event.id,
         registrationId: created.registration.id,
         action: "report_unauthorized",
         waitlistClaimWindowHours: 24,

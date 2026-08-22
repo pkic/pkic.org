@@ -1,4 +1,4 @@
-import type { RegistrationLifecycleStatus } from "../../../../assets/shared/schemas/registration";
+import type { AttendanceType, RegistrationLifecycleStatus } from "../../../../assets/shared/schemas/registration";
 
 export interface RegistrationRecord {
   id: string;
@@ -6,7 +6,7 @@ export interface RegistrationRecord {
   user_id: string;
   invite_id: string | null;
   status: RegistrationLifecycleStatus;
-  attendance_type: "in_person" | "virtual" | "on_demand";
+  attendance_type: AttendanceType;
   source_type: string;
   source_ref: string | null;
   custom_answers_json: string | null;

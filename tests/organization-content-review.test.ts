@@ -17,6 +17,14 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { processPendingStorageDeletions } from "../functions/_lib/services/storage-deletion-outbox";
+import { runScheduledDueWork } from "../functions/_lib/services/scheduled-due-work";
+import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
+import {
+  drainOrganizationContentReviewNotificationIntents,
+  listPendingOrganizationContentReviewNotificationIntents,
+  submitOrgContentChange,
+} from "../functions/_lib/services/organization-content";
 import {
   insertUser,
   insertOrganization,
@@ -29,8 +37,45 @@ import {
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
   headers.set("authorization", `Bearer ${token}`);
-  if (init.body && !headers.has("content-type")) headers.set("content-type", "application/json");
+  if (init.body && !(init.body instanceof FormData) && !headers.has("content-type")) {
+    headers.set("content-type", "application/json");
+  }
   return new Request(`https://app.test${path}`, { ...init, headers });
+}
+
+class FakeAssetsBucket {
+  private readonly objects = new Map<string, ArrayBuffer>();
+  failuresRemaining = 0;
+
+  async put(key: string, value: string | ArrayBuffer | ReadableStream): Promise<void> {
+    const body =
+      typeof value === "string"
+        ? new TextEncoder().encode(value).buffer
+        : value instanceof ArrayBuffer
+          ? value
+          : await new Response(value).arrayBuffer();
+    this.objects.set(key, body);
+  }
+
+  async delete(key: string): Promise<void> {
+    if (this.failuresRemaining > 0) {
+      this.failuresRemaining -= 1;
+      throw new Error("temporary staging-logo R2 failure");
+    }
+    this.objects.delete(key);
+  }
+
+  keys(): string[] {
+    return [...this.objects.keys()].sort();
+  }
+}
+
+const JPEG_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+
+function logoUploadRequest(token: string): Request {
+  const formData = new FormData();
+  formData.append("file", new File([JPEG_BYTES], "organization-logo.jpg", { type: "image/jpeg" }));
+  return request(token, "/api/v1/me/organization/logo", { method: "POST", body: formData });
 }
 
 async function call(token: string, path: string, init: RequestInit = {}): Promise<Response> {
@@ -68,6 +113,7 @@ async function addRepresentative(organizationId: string, email: string): Promise
 
 describe("Organization content moderation", () => {
   let adminToken: string;
+  let adminId: string;
 
   beforeEach(async () => {
     await resetDb();
@@ -75,7 +121,8 @@ describe("Organization content moderation", () => {
     const adminRow = (
       await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
     )[0];
-    adminToken = await createAdminSession(env.DB, adminRow.id, "admin-content-review-token");
+    adminId = adminRow.id;
+    adminToken = await createAdminSession(env.DB, adminId, "admin-content-review-token");
   });
 
   it("lets the primary contact submit a content change, queued as pending — live org row unchanged", async () => {
@@ -102,6 +149,28 @@ describe("Organization content moderation", () => {
     );
     expect(reviewRows).toHaveLength(1);
     expect(reviewRows[0].status).toBe("pending");
+
+    expect(
+      await queryAll<{
+        recipient_email: string;
+        organization_name: string;
+        submitter_name: string;
+        queued_outbox_id: string | null;
+      }>(
+        env.DB,
+        `SELECT recipient_email, organization_name, submitter_name, queued_outbox_id
+         FROM organization_content_review_notification_intents
+         WHERE review_id = (SELECT id FROM organization_content_reviews WHERE organization_id = ?)`,
+        organizationId,
+      ),
+    ).toEqual([
+      {
+        recipient_email: "admin@pkic.org",
+        organization_name: `Org for primary@example.test`,
+        submitter_name: "primary@example.test",
+        queued_outbox_id: expect.any(String),
+      },
+    ]);
   });
 
   it("rejects a non-contact representative's submission with 403", async () => {
@@ -116,6 +185,263 @@ describe("Organization content moderation", () => {
     expect(response.status).toBe(403);
     const body = (await response.json()) as { error: { code: string } };
     expect(body.error.code).toBe("NOT_ORG_CONTACT");
+  });
+
+  it("creates a reviewer intent for a logo-only submission", async () => {
+    const { organizationId, userId } = await seedOrgWithContact("logo-only@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "logo-only-token");
+    const bucket = new FakeAssetsBucket();
+
+    const response = await app.fetch(logoUploadRequest(token), { ...(env as any), ASSETS_BUCKET: bucket }, {
+      passThroughOnException: () => {},
+      waitUntil: () => {},
+    } as any);
+    expect(response.status).toBe(200);
+
+    expect(
+      await queryAll<{ proposed_changes_json: string; logo_staging_r2_key: string | null; status: string }>(
+        env.DB,
+        `SELECT proposed_changes_json, logo_staging_r2_key, status
+         FROM organization_content_reviews WHERE organization_id = ?`,
+        organizationId,
+      ),
+    ).toEqual([
+      {
+        proposed_changes_json: "{}",
+        logo_staging_r2_key: expect.stringMatching(new RegExp(`^org-logos/${organizationId}/staging-`)),
+        status: "pending",
+      },
+    ]);
+    expect(
+      await queryAll<{ recipient_email: string }>(
+        env.DB,
+        `SELECT recipient_email
+         FROM organization_content_review_notification_intents
+         WHERE review_id = (SELECT id FROM organization_content_reviews WHERE organization_id = ?)`,
+        organizationId,
+      ),
+    ).toEqual([{ recipient_email: "admin@pkic.org" }]);
+  });
+
+  it("snapshots only active permitted recipients and immutable review context", async () => {
+    const { organizationId, userId } = await seedOrgWithContact("snapshot-submit@example.test", "F");
+    const permittedUserId = await insertUser(env.DB, "content-reviewer@example.test");
+    const inactiveUserId = await insertUser(env.DB, "inactive-reviewer@example.test");
+    const unrelatedUserId = await insertUser(env.DB, "unrelated-reviewer@example.test");
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+           VALUES (?, ?, 'organizations:content-review', ?, datetime('now'))`,
+      ).bind(crypto.randomUUID(), permittedUserId, adminId),
+      env.DB.prepare(
+        `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+           VALUES (?, ?, 'organizations:content-review', ?, datetime('now'))`,
+      ).bind(crypto.randomUUID(), inactiveUserId, adminId),
+      env.DB.prepare("UPDATE users SET active = 0 WHERE id = ?").bind(inactiveUserId),
+    ]);
+    const token = await createMemberSession(env.DB, userId, "snapshot-submit-token");
+    const response = await call(token, "/api/v1/me/organization", {
+      method: "PATCH",
+      body: JSON.stringify({ slogan: "Snapshot this" }),
+    });
+    expect(response.status).toBe(200);
+
+    const [review] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM organization_content_reviews WHERE organization_id = ?",
+      organizationId,
+    );
+    await env.DB.batch([
+      env.DB.prepare("UPDATE organizations SET name = 'Renamed after submission' WHERE id = ?").bind(organizationId),
+      env.DB.prepare("UPDATE users SET email = 'changed-after-submission@example.test' WHERE id = ?").bind(userId),
+    ]);
+
+    expect(
+      await queryAll<{
+        recipient_email: string;
+        organization_name: string;
+        submitter_name: string;
+        review_url: string;
+      }>(
+        env.DB,
+        `SELECT recipient_email, organization_name, submitter_name, review_url
+         FROM organization_content_review_notification_intents
+         WHERE review_id = ? ORDER BY recipient_email`,
+        review.id,
+      ),
+    ).toEqual([
+      {
+        recipient_email: "admin@pkic.org",
+        organization_name: "Org for snapshot-submit@example.test",
+        submitter_name: "snapshot-submit@example.test",
+        review_url: "https://app.test/admin/#/organizations/content-reviews",
+      },
+      {
+        recipient_email: "content-reviewer@example.test",
+        organization_name: "Org for snapshot-submit@example.test",
+        submitter_name: "snapshot-submit@example.test",
+        review_url: "https://app.test/admin/#/organizations/content-reviews",
+      },
+    ]);
+    expect(unrelatedUserId).not.toBe(permittedUserId);
+  });
+
+  it("does not duplicate reviewer intents when a logo is attached to a pending content review", async () => {
+    const { organizationId, userId } = await seedOrgWithContact("content-then-logo@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "content-then-logo-token");
+    expect(
+      (
+        await call(token, "/api/v1/me/organization", {
+          method: "PATCH",
+          body: JSON.stringify({ slogan: "Content first" }),
+        })
+      ).status,
+    ).toBe(200);
+    const bucket = new FakeAssetsBucket();
+    const logoResponse = await app.fetch(logoUploadRequest(token), { ...(env as any), ASSETS_BUCKET: bucket }, {
+      passThroughOnException: () => {},
+      waitUntil: () => {},
+    } as any);
+    expect(logoResponse.status).toBe(200);
+    expect(
+      await queryAll<{ count: number }>(
+        env.DB,
+        `SELECT COUNT(*) AS count
+         FROM organization_content_review_notification_intents
+         WHERE review_id = (SELECT id FROM organization_content_reviews WHERE organization_id = ?)`,
+        organizationId,
+      ),
+    ).toEqual([{ count: 1 }]);
+  });
+
+  it("removes a staged logo when the D1 commit fails after the R2 upload", async () => {
+    const { organizationId, userId } = await seedOrgWithContact("staging-logo-rollback@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "staging-logo-rollback-token");
+    const bucket = new FakeAssetsBucket();
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_staging_logo_commit
+       BEFORE INSERT ON organization_content_reviews
+       WHEN NEW.logo_staging_r2_key IS NOT NULL
+       BEGIN
+         SELECT RAISE(ABORT, 'forced staging logo D1 failure');
+       END`,
+    ).run();
+
+    let response: Response;
+    try {
+      response = await app.fetch(logoUploadRequest(token), { ...(env as any), ASSETS_BUCKET: bucket }, {
+        passThroughOnException: () => {},
+        waitUntil: () => {},
+      } as any);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_staging_logo_commit").run();
+    }
+
+    expect(response!.status).toBe(500);
+    expect(bucket.keys()).toEqual([]);
+    expect(
+      await queryAll<{ logo_staging_r2_key: string | null }>(
+        env.DB,
+        "SELECT logo_staging_r2_key FROM organizations WHERE id = ?",
+        organizationId,
+      ),
+    ).toEqual([{ logo_staging_r2_key: null }]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM organization_content_reviews WHERE organization_id = ?", organizationId),
+    ).toHaveLength(0);
+    expect(await queryAll(env.DB, "SELECT object_key FROM storage_deletion_outbox WHERE bucket = 'assets'")).toEqual(
+      [],
+    );
+  });
+
+  it("retains a failed staged-logo cleanup for durable retry", async () => {
+    const { organizationId, userId } = await seedOrgWithContact("staging-logo-retry@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "staging-logo-retry-token");
+    const bucket = new FakeAssetsBucket();
+    bucket.failuresRemaining = 1;
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_staging_logo_commit_retry
+       BEFORE INSERT ON organization_content_reviews
+       WHEN NEW.logo_staging_r2_key IS NOT NULL
+       BEGIN
+         SELECT RAISE(ABORT, 'forced staging logo D1 failure');
+       END`,
+    ).run();
+
+    let response: Response;
+    try {
+      response = await app.fetch(logoUploadRequest(token), { ...(env as any), ASSETS_BUCKET: bucket }, {
+        passThroughOnException: () => {},
+        waitUntil: () => {},
+      } as any);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_staging_logo_commit_retry").run();
+    }
+
+    expect(response!.status).toBe(500);
+    const [storedKey] = bucket.keys();
+    expect(storedKey).toMatch(new RegExp(`^org-logos/${organizationId}/staging-`));
+    expect(
+      await queryAll<{ bucket: string; object_key: string; status: string }>(
+        env.DB,
+        "SELECT bucket, object_key, status FROM storage_deletion_outbox WHERE object_key = ?",
+        storedKey,
+      ),
+    ).toEqual([{ bucket: "assets", object_key: storedKey, status: "queued" }]);
+    expect(
+      await queryAll<{ logo_staging_r2_key: string | null }>(
+        env.DB,
+        "SELECT logo_staging_r2_key FROM organizations WHERE id = ?",
+        organizationId,
+      ),
+    ).toEqual([{ logo_staging_r2_key: null }]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM organization_content_reviews WHERE organization_id = ?", organizationId),
+    ).toHaveLength(0);
+
+    await env.DB.prepare("UPDATE storage_deletion_outbox SET next_attempt_at = datetime('now') WHERE object_key = ?")
+      .bind(storedKey)
+      .run();
+    await expect(
+      processPendingStorageDeletions(env.DB, { ASSETS_BUCKET: bucket as unknown as R2Bucket }, 10),
+    ).resolves.toEqual({ processed: 1, failed: 0 });
+    expect(bucket.keys()).toEqual([]);
+    expect(
+      await queryAll<{ status: string }>(env.DB, "SELECT status FROM storage_deletion_outbox WHERE object_key = ?", [
+        storedKey,
+      ]),
+    ).toEqual([{ status: "deleted" }]);
+  });
+
+  it("rolls back the review when reviewer-intent creation fails", async () => {
+    const { organizationId, userId } = await seedOrgWithContact("intent-rollback@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "intent-rollback-token");
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_content_review_notification_intent
+       BEFORE INSERT ON organization_content_review_notification_intents
+       BEGIN
+         SELECT RAISE(ABORT, 'forced content review notification failure');
+       END`,
+    ).run();
+
+    try {
+      const response = await call(token, "/api/v1/me/organization", {
+        method: "PATCH",
+        body: JSON.stringify({ description: "Must roll back" }),
+      });
+      expect(response.status).toBe(500);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM organization_content_reviews WHERE organization_id = ?", organizationId),
+      ).toHaveLength(0);
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT review_id FROM organization_content_review_notification_intents WHERE review_id IN (SELECT id FROM organization_content_reviews)",
+        ),
+      ).toEqual([]);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_content_review_notification_intent").run();
+    }
   });
 
   it("rejects a second submission while one is already pending with 409", async () => {
@@ -155,6 +481,197 @@ describe("Organization content moderation", () => {
         organizationId,
       ),
     ).toHaveLength(1);
+  });
+
+  it("drains reviewer intents exactly once with deterministic outbox identity", async () => {
+    const { organizationId, memberId, userId } = await seedOrgWithContact("intent-drain@example.test", "F");
+    await submitOrgContentChange(
+      env.DB,
+      {
+        userId,
+        email: "intent-drain@example.test",
+        memberId,
+        organizationId,
+        membershipCategory: "F",
+        isEcMember: false,
+        activeMemberships: [],
+      },
+      { slogan: "Queue me" },
+      "https://app.test/admin/#/organizations/content-reviews",
+    );
+    const [review] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM organization_content_reviews WHERE organization_id = ?",
+      organizationId,
+    );
+
+    const [existingIntent] = await queryAll<{ queued_outbox_id: string | null }>(
+      env.DB,
+      "SELECT queued_outbox_id FROM organization_content_review_notification_intents WHERE review_id = ?",
+      review.id,
+    );
+    if (existingIntent?.queued_outbox_id) {
+      await env.DB.batch([
+        env.DB.prepare("DELETE FROM email_outbox WHERE id = ?").bind(existingIntent.queued_outbox_id),
+        env.DB.prepare(
+          "UPDATE organization_content_review_notification_intents SET queued_outbox_id = NULL, queued_at = NULL WHERE review_id = ?",
+        ).bind(review.id),
+      ]);
+    }
+
+    const pending = await listPendingOrganizationContentReviewNotificationIntents(env.DB, 10);
+    expect(pending).toHaveLength(1);
+    const first = await drainOrganizationContentReviewNotificationIntents(env.DB, 10);
+    expect(first.queued).toBe(1);
+    expect(first.outboxIds).toHaveLength(1);
+    expect(await drainOrganizationContentReviewNotificationIntents(env.DB, 10)).toEqual({ queued: 0, outboxIds: [] });
+    expect(
+      await queryAll<{ id: string; idempotency_key: string; recipient_email: string }>(
+        env.DB,
+        `SELECT id, idempotency_key, recipient_email FROM email_outbox
+         WHERE template_key = 'org-content-submitted'`,
+      ),
+    ).toEqual([
+      {
+        id: first.outboxIds[0],
+        idempotency_key: `organization-content-review-submitted:${review.id}:admin@pkic.org`,
+        recipient_email: "admin@pkic.org",
+      },
+    ]);
+    expect(
+      await queryAll<{ queued_outbox_id: string | null }>(
+        env.DB,
+        "SELECT queued_outbox_id FROM organization_content_review_notification_intents WHERE review_id = ?",
+        review.id,
+      ),
+    ).toEqual([{ queued_outbox_id: first.outboxIds[0] }]);
+  });
+
+  it("leaves reviewer intents pending when the outbox batch fails, then retries", async () => {
+    const { memberId, organizationId, userId } = await seedOrgWithContact("intent-retry@example.test", "F");
+    await submitOrgContentChange(
+      env.DB,
+      {
+        userId,
+        email: "intent-retry@example.test",
+        memberId,
+        organizationId,
+        membershipCategory: "F",
+        isEcMember: false,
+        activeMemberships: [],
+      },
+      { slogan: "Retry me" },
+      "https://app.test/admin/#/organizations/content-reviews",
+    );
+    expect(await listPendingOrganizationContentReviewNotificationIntents(env.DB, 10)).toHaveLength(1);
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_content_review_notification_outbox
+       BEFORE INSERT ON email_outbox
+       WHEN NEW.template_key = 'org-content-submitted'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced content review outbox failure');
+       END`,
+    ).run();
+
+    try {
+      await expect(drainOrganizationContentReviewNotificationIntents(env.DB, 10)).rejects.toThrow(
+        "forced content review outbox failure",
+      );
+      expect(await listPendingOrganizationContentReviewNotificationIntents(env.DB, 10)).toHaveLength(1);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'org-content-submitted'"),
+      ).toEqual([]);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_content_review_notification_outbox").run();
+    }
+
+    await expect(drainOrganizationContentReviewNotificationIntents(env.DB, 10)).resolves.toMatchObject({ queued: 1 });
+  });
+
+  it("rolls back intent marking and converges concurrent drains", async () => {
+    const { memberId, organizationId, userId } = await seedOrgWithContact("intent-mark-race@example.test", "F");
+    await submitOrgContentChange(
+      env.DB,
+      {
+        userId,
+        email: "intent-mark-race@example.test",
+        memberId,
+        organizationId,
+        membershipCategory: "F",
+        isEcMember: false,
+        activeMemberships: [],
+      },
+      { slogan: "Mark race" },
+      "https://app.test/admin/#/organizations/content-reviews",
+    );
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_content_review_notification_mark
+       BEFORE UPDATE ON organization_content_review_notification_intents
+       WHEN NEW.queued_outbox_id IS NOT NULL
+       BEGIN
+         SELECT RAISE(ABORT, 'forced content review notification mark failure');
+       END`,
+    ).run();
+
+    try {
+      await expect(drainOrganizationContentReviewNotificationIntents(env.DB, 10)).rejects.toThrow(
+        "forced content review notification mark failure",
+      );
+      expect(await listPendingOrganizationContentReviewNotificationIntents(env.DB, 10)).toHaveLength(1);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'org-content-submitted'"),
+      ).toEqual([]);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_content_review_notification_mark").run();
+    }
+
+    const results = await Promise.all([
+      drainOrganizationContentReviewNotificationIntents(env.DB, 10),
+      drainOrganizationContentReviewNotificationIntents(env.DB, 10),
+    ]);
+    expect(results.reduce((total, result) => total + result.queued, 0)).toBe(1);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'org-content-submitted'"),
+    ).toHaveLength(1);
+    expect(await listPendingOrganizationContentReviewNotificationIntents(env.DB, 10)).toEqual([]);
+  });
+
+  it("skips reviewer draining under a low shared D1 budget and still runs downstream selections", async () => {
+    const { memberId, organizationId, userId } = await seedOrgWithContact("low-budget@example.test", "F");
+    await submitOrgContentChange(
+      env.DB,
+      {
+        userId,
+        email: "low-budget@example.test",
+        memberId,
+        organizationId,
+        membershipCategory: "F",
+        isEcMember: false,
+        activeMemberships: [],
+      },
+      { slogan: "Wait for the next pass" },
+      "https://app.test/admin/#/organizations/content-reviews",
+    );
+    const budgeted = createD1QueryBudgetedDatabase(env.DB, 6);
+    const result = await runScheduledDueWork(
+      {
+        ...env,
+        APP_BASE_URL: "https://app.test",
+        SCHEDULED_REMINDER_LIMIT: "0",
+        SCHEDULED_OUTBOX_LIMIT: "1",
+        SCHEDULED_STORAGE_DELETION_LIMIT: "1",
+        SCHEDULED_BADGE_RENDER_LIMIT: "1",
+        SCHEDULED_WAITLIST_PROMOTION_LIMIT: "0",
+        SCHEDULED_DUE_WORK_MAX_PASSES: "1",
+        SCHEDULED_DUE_WORK_MAX_MS: "120000",
+      },
+      { d1QueryBudget: budgeted.budget },
+    );
+
+    expect(result.passes).toHaveLength(1);
+    expect(result.stoppedReason).toBe("caught_up");
+    expect(budgeted.budget.usedQueries()).toBeLessThanOrEqual(6);
+    expect(await listPendingOrganizationContentReviewNotificationIntents(env.DB, 10)).toHaveLength(1);
   });
 
   it("lets the submitter withdraw a pending review, freeing them to resubmit", async () => {
@@ -220,13 +737,69 @@ describe("Organization content moderation", () => {
     expect(orgRows[0].description).toBe("Approved description");
     expect(orgRows[0].website).toBe("https://example.test");
 
-    const reviewRows = await queryAll<{ status: string; reviewer_user_id: string }>(
+    const reviewRows = await queryAll<{ status: string; reviewer_user_id: string | null }>(
       env.DB,
       "SELECT status, reviewer_user_id FROM organization_content_reviews WHERE id = ?",
       review.id,
     );
     expect(reviewRows[0].status).toBe("approved");
-    expect(reviewRows[0].reviewer_user_id).toBeTruthy();
+    expect(reviewRows[0].reviewer_user_id).toBe(adminId);
+  });
+
+  it("keeps API-key audit identity out of nullable reviewer user foreign keys", async () => {
+    const apiKey = env.ADMIN_API_KEY ?? "test-admin-key";
+    const approvedOrg = await seedOrgWithContact("api-key-approved@example.test", "F");
+    const approvedToken = await createMemberSession(env.DB, approvedOrg.userId, "api-key-approved-token");
+    const approvedSubmission = await call(approvedToken, "/api/v1/me/organization", {
+      method: "PATCH",
+      body: JSON.stringify({ description: "Approved by API key" }),
+    });
+    const approvedReview = (await approvedSubmission.json()) as { review: { id: string } };
+
+    const approvedResponse = await call(
+      apiKey,
+      `/api/v1/admin/organizations/content-reviews/${approvedReview.review.id}/approve`,
+      { method: "POST" },
+    );
+    expect(approvedResponse.status).toBe(200);
+
+    const rejectedOrg = await seedOrgWithContact("api-key-rejected@example.test", "F");
+    const rejectedToken = await createMemberSession(env.DB, rejectedOrg.userId, "api-key-rejected-token");
+    const rejectedSubmission = await call(rejectedToken, "/api/v1/me/organization", {
+      method: "PATCH",
+      body: JSON.stringify({ description: "Rejected by API key" }),
+    });
+    const rejectedReview = (await rejectedSubmission.json()) as { review: { id: string } };
+
+    const rejectedResponse = await call(
+      apiKey,
+      `/api/v1/admin/organizations/content-reviews/${rejectedReview.review.id}/reject`,
+      { method: "POST", body: JSON.stringify({ reviewerNote: "Needs revision" }) },
+    );
+    expect(rejectedResponse.status).toBe(200);
+
+    expect(
+      await queryAll<{ id: string; status: string; reviewer_user_id: string | null }>(
+        env.DB,
+        `SELECT id, status, reviewer_user_id FROM organization_content_reviews
+         WHERE id IN (?, ?) ORDER BY status`,
+        [approvedReview.review.id, rejectedReview.review.id],
+      ),
+    ).toEqual([
+      { id: approvedReview.review.id, status: "approved", reviewer_user_id: null },
+      { id: rejectedReview.review.id, status: "rejected", reviewer_user_id: null },
+    ]);
+    expect(
+      await queryAll<{ action: string; actor_id: string | null }>(
+        env.DB,
+        `SELECT action, actor_id FROM audit_log
+         WHERE action IN ('organization_content_review_approved', 'organization_content_review_rejected')
+         ORDER BY action`,
+      ),
+    ).toEqual([
+      { action: "organization_content_review_approved", actor_id: "api-key" },
+      { action: "organization_content_review_rejected", actor_id: "api-key" },
+    ]);
   });
 
   it("staff admin can reject a pending review with a reason, leaving the live org row untouched", async () => {
@@ -377,6 +950,7 @@ describe("Organization content moderation", () => {
 
 describe("Secondary contact nomination & confirmation", () => {
   let adminToken: string;
+  let adminId: string;
 
   beforeEach(async () => {
     await resetDb();
@@ -384,7 +958,8 @@ describe("Secondary contact nomination & confirmation", () => {
     const adminRow = (
       await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
     )[0];
-    adminToken = await createAdminSession(env.DB, adminRow.id, "admin-secondary-contact-token");
+    adminId = adminRow.id;
+    adminToken = await createAdminSession(env.DB, adminId, "admin-secondary-contact-token");
   });
 
   it("lets the primary contact nominate a fellow representative, held pending until staff confirms", async () => {
@@ -421,12 +996,13 @@ describe("Secondary contact nomination & confirmation", () => {
     );
     expect(confirmResponse.status).toBe(200);
 
-    const secondaryAfter = await queryAll<{ user_id: string }>(
+    const secondaryAfter = await queryAll<{ user_id: string; granted_by_user_id: string | null }>(
       env.DB,
-      `SELECT user_id FROM user_roles WHERE context_type = 'organization' AND context_id = ? AND role_id = 'role-secondary_contact' AND revoked_at IS NULL`,
+      `SELECT user_id, granted_by_user_id FROM user_roles WHERE context_type = 'organization' AND context_id = ? AND role_id = 'role-secondary_contact' AND revoked_at IS NULL`,
       memberId,
     );
     expect(secondaryAfter[0].user_id).toBe(nomineeUserId);
+    expect(secondaryAfter[0].granted_by_user_id).toBe(adminId);
 
     const nominationAfter = await queryAll<{ total: number }>(
       env.DB,
@@ -434,6 +1010,43 @@ describe("Secondary contact nomination & confirmation", () => {
       memberId,
     );
     expect(Number(nominationAfter[0].total)).toBe(0);
+  });
+
+  it("keeps API-key audit identity out of the nullable confirmed-contact grantor foreign key", async () => {
+    const {
+      organizationId,
+      memberId,
+      userId: primaryUserId,
+    } = await seedOrgWithContact("api-key-contact-primary@example.test", "F");
+    const nomineeUserId = await addRepresentative(organizationId, "api-key-contact-nominee@example.test");
+    const token = await createMemberSession(env.DB, primaryUserId, "api-key-contact-nominate-token");
+    const nominateResponse = await call(token, "/api/v1/me/organization/secondary-contact", {
+      method: "PATCH",
+      body: JSON.stringify({ userId: nomineeUserId }),
+    });
+    expect(nominateResponse.status).toBe(200);
+
+    const confirmResponse = await call(
+      env.ADMIN_API_KEY ?? "test-admin-key",
+      `/api/v1/admin/organizations/${organizationId}/confirm-secondary-contact`,
+      { method: "POST" },
+    );
+    expect(confirmResponse.status).toBe(200);
+    expect(
+      await queryAll<{ user_id: string; granted_by_user_id: string | null }>(
+        env.DB,
+        `SELECT user_id, granted_by_user_id FROM user_roles
+         WHERE context_type = 'organization' AND context_id = ?
+           AND role_id = 'role-secondary_contact' AND revoked_at IS NULL`,
+        memberId,
+      ),
+    ).toEqual([{ user_id: nomineeUserId, granted_by_user_id: null }]);
+    expect(
+      await queryAll<{ actor_id: string | null }>(
+        env.DB,
+        "SELECT actor_id FROM audit_log WHERE action = 'organization_secondary_contact_confirmed'",
+      ),
+    ).toEqual([{ actor_id: "api-key" }]);
   });
 
   it("rejects confirmation with 409 when there is no pending nomination", async () => {

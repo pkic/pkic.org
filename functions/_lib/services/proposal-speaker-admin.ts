@@ -12,8 +12,10 @@ import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 import { nowIso } from "../utils/time";
 import { parseLinksJson, serializeLinks } from "../../../assets/shared/schemas/links";
-import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
-import { prepareSyncProposalParticipantRole, proposalParticipantStatus } from "./proposal-participants";
+import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
+import { prepareProposalRoleCapacityForSpeakerChange, proposalParticipantStatus } from "./proposal-role-capacity";
+import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
+import { isEventParticipantSourceConflict } from "./event-participant-source-revision";
 import {
   assertProposalSpeakerRoleTransition,
   prepareProposalSpeakersWithStatus,
@@ -273,8 +275,9 @@ export async function editAdminProposalSpeaker(
         current.headshot_r2_key,
         current.headshot_updated_at,
       ),
-    prepareAuditLogAfterOneChange(
+    prepareScopedAuditLogAfterOneChange(
       db,
+      { type: "proposal", id: proposalId },
       "admin",
       actor.id,
       "speaker_profile_updated",
@@ -295,13 +298,13 @@ export async function editAdminProposalSpeaker(
   }
   if (next.role !== current.role) {
     statements.push(
-      ...prepareSyncProposalParticipantRole(db, {
+      ...(await prepareProposalRoleCapacityForSpeakerChange(db, {
         eventId: current.proposal_event_id,
         userId,
         proposalRole: next.role,
         sourceRef: proposalId,
         status: proposalParticipantStatus(current.proposal_status, current.status),
-      }),
+      })),
     );
   }
   statements.push(prepareProposalSpeakerWithUserById(db, current.speaker_id));
@@ -310,7 +313,10 @@ export async function editAdminProposalSpeaker(
   try {
     results = await db.batch(statements);
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isRegistrationTransitionConflict(error)) {
+      throw registrationChangedError();
+    }
+    if (isAuditOneChangeGuardFailure(error) || isEventParticipantSourceConflict(error)) {
       throw new AppError(409, "PROPOSAL_SPEAKER_CONFLICT", "Proposal speaker changed while the update was processed");
     }
     throw error;

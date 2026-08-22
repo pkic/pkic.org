@@ -10,6 +10,7 @@ import { all } from "../db/queries";
 import { queryPage } from "../db/pagination";
 import { buildD1TextSearchFilter } from "../db/search";
 import { AppError } from "../errors";
+import { adminDatabaseUserId } from "../auth/admin-identity";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import {
@@ -22,7 +23,6 @@ import {
   getMemberApplicationById,
   listApplicationCommunications,
   listApplicationConcerns,
-  listApplicationDocuments,
   type MemberApplicationRow,
 } from "./membership/applications/queries";
 import { getGlobalFormByKey } from "./forms";
@@ -42,7 +42,7 @@ import {
   type AdminApplicationSummary,
 } from "../../../assets/shared/schemas/admin-applications";
 import { resolveOrderBy } from "../db/sort";
-import type { DatabaseLike, StatementLike } from "../types";
+import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 
 type AdminApplicationSummaryRow = Pick<
   MemberApplicationRow,
@@ -97,17 +97,16 @@ export async function listAdminApplications(
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   const orderBy = resolveOrderBy(params.sort, ADMIN_APPLICATIONS_SORT_COLUMNS, "ORDER BY created_at DESC", "id ASC");
 
-  const { rows, total } = await queryPage<AdminApplicationSummaryRow>(
-    db,
-    {
-      sql: `SELECT id, applicant_email, applicant_name, organization_name,
+  const { rows, total } = await queryPage<AdminApplicationSummaryRow>(db, {
+    sql: `SELECT id, applicant_email, applicant_name, organization_name,
                    membership_category, stage, on_hold_subtype, assigned_to_user_id,
                    created_at, updated_at
-            FROM member_applications ${where} ${orderBy} LIMIT ? OFFSET ?`,
-      bindings: [...values, params.limit, params.offset],
-    },
-    { sql: `SELECT COUNT(*) AS total FROM member_applications ${where}`, bindings: values },
-  );
+            FROM member_applications ${where}`,
+    bindings: values,
+    orderBy,
+    limit: params.limit,
+    offset: params.offset,
+  });
 
   return { applications: rows.map(toSummary), total };
 }
@@ -134,7 +133,7 @@ export async function getAdminApplicationDetail(
   const requestedSlugs = Array.isArray(requestedWorkingGroups)
     ? [...new Set(requestedWorkingGroups.filter((value): value is string => typeof value === "string"))].slice(0, 200)
     : [];
-  const [eventRows, communications, concerns, ecDecisions, documents, requestedWorkingGroupRows] = await Promise.all([
+  const [eventRows, communications, concerns, ecDecisions, requestedWorkingGroupRows] = await Promise.all([
     all<ApplicationEventRow>(
       db,
       `SELECT from_stage, to_stage, actor_user_id, note, created_at FROM member_application_events WHERE application_id = ? ORDER BY created_at ASC`,
@@ -143,7 +142,6 @@ export async function getAdminApplicationDetail(
     listApplicationCommunications(db, applicationId),
     listApplicationConcerns(db, applicationId),
     listEcDecisions(db, applicationId),
-    listApplicationDocuments(db, applicationId),
     requestedSlugs.length > 0
       ? all<{ slug: string; name: string }>(
           db,
@@ -197,14 +195,6 @@ export async function getAdminApplicationDetail(
       reason: row.reason,
       createdAt: row.created_at,
     })),
-    documents: documents.map((row) => ({
-      id: row.id,
-      filename: row.filename,
-      mimeType: row.mime_type,
-      fileSizeBytes: row.file_size_bytes,
-      uploadedAt: row.uploaded_at,
-      uploadedByEmail: row.uploaded_by_email,
-    })),
   });
 }
 
@@ -243,7 +233,7 @@ export interface ApplicationEditInput {
 export async function updateAdminApplication(
   db: DatabaseLike,
   applicationId: string,
-  actorUserId: string,
+  actor: AuthAdmin,
   input: ApplicationEditInput,
 ): Promise<AdminApplicationDetail> {
   const application = await getMemberApplicationById(db, applicationId);
@@ -418,7 +408,7 @@ export async function updateAdminApplication(
       prepareAuditLogAfterOneChange(
         db,
         "admin",
-        actorUserId,
+        actor.id,
         "application_edited",
         "member_application",
         applicationId,
@@ -435,7 +425,7 @@ export async function updateAdminApplication(
           applicationId,
           application.stage,
           application.stage,
-          actorUserId,
+          adminDatabaseUserId(actor),
           `Application details edited: ${changedFields.join(", ")}`,
           now,
         ),

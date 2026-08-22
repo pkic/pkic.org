@@ -5,7 +5,8 @@ import { signJwt, verifyJwt, type JwtVerifyResult } from "../utils/jwt";
 import { constantTimeEqual, sha256Hex } from "../utils/crypto";
 import { AUTH_SCOPES } from "./scopes";
 import { computeGrantsForUser } from "./permissions";
-import type { AuthAdmin, DatabaseLike, Env } from "../types";
+import type { AuthAdmin, DatabaseLike, Env, UserBackedAuthAdmin } from "../types";
+import { createServiceAuthAdmin, createUserBackedAuthAdmin, requireUserBackedAuthAdmin } from "./admin-identity";
 import {
   AUTH_MAGIC_LINK_PURPOSES,
   getBearerToken,
@@ -45,7 +46,7 @@ const STAFF_ACCESS_CONDITION = `(
   u.role = 'admin'
   OR EXISTS (
     SELECT 1 FROM user_roles ur
-    WHERE (ur.user_id = u.id OR (ur.user_id IS NULL AND ur.user_email = u.normalized_email))
+    WHERE ur.user_id = u.id
       AND ur.revoked_at IS NULL
       AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   )
@@ -146,7 +147,7 @@ function isAdminSessionTokenClaims(claims: object): claims is AdminSessionTokenC
 export async function signAdminSessionToken(
   secret: string,
   payload: {
-    admin: AuthAdmin;
+    admin: UserBackedAuthAdmin;
     sessionId: string;
     expiresAt: string;
     state?: string | null;
@@ -206,7 +207,12 @@ export async function requireAdminFromRequest(
   // API key auth — no DB lookup needed, returns a synthetic admin identity.
   // Use constant-time comparison to avoid leaking the configured key via timing.
   if (env?.ADMIN_API_KEY && (await constantTimeEqual(token, env.ADMIN_API_KEY))) {
-    const admin = { id: "api-key", email: "api-key", role: "admin", scopes: [...AUTH_SCOPES] };
+    const admin = createServiceAuthAdmin({
+      id: "api-key",
+      email: "api-key",
+      role: "admin",
+      scopes: [...AUTH_SCOPES],
+    });
     cacheAdminForRequest(request, admin, "api-key");
     return admin;
   }
@@ -234,16 +240,9 @@ export async function requireUserBackedAdminFromRequest(
   db: DatabaseLike,
   request: Request,
   env?: Pick<Env, "ADMIN_API_KEY" | "INTERNAL_SIGNING_SECRET">,
-): Promise<AuthAdmin> {
+): Promise<UserBackedAuthAdmin> {
   const admin = await requireAdminFromRequest(db, request, env);
-  if (getCachedAdminAuthTransport(request) === "api-key") {
-    throw new AppError(
-      403,
-      "USER_BACKED_ADMIN_REQUIRED",
-      "This action requires an attributable admin session rather than the shared API key",
-    );
-  }
-  return admin;
+  return requireUserBackedAuthAdmin(admin);
 }
 
 export async function revokeAdminSession(db: DatabaseLike, sessionId: string): Promise<void> {
@@ -276,22 +275,25 @@ export async function issueAdminSession(
   db: DatabaseLike,
   user: Pick<AdminUserRow, "id" | "email" | "role">,
   sessionTtlHours: number,
-): Promise<{ admin: AuthAdmin; sessionId: string; expiresAt: string }> {
+): Promise<{ admin: UserBackedAuthAdmin; sessionId: string; expiresAt: string }> {
   const { sessionId, expiresAt } = await insertSessionRow(db, SESSIONS_TABLE, user.id, sessionTtlHours);
 
   return {
-    admin: {
+    admin: createUserBackedAuthAdmin({
       id: user.id,
       email: user.email,
       role: user.role,
       scopes: user.role === "admin" ? [...AUTH_SCOPES] : [],
-    },
+    }),
     sessionId,
     expiresAt,
   };
 }
 
-export async function getAdminBySessionClaims(db: DatabaseLike, claims: AdminSessionTokenClaims): Promise<AuthAdmin> {
+export async function getAdminBySessionClaims(
+  db: DatabaseLike,
+  claims: AdminSessionTokenClaims,
+): Promise<UserBackedAuthAdmin> {
   const row = await first<AdminSessionRow>(
     db,
     `SELECT s.id, s.user_id, s.expires_at, s.revoked_at, u.email, u.role
@@ -306,9 +308,9 @@ export async function getAdminBySessionClaims(db: DatabaseLike, claims: AdminSes
   assertSessionActive(row ? { revokedAt: row.revoked_at, expiresAt: row.expires_at } : null, "admin");
   const activeRow = row!;
 
-  const grants = await computeGrantsForUser(db, activeRow.user_id, activeRow.email);
+  const grants = await computeGrantsForUser(db, activeRow.user_id);
 
-  return {
+  return createUserBackedAuthAdmin({
     id: activeRow.user_id,
     email: activeRow.email,
     role: activeRow.role,
@@ -318,7 +320,7 @@ export async function getAdminBySessionClaims(db: DatabaseLike, claims: AdminSes
     sessionId: activeRow.id,
     expiresAt: activeRow.expires_at,
     state: claims.state ?? null,
-  };
+  });
 }
 
 export async function requestAdminMagicLink(
@@ -330,7 +332,7 @@ export async function requestAdminMagicLink(
     ttlMinutes: number;
     purpose?: AdminMagicLinkPurpose;
   },
-): Promise<{ token: string | null; admin: AuthAdmin | null }> {
+): Promise<{ token: string | null; admin: UserBackedAuthAdmin | null }> {
   const prepared = await prepareAdminMagicLink(db, payload);
   if (!prepared.statement) return { token: null, admin: null };
   await prepared.statement.run();
@@ -346,7 +348,11 @@ export async function prepareAdminMagicLink(
     ttlMinutes: number;
     purpose?: AdminMagicLinkPurpose;
   },
-): Promise<{ token: string | null; admin: AuthAdmin | null; statement: import("../types").StatementLike | null }> {
+): Promise<{
+  token: string | null;
+  admin: UserBackedAuthAdmin | null;
+  statement: import("../types").StatementLike | null;
+}> {
   const email = normalizeEmail(payload.email);
   const admin = await first<AdminUserRow>(
     db,
@@ -363,11 +369,11 @@ export async function prepareAdminMagicLink(
 
   return {
     token: magic.token,
-    admin: {
+    admin: createUserBackedAuthAdmin({
       id: admin.id,
       email: admin.email,
       role: admin.role,
-    },
+    }),
     statement: magic.statement,
   };
 }
@@ -382,7 +388,7 @@ export async function verifyAdminMagicLink(
     purpose?: AdminMagicLinkPurpose;
     auditAction?: "admin_magic_link_verified";
   },
-): Promise<{ admin: AuthAdmin; sessionId: string; expiresAt: string }> {
+): Promise<{ admin: UserBackedAuthAdmin; sessionId: string; expiresAt: string }> {
   const tokenHash = await sha256Hex(payload.token);
   const purpose = payload.purpose ?? AUTH_MAGIC_LINK_PURPOSES.admin;
   const row = await first<{
@@ -436,12 +442,12 @@ export async function verifyAdminMagicLink(
     session.statement,
   ]);
   return {
-    admin: {
+    admin: createUserBackedAuthAdmin({
       id: row.user_id,
       email: row.email,
       role: row.role,
       scopes: row.role === "admin" ? [...AUTH_SCOPES] : [],
-    },
+    }),
     sessionId: session.sessionId,
     expiresAt: session.expiresAt,
   };

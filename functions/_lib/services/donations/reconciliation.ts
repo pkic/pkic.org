@@ -6,6 +6,7 @@ import {
   fetchStripePaymentDetails,
   type StripePaymentDetails,
 } from "../../integrations/stripe/payment-details";
+import type { ProviderResult } from "../../integrations/provider-failure";
 import {
   backfillCompletedDonation,
   completeDonationFromStripe,
@@ -41,10 +42,12 @@ async function loadPaymentDetails(
   stripeKey: string,
   paymentIntentId: string | null,
   offeredMethod: string | null = null,
-): Promise<StripePaymentDetails> {
-  if (!paymentIntentId) return emptyDetails(offeredMethod);
-  const details = await fetchStripePaymentDetails(stripeKey, paymentIntentId);
-  return { ...details, paymentMethodType: details.paymentMethodType ?? offeredMethod };
+): Promise<ProviderResult<StripePaymentDetails>> {
+  if (!paymentIntentId) return { ok: true, value: emptyDetails(offeredMethod) };
+  const result = await fetchStripePaymentDetails(stripeKey, paymentIntentId);
+  return result.ok
+    ? { ok: true, value: { ...result.value, paymentMethodType: result.value.paymentMethodType ?? offeredMethod } }
+    : result;
 }
 
 async function selectReconciliationRows(
@@ -104,38 +107,21 @@ export async function reconcileDonations(
   for (const donation of donations) {
     const sessionId = donation.checkout_session_id;
     try {
-      const session = await fetchStripeCheckoutSession(options.stripeKey, sessionId);
-      if (!session) {
+      const sessionResult = await fetchStripeCheckoutSession(options.stripeKey, sessionId);
+      if (!sessionResult.ok) {
         results.push({ sessionId, outcome: "error", error: "Failed to fetch session from Stripe" });
         continue;
       }
+      const session = sessionResult.value;
 
       if (donation.status === "completed") {
         const details = await loadPaymentDetails(options.stripeKey, session.payment_intent);
-        await backfillCompletedDonation(db, session, details);
-        results.push({ sessionId, outcome: "completed" });
-        continue;
-      }
-
-      if (session.status === "complete" && session.payment_status === "paid") {
-        const details = await loadPaymentDetails(options.stripeKey, session.payment_intent);
-        await completeDonationFromStripe(db, session, details);
-        await queueNotification(db, env, sessionId, "thank_you", options.appBaseUrl, outboxIds);
-        results.push({ sessionId, outcome: "completed" });
-        continue;
-      }
-
-      if (session.status === "complete") {
-        const offeredMethod = session.payment_method_types?.[0] ?? null;
-        const details = await loadPaymentDetails(options.stripeKey, session.payment_intent, offeredMethod);
-        if (details.paymentFailed) {
-          await markDonationFailed(db, sessionId, details.paymentMethodType);
-          await queueNotification(db, env, sessionId, "payment_failed", options.appBaseUrl, outboxIds);
-          results.push({ sessionId, outcome: "failed" });
-        } else {
-          await markDonationAwaitingPayment(db, sessionId, details.paymentMethodType, session.expires_at ?? null);
-          results.push({ sessionId, outcome: "awaiting_payment" });
+        if (!details.ok) {
+          results.push({ sessionId, outcome: "error", error: "Failed to fetch payment details from Stripe" });
+          continue;
         }
+        await backfillCompletedDonation(db, session, details.value);
+        results.push({ sessionId, outcome: "completed" });
         continue;
       }
 
@@ -146,22 +132,47 @@ export async function reconcileDonations(
         continue;
       }
 
-      const details = await loadPaymentDetails(options.stripeKey, session.payment_intent);
-      if (details.paymentFailed) {
+      const detailsResult = await loadPaymentDetails(
+        options.stripeKey,
+        session.payment_intent,
+        session.status === "complete" ? (session.payment_method_types?.[0] ?? null) : null,
+      );
+      if (!detailsResult.ok) {
+        if (session.status === "complete" && session.payment_status === "paid") {
+          // A directly fetched paid Checkout Session is authoritative. The
+          // expanded payment-intent data is supplemental and backfillable.
+          await completeDonationFromStripe(db, session, emptyDetails());
+          await queueNotification(db, env, sessionId, "thank_you", options.appBaseUrl, outboxIds);
+          results.push({ sessionId, outcome: "completed" });
+          continue;
+        }
+        results.push({ sessionId, outcome: "error", error: "Failed to fetch payment details from Stripe" });
+        continue;
+      }
+      const details = detailsResult.value;
+
+      if (session.status === "complete" && session.payment_status === "paid") {
+        await completeDonationFromStripe(db, session, details);
+        await queueNotification(db, env, sessionId, "thank_you", options.appBaseUrl, outboxIds);
+        results.push({ sessionId, outcome: "completed" });
+      } else if (session.status === "complete" && details.paymentFailed) {
         await markDonationFailed(db, sessionId, details.paymentMethodType);
         await queueNotification(db, env, sessionId, "payment_failed", options.appBaseUrl, outboxIds);
         results.push({ sessionId, outcome: "failed" });
+      } else if (session.status === "complete") {
+        await markDonationAwaitingPayment(db, sessionId, details.paymentMethodType, session.expires_at ?? null);
+        results.push({ sessionId, outcome: "awaiting_payment" });
       } else {
         if (details.paymentMethodType) {
           await recordDonationPaymentMethod(db, sessionId, details.paymentMethodType);
         }
         results.push({ sessionId, outcome: "still_pending" });
       }
-    } catch (error) {
+    } catch {
       results.push({
         sessionId,
         outcome: "error",
-        error: error instanceof Error ? error.message : "Unknown reconciliation error",
+        error: "Donation reconciliation failed",
       });
     }
   }

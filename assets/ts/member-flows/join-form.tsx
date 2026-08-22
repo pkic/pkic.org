@@ -16,77 +16,16 @@ import { setStatus, readField, findSubmitButton } from "../shared/form/helpers";
 import { SuccessPanel } from "../components/SuccessPanel";
 import { replaceFormWithSuccess } from "../shared/form/success-panel";
 import { memberApplicationCreateSchema } from "../../shared/schemas/member-applications";
-import { INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../shared/schemas/membership-categories";
+import { INDIVIDUAL_MEMBERSHIP_CATEGORIES, requiresUniversityEmail } from "../../shared/schemas/membership-categories";
+import { isPersonalEmailAddress } from "../../shared/constants/email-domains";
 import type { FormDefinition } from "../shared/types";
 
 const API_BASE = "/api/v1";
-const MEMBERS_DATA_URL = "/members/members-data.json";
-
-const UNIVERSITY_EMAIL_CATEGORIES = new Set(["H5"]);
-
-const PUBLIC_EMAIL_DOMAINS = new Set([
-  "gmail.com",
-  "googlemail.com",
-  "proton.me",
-  "protonmail.com",
-  "protonmail.ch",
-  "pm.me",
-  "hotmail.com",
-  "hotmail.co.uk",
-  "hotmail.fr",
-  "hotmail.it",
-  "hotmail.de",
-  "outlook.com",
-  "live.com",
-  "msn.com",
-  "live.co.uk",
-  "yahoo.com",
-  "yahoo.co.uk",
-  "yahoo.fr",
-  "yahoo.de",
-  "yahoo.it",
-  "ymail.com",
-  "icloud.com",
-  "me.com",
-  "mac.com",
-  "aol.com",
-  "aim.com",
-  "mail.com",
-  "gmx.com",
-  "gmx.net",
-  "gmx.de",
-  "yandex.com",
-  "yandex.ru",
-  "zoho.com",
-  "tutanota.com",
-  "tuta.io",
-  "fastmail.com",
-  "fastmail.fm",
-]);
 
 // ── Pure/testable helpers ──────────────────────────────────────────────────
 
 export function isIndividualCategory(categoryCode: string): boolean {
   return INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(categoryCode);
-}
-
-export function requiresUniversityEmail(categoryCode: string): boolean {
-  return UNIVERSITY_EMAIL_CATEGORIES.has(categoryCode);
-}
-
-/** Mirrors the historic organization-domain guard from assets/js/form.js. */
-export function isPublicEmailDomain(email: string): boolean {
-  const value = email.trim().toLowerCase();
-  const domain = value.includes("@") ? value.slice(value.lastIndexOf("@") + 1) : "";
-  return domain.length > 0 && PUBLIC_EMAIL_DOMAINS.has(domain);
-}
-
-/** Mirrors the historic fuzzy duplicate-organization check from assets/js/form.js. */
-export function isDuplicateOrganization(orgName: string, existingNames: string[]): boolean {
-  const name = orgName.toLowerCase().trim();
-  if (!name || existingNames.length === 0) return false;
-  if (name.length < 3) return existingNames.some((existing) => existing === name);
-  return existingNames.some((existing) => existing === name || existing.includes(name) || name.includes(existing));
 }
 
 /** Reads the checked legal/interest checkboxes into the free-form `answers` bucket. */
@@ -148,48 +87,13 @@ function readSelectedCategory(form: HTMLFormElement): string {
   return form.querySelector<HTMLInputElement>('input[name="category"]:checked')?.value ?? "";
 }
 
-async function loadExistingOrganizationNames(): Promise<string[]> {
-  try {
-    const res = await fetch(MEMBERS_DATA_URL);
-    if (!res.ok) return [];
-    const data = (await res.json()) as unknown;
-    if (!Array.isArray(data)) return [];
-    return data
-      .filter(
-        (entry): entry is { title: string } =>
-          Boolean(entry) && typeof (entry as { title?: unknown }).title === "string",
-      )
-      .map((entry) => entry.title.toLowerCase().trim());
-  } catch {
-    return [];
-  }
-}
-
-function wireDuplicateOrganizationWarning(form: HTMLFormElement, existingNames: string[]): void {
-  const orgField = form.querySelector<HTMLInputElement>("#organizationName");
-  const warning = form.querySelector<HTMLElement>("[data-organization-warning]");
-  if (!orgField || !warning) return;
-
-  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
-  const check = () => {
-    const isDuplicate = isDuplicateOrganization(orgField.value, existingNames);
-    warning.classList.toggle("d-none", !isDuplicate);
-    orgField.classList.toggle("border-warning", isDuplicate);
-  };
-  orgField.addEventListener("blur", check);
-  orgField.addEventListener("input", () => {
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(check, 500);
-  });
-}
-
 function wireEmailValidation(form: HTMLFormElement): (categoryCode: string) => void {
   const emailField = form.querySelector<HTMLInputElement>("#email");
   let requireUniversity = false;
 
   const validate = () => {
     if (!emailField) return;
-    if (requireUniversity && isPublicEmailDomain(emailField.value)) {
+    if (requireUniversity && isPersonalEmailAddress(emailField.value)) {
       emailField.setCustomValidity(
         "Category (h5) requires your university email address; public email providers are not accepted.",
       );
@@ -252,8 +156,6 @@ async function main(): Promise<void> {
       updateEmailRule(category);
     });
   });
-
-  void loadExistingOrganizationNames().then((names) => wireDuplicateOrganizationWarning(form, names));
 
   try {
     const { form: definition } = await getJson<{ form: FormDefinition | null }>(

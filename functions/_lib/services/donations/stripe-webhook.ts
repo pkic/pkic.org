@@ -50,7 +50,10 @@ function emptyDetails(): StripePaymentDetails {
 
 async function paymentDetails(env: Env, paymentIntentId: string | null): Promise<StripePaymentDetails> {
   if (!env.STRIPE_SECRET_KEY || !paymentIntentId) return emptyDetails();
-  return fetchStripePaymentDetails(env.STRIPE_SECRET_KEY, paymentIntentId);
+  const result = await fetchStripePaymentDetails(env.STRIPE_SECRET_KEY, paymentIntentId);
+  // The signed paid webhook is authoritative for donation completion. Stripe's
+  // expanded payment-intent data is supplemental and can be backfilled later.
+  return result.ok ? result.value : emptyDetails();
 }
 
 async function notify(

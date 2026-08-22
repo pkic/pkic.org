@@ -18,7 +18,7 @@ export const ApplicationNotesPost = openApiRoute(applicationNoteCreateRouteSchem
   const body = data.body;
   const note = await addApplicationNoteWithAudit(db, {
     applicationId: data.params.id,
-    actorUserId: admin.id,
+    actor: admin,
     body: body.body,
   });
   return json(note, 201);

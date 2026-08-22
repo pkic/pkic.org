@@ -9,6 +9,7 @@ import type { AuthAdmin } from "../functions/_lib/types";
 import { proposalPermissionForRequest } from "../functions/_lib/auth/proposal-route-policy";
 
 const actor = (permissions: string[]): AuthAdmin => ({
+  identityType: "user",
   id: "staff-1",
   email: "staff@example.test",
   role: "user",
@@ -55,8 +56,9 @@ describe("admin route authorization policy", () => {
   });
 
   it("uses one contextual proposal policy for read, score, and management actions", () => {
-    expect(proposalPermissionForRequest("/api/v1/admin/proposals/p1/reviews", "GET")).toBe("proposals:read");
+    expect(proposalPermissionForRequest("/api/v1/admin/proposals/p1/reviews", "GET")).toBe("proposals:score");
     expect(proposalPermissionForRequest("/api/v1/admin/proposals/p1/reviews", "POST")).toBe("proposals:score");
+    expect(proposalPermissionForRequest("/api/v1/admin/proposals/p1/audit-log", "GET")).toBe("proposals:score");
     expect(proposalPermissionForRequest("/api/v1/admin/proposals/p1/comments", "POST")).toBe("proposals:score");
     expect(proposalPermissionForRequest("/api/v1/admin/proposals/p1/finalize", "POST")).toBe("proposals:manage");
     expect(proposalPermissionForRequest("/api/v1/admin/proposals/p1/presentation/versions/v1", "DELETE")).toBe(

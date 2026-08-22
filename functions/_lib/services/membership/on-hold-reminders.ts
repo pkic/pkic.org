@@ -225,7 +225,7 @@ export async function runOnHoldReminders(
     const prepared = prepareApplicationStageTransition(db, item.application, {
       applicationId: item.application.id,
       toStage: "withdrawn",
-      actorUserId: null,
+      actor: null,
       note: "Auto-closed — no response within the on-hold deadline",
       email: buildApplicationClosedNoResponseEmail({
         recipientEmail: item.application.applicant_email,

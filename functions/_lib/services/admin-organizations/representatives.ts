@@ -32,9 +32,10 @@ import {
 } from "../membership/representative-roles";
 import { prepareAuditLog } from "../audit";
 import { prepareQueueEmailStatement } from "../../email/outbox";
-import type { DatabaseLike, StatementLike } from "../../types";
+import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
 import { getOrgAggregate } from "./queries";
 import { buildMembershipAccessOffboardingStatements } from "../membership/offboarding";
+import { adminDatabaseUserId } from "../../auth/admin-identity";
 
 export interface AddRepresentativeInput {
   name: string;
@@ -45,7 +46,7 @@ export interface AddRepresentativeInput {
 
 export async function addOrganizationRepresentative(
   db: DatabaseLike,
-  actorUserId: string,
+  actor: AuthAdmin,
   organizationId: string,
   input: AddRepresentativeInput,
 ) {
@@ -106,7 +107,7 @@ export async function addOrganizationRepresentative(
         memberId,
         userId: user.id,
         roleId: REPRESENTATIVE_ROLE_IDS.primaryContact,
-        grantedByUserId: actorUserId,
+        grantedByUserId: adminDatabaseUserId(actor),
         now,
       }),
     );
@@ -117,14 +118,14 @@ export async function addOrganizationRepresentative(
         memberId,
         userId: user.id,
         roleId: REPRESENTATIVE_ROLE_IDS.secondaryContact,
-        grantedByUserId: actorUserId,
+        grantedByUserId: adminDatabaseUserId(actor),
         now,
       }),
     );
     assignedRole = "secondary";
   }
   statements.push(
-    prepareAuditLog(db, "admin", actorUserId, "organization_representative_added", "organization", organizationId, {
+    prepareAuditLog(db, "admin", actor.id, "organization_representative_added", "organization", organizationId, {
       representativeId,
       email: user.email,
     }),
@@ -292,7 +293,7 @@ export interface ConfirmSecondaryContactResult {
 
 export async function confirmSecondaryContact(
   db: DatabaseLike,
-  actorUserId: string,
+  actor: AuthAdmin,
   organizationId: string,
 ): Promise<ConfirmSecondaryContactResult> {
   const org = await first<{ id: string }>(db, "SELECT id FROM organizations WHERE id = ?", [organizationId]);
@@ -322,18 +323,13 @@ export async function confirmSecondaryContact(
       memberId: aggregate.id,
       userId: nomination.nominated_user_id,
       roleId: REPRESENTATIVE_ROLE_IDS.secondaryContact,
+      grantedByUserId: adminDatabaseUserId(actor),
       now,
     })),
     db.prepare("DELETE FROM organization_secondary_contact_nominations WHERE member_id = ?").bind(aggregate.id),
-    prepareAuditLog(
-      db,
-      "admin",
-      actorUserId,
-      "organization_secondary_contact_confirmed",
-      "organization",
-      organizationId,
-      { secondaryContactUserId: nomination.nominated_user_id },
-    ),
+    prepareAuditLog(db, "admin", actor.id, "organization_secondary_contact_confirmed", "organization", organizationId, {
+      secondaryContactUserId: nomination.nominated_user_id,
+    }),
   ];
   const preparedEmail = contact
     ? prepareQueueEmailStatement(db, {

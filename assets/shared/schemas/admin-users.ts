@@ -36,9 +36,8 @@ export const adminUserUpdateSchema = z
 export const ADMIN_USERS_SORT_COLUMNS = ["last_name", "email", "organization_name", "role", "created_at"] as const;
 
 /**
- * GET /api/v1/admin/users `type` filter — computed from the existing
- * `members`/`event_participants` tables ("Users Page — Member
- * vs. Event-Attendee Type Filter"), not a stored column.
+ * GET /api/v1/admin/users `type` filter — computed from membership and the
+ * canonical participant-role source read model, not a stored column.
  */
 export const ADMIN_USERS_TYPE_VALUES = ["member", "event_attendee", "contact_only"] as const;
 

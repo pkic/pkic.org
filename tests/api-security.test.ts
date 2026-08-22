@@ -96,7 +96,7 @@ async function insertSession(
   ).run();
 
   return signAdminSessionToken(env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret", {
-    admin: { id: userId, email: "admin@example.test", role: "admin" },
+    admin: { identityType: "user", id: userId, email: "admin@example.test", role: "admin" },
     sessionId,
     expiresAt,
     scopes: opts.scopes,

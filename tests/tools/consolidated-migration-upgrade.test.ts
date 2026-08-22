@@ -60,7 +60,10 @@ function seedRepresentativePre0035State(db: DatabaseSync): void {
     INSERT INTO event_permissions
       (id, event_id, user_email, user_id, permission, granted_by_id, created_at)
     VALUES
-      ('permission-1', 'event-1', 'organizer@example.test', 'organizer-1', 'organizer', 'admin-1', '2025-01-02');
+      ('permission-1', 'event-1', 'organizer@example.test', 'organizer-1', 'organizer', 'admin-1', '2025-01-02'),
+      ('permission-2', 'event-1', 'preprovisioned@example.test', NULL, 'program_committee', 'admin-1', '2025-01-02'),
+      ('permission-3', 'event-1', 'api-key-grantee@example.test', NULL, 'moderator', 'api-key', '2025-01-02'),
+      ('permission-4', 'event-1', 'unknown-grantor@example.test', NULL, 'volunteer', 'legacy-missing-admin', '2025-01-02');
 
     INSERT INTO sponsors
       (id, organization_id, sponsorship_level, status, data_json, created_at, updated_at)
@@ -73,6 +76,8 @@ function seedRepresentativePre0035State(db: DatabaseSync): void {
     VALUES
       ('sponsor-event-1', 'sponsor-1', 'event-1', 'Platinum', 'Upgrade test', 'active',
        '{"legacyEventField":"kept"}', '2025-01-04', '2025-01-04'),
+      ('sponsor-event-1-alt', 'sponsor-1', 'event-1', 'Gold', 'Second legacy tier', 'active',
+       '{"secondLegacyEventField":"kept"}', '2025-01-05', '2025-01-05'),
       ('sponsor-event-2', 'sponsor-2', 'event-1', 'Silver', 'Pending upgrade test', 'pending',
        '{"pendingEventField":"kept"}', '2025-01-04', '2025-01-04');
 
@@ -116,6 +121,33 @@ describe("consolidated pending migration upgrade", () => {
     expect(
       db
         .prepare(
+          `SELECT u.normalized_email, ur.role_id
+             FROM user_roles ur JOIN users u ON u.id = ur.user_id
+            WHERE u.normalized_email = 'preprovisioned@example.test'`,
+        )
+        .all(),
+    ).toEqual([{ normalized_email: "preprovisioned@example.test", role_id: "role-program_committee" }]);
+    expect(
+      db
+        .prepare(
+          `SELECT u.normalized_email, ur.granted_by_user_id
+             FROM user_roles ur JOIN users u ON u.id = ur.user_id
+            WHERE u.normalized_email IN (
+              'organizer@example.test',
+              'api-key-grantee@example.test',
+              'unknown-grantor@example.test'
+            )
+            ORDER BY u.normalized_email`,
+        )
+        .all(),
+    ).toEqual([
+      { normalized_email: "api-key-grantee@example.test", granted_by_user_id: null },
+      { normalized_email: "organizer@example.test", granted_by_user_id: "admin-1" },
+      { normalized_email: "unknown-grantor@example.test", granted_by_user_id: null },
+    ]);
+    expect(
+      db
+        .prepare(
           `SELECT name FROM sqlite_master
            WHERE type = 'index' AND name IN (
              'idx_session_proposals_event_live_submitted',
@@ -133,6 +165,28 @@ describe("consolidated pending migration upgrade", () => {
     expect(db.prepare("SELECT id, normalized_name, sponsor_tier FROM organizations ORDER BY id").all()).toEqual([
       { id: "org-1", normalized_name: "acme corp", sponsor_tier: "Gold" },
       { id: "org-2", normalized_name: "pending corp", sponsor_tier: null },
+    ]);
+    expect(
+      db
+        .prepare(
+          `SELECT name FROM sqlite_master
+           WHERE type = 'table' AND name = 'organization_content_review_notification_intents'`,
+        )
+        .all(),
+    ).toEqual([{ name: "organization_content_review_notification_intents" }]);
+    expect(
+      db
+        .prepare(
+          `SELECT name FROM sqlite_master
+           WHERE type = 'index' AND name IN (
+             'idx_org_content_review_notification_intents_pending',
+             'uq_org_content_review_notification_intents_outbox'
+           ) ORDER BY name`,
+        )
+        .all(),
+    ).toEqual([
+      { name: "idx_org_content_review_notification_intents_pending" },
+      { name: "uq_org_content_review_notification_intents_outbox" },
     ]);
 
     const roles = db
@@ -168,7 +222,7 @@ describe("consolidated pending migration upgrade", () => {
       .prepare(
         `SELECT sponsor_type, organization_id, tier, pipeline_stage, notes
          FROM sponsorships
-         ORDER BY sponsor_type, organization_id`,
+         ORDER BY sponsor_type, organization_id, tier`,
       )
       .all() as Array<{
       sponsor_type: string;
@@ -180,12 +234,18 @@ describe("consolidated pending migration upgrade", () => {
     expect(sponsorshipRows.map(({ notes: _notes, ...row }) => row)).toEqual([
       { sponsor_type: "consortium", organization_id: "org-1", tier: "Gold", pipeline_stage: "active" },
       { sponsor_type: "consortium", organization_id: "org-2", tier: "Silver", pipeline_stage: "new_inquiry" },
+      { sponsor_type: "event", organization_id: "org-1", tier: "Gold", pipeline_stage: "active" },
       { sponsor_type: "event", organization_id: "org-1", tier: "Platinum", pipeline_stage: "active" },
       { sponsor_type: "event", organization_id: "org-2", tier: "Silver", pipeline_stage: "payment_pending" },
     ]);
     expect(sponsorshipRows.map((row) => JSON.parse(row.notes))).toEqual([
       { legacySponsorData: { legacyCompanyField: "kept" } },
       { legacySponsorData: { pendingLead: "kept" } },
+      {
+        legacySponsorData: { legacyCompanyField: "kept" },
+        legacySponsorshipSubject: "Second legacy tier",
+        legacyEventData: { secondLegacyEventField: "kept" },
+      },
       {
         legacySponsorData: { legacyCompanyField: "kept" },
         legacySponsorshipSubject: "Upgrade test",
@@ -215,6 +275,29 @@ describe("consolidated pending migration upgrade", () => {
     expect(
       db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'storage_deletion_outbox'").get(),
     ).toEqual({ name: "storage_deletion_outbox" });
+    expect(
+      db
+        .prepare("PRAGMA table_info(application_documents)")
+        .all()
+        .map((column: any) => column.name),
+    ).toEqual(expect.arrayContaining(["content_sha256", "idempotency_key_hash"]));
+    expect(
+      db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'index' AND name IN ('idx_application_documents_app', 'uq_application_documents_idempotency') ORDER BY name",
+        )
+        .all(),
+    ).toEqual([{ name: "idx_application_documents_app" }, { name: "uq_application_documents_idempotency" }]);
+    expect(
+      db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'trigger' AND name IN ('apply_application_document_insert_guard', 'validate_application_document_insert_guard') ORDER BY name",
+        )
+        .all(),
+    ).toEqual([
+      { name: "apply_application_document_insert_guard" },
+      { name: "validate_application_document_insert_guard" },
+    ]);
     expect(
       db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'badge_render_jobs'").get(),
     ).toEqual({ name: "badge_render_jobs" });
@@ -246,13 +329,17 @@ describe("consolidated pending migration upgrade", () => {
     expect(
       db
         .prepare(
-          "SELECT name FROM sqlite_master WHERE type = 'index' AND name IN ('uq_user_roles_active_email_role_context', 'uq_user_roles_active_user_role_context') ORDER BY name",
+          "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'uq_user_roles_active_user_role_context'",
         )
         .all(),
-    ).toEqual([
-      { name: "uq_user_roles_active_email_role_context" },
-      { name: "uq_user_roles_active_user_role_context" },
-    ]);
+    ).toEqual([{ name: "uq_user_roles_active_user_role_context" }]);
+    expect(
+      db
+        .prepare("PRAGMA table_info(user_roles)")
+        .all()
+        .map((column: any) => ({ name: column.name, notnull: column.notnull }))
+        .filter((column) => column.name === "user_id" || column.name === "user_email"),
+    ).toEqual([{ name: "user_id", notnull: 1 }]);
     expect(db.prepare("SELECT review_round FROM session_proposals WHERE id = 'proposal-1'").get()).toEqual({
       review_round: 1,
     });

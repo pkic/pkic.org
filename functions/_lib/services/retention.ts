@@ -49,7 +49,8 @@ async function getRetentionPreviewRows(db: DatabaseLike): Promise<RetentionPrevi
        WHERE ${DUE_RETENTION_PREDICATE}
        GROUP BY rp.event_id, e.name, e.slug, e.ends_at, rp.user_retention_days
      )
-     SELECT *,
+     SELECT event_id, event_name, event_slug, ends_at, retention_days,
+            eligible_registrations, eligible_users,
             COUNT(*) OVER () AS total_events,
             SUM(eligible_registrations) OVER () AS total_registrations,
             SUM(eligible_users) OVER () AS total_users

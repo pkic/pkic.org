@@ -31,6 +31,13 @@ export async function buildUserAccessOffboardingStatements(
     db
       .prepare("UPDATE working_group_members SET left_at = ? WHERE user_id = ? AND left_at IS NULL")
       .bind(input.at, input.userId),
+    db
+      .prepare(
+        `UPDATE organization_representatives
+            SET left_at = ?, updated_at = ?
+          WHERE user_id = ? AND left_at IS NULL`,
+      )
+      .bind(input.at, input.at, input.userId),
   ];
 }
 

@@ -1,10 +1,8 @@
 /**
  * Secondary email addresses on a user account -- admin/display/search
  * only, does not affect login (magic-link/passkey auth continue to
- * resolve strictly off `users.normalized_email`). Added to consolidate the
- * duplicate `users` rows the YAML->D1 migration created for the same
- * person under different Google-Groups-roster emails; see the user-merge
- * tool (`user-merge.ts`) for folding an existing duplicate account in.
+ * resolve strictly off `users.normalized_email`). These aliases let staff
+ * associate roster email variations without mutating or merging identities.
  */
 import { all, first } from "../db/queries";
 import { normalizeEmail } from "../validation";
@@ -28,6 +26,11 @@ interface UserEmailRow {
   created_at: string;
 }
 
+export interface UserEmailOwner {
+  userId: string;
+  kind: "primary" | "secondary" | "pending";
+}
+
 function toRecord(row: UserEmailRow): UserEmailRecord {
   return { id: row.id, userId: row.user_id, email: row.email, createdAt: row.created_at };
 }
@@ -39,6 +42,26 @@ export async function listUserEmails(db: DatabaseLike, userId: string): Promise<
     [userId],
   );
   return rows.map(toRecord);
+}
+
+/** Resolve the one account that reserves an email as primary, secondary, or pending verification. */
+export async function findUserEmailOwner(db: DatabaseLike, normalizedEmail: string): Promise<UserEmailOwner | null> {
+  return first<UserEmailOwner>(
+    db,
+    `SELECT id AS userId, 'primary' AS kind
+       FROM users
+      WHERE normalized_email = ?
+      UNION ALL
+     SELECT user_id AS userId, 'secondary' AS kind
+       FROM user_emails
+      WHERE normalized_email = ?
+      UNION ALL
+     SELECT id AS userId, 'pending' AS kind
+       FROM users
+      WHERE pending_email = ?
+      LIMIT 1`,
+    [normalizedEmail, normalizedEmail, normalizedEmail],
+  );
 }
 
 export async function addUserEmail(
@@ -54,15 +77,8 @@ export async function addUserEmail(
 
   const normalized = normalizeEmail(email);
 
-  const ownEmail = await first<{ id: string }>(db, "SELECT id FROM users WHERE normalized_email = ?", [normalized]);
-  if (ownEmail) {
-    throw new AppError(409, "EMAIL_TAKEN", "This email address already belongs to a user account");
-  }
-  const existingSecondary = await first<{ id: string }>(db, "SELECT id FROM user_emails WHERE normalized_email = ?", [
-    normalized,
-  ]);
-  if (existingSecondary) {
-    throw new AppError(409, "EMAIL_TAKEN", "This email address is already recorded on a user account");
+  if (await findUserEmailOwner(db, normalized)) {
+    throw new AppError(409, "EMAIL_TAKEN", "This email address is already reserved by a user account");
   }
 
   const id = uuid();

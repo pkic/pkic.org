@@ -18,10 +18,10 @@
  * format they support.
  */
 
-import type { EventParticipantRole } from "../../../assets/shared/schemas/participant-roles";
+import type { SocialBadgeRole } from "../../../assets/shared/schemas/participant-roles";
 
 /** Role displayed on the badge for a referral code owner. */
-export type BadgeRole = EventParticipantRole;
+export type BadgeRole = SocialBadgeRole;
 
 /** Data required to render a badge. */
 export interface BadgeData {

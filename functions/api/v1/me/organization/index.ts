@@ -8,10 +8,12 @@
  */
 import { json } from "../../../../_lib/http";
 import { requireMemberFromRequest } from "../../../../_lib/auth/member";
-import { findUsersWithPermission } from "../../../../_lib/auth/permissions";
-import { queueEmail, processOutboxByIdBackground } from "../../../../_lib/email/outbox";
 import { getConfig } from "../../../../_lib/config";
-import { getMyOrganizationProfile, submitOrgContentChange } from "../../../../_lib/services/organization-content";
+import {
+  getMyOrganizationProfile,
+  processOrganizationContentReviewNotificationsBackground,
+  submitOrgContentChange,
+} from "../../../../_lib/services/organization-content";
 import {
   myOrganizationContentChangeRouteSchema,
   myOrganizationProfileGetRouteSchema,
@@ -31,25 +33,14 @@ export const MeOrganizationPatch = openApiRoute(
   async (c: AdminContext, data) => {
     const db = requestDb(c);
     const member = await requireMemberFromRequest(db, c.req.raw, c.env);
-    const { review, organizationName } = await submitOrgContentChange(db, member, data.body);
+    const { review } = await submitOrgContentChange(
+      db,
+      member,
+      data.body,
+      `${getConfig(c.env, c.req.raw).appBaseUrl}/admin/#/organizations/content-reviews`,
+    );
 
-    const config = getConfig(c.env, c.req.raw);
-    // Hash-routed admin SPA (wouter's useHashLocation) — matches
-    // membership-scheduled-jobs.ts's reviewUrl convention. Links to the queue
-    // list, not a per-review deep link — the admin UI's Content Review screen
-    // is a list/detail split with no :id route param.
-    const reviewUrl = `${config.appBaseUrl}/admin/#/organizations/content-reviews`;
-    const recipients = await findUsersWithPermission(db, "organizations:content-review");
-    for (const email of recipients) {
-      const outboxId = await queueEmail(db, {
-        templateKey: "org-content-submitted",
-        recipientEmail: email,
-        messageType: "transactional",
-        subject: `Organization content change submitted for review — ${organizationName}`,
-        data: { organizationName, submitterName: member.email, reviewUrl },
-      });
-      c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, outboxId));
-    }
+    c.executionCtx.waitUntil(processOrganizationContentReviewNotificationsBackground(db, c.env));
 
     return json({ review });
   },

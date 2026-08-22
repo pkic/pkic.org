@@ -76,6 +76,9 @@ export const sponsorshipEventSchema = z.object({
 export type AdminSponsorship = z.infer<typeof adminSponsorshipSchema>;
 export type SponsorshipEvent = z.infer<typeof sponsorshipEventSchema>;
 
+export const sponsorshipResponseSchema = z.object({ sponsorship: adminSponsorshipSchema });
+export type SponsorshipResponse = z.infer<typeof sponsorshipResponseSchema>;
+
 export const SPONSORSHIP_EVENTS_SORT_COLUMNS = ["createdAt"] as const;
 export const sponsorshipEventsListQuerySchema = searchableListQuerySchema(
   sortColumnSchemaWithDefault(SPONSORSHIP_EVENTS_SORT_COLUMNS, "-createdAt"),
@@ -107,6 +110,8 @@ export const sponsorshipsListQuerySchema = listQuerySchema(ADMIN_SPONSORSHIP_SOR
   nonMemberName: trimmedString(1, 200).optional(),
   contactName: trimmedString(1, 200).optional(),
 });
+export const sponsorshipsListResponseSchema = paginatedResponseSchema("sponsorships", adminSponsorshipSchema);
+export type SponsorshipsListResponse = z.infer<typeof sponsorshipsListResponseSchema>;
 
 export const sponsorshipsListRouteSchema = {
   tags: ["Sponsorships"],
@@ -117,7 +122,7 @@ export const sponsorshipsListRouteSchema = {
     "200": {
       description: "Sponsorships list.",
       content: {
-        "application/json": { schema: paginatedResponseSchema("sponsorships", adminSponsorshipSchema) },
+        "application/json": { schema: sponsorshipsListResponseSchema },
       },
     },
   },
@@ -197,7 +202,7 @@ export const sponsorshipCreateRouteSchema = {
   responses: {
     "201": {
       description: "Sponsorship created.",
-      content: { "application/json": { schema: z.object({ sponsorship: adminSponsorshipSchema }) } },
+      content: { "application/json": { schema: sponsorshipResponseSchema } },
     },
   },
 };
@@ -211,7 +216,7 @@ export const sponsorshipGetRouteSchema = {
   responses: {
     "200": {
       description: "Sponsorship detail.",
-      content: { "application/json": { schema: z.object({ sponsorship: adminSponsorshipSchema }) } },
+      content: { "application/json": { schema: sponsorshipResponseSchema } },
     },
     "404": { description: "Sponsorship not found." },
   },
@@ -271,7 +276,7 @@ export const sponsorshipUpdateRouteSchema = {
   responses: {
     "200": {
       description: "Sponsorship updated.",
-      content: { "application/json": { schema: z.object({ sponsorship: adminSponsorshipSchema }) } },
+      content: { "application/json": { schema: sponsorshipResponseSchema } },
     },
     "404": { description: "Sponsorship not found." },
     "409": { description: "The sponsorship changed concurrently or the requested update violates its active state." },
@@ -297,7 +302,7 @@ export const sponsorshipStageUpdateRouteSchema = {
   responses: {
     "200": {
       description: "Stage updated.",
-      content: { "application/json": { schema: z.object({ sponsorship: adminSponsorshipSchema }) } },
+      content: { "application/json": { schema: sponsorshipResponseSchema } },
     },
     "400": { description: "Unknown pipeline stage." },
     "404": { description: "Sponsorship not found." },

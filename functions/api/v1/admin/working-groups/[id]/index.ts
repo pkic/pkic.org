@@ -4,7 +4,8 @@
  */
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
-import { getAdminWorkingGroupDetail, updateWorkingGroup } from "../../../../../_lib/services/admin-working-groups";
+import { getAdminWorkingGroupDetail } from "../../../../../_lib/services/admin-working-groups/read-model";
+import { updateWorkingGroup } from "../../../../../_lib/services/admin-working-groups/update";
 import { AppError } from "../../../../../_lib/errors";
 import {
   workingGroupGetRouteSchema,

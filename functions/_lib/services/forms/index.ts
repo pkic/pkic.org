@@ -6,8 +6,8 @@ export {
   type ActiveFormDefinition,
   type ManagedFormWithFields,
   type FormFieldDefinition,
-  type FormPurpose,
 } from "./read";
+export type { FormPurpose } from "../../../../assets/shared/schemas/forms";
 
 export {
   validateCustomAnswersAgainstForm,

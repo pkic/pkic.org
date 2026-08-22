@@ -47,6 +47,7 @@ export async function updateAdminRegistrationDayAttendance(
   const result = await updateRegistrationByIdWithNotification(
     db,
     {
+      eventId: event.id,
       registrationId: registration.id,
       action: "update",
       attendanceType: deriveEventAttendanceType(dayAttendance) ?? registration.attendance_type,

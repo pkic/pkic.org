@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { adminEventCampaignPreviewSchema } from "../assets/shared/schemas/admin-events";
 import {
   formFieldRulesSchema,
   formFieldOptionValues,
@@ -8,8 +9,29 @@ import {
   parseFormFieldOptions,
   parseFormFieldRules,
 } from "../assets/shared/schemas/form-field-rules";
+import {
+  ATTENDANCE_TYPES as CANONICAL_ATTENDANCE_TYPES,
+  attendanceTypeSchema as canonicalAttendanceTypeSchema,
+} from "../assets/shared/schemas/registration";
 
 describe("canonical form-field rules", () => {
+  it("uses the canonical attendance vocabulary across registration, form rules, and campaigns", () => {
+    expect(CANONICAL_ATTENDANCE_TYPES).toEqual(["in_person", "virtual", "on_demand"]);
+    for (const attendanceType of CANONICAL_ATTENDANCE_TYPES) {
+      expect(canonicalAttendanceTypeSchema.safeParse(attendanceType).success).toBe(true);
+      expect(formFieldRulesSchema.safeParse({ showWhen: { eventAttendanceTypeIn: [attendanceType] } }).success).toBe(
+        true,
+      );
+      expect(
+        adminEventCampaignPreviewSchema.safeParse({
+          sendMode: "personal",
+          filter: { audience: "attendees", attendanceType },
+        }).success,
+      ).toBe(true);
+    }
+    expect(canonicalAttendanceTypeSchema.safeParse("future_mode").success).toBe(false);
+  });
+
   it("normalizes the one persisted rule shape used by frontend and backend", () => {
     expect(
       parseFormFieldRules({

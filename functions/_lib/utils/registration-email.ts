@@ -1,5 +1,5 @@
 import { all } from "../db/queries";
-import { parseJsonSafe } from "../utils/json";
+import { formatCustomAnswerValue, isCustomAnswerRecord, parseCustomAnswerRecord } from "./custom-answer-display";
 import { getActiveFormByPurpose } from "../services/forms";
 import type { DatabaseLike } from "../types";
 import type { FormFieldDefinition } from "../services/forms/read";
@@ -7,17 +7,6 @@ import type { FormFieldDefinition } from "../services/forms/read";
 export interface CustomAnswerRow {
   label: string;
   displayValue: string;
-}
-
-function formatCustomAnswerValue(fieldType: string, value: unknown): string {
-  if (value === null || value === undefined) return "";
-  if (Array.isArray(value)) return (value as unknown[]).map(String).join(", ");
-  if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (typeof value === "object") {
-    const range = value as { start?: string; end?: string };
-    if (range.start && range.end) return `${range.start} – ${range.end}`;
-  }
-  return String(value);
 }
 
 /**
@@ -29,7 +18,7 @@ export function buildCustomAnswerRows(
   customAnswers: Record<string, unknown> | null | undefined,
   formFields: FormFieldDefinition[] | null | undefined,
 ): CustomAnswerRow[] {
-  if (!customAnswers || !formFields?.length) return [];
+  if (!isCustomAnswerRecord(customAnswers) || !formFields?.length) return [];
   const rows: CustomAnswerRow[] = [];
   for (const field of formFields) {
     if (field.fieldType === "boolean") continue; // covered by acceptedTermsText
@@ -37,7 +26,7 @@ export function buildCustomAnswerRows(
     if (value === undefined || value === null || value === "") continue;
     rows.push({
       label: field.label,
-      displayValue: formatCustomAnswerValue(field.fieldType, value),
+      displayValue: formatCustomAnswerValue(value, field),
     });
   }
   return rows;
@@ -47,12 +36,12 @@ export function buildCustomAnswerVariables(
   customAnswers: Record<string, unknown> | null | undefined,
   formFields: FormFieldDefinition[] | null | undefined,
 ): Record<string, string> {
-  if (!customAnswers || !formFields?.length) return {};
+  if (!isCustomAnswerRecord(customAnswers) || !formFields?.length) return {};
   const vars: Record<string, string> = {};
   for (const field of formFields) {
     const value = customAnswers[field.key];
     if (value === undefined || value === null || value === "") continue;
-    vars[field.key] = formatCustomAnswerValue(field.fieldType, value);
+    vars[field.key] = formatCustomAnswerValue(value, field);
   }
   return vars;
 }
@@ -108,7 +97,7 @@ export async function getCustomAnswerRows(
   if (!customAnswersJson) return [];
   const form = await getActiveFormByPurpose(db, eventId, "event_registration");
   if (!form) return [];
-  const parsed = parseJsonSafe<Record<string, unknown> | null>(customAnswersJson, null);
+  const parsed = parseCustomAnswerRecord(customAnswersJson);
   if (!parsed) return [];
   return buildCustomAnswerRows(parsed, form.fields);
 }

@@ -10,7 +10,7 @@ import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 import { proposalFlagResponseSchema } from "../assets/shared/schemas/proposal-status";
 
 function decisionActor(id: string) {
-  return { id, email: "admin@pkic.org", role: "admin" };
+  return { identityType: "user" as const, id, email: "admin@pkic.org", role: "admin" };
 }
 
 async function postProposalReview(proposalId: string, token: string, body: unknown): Promise<Response> {
@@ -77,12 +77,46 @@ async function addReviews(eventId: string, proposalId: string, adminId: string, 
   return extraAdminIds;
 }
 
+async function getProposalRoleSources(proposalId: string): Promise<Array<{ user_id: string; status: string }>> {
+  return queryAll<{ user_id: string; status: string }>(
+    env.DB,
+    `SELECT user_id, status
+     FROM event_participant_role_sources
+     WHERE source_type = 'proposal' AND source_ref = ?`,
+    [proposalId],
+  );
+}
+
 describe("proposal finalize workflows", () => {
   beforeEach(async () => {
     await resetDb();
   });
 
-  it("accept: sets proposal status to accepted and activates participant records", async () => {
+  it("rejects a synthetic API-key actor at the decision service boundary", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId } = await seedProposalWithSpeaker(eventId);
+
+    await expect(
+      finalizeProposalDecision(env.DB, {
+        proposalId,
+        actor: { identityType: "service", id: "api-key", email: "api-key", role: "admin" },
+        finalStatus: "accepted",
+        minReviewsRequired: 0,
+      }),
+    ).rejects.toMatchObject({ status: 403, code: "USER_BACKED_ADMIN_REQUIRED" });
+    await expect(
+      queryAll(env.DB, "SELECT id FROM proposal_decisions WHERE proposal_id = ?", proposalId),
+    ).resolves.toHaveLength(0);
+    await expect(
+      queryAll(
+        env.DB,
+        "SELECT id FROM audit_log WHERE action = 'proposal_decision_recorded' AND entity_id = ?",
+        proposalId,
+      ),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("accept: sets proposal status to accepted and activates proposal role sources", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, proposerUserId, speakerUserId, adminUserId } = await seedProposalWithSpeaker(eventId);
 
@@ -100,17 +134,13 @@ describe("proposal finalize workflows", () => {
     );
     expect(proposalRow.status).toBe("accepted");
 
-    const participants = await queryAll<{ user_id: string; status: string }>(
-      env.DB,
-      "SELECT user_id, status FROM event_participants WHERE source_type = 'proposal' AND source_ref = ?",
-      [proposalId],
-    );
+    const participants = await getProposalRoleSources(proposalId);
     const active = participants.filter((p) => p.status === "active").map((p) => p.user_id);
     expect(active).toContain(proposerUserId);
     expect(active).toContain(speakerUserId);
   });
 
-  it("reject: sets proposal status to rejected and deactivates participants", async () => {
+  it("reject: sets proposal status to rejected and deactivates proposal role sources", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
 
@@ -128,11 +158,8 @@ describe("proposal finalize workflows", () => {
     );
     expect(proposalRow.status).toBe("rejected");
 
-    const participants = await queryAll<{ user_id: string; status: string }>(
-      env.DB,
-      "SELECT user_id, status FROM event_participants WHERE source_type = 'proposal' AND source_ref = ?",
-      [proposalId],
-    );
+    const participants = await getProposalRoleSources(proposalId);
+    expect(participants.length).toBeGreaterThan(0);
     for (const p of participants) {
       expect(p.status).toBe("inactive");
     }
@@ -245,11 +272,8 @@ describe("proposal finalize workflows", () => {
         await queryAll(env.DB, "SELECT id FROM proposal_decision_history WHERE proposal_id = ?", [proposalId]),
       ).toHaveLength(0);
       expect(await queryAll(env.DB, "SELECT id FROM email_outbox WHERE event_id = ?", [eventId])).toHaveLength(0);
-      const participants = await queryAll<{ status: string }>(
-        env.DB,
-        "SELECT status FROM event_participants WHERE source_type = 'proposal' AND source_ref = ?",
-        [proposalId],
-      );
+      const participants = await getProposalRoleSources(proposalId);
+      expect(participants.length).toBeGreaterThan(0);
       expect(participants.every(({ status }) => status === "inactive")).toBe(true);
     } finally {
       await env.DB.prepare("DROP TRIGGER IF EXISTS reject_proposal_decision_audit").run();
@@ -314,7 +338,7 @@ describe("proposal spam/duplicate/delete", () => {
     expect(row.status).toBe("duplicate");
   });
 
-  it("soft-delete: sets deleted_at and deactivates participants", async () => {
+  it("soft-delete: sets deleted_at and deactivates proposal role sources", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
     const adminToken = await createAdminSession(env.DB, adminUserId, "flag-delete-service-token");
@@ -330,11 +354,8 @@ describe("proposal spam/duplicate/delete", () => {
     expect(row.status).toBe("deleted");
     expect(row.deleted_at).not.toBeNull();
 
-    const participants = await queryAll<{ status: string }>(
-      env.DB,
-      "SELECT status FROM event_participants WHERE source_type = 'proposal' AND source_ref = ?",
-      [proposalId],
-    );
+    const participants = await getProposalRoleSources(proposalId);
+    expect(participants.length).toBeGreaterThan(0);
     for (const p of participants) {
       expect(p.status).toBe("inactive");
     }
@@ -402,15 +423,10 @@ describe("proposal spam/duplicate/delete", () => {
     expect(auditRows[0]?.action).toBe("proposal_deleted");
   });
 
-  it("rolls back proposal deletion and participant changes when its audit write fails", async () => {
+  it("rolls back proposal deletion when its audit write fails", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
     const adminToken = await createAdminSession(env.DB, adminUserId, "flag-delete-rollback-token");
-    await env.DB.prepare(
-      "UPDATE event_participants SET status = 'active' WHERE source_type = 'proposal' AND source_ref = ?",
-    )
-      .bind(proposalId)
-      .run();
     await env.DB.prepare(
       `CREATE TRIGGER reject_proposal_delete_audit
          BEFORE INSERT ON audit_log
@@ -429,12 +445,9 @@ describe("proposal spam/duplicate/delete", () => {
       [proposalId],
     );
     expect(proposal).toEqual({ status: "submitted", deleted_at: null });
-    const participants = await queryAll<{ status: string }>(
-      env.DB,
-      "SELECT status FROM event_participants WHERE source_type = 'proposal' AND source_ref = ?",
-      [proposalId],
-    );
-    expect(participants.every(({ status }) => status === "active")).toBe(true);
+    const participants = await getProposalRoleSources(proposalId);
+    expect(participants.length).toBeGreaterThan(0);
+    expect(participants.every(({ status }) => status === "inactive")).toBe(true);
   });
 
   it("does not audit a moderation compare-and-set that loses", async () => {
@@ -742,6 +755,24 @@ describe("proposal subtree access gate (full router stack)", () => {
       .run();
   }
 
+  async function assignProposalReadOnlyRole(userId: string, eventId: string, grantedBy: string): Promise<void> {
+    const roleId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO roles (id, name, description, is_system_role, created_at, updated_at)
+         VALUES (?, ?, NULL, 0, datetime('now'), datetime('now'))`,
+      ).bind(roleId, `proposal_reader_${roleId}`),
+      env.DB.prepare(
+        `INSERT INTO role_permissions (id, role_id, permission, created_at)
+         VALUES (?, ?, 'proposals:read', datetime('now'))`,
+      ).bind(crypto.randomUUID(), roleId),
+      env.DB.prepare(
+        `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, granted_by_user_id, created_at)
+         VALUES (?, ?, ?, 'event', ?, ?, datetime('now'))`,
+      ).bind(crypto.randomUUID(), userId, roleId, eventId, grantedBy),
+    ]);
+  }
+
   // Grants a role unrelated to proposals/events so the user passes
   // STAFF_ACCESS_CONDITION (can obtain a session at all) while still
   // lacking proposals:read — otherwise a truly grant-less user can't even
@@ -786,6 +817,17 @@ describe("proposal subtree access gate (full router stack)", () => {
     expect(response.status).toBe(403);
   });
 
+  it("audit-log: proposals:read alone cannot expose private review notes", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const staffId = await insertStaffUser("read-only-audit@wf.test");
+    await assignProposalReadOnlyRole(staffId, eventId, adminUserId);
+    const staffToken = await createAdminSession(env.DB, staffId, "read-only-audit-token");
+
+    const response = await callAppGet(`/api/v1/admin/proposals/${proposalId}/audit-log`, staffToken);
+    expect(response.status).toBe(403);
+  });
+
   it("remind-speakers: a staff user with no event-scoped access cannot trigger speaker reminders", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId } = await seedProposalWithSpeaker(eventId);
@@ -806,15 +848,36 @@ describe("proposal subtree access gate (full router stack)", () => {
     expect(response.status).toBe(404);
   });
 
-  it("audit-log: a staff user with an event-scoped proposals:read grant (event_moderator) can view the audit log", async () => {
+  it("audit-log: an event moderator with proposals:score can view private review audit details", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    await env.DB.prepare(
+      `INSERT INTO audit_log
+         (id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at, scope_type, scope_id)
+       VALUES (?, 'admin', ?, 'proposal_review_upserted', 'proposal_review', ?, ?, datetime('now'), 'proposal', ?)`,
+    )
+      .bind(
+        crypto.randomUUID(),
+        adminUserId,
+        crypto.randomUUID(),
+        JSON.stringify({ reviewerComment: { from: null, to: "Private review note" } }),
+        proposalId,
+      )
+      .run();
     const staffId = await insertStaffUser("moderator@wf.test");
     await assignEventModerator(staffId, eventId, adminUserId);
     const staffToken = await createAdminSession(env.DB, staffId, "moderator-token");
 
     const response = await callAppGet(`/api/v1/admin/proposals/${proposalId}/audit-log`, staffToken);
     expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      auditLog: [
+        expect.objectContaining({
+          action: "proposal_review_upserted",
+          details: { reviewerComment: { from: null, to: "Private review note" } },
+        }),
+      ],
+    });
   });
 
   it("decision endpoints require proposals:manage, not only proposal read/score access", async () => {

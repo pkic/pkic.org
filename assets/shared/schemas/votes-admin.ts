@@ -147,14 +147,24 @@ export const adminBallotSchema = z.object({
 export type AdminVoteBallot = z.infer<typeof adminBallotSchema>;
 export type AdminVoteProposalSummary = z.infer<typeof proposalSummarySchema>;
 
+export const ADMIN_VOTE_BALLOT_SORT_COLUMNS = ["submittedAt", "round", "choice", "userId", "organizationId"] as const;
+
+export const adminVoteBallotsListQuerySchema = listQuerySchema(ADMIN_VOTE_BALLOT_SORT_COLUMNS).extend({
+  round: z.coerce.number().int().min(1).optional(),
+});
+export type AdminVoteBallotsListQuery = z.infer<typeof adminVoteBallotsListQuerySchema>;
+
+export const adminVoteBallotsListResponseSchema = paginatedResponseSchema("ballots", adminBallotSchema);
+export type AdminVoteBallotsListResponse = z.infer<typeof adminVoteBallotsListResponseSchema>;
+
 export const adminVoteBallotsRouteSchema = {
   tags: ["Admin Votes"],
   summary: "Full ballot breakdown (staff only)",
-  request: { params: voteIdParamsSchema },
+  request: { params: voteIdParamsSchema, query: adminVoteBallotsListQuerySchema },
   responses: {
     "200": {
       description: "Raw ballots, including voter identity.",
-      content: { "application/json": { schema: z.object({ ballots: z.array(adminBallotSchema) }) } },
+      content: { "application/json": { schema: adminVoteBallotsListResponseSchema } },
     },
     "404": { description: "Vote not found." },
   },

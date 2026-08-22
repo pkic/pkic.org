@@ -3,16 +3,22 @@
  * visibility updates, and the admin list/ballot-audit queries. Split out of
  * votes.ts.
  */
-import { all } from "../../db/queries";
 import { queryPage } from "../../db/pagination";
+import { buildPageInfo, type PageInfo } from "../../../../assets/shared/schemas/pagination";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import { stringifyJson } from "../../utils/json";
 import { AppError } from "../../errors";
-import { resolveOrderBy } from "../../db/sort";
+import { resolveMappedOrderBy, resolveOrderBy } from "../../db/sort";
 import { buildD1TextSearchFilter } from "../../db/search";
-import { ADMIN_VOTES_SORT_COLUMNS } from "../../../../assets/shared/schemas/votes-admin";
-import { prepareAuditLog } from "../audit";
+import {
+  ADMIN_VOTE_BALLOT_SORT_COLUMNS,
+  ADMIN_VOTES_SORT_COLUMNS,
+  type AdminVoteBallotsListQuery,
+} from "../../../../assets/shared/schemas/votes-admin";
+import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
+import { adminDatabaseUserId } from "../../auth/admin-identity";
+import { prepareForumVoteDelegateNotificationIntents } from "./delegate-notification-intents";
 import {
   resolveScope,
   uniqueSlug,
@@ -83,6 +89,7 @@ export async function createVoteDirect(
   const id = uuid();
   const slug = await uniqueSlug(db, input.title);
   const status: VoteStatus = new Date(opensAt).getTime() <= Date.now() ? "open" : "scheduled";
+  const databaseUserId = adminDatabaseUserId(admin);
 
   // Build every statement first, execute once via db.batch() — the vote row
   // and its candidates are one atomic unit of work (PR #1 review §5.3): a
@@ -106,7 +113,7 @@ export async function createVoteDirect(
         input.voteType,
         input.scopeType,
         scopeId,
-        admin.id,
+        databaseUserId,
         input.eligibleCategories ? stringifyJson(input.eligibleCategories) : null,
         input.thresholdType,
         opensAt,
@@ -121,7 +128,7 @@ export async function createVoteDirect(
           `INSERT INTO vote_candidates (id, vote_id, user_id, candidate_name, candidate_bio, nominated_by_user_id, sort_order, eliminated_round, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
         )
-        .bind(uuid(), id, c.userId ?? null, c.name, c.bio ?? null, admin.id, i, now),
+        .bind(uuid(), id, c.userId ?? null, c.name, c.bio ?? null, databaseUserId, i, now),
     ),
     prepareAuditLog(
       db,
@@ -137,6 +144,7 @@ export async function createVoteDirect(
       },
       now,
     ),
+    prepareForumVoteDelegateNotificationIntents(db, id, 1, now),
   ];
   await db.batch(statements);
 
@@ -166,31 +174,51 @@ export async function updateVoteSettings(
     throw new AppError(422, "INVALID_WINDOW", "closesAt must be after opensAt");
   }
   const now = nowIso();
-  await db.batch([
-    db
-      .prepare(
-        `UPDATE votes SET
-           title = CASE WHEN ? = 1 THEN ? ELSE title END,
-           description = CASE WHEN ? = 1 THEN ? ELSE description END,
-           opens_at = CASE WHEN ? = 1 THEN ? ELSE opens_at END,
-           closes_at = CASE WHEN ? = 1 THEN ? ELSE closes_at END,
-           updated_at = ?
-         WHERE id = ?`,
-      )
-      .bind(
-        input.title === undefined ? 0 : 1,
-        input.title ?? null,
-        input.description === undefined ? 0 : 1,
-        input.description ?? null,
-        input.opensAt === undefined ? 0 : 1,
-        input.opensAt ?? null,
-        input.closesAt === undefined ? 0 : 1,
-        input.closesAt ?? null,
-        now,
+  try {
+    await db.batch([
+      db
+        .prepare(
+          `UPDATE votes SET
+             title = CASE WHEN ? = 1 THEN ? ELSE title END,
+             description = CASE WHEN ? = 1 THEN ? ELSE description END,
+             opens_at = CASE WHEN ? = 1 THEN ? ELSE opens_at END,
+             closes_at = CASE WHEN ? = 1 THEN ? ELSE closes_at END,
+             transition_revision = transition_revision + 1,
+             updated_at = ?
+           WHERE id = ?
+             AND transition_revision = ?
+             AND transition_processing_token IS NULL`,
+        )
+        .bind(
+          input.title === undefined ? 0 : 1,
+          input.title ?? null,
+          input.description === undefined ? 0 : 1,
+          input.description ?? null,
+          input.opensAt === undefined ? 0 : 1,
+          input.opensAt ?? null,
+          input.closesAt === undefined ? 0 : 1,
+          input.closesAt ?? null,
+          now,
+          existing.id,
+          existing.transition_revision,
+        ),
+      prepareAuditLogAfterOneChange(
+        db,
+        "admin",
+        admin.id,
+        "vote_updated",
+        "vote",
         existing.id,
+        { changes: input },
+        now,
       ),
-    prepareAuditLog(db, "admin", admin.id, "vote_updated", "vote", existing.id, { changes: input }, now),
-  ]);
+    ]);
+  } catch (error) {
+    if (isAuditOneChangeGuardFailure(error)) {
+      throw new AppError(409, "VOTE_CHANGED", "Vote state changed; reload and retry");
+    }
+    throw error;
+  }
   return toVoteSummary(await getVoteRowOrThrow(db, existing.id));
 }
 
@@ -202,14 +230,43 @@ export async function updateVoteVisibility(
 ): Promise<VoteSummary> {
   const existing = await getVoteRowOrThrow(db, voteId);
   const now = nowIso();
-  await db.batch([
-    db
-      .prepare(
-        `UPDATE votes SET visibility = COALESCE(?, visibility), public_detail_level = COALESCE(?, public_detail_level), updated_at = ? WHERE id = ?`,
-      )
-      .bind(input.visibility ?? null, input.publicDetailLevel ?? null, now, existing.id),
-    prepareAuditLog(db, "admin", admin.id, "vote_visibility_updated", "vote", existing.id, { changes: input }, now),
-  ]);
+  try {
+    await db.batch([
+      db
+        .prepare(
+          `UPDATE votes
+           SET visibility = COALESCE(?, visibility),
+               public_detail_level = COALESCE(?, public_detail_level),
+               transition_revision = transition_revision + 1,
+               updated_at = ?
+           WHERE id = ?
+             AND transition_revision = ?
+             AND transition_processing_token IS NULL`,
+        )
+        .bind(
+          input.visibility ?? null,
+          input.publicDetailLevel ?? null,
+          now,
+          existing.id,
+          existing.transition_revision,
+        ),
+      prepareAuditLogAfterOneChange(
+        db,
+        "admin",
+        admin.id,
+        "vote_visibility_updated",
+        "vote",
+        existing.id,
+        { changes: input },
+        now,
+      ),
+    ]);
+  } catch (error) {
+    if (isAuditOneChangeGuardFailure(error)) {
+      throw new AppError(409, "VOTE_CHANGED", "Vote state changed; reload and retry");
+    }
+    throw error;
+  }
   return toVoteSummary(await getVoteRowOrThrow(db, existing.id));
 }
 
@@ -244,14 +301,13 @@ export async function listVotesForAdmin(
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   const orderBy = resolveOrderBy(params.sort, ADMIN_VOTES_SORT_COLUMNS, "ORDER BY created_at DESC", "id ASC");
 
-  const { rows, total } = await queryPage<VoteRow>(
-    db,
-    {
-      sql: `SELECT ${VOTE_ROW_COLUMNS} FROM votes ${where} ${orderBy} LIMIT ? OFFSET ?`,
-      bindings: [...whereArgs, params.limit, params.offset],
-    },
-    { sql: `SELECT COUNT(*) AS total FROM votes ${where}`, bindings: whereArgs },
-  );
+  const { rows, total } = await queryPage<VoteRow>(db, {
+    sql: `SELECT ${VOTE_ROW_COLUMNS} FROM votes ${where}`,
+    bindings: whereArgs,
+    orderBy,
+    limit: params.limit,
+    offset: params.offset,
+  });
 
   const electionVoteIds = rows.filter((row) => row.vote_type === "election").map((row) => row.id);
   const candidatesByVoteId = await getCandidatesForVotes(db, electionVoteIds);
@@ -275,21 +331,54 @@ export interface AdminBallotRow {
   submittedAt: string;
 }
 
-export async function listBallotsForAdmin(db: DatabaseLike, voteId: string): Promise<AdminBallotRow[]> {
+const ADMIN_BALLOT_SORT_COLUMNS = {
+  submittedAt: "b.submitted_at",
+  round: "b.round",
+  choice: "b.choice",
+  userId: "b.user_id",
+  organizationId: "b.organization_id",
+} as const satisfies Record<(typeof ADMIN_VOTE_BALLOT_SORT_COLUMNS)[number], string>;
+
+export async function listBallotsForAdmin(
+  db: DatabaseLike,
+  voteId: string,
+  query: AdminVoteBallotsListQuery,
+): Promise<{ ballots: AdminBallotRow[]; page: PageInfo }> {
   await getVoteRowOrThrow(db, voteId);
-  const rows = await all<{
+  const conditions = ["b.vote_id = ?"];
+  const bindings: unknown[] = [voteId];
+  if (query.round !== undefined) {
+    conditions.push("b.round = ?");
+    bindings.push(query.round);
+  }
+  if (query.q) {
+    const search = buildD1TextSearchFilter(query.q, ["b.user_id", "b.organization_id", "b.choice", "b.round"]);
+    conditions.push(search.sql);
+    bindings.push(...search.bindings);
+  }
+  const where = `WHERE ${conditions.join(" AND ")}`;
+  const orderBy = resolveMappedOrderBy(
+    query.sort,
+    ADMIN_BALLOT_SORT_COLUMNS,
+    "b.round ASC, b.submitted_at ASC",
+    "b.id ASC",
+  );
+  const { rows, total } = await queryPage<{
     id: string;
     user_id: string;
     organization_id: string | null;
     choice: string;
     round: number;
     submitted_at: string;
-  }>(
-    db,
-    `SELECT id, user_id, organization_id, choice, round, submitted_at FROM vote_ballots WHERE vote_id = ? ORDER BY round ASC, submitted_at ASC`,
-    [voteId],
-  );
-  return rows.map((r) => ({
+  }>(db, {
+    sql: `SELECT b.id, b.user_id, b.organization_id, b.choice, b.round, b.submitted_at
+              FROM vote_ballots b ${where}`,
+    bindings,
+    orderBy,
+    limit: query.limit,
+    offset: query.offset,
+  });
+  const ballots = rows.map((r) => ({
     id: r.id,
     userId: r.user_id,
     organizationId: r.organization_id,
@@ -297,4 +386,5 @@ export async function listBallotsForAdmin(db: DatabaseLike, voteId: string): Pro
     round: r.round,
     submittedAt: r.submitted_at,
   }));
+  return { ballots, page: buildPageInfo(query.limit, query.offset, total, ballots.length) };
 }

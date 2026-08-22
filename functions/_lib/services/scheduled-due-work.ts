@@ -5,6 +5,7 @@ import { runRsvpEnforcer } from "./rsvp-enforcer";
 import { runWaitlistPromotionCycle } from "./registrations/waitlist-promotions";
 import { processPendingStorageDeletions, type StorageDeletionResult } from "./storage-deletion-outbox";
 import { processPendingBadgeRenders, type BadgeRenderResult } from "./registration-badge-regeneration";
+import { drainOrganizationContentReviewNotificationIntents } from "./organization-content";
 import type { Env } from "../types";
 import type { D1QueryBudget } from "../db/query-budget";
 
@@ -12,6 +13,12 @@ type ReminderCycleResult = Awaited<ReturnType<typeof runReminderCycle>>;
 type OutboxResult = Awaited<ReturnType<typeof processPendingOutbox>>;
 type RsvpEnforcementResult = Awaited<ReturnType<typeof runRsvpEnforcer>>;
 type WaitlistPromotionResult = Awaited<ReturnType<typeof runWaitlistPromotionCycle>>;
+
+// The notification drain is deliberately opportunistic in this shared pass.
+// Keep room for the normal outbox, storage-deletion, and badge-render
+// selection statements that follow it, even when the invocation-wide D1
+// budget is nearly exhausted by the earlier reminder/RSVP/waitlist work.
+const NOTIFICATION_DRAIN_DOWNSTREAM_D1_RESERVE = 4;
 
 interface ReminderCycleTotals {
   inviteRemindersQueued: number;
@@ -239,8 +246,8 @@ export async function runScheduledDueWork(
       stoppedReason = "time_limit";
       break;
     }
-    const remainingD1Queries = invocationBudget?.d1QueryBudget?.remainingQueries() ?? Number.POSITIVE_INFINITY;
-    if (!hasD1BudgetForAnotherPass(remainingD1Queries, estimatedNextD1Queries)) {
+    const remainingD1QueriesForPass = invocationBudget?.d1QueryBudget?.remainingQueries() ?? Number.POSITIVE_INFINITY;
+    if (!hasD1BudgetForAnotherPass(remainingD1QueriesForPass, estimatedNextD1Queries)) {
       stoppedReason = "d1_query_limit";
       break;
     }
@@ -265,6 +272,22 @@ export async function runScheduledDueWork(
       claimWindowHours: config.waitlistClaimWindowHours,
       limit: config.scheduledWaitlistPromotionLimit,
     });
+    // Reviewer intents are durable independently of request/background
+    // execution. Drain a bounded batch before the normal outbox processor so
+    // a failed waitUntil callback is recovered by the existing 15-minute due
+    // work lane. One read plus one bulk-insert and one mark statement are the
+    // minimum D1 cost, so reserve those queries before entering the drain.
+    const notificationRemainingD1Queries =
+      invocationBudget?.d1QueryBudget?.remainingQueries() ?? Number.POSITIVE_INFINITY;
+    const notificationLimit = Math.min(
+      config.scheduledOutboxLimit,
+      invocationBudget?.d1QueryBudget
+        ? Math.floor(Math.max(0, notificationRemainingD1Queries - NOTIFICATION_DRAIN_DOWNSTREAM_D1_RESERVE - 1) / 2)
+        : config.scheduledOutboxLimit,
+    );
+    if (notificationLimit > 0) {
+      await drainOrganizationContentReviewNotificationIntents(env.DB, notificationLimit);
+    }
     const outboxPass = await processPendingOutbox(env.DB, env, config.scheduledOutboxLimit);
     const storageDeletionPass = await processPendingStorageDeletions(env.DB, env, config.scheduledStorageDeletionLimit);
     const badgeRenderPassLimit = remainingBadgeRenderAllowance;

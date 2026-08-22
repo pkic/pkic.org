@@ -83,7 +83,8 @@ export const PUBLIC_SPONSOR_READ_MODEL_SQL = `
       LEFT JOIN consortium_rows consortium ON consortium.sponsor_key = keys.sponsor_key
       LEFT JOIN event_rows event ON event.sponsor_key = keys.sponsor_key
   ), enriched_sponsors AS (
-    SELECT rows.*,
+    SELECT rows.sponsor_key, rows.id, rows.name, rows.website, rows.logo_r2_key,
+           rows.sponsorship_logo_r2_key, rows.tier, rows.event_tier,
            COALESCE(rows.event_tier, rows.tier) AS effective_tier,
            COALESCE(event_tier.display_weight, consortium_tier.display_weight, 0) AS effective_weight,
            MAX(COALESCE(event_tier.display_weight, 0), COALESCE(consortium_tier.display_weight, 0)) AS max_weight
@@ -154,21 +155,17 @@ export async function listPublicSponsors(
   );
   const eventName = options.eventName ?? "";
 
-  const { rows, total } = await queryPage<SponsorRow>(
-    db,
-    {
-      sql: `${PUBLIC_SPONSOR_READ_MODEL_SQL}
+  const { rows, total } = await queryPage<SponsorRow>(db, {
+    sql: `${PUBLIC_SPONSOR_READ_MODEL_SQL}
             SELECT id, name, website, logo_r2_key, sponsorship_logo_r2_key,
                    tier, event_tier, effective_tier, effective_weight
               FROM enriched_sponsors
-              ${filter.sql} ${orderBy} LIMIT ? OFFSET ?`,
-      bindings: [eventName, ...filter.bindings, options.limit, options.offset],
-    },
-    {
-      sql: `${PUBLIC_SPONSOR_READ_MODEL_SQL} SELECT COUNT(*) AS total FROM enriched_sponsors ${filter.sql}`,
-      bindings: [eventName, ...filter.bindings],
-    },
-  );
+              ${filter.sql}`,
+    bindings: [eventName, ...filter.bindings],
+    orderBy,
+    limit: options.limit,
+    offset: options.offset,
+  });
 
   const sponsors = rows.map((row) => ({
     id: row.id,

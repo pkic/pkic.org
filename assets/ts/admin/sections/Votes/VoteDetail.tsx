@@ -1,20 +1,25 @@
 import { useState, useEffect } from "preact/hooks";
+import {
+  adminVoteBallotsListResponseSchema,
+  type AdminVoteBallot,
+  type AdminVoteBallotsListResponse,
+} from "../../../../shared/schemas/votes-admin";
 import { api } from "../../api";
 import { toast, fmt } from "../../ui";
-import type { AdminVoteSummary, AdminVoteBallot } from "../../types";
+import type { AdminVoteSummary } from "../../types";
+import { ApiDataTable } from "../../components/ApiDataTable";
 import { statusBadge } from "./shared";
 
 export function VoteDetail({ vote, onChanged }: { vote: AdminVoteSummary; onChanged: () => void }) {
   const [visibility, setVisibility] = useState(vote.visibility);
   const [detailLevel, setDetailLevel] = useState(vote.publicDetailLevel);
   const [saving, setSaving] = useState(false);
-  const [ballots, setBallots] = useState<AdminVoteBallot[] | null>(null);
-  const [loadingBallots, setLoadingBallots] = useState(false);
+  const [ballotsLoaded, setBallotsLoaded] = useState(false);
 
   useEffect(() => {
     setVisibility(vote.visibility);
     setDetailLevel(vote.publicDetailLevel);
-    setBallots(null);
+    setBallotsLoaded(false);
   }, [vote.id]);
 
   async function saveVisibility() {
@@ -30,18 +35,6 @@ export function VoteDetail({ vote, onChanged }: { vote: AdminVoteSummary; onChan
       toast((err as Error).message, "error");
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function loadBallots() {
-    setLoadingBallots(true);
-    try {
-      const data = await api<{ ballots: AdminVoteBallot[] }>(`/api/v1/admin/votes/${vote.id}/ballots`);
-      setBallots(data.ballots);
-    } catch (err) {
-      toast((err as Error).message, "error");
-    } finally {
-      setLoadingBallots(false);
     }
   }
 
@@ -104,41 +97,57 @@ export function VoteDetail({ vote, onChanged }: { vote: AdminVoteSummary; onChan
           </div>
         </div>
 
-        <button type="button" class="btn btn-outline-secondary btn-sm" disabled={loadingBallots} onClick={loadBallots}>
-          {ballots ? "Refresh ballots" : "Load ballots"}
-        </button>
+        {!ballotsLoaded && (
+          <button type="button" class="btn btn-outline-secondary btn-sm" onClick={() => setBallotsLoaded(true)}>
+            Load ballots
+          </button>
+        )}
 
-        {ballots && (
-          <div class="table-responsive mt-2">
-            <table class="table table-sm">
-              <thead>
-                <tr>
-                  <th>Voter</th>
-                  <th>Organization</th>
-                  <th>Choice</th>
-                  <th>Round</th>
-                  <th>Submitted</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ballots.length === 0 && (
-                  <tr>
-                    <td colSpan={5} class="text-muted">
-                      No ballots yet.
-                    </td>
-                  </tr>
-                )}
-                {ballots.map((b) => (
-                  <tr key={b.id}>
-                    <td class="small">{b.userId}</td>
-                    <td class="small">{b.organizationId ?? "—"}</td>
-                    <td class="small">{b.choice}</td>
-                    <td class="small">{b.round}</td>
-                    <td class="small">{fmt(b.submittedAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {ballotsLoaded && (
+          <div class="mt-2">
+            <ApiDataTable<AdminVoteBallot, AdminVoteBallotsListResponse>
+              endpoint={`/api/v1/admin/votes/${vote.id}/ballots`}
+              responseSchema={adminVoteBallotsListResponseSchema}
+              resolve={(response) => response.ballots}
+              resolvePage={(response) => response.page}
+              paginate
+              searchPlaceholder="Search ballots…"
+              columns={[
+                {
+                  header: "Voter",
+                  cell: (ballot) => ballot.userId,
+                  className: "small",
+                  sort: { asc: "userId", desc: "-userId" },
+                },
+                {
+                  header: "Organization",
+                  cell: (ballot) => ballot.organizationId ?? "—",
+                  className: "small",
+                  sort: { asc: "organizationId", desc: "-organizationId" },
+                },
+                {
+                  header: "Choice",
+                  cell: (ballot) => ballot.choice,
+                  className: "small",
+                  sort: { asc: "choice", desc: "-choice" },
+                },
+                {
+                  header: "Round",
+                  cell: (ballot) => ballot.round,
+                  className: "small",
+                  sort: { asc: "round", desc: "-round" },
+                },
+                {
+                  header: "Submitted",
+                  cell: (ballot) => fmt(ballot.submittedAt),
+                  className: "small",
+                  sort: { asc: "submittedAt", desc: "-submittedAt" },
+                },
+              ]}
+              empty="No ballots yet."
+              rowKey={(ballot) => ballot.id}
+              className="table-sm"
+            />
           </div>
         )}
       </div>

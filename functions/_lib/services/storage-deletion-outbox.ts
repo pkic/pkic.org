@@ -60,8 +60,70 @@ export function prepareStorageDeletionCancellation(
   bucketName: StorageBucketName,
 ): StatementLike {
   return db
-    .prepare("DELETE FROM storage_deletion_outbox WHERE bucket = ? AND object_key = ?")
+    .prepare(
+      `DELETE FROM storage_deletion_outbox
+       WHERE bucket = ? AND object_key = ?
+         AND status IN ('queued', 'retrying')
+         AND processing_token IS NULL`,
+    )
     .bind(bucketName, objectKey);
+}
+
+function prepareStorageUploadCommitGuard(
+  db: DatabaseLike,
+  objectKey: string,
+  bucketName: StorageBucketName,
+): StatementLike {
+  return db
+    .prepare("INSERT INTO storage_upload_commit_guards (id, bucket, object_key) VALUES (?, ?, ?)")
+    .bind(uuid(), bucketName, objectKey);
+}
+
+async function claimUploadCompensationCleanup(
+  db: DatabaseLike,
+  objectKey: string,
+  bucketName: StorageBucketName,
+): Promise<string | null> {
+  const lease = createDurableJobLease();
+  const claimed = await run(
+    db,
+    `UPDATE storage_deletion_outbox
+     SET status = 'deleting', processing_token = ?, lease_expires_at = ?, updated_at = ?
+     WHERE bucket = ? AND object_key = ?
+       AND status IN ('queued', 'retrying') AND processing_token IS NULL`,
+    [lease.token, lease.expiresAt, lease.claimedAt, bucketName, objectKey],
+  );
+  return claimed.changes === 1 ? lease.token : null;
+}
+
+async function releaseUploadCompensationCleanup(
+  db: DatabaseLike,
+  objectKey: string,
+  bucketName: StorageBucketName,
+  processingToken: string,
+): Promise<void> {
+  await run(
+    db,
+    `UPDATE storage_deletion_outbox
+     SET status = 'queued', processing_token = NULL, lease_expires_at = NULL,
+         next_attempt_at = ?, updated_at = ?
+     WHERE bucket = ? AND object_key = ? AND status = 'deleting' AND processing_token = ?`,
+    [nowIso(), nowIso(), bucketName, objectKey, processingToken],
+  );
+}
+
+async function finalizeUploadCompensationCleanup(
+  db: DatabaseLike,
+  objectKey: string,
+  bucketName: StorageBucketName,
+  processingToken: string,
+): Promise<void> {
+  await run(
+    db,
+    `DELETE FROM storage_deletion_outbox
+     WHERE bucket = ? AND object_key = ? AND status = 'deleting' AND processing_token = ?`,
+    [bucketName, objectKey, processingToken],
+  );
 }
 
 /**
@@ -76,14 +138,71 @@ export async function registerStorageUploadCompensation(
   gracePeriodMs = 15 * 60_000,
 ): Promise<void> {
   const createdAt = nowIso();
-  const statement = prepareStorageDeletion(
-    db,
-    objectKey,
-    createdAt,
-    bucketName,
-    new Date(Date.now() + gracePeriodMs).toISOString(),
-  );
-  if (statement) await statement.run();
+  await db
+    .prepare(
+      `INSERT INTO storage_deletion_outbox (
+         id, bucket, object_key, status, attempts, next_attempt_at, last_error, created_at, updated_at, deleted_at
+       ) VALUES (?, ?, ?, 'queued', 0, ?, NULL, ?, ?, NULL)`,
+    )
+    .bind(uuid(), bucketName, objectKey, new Date(Date.now() + gracePeriodMs).toISOString(), createdAt, createdAt)
+    .run();
+}
+
+/**
+ * Coordinates an R2 upload with the D1 transaction that makes it durable.
+ *
+ * The object key must be unique to this upload attempt. Registration rejects
+ * a collision with an active or retained deletion intent before R2 is touched.
+ * A successful D1 batch finishes with a commit guard that atomically verifies
+ * and cancels the cleanup intent. Callers with a guarded update must place
+ * their one-change guard immediately after that update in
+ * `prepareCommitStatements`; otherwise a zero-row CAS could incorrectly commit
+ * dependent statements.
+ *
+ * When upload or commit fails, the caller must first acquire the still-present
+ * cleanup intent before deleting R2. If the intent is absent, the D1 batch may
+ * have committed even though its response was lost, so deleting the object
+ * would create a durable dangling pointer. Cleanup errors never replace the
+ * original upload/commit error.
+ */
+export async function withStorageUploadCompensation(input: {
+  db: DatabaseLike;
+  bucket: R2Bucket;
+  bucketName: StorageBucketName;
+  objectKey: string;
+  upload: () => Promise<unknown>;
+  prepareCommitStatements: () => StatementLike[];
+  gracePeriodMs?: number;
+}): Promise<void> {
+  await registerStorageUploadCompensation(input.db, input.objectKey, input.bucketName, input.gracePeriodMs);
+
+  try {
+    await input.upload();
+    await input.db.batch([
+      ...input.prepareCommitStatements(),
+      prepareStorageUploadCommitGuard(input.db, input.objectKey, input.bucketName),
+    ]);
+  } catch (error) {
+    try {
+      const processingToken = await claimUploadCompensationCleanup(input.db, input.objectKey, input.bucketName);
+      if (processingToken) {
+        try {
+          await input.bucket.delete(input.objectKey);
+          await finalizeUploadCompensationCleanup(input.db, input.objectKey, input.bucketName, processingToken);
+        } catch {
+          try {
+            await releaseUploadCompensationCleanup(input.db, input.objectKey, input.bucketName, processingToken);
+          } catch {
+            // The claimed cleanup lease expires and becomes retryable.
+          }
+        }
+      }
+    } catch {
+      // No cleanup ownership means the commit may have succeeded or another
+      // worker owns deletion. In either case this caller must not delete R2.
+    }
+    throw error;
+  }
 }
 
 export async function enqueueStorageDeletion(

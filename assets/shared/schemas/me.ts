@@ -271,6 +271,15 @@ export const addCoworkerSchema = z.object({
   email: z.string().email(),
 });
 
+export const addedCoworkerSchema = z.object({
+  representativeId: databaseIdSchema,
+  membershipId: databaseIdSchema,
+  userId: databaseIdSchema,
+  name: z.string(),
+  email: z.string().email(),
+});
+export type AddedCoworker = z.infer<typeof addedCoworkerSchema>;
+
 export const addCoworkerRouteSchema = {
   tags: ["Me"],
   summary: "Enroll a coworker as a representative of my organization (self-service)",
@@ -284,12 +293,7 @@ export const addCoworkerRouteSchema = {
       description: "Coworker enrolled.",
       content: {
         "application/json": {
-          schema: z.object({
-            memberId: z.string(),
-            userId: z.string(),
-            name: z.string(),
-            email: z.string(),
-          }),
+          schema: addedCoworkerSchema,
         },
       },
     },

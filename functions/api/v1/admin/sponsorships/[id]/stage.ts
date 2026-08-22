@@ -25,7 +25,7 @@ export const SponsorshipStageUpdate = openApiRoute(sponsorshipStageUpdateRouteSc
   const result = await advanceSponsorshipStage(db, {
     id,
     toStage: body.toStage,
-    actorUserId: admin.id,
+    actor: admin,
     note: body.note ?? null,
     notifications: {
       appBaseUrl: config.appBaseUrl,

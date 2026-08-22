@@ -2,6 +2,7 @@ import { AppError } from "../../errors";
 import { getActiveFormByPurpose, type ActiveFormDefinition, type FormFieldDefinition, type FormPurpose } from "./read";
 import { deriveEventAttendanceType, type DayAttendanceSelection } from "../event-days";
 import type { DatabaseLike } from "../../types";
+import type { AttendanceType } from "../../../../assets/shared/schemas/registration";
 import {
   formFieldOptionValues,
   isAllowedProfileUrl,
@@ -15,7 +16,7 @@ export type DateRangeAnswer = { start: string; end: string };
 export type CustomAnswerValue = Primitive | Primitive[] | DateRangeAnswer;
 
 export interface ValidationContext {
-  attendanceType?: "in_person" | "virtual" | "on_demand";
+  attendanceType?: AttendanceType;
   dayAttendance?: DayAttendanceSelection[];
 }
 

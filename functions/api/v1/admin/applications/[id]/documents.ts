@@ -6,10 +6,8 @@ import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
-import {
-  getMemberApplicationById,
-  listApplicationDocuments,
-} from "../../../../../_lib/services/membership/applications/queries";
+import { getMemberApplicationById } from "../../../../../_lib/services/membership/applications/queries";
+import { listAdminApplicationDocuments } from "../../../../../_lib/services/membership/applications/documents";
 import { AppError } from "../../../../../_lib/errors";
 import { adminApplicationDocumentsListRouteSchema } from "../../../../../../assets/shared/schemas/admin-applications";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
@@ -27,16 +25,6 @@ export const AdminApplicationDocumentsGet = openApiRoute(
       throw new AppError(404, "APPLICATION_NOT_FOUND", "Application not found");
     }
 
-    const documents = await listApplicationDocuments(db, applicationId);
-    return json({
-      documents: documents.map((d) => ({
-        id: d.id,
-        filename: d.filename,
-        mimeType: d.mime_type,
-        fileSizeBytes: d.file_size_bytes,
-        uploadedAt: d.uploaded_at,
-        uploadedByEmail: d.uploaded_by_email,
-      })),
-    });
+    return json(await listAdminApplicationDocuments(db, applicationId, data.query));
   },
 );

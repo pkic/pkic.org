@@ -29,6 +29,7 @@ export const workingGroupCreateSchema = z.object({
   mailingListEmail: z.email().nullable().optional(),
   minEndorsersForBallot: z.number().int().min(0).max(1000).optional(),
 });
+export type WorkingGroupCreateInput = z.infer<typeof workingGroupCreateSchema>;
 
 export const workingGroupUpdateSchema = z.object({
   name: trimmedString(1, 200).optional(),
@@ -37,6 +38,7 @@ export const workingGroupUpdateSchema = z.object({
   minEndorsersForBallot: z.number().int().min(0).max(1000).optional(),
   active: z.boolean().optional(),
 });
+export type WorkingGroupUpdateInput = z.infer<typeof workingGroupUpdateSchema>;
 
 export const workingGroupMemberAddSchema = z.object({ userId: databaseIdSchema });
 
@@ -73,6 +75,7 @@ export const adminWorkingGroupMemberSchema = z.object({
 });
 
 export const adminWorkingGroupDetailSchema = adminWorkingGroupSummarySchema.extend({});
+export const workingGroupResponseSchema = z.object({ workingGroup: adminWorkingGroupSummarySchema });
 
 export type AdminWorkingGroupSummary = z.infer<typeof adminWorkingGroupSummarySchema>;
 export type AdminWorkingGroupMember = z.infer<typeof adminWorkingGroupMemberSchema>;
@@ -82,6 +85,7 @@ export const ADMIN_WORKING_GROUP_SORT_COLUMNS = ["name", "slug", "member_count",
 export const workingGroupsListQuerySchema = listQuerySchema(ADMIN_WORKING_GROUP_SORT_COLUMNS).extend({
   active: z.enum(["true", "false"]).optional(),
 });
+export type WorkingGroupsListQuery = z.infer<typeof workingGroupsListQuerySchema>;
 export const workingGroupsListResponseSchema = paginatedResponseSchema("workingGroups", adminWorkingGroupSummarySchema);
 
 export const ADMIN_WORKING_GROUP_MEMBER_SORT_COLUMNS = [
@@ -92,6 +96,7 @@ export const ADMIN_WORKING_GROUP_MEMBER_SORT_COLUMNS = [
   "joined_at",
 ] as const;
 export const workingGroupMembersListQuerySchema = listQuerySchema(ADMIN_WORKING_GROUP_MEMBER_SORT_COLUMNS);
+export type WorkingGroupMembersListQuery = z.infer<typeof workingGroupMembersListQuerySchema>;
 export const workingGroupMembersListResponseSchema = paginatedResponseSchema("members", adminWorkingGroupMemberSchema);
 
 export const workingGroupsListRouteSchema = {
@@ -114,7 +119,7 @@ export const workingGroupGetRouteSchema = {
   responses: {
     "200": {
       description: "Working group detail.",
-      content: { "application/json": { schema: z.object({ workingGroup: adminWorkingGroupDetailSchema }) } },
+      content: { "application/json": { schema: workingGroupResponseSchema } },
     },
     "404": { description: "Working group not found." },
   },
@@ -129,7 +134,7 @@ export const workingGroupCreateRouteSchema = {
   responses: {
     "201": {
       description: "Working group created.",
-      content: { "application/json": { schema: z.object({ workingGroup: adminWorkingGroupSummarySchema }) } },
+      content: { "application/json": { schema: workingGroupResponseSchema } },
     },
     "409": { description: "A working group with this name already exists." },
   },
@@ -145,7 +150,7 @@ export const workingGroupUpdateRouteSchema = {
   responses: {
     "200": {
       description: "Working group updated.",
-      content: { "application/json": { schema: z.object({ workingGroup: adminWorkingGroupSummarySchema }) } },
+      content: { "application/json": { schema: workingGroupResponseSchema } },
     },
     "404": { description: "Working group not found." },
   },

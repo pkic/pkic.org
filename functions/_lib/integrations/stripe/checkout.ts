@@ -1,4 +1,6 @@
 import { AppError } from "../../errors";
+import { discardProviderResponseBody, providerFailureDetails } from "../provider-failure";
+import { logError } from "../../logging";
 
 const STRIPE_CHECKOUT_SESSIONS_URL = "https://api.stripe.com/v1/checkout/sessions";
 
@@ -17,22 +19,53 @@ export async function createStripeCheckoutSession(
   params: URLSearchParams,
   options: { idempotencyKey: string; fetcher?: typeof fetch },
 ): Promise<StripeCheckoutSessionCreated> {
-  const response = await (options.fetcher ?? fetch)(STRIPE_CHECKOUT_SESSIONS_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${secretKey}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-      "Idempotency-Key": options.idempotencyKey,
-    },
-    body: params.toString(),
-  });
+  let response: Response;
+  try {
+    response = await (options.fetcher ?? fetch)(STRIPE_CHECKOUT_SESSIONS_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${secretKey}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Idempotency-Key": options.idempotencyKey,
+      },
+      body: params.toString(),
+    });
+  } catch {
+    const details = providerFailureDetails("stripe", "create_checkout_session", null);
+    logError("STRIPE_CHECKOUT_SESSION_CREATE_FAILED", details);
+    throw new AppError(502, "STRIPE_ERROR", "Failed to create checkout session", details);
+  }
 
   if (!response.ok) {
-    // Stripe's body can echo customer input. Log only the processor status.
-    console.error("Stripe checkout-session creation failed", response.status);
-    throw new AppError(502, "STRIPE_ERROR", "Failed to create checkout session");
+    // Stripe's body can echo customer input. Log only bounded metadata.
+    const details = providerFailureDetails("stripe", "create_checkout_session", response.status);
+    await discardProviderResponseBody(response);
+    logError("STRIPE_CHECKOUT_SESSION_CREATE_FAILED", details);
+    throw new AppError(502, "STRIPE_ERROR", "Failed to create checkout session", details);
   }
-  const session = (await response.json()) as StripeCheckoutSessionCreated;
-  if (!session.id) throw new AppError(502, "STRIPE_ERROR", "Stripe did not return a checkout session id");
+  let decoded: unknown;
+  try {
+    decoded = await response.json();
+  } catch {
+    const details = providerFailureDetails("stripe", "create_checkout_session", response.status);
+    logError("STRIPE_CHECKOUT_SESSION_CREATE_FAILED", details);
+    throw new AppError(502, "STRIPE_ERROR", "Stripe returned an invalid checkout session", details);
+  }
+  if (
+    !decoded ||
+    typeof decoded !== "object" ||
+    Array.isArray(decoded) ||
+    typeof (decoded as { id?: unknown }).id !== "string"
+  ) {
+    const details = providerFailureDetails("stripe", "create_checkout_session", response.status);
+    logError("STRIPE_CHECKOUT_SESSION_CREATE_FAILED", details);
+    throw new AppError(502, "STRIPE_ERROR", "Stripe returned an invalid checkout session", details);
+  }
+  const session = decoded as StripeCheckoutSessionCreated;
+  if (!session.id) {
+    const details = providerFailureDetails("stripe", "create_checkout_session", response.status);
+    logError("STRIPE_CHECKOUT_SESSION_CREATE_FAILED", details);
+    throw new AppError(502, "STRIPE_ERROR", "Stripe did not return a checkout session id", details);
+  }
   return session;
 }

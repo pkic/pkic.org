@@ -9,9 +9,6 @@ import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveOrderBy } from "../../db/sort";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
-import { parseJsonSafe } from "../../utils/json";
-import { extractDietarySelections } from "../../utils/registration-dietary";
-import { getActiveFormByPurpose } from "../forms";
 import { getAttendanceStatusByType, type AttendanceStatusCount } from "./admin-statistics";
 import {
   EVENT_REGISTRATIONS_SORT_COLUMNS,
@@ -77,7 +74,6 @@ export interface AdminEventRegistrationSummary {
   has_bounced: boolean;
   sponsor_consent: boolean;
   custom_answers_json: string | null;
-  dietary_restrictions: string[] | null;
   dayWaitlistSummary: string | null;
   dayWaitlistCount: number;
   attendanceChangeHistory: AttendanceChangeHistoryEntry[];
@@ -95,7 +91,6 @@ export interface AdminEventRegistrationsStats {
   byStatus: Record<string, number>;
   bouncedCount: number;
   consentCount: number;
-  dietaryCounts: Record<string, number>;
 }
 
 export interface AdminEventRegistrationsListResult {
@@ -193,12 +188,9 @@ export async function listAdminEventRegistrations(
        r.created_at DESC,
        r.id DESC`
     : "r.created_at DESC, r.id DESC";
-  const registrationForm = await getActiveFormByPurpose(db, eventId, "event_registration");
-
-  const { rows: registrationRows, total } = await queryPage<RegistrationRow>(
-    db,
-    {
-      sql: `SELECT r.id, r.user_id, r.status, r.attendance_type, r.source_type, r.created_at, r.updated_at,
+  const pageOrderBy = attendanceChangeFilter ? `ORDER BY ${orderBySql}` : orderBy;
+  const { rows: registrationRows, total } = await queryPage<RegistrationRow>(db, {
+    sql: `SELECT r.id, r.user_id, r.status, r.attendance_type, r.source_type, r.created_at, r.updated_at,
               u.email AS user_email,
               COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
               rc.code AS referral_code,
@@ -237,16 +229,12 @@ export async function listAdminEventRegistrations(
        FROM registrations r
        LEFT JOIN users u ON u.id = r.user_id
        LEFT JOIN referral_codes rc ON rc.owner_type = 'registration' AND rc.owner_id = r.id
-       WHERE ${whereClause}
-       ${attendanceChangeFilter ? `ORDER BY ${orderBySql}` : orderBy}
-       LIMIT ? OFFSET ?`,
-      bindings: [...bindings, params.limit, params.offset],
-    },
-    {
-      sql: `SELECT COUNT(*) AS total FROM registrations r LEFT JOIN users u ON u.id = r.user_id WHERE ${whereClause}`,
-      bindings,
-    },
-  );
+       WHERE ${whereClause}`,
+    bindings,
+    orderBy: pageOrderBy,
+    limit: params.limit,
+    offset: params.offset,
+  });
 
   const registrationIds = registrationRows.map((row) => row.id);
   const registrationFilter = buildD1JsonMembershipFilter("w.registration_id", registrationIds);
@@ -313,15 +301,10 @@ export async function listAdminEventRegistrations(
   const registrations = registrationRows.map((row) => {
     const summary = waitlistByRegistrationId.get(row.id);
     const attendanceChangeHistory = attendanceChangesByRegistrationId.get(row.id) ?? [];
-    const dietarySelections = extractDietarySelections(
-      parseJsonSafe<Record<string, unknown> | null>(row.custom_answers_json, null),
-      registrationForm?.fields,
-    );
     return {
       ...row,
       has_bounced: !!row.has_bounced,
       sponsor_consent: !!row.sponsor_consent,
-      dietary_restrictions: dietarySelections.length > 0 ? dietarySelections : null,
       dayWaitlistSummary: summary?.summary ?? null,
       dayWaitlistCount: summary?.count ?? 0,
       attendanceChangeHistory,
@@ -329,7 +312,7 @@ export async function listAdminEventRegistrations(
     };
   });
 
-  const [statRows, bouncedCountRow, consentCountRow, dietaryRows, attendanceStatusByType] = await Promise.all([
+  const [statRows, bouncedCountRow, consentCountRow, attendanceStatusByType] = await Promise.all([
     // Aggregate stats always cover all registrations for the event (unfiltered)
     all<{ attendance_type: string; status: string; count: number }>(
       db,
@@ -352,14 +335,6 @@ export async function listAdminEventRegistrations(
        WHERE event_id = ? AND term_key = 'sponsor-data-sharing'`,
       [eventId],
     ),
-    all<{ custom_answers_json: string | null }>(
-      db,
-      `SELECT r.custom_answers_json
-       FROM registrations r
-       WHERE r.event_id = ? AND r.status IN ('registered')
-         AND r.custom_answers_json IS NOT NULL`,
-      [eventId],
-    ),
     getAttendanceStatusByType(db, eventId),
   ]);
 
@@ -374,17 +349,6 @@ export async function listAdminEventRegistrations(
     byStatus[row.status] = (byStatus[row.status] ?? 0) + Number(row.count);
   }
 
-  const dietaryCounts: Record<string, number> = {};
-  for (const row of dietaryRows) {
-    const items = extractDietarySelections(
-      parseJsonSafe<Record<string, unknown> | null>(row.custom_answers_json, null),
-      registrationForm?.fields,
-    );
-    for (const item of items) {
-      dietaryCounts[item] = (dietaryCounts[item] ?? 0) + 1;
-    }
-  }
-
   return {
     registrations,
     total,
@@ -394,7 +358,6 @@ export async function listAdminEventRegistrations(
       byStatus,
       bouncedCount: Number(bouncedCountRow?.bounced_count ?? 0),
       consentCount: Number(consentCountRow?.consent_count ?? 0),
-      dietaryCounts,
     },
   };
 }

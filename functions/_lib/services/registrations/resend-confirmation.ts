@@ -6,6 +6,7 @@ import { prepareAuditLog } from "../audit";
 import type { EventRecord } from "../events";
 import { userRecordColumns, type UserRecord } from "../users";
 import { getRegistrationById } from "./queries";
+import { REGISTRATION_RECIPIENT_EMAIL_SQL } from "./recipient-email";
 import { prepareRegistrationConfirmationEmail, prepareRegistrationConfirmedEmail } from "./status-notifications";
 
 export interface ResendRegistrationEmailPayload {
@@ -35,9 +36,15 @@ export async function resendRegistrationEmail(
   const statements: StatementLike[] = [];
   let email;
   if (registration.status === "pending_email_confirmation") {
-    const user = await first<UserRecord>(db, `SELECT ${userRecordColumns()} FROM users WHERE id = ?`, [
-      registration.user_id,
-    ]);
+    const user = await first<UserRecord & { confirmation_email: string }>(
+      db,
+      `SELECT ${userRecordColumns("u")},
+              ${REGISTRATION_RECIPIENT_EMAIL_SQL} AS confirmation_email
+         FROM registrations r
+         JOIN users u ON u.id = r.user_id
+        WHERE r.id = ? AND u.id = ?`,
+      [registration.id, registration.user_id],
+    );
     if (!user) throw new AppError(500, "USER_NOT_FOUND", "Associated user not found");
     statements.push(
       db
@@ -53,7 +60,7 @@ export async function resendRegistrationEmail(
       registrationId: registration.id,
       registration,
       appBaseUrl: payload.appBaseUrl,
-      recipientEmail: user.email,
+      recipientEmail: user.confirmation_email,
       confirmationTtlHours: payload.confirmationTtlHours,
       subject: `Confirm your registration for ${payload.event.name}`,
     });

@@ -10,6 +10,7 @@ export * from "./shared";
 export * from "./tally";
 export * from "./lifecycle";
 export * from "./ballots";
+export * from "./delegate-notification-intents";
 export * from "./closing";
 export * from "./public";
 export * from "./portal";

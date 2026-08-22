@@ -1,5 +1,6 @@
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
 import { ADMIN_AUDIT_LOG_SORT_COLUMNS } from "../../../assets/shared/schemas/admin-audit-log";
+import type { AuditLogListQuery } from "../../../assets/shared/schemas/admin-audit-log";
 import { queryPage } from "../db/pagination";
 import { buildD1TextSearchFilter } from "../db/search";
 import { resolveMappedOrderBy } from "../db/sort";
@@ -18,18 +19,7 @@ interface AuditLogRow {
   created_at: string;
 }
 
-export interface AdminAuditLogQuery {
-  q?: string | null;
-  entityType?: string | null;
-  actorType?: string | null;
-  action?: string | null;
-  entityId?: string | null;
-  sort?: string;
-  limit: number;
-  offset: number;
-}
-
-function buildAuditLogFilter(query: AdminAuditLogQuery): { where: string; bindings: unknown[] } {
+function buildAuditLogFilter(query: AuditLogListQuery): { where: string; bindings: unknown[] } {
   const clauses: string[] = [];
   const bindings: unknown[] = [];
   const exactFilters = [
@@ -63,7 +53,7 @@ function buildAuditLogFilter(query: AdminAuditLogQuery): { where: string; bindin
   return { where: clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "", bindings };
 }
 
-export async function listAdminAuditLog(db: DatabaseLike, query: AdminAuditLogQuery) {
+export async function listAdminAuditLog(db: DatabaseLike, query: AuditLogListQuery) {
   const filter = buildAuditLogFilter(query);
   const orderBy = resolveMappedOrderBy(
     query.sort,
@@ -77,10 +67,8 @@ export async function listAdminAuditLog(db: DatabaseLike, query: AdminAuditLogQu
     "al.id ASC",
   );
   const baseJoin = `FROM audit_log al LEFT JOIN users u ON al.actor_type = 'admin' AND u.id = al.actor_id`;
-  const { rows, total } = await queryPage<AuditLogRow>(
-    db,
-    {
-      sql: `SELECT
+  const { rows, total } = await queryPage<AuditLogRow>(db, {
+    sql: `SELECT
          al.id,
          al.actor_type,
          al.actor_id,
@@ -92,12 +80,12 @@ export async function listAdminAuditLog(db: DatabaseLike, query: AdminAuditLogQu
          al.created_at
        ${baseJoin}
        ${filter.where}
-       ${orderBy}
-       LIMIT ? OFFSET ?`,
-      bindings: [...filter.bindings, query.limit, query.offset],
-    },
-    { sql: `SELECT COUNT(*) AS total ${baseJoin} ${filter.where}`, bindings: filter.bindings },
-  );
+       `,
+    bindings: filter.bindings,
+    orderBy,
+    limit: query.limit,
+    offset: query.offset,
+  });
 
   const entries = rows.map(({ details_json: detailsJson, ...row }) => ({
     ...row,

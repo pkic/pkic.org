@@ -1,20 +1,14 @@
-import { EVENT_INVITES_SORT_COLUMNS } from "../../../../assets/shared/schemas/admin-events";
+import {
+  EVENT_INVITES_SORT_COLUMNS,
+  type AdminEventInvitesListQuery,
+} from "../../../../assets/shared/schemas/admin-events";
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
 
-export interface AdminEventInviteListQuery {
-  status?: string;
-  type?: string;
-  q?: string;
-  sort?: string;
-  limit: number;
-  offset: number;
-}
-
-export async function listAdminEventInvites(db: DatabaseLike, eventId: string, query: AdminEventInviteListQuery) {
+export async function listAdminEventInvites(db: DatabaseLike, eventId: string, query: AdminEventInvitesListQuery) {
   const conditions: string[] = ["i.event_id = ?"];
   const bindings: unknown[] = [eventId];
   if (query.status) {
@@ -47,10 +41,8 @@ export async function listAdminEventInvites(db: DatabaseLike, eventId: string, q
     "i.created_at DESC",
     "i.id ASC",
   );
-  const { rows: invites, total } = await queryPage(
-    db,
-    {
-      sql: `SELECT
+  const { rows: invites, total } = await queryPage(db, {
+    sql: `SELECT
          i.id,
          i.invitee_email,
          i.invitee_first_name,
@@ -72,13 +64,12 @@ export async function listAdminEventInvites(db: DatabaseLike, eventId: string, q
          u.last_name AS inviter_last_name
        FROM invites i
        LEFT JOIN users u ON u.id = i.inviter_user_id
-       WHERE ${where}
-       ${orderBy}
-       LIMIT ? OFFSET ?`,
-      bindings: [...bindings, query.limit, query.offset],
-    },
-    { sql: `SELECT COUNT(*) AS total FROM invites i WHERE ${where}`, bindings },
-  );
+       WHERE ${where}`,
+    bindings,
+    orderBy,
+    limit: query.limit,
+    offset: query.offset,
+  });
   return {
     invites,
     page: buildPageInfo(query.limit, query.offset, total, invites.length),

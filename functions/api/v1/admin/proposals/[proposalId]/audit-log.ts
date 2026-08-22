@@ -11,12 +11,5 @@ export async function onRequestGet(
 ): Promise<Response> {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const proposalId = c.req.param("proposalId");
-  return json(
-    await listProposalAuditLog(requestDb(c), proposalId, {
-      q: data.query.q,
-      sort: data.query.sort,
-      limit: data.query.limit,
-      offset: data.query.offset,
-    }),
-  );
+  return json(await listProposalAuditLog(requestDb(c), proposalId, data.query));
 }

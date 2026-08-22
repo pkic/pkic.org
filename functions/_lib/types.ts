@@ -104,11 +104,15 @@ export interface Env {
   SCHEDULED_EC_AUTO_APPROVE_LIMIT?: string;
   SCHEDULED_GOOGLE_GROUPS_SYNC_LIMIT?: string;
   SCHEDULED_SPONSORSHIP_DUE_WORK_LIMIT?: string;
+  SCHEDULED_VOTE_DUE_WORK_LIMIT?: string;
   SCHEDULED_VOTE_NOTIFICATION_LIMIT?: string;
   /** Maximum distinct recipients resolved for a synchronous admin campaign. */
   ADMIN_CAMPAIGN_MAX_RECIPIENTS?: string;
   CSV_EXPORT_MAX_ROWS?: string;
   CSV_EXPORT_MAX_BYTES?: string;
+  APPLICATION_DOCUMENT_MAX_BYTES?: string;
+  APPLICATION_DOCUMENT_MAX_COUNT?: string;
+  APPLICATION_DOCUMENT_TOTAL_MAX_BYTES?: string;
   SENDGRID_API_KEY?: string;
   SENDGRID_API_BASE?: string;
   FROM_EMAIL?: string;
@@ -250,7 +254,8 @@ export interface AuthMember {
   expiresAt?: string;
 }
 
-export interface AuthAdmin {
+interface AuthAdminBase {
+  /** Stable identity used in audit records and authorization decisions. */
   id: string;
   email: string;
   role: string;
@@ -264,7 +269,24 @@ export interface AuthAdmin {
    * went through requireAdminFromRequest's session/API-key path.
    */
   grants?: PermissionGrant[];
+}
+
+/** A staff actor whose canonical id is also a real users(id) value. */
+export interface UserBackedAuthAdmin extends AuthAdminBase {
+  identityType: "user";
   sessionId?: string;
   expiresAt?: string;
   state?: string | null;
 }
+
+/** An authenticated non-user actor, such as the shared administrative API key. */
+export interface ServiceAuthAdmin extends AuthAdminBase {
+  identityType: "service";
+}
+
+/**
+ * Authenticated staff is deliberately discriminated by identity provenance.
+ * The single `id` is canonical: it is a users(id) only for the `user` branch,
+ * and an audit identity only for the `service` branch.
+ */
+export type AuthAdmin = UserBackedAuthAdmin | ServiceAuthAdmin;

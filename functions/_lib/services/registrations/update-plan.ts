@@ -19,12 +19,13 @@ import {
   resolveCapacityExemptReason,
   type DayWaitlistLane,
 } from "./day-waitlist";
-import { prepareUpsertAttendeeParticipantStatement } from "./participant-registration";
 import type { RegistrationRecord } from "./types";
+import type { AttendanceType } from "../../../../assets/shared/schemas/registration";
+import { prepareClearRegistrationEmailChangeStatement } from "./change-email";
 
 export interface RegistrationUpdatePayload {
   action: "update" | "cancel" | "report_unauthorized";
-  attendanceType?: "in_person" | "virtual" | "on_demand";
+  attendanceType?: AttendanceType;
   dayAttendance?: DayAttendanceSelection[];
   /** Offered day seats are accepted only when the caller explicitly names them. */
   claimDayWaitlistOffers?: string[];
@@ -107,7 +108,7 @@ export async function buildRegistrationUpdate(
         registrationId: registration.id,
         reasonCode: "registration_cancelled",
       }),
-      prepareUpsertAttendeeParticipantStatement(db, cancelled),
+      prepareClearRegistrationEmailChangeStatement(db, registration.id, registration.user_id, now),
     ];
     const audit = prepareRegistrationUpdateAudit(db, registration, cancelled, payload);
     if (audit) statements.push(audit);
@@ -140,7 +141,7 @@ export async function buildRegistrationUpdate(
         registrationId: registration.id,
         reasonCode: "registration_cancelled",
       }),
-      prepareUpsertAttendeeParticipantStatement(db, updated),
+      prepareClearRegistrationEmailChangeStatement(db, registration.id, registration.user_id, now),
     ];
     const audit = prepareRegistrationUpdateAudit(db, registration, updated, payload);
     if (audit) statements.push(audit);
@@ -152,6 +153,21 @@ export async function buildRegistrationUpdate(
     listConfirmedInPersonEventDayIdsForRegistration(db, registration.id),
     listEventDays(db, registration.event_id),
   ]);
+  // Once an event has day-level attendance, that selection is the canonical
+  // source of truth. A scalar-only update cannot safely infer whether omitted
+  // days should be preserved, removed, or changed, so reject it rather than
+  // leaving registration_day_attendance and its waitlist projection stale.
+  if (
+    payload.attendanceType !== undefined &&
+    payload.dayAttendance === undefined &&
+    (configuredEventDays.length > 0 || previousInPersonDayIds.length > 0)
+  ) {
+    throw new AppError(
+      400,
+      "DAY_ATTENDANCE_REQUIRED",
+      "dayAttendance is required when updating attendance for an event with day-level attendance",
+    );
+  }
   const effectiveAttendanceType =
     payload.attendanceType ?? deriveEventAttendanceType(payload.dayAttendance) ?? registration.attendance_type;
   if (!effectiveAttendanceType) {
@@ -185,11 +201,16 @@ export async function buildRegistrationUpdate(
   const hasPerDayAttendanceInput = Boolean(payload.dayAttendance?.length);
   const hasPerDayAttendanceContext = hasPerDayAttendanceInput || previousInPersonDayIds.length > 0;
   let newStatus = isCancelled ? "registered" : registration.status;
-  if (hasPerDayAttendanceContext || capacityExemptReason) {
-    newStatus = "registered";
-  } else if (effectiveAttendanceType !== registration.attendance_type) {
-    if (effectiveAttendanceType === "in_person" || registration.attendance_type === "in_person") {
+  // Profile and attendance edits must not double as email verification. The
+  // confirmation capability is the only self-service transition out of this
+  // state; explicit admin status changes use forceRegistrationStatus instead.
+  if (registration.status !== "pending_email_confirmation") {
+    if (hasPerDayAttendanceContext || capacityExemptReason) {
       newStatus = "registered";
+    } else if (effectiveAttendanceType !== registration.attendance_type) {
+      if (effectiveAttendanceType === "in_person" || registration.attendance_type === "in_person") {
+        newStatus = "registered";
+      }
     }
   }
   const now = nowIso();
@@ -276,7 +297,6 @@ export async function buildRegistrationUpdate(
     updated_at: now,
   };
   if (payload.profilePatch) statements.push(prepareUserProfileStatement(db, updated.user_id, payload.profilePatch));
-  statements.push(prepareUpsertAttendeeParticipantStatement(db, updated));
   const audit = prepareRegistrationUpdateAudit(db, registration, updated, payload);
   if (audit) statements.push(audit);
   return {

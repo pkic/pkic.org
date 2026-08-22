@@ -126,6 +126,17 @@ describe("proposal participants", () => {
     expect(response.status).toBe(200);
     const payload = (await response.json()) as { proposalId: string };
 
+    expect(
+      await queryAll<{ id: string }>(
+        env.DB,
+        `SELECT brj.id
+           FROM badge_render_jobs brj
+           JOIN referral_codes rc ON rc.code = brj.referral_code
+          WHERE rc.owner_type = 'proposal' AND rc.owner_id = ?`,
+        [payload.proposalId],
+      ),
+    ).toHaveLength(1);
+
     const roles = await queryAll<{ role: string }>(
       env.DB,
       "SELECT role FROM proposal_speakers WHERE proposal_id = ? ORDER BY role",
@@ -137,7 +148,10 @@ describe("proposal participants", () => {
 
     const participantRoles = await queryAll<{ role: string }>(
       env.DB,
-      "SELECT role FROM event_participants WHERE event_id = (SELECT event_id FROM session_proposals WHERE id = ?) ORDER BY role",
+      `SELECT role FROM event_participant_role_sources
+       WHERE event_id = (SELECT event_id FROM session_proposals WHERE id = ?)
+         AND source_kind = 'proposal_speaker'
+       ORDER BY role`,
       [payload.proposalId],
     );
     expect(participantRoles.map((entry) => entry.role)).toContain("panelist");
@@ -265,6 +279,7 @@ describe("proposal participants", () => {
       ).toHaveLength(0);
       expect(await queryAll(env.DB, "SELECT id FROM consent_acceptances")).toHaveLength(0);
       expect(await queryAll(env.DB, "SELECT code FROM referral_codes")).toHaveLength(0);
+      expect(await queryAll(env.DB, "SELECT id FROM badge_render_jobs")).toHaveLength(0);
       expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
     } finally {
       await env.DB.prepare("DROP TRIGGER IF EXISTS reject_proposal_submission_email").run();
@@ -363,7 +378,8 @@ describe("proposal participants", () => {
     const pendingParticipant = (
       await queryAll<{ status: string }>(
         env.DB,
-        "SELECT status FROM event_participants WHERE event_id = ? AND user_id = ? AND source_type = 'proposal' AND role = 'speaker'",
+        `SELECT status FROM event_participant_role_sources
+         WHERE event_id = ? AND user_id = ? AND source_kind = 'proposal_speaker' AND role = 'speaker'`,
         [eventId, speakerId],
       )
     )[0];
@@ -391,7 +407,7 @@ describe("proposal participants", () => {
 
     await finalizeProposalDecision(env.DB, {
       proposalId: proposal.id,
-      actor: { id: adminRow.id, email: "admin@pkic.org", role: "admin" },
+      actor: { identityType: "user", id: adminRow.id, email: "admin@pkic.org", role: "admin" },
       finalStatus: "accepted",
       minReviewsRequired: 0,
     });
@@ -399,7 +415,8 @@ describe("proposal participants", () => {
     const acceptedParticipant = (
       await queryAll<{ status: string }>(
         env.DB,
-        "SELECT status FROM event_participants WHERE event_id = ? AND user_id = ? AND source_type = 'proposal' AND role = 'speaker'",
+        `SELECT status FROM event_participant_role_sources
+         WHERE event_id = ? AND user_id = ? AND source_kind = 'proposal_speaker' AND role = 'speaker'`,
         [eventId, speakerId],
       )
     )[0];
@@ -448,9 +465,57 @@ describe("proposal participants", () => {
     expect(
       await queryAll<{ status: string }>(
         env.DB,
-        "SELECT status FROM event_participants WHERE event_id = ? AND user_id = ? AND source_type = 'proposal' AND role = 'speaker'",
+        `SELECT status FROM event_participant_role_sources
+         WHERE event_id = ? AND user_id = ? AND source_kind = 'proposal_speaker' AND role = 'speaker'`,
         [eventId, speakerId],
       ),
     ).toEqual([{ status: "active" }]);
+
+    const apiKeyHeaders = {
+      authorization: `Bearer ${env.ADMIN_API_KEY ?? "test-admin-key"}`,
+      "content-type": "application/json",
+    };
+    const unattributableSet = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/events/pqc-2026/registrations/${registrationId}/badge-role`, {
+        method: "PATCH",
+        headers: apiKeyHeaders,
+        body: JSON.stringify({ role: "moderator" }),
+      }),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(unattributableSet.status).toBe(403);
+    await expect(unattributableSet.json()).resolves.toMatchObject({
+      error: { code: "USER_BACKED_ADMIN_REQUIRED" },
+    });
+    expect(
+      await queryAll<{ role: string; set_by_user_id: string }>(
+        env.DB,
+        "SELECT role, set_by_user_id FROM registration_badge_role_overrides WHERE registration_id = ?",
+        [registrationId],
+      ),
+    ).toEqual([{ role: "staff", set_by_user_id: adminRow.id }]);
+
+    const apiKeyClear = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/events/pqc-2026/registrations/${registrationId}/badge-role`, {
+        method: "PATCH",
+        headers: apiKeyHeaders,
+        body: JSON.stringify({ role: "attendee" }),
+      }),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(apiKeyClear.status).toBe(200);
+    await expect(
+      queryAll(env.DB, "SELECT role FROM registration_badge_role_overrides WHERE registration_id = ?", [
+        registrationId,
+      ]),
+    ).resolves.toHaveLength(0);
+    expect(
+      await queryAll<{ actor_id: string | null }>(
+        env.DB,
+        "SELECT actor_id FROM audit_log WHERE action = 'admin_badge_role_set' ORDER BY created_at, id",
+      ),
+    ).toEqual([{ actor_id: adminRow.id }, { actor_id: "api-key" }]);
   });
 });

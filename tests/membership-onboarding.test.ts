@@ -15,7 +15,8 @@ import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createApplicationFormSubmission, seedMemberApplication } from "./helpers/member-applications";
 import { insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 import { approveApplication } from "../functions/_lib/services/membership/applications/approve";
-import type { DatabaseLike } from "../functions/_lib/types";
+import { recordEcDecision } from "../functions/_lib/services/ec-review";
+import type { AuthAdmin, DatabaseLike } from "../functions/_lib/types";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -61,12 +62,16 @@ async function createEcReviewApplication(
 
 describe("Post-approval onboarding", () => {
   let adminToken: string;
+  let adminId: string;
+  let adminActor: AuthAdmin;
 
   beforeEach(async () => {
     await resetDb();
     await seedEventAndAdmin(env.DB);
     const adminRow = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'"))[0];
-    adminToken = await createAdminSession(env.DB, adminRow.id, "onboarding-admin-token");
+    adminId = adminRow.id;
+    adminActor = { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" };
+    adminToken = await createAdminSession(env.DB, adminId, "onboarding-admin-token");
     await seedWorkingGroup("pqc", "pqc@lists.pkic.org");
     await seedWorkingGroup("ca", "ca@lists.pkic.org");
   });
@@ -125,6 +130,39 @@ describe("Post-approval onboarding", () => {
 
     const appRows = await queryAll<{ stage: string }>(env.DB, "SELECT stage FROM member_applications WHERE id = ?", id);
     expect(appRows[0].stage).toBe("approved");
+  });
+
+  it("preserves explicit staff approval as an override when an EC decline already exists", async () => {
+    const { id } = await createEcReviewApplication();
+    const ecUserId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, role, active, is_ec_member, created_at, updated_at)
+       VALUES (?, 'staff-override-ec@example.test', 'staff-override-ec@example.test', 'user', 1, 1,
+               datetime('now'), datetime('now'))`,
+    )
+      .bind(ecUserId)
+      .run();
+    await recordEcDecision(env.DB, {
+      applicationId: id,
+      ecMemberUserId: ecUserId,
+      decision: "decline",
+      reason: "Staff will resolve this decline manually",
+    });
+
+    const response = await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { memberId: string };
+    expect(
+      await queryAll(env.DB, "SELECT stage, transition_revision FROM member_applications WHERE id = ?", id),
+    ).toEqual([{ stage: "approved", transition_revision: 2 }]);
+    expect(await queryAll(env.DB, "SELECT decision FROM ec_decisions WHERE application_id = ?", id)).toEqual([
+      { decision: "decline" },
+    ]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'application_approved' AND entity_id = ?", id),
+    ).toHaveLength(1);
+    expect(await queryAll(env.DB, "SELECT id FROM members WHERE id = ?", body.memberId)).toHaveLength(1);
   });
 
   it("carries job_title/linkedin from the application's answers into the provisioned user (Fix 5b)", async () => {
@@ -246,6 +284,14 @@ describe("Post-approval onboarding", () => {
     );
     expect(auditRows).toHaveLength(1);
     expect(auditRows[0]!.actor_type).toBe("admin");
+    expect(auditRows[0]!.actor_id).toBe(adminId);
+    expect(
+      await queryAll<{ actor_user_id: string | null }>(
+        env.DB,
+        "SELECT actor_user_id FROM member_application_events WHERE application_id = ? AND to_stage = 'approved'",
+        id,
+      ),
+    ).toEqual([{ actor_user_id: adminId }]);
 
     // Same `now` timestamp is used to build the stage-transition, the
     // email-outbox inserts, and the audit-log insert inside approve.ts's
@@ -262,6 +308,29 @@ describe("Post-approval onboarding", () => {
     );
     expect(claimEmail!.created_at).toBe(applicationApprovedAt);
     expect(auditRows[0]!.created_at).toBe(applicationApprovedAt);
+  });
+
+  it("keeps API-key audit identity out of the nullable approval-event user foreign key", async () => {
+    const { id } = await createEcReviewApplication();
+    const response = await call(env.ADMIN_API_KEY ?? "test-admin-key", `/api/v1/admin/applications/${id}/approve`, {
+      method: "POST",
+    });
+
+    expect(response.status).toBe(200);
+    expect(
+      await queryAll<{ actor_user_id: string | null }>(
+        env.DB,
+        "SELECT actor_user_id FROM member_application_events WHERE application_id = ? AND to_stage = 'approved'",
+        id,
+      ),
+    ).toEqual([{ actor_user_id: null }]);
+    expect(
+      await queryAll<{ actor_id: string | null }>(
+        env.DB,
+        "SELECT actor_id FROM audit_log WHERE action = 'application_approved' AND entity_id = ?",
+        id,
+      ),
+    ).toEqual([{ actor_id: "api-key" }]);
   });
 
   it("does not write an audit-log entry for the unattended EC-window auto-approve path (no admin actor)", async () => {
@@ -428,7 +497,8 @@ describe("Post-approval onboarding", () => {
     await expect(
       approveApplication(racingDb, {
         applicationId: id,
-        actorUserId: "admin-user-id",
+        actor: adminActor,
+        approvalMode: "staff_override",
         loginUrl: "https://pkic.org/members/login/",
       }),
     ).rejects.toMatchObject({ status: 409 });

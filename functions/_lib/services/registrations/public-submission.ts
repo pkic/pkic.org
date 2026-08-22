@@ -17,7 +17,8 @@ import { queuedCapabilityToken } from "../capability-links";
 import { buildEventEmailVariables, getEventBySlug, updateEventBasePath } from "../events";
 import { registrationConfirmPageUrl, registrationManagePageUrl } from "../frontend-links";
 import { findInviteByToken, type InviteRecord } from "../invites";
-import { trySeedGravatarThenPrerender } from "../og-badge-prerender";
+import { prepareBadgeRenderJob } from "../badge-render-job-statements";
+import { seedGravatarAndProcessBadgeRenderJob } from "../registration-badge-regeneration";
 import { commitRegistrationSubmission } from "../registration-submission";
 
 type RegistrationCreateInput = z.infer<typeof registrationCreateSchema>;
@@ -189,7 +190,8 @@ export async function submitPublicRegistration(
     });
   }
 
-  await commitRegistrationSubmission(db, prepared, [queuedEmail.statement]);
+  const badgeRenderJob = prepareBadgeRenderJob(db, referralCode);
+  await commitRegistrationSubmission(db, prepared, [queuedEmail.statement, badgeRenderJob.statement]);
   return {
     response: {
       success: true,
@@ -203,7 +205,11 @@ export async function submitPublicRegistration(
     },
     backgroundTasks: [
       processOutboxByIdBackground(db, env, queuedEmail.id),
-      trySeedGravatarThenPrerender(user.id, user.email, referralCode, env, metadata.appBaseUrl),
+      seedGravatarAndProcessBadgeRenderJob(db, env, {
+        userId: user.id,
+        email: user.email,
+        jobId: badgeRenderJob.id,
+      }),
     ],
   };
 }

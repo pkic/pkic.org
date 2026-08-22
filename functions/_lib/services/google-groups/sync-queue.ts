@@ -235,6 +235,7 @@ export async function failGoogleGroupsSyncClaimForMissingUser(
 export async function completeGoogleGroupsDirectoryEffect(
   db: DatabaseLike,
   claim: ClaimedGoogleGroupsSyncRow,
+  notificationStatements: StatementLike[] = [],
 ): Promise<{ finalizedClaim: boolean; fulfilledCurrentDesiredState: boolean }> {
   const at = nowIso();
   const results = await db.batch([
@@ -264,7 +265,10 @@ export async function completeGoogleGroupsDirectoryEffect(
                  AND desired.desired_action = desired_queue.action
             )
             AND (
-              (desired_queue.action = ? AND desired_queue.status IN ('pending', 'processing', 'completed', 'failed'))
+              -- A stale Directory result may safely satisfy a newer desired
+              -- generation only before another worker has claimed it. Never
+              -- clear a live replacement worker's token or lease.
+              (desired_queue.action = ? AND desired_queue.status IN ('pending', 'failed'))
               OR (desired_queue.action != ? AND desired_queue.status IN ('completed', 'failed'))
             )`,
       )
@@ -287,11 +291,15 @@ export async function completeGoogleGroupsDirectoryEffect(
           WHERE user_id = ? AND google_group_email = ?`,
       )
       .bind(claim.user_id, claim.google_group_email),
+    ...notificationStatements,
   ]);
-  const desiredAction = (results[2]?.results?.[0] as { desired_action?: unknown } | undefined)?.desired_action;
+  const finalizedClaim = (results[0]?.meta?.changes ?? 0) === 1;
+  const reconciledCurrentDesiredState =
+    (results[1]?.meta?.changes ?? 0) === 1 &&
+    (results[2]?.results?.[0] as { desired_action?: unknown } | undefined)?.desired_action === claim.action;
   return {
-    finalizedClaim: (results[0]?.meta?.changes ?? 0) === 1,
-    fulfilledCurrentDesiredState: desiredAction === claim.action,
+    finalizedClaim,
+    fulfilledCurrentDesiredState: finalizedClaim || reconciledCurrentDesiredState,
   };
 }
 

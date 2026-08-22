@@ -4,7 +4,7 @@ import { parseJsonBody } from "../../../../_lib/validation";
 import { json } from "../../../../_lib/http";
 import { getEventBySlug, getRequiredTerms, updateEventBasePath } from "../../../../_lib/services/events";
 import { validateCustomAnswersByPurpose } from "../../../../_lib/services/forms";
-import { trySeedGravatarThenPrerender } from "../../../../_lib/services/og-badge-prerender";
+import { seedGravatarAndProcessBadgeRenderJob } from "../../../../_lib/services/registration-badge-regeneration";
 import { findInviteByToken, type InviteRecord } from "../../../../_lib/services/invites";
 import { validateRequiredConsents } from "../../../../_lib/services/consent";
 import { processOutboxByIdBackground } from "../../../../_lib/email/outbox";
@@ -58,13 +58,11 @@ export async function onRequestPost(c: any, data?: { body: z.infer<typeof propos
   });
 
   c.executionCtx.waitUntil(
-    trySeedGravatarThenPrerender(
-      submitted.proposer.id,
-      submitted.proposer.email,
-      submitted.referralCode,
-      c.env,
-      appBaseUrl,
-    ),
+    seedGravatarAndProcessBadgeRenderJob(c.env.DB, c.env, {
+      userId: submitted.proposer.id,
+      email: submitted.proposer.email,
+      jobId: submitted.badgeRenderJobId,
+    }),
   );
   for (const id of submitted.outboxIds) {
     c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, id));

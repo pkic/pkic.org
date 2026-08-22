@@ -111,12 +111,15 @@ describe("GET /api/v1/admin/email/outbox", () => {
       "alice@example.test",
     ]);
 
-    // limit/offset — total reflects all 3 rows regardless of page size
-    const pageRes = await callAdmin("/api/v1/admin/email/outbox?limit=1&offset=0");
+    // A filtered second page must retain the filtered total, rather than the
+    // unfiltered table total.
+    const pageRes = await callAdmin(
+      "/api/v1/admin/email/outbox?messageType=transactional&sort=recipient&limit=1&offset=1",
+    );
     expect(pageRes.status).toBe(200);
     const pagePayload = adminEmailOutboxResponseSchema.parse(await pageRes.json());
-    expect(pagePayload.page).toEqual({ limit: 1, offset: 0, total: 3, hasMore: true });
-    expect(pagePayload.outbox).toHaveLength(1);
+    expect(pagePayload.page).toEqual({ limit: 1, offset: 1, total: 2, hasMore: false });
+    expect(pagePayload.outbox.map((row) => row.id)).toEqual([failedId]);
   });
 
   it("rejects a limit above the schema max instead of silently clamping it", async () => {

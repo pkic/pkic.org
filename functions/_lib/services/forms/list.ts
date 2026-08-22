@@ -9,23 +9,9 @@ import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
+import type { AdminFormSummary, AdminFormsListQuery } from "../../../../assets/shared/schemas/admin-forms";
 
-export interface AdminFormSummaryRow {
-  id: string;
-  key: string;
-  scope_type: string;
-  scope_ref: string | null;
-  event_slug: string | null;
-  event_name: string | null;
-  purpose: string;
-  status: string;
-  title: string;
-  description: string | null;
-  created_at: string;
-  updated_at: string;
-  field_count: number;
-  submission_count: number;
-}
+export type AdminFormSummaryRow = AdminFormSummary;
 
 const FORMS_LIST_FROM = `
   FROM forms f
@@ -36,13 +22,7 @@ const FORMS_LIST_FROM = `
 
 export async function listAdminForms(
   db: DatabaseLike,
-  params: {
-    limit: number;
-    offset: number;
-    q?: string;
-    sort?: string;
-    purpose?: string;
-    status?: string;
+  params: AdminFormsListQuery & {
     eventId?: string;
     includeGlobal?: boolean;
   },
@@ -93,11 +73,10 @@ export async function listAdminForms(
     "f.scope_type ASC, f.purpose ASC, f.updated_at DESC",
     "f.id ASC",
   );
-  const { rows: forms, total } = await queryPage<AdminFormSummaryRow>(
-    db,
-    {
-      sql: `SELECT
-         f.*,
+  const { rows: forms, total } = await queryPage<AdminFormSummaryRow>(db, {
+    sql: `SELECT
+         f.id, f.key, f.scope_type, f.scope_ref, f.purpose, f.status,
+         f.title, f.description, f.created_at, f.updated_at,
          e.slug AS event_slug,
          e.name AS event_name,
          COUNT(DISTINCT ff.id) AS field_count,
@@ -120,19 +99,12 @@ export async function listAdminForms(
              ) ELSE 0 END AS submission_count
        ${FORMS_LIST_FROM}
        ${where}
-       GROUP BY f.id
-       ${orderBy}
-       LIMIT ? OFFSET ?`,
-      bindings: [...bindings, params.limit, params.offset],
-    },
-    {
-      sql: `SELECT COUNT(*) AS total
-            FROM forms f
-            LEFT JOIN events e ON e.id = f.scope_ref AND f.scope_type = 'event'
-            ${where}`,
-      bindings,
-    },
-  );
+       GROUP BY f.id`,
+    bindings,
+    orderBy,
+    limit: params.limit,
+    offset: params.offset,
+  });
 
   return { forms, total };
 }

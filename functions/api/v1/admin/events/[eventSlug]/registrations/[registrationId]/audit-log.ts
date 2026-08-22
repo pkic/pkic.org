@@ -20,12 +20,5 @@ export async function onRequestGet(
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
   const registrationId = c.req.param("registrationId");
-  return json(
-    await listRegistrationAuditLog(requestDb(c), event.id, registrationId, {
-      q: data.query.q,
-      sort: data.query.sort,
-      limit: data.query.limit,
-      offset: data.query.offset,
-    }),
-  );
+  return json(await listRegistrationAuditLog(requestDb(c), event.id, registrationId, data.query));
 }
