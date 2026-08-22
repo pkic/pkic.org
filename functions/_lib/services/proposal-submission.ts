@@ -14,6 +14,11 @@ import { buildEventEmailVariables } from "./events";
 import { proposalManagePageUrl, speakerManagePageUrl } from "./frontend-links";
 import { queuedCapabilityToken } from "./capability-links";
 import { requireConfiguredSessionType } from "./events";
+import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
+import {
+  eventParticipantSourceConflictError,
+  isEventParticipantSourceConflict,
+} from "./event-participant-source-revision";
 
 type ProposalCreateInput = z.infer<typeof proposalCreateSchema>;
 
@@ -195,7 +200,13 @@ export async function submitProposal(
   statements.push(proposerEmail.statement);
   outboxIds.push(proposerEmail.id);
 
-  await db.batch(statements);
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    if (isRegistrationTransitionConflict(error)) throw registrationChangedError();
+    if (isEventParticipantSourceConflict(error)) throw eventParticipantSourceConflictError();
+    throw error;
+  }
 
   return {
     proposalId: created.proposal.id,

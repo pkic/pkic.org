@@ -3,11 +3,18 @@ import { first } from "../db/queries";
 import { nowIso } from "../utils/time";
 import { sha256Hex } from "../utils/crypto";
 import { newCapabilityLinkSecret, queuedCapabilityToken, signCapabilityToken } from "./capability-links";
-import { prepareSyncProposalParticipantRole, proposalParticipantStatus } from "./proposal-participants";
+import { prepareSyncProposalParticipantRoleWithCapacity, proposalParticipantStatus } from "./proposal-participants";
+import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
+import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
+import {
+  eventParticipantSourceConflictError,
+  isEventParticipantSourceConflict,
+} from "./event-participant-source-revision";
 import { formatInvitePerson as formatInvitePersonRecord } from "./proposal-invite-email-context";
 import type { DatabaseLike, StatementLike } from "../types";
 import type { ProposalManageSpeakerStatus } from "../../../assets/shared/schemas/proposal-management";
 import type { SpeakerRole } from "../../../assets/shared/schemas/registration";
+import type { ProposalSpeakerRole } from "../../../assets/shared/schemas/participant-roles";
 
 export interface ProposalSpeakerRecord {
   id: string;
@@ -29,7 +36,7 @@ export async function buildAddProposalSpeaker(
   payload: {
     proposalId: string;
     userId: string;
-    role: string;
+    role: ProposalSpeakerRole;
     signingSecret?: string;
     proposalContext?: { event_id: string; status: string };
   },
@@ -44,11 +51,12 @@ export async function buildAddProposalSpeaker(
   const existingSpeaker = await first<{
     id: string;
     manage_link_secret: string | null;
+    role: ProposalSpeakerRole;
     status: string;
     invite_generation: number;
   }>(
     db,
-    `SELECT id, manage_link_secret, status, invite_generation
+    `SELECT id, manage_link_secret, role, status, invite_generation
      FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?`,
     [payload.proposalId, payload.userId],
   );
@@ -57,6 +65,8 @@ export async function buildAddProposalSpeaker(
   const manageLinkSecret = existingSpeaker?.manage_link_secret ?? newCapabilityLinkSecret();
   const inviteGeneration = (existingSpeaker?.invite_generation ?? 0) + (existingSpeaker?.status === "declined" ? 1 : 0);
   const status = isProposer ? "confirmed" : "invited";
+  const sourceRevisionAdvance: 0 | 1 =
+    !existingSpeaker || existingSpeaker.role !== payload.role || existingSpeaker.status === "declined" ? 1 : 0;
   const now = nowIso();
   const confirmedAt = isProposer ? now : null;
   const proposal =
@@ -109,13 +119,14 @@ export async function buildAddProposalSpeaker(
   ];
   if (proposal) {
     statements.push(
-      ...prepareSyncProposalParticipantRole(db, {
+      ...(await prepareSyncProposalParticipantRoleWithCapacity(db, {
         eventId: proposal.event_id,
         userId: payload.userId,
         proposalRole: payload.role,
         sourceRef: payload.proposalId,
         status: proposalParticipantStatus(proposal.status, status),
-      }),
+        sourceRevisionAdvance,
+      })),
     );
   }
 
@@ -141,7 +152,13 @@ export async function addProposalSpeaker(
   payload: Omit<Parameters<typeof buildAddProposalSpeaker>[1], "proposalContext">,
 ): Promise<{ manageToken: string }> {
   const { manageToken, speakerId, statements } = await buildAddProposalSpeaker(db, payload);
-  await db.batch(statements);
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    if (isRegistrationTransitionConflict(error)) throw registrationChangedError();
+    if (isEventParticipantSourceConflict(error)) throw eventParticipantSourceConflictError();
+    throw error;
+  }
   if (payload.signingSecret) {
     const persistedSpeaker = await first<{ manage_link_secret: string | null }>(
       db,
@@ -167,7 +184,58 @@ export async function updateProposalSpeakerRole(
   db: DatabaseLike,
   payload: { proposalId: string; userId: string; role: string },
 ): Promise<void> {
-  await db.batch(await buildUpdateProposalSpeakerRoleStatements(db, payload));
+  const proposal = await first<{ event_id: string; status: string; proposer_user_id: string; updated_at: string }>(
+    db,
+    "SELECT event_id, status, proposer_user_id, updated_at FROM session_proposals WHERE id = ? AND deleted_at IS NULL",
+    [payload.proposalId],
+  );
+  if (!proposal) throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found");
+  const speaker = await first<{ id: string; role: ProposalSpeakerRole; status: ProposalManageSpeakerStatus }>(
+    db,
+    "SELECT id, role, status FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+    [payload.proposalId, payload.userId],
+  );
+  if (!speaker) throw new AppError(404, "SPEAKER_NOT_FOUND", "Speaker not found on this proposal");
+  assertProposalSpeakerRoleTransition({
+    currentProposerUserId: proposal.proposer_user_id,
+    speakerUserId: payload.userId,
+    nextRole: payload.role,
+  });
+  const change = await prepareProposalSpeakerRoleChange(db, {
+    proposalId: payload.proposalId,
+    eventId: proposal.event_id,
+    proposalStatus: proposal.status,
+    proposalUpdatedAt: proposal.updated_at,
+    userId: payload.userId,
+    speakerId: speaker.id,
+    currentRole: speaker.role,
+    currentStatus: speaker.status,
+    nextRole: payload.role as ProposalSpeakerRole,
+  });
+  try {
+    await db.batch([
+      change.updateStatement,
+      prepareScopedAuditLogAfterOneChange(
+        db,
+        { type: "proposal", id: payload.proposalId },
+        "system",
+        null,
+        "proposal_speaker_role_updated",
+        "proposal_speaker",
+        speaker.id,
+        { role: { from: speaker.role, to: payload.role } },
+      ),
+      ...change.capacityStatements,
+    ]);
+  } catch (error) {
+    if (isRegistrationTransitionConflict(error)) {
+      throw registrationChangedError();
+    }
+    if (isAuditOneChangeGuardFailure(error) || isEventParticipantSourceConflict(error)) {
+      throw new AppError(409, "PROPOSAL_SPEAKER_CONFLICT", "Proposal speaker changed while the role was updated");
+    }
+    throw error;
+  }
 }
 
 export function assertProposalSpeakerRoleTransition(input: {
@@ -187,40 +255,55 @@ export function assertProposalSpeakerRoleTransition(input: {
   }
 }
 
-export async function buildUpdateProposalSpeakerRoleStatements(
+export async function prepareProposalSpeakerRoleChange(
   db: DatabaseLike,
-  payload: { proposalId: string; userId: string; role: string },
-): Promise<StatementLike[]> {
-  const proposal = await first<{ event_id: string; status: string; proposer_user_id: string }>(
-    db,
-    "SELECT event_id, status, proposer_user_id FROM session_proposals WHERE id = ?",
-    [payload.proposalId],
-  );
-  if (!proposal) throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found");
-  const speaker = await first<{ id: string; status: string }>(
-    db,
-    "SELECT id, status FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
-    [payload.proposalId, payload.userId],
-  );
-  if (!speaker) throw new AppError(404, "SPEAKER_NOT_FOUND", "Speaker not found on this proposal");
-  assertProposalSpeakerRoleTransition({
-    currentProposerUserId: proposal.proposer_user_id,
-    speakerUserId: payload.userId,
-    nextRole: payload.role,
-  });
-
-  return [
-    db
-      .prepare("UPDATE proposal_speakers SET role = ? WHERE proposal_id = ? AND user_id = ?")
-      .bind(payload.role, payload.proposalId, payload.userId),
-    ...prepareSyncProposalParticipantRole(db, {
-      eventId: proposal.event_id,
-      userId: payload.userId,
-      proposalRole: payload.role,
-      sourceRef: payload.proposalId,
-      status: proposalParticipantStatus(proposal.status, speaker.status),
-    }),
+  payload: {
+    proposalId: string;
+    eventId: string;
+    proposalStatus: string;
+    proposalUpdatedAt?: string;
+    userId: string;
+    speakerId: string;
+    currentRole?: ProposalSpeakerRole;
+    currentStatus: ProposalManageSpeakerStatus;
+    nextRole: ProposalSpeakerRole;
+  },
+): Promise<{ updateStatement: StatementLike; capacityStatements: StatementLike[] }> {
+  const expectedRolePredicate = payload.currentRole === undefined ? "" : " AND role = ?";
+  const expectedProposalPredicate = payload.proposalUpdatedAt === undefined ? "" : " AND sp.updated_at = ?";
+  const bindings: unknown[] = [
+    payload.nextRole,
+    payload.speakerId,
+    payload.proposalId,
+    payload.userId,
+    ...(payload.currentRole === undefined ? [] : [payload.currentRole]),
+    payload.currentStatus,
+    payload.proposalId,
+    payload.proposalStatus,
+    ...(payload.proposalUpdatedAt === undefined ? [] : [payload.proposalUpdatedAt]),
   ];
+  const updateStatement = db
+    .prepare(
+      `UPDATE proposal_speakers
+       SET role = ?
+       WHERE id = ? AND proposal_id = ? AND user_id = ?${expectedRolePredicate} AND status = ?
+         AND EXISTS (
+           SELECT 1 FROM session_proposals sp
+           WHERE sp.id = ? AND sp.status = ?${expectedProposalPredicate} AND sp.deleted_at IS NULL
+         )`,
+    )
+    .bind(...bindings);
+  return {
+    updateStatement,
+    capacityStatements: await prepareSyncProposalParticipantRoleWithCapacity(db, {
+      eventId: payload.eventId,
+      userId: payload.userId,
+      proposalRole: payload.nextRole,
+      sourceRef: payload.proposalId,
+      status: proposalParticipantStatus(payload.proposalStatus, payload.currentStatus),
+      sourceRevisionAdvance: payload.currentRole === payload.nextRole ? 0 : 1,
+    }),
+  };
 }
 
 export async function refreshSpeakerManageToken(db: DatabaseLike, proposalId: string, userId: string): Promise<string> {

@@ -1,10 +1,13 @@
 import { all, first } from "../db/queries";
 import { AppError } from "../errors";
 import { nowIso } from "../utils/time";
-import { prepareScopedAuditLog } from "./audit";
+import { isAuditOneChangeGuardFailure, prepareScopedAuditLog, prepareScopedAuditLogAfterOneChange } from "./audit";
 import { prepareConsentStatements, validateRequiredConsents } from "./consent";
 import { getRequiredTerms } from "./events";
 import { getSpeakerByManageToken } from "./proposals";
+import { prepareDeactivateProposalParticipantRolesWithCapacity } from "./proposal-participants";
+import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
+import { isEventParticipantSourceConflict } from "./event-participant-source-revision";
 import { prepareUserProfileStatement, type UserProfilePatch } from "./users";
 import type { DatabaseLike } from "../types";
 
@@ -112,33 +115,84 @@ export async function declineSpeakerParticipation(
     return;
   }
 
+  const nonDeclined = await first<{ total: number }>(
+    db,
+    "SELECT COUNT(*) AS total FROM proposal_speakers WHERE proposal_id = ? AND status <> 'declined'",
+    [proposal.id],
+  );
+  if (Number(nonDeclined?.total ?? 0) <= 1) {
+    throw new AppError(
+      409,
+      "LAST_SPEAKER_REQUIRED",
+      "A proposal must retain at least one speaker. Add another speaker or withdraw the proposal instead.",
+    );
+  }
+
   const now = nowIso();
-  await db.batch([
-    db
-      .prepare(
-        `UPDATE proposal_speakers
-         SET status = 'declined', declined_at = ?, decline_reason = ?
-         WHERE id = ?`,
-      )
-      .bind(now, payload.reason ?? null, speaker.id),
-    db
-      .prepare(
-        `UPDATE event_participants
-         SET status = 'inactive', updated_at = ?
-         WHERE event_id = ? AND user_id = ? AND source_type = 'proposal' AND source_ref = ?`,
-      )
-      .bind(now, proposal.event_id, speaker.user_id, proposal.id),
-    prepareScopedAuditLog(
+  try {
+    await db.batch([
+      db
+        .prepare(
+          `UPDATE proposal_speakers
+           SET status = 'declined', declined_at = ?, decline_reason = ?
+           WHERE id = ? AND proposal_id = ? AND user_id = ? AND role = ? AND status = ?
+             AND (SELECT COUNT(*) FROM proposal_speakers
+                  WHERE proposal_id = ? AND status <> 'declined') > 1
+             AND EXISTS (
+               SELECT 1 FROM session_proposals
+               WHERE id = ? AND status = ? AND updated_at = ? AND deleted_at IS NULL
+             )`,
+        )
+        .bind(
+          now,
+          payload.reason ?? null,
+          speaker.id,
+          proposal.id,
+          speaker.user_id,
+          speaker.role,
+          speaker.status,
+          proposal.id,
+          proposal.id,
+          proposal.status,
+          proposal.updated_at,
+        ),
+      prepareScopedAuditLogAfterOneChange(
+        db,
+        { type: "proposal", id: speaker.proposal_id },
+        "user",
+        speaker.user_id,
+        "speaker_declined",
+        "proposal_speaker",
+        speaker.id,
+        { proposalId: speaker.proposal_id, reason: payload.reason ?? null },
+        now,
+      ),
+      ...(await prepareDeactivateProposalParticipantRolesWithCapacity(db, {
+        eventId: proposal.event_id,
+        userId: speaker.user_id,
+        sourceRef: proposal.id,
+      })),
+    ]);
+  } catch (error) {
+    if (isRegistrationTransitionConflict(error)) {
+      throw registrationChangedError();
+    }
+    if (!isAuditOneChangeGuardFailure(error) && !isEventParticipantSourceConflict(error)) throw error;
+
+    const currentCount = await first<{ total: number }>(
       db,
-      { type: "proposal", id: speaker.proposal_id },
-      "user",
-      speaker.user_id,
-      "speaker_declined",
-      "proposal_speaker",
-      speaker.id,
-      { proposalId: speaker.proposal_id, reason: payload.reason ?? null },
-    ),
-  ]);
+      "SELECT COUNT(*) AS total FROM proposal_speakers WHERE proposal_id = ? AND status <> 'declined'",
+      [proposal.id],
+    );
+    if (Number(currentCount?.total ?? 0) <= 1) {
+      throw new AppError(
+        409,
+        "LAST_SPEAKER_REQUIRED",
+        "A proposal must retain at least one speaker. Add another speaker or withdraw the proposal instead.",
+      );
+    }
+    throw new AppError(409, "PROPOSAL_SPEAKER_CONFLICT", "Proposal speaker changed while the decline was processed");
+  }
 }
 
 export async function updateSpeakerProfile(db: DatabaseLike, userId: string, payload: UserProfilePatch): Promise<void> {

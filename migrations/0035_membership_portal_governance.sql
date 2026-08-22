@@ -180,6 +180,207 @@ CREATE INDEX idx_proposal_speakers_user_active
   ON proposal_speakers(user_id, created_at DESC, proposal_id)
   WHERE role <> 'proposer' AND status IN ('invited', 'confirmed');
 
+-- `event_participants` is a projection of a speaker's source set across all
+-- proposals for an event. Protect a prepared projection rebuild from a
+-- concurrent change to another proposal source without treating the
+-- projection table itself as the source of truth or rebuilding existing data.
+-- Rows are created lazily by the source triggers; absent rows represent the
+-- initial revision zero for legacy speakers.
+CREATE TABLE event_participant_source_revisions (
+  event_id TEXT NOT NULL,
+  user_id  TEXT NOT NULL,
+  revision INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(event_id, user_id),
+  FOREIGN KEY(event_id) REFERENCES events(id) ON DELETE CASCADE,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE event_participant_source_revision_guards (
+  id                TEXT NOT NULL PRIMARY KEY,
+  event_id          TEXT NOT NULL,
+  user_id           TEXT NOT NULL,
+  expected_revision INTEGER NOT NULL,
+  FOREIGN KEY(event_id) REFERENCES events(id) ON DELETE CASCADE,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Whole-proposal decisions enumerate a roster before rebuilding every
+-- affected user's projection. Guard that roster separately so an added or
+-- removed speaker cannot evade the per-user source guards by appearing only
+-- after the enumeration.
+CREATE TABLE proposal_speaker_roster_revisions (
+  proposal_id TEXT NOT NULL PRIMARY KEY,
+  revision    INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY(proposal_id) REFERENCES session_proposals(id) ON DELETE CASCADE
+);
+
+CREATE TABLE proposal_speaker_roster_revision_guards (
+  id                TEXT NOT NULL PRIMARY KEY,
+  proposal_id       TEXT NOT NULL,
+  expected_revision INTEGER NOT NULL,
+  FOREIGN KEY(proposal_id) REFERENCES session_proposals(id) ON DELETE CASCADE
+);
+
+CREATE TRIGGER trg_event_participant_source_revision_guard_validate
+BEFORE INSERT ON event_participant_source_revision_guards
+FOR EACH ROW
+BEGIN
+  SELECT CASE
+    WHEN COALESCE((
+      SELECT revision
+      FROM event_participant_source_revisions
+      WHERE event_id = NEW.event_id AND user_id = NEW.user_id
+    ), 0) <> NEW.expected_revision
+    THEN RAISE(ABORT, 'EVENT_PARTICIPANT_SOURCE_CHANGED')
+  END;
+END;
+
+CREATE TRIGGER trg_event_participant_source_revision_guard_delete
+AFTER INSERT ON event_participant_source_revision_guards
+FOR EACH ROW
+BEGIN
+  DELETE FROM event_participant_source_revision_guards WHERE id = NEW.id;
+END;
+
+CREATE TRIGGER trg_proposal_speaker_roster_revision_guard_validate
+BEFORE INSERT ON proposal_speaker_roster_revision_guards
+FOR EACH ROW
+BEGIN
+  SELECT CASE
+    WHEN COALESCE((
+      SELECT revision FROM proposal_speaker_roster_revisions WHERE proposal_id = NEW.proposal_id
+    ), 0) <> NEW.expected_revision
+    THEN RAISE(ABORT, 'PROPOSAL_SPEAKER_ROSTER_CHANGED')
+  END;
+END;
+
+CREATE TRIGGER trg_proposal_speaker_roster_revision_guard_delete
+AFTER INSERT ON proposal_speaker_roster_revision_guards
+FOR EACH ROW
+BEGIN
+  DELETE FROM proposal_speaker_roster_revision_guards WHERE id = NEW.id;
+END;
+
+CREATE TRIGGER trg_proposal_speaker_source_revision_insert
+AFTER INSERT ON proposal_speakers
+FOR EACH ROW
+BEGIN
+  INSERT INTO event_participant_source_revisions (event_id, user_id, revision)
+  SELECT event_id, NEW.user_id, 1
+  FROM session_proposals
+  WHERE id = NEW.proposal_id
+  ON CONFLICT(event_id, user_id) DO UPDATE SET revision = event_participant_source_revisions.revision + 1;
+  INSERT INTO proposal_speaker_roster_revisions (proposal_id, revision)
+  VALUES (NEW.proposal_id, 1)
+  ON CONFLICT(proposal_id) DO UPDATE SET revision = proposal_speaker_roster_revisions.revision + 1;
+END;
+
+CREATE TRIGGER trg_proposal_speaker_source_revision_delete
+AFTER DELETE ON proposal_speakers
+FOR EACH ROW
+BEGIN
+  INSERT INTO event_participant_source_revisions (event_id, user_id, revision)
+  SELECT event_id, OLD.user_id, 1
+  FROM session_proposals
+  WHERE id = OLD.proposal_id
+  ON CONFLICT(event_id, user_id) DO UPDATE SET revision = event_participant_source_revisions.revision + 1;
+  INSERT INTO proposal_speaker_roster_revisions (proposal_id, revision)
+  VALUES (OLD.proposal_id, 1)
+  ON CONFLICT(proposal_id) DO UPDATE SET revision = proposal_speaker_roster_revisions.revision + 1;
+END;
+
+CREATE TRIGGER trg_proposal_speaker_source_revision_update
+AFTER UPDATE OF role, status ON proposal_speakers
+FOR EACH ROW
+WHEN OLD.role IS NOT NEW.role
+  OR OLD.status IS NOT NEW.status
+BEGIN
+  INSERT INTO event_participant_source_revisions (event_id, user_id, revision)
+  SELECT event_id, NEW.user_id, 1
+  FROM session_proposals
+  WHERE id = NEW.proposal_id
+  ON CONFLICT(event_id, user_id) DO UPDATE SET revision = event_participant_source_revisions.revision + 1;
+  INSERT INTO proposal_speaker_roster_revisions (proposal_id, revision)
+  VALUES (NEW.proposal_id, 1)
+  ON CONFLICT(proposal_id) DO UPDATE SET revision = proposal_speaker_roster_revisions.revision + 1;
+END;
+
+CREATE TRIGGER trg_session_proposal_source_revision_update
+AFTER UPDATE OF status, deleted_at ON session_proposals
+FOR EACH ROW
+WHEN OLD.status IS NOT NEW.status
+  OR OLD.deleted_at IS NOT NEW.deleted_at
+BEGIN
+  INSERT INTO event_participant_source_revisions (event_id, user_id, revision)
+  SELECT NEW.event_id, ps.user_id, 1
+  FROM proposal_speakers ps
+  WHERE ps.proposal_id = NEW.id
+  ON CONFLICT(event_id, user_id) DO UPDATE SET revision = event_participant_source_revisions.revision + 1;
+END;
+
+-- Proposal/source ownership is a durable identity, not an editable workflow
+-- attribute. Moving it would require atomically revising two source sets, so
+-- fail closed instead of silently allowing an unsupported relationship move.
+CREATE TRIGGER trg_proposal_speaker_identity_immutable
+BEFORE UPDATE OF proposal_id, user_id ON proposal_speakers
+FOR EACH ROW
+WHEN OLD.proposal_id IS NOT NEW.proposal_id OR OLD.user_id IS NOT NEW.user_id
+BEGIN
+  SELECT RAISE(ABORT, 'PROPOSAL_SPEAKER_IDENTITY_IMMUTABLE');
+END;
+
+CREATE TRIGGER trg_session_proposal_event_identity_immutable
+BEFORE UPDATE OF event_id ON session_proposals
+FOR EACH ROW
+WHEN OLD.event_id IS NOT NEW.event_id
+BEGIN
+  SELECT RAISE(ABORT, 'SESSION_PROPOSAL_EVENT_IMMUTABLE');
+END;
+
+-- Non-proposal participant sources (for example organizer or staff roles)
+-- also determine registration capacity exemption. Their writes share the
+-- event/user source revision, while proposal-projection maintenance is
+-- deliberately excluded to avoid self-invalidating a rebuild.
+CREATE TRIGGER trg_event_participant_manual_source_revision_insert
+AFTER INSERT ON event_participants
+FOR EACH ROW
+WHEN COALESCE(NEW.source_type, '') <> 'proposal'
+BEGIN
+  INSERT INTO event_participant_source_revisions (event_id, user_id, revision)
+  VALUES (NEW.event_id, NEW.user_id, 1)
+  ON CONFLICT(event_id, user_id) DO UPDATE SET revision = event_participant_source_revisions.revision + 1;
+END;
+
+CREATE TRIGGER trg_event_participant_manual_source_revision_delete
+AFTER DELETE ON event_participants
+FOR EACH ROW
+WHEN COALESCE(OLD.source_type, '') <> 'proposal'
+BEGIN
+  INSERT INTO event_participant_source_revisions (event_id, user_id, revision)
+  VALUES (OLD.event_id, OLD.user_id, 1)
+  ON CONFLICT(event_id, user_id) DO UPDATE SET revision = event_participant_source_revisions.revision + 1;
+END;
+
+CREATE TRIGGER trg_event_participant_manual_source_revision_update
+AFTER UPDATE OF event_id, user_id, role, subrole, status, source_type ON event_participants
+FOR EACH ROW
+WHEN COALESCE(OLD.source_type, '') <> 'proposal' OR COALESCE(NEW.source_type, '') <> 'proposal'
+BEGIN
+  INSERT INTO event_participant_source_revisions (event_id, user_id, revision)
+  SELECT OLD.event_id, OLD.user_id, 1
+  WHERE COALESCE(OLD.source_type, '') <> 'proposal'
+  ON CONFLICT(event_id, user_id) DO UPDATE SET revision = event_participant_source_revisions.revision + 1;
+  INSERT INTO event_participant_source_revisions (event_id, user_id, revision)
+  SELECT NEW.event_id, NEW.user_id, 1
+  WHERE COALESCE(NEW.source_type, '') <> 'proposal'
+    AND (
+      COALESCE(OLD.source_type, '') = 'proposal'
+      OR NEW.event_id IS NOT OLD.event_id
+      OR NEW.user_id IS NOT OLD.user_id
+    )
+  ON CONFLICT(event_id, user_id) DO UPDATE SET revision = event_participant_source_revisions.revision + 1;
+END;
+
 -- Calendar replies describe one event day, not the entire registration. Keep
 -- that identity normalized so enforcement never infers a registration-wide
 -- cancellation from a day-level response. Nullable legacy/ambiguous rows are

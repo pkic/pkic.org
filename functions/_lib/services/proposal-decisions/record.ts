@@ -4,7 +4,7 @@ import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
-import { prepareAuditLogWhen } from "../audit";
+import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange, prepareAuditLogWhen } from "../audit";
 import { prepareCancelProposalEmails } from "../proposal-email-cancellation";
 import {
   assertProposalDecisionAllowed,
@@ -16,6 +16,10 @@ import {
 } from "./context";
 import type { RecordProposalDecisionInput, RecordedProposalDecision } from "./types";
 import { proposalDecisionSnapshotPredicate } from "./snapshot";
+import { prepareProposalParticipantSourceCapacityStatements } from "../proposal-participants";
+import { isRegistrationTransitionConflict, registrationChangedError } from "../registrations/transition-guard";
+import { isEventParticipantSourceConflict } from "../event-participant-source-revision";
+import { isProposalSpeakerRosterConflict } from "../proposal-speaker-roster-revision";
 
 interface RecordedDecisionSnapshot {
   review_round: number;
@@ -159,6 +163,25 @@ export async function recordProposalDecision(
 
   const statements: StatementLike[] = [
     recordCurrentDecision,
+    prepareAuditLogAfterOneChange(
+      db,
+      "admin",
+      input.actor.id,
+      "proposal_decision_recorded",
+      "proposal",
+      input.proposalId,
+      {
+        adminEmail: { from: null, to: input.actor.email },
+        finalStatus: { from: context.previous_status, to: input.finalStatus },
+        decisionNote: { from: context.previous_note, to: input.decisionNote ?? null },
+        reviewRound: { from: context.previous_review_round, to: context.review_round },
+        decisionSequence: { from: context.current_decision_sequence, to: decisionSequence },
+        supersedesDecisionId: { from: supersedesDecisionId, to: decisionId },
+        queuedEmailCount: { from: 0, to: preparedEmails.length },
+        manageLinkPolicy: { from: null, to: "expiring_capability" },
+      },
+      now,
+    ),
     db
       .prepare(
         `INSERT INTO proposal_decision_history (
@@ -205,25 +228,11 @@ export async function recordProposalDecision(
         context.updated_at,
         ...condition.bindings,
       ),
-    db
-      .prepare(
-        `UPDATE event_participants
-         SET status = ?, updated_at = ?
-         WHERE event_id = ? AND source_type = 'proposal' AND source_ref = ?
-           AND user_id IN (
-             SELECT user_id FROM proposal_speakers
-             WHERE proposal_id = ? AND status != 'declined'
-           )
-           AND EXISTS (${condition.sql})`,
-      )
-      .bind(
-        input.finalStatus === "accepted" ? "active" : "inactive",
-        now,
-        context.event_id,
-        input.proposalId,
-        input.proposalId,
-        ...condition.bindings,
-      ),
+    ...(await prepareProposalParticipantSourceCapacityStatements(db, {
+      eventId: context.event_id,
+      sourceRef: input.proposalId,
+      nextStatus: input.finalStatus === "accepted" ? "active" : "inactive",
+    })),
   ];
 
   if (input.finalStatus === "rejected") {
@@ -275,26 +284,6 @@ export async function recordProposalDecision(
     );
   }
   statements.push(
-    prepareAuditLogWhen(db, {
-      actorType: "admin",
-      actorId: input.actor.id,
-      action: "proposal_decision_recorded",
-      entityType: "proposal",
-      entityId: input.proposalId,
-      details: {
-        adminEmail: { from: null, to: input.actor.email },
-        finalStatus: { from: context.previous_status, to: input.finalStatus },
-        decisionNote: { from: context.previous_note, to: input.decisionNote ?? null },
-        reviewRound: { from: context.previous_review_round, to: context.review_round },
-        decisionSequence: { from: context.current_decision_sequence, to: decisionSequence },
-        supersedesDecisionId: { from: supersedesDecisionId, to: decisionId },
-        queuedEmailCount: { from: 0, to: preparedEmails.length },
-        manageLinkPolicy: { from: null, to: "expiring_capability" },
-      },
-      createdAt: now,
-      conditionSql: condition.sql,
-      conditionBindings: condition.bindings,
-    }),
     db
       .prepare("SELECT review_round, review_count FROM proposal_decisions WHERE id = ? AND proposal_id = ?")
       .bind(decisionId, input.proposalId),
@@ -322,10 +311,20 @@ export async function recordProposalDecision(
       outboxIds: preparedEmails.map(({ id }) => id),
     };
   } catch (error) {
+    if (isRegistrationTransitionConflict(error)) {
+      throw registrationChangedError();
+    }
     if (isProposalDecisionHistoryConflict(error)) {
       throw new Error("Proposal decision history already contains the current review round", { cause: error });
     }
-    if (!isCurrentProposalDecisionConflict(error)) throw error;
+    if (
+      !isCurrentProposalDecisionConflict(error) &&
+      !isAuditOneChangeGuardFailure(error) &&
+      !isEventParticipantSourceConflict(error) &&
+      !isProposalSpeakerRosterConflict(error)
+    ) {
+      throw error;
+    }
     return throwProposalDecisionConflict(
       db,
       input.proposalId,

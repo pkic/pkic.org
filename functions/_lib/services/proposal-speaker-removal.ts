@@ -7,6 +7,7 @@ import { first } from "../db/queries";
 import { prepareQueueEmailStatementWhen } from "../email/outbox";
 import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
+import type { ProposalSpeakerRole } from "../../../assets/shared/schemas/participant-roles";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { newCapabilityLinkSecret, queuedCapabilityToken } from "./capability-links";
@@ -19,11 +20,13 @@ import { buildEventEmailVariables, getEventById } from "./events";
 import { proposalManagePageUrl } from "./frontend-links";
 import { prepareCancelProposalEmails } from "./proposal-email-cancellation";
 import {
-  prepareDeactivateProposalParticipantRoles,
-  prepareSyncProposalParticipantRole,
+  prepareDeactivateProposalParticipantRolesWithCapacity,
+  prepareSyncProposalParticipantRoleWithCapacity,
   proposalParticipantStatus,
 } from "./proposal-participants";
 import { getProposalByManageToken } from "./proposals";
+import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
+import { isEventParticipantSourceConflict } from "./event-participant-source-revision";
 
 interface SpeakerRemovalContext {
   proposal_id: string;
@@ -35,14 +38,14 @@ interface SpeakerRemovalContext {
   speaker_count: number;
   speaker_id: string;
   speaker_user_id: string;
-  speaker_role: string;
+  speaker_role: ProposalSpeakerRole;
   speaker_status: string;
 }
 
 interface ReplacementSpeaker {
   speaker_id: string;
   user_id: string;
-  role: string;
+  role: ProposalSpeakerRole;
   status: string;
   email: string;
   first_name: string | null;
@@ -64,7 +67,8 @@ async function getSpeakerRemovalContext(
     db,
     `SELECT sp.id AS proposal_id, sp.event_id, sp.status AS proposal_status, sp.title AS proposal_title,
             sp.updated_at AS proposal_updated_at, sp.proposer_user_id,
-            (SELECT COUNT(*) FROM proposal_speakers roster WHERE roster.proposal_id = sp.id) AS speaker_count,
+            (SELECT COUNT(*) FROM proposal_speakers roster
+             WHERE roster.proposal_id = sp.id AND roster.status <> 'declined') AS speaker_count,
             ps.id AS speaker_id, ps.user_id AS speaker_user_id,
             ps.role AS speaker_role, ps.status AS speaker_status
      FROM session_proposals sp
@@ -121,7 +125,8 @@ function assertRemovalPolicy(
   if (!isProposalSpeakerRosterEditableStatus(context.proposal_status)) {
     throw new AppError(409, "PROPOSAL_CLOSED", "Speakers cannot be removed from a closed proposal");
   }
-  if (Number(context.speaker_count) <= 1) {
+  const remainingNonDeclinedSpeakers = Number(context.speaker_count) - (context.speaker_status === "declined" ? 0 : 1);
+  if (remainingNonDeclinedSpeakers < 1) {
     throw new AppError(
       409,
       "LAST_SPEAKER_REQUIRED",
@@ -150,7 +155,8 @@ function assertRemovalPolicy(
 
 async function throwSpeakerRemovalConflict(db: DatabaseLike, proposalId: string, userId: string): Promise<never> {
   const context = await getSpeakerRemovalContext(db, proposalId, userId);
-  if (Number(context.speaker_count) <= 1) {
+  const remainingNonDeclinedSpeakers = Number(context.speaker_count) - (context.speaker_status === "declined" ? 0 : 1);
+  if (remainingNonDeclinedSpeakers < 1) {
     throw new AppError(
       409,
       "LAST_SPEAKER_REQUIRED",
@@ -223,7 +229,11 @@ async function removeProposalSpeaker(
           `UPDATE session_proposals
            SET proposer_user_id = ?, manage_link_secret = ?, updated_at = ?
            WHERE id = ? AND proposer_user_id = ? AND status = ? AND updated_at = ? AND deleted_at IS NULL
-             AND (SELECT COUNT(*) FROM proposal_speakers WHERE proposal_id = session_proposals.id) > 1
+             AND EXISTS (
+               SELECT 1 FROM proposal_speakers roster
+               WHERE roster.proposal_id = session_proposals.id
+                 AND roster.id <> ? AND roster.status <> 'declined'
+             )
              AND EXISTS (
                SELECT 1 FROM proposal_speakers
                WHERE id = ? AND proposal_id = session_proposals.id AND user_id = ? AND role = ? AND status = ?
@@ -237,6 +247,7 @@ async function removeProposalSpeaker(
           context.proposer_user_id,
           context.proposal_status,
           context.proposal_updated_at,
+          context.speaker_id,
           replacement.speaker_id,
           replacement.user_id,
           replacement.role,
@@ -267,7 +278,10 @@ async function removeProposalSpeaker(
       .prepare(
         `DELETE FROM proposal_speakers
          WHERE id = ? AND proposal_id = ? AND user_id = ? AND role = ? AND status = ?
-           AND (SELECT COUNT(*) FROM proposal_speakers WHERE proposal_id = ?) > 1
+           AND EXISTS (
+             SELECT 1 FROM proposal_speakers roster
+             WHERE roster.proposal_id = ? AND roster.id <> ? AND roster.status <> 'declined'
+           )
            AND EXISTS (
              SELECT 1 FROM session_proposals
              WHERE id = ? AND status = ? AND deleted_at IS NULL
@@ -282,6 +296,7 @@ async function removeProposalSpeaker(
         context.speaker_role,
         context.speaker_status,
         context.proposal_id,
+        context.speaker_id,
         context.proposal_id,
         context.proposal_status,
         replacement?.user_id ?? context.proposer_user_id,
@@ -305,22 +320,23 @@ async function removeProposalSpeaker(
       },
       now,
     ),
-    prepareDeactivateProposalParticipantRoles(db, {
+    ...(await prepareDeactivateProposalParticipantRolesWithCapacity(db, {
       eventId: context.event_id,
       userId: context.speaker_user_id,
       sourceRef: context.proposal_id,
-    }),
+    })),
   );
 
   if (replacement) {
     statements.push(
-      ...prepareSyncProposalParticipantRole(db, {
+      ...(await prepareSyncProposalParticipantRoleWithCapacity(db, {
         eventId: context.event_id,
         userId: replacement.user_id,
         proposalRole: replacement.role,
         sourceRef: context.proposal_id,
         status: proposalParticipantStatus(context.proposal_status, replacement.status),
-      }),
+        sourceRevisionAdvance: 0,
+      })),
     );
   }
   const cancelStatementIndex = statements.length;
@@ -347,7 +363,10 @@ async function removeProposalSpeaker(
       cancelledEmailCount: Number(results[cancelStatementIndex]?.meta?.changes ?? 0),
     };
   } catch (error) {
-    if (isAuditOneChangeGuardFailure(error)) {
+    if (isRegistrationTransitionConflict(error)) {
+      throw registrationChangedError();
+    }
+    if (isAuditOneChangeGuardFailure(error) || isEventParticipantSourceConflict(error)) {
       return throwSpeakerRemovalConflict(db, context.proposal_id, context.speaker_user_id);
     }
     throw error;

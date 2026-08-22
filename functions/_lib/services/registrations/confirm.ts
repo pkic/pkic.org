@@ -1,7 +1,6 @@
 import { AppError } from "../../errors";
 import { first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
-import { uuid } from "../../utils/ids";
 import { prepareEngagementStatement } from "../engagement";
 import { prepareRemoveAllDayWaitlistStatement, resolveCapacityExemptReason } from "./day-waitlist";
 import { prepareUpsertAttendeeParticipantStatement } from "./participant-registration";
@@ -16,6 +15,7 @@ import { INVITE_COLUMNS, type InviteRecord } from "../invite-types";
 import { signCapabilityToken, verifyDatabaseCapability } from "../capability-links";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { REGISTRATION_COLUMNS, type RegistrationRecord } from "./types";
+import { isRegistrationTransitionConflict, prepareRegistrationTransitionGuard } from "./transition-guard";
 
 export interface PreparedRegistrationConfirmation {
   registration: RegistrationRecord;
@@ -24,17 +24,8 @@ export interface PreparedRegistrationConfirmation {
   statements: StatementLike[];
 }
 
-function prepareRegistrationTransitionGuard(db: DatabaseLike, registration: RegistrationRecord): StatementLike {
-  return db
-    .prepare(
-      `INSERT INTO registration_transition_guards (id, registration_id, expected_revision)
-       VALUES (?, ?, ?)`,
-    )
-    .bind(uuid(), registration.id, registration.transition_revision);
-}
-
 export function isStaleRegistrationTransition(error: unknown): boolean {
-  return error instanceof Error && error.message.includes("REGISTRATION_CHANGED");
+  return isRegistrationTransitionConflict(error);
 }
 
 export async function prepareConfirmRegistrationByToken(

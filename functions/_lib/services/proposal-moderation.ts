@@ -5,7 +5,11 @@ import { first } from "../db/queries";
 import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../types";
 import { nowIso } from "../utils/time";
-import { prepareAuditLogWhen } from "./audit";
+import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
+import { prepareProposalParticipantSourceCapacityStatements } from "./proposal-participants";
+import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
+import { isEventParticipantSourceConflict } from "./event-participant-source-revision";
+import { isProposalSpeakerRosterConflict } from "./proposal-speaker-roster-revision";
 
 interface ModeratedProposal {
   id: string;
@@ -64,43 +68,43 @@ export async function moderateProposal(
              WHERE id = ? AND status = ? AND deleted_at IS NULL`,
           )
           .bind(targetStatus, now, proposal.id, proposal.status);
-  const conditionSql =
-    action === "delete"
-      ? "SELECT 1 FROM session_proposals WHERE id = ? AND status = ? AND updated_at = ? AND deleted_at = ? AND changes() = 1"
-      : "SELECT 1 FROM session_proposals WHERE id = ? AND status = ? AND updated_at = ? AND deleted_at IS NULL AND changes() = 1";
-  const conditionBindings =
-    action === "delete" ? [proposal.id, targetStatus, now, now] : [proposal.id, targetStatus, now];
   const statements: StatementLike[] = [
     update,
-    prepareAuditLogWhen(db, {
-      actorType: "admin",
-      actorId: actor.id,
-      action: action === "delete" ? "proposal_deleted" : "proposal_flagged",
-      entityType: "proposal",
-      entityId: proposal.id,
-      details: { status: { from: proposal.status, to: targetStatus } },
-      createdAt: now,
-      conditionSql,
-      conditionBindings,
-    }),
+    prepareAuditLogAfterOneChange(
+      db,
+      "admin",
+      actor.id,
+      action === "delete" ? "proposal_deleted" : "proposal_flagged",
+      "proposal",
+      proposal.id,
+      { status: { from: proposal.status, to: targetStatus } },
+      now,
+    ),
   ];
   if (action === "delete") {
     statements.push(
-      db
-        .prepare(
-          `UPDATE event_participants
-           SET status = 'inactive', updated_at = ?
-           WHERE source_type = 'proposal' AND source_ref = ?
-             AND EXISTS (
-               SELECT 1 FROM session_proposals
-               WHERE id = ? AND status = 'deleted' AND deleted_at = ? AND updated_at = ? AND changes() = 1
-             )`,
-        )
-        .bind(now, proposal.id, proposal.id, now, now),
+      ...(await prepareProposalParticipantSourceCapacityStatements(db, {
+        eventId: proposal.event_id,
+        sourceRef: proposal.id,
+        nextStatus: "inactive",
+      })),
     );
   }
 
-  const [updated] = await db.batch(statements);
-  if ((updated.meta?.changes ?? 0) !== 1) throw await moderationConflict(db, proposal.id);
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    if (isRegistrationTransitionConflict(error)) throw registrationChangedError();
+    if (
+      isAuditOneChangeGuardFailure(error) ||
+      isEventParticipantSourceConflict(error) ||
+      isProposalSpeakerRosterConflict(error)
+    ) {
+      throw await moderationConflict(db, proposal.id);
+    }
+    throw error;
+  }
+  // The adjacent audit guard is the authoritative one-change check. D1's
+  // statement metadata may instead reflect nested source-revision triggers.
   return { action };
 }

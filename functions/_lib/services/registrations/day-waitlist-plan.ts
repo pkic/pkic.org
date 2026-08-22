@@ -34,6 +34,7 @@ export async function buildRegistrationDayWaitlistSync(
     preserveConfirmedEventDayIds?: string[];
     registrationStatus?: string;
     configuredEventDays?: EventDayCapacityRow[];
+    reArbitrateExistingCapacityRows?: boolean;
     forceWaitlistDayDates?: string[];
     claimOfferedDayDates?: string[];
   },
@@ -183,7 +184,11 @@ export async function buildRegistrationDayWaitlistSync(
       existing?.status === "offered" && existing.offer_expires_at && existing.offer_expires_at <= now
         ? "expired"
         : existing?.status;
-    if (existing && (existingStatus === "accepted" || existingStatus === "offered")) {
+    if (
+      !payload.reArbitrateExistingCapacityRows &&
+      existing &&
+      (existingStatus === "accepted" || existingStatus === "offered")
+    ) {
       activeRows.push({
         dayDate: day.day_date,
         status: existingStatus,

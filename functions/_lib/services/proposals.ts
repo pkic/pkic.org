@@ -5,7 +5,10 @@ import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { prepareReferralConversionStatements } from "./referrals";
 import { prepareEngagementStatement } from "./engagement";
-import { prepareUpsertProposalParticipant } from "./proposal-participants";
+import {
+  prepareProposalParticipantSourceCapacityStatements,
+  prepareUpsertProposalParticipant,
+} from "./proposal-participants";
 import {
   issueDatabaseCapability,
   newCapabilityLinkSecret,
@@ -21,9 +24,12 @@ import {
 } from "../../../assets/shared/schemas/proposal-status";
 import type { ProposalType } from "../../../assets/shared/schemas/proposal-management";
 import { parseJsonSafe } from "../utils/json";
-import { prepareAuditLogWhen } from "./audit";
+import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
 import { prepareCancelProposalEmails } from "./proposal-email-cancellation";
 import { recordProposalDecision } from "./proposal-decisions";
+import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
+import { isEventParticipantSourceConflict } from "./event-participant-source-revision";
+import { isProposalSpeakerRosterConflict } from "./proposal-speaker-roster-revision";
 
 export interface ProposalRecord {
   id: string;
@@ -122,6 +128,7 @@ export async function buildCreateProposal(
       userId: proposal.proposer_user_id,
       proposalRole: "proposer",
       sourceRef: proposal.id,
+      status: "inactive",
     }),
     prepareEngagementStatement(db, {
       userId: proposal.proposer_user_id,
@@ -254,53 +261,61 @@ export async function updateProposalForVerifiedOwner(
       sql: "SELECT 1 FROM session_proposals WHERE id = ? AND status = 'withdrawn' AND withdrawn_at = ? AND updated_at = ?",
       bindings: [proposal.id, now, now],
     };
-    const [updated, , , , selected] = await db.batch([
-      db
-        .prepare(
-          `UPDATE session_proposals
+    let withdrawalResults;
+    try {
+      withdrawalResults = await db.batch([
+        db
+          .prepare(
+            `UPDATE session_proposals
            SET status = 'withdrawn', withdrawn_at = ?, updated_at = ?
            WHERE id = ? AND status = ? AND review_round = ? AND updated_at = ? AND deleted_at IS NULL`,
-        )
-        .bind(now, now, proposal.id, proposal.status, proposal.review_round, proposal.updated_at),
-      prepareAuditLogWhen(db, {
-        actorType: "user",
-        actorId: proposal.proposer_user_id,
-        action: "proposal_withdrawn",
-        entityType: "proposal",
-        entityId: proposal.id,
-        details: { status: { from: proposal.status, to: "withdrawn" } },
-        createdAt: now,
-        conditionSql:
-          "SELECT 1 FROM session_proposals WHERE id = ? AND status = 'withdrawn' AND withdrawn_at = ? AND updated_at = ? AND changes() = 1",
-        conditionBindings: [proposal.id, now, now],
-      }),
-      prepareCancelProposalEmails(
-        db,
-        {
-          proposalId: proposal.id,
+          )
+          .bind(now, now, proposal.id, proposal.status, proposal.review_round, proposal.updated_at),
+        prepareAuditLogAfterOneChange(
+          db,
+          "user",
+          proposal.proposer_user_id,
+          "proposal_withdrawn",
+          "proposal",
+          proposal.id,
+          { status: { from: proposal.status, to: "withdrawn" } },
+          now,
+        ),
+        prepareCancelProposalEmails(
+          db,
+          {
+            proposalId: proposal.id,
+            eventId: proposal.event_id,
+            reason: "Cancelled because the proposal was withdrawn",
+            conditionSql: withdrawalCondition.sql,
+            conditionBindings: withdrawalCondition.bindings,
+          },
+          now,
+        ),
+        ...(await prepareProposalParticipantSourceCapacityStatements(db, {
           eventId: proposal.event_id,
-          reason: "Cancelled because the proposal was withdrawn",
-          conditionSql: withdrawalCondition.sql,
-          conditionBindings: withdrawalCondition.bindings,
-        },
-        now,
-      ),
-      db
-        .prepare(
-          `UPDATE event_participants
-           SET status = 'inactive', updated_at = ?
-           WHERE event_id = ? AND source_type = 'proposal' AND source_ref = ?
-             AND EXISTS (
-               SELECT 1 FROM session_proposals
-               WHERE id = ? AND status = 'withdrawn' AND withdrawn_at = ? AND updated_at = ?
-             )`,
-        )
-        .bind(now, proposal.event_id, proposal.id, proposal.id, now, now),
-      db.prepare(`SELECT ${PROPOSAL_COLUMNS} FROM session_proposals WHERE id = ?`).bind(proposal.id),
-    ]);
-    if ((updated.meta?.changes ?? 0) !== 1) {
-      throw new AppError(409, "PROPOSAL_EDIT_CONFLICT", "Proposal changed while the withdrawal was processed");
+          sourceRef: proposal.id,
+          nextStatus: "inactive",
+        })),
+        db.prepare(`SELECT ${PROPOSAL_COLUMNS} FROM session_proposals WHERE id = ?`).bind(proposal.id),
+      ]);
+    } catch (error) {
+      if (isRegistrationTransitionConflict(error)) {
+        throw registrationChangedError();
+      }
+      if (
+        isAuditOneChangeGuardFailure(error) ||
+        isEventParticipantSourceConflict(error) ||
+        isProposalSpeakerRosterConflict(error)
+      ) {
+        throw new AppError(409, "PROPOSAL_EDIT_CONFLICT", "Proposal changed while the withdrawal was processed");
+      }
+      throw error;
     }
+    // The immediate audit guard above is the authoritative one-change check.
+    // D1's per-statement change metadata can be affected by nested revision
+    // trigger writes, so do not reclassify a successfully guarded batch.
+    const selected = withdrawalResults.at(-1)!;
     const withdrawn = batchFirst<ProposalRecord>(selected);
     if (!withdrawn) throw new AppError(500, "PROPOSAL_UPDATE_FAILED", "Unable to load the withdrawn proposal");
     return withdrawn;
@@ -332,10 +347,12 @@ export async function updateProposalForVerifiedOwner(
   if (Object.keys(changes).length === 0) return proposal;
 
   const requiresDecisionRelease = proposal.status === "needs-work";
-  const [updated, , , selected] = await db.batch([
-    db
-      .prepare(
-        `UPDATE session_proposals
+  let updateResults;
+  try {
+    updateResults = await db.batch([
+      db
+        .prepare(
+          `UPDATE session_proposals
          SET proposal_type = ?, title = ?, abstract = ?, details_json = ?, status = ?, review_round = ?, updated_at = ?
          WHERE id = ? AND proposal_type = ? AND title = ? AND abstract = ? AND details_json IS ?
            AND status = ? AND review_round = ? AND updated_at = ? AND deleted_at IS NULL
@@ -343,62 +360,64 @@ export async function updateProposalForVerifiedOwner(
              SELECT 1 FROM proposal_decisions
              WHERE proposal_id = ? AND review_round = ? AND final_status = 'needs-work'
            ))`,
-      )
-      .bind(
-        next.proposalType,
-        next.title,
-        next.abstract,
-        next.detailsJson,
-        next.status,
-        next.reviewRound,
+        )
+        .bind(
+          next.proposalType,
+          next.title,
+          next.abstract,
+          next.detailsJson,
+          next.status,
+          next.reviewRound,
+          now,
+          proposal.id,
+          proposal.proposal_type,
+          proposal.title,
+          proposal.abstract,
+          proposal.details_json,
+          proposal.status,
+          proposal.review_round,
+          proposal.updated_at,
+          requiresDecisionRelease ? 1 : 0,
+          proposal.id,
+          proposal.review_round,
+        ),
+      prepareAuditLogAfterOneChange(
+        db,
+        "user",
+        proposal.proposer_user_id,
+        "proposal_edited",
+        "proposal",
+        proposal.id,
+        changes,
         now,
-        proposal.id,
-        proposal.proposal_type,
-        proposal.title,
-        proposal.abstract,
-        proposal.details_json,
-        proposal.status,
-        proposal.review_round,
-        proposal.updated_at,
-        requiresDecisionRelease ? 1 : 0,
-        proposal.id,
-        proposal.review_round,
       ),
-    prepareAuditLogWhen(db, {
-      actorType: "user",
-      actorId: proposal.proposer_user_id,
-      action: "proposal_edited",
-      entityType: "proposal",
-      entityId: proposal.id,
-      details: changes,
-      createdAt: now,
-      conditionSql:
-        "SELECT 1 FROM session_proposals WHERE id = ? AND status = ? AND review_round = ? AND updated_at = ? AND deleted_at IS NULL AND changes() = 1",
-      conditionBindings: [proposal.id, next.status, next.reviewRound, now],
-    }),
-    db
-      .prepare(
-        `DELETE FROM proposal_decisions
+      db
+        .prepare(
+          `DELETE FROM proposal_decisions
          WHERE ? = 1 AND proposal_id = ? AND review_round = ? AND final_status = 'needs-work'
            AND EXISTS (
              SELECT 1 FROM session_proposals
              WHERE id = ? AND status = ? AND review_round = ? AND updated_at = ?
            )`,
-      )
-      .bind(
-        requiresDecisionRelease ? 1 : 0,
-        proposal.id,
-        proposal.review_round,
-        proposal.id,
-        next.status,
-        next.reviewRound,
-        now,
-      ),
-    db.prepare(`SELECT ${PROPOSAL_COLUMNS} FROM session_proposals WHERE id = ?`).bind(proposal.id),
-  ]);
-  if ((updated.meta?.changes ?? 0) !== 1) {
-    throw new AppError(409, "PROPOSAL_EDIT_CONFLICT", "Proposal changed while the update was processed");
+        )
+        .bind(
+          requiresDecisionRelease ? 1 : 0,
+          proposal.id,
+          proposal.review_round,
+          proposal.id,
+          next.status,
+          next.reviewRound,
+          now,
+        ),
+      db.prepare(`SELECT ${PROPOSAL_COLUMNS} FROM session_proposals WHERE id = ?`).bind(proposal.id),
+    ]);
+  } catch (error) {
+    if (isAuditOneChangeGuardFailure(error)) {
+      throw new AppError(409, "PROPOSAL_EDIT_CONFLICT", "Proposal changed while the update was processed");
+    }
+    throw error;
   }
+  const selected = updateResults.at(-1)!;
   const saved = batchFirst<ProposalRecord>(selected);
   if (!saved) throw new AppError(500, "PROPOSAL_UPDATE_FAILED", "Unable to load the updated proposal");
   return saved;

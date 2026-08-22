@@ -8,6 +8,12 @@ import { prepareScopedAuditLog } from "./audit";
 import { buildAddProposalSpeaker, buildProposalInviteEmailContext, formatInvitePerson } from "./proposal-speakers";
 import type { ProposalRecord } from "./proposals";
 import { buildFindOrCreateUserStatement } from "./users";
+import type { ProposalSpeakerRole } from "../../../assets/shared/schemas/participant-roles";
+import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
+import {
+  eventParticipantSourceConflictError,
+  isEventParticipantSourceConflict,
+} from "./event-participant-source-revision";
 
 export interface ProposalSpeakerInvitation {
   proposal: ProposalRecord;
@@ -16,7 +22,7 @@ export interface ProposalSpeakerInvitation {
   email: string;
   firstName?: string;
   lastName?: string;
-  role: string;
+  role: ProposalSpeakerRole;
 }
 
 async function inviteProposalSpeakerOnce(
@@ -98,7 +104,13 @@ async function inviteProposalSpeakerOnce(
       idempotencyKey,
     ),
   );
-  await db.batch(statements);
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    if (isRegistrationTransitionConflict(error)) throw registrationChangedError();
+    if (isEventParticipantSourceConflict(error)) throw eventParticipantSourceConflictError();
+    throw error;
+  }
   return { email: preparedUser.user.email, outboxId: queued.id };
 }
 
