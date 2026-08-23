@@ -1,7 +1,8 @@
-import { useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../api";
 import type { AdminUser } from "../../types";
 import { usersListResponseSchema } from "../../../../shared/schemas/admin-users";
+import { createLatestRequestGate } from "../../../hooks/useServerCollection";
 
 export interface PickedUser {
   id: string;
@@ -24,11 +25,23 @@ export function UserPicker({
   const [results, setResults] = useState<AdminUser[]>([]);
   const [open, setOpen] = useState(false);
   const timerRef = useRef<number | null>(null);
+  const requestGate = useRef<ReturnType<typeof createLatestRequestGate> | null>(null);
+  requestGate.current ??= createLatestRequestGate();
+
+  function cancelPendingSearch() {
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    requestGate.current?.cancel();
+  }
+
+  useEffect(() => cancelPendingSearch, []);
 
   function handleInput(next: string) {
     setQuery(next);
     if (value) onChange(null);
-    if (timerRef.current) window.clearTimeout(timerRef.current);
+    cancelPendingSearch();
     const term = next.trim();
     if (!term) {
       setResults([]);
@@ -36,17 +49,24 @@ export function UserPicker({
       return;
     }
     timerRef.current = window.setTimeout(async () => {
+      timerRef.current = null;
+      const request = requestGate.current!.start();
       try {
-        const data = await api(`/api/v1/admin/users?limit=8&q=${encodeURIComponent(term)}`, usersListResponseSchema);
+        const data = await api(`/api/v1/admin/users?limit=8&q=${encodeURIComponent(term)}`, usersListResponseSchema, {
+          signal: request.signal,
+        });
+        if (!request.isCurrent()) return;
         setResults(data.users);
         setOpen(true);
       } catch {
+        if (!request.isCurrent()) return;
         setResults([]);
       }
     }, 250);
   }
 
   function pick(user: AdminUser) {
+    cancelPendingSearch();
     onChange({ id: user.id, email: user.email });
     setQuery(user.email);
     setOpen(false);
