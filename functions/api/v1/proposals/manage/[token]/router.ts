@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
+import { methodNotAllowed } from "../../../../../_lib/http";
 import speakers_Router from "./speakers/router";
 import { coSpeakerInviteRouteSchema } from "../../../../../../assets/shared/schemas/proposal-management";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
@@ -17,5 +18,6 @@ openapi.post(
   ),
 );
 openapi.route("/speakers", speakers_Router);
+app.all("/speakers", () => methodNotAllowed(["POST"]));
 
 export default openapi;
