@@ -6,6 +6,7 @@ import {
   type PublicSponsor,
   type SponsorsDisplayResponse,
 } from "../../shared/schemas/public-sponsors";
+import { useAppendableServerCollection, type CollectionLoader } from "../hooks/useServerCollection";
 
 /** The public endpoint's shared maximum keeps display work bounded in D1 and the browser. */
 export const SPONSOR_DISPLAY_LIMIT = 200;
@@ -34,6 +35,9 @@ export function mergeSponsorDisplayPages(
   return { groups: [...groups.values()].sort((a, b) => b.weight - a.weight), page: next.page };
 }
 
+const loadSponsorDisplayPage: CollectionLoader = (url, signal, responseSchema) =>
+  getJson(url, responseSchema, { signal });
+
 function buildQuery(filters: SponsorFilters, offset = 0): string {
   const query = new URLSearchParams({
     limit: String(Math.min(SPONSOR_DISPLAY_LIMIT, Math.max(1, filters.limit ?? SPONSOR_DISPLAY_LIMIT))),
@@ -45,6 +49,13 @@ function buildQuery(filters: SponsorFilters, offset = 0): string {
   if (filters.level) query.set("level", filters.level);
   if (filters.minWeight !== undefined) query.set("minWeight", String(filters.minWeight));
   return query.toString();
+}
+
+function buildDisplayParams(filters: SponsorFilters): Record<string, string> {
+  const query = new URLSearchParams(buildQuery(filters));
+  query.delete("limit");
+  query.delete("offset");
+  return Object.fromEntries(query.entries());
 }
 
 export function useSponsorList(
@@ -89,44 +100,21 @@ export function useSponsorDisplay(
   loadingMore: boolean;
   loadMore: () => Promise<void>;
 } {
-  const [display, setDisplay] = useState<SponsorsDisplayResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loadingMore, setLoadingMore] = useState(false);
-  useEffect(() => {
-    const controller = new AbortController();
-    setDisplay(null);
-    setError(null);
-    setLoadingMore(false);
-    void getJson(`${apiBase}/sponsors/display?${buildQuery(filters)}`, sponsorsDisplayResponseSchema, {
-      signal: controller.signal,
-    })
-      .then((response) => setDisplay(response))
-      .catch((cause: unknown) => {
-        if (!controller.signal.aborted) {
-          setDisplay(null);
-          setError((cause as Error).message);
-          console.error("[sponsors-wall]", cause);
-        }
-      });
-    return () => controller.abort();
-  }, [apiBase, filters.eventSlug, filters.eventName, filters.level, filters.minWeight, filters.limit, filters.sort]);
-  async function loadMore(): Promise<void> {
-    if (!display?.page.hasMore || loadingMore) return;
-    setLoadingMore(true);
-    try {
-      const loaded = display.groups.reduce((count, group) => count + group.sponsors.length, 0);
-      const response = await getJson(
-        `${apiBase}/sponsors/display?${buildQuery(filters, loaded)}`,
-        sponsorsDisplayResponseSchema,
-      );
-      setDisplay(mergeSponsorDisplayPages(display, response));
-    } catch (cause: unknown) {
-      setError((cause as Error).message);
-    } finally {
-      setLoadingMore(false);
-    }
-  }
-  return { display, error, loadingMore, loadMore };
+  const pageSize = Math.min(SPONSOR_DISPLAY_LIMIT, Math.max(1, filters.limit ?? SPONSOR_DISPLAY_LIMIT));
+  const listing = useAppendableServerCollection({
+    endpoint: `${apiBase}/sponsors/display`,
+    params: buildDisplayParams(filters),
+    pageSize,
+    responseSchema: sponsorsDisplayResponseSchema,
+    load: loadSponsorDisplayPage,
+    merge: mergeSponsorDisplayPages,
+  });
+  return {
+    display: listing.data,
+    error: listing.error?.message ?? null,
+    loadingMore: listing.loadingMore,
+    loadMore: listing.loadMore,
+  };
 }
 
 export function sponsorQueryForTest(filters: SponsorFilters, offset = 0): string {
