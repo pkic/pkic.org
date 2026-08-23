@@ -106,16 +106,13 @@ const SUMMARY_SELECT = `
          chair.expires_at AS chair_expires_at,
          vice_chair.user_role_id AS vice_chair_user_role_id, vice_chair.user_id AS vice_chair_user_id,
          vice_chair.first_name AS vice_chair_first_name, vice_chair.last_name AS vice_chair_last_name,
-         vice_chair.email AS vice_chair_email, vice_chair.expires_at AS vice_chair_expires_at
-  FROM working_groups wg
-  LEFT JOIN (${currentWorkingGroupRoleHolderSql(WORKING_GROUP_CHAIR_ROLE_ID)}) chair ON chair.wg_id = wg.id
-  LEFT JOIN (${currentWorkingGroupRoleHolderSql(WORKING_GROUP_VICE_CHAIR_ROLE_ID)}) vice_chair ON vice_chair.wg_id = wg.id
-`;
+         vice_chair.email AS vice_chair_email, vice_chair.expires_at AS vice_chair_expires_at`;
 
-export async function listAdminWorkingGroups(
-  db: DatabaseLike,
-  query: WorkingGroupsListQuery,
-): Promise<{ workingGroups: AdminWorkingGroupSummary[]; total: number }> {
+const SUMMARY_FROM = `FROM working_groups wg
+  LEFT JOIN (${currentWorkingGroupRoleHolderSql(WORKING_GROUP_CHAIR_ROLE_ID)}) chair ON chair.wg_id = wg.id
+  LEFT JOIN (${currentWorkingGroupRoleHolderSql(WORKING_GROUP_VICE_CHAIR_ROLE_ID)}) vice_chair ON vice_chair.wg_id = wg.id`;
+
+export function buildAdminWorkingGroupsPageQuery(query: WorkingGroupsListQuery) {
   const search = query.q
     ? buildD1TextSearchFilter(query.q, ["wg.name", "wg.slug", "wg.description", "wg.mailing_list_email"])
     : null;
@@ -131,13 +128,25 @@ export async function listAdminWorkingGroups(
   }
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const orderBy = resolveOrderBy(query.sort, ADMIN_WORKING_GROUP_SORT_COLUMNS, "ORDER BY wg.name ASC", "wg.id ASC");
-  const { rows, total } = await queryPage<WorkingGroupSummaryRow>(db, {
-    sql: `${SUMMARY_SELECT} ${where}`,
-    bindings,
+
+  return {
+    source: {
+      selectSql: SUMMARY_SELECT,
+      fromSql: `${SUMMARY_FROM} ${where}`,
+      countFromSql: `FROM working_groups wg ${where}`,
+      bindings,
+    },
     orderBy,
     limit: query.limit,
     offset: query.offset,
-  });
+  };
+}
+
+export async function listAdminWorkingGroups(
+  db: DatabaseLike,
+  query: WorkingGroupsListQuery,
+): Promise<{ workingGroups: AdminWorkingGroupSummary[]; total: number }> {
+  const { rows, total } = await queryPage<WorkingGroupSummaryRow>(db, buildAdminWorkingGroupsPageQuery(query));
   return { workingGroups: rows.map(toSummary), total };
 }
 
@@ -145,10 +154,11 @@ export async function getAdminWorkingGroupDetail(
   db: DatabaseLike,
   idOrSlug: string,
 ): Promise<AdminWorkingGroupSummary | null> {
-  const row = await first<WorkingGroupSummaryRow>(db, `${SUMMARY_SELECT} WHERE wg.id = ? OR wg.slug = ?`, [
-    idOrSlug,
-    idOrSlug,
-  ]);
+  const row = await first<WorkingGroupSummaryRow>(
+    db,
+    `${SUMMARY_SELECT} ${SUMMARY_FROM} WHERE wg.id = ? OR wg.slug = ?`,
+    [idOrSlug, idOrSlug],
+  );
   return row ? toSummary(row) : null;
 }
 

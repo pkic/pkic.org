@@ -60,13 +60,13 @@ const ORG_SUMMARY_SELECT = `
          primary_contact.user_id AS primary_contact_user_id,
          primary_contact.first_name AS primary_contact_first_name,
          primary_contact.last_name AS primary_contact_last_name,
-         primary_contact.email AS primary_contact_email
-  FROM organizations o
+         primary_contact.email AS primary_contact_email`;
+
+const ORG_SUMMARY_FROM = `FROM organizations o
   LEFT JOIN members m ON m.organization_id = o.id
   LEFT JOIN member_category_assignments mca ON mca.member_id = m.id
   LEFT JOIN ${primaryContactProjection()}
-    ON primary_contact.member_id = m.id
-`;
+    ON primary_contact.member_id = m.id`;
 
 function toOrgSummary(row: OrgSummaryRow) {
   const primaryContactName = [row.primary_contact_first_name, row.primary_contact_last_name].filter(Boolean).join(" ");
@@ -87,23 +87,33 @@ function toOrgSummary(row: OrgSummaryRow) {
   };
 }
 
-export async function listAdminOrganizations(
-  db: DatabaseLike,
-  params: { limit: number; offset: number; q?: string; sort?: string },
-): Promise<{ organizations: ReturnType<typeof toOrgSummary>[]; total: number }> {
+export function buildAdminOrganizationsPageQuery(params: { limit: number; offset: number; q?: string; sort?: string }) {
   const search = params.q ? buildD1TextSearchFilter(params.q, ["o.name"]) : null;
   const where = search ? `WHERE ${search.sql}` : "";
   const whereArgs = search?.bindings ?? [];
   const orderBy = resolveOrderBy(params.sort, ADMIN_ORGANIZATIONS_SORT_COLUMNS, "ORDER BY o.name ASC", "o.id ASC");
   const now = nowIso();
 
-  const { rows, total } = await queryPage<OrgSummaryRow>(db, {
-    sql: `${ORG_SUMMARY_SELECT} ${where}`,
-    bindings: [now, ...whereArgs],
+  return {
+    source: {
+      selectSql: ORG_SUMMARY_SELECT,
+      fromSql: `${ORG_SUMMARY_FROM} ${where}`,
+      countFromSql: `FROM organizations o ${where}`,
+      bindings: [now, ...whereArgs],
+      countBindings: whereArgs,
+    },
     orderBy,
     limit: params.limit,
     offset: params.offset,
-  });
+  };
+}
+
+export async function listAdminOrganizations(
+  db: DatabaseLike,
+  params: { limit: number; offset: number; q?: string; sort?: string },
+): Promise<{ organizations: ReturnType<typeof toOrgSummary>[]; total: number }> {
+  const pageQuery = buildAdminOrganizationsPageQuery(params);
+  const { rows, total } = await queryPage<OrgSummaryRow>(db, pageQuery);
 
   return { organizations: rows.map(toOrgSummary), total };
 }

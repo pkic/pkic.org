@@ -1,6 +1,7 @@
 import { EVENTS_LIST_SORT_COLUMNS, type AdminEventsListQuery } from "../../../../assets/shared/schemas/admin-events";
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import { buildOffsetPageStatements, decodeOffsetPageResults } from "../../db/pagination";
+import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
@@ -79,17 +80,19 @@ export function buildAdminEventsPageQuery(query: AdminEventsListQuery) {
   };
 }
 
-export async function listAdminEvents(db: DatabaseLike, query: AdminEventsListQuery) {
-  const pageQuery = buildAdminEventsPageQuery(query);
-  const [pageStatement, countStatement] = buildOffsetPageStatements(db, pageQuery);
-  const [pageResult, countResult] = await db.batch([pageStatement, countStatement]);
-  const { rows: pageRows, total } = decodeOffsetPageResults<EventPageRow>(pageResult, countResult);
-
-  const statsByEvent = new Map<string, EventStatsRow>();
-  if (pageRows.length > 0) {
-    const statsResult = await db
-      .prepare(
-        `WITH page_events(event_id) AS (VALUES ${pageRows.map(() => "(?)").join(", ")}),
+/**
+ * Build the bounded aggregate query for an already selected event page.
+ * The canonical JSON-membership filter keeps the query at one D1 binding
+ * even when the shared list contract returns its maximum 200 rows.
+ */
+export function buildAdminEventStatsQuery(eventIds: readonly string[]) {
+  const eventFilter = buildD1JsonMembershipFilter("e.id", eventIds);
+  return {
+    sql: `WITH page_events AS (
+         SELECT e.id AS event_id
+           FROM events e
+          WHERE ${eventFilter.sql}
+       ),
        registration_counts AS (
          SELECT r.event_id,
                 COUNT(*) AS total_registrations,
@@ -112,8 +115,22 @@ export async function listAdminEvents(db: DatabaseLike, query: AdminEventsListQu
          FROM page_events pe
          LEFT JOIN registration_counts rc ON rc.event_id = pe.event_id
          LEFT JOIN invite_counts ic ON ic.event_id = pe.event_id`,
-      )
-      .bind(...pageRows.map((event) => event.id))
+    bindings: eventFilter.bindings,
+  };
+}
+
+export async function listAdminEvents(db: DatabaseLike, query: AdminEventsListQuery) {
+  const pageQuery = buildAdminEventsPageQuery(query);
+  const [pageStatement, countStatement] = buildOffsetPageStatements(db, pageQuery);
+  const [pageResult, countResult] = await db.batch([pageStatement, countStatement]);
+  const { rows: pageRows, total } = decodeOffsetPageResults<EventPageRow>(pageResult, countResult);
+
+  const statsByEvent = new Map<string, EventStatsRow>();
+  if (pageRows.length > 0) {
+    const statsQuery = buildAdminEventStatsQuery(pageRows.map((event) => event.id));
+    const statsResult = await db
+      .prepare(statsQuery.sql)
+      .bind(...statsQuery.bindings)
       .all<EventStatsRow>();
     for (const row of statsResult.results) statsByEvent.set(row.event_id, row);
   }
