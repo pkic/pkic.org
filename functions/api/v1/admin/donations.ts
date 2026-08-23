@@ -12,12 +12,14 @@ import { json } from "../../../_lib/http";
 import { requireAdminFromRequest } from "../../../_lib/auth/admin";
 import { requestDb, type AdminContext } from "../../../_lib/db/context";
 import { openApiRoute } from "../../../_lib/openapi/route";
-import { donationsListRouteSchema } from "../../../../assets/shared/schemas/admin-donations";
+import {
+  donationsListResponseSchema,
+  donationsListRouteSchema,
+} from "../../../../assets/shared/schemas/admin-donations";
 import { listDonations } from "../../../_lib/services/donations";
 
 export const DonationsList = openApiRoute(donationsListRouteSchema, async (c: AdminContext, data) => {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  const { status, q, sort, limit, offset } = data.query;
-  return json(await listDonations(requestDb(c), { status, q, sort, limit, offset }));
+  return json(donationsListResponseSchema.parse(await listDonations(requestDb(c), data.query)));
 });
