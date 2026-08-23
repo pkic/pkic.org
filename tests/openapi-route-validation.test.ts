@@ -35,6 +35,7 @@ describe("shared OpenAPI request validation", () => {
     const app = testApp();
 
     const requestJson = vi.spyOn(Request.prototype, "json");
+    const requestClone = vi.spyOn(Request.prototype, "clone");
     try {
       const response = await app.request("/test", {
         method: "POST",
@@ -45,8 +46,10 @@ describe("shared OpenAPI request validation", () => {
       expect(response.status).toBe(200);
       expect(JSON.parse(await response.text())).toEqual({ value: "validated" });
       expect(requestJson).not.toHaveBeenCalled();
+      expect(requestClone).not.toHaveBeenCalled();
     } finally {
       requestJson.mockRestore();
+      requestClone.mockRestore();
     }
   });
 

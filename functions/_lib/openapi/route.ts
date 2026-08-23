@@ -7,9 +7,9 @@ import {
   type ValidatedData,
 } from "chanfana";
 import { AppError } from "../errors";
-import { readBoundedTextBody } from "../http-body";
+import { JSON_REQUEST_MAX_BYTES, readBoundedJsonBody } from "../http-body";
 
-export const OPENAPI_JSON_MAX_BYTES = 2 * 1024 * 1024;
+export { JSON_REQUEST_MAX_BYTES as OPENAPI_JSON_MAX_BYTES } from "../http-body";
 
 type RouteHandler<Context, Schema> = (context: Context, data: ValidatedData<Schema>) => Response | Promise<Response>;
 type BeforeValidation<Context> = (context: Context) => void | Promise<void>;
@@ -62,13 +62,10 @@ export function openApiRoute<Schema extends OpenAPIRouteSchema, Context = any>(
         !["get", "head"].includes(request.method.toLowerCase()) &&
         schema.request?.body?.content?.["application/json"]?.schema
       ) {
-        try {
-          const body = await readBoundedTextBody(request.clone() as unknown as Request, OPENAPI_JSON_MAX_BYTES);
-          unvalidatedData.body = JSON.parse(body);
-        } catch (error) {
-          if (error instanceof AppError) throw error;
-          throw new AppError(400, "INVALID_JSON", "Request body must contain valid JSON");
-        }
+        // This cache is the sole downstream body source, so consume the
+        // original stream once. Cloning would tee the body and retain an
+        // unused branch in memory for every JSON mutation request.
+        unvalidatedData.body = await readBoundedJsonBody(request as unknown as Request, JSON_REQUEST_MAX_BYTES);
       }
 
       // Chanfana's validator consumes this cache. Priming it here gives us a
