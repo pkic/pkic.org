@@ -536,7 +536,10 @@ ALTER TABLE calendar_rsvp_events ADD COLUMN action_due_at TEXT;
 
 -- Older dedupe keys predate provider namespacing. Preserve their original
 -- tuple shape while preventing two calendar transports from suppressing each
--- other's events after deployment.
+-- other's events after deployment. Historical databases may contain legacy
+-- opaque keys rather than JSON arrays; retain those values instead of making
+-- the entire additive migration depend on historical application data being
+-- valid JSON.
 UPDATE calendar_rsvp_events
 SET dedupe_key = CASE json_array_length(dedupe_key)
   WHEN 2 THEN json_array(
@@ -551,7 +554,8 @@ SET dedupe_key = CASE json_array_length(dedupe_key)
     json_extract(dedupe_key, '$[2]')
   )
   ELSE dedupe_key
-END;
+END
+WHERE json_valid(dedupe_key);
 
 UPDATE calendar_rsvp_events AS rsvp
 SET event_day_id = (
