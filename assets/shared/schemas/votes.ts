@@ -304,6 +304,7 @@ export const proposalSummarySchema = z.object({
   minEndorsersRequired: z.number(),
   createdAt: z.string(),
 });
+export type ProposalSummary = z.infer<typeof proposalSummarySchema>;
 
 export const submitProposalSchema = z.object({
   title: z.string().trim().min(1).max(300),
@@ -343,6 +344,7 @@ export const listProposalsQuerySchema = listQuerySchema(VOTE_PROPOSALS_LIST_SORT
   scopeType: voteScopeTypeSchema.optional(),
   scopeId: workingGroupIdSchema.optional(),
 });
+export type ListProposalsQuery = z.infer<typeof listProposalsQuerySchema>;
 
 export const listProposalsResponseSchema = paginatedResponseSchema("proposals", proposalSummarySchema);
 

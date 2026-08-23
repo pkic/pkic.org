@@ -7,6 +7,7 @@ import { json } from "../../../../_lib/http";
 import { requireMemberFromRequest } from "../../../../_lib/auth/member";
 import { submitVoteProposal, listVoteProposals } from "../../../../_lib/services/votes";
 import {
+  listProposalsResponseSchema,
   listProposalsRouteSchema,
   submitProposalResponseSchema,
   submitProposalRouteSchema,
@@ -24,8 +25,11 @@ export const PortalVoteProposalsPost = openApiRoute(submitProposalRouteSchema, a
 export const PortalVoteProposalsGet = openApiRoute(listProposalsRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
   await requireMemberFromRequest(db, c.req.raw, c.env);
-  const q = data.query;
-  const { limit, offset } = q;
-  const { proposals, total } = await listVoteProposals(db, { ...q, limit, offset });
-  return json({ proposals, page: buildPageInfo(limit, offset, total, proposals.length) });
+  const { proposals, total } = await listVoteProposals(db, data.query);
+  return json(
+    listProposalsResponseSchema.parse({
+      proposals,
+      page: buildPageInfo(data.query.limit, data.query.offset, total, proposals.length),
+    }),
+  );
 });

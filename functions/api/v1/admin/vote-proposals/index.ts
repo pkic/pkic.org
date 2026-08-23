@@ -7,7 +7,10 @@ import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../_lib/auth/permissions";
 import { listAllVoteProposalsForAdmin } from "../../../../_lib/services/votes";
-import { adminListProposalsRouteSchema } from "../../../../../assets/shared/schemas/votes-admin";
+import {
+  adminListProposalsRouteSchema,
+  adminVoteProposalsListResponseSchema,
+} from "../../../../../assets/shared/schemas/votes-admin";
 import { buildPageInfo } from "../../../../../assets/shared/schemas/pagination";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 
@@ -16,7 +19,11 @@ export const AdminVoteProposalsGet = openApiRoute(adminListProposalsRouteSchema,
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
   requirePermission(admin, "votes:manage");
 
-  const { status, q, sort, limit, offset } = data.query;
-  const { proposals, total } = await listAllVoteProposalsForAdmin(db, { status, q, sort, limit, offset });
-  return json({ proposals, page: buildPageInfo(limit, offset, total, proposals.length) });
+  const { proposals, total } = await listAllVoteProposalsForAdmin(db, data.query);
+  return json(
+    adminVoteProposalsListResponseSchema.parse({
+      proposals,
+      page: buildPageInfo(data.query.limit, data.query.offset, total, proposals.length),
+    }),
+  );
 });

@@ -179,8 +179,11 @@ export const adminVoteBallotsRouteSchema = {
 };
 
 export const adminListProposalsQuerySchema = listQuerySchema(VOTE_PROPOSALS_LIST_SORT_COLUMNS).extend({
+  scopeType: voteScopeTypeSchema.optional(),
+  scopeId: workingGroupIdSchema.optional(),
   status: voteProposalStatusSchema.optional(),
 });
+export type AdminListProposalsQuery = z.infer<typeof adminListProposalsQuerySchema>;
 export const adminVoteProposalsListResponseSchema = paginatedResponseSchema("proposals", proposalSummarySchema);
 export const adminVoteProposalDetailResponseSchema = proposalDetailResponseSchema;
 
