@@ -5,7 +5,10 @@ import type { DatabaseLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
 import { getRegistrationDayAttendance } from "../event-days";
 import { getActiveFormByPurpose } from "../forms";
+import { firstReferralCodeForOwnerSql } from "../referral-code-projection";
 import { listDayWaitlistForRegistration } from "./day-waitlist";
+
+const registrationReferralCodeSql = firstReferralCodeForOwnerSql("registration", "r.id");
 
 export interface AdminRegistrationDetailRow {
   id: string;
@@ -36,7 +39,7 @@ export async function fetchAdminRegistrationWithDetails(
             r.custom_answers_json, r.created_at, r.updated_at,
             u.email AS user_email,
             COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
-            rc.code AS referral_code,
+            ${registrationReferralCodeSql} AS referral_code,
             (SELECT response_status
              FROM calendar_rsvp_events
              WHERE registration_id = r.id
@@ -70,7 +73,6 @@ export async function fetchAdminRegistrationWithDetails(
             ), '[]') AS rsvp_by_day_json
      FROM registrations r
      LEFT JOIN users u ON u.id = r.user_id
-     LEFT JOIN referral_codes rc ON rc.owner_type = 'registration' AND rc.owner_id = r.id
      WHERE r.id = ? AND r.event_id = ?`,
     [registrationId, eventId],
   );

@@ -226,6 +226,8 @@ describe("admin event management endpoints", () => {
 
     expect(pageSql).toMatch(/calendar_rsvp_events|JSON_GROUP_ARRAY|email_outbox/i);
     expect(countSql).not.toMatch(/calendar_rsvp_events|JSON_GROUP_ARRAY|ROW_NUMBER|rsvp_events_json/i);
+    expect(pageSql).not.toMatch(/JOIN referral_codes/i);
+    expect(countSql).not.toMatch(/referral_codes/i);
     expect(countSql).toContain("r.event_id = ?");
     expect(countSql).toContain("r.status = ?");
     expect(countBindings).toEqual(bindings);
@@ -239,6 +241,47 @@ describe("admin event management endpoints", () => {
     ]);
     expect(pagePlan.results.length).toBeGreaterThan(0);
     expect(countPlan.results.length).toBeGreaterThan(0);
+  });
+
+  it("returns one registration and one deterministic referral code when an owner has multiple codes", async () => {
+    const { baseEventId } = await setupAdmin();
+    const userId = crypto.randomUUID();
+    const registrationId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+         VALUES (?, 'multi-referral@example.test', 'multi-referral@example.test', 'user', 1, datetime('now'), datetime('now'))`,
+      ).bind(userId),
+      env.DB.prepare(
+        `INSERT INTO registrations
+           (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
+         VALUES (?, ?, ?, 'registered', 'virtual', 'direct', ?, datetime('now'), datetime('now'))`,
+      ).bind(registrationId, baseEventId, userId, `manage-${crypto.randomUUID()}`),
+      env.DB.prepare(
+        `INSERT INTO referral_codes
+           (code, event_id, owner_type, owner_id, created_by_user_id, clicks, conversions, created_at)
+         VALUES ('second02', ?, 'registration', ?, ?, 0, 0, '2026-01-02T00:00:00.000Z')`,
+      ).bind(baseEventId, registrationId, userId),
+      env.DB.prepare(
+        `INSERT INTO referral_codes
+           (code, event_id, owner_type, owner_id, created_by_user_id, clicks, conversions, created_at)
+         VALUES ('first001', ?, 'registration', ?, ?, 0, 0, '2026-01-01T00:00:00.000Z')`,
+      ).bind(baseEventId, registrationId, userId),
+    ]);
+
+    const listResponse = await callAdmin("/api/v1/admin/events/pqc-2026/registrations");
+    expect(listResponse.status).toBe(200);
+    const list = (await listResponse.json()) as {
+      registrations: Array<{ id: string; referral_code: string | null }>;
+      page: { total: number };
+    };
+    expect(list.page.total).toBe(1);
+    expect(list.registrations).toEqual([expect.objectContaining({ id: registrationId, referral_code: "first001" })]);
+
+    const detailResponse = await callAdmin(`/api/v1/admin/events/pqc-2026/registrations/${registrationId}`);
+    expect(detailResponse.status).toBe(200);
+    const detail = adminRegistrationDetailResponseSchema.parse(await detailResponse.json());
+    expect(detail.registration.referral_code).toBe("first001");
   });
 
   it("returns details and persists settings updates", async () => {

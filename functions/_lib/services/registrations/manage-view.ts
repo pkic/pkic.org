@@ -3,6 +3,7 @@ import type { DatabaseLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
 import { countRegisteredByEventDay, getRegistrationDayAttendance, listEventDays } from "../event-days";
 import { getEventById } from "../events";
+import { firstReferralCodeQuerySql } from "../referral-code-projection";
 import { listDayWaitlistForRegistration } from "./day-waitlist";
 import type { RegistrationRecord } from "./types";
 import { publicUserHeadshotUrl } from "../user-headshot";
@@ -34,13 +35,7 @@ export async function buildRegistrationManageView(
              FROM users WHERE id = ?`,
         )
         .bind(registration.user_id),
-      db
-        .prepare(
-          `SELECT code FROM referral_codes
-            WHERE owner_type = 'registration' AND owner_id = ?
-            ORDER BY created_at ASC LIMIT 1`,
-        )
-        .bind(registration.id),
+      db.prepare(firstReferralCodeQuerySql("registration", "?")).bind(registration.id),
     ]),
     listEventDays(db, registration.event_id),
     getRegistrationDayAttendance(db, registration.id),

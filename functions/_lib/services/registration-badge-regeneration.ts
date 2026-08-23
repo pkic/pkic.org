@@ -10,6 +10,7 @@ import type { EventRecord } from "./events";
 import { fetchGravatar } from "./gravatar";
 import { renderAndCacheBadge } from "./og-badge-prerender";
 import { prepareBadgeRenderJob } from "./badge-render-job-statements";
+import { firstReferralCodeQuerySql } from "./referral-code-projection";
 export { prepareBadgeRenderJobsForUser } from "./badge-render-job-statements";
 
 const MAX_ATTEMPTS = 10;
@@ -43,16 +44,10 @@ export async function requestRegistrationBadgeRegeneration(
   db: DatabaseLike,
   payload: { actor: AuthAdmin; event: EventRecord; registrationId: string; appBaseUrl: string },
 ): Promise<{ jobId: string; referralCode: string; badgeUrl: string }> {
-  const referral = await first<{ code: string }>(
-    db,
-    `SELECT rc.code
-       FROM registrations r
-       JOIN referral_codes rc
-         ON rc.owner_type = 'registration' AND rc.owner_id = r.id AND rc.event_id = r.event_id
-      WHERE r.id = ? AND r.event_id = ?
-      LIMIT 1`,
-    [payload.registrationId, payload.event.id],
-  );
+  const referral = await first<{ code: string }>(db, firstReferralCodeQuerySql("registration", "?", "?"), [
+    payload.registrationId,
+    payload.event.id,
+  ]);
   if (!referral) throw new AppError(404, "NO_REFERRAL_CODE", "No referral code found for this registration");
 
   const createdAt = nowIso();

@@ -6,6 +6,7 @@ import { prepareAuditLog } from "./audit";
 import { prepareConsentStatements } from "./consent";
 import { prepareAcceptInviteStatements, prepareRevokeDuplicateInvitesStatement, type InviteRecord } from "./invites";
 import { prepareReferralCodeStatement } from "./referrals";
+import { firstReferralCodeQuerySql } from "./referral-code-projection";
 import { buildCreateRegistration } from "./registrations/create";
 import { isEventDayCapacityConflict, type PlannedDayWaitlistEntry } from "./registrations/day-waitlist";
 import type { RegistrationRecord } from "./registrations";
@@ -62,11 +63,9 @@ export async function prepareRegistrationSubmission(
     confirmationTtlHours: payload.confirmationTtlHours,
     signingSecret: payload.signingSecret,
   });
-  const existingReferral = await first<{ code: string }>(
-    db,
-    "SELECT code FROM referral_codes WHERE owner_type = 'registration' AND owner_id = ? ORDER BY created_at ASC LIMIT 1",
-    [builtRegistration.registration.id],
-  );
+  const existingReferral = await first<{ code: string }>(db, firstReferralCodeQuerySql("registration", "?"), [
+    builtRegistration.registration.id,
+  ]);
   const preparedReferral = existingReferral
     ? null
     : await prepareReferralCodeStatement(db, {

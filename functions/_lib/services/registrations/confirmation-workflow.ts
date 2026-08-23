@@ -7,6 +7,7 @@ import { isStaleInviteTransition } from "../invite-lifecycle";
 import { registrationManagePageUrl } from "../frontend-links";
 import { isStaleRegistrationTransition, prepareConfirmRegistrationByToken } from "./confirm";
 import { prepareRegistrationConfirmedEmail } from "./status-notifications";
+import { firstReferralCodeQuerySql } from "../referral-code-projection";
 
 export interface ConfirmRegistrationWorkflowPayload {
   event: EventRecord;
@@ -54,11 +55,9 @@ async function confirmRegistrationWithNotificationOnce(
     waitlistClaimWindowHours: payload.waitlistClaimWindowHours,
     signingSecret: payload.signingSecret,
   });
-  const referral = await first<{ code: string }>(
-    db,
-    "SELECT code FROM referral_codes WHERE owner_type = 'registration' AND owner_id = ? LIMIT 1",
-    [prepared.registration.id],
-  );
+  const referral = await first<{ code: string }>(db, firstReferralCodeQuerySql("registration", "?"), [
+    prepared.registration.id,
+  ]);
   const idempotencyKey = `registration_confirmed_email:${prepared.registration.id}`;
   const email = await prepareRegistrationConfirmedEmail(db, {
     event: payload.event,

@@ -10,6 +10,7 @@ import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveOrderBy } from "../../db/sort";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { getAttendanceStatusByType, type AttendanceStatusCount } from "./admin-statistics";
+import { firstReferralCodeForOwnerSql } from "../referral-code-projection";
 import {
   EVENT_REGISTRATIONS_SORT_COLUMNS,
   type AdminEventRegistrationsQuery,
@@ -104,6 +105,7 @@ const latestOutboxStatusForRegistrationSql = `(SELECT eo.status
        WHERE eo.recipient_user_id = r.user_id AND eo.event_id = r.event_id
        ORDER BY eo.updated_at DESC
        LIMIT 1)`;
+const registrationReferralCodeSql = firstReferralCodeForOwnerSql("registration", "r.id");
 
 export function buildAdminEventRegistrationsPageQuery(eventId: string, params: AdminEventRegistrationsListParams) {
   const search = (params.q ?? "").trim();
@@ -190,7 +192,7 @@ export function buildAdminEventRegistrationsPageQuery(eventId: string, params: A
       selectSql: `SELECT r.id, r.user_id, r.status, r.attendance_type, r.source_type, r.created_at, r.updated_at,
               u.email AS user_email,
               COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
-              rc.code AS referral_code,
+              ${registrationReferralCodeSql} AS referral_code,
               COALESCE(${latestOutboxStatusForRegistrationSql} = 'bounced', 0) AS has_bounced,
               EXISTS(SELECT 1 FROM consent_acceptances ca
                      WHERE ca.registration_id = r.id AND ca.term_key = 'sponsor-data-sharing') AS sponsor_consent,
@@ -225,7 +227,6 @@ export function buildAdminEventRegistrationsPageQuery(eventId: string, params: A
               ) AS rsvp_events_json`,
       fromSql: `FROM registrations r
        LEFT JOIN users u ON u.id = r.user_id
-       LEFT JOIN referral_codes rc ON rc.owner_type = 'registration' AND rc.owner_id = r.id
        WHERE ${whereClause}`,
       bindings,
     },
