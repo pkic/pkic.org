@@ -267,6 +267,41 @@ export async function findEligibleStaffUserById(db: DatabaseLike, userId: string
 }
 
 /**
+ * Re-resolves a user-backed admin identity for short-lived delegated flows.
+ * Unlike a signed actor claim, this reflects current deactivation and staff
+ * eligibility state and recomputes grants after each resolution.
+ */
+export async function getCurrentUserBackedAdmin(
+  db: DatabaseLike,
+  userId: string,
+  sessionId: string,
+): Promise<UserBackedAuthAdmin | null> {
+  const session = await first<AdminSessionRow>(
+    db,
+    `SELECT s.id, s.user_id, s.expires_at, s.revoked_at, u.email, u.role
+       FROM sessions s
+       JOIN users u ON u.id = s.user_id
+      WHERE s.id = ? AND s.user_id = ? AND u.active = 1 AND ${STAFF_ACCESS_CONDITION}`,
+    [sessionId, userId],
+  );
+  try {
+    assertSessionActive(session ? { revokedAt: session.revoked_at, expiresAt: session.expires_at } : null, "admin");
+  } catch {
+    return null;
+  }
+
+  return createUserBackedAuthAdmin({
+    id: session!.user_id,
+    email: session!.email,
+    role: session!.role,
+    scopes: session!.role === "admin" ? [...AUTH_SCOPES] : [],
+    grants: await computeGrantsForUser(db, session!.user_id),
+    sessionId: session!.id,
+    expiresAt: session!.expires_at,
+  });
+}
+
+/**
  * Creates a `sessions` row for an already-verified user and returns the same
  * shape `verifyAdminMagicLink` does, so any login entry point (magic link,
  * passkey) can share one session-issuance path.

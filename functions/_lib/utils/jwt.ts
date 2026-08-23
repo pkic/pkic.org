@@ -95,6 +95,8 @@ export interface AdminManageClaims {
   sub: string;
   /** Admin user ID that opened the management session. */
   actor: string;
+  /** Issuing admin session. Omitted only for the API-key service principal. */
+  sid?: string;
   /** Event slug */
   event: string;
   /** sha256(ip) of the issuing request */
@@ -112,6 +114,7 @@ export async function signAdminManageJwt(
   return signJwt(secret, {
     sub: claims.sub,
     actor: claims.actor,
+    ...(claims.sid ? { sid: claims.sid } : {}),
     event: claims.event,
     iphash: claims.iphash,
     uahash: claims.uahash,
@@ -124,8 +127,11 @@ export type AdminManageJwtVerifyResult = JwtVerifyResult<AdminManageClaims>;
 export async function verifyAdminManageJwt(secret: string, token: string): Promise<AdminManageJwtVerifyResult> {
   const result = await verifyJwt<AdminManageClaims>(secret, token);
   if (!result.ok) return result;
-  const { sub, actor, event, iphash, uahash } = result.claims;
+  const { sub, actor, sid, event, iphash, uahash } = result.claims;
   if (![sub, actor, event, iphash, uahash].every((claim) => typeof claim === "string" && claim.length > 0)) {
+    return { ok: false, reason: "invalid" };
+  }
+  if (actor !== "api-key" && (typeof sid !== "string" || sid.length === 0)) {
     return { ok: false, reason: "invalid" };
   }
   return result;
