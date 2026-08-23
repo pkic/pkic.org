@@ -6,6 +6,7 @@ import {
   type SponsorshipEventsListResponse,
 } from "../../../../shared/schemas/admin-sponsorships";
 import { api } from "../../api";
+import { useAppendableServerCollection, type CollectionLoader } from "../../../hooks/useServerCollection";
 
 export interface SponsorshipEventHistoryState {
   events: SponsorshipEvent[];
@@ -19,91 +20,68 @@ export interface SponsorshipEventHistoryState {
   reload: () => Promise<void>;
 }
 
-/** Owns one sponsorship's server-paginated history and rejects stale responses. */
+const SPONSORSHIP_EVENT_PAGE_SIZE = 25;
+
+const loadSponsorshipEvents: CollectionLoader = (url, signal, responseSchema) => api(url, responseSchema, { signal });
+
+function mergeSponsorshipEventPages(
+  current: SponsorshipEventsListResponse,
+  next: SponsorshipEventsListResponse,
+): SponsorshipEventsListResponse {
+  return { events: [...current.events, ...next.events], page: next.page };
+}
+
+/** Owns one sponsorship's server-paginated history through the shared collection controller. */
 export function useSponsorshipEventHistory(sponsorshipId: string): SponsorshipEventHistoryState {
-  const [events, setEvents] = useState<SponsorshipEvent[]>([]);
-  const [page, setPage] = useState<SponsorshipEventsListResponse["page"] | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
-  const [failedOffset, setFailedOffset] = useState<number | null>(null);
-  const requestIdRef = useRef(0);
-  const loadMoreOwnerRef = useRef<number | null>(null);
-  const pageLimitRef = useRef(25);
-
-  const loadPage = useCallback(
-    async (offset: number): Promise<void> => {
-      if (offset > 0 && loadMoreOwnerRef.current !== null) return;
-      const requestId = ++requestIdRef.current;
-      if (offset === 0) {
-        loadMoreOwnerRef.current = null;
-        pageLimitRef.current = 25;
-        setEvents([]);
-        setPage(null);
-        setLoading(true);
-        setLoadingMore(false);
-      } else {
-        loadMoreOwnerRef.current = requestId;
-        setLoadingMore(true);
-      }
-      setError(null);
-      setFailedOffset(null);
-      try {
-        const query = offset === 0 ? "" : `?limit=${pageLimitRef.current}&offset=${offset}`;
-        const data = await api(
-          `/api/v1/admin/sponsorships/${sponsorshipId}/events${query}`,
-          sponsorshipEventsListResponseSchema,
-        );
-        if (requestId !== requestIdRef.current) return;
-        pageLimitRef.current = data.page.limit;
-        setEvents((previous) => (offset === 0 ? data.events : [...previous, ...data.events]));
-        setPage(data.page);
-        setAnnouncement(
-          offset === 0
-            ? `${data.events.length} history ${data.events.length === 1 ? "entry" : "entries"} loaded.`
-            : `${data.events.length} additional history ${data.events.length === 1 ? "entry" : "entries"} loaded.`,
-        );
-      } catch (cause) {
-        if (requestId !== requestIdRef.current) return;
-        setError(
-          cause instanceof ZodError
-            ? "Received an invalid pipeline history response."
-            : cause instanceof Error
-              ? cause.message
-              : "Unable to load pipeline history",
-        );
-        setFailedOffset(offset);
-        setAnnouncement("Pipeline history could not be loaded.");
-      } finally {
-        if (requestId === requestIdRef.current) {
-          if (offset === 0) setLoading(false);
-          else setLoadingMore(false);
-        }
-        if (loadMoreOwnerRef.current === requestId) loadMoreOwnerRef.current = null;
-      }
-    },
-    [sponsorshipId],
-  );
-
-  const reload = useCallback(() => loadPage(0), [loadPage]);
+  const previousDataRef = useRef<SponsorshipEventsListResponse | null>(null);
+  const listing = useAppendableServerCollection({
+    endpoint: `/api/v1/admin/sponsorships/${sponsorshipId}/events`,
+    pageSize: SPONSORSHIP_EVENT_PAGE_SIZE,
+    responseSchema: sponsorshipEventsListResponseSchema,
+    load: loadSponsorshipEvents,
+    merge: mergeSponsorshipEventPages,
+    clearDataOnReload: true,
+  });
 
   useEffect(() => {
-    void reload();
-    return () => {
-      requestIdRef.current += 1;
-      loadMoreOwnerRef.current = null;
-    };
-  }, [reload]);
+    if (listing.error) {
+      setAnnouncement("Pipeline history could not be loaded.");
+      return;
+    }
+    if (!listing.data) return;
+    const previous = previousDataRef.current;
+    const appendedCount =
+      previous && listing.data.page.offset > 0 ? listing.data.events.length - previous.events.length : 0;
+    const loadedCount = listing.data.page.offset > 0 ? appendedCount : listing.data.events.length;
+    setAnnouncement(
+      listing.data.page.offset > 0
+        ? `${loadedCount} additional history ${loadedCount === 1 ? "entry" : "entries"} loaded.`
+        : `${loadedCount} history ${loadedCount === 1 ? "entry" : "entries"} loaded.`,
+    );
+    previousDataRef.current = listing.data;
+  }, [listing.data, listing.error]);
 
-  function loadMore(): void {
-    if (!page?.hasMore || loadingMore || loadMoreOwnerRef.current !== null) return;
-    void loadPage(events.length);
-  }
+  const retry = useCallback((): void => {
+    if (listing.data?.page.hasMore) void listing.loadMore();
+    else void listing.reload();
+  }, [listing.data, listing.loadMore, listing.reload]);
 
-  function retry(): void {
-    void loadPage(failedOffset ?? 0);
-  }
+  const error = listing.error
+    ? listing.error instanceof ZodError
+      ? "Received an invalid pipeline history response."
+      : listing.error.message || "Unable to load pipeline history"
+    : null;
 
-  return { events, page, loading, loadingMore, error, announcement, loadMore, retry, reload };
+  return {
+    events: listing.data?.events ?? [],
+    page: listing.page,
+    loading: listing.loading,
+    loadingMore: listing.loadingMore,
+    error,
+    announcement,
+    loadMore: () => void listing.loadMore(),
+    retry,
+    reload: listing.reload,
+  };
 }

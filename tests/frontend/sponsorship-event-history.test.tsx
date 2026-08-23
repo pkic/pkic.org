@@ -91,8 +91,8 @@ describe("sponsorship event history", () => {
     await act(() => render(h(Harness, { id: "sponsor-a", onState }), container));
     await act(() => render(h(Harness, { id: "sponsor-b", onState }), container));
     expect(pending.map(({ url }) => url)).toEqual([
-      "/api/v1/admin/sponsorships/sponsor-a/events",
-      "/api/v1/admin/sponsorships/sponsor-b/events",
+      "/api/v1/admin/sponsorships/sponsor-a/events?limit=25&offset=0",
+      "/api/v1/admin/sponsorships/sponsor-b/events?limit=25&offset=0",
     ]);
 
     await act(async () => {
@@ -134,7 +134,7 @@ describe("sponsorship event history", () => {
       latest.loadMore();
     });
     expect(pending).toHaveLength(2);
-    expect(pending[1].url).toBe("/api/v1/admin/sponsorships/sponsor/events?limit=1&offset=1");
+    expect(pending[1].url).toBe("/api/v1/admin/sponsorships/sponsor/events?limit=25&offset=1");
     await act(async () => {
       pending[1].resolve(historyResponse([event("00000000000000000000000000000001", "new_inquiry")], 2, 1, 1));
       await flush();
@@ -182,7 +182,7 @@ describe("sponsorship event history", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = input.toString();
-        if (!url.endsWith("/events")) return sponsorshipResponse(id);
+        if (!url.split("?", 1)[0].endsWith("/events")) return sponsorshipResponse(id);
         historyRequests += 1;
         return historyRequests === 1
           ? Response.json({ error: { code: "HISTORY_FAILED", message: "History unavailable" } }, { status: 500 })
@@ -214,7 +214,7 @@ describe("sponsorship event history", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) =>
-        input.toString().endsWith("/events")
+        input.toString().split("?", 1)[0].endsWith("/events")
           ? historyResponse([event("00000000000000000000000000000002", "active")])
           : sponsorshipResponse(id),
       ),

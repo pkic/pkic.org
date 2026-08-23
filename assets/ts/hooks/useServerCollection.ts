@@ -154,6 +154,8 @@ export interface AppendableServerCollectionOptions<T extends AppendablePageRespo
   merge: (current: T, next: T) => T;
   /** Derives the next server offset when response rows are grouped or transformed. */
   nextOffset?: (data: T) => number;
+  /** Clears the current collection while an explicit reload is in flight. */
+  clearDataOnReload?: boolean;
 }
 
 export interface AppendableServerCollectionState<T extends AppendablePageResponse> {
@@ -180,6 +182,7 @@ export function useAppendableServerCollection<T extends AppendablePageResponse>(
   load,
   merge,
   nextOffset,
+  clearDataOnReload = false,
 }: AppendableServerCollectionOptions<T>): AppendableServerCollectionState<T> {
   const requestGate = useRef<ReturnType<typeof createLatestRequestGate> | null>(null);
   requestGate.current ??= createLatestRequestGate();
@@ -201,7 +204,7 @@ export function useAppendableServerCollection<T extends AppendablePageResponse>(
       if (append) appendOwner.current = sequence;
       else appendOwner.current = null;
       setState((current) => ({
-        data: current.data,
+        data: append || !clearDataOnReload ? current.data : null,
         loading: !append,
         loadingMore: append,
         error: null,
@@ -235,7 +238,7 @@ export function useAppendableServerCollection<T extends AppendablePageResponse>(
           });
       });
     },
-    [collectionUrl, load, merge, normalizedPageSize, responseSchema],
+    [clearDataOnReload, collectionUrl, load, merge, normalizedPageSize, responseSchema],
   );
 
   useEffect(() => {
