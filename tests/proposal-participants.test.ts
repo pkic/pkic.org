@@ -1,9 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
-import { createContext, deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
+import { deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
-import { onRequestPost as submitProposal } from "../functions/api/v1/events/[eventSlug]/proposals";
 import {
   addProposalSpeaker,
   createProposal,
@@ -11,6 +10,10 @@ import {
   getProposalByManageToken,
 } from "../functions/_lib/services/proposals";
 import app from "../functions/router";
+
+function mountedAppFetch(request: Request): Promise<Response> {
+  return app.fetch(request, env as any, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
+}
 
 describe("proposal participants", () => {
   beforeEach(async () => {
@@ -74,33 +77,29 @@ describe("proposal participants", () => {
   it("delivers an existing proposer's management capability only to their canonical email", async () => {
     await seedEventAndAdmin(env.DB);
 
-    const response = await submitProposal(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            sourceType: "direct",
-            proposer: {
-              firstName: "Claimed",
-              lastName: "Admin",
-              email: "admin@pkic.org",
-              organizationName: "Untrusted Organization",
-              jobTitle: "Untrusted Title",
-              bio: "A sufficiently detailed biography supplied by an anonymous submitter for validation purposes.",
-            },
-            proposal: {
-              type: "talk",
-              title: "Existing identity capability delivery",
-              abstract:
-                "A sufficiently detailed abstract used to verify that public email equality never exposes an existing account's proposal capability.",
-            },
-            consents: [{ termKey: "speaker-terms", version: "v1" }],
-          }),
+    const response = await mountedAppFetch(
+      new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sourceType: "direct",
+          proposer: {
+            firstName: "Claimed",
+            lastName: "Admin",
+            email: "admin@pkic.org",
+            organizationName: "Untrusted Organization",
+            jobTitle: "Untrusted Title",
+            bio: "A sufficiently detailed biography supplied by an anonymous submitter for validation purposes.",
+          },
+          proposal: {
+            type: "talk",
+            title: "Existing identity capability delivery",
+            abstract:
+              "A sufficiently detailed abstract used to verify that public email equality never exposes an existing account's proposal capability.",
+          },
+          consents: [{ termKey: "speaker-terms", version: "v1" }],
         }),
-        { eventSlug: "pqc-2026" },
-      ),
+      }),
     );
 
     expect(response.status).toBe(200);
@@ -137,57 +136,53 @@ describe("proposal participants", () => {
   it("supports panel participants and stores user links", async () => {
     await seedEventAndAdmin(env.DB);
 
-    const response = await submitProposal(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            sourceType: "direct",
-            proposer: {
-              firstName: "Panel",
-              lastName: "Lead",
-              email: "lead@example.test",
-              organizationName: "Public University",
-              jobTitle: "Researcher",
-              bio: "Leads cross-industry cryptography migration planning and public policy coordination programs.",
-              links: ["https://example.test/lead", "https://linkedin.com/in/lead"],
+    const response = await mountedAppFetch(
+      new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sourceType: "direct",
+          proposer: {
+            firstName: "Panel",
+            lastName: "Lead",
+            email: "lead@example.test",
+            organizationName: "Public University",
+            jobTitle: "Researcher",
+            bio: "Leads cross-industry cryptography migration planning and public policy coordination programs.",
+            links: ["https://example.test/lead", "https://linkedin.com/in/lead"],
+            role: "moderator",
+          },
+          proposal: {
+            type: "panel",
+            title: "Panel: Real-world PQC Migration Governance",
+            abstract:
+              "Panel discussion on organizational governance, procurement, stakeholder management, and transition planning for post-quantum cryptography programs in regulated environments.",
+          },
+          speakers: [
+            {
+              firstName: "Panelist",
+              lastName: "One",
+              email: "panelist1@example.test",
+              role: "panelist",
+              organizationName: "National Agency",
+              jobTitle: "Architect",
+              bio: "Builds enterprise security reference architectures and guides cryptographic agility programs.",
+              links: ["https://github.com/panelist1"],
+            },
+            {
+              firstName: "Moderator",
+              lastName: "One",
+              email: "moderator@example.test",
               role: "moderator",
+              organizationName: "Community Foundation",
+              jobTitle: "Program Director",
+              bio: "Moderates industry forums focused on interoperability and deployment readiness.",
+              links: ["https://x.com/moderator"],
             },
-            proposal: {
-              type: "panel",
-              title: "Panel: Real-world PQC Migration Governance",
-              abstract:
-                "Panel discussion on organizational governance, procurement, stakeholder management, and transition planning for post-quantum cryptography programs in regulated environments.",
-            },
-            speakers: [
-              {
-                firstName: "Panelist",
-                lastName: "One",
-                email: "panelist1@example.test",
-                role: "panelist",
-                organizationName: "National Agency",
-                jobTitle: "Architect",
-                bio: "Builds enterprise security reference architectures and guides cryptographic agility programs.",
-                links: ["https://github.com/panelist1"],
-              },
-              {
-                firstName: "Moderator",
-                lastName: "One",
-                email: "moderator@example.test",
-                role: "moderator",
-                organizationName: "Community Foundation",
-                jobTitle: "Program Director",
-                bio: "Moderates industry forums focused on interoperability and deployment readiness.",
-                links: ["https://x.com/moderator"],
-              },
-            ],
-            consents: [{ termKey: "speaker-terms", version: "v1" }],
-          }),
+          ],
+          consents: [{ termKey: "speaker-terms", version: "v1" }],
         }),
-        { eventSlug: "pqc-2026" },
-      ),
+      }),
     );
 
     expect(response.status).toBe(200);
@@ -254,33 +249,29 @@ describe("proposal participants", () => {
       )
       .run();
 
-    const response = await submitProposal(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            sourceType: "direct",
-            proposer: {
-              firstName: "Existing",
-              lastName: "Proposer",
-              email: "existing-proposer@example.test",
-              organizationName: "Existing Org",
-              jobTitle: "Existing Role",
-              role: "proposer",
-            },
-            proposal: {
-              type: "talk",
-              title: "Operational Lessons for Certificate Migration",
-              abstract:
-                "A practical talk covering certificate migration lessons, stakeholder coordination, operational sequencing, and governance decisions for production security teams.",
-            },
-            consents: [{ termKey: "speaker-terms", version: "v1" }],
-          }),
+    const response = await mountedAppFetch(
+      new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sourceType: "direct",
+          proposer: {
+            firstName: "Existing",
+            lastName: "Proposer",
+            email: "existing-proposer@example.test",
+            organizationName: "Existing Org",
+            jobTitle: "Existing Role",
+            role: "proposer",
+          },
+          proposal: {
+            type: "talk",
+            title: "Operational Lessons for Certificate Migration",
+            abstract:
+              "A practical talk covering certificate migration lessons, stakeholder coordination, operational sequencing, and governance decisions for production security teams.",
+          },
+          consents: [{ termKey: "speaker-terms", version: "v1" }],
         }),
-        { eventSlug: "pqc-2026" },
-      ),
+      }),
     );
 
     expect(response.status).toBe(200);
@@ -310,34 +301,30 @@ describe("proposal participants", () => {
     ).run();
 
     try {
-      await expect(
-        submitProposal(
-          createContext(
-            env,
-            new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({
-                sourceType: "direct",
-                proposer: {
-                  firstName: "Atomic",
-                  lastName: "Proposer",
-                  email: "atomic-proposer@example.test",
-                  role: "proposer",
-                },
-                proposal: {
-                  type: "talk",
-                  title: "Atomic Proposal Submission Test",
-                  abstract:
-                    "This valid proposal deliberately fails at the final outbox statement to prove that users, consent, participants, referral state, and proposal data all roll back together.",
-                },
-                consents: [{ termKey: "speaker-terms", version: "v1" }],
-              }),
-            }),
-            { eventSlug: "pqc-2026" },
-          ),
-        ),
-      ).rejects.toThrow("forced outbox failure");
+      const response = await mountedAppFetch(
+        new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            sourceType: "direct",
+            proposer: {
+              firstName: "Atomic",
+              lastName: "Proposer",
+              email: "atomic-proposer@example.test",
+              role: "proposer",
+            },
+            proposal: {
+              type: "talk",
+              title: "Atomic Proposal Submission Test",
+              abstract:
+                "This valid proposal deliberately fails at the final outbox statement to prove that users, consent, participants, referral state, and proposal data all roll back together.",
+            },
+            consents: [{ termKey: "speaker-terms", version: "v1" }],
+          }),
+        }),
+      );
+      expect(response.status).toBe(500);
+      await expect(response.json()).resolves.toMatchObject({ error: { code: "INTERNAL_ERROR" } });
       expect(
         await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = 'atomic-proposer@example.test'"),
       ).toHaveLength(0);
@@ -355,43 +342,39 @@ describe("proposal participants", () => {
 
   it("rejects duplicate participant emails before creating any proposal state", async () => {
     await seedEventAndAdmin(env.DB);
-    await expect(
-      submitProposal(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              sourceType: "direct",
-              proposer: {
-                firstName: "Duplicate",
-                lastName: "Person",
-                email: "duplicate-person@example.test",
-                role: "proposer",
-              },
-              proposal: {
-                type: "talk",
-                title: "Duplicate Participant Integrity Test",
-                abstract:
-                  "This proposal payload is otherwise valid but repeats the proposer email as a co-speaker and must be rejected before any database records are created.",
-              },
-              speakers: [
-                {
-                  firstName: "Duplicate",
-                  lastName: "Person",
-                  email: "DUPLICATE-PERSON@example.test",
-                  role: "speaker",
-                  bio: "A sufficiently detailed biography for validating the duplicate participant contract behavior.",
-                },
-              ],
-              consents: [{ termKey: "speaker-terms", version: "v1" }],
-            }),
-          }),
-          { eventSlug: "pqc-2026" },
-        ),
-      ),
-    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    const response = await mountedAppFetch(
+      new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sourceType: "direct",
+          proposer: {
+            firstName: "Duplicate",
+            lastName: "Person",
+            email: "duplicate-person@example.test",
+            role: "proposer",
+          },
+          proposal: {
+            type: "talk",
+            title: "Duplicate Participant Integrity Test",
+            abstract:
+              "This proposal payload is otherwise valid but repeats the proposer email as a co-speaker and must be rejected before any database records are created.",
+          },
+          speakers: [
+            {
+              firstName: "Duplicate",
+              lastName: "Person",
+              email: "DUPLICATE-PERSON@example.test",
+              role: "speaker",
+              bio: "A sufficiently detailed biography for validating the duplicate participant contract behavior.",
+            },
+          ],
+          consents: [{ termKey: "speaker-terms", version: "v1" }],
+        }),
+      }),
+    );
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "VALIDATION_ERROR" } });
     expect(
       await queryAll(env.DB, "SELECT id FROM session_proposals WHERE title = 'Duplicate Participant Integrity Test'"),
     ).toHaveLength(0);

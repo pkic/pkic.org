@@ -5,11 +5,6 @@ import { createAdminSession } from "./helpers/auth";
 import { createTemplateVersion, activateTemplateVersion } from "../functions/_lib/email/templates";
 import { onRequestPost as requestAdminLink } from "../functions/api/v1/admin/auth/request-link";
 import { onRequestPost as verifyAdminLink } from "../functions/api/v1/admin/auth/verify-link";
-import { onRequestPost as submitProposal } from "../functions/api/v1/events/[eventSlug]/proposals";
-import { onRequestPost as createRegistration } from "../functions/api/v1/events/[eventSlug]/registrations";
-import { onRequest as confirmRegistrationEmail } from "../functions/api/v1/events/[eventSlug]/registrations/confirm-email";
-import { onRequestPatch as manageRegistration } from "../functions/api/v1/registrations/manage/[token]";
-import { onRequestPost as inviteAttendeesFromRegistration } from "../functions/api/v1/events/[eventSlug]/invites";
 import { onRequestGet as referralRedirect } from "../functions/r/[code]";
 import { onRequestPost as retryPendingEmail } from "../functions/api/v1/internal/email/retry";
 import { queueEmail } from "../functions/_lib/email/outbox";
@@ -218,33 +213,29 @@ describe("full workflow", () => {
         resourceId: speakerInvite.id,
       });
 
-      const proposalResponse = await submitProposal(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              inviteToken: speakerInviteToken,
-              proposer: {
-                firstName: "Speaker",
-                lastName: "One",
-                email: "speaker@example.test",
-                organizationName: "Government Agency",
-                jobTitle: "Engineer",
-                bio: "Experienced speaker focused on practical post-quantum migration and governance.",
-              },
-              proposal: {
-                type: "talk",
-                title: "Post-Quantum Migration",
-                abstract:
-                  "A practical migration blueprint covering inventory, risk profiling, dual-stack rollout, crypto-agility governance, and operational playbooks for enterprise PKI teams.",
-              },
-              consents: [{ termKey: "speaker-terms", version: "v1" }],
-            }),
+      const proposalResponse = await callMountedApp(
+        new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            inviteToken: speakerInviteToken,
+            proposer: {
+              firstName: "Speaker",
+              lastName: "One",
+              email: "speaker@example.test",
+              organizationName: "Government Agency",
+              jobTitle: "Engineer",
+              bio: "Experienced speaker focused on practical post-quantum migration and governance.",
+            },
+            proposal: {
+              type: "talk",
+              title: "Post-Quantum Migration",
+              abstract:
+                "A practical migration blueprint covering inventory, risk profiling, dual-stack rollout, crypto-agility governance, and operational playbooks for enterprise PKI teams.",
+            },
+            consents: [{ termKey: "speaker-terms", version: "v1" }],
           }),
-          { eventSlug: "pqc-2026" },
-        ),
+        }),
       );
       expect(proposalResponse.status).toBe(200);
       const createdProposal = (await proposalResponse.json()) as ProposalPayload;
@@ -296,26 +287,22 @@ describe("full workflow", () => {
       );
       expect(finalizeResponse.status).toBe(200);
 
-      const registrationOneResponse = await createRegistration(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              firstName: "Attendee",
-              lastName: "One",
-              email: "attendee1@pkic.org",
-              attendanceType: "in_person",
-              sourceType: "direct",
-              consents: [
-                { termKey: "privacy-policy", version: "v1" },
-                { termKey: "code-of-conduct", version: "v1" },
-              ],
-            }),
+      const registrationOneResponse = await callMountedApp(
+        new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            firstName: "Attendee",
+            lastName: "One",
+            email: "attendee1@pkic.org",
+            attendanceType: "in_person",
+            sourceType: "direct",
+            consents: [
+              { termKey: "privacy-policy", version: "v1" },
+              { termKey: "code-of-conduct", version: "v1" },
+            ],
           }),
-          { eventSlug: "pqc-2026" },
-        ),
+        }),
       );
       const registrationOnePayload = (await registrationOneResponse.json()) as CreateRegistrationPayload;
       expect(registrationOnePayload.status).toBe("pending_email_confirmation");
@@ -331,61 +318,49 @@ describe("full workflow", () => {
         "confirmationUrl",
       );
 
-      const firstConfirmResponse = await confirmRegistrationEmail(
-        createContext(
-          env,
-          new Request(
-            `https://app.test/api/v1/events/pqc-2026/registrations/confirm-email?token=${encodeURIComponent(
-              firstConfirmationToken,
-            )}`,
-            { method: "GET" },
-          ),
-          { eventSlug: "pqc-2026" },
+      const firstConfirmResponse = await callMountedApp(
+        new Request(
+          `https://app.test/api/v1/events/pqc-2026/registrations/confirm-email?token=${encodeURIComponent(
+            firstConfirmationToken,
+          )}`,
+          { method: "GET" },
         ),
       );
       const firstConfirmPayload = (await firstConfirmResponse.json()) as { status: string; manageToken: string };
       expect(firstConfirmPayload.status).toBe("registered");
 
-      const inviteFromAttendeeResponse = await inviteAttendeesFromRegistration(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/events/pqc-2026/invites", {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              authorization: `Bearer ${firstConfirmPayload.manageToken}`,
-            },
-            body: JSON.stringify({
-              invites: [{ email: "friend@example.test", firstName: "Friend", lastName: "User" }],
-            }),
+      const inviteFromAttendeeResponse = await callMountedApp(
+        new Request("https://app.test/api/v1/events/pqc-2026/invites", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${firstConfirmPayload.manageToken}`,
+          },
+          body: JSON.stringify({
+            invites: [{ email: "friend@example.test", firstName: "Friend", lastName: "User" }],
           }),
-          { eventSlug: "pqc-2026" },
-        ),
+        }),
       );
       expect(inviteFromAttendeeResponse.status).toBe(200);
       const inviteFromAttendeePayload = (await inviteFromAttendeeResponse.json()) as { referralCode: string };
       expect(inviteFromAttendeePayload.referralCode).toHaveLength(7);
 
-      const registrationTwoResponse = await createRegistration(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              firstName: "Attendee",
-              lastName: "Two",
-              email: "attendee2@pkic.org",
-              attendanceType: "in_person",
-              sourceType: "direct",
-              consents: [
-                { termKey: "privacy-policy", version: "v1" },
-                { termKey: "code-of-conduct", version: "v1" },
-              ],
-            }),
+      const registrationTwoResponse = await callMountedApp(
+        new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            firstName: "Attendee",
+            lastName: "Two",
+            email: "attendee2@pkic.org",
+            attendanceType: "in_person",
+            sourceType: "direct",
+            consents: [
+              { termKey: "privacy-policy", version: "v1" },
+              { termKey: "code-of-conduct", version: "v1" },
+            ],
           }),
-          { eventSlug: "pqc-2026" },
-        ),
+        }),
       );
       await registrationTwoResponse.json();
 
@@ -400,31 +375,23 @@ describe("full workflow", () => {
         "confirmationUrl",
       );
 
-      const secondConfirmResponse = await confirmRegistrationEmail(
-        createContext(
-          env,
-          new Request(
-            `https://app.test/api/v1/events/pqc-2026/registrations/confirm-email?token=${encodeURIComponent(
-              secondConfirmationToken,
-            )}`,
-            { method: "GET" },
-          ),
-          { eventSlug: "pqc-2026" },
+      const secondConfirmResponse = await callMountedApp(
+        new Request(
+          `https://app.test/api/v1/events/pqc-2026/registrations/confirm-email?token=${encodeURIComponent(
+            secondConfirmationToken,
+          )}`,
+          { method: "GET" },
         ),
       );
       const secondConfirmPayload = (await secondConfirmResponse.json()) as { status: string };
       expect(secondConfirmPayload.status).toBe("registered");
 
-      const cancelRegistrationResponse = await manageRegistration(
-        createContext(
-          env,
-          new Request(`https://app.test/api/v1/registrations/manage/${firstConfirmPayload.manageToken}`, {
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ action: "cancel" }),
-          }),
-          { token: firstConfirmPayload.manageToken },
-        ),
+      const cancelRegistrationResponse = await callMountedApp(
+        new Request(`https://app.test/api/v1/registrations/manage/${firstConfirmPayload.manageToken}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "cancel" }),
+        }),
       );
       expect(cancelRegistrationResponse.status).toBe(200);
 

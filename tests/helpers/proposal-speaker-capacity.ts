@@ -1,9 +1,8 @@
 import { env } from "cloudflare:workers";
-import { createContext, queryAll, seedEventAndAdmin } from "./context";
+import { queryAll, seedEventAndAdmin } from "./context";
 import app from "../../functions/router";
 import { createAdminSession } from "./auth";
 import { seedWorkflowEmailTemplates } from "./event-workflow";
-import { onRequestPost as submitProposal } from "../../functions/api/v1/events/[eventSlug]/proposals";
 import { addProposalSpeaker } from "../../functions/_lib/services/proposals";
 import { getEventBySlug } from "../../functions/_lib/services/events";
 import {
@@ -66,33 +65,31 @@ export async function inviteSpeakerAndSubmitCapacityProposal(adminSessionToken: 
     purpose: "invite",
     resourceId: invite.id,
   });
-  const proposalResponse = await submitProposal(
-    createContext(
-      env,
-      new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          inviteToken,
-          proposer: {
-            firstName: "Speaker",
-            lastName: "Test",
-            email: "speaker@example.test",
-            organizationName: "Test Corp",
-            jobTitle: "Engineer",
-            bio: "Experienced speaker in post-quantum cryptography.",
-          },
-          proposal: {
-            type: "talk",
-            title: "Post-Quantum Migration Strategies",
-            abstract:
-              "A practical guide to migrating enterprise PKI to quantum-safe algorithms covering risk assessment, dual-stack rollout, and governance frameworks.",
-          },
-          consents: [{ termKey: "speaker-terms", version: "v1" }],
-        }),
+  const proposalResponse = await app.fetch(
+    new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        inviteToken,
+        proposer: {
+          firstName: "Speaker",
+          lastName: "Test",
+          email: "speaker@example.test",
+          organizationName: "Test Corp",
+          jobTitle: "Engineer",
+          bio: "Experienced speaker in post-quantum cryptography.",
+        },
+        proposal: {
+          type: "talk",
+          title: "Post-Quantum Migration Strategies",
+          abstract:
+            "A practical guide to migrating enterprise PKI to quantum-safe algorithms covering risk assessment, dual-stack rollout, and governance frameworks.",
+        },
+        consents: [{ termKey: "speaker-terms", version: "v1" }],
       }),
-      { eventSlug: "pqc-2026" },
-    ),
+    }),
+    env as any,
+    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
   );
   if (proposalResponse.status !== 200) throw new Error(`Proposal submission failed: ${proposalResponse.status}`);
   const { proposalId, manageToken } = (await proposalResponse.json()) as { proposalId: string; manageToken: string };
