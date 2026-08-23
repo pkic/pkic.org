@@ -1,5 +1,6 @@
 import {
   adminEventPermissionSchema,
+  adminEventTeamListResponseSchema,
   adminEventTeamPermissionCreateResponseSchema,
 } from "../../../../../../assets/shared/schemas/admin-events";
 import {
@@ -16,7 +17,9 @@ import type { ValidatedData } from "chanfana";
 
 export const AdminEventTeamList = openApiRoute(adminEventTeamListRouteSchema, async (c: AdminContext, data) => {
   const actor = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  return json(await listEventTeam(requestDb(c), actor, data.params.eventSlug, data.query));
+  return json(
+    adminEventTeamListResponseSchema.parse(await listEventTeam(requestDb(c), actor, data.params.eventSlug, data.query)),
+  );
 });
 
 export async function onRequestPost(
