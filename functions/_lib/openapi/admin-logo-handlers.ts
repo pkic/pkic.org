@@ -6,6 +6,7 @@ import { deleteStoredImageInBackground } from "../services/stored-image-pointer"
 import type { AuthAdmin, DatabaseLike } from "../types";
 import { readValidatedUploadedImage } from "../utils/image-upload";
 import { logoUploadResponseSchema } from "../../../assets/shared/schemas/images";
+import { successResponseSchema } from "../../../assets/shared/schemas/api-common";
 
 interface LogoMutationResult {
   previousKey: string | null;
@@ -27,14 +28,18 @@ interface AdminLogoHandlersConfig {
   publicLogoUrl: (id: string) => string;
 }
 
+interface ValidatedLogoData {
+  params: { id: string };
+}
+
 /** Builds the identical authenticated PUT/DELETE transport around domain-specific logo services. */
 export function buildAdminLogoHandlers(config: AdminLogoHandlersConfig) {
-  async function onPut(c: AdminContext): Promise<Response> {
+  async function onPut(c: AdminContext, data?: ValidatedLogoData): Promise<Response> {
     const db = requestDb(c);
     const actor = await requireAdminFromRequest(db, c.req.raw, c.env);
     const bucket = c.env.ASSETS_BUCKET;
     if (!bucket) throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "File uploads are not configured");
-    const id = c.req.param("id");
+    const id = data?.params.id ?? c.req.param("id");
     const result = await config.replaceLogo(db, actor, bucket, id, await readValidatedUploadedImage(c.req.raw, "Logo"));
     c.executionCtx.waitUntil(deleteStoredImageInBackground(db, c.env, result.previousKey, "assets"));
     return json(
@@ -42,12 +47,12 @@ export function buildAdminLogoHandlers(config: AdminLogoHandlersConfig) {
     );
   }
 
-  async function onDelete(c: AdminContext): Promise<Response> {
+  async function onDelete(c: AdminContext, data?: ValidatedLogoData): Promise<Response> {
     const db = requestDb(c);
     const actor = await requireAdminFromRequest(db, c.req.raw, c.env);
-    const result = await config.removeLogo(db, actor, c.req.param("id"));
+    const result = await config.removeLogo(db, actor, data?.params.id ?? c.req.param("id"));
     c.executionCtx.waitUntil(deleteStoredImageInBackground(db, c.env, result.previousKey, "assets"));
-    return json({ success: true });
+    return json(successResponseSchema.parse({ success: true }));
   }
 
   async function onRequest(c: AdminContext): Promise<Response> {

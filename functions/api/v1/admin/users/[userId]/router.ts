@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
-import { onRequestPost as AdminUsersUserIdAnonymizePost_l } from "./anonymize";
+import { AdminUsersUserIdAnonymizePost } from "./anonymize";
 import { onRequestPost as AdminUsersUserIdGravatarPost_l } from "./gravatar";
 import { AdminUsersUserIdHeadshotGet } from "./headshot";
 import { AdminUsersUserIdHeadshotPut } from "./headshot";
@@ -18,7 +18,7 @@ import type { RequestDbContext } from "../../../../../_lib/db/context";
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
-app.post("/anonymize", AdminUsersUserIdAnonymizePost_l);
+openapi.post("/anonymize", AdminUsersUserIdAnonymizePost);
 openapi.post("/gravatar", openApiRoute(adminUserGravatarImportRouteSchema, AdminUsersUserIdGravatarPost_l));
 openapi.get("/headshot", AdminUsersUserIdHeadshotGet);
 openapi.put("/headshot", AdminUsersUserIdHeadshotPut);

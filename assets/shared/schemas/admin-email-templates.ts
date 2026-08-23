@@ -93,6 +93,28 @@ export const adminEmailTemplateRenderedResponseSchema = z.object({
   html: z.string(),
   text: z.string(),
 });
+export const adminEmailTemplatePreviewResponseSchema = successResponseSchema.extend({
+  ...adminEmailTemplateRenderedResponseSchema.shape,
+  data: z.record(z.string(), z.unknown()),
+});
+
+export const adminEmailTemplatePreviewRouteSchema = {
+  tags: ["Admin email templates"],
+  summary: "Render an email template preview (admin)",
+  description: "Renders the supplied template using preview data and the configured email partials/layout.",
+  request: {
+    body: {
+      content: { "application/json": { schema: adminEmailTemplatePreviewSchema } },
+      required: true,
+    },
+  },
+  responses: {
+    "200": {
+      description: "Rendered email preview.",
+      content: { "application/json": { schema: adminEmailTemplatePreviewResponseSchema } },
+    },
+  },
+};
 
 // ── Template version list ───────────────────────────────────────────────
 
@@ -146,6 +168,25 @@ export const emailTemplateVersionsListRouteSchema = {
       content: {
         "application/json": { schema: adminEmailTemplateVersionsListResponseSchema },
       },
+    },
+  },
+};
+
+export const emailTemplateVersionCreateRouteSchema = {
+  tags: ["Admin email templates"],
+  summary: "Create a template version (admin)",
+  description: "Creates a new draft version of a single email template.",
+  request: {
+    params: emailTemplateKeyParamsSchema,
+    body: {
+      content: { "application/json": { schema: adminEmailTemplateVersionSchema } },
+      required: true,
+    },
+  },
+  responses: {
+    "200": {
+      description: "Template version created.",
+      content: { "application/json": { schema: adminEmailTemplateVersionCreateResponseSchema } },
     },
   },
 };

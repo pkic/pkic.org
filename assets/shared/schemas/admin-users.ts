@@ -156,3 +156,23 @@ export const adminUserUpdateRouteSchema = {
     "200": { description: "Updated user.", content: { "application/json": { schema: adminUserUpdateResponseSchema } } },
   },
 };
+
+export const adminUserAnonymizeResponseSchema = successResponseSchema.extend({
+  userId: adminUserIdParamsSchema.shape.userId,
+});
+
+export const adminUserAnonymizeRouteSchema = {
+  tags: ["Users"],
+  summary: "Anonymize a user (admin)",
+  description: "Irreversibly removes the user's personal data and revokes access paths.",
+  request: { params: adminUserIdParamsSchema },
+  responses: {
+    "200": {
+      description: "User anonymized.",
+      content: { "application/json": { schema: adminUserAnonymizeResponseSchema } },
+    },
+    "403": { description: "The calling administrator cannot anonymize this account." },
+    "404": { description: "User not found." },
+    "409": { description: "The user is already anonymized or changed concurrently." },
+  },
+};

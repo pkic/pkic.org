@@ -4,8 +4,14 @@ import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { renderEmail, renderSubject } from "../../../../_lib/email/render";
 import { loadEmailPartials, loadEmailRenderResources } from "../../../../_lib/email/partials";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
-import { adminEmailTemplatePreviewSchema } from "../../../../../assets/shared/schemas/admin-email-templates";
+import {
+  adminEmailTemplatePreviewResponseSchema,
+  adminEmailTemplatePreviewRouteSchema,
+  adminEmailTemplatePreviewSchema,
+} from "../../../../../assets/shared/schemas/admin-email-templates";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
+import { openApiRoute } from "../../../../_lib/openapi/route";
+import type { ValidatedData } from "chanfana";
 
 function buildDefaultPreviewData(baseUrl: string): Record<string, unknown> {
   return {
@@ -31,10 +37,13 @@ function buildDefaultPreviewData(baseUrl: string): Record<string, unknown> {
   };
 }
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+export async function onRequestPost(
+  c: AdminContext,
+  validated?: ValidatedData<typeof adminEmailTemplatePreviewRouteSchema>,
+): Promise<Response> {
   const db = requestDb(c);
   await requireAdminFromRequest(db, c.req.raw, c.env);
-  const body = await parseJsonBody(c.req, adminEmailTemplatePreviewSchema);
+  const body = validated?.body ?? (await parseJsonBody(c.req, adminEmailTemplatePreviewSchema));
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
   const data = {
@@ -51,14 +60,18 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 
   const rendered = await renderEmail(body.content, dataWithPartials, layoutHtml, body.contentType, appBaseUrl);
 
-  return json({
-    success: true,
-    subject,
-    html: rendered.html,
-    text: rendered.text,
-    data,
-  });
+  return json(
+    adminEmailTemplatePreviewResponseSchema.parse({
+      success: true,
+      subject,
+      html: rendered.html,
+      text: rendered.text,
+      data,
+    }),
+  );
 }
+
+export const AdminEmailTemplatePreviewPost = openApiRoute(adminEmailTemplatePreviewRouteSchema, onRequestPost);
 
 export async function onRequest(c: AdminContext): Promise<Response> {
   return dispatchPostOnly(c, onRequestPost);
