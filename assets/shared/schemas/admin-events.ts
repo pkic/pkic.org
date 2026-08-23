@@ -25,6 +25,7 @@ import { proposalAdminStatusFilterSchema } from "./proposal-status";
 import { proposalSessionTypesSchema } from "./proposal-management";
 import { httpOrSameOriginUrlSchema, httpUrlSchema } from "./urls";
 import { adminRegistrationRecordContextSchema } from "./admin-registration-detail";
+import { eventSummarySchema } from "./event-read-models";
 
 export const EVENT_PROPOSALS_SORT_COLUMNS = [
   "submittedAt",
@@ -180,7 +181,7 @@ export const adminEventRegistrationsListResponseSchema = paginatedResponseSchema
   "registrations",
   adminEventRegistrationSummarySchema,
 ).extend({
-  event: z.object({ id: z.string(), slug: z.string(), name: z.string() }),
+  event: eventSummarySchema,
   stats: z.object({
     byAttendanceType: z.record(z.string(), z.number()),
     attendanceStatusByType: z.record(z.string(), z.object({ accepted: z.number(), waitlisted: z.number() })),

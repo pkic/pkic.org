@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
+import { eventSummarySchema } from "./event-read-models";
 
 const countMapSchema = z.record(z.string(), z.number());
 
@@ -82,7 +83,7 @@ const inviteStatsSchema = z.object({
 });
 
 export const adminEventStatsResponseSchema = z.object({
-  event: z.object({ id: databaseIdSchema, slug: z.string(), name: z.string() }),
+  event: eventSummarySchema,
   registrations: z.object({
     byStatus: countMapSchema,
     byAttendanceType: countMapSchema,

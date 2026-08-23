@@ -4,6 +4,7 @@ import { paginatedResponseSchema } from "./pagination";
 import { activeFormSummarySchema } from "./forms";
 import { databaseIdSchema } from "./identifiers";
 import { proposalDecisionStatusSchema, proposalStatusSchema } from "./proposal-status";
+import { eventSummarySchema } from "./event-read-models";
 import {
   adminSpeakerBioPatchSchema,
   MAX_PROPOSAL_PARTICIPANTS,
@@ -146,7 +147,7 @@ export const adminEventProposalsResponseSchema = paginatedResponseSchema(
   "proposals",
   adminEventProposalSummarySchema,
 ).extend({
-  event: z.object({ id: eventIdSchema, slug: z.string(), name: z.string() }),
+  event: eventSummarySchema,
   access: proposalAccessSchema,
   stats: proposalStatsSchema,
 });
