@@ -12,6 +12,7 @@ import { buildProvisionOrganizationMembership } from "./membership/provisioning"
 import { prepareAuditLog } from "./audit";
 import { adminDatabaseUserId } from "../auth/admin-identity";
 import type { AuthAdmin, DatabaseLike } from "../types";
+import type { AdminMembersListQuery } from "../../../assets/shared/schemas/admin-members";
 
 export interface AdminMemberCreateRepresentative {
   name: string;
@@ -160,14 +161,7 @@ function toAdminMemberSummary(row: AdminMemberRow): AdminMemberSummary {
  */
 export async function listAdminMembers(
   db: DatabaseLike,
-  params: {
-    limit: number;
-    offset: number;
-    q?: string;
-    sort?: string;
-    membershipCategory?: string;
-    status?: string;
-  },
+  params: AdminMembersListQuery,
 ): Promise<{ members: AdminMemberSummary[]; total: number }> {
   const conditions: string[] = [];
   const bindings: unknown[] = [];

@@ -14,6 +14,7 @@ import { requirePermission } from "../../../../_lib/auth/permissions";
 import { createAdminMember, listAdminMembers } from "../../../../_lib/services/admin-members";
 import {
   memberCreateResponseSchema,
+  adminMembersListResponseSchema,
   membersCreateRouteSchema,
   membersListRouteSchema,
 } from "../../../../../assets/shared/schemas/admin-members";
@@ -25,17 +26,13 @@ export const MembersList = openApiRoute(membersListRouteSchema, async (c: AdminC
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "membership:read");
 
-  const { limit, offset, q, sort, membershipCategory, status } = data.query;
-
-  const { members, total } = await listAdminMembers(requestDb(c), {
-    limit,
-    offset,
-    q,
-    sort,
-    membershipCategory,
-    status,
-  });
-  return json({ members, page: buildPageInfo(limit, offset, total, members.length) });
+  const { members, total } = await listAdminMembers(requestDb(c), data.query);
+  return json(
+    adminMembersListResponseSchema.parse({
+      members,
+      page: buildPageInfo(data.query.limit, data.query.offset, total, members.length),
+    }),
+  );
 });
 
 export const MembersCreate = openApiRoute(membersCreateRouteSchema, async (c: AdminContext, data) => {

@@ -15,6 +15,7 @@ import { requirePermission } from "../../../../_lib/auth/permissions";
 import { listLeadershipPositionsAdmin, createLeadershipPosition } from "../../../../_lib/services/leadership";
 import {
   leadershipPositionResponseSchema,
+  leadershipPositionsListResponseSchema,
   leadershipPositionsListRouteSchema,
   leadershipPositionsCreateRouteSchema,
 } from "../../../../../assets/shared/schemas/leadership";
@@ -28,16 +29,13 @@ export const LeadershipPositionsList = openApiRoute(
     const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
     requirePermission(admin, "access:grant");
 
-    const { body, status, q, sort, limit, offset } = data.query;
-    const { positions, total } = await listLeadershipPositionsAdmin(requestDb(c), {
-      body,
-      status,
-      q,
-      sort,
-      limit,
-      offset,
-    });
-    return json({ positions, page: buildPageInfo(limit, offset, total, positions.length) });
+    const { positions, total } = await listLeadershipPositionsAdmin(requestDb(c), data.query);
+    return json(
+      leadershipPositionsListResponseSchema.parse({
+        positions,
+        page: buildPageInfo(data.query.limit, data.query.offset, total, positions.length),
+      }),
+    );
   },
 );
 

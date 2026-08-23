@@ -29,6 +29,7 @@ export type MailingList = z.infer<typeof mailingListSchema>;
 
 export const ADMIN_MAILING_LIST_SORT_COLUMNS = ["email", "label", "list_type", "active", "created_at"] as const;
 export const mailingListsListQuerySchema = listQuerySchema(ADMIN_MAILING_LIST_SORT_COLUMNS);
+export type MailingListsListQuery = z.infer<typeof mailingListsListQuerySchema>;
 export const mailingListsListResponseSchema = paginatedResponseSchema("mailingLists", mailingListSchema);
 export const mailingListResponseSchema = z.object({ mailingList: mailingListSchema });
 export type MailingListsListResponse = z.infer<typeof mailingListsListResponseSchema>;

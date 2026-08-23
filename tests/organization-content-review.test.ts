@@ -713,7 +713,7 @@ describe("Organization content moderation", () => {
 
     const listResponse = await call(adminToken, "/api/v1/admin/organizations/content-reviews");
     expect(listResponse.status).toBe(200);
-    const listBody = (await listResponse.json()) as { reviews: Array<{ id: string }> };
+    const listBody = contentReviewsListResponseSchema.parse(await listResponse.json());
     expect(listBody.reviews.map((r) => r.id)).toContain(review.id);
 
     const detailResponse = await call(adminToken, `/api/v1/admin/organizations/content-reviews/${review.id}`);

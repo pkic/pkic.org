@@ -102,6 +102,7 @@ export type AdminOrganizationDetail = z.infer<typeof adminOrganizationDetailSche
 export const ADMIN_ORGANIZATIONS_SORT_COLUMNS = ["name", "membership_category", "created_at", "member_count"] as const;
 
 export const organizationsListQuerySchema = listQuerySchema(ADMIN_ORGANIZATIONS_SORT_COLUMNS);
+export type OrganizationsListQuery = z.infer<typeof organizationsListQuerySchema>;
 export const adminOrganizationsListResponseSchema = paginatedResponseSchema(
   "organizations",
   adminOrganizationSummarySchema,
@@ -326,6 +327,7 @@ export const ADMIN_CONTENT_REVIEW_SORT_COLUMNS = [
 export const contentReviewsListQuerySchema = listQuerySchema(ADMIN_CONTENT_REVIEW_SORT_COLUMNS).extend({
   status: contentReviewStatusSchema.optional(),
 });
+export type ContentReviewsListQuery = z.infer<typeof contentReviewsListQuerySchema>;
 export const contentReviewsListResponseSchema = paginatedResponseSchema("reviews", contentReviewSummarySchema);
 
 export const contentReviewsListRouteSchema = {

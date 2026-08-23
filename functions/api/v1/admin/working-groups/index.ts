@@ -9,6 +9,7 @@ import { createWorkingGroup } from "../../../../_lib/services/admin-working-grou
 import { listAdminWorkingGroups } from "../../../../_lib/services/admin-working-groups/read-model";
 import {
   workingGroupCreateRouteSchema,
+  workingGroupsListResponseSchema,
   workingGroupsListRouteSchema,
 } from "../../../../../assets/shared/schemas/working-groups";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
@@ -19,9 +20,13 @@ export const WorkingGroupsList = openApiRoute(workingGroupsListRouteSchema, asyn
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "working-groups:read");
 
-  const { limit, offset, q, sort, active } = data.query;
-  const { workingGroups, total } = await listAdminWorkingGroups(requestDb(c), { limit, offset, q, sort, active });
-  return json({ workingGroups, page: buildPageInfo(limit, offset, total, workingGroups.length) });
+  const { workingGroups, total } = await listAdminWorkingGroups(requestDb(c), data.query);
+  return json(
+    workingGroupsListResponseSchema.parse({
+      workingGroups,
+      page: buildPageInfo(data.query.limit, data.query.offset, total, workingGroups.length),
+    }),
+  );
 });
 
 export const WorkingGroupsCreate = openApiRoute(workingGroupCreateRouteSchema, async (c: AdminContext, data) => {

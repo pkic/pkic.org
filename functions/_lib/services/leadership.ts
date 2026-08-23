@@ -23,7 +23,7 @@ import { queryPage } from "../db/pagination";
 import { buildD1TextSearchFilter } from "../db/search";
 import { resolveMappedOrderBy } from "../db/sort";
 import type { DatabaseLike } from "../types";
-import type { LeadershipBody } from "../../../assets/shared/schemas/leadership";
+import type { LeadershipBody, LeadershipPositionsListQuery } from "../../../assets/shared/schemas/leadership";
 import { SYSTEM_ROLE_IDS } from "../../../assets/shared/schemas/access-control";
 
 export type { LeadershipBody };
@@ -104,14 +104,7 @@ function toAdmin(row: LeadershipPositionRow): LeadershipPositionAdmin {
 
 export async function listLeadershipPositionsAdmin(
   db: DatabaseLike,
-  query: {
-    body: LeadershipBody;
-    status?: "current" | "past";
-    limit: number;
-    offset: number;
-    q?: string;
-    sort?: string;
-  },
+  query: LeadershipPositionsListQuery,
 ): Promise<{ positions: LeadershipPositionAdmin[]; total: number }> {
   const conditions = ["lp.body = ?"];
   const bindings: unknown[] = [query.body];

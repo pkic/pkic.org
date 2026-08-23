@@ -25,6 +25,7 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { adminOrganizationsListResponseSchema } from "../assets/shared/schemas/admin-organizations";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -279,14 +280,7 @@ describe("Admin Organizations — membership category on the aggregate (Phase 1 
 
     const listResponse = await call(adminToken, "/api/v1/admin/organizations");
     expect(listResponse.status).toBe(200);
-    const listBody = (await listResponse.json()) as {
-      organizations: Array<{
-        id: string;
-        name: string;
-        membershipCategory: string | null;
-        primaryContactEmail: string | null;
-      }>;
-    };
+    const listBody = adminOrganizationsListResponseSchema.parse(await listResponse.json());
     const byName = Object.fromEntries(listBody.organizations.map((o) => [o.name, o.membershipCategory]));
     expect(byName["Acme Corp"]).toBe("F");
     expect(byName["Beta Inc"]).toBe("A");
@@ -297,7 +291,7 @@ describe("Admin Organizations — membership category on the aggregate (Phase 1 
     expect(contactsById[beta.organizationId]).toBe("bob@beta.test");
 
     const sortedResponse = await call(adminToken, "/api/v1/admin/organizations?sort=membership_category");
-    const sortedBody = (await sortedResponse.json()) as { organizations: Array<{ membershipCategory: string | null }> };
+    const sortedBody = adminOrganizationsListResponseSchema.parse(await sortedResponse.json());
     const categories = sortedBody.organizations.map((o) => o.membershipCategory);
     expect(categories).toEqual([...categories].sort());
   });

@@ -110,6 +110,8 @@ export const adminMembersListQuerySchema = listQuerySchema(ADMIN_MEMBERS_SORT_CO
   membershipCategory: membershipCategorySchema.optional(),
   status: memberStatusSchema.optional(),
 });
+export type AdminMembersListQuery = z.infer<typeof adminMembersListQuerySchema>;
+export const adminMembersListResponseSchema = paginatedResponseSchema("members", adminMemberSummarySchema);
 
 export const membersListRouteSchema = {
   tags: ["Membership"],
@@ -123,7 +125,7 @@ export const membersListRouteSchema = {
     "200": {
       description: "Members list.",
       content: {
-        "application/json": { schema: paginatedResponseSchema("members", adminMemberSummarySchema) },
+        "application/json": { schema: adminMembersListResponseSchema },
       },
     },
   },

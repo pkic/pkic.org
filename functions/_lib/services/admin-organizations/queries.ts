@@ -13,7 +13,10 @@ import { buildD1TextSearchFilter } from "../../db/search";
 import { AppError } from "../../errors";
 import { resolveOrderBy } from "../../db/sort";
 import { parseLinksJson } from "../../../../assets/shared/schemas/links";
-import { ADMIN_ORGANIZATIONS_SORT_COLUMNS } from "../../../../assets/shared/schemas/admin-organizations";
+import {
+  ADMIN_ORGANIZATIONS_SORT_COLUMNS,
+  type OrganizationsListQuery,
+} from "../../../../assets/shared/schemas/admin-organizations";
 import { primaryContactProjection, resolveRepresentativeRoleHolders } from "../membership/representative-roles";
 import { toOrganizationExtendedContent, toOrganizationSummaryContent } from "../organization-content/fields";
 import { nowIso } from "../../utils/time";
@@ -87,7 +90,7 @@ function toOrgSummary(row: OrgSummaryRow) {
   };
 }
 
-export function buildAdminOrganizationsPageQuery(params: { limit: number; offset: number; q?: string; sort?: string }) {
+export function buildAdminOrganizationsPageQuery(params: OrganizationsListQuery) {
   const search = params.q ? buildD1TextSearchFilter(params.q, ["o.name"]) : null;
   const where = search ? `WHERE ${search.sql}` : "";
   const whereArgs = search?.bindings ?? [];
@@ -110,7 +113,7 @@ export function buildAdminOrganizationsPageQuery(params: { limit: number; offset
 
 export async function listAdminOrganizations(
   db: DatabaseLike,
-  params: { limit: number; offset: number; q?: string; sort?: string },
+  params: OrganizationsListQuery,
 ): Promise<{ organizations: ReturnType<typeof toOrgSummary>[]; total: number }> {
   const pageQuery = buildAdminOrganizationsPageQuery(params);
   const { rows, total } = await queryPage<OrgSummaryRow>(db, pageQuery);

@@ -38,6 +38,7 @@ import {
   ADMIN_APPLICATIONS_SORT_COLUMNS,
   adminApplicationDetailSchema,
   adminApplicationSummarySchema,
+  type AdminApplicationsListQuery,
   type AdminApplicationDetail,
   type AdminApplicationSummary,
 } from "../../../assets/shared/schemas/admin-applications";
@@ -75,7 +76,7 @@ function toSummary(row: AdminApplicationSummaryRow): AdminApplicationSummary {
 
 export async function listAdminApplications(
   db: DatabaseLike,
-  params: { limit: number; offset: number; stage?: string; q?: string; sort?: string },
+  params: AdminApplicationsListQuery,
 ): Promise<{ applications: AdminApplicationSummary[]; total: number }> {
   const conditions: string[] = [];
   const values: unknown[] = [];

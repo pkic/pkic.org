@@ -24,6 +24,7 @@ import { updateMembershipSettings } from "../functions/_lib/services/membership-
 import { runOnHoldReminders } from "../functions/_lib/services/membership/scheduled-jobs";
 import { updateAdminApplication } from "../functions/_lib/services/admin-applications";
 import type { AuthAdmin } from "../functions/_lib/types";
+import { adminApplicationsListResponseSchema } from "../assets/shared/schemas/admin-applications";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -409,31 +410,28 @@ describe("GET /api/v1/admin/applications?sort=... (Fix 4 — sortable columns)",
   it("defaults to created_at DESC when no sort param is given (unchanged behavior)", async () => {
     const response = await call(adminToken, "/api/v1/admin/applications");
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { applications: Array<{ applicantName: string }> };
+    const body = adminApplicationsListResponseSchema.parse(await response.json());
     expect(body.applications.map((a) => a.applicantName)).toEqual(["Amy Applicant", "Zed Applicant"]);
   });
 
   it("sorts ascending by a valid allowlisted column (applicant_name)", async () => {
     const response = await call(adminToken, "/api/v1/admin/applications?sort=applicant_name");
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { applications: Array<{ applicantName: string }> };
+    const body = adminApplicationsListResponseSchema.parse(await response.json());
     expect(body.applications.map((a) => a.applicantName)).toEqual(["Amy Applicant", "Zed Applicant"]);
   });
 
   it("sorts descending with a leading '-'", async () => {
     const response = await call(adminToken, "/api/v1/admin/applications?sort=-applicant_name");
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { applications: Array<{ applicantName: string }> };
+    const body = adminApplicationsListResponseSchema.parse(await response.json());
     expect(body.applications.map((a) => a.applicantName)).toEqual(["Zed Applicant", "Amy Applicant"]);
   });
 
   it("applies the shared search contract in D1 and returns the matching page total", async () => {
     const response = await call(adminToken, "/api/v1/admin/applications?q=amy%40example.test");
     expect(response.status).toBe(200);
-    const body = (await response.json()) as {
-      applications: Array<{ applicantName: string }>;
-      page: { total: number };
-    };
+    const body = adminApplicationsListResponseSchema.parse(await response.json());
     expect(body.applications.map(({ applicantName }) => applicantName)).toEqual(["Amy Applicant"]);
     expect(body.page.total).toBe(1);
   });
