@@ -51,6 +51,7 @@ export const usersListQuerySchema = listQuerySchema(ADMIN_USERS_SORT_COLUMNS).ex
   role: trimmedString(1, 100).optional(),
   type: usersTypeValueSchema,
 });
+export type AdminUsersListQuery = z.infer<typeof usersListQuerySchema>;
 
 export const adminUserMembershipSchema = z.object({
   memberId: z.string(),

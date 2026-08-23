@@ -180,6 +180,7 @@ export const publicVotesListQuerySchema = listQuerySchema(VOTES_LIST_SORT_COLUMN
   from: z.iso.date().optional(),
   to: z.iso.date().optional(),
 });
+export type PublicVotesListQuery = z.infer<typeof publicVotesListQuerySchema>;
 
 export const publicVotesListRouteSchema = {
   tags: ["Votes"],

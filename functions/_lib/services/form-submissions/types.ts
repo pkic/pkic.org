@@ -1,5 +1,7 @@
 import type { z } from "zod";
 import type {
+  AdminFormSubmissionStatsQuery,
+  AdminFormSubmissionsQuery,
   adminFormSubmissionSchema,
   adminFormSubmissionStatsResponseSchema,
   adminFormSubmissionStatSchema,
@@ -14,29 +16,19 @@ export type FieldRow = Pick<FormFieldRow, "key" | "options_json">;
 
 export type AdminSubmissionPayload = z.infer<typeof adminFormSubmissionSchema>;
 export type FieldStatPayload = z.infer<typeof adminFormSubmissionStatSchema>;
-type FormReference = z.infer<typeof adminFormSubmissionStatsResponseSchema>["form"];
 
-export interface FormSubmissionFilters {
-  formKey: string;
-  status: string;
-  attendanceType: string;
-  eventSlug: string;
-  q?: string;
-}
-
-export interface ListFormSubmissionsParams extends FormSubmissionFilters {
-  sort?: string;
-  limit: number;
-  offset: number;
-}
-
-export interface ListFormSubmissionsResult {
-  form: FormReference;
+export type FormSubmissionFilters = { formKey: string } & Pick<
+  AdminFormSubmissionStatsQuery,
+  "status" | "attendanceType" | "eventSlug" | "q"
+>;
+export type ListFormSubmissionsParams = FormSubmissionFilters &
+  Pick<AdminFormSubmissionsQuery, "sort" | "limit" | "offset">;
+export type ListFormSubmissionsResult = {
+  form: z.infer<typeof adminFormSubmissionStatsResponseSchema>["form"];
   total: number;
   offset: number;
   limit: number;
   submissions: AdminSubmissionPayload[];
-}
-
+};
 export type GetFormSubmissionStatsParams = FormSubmissionFilters;
 export type GetFormSubmissionStatsResult = z.infer<typeof adminFormSubmissionStatsResponseSchema>;

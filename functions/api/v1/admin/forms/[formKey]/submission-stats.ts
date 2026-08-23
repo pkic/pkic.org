@@ -11,10 +11,7 @@ export const AdminFormsFormKeySubmissionStatsGet = openApiRoute(
     await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
     const result = await getFormSubmissionStats(requestDb(c), {
       formKey: data.params.formKey,
-      status: data.query.status ?? "",
-      attendanceType: data.query.attendanceType ?? "",
-      eventSlug: data.query.eventSlug ?? "",
-      q: data.query.q,
+      ...data.query,
     });
     return json(result);
   },

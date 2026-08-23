@@ -46,7 +46,7 @@ export interface PopulationQuery {
 export const MERGED_SUBMISSION_COLUMNS = `id, source, source_id, context_type, context_ref, status, submitted_at,
   user_id, user_email, user_first_name, user_last_name, user_organization, answers_json`;
 
-function optionalEquality(expression: string, value: string): SqlFragment {
+function optionalEquality(expression: string, value: string | undefined): SqlFragment {
   return value ? { sql: `AND ${expression} = ?`, bindings: [value] } : { sql: "", bindings: [] };
 }
 
@@ -64,8 +64,8 @@ function nativeSubmissionBranch(params: {
   formId: string;
   purpose: string;
   eventId: string | null;
-  status: string;
-  attendanceType: string;
+  status?: string;
+  attendanceType?: string;
   q?: string;
 }): SqlFragment {
   const isRegistration = params.purpose === "event_registration";
@@ -137,8 +137,8 @@ function nativeSubmissionBranch(params: {
 function legacyRegistrationBranch(params: {
   eventId: string;
   formId: string;
-  status: string;
-  attendanceType: string;
+  status?: string;
+  attendanceType?: string;
   q?: string;
 }): SqlFragment {
   const status = optionalEquality("r.status", params.status);
@@ -183,7 +183,7 @@ function legacyRegistrationBranch(params: {
   };
 }
 
-function legacyProposalBranch(params: { eventId: string; formId: string; status: string; q?: string }): SqlFragment {
+function legacyProposalBranch(params: { eventId: string; formId: string; status?: string; q?: string }): SqlFragment {
   const status = optionalEquality("sp.status", params.status);
   const search = optionalSearch(params.q, [
     "u.email",
@@ -227,8 +227,8 @@ function legacyProposalBranch(params: { eventId: string; formId: string; status:
 
 function buildMergedSubmissionsQuery(params: {
   formId: string;
-  status: string;
-  attendanceType: string;
+  status?: string;
+  attendanceType?: string;
   q?: string;
   purpose: string;
   eventId: string | null;

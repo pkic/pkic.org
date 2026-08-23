@@ -20,6 +20,7 @@ export const applicationDocumentsListQuerySchema = searchableListQuerySchema(
   sortColumnSchemaWithDefault(APPLICATION_DOCUMENT_SORT_KEYS, "-uploadedAt"),
   { limit: 25 },
 );
+export type ApplicationDocumentsListQuery = z.infer<typeof applicationDocumentsListQuerySchema>;
 
 export const applicationDocumentSchema = z.object({
   id: databaseIdSchema,

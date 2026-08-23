@@ -127,8 +127,10 @@ const adminFormSubmissionFiltersSchema = z.object({
 export const adminFormSubmissionsQuerySchema = searchableListQuerySchema(formSubmissionsSortValueSchema, {
   limit: 200,
 }).merge(adminFormSubmissionFiltersSchema);
+export type AdminFormSubmissionsQuery = z.infer<typeof adminFormSubmissionsQuerySchema>;
 
 export const adminFormSubmissionStatsQuerySchema = searchQuerySchema.merge(adminFormSubmissionFiltersSchema);
+export type AdminFormSubmissionStatsQuery = z.infer<typeof adminFormSubmissionStatsQuerySchema>;
 
 export const adminFormSubmissionSubmitterSchema = z.object({
   id: z.string(),
@@ -173,6 +175,7 @@ export const adminFormSubmissionsResponseSchema = paginatedResponseSchema(
   "submissions",
   adminFormSubmissionSchema,
 ).extend({ form: adminFormReferenceSchema });
+export type AdminFormSubmissionsResponse = z.infer<typeof adminFormSubmissionsResponseSchema>;
 
 export const adminFormSubmissionStatsResponseSchema = z.object({
   form: adminFormReferenceSchema,

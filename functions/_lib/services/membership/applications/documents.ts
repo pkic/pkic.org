@@ -2,7 +2,10 @@ import {
   APPLICATION_DOCUMENT_ALLOWED_MIME_TYPES,
   APPLICATION_DOCUMENT_SORT_KEYS,
   adminApplicationDocumentSchema,
+  adminApplicationDocumentsListResponseSchema,
   applicationDocumentSchema,
+  applicationDocumentsListResponseSchema,
+  type ApplicationDocumentsListQuery,
   type AdminApplicationDocument,
   type ApplicationDocument,
 } from "../../../../../assets/shared/schemas/application-documents";
@@ -37,13 +40,6 @@ export interface ApplicationDocumentLimits {
   maxFileBytes: number;
   maxDocumentCount: number;
   maxTotalBytes: number;
-}
-
-export interface ApplicationDocumentsListQuery {
-  limit: number;
-  offset: number;
-  q?: string;
-  sort?: string;
 }
 
 interface ApplicationDocumentListRow {
@@ -131,7 +127,10 @@ export async function listApplicationDocuments(
   query: ApplicationDocumentsListQuery,
 ): Promise<{ documents: ApplicationDocument[]; page: PageInfo }> {
   const result = await queryApplicationDocuments(db, applicationId, query);
-  return { documents: result.rows.map(toApplicationDocument), page: result.page };
+  return applicationDocumentsListResponseSchema.parse({
+    documents: result.rows.map(toApplicationDocument),
+    page: result.page,
+  });
 }
 
 export async function listAdminApplicationDocuments(
@@ -140,7 +139,10 @@ export async function listAdminApplicationDocuments(
   query: ApplicationDocumentsListQuery,
 ): Promise<{ documents: AdminApplicationDocument[]; page: PageInfo }> {
   const result = await queryApplicationDocuments(db, applicationId, query);
-  return { documents: result.rows.map(toAdminApplicationDocument), page: result.page };
+  return adminApplicationDocumentsListResponseSchema.parse({
+    documents: result.rows.map(toAdminApplicationDocument),
+    page: result.page,
+  });
 }
 
 function normalizeFilename(name: string): string {

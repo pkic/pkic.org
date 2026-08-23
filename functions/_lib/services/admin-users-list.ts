@@ -1,4 +1,8 @@
-import { ADMIN_USERS_SORT_COLUMNS } from "../../../assets/shared/schemas/admin-users";
+import {
+  ADMIN_USERS_SORT_COLUMNS,
+  usersListResponseSchema,
+  type AdminUsersListQuery,
+} from "../../../assets/shared/schemas/admin-users";
 import { parseLinksJson } from "../../../assets/shared/schemas/links";
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
 import { queryPage } from "../db/pagination";
@@ -23,15 +27,6 @@ interface UserRow {
   member_organization_id: string | null;
   member_organization_name: string | null;
   event_participation_count: number;
-}
-
-export interface AdminUsersListQuery {
-  role?: string;
-  type?: "member" | "event_attendee" | "contact_only";
-  q?: string;
-  sort?: string;
-  limit: number;
-  offset: number;
 }
 
 const USER_HAS_MEMBERSHIP = `(EXISTS (
@@ -119,5 +114,8 @@ export async function listAdminUsers(db: DatabaseLike, query: AdminUsersListQuer
     type: row.member_id ? "member" : participationCount > 0 ? "event_attendee" : "contact_only",
     eventParticipationCount: participationCount,
   }));
-  return { users: results, page: buildPageInfo(query.limit, query.offset, total, results.length) };
+  return usersListResponseSchema.parse({
+    users: results,
+    page: buildPageInfo(query.limit, query.offset, total, results.length),
+  });
 }

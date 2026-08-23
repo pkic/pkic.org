@@ -46,6 +46,7 @@ export const emailTemplatesListQuerySchema = searchableListQuerySchema(emailTemp
     .regex(/^[a-z][a-z0-9_]*$/)
     .optional(),
 });
+export type EmailTemplatesListQuery = z.infer<typeof emailTemplatesListQuerySchema>;
 
 export const emailTemplatesListRouteSchema = {
   tags: ["Admin email templates"],
@@ -125,6 +126,7 @@ export const ADMIN_EMAIL_TEMPLATE_VERSIONS_SORT_COLUMNS = ["version", "status", 
 export const emailTemplateVersionsListQuerySchema = listQuerySchema(ADMIN_EMAIL_TEMPLATE_VERSIONS_SORT_COLUMNS).extend({
   status: emailTemplateVersionStatusSchema.optional(),
 });
+export type EmailTemplateVersionsListQuery = z.infer<typeof emailTemplateVersionsListQuerySchema>;
 export const adminEmailTemplateVersionsListResponseSchema = paginatedResponseSchema(
   "versions",
   adminEmailTemplateVersionRowSchema,

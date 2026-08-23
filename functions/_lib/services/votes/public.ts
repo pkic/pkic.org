@@ -16,32 +16,15 @@ import {
   getCandidatesForVotes,
   VOTE_ROW_COLUMNS,
   type VoteRow,
-  type VoteType,
-  type VoteScopeType,
-  type VoteSummary,
-  type CandidateSummary,
   type VoteResult,
 } from "./shared";
 import type { DatabaseLike } from "../../types";
 import { VOTES_LIST_SORT_COLUMNS } from "../../../../assets/shared/schemas/votes";
+import { publicVoteSchema, type PublicVotesListQuery } from "../../../../assets/shared/schemas/votes";
+import type { z } from "zod";
 
-export interface PublicVoteListParams {
-  type?: VoteType;
-  scope?: VoteScopeType;
-  wg?: string;
-  status?: Array<"scheduled" | "open" | "closed">;
-  from?: string;
-  to?: string;
-  q?: string;
-  limit?: number;
-  offset?: number;
-  sort?: string;
-}
-
-export interface PublicVoteSummary extends VoteSummary {
-  candidates: CandidateSummary[] | null;
-  result: VoteResult;
-}
+export type PublicVoteListParams = PublicVotesListQuery;
+export type PublicVoteSummary = z.infer<typeof publicVoteSchema>;
 
 function publicResultForDetailLevel(row: VoteRow): VoteResult {
   if (row.status !== "closed" || !row.result_json) return null;
@@ -60,17 +43,19 @@ async function toPublicVoteSummary(db: DatabaseLike, row: VoteRow): Promise<Publ
   const summary = toVoteSummary(row);
   const candidates = row.vote_type === "election" ? await getCandidates(db, row.id) : null;
   const result = publicResultForDetailLevel(row);
-  return { ...summary, candidates, result };
+  return publicVoteSchema.parse({ ...summary, candidates, result });
 }
 
 async function toPublicVoteSummaries(db: DatabaseLike, rows: VoteRow[]): Promise<PublicVoteSummary[]> {
   const electionIds = rows.filter((row) => row.vote_type === "election").map((row) => row.id);
   const candidatesByVoteId = await getCandidatesForVotes(db, electionIds);
-  return rows.map((row) => ({
-    ...toVoteSummary(row),
-    candidates: row.vote_type === "election" ? (candidatesByVoteId.get(row.id) ?? []) : null,
-    result: publicResultForDetailLevel(row),
-  }));
+  return rows.map((row) =>
+    publicVoteSchema.parse({
+      ...toVoteSummary(row),
+      candidates: row.vote_type === "election" ? (candidatesByVoteId.get(row.id) ?? []) : null,
+      result: publicResultForDetailLevel(row),
+    }),
+  );
 }
 
 export async function listPublicVotes(
@@ -113,8 +98,7 @@ export async function listPublicVotes(
   }
 
   const orderBy = resolveOrderBy(params.sort, VOTES_LIST_SORT_COLUMNS, "ORDER BY closes_at DESC", "id ASC");
-  const limit = params.limit ?? 50;
-  const offset = params.offset ?? 0;
+  const { limit, offset } = params;
 
   const where = conditions.join(" AND ");
   const { rows, total } = await queryPage<VoteRow>(db, {

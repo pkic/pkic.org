@@ -3,7 +3,10 @@ import { queryPage } from "../../db/pagination";
 import { all } from "../../db/queries";
 import { resolveOrderBy } from "../../db/sort";
 import { parseJsonSafe } from "../../utils/json";
-import { FORM_SUBMISSIONS_SORT_COLUMNS } from "../../../../assets/shared/schemas/admin-forms";
+import {
+  adminFormSubmissionSchema,
+  FORM_SUBMISSIONS_SORT_COLUMNS,
+} from "../../../../assets/shared/schemas/admin-forms";
 import type { DatabaseLike } from "../../types";
 import type { AdminSubmissionPayload, ListFormSubmissionsParams, ListFormSubmissionsResult } from "./types";
 import {
@@ -87,7 +90,9 @@ export async function listFormSubmissions(
     limit: params.limit,
     offset: params.offset,
   });
-  const submissions = page.rows.length ? await attachSubmissionAnswers(db, page.rows) : [];
+  const submissions = page.rows.length
+    ? (await attachSubmissionAnswers(db, page.rows)).map((submission) => adminFormSubmissionSchema.parse(submission))
+    : [];
 
   return {
     form: {
