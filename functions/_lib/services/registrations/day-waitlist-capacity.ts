@@ -14,6 +14,45 @@ const ROLE_BASED_CAPACITY_EXEMPT_ROLES = [
 ] as const satisfies readonly EventParticipantRole[];
 const ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL = ROLE_BASED_CAPACITY_EXEMPT_ROLES.map((role) => `'${role}'`).join(", ");
 
+/**
+ * Shared set-based capacity predicate used when selecting promotion work and
+ * when atomically claiming a waitlist seat. The day alias is supplied only by
+ * internal SQL builders; validating it prevents an accidental unsafe call.
+ */
+export function eventDayHasAvailableCapacitySql(dayAlias: string, nowExpression: string): string {
+  if (!/^[a-z][a-z0-9_]*$/i.test(dayAlias)) {
+    throw new Error("Invalid event-day SQL alias");
+  }
+  return `
+    ${dayAlias}.in_person_capacity IS NOT NULL
+    AND ${dayAlias}.in_person_capacity > 0
+    AND (
+      (
+        SELECT COUNT(*)
+        FROM registration_day_attendance rda
+        JOIN registrations r ON r.id = rda.registration_id
+        LEFT JOIN event_day_waitlist_entries w
+          ON w.event_day_id = rda.event_day_id
+         AND w.registration_id = rda.registration_id
+         AND ${NON_CAPACITY_CONSUMING_DAY_WAITLIST_SQL}
+        WHERE rda.event_day_id = ${dayAlias}.id
+          AND rda.attendance_type = 'in_person'
+          AND r.status IN ('pending_email_confirmation', 'registered')
+          AND r.capacity_exempt_in_person = 0
+          AND w.id IS NULL
+      ) + (
+        SELECT COUNT(*)
+        FROM event_day_waitlist_entries w
+        JOIN registrations r ON r.id = w.registration_id
+        WHERE w.event_day_id = ${dayAlias}.id
+          AND w.status = 'offered'
+          AND (w.offer_expires_at IS NULL OR w.offer_expires_at > ${nowExpression})
+          AND r.status IN ('pending_email_confirmation', 'registered')
+          AND r.capacity_exempt_in_person = 0
+      )
+    ) < ${dayAlias}.in_person_capacity`;
+}
+
 function rolePriority(role: string): number {
   const index = ROLE_BASED_CAPACITY_EXEMPT_ROLES.indexOf(role as (typeof ROLE_BASED_CAPACITY_EXEMPT_ROLES)[number]);
   return index === -1 ? Number.MAX_SAFE_INTEGER : index;

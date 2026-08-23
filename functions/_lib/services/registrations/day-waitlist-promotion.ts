@@ -1,9 +1,12 @@
 import { all, first, run } from "../../db/queries";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { addHours, nowIso } from "../../utils/time";
-import { countActiveOffersForDay, countConfirmedInPersonForDay } from "./day-waitlist-capacity";
+import {
+  countActiveOffersForDay,
+  countConfirmedInPersonForDay,
+  eventDayHasAvailableCapacitySql,
+} from "./day-waitlist-capacity";
 import type { DayWaitlistRow } from "./day-waitlist-types";
-import { NON_CAPACITY_CONSUMING_DAY_WAITLIST_SQL } from "./day-waitlist-policy";
 
 export async function expireDayWaitlistOffers(db: DatabaseLike, eventId: string): Promise<void> {
   const now = nowIso();
@@ -56,35 +59,20 @@ export async function promoteDayWaitlistIfCapacity(
   for (const candidate of candidates) {
     const now = nowIso();
     const offerExpiresAt = addHours(now, payload.claimWindowHours);
+    const availableCapacitySql = eventDayHasAvailableCapacitySql("ed", "?");
     const updateStatement = db
       .prepare(
         `UPDATE event_day_waitlist_entries
        SET status = 'offered', offer_expires_at = ?, updated_at = ?
        WHERE id = ? AND status = 'waiting'
-         AND (
-           (
-             SELECT COUNT(*)
-             FROM registration_day_attendance rda
-             JOIN registrations r ON r.id = rda.registration_id
-             LEFT JOIN event_day_waitlist_entries w
-               ON w.event_day_id = rda.event_day_id
-              AND w.registration_id = rda.registration_id
-              AND ${NON_CAPACITY_CONSUMING_DAY_WAITLIST_SQL}
-             WHERE rda.event_day_id = ? AND rda.attendance_type = 'in_person'
-               AND r.status IN ('pending_email_confirmation', 'registered')
-               AND r.capacity_exempt_in_person = 0 AND w.id IS NULL
-           ) + (
-             SELECT COUNT(*)
-             FROM event_day_waitlist_entries w
-             JOIN registrations r ON r.id = w.registration_id
-             WHERE w.event_day_id = ? AND w.status = 'offered'
-               AND (w.offer_expires_at IS NULL OR w.offer_expires_at > ?)
-               AND r.status IN ('pending_email_confirmation', 'registered')
-               AND r.capacity_exempt_in_person = 0
-           )
-         ) < ?`,
+         AND EXISTS (
+           SELECT 1
+           FROM event_days ed
+           WHERE ed.id = ? AND ed.event_id = ?
+             AND ${availableCapacitySql}
+         )`,
       )
-      .bind(offerExpiresAt, now, candidate.id, payload.eventDayId, payload.eventDayId, now, day.in_person_capacity);
+      .bind(offerExpiresAt, now, candidate.id, payload.eventDayId, payload.eventId, now);
     const promotion = { ...candidate, status: "offered" as const, offer_expires_at: offerExpiresAt };
     const commitGuard = payload.prepareCommitGuard?.(promotion);
     const additionalStatements = (await payload.prepareCommitStatements?.(promotion)) ?? [];

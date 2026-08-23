@@ -6,6 +6,7 @@ import { listEventDays } from "../event-days";
 import { listDayWaitlistForRegistration } from "./day-waitlist-queries";
 import { prepareRegistrationStatusEmail, type RegistrationStatusEmailEvent } from "./status-notifications";
 import { promoteDayWaitlistIfCapacity } from "./day-waitlist";
+import { eventDayHasAvailableCapacitySql } from "./day-waitlist-capacity";
 import type { DatabaseLike, StatementLike } from "../../types";
 
 export interface WaitlistPromotionEvent extends RegistrationStatusEmailEvent {
@@ -146,6 +147,7 @@ export async function runWaitlistPromotionCycle(
        AND datetime(offer_expires_at) <= datetime('now')`,
   );
 
+  const availableCapacitySql = eventDayHasAvailableCapacitySql("ed", "datetime('now')");
   const events = await all<WaitlistPromotionEvent>(
     db,
     `SELECT DISTINCT
@@ -161,10 +163,22 @@ export async function runWaitlistPromotionCycle(
      FROM events e
      WHERE (e.ends_at IS NULL OR datetime(e.ends_at) >= datetime('now'))
        AND EXISTS (
-         SELECT 1 FROM event_day_waitlist_entries w
-         WHERE w.event_id = e.id AND w.status = 'waiting'
+         SELECT 1
+         FROM event_days ed
+         WHERE ed.event_id = e.id
+           AND ${availableCapacitySql}
+           AND EXISTS (
+             SELECT 1
+             FROM event_day_waitlist_entries candidate
+             JOIN registrations candidate_registration
+               ON candidate_registration.id = candidate.registration_id
+             WHERE candidate.event_day_id = ed.id
+               AND candidate.status = 'waiting'
+               AND candidate_registration.status IN ('pending_email_confirmation', 'registered')
+               AND candidate_registration.capacity_exempt_in_person = 0
+           )
        )
-     ORDER BY datetime(COALESCE(e.starts_at, '9999-12-31')) ASC, e.name ASC
+     ORDER BY datetime(COALESCE(e.starts_at, '9999-12-31')) ASC, e.name ASC, e.id ASC
      LIMIT 50`,
   );
 
