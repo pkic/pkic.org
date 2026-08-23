@@ -1,9 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
-import { createContext, deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
-import { onRequestPost as createRegistration } from "../functions/api/v1/events/[eventSlug]/registrations";
-import { onRequestGet as confirmRegistration } from "../functions/api/v1/events/[eventSlug]/registrations/confirm-email";
+import { deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
+import { callApi } from "./helpers/app";
 import { recordEngagement } from "../functions/_lib/services/engagement";
 
 describe("engagement events", () => {
@@ -13,27 +12,21 @@ describe("engagement events", () => {
   it("records registration lifecycle points", async () => {
     await seedEventAndAdmin(env.DB);
 
-    const createResponse = await createRegistration(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            firstName: "Jamie",
-            lastName: "Example",
-            email: "jamie@pkic.org",
-            attendanceType: "virtual",
-            sourceType: "direct",
-            consents: [
-              { termKey: "privacy-policy", version: "v1" },
-              { termKey: "code-of-conduct", version: "v1" },
-            ],
-          }),
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const createResponse = await callApi(env, "/api/v1/events/pqc-2026/registrations", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        firstName: "Jamie",
+        lastName: "Example",
+        email: "jamie@pkic.org",
+        attendanceType: "virtual",
+        sourceType: "direct",
+        consents: [
+          { termKey: "privacy-policy", version: "v1" },
+          { termKey: "code-of-conduct", version: "v1" },
+        ],
+      }),
+    });
 
     expect(createResponse.status).toBe(200);
 
@@ -56,14 +49,9 @@ describe("engagement events", () => {
     const token = new URL(confirmationUrl).searchParams.get("token");
     expect(token).toBeTruthy();
 
-    const confirmResponse = await confirmRegistration(
-      createContext(
-        env,
-        new Request(
-          `https://app.test/api/v1/events/pqc-2026/registrations/confirm-email?token=${encodeURIComponent(token as string)}`,
-        ),
-        { eventSlug: "pqc-2026" },
-      ),
+    const confirmResponse = await callApi(
+      env,
+      `/api/v1/events/pqc-2026/registrations/confirm-email?token=${encodeURIComponent(token as string)}`,
     );
 
     expect(confirmResponse.status).toBe(200);

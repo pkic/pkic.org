@@ -10,11 +10,8 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
-import { createContext, createTestRateLimiter, seedEventAndAdmin, queryAll } from "./helpers/context";
+import { createTestRateLimiter, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
-import { onRequestPost as createRegistration } from "../functions/api/v1/events/[eventSlug]/registrations";
-import { onRequestGet as confirmInfo } from "../functions/api/v1/events/[eventSlug]/registrations/confirm-info";
-import { onRequestPost as resendConfirmation } from "../functions/api/v1/events/[eventSlug]/registrations/resend-confirmation";
 import { issueDatabaseCapability, materializeQueuedCapabilityLinks } from "../functions/_lib/services/capability-links";
 import { getRegistrationByManageToken } from "../functions/_lib/services/registrations";
 import { callApi } from "./helpers/app";
@@ -36,27 +33,21 @@ async function registerAttendee(): Promise<{
   email: string;
   manageToken: string;
 }> {
-  const response = await createRegistration(
-    createContext(
-      env,
-      new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          firstName: "Test",
-          lastName: "User",
-          email: "resendtest@pkic.org",
-          attendanceType: "virtual",
-          sourceType: "direct",
-          consents: [
-            { termKey: "privacy-policy", version: "v1" },
-            { termKey: "code-of-conduct", version: "v1" },
-          ],
-        }),
-      }),
-      { eventSlug: "pqc-2026" },
-    ),
-  );
+  const response = await callApi(env, "/api/v1/events/pqc-2026/registrations", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      firstName: "Test",
+      lastName: "User",
+      email: "resendtest@pkic.org",
+      attendanceType: "virtual",
+      sourceType: "direct",
+      consents: [
+        { termKey: "privacy-policy", version: "v1" },
+        { termKey: "code-of-conduct", version: "v1" },
+      ],
+    }),
+  });
 
   expect(response.status).toBe(200);
   const payload = (await response.json()) as { manageToken: string };
@@ -95,14 +86,9 @@ describe("confirm-info endpoint", () => {
 
     const { confirmationToken, registrationId } = await registerAttendee();
 
-    const response = await confirmInfo(
-      createContext(
-        env,
-        new Request(
-          `https://app.test/api/v1/events/pqc-2026/registrations/confirm-info?token=${encodeURIComponent(confirmationToken)}&id=${encodeURIComponent(registrationId)}`,
-        ),
-        { eventSlug: "pqc-2026" },
-      ),
+    const response = await callApi(
+      env,
+      `/api/v1/events/pqc-2026/registrations/confirm-info?token=${encodeURIComponent(confirmationToken)}&id=${encodeURIComponent(registrationId)}`,
     );
 
     expect(response.status).toBe(200);
@@ -123,13 +109,7 @@ describe("confirm-info endpoint", () => {
   it("returns null values for an invalid/unknown token", async () => {
     await seedEventAndAdmin(env.DB);
 
-    const response = await confirmInfo(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/events/pqc-2026/registrations/confirm-info?token=invalid-goes-here"),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const response = await callApi(env, "/api/v1/events/pqc-2026/registrations/confirm-info?token=invalid-goes-here");
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
@@ -145,11 +125,7 @@ describe("confirm-info endpoint", () => {
   it("returns null values when no token is provided", async () => {
     await seedEventAndAdmin(env.DB);
 
-    const response = await confirmInfo(
-      createContext(env, new Request("https://app.test/api/v1/events/pqc-2026/registrations/confirm-info"), {
-        eventSlug: "pqc-2026",
-      }),
-    );
+    const response = await callApi(env, "/api/v1/events/pqc-2026/registrations/confirm-info");
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as { firstName: null; eventName: null };
@@ -178,17 +154,11 @@ describe("resend-confirmation endpoint", () => {
 
     const { confirmationToken, registrationId } = await registerAttendee();
 
-    const response = await resendConfirmation(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/events/pqc-2026/registrations/resend-confirmation", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ id: registrationId, token: confirmationToken }),
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const response = await callApi(env, "/api/v1/events/pqc-2026/registrations/resend-confirmation", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: registrationId, token: confirmationToken }),
+    });
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as { ok: boolean };
@@ -214,14 +184,9 @@ describe("resend-confirmation endpoint", () => {
     const freshToken = confirmationUrl.searchParams.get("token") as string;
     expect(freshToken).toMatch(/^pkc1_/);
 
-    const originalInfoResponse = await confirmInfo(
-      createContext(
-        env,
-        new Request(
-          `https://app.test/api/v1/events/pqc-2026/registrations/confirm-info?token=${encodeURIComponent(confirmationToken)}&id=${encodeURIComponent(registrationId)}`,
-        ),
-        { eventSlug: "pqc-2026" },
-      ),
+    const originalInfoResponse = await callApi(
+      env,
+      `/api/v1/events/pqc-2026/registrations/confirm-info?token=${encodeURIComponent(confirmationToken)}&id=${encodeURIComponent(registrationId)}`,
     );
     const originalInfo = (await originalInfoResponse.json()) as {
       email: string | null;
@@ -232,30 +197,19 @@ describe("resend-confirmation endpoint", () => {
     expect(originalInfo.expired).toBe(false);
     expect(originalInfo.recoverable).toBe(false);
 
-    const freshInfoResponse = await confirmInfo(
-      createContext(
-        env,
-        new Request(
-          `https://app.test/api/v1/events/pqc-2026/registrations/confirm-info?token=${encodeURIComponent(freshToken)}&id=${encodeURIComponent(registrationId)}`,
-        ),
-        { eventSlug: "pqc-2026" },
-      ),
+    const freshInfoResponse = await callApi(
+      env,
+      `/api/v1/events/pqc-2026/registrations/confirm-info?token=${encodeURIComponent(freshToken)}&id=${encodeURIComponent(registrationId)}`,
     );
     expect((await freshInfoResponse.json()) as { email: string | null }).toMatchObject({
       email: "resendtest@pkic.org",
     });
 
-    const staleResponse = await resendConfirmation(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/events/pqc-2026/registrations/resend-confirmation", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ id: registrationId, token: confirmationToken }),
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const staleResponse = await callApi(env, "/api/v1/events/pqc-2026/registrations/resend-confirmation", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: registrationId, token: confirmationToken }),
+    });
     expect(staleResponse.status).toBe(200);
   });
 
@@ -364,27 +318,21 @@ describe("resend-confirmation endpoint", () => {
       .bind(registration.id)
       .run();
 
-    const response = await createRegistration(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            firstName: "Test",
-            lastName: "User",
-            email: "resendtest@pkic.org",
-            attendanceType: "virtual",
-            sourceType: "direct",
-            consents: [
-              { termKey: "privacy-policy", version: "v1" },
-              { termKey: "code-of-conduct", version: "v1" },
-            ],
-          }),
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const response = await callApi(env, "/api/v1/events/pqc-2026/registrations", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        firstName: "Test",
+        lastName: "User",
+        email: "resendtest@pkic.org",
+        attendanceType: "virtual",
+        sourceType: "direct",
+        consents: [
+          { termKey: "privacy-policy", version: "v1" },
+          { termKey: "code-of-conduct", version: "v1" },
+        ],
+      }),
+    });
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as { registrationId: string; status: string };
@@ -408,19 +356,13 @@ describe("resend-confirmation endpoint", () => {
     const queuedBefore = (await queryAll<{ count: number }>(env.DB, "SELECT COUNT(*) AS count FROM email_outbox"))[0]
       .count;
 
-    await expect(
-      resendConfirmation(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/events/pqc-2026/registrations/resend-confirmation", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ id: registrationId, token: "bogus-nonexistent-token" }),
-          }),
-          { eventSlug: "pqc-2026" },
-        ),
-      ),
-    ).rejects.toMatchObject({ code: "RESEND_TOKEN_INVALID" });
+    const invalidResponse = await callApi(env, "/api/v1/events/pqc-2026/registrations/resend-confirmation", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: registrationId, token: "bogus-nonexistent-token" }),
+    });
+    expect(invalidResponse.status).toBe(404);
+    await expect(invalidResponse.json()).resolves.toMatchObject({ error: { code: "RESEND_TOKEN_INVALID" } });
     const queuedAfter = (await queryAll<{ count: number }>(env.DB, "SELECT COUNT(*) AS count FROM email_outbox"))[0]
       .count;
     expect(queuedAfter).toBe(queuedBefore);
