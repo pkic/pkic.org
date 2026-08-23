@@ -401,4 +401,140 @@ describe("consolidated pending migration upgrade", () => {
       score: 9,
     });
   });
+
+  it("rejects cross-aggregate rows at the consolidated schema boundary", () => {
+    db = new DatabaseSync(":memory:");
+    applyMigrationsBefore0035(db);
+    seedRepresentativePre0035State(db);
+    db.exec(fs.readFileSync(path.join(MIGRATIONS_DIR, CONSOLIDATED_MIGRATION), "utf8"));
+
+    // D1 enforces foreign keys by default; the consolidated migration must not
+    // depend on toggling PRAGMA foreign_keys, which D1 does not permit.
+    expect(db.prepare("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
+
+    db.exec(`
+      INSERT INTO events (id, slug, name, timezone, created_at, updated_at)
+      VALUES ('event-2', 'upgrade-test-2', 'Upgrade test 2', 'UTC', '2025-01-01', '2025-01-01');
+      INSERT INTO users (id, email, normalized_email, role, created_at, updated_at)
+      VALUES ('user-2', 'second@example.test', 'second@example.test', 'user', '2025-01-01', '2025-01-01');
+      INSERT INTO event_days (id, event_id, day_date, created_at, updated_at)
+      VALUES ('day-1', 'event-1', '2025-05-01', '2025-01-01', '2025-01-01'),
+             ('day-2', 'event-2', '2025-05-01', '2025-01-01', '2025-01-01');
+      INSERT INTO registrations
+        (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
+      VALUES ('registration-1', 'event-1', 'admin-1', 'registered', 'virtual', 'test', 'manage-1', '2025-01-01', '2025-01-01'),
+             ('registration-2', 'event-2', 'user-2', 'registered', 'virtual', 'test', 'manage-2', '2025-01-01', '2025-01-01');
+      INSERT INTO proposal_speakers (id, proposal_id, user_id, role, status, created_at)
+      VALUES ('proposal-speaker-1', 'proposal-1', 'admin-1', 'proposer', 'confirmed', '2025-01-01');
+      INSERT INTO working_groups (id, name, slug, active, created_at, updated_at)
+      VALUES ('wg-integrity', 'Integrity WG', 'integrity', 1, '2025-01-01', '2025-01-01');
+      INSERT INTO member_applications
+        (id, applicant_email, applicant_name, membership_category, stage_entered_at, manage_token_hash, created_at, updated_at)
+      VALUES ('application-1', 'applicant@example.test', 'Applicant', 'F', '2025-01-01', 'application-token', '2025-01-01', '2025-01-01');
+    `);
+
+    // Valid registration and proposal evidence are accepted.
+    db.prepare(
+      `INSERT INTO consent_acceptances
+         (id, registration_id, proposal_id, event_id, user_id, audience_type, term_key, term_version, accepted_at)
+       VALUES (?, ?, NULL, ?, ?, 'attendee', ?, 'v1', datetime('now'))`,
+    ).run("consent-registration", "registration-1", "event-1", "admin-1", "privacy");
+    db.prepare(
+      `INSERT INTO consent_acceptances
+         (id, registration_id, proposal_id, event_id, user_id, audience_type, term_key, term_version, accepted_at)
+       VALUES (?, NULL, ?, ?, ?, 'speaker', ?, 'v1', datetime('now'))`,
+    ).run("consent-proposal", "proposal-1", "event-1", "admin-1", "speaker-terms");
+
+    expect(() =>
+      db!
+        .prepare(
+          `INSERT INTO consent_acceptances
+           (id, registration_id, proposal_id, event_id, user_id, audience_type, term_key, term_version, accepted_at)
+         VALUES ('consent-neither', NULL, NULL, 'event-1', 'admin-1', 'attendee', 'neither', 'v1', datetime('now'))`,
+        )
+        .run(),
+    ).toThrow("CONSENT_ACCEPTANCE_CONTEXT_INVALID");
+    expect(() =>
+      db!
+        .prepare(
+          `INSERT INTO consent_acceptances
+           (id, registration_id, proposal_id, event_id, user_id, audience_type, term_key, term_version, accepted_at)
+         VALUES ('consent-cross-event', 'registration-1', NULL, 'event-2', 'admin-1', 'attendee', 'cross-event', 'v1', datetime('now'))`,
+        )
+        .run(),
+    ).toThrow("CONSENT_ACCEPTANCE_CONTEXT_INVALID");
+
+    db.prepare(
+      `INSERT INTO registration_day_attendance
+         (id, registration_id, event_day_id, attendance_type, created_at, updated_at)
+       VALUES ('attendance-1', 'registration-1', 'day-1', 'in_person', '2025-01-01', '2025-01-01')`,
+    ).run();
+    expect(() =>
+      db!
+        .prepare(
+          `INSERT INTO registration_day_attendance
+           (id, registration_id, event_day_id, attendance_type, created_at, updated_at)
+         VALUES ('attendance-cross-event', 'registration-1', 'day-2', 'in_person', '2025-01-01', '2025-01-01')`,
+        )
+        .run(),
+    ).toThrow("REGISTRATION_DAY_EVENT_MISMATCH");
+
+    db.prepare(
+      `INSERT INTO event_day_waitlist_entries
+         (id, event_id, event_day_id, registration_id, user_id, priority_lane, status, position, created_at, updated_at)
+       VALUES ('waitlist-1', 'event-1', 'day-1', 'registration-1', 'admin-1', 'general', 'waiting', 1, '2025-01-01', '2025-01-01')`,
+    ).run();
+    expect(() =>
+      db!.prepare("UPDATE event_day_waitlist_entries SET user_id = 'user-2' WHERE id = 'waitlist-1'").run(),
+    ).toThrow("WAITLIST_EVENT_CONTEXT_INVALID");
+
+    db.prepare(
+      `INSERT INTO organization_domain_claims
+         (id, domain, application_id, organization_id, created_at, updated_at)
+       VALUES ('domain-application', 'application.example', 'application-1', NULL, '2025-01-01', '2025-01-01')`,
+    ).run();
+    expect(() =>
+      db!
+        .prepare(
+          `INSERT INTO organization_domain_claims
+           (id, domain, application_id, organization_id, created_at, updated_at)
+         VALUES ('domain-neither', 'neither.example', NULL, NULL, '2025-01-01', '2025-01-01')`,
+        )
+        .run(),
+    ).toThrow("DOMAIN_CLAIM_OWNER_INVALID");
+    expect(() =>
+      db!
+        .prepare("UPDATE organization_domain_claims SET organization_id = 'member-1' WHERE id = 'domain-application'")
+        .run(),
+    ).toThrow("DOMAIN_CLAIM_OWNER_INVALID");
+
+    db.prepare(
+      `INSERT INTO user_roles
+         (id, user_id, role_id, context_type, context_id, created_at)
+       VALUES ('role-event-1', 'admin-1', 'role-event_organizer', 'event', 'event-1', '2025-01-01')`,
+    ).run();
+    expect(() =>
+      db!
+        .prepare(
+          `INSERT INTO user_roles
+           (id, user_id, role_id, context_type, context_id, created_at)
+         VALUES ('role-invalid-context', 'admin-1', 'role-event_organizer', 'event', 'missing-event', '2025-01-01')`,
+        )
+        .run(),
+    ).toThrow("USER_ROLE_CONTEXT_INVALID");
+    expect(() => db!.prepare("DELETE FROM events WHERE id = 'event-1'").run()).toThrow(
+      "EVENT_HAS_AUTHORIZATION_CONTEXT",
+    );
+    expect(() =>
+      db!
+        .prepare(
+          `INSERT INTO permission_grants
+           (id, user_id, permission, context_type, context_id, created_at)
+         VALUES ('grant-invalid-context', 'admin-1', 'events:read', 'unknown', 'event-1', '2025-01-01')`,
+        )
+        .run(),
+    ).toThrow("PERMISSION_GRANT_CONTEXT_INVALID");
+
+    expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+  });
 });

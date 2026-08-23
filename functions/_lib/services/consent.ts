@@ -81,3 +81,8 @@ export async function prepareConsentStatements(
       ),
   );
 }
+
+/** D1 trigger failure when consent no longer belongs to the planned aggregate. */
+export function isConsentAcceptanceContextConflict(error: unknown): boolean {
+  return error instanceof Error && error.message.includes("CONSENT_ACCEPTANCE_CONTEXT_INVALID");
+}
