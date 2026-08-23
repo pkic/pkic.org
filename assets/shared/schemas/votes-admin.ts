@@ -191,7 +191,7 @@ export const adminListProposalsRouteSchema = {
   responses: {
     "200": {
       description: "Proposals.",
-      content: { "application/json": { schema: paginatedResponseSchema("proposals", proposalSummarySchema) } },
+      content: { "application/json": { schema: adminVoteProposalsListResponseSchema } },
     },
   },
 };
