@@ -124,6 +124,21 @@ export const adminUserDetailSchema = z.object({
   membership: adminUserMembershipDetailSchema.nullable(),
 });
 export const adminUserDetailResponseSchema = z.object({ user: adminUserDetailSchema });
+
+export const adminUserDetailRouteSchema = {
+  tags: ["Users"],
+  summary: "Get an admin user detail",
+  request: { params: adminUserIdParamsSchema },
+  responses: {
+    "200": {
+      description: "User detail, membership, and working-group information.",
+      content: { "application/json": { schema: adminUserDetailResponseSchema } },
+    },
+    "400": { description: "Invalid user identifier." },
+    "401": { description: "Admin authorization required." },
+    "404": { description: "User not found." },
+  },
+};
 /** PATCH /admin/users/:userId keeps the command acknowledgement and returns the edited user. */
 export const adminUserUpdateResponseSchema = successResponseSchema.extend({
   user: adminUserDetailSchema.pick({ id: true, email: true, role: true, active: true }).extend({

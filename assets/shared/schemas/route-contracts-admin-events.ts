@@ -14,11 +14,13 @@ import {
   adminEventTeamPermissionCreateResponseSchema,
   adminEventSettingsSchema,
   adminEventSyncSchema,
+  adminEventDetailResponseSchema,
   adminEventTermsReplaceSchema,
   adminEventTermsResponseSchema,
   adminEventUpdateResponseSchema,
   adminWaitlistPromotionResponseSchema,
 } from "./admin-events";
+import { adminEventStatsResponseSchema } from "./admin-analytics";
 import { databaseIdSchema } from "./identifiers";
 import { z } from "zod";
 
@@ -125,6 +127,34 @@ export const adminEventTeamPermissionDeleteRouteSchema = {
     "401": { description: "Admin authorization required." },
     "403": { description: "Insufficient permission to manage this event." },
     "404": { description: "Event or permission grant not found." },
+  },
+};
+
+export const adminEventDetailRouteSchema = {
+  tags: ["Admin events"],
+  summary: "Get event details",
+  request: { params: eventSlugParamsSchema },
+  responses: {
+    "200": {
+      description: "Event details and settings.",
+      content: { "application/json": { schema: adminEventDetailResponseSchema } },
+    },
+    "401": { description: "Admin authorization required." },
+    "404": { description: "Event not found." },
+  },
+};
+
+export const adminEventStatsRouteSchema = {
+  tags: ["Admin events"],
+  summary: "Get event statistics",
+  request: { params: eventSlugParamsSchema },
+  responses: {
+    "200": {
+      description: "Event registration, attendance, waitlist, invitation, proposal, and RSVP statistics.",
+      content: { "application/json": { schema: adminEventStatsResponseSchema } },
+    },
+    "401": { description: "Admin authorization required." },
+    "404": { description: "Event not found." },
   },
 };
 

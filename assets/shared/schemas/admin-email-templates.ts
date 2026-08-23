@@ -88,6 +88,20 @@ export const adminEmailTemplatePreviewSchema = z.object({
   data: z.record(z.string().trim().min(1).max(80), z.unknown()).optional(),
 });
 export const adminEmailTemplateExistsResponseSchema = z.object({ exists: z.boolean() });
+
+export const emailTemplateExistsRouteSchema = {
+  tags: ["Admin email templates"],
+  summary: "Check whether an email template exists",
+  request: { params: emailTemplateKeyParamsSchema },
+  responses: {
+    "200": {
+      description: "Whether the template key exists.",
+      content: { "application/json": { schema: adminEmailTemplateExistsResponseSchema } },
+    },
+    "400": { description: "Invalid template key." },
+    "401": { description: "Admin authorization required." },
+  },
+};
 export const adminEmailTemplateRenderedResponseSchema = z.object({
   subject: z.string(),
   html: z.string(),

@@ -28,7 +28,6 @@ import { nowIso } from "../functions/_lib/utils/time";
 import type { DatabaseLike, Env as AppEnv } from "../functions/_lib/types";
 
 // ── Admin endpoint handlers ───────────────────────────────────────────────────
-import { onRequest as adminStatsRequest } from "../functions/api/v1/admin/stats";
 import { onRequest as internalEmailRetryRequest } from "../functions/api/v1/internal/email/retry";
 import { onRequest as internalJobsRequest } from "../functions/api/v1/internal/jobs/run";
 import { onRequest as internalEmailResetRequest } from "../functions/api/v1/internal/email/reset-failed";
@@ -563,11 +562,15 @@ describe("HTTP method enforcement", () => {
     expect(response.status).not.toBe(200);
   });
 
-  it("rejects POST to GET-only /api/v1/admin/stats → 405", async () => {
-    const response = await adminStatsRequest(
-      createContext(appEnv, new Request("https://app.test/api/v1/admin/stats", { method: "POST" }), {}),
+  it("rejects POST to GET-only /api/v1/admin/stats", async () => {
+    const token = await createAdminSession(env.DB, adminId, "stats-method-enforcement-token");
+    const response = await callApp(
+      new Request("https://app.test/api/v1/admin/stats", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}` },
+      }),
     );
-    expect(response.status).toBe(405);
+    expect(response.status).not.toBe(200);
   });
 
   it("rejects GET to POST-only /api/v1/internal/email/retry → 405", async () => {

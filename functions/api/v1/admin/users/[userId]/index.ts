@@ -3,19 +3,24 @@ import {
   adminUserUpdateRouteSchema,
   adminUserUpdateResponseSchema,
   adminUserUpdateSchema,
+  adminUserDetailResponseSchema,
+  adminUserDetailRouteSchema,
 } from "../../../../../../assets/shared/schemas/admin-users";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { dispatchRequestMethod, json } from "../../../../../_lib/http";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { getAdminUserDetail } from "../../../../../_lib/services/admin-user-detail";
 import { updateAdminUser } from "../../../../../_lib/services/admin-user-update";
 import { parseJsonBody } from "../../../../../_lib/validation";
 import type { ValidatedData } from "chanfana";
 
-export async function onRequestGet(c: AdminContext): Promise<Response> {
+export const AdminUsersUserIdGet = openApiRoute(adminUserDetailRouteSchema, async (c: AdminContext, data) => {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  return json({ user: await getAdminUserDetail(requestDb(c), c.req.param("userId")) });
-}
+  return json(
+    adminUserDetailResponseSchema.parse({ user: await getAdminUserDetail(requestDb(c), data.params.userId) }),
+  );
+});
 
 export async function onRequestPatch(
   c: AdminContext,
@@ -33,5 +38,5 @@ export async function onRequestPatch(
 }
 
 export async function onRequest(c: AdminContext): Promise<Response> {
-  return dispatchRequestMethod(c, { GET: onRequestGet, PATCH: onRequestPatch });
+  return dispatchRequestMethod(c, { PATCH: onRequestPatch });
 }

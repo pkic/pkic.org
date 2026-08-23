@@ -5,7 +5,7 @@ import { onRequestPost as AdminUsersUserIdGravatarPost_l } from "./gravatar";
 import { AdminUsersUserIdHeadshotGet } from "./headshot";
 import { AdminUsersUserIdHeadshotPut } from "./headshot";
 import { AdminUsersUserIdHeadshotDelete } from "./headshot";
-import { onRequestGet as AdminUsersUserIdGet_l } from "./index";
+import { AdminUsersUserIdGet } from "./index";
 import { onRequestPatch as AdminUsersUserIdPatch_l } from "./index";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { adminUserUpdateRouteSchema } from "../../../../../../assets/shared/schemas/admin-users";
@@ -23,7 +23,7 @@ openapi.post("/gravatar", openApiRoute(adminUserGravatarImportRouteSchema, Admin
 openapi.get("/headshot", AdminUsersUserIdHeadshotGet);
 openapi.put("/headshot", AdminUsersUserIdHeadshotPut);
 openapi.delete("/headshot", AdminUsersUserIdHeadshotDelete);
-app.get("/", AdminUsersUserIdGet_l);
+openapi.get("/", AdminUsersUserIdGet);
 openapi.patch("/", openApiRoute(adminUserUpdateRouteSchema, AdminUsersUserIdPatch_l));
 openapi.post("/membership", UserMembershipGrant);
 openapi.route("/roles", roles_Router);

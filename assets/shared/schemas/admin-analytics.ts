@@ -153,3 +153,15 @@ export const adminEventStatsResponseSchema = z.object({
 export type DonationPeriod = z.infer<typeof donationPeriodSchema>;
 export type AdminStatsResponse = z.infer<typeof adminStatsResponseSchema>;
 export type AdminEventStatsResponse = z.infer<typeof adminEventStatsResponseSchema>;
+
+export const adminStatsRouteSchema = {
+  tags: ["Admin analytics"],
+  summary: "Get platform statistics (admin)",
+  responses: {
+    "200": {
+      description: "Platform-wide registration, invitation, email, donation, and activity statistics.",
+      content: { "application/json": { schema: adminStatsResponseSchema } },
+    },
+    "401": { description: "Admin authorization required." },
+  },
+};
