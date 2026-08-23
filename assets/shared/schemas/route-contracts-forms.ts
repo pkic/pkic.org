@@ -1,4 +1,6 @@
 import {
+  adminFormCreateResponseSchema,
+  adminFormCreateSchema,
   adminFormsListQuerySchema,
   adminFormsListResponseSchema,
   adminFormSubmissionsQuerySchema,
@@ -9,6 +11,37 @@ import {
   adminFormUpdateResponseSchema,
 } from "./admin-forms";
 import { eventSlugParamsSchema, formKeyParamsSchema } from "./api-common";
+
+const adminFormCreateResponses = {
+  "201": {
+    description: "Form created.",
+    content: { "application/json": { schema: adminFormCreateResponseSchema } },
+  },
+  "400": { description: "Invalid form payload." },
+  "401": { description: "Admin authorization required." },
+  "403": { description: "Insufficient permission to create forms." },
+  "409": { description: "A form with this key already exists." },
+};
+
+export const adminFormCreateRouteSchema = {
+  tags: ["Admin forms"],
+  summary: "Create a global form",
+  description: "Creates an admin-managed global custom form and its field definitions.",
+  request: {
+    body: { content: { "application/json": { schema: adminFormCreateSchema } }, required: true },
+  },
+  responses: adminFormCreateResponses,
+};
+
+export const adminEventFormCreateRouteSchema = {
+  ...adminFormCreateRouteSchema,
+  summary: "Create an event form",
+  description: "Creates an admin-managed custom form scoped to one event.",
+  request: {
+    params: eventSlugParamsSchema,
+    body: { content: { "application/json": { schema: adminFormCreateSchema } }, required: true },
+  },
+};
 
 export const adminFormsListRouteSchema = {
   tags: ["Admin forms"],

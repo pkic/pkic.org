@@ -6,7 +6,11 @@ import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { nowIso } from "../functions/_lib/utils/time";
 import { createManagedForm, updateManagedForm } from "../functions/_lib/services/forms";
-import { adminFormCreateSchema, adminFormsListQuerySchema } from "../assets/shared/schemas/admin-forms";
+import {
+  adminFormCreateResponseSchema,
+  adminFormCreateSchema,
+  adminFormsListQuerySchema,
+} from "../assets/shared/schemas/admin-forms";
 import {
   FORM_FIELD_TYPES,
   FORM_PURPOSES,
@@ -360,8 +364,10 @@ describe("admin forms endpoints", () => {
     });
 
     expect(createResponse.status).toBe(201);
-    const created = (await createResponse.json()) as { key: string };
+    const created = adminFormCreateResponseSchema.parse(await createResponse.json());
     expect(created.key).toBe("community-survey");
+    expect(created.success).toBe(true);
+    expect(created.formId).toBeTruthy();
 
     const rootResponse = await callAdmin("/api/v1/admin/forms");
     expect(rootResponse.status).toBe(200);
@@ -469,7 +475,7 @@ describe("admin forms endpoints", () => {
     });
 
     expect(createResponse.status).toBe(201);
-    const created = (await createResponse.json()) as { formId: string; key: string };
+    const created = adminFormCreateResponseSchema.parse(await createResponse.json());
     expect(created.key).toBe("event-workshop-form");
 
     const [detailRow] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM forms WHERE key = ?", [

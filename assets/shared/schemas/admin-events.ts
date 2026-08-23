@@ -436,7 +436,9 @@ export const adminEventDaysResponseSchema = z.object({
     }),
   ),
 });
-export const adminEventDaysReplaceResponseSchema = z.object({ skipped: z.array(z.string()).optional() });
+export const adminEventDaysReplaceResponseSchema = successResponseSchema
+  .extend(adminEventDaysResponseSchema.shape)
+  .extend({ skipped: z.array(z.string()) });
 export const adminEventTermsResponseSchema = z.object({
   terms: z.object({
     attendee: z.array(

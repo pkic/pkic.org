@@ -24,6 +24,11 @@ describe("OpenAPI schema generation", () => {
   it("mounts admin mutation contracts through their owning routers", () => {
     const spec = decorateOpenApiSpec(openapi.schema);
 
+    expect(spec.paths["/api/v1/admin/events"].post).toBeDefined();
+    expect(spec.paths["/api/v1/admin/forms"].post).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/forms"].post).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/days"].get).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/days"].put).toBeDefined();
     expect(spec.paths["/api/v1/admin/users/{userId}"].patch).toBeDefined();
     expect(spec.paths["/api/v1/admin/users/{userId}/gravatar"].post).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/permissions"].post).toBeDefined();

@@ -16,8 +16,7 @@ import type { DatabaseSessionLike } from "../../../_lib/db/session";
 import { AdminAuditLogList } from "./audit-log";
 import { AdminDueWorkList } from "./due-work";
 import { EmailTemplatesList } from "./email-templates";
-import { AdminEventsListGet } from "./events";
-import { onRequestPost as AdminEventsPost_l } from "./events";
+import { AdminEventsCreatePost, AdminEventsListGet } from "./events";
 import { onRequestGet as AdminStatsGet_l } from "./stats";
 import { UsersList } from "./users";
 import access_grants_Router from "./access-grants/router";
@@ -142,7 +141,7 @@ app.use("*", useRequestScopedD1Session);
 
 openapi.get("/email-templates", EmailTemplatesList);
 openapi.get("/events", AdminEventsListGet);
-app.post("/events", AdminEventsPost_l);
+openapi.post("/events", AdminEventsCreatePost);
 app.get("/stats", AdminStatsGet_l);
 openapi.get("/audit-log", AdminAuditLogList);
 openapi.get("/due-work", AdminDueWorkList);

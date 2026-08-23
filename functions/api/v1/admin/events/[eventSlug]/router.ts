@@ -6,10 +6,8 @@ import { getEventBySlug } from "../../../../../_lib/services/events";
 import { requestDb } from "../../../../../_lib/db/context";
 import { AppError } from "../../../../../_lib/errors";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
-import { onRequestGet as AdminEventsEventSlugDaysGet_l } from "./days";
-import { onRequestPut as AdminEventsEventSlugDaysPut_l } from "./days";
-import { onRequestGet as AdminEventsEventSlugFormsGet_l } from "./forms";
-import { onRequestPost as AdminEventsEventSlugFormsPost_l } from "./forms";
+import { AdminEventDaysGet, AdminEventDaysReplace } from "./days";
+import { AdminEventFormsCreate, onRequestGet as AdminEventsEventSlugFormsGet_l } from "./forms";
 import { onRequestGet as AdminEventsEventSlugGet_l } from "./index";
 import { AdminEventTeamList } from "./permissions";
 import { onRequestPost as AdminEventsEventSlugPermissionsPost_l } from "./permissions";
@@ -80,10 +78,10 @@ async function requireEventManagementAccess(c: Context<RequestDbContext>, next: 
 
 app.use("*", requireEventManagementAccess);
 
-app.get("/days", AdminEventsEventSlugDaysGet_l);
-app.put("/days", AdminEventsEventSlugDaysPut_l);
+openapi.get("/days", AdminEventDaysGet);
+openapi.put("/days", AdminEventDaysReplace);
 openapi.get("/forms", AdminEventsEventSlugFormsGet_l);
-app.post("/forms", AdminEventsEventSlugFormsPost_l);
+openapi.post("/forms", AdminEventFormsCreate);
 app.get("/", AdminEventsEventSlugGet_l);
 openapi.get("/permissions", AdminEventTeamList);
 openapi.post(

@@ -3,7 +3,6 @@ import { Hono } from "hono";
 import { dispatchRequestMethod, methodNotAllowed } from "../functions/_lib/http";
 import { onRequest as eventFormsDispatch } from "../functions/api/v1/events/[eventSlug]/forms";
 import { onRequest as retentionDispatch } from "../functions/api/v1/internal/retention/run";
-import { onRequest as eventDaysDispatch } from "../functions/api/v1/admin/events/[eventSlug]/days";
 import { onRequest as registrationConfirmDispatch } from "../functions/api/v1/events/[eventSlug]/registrations/confirm-email";
 import { onRequest as registrationCreateDispatch } from "../functions/api/v1/events/[eventSlug]/registrations";
 import { onRequest as speakerPresentationDispatch } from "../functions/api/v1/proposals/speaker/[token]/presentation";
@@ -68,13 +67,6 @@ describe("HTTP method dispatch", () => {
       method: "GET",
       allow: "POST",
       handler: retentionDispatch,
-    },
-    {
-      label: "multi-method",
-      path: "/days",
-      method: "DELETE",
-      allow: "GET, PUT",
-      handler: eventDaysDispatch,
     },
     {
       label: "registration confirmation",

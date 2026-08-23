@@ -13,6 +13,10 @@ import {
   updateRegistrationById,
 } from "../functions/_lib/services/registrations";
 import { adminRegistrationDetailResponseSchema } from "../assets/shared/schemas/admin-registration-detail";
+import {
+  adminEventCreateResponseSchema,
+  adminEventDaysReplaceResponseSchema,
+} from "../assets/shared/schemas/admin-events";
 import { buildAdminEventRegistrationsPageQuery } from "../functions/_lib/services/registrations/admin-list";
 
 let ADMIN_TOKEN = "event-admin-token";
@@ -71,9 +75,7 @@ describe("admin event management endpoints", () => {
     });
 
     expect(createResponse.status).toBe(201);
-    const createdPayload = (await createResponse.json()) as {
-      event: { slug: string; settings: Record<string, unknown> };
-    };
+    const createdPayload = adminEventCreateResponseSchema.parse(await createResponse.json());
     expect(createdPayload.event.slug).toBe("pqc-2027");
     expect(createdPayload.event.settings.venue).toBe("Amsterdam Congress Center");
 
@@ -100,6 +102,23 @@ describe("admin event management endpoints", () => {
     };
     expect(listPayload.events.map((event) => event.slug)).toEqual(expect.arrayContaining(["pqc-2026", "pqc-2027"]));
     expect(listPayload.page.total).toBeGreaterThanOrEqual(2);
+  });
+
+  it("validates admin event and form mutations through the canonical JSON boundary", async () => {
+    await setupAdmin();
+
+    for (const [path, method] of [
+      ["/api/v1/admin/events", "POST"],
+      ["/api/v1/admin/forms", "POST"],
+      ["/api/v1/admin/events/pqc-2026/forms", "POST"],
+      ["/api/v1/admin/events/pqc-2026/days", "PUT"],
+    ] as const) {
+      const response = await callAdmin(path, { method, body: "{not-json" });
+      expect(response.status, `${method} ${path}`).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: "INVALID_JSON", message: "Request body must be valid JSON" },
+      });
+    }
   });
 
   it("P6M-P2-04: bounds the events list with ?limit=/?offset= via the query schema (data.query, not a fetch-everything scan)", async () => {
@@ -390,10 +409,7 @@ describe("admin event management endpoints", () => {
     });
 
     expect(daysResponse.status).toBe(200);
-    const daysPayload = (await daysResponse.json()) as {
-      success: boolean;
-      days: Array<{ date: string; label: string }>;
-    };
+    const daysPayload = adminEventDaysReplaceResponseSchema.parse(await daysResponse.json());
     expect(daysPayload.success).toBe(true);
     expect(daysPayload.days.map((day) => day.date)).toEqual(["2026-12-01", "2026-12-02"]);
 

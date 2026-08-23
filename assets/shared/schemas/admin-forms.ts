@@ -111,7 +111,10 @@ export const adminFormDetailResponseSchema = z.object({
 export type AdminFormDetailResponse = z.infer<typeof adminFormDetailResponseSchema>;
 export const adminFormUpdateResponseSchema = successResponseSchema.extend(adminFormDetailResponseSchema.shape);
 export const adminFormDeleteResponseSchema = z.object({ action: z.string(), message: z.string().optional() });
-export const adminFormCreateResponseSchema = z.object({ key: z.string() });
+export const adminFormCreateResponseSchema = successResponseSchema.extend({
+  formId: databaseIdSchema,
+  key: z.string(),
+});
 
 export const adminFormsListResponseSchema = paginatedResponseSchema("forms", adminFormSummarySchema);
 

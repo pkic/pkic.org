@@ -8,33 +8,35 @@
  *   Days removed from the list are deleted only if they have no registered
  *   attendees; otherwise they are skipped and reported in the response.
  */
-import { parseJsonBody } from "../../../../../_lib/validation";
-import { dispatchRequestMethod, json } from "../../../../../_lib/http";
+import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { listAdminEventDaysWithCounts } from "../../../../../_lib/services/event-days";
 import { replaceConfiguredEventDays } from "../../../../../_lib/services/events/day-configuration";
-import { adminEventDaysReplaceSchema } from "../../../../../../assets/shared/schemas/admin-events";
+import {
+  adminEventDaysReplaceResponseSchema,
+  adminEventDaysResponseSchema,
+} from "../../../../../../assets/shared/schemas/admin-events";
+import {
+  adminEventDaysGetRouteSchema,
+  adminEventDaysReplaceRouteSchema,
+} from "../../../../../../assets/shared/schemas/route-contracts";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 
-export async function onRequestGet(c: AdminContext): Promise<Response> {
+export const AdminEventDaysGet = openApiRoute(adminEventDaysGetRouteSchema, async (c: AdminContext, data) => {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
+  const event = await getEventBySlug(requestDb(c), data.params.eventSlug);
   const days = await listAdminEventDaysWithCounts(requestDb(c), event.id);
-  return json({ days });
-}
+  return json(adminEventDaysResponseSchema.parse({ days }));
+});
 
-export async function onRequestPut(c: AdminContext): Promise<Response> {
+export const AdminEventDaysReplace = openApiRoute(adminEventDaysReplaceRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const body = await parseJsonBody(c.req, adminEventDaysReplaceSchema);
-  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
+  const event = await getEventBySlug(requestDb(c), data.params.eventSlug);
 
-  const { skipped } = await replaceConfiguredEventDays(requestDb(c), admin.id, event, body);
+  const { skipped } = await replaceConfiguredEventDays(requestDb(c), admin.id, event, data.body);
 
   const updatedDays = await listAdminEventDaysWithCounts(requestDb(c), event.id);
-  return json({ success: true, days: updatedDays, skipped });
-}
-
-export async function onRequest(c: AdminContext): Promise<Response> {
-  return dispatchRequestMethod(c, { GET: onRequestGet, PUT: onRequestPut });
-}
+  return json(adminEventDaysReplaceResponseSchema.parse({ success: true, days: updatedDays, skipped }));
+});

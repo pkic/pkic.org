@@ -1,4 +1,3 @@
-import { parseJsonBody } from "../../../_lib/validation";
 import { json } from "../../../_lib/http";
 import { requireAdminFromRequest } from "../../../_lib/auth/admin";
 import { requirePermission } from "../../../_lib/auth/permissions";
@@ -7,11 +6,11 @@ import { createAdminEvent } from "../../../_lib/services/events";
 import { getAdminEventDetail } from "../../../_lib/services/events/admin-detail";
 import { listAdminEvents } from "../../../_lib/services/events/admin-list";
 import {
-  adminCreateEventSchema,
   adminEventCreateResponseSchema,
   adminEventsListQuerySchema,
   adminEventsListResponseSchema,
 } from "../../../../assets/shared/schemas/admin-events";
+import { adminEventCreateRouteSchema } from "../../../../assets/shared/schemas/route-contracts";
 import { requestDb, type AdminContext } from "../../../_lib/db/context";
 
 /**
@@ -46,10 +45,10 @@ export const AdminEventsListGet = openApiRoute(
  *
  * Creates a new event from the admin console. The slug must be unique.
  */
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+export const AdminEventsCreatePost = openApiRoute(adminEventCreateRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "events:write");
-  const body = await parseJsonBody(c.req, adminCreateEventSchema);
+  const body = data.body;
 
   const settings: Record<string, unknown> = {};
   if (body.venue) settings["venue"] = body.venue;
@@ -71,4 +70,4 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   );
 
   return json(adminEventCreateResponseSchema.parse({ event: await getAdminEventDetail(requestDb(c), body.slug) }), 201);
-}
+});
