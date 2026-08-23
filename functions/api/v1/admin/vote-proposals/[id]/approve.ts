@@ -7,7 +7,10 @@ import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { approveVoteProposal, getProposalScopeForPermissionCheck } from "../../../../../_lib/services/votes";
-import { adminApproveProposalRouteSchema } from "../../../../../../assets/shared/schemas/votes-admin";
+import {
+  adminApproveProposalRouteSchema,
+  adminVoteProposalApproveResponseSchema,
+} from "../../../../../../assets/shared/schemas/votes-admin";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 export const AdminVoteProposalApprovePost = openApiRoute(
@@ -26,6 +29,6 @@ export const AdminVoteProposalApprovePost = openApiRoute(
 
     const result = await approveVoteProposal(db, admin, id);
 
-    return json(result);
+    return json(adminVoteProposalApproveResponseSchema.parse(result));
   },
 );

@@ -1,6 +1,6 @@
 import { useState } from "preact/hooks";
 import { Spinner } from "../../../../../components/Spinner";
-import { api } from "../../../../api";
+import { api, apiCommand } from "../../../../api";
 import { toast } from "../../../../ui";
 import type { BadgeRoleInfo } from "../../../../types";
 import { useData } from "../../../../../hooks/useData";
@@ -9,6 +9,7 @@ import {
   adminEventRegistrationStatusLabel,
 } from "../../../../../../shared/schemas/admin-events";
 import { AuditLogTable } from "../../../../components/AuditLogTable";
+import { badgeRoleInfoSchema } from "../../../../../../shared/schemas/route-contracts-admin-registrations";
 
 const ROLE_BADGE_COLOR: Record<string, string> = {
   attendee: "primary",
@@ -27,7 +28,7 @@ export function BadgeRolePanel({ slug, regId }: { slug: string; regId: string })
 
   const { loading } = useData(
     () =>
-      api<BadgeRoleInfo>(`/api/v1/admin/events/${slug}/registrations/${regId}/badge-role`).then((d) => {
+      api(`/api/v1/admin/events/${slug}/registrations/${regId}/badge-role`, badgeRoleInfoSchema).then((d) => {
         setInfo(d);
         setSelectedRole(d.admin_override ?? "");
         return d;
@@ -39,7 +40,7 @@ export function BadgeRolePanel({ slug, regId }: { slug: string; regId: string })
     setSaving(true);
     setSaveStatus("");
     try {
-      const res = await api<BadgeRoleInfo>(`/api/v1/admin/events/${slug}/registrations/${regId}/badge-role`, {
+      const res = await api(`/api/v1/admin/events/${slug}/registrations/${regId}/badge-role`, badgeRoleInfoSchema, {
         method: "PATCH",
         body: JSON.stringify({ role: selectedRole || null }),
       });
@@ -153,7 +154,7 @@ export function RegistrationEmailEditor({
     setSaving(true);
     setError("");
     try {
-      await api(`/api/v1/admin/events/${slug}/registrations/${regId}`, {
+      await apiCommand(`/api/v1/admin/events/${slug}/registrations/${regId}`, {
         method: "PATCH",
         body: JSON.stringify({ action: "update", email: trimmed }),
       });
@@ -224,7 +225,7 @@ export function RegistrationForceStatusPanel({
     setSaving(true);
     setError("");
     try {
-      await api(`/api/v1/admin/events/${slug}/registrations/${regId}`, {
+      await apiCommand(`/api/v1/admin/events/${slug}/registrations/${regId}`, {
         method: "PATCH",
         body: JSON.stringify({ action: "force_status", status: selected }),
       });

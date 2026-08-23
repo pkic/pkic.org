@@ -57,10 +57,9 @@ async function showStatus(root: HTMLElement, apiBase: string, { id, token }: Loo
   resultContainer.classList.remove("d-none");
 
   try {
-    const data = memberApplicationStatusResponseSchema.parse(
-      await getJson<unknown>(
-        `${apiBase}/members/applications/${encodeURIComponent(id)}/status?token=${encodeURIComponent(token)}`,
-      ),
+    const data = await getJson(
+      `${apiBase}/members/applications/${encodeURIComponent(id)}/status?token=${encodeURIComponent(token)}`,
+      memberApplicationStatusResponseSchema,
     );
 
     const summaryHost = document.createElement("div");

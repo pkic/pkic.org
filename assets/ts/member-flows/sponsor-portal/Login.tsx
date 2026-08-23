@@ -19,6 +19,7 @@ import { useState } from "preact/hooks";
 import { postJson } from "../../shared/api-client";
 import { MagicLinkSubmitButton, SignInError } from "../../components/MagicLinkFeedback";
 import { useMagicLinkRequest } from "../../hooks/useMagicLinkRequest";
+import { successResponseSchema } from "../../../shared/schemas/api-common";
 
 function prefilledEvent(): string {
   return new URLSearchParams(window.location.search).get("event") ?? "";
@@ -32,12 +33,13 @@ export function Login() {
   async function handleSubmit(e: Event): Promise<void> {
     e.preventDefault();
     if (!email.trim() || !eventSlug.trim()) return;
-    await magicLink.request(() =>
-      postJson("/api/v1/auth/sponsor-portal/request-link", {
-        email: email.trim(),
-        eventId: eventSlug.trim(),
-      }),
-    );
+    await magicLink.request(async () => {
+      await postJson(
+        "/api/v1/auth/sponsor-portal/request-link",
+        { email: email.trim(), eventId: eventSlug.trim() },
+        successResponseSchema,
+      );
+    });
   }
 
   return (

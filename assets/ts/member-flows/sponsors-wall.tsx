@@ -298,9 +298,9 @@ function useWallEntries(apiBase: string, memberLimit: number): MemberWallEntry[]
     let cancelled = false;
     async function load() {
       try {
-        const response = await getJson<unknown>(`${apiBase}/members/wall?memberLimit=${memberLimit}`);
+        const response = await getJson(`${apiBase}/members/wall?memberLimit=${memberLimit}`, memberWallResponseSchema);
         if (!cancelled) {
-          setEntries(memberWallResponseSchema.parse(response).entries);
+          setEntries(response.entries);
         }
       } catch (e) {
         console.error("[sponsors-wall]", e);

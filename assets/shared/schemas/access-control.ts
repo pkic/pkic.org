@@ -144,6 +144,7 @@ export const roleResponseSchema = z.object({
   createdAt: z.string(),
 });
 export type Role = z.infer<typeof roleResponseSchema>;
+export const roleResponseEnvelopeSchema = z.object({ role: roleResponseSchema });
 
 export const rolesCreateRouteSchema = {
   tags: ["Access Control"],
@@ -153,7 +154,7 @@ export const rolesCreateRouteSchema = {
     body: { content: { "application/json": { schema: roleCreateSchema } }, required: true },
   },
   responses: {
-    "201": { description: "Role created.", content: { "application/json": { schema: roleResponseSchema } } },
+    "201": { description: "Role created.", content: { "application/json": { schema: roleResponseEnvelopeSchema } } },
     "409": { description: "A role with this name already exists." },
   },
 };
@@ -252,6 +253,9 @@ export const userRoleResponseSchema = roleAssignmentContextSchema.extend({
 });
 
 export type UserRoleAssignment = z.infer<typeof userRoleResponseSchema>;
+/** Response envelope returned by role assignment and expiry-update commands. */
+export const userRoleResponseEnvelopeSchema = z.object({ role: userRoleResponseSchema });
+export type UserRoleResponseEnvelope = z.infer<typeof userRoleResponseEnvelopeSchema>;
 
 export const ADMIN_USER_ROLE_ASSIGNMENTS_SORT_COLUMNS = [
   "role_name",
@@ -274,7 +278,10 @@ export const userRolesAssignRouteSchema = {
     body: { content: { "application/json": { schema: userRoleAssignSchema } }, required: true },
   },
   responses: {
-    "201": { description: "Role assigned.", content: { "application/json": { schema: userRoleResponseSchema } } },
+    "201": {
+      description: "Role assigned.",
+      content: { "application/json": { schema: userRoleResponseEnvelopeSchema } },
+    },
   },
 };
 
@@ -320,7 +327,10 @@ export const userRoleUpdateExpiryRouteSchema = {
     body: { content: { "application/json": { schema: userRoleUpdateExpirySchema } }, required: true },
   },
   responses: {
-    "200": { description: "Expiry updated.", content: { "application/json": { schema: userRoleResponseSchema } } },
+    "200": {
+      description: "Expiry updated.",
+      content: { "application/json": { schema: userRoleResponseEnvelopeSchema } },
+    },
     "404": { description: "Assignment not found." },
   },
 };

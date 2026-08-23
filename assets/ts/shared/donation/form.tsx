@@ -16,6 +16,8 @@
 import { render } from "preact";
 import { postJson, getJson } from "../api-client";
 import { donationCheckoutSchema } from "../../../shared/schemas/donation";
+import { donationCheckoutEmbeddedResponseSchema } from "../../../shared/schemas/donation";
+import { geoResponseSchema } from "../../../shared/schemas/geolocation";
 import {
   CURRENCIES,
   currencyForCountry,
@@ -83,7 +85,7 @@ async function initForm(root: HTMLElement): Promise<void> {
   // ── Detect currency from geo ───────────────────────────────────────────
   let defaultCurrency = "usd";
   try {
-    const geo = await getJson<{ country: string | null }>(`${API_BASE}/geo`);
+    const geo = await getJson(`${API_BASE}/geo`, geoResponseSchema);
     defaultCurrency = currencyForCountry(geo.country);
   } catch {
     // Geo detection is best-effort; default to USD
@@ -221,10 +223,7 @@ async function initForm(root: HTMLElement): Promise<void> {
         metadata: config.source ? { source: config.source } : undefined,
         embedded: true,
       });
-      const res = await postJson<{ clientSecret: string; publishableKey: string }>(
-        `${API_BASE}/donations/checkout`,
-        payload,
-      );
+      const res = await postJson(`${API_BASE}/donations/checkout`, payload, donationCheckoutEmbeddedResponseSchema);
       await mountEmbeddedCheckout(res.clientSecret, res.publishableKey);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Something went wrong. Please try again.";

@@ -22,8 +22,7 @@ function ApplicationDetailView({ id, onBack }: { id: string; onBack: () => void 
 
   useEffect(() => {
     let cancelled = false;
-    getJson<unknown>(`/api/v1/me/applications/${id}`)
-      .then((response) => myApplicationDetailSchema.parse(response))
+    getJson(`/api/v1/me/applications/${id}`, myApplicationDetailSchema)
       .then((d) => {
         if (!cancelled) setDetail(d);
       })

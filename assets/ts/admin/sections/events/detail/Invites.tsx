@@ -2,7 +2,9 @@ import { useState, useRef } from "preact/hooks";
 import { Badge } from "../../../../components/Badge";
 import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataTable";
 import { Tabs } from "../../../../components/Tabs";
+import { apiCommand } from "../../../api";
 import { api } from "../../../api";
+import { adminInvitePreviewResponseSchema } from "../../../../../shared/schemas/admin-events";
 import { fmt, toast } from "../../../ui";
 import type { AdminInviteEntry, InviteRecord } from "../../../types";
 import { parseContactText } from "../../../../shared/invite-parser";
@@ -126,16 +128,14 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
     setInviteDigest(null);
     try {
       const invites = validRows.map(({ email, firstName, lastName }) => ({ email, firstName, lastName }));
-      const res = await api<{
-        subject: string;
-        html: string;
-        text: string;
-        previewToken: string;
-        inviteDigest: string;
-      }>(`/api/v1/admin/events/${slug}/invites/${inviteType}s/preview`, {
-        method: "POST",
-        body: JSON.stringify({ invites }),
-      });
+      const res = await api(
+        `/api/v1/admin/events/${slug}/invites/${inviteType}s/preview`,
+        adminInvitePreviewResponseSchema,
+        {
+          method: "POST",
+          body: JSON.stringify({ invites }),
+        },
+      );
       setPreview(res);
       setPreviewToken(res.previewToken);
       setInviteDigest(res.inviteDigest);
@@ -164,7 +164,7 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
       let total = 0;
       for (let i = 0; i < invites.length; i += CHUNK) {
         const chunk = invites.slice(i, i + CHUNK);
-        await api(`/api/v1/admin/events/${slug}/invites/${inviteType}s/bulk`, {
+        await apiCommand(`/api/v1/admin/events/${slug}/invites/${inviteType}s/bulk`, {
           method: "POST",
           body: JSON.stringify({ previewToken, inviteDigest, invites: chunk }),
         });
@@ -320,7 +320,7 @@ function InviteList({ slug, inviteType }: { slug: string; inviteType: InviteType
   async function handleRevoke(id: string) {
     if (!confirm("Revoke this invite?")) return;
     try {
-      await api(`/api/v1/admin/events/${slug}/invites/${id}/revoke`, { method: "POST", body: "{}" });
+      await apiCommand(`/api/v1/admin/events/${slug}/invites/${id}/revoke`, { method: "POST", body: "{}" });
       toast("Invite revoked", "success");
       tableRef.current?.reload();
     } catch (e) {

@@ -4,7 +4,6 @@ import type { SponsorshipCompany } from "../../types";
 import {
   sponsorshipResponseSchema,
   sponsorshipsListResponseSchema,
-  type SponsorshipResponse,
   type SponsorshipsListResponse,
 } from "../../../../shared/schemas/admin-sponsorships";
 import type { PageInfo } from "../../../../shared/schemas/pagination";
@@ -52,9 +51,7 @@ export function useCompanySponsorships(filters: { type: string; stage: string })
       try {
         if (company.key.startsWith("sponsorship:")) {
           const id = company.key.slice("sponsorship:".length);
-          const data: SponsorshipResponse = sponsorshipResponseSchema.parse(
-            await api(`/api/v1/admin/sponsorships/${id}`),
-          );
+          const data = await api(`/api/v1/admin/sponsorships/${id}`, sponsorshipResponseSchema);
           if (requestId !== requestIdRef.current) return;
           setCompanySponsorships([data.sponsorship]);
           setCompanyPage(null);
@@ -62,7 +59,7 @@ export function useCompanySponsorships(filters: { type: string; stage: string })
           return;
         }
         const url = buildCompanySponsorshipsUrl(company.key, filters, offset);
-        const data = sponsorshipsListResponseSchema.parse(await api(url));
+        const data = await api(url, sponsorshipsListResponseSchema);
         if (requestId !== requestIdRef.current) return;
         setCompanySponsorships((prev) => mergeCompanySponsorshipsPage(prev, offset, data).sponsorships);
         setCompanyPage(data.page);

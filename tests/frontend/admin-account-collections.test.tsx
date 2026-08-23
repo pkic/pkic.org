@@ -71,8 +71,21 @@ describe("admin account collection pagination", () => {
                 first_name: "History",
                 last_name: "User",
                 organization_name: null,
+                role: "user",
+                active: 1,
+                created_at: "2026-01-01T00:00:00.000Z",
+                member_id: null,
+                member_category: null,
+                member_status: null,
+                member_organization_id: null,
+                member_organization_name: null,
+                links: [],
+                membership: null,
+                type: "contact_only",
+                eventParticipationCount: 0,
               },
             ],
+            page: page(url, 1, 1),
           });
         }
         if (url.pathname === "/api/v1/admin/roles") {

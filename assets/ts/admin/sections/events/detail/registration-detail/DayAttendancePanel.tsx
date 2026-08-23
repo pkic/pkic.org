@@ -1,6 +1,6 @@
 import { useState } from "preact/hooks";
 import { DataTable } from "../../../../../components/Table";
-import { api } from "../../../../api";
+import { apiCommand } from "../../../../api";
 import { fmt, toast } from "../../../../ui";
 import type { AdminEventDay } from "../../../../types";
 import type { AttendanceType } from "../../../../../../shared/schemas/registration";
@@ -57,7 +57,7 @@ export function DayAttendancePanel({
   async function applyChange(dayDate: string, action: DayOption | "waitlist") {
     setSaving((s) => ({ ...s, [dayDate]: true }));
     try {
-      await api(`/api/v1/admin/events/${slug}/registrations/${regId}/day-attendance`, {
+      await apiCommand(`/api/v1/admin/events/${slug}/registrations/${regId}/day-attendance`, {
         method: "PATCH",
         body: JSON.stringify({ action: action === "none" ? "remove" : action, dayDates: [dayDate] }),
       });
@@ -91,7 +91,7 @@ export function DayAttendancePanel({
     if (admitDayDates.length === 0) return;
     setAdmitting(true);
     try {
-      await api(`/api/v1/admin/events/${slug}/registrations/${regId}/admit`, {
+      await apiCommand(`/api/v1/admin/events/${slug}/registrations/${regId}/admit`, {
         method: "POST",
         body: JSON.stringify({
           mode: "capacity_exempt",

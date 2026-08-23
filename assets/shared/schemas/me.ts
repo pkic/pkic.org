@@ -4,6 +4,7 @@
  * target-user path parameter.
  */
 import { z } from "zod";
+import { successResponseSchema } from "./api-common";
 import { httpOrSameOriginUrlSchema } from "./urls";
 import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
@@ -313,6 +314,8 @@ export const addCoworkerRouteSchema = {
 // ── Organization profile & content moderation ────────────────
 
 export const myOrganizationReviewSchema = organizationContentReviewSchema;
+export const myOrganizationLogoUploadResponseSchema = successResponseSchema.extend({ r2Key: z.string().min(1) });
+export const myHeadshotUploadResponseSchema = successResponseSchema.extend({ r2Key: z.string().min(1) });
 
 export const myOrganizationProfileSchema = z
   .object({
@@ -339,6 +342,7 @@ export const myOrganizationProfileGetRouteSchema = {
 };
 
 export const myOrganizationContentChangeSchema = organizationEditableContentSchema;
+export const myOrganizationContentChangeResponseSchema = z.object({ review: myOrganizationReviewSchema });
 
 export const myOrganizationContentChangeRouteSchema = {
   tags: ["Me"],
@@ -349,7 +353,10 @@ export const myOrganizationContentChangeRouteSchema = {
     body: { content: { "application/json": { schema: myOrganizationContentChangeSchema } }, required: true },
   },
   responses: {
-    "200": { description: "Submitted for review." },
+    "200": {
+      description: "Submitted for review.",
+      content: { "application/json": { schema: myOrganizationContentChangeResponseSchema } },
+    },
     "403": { description: "Caller is not an org contact, or has no organization." },
     "409": { description: "A submission is already pending review." },
     "422": { description: "No editable fields were submitted." },
@@ -394,7 +401,10 @@ export const myOrganizationLogoUploadRouteSchema = {
   description:
     "multipart/form-data with a single 'file' field. Held in R2 staging and folds into the org's single pending content review until a staff admin approves it.",
   responses: {
-    "200": { description: "Staged." },
+    "200": {
+      description: "Staged.",
+      content: { "application/json": { schema: myOrganizationLogoUploadResponseSchema } },
+    },
     "403": { description: "Caller is not an org contact, or has no organization." },
     "413": { description: "File too large." },
     "415": { description: "Unsupported file type." },
@@ -403,6 +413,9 @@ export const myOrganizationLogoUploadRouteSchema = {
 
 export const mySecondaryContactNominateSchema = z.object({
   userId: databaseIdSchema.nullable(),
+});
+export const mySecondaryContactNominateResponseSchema = z.object({
+  pendingSecondaryContactUserId: databaseIdSchema.nullable(),
 });
 
 export const mySecondaryContactNominateRouteSchema = {
@@ -414,7 +427,10 @@ export const mySecondaryContactNominateRouteSchema = {
     body: { content: { "application/json": { schema: mySecondaryContactNominateSchema } }, required: true },
   },
   responses: {
-    "200": { description: "Nomination recorded." },
+    "200": {
+      description: "Nomination recorded.",
+      content: { "application/json": { schema: mySecondaryContactNominateResponseSchema } },
+    },
     "403": { description: "Only the primary contact may nominate a secondary contact." },
     "422": {
       description: "Nominee is not an active member of the same organization, or is already the primary contact.",
@@ -425,6 +441,7 @@ export const mySecondaryContactNominateRouteSchema = {
 export const myVotingDelegateUpdateSchema = z.object({
   userId: databaseIdSchema.nullable(),
 });
+export const myVotingDelegateUpdateResponseSchema = z.object({ votingDelegateUserId: databaseIdSchema.nullable() });
 
 export const myVotingDelegateUpdateRouteSchema = {
   tags: ["Me"],
@@ -435,7 +452,10 @@ export const myVotingDelegateUpdateRouteSchema = {
     body: { content: { "application/json": { schema: myVotingDelegateUpdateSchema } }, required: true },
   },
   responses: {
-    "200": { description: "Voting delegate updated." },
+    "200": {
+      description: "Voting delegate updated.",
+      content: { "application/json": { schema: myVotingDelegateUpdateResponseSchema } },
+    },
     "403": { description: "Caller is not an org contact, or has no organization." },
     "422": { description: "Nominee is not an active member of the same organization." },
   },
@@ -446,12 +466,14 @@ export const myHeadshotUploadRouteSchema = {
   summary: "Upload my headshot",
   description: "multipart/form-data with a single 'file' field. JPEG, PNG, or WebP, up to 5MB.",
   responses: {
-    "200": { description: "Uploaded." },
+    "200": {
+      description: "Uploaded.",
+      content: { "application/json": { schema: myHeadshotUploadResponseSchema } },
+    },
     "413": { description: "File too large." },
     "415": { description: "Unsupported file type." },
   },
 };
-
 // ── Notification preferences (Account Settings) ─────────
 
 export const myNotificationPreferencesSchema = z.object({

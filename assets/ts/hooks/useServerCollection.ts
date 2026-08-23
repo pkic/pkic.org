@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 
-export type CollectionLoader = (url: string, signal: AbortSignal) => Promise<unknown>;
+export type CollectionLoader = <T>(url: string, signal: AbortSignal, responseSchema: z.ZodType<T>) => Promise<T>;
 
 export interface ServerCollectionOptions<T> {
   endpoint: string;
@@ -88,8 +88,7 @@ export function useServerCollection<T>({
     const request = requestGate.current!.start();
     setState((current) => ({ ...current, loading: true, error: null }));
 
-    void load(url, request.signal)
-      .then((raw) => responseSchema.parse(raw))
+    void load(url, request.signal, responseSchema)
       .then((data) => {
         if (request.isCurrent()) {
           setState({ data, loading: false, error: null });

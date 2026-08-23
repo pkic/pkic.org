@@ -5,6 +5,7 @@ import {
   emailMessageTypeSchema,
   frontendPathPattern,
   slugPattern,
+  successResponseSchema,
   termKeyPattern,
   trimmedString,
   versionPattern,
@@ -62,6 +63,33 @@ export const adminEventSummarySchema = z.object({
   confirmed_registrations: z.number(),
   total_registrations: z.number(),
   pending_invites: z.number(),
+});
+export const adminEventDetailSchema = z.object({
+  id: eventIdSchema,
+  slug: z.string(),
+  name: z.string(),
+  timezone: z.string(),
+  starts_at: z.string().nullable(),
+  ends_at: z.string().nullable(),
+  registration_mode: z.string(),
+  invite_limit_attendee: z.number(),
+  base_path: z.string().nullable(),
+  user_retention_days: z.number().nullable(),
+  venue: z.string().nullable(),
+  virtual_url: z.string().nullable(),
+  hero_image_url: z.string().nullable(),
+  location: z.string().nullable(),
+  session_types: z.array(z.object({ label: z.string(), requiresPresentation: z.boolean() })).nullable(),
+  settings: z.record(z.string(), z.unknown()),
+});
+export type AdminEventDetail = z.infer<typeof adminEventDetailSchema>;
+export const adminEventDetailResponseSchema = z.object({ event: adminEventDetailSchema });
+export const adminEventCreateResponseSchema = adminEventDetailResponseSchema;
+export const adminEventUpdateResponseSchema = successResponseSchema.extend({ event: adminEventDetailSchema });
+export const adminEventEmailSupportDaysResponseSchema = z.object({
+  days: z.array(
+    z.object({ day_date: z.string().optional(), date: z.string().optional(), label: z.string().nullable().optional() }),
+  ),
 });
 export type AdminEventSummary = z.infer<typeof adminEventSummarySchema>;
 export const adminEventsListResponseSchema = paginatedResponseSchema("events", adminEventSummarySchema);
@@ -369,6 +397,83 @@ export const adminEventDaysReplaceSchema = z
       label: "Event day",
     });
   });
+
+export const adminEventDaysResponseSchema = z.object({
+  days: z.array(
+    z.object({
+      id: z.string(),
+      date: z.string(),
+      label: z.string().nullable(),
+      startsAt: z.string().nullable(),
+      endsAt: z.string().nullable(),
+      sortOrder: z.number(),
+      attendanceOptions: z.array(adminAttendanceOptionSchema),
+      attendanceCounts: z.record(z.string(), z.number()),
+    }),
+  ),
+});
+export const adminEventDaysReplaceResponseSchema = z.object({ skipped: z.array(z.string()).optional() });
+export const adminEventTermsResponseSchema = z.object({
+  terms: z.object({
+    attendee: z.array(
+      z.object({
+        id: z.string(),
+        audience_type: z.string(),
+        term_key: z.string(),
+        version: z.string(),
+        required: z.number(),
+        content_ref: z.string().nullable(),
+        display_text: z.string().nullable(),
+        help_text: z.string().nullable(),
+      }),
+    ),
+    speaker: z.array(
+      z.object({
+        id: z.string(),
+        audience_type: z.string(),
+        term_key: z.string(),
+        version: z.string(),
+        required: z.number(),
+        content_ref: z.string().nullable(),
+        display_text: z.string().nullable(),
+        help_text: z.string().nullable(),
+      }),
+    ),
+    presentation: z.array(
+      z.object({
+        id: z.string(),
+        audience_type: z.string(),
+        term_key: z.string(),
+        version: z.string(),
+        required: z.number(),
+        content_ref: z.string().nullable(),
+        display_text: z.string().nullable(),
+        help_text: z.string().nullable(),
+      }),
+    ),
+  }),
+});
+export const adminEventEmailPreviewResponseSchema = z.object({
+  subject: z.string(),
+  html: z.string(),
+  text: z.string(),
+  recipientCount: z.number().optional(),
+  previewToken: z.string().optional(),
+});
+export const adminEventEmailSendResponseSchema = z.object({
+  queuedRecipients: z.number().optional(),
+  queuedBatches: z.number().optional(),
+});
+export const adminInvitePreviewResponseSchema = z.object({
+  subject: z.string(),
+  html: z.string(),
+  text: z.string(),
+  previewToken: z.string(),
+  inviteDigest: z.string(),
+});
+export const adminEventSponsorTiersResponseSchema = z.object({
+  tiers: z.array(z.object({ tierName: z.string(), hasAttendeeDataAccess: z.boolean() })),
+});
 
 export const adminCreateEventSchema = z.object({
   slug: z.string().trim().regex(slugPattern),

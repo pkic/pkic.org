@@ -71,7 +71,7 @@ describe("registration waitlist claim UI", () => {
       return jsonResponse({
         success: true,
         registration: {
-          id: "registration-1",
+          id: "00000000-0000-0000-0000-000000000000",
           event_id: "event-1",
           status: "registered",
           cancellation_reason_code: null,
@@ -106,6 +106,8 @@ describe("registration waitlist claim UI", () => {
             offerExpiresAt: "2026-12-01T10:00:00.000Z",
           },
         ],
+        shareUrl: null,
+        headshotUrl: null,
       });
     });
     vi.stubGlobal("fetch", fetchMock);

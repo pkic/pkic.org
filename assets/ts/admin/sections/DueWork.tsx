@@ -3,6 +3,7 @@ import { ErrorAlert } from "../../components/ErrorAlert";
 import { Spinner } from "../../components/Spinner";
 import { api } from "../api";
 import type { AdminJobsRunResponse } from "../types";
+import { adminJobsRunResponseSchema } from "../../../shared/schemas/admin-jobs";
 import { toast } from "../ui";
 import { DueWorkTable } from "./due-work/DueWorkTable";
 import { JobRunSummary } from "./due-work/JobRunSummary";
@@ -23,7 +24,7 @@ export function DueWork() {
 
   const fetchPreview = useCallback(
     async (rl: number, ol: number, retention: boolean): Promise<AdminJobsRunResponse> => {
-      return api<AdminJobsRunResponse>("/api/v1/internal/jobs/run", {
+      return api("/api/v1/internal/jobs/run", adminJobsRunResponseSchema, {
         method: "POST",
         body: JSON.stringify({
           reminderLimit: rl,
@@ -59,7 +60,7 @@ export function DueWork() {
   async function doRunJobs(dryRun: boolean) {
     setRunning(true);
     try {
-      const result = await api<AdminJobsRunResponse>("/api/v1/internal/jobs/run", {
+      const result = await api("/api/v1/internal/jobs/run", adminJobsRunResponseSchema, {
         method: "POST",
         body: JSON.stringify({
           reminderLimit,
@@ -95,7 +96,7 @@ export function DueWork() {
   async function runMembershipBatch(kind: "consultation" | "ecReview" | "wgChairDigest") {
     setRunningMembershipBatch(kind);
     try {
-      const result = await api<AdminJobsRunResponse>("/api/v1/internal/jobs/run", {
+      const result = await api("/api/v1/internal/jobs/run", adminJobsRunResponseSchema, {
         method: "POST",
         body: JSON.stringify({
           runReminders: false,

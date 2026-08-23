@@ -1,5 +1,8 @@
 import { wireHeadshotController } from "../shared/headshot/controller";
 import { setStatus } from "./boot";
+import { registrationHeadshotUploadResponseSchema } from "../../shared/schemas/registration";
+import { successResponseSchema } from "../../shared/schemas/api-common";
+import { requestJson } from "../shared/api-client";
 
 interface TokenHeadshotSectionOptions {
   root: HTMLElement;
@@ -49,23 +52,17 @@ export function wireTokenHeadshotSection({
       const form = new FormData();
       form.append("file", cropped, "headshot.jpg");
       form.append("consent", "true");
-      const res = await fetch(uploadUrl, {
+      const data = await requestJson(uploadUrl, registrationHeadshotUploadResponseSchema, {
         method: "PUT",
         body: form,
       });
-      const data = (await res.json()) as { success?: boolean; headshotUrl?: string; error?: { message?: string } };
-      if (!res.ok) throw new Error(data.error?.message ?? `HTTP ${res.status}`);
       return { headshotUrl: data.headshotUrl ?? null };
     },
     deleteHeadshot: deleteUrl
       ? async () => {
-          const res = await fetch(deleteUrl, {
+          await requestJson(deleteUrl, successResponseSchema, {
             method: "DELETE",
           });
-          if (!res.ok) {
-            const data = (await res.json()) as { error?: { message?: string } };
-            throw new Error(data.error?.message ?? `HTTP ${res.status}`);
-          }
         }
       : undefined,
     onUploaded: () => {

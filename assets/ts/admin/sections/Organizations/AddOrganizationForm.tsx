@@ -3,7 +3,7 @@
  * Split out of Organizations.tsx (PR #1 review).
  */
 import { useState } from "preact/hooks";
-import { api } from "../../api";
+import { apiCommand } from "../../api";
 import { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../../../shared/schemas/admin-members";
 import type { AdminWorkingGroupSummary } from "../../../../shared/schemas/working-groups";
 import { ProfileLinksInput } from "../../../components/ProfileLinksInput";
@@ -90,7 +90,7 @@ export function AddOrganizationForm({ onCreated, onCancel }: { onCreated: () => 
     }
     await performAdminAction({
       setBusy: setSaving,
-      request: () => api("/api/v1/admin/members", { method: "POST", body: JSON.stringify(body) }),
+      request: () => apiCommand("/api/v1/admin/members", { method: "POST", body: JSON.stringify(body) }),
       successMessage: isIndividual ? "Individual member created" : "Organization created",
       afterSuccess: onCreated,
       onError: setStatus,

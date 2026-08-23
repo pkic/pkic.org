@@ -15,9 +15,11 @@ import { profile as profileSignal, saveProfile } from "../state";
 import { toast } from "../ui";
 import type { MyProfile as MyProfileType, MyProfileUpdateInput } from "../types";
 import { linksToText, textToLinks } from "../../../shared/links-text";
+import { myProfileSchema, addedCoworkerSchema, myHeadshotUploadResponseSchema } from "../../../../shared/schemas/me";
+import { successResponseSchema } from "../../../../shared/schemas/api-common";
 
 async function refreshProfile(): Promise<void> {
-  const refreshed = await getJson<MyProfileType>("/api/v1/me");
+  const refreshed = await getJson("/api/v1/me", myProfileSchema);
   saveProfile(refreshed);
 }
 
@@ -54,7 +56,7 @@ export function MyProfile() {
       if (current!.canEditOrganizationName) {
         input.organizationName = form.organizationName.trim();
       }
-      const updated = await patchJson<MyProfileType>("/api/v1/me", input);
+      const updated = await patchJson("/api/v1/me", input, myProfileSchema);
       saveProfile(updated);
       toast("Profile updated", "success");
     } catch (err) {
@@ -67,7 +69,7 @@ export function MyProfile() {
   async function handleVisibilityToggle(next: boolean): Promise<void> {
     setVisibilitySaving(true);
     try {
-      await patchJson("/api/v1/me/organization-visibility", { showOnOrgProfile: next });
+      await patchJson("/api/v1/me/organization-visibility", { showOnOrgProfile: next }, successResponseSchema);
       await refreshProfile();
       toast(
         next
@@ -94,7 +96,7 @@ export function MyProfile() {
               uploadLabel="📷 Upload headshot"
               helpText="JPEG, PNG, or WebP, up to 5MB."
               uploadHeadshot={async (file) => {
-                await uploadFile("/api/v1/me/headshot", file);
+                await uploadFile("/api/v1/me/headshot", file, myHeadshotUploadResponseSchema);
                 await refreshProfile();
                 return { headshotUrl: profileSignal.value?.headshotUrl };
               }}
@@ -274,7 +276,7 @@ function ActiveMembershipSwitcher({ current }: { current: MyProfileType }) {
     setError(null);
     setSwitching(memberId);
     try {
-      await putJson<MyProfileType>("/api/v1/me/active-membership", { memberId });
+      await putJson("/api/v1/me/active-membership", { memberId }, myProfileSchema);
       // A full reload, not window.location.assign to this same route — the
       // caller is already on #/profile, so assigning that same URL is a
       // no-op and would leave every other org-scoped screen (working
@@ -340,10 +342,7 @@ function AddCoworkerForm() {
     setSuccess(null);
     setSubmitting(true);
     try {
-      const created = await postJson<{ name: string; email: string }>("/api/v1/me/organization/members", {
-        name,
-        email,
-      });
+      const created = await postJson("/api/v1/me/organization/members", { name, email }, addedCoworkerSchema);
       setSuccess(`${created.name} (${created.email}) was added to your organization.`);
       form.reset();
       await refreshProfile();

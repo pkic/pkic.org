@@ -20,6 +20,7 @@ import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { processPendingStorageDeletions } from "../functions/_lib/services/storage-deletion-outbox";
 import { runScheduledDueWork } from "../functions/_lib/services/scheduled-due-work";
 import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
+import { contentReviewDecisionResponseSchema } from "../assets/shared/schemas/admin-organizations";
 import {
   drainOrganizationContentReviewNotificationIntents,
   listPendingOrganizationContentReviewNotificationIntents,
@@ -728,6 +729,9 @@ describe("Organization content moderation", () => {
       method: "POST",
     });
     expect(approveResponse.status).toBe(200);
+    expect(contentReviewDecisionResponseSchema.parse(await approveResponse.json())).toMatchObject({
+      review: { id: review.id, status: "approved", reviewerUserId: adminId },
+    });
 
     const orgRows = await queryAll<{ description: string; website: string }>(
       env.DB,
@@ -816,6 +820,9 @@ describe("Organization content moderation", () => {
       body: JSON.stringify({ reviewerNote: "Too promotional" }),
     });
     expect(rejectResponse.status).toBe(200);
+    expect(contentReviewDecisionResponseSchema.parse(await rejectResponse.json())).toMatchObject({
+      review: { id: review.id, status: "rejected", reviewerUserId: adminId, reviewerNote: "Too promotional" },
+    });
 
     const orgRows = await queryAll<{ description: string }>(
       env.DB,

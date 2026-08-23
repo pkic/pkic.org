@@ -95,6 +95,21 @@ export const adminApplicationDetailSchema = adminApplicationSummarySchema.extend
   concerns: z.array(adminApplicationConcernSchema),
   ecDecisions: z.array(adminApplicationEcDecisionSchema),
 });
+export const applicationStageTransitionResponseSchema = z.object({
+  id: databaseIdSchema,
+  stage: applicationStageSchema,
+  onHoldSubtype: onHoldSubtypeSchema.nullable(),
+});
+export const applicationCommunicationCreateResponseSchema = z.object({ id: databaseIdSchema, createdAt: z.string() });
+export const applicationNoteCreateResponseSchema = applicationCommunicationCreateResponseSchema;
+export const adminEcDecisionCreateResponseSchema = adminApplicationEcDecisionSchema;
+export const applicationApproveResponseSchema = z.object({
+  applicationId: databaseIdSchema,
+  memberId: databaseIdSchema,
+  userId: databaseIdSchema,
+  organizationId: databaseIdSchema.nullable(),
+  workingGroupSlugs: z.array(z.string()),
+});
 export type AdminApplicationDetail = z.infer<typeof adminApplicationDetailSchema>;
 export type AdminApplicationEvent = z.infer<typeof adminApplicationEventSchema>;
 export type AdminApplicationCommunication = z.infer<typeof adminApplicationCommunicationSchema>;
@@ -148,7 +163,10 @@ export const applicationStageTransitionRouteSchema = {
     body: { content: { "application/json": { schema: applicationStageTransitionSchema } }, required: true },
   },
   responses: {
-    "200": { description: "Stage transitioned." },
+    "200": {
+      description: "Stage transitioned.",
+      content: { "application/json": { schema: applicationStageTransitionResponseSchema } },
+    },
     "404": { description: "Application not found." },
     "409": { description: "Invalid transition for the application's current stage." },
     "422": { description: "on_hold requires a valid onHoldSubtype." },
@@ -170,7 +188,10 @@ export const applicationCommunicationCreateRouteSchema = {
     body: { content: { "application/json": { schema: applicationCommunicationCreateSchema } }, required: true },
   },
   responses: {
-    "201": { description: "Communication sent and recorded." },
+    "201": {
+      description: "Communication sent and recorded.",
+      content: { "application/json": { schema: applicationCommunicationCreateResponseSchema } },
+    },
     "404": { description: "Application not found." },
   },
 };
@@ -188,7 +209,10 @@ export const applicationNoteCreateRouteSchema = {
     body: { content: { "application/json": { schema: applicationNoteCreateSchema } }, required: true },
   },
   responses: {
-    "201": { description: "Note recorded." },
+    "201": {
+      description: "Note recorded.",
+      content: { "application/json": { schema: applicationNoteCreateResponseSchema } },
+    },
     "404": { description: "Application not found." },
   },
 };
@@ -206,7 +230,10 @@ export const adminEcDecisionCreateRouteSchema = {
     body: { content: { "application/json": { schema: adminEcDecisionCreateSchema } }, required: true },
   },
   responses: {
-    "201": { description: "Decision recorded." },
+    "201": {
+      description: "Decision recorded.",
+      content: { "application/json": { schema: adminEcDecisionCreateResponseSchema } },
+    },
     "404": { description: "Application not found." },
     "409": { description: "Application is not currently in EC review." },
     "400": { description: "Missing required reason for a decline." },
@@ -218,7 +245,10 @@ export const applicationApproveRouteSchema = {
   summary: "Approve an application and run post-approval onboarding",
   request: { params: z.object({ id: z.string() }) },
   responses: {
-    "200": { description: "Application approved and member provisioned." },
+    "200": {
+      description: "Application approved and member provisioned.",
+      content: { "application/json": { schema: applicationApproveResponseSchema } },
+    },
     "404": { description: "Application not found." },
     "409": { description: "Application must be in ec_review to approve." },
   },

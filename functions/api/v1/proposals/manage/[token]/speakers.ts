@@ -14,13 +14,19 @@ import { getProposalByManageToken } from "../../../../../_lib/services/proposals
 import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { getEventById } from "../../../../../_lib/services/events";
-import { coSpeakerInviteSchema } from "../../../../../../assets/shared/schemas/proposal-management";
+import {
+  coSpeakerInviteResponseSchema,
+  coSpeakerInviteSchema,
+} from "../../../../../../assets/shared/schemas/proposal-management";
+import type { SpeakerRole } from "../../../../../../assets/shared/schemas/registration";
 import { requireInternalSecret } from "../../../../../_lib/request";
 import { inviteProposalSpeaker } from "../../../../../_lib/services/proposal-speaker-invitations";
 import { isProposalSpeakerRosterEditableStatus } from "../../../../../../assets/shared/schemas/proposal-status";
 
-export async function onRequestPost(c: any): Promise<Response> {
-  const body = await parseJsonBody(c.req, coSpeakerInviteSchema);
+export async function handleCoSpeakerInvite(
+  c: any,
+  body: { email: string; firstName?: string; lastName?: string; role: SpeakerRole },
+) {
   const proposal = await getProposalByManageToken(c.env.DB, c.req.param("token"), requireInternalSecret(c.env));
 
   if (!isProposalSpeakerRosterEditableStatus(proposal.status)) {
@@ -41,7 +47,12 @@ export async function onRequestPost(c: any): Promise<Response> {
   });
   c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, invited.outboxId));
 
-  return json({ success: true, email: invited.email, role: body.role });
+  return json(coSpeakerInviteResponseSchema.parse({ success: true, email: invited.email, role: body.role }));
+}
+
+export async function onRequestPost(c: any): Promise<Response> {
+  const body = await parseJsonBody(c.req, coSpeakerInviteSchema);
+  return handleCoSpeakerInvite(c, body);
 }
 
 export async function onRequest(c: any): Promise<Response> {

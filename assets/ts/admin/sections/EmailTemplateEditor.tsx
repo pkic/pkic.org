@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { Tabs } from "../../components/Tabs";
 import { Badge } from "../../components/Badge";
 import { ApiDataTable, type ApiTableActions } from "../components/ApiDataTable";
-import { api } from "../api";
+import { api, apiCommand } from "../api";
 import { toast } from "../ui";
 import { highlightTemplateSyntax } from "../email-template-syntax";
 import type { EmailTemplateVersion } from "../types";
@@ -14,6 +14,8 @@ import {
 } from "../email-template-helpers";
 import {
   adminEmailTemplateVersionsListResponseSchema,
+  adminEmailTemplateRenderedResponseSchema,
+  adminEmailTemplateVersionCreateResponseSchema,
   type EmailContentType,
   type EmailMessageType,
 } from "../../../shared/schemas/admin-email-templates";
@@ -145,19 +147,16 @@ export function TemplateEditor({
       const previewContent = isLayout
         ? "<h2>Layout preview</h2><p>This is how body content will appear inside the shared email shell.</p>"
         : body;
-      const result = await api<{ subject: string; html: string; text: string }>(
-        "/api/v1/admin/email-templates/preview",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            subjectTemplate: subject || undefined,
-            content: previewContent,
-            contentType: isLayout ? "html" : contentType,
-            layoutHtml,
-            data,
-          }),
-        },
-      );
+      const result = await api("/api/v1/admin/email-templates/preview", adminEmailTemplateRenderedResponseSchema, {
+        method: "POST",
+        body: JSON.stringify({
+          subjectTemplate: subject || undefined,
+          content: previewContent,
+          contentType: isLayout ? "html" : contentType,
+          layoutHtml,
+          data,
+        }),
+      });
       setPreviewSubject(result.subject);
       setPreviewHtml(result.html);
       setPreviewText(result.text);
@@ -182,8 +181,9 @@ export function TemplateEditor({
     setSaving(true);
     try {
       const effectiveContentType = isLayout ? "html" : contentType;
-      const result = await api<{ success: boolean; version: { version: number } }>(
+      const result = await api(
         `/api/v1/admin/email-templates/${encodeURIComponent(templateKey)}/versions`,
+        adminEmailTemplateVersionCreateResponseSchema,
         {
           method: "POST",
           body: JSON.stringify({
@@ -205,7 +205,7 @@ export function TemplateEditor({
 
   async function doActivate(version: number) {
     try {
-      await api(`/api/v1/admin/email-templates/${encodeURIComponent(templateKey)}/activate`, {
+      await apiCommand(`/api/v1/admin/email-templates/${encodeURIComponent(templateKey)}/activate`, {
         method: "POST",
         body: JSON.stringify({ version }),
       });

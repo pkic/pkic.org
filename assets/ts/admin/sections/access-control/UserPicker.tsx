@@ -1,6 +1,7 @@
 import { useRef, useState } from "preact/hooks";
 import { api } from "../../api";
 import type { AdminUser } from "../../types";
+import { usersListResponseSchema } from "../../../../shared/schemas/admin-users";
 
 export interface PickedUser {
   id: string;
@@ -36,7 +37,7 @@ export function UserPicker({
     }
     timerRef.current = window.setTimeout(async () => {
       try {
-        const data = await api<{ users: AdminUser[] }>(`/api/v1/admin/users?limit=8&q=${encodeURIComponent(term)}`);
+        const data = await api(`/api/v1/admin/users?limit=8&q=${encodeURIComponent(term)}`, usersListResponseSchema);
         setResults(data.users);
         setOpen(true);
       } catch {

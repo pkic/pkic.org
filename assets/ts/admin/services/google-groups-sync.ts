@@ -1,15 +1,9 @@
 import { api } from "../api";
 import { toast } from "../ui";
-
-interface SyncResult {
-  processed: number;
-  succeeded: number;
-  failed: number;
-  skippedUnconfigured: boolean;
-}
+import { mailingListSyncResponseSchema } from "../../../shared/schemas/admin-mailing-lists";
 
 export async function runGoogleGroupsSync(): Promise<void> {
-  const result = await api<SyncResult>("/api/v1/admin/mailing-lists/sync", { method: "POST" });
+  const result = await api("/api/v1/admin/mailing-lists/sync", mailingListSyncResponseSchema, { method: "POST" });
   if (result.skippedUnconfigured) {
     toast("Google Groups sync isn't configured in this environment", "error");
   } else if (result.processed === 0) {

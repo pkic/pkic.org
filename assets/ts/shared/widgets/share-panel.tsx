@@ -19,6 +19,8 @@ import { useState, useCallback, useRef, useEffect } from "preact/hooks";
 import { IconLinkedIn, IconXTwitter, IconBluesky, IconReddit } from "../../components/icons";
 import { parseContactText } from "../invite-parser";
 import type { ParsedContact } from "../invite-parser";
+import { registrationInviteCreateSchema, peerInviteResultSchema } from "../../../shared/schemas/registration";
+import { postJson, ApiClientError } from "../api-client";
 
 export interface SharePanelOptions {
   shareUrl: string;
@@ -396,27 +398,21 @@ function InvitePanel({ manageToken, eventSlug }: { manageToken: string; eventSlu
     setStatus(null);
 
     try {
-      const response = await fetch(`/api/v1/events/${eventSlug}/invites`, {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${manageToken}` },
-        body: JSON.stringify({ invites }),
+      const payload = registrationInviteCreateSchema.parse({ invites });
+      const data = await postJson(`/api/v1/events/${eventSlug}/invites`, payload, peerInviteResultSchema, {
+        authorization: `Bearer ${manageToken}`,
       });
-      const data = (await response.json()) as Record<string, unknown>;
-      if (!response.ok) {
-        const msg =
-          ((data?.error as Record<string, unknown>)?.message as string | undefined) ??
-          "Something went wrong. Please try again.";
-        setStatus({ message: msg, type: "danger" });
-        return;
-      }
-      const count = (data?.created as unknown[])?.length ?? invites.length;
+      const count = data.created.length;
       setStatus({
         message: `✓ Sent ${count} invitation${count !== 1 ? "s" : ""}! They'll receive a registration link shortly.`,
         type: "success",
       });
       setRows([makeRow()]);
-    } catch {
-      setStatus({ message: "Could not send invites. Please try again later.", type: "danger" });
+    } catch (error) {
+      setStatus({
+        message: error instanceof ApiClientError ? error.message : "Could not send invites. Please try again later.",
+        type: "danger",
+      });
     } finally {
       setSending(false);
     }

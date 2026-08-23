@@ -9,7 +9,7 @@ import {
 import { trimmedString } from "./api-common";
 import { addDuplicateStringIssues } from "./refinements";
 import { formFieldRulesSchema } from "./form-field-rules";
-import { formFieldTypeSchema, formPurposeSchema, formStatusSchema } from "./forms";
+import { formFieldDefinitionSchema, formFieldTypeSchema, formPurposeSchema, formStatusSchema } from "./forms";
 
 export const FORM_SUBMISSIONS_SORT_COLUMNS = ["submitter", "status", "submitted_at"] as const;
 export const formSubmissionsSortValueSchema = sortColumnSchema(FORM_SUBMISSIONS_SORT_COLUMNS);
@@ -98,6 +98,12 @@ export const adminFormSummarySchema = z.object({
   submission_count: z.number(),
 });
 export type AdminFormSummary = z.infer<typeof adminFormSummarySchema>;
+export const adminFormDetailResponseSchema = z.object({
+  form: adminFormSummarySchema,
+  fields: z.array(formFieldDefinitionSchema),
+});
+export const adminFormDeleteResponseSchema = z.object({ action: z.string(), message: z.string().optional() });
+export const adminFormCreateResponseSchema = z.object({ key: z.string() });
 
 export const adminFormsListResponseSchema = paginatedResponseSchema("forms", adminFormSummarySchema);
 

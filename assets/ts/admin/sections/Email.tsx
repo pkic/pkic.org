@@ -12,6 +12,10 @@ import { adminStatsResponseSchema } from "../../../shared/schemas/admin-analytic
 import { useServerCollection } from "../../hooks/useServerCollection";
 import { useOffsetPager } from "../../hooks/useOffsetPager";
 import { loadAdminCollection } from "../services/server-collection";
+import {
+  adminResetFailedOutboxResponseSchema,
+  adminRetryOutboxResponseSchema,
+} from "../../../shared/schemas/admin-email-outbox";
 
 // ────────────────────────────────────────────────────────
 // Types
@@ -247,7 +251,7 @@ export function Email() {
   async function doRetry(ids?: string[]) {
     try {
       const body = ids?.length ? { limit: ids.length, ids } : { limit: retryLimit };
-      const r = await api<{ processed?: number; failed?: number; skipped?: number }>("/api/v1/internal/email/retry", {
+      const r = await api("/api/v1/internal/email/retry", adminRetryOutboxResponseSchema, {
         method: "POST",
         body: JSON.stringify(body),
       });
@@ -267,7 +271,7 @@ export function Email() {
     try {
       while (true) {
         setProcessAllStatus(`${totalProcessed} sent so far…`);
-        const r = await api<{ processed?: number; failed?: number }>("/api/v1/internal/email/retry", {
+        const r = await api("/api/v1/internal/email/retry", adminRetryOutboxResponseSchema, {
           method: "POST",
           body: JSON.stringify({ limit: BATCH }),
         });
@@ -286,7 +290,7 @@ export function Email() {
 
   async function doResetFailed(ids?: string[]) {
     try {
-      const r = await api<{ reset?: number; processed?: number }>("/api/v1/internal/email/reset-failed", {
+      const r = await api("/api/v1/internal/email/reset-failed", adminResetFailedOutboxResponseSchema, {
         method: "POST",
         body: JSON.stringify(ids?.length ? { ids } : {}),
       });

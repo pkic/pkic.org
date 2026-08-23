@@ -2,9 +2,10 @@ import { showHeadshotDisclaimer } from "../shared/headshot/upload";
 import { setStatus } from "./boot";
 import { presentationUploadRequest } from "../../shared/presentation-upload";
 import { loadSpeakerPageData } from "./speaker-link-recovery";
-import { getJson } from "../shared/api-client";
+import { getJson, requestJson } from "../shared/api-client";
 import {
   speakerSelfServiceReadResponseSchema,
+  speakerPresentationUploadResponseSchema,
   type SpeakerSelfServiceReadResponse,
 } from "../../shared/schemas/speaker-self-service";
 
@@ -20,9 +21,7 @@ async function main(): Promise<void> {
   const loaded = await loadSpeakerPageData<SpeakerSelfServiceReadResponse>({
     selector: "[data-event-speaker-presentation]",
     request: async (token, boot) =>
-      speakerSelfServiceReadResponseSchema.parse(
-        await getJson<unknown>(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`),
-      ),
+      getJson(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`, speakerSelfServiceReadResponseSchema),
   });
   if (!loaded) return;
   const { boot, token, data, loadingEl, contentEl } = loaded;
@@ -107,12 +106,11 @@ async function main(): Promise<void> {
       if (presentationUploadStatus) presentationUploadStatus.textContent = "Uploading…";
       try {
         const upload = presentationUploadRequest(file);
-        const response = await fetch(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}/presentation`, {
-          method: "PUT",
-          ...upload,
-        });
-        const json = (await response.json()) as { success?: boolean; error?: { message?: string } };
-        if (!response.ok) throw new Error(json.error?.message ?? `HTTP ${response.status}`);
+        await requestJson(
+          `${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}/presentation`,
+          speakerPresentationUploadResponseSchema,
+          { method: "PUT", ...upload },
+        );
         if (presentationUploadStatus) presentationUploadStatus.textContent = "Presentation uploaded successfully.";
         if (presentationMsg)
           presentationMsg.textContent = "Presentation uploaded. You can replace it with a newer version if needed.";

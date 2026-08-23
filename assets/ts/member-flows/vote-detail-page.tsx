@@ -155,8 +155,8 @@ function VoteDetailPage({ apiBase, indexHref }: { apiBase: string; indexHref: st
       setNotFound(true);
       return;
     }
-    getJson<unknown>(`${apiBase}/votes/${encodeURIComponent(slug)}`)
-      .then((response) => setVote(publicVoteGetResponseSchema.parse(response).vote))
+    getJson(`${apiBase}/votes/${encodeURIComponent(slug)}`, publicVoteGetResponseSchema)
+      .then((response) => setVote(response.vote))
       .catch((e) => {
         if (e instanceof ApiClientError && e.status === 404) setNotFound(true);
         else setError((e as Error).message);

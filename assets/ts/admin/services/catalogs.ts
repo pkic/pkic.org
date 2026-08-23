@@ -104,11 +104,12 @@ async function loadTemplateVersionPage(
   signal?: AbortSignal,
 ): Promise<AdminEmailTemplateVersion[]> {
   const query = new URLSearchParams({ limit: "1", offset: "0", sort: "-version", ...params });
-  const raw = await api<unknown>(
+  const raw = await api(
     `/api/v1/admin/email-templates/${encodeURIComponent(templateKey)}/versions?${query.toString()}`,
+    adminEmailTemplateVersionsListResponseSchema,
     { signal },
   );
-  return adminEmailTemplateVersionsListResponseSchema.parse(raw).versions;
+  return raw.versions;
 }
 
 /** Loads only the active editor version, or the latest draft when no version is active. */

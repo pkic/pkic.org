@@ -33,6 +33,17 @@ export const adminResetFailedOutboxSchema = z.object({
   ids: z.array(databaseIdSchema).max(100).optional(),
 });
 
+export const adminRetryOutboxResponseSchema = z.object({
+  processed: z.number().optional(),
+  failed: z.number().optional(),
+  skipped: z.number().optional(),
+});
+
+export const adminResetFailedOutboxResponseSchema = z.object({
+  reset: z.number().optional(),
+  processed: z.number().optional(),
+});
+
 export const adminEmailOutboxRowSchema = z.object({
   id: databaseIdSchema,
   eventSlug: z.string().nullable(),

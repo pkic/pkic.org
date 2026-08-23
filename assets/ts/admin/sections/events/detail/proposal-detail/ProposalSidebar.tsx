@@ -1,6 +1,7 @@
 import { Badge } from "../../../../../components/Badge";
 import { Markdown } from "../../../../../components/Markdown";
 import { api } from "../../../../api";
+import { proposalReminderResponseSchema } from "../../../../../../shared/schemas/admin-event-proposals";
 import type { ProposalAccess, ProposalReview } from "../../../../types";
 import { fmt, toast } from "../../../../ui";
 import type { PageInfo } from "../../../../../../shared/schemas/pagination";
@@ -52,7 +53,7 @@ export function ProposalSidebar({
   async function remindAll(kind: "profile" | "presentation") {
     const path = kind === "profile" ? "remind-speakers" : "remind-presentation";
     try {
-      const response = await api<{ queued: number }>(`/api/v1/admin/proposals/${proposalId}/${path}`, {
+      const response = await api(`/api/v1/admin/proposals/${proposalId}/${path}`, proposalReminderResponseSchema, {
         method: "POST",
       });
       toast(

@@ -27,12 +27,17 @@ import type {
   AdminApplicationSummary as CanonicalAdminApplicationSummary,
 } from "../../shared/schemas/admin-applications";
 import type {
+  adminEventDaysResponseSchema,
+  adminEventTermsResponseSchema,
   AdminEventRegistrationSummary as CanonicalRegistration,
   AdminEventSummary as CanonicalEventSummary,
   AdminEventInviteSummary as CanonicalInviteRecord,
   AdminEventRegistrationAttendanceChange as CanonicalRegistrationAttendanceChange,
   AdminEventTeamListItem as CanonicalEventPermission,
+  AdminEventDetail as CanonicalAdminEventDetail,
 } from "../../shared/schemas/admin-events";
+import type { badgeRoleInfoSchema } from "../../shared/schemas/route-contracts-admin-registrations";
+import type { membershipSettingsSchema } from "../../shared/schemas/membership-settings";
 import type {
   AdminOrganizationDetail as CanonicalAdminOrganizationDetail,
   AdminOrganizationRepresentative as CanonicalAdminOrganizationRepresentative,
@@ -83,60 +88,21 @@ import type {
   AdminWorkingGroupSummary as CanonicalAdminWorkingGroupSummary,
 } from "../../shared/schemas/working-groups";
 import type { ProposalReview as CanonicalProposalReview } from "../../shared/schemas/proposal-reviews";
+import type { z } from "zod";
 
 export { SPONSORSHIP_PIPELINE_STAGES };
 export type { SponsorshipPipelineStage };
 
 export type EventSummary = CanonicalEventSummary;
+export type EventDetail = CanonicalAdminEventDetail;
 
-export interface EventDetail extends EventSummary {
-  id: string;
-  base_path: string | null;
-  user_retention_days: number | null;
-  venue: string | null;
-  virtual_url: string | null;
-  hero_image_url: string | null;
-  location: string | null;
-  session_types: Array<{ label: string; requiresPresentation: boolean }> | null;
-  settings: Record<string, unknown>;
-}
-
-export interface AdminEventDay {
-  id: string;
-  date: string;
-  label: string | null;
-  startsAt: string | null;
-  endsAt: string | null;
-  sortOrder: number;
-  attendanceOptions: AdminAttendanceOption[];
-  attendanceCounts: Record<string, number>;
-}
-
-export interface AdminAttendanceOption {
-  value: string;
-  label: string;
-  capacity?: number | null;
-}
-
-export interface AdminEventTerm {
-  id: string;
-  audience_type: string;
-  term_key: string;
-  version: string;
-  required: number;
-  content_ref: string | null;
-  display_text: string | null;
-  help_text: string | null;
-}
+export type AdminEventDay = z.infer<typeof adminEventDaysResponseSchema>["days"][number];
+export type AdminAttendanceOption = AdminEventDay["attendanceOptions"][number];
+export type AdminEventTerm = z.infer<typeof adminEventTermsResponseSchema>["terms"]["attendee"][number];
 
 export type AdminEventFormSummary = CanonicalAdminEventFormSummary;
 
 export type AdminFormDetailField = CanonicalFormFieldDefinition;
-
-export type ApiFn = <T = unknown>(
-  path: string,
-  opts?: RequestInit & { headers?: Record<string, string> },
-) => Promise<T>;
 
 export type RegistrationAttendanceChange = CanonicalRegistrationAttendanceChange;
 export type Registration = CanonicalRegistration;
@@ -146,12 +112,7 @@ export interface AdminRegistrationDay {
   label: string | null;
 }
 
-export interface BadgeRoleInfo {
-  admin_override: string | null;
-  auto_detected: string;
-  effective_role: string;
-  available_roles: string[];
-}
+export type BadgeRoleInfo = z.infer<typeof badgeRoleInfoSchema>;
 
 export type AdminFormSubmission = CanonicalAdminFormSubmission;
 
@@ -268,17 +229,7 @@ export type AdminApplicationDocument = CanonicalAdminApplicationDocument;
 export type AdminApplicationDetail = CanonicalAdminApplicationDetail;
 
 // GET/PATCH /api/v1/admin/membership-settings
-export interface AdminMembershipSettings {
-  consultationWindowDays: number;
-  ecReviewWindowDays: number;
-  onHoldResponseDeadlineDays: number;
-  consultationEmailRecipients: string;
-  ecEmailRecipients: string;
-  ccApplicantEmails: string;
-  autoReminderOnHolds: boolean;
-  forumVoteMinEndorsers: number;
-  updatedAt: string;
-}
+export type AdminMembershipSettings = z.infer<typeof membershipSettingsSchema>;
 
 // Voting system
 export type VoteCandidateSummary = CanonicalVoteCandidateSummary;

@@ -85,6 +85,17 @@ export const memberCreateResponseSchema = z.object({
   organizationId: databaseIdSchema.nullable(),
   members: z.array(adminMemberSummarySchema),
 });
+export const adminMemberMutationResponseSchema = z.object({
+  member: z.object({
+    id: databaseIdSchema,
+    userId: databaseIdSchema,
+    organizationId: databaseIdSchema.nullable(),
+    membershipCategory: z.string().nullable(),
+    status: memberStatusSchema,
+    showOnOrgProfile: z.boolean(),
+    createdAt: z.string().optional(),
+  }),
+});
 
 export const ADMIN_MEMBERS_SORT_COLUMNS = [
   "name",

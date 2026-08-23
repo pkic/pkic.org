@@ -7,7 +7,10 @@
 import { json } from "../../../../_lib/http";
 import { requireMemberFromRequest } from "../../../../_lib/auth/member";
 import { nominateSecondaryContact } from "../../../../_lib/services/member-organization";
-import { mySecondaryContactNominateRouteSchema } from "../../../../../assets/shared/schemas/me";
+import {
+  mySecondaryContactNominateResponseSchema,
+  mySecondaryContactNominateRouteSchema,
+} from "../../../../../assets/shared/schemas/me";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 
@@ -17,6 +20,6 @@ export const MeSecondaryContactPatch = openApiRoute(
     const db = requestDb(c);
     const member = await requireMemberFromRequest(db, c.req.raw, c.env);
     const result = await nominateSecondaryContact(db, member, data.body.userId);
-    return json(result);
+    return json(mySecondaryContactNominateResponseSchema.parse(result));
   },
 );

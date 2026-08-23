@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { Spinner } from "../../../components/Spinner";
-import { api } from "../../api";
+import { api, apiCommand } from "../../api";
 import { fmt, toast } from "../../ui";
 import type { AdminWorkingGroupSummary, RoleAssignment } from "../../types";
 import { UserPicker, type PickedUser } from "./UserPicker";
 import { LeadershipPositions } from "./LeadershipPositions";
 import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
 import { workingGroupsListResponseSchema } from "../../../../shared/schemas/working-groups";
-import { roleAssignmentsListResponseSchema, SYSTEM_ROLE_IDS } from "../../../../shared/schemas/access-control";
+import {
+  roleAssignmentsListResponseSchema,
+  SYSTEM_ROLE_IDS,
+  userRoleResponseEnvelopeSchema,
+} from "../../../../shared/schemas/access-control";
 
 /**
  * "Create a new tab under the Access Control for chairs to set the chairs
@@ -74,7 +78,7 @@ function ChairSlot({
     if (!current) return;
     setBusy(true);
     try {
-      await api(`/api/v1/admin/users/${current.userId}/roles/${current.userRoleId}`, {
+      await api(`/api/v1/admin/users/${current.userId}/roles/${current.userRoleId}`, userRoleResponseEnvelopeSchema, {
         method: "PATCH",
         body: JSON.stringify({
           expiresAt: editExpiresAt ? new Date(editExpiresAt).toISOString() : null,
@@ -95,7 +99,7 @@ function ChairSlot({
     if (!picked || !roleId) return;
     setBusy(true);
     try {
-      await api(`/api/v1/admin/users/${picked.id}/roles`, {
+      await api(`/api/v1/admin/users/${picked.id}/roles`, userRoleResponseEnvelopeSchema, {
         method: "POST",
         body: JSON.stringify({
           roleId,
@@ -120,7 +124,7 @@ function ChairSlot({
     if (!confirm(`Remove ${current.name} as ${label.toLowerCase()}?`)) return;
     setBusy(true);
     try {
-      await api(`/api/v1/admin/users/${current.userId}/roles/${current.userRoleId}`, { method: "DELETE" });
+      await apiCommand(`/api/v1/admin/users/${current.userId}/roles/${current.userRoleId}`, { method: "DELETE" });
       toast(`${label} removed`, "success");
       onChanged();
     } catch (err) {
@@ -210,13 +214,17 @@ export function Leadership() {
     setLoading(true);
     try {
       const [forumChairRaw, forumViceChairRaw] = await Promise.all([
-        api<unknown>(`/api/v1/admin/roles/${SYSTEM_ROLE_IDS.forumChair}/assignments?limit=1&offset=0&sort=-created_at`),
-        api<unknown>(
+        api(
+          `/api/v1/admin/roles/${SYSTEM_ROLE_IDS.forumChair}/assignments?limit=1&offset=0&sort=-created_at`,
+          roleAssignmentsListResponseSchema,
+        ),
+        api(
           `/api/v1/admin/roles/${SYSTEM_ROLE_IDS.forumViceChair}/assignments?limit=1&offset=0&sort=-created_at`,
+          roleAssignmentsListResponseSchema,
         ),
       ]);
-      const forumChairAssignments = roleAssignmentsListResponseSchema.parse(forumChairRaw);
-      const forumViceChairAssignments = roleAssignmentsListResponseSchema.parse(forumViceChairRaw);
+      const forumChairAssignments = forumChairRaw;
+      const forumViceChairAssignments = forumViceChairRaw;
 
       setForumChair(forumChairAssignments.assignments[0] ?? null);
       setForumViceChair(forumViceChairAssignments.assignments[0] ?? null);

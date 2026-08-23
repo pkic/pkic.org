@@ -1,5 +1,5 @@
 import { useRef, useState } from "preact/hooks";
-import { api } from "../../api";
+import { api, apiCommand } from "../../api";
 import { fmt, toast } from "../../ui";
 import type { UserRoleAssignment } from "../../types";
 import { UserPicker, type PickedUser } from "./UserPicker";
@@ -7,7 +7,7 @@ import { ContextPicker, type PickedContext } from "./ContextPicker";
 import { adminRoleCatalog } from "../../services/catalogs";
 import { ServerSearchSelect } from "../../components/ServerSearchSelect";
 import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
-import { userRolesListResponseSchema } from "../../../../shared/schemas/access-control";
+import { userRoleResponseEnvelopeSchema, userRolesListResponseSchema } from "../../../../shared/schemas/access-control";
 
 /** Staff management: assign built-in roles, override individual permissions. */
 export function UserRoles() {
@@ -28,7 +28,7 @@ export function UserRoles() {
     }
     setSubmitting(true);
     try {
-      await api(`/api/v1/admin/users/${user.id}/roles`, {
+      await api(`/api/v1/admin/users/${user.id}/roles`, userRoleResponseEnvelopeSchema, {
         method: "POST",
         body: JSON.stringify({
           roleId,
@@ -52,7 +52,7 @@ export function UserRoles() {
     if (!user) return;
     if (!confirm(`Revoke role "${assignment.roleName}"?`)) return;
     try {
-      await api(`/api/v1/admin/users/${user.id}/roles/${assignment.id}`, { method: "DELETE" });
+      await apiCommand(`/api/v1/admin/users/${user.id}/roles/${assignment.id}`, { method: "DELETE" });
       toast("Role revoked", "success");
       tableRef.current?.reload();
     } catch (e) {

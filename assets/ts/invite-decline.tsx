@@ -174,9 +174,7 @@ function boot(): void {
     const inviteIdQuery = id ? `?id=${encodeURIComponent(id)}` : "";
     let info: DeclineInfo;
     try {
-      info = inviteDeclineInfoResponseSchema.parse(
-        await getJson<unknown>(`${base}/invites/${tok}/decline-info${inviteIdQuery}`),
-      );
+      info = await getJson(`${base}/invites/${tok}/decline-info${inviteIdQuery}`, inviteDeclineInfoResponseSchema);
     } catch {
       showStatus(
         "Something went wrong",
@@ -528,8 +526,10 @@ function boot(): void {
       if (submitBtn) setButtonLoading(submitBtn);
 
       try {
-        const result = inviteDeclineResponseSchema.parse(
-          await postJson<unknown>(`${base}/invites/${tok}/decline${inviteIdQuery}`, payload),
+        const result = await postJson(
+          `${base}/invites/${tok}/decline${inviteIdQuery}`,
+          payload,
+          inviteDeclineResponseSchema,
         );
 
         if (result.success) {

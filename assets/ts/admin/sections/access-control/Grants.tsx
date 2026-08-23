@@ -1,6 +1,6 @@
 import { useRef, useState } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
-import { api } from "../../api";
+import { apiCommand } from "../../api";
 import { fmt, toast } from "../../ui";
 import type { AccessGrant } from "../../types";
 import { PERMISSIONS } from "../../permissions";
@@ -21,7 +21,7 @@ export function Grants() {
   async function handleRevoke(id: string) {
     if (!confirm("Revoke this permission grant?")) return;
     await performAdminAction({
-      request: () => api(`/api/v1/admin/access-grants/${id}`, { method: "DELETE" }),
+      request: () => apiCommand(`/api/v1/admin/access-grants/${id}`, { method: "DELETE" }),
       successMessage: "Grant revoked",
       afterSuccess: () => tableRef.current?.reload(),
     });
@@ -40,7 +40,7 @@ export function Grants() {
     await performAdminAction({
       setBusy: setSubmitting,
       request: () =>
-        api("/api/v1/admin/access-grants", {
+        apiCommand("/api/v1/admin/access-grants", {
           method: "POST",
           body: JSON.stringify({
             userId: user.id,

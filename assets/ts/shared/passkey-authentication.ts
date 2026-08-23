@@ -1,34 +1,20 @@
 import { startAuthentication } from "@simplewebauthn/browser";
 import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
+import type { z } from "zod";
+import { passkeyAuthenticateCompleteResponseSchema, passkeyBeginResponseSchema } from "../../shared/schemas/passkeys";
+import { getJson, postJson } from "./api-client";
 
-export interface PasskeyAuthenticationResult {
-  admin?: { email?: string };
-  member?: unknown;
-}
+export type PasskeyAuthenticationResult = z.infer<typeof passkeyAuthenticateCompleteResponseSchema>;
 
 export async function authenticateWithPasskey(): Promise<PasskeyAuthenticationResult> {
-  const beginResponse = await fetch("/api/v1/auth/passkeys/authenticate/begin");
-  const begin = (await beginResponse.json().catch(() => ({}))) as {
-    options?: unknown;
-    challengeToken?: string;
-    error?: { message?: string };
-  };
-  if (!beginResponse.ok || !begin.options || !begin.challengeToken) {
-    throw new Error(begin.error?.message ?? "Could not start passkey sign-in.");
-  }
+  const begin = await getJson("/api/v1/auth/passkeys/authenticate/begin", passkeyBeginResponseSchema);
 
   const assertion = await startAuthentication({
-    optionsJSON: begin.options as PublicKeyCredentialRequestOptionsJSON,
+    optionsJSON: begin.options as unknown as PublicKeyCredentialRequestOptionsJSON,
   });
-  const completeResponse = await fetch("/api/v1/auth/passkeys/authenticate/complete", {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ challengeToken: begin.challengeToken, response: assertion }),
-  });
-  const result = (await completeResponse.json().catch(() => ({}))) as PasskeyAuthenticationResult & {
-    error?: { message?: string };
-  };
-  if (!completeResponse.ok) throw new Error(result.error?.message ?? "Passkey sign-in failed.");
-  return result;
+  return postJson(
+    "/api/v1/auth/passkeys/authenticate/complete",
+    { challengeToken: begin.challengeToken, response: assertion },
+    passkeyAuthenticateCompleteResponseSchema,
+  );
 }

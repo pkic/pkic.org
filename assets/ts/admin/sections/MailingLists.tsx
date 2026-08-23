@@ -11,12 +11,13 @@ import { ErrorAlert } from "../../components/ErrorAlert";
 import { Pager } from "../../components/Pager";
 import { useApiPage } from "../../hooks/useApiPage";
 import { runGoogleGroupsSync } from "../services/google-groups-sync";
-import { api } from "../api";
+import { api, apiCommand } from "../api";
 import { toast } from "../ui";
 import type { MailingList } from "../types";
 import {
   MAILING_LIST_TYPES as LIST_TYPES,
   mailingListsListResponseSchema,
+  mailingListResponseSchema,
   type MailingListsListResponse,
 } from "../../../shared/schemas/admin-mailing-lists";
 
@@ -169,7 +170,10 @@ export function MailingLists() {
     e.preventDefault();
     setSaving(true);
     try {
-      await api("/api/v1/admin/mailing-lists", { method: "POST", body: JSON.stringify(draftToPayload(newDraft)) });
+      await api("/api/v1/admin/mailing-lists", mailingListResponseSchema, {
+        method: "POST",
+        body: JSON.stringify(draftToPayload(newDraft)),
+      });
       toast("Mailing list added", "success");
       setNewDraft(emptyDraft());
       setShowAdd(false);
@@ -184,7 +188,7 @@ export function MailingLists() {
   async function saveEdit(id: string) {
     setSaving(true);
     try {
-      await api(`/api/v1/admin/mailing-lists/${id}`, {
+      await api(`/api/v1/admin/mailing-lists/${id}`, mailingListResponseSchema, {
         method: "PATCH",
         body: JSON.stringify(draftToPayload(editDraft)),
       });
@@ -205,7 +209,7 @@ export function MailingLists() {
       return;
     }
     try {
-      await api(`/api/v1/admin/mailing-lists/${id}`, { method: "DELETE" });
+      await apiCommand(`/api/v1/admin/mailing-lists/${id}`, { method: "DELETE" });
       toast("Deleted", "success");
       await listing.reload();
     } catch (e) {

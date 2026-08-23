@@ -1,6 +1,7 @@
 import { useState, useEffect } from "preact/hooks";
 import {
   adminVoteBallotsListResponseSchema,
+  adminVoteMutationResponseSchema,
   type AdminVoteBallot,
   type AdminVoteBallotsListResponse,
 } from "../../../../shared/schemas/votes-admin";
@@ -25,7 +26,7 @@ export function VoteDetail({ vote, onChanged }: { vote: AdminVoteSummary; onChan
   async function saveVisibility() {
     setSaving(true);
     try {
-      await api(`/api/v1/admin/votes/${vote.id}/visibility`, {
+      await api(`/api/v1/admin/votes/${vote.id}/visibility`, adminVoteMutationResponseSchema, {
         method: "PATCH",
         body: JSON.stringify({ visibility, publicDetailLevel: detailLevel }),
       });

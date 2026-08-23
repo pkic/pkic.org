@@ -64,8 +64,10 @@ export function useSponsorList(
       setSponsors([]);
       return () => controller.abort();
     }
-    void getJson<unknown>(`${apiBase}/sponsors?${buildQuery(filters)}`, { signal: controller.signal })
-      .then((response) => setSponsors(sponsorsListResponseSchema.parse(response).sponsors))
+    void getJson(`${apiBase}/sponsors?${buildQuery(filters)}`, sponsorsListResponseSchema, {
+      signal: controller.signal,
+    })
+      .then((response) => setSponsors(response.sponsors))
       .catch((cause: unknown) => {
         if (!controller.signal.aborted) {
           setSponsors(null);
@@ -95,8 +97,10 @@ export function useSponsorDisplay(
     setDisplay(null);
     setError(null);
     setLoadingMore(false);
-    void getJson<unknown>(`${apiBase}/sponsors/display?${buildQuery(filters)}`, { signal: controller.signal })
-      .then((response) => setDisplay(sponsorsDisplayResponseSchema.parse(response)))
+    void getJson(`${apiBase}/sponsors/display?${buildQuery(filters)}`, sponsorsDisplayResponseSchema, {
+      signal: controller.signal,
+    })
+      .then((response) => setDisplay(response))
       .catch((cause: unknown) => {
         if (!controller.signal.aborted) {
           setDisplay(null);
@@ -111,8 +115,9 @@ export function useSponsorDisplay(
     setLoadingMore(true);
     try {
       const loaded = display.groups.reduce((count, group) => count + group.sponsors.length, 0);
-      const response = sponsorsDisplayResponseSchema.parse(
-        await getJson<unknown>(`${apiBase}/sponsors/display?${buildQuery(filters, loaded)}`),
+      const response = await getJson(
+        `${apiBase}/sponsors/display?${buildQuery(filters, loaded)}`,
+        sponsorsDisplayResponseSchema,
       );
       setDisplay(mergeSponsorDisplayPages(display, response));
     } catch (cause: unknown) {

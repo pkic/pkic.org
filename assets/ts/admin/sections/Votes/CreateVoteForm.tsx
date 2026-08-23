@@ -1,5 +1,6 @@
 import { useState } from "preact/hooks";
 import { api } from "../../api";
+import { adminVoteMutationResponseSchema } from "../../../../shared/schemas/votes-admin";
 import { toast } from "../../ui";
 import { VOTE_TYPES, SCOPE_TYPES, thresholdOptionsFor } from "./shared";
 import { performAdminAction } from "../../actions";
@@ -58,7 +59,7 @@ export function CreateVoteForm({ onCreated }: { onCreated: () => void }) {
     await performAdminAction({
       setBusy: setSaving,
       request: () =>
-        api("/api/v1/admin/votes", {
+        api("/api/v1/admin/votes", adminVoteMutationResponseSchema, {
           method: "POST",
           body: JSON.stringify({
             title: draft.title.trim(),

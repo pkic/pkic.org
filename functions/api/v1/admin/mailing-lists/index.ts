@@ -10,6 +10,7 @@ import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { createMailingList, listMailingLists } from "../../../../_lib/services/mailing-lists";
 import {
   mailingListCreateRouteSchema,
+  mailingListResponseSchema,
   mailingListsListRouteSchema,
 } from "../../../../../assets/shared/schemas/admin-mailing-lists";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
@@ -29,5 +30,5 @@ export const MailingListsCreate = openApiRoute(mailingListCreateRouteSchema, asy
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
   const body = data.body;
   const mailingList = await createMailingList(db, body, admin.id);
-  return json({ mailingList }, 201);
+  return json(mailingListResponseSchema.parse({ mailingList }), 201);
 });

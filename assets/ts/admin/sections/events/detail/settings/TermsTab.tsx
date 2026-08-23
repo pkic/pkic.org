@@ -1,5 +1,6 @@
 import { useState } from "preact/hooks";
 import { api } from "../../../../api";
+import { adminEventTermsResponseSchema } from "../../../../../../shared/schemas/admin-events";
 import type { AdminEventTerm } from "../../../../types";
 import { useAdminEditorResource } from "../../../../hooks/useAdminEditorResource";
 import { saveAdminEditor } from "../../../../actions";
@@ -154,9 +155,7 @@ function TermsGroup({
 export function TermsTab({ slug }: { slug: string }) {
   const termsResource = useAdminEditorResource(
     async () => {
-      const data = await api<{
-        terms: { attendee: AdminEventTerm[]; speaker: AdminEventTerm[]; presentation: AdminEventTerm[] };
-      }>(`/api/v1/admin/events/${slug}/terms`);
+      const data = await api(`/api/v1/admin/events/${slug}/terms`, adminEventTermsResponseSchema);
       return {
         attendee: (data.terms?.attendee ?? []).map(termFromRow),
         speaker: (data.terms?.speaker ?? []).map(termFromRow),
@@ -189,7 +188,7 @@ export function TermsTab({ slug }: { slug: string }) {
       setSaving,
       setStatus: setSaveStatus,
       request: () =>
-        api(`/api/v1/admin/events/${slug}/terms`, {
+        api(`/api/v1/admin/events/${slug}/terms`, adminEventTermsResponseSchema, {
           method: "PUT",
           body: JSON.stringify({
             attendee: toPayload(attendee),

@@ -2,8 +2,11 @@ import { parseJsonBody } from "../../../../../_lib/validation";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
-import { adminEmailTemplateVersionSchema } from "../../../../../../assets/shared/schemas/admin-email-templates";
-import { emailTemplateVersionsListRouteSchema } from "../../../../../../assets/shared/schemas/admin-email-templates";
+import {
+  adminEmailTemplateVersionCreateResponseSchema,
+  adminEmailTemplateVersionSchema,
+  emailTemplateVersionsListRouteSchema,
+} from "../../../../../../assets/shared/schemas/admin-email-templates";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import {
   createAdminEmailTemplateVersion,
@@ -31,5 +34,5 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     messageType: body.messageType,
   });
 
-  return json({ success: true, version });
+  return json(adminEmailTemplateVersionCreateResponseSchema.parse({ success: true, version }));
 }

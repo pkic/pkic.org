@@ -69,8 +69,8 @@ export const adminMeetingSeriesListResponseSchema = paginatedResponseSchema(
   "meetingSeries",
   adminMeetingSeriesSummarySchema,
 );
-const adminMeetingSeriesResponseSchema = z.object({ meetingSeries: adminMeetingSeriesSummarySchema });
-const adminIcsFileResponseSchema = z.object({ icsFile: adminIcsFileSummarySchema });
+export const adminMeetingSeriesResponseSchema = z.object({ meetingSeries: adminMeetingSeriesSummarySchema });
+export const adminIcsFileResponseSchema = z.object({ icsFile: adminIcsFileSummarySchema });
 
 export type AdminIcsFile = z.infer<typeof adminIcsFileSummarySchema>;
 export type AdminMeetingSeries = z.infer<typeof adminMeetingSeriesSummarySchema>;
@@ -346,6 +346,7 @@ export const myCalendarListRouteSchema = {
 };
 
 export const myCalendarPreferenceSetSchema = z.object({ icsFileId: databaseIdSchema.nullable() });
+export const myCalendarPreferenceResponseSchema = successResponseSchema;
 
 export const myCalendarPreferenceRouteSchema = {
   tags: ["Me"],
@@ -355,7 +356,10 @@ export const myCalendarPreferenceRouteSchema = {
     body: { content: { "application/json": { schema: myCalendarPreferenceSetSchema } }, required: true },
   },
   responses: {
-    "200": { description: "Preference saved." },
+    "200": {
+      description: "Preference saved.",
+      content: { "application/json": { schema: myCalendarPreferenceResponseSchema } },
+    },
     "403": { description: "Not a member of this series' working group." },
     "404": { description: "Meeting series or ICS file not found." },
   },

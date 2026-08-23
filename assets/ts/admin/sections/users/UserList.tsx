@@ -1,7 +1,7 @@
 import { useRef, useState } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
 import { normalizeProfileLinks } from "../../../shared/widgets/profile-links";
-import { api } from "../../api";
+import { apiCommand } from "../../api";
 import type { AdminUser } from "../../types";
 import { fmt, toast } from "../../ui";
 import { usersListResponseSchema } from "../../../../shared/schemas/admin-users";
@@ -16,7 +16,7 @@ export function UserList({ onViewUser }: { onViewUser: (id: string) => void }) {
   async function updateRole(userId: string, newRole: string, select: HTMLSelectElement) {
     const previousRole = select.dataset.currentRole ?? select.value;
     try {
-      await api(`/api/v1/admin/users/${userId}`, { method: "PATCH", body: JSON.stringify({ role: newRole }) });
+      await apiCommand(`/api/v1/admin/users/${userId}`, { method: "PATCH", body: JSON.stringify({ role: newRole }) });
       select.dataset.currentRole = newRole;
       toast(`Role updated to '${newRole}'`, "success");
     } catch (error) {

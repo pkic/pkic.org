@@ -8,7 +8,10 @@ import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
 import { getProposalScopeForPermissionCheck, rejectVoteProposal } from "../../../../../_lib/services/votes";
-import { adminRejectProposalRouteSchema } from "../../../../../../assets/shared/schemas/votes-admin";
+import {
+  adminRejectProposalRouteSchema,
+  adminVoteProposalRejectResponseSchema,
+} from "../../../../../../assets/shared/schemas/votes-admin";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 export const AdminVoteProposalRejectPost = openApiRoute(
@@ -32,6 +35,6 @@ export const AdminVoteProposalRejectPost = openApiRoute(
       c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, result.outboxId));
     }
 
-    return json({ proposal: result.proposal });
+    return json(adminVoteProposalRejectResponseSchema.parse({ proposal: result.proposal }));
   },
 );

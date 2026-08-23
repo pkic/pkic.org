@@ -23,6 +23,15 @@ import { myOrganizationReviewsListRouteSchema } from "../../../../shared/schemas
 import type { z } from "zod";
 import { uploadFile } from "../../../shared/file-upload";
 import { ORGANIZATION_CONTENT_FIELD_LABELS } from "../../../shared/organization-content";
+import { successResponseSchema } from "../../../../shared/schemas/api-common";
+import {
+  myOrganizationProfileSchema,
+  myOrganizationSponsorshipSchema,
+  myOrganizationContentChangeResponseSchema,
+  myVotingDelegateUpdateResponseSchema,
+  mySecondaryContactNominateResponseSchema,
+  myOrganizationLogoUploadResponseSchema,
+} from "../../../../shared/schemas/me";
 
 const myOrganizationReviewsResponseSchema =
   myOrganizationReviewsListRouteSchema.responses["200"].content["application/json"].schema;
@@ -49,7 +58,12 @@ function LogoUploader({ org, reload }: { org: MyOrganizationProfile; reload: () 
   async function upload(file: File): Promise<void> {
     setBusy(true);
     try {
-      await uploadFile("/api/v1/me/organization/logo", file, "Could not upload the organization logo.");
+      await uploadFile(
+        "/api/v1/me/organization/logo",
+        file,
+        myOrganizationLogoUploadResponseSchema,
+        "Could not upload the organization logo.",
+      );
       toast("Logo submitted for review", "success");
       await reload();
     } catch (err) {
@@ -141,7 +155,7 @@ function PendingReviewBanner({
     if (!confirm("Withdraw this pending submission?")) return;
     setBusy(true);
     try {
-      await deleteJson(`/api/v1/me/organization/reviews/${review.id}`);
+      await deleteJson(`/api/v1/me/organization/reviews/${review.id}`, successResponseSchema);
       toast("Submission withdrawn", "success");
       await onWithdrawn();
     } catch (e) {
@@ -228,7 +242,7 @@ function ContentEditForm({ org, reload }: { org: MyOrganizationProfile; reload: 
 
     setSaving(true);
     try {
-      await patchJson("/api/v1/me/organization", changes);
+      await patchJson("/api/v1/me/organization", changes, myOrganizationContentChangeResponseSchema);
       toast("Submitted for staff review", "success");
       await reload();
     } catch (err) {
@@ -378,7 +392,11 @@ function VotingDelegateSection({ org, reload }: { org: MyOrganizationProfile; re
     setValue(next);
     setSaving(true);
     try {
-      await patchJson("/api/v1/me/organization/voting-delegate", { userId: next || null });
+      await patchJson(
+        "/api/v1/me/organization/voting-delegate",
+        { userId: next || null },
+        myVotingDelegateUpdateResponseSchema,
+      );
       toast("Voting delegate updated", "success");
       await reload();
     } catch (e) {
@@ -424,7 +442,11 @@ function SecondaryContactSection({ org, reload }: { org: MyOrganizationProfile; 
     setValue(next);
     setSaving(true);
     try {
-      await patchJson("/api/v1/me/organization/secondary-contact", { userId: next || null });
+      await patchJson(
+        "/api/v1/me/organization/secondary-contact",
+        { userId: next || null },
+        mySecondaryContactNominateResponseSchema,
+      );
       toast(next ? "Secondary contact nominated — pending staff confirmation" : "Nomination withdrawn", "success");
       await reload();
     } catch (e) {
@@ -508,7 +530,7 @@ function SponsorshipCard() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getJson<MyOrganizationSponsorship>("/api/v1/me/organization/sponsorship")
+    getJson("/api/v1/me/organization/sponsorship", myOrganizationSponsorshipSchema)
       .then(setSponsorship)
       .catch((e: unknown) => setError(e instanceof ApiClientError ? e.message : "Could not load sponsorship."));
   }, []);
@@ -541,7 +563,7 @@ export function MyOrganization() {
 
   const reload = useCallback(async () => {
     try {
-      const orgData = await getJson<MyOrganizationProfile>("/api/v1/me/organization");
+      const orgData = await getJson("/api/v1/me/organization", myOrganizationProfileSchema);
       setOrg(orgData);
       setError(null);
       setErrorCode(null);

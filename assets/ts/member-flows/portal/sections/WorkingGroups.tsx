@@ -15,6 +15,7 @@ import { useApiPage } from "../../../hooks/useApiPage";
 import { toast, fmt } from "../ui";
 import { myWorkingGroupsListResponseSchema } from "../../../../shared/schemas/me";
 import type { WorkingGroupSummary, MyWorkingGroupMembership } from "../types";
+import { successResponseSchema } from "../../../../shared/schemas/api-common";
 
 type MyWorkingGroupsPage = z.infer<typeof myWorkingGroupsListResponseSchema>;
 
@@ -33,7 +34,7 @@ function WorkingGroupCard({
   async function join(): Promise<void> {
     setBusy(true);
     try {
-      await postJson(`/api/v1/me/working-groups/${wg.slug}`, {});
+      await postJson(`/api/v1/me/working-groups/${wg.slug}`, {}, successResponseSchema);
       toast(`Joined ${wg.name}`, "success");
       await onChanged();
     } catch (e) {
@@ -47,7 +48,7 @@ function WorkingGroupCard({
     if (!confirm(`Leave ${wg.name}?`)) return;
     setBusy(true);
     try {
-      await deleteJson(`/api/v1/me/working-groups/${wg.slug}`);
+      await deleteJson(`/api/v1/me/working-groups/${wg.slug}`, successResponseSchema);
       toast(`Left ${wg.name}`, "success");
       await onChanged();
     } catch (e) {

@@ -1,5 +1,6 @@
 import { useRef, useState } from "preact/hooks";
-import { api } from "../../api";
+import { api, apiCommand } from "../../api";
+import { userEmailAddResponseSchema } from "../../../../shared/schemas/user-emails";
 import { fmt, toast } from "../../ui";
 import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
 import { type UserEmailRecord, userEmailsListResponseSchema } from "../../../../shared/schemas/user-emails";
@@ -15,7 +16,10 @@ export function UserEmailAddressesPanel({ userId, primaryEmail }: { userId: stri
     if (!trimmed) return;
     setAdding(true);
     try {
-      await api(`/api/v1/admin/users/${userId}/emails`, { method: "POST", body: JSON.stringify({ email: trimmed }) });
+      await api(`/api/v1/admin/users/${userId}/emails`, userEmailAddResponseSchema, {
+        method: "POST",
+        body: JSON.stringify({ email: trimmed }),
+      });
       toast("Email added", "success");
       setNewEmail("");
       tableRef.current?.reload();
@@ -29,7 +33,7 @@ export function UserEmailAddressesPanel({ userId, primaryEmail }: { userId: stri
   async function handleRemove(emailId: string, email: string) {
     if (!confirm(`Remove ${email} from this account?`)) return;
     try {
-      await api(`/api/v1/admin/users/${userId}/emails/${emailId}`, { method: "DELETE" });
+      await apiCommand(`/api/v1/admin/users/${userId}/emails/${emailId}`, { method: "DELETE" });
       toast("Email removed", "success");
       tableRef.current?.reload();
     } catch (error) {

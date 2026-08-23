@@ -19,9 +19,9 @@ function ConsultationQueueBanner() {
 
   useEffect(() => {
     let cancelled = false;
-    void api<unknown>("/api/v1/admin/applications?stage=in_consultation&limit=1&offset=0")
+    void api("/api/v1/admin/applications?stage=in_consultation&limit=1&offset=0", adminApplicationsListResponseSchema)
       .then((data) => {
-        if (!cancelled) setCount(adminApplicationsListResponseSchema.parse(data).page.total);
+        if (!cancelled) setCount(data.page.total);
       })
       .catch(() => {
         if (!cancelled) setCount(null);

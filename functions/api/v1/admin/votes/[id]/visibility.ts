@@ -8,7 +8,10 @@ import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requireVoteManagementAccess } from "../../../../../_lib/auth/vote-access";
 import { updateVoteVisibility } from "../../../../../_lib/services/votes";
-import { adminVoteVisibilityUpdateRouteSchema } from "../../../../../../assets/shared/schemas/votes-admin";
+import {
+  adminVoteMutationResponseSchema,
+  adminVoteVisibilityUpdateRouteSchema,
+} from "../../../../../../assets/shared/schemas/votes-admin";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 export const AdminVoteVisibilityPatch = openApiRoute(
@@ -23,6 +26,6 @@ export const AdminVoteVisibilityPatch = openApiRoute(
     const body = data.body;
     const vote = await updateVoteVisibility(db, admin, id, body);
 
-    return json({ vote });
+    return json(adminVoteMutationResponseSchema.parse({ vote }));
   },
 );

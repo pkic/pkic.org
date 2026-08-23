@@ -9,6 +9,7 @@ import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { grantIndividualMembership } from "../../../../../_lib/services/admin-organizations";
 import { userMembershipGrantRouteSchema } from "../../../../../../assets/shared/schemas/admin-organizations";
+import { adminMemberMutationResponseSchema } from "../../../../../../assets/shared/schemas/admin-members";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 
@@ -20,5 +21,5 @@ export const UserMembershipGrant = openApiRoute(userMembershipGrantRouteSchema, 
   const body = data.body;
   const member = await grantIndividualMembership(requestDb(c), admin.id, userId, body.membershipCategory);
 
-  return json({ member }, 201);
+  return json(adminMemberMutationResponseSchema.parse({ member }), 201);
 });

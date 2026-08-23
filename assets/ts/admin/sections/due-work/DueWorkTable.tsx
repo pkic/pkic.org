@@ -53,8 +53,7 @@ export function DueWorkTable({
       offset: String(offset),
       sort: "dueAt",
     });
-    void api<unknown>(`/api/v1/admin/due-work?${query}`)
-      .then((raw) => adminDueWorkListResponseSchema.parse(raw))
+    void api(`/api/v1/admin/due-work?${query}`, adminDueWorkListResponseSchema)
       .then((next) => {
         if (!cancelled) setResult(next);
       })

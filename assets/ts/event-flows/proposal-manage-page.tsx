@@ -1,6 +1,6 @@
 import { render } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { deleteJson, getJson, patchJson, postJson } from "../shared/api-client";
+import { deleteJson, getJson, patchJson, postJson, requestJson } from "../shared/api-client";
 import type { ProposalManageResponse } from "../shared/types";
 import { normalizeValidation } from "../shared/form/validation-map";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
@@ -11,7 +11,15 @@ import { AdminHeadshotManager } from "../shared/headshot/AdminHeadshotManager";
 import { ProfileLinksInput, type ProfileLinksHandle } from "../components/ProfileLinksInput";
 import { normalizeProfileLinks } from "../shared/widgets/profile-links";
 import { showManageLinkRecoveryForm } from "../shared/widgets/link-recovery";
-import { speakerRoleSchema } from "../../shared/schemas/registration";
+import { speakerRoleSchema, headshotUploadResponseSchema } from "../../shared/schemas/registration";
+import { successResponseSchema } from "../../shared/schemas/api-common";
+import {
+  coSpeakerInviteResponseSchema,
+  proposalManageReadResponseSchema,
+  proposalManageUpdateResponseSchema,
+  proposerSpeakerPatchSchema,
+  proposalSpeakerRemovalResponseSchema,
+} from "../../shared/schemas/proposal-management";
 import { SPEAKER_ROLE_OPTIONS } from "../shared/speaker-roles";
 
 function tokenFromRoot(root: HTMLElement, fallback: string | null): string | null {
@@ -92,15 +100,19 @@ export function ProposalManageSpeakerCard({
     event.preventDefault();
     setSaving(true);
     try {
-      await patchJson(profileEndpoint, {
-        firstName: firstName.trim() || null,
-        lastName: lastName.trim() || null,
-        role,
-        organizationName: organizationName.trim() || null,
-        jobTitle: jobTitle.trim() || null,
-        biography: biography.trim() || null,
-        links: linksRef.current?.getLinks() ?? [],
-      });
+      await patchJson(
+        profileEndpoint,
+        proposerSpeakerPatchSchema.parse({
+          firstName: firstName.trim() || null,
+          lastName: lastName.trim() || null,
+          role,
+          organizationName: organizationName.trim() || null,
+          jobTitle: jobTitle.trim() || null,
+          biography: biography.trim() || null,
+          links: linksRef.current?.getLinks() ?? [],
+        }),
+        successResponseSchema,
+      );
       await onReload();
       onStatus(`Saved speaker details for ${speaker.email}.`);
     } catch (error) {
@@ -113,9 +125,11 @@ export function ProposalManageSpeakerCard({
   async function sendReminder(): Promise<void> {
     setReminding(true);
     try {
-      await postJson(`${apiBase}/proposals/manage/${encodeURIComponent(token)}/speakers/remind`, {
-        userId: speaker.userId,
-      });
+      await postJson(
+        `${apiBase}/proposals/manage/${encodeURIComponent(token)}/speakers/remind`,
+        { userId: speaker.userId },
+        successResponseSchema,
+      );
       onStatus(`${speaker.status === "invited" ? "Reminder" : "Profile link"} sent to ${speaker.email}.`);
     } catch (error) {
       onStatus(normalizeValidation(error).globalMessage, true);
@@ -130,7 +144,7 @@ export function ProposalManageSpeakerCard({
     }
     setRemoving(true);
     try {
-      await deleteJson(profileEndpoint);
+      await deleteJson(profileEndpoint, proposalSpeakerRemovalResponseSchema);
       await onReload();
       onStatus(`Removed ${speaker.email} from the proposal.`);
     } catch (error) {
@@ -143,22 +157,15 @@ export function ProposalManageSpeakerCard({
   async function uploadHeadshot(file: Blob) {
     const formData = new FormData();
     formData.append("file", file, "headshot.jpg");
-    const response = await fetch(headshotEndpoint, {
+    const payload = await requestJson(headshotEndpoint, headshotUploadResponseSchema, {
       method: "PUT",
       body: formData,
     });
-    const payload = (await response.json().catch(() => ({}))) as {
-      headshotUrl?: string;
-      error?: { message?: string };
-    };
-    if (!response.ok) throw new Error(payload.error?.message ?? `HTTP ${response.status}`);
     return { headshotUrl: payload.headshotUrl ?? null };
   }
 
   async function deleteHeadshot(): Promise<void> {
-    const response = await fetch(headshotEndpoint, { method: "DELETE" });
-    const payload = (await response.json().catch(() => ({}))) as { error?: { message?: string } };
-    if (!response.ok) throw new Error(payload.error?.message ?? `HTTP ${response.status}`);
+    await requestJson(headshotEndpoint, successResponseSchema, { method: "DELETE" });
   }
 
   const roleLabel = speaker.role.replace(/_/g, " ");
@@ -401,8 +408,9 @@ async function main(): Promise<void> {
   let proposalData: ProposalManageResponse | null;
 
   async function reloadSpeakers(): Promise<void> {
-    const refreshed = await getJson<ProposalManageResponse>(
+    const refreshed = await getJson(
       `${apiBase}/proposals/manage/${encodeURIComponent(manageToken)}`,
+      proposalManageReadResponseSchema,
     );
     proposalData = refreshed;
     renderSpeakerList(
@@ -421,8 +429,9 @@ async function main(): Promise<void> {
   }
 
   try {
-    proposalData = await getJson<ProposalManageResponse>(
+    proposalData = await getJson(
       `${apiBase}/proposals/manage/${encodeURIComponent(manageToken)}`,
+      proposalManageReadResponseSchema,
     );
     setField(boot.form, "proposalType", proposalData.proposal.proposal_type);
     setField(boot.form, "title", proposalData.proposal.title);
@@ -448,7 +457,7 @@ async function main(): Promise<void> {
 
     await withLoadingButton(findSubmitButton(boot.form), async () => {
       try {
-        const response = await patchJson<{ success: true; proposal: { status: string } }>(
+        const response = await patchJson(
           `${apiBase}/proposals/manage/${encodeURIComponent(manageToken)}`,
           {
             action: "update",
@@ -456,6 +465,7 @@ async function main(): Promise<void> {
             title: readField(boot.form, "title"),
             abstract: readField(boot.form, "abstract"),
           },
+          proposalManageUpdateResponseSchema,
         );
         setStatus(boot.statusEl, `Proposal updated. Current status: '${response.proposal.status}'.`);
       } catch (error) {
@@ -467,9 +477,10 @@ async function main(): Promise<void> {
   const withdrawButton = boot.form.querySelector<HTMLButtonElement>("[data-action='withdraw']");
   withdrawButton?.addEventListener("click", async () => {
     try {
-      const response = await patchJson<{ success: true; proposal: { status: string } }>(
+      const response = await patchJson(
         `${apiBase}/proposals/manage/${encodeURIComponent(manageToken)}`,
         { action: "withdraw" },
+        proposalManageUpdateResponseSchema,
       );
       setStatus(boot.statusEl, `Proposal updated. Current status: '${response.proposal.status}'.`);
     } catch (error) {
@@ -512,12 +523,11 @@ async function main(): Promise<void> {
 
     await withLoadingButton(inviteBtn, async () => {
       try {
-        await postJson(`${apiBase}/proposals/manage/${encodeURIComponent(manageToken)}/speakers`, {
-          email,
-          firstName,
-          lastName,
-          role,
-        });
+        await postJson(
+          `${apiBase}/proposals/manage/${encodeURIComponent(manageToken)}/speakers`,
+          { email, firstName, lastName, role },
+          coSpeakerInviteResponseSchema,
+        );
         if (csStatus) {
           csStatus.textContent = `Invite sent to ${email}.`;
           csStatus.className = "mt-2 small text-success";

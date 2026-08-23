@@ -1,9 +1,13 @@
 import { useCallback, useState } from "preact/hooks";
 import { api } from "../../../../api";
-import type { AdminAttendanceOption, AdminEventDay } from "../../../../types";
+import type { AdminAttendanceOption } from "../../../../types";
 import { useAdminEditorResource } from "../../../../hooks/useAdminEditorResource";
 import { saveAdminEditor } from "../../../../actions";
 import { AdminSettingsEditor } from "../../../../components/AdminSettingsEditor";
+import {
+  adminEventDaysReplaceResponseSchema,
+  adminEventDaysResponseSchema,
+} from "../../../../../../shared/schemas/admin-events";
 
 function DayOptionRow({
   option,
@@ -82,7 +86,7 @@ export function DaysTab({ slug, timezone }: { slug: string; timezone: string }) 
 
   const daysResource = useAdminEditorResource<DayState[]>(
     async () => {
-      const data = await api<{ days: AdminEventDay[] }>(`/api/v1/admin/events/${slug}/days`);
+      const data = await api(`/api/v1/admin/events/${slug}/days`, adminEventDaysResponseSchema);
       return (data.days ?? []).map((day) => ({
         id: day.id,
         date: day.date,
@@ -123,7 +127,7 @@ export function DaysTab({ slug, timezone }: { slug: string; timezone: string }) 
       setSaving,
       setStatus: setSaveStatus,
       request: () =>
-        api<{ skipped?: string[] }>(`/api/v1/admin/events/${slug}/days`, {
+        api(`/api/v1/admin/events/${slug}/days`, adminEventDaysReplaceResponseSchema, {
           method: "PUT",
           body: JSON.stringify({ days: body }),
         }),

@@ -12,6 +12,7 @@ import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { successResponseSchema } from "./api-common";
 import { publicAuthAdminSchema } from "./admin-auth";
+import { authMemberSchema } from "./member-auth";
 
 export const passkeyIdParamsSchema = z.object({ id: databaseIdSchema });
 
@@ -72,10 +73,11 @@ export const passkeySummarySchema = z.object({
 export type PasskeySummary = z.infer<typeof passkeySummarySchema>;
 export const passkeysListResponseSchema = z.object({ passkeys: z.array(passkeySummarySchema) });
 
-export const passkeyAuthenticateCompleteResponseSchema = successResponseSchema.extend({
-  expiresAt: z.string(),
-  admin: publicAuthAdminSchema,
-});
+export const passkeyAuthenticateCompleteBaseResponseSchema = successResponseSchema.extend({ expiresAt: z.string() });
+export const passkeyAuthenticateCompleteResponseSchema = z.union([
+  passkeyAuthenticateCompleteBaseResponseSchema.extend({ admin: publicAuthAdminSchema }),
+  passkeyAuthenticateCompleteBaseResponseSchema.extend({ member: authMemberSchema }),
+]);
 
 export const passkeyRegisterBeginRouteSchema = {
   tags: ["Passkeys"],

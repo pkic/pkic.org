@@ -19,6 +19,7 @@ export const userEmailResponseSchema = z.object({
   email: z.string(),
   createdAt: z.string(),
 });
+export const userEmailAddResponseSchema = z.object({ email: userEmailResponseSchema });
 export type UserEmailRecord = z.infer<typeof userEmailResponseSchema>;
 
 export const ADMIN_USER_EMAILS_SORT_COLUMNS = ["email", "created_at"] as const;
@@ -49,7 +50,7 @@ export const userEmailAddRouteSchema = {
   responses: {
     "201": {
       description: "Secondary email added.",
-      content: { "application/json": { schema: z.object({ email: userEmailResponseSchema }) } },
+      content: { "application/json": { schema: userEmailAddResponseSchema } },
     },
     "409": { description: "Email already belongs to (or is already recorded on) a user account." },
   },

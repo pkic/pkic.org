@@ -7,20 +7,15 @@
  */
 
 import { render, type ComponentChildren } from "preact";
+import type { z } from "zod";
 import { useEffect, useRef } from "preact/hooks";
 import { getJson } from "../api-client";
 import { currencyInfo, toMajorUnit } from "../../../shared/constants/currencies";
 import { asyncPaymentWindow } from "../../../shared/constants/async-payment-window";
-import {
-  classifyDonationPollResult,
-  type DonationSession,
-  type DonationSessionResponse,
-  type PendingDonationSession,
-  type TerminalDonationSession,
-} from "./session-poll";
-
-type PendingSession = PendingDonationSession;
-type TerminalSession = TerminalDonationSession;
+import { classifyDonationPollResult, type DonationSession, type DonationSessionResponse } from "./session-poll";
+import { donationSessionPollResponseSchema } from "../../../shared/schemas/donation";
+import { donationPromoterResponseSchema, donationPromoterRequestSchema } from "../../../shared/schemas/donation";
+import { postJson } from "../api-client";
 
 const POLL_INTERVAL_MS = 2000;
 const MAX_POLLS = 15;
@@ -285,8 +280,9 @@ export async function initDonationThankYou(): Promise<void> {
 
   for (let i = 0; i < MAX_POLLS; i++) {
     try {
-      const data = await getJson<DonationSession | PendingSession | TerminalSession>(
+      const data = await getJson(
         `/api/v1/donations/session?session_id=${encodeURIComponent(sessionId)}`,
+        donationSessionPollResponseSchema,
       );
       if ("asyncPayment" in data && data.asyncPayment) {
         isAsyncPayment = true;
@@ -334,8 +330,9 @@ export async function initDonationThankYou(): Promise<void> {
   for (let i = 0; i < asyncPolls; i++) {
     await sleep(ASYNC_POLL_INTERVAL_MS);
     try {
-      const data = await getJson<DonationSession | PendingSession | TerminalSession>(
+      const data = await getJson(
         `/api/v1/donations/session?session_id=${encodeURIComponent(sessionId)}`,
+        donationSessionPollResponseSchema,
       );
       const result = consumeDonationPollResult(container, data);
       if (result.stop) {
@@ -378,21 +375,12 @@ function renderStaticThankYou(container: HTMLElement): void {
 
 // ── Share link updates ──────────────────────────────────────────────────
 
-interface PromoterResult {
-  code: string;
-  shareUrl: string;
-  ogImageUrl: string;
-}
+type PromoterResult = z.infer<typeof donationPromoterResponseSchema>;
 
 async function fetchPromoterCode(sessionId: string): Promise<PromoterResult | null> {
   try {
-    const res = await fetch("/api/v1/donations/promoter", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session_id: sessionId }),
-    });
-    if (!res.ok) return null;
-    return (await res.json()) as PromoterResult;
+    const payload = donationPromoterRequestSchema.parse({ session_id: sessionId });
+    return postJson("/api/v1/donations/promoter", payload, donationPromoterResponseSchema);
   } catch {
     return null;
   }

@@ -4,7 +4,7 @@ import { isEligibleReplacementProposerStatus } from "../../../../../../shared/sc
 import { Badge } from "../../../../../components/Badge";
 import { ProfileLinksInput, type ProfileLinksHandle } from "../../../../../components/ProfileLinksInput";
 import { normalizeProfileLinks } from "../../../../../shared/widgets/profile-links";
-import { api } from "../../../../api";
+import { apiCommand } from "../../../../api";
 import type { ProposalSpeaker } from "../../../../types";
 import { fmt, toast } from "../../../../ui";
 import { ProposalSpeakerHeadshotManager } from "./ProposalSpeakerHeadshotManager";
@@ -87,7 +87,7 @@ export function SpeakerCard({
         links,
         role,
       };
-      await api(`/api/v1/admin/proposals/${proposalId}/speakers/${speaker.userId}`, {
+      await apiCommand(`/api/v1/admin/proposals/${proposalId}/speakers/${speaker.userId}`, {
         method: "PATCH",
         body: JSON.stringify(patch),
       });
@@ -104,7 +104,9 @@ export function SpeakerCard({
   async function sendReminder(kind: "profile" | "presentation") {
     const suffix = kind === "profile" ? "remind" : "remind-presentation";
     try {
-      await api(`/api/v1/admin/proposals/${proposalId}/speakers/${speaker.userId}/${suffix}`, { method: "POST" });
+      await apiCommand(`/api/v1/admin/proposals/${proposalId}/speakers/${speaker.userId}/${suffix}`, {
+        method: "POST",
+      });
       toast(`${kind === "profile" ? "Profile" : "Presentation"} reminder sent`, "success");
     } catch (caught) {
       toast((caught as Error).message, "error");
@@ -121,7 +123,7 @@ export function SpeakerCard({
     }
     setRemoving(true);
     try {
-      await api(`/api/v1/admin/proposals/${proposalId}/speakers/${speaker.userId}`, {
+      await apiCommand(`/api/v1/admin/proposals/${proposalId}/speakers/${speaker.userId}`, {
         method: "DELETE",
         body: JSON.stringify({
           replacementProposerUserId: isCurrentProposer ? replacementProposerUserId : undefined,

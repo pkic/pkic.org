@@ -5,6 +5,7 @@
  * `/api/v1/admin/votes*` and `/api/v1/admin/vote-proposals*` endpoints.
  */
 import { z } from "zod";
+import { successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { VOTING_CATEGORY_LETTERS } from "./membership-categories";
@@ -88,7 +89,10 @@ export const voteOutcomeOnlyResultSchema = z.object({ outcome: z.string().nullab
  * shape depending on the vote's publicDetailLevel (portal endpoints
  * always return the full shape, never outcome-only).
  */
-export const voteResultSchema = z.union([voteOutcomeOnlyResultSchema, voteFullResultSchema]).nullable();
+// Parse full results first. Zod object schemas strip unknown keys by default,
+// so putting the smaller outcome-only projection first would silently discard
+// counts/rounds from otherwise valid closed-vote responses.
+export const voteResultSchema = z.union([voteFullResultSchema, voteOutcomeOnlyResultSchema]).nullable();
 
 export const voteIdParamsSchema = z.object({ id: databaseIdSchema });
 export const voteSlugParamsSchema = z.object({ slug: z.string() });
@@ -246,6 +250,7 @@ export const portalVoteGetRouteSchema = {
 export const submitBallotSchema = z.object({
   choice: z.string().trim().min(1).max(100),
 });
+export const submitBallotResponseSchema = successResponseSchema;
 
 export const submitBallotRouteSchema = {
   tags: ["Portal Votes"],
@@ -257,7 +262,10 @@ export const submitBallotRouteSchema = {
     body: { content: { "application/json": { schema: submitBallotSchema } }, required: true },
   },
   responses: {
-    "200": { description: "Ballot recorded." },
+    "200": {
+      description: "Ballot recorded.",
+      content: { "application/json": { schema: submitBallotResponseSchema } },
+    },
     "403": { description: "Not eligible to vote in this vote." },
     "409": { description: "Vote is not open, or a ballot was already cast for this round." },
     "422": { description: "Invalid choice." },
@@ -306,6 +314,7 @@ export const submitProposalSchema = z.object({
   proposedOpensAt: z.iso.datetime({ offset: true }).nullable().optional(),
   proposedClosesAt: z.iso.datetime({ offset: true }).nullable().optional(),
 });
+export const submitProposalResponseSchema = z.object({ proposal: proposalSummarySchema });
 
 export const submitProposalRouteSchema = {
   tags: ["Vote Proposals"],
@@ -318,7 +327,7 @@ export const submitProposalRouteSchema = {
   responses: {
     "200": {
       description: "Proposal submitted, open for endorsement.",
-      content: { "application/json": { schema: z.object({ proposal: proposalSummarySchema }) } },
+      content: { "application/json": { schema: submitProposalResponseSchema } },
     },
     "403": {
       description:
@@ -340,6 +349,13 @@ export const proposalDetailResponseSchema = z.object({
   proposal: proposalSummarySchema,
   endorserUserIds: z.array(databaseIdSchema),
 });
+
+export const endorseProposalResponseSchema = z.object({
+  proposal: proposalSummarySchema,
+  convertedVote: z.object(voteSummaryFieldsSchema).nullable(),
+});
+export const withdrawEndorsementResponseSchema = successResponseSchema;
+export const withdrawProposalResponseSchema = successResponseSchema;
 
 export const listProposalsRouteSchema = {
   tags: ["Vote Proposals"],
@@ -378,10 +394,7 @@ export const endorseProposalRouteSchema = {
       description: "Endorsement recorded.",
       content: {
         "application/json": {
-          schema: z.object({
-            proposal: proposalSummarySchema,
-            convertedVote: z.object(voteSummaryFieldsSchema).nullable(),
-          }),
+          schema: endorseProposalResponseSchema,
         },
       },
     },
@@ -389,12 +402,16 @@ export const endorseProposalRouteSchema = {
     "409": { description: "Proposal is not open for endorsement." },
   },
 };
-
 export const withdrawEndorsementRouteSchema = {
   tags: ["Vote Proposals"],
   summary: "Withdraw my own endorsement",
   request: { params: proposalIdParamsSchema },
-  responses: { "200": { description: "Endorsement withdrawn." } },
+  responses: {
+    "200": {
+      description: "Endorsement withdrawn.",
+      content: { "application/json": { schema: withdrawEndorsementResponseSchema } },
+    },
+  },
 };
 
 export const withdrawProposalRouteSchema = {
@@ -402,7 +419,10 @@ export const withdrawProposalRouteSchema = {
   summary: "Withdraw my own proposal (proposer only)",
   request: { params: proposalIdParamsSchema },
   responses: {
-    "200": { description: "Proposal withdrawn." },
+    "200": {
+      description: "Proposal withdrawn.",
+      content: { "application/json": { schema: withdrawProposalResponseSchema } },
+    },
     "403": { description: "Not the proposer." },
     "409": { description: "Only an open proposal can be withdrawn." },
   },

@@ -3,6 +3,7 @@ import {
   emailTemplateKeyParamsSchema,
   emailContentTypeSchema,
   emailMessageTypeSchema,
+  successResponseSchema,
   type EmailContentType,
   type EmailMessageType,
 } from "./api-common";
@@ -85,6 +86,12 @@ export const adminEmailTemplatePreviewSchema = z.object({
   layoutHtml: z.string().min(1).max(500_000).optional(),
   data: z.record(z.string().trim().min(1).max(80), z.unknown()).optional(),
 });
+export const adminEmailTemplateExistsResponseSchema = z.object({ exists: z.boolean() });
+export const adminEmailTemplateRenderedResponseSchema = z.object({
+  subject: z.string(),
+  html: z.string(),
+  text: z.string(),
+});
 
 // ── Template version list ───────────────────────────────────────────────
 
@@ -106,6 +113,10 @@ export const adminEmailTemplateVersionRowSchema = z.object({
   created_at: z.string(),
   message_type: emailMessageTypeSchema,
 });
+export const adminEmailTemplateVersionCreateResponseSchema = successResponseSchema.extend({
+  version: adminEmailTemplateVersionRowSchema,
+});
+export const adminEmailTemplateVersionUpdateResponseSchema = adminEmailTemplateVersionCreateResponseSchema;
 
 export type AdminEmailTemplateVersion = z.infer<typeof adminEmailTemplateVersionRowSchema>;
 

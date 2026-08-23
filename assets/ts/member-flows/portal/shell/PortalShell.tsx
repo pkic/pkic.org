@@ -18,6 +18,8 @@ import { Calendar } from "../sections/Calendar";
 import { Votes } from "../sections/Votes";
 import { MyApplications } from "../sections/MyApplications";
 import { AccountSettings } from "../sections/AccountSettings";
+import { postJson } from "../../../shared/api-client";
+import { successResponseSchema } from "../../../../shared/schemas/api-common";
 import { MenuIcon } from "../../../components/MenuIcon";
 
 interface NavItem {
@@ -86,7 +88,7 @@ function Sidebar() {
           class="btn btn-sm btn-outline-secondary w-100"
           onClick={async () => {
             try {
-              await fetch("/api/v1/auth/member/logout", { method: "POST", credentials: "same-origin" });
+              await postJson("/api/v1/auth/member/logout", {}, successResponseSchema);
             } finally {
               clearAuth();
               window.location.assign("/portal/");

@@ -15,6 +15,7 @@ import type { ProposalSpeaker } from "../../../../types";
 import { toast } from "../../../../ui";
 import type { PresentationVersion } from "./model";
 import { presentationVersionsResponseSchema } from "../../../../../../shared/schemas/presentation-versions";
+import { adminProposalSpeakersResponseSchema } from "../../../../../../shared/schemas/admin-event-proposals";
 
 const EMPTY_REVIEW_SUMMARY: ProposalReviewSummary = {
   totalReviews: 0,
@@ -54,28 +55,27 @@ export function useProposalSubresources(proposalId: string, reloadProposal: () =
     setLoading(true);
     try {
       const [reviewData, speakerData, commentData, presentationData] = await Promise.all([
-        api<unknown>(`/api/v1/admin/proposals/${proposalId}/reviews?limit=25`)
-          .then((value) => proposalReviewsListResponseSchema.parse(value))
-          .catch(recoverSubresource("reviews", null)),
-        api<{ speakers: ProposalSpeaker[] }>(`/api/v1/admin/proposals/${proposalId}/speakers`).catch(
+        api(`/api/v1/admin/proposals/${proposalId}/reviews?limit=25`, proposalReviewsListResponseSchema).catch(
+          recoverSubresource("reviews", null),
+        ),
+        api(`/api/v1/admin/proposals/${proposalId}/speakers`, adminProposalSpeakersResponseSchema).catch(
           recoverSubresource("speakers", { speakers: [] }),
         ),
-        api<unknown>(`/api/v1/admin/proposals/${proposalId}/comments?limit=25`)
-          .then((value) => proposalCommentsListResponseSchema.parse(value))
-          .catch(
-            recoverSubresource("comments", {
-              comments: [],
-              page: { limit: 25, offset: 0, total: 0, hasMore: false },
-            }),
-          ),
-        api<unknown>(`/api/v1/admin/proposals/${proposalId}/presentation/versions?limit=25`)
-          .then((value) => presentationVersionsResponseSchema.parse(value))
-          .catch(
-            recoverSubresource("presentation versions", {
-              versions: [],
-              page: { limit: 25, offset: 0, total: 0, hasMore: false },
-            }),
-          ),
+        api(`/api/v1/admin/proposals/${proposalId}/comments?limit=25`, proposalCommentsListResponseSchema).catch(
+          recoverSubresource("comments", {
+            comments: [],
+            page: { limit: 25, offset: 0, total: 0, hasMore: false },
+          }),
+        ),
+        api(
+          `/api/v1/admin/proposals/${proposalId}/presentation/versions?limit=25`,
+          presentationVersionsResponseSchema,
+        ).catch(
+          recoverSubresource("presentation versions", {
+            versions: [],
+            page: { limit: 25, offset: 0, total: 0, hasMore: false },
+          }),
+        ),
       ]);
       setReviews(reviewData?.reviews ?? []);
       setReviewPage(reviewData?.page ?? null);
@@ -109,12 +109,10 @@ export function useProposalSubresources(proposalId: string, reloadProposal: () =
   async function addComment(comment: string): Promise<boolean> {
     setSavingComment(true);
     try {
-      const result = proposalCommentCreateResponseSchema.parse(
-        await api<unknown>(`/api/v1/admin/proposals/${proposalId}/comments`, {
-          method: "POST",
-          body: JSON.stringify({ comment }),
-        }),
-      );
+      const result = await api(`/api/v1/admin/proposals/${proposalId}/comments`, proposalCommentCreateResponseSchema, {
+        method: "POST",
+        body: JSON.stringify({ comment }),
+      });
       setComments((previous) => [result.comment, ...previous]);
       setCommentPage((previous) => (previous ? { ...previous, total: previous.total + 1 } : previous));
       return true;
@@ -130,10 +128,9 @@ export function useProposalSubresources(proposalId: string, reloadProposal: () =
     if (!commentPage?.hasMore || loadingMoreComments) return;
     setLoadingMoreComments(true);
     try {
-      const next = proposalCommentsListResponseSchema.parse(
-        await api<unknown>(
-          `/api/v1/admin/proposals/${proposalId}/comments?limit=${commentPage.limit}&offset=${comments.length}`,
-        ),
+      const next = await api(
+        `/api/v1/admin/proposals/${proposalId}/comments?limit=${commentPage.limit}&offset=${comments.length}`,
+        proposalCommentsListResponseSchema,
       );
       setComments((previous) => [...previous, ...next.comments]);
       setCommentPage(next.page);
@@ -148,10 +145,9 @@ export function useProposalSubresources(proposalId: string, reloadProposal: () =
     if (!reviewPage?.hasMore || loadingMoreReviews) return;
     setLoadingMoreReviews(true);
     try {
-      const next = proposalReviewsListResponseSchema.parse(
-        await api<unknown>(
-          `/api/v1/admin/proposals/${proposalId}/reviews?limit=${reviewPage.limit}&offset=${reviews.length}`,
-        ),
+      const next = await api(
+        `/api/v1/admin/proposals/${proposalId}/reviews?limit=${reviewPage.limit}&offset=${reviews.length}`,
+        proposalReviewsListResponseSchema,
       );
       setReviews((previous) => [...previous, ...next.reviews]);
       setReviewPage(next.page);
@@ -168,10 +164,9 @@ export function useProposalSubresources(proposalId: string, reloadProposal: () =
     if (!versionPage?.hasMore || loadingMoreVersions) return;
     setLoadingMoreVersions(true);
     try {
-      const next = presentationVersionsResponseSchema.parse(
-        await api<unknown>(
-          `/api/v1/admin/proposals/${proposalId}/presentation/versions?limit=${versionPage.limit}&offset=${versions.length}`,
-        ),
+      const next = await api(
+        `/api/v1/admin/proposals/${proposalId}/presentation/versions?limit=${versionPage.limit}&offset=${versions.length}`,
+        presentationVersionsResponseSchema,
       );
       setVersions((previous) => [...previous, ...next.versions]);
       setVersionPage(next.page);

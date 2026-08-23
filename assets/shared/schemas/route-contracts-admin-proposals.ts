@@ -43,6 +43,8 @@ import {
 } from "./presentation-versions";
 import { httpUrlSchema } from "./urls";
 
+export const adminProposalOpenManageResponseSchema = z.object({ manageUrl: httpUrlSchema });
+
 export const adminProposalOpenManageRouteSchema = {
   tags: ["Admin proposals"],
   summary: "Open proposal management view",
@@ -56,7 +58,7 @@ export const adminProposalOpenManageRouteSchema = {
       description: "Fresh proposal management URL.",
       content: {
         "application/json": {
-          schema: z.object({ manageUrl: httpUrlSchema }),
+          schema: adminProposalOpenManageResponseSchema,
         },
       },
     },

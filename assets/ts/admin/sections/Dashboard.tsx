@@ -3,6 +3,7 @@ import { Spinner } from "../../components/Spinner";
 import { ErrorAlert } from "../../components/ErrorAlert";
 import { DataTable } from "../../components/Table";
 import { api } from "../api";
+import { adminStatsResponseSchema } from "../../../shared/schemas/admin-analytics";
 import { fmtMoney, recentActivityChart, statusBars } from "../charts";
 import type { StatsResponse } from "../types";
 import { useHashLocation } from "wouter/use-hash-location";
@@ -11,7 +12,11 @@ import { ActivityChartCard } from "../components/ActivityChartCard";
 
 export function Dashboard() {
   const [, navigate] = useHashLocation();
-  const { data: stats, loading, error } = useData<StatsResponse>(() => api<StatsResponse>("/api/v1/admin/stats"), []);
+  const {
+    data: stats,
+    loading,
+    error,
+  } = useData<StatsResponse>(() => api("/api/v1/admin/stats", adminStatsResponseSchema), []);
 
   if (loading) return <Spinner />;
   if (error) return <ErrorAlert error={error} />;

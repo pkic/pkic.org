@@ -147,6 +147,12 @@ export const donationSessionPendingResponseSchema = z.object({
   sessionExpiresAt: z.number().nullable().optional(),
 });
 
+/** Combined 200/202 wire response used by clients that poll settlement state. */
+export const donationSessionPollResponseSchema = z.union([
+  donationSessionResponseSchema,
+  donationSessionPendingResponseSchema,
+]);
+
 export const donationSessionGetRouteSchema = {
   tags: ["Donations"],
   summary: "Get minimal public donation information",

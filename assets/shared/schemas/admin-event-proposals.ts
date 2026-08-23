@@ -140,6 +140,7 @@ export const proposalStatsSchema = z.object({
   unreviewedCount: z.number().int().nonnegative(),
   total: z.number().int().nonnegative(),
 });
+export const proposalReminderResponseSchema = z.object({ queued: z.number() });
 
 export const adminEventProposalsResponseSchema = paginatedResponseSchema(
   "proposals",

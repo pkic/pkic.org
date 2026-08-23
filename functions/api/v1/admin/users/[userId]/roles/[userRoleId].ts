@@ -1,4 +1,5 @@
 import {
+  userRoleResponseEnvelopeSchema,
   userRoleRevokeRouteSchema,
   userRoleUpdateExpiryRouteSchema,
 } from "../../../../../../../assets/shared/schemas/access-control";
@@ -19,13 +20,15 @@ export const UserRolesRevoke = openApiRoute(userRoleRevokeRouteSchema, async (c:
 
 export const UserRolesUpdateExpiry = openApiRoute(userRoleUpdateExpiryRouteSchema, async (c: AdminContext, data) => {
   const actor = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  return json({
-    role: await updateUserRoleAssignmentExpiry(
-      requestDb(c),
-      actor,
-      data.params.userId,
-      data.params.userRoleId,
-      data.body,
-    ),
-  });
+  return json(
+    userRoleResponseEnvelopeSchema.parse({
+      role: await updateUserRoleAssignmentExpiry(
+        requestDb(c),
+        actor,
+        data.params.userId,
+        data.params.userRoleId,
+        data.body,
+      ),
+    }),
+  );
 });

@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from "preact/hooks";
 import { Spinner } from "../../components/Spinner";
 import { ErrorAlert } from "../../components/ErrorAlert";
 import { api } from "../api";
+import { membershipSettingsSchema } from "../../../shared/schemas/membership-settings";
 import { toast } from "../ui";
 import type { AdminMembershipSettings } from "../types";
 
@@ -19,7 +20,7 @@ export function MembershipSettings() {
     setLoading(true);
     setError(null);
     try {
-      const data = await api<AdminMembershipSettings>("/api/v1/admin/membership-settings");
+      const data = await api("/api/v1/admin/membership-settings", membershipSettingsSchema);
       setSettings(data);
     } catch (e) {
       setError((e as Error).message);
@@ -37,7 +38,7 @@ export function MembershipSettings() {
     if (!settings) return;
     setSaving(true);
     try {
-      const updated = await api<AdminMembershipSettings>("/api/v1/admin/membership-settings", {
+      const updated = await api("/api/v1/admin/membership-settings", membershipSettingsSchema, {
         method: "PATCH",
         body: JSON.stringify({
           consultationWindowDays: settings.consultationWindowDays,

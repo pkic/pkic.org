@@ -161,8 +161,9 @@ async function main(): Promise<void> {
   });
 
   try {
-    const { form: definition } = memberApplicationFormResponseSchema.parse(
-      await getJson<unknown>(`${API_BASE}/members/applications/form`),
+    const { form: definition } = await getJson(
+      `${API_BASE}/members/applications/form`,
+      memberApplicationFormResponseSchema,
     );
     if (customFieldsContainer) renderCustomFields(customFieldsContainer, definition?.fields ?? []);
   } catch {
@@ -183,8 +184,10 @@ async function main(): Promise<void> {
     await withLoadingButton(findSubmitButton(form), async () => {
       try {
         const payload = memberApplicationCreateSchema.parse(buildApplicationPayload(form, category));
-        const result = memberApplicationCreateResponseSchema.parse(
-          await postJson<unknown>(`${API_BASE}/members/applications`, payload),
+        const result = await postJson(
+          `${API_BASE}/members/applications`,
+          payload,
+          memberApplicationCreateResponseSchema,
         );
         showSuccessPanel(root, form, result.applicationId, result.manageToken, payload.applicantName);
       } catch (error) {

@@ -3,12 +3,13 @@ import { Spinner } from "../../../components/Spinner";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { Pager } from "../../../components/Pager";
 import { useApiPage } from "../../../hooks/useApiPage";
-import { api } from "../../api";
+import { api, apiCommand } from "../../api";
 import { toast } from "../../ui";
 import type { LeadershipPosition } from "../../types";
 import { UserPicker, type PickedUser } from "./UserPicker";
 import {
   leadershipAffiliationsResponseSchema,
+  leadershipPositionResponseSchema,
   leadershipPositionsListResponseSchema,
   type LeadershipAffiliation,
   type LeadershipPositionsListResponse,
@@ -51,8 +52,8 @@ function AffiliationPicker({
 
     setLoading(true);
     onChange(undefined);
-    void api<unknown>(`/api/v1/admin/leadership-positions/users/${userId}/affiliations`)
-      .then((raw) => leadershipAffiliationsResponseSchema.parse(raw).affiliations)
+    void api(`/api/v1/admin/leadership-positions/users/${userId}/affiliations`, leadershipAffiliationsResponseSchema)
+      .then((data) => data.affiliations)
       .then((next) => {
         if (cancelled) return;
         setAffiliations(next);
@@ -116,7 +117,7 @@ function AddPositionForm({ onAdded, body }: { onAdded: () => void; body: "board"
     if (!picked || memberId === undefined || !title.trim() || !startsAt) return;
     setBusy(true);
     try {
-      await api("/api/v1/admin/leadership-positions", {
+      await api("/api/v1/admin/leadership-positions", leadershipPositionResponseSchema, {
         method: "POST",
         body: JSON.stringify({
           body,
@@ -216,7 +217,7 @@ function PositionRow({ position, onChanged }: { position: LeadershipPosition; on
     e.preventDefault();
     setBusy(true);
     try {
-      await api(`/api/v1/admin/leadership-positions/${position.id}`, {
+      await api(`/api/v1/admin/leadership-positions/${position.id}`, leadershipPositionResponseSchema, {
         method: "PATCH",
         body: JSON.stringify({ memberId, title: title.trim(), startsAt, endsAt: endsAt || null }),
       });
@@ -234,7 +235,7 @@ function PositionRow({ position, onChanged }: { position: LeadershipPosition; on
     if (!confirm(`Remove ${position.name} (${position.title})?`)) return;
     setBusy(true);
     try {
-      await api(`/api/v1/admin/leadership-positions/${position.id}`, { method: "DELETE" });
+      await apiCommand(`/api/v1/admin/leadership-positions/${position.id}`, { method: "DELETE" });
       toast("Position removed", "success");
       onChanged();
     } catch (err) {

@@ -3,6 +3,7 @@ import { postJson, ApiClientError } from "../../../../shared/api-client";
 import { toast } from "../../ui";
 import type { PortalVote } from "../../types";
 import { MOTION_CHOICES } from "./shared";
+import { submitBallotResponseSchema } from "../../../../../shared/schemas/votes";
 
 export function BallotForm({ vote, onCast }: { vote: PortalVote; onCast: () => Promise<void> }) {
   const [choice, setChoice] = useState<string>("");
@@ -11,7 +12,7 @@ export function BallotForm({ vote, onCast }: { vote: PortalVote; onCast: () => P
   async function submit(selected: string): Promise<void> {
     setSubmitting(true);
     try {
-      await postJson(`/api/v1/portal/votes/${vote.id}/ballots`, { choice: selected });
+      await postJson(`/api/v1/portal/votes/${vote.id}/ballots`, { choice: selected }, submitBallotResponseSchema);
       toast("Ballot cast", "success");
       await onCast();
     } catch (e) {

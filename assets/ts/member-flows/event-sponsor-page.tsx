@@ -59,8 +59,9 @@ async function main(): Promise<void> {
         const organizationName = readField(form, "organizationName");
         const basePath = currentBasePath();
 
-        const data = sponsorshipCheckoutResponseSchema.parse(
-          await postJson<unknown>(`${apiBase}/sponsorship/checkout`, {
+        const data = await postJson(
+          `${apiBase}/sponsorship/checkout`,
+          {
             checkoutAttemptId,
             contactName: [firstName, lastName].filter(Boolean).join(" "),
             contactEmail: readField(form, "email"),
@@ -69,7 +70,8 @@ async function main(): Promise<void> {
             eventId: eventSlug,
             successPath: `${basePath}complete/`,
             cancelPath: basePath,
-          }),
+          },
+          sponsorshipCheckoutResponseSchema,
         );
 
         window.location.href = data.url;

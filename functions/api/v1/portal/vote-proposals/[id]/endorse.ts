@@ -9,7 +9,9 @@ import { json } from "../../../../../_lib/http";
 import { requireMemberFromRequest } from "../../../../../_lib/auth/member";
 import { endorseVoteProposal, withdrawEndorsement } from "../../../../../_lib/services/votes";
 import {
+  endorseProposalResponseSchema,
   endorseProposalRouteSchema,
+  withdrawEndorsementResponseSchema,
   withdrawEndorsementRouteSchema,
 } from "../../../../../../assets/shared/schemas/votes";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
@@ -19,7 +21,7 @@ export const PortalVoteProposalEndorsePost = openApiRoute(endorseProposalRouteSc
   const member = await requireMemberFromRequest(db, c.req.raw, c.env);
   const id = data.params.id;
   const result = await endorseVoteProposal(db, member, id);
-  return json(result);
+  return json(endorseProposalResponseSchema.parse(result));
 });
 
 export const PortalVoteProposalEndorseDelete = openApiRoute(
@@ -29,6 +31,6 @@ export const PortalVoteProposalEndorseDelete = openApiRoute(
     const member = await requireMemberFromRequest(db, c.req.raw, c.env);
     const id = data.params.id;
     await withdrawEndorsement(db, member, id);
-    return json({ success: true });
+    return json(withdrawEndorsementResponseSchema.parse({ success: true }));
   },
 );

@@ -1,6 +1,6 @@
 import { useState, useRef } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataTable";
-import { api } from "../../../api";
+import { apiCommand } from "../../../api";
 import { fmt } from "../../../ui";
 import type { EventPermission } from "../../../types";
 import { adminEventTeamListResponseSchema } from "../../../../../shared/schemas/admin-events";
@@ -24,7 +24,7 @@ export function Team({ slug }: { slug: string }) {
   async function handleRevoke(permId: string) {
     if (!confirm("Remove this team member?")) return;
     await performAdminAction({
-      request: () => api(`/api/v1/admin/events/${slug}/permissions/${permId}`, { method: "DELETE" }),
+      request: () => apiCommand(`/api/v1/admin/events/${slug}/permissions/${permId}`, { method: "DELETE" }),
       successMessage: "Permission revoked",
       afterSuccess: () => tableRef.current?.reload(),
     });
@@ -37,7 +37,7 @@ export function Team({ slug }: { slug: string }) {
     await performAdminAction({
       setBusy: setAdding,
       request: () =>
-        api(`/api/v1/admin/events/${slug}/permissions`, {
+        apiCommand(`/api/v1/admin/events/${slug}/permissions`, {
           method: "POST",
           body: JSON.stringify({
             userEmail: newEmail.trim(),

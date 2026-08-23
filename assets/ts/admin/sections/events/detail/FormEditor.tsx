@@ -1,5 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
-import { api } from "../../../api";
+import { api, apiCommand } from "../../../api";
+import { adminFormCreateResponseSchema } from "../../../../../shared/schemas/admin-forms";
 import { toast } from "../../../ui";
 import type { AdminEventFormSummary, AdminFormDetailField } from "../../../types";
 import {
@@ -240,14 +241,14 @@ export function FormEditor({
       const payload = draftToPayload(draft, mode === "create");
       if (mode === "create") {
         const endpoint = slug ? `/api/v1/admin/events/${slug}/forms` : "/api/v1/admin/forms";
-        await api<{ key: string }>(endpoint, {
+        await api(endpoint, adminFormCreateResponseSchema, {
           method: "POST",
           body: JSON.stringify(payload),
         });
         toast(slug ? "Form created" : "Global form created", "success");
         onSaved(draft.key.trim());
       } else if (detail) {
-        await api(`/api/v1/admin/forms/${detail.form.key}`, {
+        await apiCommand(`/api/v1/admin/forms/${detail.form.key}`, {
           method: "PATCH",
           body: JSON.stringify(payload),
         });

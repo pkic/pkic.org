@@ -1,7 +1,7 @@
 import { useState } from "preact/hooks";
-import type { HeadshotUploadResponse } from "../../../../../../shared/schemas/registration";
+import { headshotUploadResponseSchema } from "../../../../../../shared/schemas/registration";
 import { AdminHeadshotManager, ADMIN_HEADSHOT_DISCLAIMER } from "../../../../../shared/headshot/AdminHeadshotManager";
-import { api } from "../../../../api";
+import { api, apiCommand } from "../../../../api";
 import type { ProposalSpeaker } from "../../../../types";
 import { toast } from "../../../../ui";
 
@@ -29,8 +29,9 @@ export function ProposalSpeakerHeadshotManager({
   const [status, setStatus] = useState("");
 
   async function upload(file: Blob) {
-    const data = await api<HeadshotUploadResponse>(
+    const data = await api(
       adminProposalSpeakerAssetPath(proposalId, speaker.userId, "headshot"),
+      headshotUploadResponseSchema,
       {
         method: "PUT",
         headers: { "Content-Type": file.type || "image/jpeg" },
@@ -43,8 +44,9 @@ export function ProposalSpeakerHeadshotManager({
   async function fetchGravatar() {
     setStatus("Looking up Gravatar...");
     try {
-      const data = await api<HeadshotUploadResponse>(
+      const data = await api(
         adminProposalSpeakerAssetPath(proposalId, speaker.userId, "gravatar"),
+        headshotUploadResponseSchema,
         { method: "POST" },
       );
       onSaved(speaker.userId, {
@@ -69,7 +71,9 @@ export function ProposalSpeakerHeadshotManager({
       readOnly={!canEdit}
       uploadHeadshot={upload}
       deleteHeadshot={() =>
-        api(adminProposalSpeakerAssetPath(proposalId, speaker.userId, "headshot"), { method: "DELETE" })
+        apiCommand(adminProposalSpeakerAssetPath(proposalId, speaker.userId, "headshot"), { method: "DELETE" }).then(
+          () => undefined,
+        )
       }
       onFetchGravatar={fetchGravatar}
       disclaimerTexts={ADMIN_HEADSHOT_DISCLAIMER}

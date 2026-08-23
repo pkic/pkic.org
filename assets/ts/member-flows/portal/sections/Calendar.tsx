@@ -11,6 +11,10 @@ import { Spinner } from "../../../components/Spinner";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { toast, formatStageLabel } from "../ui";
 import type { MyMeetingSeries, MyMeetingSeriesPageInfo } from "../types";
+import {
+  myMeetingSeriesListResponseSchema,
+  myCalendarPreferenceResponseSchema,
+} from "../../../../shared/schemas/meeting-calendar";
 
 function MeetingSeriesCard({ series, onChanged }: { series: MyMeetingSeries; onChanged: () => Promise<void> }) {
   const [saving, setSaving] = useState(false);
@@ -18,7 +22,7 @@ function MeetingSeriesCard({ series, onChanged }: { series: MyMeetingSeries; onC
   async function setPreference(icsFileId: string | null): Promise<void> {
     setSaving(true);
     try {
-      await patchJson(`/api/v1/me/calendar/${series.id}/preference`, { icsFileId });
+      await patchJson(`/api/v1/me/calendar/${series.id}/preference`, { icsFileId }, myCalendarPreferenceResponseSchema);
       toast("Preference saved", "success");
       await onChanged();
     } catch (e) {
@@ -90,9 +94,7 @@ export function Calendar() {
       const currentPage = pageRef.current;
       const offset = append && currentPage ? currentPage.offset + currentPage.limit : 0;
       const params = new URLSearchParams({ limit: "50", offset: String(offset) });
-      const data = await getJson<{ meetingSeries: MyMeetingSeries[]; page: MyMeetingSeriesPageInfo }>(
-        `/api/v1/me/calendar?${params.toString()}`,
-      );
+      const data = await getJson(`/api/v1/me/calendar?${params.toString()}`, myMeetingSeriesListResponseSchema);
       setSeries((current) => (append ? [...(current ?? []), ...data.meetingSeries] : data.meetingSeries));
       pageRef.current = data.page;
       setPage(data.page);

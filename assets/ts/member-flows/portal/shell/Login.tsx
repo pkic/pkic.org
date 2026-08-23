@@ -14,15 +14,16 @@ import { authenticateWithPasskey } from "../../../shared/passkey-authentication"
 import { MagicLinkSubmitButton, SignInError } from "../../../components/MagicLinkFeedback";
 import { useMagicLinkRequest } from "../../../hooks/useMagicLinkRequest";
 import { emailFromSubmitEvent } from "../../../shared/form/helpers";
+import { successResponseSchema } from "../../../../shared/schemas/api-common";
 
 async function requestMagicLink(email: string): Promise<void> {
-  await postJson("/api/v1/auth/member/request-link", { email });
+  await postJson("/api/v1/auth/member/request-link", { email }, successResponseSchema);
   // Always show success to prevent email enumeration (mirrors admin Login).
 }
 
 async function signInWithPasskey(): Promise<void> {
   const result = await authenticateWithPasskey();
-  if (!result.member) {
+  if (!("member" in result)) {
     // Succeeded, but the passkey belonged to a staff account, not a member.
     throw new Error("This passkey isn't registered to a member account.");
   }

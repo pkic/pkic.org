@@ -84,6 +84,46 @@ export type AdminUserListItem = z.infer<typeof adminUserListItemSchema>;
 
 export const usersListResponseSchema = paginatedResponseSchema("users", adminUserListItemSchema);
 
+export const adminUserMembershipDetailSchema = z.object({
+  memberId: z.string(),
+  membershipCategory: z.string(),
+  status: z.string(),
+  showOnOrgProfile: z.boolean(),
+  organizationId: z.string().nullable(),
+  organizationName: z.string().nullable(),
+  createdAt: z.string(),
+  workingGroups: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string() })),
+});
+export const adminUserDetailSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  first_name: z.string().nullable(),
+  last_name: z.string().nullable(),
+  preferred_name: z.string().nullable(),
+  organization_name: z.string().nullable(),
+  job_title: z.string().nullable(),
+  biography: z.string().nullable(),
+  links: z
+    .array(
+      z.union([
+        z.string(),
+        z.object({ label: z.string().nullable().optional(), url: z.string().nullable().optional() }),
+      ]),
+    )
+    .optional(),
+  role: z.string(),
+  active: z.boolean(),
+  isEcMember: z.boolean().optional(),
+  headshot_r2_key: z.string().nullable(),
+  headshot_updated_at: z.string().nullable(),
+  headshotUrl: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  pii_redacted_at: z.string().nullable(),
+  membership: adminUserMembershipDetailSchema.nullable(),
+});
+export const adminUserDetailResponseSchema = z.object({ user: adminUserDetailSchema });
+
 export const usersListRouteSchema = {
   tags: ["Users"],
   summary: "List users (admin)",

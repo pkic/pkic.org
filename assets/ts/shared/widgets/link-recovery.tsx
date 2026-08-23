@@ -1,5 +1,6 @@
 import { render } from "preact";
 import { postJson } from "../api-client";
+import { successResponseSchema } from "../../../shared/schemas/api-common";
 import { resetButton, setButtonLoading } from "../form/button-loading";
 
 interface ManageLinkRecoveryOptions {
@@ -57,7 +58,7 @@ export function showManageLinkRecoveryForm(options: ManageLinkRecoveryOptions): 
 
     setButtonLoading(resendBtn);
     try {
-      await postJson(endpoint, { email });
+      await postJson(endpoint, { email }, successResponseSchema);
       if (sectionEl) {
         render(<p class="alert alert-success">{successMessage}</p>, sectionEl);
       }

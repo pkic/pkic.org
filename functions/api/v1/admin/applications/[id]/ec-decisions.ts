@@ -7,7 +7,10 @@ import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { recordEcDecision } from "../../../../../_lib/services/ec-review";
-import { adminEcDecisionCreateRouteSchema } from "../../../../../../assets/shared/schemas/admin-applications";
+import {
+  adminEcDecisionCreateResponseSchema,
+  adminEcDecisionCreateRouteSchema,
+} from "../../../../../../assets/shared/schemas/admin-applications";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 export const AdminApplicationEcDecisionsPost = openApiRoute(
@@ -28,15 +31,14 @@ export const AdminApplicationEcDecisionsPost = openApiRoute(
       audit: { actorType: "admin", actorId: admin.id, action: "ec_decision_recorded_by_staff" },
     });
 
-    return json(
-      {
-        id: decision.id,
-        applicationId,
-        decision: decision.decision,
-        reason: decision.reason,
-        createdAt: decision.created_at,
-      },
-      201,
-    );
+    const payload = adminEcDecisionCreateResponseSchema.parse({
+      id: decision.id,
+      applicationId,
+      ecMemberUserId: decision.ec_member_user_id,
+      decision: decision.decision,
+      reason: decision.reason,
+      createdAt: decision.created_at,
+    });
+    return json(payload, 201);
   },
 );

@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from "preact/hooks";
 import { Spinner } from "../../../components/Spinner";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { api } from "../../api";
+import { adminOrganizationDetailResponseSchema } from "../../../../shared/schemas/admin-organizations";
 import { toast, fmt } from "../../ui";
 import type { AdminOrganizationDetail } from "../../types";
 import { AddRepresentativeForm, RepresentativeRow } from "./Representatives";
@@ -24,9 +25,7 @@ export function OrganizationDetailView({ organizationId, onBack }: { organizatio
     setLoading(true);
     setError(null);
     try {
-      const data = await api<{ organization: AdminOrganizationDetail }>(
-        `/api/v1/admin/organizations/${organizationId}`,
-      );
+      const data = await api(`/api/v1/admin/organizations/${organizationId}`, adminOrganizationDetailResponseSchema);
       setOrg(data.organization);
     } catch (e) {
       setError((e as Error).message);
@@ -41,7 +40,7 @@ export function OrganizationDetailView({ organizationId, onBack }: { organizatio
 
   async function updateContact(field: "primaryContactUserId" | "secondaryContactUserId", userId: string) {
     try {
-      await api(`/api/v1/admin/organizations/${organizationId}`, {
+      await api(`/api/v1/admin/organizations/${organizationId}`, adminOrganizationDetailResponseSchema, {
         method: "PATCH",
         body: JSON.stringify({ [field]: userId || null }),
       });

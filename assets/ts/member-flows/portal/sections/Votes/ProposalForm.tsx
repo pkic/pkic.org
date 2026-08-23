@@ -4,6 +4,7 @@ import { postJson, ApiClientError } from "../../../../shared/api-client";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Pager } from "../../../../components/Pager";
 import { useApiPage } from "../../../../hooks/useApiPage";
+import { submitProposalResponseSchema } from "../../../../../shared/schemas/votes";
 import { myWorkingGroupsListResponseSchema } from "../../../../../shared/schemas/me";
 import { toast } from "../../ui";
 import type { VoteType, VoteScopeType } from "../../types";
@@ -35,13 +36,17 @@ export function ProposalForm({ onCreated }: { onCreated: () => Promise<void> }) 
     }
     submission.begin();
     try {
-      await postJson("/api/v1/portal/vote-proposals", {
-        title: title.trim(),
-        description: description.trim(),
-        voteType,
-        scopeType,
-        scopeId: scopeType === "working_group" ? scopeId : null,
-      });
+      await postJson(
+        "/api/v1/portal/vote-proposals",
+        {
+          title: title.trim(),
+          description: description.trim(),
+          voteType,
+          scopeType,
+          scopeId: scopeType === "working_group" ? scopeId : null,
+        },
+        submitProposalResponseSchema,
+      );
       toast("Proposal submitted, open for endorsement", "success");
       setTitle("");
       setDescription("");

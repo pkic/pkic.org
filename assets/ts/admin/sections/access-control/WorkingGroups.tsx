@@ -2,13 +2,16 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Spinner } from "../../../components/Spinner";
 import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
-import { api } from "../../api";
+import { api, apiCommand } from "../../api";
 import { fmt, toast } from "../../ui";
 import type { AdminWorkingGroupDetail, AdminWorkingGroupMember } from "../../types";
 import { UserPicker, type PickedUser } from "./UserPicker";
 import { adminWorkingGroupCatalog } from "../../services/catalogs";
 import { performAdminAction } from "../../actions";
-import { workingGroupMembersListResponseSchema } from "../../../../shared/schemas/working-groups";
+import {
+  workingGroupMembersListResponseSchema,
+  workingGroupResponseSchema,
+} from "../../../../shared/schemas/working-groups";
 import { runGoogleGroupsSync } from "../../services/google-groups-sync";
 import { ServerSearchSelect } from "../../components/ServerSearchSelect";
 
@@ -36,7 +39,7 @@ function CreateWorkingGroupForm({ onCreated }: { onCreated: () => void }) {
     await performAdminAction({
       setBusy: setSaving,
       request: () =>
-        api("/api/v1/admin/working-groups", {
+        api("/api/v1/admin/working-groups", workingGroupResponseSchema, {
           method: "POST",
           body: JSON.stringify({
             name: name.trim(),
@@ -137,7 +140,7 @@ export function WorkingGroups() {
     if (!selectedId) return;
     setLoading(true);
     try {
-      const d = await api<{ workingGroup: AdminWorkingGroupDetail }>(`/api/v1/admin/working-groups/${selectedId}`);
+      const d = await api(`/api/v1/admin/working-groups/${selectedId}`, workingGroupResponseSchema);
       setDetail(d.workingGroup);
     } catch (e) {
       toast((e as Error).message, "error");
@@ -155,7 +158,7 @@ export function WorkingGroups() {
     if (!addMemberUser || !selectedId) return;
     setAddingMember(true);
     try {
-      await api(`/api/v1/admin/working-groups/${selectedId}/members`, {
+      await apiCommand(`/api/v1/admin/working-groups/${selectedId}/members`, {
         method: "POST",
         body: JSON.stringify({ userId: addMemberUser.id }),
       });
@@ -174,7 +177,7 @@ export function WorkingGroups() {
     if (!selectedId) return;
     if (!confirm(`Remove ${name} from this working group?`)) return;
     try {
-      await api(`/api/v1/admin/working-groups/${selectedId}/members/${userId}`, { method: "DELETE" });
+      await apiCommand(`/api/v1/admin/working-groups/${selectedId}/members/${userId}`, { method: "DELETE" });
       toast("Member removed", "success");
       await Promise.all([loadDetail(), loadGroups()]);
       memberTableRef.current?.reload();
@@ -211,7 +214,7 @@ export function WorkingGroups() {
     }
     setTogglingActive(true);
     try {
-      await api(`/api/v1/admin/working-groups/${detail.id}`, {
+      await api(`/api/v1/admin/working-groups/${detail.id}`, workingGroupResponseSchema, {
         method: "PATCH",
         body: JSON.stringify({ active: next }),
       });

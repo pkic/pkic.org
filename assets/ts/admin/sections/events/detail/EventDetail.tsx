@@ -4,6 +4,7 @@ import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
+import { adminEventDetailResponseSchema } from "../../../../../shared/schemas/admin-events";
 import { toast } from "../../../ui";
 import type { EventDetail } from "../../../types";
 import { Settings } from "./Settings";
@@ -34,7 +35,7 @@ export function EventDetailView({ slug, tab: tabProp, subTab }: { slug: string; 
     setLoading(true);
     setError(null);
     try {
-      const data = await api<{ event: EventDetail }>(`/api/v1/admin/events/${slug}`);
+      const data = await api(`/api/v1/admin/events/${slug}`, adminEventDetailResponseSchema);
       setEvent(data.event);
       currentEvent.value = data.event;
     } catch (e) {

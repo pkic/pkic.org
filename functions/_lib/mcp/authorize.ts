@@ -24,6 +24,12 @@ import {
   verifyMcpAuthorizeMagicLink,
   wantsJsonResponse,
 } from "./oauth";
+import {
+  adminMcpOauthContextSchema,
+  adminMcpOauthMagicLinkResponseSchema,
+  adminMcpOauthRedirectResponseSchema,
+  adminMcpOauthVerifyResponseSchema,
+} from "../../../assets/shared/schemas/admin-oauth";
 
 interface McpAuthorizeHandlerOptions {
   app: Hono<{ Bindings: Env }>;
@@ -75,7 +81,7 @@ async function handleAuthorizeGet(request: Request, env: McpOAuthEnv): Promise<R
     return redirectToMcpOauthUi(env, request, returnTo);
   }
 
-  return jsonResponse(await describeMcpAuthorization(request, env, returnTo));
+  return jsonResponse(adminMcpOauthContextSchema.parse(await describeMcpAuthorization(request, env, returnTo)));
 }
 
 async function handleMagicLinkRequest(
@@ -86,7 +92,7 @@ async function handleMagicLinkRequest(
   returnTo: string,
 ): Promise<Response> {
   await sendMcpAuthorizeMagicLink({ request, env, executionCtx: ctx, email, returnTo });
-  return jsonResponse({ success: true, sentTo: email || null });
+  return jsonResponse(adminMcpOauthMagicLinkResponseSchema.parse({ success: true, sentTo: email || null }));
 }
 
 async function handleAuthorizeApproval(
@@ -124,7 +130,7 @@ async function handleAuthorizeApproval(
     ),
   });
 
-  return { redirectTo };
+  return adminMcpOauthRedirectResponseSchema.parse({ redirectTo });
 }
 
 async function handleAuthorizePost(request: Request, env: McpOAuthEnv, ctx: ExecutionContext): Promise<Response> {
@@ -139,7 +145,10 @@ async function handleAuthorizePost(request: Request, env: McpOAuthEnv, ctx: Exec
   if (action === "deny") {
     const response = redirectAuthorizationDenied(authRequest);
     response.headers.append("Set-Cookie", serializeExpiredMcpOauthLoginCookie(request));
-    return jsonResponse({ redirectTo: response.headers.get("location") }, 200);
+    return jsonResponse(
+      adminMcpOauthRedirectResponseSchema.parse({ redirectTo: response.headers.get("location") }),
+      200,
+    );
   }
 
   if (action === "approve") {
@@ -172,12 +181,14 @@ async function handleVerifyApi(request: Request, env: McpOAuthEnv): Promise<Resp
       headers: request.headers,
     });
     const verified = await verifyMcpAuthorizeMagicLink(verifyRequest, env);
-    const response = jsonResponse({
-      success: true,
-      expiresAt: verified.expiresAt,
-      returnTo: verified.returnTo,
-      admin: publicAuthAdmin(verified.admin),
-    });
+    const response = jsonResponse(
+      adminMcpOauthVerifyResponseSchema.parse({
+        success: true,
+        expiresAt: verified.expiresAt,
+        returnTo: verified.returnTo,
+        admin: publicAuthAdmin(verified.admin),
+      }),
+    );
     response.headers.append("Set-Cookie", serializeMcpOauthLoginCookie(verified.sessionToken, request));
     return response;
   } catch (error) {

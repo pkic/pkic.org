@@ -5,10 +5,14 @@
  */
 import { useState } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
-import { api } from "../../api";
+import { api, apiCommand } from "../../api";
 import { toast } from "../../ui";
 import type { AdminOrganizationRepresentative } from "../../types";
-import { MEMBER_STATUSES } from "../../../../shared/schemas/admin-organizations";
+import {
+  MEMBER_STATUSES,
+  organizationRepresentativeResponseSchema,
+} from "../../../../shared/schemas/admin-organizations";
+import { adminMemberMutationResponseSchema } from "../../../../shared/schemas/admin-members";
 import { ProfileLinksInput } from "../../../components/ProfileLinksInput";
 
 export function AddRepresentativeForm({
@@ -35,7 +39,7 @@ export function AddRepresentativeForm({
     setSaving(true);
     setError("");
     try {
-      await api(`/api/v1/admin/organizations/${organizationId}/members`, {
+      await api(`/api/v1/admin/organizations/${organizationId}/members`, organizationRepresentativeResponseSchema, {
         method: "POST",
         body: JSON.stringify({
           name: name.trim(),
@@ -127,7 +131,10 @@ export function RepresentativeRow({ rep, onChanged }: { rep: AdminOrganizationRe
   async function patch(body: Record<string, unknown>) {
     setBusy(true);
     try {
-      await api(`/api/v1/admin/members/${rep.representativeId}`, { method: "PATCH", body: JSON.stringify(body) });
+      await api(`/api/v1/admin/members/${rep.representativeId}`, adminMemberMutationResponseSchema, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
       toast("Representative updated", "success");
       onChanged();
     } catch (err) {
@@ -141,7 +148,7 @@ export function RepresentativeRow({ rep, onChanged }: { rep: AdminOrganizationRe
     if (!confirm(`Remove ${rep.name} as a representative? Their user account is not deleted.`)) return;
     setBusy(true);
     try {
-      await api(`/api/v1/admin/members/${rep.representativeId}`, { method: "DELETE" });
+      await apiCommand(`/api/v1/admin/members/${rep.representativeId}`, { method: "DELETE" });
       toast("Representative removed", "success");
       onChanged();
     } catch (err) {

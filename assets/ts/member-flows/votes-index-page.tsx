@@ -77,8 +77,7 @@ async function fetchVotesSection(
   section: SectionKey,
   offset: number,
 ): Promise<PublicVotesListResponse> {
-  const response = await getJson<unknown>(buildVotesSectionUrl(apiBase, section, offset));
-  return publicVotesListResponseSchema.parse(response);
+  return getJson(buildVotesSectionUrl(apiBase, section, offset), publicVotesListResponseSchema);
 }
 
 function VoteCard({ vote, detailBase }: { vote: PublicVote; detailBase: string }) {

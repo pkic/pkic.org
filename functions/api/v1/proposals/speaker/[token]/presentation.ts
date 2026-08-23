@@ -20,6 +20,11 @@ import {
 } from "../../../../../_lib/services/presentation-upload";
 import { requireInternalSecret } from "../../../../../_lib/request";
 import { requestDb } from "../../../../../_lib/db/context";
+import {
+  speakerPresentationUploadResponseSchema,
+  speakerPresentationUploadRouteSchema,
+} from "../../../../../../assets/shared/schemas/speaker-self-service";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 
 export async function onRequestPut(c: any): Promise<Response> {
   const { speaker, proposal } = await getSpeakerByManageToken(
@@ -53,8 +58,14 @@ export async function onRequestPut(c: any): Promise<Response> {
     },
   );
 
-  return json({ success: true, r2Key });
+  return json(speakerPresentationUploadResponseSchema.parse({ success: true, r2Key }));
 }
+
+export const SpeakerPresentationPut = openApiRoute(
+  speakerPresentationUploadRouteSchema,
+  (c) => onRequestPut(c),
+  (c) => c.set("sensitive", true),
+);
 
 export async function onRequest(c: any): Promise<Response> {
   c.set("sensitive", true);

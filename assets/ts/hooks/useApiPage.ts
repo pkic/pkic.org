@@ -3,15 +3,15 @@ import type { z } from "zod";
 import type { PageInfo } from "../../shared/schemas/pagination";
 import { getJson } from "../shared/api-client";
 import { useOffsetPager } from "./useOffsetPager";
-import { useServerCollection, type CollectionLoader } from "./useServerCollection";
+import { type CollectionLoader, useServerCollection } from "./useServerCollection";
 
 export interface ApiPageResponse {
   page: PageInfo;
 }
 
-/** Shared bounded-fetch state for non-table API collections. */
-const loadCollection: CollectionLoader = (url, signal) => getJson<unknown>(url, { signal });
+const loadApiPage: CollectionLoader = (url, signal, responseSchema) => getJson(url, responseSchema, { signal });
 
+/** Shared bounded-fetch state for non-table API collections. */
 export function useApiPage<T extends ApiPageResponse>(
   endpoint: string,
   params: Record<string, string>,
@@ -29,7 +29,7 @@ export function useApiPage<T extends ApiPageResponse>(
       offset: String(pager.offset),
     },
     responseSchema,
-    load: loadCollection,
+    load: loadApiPage,
   });
 
   useEffect(() => {

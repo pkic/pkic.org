@@ -162,12 +162,10 @@ async function main(): Promise<void> {
 
   try {
     [manageData, formsData] = await Promise.all([
-      getJson<unknown>(`${apiBase}/registrations/manage/${encodeURIComponent(token)}`).then((value) =>
-        registrationManageReadResponseSchema.parse(value),
+      getJson(`${apiBase}/registrations/manage/${encodeURIComponent(token)}`, registrationManageReadResponseSchema),
+      getJson(`${apiBase}/events/${eventSlug}/forms?purpose=event_registration`, eventFormsResponseSchema).catch(
+        () => null,
       ),
-      getJson<unknown>(`${apiBase}/events/${eventSlug}/forms?purpose=event_registration`)
-        .then((value) => eventFormsResponseSchema.parse(value))
-        .catch(() => null),
     ]);
   } catch (error) {
     const normalized = normalizeValidation(error);
@@ -265,11 +263,11 @@ async function main(): Promise<void> {
                   void withLoadingButton(button, async () => {
                     try {
                       const selections = readDayAttendance(form);
-                      await patchJson(`${apiBase}/registrations/manage/${encodeURIComponent(token)}`, {
-                        action: "update",
-                        dayAttendance: selections,
-                        claimDayWaitlistOffers: offeredDayDates,
-                      });
+                      await patchJson(
+                        `${apiBase}/registrations/manage/${encodeURIComponent(token)}`,
+                        { action: "update", dayAttendance: selections, claimDayWaitlistOffers: offeredDayDates },
+                        registrationManageUpdateResponseSchema,
+                      );
                       if (manageFormEl) {
                         showPostAction(root, manageFormEl, {
                           title: "In-person spot claimed",
@@ -339,7 +337,11 @@ async function main(): Promise<void> {
         restoring = true;
         restoreBtn.disabled = true;
         try {
-          await patchJson(`/api/v1/registrations/manage/${encodeURIComponent(token)}`, { action: "update" });
+          await patchJson(
+            `/api/v1/registrations/manage/${encodeURIComponent(token)}`,
+            { action: "update" },
+            registrationManageUpdateResponseSchema,
+          );
           if (manageFormEl) {
             showPostAction(root, manageFormEl, {
               title: "Registration Restored",
@@ -432,23 +434,22 @@ async function main(): Promise<void> {
         const dayAttendancePayload = readDayAttendance(form);
         const emailValue = (form.elements.namedItem("email") as HTMLInputElement | null)?.value.trim() || undefined;
         const emailIsChanged = emailValue && emailValue.toLowerCase() !== originalEmail;
-        const result = registrationManageUpdateResponseSchema.parse(
-          await patchJson<unknown>(
-            `${apiBase}/registrations/manage/${encodeURIComponent(token)}`,
-            registrationManageSchema.parse({
-              action: "update",
-              attendanceType:
-                dayAttendancePayload.length === 0 ? (registration.attendance_type as AttendanceType) : undefined,
-              dayAttendance: dayAttendancePayload,
-              customAnswers: customFieldsRendered ? readCustomFieldValues(form) : undefined,
-              email: emailIsChanged ? emailValue : undefined,
-              firstName: (form.elements.namedItem("firstName") as HTMLInputElement | null)?.value.trim() || undefined,
-              lastName: (form.elements.namedItem("lastName") as HTMLInputElement | null)?.value.trim() || undefined,
-              organizationName:
-                (form.elements.namedItem("organizationName") as HTMLInputElement | null)?.value.trim() || undefined,
-              jobTitle: (form.elements.namedItem("jobTitle") as HTMLInputElement | null)?.value.trim() || undefined,
-            }),
-          ),
+        const result = await patchJson(
+          `${apiBase}/registrations/manage/${encodeURIComponent(token)}`,
+          registrationManageSchema.parse({
+            action: "update",
+            attendanceType:
+              dayAttendancePayload.length === 0 ? (registration.attendance_type as AttendanceType) : undefined,
+            dayAttendance: dayAttendancePayload,
+            customAnswers: customFieldsRendered ? readCustomFieldValues(form) : undefined,
+            email: emailIsChanged ? emailValue : undefined,
+            firstName: (form.elements.namedItem("firstName") as HTMLInputElement | null)?.value.trim() || undefined,
+            lastName: (form.elements.namedItem("lastName") as HTMLInputElement | null)?.value.trim() || undefined,
+            organizationName:
+              (form.elements.namedItem("organizationName") as HTMLInputElement | null)?.value.trim() || undefined,
+            jobTitle: (form.elements.namedItem("jobTitle") as HTMLInputElement | null)?.value.trim() || undefined,
+          }),
+          registrationManageUpdateResponseSchema,
         );
         if (manageFormEl) {
           showPostAction(root, manageFormEl, {
@@ -486,9 +487,11 @@ async function main(): Promise<void> {
 
     await withLoadingButton(yesBtn, async () => {
       try {
-        await patchJson<{ success: boolean }>(`${apiBase}/registrations/manage/${encodeURIComponent(token)}`, {
-          action: "cancel",
-        });
+        await patchJson(
+          `${apiBase}/registrations/manage/${encodeURIComponent(token)}`,
+          { action: "cancel" },
+          registrationManageUpdateResponseSchema,
+        );
         cancelConfirmPanel?.classList.add("d-none");
         if (manageFormEl) {
           showPostAction(root, manageFormEl, {
@@ -525,9 +528,11 @@ async function main(): Promise<void> {
 
     await withLoadingButton(yesBtn, async () => {
       try {
-        await patchJson<{ success: boolean }>(`${apiBase}/registrations/manage/${encodeURIComponent(token)}`, {
-          action: "report_unauthorized",
-        });
+        await patchJson(
+          `${apiBase}/registrations/manage/${encodeURIComponent(token)}`,
+          { action: "report_unauthorized" },
+          registrationManageUpdateResponseSchema,
+        );
         unauthorizedPanel?.classList.add("d-none");
         if (manageFormEl) {
           showPostAction(root, manageFormEl, {

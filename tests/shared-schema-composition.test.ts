@@ -34,7 +34,7 @@ import {
 } from "../assets/shared/schemas/meeting-calendar";
 import {
   authenticationResponseSchema,
-  passkeyAuthenticateCompleteResponseSchema,
+  passkeyAuthenticateCompleteBaseResponseSchema,
   publicKeyCredentialEnvelopeSchema,
   registrationResponseSchema,
 } from "../assets/shared/schemas/passkeys";
@@ -42,6 +42,8 @@ import { successResponseSchema } from "../assets/shared/schemas/api-common";
 import { headshotUploadResponseSchema } from "../assets/shared/schemas/registration";
 import { memberAuthVerifyResponseSchema } from "../assets/shared/schemas/member-auth";
 import { sponsorPortalAuthVerifyResponseSchema } from "../assets/shared/schemas/sponsor-portal";
+import { adminMemberMutationResponseSchema } from "../assets/shared/schemas/admin-members";
+import { adminEmailTemplateVersionCreateResponseSchema } from "../assets/shared/schemas/admin-email-templates";
 
 const ID = "11111111-1111-4111-8111-111111111111";
 const SECOND_ID = "22222222-2222-4222-8222-222222222222";
@@ -52,12 +54,48 @@ describe("canonical shared schema composition", () => {
       headshotUploadResponseSchema,
       memberAuthVerifyResponseSchema,
       sponsorPortalAuthVerifyResponseSchema,
-      passkeyAuthenticateCompleteResponseSchema,
+      passkeyAuthenticateCompleteBaseResponseSchema,
     ]) {
       expect(schema.shape.success).toBe(successResponseSchema.shape.success);
       expect(schema.safeParse({ success: false }).success).toBe(false);
     }
     expect(successResponseSchema.parse({ success: true })).toEqual({ success: true });
+  });
+
+  it("keeps admin mutation payloads explicit instead of treating them as success-only commands", () => {
+    expect(
+      adminMemberMutationResponseSchema.parse({
+        member: {
+          id: ID,
+          userId: SECOND_ID,
+          organizationId: null,
+          membershipCategory: "H5",
+          status: "active",
+          showOnOrgProfile: true,
+          createdAt: "2026-08-21T12:00:00Z",
+        },
+      }).member.membershipCategory,
+    ).toBe("H5");
+
+    expect(
+      adminEmailTemplateVersionCreateResponseSchema.parse({
+        success: true,
+        version: {
+          id: ID,
+          template_key: "welcome",
+          version: 1,
+          subject_template: "Welcome",
+          body: "Hello",
+          content_type: "markdown",
+          r2_object_key: null,
+          checksum_sha256: "a".repeat(64),
+          status: "draft",
+          created_by_user_id: SECOND_ID,
+          created_at: "2026-08-21T12:00:00Z",
+          message_type: "transactional",
+        },
+      }).version.version,
+    ).toBe(1);
   });
 
   it("uses one role-assignment context contract for holder and user projections", () => {

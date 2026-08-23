@@ -115,7 +115,11 @@ describe("donation thank-you page", () => {
       // Promoter POST — expected after confirmation
       if (url.includes("/api/v1/donations/promoter")) {
         return new Response(
-          JSON.stringify({ code: "abc123", shareUrl: "https://pkic.org/donate/r/abc123", ogImageUrl: "" }),
+          JSON.stringify({
+            code: "abc123",
+            shareUrl: "https://pkic.org/donate/r/abc123",
+            ogImageUrl: "https://pkic.org/images/donation-badge.png",
+          }),
           {
             status: 200,
             headers: { "content-type": "application/json" },

@@ -16,7 +16,7 @@ import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
 import { readField, findSubmitButton } from "../shared/form/helpers";
 import { SuccessPanel } from "../components/SuccessPanel";
 import { replaceFormWithSuccess } from "../shared/form/success-panel";
-import { sponsorshipInquirySchema } from "../../shared/schemas/sponsorship";
+import { sponsorshipInquirySchema, sponsorshipInquiryResponseSchema } from "../../shared/schemas/sponsorship";
 
 const API_BASE = "/api/v1";
 
@@ -89,7 +89,7 @@ async function main(): Promise<void> {
     await withLoadingButton(findSubmitButton(form), async () => {
       try {
         const payload = sponsorshipInquirySchema.parse(buildSponsorshipPayload(form));
-        await postJson(`${API_BASE}/sponsorship/inquiries`, payload);
+        await postJson(`${API_BASE}/sponsorship/inquiries`, payload, sponsorshipInquiryResponseSchema);
         showSuccessPanel(root, form);
       } catch (error) {
         handleSubmitError(error, form, statusEl);

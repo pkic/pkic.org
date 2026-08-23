@@ -60,12 +60,10 @@ export function ProposalReviewsTab({
       const body: Record<string, unknown> = { recommendation, score: Number.parseInt(score, 10) };
       if (reviewerComment.trim()) body.reviewerComment = reviewerComment.trim();
       if (applicantNote.trim()) body.applicantNote = applicantNote.trim();
-      const result = proposalReviewWriteResponseSchema.parse(
-        await api<unknown>(`/api/v1/admin/proposals/${proposalId}/reviews`, {
-          method: "POST",
-          body: JSON.stringify(body),
-        }),
-      );
+      const result = await api(`/api/v1/admin/proposals/${proposalId}/reviews`, proposalReviewWriteResponseSchema, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
       onSaved(result.review);
       toast("Review saved", "success");
     } catch (error) {

@@ -17,7 +17,10 @@ import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { getConfig } from "../../../../../_lib/config";
 import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
 import { approveApplication } from "../../../../../_lib/services/membership/applications/approve";
-import { applicationApproveRouteSchema } from "../../../../../../assets/shared/schemas/admin-applications";
+import {
+  applicationApproveResponseSchema,
+  applicationApproveRouteSchema,
+} from "../../../../../../assets/shared/schemas/admin-applications";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 export const ApplicationApprovePost = openApiRoute(applicationApproveRouteSchema, async (c: AdminContext, data) => {
@@ -41,11 +44,13 @@ export const ApplicationApprovePost = openApiRoute(applicationApproveRouteSchema
     c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, outboxId));
   }
 
-  return json({
-    applicationId: result.applicationId,
-    memberId: result.memberId,
-    userId: result.userId,
-    organizationId: result.organizationId,
-    workingGroupSlugs: result.workingGroupSlugs,
-  });
+  return json(
+    applicationApproveResponseSchema.parse({
+      applicationId: result.applicationId,
+      memberId: result.memberId,
+      userId: result.userId,
+      organizationId: result.organizationId,
+      workingGroupSlugs: result.workingGroupSlugs,
+    }),
+  );
 });

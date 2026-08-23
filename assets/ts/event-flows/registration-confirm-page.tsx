@@ -15,6 +15,7 @@ import { findSubmitButton } from "../shared/form/helpers";
 import {
   registrationConfirmInfoResponseSchema,
   registrationConfirmResponseSchema,
+  okResponseSchema,
   type RegistrationConfirmResponse,
 } from "../../shared/schemas/registration";
 
@@ -203,11 +204,15 @@ function ResendButton({
     }
     setState("sending");
     try {
-      await postJson(`${apiBase}/events/${eventSlug}/registrations/resend-confirmation`, {
-        ...(registrationId ? { id: registrationId } : {}),
-        token,
-        ...(recoveryEmail ? { email: recoveryEmail } : {}),
-      });
+      await postJson(
+        `${apiBase}/events/${eventSlug}/registrations/resend-confirmation`,
+        {
+          ...(registrationId ? { id: registrationId } : {}),
+          token,
+          ...(recoveryEmail ? { email: recoveryEmail } : {}),
+        },
+        okResponseSchema,
+      );
       setState("sent");
     } catch (error) {
       const normalized = normalizeValidation(error);
@@ -338,10 +343,9 @@ async function main(): Promise<void> {
   let isExpired = false;
   let isRecoverable = false;
   try {
-    const info = registrationConfirmInfoResponseSchema.parse(
-      await getJson<unknown>(
-        `${boot.apiBase}/events/${boot.eventSlug}/registrations/confirm-info?token=${encodeURIComponent(token)}${registrationId ? `&id=${encodeURIComponent(registrationId)}` : ""}`,
-      ),
+    const info = await getJson(
+      `${boot.apiBase}/events/${boot.eventSlug}/registrations/confirm-info?token=${encodeURIComponent(token)}${registrationId ? `&id=${encodeURIComponent(registrationId)}` : ""}`,
+      registrationConfirmInfoResponseSchema,
     );
     firstName = info.firstName ?? "";
     lastName = info.lastName ?? "";
@@ -390,11 +394,13 @@ async function main(): Promise<void> {
 
     await withLoadingButton(findSubmitButton(boot.form), async () => {
       try {
-        const result = registrationConfirmResponseSchema.parse(
-          await postJson<unknown>(`${boot.apiBase}/events/${boot.eventSlug}/registrations/confirm-email`, {
+        const result = await postJson(
+          `${boot.apiBase}/events/${boot.eventSlug}/registrations/confirm-email`,
+          {
             token,
             ...(registrationId ? { id: registrationId } : {}),
-          }),
+          },
+          registrationConfirmResponseSchema,
         );
         showConfirmedPanel(
           boot.root,

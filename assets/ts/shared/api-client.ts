@@ -1,11 +1,12 @@
-import type { ApiErrorPayload } from "./types";
+import { z } from "zod";
+import { apiErrorPayloadSchema, type ApiErrorPayload } from "../../shared/schemas/api-common";
 
 export class ApiClientError extends Error {
   status: number;
 
   code: string;
 
-  details: ApiErrorPayload["error"]["details"];
+  details: unknown;
 
   constructor(payload: ApiErrorPayload, status: number) {
     super(payload.error.message);
@@ -19,63 +20,98 @@ export class ApiClientError extends Error {
 async function parseJson(response: Response): Promise<unknown> {
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) {
-    return null;
+    return undefined;
   }
-  return response.json();
+  return response.json().catch(() => undefined);
 }
 
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
+export interface JsonRequestInit extends RequestInit {
+  mapError?: (payload: ApiErrorPayload, status: number) => ApiErrorPayload;
+}
+
+export async function requestJson<Schema extends z.ZodType>(
+  url: string,
+  schema: Schema,
+  init?: JsonRequestInit,
+): Promise<z.output<Schema>> {
+  const { mapError, ...requestInit } = init ?? {};
+  const headers = new Headers(requestInit.headers);
+  if (!headers.has("content-type") && typeof requestInit.body === "string") {
+    headers.set("content-type", "application/json");
+  }
   const response = await fetch(url, {
     credentials: "same-origin",
-    ...init,
-    headers: {
-      "content-type": "application/json",
-      ...(init?.headers ?? {}),
-    },
+    ...requestInit,
+    headers,
   });
 
-  const body = (await parseJson(response)) as T | ApiErrorPayload | null;
+  const body = await parseJson(response);
   if (!response.ok) {
     const fallback: ApiErrorPayload = {
       error: {
         code: "HTTP_ERROR",
-        message: `Request failed with status ${response.status}`,
+        message: `HTTP ${response.status}`,
       },
     };
-    throw new ApiClientError((body as ApiErrorPayload) ?? fallback, response.status);
+    const parsed = apiErrorPayloadSchema.safeParse(body);
+    const payload = parsed.success ? parsed.data : fallback;
+    throw new ApiClientError(mapError?.(payload, response.status) ?? payload, response.status);
   }
 
-  return (body ?? {}) as T;
+  return schema.parse(body);
 }
 
-export function getJson<T>(url: string, init?: Pick<RequestInit, "signal">): Promise<T> {
-  return request<T>(url, { method: "GET", ...init });
+export function getJson<Schema extends z.ZodType>(
+  url: string,
+  schema: Schema,
+  init?: Pick<RequestInit, "signal">,
+): Promise<z.output<Schema>> {
+  return requestJson(url, schema, { method: "GET", ...init });
 }
 
-export function postJson<T>(url: string, body: unknown, headers?: Record<string, string>): Promise<T> {
-  return request<T>(url, {
+export function postJson<Schema extends z.ZodType>(
+  url: string,
+  body: unknown,
+  schema: Schema,
+  headers?: Record<string, string>,
+): Promise<z.output<Schema>> {
+  return requestJson(url, schema, {
     method: "POST",
     body: JSON.stringify(body),
     headers,
   });
 }
 
-export function patchJson<T>(url: string, body: unknown, headers?: Record<string, string>): Promise<T> {
-  return request<T>(url, {
+export function patchJson<Schema extends z.ZodType>(
+  url: string,
+  body: unknown,
+  schema: Schema,
+  headers?: Record<string, string>,
+): Promise<z.output<Schema>> {
+  return requestJson(url, schema, {
     method: "PATCH",
     body: JSON.stringify(body),
     headers,
   });
 }
 
-export function putJson<T>(url: string, body: unknown, headers?: Record<string, string>): Promise<T> {
-  return request<T>(url, {
+export function putJson<Schema extends z.ZodType>(
+  url: string,
+  body: unknown,
+  schema: Schema,
+  headers?: Record<string, string>,
+): Promise<z.output<Schema>> {
+  return requestJson(url, schema, {
     method: "PUT",
     body: JSON.stringify(body),
     headers,
   });
 }
 
-export function deleteJson<T>(url: string, headers?: Record<string, string>): Promise<T> {
-  return request<T>(url, { method: "DELETE", headers });
+export function deleteJson<Schema extends z.ZodType>(
+  url: string,
+  schema: Schema,
+  headers?: Record<string, string>,
+): Promise<z.output<Schema>> {
+  return requestJson(url, schema, { method: "DELETE", headers });
 }

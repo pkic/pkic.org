@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { proposalManageTokenParamsSchema } from "./proposal-management";
 import { normalizedEmailSchema, successResponseSchema } from "./api-common";
 import { requiredTermSchema } from "./event-read-models";
 import { databaseIdSchema } from "./identifiers";
@@ -72,6 +73,19 @@ export const speakerSelfServiceReadResponseSchema = z.object({
 export const speakerParticipationResponseSchema = successResponseSchema.extend({
   status: z.enum(["confirmed", "declined"]),
 });
+export const speakerPresentationUploadResponseSchema = successResponseSchema.extend({ r2Key: z.string().min(1) });
+
+export const speakerPresentationUploadRouteSchema = {
+  tags: ["Proposals", "Presentations"],
+  summary: "Upload a speaker presentation",
+  request: { params: proposalManageTokenParamsSchema },
+  responses: {
+    "200": {
+      description: "Presentation uploaded.",
+      content: { "application/json": { schema: speakerPresentationUploadResponseSchema } },
+    },
+  },
+};
 
 export type SpeakerSelfServiceAccess = z.infer<typeof speakerSelfServiceAccessSchema>;
 export type SpeakerSelfServiceProposal = z.infer<typeof speakerSelfServiceProposalSchema>;

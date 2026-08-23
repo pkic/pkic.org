@@ -2,6 +2,7 @@ import { StatCard } from "../../../../components/StatCard";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { api } from "../../../api";
+import { adminEventStatsResponseSchema } from "../../../../../shared/schemas/admin-analytics";
 import { ATTENDANCE_TYPE_LABELS, attendanceTypeLabel } from "../../../attendance";
 import { svgStackedBarChart, isoDateRange } from "../../../charts";
 import type { EventStatsResponse } from "../../../types";
@@ -29,7 +30,10 @@ export function EventStats({ slug }: { slug: string }) {
     loading,
     error,
     reload,
-  } = useData<EventStatsResponse>(() => api<EventStatsResponse>(`/api/v1/admin/events/${slug}/stats`), [slug]);
+  } = useData<EventStatsResponse>(
+    () => api(`/api/v1/admin/events/${slug}/stats`, adminEventStatsResponseSchema),
+    [slug],
+  );
 
   if (loading) return <Spinner />;
   if (error) return <ErrorAlert error={error} />;

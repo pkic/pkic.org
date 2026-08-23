@@ -11,6 +11,7 @@ import {
   roleIdParamsSchema,
   roleIdSchema,
   roleResponseSchema,
+  userRoleResponseEnvelopeSchema,
   userRoleResponseSchema,
 } from "../assets/shared/schemas/access-control";
 
@@ -49,6 +50,21 @@ describe("access-control role id response contracts", () => {
       createdAt: new Date().toISOString(),
     });
     expect(result.success).toBe(true);
+  });
+
+  it("matches the role assignment command envelope returned by admin routes", () => {
+    const role = {
+      id: crypto.randomUUID(),
+      userId: crypto.randomUUID(),
+      roleId: SYSTEM_ROLE_ID,
+      roleName: "Admin",
+      contextType: null,
+      contextId: null,
+      expiresAt: null,
+      createdAt: new Date().toISOString(),
+    };
+    expect(userRoleResponseEnvelopeSchema.parse({ role })).toEqual({ role });
+    expect(userRoleResponseEnvelopeSchema.safeParse(role).success).toBe(false);
   });
 
   it("roleIdParamsSchema and roleResponseSchema/userRoleResponseSchema.roleId share one schema instance", () => {

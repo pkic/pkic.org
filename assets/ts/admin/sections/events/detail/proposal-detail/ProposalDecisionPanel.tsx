@@ -3,7 +3,7 @@ import { proposalDecisionPreviewResponseSchema } from "../../../../../../shared/
 import { Badge } from "../../../../../components/Badge";
 import { Markdown } from "../../../../../components/Markdown";
 import { Tabs } from "../../../../../components/Tabs";
-import { api } from "../../../../api";
+import { api, apiCommand } from "../../../../api";
 import { fmt, toast } from "../../../../ui";
 import { isNeedsWorkDecision, type DecisionPreviewResponse, type ProposalDetailRecord } from "./model";
 import {
@@ -86,7 +86,7 @@ export function ProposalDecisionPanel({
     }
     setSaving(true);
     try {
-      await api(`/api/v1/admin/proposals/${proposalId}/finalize`, {
+      await apiCommand(`/api/v1/admin/proposals/${proposalId}/finalize`, {
         method: "POST",
         body: JSON.stringify({ finalStatus: decisionStatus, decisionNote: decisionNote.trim() || undefined }),
       });
@@ -104,12 +104,10 @@ export function ProposalDecisionPanel({
     setPreviewing(true);
     try {
       setPreview(
-        proposalDecisionPreviewResponseSchema.parse(
-          await api<unknown>(`/api/v1/admin/proposals/${proposalId}/finalize-preview`, {
-            method: "POST",
-            body: JSON.stringify({ finalStatus: decisionStatus, decisionNote: decisionNote.trim() || undefined }),
-          }),
-        ),
+        await api(`/api/v1/admin/proposals/${proposalId}/finalize-preview`, proposalDecisionPreviewResponseSchema, {
+          method: "POST",
+          body: JSON.stringify({ finalStatus: decisionStatus, decisionNote: decisionNote.trim() || undefined }),
+        }),
       );
       setPreviewConfirmed(false);
     } catch (error) {

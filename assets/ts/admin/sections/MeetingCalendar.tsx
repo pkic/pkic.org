@@ -10,12 +10,18 @@ import { useEffect, useState } from "preact/hooks";
 import { Spinner } from "../../components/Spinner";
 import { ErrorAlert } from "../../components/ErrorAlert";
 import { Tabs } from "../../components/Tabs";
-import { api } from "../api";
+import { api, apiCommand } from "../api";
 import { toast } from "../ui";
-import type { AdminIcsFile, AdminMeetingSeries, MeetingResendResult, MeetingSeriesPageInfo } from "../types";
+import type { AdminIcsFile, AdminMeetingSeries, MeetingSeriesPageInfo } from "../types";
 import { adminWorkingGroupCatalog } from "../services/catalogs";
 import { performAdminAction } from "../actions";
 import { ServerSearchSelect } from "../components/ServerSearchSelect";
+import {
+  adminIcsFileResponseSchema,
+  adminMeetingSeriesResponseSchema,
+  adminMeetingSeriesListResponseSchema,
+  meetingResendResultSchema,
+} from "../../../shared/schemas/meeting-calendar";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -42,7 +48,7 @@ function IcsFileRow({
     await performAdminAction({
       setBusy,
       request: () =>
-        api(`${baseUrl}/${seriesId}/ics-files/${file.id}`, {
+        api(`${baseUrl}/${seriesId}/ics-files/${file.id}`, adminIcsFileResponseSchema, {
           method: "PATCH",
           body: JSON.stringify({ label: label.trim() }),
         }),
@@ -57,7 +63,7 @@ function IcsFileRow({
   async function toggleActive() {
     setBusy(true);
     try {
-      await api(`${baseUrl}/${seriesId}/ics-files/${file.id}`, {
+      await api(`${baseUrl}/${seriesId}/ics-files/${file.id}`, adminIcsFileResponseSchema, {
         method: "PATCH",
         body: JSON.stringify({ active: !file.active }),
       });
@@ -85,7 +91,7 @@ function IcsFileRow({
     }
     setBusy(true);
     try {
-      await api(`${baseUrl}/${seriesId}/ics-files/${file.id}`, { method: "DELETE" });
+      await apiCommand(`${baseUrl}/${seriesId}/ics-files/${file.id}`, { method: "DELETE" });
       toast("ICS file deleted", "success");
       await onChanged();
     } catch (err) {
@@ -175,13 +181,10 @@ function IcsUploadForm({
       body.append("file", file);
       body.append("label", label.trim());
       body.append("year", year.trim());
-      const res = await fetch(`${baseUrl}/${seriesId}/ics-files`, {
+      await api(`${baseUrl}/${seriesId}/ics-files`, adminIcsFileResponseSchema, {
         method: "POST",
-        credentials: "same-origin",
         body,
       });
-      const data = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-      if (!res.ok) throw new Error(data.error?.message ?? `HTTP ${res.status}`);
       toast("ICS file uploaded", "success");
       setLabel("");
       setYear(String(CURRENT_YEAR));
@@ -258,7 +261,11 @@ function MeetingSeriesCard({
     }
     await performAdminAction({
       setBusy,
-      request: () => api(`${baseUrl}/${series.id}`, { method: "PATCH", body: JSON.stringify({ name: name.trim() }) }),
+      request: () =>
+        api(`${baseUrl}/${series.id}`, adminMeetingSeriesResponseSchema, {
+          method: "PATCH",
+          body: JSON.stringify({ name: name.trim() }),
+        }),
       successMessage: "Series renamed",
       afterSuccess: async () => {
         setEditingName(false);
@@ -270,7 +277,10 @@ function MeetingSeriesCard({
   async function toggleActive() {
     setBusy(true);
     try {
-      await api(`${baseUrl}/${series.id}`, { method: "PATCH", body: JSON.stringify({ active: !series.active }) });
+      await api(`${baseUrl}/${series.id}`, adminMeetingSeriesResponseSchema, {
+        method: "PATCH",
+        body: JSON.stringify({ active: !series.active }),
+      });
       toast(series.active ? "Series deactivated" : "Series reactivated", "success");
       await onChanged();
     } catch (err) {
@@ -290,7 +300,7 @@ function MeetingSeriesCard({
     }
     setResending(true);
     try {
-      const result = await api<MeetingResendResult>(`${baseUrl}/${series.id}/resend`, { method: "POST" });
+      const result = await api(`${baseUrl}/${series.id}/resend`, meetingResendResultSchema, { method: "POST" });
       toast(`Resend queued for ${result.queuedRecipients} recipient(s)`, "success");
     } catch (err) {
       toast((err as Error).message, "error");
@@ -308,7 +318,7 @@ function MeetingSeriesCard({
     if (!confirm(`Delete the meeting series "${series.name}"?${warning} This can't be undone.`)) return;
     setDeleting(true);
     try {
-      await api(`${baseUrl}/${series.id}`, { method: "DELETE" });
+      await apiCommand(`${baseUrl}/${series.id}`, { method: "DELETE" });
       toast("Meeting series deleted", "success");
       await onChanged();
     } catch (err) {
@@ -404,7 +414,11 @@ function CreateSeriesForm({ baseUrl, onCreated }: { baseUrl: string; onCreated: 
     if (!name.trim()) return;
     await performAdminAction({
       setBusy: setSaving,
-      request: () => api(baseUrl, { method: "POST", body: JSON.stringify({ name: name.trim() }) }),
+      request: () =>
+        api(baseUrl, adminMeetingSeriesResponseSchema, {
+          method: "POST",
+          body: JSON.stringify({ name: name.trim() }),
+        }),
       successMessage: "Meeting series created",
       afterSuccess: async () => {
         setName("");
@@ -457,9 +471,7 @@ function MeetingSeriesManager({ baseUrl }: { baseUrl: string }) {
     try {
       const offset = append && page ? page.offset + page.limit : 0;
       const params = new URLSearchParams({ limit: "50", offset: String(offset) });
-      const data = await api<{ meetingSeries: AdminMeetingSeries[]; page: MeetingSeriesPageInfo }>(
-        `${baseUrl}?${params.toString()}`,
-      );
+      const data = await api(`${baseUrl}?${params.toString()}`, adminMeetingSeriesListResponseSchema);
       setSeries((current) => (append ? [...(current ?? []), ...data.meetingSeries] : data.meetingSeries));
       setPage(data.page);
       setError(null);

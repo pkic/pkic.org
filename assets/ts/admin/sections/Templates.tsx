@@ -6,6 +6,8 @@ import { toast } from "../ui";
 import type { EmailTemplateVersion } from "../types";
 import {
   adminEmailTemplatesListResponseSchema,
+  adminEmailTemplateExistsResponseSchema,
+  adminEmailTemplateVersionCreateResponseSchema,
   type AdminEmailTemplateSummary,
   type EmailContentType,
   type EmailMessageType,
@@ -33,7 +35,7 @@ function CreateTemplate({ onCreated, onCancel }: { onCreated: (key: string) => v
     }
     setKeyCheckStatus("checking");
     const timer = setTimeout(() => {
-      api<{ exists: boolean }>(`/api/v1/admin/email-templates/${encodeURIComponent(key)}/exists`)
+      api(`/api/v1/admin/email-templates/${encodeURIComponent(key)}/exists`, adminEmailTemplateExistsResponseSchema)
         .then((data) => setKeyCheckStatus(data.exists ? "exists" : "available"))
         .catch(() => setKeyCheckStatus("idle"));
     }, 400);
@@ -62,8 +64,9 @@ function CreateTemplate({ onCreated, onCancel }: { onCreated: (key: string) => v
     }
     setSaving(true);
     try {
-      await api<{ success: boolean; version: number }>(
+      await api(
         `/api/v1/admin/email-templates/${encodeURIComponent(key)}/versions`,
+        adminEmailTemplateVersionCreateResponseSchema,
         {
           method: "POST",
           body: JSON.stringify({

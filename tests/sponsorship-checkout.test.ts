@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
-import type { SponsorshipCheckoutInput } from "../assets/shared/schemas/sponsorship";
+import { sponsorshipCheckoutResponseSchema, type SponsorshipCheckoutInput } from "../assets/shared/schemas/sponsorship";
 import { handleError } from "../functions/_lib/http";
 import { handleSponsorshipCheckout } from "../functions/api/v1/sponsorship/checkout";
 import { createContext, createTestRateLimiter, seedEventAndAdmin } from "./helpers/context";
@@ -82,5 +82,14 @@ describe("POST /api/v1/sponsorship/checkout", () => {
 
     expect(response.status).toBe(429);
     expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps the checkout redirect response absolute like Stripe's session URL", () => {
+    expect(sponsorshipCheckoutResponseSchema.parse({ url: "https://checkout.stripe.test/session" })).toEqual({
+      url: "https://checkout.stripe.test/session",
+    });
+    expect(sponsorshipCheckoutResponseSchema.safeParse({ url: "/events/example/sponsors/complete/" }).success).toBe(
+      false,
+    );
   });
 });

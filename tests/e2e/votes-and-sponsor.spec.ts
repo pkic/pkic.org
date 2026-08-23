@@ -156,15 +156,23 @@ test.describe("public votes pages", () => {
         contentType: "application/json",
         body: JSON.stringify({
           vote: {
-            id: "mock-motion-1",
+            id: "00000000-0000-4000-8000-000000000001",
             slug: "mocked-closed-motion",
             title: "Mocked Closed Motion",
             description: "A mocked, already-closed motion vote.",
             voteType: "motion",
             scopeType: "forum",
+            scopeId: null,
+            thresholdType: "simple_majority",
+            eligibleCategories: null,
             opensAt: new Date(Date.now() - 172_800_000).toISOString(),
             closesAt: new Date(Date.now() - 86_400_000).toISOString(),
+            currentRound: 0,
             status: "closed",
+            visibility: "public",
+            publicDetailLevel: "full_breakdown",
+            createdAt: new Date(Date.now() - 259_200_000).toISOString(),
+            updatedAt: new Date(Date.now() - 86_400_000).toISOString(),
             candidates: null,
             result: {
               thresholdType: "simple_majority",
@@ -187,22 +195,54 @@ test.describe("public votes pages", () => {
         contentType: "application/json",
         body: JSON.stringify({
           vote: {
-            id: "mock-election-1",
+            id: "00000000-0000-4000-8000-000000000002",
             slug: "mocked-closed-election",
             title: "Mocked WG Chair Election",
             description: "A mocked, already-closed election vote.",
             voteType: "election",
             scopeType: "working_group",
+            scopeId: "00000000-0000-4000-8000-000000000003",
+            thresholdType: "successive_elimination",
+            eligibleCategories: null,
             opensAt: new Date(Date.now() - 172_800_000).toISOString(),
             closesAt: new Date(Date.now() - 86_400_000).toISOString(),
+            currentRound: 1,
             status: "closed",
+            visibility: "public",
+            publicDetailLevel: "full_breakdown",
+            createdAt: new Date(Date.now() - 259_200_000).toISOString(),
+            updatedAt: new Date(Date.now() - 86_400_000).toISOString(),
             candidates: [
-              { id: "cand-1", candidateName: "Alice Candidate" },
-              { id: "cand-2", candidateName: "Bob Candidate" },
+              {
+                id: "00000000-0000-4000-8000-000000000004",
+                userId: null,
+                candidateName: "Alice Candidate",
+                candidateBio: null,
+                sortOrder: 0,
+                eliminatedRound: null,
+              },
+              {
+                id: "00000000-0000-4000-8000-000000000005",
+                userId: null,
+                candidateName: "Bob Candidate",
+                candidateBio: null,
+                sortOrder: 1,
+                eliminatedRound: 1,
+              },
             ],
             result: {
-              rounds: [{ round: 1, counts: { "cand-1": 12, "cand-2": 8 }, eliminatedCandidateIds: ["cand-2"] }],
-              winnerCandidateId: "cand-1",
+              rounds: [
+                {
+                  round: 1,
+                  counts: {
+                    "00000000-0000-4000-8000-000000000004": 12,
+                    "00000000-0000-4000-8000-000000000005": 8,
+                  },
+                  eliminatedCandidateIds: ["00000000-0000-4000-8000-000000000005"],
+                  winnerCandidateId: null,
+                },
+              ],
+              winnerCandidateId: "00000000-0000-4000-8000-000000000004",
             },
           },
         }),
@@ -224,11 +264,15 @@ test.describe("event sponsor self-service checkout (Path B)", () => {
 
     await page.route("**/api/v1/sponsorship/checkout", async (route) => {
       capturedBody = route.request().postDataJSON() as Record<string, unknown>;
+      const checkoutUrl = new URL(
+        "/events/2026/pqc-conference-amsterdam-nl/sponsors/complete/?session_id=cs_test_mocked",
+        route.request().url(),
+      ).toString();
       await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          url: "/events/2026/pqc-conference-amsterdam-nl/sponsors/complete/?session_id=cs_test_mocked",
+          url: checkoutUrl,
         }),
       });
     });

@@ -16,7 +16,10 @@ import {
   processOrganizationContentReviewNotificationsBackground,
   requireOrgContact,
 } from "../../../../_lib/services/organization-content";
-import { myOrganizationLogoUploadRouteSchema } from "../../../../../assets/shared/schemas/me";
+import {
+  myOrganizationLogoUploadResponseSchema,
+  myOrganizationLogoUploadRouteSchema,
+} from "../../../../../assets/shared/schemas/me";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import {
@@ -60,5 +63,5 @@ export const MeOrganizationLogoPost = openApiRoute(myOrganizationLogoUploadRoute
 
   c.executionCtx.waitUntil(processOrganizationContentReviewNotificationsBackground(db, c.env));
 
-  return json({ success: true, r2Key });
+  return json(myOrganizationLogoUploadResponseSchema.parse({ success: true, r2Key }));
 });
