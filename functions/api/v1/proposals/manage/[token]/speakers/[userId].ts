@@ -47,10 +47,10 @@ async function handleProposalSpeakerPatch(
 
 export async function onRequestDelete(
   c: any,
-  data?: ValidatedData<typeof proposerManagedSpeakerDeleteRouteSchema>,
+  data: ValidatedData<typeof proposerManagedSpeakerDeleteRouteSchema>,
 ): Promise<Response> {
   c.set?.("sensitive", true);
-  const params = data?.params ?? { token: c.req.param("token"), userId: c.req.param("userId") };
+  const params = data.params;
   const result = await removeProposalSpeakerByProposer(c.env.DB, {
     manageToken: params.token,
     signingSecret: requireInternalSecret(c.env),

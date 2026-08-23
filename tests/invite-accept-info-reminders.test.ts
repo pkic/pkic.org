@@ -15,8 +15,14 @@ import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 import { run } from "../functions/_lib/db/queries";
 import { createInvite, declineInvite, acceptInvite } from "../functions/_lib/services/invites";
 import { onRequestGet as inviteInfo } from "../functions/api/v1/invites/[token]/info";
-import { onRequestPost as inviteAccept } from "../functions/api/v1/invites/[token]/accept";
-import { onRequestPost as inviteReminders } from "../functions/api/v1/invites/[token]/reminders";
+import app from "../functions/router";
+
+function mounted(c: any): Promise<Response> {
+  return app.fetch(c.req.raw, c.env, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
+}
+
+const inviteAccept = mounted;
+const inviteReminders = mounted;
 
 describe("invite info endpoint", () => {
   beforeEach(async () => {
@@ -359,19 +365,19 @@ describe("invite accept endpoint", () => {
   it("rejects accept with invalid/non-existent token", async () => {
     await seedEventAndAdmin(env.DB);
 
-    await expect(
-      inviteAccept(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/invites/bogus-token/accept", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({}),
-          }),
-          { token: "bogus-token" },
-        ),
+    const response = await inviteAccept(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/invites/bogus-token/accept", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({}),
+        }),
+        { token: "bogus-token" },
       ),
-    ).rejects.toMatchObject({ code: "INVITE_NOT_FOUND" });
+    );
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "INVITE_NOT_FOUND" } });
   });
 });
 
@@ -518,18 +524,18 @@ describe("invite reminders endpoint", () => {
   it("rejects with invalid token", async () => {
     await seedEventAndAdmin(env.DB);
 
-    await expect(
-      inviteReminders(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/invites/bad-token/reminders", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ action: "resume" }),
-          }),
-          { token: "bad-token" },
-        ),
+    const response = await inviteReminders(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/invites/bad-token/reminders", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "resume" }),
+        }),
+        { token: "bad-token" },
       ),
-    ).rejects.toMatchObject({ code: "INVITE_NOT_FOUND" });
+    );
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "INVITE_NOT_FOUND" } });
   });
 });

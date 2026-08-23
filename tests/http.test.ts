@@ -6,8 +6,6 @@ import { onRequest as eventFormsDispatch } from "../functions/api/v1/events/[eve
 import worker from "../functions/router";
 import { onRequest as retentionDispatch } from "../functions/api/v1/internal/retention/run";
 import { onRequest as speakerPresentationDispatch } from "../functions/api/v1/proposals/speaker/[token]/presentation";
-import { onRequest as speakerManageDispatch } from "../functions/api/v1/proposals/speaker/[token]";
-import { onRequest as proposerSpeakersDispatch } from "../functions/api/v1/proposals/manage/[token]/speakers";
 import { onRequest as registrationHeadshotDispatch } from "../functions/api/v1/registrations/manage/[token]/headshot";
 
 function context(method: string) {
@@ -86,14 +84,14 @@ describe("HTTP method dispatch", () => {
       path: "/proposals/speaker/token",
       method: "DELETE",
       allow: "GET, POST, PATCH",
-      handler: speakerManageDispatch,
+      mounted: true,
     },
     {
       label: "proposer speaker invitation",
       path: "/proposals/manage/token/speakers",
       method: "GET",
       allow: "POST",
-      handler: proposerSpeakersDispatch,
+      mounted: true,
     },
     {
       label: "proposer speaker reminder",

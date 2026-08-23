@@ -8,8 +8,7 @@
  * Only the proposer holds the proposal manage token — co-speakers hold separate
  * per-speaker tokens and cannot reach this endpoint.
  */
-import { dispatchPostOnly, json } from "../../../../../_lib/http";
-import { parseJsonBody } from "../../../../../_lib/validation";
+import { json } from "../../../../../_lib/http";
 import { getProposalByManageToken } from "../../../../../_lib/services/proposals";
 import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
@@ -18,15 +17,12 @@ import {
   coSpeakerInviteResponseSchema,
   coSpeakerInviteSchema,
 } from "../../../../../../assets/shared/schemas/proposal-management";
-import type { SpeakerRole } from "../../../../../../assets/shared/schemas/registration";
+import type { z } from "zod";
 import { requireInternalSecret } from "../../../../../_lib/request";
 import { inviteProposalSpeaker } from "../../../../../_lib/services/proposal-speaker-invitations";
 import { isProposalSpeakerRosterEditableStatus } from "../../../../../../assets/shared/schemas/proposal-status";
 
-export async function handleCoSpeakerInvite(
-  c: any,
-  body: { email: string; firstName?: string; lastName?: string; role: SpeakerRole },
-) {
+export async function handleCoSpeakerInvite(c: any, body: z.infer<typeof coSpeakerInviteSchema>) {
   const proposal = await getProposalByManageToken(c.env.DB, c.req.param("token"), requireInternalSecret(c.env));
 
   if (!isProposalSpeakerRosterEditableStatus(proposal.status)) {
@@ -48,14 +44,4 @@ export async function handleCoSpeakerInvite(
   c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, invited.outboxId));
 
   return json(coSpeakerInviteResponseSchema.parse({ success: true, email: invited.email, role: body.role }));
-}
-
-export async function onRequestPost(c: any): Promise<Response> {
-  const body = await parseJsonBody(c.req, coSpeakerInviteSchema);
-  return handleCoSpeakerInvite(c, body);
-}
-
-export async function onRequest(c: any): Promise<Response> {
-  c.set("sensitive", true);
-  return dispatchPostOnly(c, onRequestPost);
 }

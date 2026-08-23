@@ -1,5 +1,4 @@
-import { parseJsonBody } from "../../../../_lib/validation";
-import { dispatchPostOnly, json } from "../../../../_lib/http";
+import { json } from "../../../../_lib/http";
 import { addHours, nowIso } from "../../../../_lib/utils/time";
 import {
   clearInviteRemindersPause,
@@ -7,11 +6,7 @@ import {
   findInviteByToken,
   setInviteRemindersPausedUntil,
 } from "../../../../_lib/services/invites";
-import {
-  inviteCapabilityQuerySchema,
-  inviteReminderPreferenceRouteSchema,
-  inviteReminderPreferenceSchema,
-} from "../../../../../assets/shared/schemas/invites";
+import { inviteReminderPreferenceRouteSchema } from "../../../../../assets/shared/schemas/invites";
 import { requireInternalSecret } from "../../../../_lib/request";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import type { AdminContext } from "../../../../_lib/db/context";
@@ -53,17 +48,8 @@ async function updateInviteReminderPreference(
   });
 }
 
-export const InviteRemindersPost = openApiRoute(inviteReminderPreferenceRouteSchema, (c: AdminContext, data) =>
-  updateInviteReminderPreference(c, data.params.token, data.query.id, data.body),
+export const InviteRemindersPost = openApiRoute(
+  inviteReminderPreferenceRouteSchema,
+  (c: AdminContext, data) => updateInviteReminderPreference(c, data.params.token, data.query.id, data.body),
+  (c: AdminContext) => c.set?.("sensitive", true),
 );
-
-/** Compatibility export for direct endpoint tests. */
-export async function onRequestPost(c: AdminContext): Promise<Response> {
-  const body = await parseJsonBody(c.req, inviteReminderPreferenceSchema);
-  const query = inviteCapabilityQuerySchema.parse(Object.fromEntries(new URL(c.req.raw.url).searchParams));
-  return updateInviteReminderPreference(c, c.req.param("token"), query.id, body);
-}
-
-export async function onRequest(c: any): Promise<Response> {
-  return dispatchPostOnly(c, onRequestPost);
-}

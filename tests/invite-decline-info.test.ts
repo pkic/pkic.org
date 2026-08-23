@@ -5,7 +5,11 @@ import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { run } from "../functions/_lib/db/queries";
 import { createInvite } from "../functions/_lib/services/invites";
 import { onRequestGet as declineInfoGet } from "../functions/api/v1/invites/[token]/decline-info";
-import { onRequestPost as declinePost } from "../functions/api/v1/invites/[token]/decline";
+import app from "../functions/router";
+
+function declinePost(c: any): Promise<Response> {
+  return app.fetch(c.req.raw, c.env, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
+}
 
 describe("invite decline-info", () => {
   beforeEach(async () => {

@@ -1,5 +1,4 @@
-import { parseJsonBody } from "../../../../_lib/validation";
-import { dispatchPostOnly, json } from "../../../../_lib/http";
+import { json } from "../../../../_lib/http";
 import { findInviteByToken, acceptInvite } from "../../../../_lib/services/invites";
 import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
 import { commitRegistrationSubmission } from "../../../../_lib/services/registration-submission";
@@ -8,7 +7,7 @@ import { prepareBadgeRenderJob } from "../../../../_lib/services/badge-render-jo
 import { seedGravatarAndProcessBadgeRenderJob } from "../../../../_lib/services/registration-badge-regeneration";
 import { proposalPageUrl } from "../../../../_lib/services/frontend-links";
 import { inviteAcceptAttendeeSchema } from "../../../../../assets/shared/schemas/registration";
-import { inviteAcceptRouteSchema, inviteCapabilityQuerySchema } from "../../../../../assets/shared/schemas/invites";
+import { inviteAcceptRouteSchema } from "../../../../../assets/shared/schemas/invites";
 import { requireInternalSecret } from "../../../../_lib/request";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import type { AdminContext } from "../../../../_lib/db/context";
@@ -79,20 +78,12 @@ async function acceptInviteRequest(
   });
 }
 
-export const InviteAcceptPost = openApiRoute(inviteAcceptRouteSchema, (c: AdminContext, data) =>
-  acceptInviteRequest(c, data.params.token, data.query.id, async () => {
-    if (!data.body) throw new AppError(400, "INVALID_BODY", "Attendee registration details are required");
-    return data.body;
-  }),
+export const InviteAcceptPost = openApiRoute(
+  inviteAcceptRouteSchema,
+  (c: AdminContext, data) =>
+    acceptInviteRequest(c, data.params.token, data.query.id, async () => {
+      if (!data.body) throw new AppError(400, "INVALID_BODY", "Attendee registration details are required");
+      return data.body;
+    }),
+  (c: AdminContext) => c.set?.("sensitive", true),
 );
-
-/** Compatibility export for direct endpoint tests. */
-export async function onRequestPost(c: AdminContext): Promise<Response> {
-  const query = inviteCapabilityQuerySchema.parse(Object.fromEntries(new URL(c.req.raw.url).searchParams));
-  return acceptInviteRequest(c, c.req.param("token"), query.id, () => parseJsonBody(c.req, inviteAcceptAttendeeSchema));
-}
-
-export async function onRequest(c: any): Promise<Response> {
-  c.set("sensitive", true);
-  return dispatchPostOnly(c, onRequestPost);
-}

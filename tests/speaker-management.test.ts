@@ -17,9 +17,6 @@ import { getProposalByManageToken, getSpeakerByManageToken } from "../functions/
 import { updateSpeakerProfile } from "../functions/_lib/services/proposals-speaker-profile";
 import { inviteProposalSpeaker } from "../functions/_lib/services/proposal-speaker-invitations";
 import { getEventBySlug } from "../functions/_lib/services/events";
-import { onRequestGet as speakerGet } from "../functions/api/v1/proposals/speaker/[token]";
-import { onRequestPost as speakerPost } from "../functions/api/v1/proposals/speaker/[token]";
-import { onRequestPatch as speakerPatch } from "../functions/api/v1/proposals/speaker/[token]";
 import { onRequestPost as createRegistration } from "../functions/api/v1/events/[eventSlug]/registrations";
 import { onRequestGet as confirmRegistrationEmail } from "../functions/api/v1/events/[eventSlug]/registrations/confirm-email";
 import { onRequestPost as speakerInvites } from "../functions/api/v1/events/[eventSlug]/speaker-invites";
@@ -49,6 +46,14 @@ import {
   inviteSpeakerAndSubmitCapacityProposal,
   setupProposalSpeakerCapacityWorkflow,
 } from "./helpers/proposal-speaker-capacity";
+
+function mountedSpeakerRoute(c: any): Promise<Response> {
+  return app.fetch(c.req.raw, c.env, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
+}
+
+const speakerGet = mountedSpeakerRoute;
+const speakerPost = mountedSpeakerRoute;
+const speakerPatch = mountedSpeakerRoute;
 
 interface StoredObject {
   body: ArrayBuffer;

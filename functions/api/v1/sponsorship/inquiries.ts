@@ -4,8 +4,6 @@
  * express interest, no payment. Replaces POST
  * /api/v1/forms (form_type=sponsor-interest).
  */
-import { OpenAPIRoute } from "chanfana";
-import { parseJsonBody } from "../../../_lib/validation";
 import { json } from "../../../_lib/http";
 import { AppError } from "../../../_lib/errors";
 import { resolveAppBaseUrl } from "../../../_lib/config";
@@ -20,8 +18,12 @@ import {
   listActiveSponsorshipTierNames,
 } from "../../../_lib/services/sponsorship";
 import { sponsorshipInquiryRouteSchema, sponsorshipInquirySchema } from "../../../../assets/shared/schemas/sponsorship";
+import { openApiRoute } from "../../../_lib/openapi/route";
+import type { z } from "zod";
 
-export async function onRequestPost(c: any): Promise<Response> {
+type SponsorshipInquiry = z.infer<typeof sponsorshipInquirySchema>;
+
+async function handleSponsorshipInquiry(c: any, body: SponsorshipInquiry): Promise<Response> {
   const env = c.env;
   const db = env.DB;
 
@@ -31,7 +33,6 @@ export async function onRequestPost(c: any): Promise<Response> {
     key: getClientIp(c.req.raw),
   });
 
-  const body = await parseJsonBody(c.req, sponsorshipInquirySchema);
   const sponsorType: "consortium" | "event" = body.eventId ? "event" : "consortium";
   if (!(await isActiveSponsorshipTier(db, sponsorType, body.desiredTier))) {
     throw new AppError(422, "UNKNOWN_TIER", `Unknown or unsupported sponsorship tier: ${body.desiredTier}`, {
@@ -66,10 +67,6 @@ export async function onRequestPost(c: any): Promise<Response> {
   return json({ sponsorshipId: created.id, pipelineStage: "new_inquiry" }, 201);
 }
 
-export class SponsorshipInquiriesPost extends OpenAPIRoute {
-  schema = sponsorshipInquiryRouteSchema;
-
-  async handle(c: any) {
-    return onRequestPost(c);
-  }
-}
+export const SponsorshipInquiriesPost = openApiRoute(sponsorshipInquiryRouteSchema, (c: any, data) =>
+  handleSponsorshipInquiry(c, data.body),
+);

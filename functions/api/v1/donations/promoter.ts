@@ -16,31 +16,23 @@
  * vanity share link — no PII is exposed.
  */
 
-import { OpenAPIRoute } from "chanfana";
 import {
   donationPromoterPostRouteSchema,
   donationPromoterRequestSchema,
 } from "../../../../assets/shared/schemas/donation";
 import { json } from "../../../_lib/http";
-import { parseJsonBody } from "../../../_lib/validation";
-import { isAppError } from "../../../_lib/errors";
 import { resolveAppBaseUrl } from "../../../_lib/config";
 import { getOrCreateDonationPromoter } from "../../../_lib/services/donations/promoter";
+import { openApiRoute } from "../../../_lib/openapi/route";
+import type { z } from "zod";
 
-export async function onRequestPost(c: any): Promise<Response> {
+type DonationPromoterRequest = z.infer<typeof donationPromoterRequestSchema>;
+
+async function handleDonationPromoter(c: any, body: DonationPromoterRequest): Promise<Response> {
   const env = c.env;
   const request = c.req.raw;
   const db = env.DB;
 
-  let body: { session_id: string };
-  try {
-    body = await parseJsonBody(request, donationPromoterRequestSchema);
-  } catch (error) {
-    if (isAppError(error) && (error.code === "INVALID_JSON" || error.code === "VALIDATION_ERROR")) {
-      return json({ error: { code: "BAD_REQUEST", message: error.message } }, 400);
-    }
-    throw error;
-  }
   const sessionId = body.session_id;
 
   const promoter = await getOrCreateDonationPromoter(db, sessionId, resolveAppBaseUrl(env, request));
@@ -50,10 +42,6 @@ export async function onRequestPost(c: any): Promise<Response> {
   return json(promoter);
 }
 
-export class DonationsPromoterPost extends OpenAPIRoute {
-  schema = donationPromoterPostRouteSchema;
-
-  async handle(c: any) {
-    return onRequestPost(c);
-  }
-}
+export const DonationsPromoterPost = openApiRoute(donationPromoterPostRouteSchema, (c: any, data) =>
+  handleDonationPromoter(c, data.body),
+);
