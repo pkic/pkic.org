@@ -191,18 +191,20 @@ export const adminEventRegistrationSummarySchema = adminRegistrationRecordContex
   lastAttendanceChange: adminEventRegistrationAttendanceChangeSchema.nullable(),
 });
 export type AdminEventRegistrationSummary = z.infer<typeof adminEventRegistrationSummarySchema>;
+export const adminEventRegistrationsStatsSchema = z.object({
+  byAttendanceType: z.record(z.string(), z.number()),
+  attendanceStatusByType: z.record(z.string(), z.object({ accepted: z.number(), waitlisted: z.number() })),
+  byStatus: z.record(z.string(), z.number()),
+  bouncedCount: z.number(),
+  consentCount: z.number(),
+});
+export type AdminEventRegistrationsStats = z.infer<typeof adminEventRegistrationsStatsSchema>;
 export const adminEventRegistrationsListResponseSchema = paginatedResponseSchema(
   "registrations",
   adminEventRegistrationSummarySchema,
 ).extend({
   event: eventSummarySchema,
-  stats: z.object({
-    byAttendanceType: z.record(z.string(), z.number()),
-    attendanceStatusByType: z.record(z.string(), z.object({ accepted: z.number(), waitlisted: z.number() })),
-    byStatus: z.record(z.string(), z.number()),
-    bouncedCount: z.number(),
-    consentCount: z.number(),
-  }),
+  stats: adminEventRegistrationsStatsSchema,
 });
 export type AdminEventRegistrationsListResponse = z.infer<typeof adminEventRegistrationsListResponseSchema>;
 

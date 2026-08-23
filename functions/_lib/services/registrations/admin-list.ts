@@ -9,10 +9,13 @@ import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveOrderBy } from "../../db/sort";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
-import { getAttendanceStatusByType, type AttendanceStatusCount } from "./admin-statistics";
+import { getAttendanceStatusByType } from "./admin-statistics";
 import { firstReferralCodeForOwnerSql } from "../referral-code-projection";
 import {
   EVENT_REGISTRATIONS_SORT_COLUMNS,
+  adminEventRegistrationSummarySchema,
+  adminEventRegistrationsStatsSchema,
+  type AdminEventRegistrationsListResponse,
   type AdminEventRegistrationsQuery,
 } from "../../../../assets/shared/schemas/admin-events";
 import type { DatabaseLike } from "../../types";
@@ -49,55 +52,15 @@ interface AttendanceChangeRow {
   day_label: string | null;
 }
 
-export interface AdminEventRegistrationsListParams {
-  limit: number;
-  offset: number;
-  q?: AdminEventRegistrationsQuery["q"];
-  status?: AdminEventRegistrationsQuery["status"];
-  bounced?: AdminEventRegistrationsQuery["bounced"];
-  consent?: AdminEventRegistrationsQuery["consent"];
-  attendanceChange?: AdminEventRegistrationsQuery["attendance_change"];
-  sort?: AdminEventRegistrationsQuery["sort"];
-}
-
-export interface AdminEventRegistrationSummary {
-  id: string;
-  user_id: string;
-  status: string;
-  attendance_type: string | null;
-  source_type: string | null;
-  created_at: string;
-  updated_at: string;
-  user_email: string | null;
-  display_name: string | null;
-  referral_code: string | null;
-  rsvp_events_json: string | null;
-  has_bounced: boolean;
-  sponsor_consent: boolean;
-  custom_answers_json: string | null;
-  dayWaitlistSummary: string | null;
-  dayWaitlistCount: number;
-  attendanceChangeHistory: AttendanceChangeHistoryEntry[];
-  lastAttendanceChange: AttendanceChangeHistoryEntry | null;
-}
-
-export interface AttendanceChangeHistoryEntry {
-  changedAt: string;
-  transitions: Array<{ fromType: string; toType: string; days: Array<{ dayDate: string; label: string | null }> }>;
-}
-
-export interface AdminEventRegistrationsStats {
-  byAttendanceType: Record<string, number>;
-  attendanceStatusByType: Record<string, AttendanceStatusCount>;
-  byStatus: Record<string, number>;
-  bouncedCount: number;
-  consentCount: number;
-}
-
+export type AdminEventRegistrationsListParams = AdminEventRegistrationsQuery;
+export type AttendanceChangeHistoryEntry =
+  AdminEventRegistrationsListResponse["registrations"][number]["attendanceChangeHistory"][number];
+export type AdminEventRegistrationSummary = AdminEventRegistrationsListResponse["registrations"][number];
+export type AdminEventRegistrationsStats = AdminEventRegistrationsListResponse["stats"];
 export interface AdminEventRegistrationsListResult {
-  registrations: AdminEventRegistrationSummary[];
+  registrations: AdminEventRegistrationsListResponse["registrations"];
   total: number;
-  stats: AdminEventRegistrationsStats;
+  stats: AdminEventRegistrationsListResponse["stats"];
 }
 
 const latestOutboxStatusForRegistrationSql = `(SELECT eo.status
@@ -115,7 +78,7 @@ export function buildAdminEventRegistrationsPageQuery(eventId: string, params: A
     "ORDER BY r.created_at DESC",
     "r.id ASC",
   );
-  const attendanceChangeFilter = params.attendanceChange;
+  const attendanceChangeFilter = params.attendance_change;
 
   const conditions: string[] = ["r.event_id = ?"];
   const bindings: unknown[] = [eventId];
@@ -360,14 +323,14 @@ export async function listAdminEventRegistrations(
   }
 
   return {
-    registrations,
+    registrations: registrations.map((registration) => adminEventRegistrationSummarySchema.parse(registration)),
     total,
-    stats: {
+    stats: adminEventRegistrationsStatsSchema.parse({
       byAttendanceType,
       attendanceStatusByType,
       byStatus,
       bouncedCount: Number(bouncedCountRow?.bounced_count ?? 0),
       consentCount: Number(consentCountRow?.consent_count ?? 0),
-    },
+    }),
   };
 }

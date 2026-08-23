@@ -33,23 +33,14 @@ export const AdminEventRegistrationsGet = openApiRoute(
     await requireAdminFromRequest(db, c.req.raw, c.env);
     const event = await getEventBySlug(db, c.req.param("eventSlug"));
 
-    const { limit, offset, q, status, bounced, consent, attendance_change, sort } = data.query;
-    const result = await listAdminEventRegistrations(db, event.id, {
-      limit,
-      offset,
-      q,
-      status,
-      bounced,
-      consent,
-      attendanceChange: attendance_change,
-      sort,
-    });
-
-    return json({
-      event: { id: event.id, slug: event.slug, name: event.name },
-      registrations: result.registrations,
-      stats: result.stats,
-      page: buildPageInfo(limit, offset, result.total, result.registrations.length),
-    });
+    const result = await listAdminEventRegistrations(db, event.id, data.query);
+    return json(
+      adminEventRegistrationsListResponseSchema.parse({
+        event: { id: event.id, slug: event.slug, name: event.name },
+        registrations: result.registrations,
+        stats: result.stats,
+        page: buildPageInfo(data.query.limit, data.query.offset, result.total, result.registrations.length),
+      }),
+    );
   },
 );

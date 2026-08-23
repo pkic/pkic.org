@@ -16,6 +16,7 @@ import { adminRegistrationDetailResponseSchema } from "../assets/shared/schemas/
 import {
   adminEventCreateResponseSchema,
   adminEventDaysReplaceResponseSchema,
+  adminEventRegistrationsListResponseSchema,
 } from "../assets/shared/schemas/admin-events";
 import { buildAdminEventRegistrationsPageQuery } from "../functions/_lib/services/registrations/admin-list";
 
@@ -238,7 +239,7 @@ describe("admin event management endpoints", () => {
       offset: 0,
       status: "registered",
       consent: "true",
-      attendanceChange: "joined_in_person",
+      attendance_change: "joined_in_person",
       q: "attendee",
     });
     const { pageSql, countSql, bindings, countBindings } = buildOffsetPageSql(query);
@@ -290,10 +291,7 @@ describe("admin event management endpoints", () => {
 
     const listResponse = await callAdmin("/api/v1/admin/events/pqc-2026/registrations");
     expect(listResponse.status).toBe(200);
-    const list = (await listResponse.json()) as {
-      registrations: Array<{ id: string; referral_code: string | null }>;
-      page: { total: number };
-    };
+    const list = adminEventRegistrationsListResponseSchema.parse(await listResponse.json());
     expect(list.page.total).toBe(1);
     expect(list.registrations).toEqual([expect.objectContaining({ id: registrationId, referral_code: "first001" })]);
 
