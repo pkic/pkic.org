@@ -1,9 +1,8 @@
 import { env } from "cloudflare:workers";
 import { createContext, queryAll, seedEventAndAdmin } from "./context";
+import app from "../../functions/router";
 import { createAdminSession } from "./auth";
 import { seedWorkflowEmailTemplates } from "./event-workflow";
-import { onRequestPost as inviteSpeakersBulk } from "../../functions/api/v1/admin/events/[eventSlug]/invites/speakers/bulk";
-import { onRequestPost as previewSpeakerInvites } from "../../functions/api/v1/admin/events/[eventSlug]/invites/speakers/preview";
 import { onRequestPost as submitProposal } from "../../functions/api/v1/events/[eventSlug]/proposals";
 import { addProposalSpeaker } from "../../functions/_lib/services/proposals";
 import { getEventBySlug } from "../../functions/_lib/services/events";
@@ -33,28 +32,24 @@ export async function inviteSpeakerAndSubmitCapacityProposal(adminSessionToken: 
   proposalManageToken: string;
 }> {
   const invites = [{ email: "speaker@example.test", firstName: "Speaker", lastName: "Test", sourceType: "direct" }];
-  const previewResponse = await previewSpeakerInvites(
-    createContext(
-      env,
-      new Request("https://app.test/api/v1/admin/events/pqc-2026/invites/speakers/preview", {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
-        body: JSON.stringify({ invites }),
-      }),
-      { eventSlug: "pqc-2026" },
-    ),
+  const previewResponse = await app.fetch(
+    new Request("https://app.test/api/v1/admin/events/pqc-2026/invites/speakers/preview", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
+      body: JSON.stringify({ invites }),
+    }),
+    env as any,
+    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
   );
   const preview = (await previewResponse.json()) as { previewToken: string; inviteDigest: string };
-  const inviteResponse = await inviteSpeakersBulk(
-    createContext(
-      env,
-      new Request("https://app.test/api/v1/admin/events/pqc-2026/invites/speakers/bulk", {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
-        body: JSON.stringify({ invites, previewToken: preview.previewToken, inviteDigest: preview.inviteDigest }),
-      }),
-      { eventSlug: "pqc-2026" },
-    ),
+  const inviteResponse = await app.fetch(
+    new Request("https://app.test/api/v1/admin/events/pqc-2026/invites/speakers/bulk", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
+      body: JSON.stringify({ invites, previewToken: preview.previewToken, inviteDigest: preview.inviteDigest }),
+    }),
+    env as any,
+    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
   );
   if (inviteResponse.status !== 200) throw new Error(`Speaker invite failed: ${inviteResponse.status}`);
   await inviteResponse.json();

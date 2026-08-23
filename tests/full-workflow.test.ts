@@ -5,8 +5,6 @@ import { createAdminSession } from "./helpers/auth";
 import { createTemplateVersion, activateTemplateVersion } from "../functions/_lib/email/templates";
 import { onRequestPost as requestAdminLink } from "../functions/api/v1/admin/auth/request-link";
 import { onRequestPost as verifyAdminLink } from "../functions/api/v1/admin/auth/verify-link";
-import { onRequestPost as inviteSpeakersBulk } from "../functions/api/v1/admin/events/[eventSlug]/invites/speakers/bulk";
-import { onRequestPost as previewSpeakerInvites } from "../functions/api/v1/admin/events/[eventSlug]/invites/speakers/preview";
 import { onRequestPost as submitProposal } from "../functions/api/v1/events/[eventSlug]/proposals";
 import { onRequestPost as createRegistration } from "../functions/api/v1/events/[eventSlug]/registrations";
 import { onRequest as confirmRegistrationEmail } from "../functions/api/v1/events/[eventSlug]/registrations/confirm-email";
@@ -173,39 +171,35 @@ describe("full workflow", () => {
       const speakerInvites = [
         { email: "speaker@example.test", firstName: "Speaker", lastName: "One", sourceType: "direct" },
       ];
-      const speakerPreviewResponse = await previewSpeakerInvites(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/admin/events/pqc-2026/invites/speakers/preview", {
-            method: "POST",
-            headers: { "content-type": "application/json", cookie: adminSessionCookie },
-            body: JSON.stringify({ invites: speakerInvites }),
-          }),
-          { eventSlug: "pqc-2026" },
-        ),
+      const speakerPreviewResponse = await app.fetch(
+        new Request("https://app.test/api/v1/admin/events/pqc-2026/invites/speakers/preview", {
+          method: "POST",
+          headers: { "content-type": "application/json", cookie: adminSessionCookie },
+          body: JSON.stringify({ invites: speakerInvites }),
+        }),
+        env as any,
+        { passThroughOnException: () => {}, waitUntil: () => {} } as any,
       );
       expect(speakerPreviewResponse.status).toBe(200);
       const speakerPreview = (await speakerPreviewResponse.json()) as {
         previewToken: string;
         inviteDigest: string;
       };
-      const speakerInviteResponse = await inviteSpeakersBulk(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/admin/events/pqc-2026/invites/speakers/bulk", {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              cookie: adminSessionCookie,
-            },
-            body: JSON.stringify({
-              invites: speakerInvites,
-              previewToken: speakerPreview.previewToken,
-              inviteDigest: speakerPreview.inviteDigest,
-            }),
+      const speakerInviteResponse = await app.fetch(
+        new Request("https://app.test/api/v1/admin/events/pqc-2026/invites/speakers/bulk", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            cookie: adminSessionCookie,
+          },
+          body: JSON.stringify({
+            invites: speakerInvites,
+            previewToken: speakerPreview.previewToken,
+            inviteDigest: speakerPreview.inviteDigest,
           }),
-          { eventSlug: "pqc-2026" },
-        ),
+        }),
+        env as any,
+        { passThroughOnException: () => {}, waitUntil: () => {} } as any,
       );
       expect(speakerInviteResponse.status).toBe(200);
       await speakerInviteResponse.json();

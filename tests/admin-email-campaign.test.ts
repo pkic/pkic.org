@@ -3,14 +3,11 @@ import { env } from "cloudflare:workers";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { listCampaignRecipients } from "../functions/_lib/services/admin-email-campaign";
 import { resetDb } from "./helpers/reset-db";
-import { createContext, queryAll, seedEventAndAdmin } from "./helpers/context";
+import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { activateTemplateVersion, createTemplateVersion } from "../functions/_lib/email/templates";
-import { onRequestPost as campaignPreview } from "../functions/api/v1/admin/events/[eventSlug]/emails/campaign/preview";
-import { onRequestPost as campaignSend } from "../functions/api/v1/admin/events/[eventSlug]/emails/campaign/send";
-import type { DatabaseLike, Env as AppEnv, StatementLike } from "../functions/_lib/types";
-
-const appEnv = env as unknown as AppEnv;
+import app from "../functions/router";
+import type { DatabaseLike, StatementLike } from "../functions/_lib/types";
 
 function countingDatabase(db: DatabaseLike, counts: { dayAttendance: number; dayWaitlist: number }): DatabaseLike {
   function wrapStatement(statement: StatementLike, query: string): StatementLike {
@@ -229,13 +226,17 @@ describe("admin email campaign recipients", () => {
       batchSize: 500,
       filter: { audience: "attendees" as const, attendeeStatus: "registered" as const },
     };
-    const makeRequest = (requestBody: unknown) =>
-      new Request("https://app.test", {
+    const makeRequest = (requestBody: unknown, action: "preview" | "send") =>
+      new Request(`https://app.test/api/v1/admin/events/pqc-2026/emails/campaign/${action}`, {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${rawToken}` },
         body: JSON.stringify(requestBody),
       });
-    const previewResponse = await campaignPreview(createContext(appEnv, makeRequest(body), { eventSlug: "pqc-2026" }));
+    const previewResponse = await app.fetch(
+      makeRequest(body, "preview"),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
     const preview = (await previewResponse.json()) as { previewToken: string };
     expect(previewResponse.status).toBe(200);
 
@@ -247,16 +248,17 @@ describe("admin email campaign recipients", () => {
         return env.DB.batch(statements);
       },
     };
-    const sendContext = createContext(appEnv, makeRequest({ ...body, previewToken: preview.previewToken }), {
-      eventSlug: "pqc-2026",
-    });
-    sendContext.var = { requestDb: batchDb };
     let backgroundCalls = 0;
-    sendContext.executionCtx.waitUntil = () => {
-      backgroundCalls += 1;
-    };
-
-    const sendResponse = await campaignSend(sendContext);
+    const sendResponse = await app.fetch(
+      makeRequest({ ...body, previewToken: preview.previewToken }, "send"),
+      { ...env, DB: batchDb } as any,
+      {
+        passThroughOnException: () => {},
+        waitUntil: () => {
+          backgroundCalls += 1;
+        },
+      } as any,
+    );
     const sendBody = (await sendResponse.json()) as {
       queuedRecipients: number;
       queuedBatches: number;
