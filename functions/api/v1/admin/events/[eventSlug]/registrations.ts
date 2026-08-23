@@ -31,7 +31,7 @@ export const AdminEventRegistrationsGet = openApiRoute(
   async (c: AdminContext, data) => {
     const db = requestDb(c);
     await requireAdminFromRequest(db, c.req.raw, c.env);
-    const event = await getEventBySlug(db, c.req.param("eventSlug"));
+    const event = await getEventBySlug(db, data.params.eventSlug);
 
     const result = await listAdminEventRegistrations(db, event.id, data.query);
     return json(

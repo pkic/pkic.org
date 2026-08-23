@@ -15,7 +15,8 @@ import {
   EVENT_REGISTRATIONS_SORT_COLUMNS,
   adminEventRegistrationSummarySchema,
   adminEventRegistrationsStatsSchema,
-  type AdminEventRegistrationsListResponse,
+  type AdminEventRegistrationSummary,
+  type AdminEventRegistrationsStats,
   type AdminEventRegistrationsQuery,
 } from "../../../../assets/shared/schemas/admin-events";
 import type { DatabaseLike } from "../../types";
@@ -52,15 +53,11 @@ interface AttendanceChangeRow {
   day_label: string | null;
 }
 
-export type AdminEventRegistrationsListParams = AdminEventRegistrationsQuery;
-export type AttendanceChangeHistoryEntry =
-  AdminEventRegistrationsListResponse["registrations"][number]["attendanceChangeHistory"][number];
-export type AdminEventRegistrationSummary = AdminEventRegistrationsListResponse["registrations"][number];
-export type AdminEventRegistrationsStats = AdminEventRegistrationsListResponse["stats"];
+type AttendanceChangeHistoryEntry = AdminEventRegistrationSummary["attendanceChangeHistory"][number];
 export interface AdminEventRegistrationsListResult {
-  registrations: AdminEventRegistrationsListResponse["registrations"];
+  registrations: AdminEventRegistrationSummary[];
   total: number;
-  stats: AdminEventRegistrationsListResponse["stats"];
+  stats: AdminEventRegistrationsStats;
 }
 
 const latestOutboxStatusForRegistrationSql = `(SELECT eo.status
@@ -70,7 +67,7 @@ const latestOutboxStatusForRegistrationSql = `(SELECT eo.status
        LIMIT 1)`;
 const registrationReferralCodeSql = firstReferralCodeForOwnerSql("registration", "r.id");
 
-export function buildAdminEventRegistrationsPageQuery(eventId: string, params: AdminEventRegistrationsListParams) {
+export function buildAdminEventRegistrationsPageQuery(eventId: string, params: AdminEventRegistrationsQuery) {
   const search = (params.q ?? "").trim();
   const orderBy = resolveOrderBy(
     params.sort,
@@ -202,7 +199,7 @@ export function buildAdminEventRegistrationsPageQuery(eventId: string, params: A
 export async function listAdminEventRegistrations(
   db: DatabaseLike,
   eventId: string,
-  params: AdminEventRegistrationsListParams,
+  params: AdminEventRegistrationsQuery,
 ): Promise<AdminEventRegistrationsListResult> {
   const { rows: registrationRows, total } = await queryPage<RegistrationRow>(
     db,
