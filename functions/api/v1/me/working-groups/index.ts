@@ -5,7 +5,7 @@ import { json } from "../../../../_lib/http";
 import { requireMemberFromRequest } from "../../../../_lib/auth/member";
 import { listMyWorkingGroups } from "../../../../_lib/services/member-working-groups";
 import {
-  myWorkingGroupsListQuerySchema,
+  myWorkingGroupsListResponseSchema,
   myWorkingGroupsListRouteSchema,
 } from "../../../../../assets/shared/schemas/me";
 import { buildPageInfo } from "../../../../../assets/shared/schemas/pagination";
@@ -15,7 +15,11 @@ import { openApiRoute } from "../../../../_lib/openapi/route";
 export const MeWorkingGroupsGet = openApiRoute(myWorkingGroupsListRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
   const member = await requireMemberFromRequest(db, c.req.raw, c.env);
-  const query = myWorkingGroupsListQuerySchema.parse(data.query);
-  const { workingGroups, total } = await listMyWorkingGroups(db, member, query);
-  return json({ workingGroups, page: buildPageInfo(query.limit, query.offset, total, workingGroups.length) });
+  const { workingGroups, total } = await listMyWorkingGroups(db, member, data.query);
+  return json(
+    myWorkingGroupsListResponseSchema.parse({
+      workingGroups,
+      page: buildPageInfo(data.query.limit, data.query.offset, total, workingGroups.length),
+    }),
+  );
 });

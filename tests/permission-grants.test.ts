@@ -196,15 +196,15 @@ describe("permission_grants (Access grants)", () => {
     await env.DB.batch([
       env.DB.prepare(
         `INSERT INTO permission_grants (id, user_id, permission, context_type, context_id, granted_by_user_id, created_at)
-         VALUES (?, ?, 'events:read', 'event', 'searchable-event', ?, datetime('now'))`,
-      ).bind(crypto.randomUUID(), staffUserId, adminId),
+         VALUES (?, ?, 'events:read', 'event', ?, ?, datetime('now'))`,
+      ).bind(crypto.randomUUID(), staffUserId, eventAId, adminId),
       env.DB.prepare(
         `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
          VALUES (?, ?, 'donations:read', ?, datetime('now'))`,
       ).bind(crypto.randomUUID(), staffUserId, adminId),
     ]);
 
-    const response = await call(adminToken, "/api/v1/admin/access-grants?q=searchable-event");
+    const response = await call(adminToken, `/api/v1/admin/access-grants?q=${eventAId}`);
     expect(response.status).toBe(200);
     const payload = (await response.json()) as { grants: Array<{ permission: string }>; page: { total: number } };
     expect(payload.grants.map(({ permission }) => permission)).toEqual(["events:read"]);

@@ -11,6 +11,7 @@ import { createMailingList, listMailingLists } from "../../../../_lib/services/m
 import {
   mailingListCreateRouteSchema,
   mailingListResponseSchema,
+  mailingListsListResponseSchema,
   mailingListsListRouteSchema,
 } from "../../../../../assets/shared/schemas/admin-mailing-lists";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
@@ -20,9 +21,13 @@ import { buildPageInfo } from "../../../../../assets/shared/schemas/pagination";
 export const MailingListsList = openApiRoute(mailingListsListRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
   await requireAdminFromRequest(db, c.req.raw, c.env);
-  const { limit, offset, q, sort } = data.query;
-  const { mailingLists, total } = await listMailingLists(db, { limit, offset, q, sort });
-  return json({ mailingLists, page: buildPageInfo(limit, offset, total, mailingLists.length) });
+  const { mailingLists, total } = await listMailingLists(db, data.query);
+  return json(
+    mailingListsListResponseSchema.parse({
+      mailingLists,
+      page: buildPageInfo(data.query.limit, data.query.offset, total, mailingLists.length),
+    }),
+  );
 });
 
 export const MailingListsCreate = openApiRoute(mailingListCreateRouteSchema, async (c: AdminContext, data) => {

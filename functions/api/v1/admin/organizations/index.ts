@@ -10,7 +10,10 @@ import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../_lib/auth/permissions";
 import { listAdminOrganizations } from "../../../../_lib/services/admin-organizations";
-import { organizationsListRouteSchema } from "../../../../../assets/shared/schemas/admin-organizations";
+import {
+  adminOrganizationsListResponseSchema,
+  organizationsListRouteSchema,
+} from "../../../../../assets/shared/schemas/admin-organizations";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { buildPageInfo } from "../../../../../assets/shared/schemas/pagination";
@@ -19,8 +22,11 @@ export const OrganizationsList = openApiRoute(organizationsListRouteSchema, asyn
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "organizations:read");
 
-  const { q, sort, limit, offset } = data.query;
-
-  const { organizations, total } = await listAdminOrganizations(requestDb(c), { limit, offset, q, sort });
-  return json({ organizations, page: buildPageInfo(limit, offset, total, organizations.length) });
+  const { organizations, total } = await listAdminOrganizations(requestDb(c), data.query);
+  return json(
+    adminOrganizationsListResponseSchema.parse({
+      organizations,
+      page: buildPageInfo(data.query.limit, data.query.offset, total, organizations.length),
+    }),
+  );
 });

@@ -9,14 +9,17 @@
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { json } from "../../../../_lib/http";
 import { getGlobalFormByKey } from "../../../../_lib/services/forms";
-import { memberApplicationFormRouteSchema } from "../../../../../assets/shared/schemas/member-applications";
+import {
+  memberApplicationFormResponseSchema,
+  memberApplicationFormRouteSchema,
+} from "../../../../../assets/shared/schemas/member-applications";
 
 const APPLICATION_FORM_KEY = "membership-application";
 
 export async function onRequestGet(c: any): Promise<Response> {
   const db = c.env.DB;
   const form = await getGlobalFormByKey(db, APPLICATION_FORM_KEY);
-  const response = json({ form });
+  const response = json(memberApplicationFormResponseSchema.parse({ form }));
   response.headers.set("cache-control", "public, max-age=60, s-maxage=300, stale-while-revalidate=60");
   return response;
 }

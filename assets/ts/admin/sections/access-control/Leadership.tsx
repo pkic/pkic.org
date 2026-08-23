@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { Spinner } from "../../../components/Spinner";
 import { api, apiCommand } from "../../api";
 import { fmt, toast } from "../../ui";
-import type { AdminWorkingGroupSummary, RoleAssignment } from "../../types";
+import type { RoleAssignment } from "../../types";
 import { UserPicker, type PickedUser } from "./UserPicker";
 import { LeadershipPositions } from "./LeadershipPositions";
 import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
@@ -273,11 +273,11 @@ export function Leadership() {
       <div class="card border-0 shadow-sm">
         <div class="card-header bg-white fw-semibold">Working groups</div>
         <div class="card-body">
-          <ApiDataTable<AdminWorkingGroupSummary>
+          <ApiDataTable
             endpoint="/api/v1/admin/working-groups"
             responseSchema={workingGroupsListResponseSchema}
-            resolve={(response) => workingGroupsListResponseSchema.parse(response).workingGroups}
-            resolvePage={(response) => workingGroupsListResponseSchema.parse(response).page}
+            resolve={(response) => response.workingGroups}
+            resolvePage={(response) => response.page}
             paginate
             initialPageSize={25}
             initialSort="name"

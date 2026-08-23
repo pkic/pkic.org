@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { adminUserIdParamsSchema, proposalSpeakerIdParamsSchema, successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { proposalManageTokenParamsSchema } from "./proposal-management";
@@ -7,6 +8,20 @@ import {
   headshotUploadResponseSchema,
 } from "./registration";
 
+const rawHeadshotImageSchema = z.any().describe("Raw JPEG, PNG, or WebP image bytes");
+const headshotUploadRequestContent = {
+  "multipart/form-data": { schema: headshotImageUploadFormSchema },
+  "image/jpeg": { schema: rawHeadshotImageSchema },
+  "image/png": { schema: rawHeadshotImageSchema },
+  "image/webp": { schema: rawHeadshotImageSchema },
+  "application/octet-stream": { schema: rawHeadshotImageSchema },
+};
+const headshotImageResponseContent = {
+  "image/jpeg": { schema: rawHeadshotImageSchema },
+  "image/png": { schema: rawHeadshotImageSchema },
+  "image/webp": { schema: rawHeadshotImageSchema },
+};
+
 export const adminUserHeadshotGetRouteSchema = {
   tags: ["Admin headshots"],
   summary: "Download a user headshot",
@@ -15,25 +30,38 @@ export const adminUserHeadshotGetRouteSchema = {
     params: adminUserIdParamsSchema,
   },
   responses: {
-    "200": { description: "Binary headshot image." },
+    "200": { description: "Binary headshot image.", content: headshotImageResponseContent },
     "401": { description: "Admin authorization required." },
     "404": { description: "User or headshot not found." },
     "503": { description: "Uploads bucket is not configured." },
   },
 };
 
+export const adminUserGravatarImportResponseSchema = adminHeadshotUploadResponseSchema.extend({
+  source: z.literal("gravatar"),
+});
+export const adminUserGravatarImportRouteSchema = {
+  tags: ["Admin headshots"],
+  summary: "Import an admin user's Gravatar",
+  request: { params: adminUserIdParamsSchema },
+  responses: {
+    "200": {
+      description: "Gravatar imported.",
+      content: { "application/json": { schema: adminUserGravatarImportResponseSchema } },
+    },
+    "404": { description: "User or Gravatar not found." },
+  },
+};
+
 export const adminUserHeadshotPutRouteSchema = {
   tags: ["Admin headshots"],
   summary: "Upload or replace a user headshot",
-  description: "Uploads, resizes, stores, and activates a headshot image for a user from the admin console.",
+  description:
+    "Uploads, resizes, stores, and activates a headshot image for a user from the admin console. Accepts a multipart file field or raw JPEG, PNG, WebP, or octet-stream image bytes; the handler validates the detected file signature.",
   request: {
     params: adminUserIdParamsSchema,
     body: {
-      content: {
-        "multipart/form-data": {
-          schema: headshotImageUploadFormSchema,
-        },
-      },
+      content: headshotUploadRequestContent,
       required: true,
     },
   },
@@ -84,7 +112,7 @@ function privateHeadshotGetRouteSchema<TParams extends HeadshotParamsSchema>(
     summary,
     request: { params },
     responses: {
-      "200": { description: "Binary headshot image." },
+      "200": { description: "Binary headshot image.", content: headshotImageResponseContent },
       ...options.accessResponses,
       "404": { description: options.notFoundDescription ?? "Speaker or headshot not found." },
       "503": { description: "Uploads bucket is not configured." },
@@ -102,7 +130,7 @@ function headshotPutRouteSchema<TParams extends HeadshotParamsSchema>(
     summary,
     request: {
       params,
-      body: { content: { "multipart/form-data": { schema: headshotImageUploadFormSchema } }, required: true },
+      body: { content: headshotUploadRequestContent, required: true },
     },
     responses: {
       "200": headshotUploadSuccessResponse,

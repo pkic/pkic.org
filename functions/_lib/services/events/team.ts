@@ -1,8 +1,10 @@
 import {
+  EVENT_TEAM_PERMISSION_ROLE_IDS,
   EVENT_TEAM_SORT_COLUMNS,
   type AdminEventPermissionInput,
   type AdminEventTeamListQuery,
   type AdminEventTeamListItem,
+  type EventTeamRoleId,
   type EventTeamPermission,
 } from "../../../../assets/shared/schemas/admin-events";
 import { buildPageInfo, type PageInfo } from "../../../../assets/shared/schemas/pagination";
@@ -21,19 +23,24 @@ import { prepareAuditLog } from "../audit";
 import { getEventBySlug } from "../events";
 import { findUserByEmail } from "../users";
 
-const PERMISSION_TO_ROLE_ID: Record<EventTeamPermission, string> = {
-  organizer: "role-event_organizer",
-  program_committee: "role-program_committee",
-  moderator: "role-event_moderator",
-  volunteer: "role-event_volunteer",
-};
+const EVENT_TEAM_ROLE_IDS = Object.values(EVENT_TEAM_PERMISSION_ROLE_IDS) as EventTeamRoleId[];
+const EVENT_TEAM_ROLE_ID_BINDINGS = EVENT_TEAM_ROLE_IDS.map(() => "?").join(", ");
+const ROLE_ID_TO_PERMISSION = Object.fromEntries(
+  Object.entries(EVENT_TEAM_PERMISSION_ROLE_IDS).map(([permission, roleId]) => [roleId, permission]),
+) as Record<EventTeamRoleId, EventTeamPermission>;
 
-const ROLE_ID_TO_PERMISSION: Record<string, EventTeamPermission> = {
-  "role-event_organizer": "organizer",
-  "role-program_committee": "program_committee",
-  "role-event_moderator": "moderator",
-  "role-event_volunteer": "volunteer",
-};
+/**
+ * Converts persisted event-team role IDs back into the shared API vocabulary.
+ * Unknown IDs indicate corrupted or incomplete role configuration and must not
+ * be emitted as an invalid response with an undefined permission.
+ */
+export function eventTeamPermissionForRoleId(roleId: string): EventTeamPermission {
+  const permission = ROLE_ID_TO_PERMISSION[roleId as EventTeamRoleId];
+  if (!permission) {
+    throw new AppError(500, "INVALID_EVENT_TEAM_ROLE", "Event-team data contains an unsupported role");
+  }
+  return permission;
+}
 
 interface PermissionRow {
   id: string;
@@ -77,9 +84,9 @@ export async function listEventTeam(
               JOIN users subject ON subject.id = ur.user_id
               LEFT JOIN users u ON u.id = ur.granted_by_user_id
              WHERE ur.context_type = 'event' AND ur.context_id = ? AND ur.revoked_at IS NULL
-               AND ur.role_id IN ('role-event_organizer', 'role-program_committee', 'role-event_moderator', 'role-event_volunteer')
+               AND ur.role_id IN (${EVENT_TEAM_ROLE_ID_BINDINGS})
                ${searchSql}`,
-    bindings: [event.id, ...bindings],
+    bindings: [event.id, ...EVENT_TEAM_ROLE_IDS, ...bindings],
     orderBy,
     limit,
     offset,
@@ -88,7 +95,7 @@ export async function listEventTeam(
     id: row.id,
     user_email: row.user_email,
     user_id: row.user_id,
-    permission: ROLE_ID_TO_PERMISSION[row.role_id],
+    permission: eventTeamPermissionForRoleId(row.role_id),
     granted_by_id: row.granted_by_id,
     expires_at: row.expires_at,
     created_at: row.created_at,
@@ -106,7 +113,7 @@ export async function grantEventTeamRole(
   const event = await getEventBySlug(db, eventSlug);
   requirePermission(actor, "events:manage", { type: "event", id: event.id });
   const normalizedEmail = normalizeEmail(input.userEmail);
-  const roleId = PERMISSION_TO_ROLE_ID[input.permission];
+  const roleId = EVENT_TEAM_PERMISSION_ROLE_IDS[input.permission];
   const user = await findUserByEmail(db, normalizedEmail);
   const userId = user?.id ?? uuid();
   const id = uuid();

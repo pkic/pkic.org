@@ -1,5 +1,9 @@
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
-import type { SponsorsDisplayResponse, SponsorsListResponse } from "../../../assets/shared/schemas/public-sponsors";
+import type {
+  SponsorsDisplayResponse,
+  SponsorsListQuery,
+  SponsorsListResponse,
+} from "../../../assets/shared/schemas/public-sponsors";
 import { sanitizeLegacyHttpUrl } from "../../../assets/shared/schemas/urls";
 import { buildD1TextSearchFilter } from "../db/search";
 import { resolveMappedOrderBy } from "../db/sort";
@@ -95,11 +99,7 @@ const PUBLIC_SPONSOR_READ_MODEL_CTE = `
        AND event_tier.active = 1
   )`;
 
-export interface PublicSponsorEventIdentity {
-  eventSlug?: string;
-  /** Legacy fallback for callers that have not migrated to the stable canonical slug. */
-  eventName?: string;
-}
+export type PublicSponsorEventIdentity = Pick<SponsorsListQuery, "eventSlug" | "eventName">;
 
 /**
  * Select an event by stable canonical slug whenever available. Name matching is
@@ -144,14 +144,7 @@ interface SponsorRow {
   effective_weight: number;
 }
 
-export interface PublicSponsorListOptions extends PublicSponsorEventIdentity {
-  level?: string;
-  minWeight?: number;
-  limit: number;
-  offset: number;
-  q?: string;
-  sort?: string;
-}
+export type PublicSponsorListOptions = SponsorsListQuery;
 
 async function rejectAmbiguousLegacyEventName(db: DatabaseLike, eventName?: string): Promise<void> {
   if (!eventName) return;

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api } from "../../assets/ts/admin/api";
+import { api, apiCommand } from "../../assets/ts/admin/api";
 import { authStatus, saveAuth } from "../../assets/ts/admin/state";
 import { ADMIN_PERMISSION_DENIED_MESSAGE, PERMISSION_DENIED_MESSAGE } from "../../assets/shared/auth-errors";
 import { presentationUploadRequest } from "../../assets/shared/presentation-upload";
@@ -8,6 +8,7 @@ import { successResponseSchema } from "../../assets/shared/schemas/api-common";
 import { adminAuthSessionResponseSchema } from "../../assets/shared/schemas/admin-auth";
 import { ApiClientError, requestJson } from "../../assets/ts/shared/api-client";
 import { z } from "zod";
+import { adminBulkInviteResponseSchema } from "../../assets/shared/schemas/admin-events";
 
 describe("admin API client", () => {
   afterEach(() => {
@@ -81,6 +82,33 @@ describe("admin API client", () => {
     );
 
     await expect(requestJson("/api/v1/example", successResponseSchema)).rejects.toBeInstanceOf(z.ZodError);
+  });
+
+  it("keeps apiCommand success-only and rejects an undeclared payload", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ success: true, jobId: "job-1" })),
+    );
+
+    await expect(apiCommand("/api/v1/admin/example", { method: "POST" })).rejects.toBeInstanceOf(z.ZodError);
+  });
+
+  it("accepts named payload response schemas without truncating their domain fields", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({ success: true, created: [{ email: "a@example.test" }], endorsed: [], skipped: [] }),
+      ),
+    );
+
+    await expect(
+      api("/api/v1/admin/events/event/invites/attendees/bulk", adminBulkInviteResponseSchema),
+    ).resolves.toEqual({
+      success: true,
+      created: [{ email: "a@example.test" }],
+      endorsed: [],
+      skipped: [],
+    });
   });
 
   it("rejects incomplete admin session responses before treating the browser as authenticated", async () => {

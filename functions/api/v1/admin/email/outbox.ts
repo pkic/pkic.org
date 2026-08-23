@@ -10,11 +10,11 @@ import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { json } from "../../../../_lib/http";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { listAdminEmailOutbox } from "../../../../_lib/services/admin-email-outbox";
+import { adminEmailOutboxResponseSchema } from "../../../../../assets/shared/schemas/admin-email-outbox";
 import { adminEmailOutboxGetRouteSchema } from "../../../../../assets/shared/schemas/route-contracts";
 
 export const AdminEmailOutboxGet = openApiRoute(adminEmailOutboxGetRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
   await requireAdminFromRequest(db, c.req.raw, c.env);
-  const { status, messageType, dueNow, q, sort, limit, offset } = data.query;
-  return json(await listAdminEmailOutbox(db, { status, messageType, dueNow, q, sort, limit, offset }));
+  return json(adminEmailOutboxResponseSchema.parse(await listAdminEmailOutbox(db, data.query)));
 });

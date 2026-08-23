@@ -10,6 +10,7 @@ import { getRegistrationByManageToken } from "./registrations";
 import { bulkCreateInvites } from "./invite-bulk";
 import { countInvitesByInviter } from "./invites";
 import { createReferralCode } from "./referrals";
+import { firstReferralCodeQuerySql } from "./referral-code-projection";
 import { inviteDeclineUrl, proposalPageUrl, registrationPageUrl } from "./frontend-links";
 import type { Env } from "../types";
 
@@ -45,11 +46,9 @@ async function registrationReferralCode(
   userId: string,
   length: number,
 ): Promise<string> {
-  const existing = await first<{ code: string }>(
-    env.DB,
-    "SELECT code FROM referral_codes WHERE owner_type = 'registration' AND owner_id = ? ORDER BY created_at ASC LIMIT 1",
-    [registrationId],
-  );
+  const existing = await first<{ code: string }>(env.DB, firstReferralCodeQuerySql("registration", "?"), [
+    registrationId,
+  ]);
   return (
     existing?.code ??
     (await createReferralCode(env.DB, {

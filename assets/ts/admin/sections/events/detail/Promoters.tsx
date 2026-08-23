@@ -4,10 +4,13 @@ import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Badge } from "../../../../components/Badge";
 import { DataTable } from "../../../../components/Table";
 import { Tabs } from "../../../../components/Tabs";
-import { useServerCollection } from "../../../../hooks/useServerCollection";
+import {
+  buildCollectionResetKey,
+  useCollectionOffset,
+  useServerCollection,
+} from "../../../../hooks/useServerCollection";
 import { loadAdminCollection } from "../../../services/server-collection";
 import { Pager } from "../../../../components/Pager";
-import { useEffect } from "preact/hooks";
 import {
   eventPromotersListResponseSchema,
   type EventPromoter as PromoterEntry,
@@ -119,19 +122,21 @@ export function Promoters({ slug, subTab }: { slug: string; subTab?: string }) {
   const tab = subTab === "codes" ? "codes" : "promoters";
   const pager = useOffsetPager();
   const { offset, pageSize } = pager;
+  const endpoint = `/api/v1/admin/events/${slug}/promoters`;
+  const sort = tab === "promoters" ? "-impact" : "-conversions";
+  const resetKey = buildCollectionResetKey(endpoint, { view: tab, sort });
+  const requestOffset = useCollectionOffset(resetKey, offset, pager.resetPage);
   const { data, loading, error } = useServerCollection({
-    endpoint: `/api/v1/admin/events/${slug}/promoters`,
+    endpoint,
     params: {
       view: tab,
       limit: String(pageSize),
-      offset: String(offset),
-      sort: tab === "promoters" ? "-impact" : "-conversions",
+      offset: String(requestOffset),
+      sort,
     },
     responseSchema: eventPromotersListResponseSchema,
     load: loadAdminCollection,
   });
-
-  useEffect(() => pager.resetPage(), [tab, pager.resetPage]);
 
   if (loading) return <Spinner />;
   if (error) return <ErrorAlert error={error} />;

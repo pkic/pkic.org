@@ -6,7 +6,8 @@ import {
   searchableListQuerySchema,
   sortColumnSchema,
 } from "./pagination";
-import { trimmedString } from "./api-common";
+import { successResponseSchema, trimmedString } from "./api-common";
+import { databaseIdSchema } from "./identifiers";
 import { addDuplicateStringIssues } from "./refinements";
 import { formFieldRulesSchema } from "./form-field-rules";
 import { formFieldDefinitionSchema, formFieldTypeSchema, formPurposeSchema, formStatusSchema } from "./forms";
@@ -81,29 +82,39 @@ export const adminFormsListQuerySchema = listQuerySchema(ADMIN_FORMS_SORT_COLUMN
 });
 export type AdminFormsListQuery = z.infer<typeof adminFormsListQuerySchema>;
 
-export const adminFormSummarySchema = z.object({
-  id: z.string(),
+/** Canonical persisted form shape used by detail and mutation responses. */
+export const adminFormRecordSchema = z.object({
+  id: databaseIdSchema,
   key: z.string(),
   scope_type: z.string(),
   scope_ref: z.string().nullable(),
-  event_slug: z.string().nullable(),
-  event_name: z.string().nullable(),
   purpose: formPurposeSchema,
   status: formStatusSchema,
   title: z.string(),
   description: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
+});
+
+/** List-only projection extending the persisted form with joins and aggregates. */
+export const adminFormSummarySchema = adminFormRecordSchema.extend({
+  event_slug: z.string().nullable(),
+  event_name: z.string().nullable(),
   field_count: z.number(),
   submission_count: z.number(),
 });
 export type AdminFormSummary = z.infer<typeof adminFormSummarySchema>;
 export const adminFormDetailResponseSchema = z.object({
-  form: adminFormSummarySchema,
+  form: adminFormRecordSchema,
   fields: z.array(formFieldDefinitionSchema),
 });
+export type AdminFormDetailResponse = z.infer<typeof adminFormDetailResponseSchema>;
+export const adminFormUpdateResponseSchema = successResponseSchema.extend(adminFormDetailResponseSchema.shape);
 export const adminFormDeleteResponseSchema = z.object({ action: z.string(), message: z.string().optional() });
-export const adminFormCreateResponseSchema = z.object({ key: z.string() });
+export const adminFormCreateResponseSchema = successResponseSchema.extend({
+  formId: databaseIdSchema,
+  key: z.string(),
+});
 
 export const adminFormsListResponseSchema = paginatedResponseSchema("forms", adminFormSummarySchema);
 
@@ -116,8 +127,10 @@ const adminFormSubmissionFiltersSchema = z.object({
 export const adminFormSubmissionsQuerySchema = searchableListQuerySchema(formSubmissionsSortValueSchema, {
   limit: 200,
 }).merge(adminFormSubmissionFiltersSchema);
+export type AdminFormSubmissionsQuery = z.infer<typeof adminFormSubmissionsQuerySchema>;
 
 export const adminFormSubmissionStatsQuerySchema = searchQuerySchema.merge(adminFormSubmissionFiltersSchema);
+export type AdminFormSubmissionStatsQuery = z.infer<typeof adminFormSubmissionStatsQuerySchema>;
 
 export const adminFormSubmissionSubmitterSchema = z.object({
   id: z.string(),
@@ -162,6 +175,7 @@ export const adminFormSubmissionsResponseSchema = paginatedResponseSchema(
   "submissions",
   adminFormSubmissionSchema,
 ).extend({ form: adminFormReferenceSchema });
+export type AdminFormSubmissionsResponse = z.infer<typeof adminFormSubmissionsResponseSchema>;
 
 export const adminFormSubmissionStatsResponseSchema = z.object({
   form: adminFormReferenceSchema,

@@ -15,6 +15,7 @@ import {
   ADMIN_VOTE_BALLOT_SORT_COLUMNS,
   ADMIN_VOTES_SORT_COLUMNS,
   type AdminVoteBallotsListQuery,
+  type AdminVotesListQuery,
 } from "../../../../assets/shared/schemas/votes-admin";
 import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
 import { adminDatabaseUserId } from "../../auth/admin-identity";
@@ -285,7 +286,7 @@ export interface AdminVoteSummary extends VoteSummary {
 
 export async function listVotesForAdmin(
   db: DatabaseLike,
-  params: { status?: VoteStatus; q?: string; limit: number; offset: number; sort?: string },
+  params: AdminVotesListQuery,
 ): Promise<{ votes: AdminVoteSummary[]; total: number }> {
   const conditions: string[] = [];
   const whereArgs: unknown[] = [];

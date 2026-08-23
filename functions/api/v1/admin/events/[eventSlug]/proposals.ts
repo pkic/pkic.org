@@ -27,25 +27,20 @@ export const AdminEventsEventSlugProposalsGet = openApiRoute(
   async (c: AdminContext, data) => {
     const db = requestDb(c);
     const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
-    const event = await getEventBySlug(db, c.req.param("eventSlug"));
+    const event = await getEventBySlug(db, data.params.eventSlug);
     requirePermission(admin, "proposals:read", { type: "event", id: event.id });
     const access = await getProposalAccessForEvent(db, event.id, admin);
-    const { status, recommendation, sort, q, deleted, limit, offset } = data.query;
     const result = await listAdminEventProposals(db, {
+      ...data.query,
       eventId: event.id,
-      status,
-      recommendation,
-      sort,
-      q,
-      deleted,
-      limit,
-      offset,
     });
 
-    return json({
-      event: { id: event.id, slug: event.slug, name: event.name },
-      access,
-      ...result,
-    });
+    return json(
+      adminEventProposalsResponseSchema.parse({
+        event: { id: event.id, slug: event.slug, name: event.name },
+        access,
+        ...result,
+      }),
+    );
   },
 );

@@ -6,7 +6,10 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { eventPromotersListResponseSchema } from "../../assets/shared/schemas/admin-event-promoters";
-import { donationPromotersListResponseSchema } from "../../assets/shared/schemas/admin-donations";
+import {
+  donationPromotersListResponseSchema,
+  donationsListResponseSchema,
+} from "../../assets/shared/schemas/admin-donations";
 import { pageInfoSchema } from "../../assets/shared/schemas/pagination";
 import { ApiDataTable } from "../../assets/ts/admin/components/ApiDataTable";
 import { ApplicationDocumentsCard } from "../../assets/ts/admin/sections/Applications/ApplicationDocumentsCard";
@@ -134,10 +137,12 @@ describe("canonical offset pagination", () => {
     await settle();
     expect(requests.at(-1)?.searchParams.get("offset")).toBe("25");
 
+    const requestsBeforeFilter = requests.length;
     void act(() => (container.querySelector("[data-filter]") as HTMLButtonElement).click());
     await settle();
     expect(requests.at(-1)?.searchParams.get("filter")).toBe("closed");
     expect(requests.at(-1)?.searchParams.get("offset")).toBe("0");
+    expect(requests.slice(requestsBeforeFilter)).toHaveLength(1);
   });
 
   it("keeps portal working-group search server-side while paging the joined view", async () => {
@@ -250,10 +255,57 @@ describe("canonical offset pagination", () => {
 
     void act(() => nextButton(container).click());
     await settle();
+    const requestsBeforeFilter = requests.length;
     void act(() => (container.querySelector("[data-filter]") as HTMLButtonElement).click());
     await settle();
     expect(requests.at(-1)?.searchParams.get("status")).toBe("closed");
     expect(requests.at(-1)?.searchParams.get("offset")).toBe("0");
+    expect(requests.slice(requestsBeforeFilter)).toHaveLength(1);
+  });
+
+  it("publishes table summary data after load without updating state during render", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        requests.push(url);
+        return jsonResponse(
+          donationsListResponseSchema.parse({
+            donations: [
+              {
+                id: "donation-1",
+                checkout_session_id: "cs_test_1",
+                payment_intent_id: null,
+                name: "Ada Lovelace",
+                email: "ada@example.test",
+                organization: null,
+                currency: "usd",
+                gross_amount: 1000,
+                net_amount: null,
+                source: null,
+                status: "completed",
+                payment_method_type: null,
+                session_expires_at: null,
+                settled_amount: null,
+                settled_currency: null,
+                created_at: "2026-01-01T00:00:00Z",
+                completed_at: "2026-01-01T00:00:00Z",
+              },
+            ],
+            page: pageFor(url, 1),
+            summary: { byStatus: { completed: 1 }, backfillable: 0, syncable: 0 },
+          }),
+        );
+      }),
+    );
+
+    const container = mount(<Donations />);
+    await settle();
+
+    expect(container.textContent).toContain("All");
+    expect(container.textContent).toContain("1");
+    expect(requests).toHaveLength(1);
   });
 
   it("loads application documents through the shared server-side table contract", async () => {
@@ -390,6 +442,12 @@ describe("canonical offset pagination", () => {
     await settle();
     expect(requests.at(-1)?.pathname).toBe("/api/v1/admin/events/summit/promoters");
     expect(requests.at(-1)?.searchParams.get("offset")).toBe("50");
+
+    requests.length = 0;
+    void act(() => render(<Promoters slug="summit" subTab="codes" />, eventPromoters));
+    await settle();
+    const codeViewRequests = requests.filter((url) => url.searchParams.get("view") === "codes");
+    expect(codeViewRequests.map((url) => url.searchParams.get("offset"))).toEqual(["0"]);
   });
 
   it("uses the shared pager for email outbox and due-work filters", async () => {

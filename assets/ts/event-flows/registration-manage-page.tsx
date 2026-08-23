@@ -324,7 +324,13 @@ async function main(): Promise<void> {
 
     // Show different message and options based on email verification status
     const isEmailVerified = manageData.registration.isEmailVerified;
-    if (isEmailVerified) {
+    if (registration.cancellation_reason_code === "unauthorized_registration") {
+      setStatus(
+        statusEl,
+        "This registration was reported as unauthorized and cannot be restored through self-service. Please contact the organizer if it should be reviewed.",
+        true,
+      );
+    } else if (isEmailVerified) {
       // Email verified but registration cancelled for other reason → offer simple restore
       const restoreBtn = document.createElement("button");
       restoreBtn.type = "button";

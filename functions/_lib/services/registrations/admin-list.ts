@@ -9,9 +9,14 @@ import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveOrderBy } from "../../db/sort";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
-import { getAttendanceStatusByType, type AttendanceStatusCount } from "./admin-statistics";
+import { getAttendanceStatusByType } from "./admin-statistics";
+import { firstReferralCodeForOwnerSql } from "../referral-code-projection";
 import {
   EVENT_REGISTRATIONS_SORT_COLUMNS,
+  adminEventRegistrationSummarySchema,
+  adminEventRegistrationsStatsSchema,
+  type AdminEventRegistrationSummary,
+  type AdminEventRegistrationsStats,
   type AdminEventRegistrationsQuery,
 } from "../../../../assets/shared/schemas/admin-events";
 import type { DatabaseLike } from "../../types";
@@ -48,51 +53,7 @@ interface AttendanceChangeRow {
   day_label: string | null;
 }
 
-export interface AdminEventRegistrationsListParams {
-  limit: number;
-  offset: number;
-  q?: AdminEventRegistrationsQuery["q"];
-  status?: AdminEventRegistrationsQuery["status"];
-  bounced?: AdminEventRegistrationsQuery["bounced"];
-  consent?: AdminEventRegistrationsQuery["consent"];
-  attendanceChange?: AdminEventRegistrationsQuery["attendance_change"];
-  sort?: AdminEventRegistrationsQuery["sort"];
-}
-
-export interface AdminEventRegistrationSummary {
-  id: string;
-  user_id: string;
-  status: string;
-  attendance_type: string | null;
-  source_type: string | null;
-  created_at: string;
-  updated_at: string;
-  user_email: string | null;
-  display_name: string | null;
-  referral_code: string | null;
-  rsvp_events_json: string | null;
-  has_bounced: boolean;
-  sponsor_consent: boolean;
-  custom_answers_json: string | null;
-  dayWaitlistSummary: string | null;
-  dayWaitlistCount: number;
-  attendanceChangeHistory: AttendanceChangeHistoryEntry[];
-  lastAttendanceChange: AttendanceChangeHistoryEntry | null;
-}
-
-export interface AttendanceChangeHistoryEntry {
-  changedAt: string;
-  transitions: Array<{ fromType: string; toType: string; days: Array<{ dayDate: string; label: string | null }> }>;
-}
-
-export interface AdminEventRegistrationsStats {
-  byAttendanceType: Record<string, number>;
-  attendanceStatusByType: Record<string, AttendanceStatusCount>;
-  byStatus: Record<string, number>;
-  bouncedCount: number;
-  consentCount: number;
-}
-
+type AttendanceChangeHistoryEntry = AdminEventRegistrationSummary["attendanceChangeHistory"][number];
 export interface AdminEventRegistrationsListResult {
   registrations: AdminEventRegistrationSummary[];
   total: number;
@@ -104,12 +65,9 @@ const latestOutboxStatusForRegistrationSql = `(SELECT eo.status
        WHERE eo.recipient_user_id = r.user_id AND eo.event_id = r.event_id
        ORDER BY eo.updated_at DESC
        LIMIT 1)`;
+const registrationReferralCodeSql = firstReferralCodeForOwnerSql("registration", "r.id");
 
-export async function listAdminEventRegistrations(
-  db: DatabaseLike,
-  eventId: string,
-  params: AdminEventRegistrationsListParams,
-): Promise<AdminEventRegistrationsListResult> {
+export function buildAdminEventRegistrationsPageQuery(eventId: string, params: AdminEventRegistrationsQuery) {
   const search = (params.q ?? "").trim();
   const orderBy = resolveOrderBy(
     params.sort,
@@ -117,7 +75,7 @@ export async function listAdminEventRegistrations(
     "ORDER BY r.created_at DESC",
     "r.id ASC",
   );
-  const attendanceChangeFilter = params.attendanceChange;
+  const attendanceChangeFilter = params.attendance_change;
 
   const conditions: string[] = ["r.event_id = ?"];
   const bindings: unknown[] = [eventId];
@@ -189,11 +147,12 @@ export async function listAdminEventRegistrations(
        r.id DESC`
     : "r.created_at DESC, r.id DESC";
   const pageOrderBy = attendanceChangeFilter ? `ORDER BY ${orderBySql}` : orderBy;
-  const { rows: registrationRows, total } = await queryPage<RegistrationRow>(db, {
-    sql: `SELECT r.id, r.user_id, r.status, r.attendance_type, r.source_type, r.created_at, r.updated_at,
+  return {
+    source: {
+      selectSql: `SELECT r.id, r.user_id, r.status, r.attendance_type, r.source_type, r.created_at, r.updated_at,
               u.email AS user_email,
               COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
-              rc.code AS referral_code,
+              ${registrationReferralCodeSql} AS referral_code,
               COALESCE(${latestOutboxStatusForRegistrationSql} = 'bounced', 0) AS has_bounced,
               EXISTS(SELECT 1 FROM consent_acceptances ca
                      WHERE ca.registration_id = r.id AND ca.term_key = 'sponsor-data-sharing') AS sponsor_consent,
@@ -225,16 +184,27 @@ export async function listAdminEventRegistrations(
                  )
                )
                WHERE rn = 1
-              ) AS rsvp_events_json
-       FROM registrations r
+              ) AS rsvp_events_json`,
+      fromSql: `FROM registrations r
        LEFT JOIN users u ON u.id = r.user_id
-       LEFT JOIN referral_codes rc ON rc.owner_type = 'registration' AND rc.owner_id = r.id
        WHERE ${whereClause}`,
-    bindings,
+      bindings,
+    },
     orderBy: pageOrderBy,
     limit: params.limit,
     offset: params.offset,
-  });
+  };
+}
+
+export async function listAdminEventRegistrations(
+  db: DatabaseLike,
+  eventId: string,
+  params: AdminEventRegistrationsQuery,
+): Promise<AdminEventRegistrationsListResult> {
+  const { rows: registrationRows, total } = await queryPage<RegistrationRow>(
+    db,
+    buildAdminEventRegistrationsPageQuery(eventId, params),
+  );
 
   const registrationIds = registrationRows.map((row) => row.id);
   const registrationFilter = buildD1JsonMembershipFilter("w.registration_id", registrationIds);
@@ -350,14 +320,14 @@ export async function listAdminEventRegistrations(
   }
 
   return {
-    registrations,
+    registrations: registrations.map((registration) => adminEventRegistrationSummarySchema.parse(registration)),
     total,
-    stats: {
+    stats: adminEventRegistrationsStatsSchema.parse({
       byAttendanceType,
       attendanceStatusByType,
       byStatus,
       bouncedCount: Number(bouncedCountRow?.bounced_count ?? 0),
       consentCount: Number(consentCountRow?.consent_count ?? 0),
-    },
+    }),
   };
 }

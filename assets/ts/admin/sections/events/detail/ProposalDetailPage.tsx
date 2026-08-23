@@ -4,7 +4,7 @@ import { Badge } from "../../../../components/Badge";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Tabs } from "../../../../components/Tabs";
-import { api, apiCommand } from "../../../api";
+import { api } from "../../../api";
 import { fmt, toast } from "../../../ui";
 import { useData } from "../../../../hooks/useData";
 import { FormAnswerTable } from "./FormResponses";
@@ -13,7 +13,8 @@ import { PresentationVersionsTab } from "./proposal-detail/PresentationVersionsT
 import { ProposalSidebar } from "./proposal-detail/ProposalSidebar";
 import { ProposalReviewsTab } from "./proposal-detail/ProposalReviewsTab";
 import { buildReplacementProposerOptions, SpeakerCard } from "./proposal-detail/SpeakerCard";
-import { isProposalDecidableStatus } from "../../../../../shared/schemas/proposal-status";
+import { isProposalDecidableStatus, proposalFlagResponseSchema } from "../../../../../shared/schemas/proposal-status";
+import { adminProposalPatchResponseSchema } from "../../../../../shared/schemas/proposal-management";
 import { useProposalSubresources } from "./proposal-detail/useProposalSubresources";
 import type { DetailTab, ProposalResponse } from "./proposal-detail/model";
 import { adminProposalDetailResponseSchema } from "../../../../../shared/schemas/admin-event-proposals";
@@ -123,7 +124,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     const label = action === "delete" ? "soft-delete" : `mark as ${action}`;
     if (!confirm(`Are you sure you want to ${label} this proposal? This action is not easily reversible.`)) return;
     try {
-      await apiCommand(`/api/v1/admin/proposals/${proposalId}/flag`, {
+      await api(`/api/v1/admin/proposals/${proposalId}/flag`, proposalFlagResponseSchema, {
         method: "POST",
         body: JSON.stringify({ action }),
       });
@@ -154,7 +155,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     e.preventDefault();
     setSavingAbstract(true);
     try {
-      await apiCommand(`/api/v1/admin/proposals/${proposalId}`, {
+      await api(`/api/v1/admin/proposals/${proposalId}`, adminProposalPatchResponseSchema, {
         method: "PATCH",
         body: JSON.stringify({ abstract: abstractDraft }),
       });

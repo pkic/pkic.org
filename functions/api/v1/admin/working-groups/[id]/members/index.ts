@@ -7,6 +7,7 @@ import { addMemberToWorkingGroup } from "../../../../../../_lib/services/admin-w
 import { listAdminWorkingGroupMembers } from "../../../../../../_lib/services/admin-working-groups/read-model";
 import {
   workingGroupMemberAddRouteSchema,
+  workingGroupMembersListResponseSchema,
   workingGroupMembersListRouteSchema,
 } from "../../../../../../../assets/shared/schemas/working-groups";
 import { buildPageInfo } from "../../../../../../../assets/shared/schemas/pagination";
@@ -29,11 +30,12 @@ export const WorkingGroupMemberAdd = openApiRoute(workingGroupMemberAddRouteSche
 export const WorkingGroupMembersGet = openApiRoute(
   workingGroupMembersListRouteSchema,
   async (c: AdminContext, data) => {
-    const { limit, offset, q, sort } = data.query;
-    const result = await listAdminWorkingGroupMembers(requestDb(c), data.params.id, { limit, offset, q, sort });
-    return json({
-      members: result.members,
-      page: buildPageInfo(limit, offset, result.total, result.members.length),
-    });
+    const result = await listAdminWorkingGroupMembers(requestDb(c), data.params.id, data.query);
+    return json(
+      workingGroupMembersListResponseSchema.parse({
+        members: result.members,
+        page: buildPageInfo(data.query.limit, data.query.offset, result.total, result.members.length),
+      }),
+    );
   },
 );

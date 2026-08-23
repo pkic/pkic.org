@@ -180,6 +180,7 @@ export const publicVotesListQuerySchema = listQuerySchema(VOTES_LIST_SORT_COLUMN
   from: z.iso.date().optional(),
   to: z.iso.date().optional(),
 });
+export type PublicVotesListQuery = z.infer<typeof publicVotesListQuerySchema>;
 
 export const publicVotesListRouteSchema = {
   tags: ["Votes"],
@@ -217,14 +218,17 @@ export const publicVotesFeedRouteSchema = {
 
 // ── Portal (authenticated members) ───────────────────────────────────
 
+export const portalVotesListQuerySchema = listQuerySchema(VOTES_LIST_SORT_COLUMNS).extend({
+  status: portalVoteStatusListSchema.optional(),
+});
+export type PortalVotesListQuery = z.infer<typeof portalVotesListQuerySchema>;
+
 export const portalVotesListRouteSchema = {
   tags: ["Portal Votes"],
   summary: "List all votes visible to the caller",
   description: "Every forum vote, every public vote, plus every vote scoped to a working group the caller belongs to.",
   request: {
-    query: listQuerySchema(VOTES_LIST_SORT_COLUMNS).extend({
-      status: portalVoteStatusListSchema.optional(),
-    }),
+    query: portalVotesListQuerySchema,
   },
   responses: {
     "200": {
@@ -303,6 +307,7 @@ export const proposalSummarySchema = z.object({
   minEndorsersRequired: z.number(),
   createdAt: z.string(),
 });
+export type ProposalSummary = z.infer<typeof proposalSummarySchema>;
 
 export const submitProposalSchema = z.object({
   title: z.string().trim().min(1).max(300),
@@ -342,6 +347,7 @@ export const listProposalsQuerySchema = listQuerySchema(VOTE_PROPOSALS_LIST_SORT
   scopeType: voteScopeTypeSchema.optional(),
   scopeId: workingGroupIdSchema.optional(),
 });
+export type ListProposalsQuery = z.infer<typeof listProposalsQuerySchema>;
 
 export const listProposalsResponseSchema = paginatedResponseSchema("proposals", proposalSummarySchema);
 

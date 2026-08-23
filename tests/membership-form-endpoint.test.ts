@@ -3,6 +3,7 @@ import { onRequestPost } from "../functions/api/v1/forms";
 import { createContext, createTestRateLimiter } from "./helpers/context";
 import type { Env } from "../functions/_lib/types";
 import { LEGACY_FORM_MAX_BYTES } from "../functions/_lib/http-body";
+import worker from "../functions/router";
 
 const originalFetch = globalThis.fetch;
 
@@ -120,6 +121,16 @@ describe("POST /api/v1/forms", () => {
       referer: "https://pkic.org/join/",
     });
     const response = await onRequestPost(createContext(env, request, {}));
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("https://pkic.org/join/?status=success");
+  });
+
+  it("serves the legacy form through the mounted OpenAPI route", async () => {
+    const env = makeEnv();
+    const request = makeFormRequest("https://pkic.org/api/v1/forms", VALID_FIELDS, {
+      referer: "https://pkic.org/join/",
+    });
+    const response = await worker.fetch(request, env, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe("https://pkic.org/join/?status=success");
   });

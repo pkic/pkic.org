@@ -791,6 +791,68 @@ BEGIN
   UPDATE event_days SET capacity_revision = capacity_revision + 1 WHERE id IN (OLD.event_day_id, NEW.event_day_id);
 END;
 
+-- Individual foreign keys prove that each ID exists, but cannot prove that a
+-- registration and event day belong to the same event. Keep this invariant in
+-- triggers rather than rebuilding the deployed attendance table to introduce a
+-- composite parent key.
+CREATE TRIGGER validate_registration_day_attendance_insert
+BEFORE INSERT ON registration_day_attendance
+FOR EACH ROW
+WHEN NOT EXISTS (
+  SELECT 1
+  FROM registrations r
+  JOIN event_days ed ON ed.event_id = r.event_id
+  WHERE r.id = NEW.registration_id AND ed.id = NEW.event_day_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'REGISTRATION_DAY_EVENT_MISMATCH');
+END;
+
+CREATE TRIGGER validate_registration_day_attendance_update
+BEFORE UPDATE OF registration_id, event_day_id ON registration_day_attendance
+FOR EACH ROW
+WHEN NOT EXISTS (
+  SELECT 1
+  FROM registrations r
+  JOIN event_days ed ON ed.event_id = r.event_id
+  WHERE r.id = NEW.registration_id AND ed.id = NEW.event_day_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'REGISTRATION_DAY_EVENT_MISMATCH');
+END;
+
+CREATE TRIGGER validate_event_day_waitlist_insert
+BEFORE INSERT ON event_day_waitlist_entries
+FOR EACH ROW
+WHEN NOT EXISTS (
+  SELECT 1
+  FROM event_days ed
+  JOIN registrations r ON r.event_id = ed.event_id
+  WHERE ed.id = NEW.event_day_id
+    AND ed.event_id = NEW.event_id
+    AND r.id = NEW.registration_id
+    AND r.user_id = NEW.user_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'WAITLIST_EVENT_CONTEXT_INVALID');
+END;
+
+CREATE TRIGGER validate_event_day_waitlist_update
+BEFORE UPDATE OF event_id, event_day_id, registration_id, user_id ON event_day_waitlist_entries
+FOR EACH ROW
+WHEN NOT EXISTS (
+  SELECT 1
+  FROM event_days ed
+  JOIN registrations r ON r.event_id = ed.event_id
+  WHERE ed.id = NEW.event_day_id
+    AND ed.event_id = NEW.event_id
+    AND r.id = NEW.registration_id
+    AND r.user_id = NEW.user_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'WAITLIST_EVENT_CONTEXT_INVALID');
+END;
+
 -- A conversion counter alone cannot distinguish a legitimate new conversion
 -- from a retry. Keep the conversion identity and use it to update the counter
 -- exactly once inside the caller's D1 batch.
@@ -1359,6 +1421,38 @@ CREATE UNIQUE INDEX uq_user_roles_single_holder_per_context
   ON user_roles(context_type, context_id, role_id)
   WHERE revoked_at IS NULL AND single_holder_per_context = 1;
 
+-- `context_id` is intentionally polymorphic because a role may be scoped to
+-- an event, working group, or membership aggregate. Keep that flexibility,
+-- but enforce the finite context vocabulary and ensure every scoped grant
+-- points at a live aggregate. Without these guards a typo or direct SQL import
+-- can create an authorization row that can never be resolved or revoked by
+-- its owning resource.
+CREATE TRIGGER validate_user_role_context_insert
+BEFORE INSERT ON user_roles
+FOR EACH ROW
+WHEN (NEW.context_type IS NULL AND NEW.context_id IS NOT NULL)
+  OR (NEW.context_type IS NOT NULL AND NEW.context_id IS NULL)
+  OR (NEW.context_type IS NOT NULL AND NEW.context_type NOT IN ('event', 'working_group', 'organization'))
+  OR (NEW.context_type = 'event' AND NOT EXISTS (SELECT 1 FROM events WHERE id = NEW.context_id))
+  OR (NEW.context_type = 'working_group' AND NOT EXISTS (SELECT 1 FROM working_groups WHERE id = NEW.context_id))
+  OR (NEW.context_type = 'organization' AND NOT EXISTS (SELECT 1 FROM members WHERE id = NEW.context_id))
+BEGIN
+  SELECT RAISE(ABORT, 'USER_ROLE_CONTEXT_INVALID');
+END;
+
+CREATE TRIGGER validate_user_role_context_update
+BEFORE UPDATE OF context_type, context_id ON user_roles
+FOR EACH ROW
+WHEN (NEW.context_type IS NULL AND NEW.context_id IS NOT NULL)
+  OR (NEW.context_type IS NOT NULL AND NEW.context_id IS NULL)
+  OR (NEW.context_type IS NOT NULL AND NEW.context_type NOT IN ('event', 'working_group', 'organization'))
+  OR (NEW.context_type = 'event' AND NOT EXISTS (SELECT 1 FROM events WHERE id = NEW.context_id))
+  OR (NEW.context_type = 'working_group' AND NOT EXISTS (SELECT 1 FROM working_groups WHERE id = NEW.context_id))
+  OR (NEW.context_type = 'organization' AND NOT EXISTS (SELECT 1 FROM members WHERE id = NEW.context_id))
+BEGIN
+  SELECT RAISE(ABORT, 'USER_ROLE_CONTEXT_INVALID');
+END;
+
 -- Representative designations are relationship-owned facts: an organization
 -- role grant is valid only while its user has an active
 -- organization_representatives row for the same members aggregate. Keep this
@@ -1420,6 +1514,62 @@ CREATE TABLE permission_grants (
 
 CREATE INDEX idx_permission_grants_user ON permission_grants(user_id);
 CREATE INDEX idx_permission_grants_context ON permission_grants(context_type, context_id);
+
+CREATE TRIGGER validate_permission_grant_context_insert
+BEFORE INSERT ON permission_grants
+FOR EACH ROW
+WHEN (NEW.context_type IS NULL AND NEW.context_id IS NOT NULL)
+  OR (NEW.context_type IS NOT NULL AND NEW.context_id IS NULL)
+  OR (NEW.context_type IS NOT NULL AND NEW.context_type NOT IN ('event', 'working_group', 'organization'))
+  OR (NEW.context_type = 'event' AND NOT EXISTS (SELECT 1 FROM events WHERE id = NEW.context_id))
+  OR (NEW.context_type = 'working_group' AND NOT EXISTS (SELECT 1 FROM working_groups WHERE id = NEW.context_id))
+  OR (NEW.context_type = 'organization' AND NOT EXISTS (SELECT 1 FROM members WHERE id = NEW.context_id))
+BEGIN
+  SELECT RAISE(ABORT, 'PERMISSION_GRANT_CONTEXT_INVALID');
+END;
+
+CREATE TRIGGER validate_permission_grant_context_update
+BEFORE UPDATE OF context_type, context_id ON permission_grants
+FOR EACH ROW
+WHEN (NEW.context_type IS NULL AND NEW.context_id IS NOT NULL)
+  OR (NEW.context_type IS NOT NULL AND NEW.context_id IS NULL)
+  OR (NEW.context_type IS NOT NULL AND NEW.context_type NOT IN ('event', 'working_group', 'organization'))
+  OR (NEW.context_type = 'event' AND NOT EXISTS (SELECT 1 FROM events WHERE id = NEW.context_id))
+  OR (NEW.context_type = 'working_group' AND NOT EXISTS (SELECT 1 FROM working_groups WHERE id = NEW.context_id))
+  OR (NEW.context_type = 'organization' AND NOT EXISTS (SELECT 1 FROM members WHERE id = NEW.context_id))
+BEGIN
+  SELECT RAISE(ABORT, 'PERMISSION_GRANT_CONTEXT_INVALID');
+END;
+
+-- Retain authorization history rather than deleting its parent and leaving
+-- stale polymorphic context IDs behind. Existing FK-backed children already
+-- provide the same protection for their own aggregates.
+CREATE TRIGGER protect_event_context_delete
+BEFORE DELETE ON events
+FOR EACH ROW
+WHEN EXISTS (SELECT 1 FROM user_roles WHERE context_type = 'event' AND context_id = OLD.id)
+   OR EXISTS (SELECT 1 FROM permission_grants WHERE context_type = 'event' AND context_id = OLD.id)
+BEGIN
+  SELECT RAISE(ABORT, 'EVENT_HAS_AUTHORIZATION_CONTEXT');
+END;
+
+CREATE TRIGGER protect_working_group_context_delete
+BEFORE DELETE ON working_groups
+FOR EACH ROW
+WHEN EXISTS (SELECT 1 FROM user_roles WHERE context_type = 'working_group' AND context_id = OLD.id)
+   OR EXISTS (SELECT 1 FROM permission_grants WHERE context_type = 'working_group' AND context_id = OLD.id)
+BEGIN
+  SELECT RAISE(ABORT, 'WORKING_GROUP_HAS_AUTHORIZATION_CONTEXT');
+END;
+
+CREATE TRIGGER protect_membership_context_delete
+BEFORE DELETE ON members
+FOR EACH ROW
+WHEN EXISTS (SELECT 1 FROM user_roles WHERE context_type = 'organization' AND context_id = OLD.id)
+   OR EXISTS (SELECT 1 FROM permission_grants WHERE context_type = 'organization' AND context_id = OLD.id)
+BEGIN
+  SELECT RAISE(ABORT, 'MEMBERSHIP_HAS_AUTHORIZATION_CONTEXT');
+END;
 
 CREATE TABLE refresh_tokens (
   id           TEXT NOT NULL PRIMARY KEY,
@@ -1731,6 +1881,24 @@ CREATE TABLE organization_domain_claims (
 );
 
 CREATE INDEX idx_organization_domain_claims_org ON organization_domain_claims(organization_id);
+
+CREATE TRIGGER validate_organization_domain_claim_owner_insert
+BEFORE INSERT ON organization_domain_claims
+FOR EACH ROW
+WHEN (NEW.application_id IS NULL AND NEW.organization_id IS NULL)
+   OR (NEW.application_id IS NOT NULL AND NEW.organization_id IS NOT NULL)
+BEGIN
+  SELECT RAISE(ABORT, 'DOMAIN_CLAIM_OWNER_INVALID');
+END;
+
+CREATE TRIGGER validate_organization_domain_claim_owner_update
+BEFORE UPDATE OF application_id, organization_id ON organization_domain_claims
+FOR EACH ROW
+WHEN (NEW.application_id IS NULL AND NEW.organization_id IS NULL)
+   OR (NEW.application_id IS NOT NULL AND NEW.organization_id IS NOT NULL)
+BEGIN
+  SELECT RAISE(ABORT, 'DOMAIN_CLAIM_OWNER_INVALID');
+END;
 
 -- ── EC decisions ───────────────────────
 CREATE TABLE ec_decisions (
@@ -3497,6 +3665,75 @@ CREATE INDEX IF NOT EXISTS idx_consent_acceptances_registration_term
   ON consent_acceptances(registration_id, term_key)
   WHERE registration_id IS NOT NULL;
 
+-- Consent evidence belongs to exactly one event aggregate. Enforce the
+-- relationship at the database boundary because the table is also written by
+-- imports, retention tooling, and tests that do not pass through consent.ts.
+-- Proposal consents may be accepted by the proposer or any proposal speaker;
+-- registration consents must match the registration's event and user.
+CREATE TRIGGER validate_consent_acceptance_insert
+BEFORE INSERT ON consent_acceptances
+FOR EACH ROW
+WHEN NOT (
+  (
+    NEW.registration_id IS NOT NULL
+    AND NEW.proposal_id IS NULL
+    AND EXISTS (
+      SELECT 1 FROM registrations r
+      WHERE r.id = NEW.registration_id
+        AND r.event_id = NEW.event_id
+        AND r.user_id = NEW.user_id
+    )
+  )
+  OR (
+    NEW.registration_id IS NULL
+    AND NEW.proposal_id IS NOT NULL
+    AND EXISTS (
+      SELECT 1
+      FROM session_proposals p
+      LEFT JOIN proposal_speakers ps
+        ON ps.proposal_id = p.id AND ps.user_id = NEW.user_id
+      WHERE p.id = NEW.proposal_id
+        AND p.event_id = NEW.event_id
+        AND (p.proposer_user_id = NEW.user_id OR ps.id IS NOT NULL)
+    )
+  )
+)
+BEGIN
+  SELECT RAISE(ABORT, 'CONSENT_ACCEPTANCE_CONTEXT_INVALID');
+END;
+
+CREATE TRIGGER validate_consent_acceptance_update
+BEFORE UPDATE OF registration_id, proposal_id, event_id, user_id ON consent_acceptances
+FOR EACH ROW
+WHEN NOT (
+  (
+    NEW.registration_id IS NOT NULL
+    AND NEW.proposal_id IS NULL
+    AND EXISTS (
+      SELECT 1 FROM registrations r
+      WHERE r.id = NEW.registration_id
+        AND r.event_id = NEW.event_id
+        AND r.user_id = NEW.user_id
+    )
+  )
+  OR (
+    NEW.registration_id IS NULL
+    AND NEW.proposal_id IS NOT NULL
+    AND EXISTS (
+      SELECT 1
+      FROM session_proposals p
+      LEFT JOIN proposal_speakers ps
+        ON ps.proposal_id = p.id AND ps.user_id = NEW.user_id
+      WHERE p.id = NEW.proposal_id
+        AND p.event_id = NEW.event_id
+        AND (p.proposer_user_id = NEW.user_id OR ps.id IS NOT NULL)
+    )
+  )
+)
+BEGIN
+  SELECT RAISE(ABORT, 'CONSENT_ACCEPTANCE_CONTEXT_INVALID');
+END;
+
 -- Admin attendee export filters by event/status and emits chronological rows.
 CREATE INDEX IF NOT EXISTS idx_registrations_event_status_created
   ON registrations(event_id, status, created_at);
@@ -3592,5 +3829,3 @@ CREATE INDEX idx_session_proposals_event_deleted_submitted
 
 CREATE INDEX idx_proposal_decision_history_proposal_round
   ON proposal_decision_history(proposal_id, review_round DESC, decision_sequence DESC);
-
-PRAGMA foreign_keys = ON;

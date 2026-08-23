@@ -20,6 +20,7 @@ import { createMemberApplication } from "../../../../_lib/services/membership/ap
 import {
   memberApplicationCreateRouteSchema,
   memberApplicationCreateSchema,
+  memberApplicationCreateResponseSchema,
 } from "../../../../../assets/shared/schemas/member-applications";
 
 export async function onRequestPost(c: any): Promise<Response> {
@@ -53,7 +54,14 @@ export async function onRequestPost(c: any): Promise<Response> {
   });
   c.executionCtx.waitUntil(processOutboxByIdBackground(db, env, created.outboxId));
 
-  return json({ applicationId: created.id, stage: created.stage, manageToken: created.manageToken }, 201);
+  return json(
+    memberApplicationCreateResponseSchema.parse({
+      applicationId: created.id,
+      stage: created.stage,
+      manageToken: created.manageToken,
+    }),
+    201,
+  );
 }
 
 export class MembersApplicationsPost extends OpenAPIRoute {

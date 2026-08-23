@@ -101,7 +101,7 @@ export function AddRepresentativeForm({
       </div>
       <div class="col-md-2">
         <label class="form-label small text-muted mb-1">Profile links</label>
-        <ProfileLinksInput fieldName="representative.links" value={links} onChange={setLinks} max={15} />
+        <ProfileLinksInput fieldName="representative.links" value={links} onChange={setLinks} />
       </div>
       <div class="col-md-1">
         <label class="form-label small text-muted mb-1">Category</label>

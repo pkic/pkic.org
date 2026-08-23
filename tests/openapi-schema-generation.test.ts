@@ -19,6 +19,52 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/proposals/speaker/{token}"].get).toBeDefined();
     expect(spec.paths["/api/v1/proposals/speaker/{token}"].post).toBeDefined();
     expect(spec.paths["/api/v1/proposals/speaker/{token}"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/proposals/manage/{token}/speakers/remind"].post).toBeDefined();
+    expect(spec.paths["/api/v1/proposals/manage/{token}/speakers/{userId}"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/forms"].post).toBeDefined();
+  });
+
+  it("mounts admin mutation contracts through their owning routers", () => {
+    const spec = decorateOpenApiSpec(openapi.schema);
+
+    expect(spec.paths["/api/v1/admin/events"].post).toBeDefined();
+    expect(spec.paths["/api/v1/admin/forms"].post).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/forms"].post).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/days"].get).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/days"].put).toBeDefined();
+    expect(spec.paths["/api/v1/admin/users/{userId}"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/admin/users/{userId}/gravatar"].post).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/permissions"].post).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/invites/attendees/bulk"].post).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/invites/speakers/bulk"].post).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/waitlist/promote"].post).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}/badge-role"].get).toBeDefined();
+    expect(
+      spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}/badge-role"].patch,
+    ).toBeDefined();
+    expect(
+      spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}/day-attendance"].patch,
+    ).toBeDefined();
+    expect(
+      spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}/open-manage"].post,
+    ).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}/admit"].post).toBeDefined();
+    expect(
+      spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}/resend-confirmation"].post,
+    ).toBeDefined();
+  });
+
+  it("documents the geo response through its shared response schema", () => {
+    const spec = decorateOpenApiSpec(openapi.schema);
+    const geoGet = spec.paths["/api/v1/geo"].get;
+
+    expect(geoGet).toBeDefined();
+    expect(geoGet.responses["200"].content["application/json"].schema).toMatchObject({
+      type: "object",
+      required: ["country"],
+      properties: { country: { type: ["string", "null"] } },
+    });
   });
 
   it("includes required scopes on decorated admin operations", () => {

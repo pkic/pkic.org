@@ -7,9 +7,11 @@ import {
   proposalManageSchema,
   proposalManageTokenParamsSchema,
   proposalManageUpdateResponseSchema,
+  proposalSpeakerReminderRequestSchema,
   proposalSpeakerRemovalResponseSchema,
   proposalResendManageLinkSchema,
   proposalResendSpeakerManageLinkSchema,
+  proposerSpeakerPatchSchema,
   speakerParticipationActionSchema,
   speakerProfilePatchSchema,
 } from "./proposal-management";
@@ -123,6 +125,41 @@ export const proposerManagedSpeakerDeleteRouteSchema = {
     "400": { description: "Invalid removal payload." },
     "404": { description: "Proposal management capability or speaker not found." },
     "409": { description: "The final speaker, current proposer, or closed proposal cannot be changed." },
+    "410": { description: "Proposal management capability expired." },
+  },
+};
+
+export const proposerManagedSpeakerReminderRouteSchema = {
+  tags: ["Proposals", "Reminders"],
+  summary: "Remind a proposal speaker through proposal management",
+  description: "Queues a profile reminder for a confirmed speaker using the proposer management capability.",
+  request: {
+    params: proposalManageTokenParamsSchema,
+    body: requiredJsonBody(proposalSpeakerReminderRequestSchema),
+  },
+  responses: {
+    "200": jsonResponse("Speaker reminder queued.", successResponseSchema),
+    "400": { description: "Invalid speaker reminder payload." },
+    "404": { description: "Proposal management capability or speaker not found." },
+    "409": { description: "The proposal or speaker is not eligible for a reminder." },
+    "410": { description: "Proposal management capability expired." },
+  },
+};
+
+export const proposerManagedSpeakerPatchRouteSchema = {
+  tags: ["Proposals", "Speakers"],
+  summary: "Update a proposal speaker through proposal management",
+  description: "Updates a speaker profile and role using the proposer management capability.",
+  request: {
+    params: proposerManagedSpeakerParamsSchema,
+    body: requiredJsonBody(proposerSpeakerPatchSchema),
+  },
+  responses: {
+    "200": jsonResponse("Speaker profile updated.", successResponseSchema),
+    "400": { description: "Invalid speaker profile." },
+    "403": { description: "Speaker has declined participation." },
+    "404": { description: "Proposal management capability or speaker not found." },
+    "409": { description: "The proposal or speaker profile changed concurrently." },
     "410": { description: "Proposal management capability expired." },
   },
 };

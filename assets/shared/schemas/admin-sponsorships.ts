@@ -6,7 +6,7 @@
  */
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
-import { eventIdSchema, normalizedEmailSchema, trimmedString } from "./api-common";
+import { eventIdSchema, eventSlugParamsSchema, normalizedEmailSchema, trimmedString } from "./api-common";
 import {
   listQuerySchema,
   paginatedResponseSchema,
@@ -110,6 +110,7 @@ export const sponsorshipsListQuerySchema = listQuerySchema(ADMIN_SPONSORSHIP_SOR
   nonMemberName: trimmedString(1, 200).optional(),
   contactName: trimmedString(1, 200).optional(),
 });
+export type SponsorshipsListQuery = z.infer<typeof sponsorshipsListQuerySchema>;
 export const sponsorshipsListResponseSchema = paginatedResponseSchema("sponsorships", adminSponsorshipSchema);
 export type SponsorshipsListResponse = z.infer<typeof sponsorshipsListResponseSchema>;
 
@@ -148,7 +149,9 @@ export const sponsorshipCompaniesListQuerySchema = listQuerySchema(ADMIN_SPONSOR
   stage: sponsorshipPipelineStageSchema.optional(),
   tier: trimmedString(1, 100).optional(),
 });
+export type SponsorshipCompaniesListQuery = z.infer<typeof sponsorshipCompaniesListQuerySchema>;
 export const sponsorshipCompaniesListResponseSchema = paginatedResponseSchema("companies", sponsorshipCompanySchema);
+export type SponsorshipCompaniesListResponse = z.infer<typeof sponsorshipCompaniesListResponseSchema>;
 
 export const sponsorshipCompaniesListRouteSchema = {
   tags: ["Sponsorships"],
@@ -343,14 +346,21 @@ export const eventSponsorTiersReplaceSchema = z
     });
   });
 
+export const eventSponsorTiersResponseSchema = z.object({
+  tiers: z.array(eventSponsorTierSchema),
+});
+
 export const eventSponsorTiersGetRouteSchema = {
   tags: ["Sponsorships"],
   summary: "View per-event sponsor attendee-data-access config",
+  request: { params: eventSlugParamsSchema },
   responses: {
     "200": {
       description: "Sponsor tier config for this event.",
-      content: { "application/json": { schema: z.object({ tiers: z.array(eventSponsorTierSchema) }) } },
+      content: { "application/json": { schema: eventSponsorTiersResponseSchema } },
     },
+    "401": { description: "Admin authorization required." },
+    "404": { description: "Event not found." },
   },
 };
 
@@ -358,13 +368,17 @@ export const eventSponsorTiersPutRouteSchema = {
   tags: ["Sponsorships"],
   summary: "Replace per-event sponsor attendee-data-access config",
   request: {
+    params: eventSlugParamsSchema,
     body: { content: { "application/json": { schema: eventSponsorTiersReplaceSchema } }, required: true },
   },
   responses: {
     "200": {
       description: "Sponsor tier config replaced.",
-      content: { "application/json": { schema: z.object({ tiers: z.array(eventSponsorTierSchema) }) } },
+      content: { "application/json": { schema: eventSponsorTiersResponseSchema } },
     },
+    "400": { description: "Invalid sponsor tier configuration." },
+    "401": { description: "Admin authorization required." },
+    "404": { description: "Event not found." },
   },
 };
 

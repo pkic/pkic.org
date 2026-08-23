@@ -1,8 +1,12 @@
 import {
   ADMIN_EMAIL_TEMPLATES_SORT_COLUMNS,
+  adminEmailTemplateVersionRowSchema,
+  adminEmailTemplatesListResponseSchema,
+  adminEmailTemplateVersionsListResponseSchema,
+  type EmailTemplatesListQuery,
+  type EmailTemplateVersionsListQuery,
   type AdminEmailTemplateVersion,
   type AdminEmailTemplateVersionInput,
-  type EmailTemplateVersionStatus,
 } from "../../../assets/shared/schemas/admin-email-templates";
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
 import { queryPage } from "../db/pagination";
@@ -18,15 +22,6 @@ interface TemplateSummaryRow {
   active_version: number | null;
   version_count: number;
   draft_count: number;
-}
-
-interface ListQuery {
-  q?: string;
-  templateKeyPrefix?: string;
-  status?: EmailTemplateVersionStatus;
-  sort?: string;
-  limit: number;
-  offset: number;
 }
 
 export async function createAdminEmailTemplateVersion(
@@ -59,7 +54,7 @@ export async function createAdminEmailTemplateVersion(
   return prepared.row;
 }
 
-export async function listAdminEmailTemplates(db: DatabaseLike, query: ListQuery) {
+export async function listAdminEmailTemplates(db: DatabaseLike, query: EmailTemplatesListQuery) {
   const orderBy = resolveOrderBy(
     query.sort,
     ADMIN_EMAIL_TEMPLATES_SORT_COLUMNS,
@@ -92,13 +87,17 @@ export async function listAdminEmailTemplates(db: DatabaseLike, query: ListQuery
     limit: query.limit,
     offset: query.offset,
   });
-  return {
+  return adminEmailTemplatesListResponseSchema.parse({
     templates,
     page: buildPageInfo(query.limit, query.offset, total, templates.length),
-  };
+  });
 }
 
-export async function listAdminEmailTemplateVersions(db: DatabaseLike, templateKey: string, query: ListQuery) {
+export async function listAdminEmailTemplateVersions(
+  db: DatabaseLike,
+  templateKey: string,
+  query: EmailTemplateVersionsListQuery,
+) {
   const search = query.q
     ? buildD1TextSearchFilter(query.q, ["subject_template", "status", "content_type", "message_type"])
     : null;
@@ -123,7 +122,7 @@ export async function listAdminEmailTemplateVersions(db: DatabaseLike, templateK
     "version DESC",
     "id ASC",
   );
-  const { rows: versions, total } = await queryPage<AdminEmailTemplateVersion>(db, {
+  const { rows, total } = await queryPage<AdminEmailTemplateVersion>(db, {
     sql: `SELECT
          id,
          template_key,
@@ -144,8 +143,9 @@ export async function listAdminEmailTemplateVersions(db: DatabaseLike, templateK
     limit: query.limit,
     offset: query.offset,
   });
-  return {
+  const versions = rows.map((version) => adminEmailTemplateVersionRowSchema.parse(version));
+  return adminEmailTemplateVersionsListResponseSchema.parse({
     versions,
     page: buildPageInfo(query.limit, query.offset, total, versions.length),
-  };
+  });
 }

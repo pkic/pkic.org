@@ -27,6 +27,7 @@ import {
 import type { AuthMember, DatabaseLike, StatementLike } from "../../types";
 import { prepareStorageDeletion } from "../storage-deletion-outbox";
 import { prepareOrganizationContentReviewNotificationIntents } from "./notifications";
+import type { MyOrganizationReviewsListQuery } from "../../../../assets/shared/schemas/me";
 
 export async function getMyOrganizationProfile(db: DatabaseLike, member: AuthMember) {
   if (!member.organizationId) {
@@ -132,7 +133,7 @@ export async function submitOrgContentChange(
 export async function listMyOrganizationReviews(
   db: DatabaseLike,
   member: AuthMember,
-  params: { status: string; q?: string; sort?: string; limit: number; offset: number },
+  params: MyOrganizationReviewsListQuery,
 ) {
   if (!member.organizationId) {
     throw new AppError(403, "NO_ORGANIZATION", "Your membership is not tied to an organization");

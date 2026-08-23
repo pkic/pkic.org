@@ -8,7 +8,10 @@ import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { listSponsorshipCompanies } from "../../../../../_lib/services/sponsorship";
-import { sponsorshipCompaniesListRouteSchema } from "../../../../../../assets/shared/schemas/admin-sponsorships";
+import {
+  sponsorshipCompaniesListResponseSchema,
+  sponsorshipCompaniesListRouteSchema,
+} from "../../../../../../assets/shared/schemas/admin-sponsorships";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { buildPageInfo } from "../../../../../../assets/shared/schemas/pagination";
@@ -20,9 +23,12 @@ export const SponsorshipCompaniesList = openApiRoute(
     const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
     requirePermission(admin, "sponsorships:read");
 
-    const { type, stage, tier, q, sort, limit, offset } = data.query;
-
-    const { companies, total } = await listSponsorshipCompanies(db, { type, stage, tier, q, sort, limit, offset });
-    return json({ companies, page: buildPageInfo(limit, offset, total, companies.length) });
+    const { companies, total } = await listSponsorshipCompanies(db, data.query);
+    return json(
+      sponsorshipCompaniesListResponseSchema.parse({
+        companies,
+        page: buildPageInfo(data.query.limit, data.query.offset, total, companies.length),
+      }),
+    );
   },
 );

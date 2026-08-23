@@ -28,6 +28,8 @@ interface AdminUserUpdateRow {
   is_ec_member: number;
   pii_redacted_at: string | null;
   merged_into_user_id: string | null;
+  pending_email: string | null;
+  pending_email_change_registration_id: string | null;
   updated_at: string;
 }
 
@@ -122,7 +124,7 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
     db,
     `SELECT id, email, first_name, last_name, preferred_name, organization_name,
             job_title, biography, links_json, role, active, is_ec_member, pii_redacted_at,
-            merged_into_user_id, updated_at
+            merged_into_user_id, pending_email, pending_email_change_registration_id, updated_at
      FROM users WHERE id = ?`,
     [userId],
   );
@@ -169,6 +171,8 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
   }
   const statements: StatementLike[] = [];
   const at = new Date().toISOString();
+  const clearPendingEmailChange =
+    email !== user.email && Boolean(user.pending_email && user.pending_email_change_registration_id);
   if (promotedSecondaryEmail) {
     statements.push(
       db
@@ -176,17 +180,52 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
         .bind(user.id, promotedSecondaryEmail),
     );
   }
+  if (clearPendingEmailChange && user.pending_email_change_registration_id) {
+    // A direct admin correction supersedes an older unverified request. Make
+    // its confirmation capability unusable in the same batch so a delayed
+    // click cannot overwrite the newer authoritative address.
+    statements.push(
+      db
+        .prepare(
+          `UPDATE registrations
+              SET confirmation_link_secret = NULL,
+                  pending_confirmation_deadline_at = NULL,
+                  confirmation_reminder_sent_at = NULL,
+                  transition_revision = transition_revision + 1,
+                  updated_at = ?
+            WHERE id = ? AND user_id = ?`,
+        )
+        .bind(at, user.pending_email_change_registration_id, user.id),
+    );
+  }
   statements.push(
     db
       .prepare(
         `UPDATE users
-         SET email = ?, normalized_email = ?, role = ?, active = ?, is_ec_member = ?, updated_at = ?
+         SET email = ?, normalized_email = ?, role = ?, active = ?, is_ec_member = ?,
+             pending_email = CASE WHEN ? = 1 THEN NULL ELSE pending_email END,
+             pending_email_expires_at = CASE WHEN ? = 1 THEN NULL ELSE pending_email_expires_at END,
+             pending_email_change_registration_id = CASE
+               WHEN ? = 1 THEN NULL ELSE pending_email_change_registration_id END,
+             updated_at = ?
          WHERE id = ?
            AND pii_redacted_at IS NULL
            AND merged_into_user_id IS NULL
            AND updated_at = ?`,
       )
-      .bind(email, normalizeEmail(email), role, active ? 1 : 0, isEcMember ? 1 : 0, at, user.id, user.updated_at),
+      .bind(
+        email,
+        normalizeEmail(email),
+        role,
+        active ? 1 : 0,
+        isEcMember ? 1 : 0,
+        clearPendingEmailChange ? 1 : 0,
+        clearPendingEmailChange ? 1 : 0,
+        clearPendingEmailChange ? 1 : 0,
+        at,
+        user.id,
+        user.updated_at,
+      ),
     prepareAuditLogAfterOneChange(db, "admin", actor.id, "user_updated", "user", user.id, {
       changedFields,
       ...(role !== user.role ? { role: { from: user.role, to: role } } : {}),

@@ -25,6 +25,7 @@ export const sponsorsListQuerySchema = listQuerySchema(PUBLIC_SPONSOR_SORT_COLUM
   level: z.string().trim().min(1).max(100).optional(),
   minWeight: z.coerce.number().int().positive().optional(),
 });
+export type SponsorsListQuery = z.infer<typeof sponsorsListQuerySchema>;
 
 export const sponsorsListResponseSchema = paginatedResponseSchema("sponsors", publicSponsorItemSchema);
 export type SponsorsListResponse = z.infer<typeof sponsorsListResponseSchema>;

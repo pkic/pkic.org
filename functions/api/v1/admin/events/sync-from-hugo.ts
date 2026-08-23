@@ -1,15 +1,18 @@
-import { parseJsonBody } from "../../../../_lib/validation";
-import { dispatchPostOnly, json } from "../../../../_lib/http";
+import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../_lib/auth/permissions";
 import { syncEventFromHugo } from "../../../../_lib/services/events";
-import { adminEventSyncSchema } from "../../../../../assets/shared/schemas/admin-events";
+import {
+  adminEventSyncResponseSchema,
+  adminEventSyncRouteSchema,
+} from "../../../../../assets/shared/schemas/route-contracts-admin-events";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
+import { openApiRoute } from "../../../../_lib/openapi/route";
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+export const AdminEventsSyncFromHugoPost = openApiRoute(adminEventSyncRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "events:write");
-  const body = await parseJsonBody(c.req, adminEventSyncSchema);
+  const body = data.body;
 
   const settings = {
     ...(body.event.settings ?? {}),
@@ -18,9 +21,5 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 
   const event = await syncEventFromHugo(requestDb(c), { ...body.event, settings }, body.terms, admin.id);
 
-  return json({ success: true, event });
-}
-
-export async function onRequest(c: AdminContext): Promise<Response> {
-  return dispatchPostOnly(c, onRequestPost);
-}
+  return json(adminEventSyncResponseSchema.parse({ success: true, event }));
+});

@@ -2,11 +2,13 @@ import { useState, useRef } from "preact/hooks";
 import { Badge } from "../../../../components/Badge";
 import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataTable";
 import { Tabs } from "../../../../components/Tabs";
-import { apiCommand } from "../../../api";
-import { api } from "../../../api";
-import { adminInvitePreviewResponseSchema } from "../../../../../shared/schemas/admin-events";
+import { api, apiCommand } from "../../../api";
+import {
+  adminBulkInviteResponseSchema,
+  adminInvitePreviewResponseSchema,
+} from "../../../../../shared/schemas/admin-events";
 import { fmt, toast } from "../../../ui";
-import type { AdminInviteEntry, InviteRecord } from "../../../types";
+import type { AdminInviteEntry } from "../../../types";
 import { parseContactText } from "../../../../shared/invite-parser";
 import { adminEventInvitesListResponseSchema } from "../../../../../shared/schemas/admin-events";
 
@@ -164,7 +166,7 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
       let total = 0;
       for (let i = 0; i < invites.length; i += CHUNK) {
         const chunk = invites.slice(i, i + CHUNK);
-        await apiCommand(`/api/v1/admin/events/${slug}/invites/${inviteType}s/bulk`, {
+        await api(`/api/v1/admin/events/${slug}/invites/${inviteType}s/bulk`, adminBulkInviteResponseSchema, {
           method: "POST",
           body: JSON.stringify({ previewToken, inviteDigest, invites: chunk }),
         });
@@ -329,11 +331,11 @@ function InviteList({ slug, inviteType }: { slug: string; inviteType: InviteType
   }
 
   return (
-    <ApiDataTable<InviteRecord>
+    <ApiDataTable
       endpoint={`/api/v1/admin/events/${slug}/invites`}
       responseSchema={adminEventInvitesListResponseSchema}
-      resolve={(data) => adminEventInvitesListResponseSchema.parse(data).invites}
-      resolvePage={(data) => adminEventInvitesListResponseSchema.parse(data).page}
+      resolve={(data) => data.invites}
+      resolvePage={(data) => data.page}
       paginate
       searchPlaceholder="Search email / name…"
       params={{ type: inviteType, ...(statusFilter ? { status: statusFilter } : {}) }}

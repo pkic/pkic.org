@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env as workerEnv } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
-import { createContext, queryAll, seedEventAndAdmin } from "./helpers/context";
-import { handleError } from "../functions/_lib/http";
-import { onRequestPatch } from "../functions/api/v1/admin/events/[eventSlug]/settings";
+import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import app from "../functions/router";
 import { normalizeHttpOrSameOriginUrl } from "../assets/shared/schemas/urls";
 import type { Env } from "../functions/_lib/types";
-import { adminEventSettingsSchema } from "../assets/shared/schemas/admin-events";
+import { adminEventSettingsSchema, adminEventUpdateResponseSchema } from "../assets/shared/schemas/admin-events";
+import { apiErrorPayloadSchema } from "../assets/shared/schemas/api-common";
 
 describe("event hero image URL handling", () => {
   beforeEach(async () => {
@@ -53,14 +53,14 @@ describe("event hero image URL handling", () => {
       }),
     });
 
-    let response: Response;
-    try {
-      response = await onRequestPatch(createContext(env, request, { eventSlug: "pqc-2026" }));
-    } catch (error) {
-      response = handleError(error);
-    }
+    const response = await app.fetch(request, env, {
+      passThroughOnException: () => {},
+      waitUntil: () => {},
+    } as unknown as ExecutionContext);
 
     expect(response.status).toBe(200);
+    const payload = adminEventUpdateResponseSchema.parse(await response.json());
+    expect(payload.event.settings.heroImageUrl).toBe("/events/2026/pqc-conference-amsterdam-nl/hero.png?version=1");
 
     const rows = await queryAll<{ settings_json: string }>(env.DB, "SELECT settings_json FROM events WHERE slug = ?", [
       "pqc-2026",
@@ -97,14 +97,13 @@ describe("event hero image URL handling", () => {
       body: JSON.stringify({ venue: "Expected venue", settings: { venue: "Injected venue" } }),
     });
 
-    let response: Response;
-    try {
-      response = await onRequestPatch(createContext(env, request, { eventSlug: "pqc-2026" }));
-    } catch (error) {
-      response = handleError(error);
-    }
+    const response = await app.fetch(request, env, {
+      passThroughOnException: () => {},
+      waitUntil: () => {},
+    } as unknown as ExecutionContext);
 
     expect(response.status).toBe(400);
+    expect(apiErrorPayloadSchema.parse(await response.json()).error.code).toBe("VALIDATION_ERROR");
     const [row] = await queryAll<{ settings_json: string }>(env.DB, "SELECT settings_json FROM events WHERE slug = ?", [
       "pqc-2026",
     ]);

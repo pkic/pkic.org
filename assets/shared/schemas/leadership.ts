@@ -87,6 +87,7 @@ export const leadershipPositionsListQuerySchema = listQuerySchema(ADMIN_LEADERSH
   body: leadershipBodySchema,
   status: z.enum(["current", "past"]).optional(),
 });
+export type LeadershipPositionsListQuery = z.infer<typeof leadershipPositionsListQuerySchema>;
 
 export const leadershipPositionsListResponseSchema = paginatedResponseSchema(
   "positions",

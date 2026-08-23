@@ -1,6 +1,7 @@
 import { batchFirst, batchRows } from "../../db/pagination";
 import { parseJsonSafe } from "../../utils/json";
 import { parseFormFieldOptions } from "../../../../assets/shared/schemas/form-field-rules";
+import { adminFormSubmissionStatsResponseSchema } from "../../../../assets/shared/schemas/admin-forms";
 import type { DatabaseLike } from "../../types";
 import type { FieldRow, FieldStatPayload, GetFormSubmissionStatsParams, GetFormSubmissionStatsResult } from "./types";
 import {
@@ -150,7 +151,7 @@ export async function getFormSubmissionStats(
     db.prepare(statisticsQuery.sql).bind(...statisticsQuery.bindings),
   ]);
 
-  return {
+  return adminFormSubmissionStatsResponseSchema.parse({
     form: {
       id: population.form.id,
       key: population.form.key,
@@ -159,5 +160,5 @@ export async function getFormSubmissionStats(
     },
     total: Number(batchFirst<{ total: number }>(countResult)?.total ?? 0),
     stats: buildFieldStatistics(batchRows<FieldRow>(fieldsResult), batchRows<AggregatedStatRow>(statisticsResult)),
-  };
+  });
 }

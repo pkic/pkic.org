@@ -137,6 +137,38 @@ interface RoleHolderRow {
   user_id: string;
 }
 
+/**
+ * The canonical active-holder predicate shared by role resolution and read-model
+ * projections. Keep the role, user, and representative aliases explicit because
+ * callers use this in both ordinary queries and derived-table projections.
+ */
+export function representativeRoleActivePredicate(
+  roleAlias = "ur",
+  userAlias = "u",
+  representativeAlias = "rep",
+  nowPlaceholder = "?",
+): string {
+  return `${roleAlias}.revoked_at IS NULL
+       AND ${userAlias}.active = 1
+       AND ${representativeAlias}.left_at IS NULL
+       AND (${roleAlias}.expires_at IS NULL OR datetime(${roleAlias}.expires_at) > datetime(${nowPlaceholder}))`;
+}
+
+/**
+ * A one-row-per-organization projection for the active primary contact.
+ * The current time remains a bound parameter.
+ */
+export function primaryContactProjection(): string {
+  return `(SELECT ur.context_id AS member_id, ur.user_id,
+          u.first_name, u.last_name, u.email
+     FROM user_roles ur
+     JOIN users u ON u.id = ur.user_id
+     JOIN organization_representatives rep
+       ON rep.member_id = ur.context_id AND rep.user_id = ur.user_id
+    WHERE ur.context_type = 'organization' AND ur.role_id = '${REPRESENTATIVE_ROLE_IDS.primaryContact}'
+      AND ${representativeRoleActivePredicate()}) AS primary_contact`;
+}
+
 /** The current active holder of a singleton representative role for an organization, or null. */
 export async function resolveRepresentativeRoleHolder(
   db: DatabaseLike,
@@ -147,11 +179,11 @@ export async function resolveRepresentativeRoleHolder(
     db,
     `SELECT ur.user_id
      FROM user_roles ur
-     JOIN users u ON u.id = ur.user_id AND u.active = 1
+     JOIN users u ON u.id = ur.user_id
      JOIN organization_representatives rep
-       ON rep.member_id = ur.context_id AND rep.user_id = ur.user_id AND rep.left_at IS NULL
-     WHERE ur.context_type = 'organization' AND ur.context_id = ? AND ur.role_id = ? AND ur.revoked_at IS NULL
-       AND (ur.expires_at IS NULL OR datetime(ur.expires_at) > datetime(?))
+       ON rep.member_id = ur.context_id AND rep.user_id = ur.user_id
+     WHERE ur.context_type = 'organization' AND ur.context_id = ? AND ur.role_id = ?
+       AND ${representativeRoleActivePredicate()}
      LIMIT 1`,
     [memberId, roleId, nowIso()],
   );
@@ -172,11 +204,11 @@ export async function resolveRepresentativeRoleHolders(
     db,
     `SELECT ur.role_id, ur.user_id
      FROM user_roles ur
-     JOIN users u ON u.id = ur.user_id AND u.active = 1
+     JOIN users u ON u.id = ur.user_id
      JOIN organization_representatives rep
-       ON rep.member_id = ur.context_id AND rep.user_id = ur.user_id AND rep.left_at IS NULL
-     WHERE ur.context_type = 'organization' AND ur.context_id = ? AND ur.revoked_at IS NULL
-       AND (ur.expires_at IS NULL OR datetime(ur.expires_at) > datetime(?))
+       ON rep.member_id = ur.context_id AND rep.user_id = ur.user_id
+     WHERE ur.context_type = 'organization' AND ur.context_id = ?
+       AND ${representativeRoleActivePredicate()}
        AND ur.role_id IN (?, ?, ?)`,
     [
       memberId,

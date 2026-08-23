@@ -4,24 +4,19 @@
  * Returns a single donation by its primary key.
  */
 
-import { dispatchRequestMethod, json } from "../../../../_lib/http";
+import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
+import { openApiRoute } from "../../../../_lib/openapi/route";
 import { getAdminDonationById } from "../../../../_lib/services/donations";
+import {
+  donationDetailResponseSchema,
+  donationDetailRouteSchema,
+} from "../../../../../assets/shared/schemas/admin-donations";
 
-export async function onRequestGet(c: AdminContext): Promise<Response> {
+export const AdminDonationsIdGet = openApiRoute(donationDetailRouteSchema, async (c: AdminContext, data) => {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-
-  const id = c.req.param("id");
-  if (!id) return json({ error: { code: "BAD_REQUEST", message: "Missing donation id" } }, 400);
-
-  const row = await getAdminDonationById(requestDb(c), id);
-
+  const row = await getAdminDonationById(requestDb(c), data.params.id);
   if (!row) return json({ error: { code: "NOT_FOUND", message: "Donation not found" } }, 404);
-
-  return json({ donation: row });
-}
-
-export async function onRequest(c: AdminContext): Promise<Response> {
-  return dispatchRequestMethod(c, { GET: onRequestGet });
-}
+  return json(donationDetailResponseSchema.parse({ donation: row }));
+});

@@ -1,11 +1,17 @@
 import { eventSlugParamsSchema, successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
-import { adminRegistrationDetailResponseSchema } from "./admin-registration-detail";
+import { adminRegistrationDetailResponseSchema, adminRegistrationDetailSchema } from "./admin-registration-detail";
 import { z } from "zod";
-import { httpUrlSchema } from "./urls";
-import { registrationManageSchema } from "./registration";
-import { ADMIN_EVENT_REGISTRATION_STATUSES, adminEventRegistrationStatusSchema } from "./admin-events";
+import { httpCapabilityUrlSchema, httpUrlSchema } from "./urls";
+import { registrationCapabilitySafeProjectionSchema, registrationManageSchema } from "./registration";
+import {
+  ADMIN_EVENT_REGISTRATION_STATUSES,
+  adminEventRegistrationStatusSchema,
+  adminManageDayAttendanceSchema,
+  adminRegistrationAdmitSchema,
+} from "./admin-events";
 import { scopedAuditLogListQuerySchema, scopedAuditLogResponseSchema } from "./audit-log";
+import { adminBadgeRolePatchSchema, adminBadgeRoleResponseSchema } from "./participant-roles";
 
 export const ADMIN_REGISTRATION_FORCE_STATUSES = ADMIN_EVENT_REGISTRATION_STATUSES;
 export const adminRegistrationForceStatusSchema = adminEventRegistrationStatusSchema;
@@ -20,7 +26,19 @@ export const badgeRegenerationQueuedResponseSchema = successResponseSchema.exten
   referralCode: z.string().regex(/^[A-Za-z0-9]{1,64}$/),
   badgeUrl: httpUrlSchema,
 });
-export const adminRegistrationOpenManageResponseSchema = z.object({ manageUrl: httpUrlSchema });
+export const adminRegistrationOpenManageResponseSchema = z.object({ manageUrl: httpCapabilityUrlSchema });
+export const adminRegistrationDayAttendanceResponseSchema = successResponseSchema;
+export const adminRegistrationUpdateResponseSchema = successResponseSchema.extend({
+  registration: adminRegistrationDetailSchema.nullable(),
+  emailChanged: z.boolean().optional(),
+});
+export const adminRegistrationResendConfirmationResponseSchema = successResponseSchema.extend({
+  message: z.literal("Email queued"),
+});
+export const adminRegistrationAdmitResponseSchema = successResponseSchema.extend({
+  registration: registrationCapabilitySafeProjectionSchema,
+  admittedDayDates: z.array(z.string()),
+});
 export const badgeRoleInfoSchema = z.object({
   admin_override: z.string().nullable(),
   auto_detected: z.string(),
@@ -76,5 +94,109 @@ export const adminRegistrationBadgeRegenerationRouteSchema = {
     },
     "401": { description: "Admin authorization required." },
     "404": { description: "Event, registration, or referral code not found." },
+  },
+};
+
+const adminRegistrationParamsSchema = eventSlugParamsSchema.extend({ registrationId: databaseIdSchema });
+export const adminRegistrationBadgeRoleGetRouteSchema = {
+  tags: ["Admin registrations"],
+  summary: "Get a registration badge role",
+  request: { params: adminRegistrationParamsSchema },
+  responses: {
+    "200": {
+      description: "The configured, detected, and effective badge roles.",
+      content: { "application/json": { schema: adminBadgeRoleResponseSchema } },
+    },
+    "401": { description: "Admin authorization required." },
+    "404": { description: "Event or registration not found." },
+  },
+};
+export const adminRegistrationBadgeRolePatchRouteSchema = {
+  tags: ["Admin registrations"],
+  summary: "Override a registration badge role",
+  request: {
+    params: adminRegistrationParamsSchema,
+    body: { content: { "application/json": { schema: adminBadgeRolePatchSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Updated badge-role configuration.",
+      content: { "application/json": { schema: adminBadgeRoleResponseSchema } },
+    },
+    "400": { description: "Invalid badge-role payload." },
+    "401": { description: "Admin authorization required." },
+    "404": { description: "Event or registration not found." },
+  },
+};
+export const adminRegistrationDayAttendancePatchRouteSchema = {
+  tags: ["Admin registrations"],
+  summary: "Update registration day attendance",
+  request: {
+    params: adminRegistrationParamsSchema,
+    body: { content: { "application/json": { schema: adminManageDayAttendanceSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Day attendance updated.",
+      content: { "application/json": { schema: adminRegistrationDayAttendanceResponseSchema } },
+    },
+    "400": { description: "Invalid day-attendance payload." },
+    "401": { description: "Admin authorization required." },
+    "404": { description: "Event, registration, or event day not found." },
+    "409": { description: "The requested attendance transition conflicts with capacity or current state." },
+  },
+};
+export const adminRegistrationOpenManageRouteSchema = {
+  tags: ["Admin registrations"],
+  summary: "Create temporary registration management access",
+  description: "Creates an audited, short-lived registration management URL for an authorized administrator.",
+  request: { params: adminRegistrationParamsSchema },
+  responses: {
+    "200": {
+      description: "Temporary management URL created.",
+      content: { "application/json": { schema: adminRegistrationOpenManageResponseSchema } },
+    },
+    "401": { description: "Admin authorization required." },
+    "404": { description: "Event or registration not found." },
+    "500": { description: "Management-link signing is not configured." },
+  },
+};
+export const adminRegistrationPatchRouteSchema = {
+  tags: ["Admin registrations"],
+  summary: "Update a registration",
+  request: {
+    params: adminRegistrationParamsSchema,
+    body: { content: { "application/json": { schema: adminRegistrationUpdateSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Registration updated.",
+      content: { "application/json": { schema: adminRegistrationUpdateResponseSchema } },
+    },
+  },
+};
+export const adminRegistrationAdmitRouteSchema = {
+  tags: ["Admin registrations"],
+  summary: "Admit a registration",
+  request: {
+    params: adminRegistrationParamsSchema,
+    body: { content: { "application/json": { schema: adminRegistrationAdmitSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Registration admitted.",
+      content: { "application/json": { schema: adminRegistrationAdmitResponseSchema } },
+    },
+  },
+};
+export const adminRegistrationResendConfirmationRouteSchema = {
+  tags: ["Admin registrations"],
+  summary: "Resend registration confirmation",
+  request: { params: adminRegistrationParamsSchema },
+  responses: {
+    "200": {
+      description: "Confirmation queued.",
+      content: { "application/json": { schema: adminRegistrationResendConfirmationResponseSchema } },
+    },
   },
 };

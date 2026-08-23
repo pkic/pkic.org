@@ -4,11 +4,15 @@ import { getEventBySlug } from "../../../../../_lib/services/events";
 import { listEventPromotionActivity } from "../../../../../_lib/services/events/promoters";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
-import { eventPromotersListRouteSchema } from "../../../../../../assets/shared/schemas/admin-event-promoters";
+import {
+  eventPromotersListResponseSchema,
+  eventPromotersListRouteSchema,
+} from "../../../../../../assets/shared/schemas/admin-event-promoters";
 
 export const AdminEventPromotersGet = openApiRoute(eventPromotersListRouteSchema, async (c: AdminContext, data) => {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
-  const { view, limit, offset, q, sort } = data.query;
-  return json(await listEventPromotionActivity(requestDb(c), event, { view, limit, offset, q, sort }));
+  const event = await getEventBySlug(requestDb(c), data.params.eventSlug);
+  return json(
+    eventPromotersListResponseSchema.parse(await listEventPromotionActivity(requestDb(c), event, data.query)),
+  );
 });

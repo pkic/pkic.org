@@ -76,6 +76,7 @@ export const accessGrantResponseSchema = z.object({
   createdAt: z.string(),
 });
 export type AccessGrant = z.infer<typeof accessGrantResponseSchema>;
+export const accessGrantCreateResponseSchema = z.object({ grant: accessGrantResponseSchema });
 
 // Implements permission_grants.
 export const accessGrantsCreateRouteSchema = {
@@ -86,7 +87,10 @@ export const accessGrantsCreateRouteSchema = {
     body: { content: { "application/json": { schema: accessGrantCreateSchema } }, required: true },
   },
   responses: {
-    "201": { description: "Grant created.", content: { "application/json": { schema: accessGrantResponseSchema } } },
+    "201": {
+      description: "Grant created.",
+      content: { "application/json": { schema: accessGrantCreateResponseSchema } },
+    },
     "403": { description: "Missing access:grant permission." },
   },
 };

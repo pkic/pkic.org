@@ -4,6 +4,7 @@ import type { DatabaseLike, StatementLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
 import type { EventRecord } from "../events";
+import { firstReferralCodeQuerySql } from "../referral-code-projection";
 import { userRecordColumns, type UserRecord } from "../users";
 import { getRegistrationById } from "./queries";
 import { REGISTRATION_RECIPIENT_EMAIL_SQL } from "./recipient-email";
@@ -65,11 +66,9 @@ export async function resendRegistrationEmail(
       subject: `Confirm your registration for ${payload.event.name}`,
     });
   } else {
-    const referral = await first<{ code: string }>(
-      db,
-      "SELECT code FROM referral_codes WHERE owner_type = 'registration' AND owner_id = ? LIMIT 1",
-      [registration.id],
-    );
+    const referral = await first<{ code: string }>(db, firstReferralCodeQuerySql("registration", "?"), [
+      registration.id,
+    ]);
     email = await prepareRegistrationConfirmedEmail(db, {
       event: payload.event,
       registrationId: registration.id,

@@ -1,9 +1,10 @@
 import { useState } from "preact/hooks";
 import { DataTable } from "../../../../../components/Table";
-import { apiCommand } from "../../../../api";
+import { api, apiCommand } from "../../../../api";
 import { fmt, toast } from "../../../../ui";
 import type { AdminEventDay } from "../../../../types";
 import type { AttendanceType } from "../../../../../../shared/schemas/registration";
+import { adminRegistrationAdmitResponseSchema } from "../../../../../../shared/schemas/route-contracts-admin-registrations";
 
 type DayOption = "none" | AttendanceType;
 
@@ -91,7 +92,7 @@ export function DayAttendancePanel({
     if (admitDayDates.length === 0) return;
     setAdmitting(true);
     try {
-      await apiCommand(`/api/v1/admin/events/${slug}/registrations/${regId}/admit`, {
+      await api(`/api/v1/admin/events/${slug}/registrations/${regId}/admit`, adminRegistrationAdmitResponseSchema, {
         method: "POST",
         body: JSON.stringify({
           mode: "capacity_exempt",

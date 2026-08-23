@@ -235,6 +235,78 @@ describe("admin user deactivation", () => {
     ).toEqual({ email: "email-after@example.test", biography: "Still editable by users:write staff." });
   });
 
+  it("invalidates a stale pending confirmation when an admin changes the primary email", async () => {
+    const { adminId, eventId } = await setup();
+    const userId = await seedUser(env.DB, "email-original@example.test");
+    const registrationId = crypto.randomUUID();
+    const confirmationLinkSecret = crypto.randomUUID();
+    const signingSecret = "admin-email-correction-secret";
+    const staleToken = await signCapabilityToken({
+      signingSecret,
+      linkSecret: confirmationLinkSecret,
+      purpose: "registration_confirm",
+      resourceId: registrationId,
+    });
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO registrations
+             (id, event_id, user_id, status, attendance_type, source_type,
+              confirmation_link_secret, manage_link_secret, pending_confirmation_deadline_at,
+              created_at, updated_at)
+           VALUES (?, ?, ?, 'pending_email_confirmation', 'virtual', 'admin', ?, ?,
+                   datetime('now', '+1 day'), datetime('now'), datetime('now'))`,
+      ).bind(registrationId, eventId, userId, confirmationLinkSecret, crypto.randomUUID()),
+      env.DB.prepare(
+        `UPDATE users
+              SET pending_email = 'email-pending@example.test',
+                  pending_email_expires_at = datetime('now', '+1 day'),
+                  pending_email_change_registration_id = ?
+            WHERE id = ?`,
+      ).bind(registrationId, userId),
+    ]);
+
+    await updateAdminUser(
+      env.DB,
+      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" },
+      userId,
+      { email: "email-admin-set@example.test" },
+    );
+
+    expect(
+      (
+        await queryAll<{
+          email: string;
+          pending_email: string | null;
+          pending_email_change_registration_id: string | null;
+        }>(env.DB, "SELECT email, pending_email, pending_email_change_registration_id FROM users WHERE id = ?", userId)
+      )[0],
+    ).toEqual({
+      email: "email-admin-set@example.test",
+      pending_email: null,
+      pending_email_change_registration_id: null,
+    });
+    expect(
+      (
+        await queryAll<{ confirmation_link_secret: string | null }>(
+          env.DB,
+          "SELECT confirmation_link_secret FROM registrations WHERE id = ?",
+          registrationId,
+        )
+      )[0].confirmation_link_secret,
+    ).toBeNull();
+
+    await expect(
+      confirmRegistrationByToken(env.DB, {
+        token: staleToken,
+        waitlistClaimWindowHours: 24,
+        signingSecret,
+      }),
+    ).rejects.toMatchObject({ code: "CONFIRM_TOKEN_INVALID" });
+    expect((await queryAll<{ email: string }>(env.DB, "SELECT email FROM users WHERE id = ?", userId))[0].email).toBe(
+      "email-admin-set@example.test",
+    );
+  });
+
   it("updates profile biography and links", async () => {
     await setup();
     const userId = await seedUser(env.DB, "profile@example.test");

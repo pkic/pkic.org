@@ -6,15 +6,25 @@ import { admitRegistration } from "../../../../../../../_lib/services/registrati
 import { adminRegistrationAdmitSchema } from "../../../../../../../../assets/shared/schemas/admin-events";
 import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { processOutboxByIdBackground } from "../../../../../../../_lib/email/outbox";
+import { omitCapabilitySecrets } from "../../../../../../../_lib/auth/capability-links";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
-import { omitCapabilitySecrets } from "../../../../../../../_lib/services/capability-links";
+import {
+  adminRegistrationAdmitResponseSchema,
+  adminRegistrationAdmitRouteSchema,
+} from "../../../../../../../../assets/shared/schemas/route-contracts-admin-registrations";
+import type { ValidatedData } from "chanfana";
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+export async function onRequestPost(
+  c: AdminContext,
+  data?: ValidatedData<typeof adminRegistrationAdmitRouteSchema>,
+): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const body = await parseJsonBody(c.req, adminRegistrationAdmitSchema);
-  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
+  const body = data?.body ?? (await parseJsonBody(c.req, adminRegistrationAdmitSchema));
+  const eventSlug = data?.params.eventSlug ?? c.req.param("eventSlug");
+  const registrationId = data?.params.registrationId ?? c.req.param("registrationId");
+  const event = await getEventBySlug(requestDb(c), eventSlug);
   const admitted = await admitRegistration(requestDb(c), {
-    registrationId: c.req.param("registrationId"),
+    registrationId,
     event,
     dayDates: body.dayDates,
     mode: body.mode,
@@ -26,11 +36,13 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     c.executionCtx.waitUntil(processOutboxByIdBackground(requestDb(c), c.env, admitted.outboxId));
   }
 
-  return json({
-    success: true,
-    registration: omitCapabilitySecrets(admitted.registration),
-    admittedDayDates: admitted.admittedDayDates,
-  });
+  return json(
+    adminRegistrationAdmitResponseSchema.parse({
+      success: true,
+      registration: omitCapabilitySecrets(admitted.registration),
+      admittedDayDates: admitted.admittedDayDates,
+    }),
+  );
 }
 
 export async function onRequest(c: AdminContext): Promise<Response> {

@@ -18,7 +18,11 @@ import {
 import { donationsListQuerySchema } from "../assets/shared/schemas/admin-donations";
 import { usersListQuerySchema } from "../assets/shared/schemas/admin-users";
 import { auditLogListQuerySchema } from "../assets/shared/schemas/admin-audit-log";
-import { emailTemplatesSortValueSchema } from "../assets/shared/schemas/admin-email-templates";
+import {
+  emailTemplateVersionsListQuerySchema,
+  emailTemplatesListQuerySchema,
+  emailTemplatesSortValueSchema,
+} from "../assets/shared/schemas/admin-email-templates";
 import {
   eventsListSortValueSchema,
   eventTeamSortValueSchema,
@@ -89,6 +93,9 @@ describe("shared list/search contract", () => {
 
   it("keeps endpoint-specific page sizes in schemas rather than routes or services", () => {
     expect(publicVotesListQuerySchema.parse({})).toMatchObject({ limit: 20, offset: 0 });
+    expect(usersListQuerySchema.parse({})).toMatchObject({ limit: 50, offset: 0 });
+    expect(emailTemplatesListQuerySchema.parse({})).toMatchObject({ limit: 50, offset: 0 });
+    expect(emailTemplateVersionsListQuerySchema.parse({})).toMatchObject({ limit: 50, offset: 0 });
     expect(myApplicationsListQuerySchema.parse({})).toMatchObject({ limit: 25, offset: 0 });
     expect(proposalCommentsListQuerySchema.parse({})).toMatchObject({ limit: 25, offset: 0 });
     expect(proposalReviewsListQuerySchema.parse({})).toMatchObject({ limit: 25, offset: 0 });

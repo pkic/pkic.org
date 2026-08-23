@@ -18,6 +18,8 @@
  */
 
 import { dispatchRequestMethod, json } from "../../_lib/http";
+import { openApiRoute } from "../../_lib/openapi/route";
+import { geoResponseSchema, geoRouteSchema } from "../../../assets/shared/schemas/geolocation";
 
 /**
  * Allowed origins. Must exactly match the site origin (scheme + host + optional
@@ -52,7 +54,7 @@ function geoResponse(c: any): Response {
   const cf = (request as Request & { cf?: { country?: string } }).cf;
   const country: string | null = cf?.country ?? null;
 
-  return json({ country }, 200, {
+  return json(geoResponseSchema.parse({ country }), 200, {
     "cache-control": "private, max-age=60, stale-while-revalidate=0",
   });
 }
@@ -74,3 +76,5 @@ export async function onRequest(c: any): Promise<Response> {
 
   return dispatchRequestMethod(c, { GET: geoResponse, HEAD: geoResponse });
 }
+
+export const GeoGet = openApiRoute(geoRouteSchema, onRequest);

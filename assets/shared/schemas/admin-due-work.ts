@@ -12,6 +12,7 @@ export const adminDueWorkListQuerySchema = listQuerySchema(ADMIN_DUE_WORK_SORT_C
   outboxLimit: z.coerce.number().int().min(1).max(500).default(120),
   cleanupLimit: z.coerce.number().int().min(1).max(500).default(120),
 });
+export type AdminDueWorkListQuery = z.infer<typeof adminDueWorkListQuerySchema>;
 
 export const adminDueWorkRowSchema = z.object({
   bucket: adminDueWorkBucketSchema.exclude(["all"]),

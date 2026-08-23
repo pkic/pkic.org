@@ -8,6 +8,8 @@ import { getMembershipSettings } from "../membership-settings";
 import type { DatabaseLike } from "../../types";
 import type { VoteProposalStatus, VoteScopeType, VoteType } from "./shared";
 import { getWorkingGroupNamesByIds } from "../working-groups";
+import type { ListProposalsQuery, ProposalSummary } from "../../../../assets/shared/schemas/votes";
+import type { AdminListProposalsQuery } from "../../../../assets/shared/schemas/votes-admin";
 
 export interface ProposalRow {
   id: string;
@@ -31,23 +33,6 @@ export interface ProposalRow {
 const PROPOSAL_ROW_COLUMNS =
   "id, title, description, vote_type, scope_type, scope_id, proposed_by_user_id, eligible_categories, " +
   "proposed_opens_at, proposed_closes_at, status, vote_id, rejection_reason, transition_revision, created_at, updated_at";
-
-export interface ProposalSummary {
-  id: string;
-  title: string;
-  description: string;
-  voteType: VoteType;
-  scopeType: VoteScopeType;
-  scopeId: string | null;
-  scopeName: string | null;
-  proposedByUserId: string;
-  status: VoteProposalStatus;
-  voteId: string | null;
-  rejectionReason: string | null;
-  endorsementCount: number;
-  minEndorsersRequired: number;
-  createdAt: string;
-}
 
 export async function minEndorsersFor(
   db: DatabaseLike,
@@ -178,15 +163,8 @@ export async function getProposalScopeForPermissionCheck(
   return { scopeType: row.scope_type, scopeId: row.scope_id };
 }
 
-export interface VoteProposalListParams {
-  scopeType?: VoteScopeType;
-  scopeId?: string;
-  status?: VoteProposalStatus;
-  q?: string;
-  sort?: string;
-  limit: number;
-  offset: number;
-}
+export type VoteProposalListParams = ListProposalsQuery & Partial<Pick<AdminListProposalsQuery, "status">>;
+export type { ProposalSummary } from "../../../../assets/shared/schemas/votes";
 
 async function queryProposalPage(
   db: DatabaseLike,
@@ -237,14 +215,14 @@ async function queryProposalPage(
 
 export function listVoteProposals(
   db: DatabaseLike,
-  params: VoteProposalListParams,
+  params: ListProposalsQuery,
 ): Promise<{ proposals: ProposalSummary[]; total: number }> {
   return queryProposalPage(db, params, true);
 }
 
 export function listAllVoteProposalsForAdmin(
   db: DatabaseLike,
-  params: Omit<VoteProposalListParams, "scopeType" | "scopeId">,
+  params: AdminListProposalsQuery,
 ): Promise<{ proposals: ProposalSummary[]; total: number }> {
   return queryProposalPage(db, params, false);
 }

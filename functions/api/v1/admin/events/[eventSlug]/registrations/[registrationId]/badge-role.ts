@@ -1,31 +1,42 @@
-import { adminBadgeRolePatchSchema } from "../../../../../../../../assets/shared/schemas/participant-roles";
+import { adminBadgeRoleResponseSchema } from "../../../../../../../../assets/shared/schemas/participant-roles";
+import {
+  adminRegistrationBadgeRoleGetRouteSchema,
+  adminRegistrationBadgeRolePatchRouteSchema,
+} from "../../../../../../../../assets/shared/schemas/route-contracts";
 import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
-import { dispatchRequestMethod, json } from "../../../../../../../_lib/http";
+import { json } from "../../../../../../../_lib/http";
+import { openApiRoute } from "../../../../../../../_lib/openapi/route";
 import {
   getAdminRegistrationBadgeRole,
   setAdminRegistrationBadgeRole,
 } from "../../../../../../../_lib/services/registrations/badge-role";
-import { parseJsonBody } from "../../../../../../../_lib/validation";
+import type { ValidatedData } from "chanfana";
 
-export async function onRequestGet(c: AdminContext): Promise<Response> {
+type GetData = ValidatedData<typeof adminRegistrationBadgeRoleGetRouteSchema>;
+
+export async function onRequestGet(c: AdminContext, data?: GetData): Promise<Response> {
   const actor = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  const params = data?.params ?? c.req.param();
   return json(
-    await getAdminRegistrationBadgeRole(requestDb(c), actor, c.req.param("eventSlug"), c.req.param("registrationId")),
+    adminBadgeRoleResponseSchema.parse(
+      await getAdminRegistrationBadgeRole(requestDb(c), actor, params.eventSlug, params.registrationId),
+    ),
   );
 }
 
-export async function onRequestPatch(c: AdminContext): Promise<Response> {
+async function handlePatch(
+  c: AdminContext,
+  data: ValidatedData<typeof adminRegistrationBadgeRolePatchRouteSchema>,
+): Promise<Response> {
   const actor = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const patch = await parseJsonBody(c.req, adminBadgeRolePatchSchema);
   const result = await setAdminRegistrationBadgeRole(requestDb(c), actor, {
-    eventSlug: c.req.param("eventSlug"),
-    registrationId: c.req.param("registrationId"),
-    patch,
+    eventSlug: data.params.eventSlug,
+    registrationId: data.params.registrationId,
+    patch: data.body,
   });
-  return json(result.response);
+  return json(adminBadgeRoleResponseSchema.parse(result.response));
 }
 
-export async function onRequest(c: AdminContext): Promise<Response> {
-  return dispatchRequestMethod(c, { GET: onRequestGet, PATCH: onRequestPatch });
-}
+export const AdminRegistrationBadgeRoleGet = openApiRoute(adminRegistrationBadgeRoleGetRouteSchema, onRequestGet);
+export const AdminRegistrationBadgeRolePatch = openApiRoute(adminRegistrationBadgeRolePatchRouteSchema, handlePatch);

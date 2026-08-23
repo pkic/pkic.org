@@ -5,6 +5,10 @@ import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
 import { deterministicRepresentativeJoinSql } from "./representative-lookup";
 import { toPublicRoleProfile, type PublicRoleProfile, type PublicRoleProfileRow } from "./public-role-profile";
+import type {
+  PublicWorkingGroupMembersListQuery,
+  PublicWorkingGroupsListQuery,
+} from "../../../../assets/shared/schemas/members-directory";
 
 export interface WorkingGroupSummary {
   id: string;
@@ -53,7 +57,7 @@ async function getActiveWorkingGroupRow(db: DatabaseLike, idOrSlug: string): Pro
 
 export async function listWorkingGroups(
   db: DatabaseLike,
-  params: { q?: string; sort?: string; limit: number; offset: number },
+  params: PublicWorkingGroupsListQuery,
 ): Promise<{ workingGroups: WorkingGroupSummary[]; total: number }> {
   const search = params.q ? buildD1TextSearchFilter(params.q, ["name", "slug", "description"]) : null;
   const where = search ? ` AND ${search.sql}` : "";
@@ -142,7 +146,7 @@ export async function getWorkingGroupByIdOrSlug(
 export async function listWorkingGroupMembers(
   db: DatabaseLike,
   idOrSlug: string,
-  params: { q?: string; sort?: string; limit: number; offset: number },
+  params: PublicWorkingGroupMembersListQuery,
 ): Promise<{ members: WorkingGroupMemberPublic[]; total: number } | null> {
   const workingGroup = await getActiveWorkingGroupRow(db, idOrSlug);
   if (!workingGroup) return null;

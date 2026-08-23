@@ -25,6 +25,7 @@ import { proposalAdminStatusFilterSchema } from "./proposal-status";
 import { proposalSessionTypesSchema } from "./proposal-management";
 import { httpOrSameOriginUrlSchema, httpUrlSchema } from "./urls";
 import { adminRegistrationRecordContextSchema } from "./admin-registration-detail";
+import { eventSummarySchema } from "./event-read-models";
 
 export const EVENT_PROPOSALS_SORT_COLUMNS = [
   "submittedAt",
@@ -98,8 +99,22 @@ export const EVENT_TEAM_SORT_COLUMNS = ["user_email", "role_id", "created_at", "
 export const eventTeamSortValueSchema = sortColumnSchema(EVENT_TEAM_SORT_COLUMNS);
 export const adminEventTeamListQuerySchema = searchableListQuerySchema(eventTeamSortValueSchema, { limit: 100 });
 export type AdminEventTeamListQuery = z.infer<typeof adminEventTeamListQuerySchema>;
-export const eventTeamPermissionSchema = z.enum(["organizer", "program_committee", "moderator", "volunteer"]);
+/** Stable event-team permission vocabulary shared by API contracts and RBAC persistence. */
+export const EVENT_TEAM_PERMISSIONS = ["organizer", "program_committee", "moderator", "volunteer"] as const;
+export const eventTeamPermissionSchema = z.enum(EVENT_TEAM_PERMISSIONS);
 export type EventTeamPermission = z.infer<typeof eventTeamPermissionSchema>;
+/**
+ * The event-team grants are persisted as ordinary context-scoped `user_roles` rows.
+ * Keep this as the single permission-to-role vocabulary so services cannot drift in
+ * their forward mapping, reverse mapping, or SQL role allowlists.
+ */
+export const EVENT_TEAM_PERMISSION_ROLE_IDS = {
+  organizer: "role-event_organizer",
+  program_committee: "role-program_committee",
+  moderator: "role-event_moderator",
+  volunteer: "role-event_volunteer",
+} as const satisfies Record<EventTeamPermission, string>;
+export type EventTeamRoleId = (typeof EVENT_TEAM_PERMISSION_ROLE_IDS)[EventTeamPermission];
 export const adminEventTeamListItemSchema = z.object({
   id: z.string(),
   user_email: z.string(),
@@ -112,6 +127,15 @@ export const adminEventTeamListItemSchema = z.object({
 });
 export type AdminEventTeamListItem = z.infer<typeof adminEventTeamListItemSchema>;
 export const adminEventTeamListResponseSchema = paginatedResponseSchema("permissions", adminEventTeamListItemSchema);
+export const adminEventTeamPermissionCreateResponseSchema = z.object({
+  permission: adminEventTeamListItemSchema.pick({
+    id: true,
+    user_email: true,
+    permission: true,
+    expires_at: true,
+    created_at: true,
+  }),
+});
 
 export const EVENT_REGISTRATIONS_SORT_COLUMNS = ["display_name", "status", "attendance_type", "created_at"] as const;
 export const ADMIN_EVENT_REGISTRATION_STATUSES = ["registered", "pending_email_confirmation", "cancelled"] as const;
@@ -167,18 +191,20 @@ export const adminEventRegistrationSummarySchema = adminRegistrationRecordContex
   lastAttendanceChange: adminEventRegistrationAttendanceChangeSchema.nullable(),
 });
 export type AdminEventRegistrationSummary = z.infer<typeof adminEventRegistrationSummarySchema>;
+export const adminEventRegistrationsStatsSchema = z.object({
+  byAttendanceType: z.record(z.string(), z.number()),
+  attendanceStatusByType: z.record(z.string(), z.object({ accepted: z.number(), waitlisted: z.number() })),
+  byStatus: z.record(z.string(), z.number()),
+  bouncedCount: z.number(),
+  consentCount: z.number(),
+});
+export type AdminEventRegistrationsStats = z.infer<typeof adminEventRegistrationsStatsSchema>;
 export const adminEventRegistrationsListResponseSchema = paginatedResponseSchema(
   "registrations",
   adminEventRegistrationSummarySchema,
 ).extend({
-  event: z.object({ id: z.string(), slug: z.string(), name: z.string() }),
-  stats: z.object({
-    byAttendanceType: z.record(z.string(), z.number()),
-    attendanceStatusByType: z.record(z.string(), z.object({ accepted: z.number(), waitlisted: z.number() })),
-    byStatus: z.record(z.string(), z.number()),
-    bouncedCount: z.number(),
-    consentCount: z.number(),
-  }),
+  event: eventSummarySchema,
+  stats: adminEventRegistrationsStatsSchema,
 });
 export type AdminEventRegistrationsListResponse = z.infer<typeof adminEventRegistrationsListResponseSchema>;
 
@@ -412,7 +438,9 @@ export const adminEventDaysResponseSchema = z.object({
     }),
   ),
 });
-export const adminEventDaysReplaceResponseSchema = z.object({ skipped: z.array(z.string()).optional() });
+export const adminEventDaysReplaceResponseSchema = successResponseSchema
+  .extend(adminEventDaysResponseSchema.shape)
+  .extend({ skipped: z.array(z.string()) });
 export const adminEventTermsResponseSchema = z.object({
   terms: z.object({
     attendee: z.array(
@@ -493,7 +521,6 @@ export const adminEventPermissionSchema = z.object({
   expiresAt: z.iso.datetime().nullable().optional(),
 });
 export type AdminEventPermissionInput = z.infer<typeof adminEventPermissionSchema>;
-
 const bulkInviteNameSchema = (max: number) => z.string().trim().min(1).max(max).optional();
 const bulkInviteeSchema = inviteeSchema.extend({
   firstName: bulkInviteNameSchema(80),
@@ -515,7 +542,16 @@ export const adminBulkAttendeeInvitesSchema = adminBulkInvitesSchema;
 export const adminBulkSpeakerInvitesSchema = adminBulkInvitesSchema;
 export const adminBulkAttendeeInvitesPreviewSchema = adminBulkInvitesPreviewSchema;
 export const adminBulkSpeakerInvitesPreviewSchema = adminBulkInvitesPreviewSchema;
-
+const adminBulkInviteResultSchema = z.object({ email: z.email() });
+export const adminBulkInviteResponseSchema = successResponseSchema.extend({
+  created: z.array(adminBulkInviteResultSchema),
+  endorsed: z.array(adminBulkInviteResultSchema),
+  skipped: z.array(adminBulkInviteResultSchema),
+});
+export const adminWaitlistPromotionResponseSchema = successResponseSchema.extend({
+  dayRegistrationOffers: z.number().int().nonnegative(),
+  affectedRegistrations: z.array(z.string()),
+});
 export const adminRegistrationAdmitSchema = z.object({
   mode: z.enum(["vip", "capacity_exempt"]).default("vip"),
   reason: trimmedString(3, 1000),

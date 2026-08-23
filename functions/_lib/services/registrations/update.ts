@@ -162,11 +162,15 @@ export async function updateRegistrationByIdWithNotification(
   db: DatabaseLike,
   payload: { eventId: string; registrationId: string; notification: UpdateNotification } & RegistrationUpdatePayload,
   changedBy: string,
+  registrationSnapshot?: RegistrationRecord,
 ): Promise<{ registration: RegistrationRecord; outboxId: string | null }> {
   return executeRegistrationUpdate(
     db,
     payload,
-    () => getRegistrationByIdForEvent(db, payload.eventId, payload.registrationId),
+    () =>
+      registrationSnapshot
+        ? Promise.resolve(registrationSnapshot)
+        : getRegistrationByIdForEvent(db, payload.eventId, payload.registrationId),
     changedBy,
     (built) => commitUpdateWithNotification(db, built, payload),
   );

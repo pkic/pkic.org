@@ -4,6 +4,7 @@ import { paginatedResponseSchema } from "./pagination";
 import { activeFormSummarySchema } from "./forms";
 import { databaseIdSchema } from "./identifiers";
 import { proposalDecisionStatusSchema, proposalStatusSchema } from "./proposal-status";
+import { eventSummarySchema } from "./event-read-models";
 import {
   adminSpeakerBioPatchSchema,
   MAX_PROPOSAL_PARTICIPANTS,
@@ -104,6 +105,10 @@ export const adminProposalSpeakersResponseSchema = z.object({
 export const adminProposalSpeakerPatchResponseSchema = successResponseSchema.extend({
   speaker: adminProposalSpeakerSchema,
 });
+export const adminProposalSpeakerReminderResponseSchema = successResponseSchema;
+export const adminProposalSpeakerRemindersResponseSchema = successResponseSchema.extend({
+  queued: z.number().int().nonnegative(),
+});
 
 export type AdminProposalSpeakerPatch = z.infer<typeof adminSpeakerBioPatchSchema>;
 export type AdminProposalSpeaker = z.infer<typeof adminProposalSpeakerSchema>;
@@ -146,7 +151,7 @@ export const adminEventProposalsResponseSchema = paginatedResponseSchema(
   "proposals",
   adminEventProposalSummarySchema,
 ).extend({
-  event: z.object({ id: eventIdSchema, slug: z.string(), name: z.string() }),
+  event: eventSummarySchema,
   access: proposalAccessSchema,
   stats: proposalStatsSchema,
 });

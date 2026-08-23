@@ -9,7 +9,10 @@ import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { AppError } from "../../../../../_lib/errors";
 import { json } from "../../../../../_lib/http";
 import { verifyApplicationManageToken } from "../../../../../_lib/services/membership/applications/queries";
-import { memberApplicationStatusRouteSchema } from "../../../../../../assets/shared/schemas/member-applications";
+import {
+  memberApplicationStatusResponseSchema,
+  memberApplicationStatusRouteSchema,
+} from "../../../../../../assets/shared/schemas/member-applications";
 
 export async function onRequestGet(c: any): Promise<Response> {
   c.set("sensitive", true);
@@ -26,12 +29,14 @@ export async function onRequestGet(c: any): Promise<Response> {
     throw new AppError(401, "AUTH_INVALID", "Invalid application id or token");
   }
 
-  return json({
-    id: application.id,
-    stage: application.stage,
-    stageEnteredAt: application.stage_entered_at,
-    createdAt: application.created_at,
-  });
+  return json(
+    memberApplicationStatusResponseSchema.parse({
+      id: application.id,
+      stage: application.stage,
+      stageEnteredAt: application.stage_entered_at,
+      createdAt: application.created_at,
+    }),
+  );
 }
 
 export const MembersApplicationsStatusGet = openApiRoute(memberApplicationStatusRouteSchema, onRequestGet);

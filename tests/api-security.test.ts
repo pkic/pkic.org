@@ -28,7 +28,6 @@ import { nowIso } from "../functions/_lib/utils/time";
 import type { DatabaseLike, Env as AppEnv } from "../functions/_lib/types";
 
 // ── Admin endpoint handlers ───────────────────────────────────────────────────
-import { onRequest as adminStatsRequest } from "../functions/api/v1/admin/stats";
 import { onRequest as internalEmailRetryRequest } from "../functions/api/v1/internal/email/retry";
 import { onRequest as internalJobsRequest } from "../functions/api/v1/internal/jobs/run";
 import { onRequest as internalEmailResetRequest } from "../functions/api/v1/internal/email/reset-failed";
@@ -40,6 +39,7 @@ import {
   onRequest as eventFormsRequest,
 } from "../functions/api/v1/events/[eventSlug]/forms";
 import { onRequest as geoRequest } from "../functions/api/v1/geo";
+import { geoResponseSchema } from "../assets/shared/schemas/geolocation";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -562,11 +562,15 @@ describe("HTTP method enforcement", () => {
     expect(response.status).not.toBe(200);
   });
 
-  it("rejects POST to GET-only /api/v1/admin/stats → 405", async () => {
-    const response = await adminStatsRequest(
-      createContext(appEnv, new Request("https://app.test/api/v1/admin/stats", { method: "POST" }), {}),
+  it("rejects POST to GET-only /api/v1/admin/stats", async () => {
+    const token = await createAdminSession(env.DB, adminId, "stats-method-enforcement-token");
+    const response = await callApp(
+      new Request("https://app.test/api/v1/admin/stats", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}` },
+      }),
     );
-    expect(response.status).toBe(405);
+    expect(response.status).not.toBe(200);
   });
 
   it("rejects GET to POST-only /api/v1/internal/email/retry → 405", async () => {
@@ -633,8 +637,20 @@ describe("public endpoints — accessible without credentials", () => {
       ),
     );
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { country: string | null };
-    expect("country" in body).toBe(true);
+    const body = geoResponseSchema.parse(await response.json());
+    expect(body.country).toBeNull();
+  });
+
+  it("GET /api/v1/geo returns and validates Cloudflare's country hint", async () => {
+    const request = new Request("https://app.test/api/v1/geo", {
+      headers: { "sec-fetch-site": "same-origin" },
+    });
+    Object.defineProperty(request, "cf", { value: { country: "NL" } });
+
+    const response = await geoRequest(createContext(appEnv, request, {}));
+
+    expect(response.status).toBe(200);
+    expect(geoResponseSchema.parse(await response.json())).toEqual({ country: "NL" });
   });
 
   it("GET /api/v1/geo rejects cross-origin requests (CSRF guard) without any credentials needed", async () => {

@@ -1,4 +1,6 @@
 import {
+  adminFormCreateResponseSchema,
+  adminFormCreateSchema,
   adminFormsListQuerySchema,
   adminFormsListResponseSchema,
   adminFormSubmissionsQuerySchema,
@@ -6,8 +8,56 @@ import {
   adminFormSubmissionStatsQuerySchema,
   adminFormSubmissionStatsResponseSchema,
   adminFormUpdateSchema,
+  adminFormUpdateResponseSchema,
 } from "./admin-forms";
 import { eventSlugParamsSchema, formKeyParamsSchema } from "./api-common";
+
+/**
+ * Legacy browser form endpoint. The payload intentionally remains dynamic
+ * FormData because the public join and sponsor shortcodes submit configured
+ * fields, while the endpoint preserves the browser redirect contract.
+ */
+export const legacyFormSubmissionRouteSchema = {
+  tags: ["Legacy forms"],
+  summary: "Submit a legacy public form",
+  description:
+    "Accepts the join-membership and sponsor-interest browser forms and redirects to the trusted referring page with a success or error status.",
+  responses: {
+    "302": { description: "Redirect to the trusted referring page with the submission status." },
+    "400": { description: "Missing or untrusted request origin." },
+  },
+};
+
+const adminFormCreateResponses = {
+  "201": {
+    description: "Form created.",
+    content: { "application/json": { schema: adminFormCreateResponseSchema } },
+  },
+  "400": { description: "Invalid form payload." },
+  "401": { description: "Admin authorization required." },
+  "403": { description: "Insufficient permission to create forms." },
+  "409": { description: "A form with this key already exists." },
+};
+
+export const adminFormCreateRouteSchema = {
+  tags: ["Admin forms"],
+  summary: "Create a global form",
+  description: "Creates an admin-managed global custom form and its field definitions.",
+  request: {
+    body: { content: { "application/json": { schema: adminFormCreateSchema } }, required: true },
+  },
+  responses: adminFormCreateResponses,
+};
+
+export const adminEventFormCreateRouteSchema = {
+  ...adminFormCreateRouteSchema,
+  summary: "Create an event form",
+  description: "Creates an admin-managed custom form scoped to one event.",
+  request: {
+    params: eventSlugParamsSchema,
+    body: { content: { "application/json": { schema: adminFormCreateSchema } }, required: true },
+  },
+};
 
 export const adminFormsListRouteSchema = {
   tags: ["Admin forms"],
@@ -110,7 +160,10 @@ export const adminFormPatchRouteSchema = {
     },
   },
   responses: {
-    "200": { description: "Updated form metadata and fields." },
+    "200": {
+      description: "Updated form metadata and fields.",
+      content: { "application/json": { schema: adminFormUpdateResponseSchema } },
+    },
     "400": { description: "Invalid form payload." },
     "401": { description: "Admin authorization required." },
     "404": { description: "Form not found." },

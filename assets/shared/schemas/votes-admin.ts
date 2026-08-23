@@ -38,6 +38,7 @@ export const ADMIN_VOTES_SORT_COLUMNS = [
 export const adminVotesListQuerySchema = listQuerySchema(ADMIN_VOTES_SORT_COLUMNS).extend({
   status: voteStatusSchema.optional(),
 });
+export type AdminVotesListQuery = z.infer<typeof adminVotesListQuerySchema>;
 
 export const adminVoteSchema = z.object({
   ...voteSummaryFieldsSchema,
@@ -51,6 +52,7 @@ export type VoteCandidateSummary = z.infer<typeof candidateSummarySchema>;
 export type AdminVoteSummary = z.infer<typeof adminVoteSchema>;
 
 export const adminVotesListResponseSchema = paginatedResponseSchema("votes", adminVoteSchema);
+export type AdminVotesListResponse = z.infer<typeof adminVotesListResponseSchema>;
 
 export const adminVotesListRouteSchema = {
   tags: ["Admin Votes"],
@@ -179,8 +181,11 @@ export const adminVoteBallotsRouteSchema = {
 };
 
 export const adminListProposalsQuerySchema = listQuerySchema(VOTE_PROPOSALS_LIST_SORT_COLUMNS).extend({
+  scopeType: voteScopeTypeSchema.optional(),
+  scopeId: workingGroupIdSchema.optional(),
   status: voteProposalStatusSchema.optional(),
 });
+export type AdminListProposalsQuery = z.infer<typeof adminListProposalsQuerySchema>;
 export const adminVoteProposalsListResponseSchema = paginatedResponseSchema("proposals", proposalSummarySchema);
 export const adminVoteProposalDetailResponseSchema = proposalDetailResponseSchema;
 
@@ -191,7 +196,7 @@ export const adminListProposalsRouteSchema = {
   responses: {
     "200": {
       description: "Proposals.",
-      content: { "application/json": { schema: paginatedResponseSchema("proposals", proposalSummarySchema) } },
+      content: { "application/json": { schema: adminVoteProposalsListResponseSchema } },
     },
   },
 };

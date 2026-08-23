@@ -5,12 +5,20 @@ import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { getEventBySlug } from "../functions/_lib/services/events";
+import { buildAdminEventsPageQuery, listAdminEvents } from "../functions/_lib/services/events/admin-list";
+import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import {
   createRegistration,
   confirmRegistrationByToken,
   updateRegistrationById,
 } from "../functions/_lib/services/registrations";
 import { adminRegistrationDetailResponseSchema } from "../assets/shared/schemas/admin-registration-detail";
+import {
+  adminEventCreateResponseSchema,
+  adminEventDaysReplaceResponseSchema,
+  adminEventRegistrationsListResponseSchema,
+} from "../assets/shared/schemas/admin-events";
+import { buildAdminEventRegistrationsPageQuery } from "../functions/_lib/services/registrations/admin-list";
 
 let ADMIN_TOKEN = "event-admin-token";
 
@@ -68,9 +76,7 @@ describe("admin event management endpoints", () => {
     });
 
     expect(createResponse.status).toBe(201);
-    const createdPayload = (await createResponse.json()) as {
-      event: { slug: string; settings: Record<string, unknown> };
-    };
+    const createdPayload = adminEventCreateResponseSchema.parse(await createResponse.json());
     expect(createdPayload.event.slug).toBe("pqc-2027");
     expect(createdPayload.event.settings.venue).toBe("Amsterdam Congress Center");
 
@@ -97,6 +103,23 @@ describe("admin event management endpoints", () => {
     };
     expect(listPayload.events.map((event) => event.slug)).toEqual(expect.arrayContaining(["pqc-2026", "pqc-2027"]));
     expect(listPayload.page.total).toBeGreaterThanOrEqual(2);
+  });
+
+  it("validates admin event and form mutations through the canonical JSON boundary", async () => {
+    await setupAdmin();
+
+    for (const [path, method] of [
+      ["/api/v1/admin/events", "POST"],
+      ["/api/v1/admin/forms", "POST"],
+      ["/api/v1/admin/events/pqc-2026/forms", "POST"],
+      ["/api/v1/admin/events/pqc-2026/days", "PUT"],
+    ] as const) {
+      const response = await callAdmin(path, { method, body: "{not-json" });
+      expect(response.status, `${method} ${path}`).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: "INVALID_JSON", message: "Request body must be valid JSON" },
+      });
+    }
   });
 
   it("P6M-P2-04: bounds the events list with ?limit=/?offset= via the query schema (data.query, not a fetch-everything scan)", async () => {
@@ -128,6 +151,154 @@ describe("admin event management endpoints", () => {
 
     const invalidLimit = await callAdmin("/api/v1/admin/events?limit=0");
     expect(invalidLimit.status).toBe(400);
+  });
+
+  it("aggregates only the returned event page, not unrelated events", async () => {
+    await setupAdmin();
+    const pageEventId = crypto.randomUUID();
+    const unrelatedEventId = crypto.randomUUID();
+    const pageUserId = crypto.randomUUID();
+    const unrelatedUserIds = Array.from({ length: 3 }, () => crypto.randomUUID());
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO events (id, slug, name, timezone, registration_mode, invite_limit_attendee, settings_json, created_at, updated_at)
+         VALUES (?, 'a-page-event', 'A page event', 'UTC', 'open', 5, '{}', datetime('now'), datetime('now'))`,
+      ).bind(pageEventId),
+      env.DB.prepare(
+        `INSERT INTO events (id, slug, name, timezone, registration_mode, invite_limit_attendee, settings_json, created_at, updated_at)
+         VALUES (?, 'z-unrelated-event', 'Z unrelated event', 'UTC', 'open', 5, '{}', datetime('now'), datetime('now'))`,
+      ).bind(unrelatedEventId),
+      env.DB.prepare(
+        `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+         VALUES (?, 'page-event@example.test', 'page-event@example.test', 'user', 1, datetime('now'), datetime('now'))`,
+      ).bind(pageUserId),
+      ...unrelatedUserIds.map((userId, index) =>
+        env.DB.prepare(
+          `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+           VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+        ).bind(userId, `unrelated-${index}@example.test`, `unrelated-${index}@example.test`),
+      ),
+      env.DB.prepare(
+        `INSERT INTO registrations
+           (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
+         VALUES (?, ?, ?, 'registered', 'in_person', 'direct', ?, datetime('now'), datetime('now'))`,
+      ).bind(crypto.randomUUID(), pageEventId, pageUserId, `page-manage-${crypto.randomUUID()}`),
+      ...unrelatedUserIds.map((userId) =>
+        env.DB.prepare(
+          `INSERT INTO registrations
+             (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
+           VALUES (?, ?, ?, 'registered', 'in_person', 'direct', ?, datetime('now'), datetime('now'))`,
+        ).bind(crypto.randomUUID(), unrelatedEventId, userId, `unrelated-manage-${crypto.randomUUID()}`),
+      ),
+      env.DB.prepare(
+        `INSERT INTO invites
+           (id, event_id, invitee_email, invite_type, link_secret, status, source_type, created_at)
+         VALUES (?, ?, 'page-invite@example.test', 'attendee', ?, 'sent', 'direct', datetime('now'))`,
+      ).bind(crypto.randomUUID(), pageEventId, `page-invite-${crypto.randomUUID()}`),
+      env.DB.prepare(
+        `INSERT INTO invites
+           (id, event_id, invitee_email, invite_type, link_secret, status, source_type, created_at)
+         VALUES (?, ?, 'unrelated-invite@example.test', 'attendee', ?, 'sent', 'direct', datetime('now'))`,
+      ).bind(crypto.randomUUID(), unrelatedEventId, `unrelated-invite-${crypto.randomUUID()}`),
+    ]);
+
+    const result = await listAdminEvents(env.DB, { limit: 1, offset: 0, sort: "name" });
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0]).toMatchObject({
+      id: pageEventId,
+      total_registrations: 1,
+      confirmed_registrations: 1,
+      pending_invites: 1,
+    });
+    expect(result.page.total).toBeGreaterThanOrEqual(3);
+  });
+
+  it("keeps the event count plan independent of registration and invite projections", async () => {
+    await setupAdmin();
+    const query = buildAdminEventsPageQuery({ limit: 1, offset: 0 });
+    const { pageSql, countSql, bindings } = buildOffsetPageSql(query);
+    const [pagePlan, countPlan] = await Promise.all([
+      env.DB.prepare(`EXPLAIN QUERY PLAN ${pageSql}`)
+        .bind(...bindings, query.limit, query.offset)
+        .all(),
+      env.DB.prepare(`EXPLAIN QUERY PLAN ${countSql}`)
+        .bind(...bindings)
+        .all(),
+    ]);
+
+    expect(pagePlan.results.length).toBeGreaterThan(0);
+    expect(countPlan.results.length).toBeGreaterThan(0);
+    expect(countSql).not.toMatch(/registrations|invites|total_registrations|pending_invites/i);
+    expect(pageSql).not.toMatch(/registration_counts|invite_counts/);
+  });
+
+  it("keeps registration count predicates while excluding outbox and RSVP projections", async () => {
+    const { baseEventId } = await setupAdmin();
+    const query = buildAdminEventRegistrationsPageQuery(baseEventId, {
+      limit: 10,
+      offset: 0,
+      status: "registered",
+      consent: "true",
+      attendance_change: "joined_in_person",
+      q: "attendee",
+    });
+    const { pageSql, countSql, bindings, countBindings } = buildOffsetPageSql(query);
+
+    expect(pageSql).toMatch(/calendar_rsvp_events|JSON_GROUP_ARRAY|email_outbox/i);
+    expect(countSql).not.toMatch(/calendar_rsvp_events|JSON_GROUP_ARRAY|ROW_NUMBER|rsvp_events_json/i);
+    expect(pageSql).not.toMatch(/JOIN referral_codes/i);
+    expect(countSql).not.toMatch(/referral_codes/i);
+    expect(countSql).toContain("r.event_id = ?");
+    expect(countSql).toContain("r.status = ?");
+    expect(countBindings).toEqual(bindings);
+    const [pagePlan, countPlan] = await Promise.all([
+      env.DB.prepare(`EXPLAIN QUERY PLAN ${pageSql}`)
+        .bind(...bindings, query.limit, query.offset)
+        .all(),
+      env.DB.prepare(`EXPLAIN QUERY PLAN ${countSql}`)
+        .bind(...countBindings)
+        .all(),
+    ]);
+    expect(pagePlan.results.length).toBeGreaterThan(0);
+    expect(countPlan.results.length).toBeGreaterThan(0);
+  });
+
+  it("returns one registration and one deterministic referral code when an owner has multiple codes", async () => {
+    const { baseEventId } = await setupAdmin();
+    const userId = crypto.randomUUID();
+    const registrationId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+         VALUES (?, 'multi-referral@example.test', 'multi-referral@example.test', 'user', 1, datetime('now'), datetime('now'))`,
+      ).bind(userId),
+      env.DB.prepare(
+        `INSERT INTO registrations
+           (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
+         VALUES (?, ?, ?, 'registered', 'virtual', 'direct', ?, datetime('now'), datetime('now'))`,
+      ).bind(registrationId, baseEventId, userId, `manage-${crypto.randomUUID()}`),
+      env.DB.prepare(
+        `INSERT INTO referral_codes
+           (code, event_id, owner_type, owner_id, created_by_user_id, clicks, conversions, created_at)
+         VALUES ('second02', ?, 'registration', ?, ?, 0, 0, '2026-01-02T00:00:00.000Z')`,
+      ).bind(baseEventId, registrationId, userId),
+      env.DB.prepare(
+        `INSERT INTO referral_codes
+           (code, event_id, owner_type, owner_id, created_by_user_id, clicks, conversions, created_at)
+         VALUES ('first001', ?, 'registration', ?, ?, 0, 0, '2026-01-01T00:00:00.000Z')`,
+      ).bind(baseEventId, registrationId, userId),
+    ]);
+
+    const listResponse = await callAdmin("/api/v1/admin/events/pqc-2026/registrations");
+    expect(listResponse.status).toBe(200);
+    const list = adminEventRegistrationsListResponseSchema.parse(await listResponse.json());
+    expect(list.page.total).toBe(1);
+    expect(list.registrations).toEqual([expect.objectContaining({ id: registrationId, referral_code: "first001" })]);
+
+    const detailResponse = await callAdmin(`/api/v1/admin/events/pqc-2026/registrations/${registrationId}`);
+    expect(detailResponse.status).toBe(200);
+    const detail = adminRegistrationDetailResponseSchema.parse(await detailResponse.json());
+    expect(detail.registration.referral_code).toBe("first001");
   });
 
   it("returns details and persists settings updates", async () => {
@@ -236,10 +407,7 @@ describe("admin event management endpoints", () => {
     });
 
     expect(daysResponse.status).toBe(200);
-    const daysPayload = (await daysResponse.json()) as {
-      success: boolean;
-      days: Array<{ date: string; label: string }>;
-    };
+    const daysPayload = adminEventDaysReplaceResponseSchema.parse(await daysResponse.json());
     expect(daysPayload.success).toBe(true);
     expect(daysPayload.days.map((day) => day.date)).toEqual(["2026-12-01", "2026-12-02"]);
 

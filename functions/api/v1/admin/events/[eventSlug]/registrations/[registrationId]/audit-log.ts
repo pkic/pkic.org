@@ -15,10 +15,11 @@ import type { ValidatedData } from "chanfana";
 
 export async function onRequestGet(
   c: AdminContext,
-  data: ValidatedData<typeof adminRegistrationAuditLogRouteSchema>,
+  data?: ValidatedData<typeof adminRegistrationAuditLogRouteSchema>,
 ): Promise<Response> {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
-  const registrationId = c.req.param("registrationId");
-  return json(await listRegistrationAuditLog(requestDb(c), event.id, registrationId, data.query));
+  const event = await getEventBySlug(requestDb(c), data?.params.eventSlug ?? c.req.param("eventSlug"));
+  const registrationId = data?.params.registrationId ?? c.req.param("registrationId");
+  const query = data?.query ?? adminRegistrationAuditLogRouteSchema.request.query.parse({});
+  return json(await listRegistrationAuditLog(requestDb(c), event.id, registrationId, query));
 }

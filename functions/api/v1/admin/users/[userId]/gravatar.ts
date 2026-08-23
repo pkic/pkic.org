@@ -24,12 +24,20 @@ import { downloadGravatar, gravatarHash } from "../../../../../_lib/utils/gravat
 import { AppError } from "../../../../../_lib/errors";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { commitUserHeadshotUpload, getUserHeadshotRecord } from "../../../../../_lib/services/user-headshot";
+import {
+  adminUserGravatarImportResponseSchema,
+  adminUserGravatarImportRouteSchema,
+} from "../../../../../../assets/shared/schemas/route-contracts";
+import type { ValidatedData } from "chanfana";
 
 // ── Handler ─────────────────────────────────────────────────────────────────
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+export async function onRequestPost(
+  c: AdminContext,
+  data?: ValidatedData<typeof adminUserGravatarImportRouteSchema>,
+): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const userId = c.req.param("userId");
+  const userId = data?.params.userId ?? c.req.param("userId");
 
   const user = await getUserHeadshotRecord(requestDb(c), userId);
 
@@ -60,7 +68,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     (promise) => c.executionCtx.waitUntil(promise),
   );
 
-  return json({ success: true, r2Key, source: "gravatar" });
+  return json(adminUserGravatarImportResponseSchema.parse({ success: true, r2Key, source: "gravatar" }));
 }
 
 export async function onRequest(c: AdminContext): Promise<Response> {

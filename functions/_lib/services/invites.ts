@@ -24,6 +24,7 @@ export {
   refreshInviteToken,
   setInviteRemindersPausedUntil,
 } from "./invite-reminder-state";
+export { revokeInviteByAdmin } from "./invite-revoke";
 export {
   bulkCreateAttendeesAdmin,
   bulkCreateSpeakersAdmin,

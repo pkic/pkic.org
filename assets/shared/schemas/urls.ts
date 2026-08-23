@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const MAX_URL_LENGTH = 500;
+export const MAX_CAPABILITY_URL_LENGTH = 4096;
 
 function isHttpUrl(value: string): boolean {
   try {
@@ -18,6 +19,14 @@ function isHttpUrl(value: string): boolean {
 
 /** Canonical absolute-link contract. Userinfo and non-HTTP schemes are never accepted. */
 export const httpUrlSchema = z.string().trim().url().max(MAX_URL_LENGTH).refine(isHttpUrl, "Must be an HTTP(S) URL");
+
+/** Generated signed links can legitimately exceed the user-supplied URL limit. */
+export const httpCapabilityUrlSchema = z
+  .string()
+  .trim()
+  .url()
+  .max(MAX_CAPABILITY_URL_LENGTH)
+  .refine(isHttpUrl, "Must be an HTTP(S) URL");
 
 /** Same-origin path; rejects scheme-relative and backslash-normalized URLs. */
 export const sameOriginPathSchema = z

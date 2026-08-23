@@ -8,7 +8,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
-import { queryAll } from "./helpers/context";
+import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import {
   insertUser,
   insertOrganization,
@@ -165,7 +165,7 @@ describe("representative role grants — singleton per organization", () => {
   });
 
   it("does not constrain a non-singleton context-scoped role (role-event_volunteer) — multiple concurrent active grants allowed", async () => {
-    const eventContextId = crypto.randomUUID();
+    const { eventId: eventContextId } = await seedEventAndAdmin(env.DB);
     const userA = await insertUser(env.DB);
     const userB = await insertUser(env.DB);
 

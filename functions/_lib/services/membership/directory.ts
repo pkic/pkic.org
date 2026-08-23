@@ -6,7 +6,11 @@ import { parseLinksJson, findLinkedinUrl } from "../../../../assets/shared/schem
 import { sanitizeLegacyHttpOrSameOriginUrl, sanitizeLegacyHttpUrl } from "../../../../assets/shared/schemas/urls";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
-import type { PublicMemberDetail, PublicMemberSummary } from "../../../../assets/shared/schemas/members-directory";
+import type {
+  MembersListQuery,
+  PublicMemberDetail,
+  PublicMemberSummary,
+} from "../../../../assets/shared/schemas/members-directory";
 
 /**
  * Public member directory. D1 is the source of truth,
@@ -110,13 +114,7 @@ const DIRECTORY_SELECT = `
 /** group: "organization" = org-tied categories; "independent" = org-less H5/H6/H7 */
 export async function listPublicMembers(
   db: DatabaseLike,
-  params: {
-    limit: number;
-    offset: number;
-    q?: string;
-    sort?: string;
-    group?: "all" | "organization" | "independent";
-  },
+  params: MembersListQuery,
 ): Promise<{ members: PublicMemberSummary[]; total: number }> {
   const conditions: string[] = [];
   const args: unknown[] = [];

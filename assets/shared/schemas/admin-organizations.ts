@@ -11,7 +11,7 @@
  */
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
-import { normalizedEmailSchema, trimmedString } from "./api-common";
+import { normalizedEmailSchema, successResponseSchema, trimmedString } from "./api-common";
 import { linksSchema } from "./links";
 import { logoUploadResponseSchema } from "./images";
 import {
@@ -102,6 +102,7 @@ export type AdminOrganizationDetail = z.infer<typeof adminOrganizationDetailSche
 export const ADMIN_ORGANIZATIONS_SORT_COLUMNS = ["name", "membership_category", "created_at", "member_count"] as const;
 
 export const organizationsListQuerySchema = listQuerySchema(ADMIN_ORGANIZATIONS_SORT_COLUMNS);
+export type OrganizationsListQuery = z.infer<typeof organizationsListQuerySchema>;
 export const adminOrganizationsListResponseSchema = paginatedResponseSchema(
   "organizations",
   adminOrganizationSummarySchema,
@@ -264,7 +265,10 @@ export const adminOrganizationLogoDeleteRouteSchema = {
   summary: "Remove an organization's logo",
   request: { params: organizationIdParamsSchema },
   responses: {
-    "200": { description: "Logo removed." },
+    "200": {
+      description: "Logo removed.",
+      content: { "application/json": { schema: successResponseSchema } },
+    },
     "404": { description: "Organization not found." },
   },
 };
@@ -323,6 +327,7 @@ export const ADMIN_CONTENT_REVIEW_SORT_COLUMNS = [
 export const contentReviewsListQuerySchema = listQuerySchema(ADMIN_CONTENT_REVIEW_SORT_COLUMNS).extend({
   status: contentReviewStatusSchema.optional(),
 });
+export type ContentReviewsListQuery = z.infer<typeof contentReviewsListQuerySchema>;
 export const contentReviewsListResponseSchema = paginatedResponseSchema("reviews", contentReviewSummarySchema);
 
 export const contentReviewsListRouteSchema = {

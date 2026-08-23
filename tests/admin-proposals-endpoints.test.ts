@@ -21,6 +21,8 @@ import {
 import { adminProposalPatchResponseSchema } from "../assets/shared/schemas/proposal-management";
 import { proposalReviewsListResponseSchema } from "../assets/shared/schemas/proposal-reviews";
 import { editAdminProposalSpeaker } from "../functions/_lib/services/proposal-speaker-admin";
+import { buildAdminEventProposalsPageQuery } from "../functions/_lib/services/admin-event-proposals";
+import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 
 const proposalDetails = {
   audience: "Operators",
@@ -280,6 +282,47 @@ describe("admin proposal endpoints", () => {
     expect(payload.stats.reviewedCount).toBe(1);
     expect(payload.stats.unreviewedCount).toBe(0);
     expect(payload.stats.total).toBe(1);
+  });
+
+  it("keeps proposal count predicates while excluding page-only review projections", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const query = buildAdminEventProposalsPageQuery({
+      eventId,
+      limit: 10,
+      offset: 0,
+      sort: "-submittedAt",
+    });
+    const { pageSql, countSql, bindings, countBindings } = buildOffsetPageSql(query);
+
+    expect(pageSql).toMatch(/proposal_reviews|proposal_decisions/);
+    expect(countSql).not.toMatch(/proposal_reviews|proposal_decisions|review_count|average_review_score/i);
+    expect(countSql).toContain("sp.event_id = ?");
+    expect(countBindings).toEqual([eventId]);
+    const [pagePlan, countPlan] = await Promise.all([
+      env.DB.prepare(`EXPLAIN QUERY PLAN ${pageSql}`)
+        .bind(...bindings, query.limit, query.offset)
+        .all(),
+      env.DB.prepare(`EXPLAIN QUERY PLAN ${countSql}`)
+        .bind(...countBindings)
+        .all(),
+    ]);
+    expect(pagePlan.results.length).toBeGreaterThan(0);
+    expect(countPlan.results.length).toBeGreaterThan(0);
+
+    const filteredQuery = buildAdminEventProposalsPageQuery({
+      eventId,
+      limit: 10,
+      offset: 0,
+      sort: "-submittedAt",
+      status: "active",
+      recommendation: "accept",
+      q: "needle",
+    });
+    const filteredSql = buildOffsetPageSql(filteredQuery);
+    expect(filteredSql.countSql).toContain("sp.status NOT IN");
+    expect(filteredSql.countSql).toContain("pr_filter.recommendation = ?");
+    expect(filteredSql.countSql).toContain("pr_search.proposal_id = sp.id");
+    expect(filteredSql.countBindings).toEqual(filteredSql.bindings.slice(1));
   });
 
   it("filters proposal list by recommendation and sorts by average score", async () => {

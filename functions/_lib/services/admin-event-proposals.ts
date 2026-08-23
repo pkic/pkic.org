@@ -1,4 +1,4 @@
-import { batchFirst, buildOffsetPageStatements, decodeOffsetPageResults } from "../db/pagination";
+import { batchFirst, buildOffsetPageStatements, decodeOffsetPageResults, type OffsetPageQuery } from "../db/pagination";
 import { buildD1TextSearchFilter } from "../db/search";
 import type { DatabaseLike } from "../types";
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
@@ -48,25 +48,24 @@ function parseCountRecord(value: string): Record<string, number> {
   );
 }
 
-export async function listAdminEventProposals(
-  db: DatabaseLike,
+export function buildAdminEventProposalsPageQuery(
   query: AdminEventProposalsQuery & { eventId: string },
-): Promise<{ proposals: AdminEventProposalSummary[]; stats: ProposalStats; page: ReturnType<typeof buildPageInfo> }> {
+): OffsetPageQuery {
   const conditions = ["sp.event_id = ?", query.deleted === "1" ? "sp.deleted_at IS NOT NULL" : "sp.deleted_at IS NULL"];
-  const bindings: unknown[] = [query.eventId];
+  const predicateBindings: unknown[] = [query.eventId];
 
   if (query.status === "active") {
     conditions.push(`sp.status NOT IN (${PROPOSAL_INACTIVE_STATUSES.map(() => "?").join(", ")})`);
-    bindings.push(...PROPOSAL_INACTIVE_STATUSES);
+    predicateBindings.push(...PROPOSAL_INACTIVE_STATUSES);
   } else if (query.status) {
     conditions.push("sp.status = ?");
-    bindings.push(query.status);
+    predicateBindings.push(query.status);
   }
   if (query.recommendation) {
     conditions.push(
       "EXISTS (SELECT 1 FROM proposal_reviews pr_filter WHERE pr_filter.proposal_id = sp.id AND pr_filter.review_round = sp.review_round AND pr_filter.recommendation = ?)",
     );
-    bindings.push(query.recommendation);
+    predicateBindings.push(query.recommendation);
   }
   if (query.q) {
     const proposal = buildD1TextSearchFilter(query.q, [
@@ -98,25 +97,16 @@ export async function listAdminEventProposals(
         SELECT 1 FROM proposal_decisions pd_search
         WHERE pd_search.proposal_id = sp.id AND ${decision.sql}
       ))`);
-    bindings.push(...proposal.bindings, ...review.bindings, ...decision.bindings);
+    predicateBindings.push(...proposal.bindings, ...review.bindings, ...decision.bindings);
   }
 
   const where = conditions.join(" AND ");
-  const deletedScope = query.deleted === "1" ? "sp.deleted_at IS NOT NULL" : "sp.deleted_at IS NULL";
   const reviewDeletedScope =
     query.deleted === "1" ? "review_sp.deleted_at IS NOT NULL" : "review_sp.deleted_at IS NULL";
-  const [pageStatement, countStatement] = buildOffsetPageStatements(db, {
-    sql: `SELECT sp.id, sp.event_id, sp.proposer_user_id, sp.status, sp.proposal_type, sp.title, sp.abstract,
-                sp.review_round,
-                sp.submitted_at, sp.updated_at,
-                u.email AS proposer_email, u.first_name AS proposer_first_name, u.last_name AS proposer_last_name,
-                COALESCE(rv.review_count, 0) AS review_count,
-                rv.average_review_score AS average_review_score,
-                COALESCE(rv.accept_count, 0) AS recommendation_accept_count,
-                COALESCE(rv.needs_work_count, 0) AS recommendation_needs_work_count,
-                COALESCE(rv.reject_count, 0) AS recommendation_reject_count,
-                pd.final_status AS decision_status, pd.decision_note, pd.decided_at AS decision_decided_at
-         FROM session_proposals sp
+  const baseFromSql = `FROM session_proposals sp
+         JOIN users u ON u.id = sp.proposer_user_id
+         WHERE ${where}`;
+  const pageFromSql = `FROM session_proposals sp
          JOIN users u ON u.id = sp.proposer_user_id
          LEFT JOIN (
            SELECT pr.proposal_id, pr.review_round, COUNT(*) AS review_count, AVG(pr.score) AS average_review_score,
@@ -129,12 +119,38 @@ export async function listAdminEventProposals(
            GROUP BY pr.proposal_id, pr.review_round
          ) rv ON rv.proposal_id = sp.id AND rv.review_round = sp.review_round
          LEFT JOIN proposal_decisions pd ON pd.proposal_id = sp.id
-         WHERE ${where}`,
-    bindings: [query.eventId, ...bindings],
+         WHERE ${where}`;
+  return {
+    source: {
+      selectSql: `SELECT sp.id, sp.event_id, sp.proposer_user_id, sp.status, sp.proposal_type, sp.title, sp.abstract,
+                sp.review_round,
+                sp.submitted_at, sp.updated_at,
+                u.email AS proposer_email, u.first_name AS proposer_first_name, u.last_name AS proposer_last_name,
+                COALESCE(rv.review_count, 0) AS review_count,
+                rv.average_review_score AS average_review_score,
+                COALESCE(rv.accept_count, 0) AS recommendation_accept_count,
+                COALESCE(rv.needs_work_count, 0) AS recommendation_needs_work_count,
+                COALESCE(rv.reject_count, 0) AS recommendation_reject_count,
+                pd.final_status AS decision_status, pd.decision_note, pd.decided_at AS decision_decided_at
+      `,
+      fromSql: pageFromSql,
+      countFromSql: baseFromSql,
+      bindings: [query.eventId, ...predicateBindings],
+      countBindings: predicateBindings,
+    },
     orderBy: `ORDER BY ${proposalOrderBy(query.sort)}`,
     limit: query.limit,
     offset: query.offset,
-  });
+  };
+}
+
+export async function listAdminEventProposals(
+  db: DatabaseLike,
+  query: AdminEventProposalsQuery & { eventId: string },
+): Promise<{ proposals: AdminEventProposalSummary[]; stats: ProposalStats; page: ReturnType<typeof buildPageInfo> }> {
+  const pageQuery = buildAdminEventProposalsPageQuery(query);
+  const [pageStatement, countStatement] = buildOffsetPageStatements(db, pageQuery);
+  const deletedScope = query.deleted === "1" ? "sp.deleted_at IS NOT NULL" : "sp.deleted_at IS NULL";
   const [rowsResult, totalResult, statsResult] = await db.batch([
     pageStatement,
     countStatement,

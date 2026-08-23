@@ -1,27 +1,9 @@
-import type { AttendanceType, RegistrationLifecycleStatus } from "../../../../assets/shared/schemas/registration";
+import type { RegistrationCapabilitySafeProjection } from "../../../../assets/shared/schemas/registration";
 
-export interface RegistrationRecord {
-  id: string;
-  event_id: string;
-  user_id: string;
-  invite_id: string | null;
-  status: RegistrationLifecycleStatus;
-  attendance_type: AttendanceType;
-  source_type: string;
-  source_ref: string | null;
-  custom_answers_json: string | null;
-  referred_by_code: string | null;
+/** Internal row model extends the stable public subset with storage-only fields. */
+export interface RegistrationRecord extends RegistrationCapabilitySafeProjection {
   confirmation_link_secret: string | null;
-  pending_confirmation_deadline_at: string | null;
   manage_link_secret: string;
-  capacity_exempt_in_person: number;
-  capacity_exempt_reason: string | null;
-  cancellation_reason_code: string | null;
-  transition_revision: number;
-  confirmed_at: string | null;
-  cancelled_at: string | null;
-  created_at: string;
-  updated_at: string;
 }
 
 const REGISTRATION_COLUMN_NAMES = [

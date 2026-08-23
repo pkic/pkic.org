@@ -17,6 +17,7 @@ import {
   adminUserHeadshotPutRouteSchema,
 } from "../../../../../../assets/shared/schemas/route-contracts";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
+import type { ValidatedData } from "chanfana";
 import {
   adminUserHeadshotResponse,
   getUserHeadshotRecord,
@@ -27,18 +28,22 @@ import {
 
 // ── GET — serve the headshot image ──────────────────────────────────────────
 
-async function onGet(c: AdminContext): Promise<Response> {
+async function onGet(c: AdminContext, data?: ValidatedData<typeof adminUserHeadshotGetRouteSchema>): Promise<Response> {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  return adminUserHeadshotResponse(requestDb(c), requireUserHeadshotBucket(c.env), c.req.param("userId"));
+  return adminUserHeadshotResponse(
+    requestDb(c),
+    requireUserHeadshotBucket(c.env),
+    data?.params.userId ?? c.req.param("userId"),
+  );
 }
 
 // ── PUT — upload / replace headshot ─────────────────────────────────────────
 
-async function onPut(c: AdminContext): Promise<Response> {
+async function onPut(c: AdminContext, data?: ValidatedData<typeof adminUserHeadshotPutRouteSchema>): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  const user = await getUserHeadshotRecord(requestDb(c), c.req.param("userId"));
+  const user = await getUserHeadshotRecord(requestDb(c), data?.params.userId ?? c.req.param("userId"));
 
   const uploaded = await readValidatedUploadedImage(c.req.raw, "Headshot");
   const resized = await resizeHeadshot(uploaded.buffer, uploaded.contentType, c.env.IMAGES);
@@ -66,10 +71,13 @@ async function onPut(c: AdminContext): Promise<Response> {
 
 // ── DELETE — remove headshot ────────────────────────────────────────────────
 
-async function onDelete(c: AdminContext): Promise<Response> {
+async function onDelete(
+  c: AdminContext,
+  data?: ValidatedData<typeof adminUserHeadshotDeleteRouteSchema>,
+): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  const user = await getUserHeadshotRecord(requestDb(c), c.req.param("userId"));
+  const user = await getUserHeadshotRecord(requestDb(c), data?.params.userId ?? c.req.param("userId"));
 
   await removeUserHeadshotForRequest(requestDb(c), c.env, c.req.raw, c.executionCtx.waitUntil.bind(c.executionCtx), {
     userId: user.id,
@@ -87,13 +95,6 @@ export async function onRequest(c: AdminContext): Promise<Response> {
 }
 
 export const AdminUsersUserIdHeadshotGet = openApiRoute(adminUserHeadshotGetRouteSchema, onGet);
-
-// Unused by ./router.ts today — PUT /headshot is wired directly to the
-// manual `onRequest` dispatcher below (raw Hono `app.put`, bypassing
-// chanfana schema validation, since onGet/onPut/onDelete are also called
-// directly with a single `c` argument by that dispatcher and by
-// tests/admin-user-headshot.test.ts). Kept in sync with onPut's signature
-// so it stays usable if the routing is ever switched over.
 export const AdminUsersUserIdHeadshotPut = openApiRoute(adminUserHeadshotPutRouteSchema, onPut);
 
 export const AdminUsersUserIdHeadshotDelete = openApiRoute(adminUserHeadshotDeleteRouteSchema, onDelete);

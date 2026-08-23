@@ -11,6 +11,7 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { adminMembersListResponseSchema } from "../assets/shared/schemas/admin-members";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -355,7 +356,7 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
 
     const response = await call(adminToken, "/api/v1/admin/members");
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { members: Array<{ email: string }>; page: { total: number } };
+    const body = adminMembersListResponseSchema.parse(await response.json());
     expect(body.page.total).toBe(1);
     expect(body.members[0].email).toBe("jane@acme.test");
   });

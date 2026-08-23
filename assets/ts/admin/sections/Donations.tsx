@@ -258,17 +258,12 @@ export function Donations({ subTab }: { subTab?: string }) {
 
       {tab === "list" && (
         <>
-          <ApiDataTable<DonationRow>
+          <ApiDataTable
             endpoint="/api/v1/admin/donations"
             responseSchema={donationsListResponseSchema}
-            resolve={(d) => {
-              const resp = donationsListResponseSchema.parse(d);
-              setSummary(resp.summary);
-              return resp.donations;
-            }}
-            resolvePage={(d) => {
-              return donationsListResponseSchema.parse(d).page;
-            }}
+            resolve={(d) => d.donations}
+            resolvePage={(d) => d.page}
+            onData={(d) => setSummary(d.summary)}
             paginate
             params={{
               ...(statusFilter && { status: statusFilter }),

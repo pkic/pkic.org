@@ -476,11 +476,11 @@ export function FormSubmissionsTable({
   }));
 
   return (
-    <ApiDataTable<AdminFormSubmission>
+    <ApiDataTable
       endpoint={endpoint}
       responseSchema={adminFormSubmissionsResponseSchema}
-      resolve={(data) => adminFormSubmissionsResponseSchema.parse(data).submissions}
-      resolvePage={(data) => adminFormSubmissionsResponseSchema.parse(data).page}
+      resolve={(data) => data.submissions}
+      resolvePage={(data) => data.page}
       paginate
       params={params}
       empty="No responses found"

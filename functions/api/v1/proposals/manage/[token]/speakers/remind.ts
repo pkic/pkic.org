@@ -1,25 +1,37 @@
-import { dispatchPostOnly, json } from "../../../../../../_lib/http";
-import { parseJsonBody } from "../../../../../../_lib/validation";
+import type { ValidatedData } from "chanfana";
+import { json } from "../../../../../../_lib/http";
 import { getProposalByManageToken } from "../../../../../../_lib/services/proposals";
 import { remindProposalSpeakerByProposer } from "../../../../../../_lib/services/proposal-reminders";
 import { processOutboxByIdBackground } from "../../../../../../_lib/email/outbox";
 import { resolveAppBaseUrl } from "../../../../../../_lib/config";
 import { requireInternalSecret } from "../../../../../../_lib/request";
-import { proposalSpeakerReminderRequestSchema } from "../../../../../../../assets/shared/schemas/proposal-management";
+import { successResponseSchema } from "../../../../../../../assets/shared/schemas/api-common";
+import { proposerManagedSpeakerReminderRouteSchema } from "../../../../../../../assets/shared/schemas/route-contracts-public-proposals";
+import type { AdminContext } from "../../../../../../_lib/db/context";
+import { openApiRoute } from "../../../../../../_lib/openapi/route";
 
-export async function onRequestPost(c: any): Promise<Response> {
-  const body = await parseJsonBody(c.req, proposalSpeakerReminderRequestSchema);
-  const proposal = await getProposalByManageToken(c.env.DB, c.req.param("token"), requireInternalSecret(c.env));
+type ProposalManageSpeakerContext = AdminContext<{ token: string }>;
+
+function markProposalManageSensitive(c: ProposalManageSpeakerContext): void {
+  c.set?.("sensitive", true);
+}
+
+async function handleProposalSpeakerReminder(
+  c: ProposalManageSpeakerContext,
+  data: ValidatedData<typeof proposerManagedSpeakerReminderRouteSchema>,
+): Promise<Response> {
+  const proposal = await getProposalByManageToken(c.env.DB, data.params.token, requireInternalSecret(c.env));
   const result = await remindProposalSpeakerByProposer(c.env.DB, {
     proposal,
-    userId: body.userId,
+    userId: data.body.userId,
     appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
   });
   c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, result.outboxId));
-  return json({ success: true });
+  return json(successResponseSchema.parse({ success: true }));
 }
 
-export async function onRequest(c: any): Promise<Response> {
-  c.set("sensitive", true);
-  return dispatchPostOnly(c, onRequestPost);
-}
+export const ProposalsManageTokenSpeakersRemindPost = openApiRoute(
+  proposerManagedSpeakerReminderRouteSchema,
+  handleProposalSpeakerReminder,
+  markProposalManageSensitive,
+);

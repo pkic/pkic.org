@@ -6,38 +6,40 @@
  *   Replaces all attendee and speaker terms for the event.
  *   Deactivates existing terms, then upserts the submitted set.
  */
-import { parseJsonBody } from "../../../../../_lib/validation";
-import { dispatchRequestMethod, json } from "../../../../../_lib/http";
+import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import {
   listConfiguredEventTerms,
   replaceConfiguredEventTerms,
 } from "../../../../../_lib/services/events/term-configuration";
+import { adminEventTermsResponseSchema } from "../../../../../../assets/shared/schemas/admin-events";
 import {
-  adminEventTermsReplaceSchema,
-  adminEventTermsResponseSchema,
-} from "../../../../../../assets/shared/schemas/admin-events";
+  adminEventTermsGetRouteSchema,
+  adminEventTermsReplaceRouteSchema,
+} from "../../../../../../assets/shared/schemas/route-contracts-admin-events";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 
-export async function onRequestGet(c: AdminContext): Promise<Response> {
-  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
-  const terms = await listConfiguredEventTerms(requestDb(c), event.id);
-  return json({ terms });
-}
+export const AdminEventsEventSlugTermsGet = openApiRoute(
+  adminEventTermsGetRouteSchema,
+  async (c: AdminContext, data) => {
+    await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+    const event = await getEventBySlug(requestDb(c), data.params.eventSlug);
+    const terms = await listConfiguredEventTerms(requestDb(c), event.id);
+    return json(adminEventTermsResponseSchema.parse({ terms }));
+  },
+);
 
-export async function onRequestPut(c: AdminContext): Promise<Response> {
-  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const body = await parseJsonBody(c.req, adminEventTermsReplaceSchema);
-  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
+export const AdminEventsEventSlugTermsPut = openApiRoute(
+  adminEventTermsReplaceRouteSchema,
+  async (c: AdminContext, data) => {
+    const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+    const event = await getEventBySlug(requestDb(c), data.params.eventSlug);
 
-  await replaceConfiguredEventTerms(requestDb(c), admin.id, event.id, body);
+    await replaceConfiguredEventTerms(requestDb(c), admin.id, event.id, data.body);
 
-  const updatedTerms = await listConfiguredEventTerms(requestDb(c), event.id);
-  return json(adminEventTermsResponseSchema.parse({ terms: updatedTerms }));
-}
-
-export async function onRequest(c: AdminContext): Promise<Response> {
-  return dispatchRequestMethod(c, { GET: onRequestGet, PUT: onRequestPut });
-}
+    const updatedTerms = await listConfiguredEventTerms(requestDb(c), event.id);
+    return json(adminEventTermsResponseSchema.parse({ terms: updatedTerms }));
+  },
+);

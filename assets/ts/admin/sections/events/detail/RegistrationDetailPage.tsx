@@ -3,7 +3,7 @@ import { useHashLocation } from "wouter/use-hash-location";
 import { Badge } from "../../../../components/Badge";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { api, apiCommand } from "../../../api";
+import { api } from "../../../api";
 import { fmt, toast } from "../../../ui";
 import { useData } from "../../../../hooks/useData";
 import { FormAnswerTable } from "./FormResponses";
@@ -12,7 +12,11 @@ import {
   type AdminRegistrationDetailResponse,
 } from "../../../../../shared/schemas/admin-registration-detail";
 import { adminEventDaysResponseSchema } from "../../../../../shared/schemas/admin-events";
-import { adminRegistrationOpenManageResponseSchema } from "../../../../../shared/schemas/route-contracts-admin-registrations";
+import {
+  adminRegistrationOpenManageResponseSchema,
+  adminRegistrationResendConfirmationResponseSchema,
+  badgeRegenerationQueuedResponseSchema,
+} from "../../../../../shared/schemas/route-contracts-admin-registrations";
 import { DayAttendancePanel } from "./registration-detail/DayAttendancePanel";
 import {
   BadgeRolePanel,
@@ -55,10 +59,14 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
   async function handleResend() {
     setResendStatus("Sending…");
     try {
-      await apiCommand(`/api/v1/admin/events/${slug}/registrations/${regId}/resend-confirmation`, {
-        method: "POST",
-        body: "{}",
-      });
+      await api(
+        `/api/v1/admin/events/${slug}/registrations/${regId}/resend-confirmation`,
+        adminRegistrationResendConfirmationResponseSchema,
+        {
+          method: "POST",
+          body: "{}",
+        },
+      );
       toast("Confirmation email queued", "success");
       setResendStatus("✓ Queued");
     } catch (e) {
@@ -87,10 +95,14 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
   async function handleRegenerateBadge() {
     setRegenerating(true);
     try {
-      await apiCommand(`/api/v1/admin/events/${slug}/registrations/${regId}/regenerate-badge`, {
-        method: "POST",
-        body: "{}",
-      });
+      await api(
+        `/api/v1/admin/events/${slug}/registrations/${regId}/regenerate-badge`,
+        badgeRegenerationQueuedResponseSchema,
+        {
+          method: "POST",
+          body: "{}",
+        },
+      );
       toast("Badge regeneration queued", "success");
     } catch (e) {
       toast((e as Error).message, "error");

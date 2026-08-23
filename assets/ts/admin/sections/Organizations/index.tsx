@@ -15,7 +15,6 @@
 import { useState, useRef } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
 import { fmt } from "../../ui";
-import type { AdminOrganizationSummary } from "../../types";
 import { AddOrganizationForm } from "./AddOrganizationForm";
 import { OrganizationDetailView } from "./OrganizationDetailView";
 import { adminOrganizationsListResponseSchema } from "../../../../shared/schemas/admin-organizations";
@@ -52,11 +51,11 @@ export function Organizations() {
         </div>
       )}
 
-      <ApiDataTable<AdminOrganizationSummary>
+      <ApiDataTable
         endpoint="/api/v1/admin/organizations"
         responseSchema={adminOrganizationsListResponseSchema}
-        resolve={(data) => adminOrganizationsListResponseSchema.parse(data).organizations}
-        resolvePage={(data) => adminOrganizationsListResponseSchema.parse(data).page}
+        resolve={(data) => data.organizations}
+        resolvePage={(data) => data.page}
         paginate
         actionsRef={tableRef}
         searchPlaceholder="organization name"

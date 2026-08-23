@@ -1,9 +1,13 @@
-import { useEffect } from "preact/hooks";
 import type { z } from "zod";
 import type { PageInfo } from "../../shared/schemas/pagination";
 import { getJson } from "../shared/api-client";
 import { useOffsetPager } from "./useOffsetPager";
-import { type CollectionLoader, useServerCollection } from "./useServerCollection";
+import {
+  buildCollectionResetKey,
+  type CollectionLoader,
+  useCollectionOffset,
+  useServerCollection,
+} from "./useServerCollection";
 
 export interface ApiPageResponse {
   page: PageInfo;
@@ -20,21 +24,18 @@ export function useApiPage<T extends ApiPageResponse>(
   initialPageSize?: number,
 ) {
   const pager = useOffsetPager(initialPageSize);
-  const serializedParams = JSON.stringify(Object.entries(params).sort(([left], [right]) => left.localeCompare(right)));
+  const resetKey = buildCollectionResetKey(endpoint, params);
+  const requestOffset = useCollectionOffset(resetKey, pager.offset, pager.resetPage);
   const listing = useServerCollection({
     endpoint,
     params: {
       ...params,
       limit: String(pager.pageSize),
-      offset: String(pager.offset),
+      offset: String(requestOffset),
     },
     responseSchema,
     load: loadApiPage,
   });
-
-  useEffect(() => {
-    pager.resetPage();
-  }, [endpoint, serializedParams, pager.resetPage]);
 
   return {
     ...listing,

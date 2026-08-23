@@ -17,7 +17,7 @@ import {
 import { consentItemSchema, participantProfileSchema, proposerProfileSchema, speakerRoleSchema } from "./registration";
 import { proposalDecisionStatusSchema, proposalStatusSchema } from "./proposal-status";
 import { addDuplicateStringIssues } from "./refinements";
-import { httpUrlSchema } from "./urls";
+import { httpCapabilityUrlSchema, httpUrlSchema } from "./urls";
 
 /** Event-defined session-type label; allowed values are checked against the event in the service layer. */
 export const proposalTypeSchema = trimmedString(2, 64);
@@ -96,7 +96,7 @@ export const proposalCreateResponseSchema = successResponseSchema.extend({
   proposalId: databaseIdSchema,
   status: proposalStatusSchema,
   manageToken: z.string().nullable(),
-  manageUrl: httpUrlSchema.nullable(),
+  manageUrl: httpCapabilityUrlSchema.nullable(),
   shareUrl: httpUrlSchema,
 });
 

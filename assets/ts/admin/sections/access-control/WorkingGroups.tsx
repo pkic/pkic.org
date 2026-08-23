@@ -4,7 +4,7 @@ import { Spinner } from "../../../components/Spinner";
 import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
 import { api, apiCommand } from "../../api";
 import { fmt, toast } from "../../ui";
-import type { AdminWorkingGroupDetail, AdminWorkingGroupMember } from "../../types";
+import type { AdminWorkingGroupDetail } from "../../types";
 import { UserPicker, type PickedUser } from "./UserPicker";
 import { adminWorkingGroupCatalog } from "../../services/catalogs";
 import { performAdminAction } from "../../actions";
@@ -322,11 +322,11 @@ export function WorkingGroups() {
             </form>
 
             <div class="fw-semibold small mb-2">Roster ({detail.memberCount})</div>
-            <ApiDataTable<AdminWorkingGroupMember>
+            <ApiDataTable
               endpoint={`/api/v1/admin/working-groups/${selectedId}/members`}
               responseSchema={workingGroupMembersListResponseSchema}
-              resolve={(data) => workingGroupMembersListResponseSchema.parse(data).members}
-              resolvePage={(data) => workingGroupMembersListResponseSchema.parse(data).page}
+              resolve={(data) => data.members}
+              resolvePage={(data) => data.page}
               paginate
               searchPlaceholder="Search members…"
               initialSort="name"

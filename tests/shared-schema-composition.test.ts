@@ -44,11 +44,30 @@ import { memberAuthVerifyResponseSchema } from "../assets/shared/schemas/member-
 import { sponsorPortalAuthVerifyResponseSchema } from "../assets/shared/schemas/sponsor-portal";
 import { adminMemberMutationResponseSchema } from "../assets/shared/schemas/admin-members";
 import { adminEmailTemplateVersionCreateResponseSchema } from "../assets/shared/schemas/admin-email-templates";
+import { adminEventProposalsResponseSchema } from "../assets/shared/schemas/admin-event-proposals";
+import { adminEventStatsResponseSchema } from "../assets/shared/schemas/admin-analytics";
+import { eventSummarySchema } from "../assets/shared/schemas/event-read-models";
 
 const ID = "11111111-1111-4111-8111-111111111111";
 const SECOND_ID = "22222222-2222-4222-8222-222222222222";
 
 describe("canonical shared schema composition", () => {
+  it("uses one event identity contract across event workflow responses", () => {
+    expect(adminEventProposalsResponseSchema.shape.event).toBe(eventSummarySchema);
+    expect(adminEventRegistrationsListResponseSchema.shape.event).toBe(eventSummarySchema);
+    expect(adminEventStatsResponseSchema.shape.event).toBe(eventSummarySchema);
+
+    const valid = { id: ID, slug: "pqc-2026", name: "PQC Conference 2026" };
+    expect(eventSummarySchema.parse(valid)).toEqual(valid);
+    for (const schema of [
+      adminEventProposalsResponseSchema.shape.event,
+      adminEventRegistrationsListResponseSchema.shape.event,
+      adminEventStatsResponseSchema.shape.event,
+    ]) {
+      expect(schema.safeParse({ ...valid, id: "" }).success).toBe(false);
+    }
+  });
+
   it("uses one success envelope across unrelated API domains", () => {
     for (const schema of [
       headshotUploadResponseSchema,

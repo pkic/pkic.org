@@ -13,7 +13,10 @@ import {
   listSponsorPortalAttendeesPageWithAudit,
   requireSponsorPortalAttendeeAccess,
 } from "../../../../../../_lib/services/sponsorship";
-import { sponsorPortalAttendeesListRouteSchema } from "../../../../../../../assets/shared/schemas/sponsor-portal";
+import {
+  sponsorPortalAttendeesListResponseSchema,
+  sponsorPortalAttendeesListRouteSchema,
+} from "../../../../../../../assets/shared/schemas/sponsor-portal";
 import { buildPageInfo } from "../../../../../../../assets/shared/schemas/pagination";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../../_lib/openapi/route";
@@ -33,14 +36,13 @@ export const SponsorPortalAttendeesList = openApiRoute(
   sponsorPortalAttendeesListRouteSchema,
   async (c: AdminContext, data) => {
     const { db, session } = await requireEligibleSponsorPortalSession(c);
-    const { limit, offset, q, sort } = data.query;
-    const { attendees, total } = await listSponsorPortalAttendeesPageWithAudit(db, session, {
-      limit,
-      offset,
-      q,
-      sort,
-    });
+    const { attendees, total } = await listSponsorPortalAttendeesPageWithAudit(db, session, data.query);
 
-    return json({ attendees, page: buildPageInfo(limit, offset, total, attendees.length) });
+    return json(
+      sponsorPortalAttendeesListResponseSchema.parse({
+        attendees,
+        page: buildPageInfo(data.query.limit, data.query.offset, total, attendees.length),
+      }),
+    );
   },
 );

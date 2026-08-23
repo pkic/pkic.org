@@ -1,5 +1,5 @@
 import type { ComponentChildren } from "preact";
-import { useEffect, useState, type MutableRef } from "preact/hooks";
+import { useEffect, useRef, useState, type MutableRef } from "preact/hooks";
 import type { z } from "zod";
 import type { PageInfo } from "../../../shared/schemas/pagination";
 import { DataTable, type DataTableProps } from "../../components/Table";
@@ -7,7 +7,7 @@ import { ErrorAlert } from "../../components/ErrorAlert";
 import { Pager } from "../../components/Pager";
 import { Spinner } from "../../components/Spinner";
 import { useOffsetPager } from "../../hooks/useOffsetPager";
-import { useServerCollection } from "../../hooks/useServerCollection";
+import { buildCollectionResetKey, useCollectionOffset, useServerCollection } from "../../hooks/useServerCollection";
 import { loadAdminCollection } from "../services/server-collection";
 
 export interface ApiTableActions {
@@ -27,6 +27,7 @@ export interface ApiDataTableProps<T, Response> extends Omit<DataTableProps<T>, 
   initialSort?: string;
   toolbar?: (actions: ApiTableActions) => ComponentChildren;
   actionsRef?: MutableRef<ApiTableActions | null>;
+  onData?: (data: Response) => void;
 }
 
 /** Connects the shared presentational DataTable to an admin API collection. */
@@ -49,15 +50,11 @@ export function ApiDataTable<T, Response = unknown>({
   initialSort = "",
   toolbar,
   actionsRef,
+  onData,
 }: ApiDataTableProps<T, Response>) {
   const pager = useOffsetPager(initialPageSize);
-  const serializedParams = JSON.stringify(
-    Object.entries(params ?? {}).sort(([left], [right]) => left.localeCompare(right)),
-  );
-
-  useEffect(() => {
-    pager.resetPage();
-  }, [endpoint, serializedParams, pager.resetPage]);
+  const resetKey = buildCollectionResetKey(endpoint, params);
+  const requestOffset = useCollectionOffset(resetKey, pager.offset, pager.resetPage);
 
   const [sort, setSort] = useState(initialSort);
   function applySort(nextSort: string) {
@@ -76,7 +73,7 @@ export function ApiDataTable<T, Response = unknown>({
     endpoint,
     params: {
       ...params,
-      ...(paginate ? { limit: String(pager.pageSize), offset: String(pager.offset) } : {}),
+      ...(paginate ? { limit: String(pager.pageSize), offset: String(requestOffset) } : {}),
       ...(search ? { q: search } : {}),
       ...(sort ? { sort } : {}),
     },
@@ -86,6 +83,13 @@ export function ApiDataTable<T, Response = unknown>({
 
   const actions: ApiTableActions = { reload: collection.reload, resetPage: pager.resetPage };
   if (actionsRef) actionsRef.current = actions;
+
+  const lastNotifiedData = useRef<Response | null>(null);
+  useEffect(() => {
+    if (!collection.data || collection.data === lastNotifiedData.current) return;
+    lastNotifiedData.current = collection.data;
+    onData?.(collection.data);
+  }, [collection.data, onData]);
 
   const rows = collection.data ? resolve(collection.data) : [];
   const pageInfo = collection.data ? resolvePage(collection.data) : null;

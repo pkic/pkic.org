@@ -1,5 +1,6 @@
 import { useRef, useState } from "preact/hooks";
-import { apiCommand } from "./api";
+import { api, apiCommand } from "./api";
+import { logoUploadResponseSchema } from "../../shared/schemas/images";
 import { toast } from "./ui";
 
 interface LogoManagerProps {
@@ -23,7 +24,7 @@ export function LogoManager(props: LogoManagerProps) {
   async function upload(file: File) {
     setBusy(true);
     try {
-      await apiCommand(props.endpoint, {
+      await api(props.endpoint, logoUploadResponseSchema, {
         method: "PUT",
         headers: { "Content-Type": file.type || "application/octet-stream" },
         body: file,

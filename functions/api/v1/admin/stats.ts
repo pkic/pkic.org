@@ -1,14 +1,12 @@
 import { requireAdminFromRequest } from "../../../_lib/auth/admin";
 import { requestDb, type AdminContext } from "../../../_lib/db/context";
-import { dispatchRequestMethod, json } from "../../../_lib/http";
+import { json } from "../../../_lib/http";
+import { openApiRoute } from "../../../_lib/openapi/route";
 import { getAdminPlatformStats } from "../../../_lib/services/admin-platform-stats";
+import { adminStatsResponseSchema, adminStatsRouteSchema } from "../../../../assets/shared/schemas/admin-analytics";
 
-export async function onRequestGet(c: AdminContext): Promise<Response> {
+export const AdminStatsGet = openApiRoute(adminStatsRouteSchema, async (c: AdminContext) => {
   const db = requestDb(c);
   await requireAdminFromRequest(db, c.req.raw, c.env);
-  return json(await getAdminPlatformStats(db));
-}
-
-export async function onRequest(c: AdminContext): Promise<Response> {
-  return dispatchRequestMethod(c, { GET: onRequestGet });
-}
+  return json(adminStatsResponseSchema.parse(await getAdminPlatformStats(db)));
+});

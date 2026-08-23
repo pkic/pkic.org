@@ -13,14 +13,23 @@ import {
 } from "../../../../../../../_lib/services/admin-email-campaign";
 import { queueAdminCampaign } from "../../../../../../../_lib/services/admin-email-campaign-queue";
 import { adminEventCampaignSendSchema } from "../../../../../../../../assets/shared/schemas/admin-events";
+import {
+  adminEventCampaignSendResponseSchema,
+  adminEventCampaignSendRouteSchema,
+} from "../../../../../../../../assets/shared/schemas/route-contracts-admin-event-communications";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
+import { openApiRoute } from "../../../../../../../_lib/openapi/route";
+import type { ValidatedData } from "chanfana";
 
 const CAMPAIGN_IMMEDIATE_OUTBOX_LIMIT = 100;
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+export async function onRequestPost(
+  c: AdminContext,
+  validated?: ValidatedData<typeof adminEventCampaignSendRouteSchema>,
+): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const body = await parseJsonBody(c.req, adminEventCampaignSendSchema);
-  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
+  const body = validated?.body ?? (await parseJsonBody(c.req, adminEventCampaignSendSchema));
+  const event = await getEventBySlug(requestDb(c), validated?.params.eventSlug ?? c.req.param("eventSlug"));
   const secret = requireInternalSecret(c.env);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   if (!body.bodyContent && !body.templateKey) {
@@ -79,13 +88,20 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     ),
   );
 
-  return json({
-    success: true,
-    queuedRecipients: queued.queuedRecipients,
-    queuedBatches: queued.queuedBatches,
-    mode: body.sendMode,
-  });
+  return json(
+    adminEventCampaignSendResponseSchema.parse({
+      success: true,
+      queuedRecipients: queued.queuedRecipients,
+      queuedBatches: queued.queuedBatches,
+      mode: body.sendMode,
+    }),
+  );
 }
+
+export const AdminEventsEventSlugEmailsCampaignSendPost = openApiRoute(
+  adminEventCampaignSendRouteSchema,
+  onRequestPost,
+);
 
 export async function onRequest(c: AdminContext): Promise<Response> {
   return dispatchPostOnly(c, onRequestPost);

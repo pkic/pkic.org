@@ -1,7 +1,11 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import type { AdminCatalog } from "../services/catalogs";
 import { loadAdminCollection } from "../services/server-collection";
-import { useServerCollection } from "../../hooks/useServerCollection";
+import {
+  buildCollectionResetKey,
+  useCollectionResetPending,
+  useServerCollection,
+} from "../../hooks/useServerCollection";
 
 const SELECTOR_PAGE_SIZE = 25;
 
@@ -36,24 +40,23 @@ export function ServerSearchSelect<Item, Response>({
   const valueRef = useRef(value);
   valueRef.current = value;
   const excluded = new Set(excludeValues);
-  const stableParams = JSON.stringify(
-    Object.entries(catalog.params ?? {}).sort(([left], [right]) => left.localeCompare(right)),
-  );
+  const resetKey = buildCollectionResetKey(catalog.endpoint, catalog.params);
+  const resetOffset = useCallback(() => setOffset(0), []);
+  const resetPending = useCollectionResetPending(resetKey, resetOffset);
 
   useEffect(() => {
     setPendingSearch("");
     setSearch("");
-    setOffset(0);
-  }, [catalog.endpoint, stableParams]);
+  }, [resetKey]);
 
   const collection = useServerCollection({
     endpoint: catalog.endpoint,
     params: {
       ...catalog.params,
       limit: String(SELECTOR_PAGE_SIZE),
-      offset: String(offset),
+      offset: String(resetPending ? 0 : offset),
       sort: catalog.sort,
-      ...(search ? { q: search } : {}),
+      ...(!resetPending && search ? { q: search } : {}),
     },
     responseSchema: catalog.responseSchema,
     load: loadAdminCollection,

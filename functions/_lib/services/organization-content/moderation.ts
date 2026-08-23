@@ -19,6 +19,7 @@ import type { AuthAdmin, DatabaseLike } from "../../types";
 import { adminDatabaseUserId } from "../../auth/admin-identity";
 import { prepareStorageDeletion } from "../storage-deletion-outbox";
 import { serializeOrganizationContentValue } from "./fields";
+import type { ContentReviewsListQuery } from "../../../../assets/shared/schemas/admin-organizations";
 
 interface AdminReviewRow extends ReviewRow {
   organization_name: string;
@@ -51,10 +52,7 @@ function toAdminReviewSummary(row: AdminReviewRow) {
   };
 }
 
-export async function listContentReviews(
-  db: DatabaseLike,
-  params: { status?: string; q?: string; sort?: string; limit: number; offset: number },
-) {
+export async function listContentReviews(db: DatabaseLike, params: ContentReviewsListQuery) {
   const status = params.status ?? "pending";
   const conditions = ["r.status = ?"];
   const bindings: unknown[] = [status];

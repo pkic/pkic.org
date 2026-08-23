@@ -171,4 +171,115 @@ describe("scheduled due work waitlist promotions", () => {
     );
     expect(rows[0].status).toBe("expired");
   });
+
+  it("does not let more than one selection batch of full events starve a promotable event", async () => {
+    const { eventId } = await seedEventAndAdmin(baseEnv.DB);
+    const blocked = Array.from({ length: 51 }, (_, index) => index + 1);
+
+    await baseEnv.DB.batch(
+      blocked.map((index) =>
+        baseEnv.DB.prepare(
+          `INSERT INTO events (
+             id, slug, name, timezone, starts_at, settings_json, created_at, updated_at
+           ) VALUES (?, ?, ?, 'UTC', '2026-01-01T00:00:00.000Z', '{}', datetime('now'), datetime('now'))`,
+        ).bind(`blocked-event-${index}`, `blocked-${index}`, `Blocked event ${String(index).padStart(2, "0")}`),
+      ),
+    );
+    await baseEnv.DB.batch(
+      blocked.map((index) =>
+        baseEnv.DB.prepare(
+          `INSERT INTO event_days (
+             id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at
+           ) VALUES (?, ?, ?, 'Blocked day', 0, 0, datetime('now'), datetime('now'))`,
+        ).bind(`blocked-day-${index}`, `blocked-event-${index}`, `2026-01-${String(index).padStart(2, "0")}`),
+      ),
+    );
+    await baseEnv.DB.batch(
+      blocked.map((index) =>
+        baseEnv.DB.prepare(
+          `INSERT INTO users (
+             id, email, normalized_email, created_at, updated_at
+           ) VALUES (?, ?, ?, datetime('now'), datetime('now'))`,
+        ).bind(`blocked-user-${index}`, `blocked-${index}@example.test`, `blocked-${index}@example.test`),
+      ),
+    );
+    await baseEnv.DB.batch(
+      blocked.map((index) =>
+        baseEnv.DB.prepare(
+          `INSERT INTO registrations (
+             id, event_id, user_id, status, attendance_type, source_type,
+             manage_link_secret, created_at, updated_at
+           ) VALUES (?, ?, ?, 'registered', 'in_person', 'direct', ?, datetime('now'), datetime('now'))`,
+        ).bind(
+          `blocked-registration-${index}`,
+          `blocked-event-${index}`,
+          `blocked-user-${index}`,
+          `blocked-manage-token-${index}`,
+        ),
+      ),
+    );
+    await baseEnv.DB.batch(
+      blocked.map((index) =>
+        baseEnv.DB.prepare(
+          `INSERT INTO event_day_waitlist_entries (
+             id, event_id, event_day_id, registration_id, user_id,
+             priority_lane, status, position, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, 'general', 'waiting', 1, datetime('now'), datetime('now'))`,
+        ).bind(
+          `blocked-waitlist-${index}`,
+          `blocked-event-${index}`,
+          `blocked-day-${index}`,
+          `blocked-registration-${index}`,
+          `blocked-user-${index}`,
+        ),
+      ),
+    );
+
+    await baseEnv.DB.batch([
+      baseEnv.DB.prepare(
+        `INSERT INTO event_days (
+           id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at
+         ) VALUES ('promotable-day', ?, '2026-12-01', 'Promotable day', 1, 0, datetime('now'), datetime('now'))`,
+      ).bind(eventId),
+      baseEnv.DB.prepare(
+        `INSERT INTO users (
+           id, email, normalized_email, created_at, updated_at
+         ) VALUES (
+           'promotable-user', 'promotable@example.test', 'promotable@example.test', datetime('now'), datetime('now')
+         )`,
+      ),
+      baseEnv.DB.prepare(
+        `INSERT INTO registrations (
+           id, event_id, user_id, status, attendance_type, source_type,
+           manage_link_secret, created_at, updated_at
+         ) VALUES (
+           'promotable-registration', ?, 'promotable-user', 'registered', 'in_person', 'direct',
+           'promotable-manage-token', datetime('now'), datetime('now')
+         )`,
+      ).bind(eventId),
+      baseEnv.DB.prepare(
+        `INSERT INTO event_day_waitlist_entries (
+           id, event_id, event_day_id, registration_id, user_id,
+           priority_lane, status, position, created_at, updated_at
+         ) VALUES (
+           'promotable-waitlist', ?, 'promotable-day', 'promotable-registration', 'promotable-user',
+           'general', 'waiting', 1, datetime('now'), datetime('now')
+         )`,
+      ).bind(eventId),
+    ]);
+
+    const result = await runWaitlistPromotionCycle(baseEnv.DB, {
+      appBaseUrl: "https://app.test",
+      claimWindowHours: 24,
+      limit: 1,
+    });
+
+    expect(result.eventsScanned).toBe(1);
+    expect(result.dayRegistrationOffers).toBe(1);
+    const rows = await queryAll<{ status: string }>(
+      baseEnv.DB,
+      "SELECT status FROM event_day_waitlist_entries WHERE id = 'promotable-waitlist'",
+    );
+    expect(rows[0].status).toBe("offered");
+  });
 });

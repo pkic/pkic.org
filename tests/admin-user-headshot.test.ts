@@ -210,6 +210,34 @@ describe("admin user headshot upload", () => {
     expect(row.headshot_r2_key).toBe(payload.r2Key);
   });
 
+  it("preserves direct image uploads through the mounted OpenAPI route", async () => {
+    const { targetUserId } = await setup();
+    const bucket = new FakeUploadsBucket();
+
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/users/${targetUserId}/headshot`, {
+        method: "PUT",
+        headers: {
+          authorization: `Bearer ${ADMIN_TOKEN}`,
+          "content-type": "image/jpeg",
+        },
+        body: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
+      }),
+      { ...(env as any), IMAGES: undefined, SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException() {}, waitUntil() {} } as unknown as ExecutionContext,
+    );
+
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as { success: boolean; r2Key: string };
+    expect(payload).toMatchObject({ success: true });
+    expect(payload.r2Key).toMatch(new RegExp(`^headshots/${targetUserId}/`));
+    await expect(
+      queryAll<{ headshot_r2_key: string | null }>(env.DB, "SELECT headshot_r2_key FROM users WHERE id = ?", [
+        targetUserId,
+      ]),
+    ).resolves.toEqual([{ headshot_r2_key: payload.r2Key }]);
+  });
+
   it("accepts multipart upload with file field", async () => {
     const { targetUserId } = await setup();
     const bucket = new FakeUploadsBucket();

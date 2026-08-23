@@ -8,10 +8,12 @@ import {
   onRequestGet as getRegistration,
   onRequestPatch as updateRegistration,
 } from "../functions/api/v1/registrations/manage/[token]";
+import { onRequest as registrationHeadshot } from "../functions/api/v1/registrations/manage/[token]/headshot";
 import { onRequestPost as openRegistrationManage } from "../functions/api/v1/admin/events/[eventSlug]/registrations/[registrationId]/open-manage";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { createRegistration, confirmRegistrationByToken } from "../functions/_lib/services/registrations";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
+import { signAdminManageJwt } from "../functions/_lib/utils/jwt";
 import app from "../functions/router";
 import {
   registrationManageReadResponseSchema,
@@ -266,8 +268,10 @@ describe("manage read endpoints", () => {
     expect(jwt.split(".")).toHaveLength(3);
     const claims = JSON.parse(atob(jwt.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))) as {
       actor: string;
+      sid: string;
     };
     expect(claims.actor).toBe(admin.id);
+    expect(claims.sid).toBeTruthy();
 
     const validResponse = await getRegistration(
       createContext(
@@ -327,6 +331,244 @@ describe("manage read endpoints", () => {
     expect(wrongContextResponse.status).toBe(403);
     const body = (await wrongContextResponse.json()) as { error: { code: string } };
     expect(body.error.code).toBe("AUTH_INVALID");
+
+    await env.DB.prepare("UPDATE sessions SET revoked_at = datetime('now') WHERE id = ?").bind(claims.sid).run();
+    const revokedSessionGet = await getRegistration(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+          headers: { "cf-connecting-ip": "203.0.113.30", "user-agent": "admin-browser" },
+        }),
+        { token: jwt },
+      ),
+    );
+    expect(revokedSessionGet.status).toBe(401);
+
+    const revokedSessionPatch = await updateRegistration(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "cf-connecting-ip": "203.0.113.30",
+            "user-agent": "admin-browser",
+          },
+          body: JSON.stringify({ action: "update", firstName: "Should fail" }),
+        }),
+        { token: jwt },
+      ),
+    );
+    expect(revokedSessionPatch.status).toBe(401);
+
+    const revokedSessionHeadshot = await registrationHeadshot(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/registrations/manage/${jwt}/headshot`, {
+          method: "PUT",
+          headers: { "cf-connecting-ip": "203.0.113.30", "user-agent": "admin-browser" },
+        }),
+        { token: jwt },
+      ),
+    );
+    expect(revokedSessionHeadshot.status).toBe(401);
+
+    // Restore only the fixture session so the following assertions isolate
+    // account deactivation as a separate invalidation mechanism.
+    await env.DB.prepare("UPDATE sessions SET revoked_at = NULL WHERE id = ?").bind(claims.sid).run();
+
+    await env.DB.prepare("UPDATE users SET active = 0 WHERE id = ?").bind(admin.id).run();
+
+    const deactivatedGet = await getRegistration(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+          headers: { "cf-connecting-ip": "203.0.113.30", "user-agent": "admin-browser" },
+        }),
+        { token: jwt },
+      ),
+    );
+    expect(deactivatedGet.status).toBe(401);
+
+    const deactivatedPatch = await updateRegistration(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "cf-connecting-ip": "203.0.113.30",
+            "user-agent": "admin-browser",
+          },
+          body: JSON.stringify({ action: "update", firstName: "Should fail" }),
+        }),
+        { token: jwt },
+      ),
+    );
+    expect(deactivatedPatch.status).toBe(401);
+
+    const deactivatedHeadshot = await registrationHeadshot(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/registrations/manage/${jwt}/headshot`, {
+          method: "PUT",
+          headers: { "cf-connecting-ip": "203.0.113.30", "user-agent": "admin-browser" },
+        }),
+        { token: jwt },
+      ),
+    );
+    expect(deactivatedHeadshot.status).toBe(401);
+  });
+
+  it("rechecks the original event permissions for a scoped admin manage JWT", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const [globalAdmin] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1",
+    );
+    const scopedAdminId = crypto.randomUUID();
+    const registrationUserId = crypto.randomUUID();
+    const registrationId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+         VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+      ).bind(scopedAdminId, "scoped-admin@example.test", "scoped-admin@example.test"),
+      env.DB.prepare(
+        `INSERT INTO users (id, email, normalized_email, first_name, last_name, role, active, created_at, updated_at)
+         VALUES (?, ?, ?, 'Managed', 'Attendee', 'user', 1, datetime('now'), datetime('now'))`,
+      ).bind(registrationUserId, "managed-attendee@example.test", "managed-attendee@example.test"),
+      env.DB.prepare(
+        `INSERT INTO registrations (
+           id, event_id, user_id, status, attendance_type, source_type,
+           manage_link_secret, created_at, updated_at
+         ) VALUES (?, ?, ?, 'registered', 'virtual', 'direct', ?, datetime('now'), datetime('now'))`,
+      ).bind(registrationId, eventId, registrationUserId, crypto.randomUUID()),
+      ...(["events:read", "events:write", "donations:read"] as const).map((permission) =>
+        env.DB.prepare(
+          `INSERT INTO permission_grants
+             (id, user_id, permission, context_type, context_id, granted_by_user_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
+        ).bind(
+          crypto.randomUUID(),
+          scopedAdminId,
+          permission,
+          permission === "donations:read" ? null : "event",
+          permission === "donations:read" ? null : eventId,
+          globalAdmin.id,
+        ),
+      ),
+    ]);
+
+    const scopedAdminToken = await createAdminSession(env.DB, scopedAdminId, "scoped-admin-manage-token");
+    const openResponse = await callApp(
+      new Request(`https://app.test/api/v1/admin/events/pqc-2026/registrations/${registrationId}/open-manage`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${scopedAdminToken}`,
+          "cf-connecting-ip": "203.0.113.40",
+          "user-agent": "scoped-admin-browser",
+        },
+      }),
+    );
+    expect(openResponse.status).toBe(200);
+    const { manageUrl } = (await openResponse.json()) as { manageUrl: string };
+    const jwt = new URL(manageUrl).searchParams.get("token") as string;
+
+    const validGet = await getRegistration(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+          headers: { "cf-connecting-ip": "203.0.113.40", "user-agent": "scoped-admin-browser" },
+        }),
+        { token: jwt },
+      ),
+    );
+    expect(validGet.status).toBe(200);
+
+    const [iphash, uahash] = await Promise.all([sha256Hex("203.0.113.40"), sha256Hex("scoped-admin-browser")]);
+    const wrongEventJwt = await signAdminManageJwt(signingSecret, {
+      sub: registrationId,
+      actor: scopedAdminId,
+      sid: (await queryAll<{ id: string }>(env.DB, "SELECT id FROM sessions WHERE user_id = ?", scopedAdminId))[0].id,
+      event: "different-event",
+      iphash,
+      uahash,
+      ttlSeconds: 300,
+    });
+    const wrongEventGet = await getRegistration(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/registrations/manage/${wrongEventJwt}`, {
+          headers: { "cf-connecting-ip": "203.0.113.40", "user-agent": "scoped-admin-browser" },
+        }),
+        { token: wrongEventJwt },
+      ),
+    );
+    expect(wrongEventGet.status).toBe(401);
+
+    await env.DB.prepare(
+      "UPDATE permission_grants SET revoked_at = datetime('now') WHERE user_id = ? AND permission = 'events:write'",
+    )
+      .bind(scopedAdminId)
+      .run();
+
+    const readOnlyGet = await getRegistration(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+          headers: { "cf-connecting-ip": "203.0.113.40", "user-agent": "scoped-admin-browser" },
+        }),
+        { token: jwt },
+      ),
+    );
+    expect(readOnlyGet.status).toBe(200);
+
+    const revokedPatch = await updateRegistration(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "cf-connecting-ip": "203.0.113.40",
+            "user-agent": "scoped-admin-browser",
+          },
+          body: JSON.stringify({ action: "update", firstName: "Should fail" }),
+        }),
+        { token: jwt },
+      ),
+    );
+    expect(revokedPatch.status).toBe(403);
+
+    const revokedHeadshot = await registrationHeadshot(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/registrations/manage/${jwt}/headshot`, {
+          method: "PUT",
+          headers: { "cf-connecting-ip": "203.0.113.40", "user-agent": "scoped-admin-browser" },
+        }),
+        { token: jwt },
+      ),
+    );
+    expect(revokedHeadshot.status).toBe(403);
+
+    await env.DB.prepare(
+      "UPDATE permission_grants SET revoked_at = datetime('now') WHERE user_id = ? AND permission = 'events:read'",
+    )
+      .bind(scopedAdminId)
+      .run();
+
+    const revokedGet = await getRegistration(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+          headers: { "cf-connecting-ip": "203.0.113.40", "user-agent": "scoped-admin-browser" },
+        }),
+        { token: jwt },
+      ),
+    );
+    expect(revokedGet.status).toBe(403);
   });
 
   it("returns proposal state for a valid manage token", async () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   hasUrlHostname,
+  httpCapabilityUrlSchema,
   httpOrSameOriginUrlSchema,
   httpUrlSchema,
   normalizeHttpOrSameOriginUrl,
@@ -18,6 +19,16 @@ describe("canonical URL contracts", () => {
     for (const value of ["javascript:alert(1)", "ftp://example.com/file", "https://user:pass@example.com/"]) {
       expect(httpUrlSchema.safeParse(value).success).toBe(false);
     }
+  });
+
+  it("allows longer generated capability links without relaxing user-supplied URLs", () => {
+    const signedUrl = `https://example.com/manage?token=${"a".repeat(900)}`;
+    expect(httpUrlSchema.safeParse(signedUrl).success).toBe(false);
+    expect(httpCapabilityUrlSchema.parse(signedUrl)).toBe(signedUrl);
+    expect(httpCapabilityUrlSchema.safeParse(`https://example.com/manage?token=${"a".repeat(5000)}`).success).toBe(
+      false,
+    );
+    expect(httpCapabilityUrlSchema.safeParse("javascript:alert(1)").success).toBe(false);
   });
 
   it("keeps same-origin paths separate from scheme-relative and backslash paths", () => {

@@ -28,7 +28,8 @@ import {
   type VoteResult,
 } from "./shared";
 import type { AuthMember, DatabaseLike } from "../../types";
-import { VOTES_LIST_SORT_COLUMNS } from "../../../../assets/shared/schemas/votes";
+import type { MyVotesListQuery } from "../../../../assets/shared/schemas/me";
+import { VOTES_LIST_SORT_COLUMNS, type PortalVotesListQuery } from "../../../../assets/shared/schemas/votes";
 import { getWorkingGroupNamesByIds } from "../working-groups";
 
 export interface PortalVoteSummary extends VoteSummary {
@@ -143,7 +144,7 @@ async function loadCastBallotRounds(db: DatabaseLike, voteIds: string[], member:
 export async function listVisibleVotesForMember(
   db: DatabaseLike,
   member: AuthMember,
-  params: { limit: number; offset: number; status?: VoteStatus[]; q?: string; sort?: string },
+  params: PortalVotesListQuery,
 ): Promise<{ votes: PortalVoteSummary[]; total: number }> {
   const wgRows = await all<{ working_group_id: string }>(
     db,
@@ -256,7 +257,7 @@ export interface MyVoteHistoryEntry {
 export async function listMyVoteHistory(
   db: DatabaseLike,
   member: AuthMember,
-  params: { limit: number; offset: number; q?: string; sort?: string },
+  params: MyVotesListQuery,
 ): Promise<{ votes: MyVoteHistoryEntry[]; total: number }> {
   const conditions = ["b.user_id = ?"];
   const bindings: unknown[] = [member.userId];

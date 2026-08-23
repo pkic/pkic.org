@@ -26,6 +26,7 @@ import {
   MAILING_LIST_TYPES,
 } from "../../../assets/shared/schemas/admin-mailing-lists";
 import type { DatabaseLike } from "../types";
+import type { MailingListsListQuery } from "../../../assets/shared/schemas/admin-mailing-lists";
 import { prepareAuditLog } from "./audit";
 
 export { MAILING_LIST_TYPES };
@@ -60,10 +61,7 @@ function toMailingList(row: MailingListRow) {
 const MAILING_LIST_COLUMNS =
   "id, email, label, list_type, working_group_id, auto_sync_categories_json, active, created_at, updated_at";
 
-export async function listMailingLists(
-  db: DatabaseLike,
-  query: { limit: number; offset: number; q?: string; sort?: string },
-) {
+export async function listMailingLists(db: DatabaseLike, query: MailingListsListQuery) {
   const search = query.q ? buildD1TextSearchFilter(query.q, ["email", "label", "list_type"]) : null;
   const where = search ? `WHERE ${search.sql}` : "";
   const bindings = search?.bindings ?? [];

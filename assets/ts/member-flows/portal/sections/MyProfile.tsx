@@ -15,8 +15,12 @@ import { profile as profileSignal, saveProfile } from "../state";
 import { toast } from "../ui";
 import type { MyProfile as MyProfileType, MyProfileUpdateInput } from "../types";
 import { linksToText, textToLinks } from "../../../shared/links-text";
-import { myProfileSchema, addedCoworkerSchema, myHeadshotUploadResponseSchema } from "../../../../shared/schemas/me";
-import { successResponseSchema } from "../../../../shared/schemas/api-common";
+import {
+  myProfileSchema,
+  addedCoworkerSchema,
+  myHeadshotUploadResponseSchema,
+  myOrganizationVisibilityUpdateResponseSchema,
+} from "../../../../shared/schemas/me";
 
 async function refreshProfile(): Promise<void> {
   const refreshed = await getJson("/api/v1/me", myProfileSchema);
@@ -69,7 +73,11 @@ export function MyProfile() {
   async function handleVisibilityToggle(next: boolean): Promise<void> {
     setVisibilitySaving(true);
     try {
-      await patchJson("/api/v1/me/organization-visibility", { showOnOrgProfile: next }, successResponseSchema);
+      await patchJson(
+        "/api/v1/me/organization-visibility",
+        { showOnOrgProfile: next },
+        myOrganizationVisibilityUpdateResponseSchema,
+      );
       await refreshProfile();
       toast(
         next

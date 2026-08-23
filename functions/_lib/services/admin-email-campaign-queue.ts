@@ -7,14 +7,8 @@ import {
   chunkRecipients,
   findBroadcastOnlyTemplateRefs,
   type AdminCampaignInput,
-  type CampaignRecipient,
+  type PreparedAdminCampaign,
 } from "./admin-email-campaign";
-
-interface PreparedCampaign {
-  template: { subjectTemplate: string | null; content: string } | null;
-  messageType: "transactional" | "promotional";
-  recipients: CampaignRecipient[];
-}
 
 /** Builds and atomically queues every outbox row for a validated campaign. */
 export async function queueAdminCampaign(
@@ -22,7 +16,7 @@ export async function queueAdminCampaign(
   event: EventRecord,
   appBaseUrl: string,
   input: AdminCampaignInput,
-  campaign: PreparedCampaign,
+  campaign: PreparedAdminCampaign,
 ): Promise<{ queuedRecipients: number; queuedBatches: number }> {
   const { template, messageType, recipients } = campaign;
   const templateKey = input.bodyContent ? input.templateKey || "__direct__" : (input.templateKey as string);

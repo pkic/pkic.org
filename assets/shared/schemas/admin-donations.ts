@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { stripeCheckoutSessionIdSchema } from "./stripe";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { databaseIdSchema } from "./identifiers";
 
 /** Allowlisted sort columns for GET /api/v1/admin/donations — see functions/api/v1/admin/donations.ts. */
 export const ADMIN_DONATIONS_SORT_COLUMNS = ["name", "gross_amount", "status", "created_at"] as const;
@@ -101,6 +102,21 @@ export type DonationSyncRequest = z.infer<typeof donationSyncRequestSchema>;
 export type AdminDonationSummary = z.infer<typeof adminDonationSummarySchema>;
 
 export const donationDetailResponseSchema = z.object({ donation: adminDonationSummarySchema });
+
+export const donationDetailRouteSchema = {
+  tags: ["Donations"],
+  summary: "Get donation details (admin)",
+  request: { params: z.object({ id: databaseIdSchema }) },
+  responses: {
+    "200": {
+      description: "Donation details.",
+      content: { "application/json": { schema: donationDetailResponseSchema } },
+    },
+    "400": { description: "Invalid donation identifier." },
+    "401": { description: "Admin authorization required." },
+    "404": { description: "Donation not found." },
+  },
+};
 
 export const donationsListRouteSchema = {
   tags: ["Donations"],

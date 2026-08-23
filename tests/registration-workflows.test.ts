@@ -1081,7 +1081,7 @@ describe("registration workflows", () => {
     }
   });
 
-  it("records an unauthorized cancellation reason without expanding the constrained lifecycle status", async () => {
+  it("revokes self-service access when an unauthorized registration is reported", async () => {
     await seedEventAndAdmin(env.DB);
     await env.DB.prepare(
       `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
@@ -1112,6 +1112,7 @@ describe("registration workflows", () => {
     expect(updated.status).toBe("cancelled");
     expect(updated.cancellation_reason_code).toBe("unauthorized_registration");
     expect(updated.custom_answers_json).toBeNull();
+    expect(updated.manage_link_secret).not.toBe(created.registration.manage_link_secret);
     const [stored] = await queryAll<{
       status: string;
       cancellation_reason_code: string | null;
@@ -1124,6 +1125,43 @@ describe("registration workflows", () => {
       cancellation_reason_code: "unauthorized_registration",
       custom_answers_json: null,
     });
+
+    await expect(
+      updateRegistrationByManageToken(env.DB, {
+        manageToken: created.manageToken,
+        signingSecret: "test-signing-secret",
+        action: "update",
+      }),
+    ).rejects.toMatchObject({ code: "REGISTRATION_NOT_FOUND" });
+
+    // Even a newly delivered recovery link cannot silently reverse a report
+    // of misuse. An organizer can still review and restore through the admin
+    // path, which is deliberately separate from this capability.
+    const replacementToken = await issueDatabaseCapability({
+      db: env.DB,
+      signingSecret: "test-signing-secret",
+      purpose: "registration_manage",
+      resourceId: created.registration.id,
+    });
+    await expect(
+      updateRegistrationByManageToken(env.DB, {
+        manageToken: replacementToken,
+        signingSecret: "test-signing-secret",
+        action: "update",
+      }),
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED_REGISTRATION_REVIEW_REQUIRED" });
+
+    const restored = await updateRegistrationById(
+      env.DB,
+      {
+        eventId: event.id,
+        registrationId: created.registration.id,
+        action: "update",
+      },
+      "admin",
+    );
+    expect(restored.status).toBe("registered");
+    expect(restored.cancellation_reason_code).toBeNull();
   });
 
   it("rejects a stale self-service update after an intervening registration transition", async () => {

@@ -30,6 +30,7 @@ export const ADMIN_APPLICATIONS_SORT_COLUMNS = [
 export const adminApplicationsListQuerySchema = listQuerySchema(ADMIN_APPLICATIONS_SORT_COLUMNS).extend({
   stage: applicationStageSchema.optional(),
 });
+export type AdminApplicationsListQuery = z.infer<typeof adminApplicationsListQuerySchema>;
 
 export const adminApplicationSummarySchema = z.object({
   id: z.string(),

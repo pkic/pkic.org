@@ -1,8 +1,12 @@
 import { useEffect, useState } from "preact/hooks";
-import { api, apiCommand } from "../../../api";
-import { adminFormCreateResponseSchema } from "../../../../../shared/schemas/admin-forms";
+import { api } from "../../../api";
+import {
+  adminFormCreateResponseSchema,
+  adminFormUpdateResponseSchema,
+  type AdminFormDetailResponse,
+} from "../../../../../shared/schemas/admin-forms";
 import { toast } from "../../../ui";
-import type { AdminEventFormSummary, AdminFormDetailField } from "../../../types";
+import type { AdminFormDetailField } from "../../../types";
 import {
   FORM_FIELD_TYPES,
   FORM_PURPOSES,
@@ -18,10 +22,7 @@ import {
   type VisualizationConfig,
 } from "./FormFieldConfigEditor";
 
-export interface AdminFormDetail {
-  form: AdminEventFormSummary;
-  fields: AdminFormDetailField[];
-}
+export type AdminFormDetail = AdminFormDetailResponse;
 
 interface FormDraft {
   key: string;
@@ -248,7 +249,7 @@ export function FormEditor({
         toast(slug ? "Form created" : "Global form created", "success");
         onSaved(draft.key.trim());
       } else if (detail) {
-        await apiCommand(`/api/v1/admin/forms/${detail.form.key}`, {
+        await api(`/api/v1/admin/forms/${detail.form.key}`, adminFormUpdateResponseSchema, {
           method: "PATCH",
           body: JSON.stringify(payload),
         });

@@ -3,7 +3,8 @@ import { proposalDecisionPreviewResponseSchema } from "../../../../../../shared/
 import { Badge } from "../../../../../components/Badge";
 import { Markdown } from "../../../../../components/Markdown";
 import { Tabs } from "../../../../../components/Tabs";
-import { api, apiCommand } from "../../../../api";
+import { api } from "../../../../api";
+import { finalizeProposalResponseSchema } from "../../../../../../shared/schemas/proposal-management";
 import { fmt, toast } from "../../../../ui";
 import { isNeedsWorkDecision, type DecisionPreviewResponse, type ProposalDetailRecord } from "./model";
 import {
@@ -86,7 +87,7 @@ export function ProposalDecisionPanel({
     }
     setSaving(true);
     try {
-      await apiCommand(`/api/v1/admin/proposals/${proposalId}/finalize`, {
+      await api(`/api/v1/admin/proposals/${proposalId}/finalize`, finalizeProposalResponseSchema, {
         method: "POST",
         body: JSON.stringify({ finalStatus: decisionStatus, decisionNote: decisionNote.trim() || undefined }),
       });

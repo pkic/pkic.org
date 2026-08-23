@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
+import { eventSummarySchema } from "./event-read-models";
 
 const countMapSchema = z.record(z.string(), z.number());
 
@@ -82,7 +83,7 @@ const inviteStatsSchema = z.object({
 });
 
 export const adminEventStatsResponseSchema = z.object({
-  event: z.object({ id: databaseIdSchema, slug: z.string(), name: z.string() }),
+  event: eventSummarySchema,
   registrations: z.object({
     byStatus: countMapSchema,
     byAttendanceType: countMapSchema,
@@ -152,3 +153,15 @@ export const adminEventStatsResponseSchema = z.object({
 export type DonationPeriod = z.infer<typeof donationPeriodSchema>;
 export type AdminStatsResponse = z.infer<typeof adminStatsResponseSchema>;
 export type AdminEventStatsResponse = z.infer<typeof adminEventStatsResponseSchema>;
+
+export const adminStatsRouteSchema = {
+  tags: ["Admin analytics"],
+  summary: "Get platform statistics (admin)",
+  responses: {
+    "200": {
+      description: "Platform-wide registration, invitation, email, donation, and activity statistics.",
+      content: { "application/json": { schema: adminStatsResponseSchema } },
+    },
+    "401": { description: "Admin authorization required." },
+  },
+};

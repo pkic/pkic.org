@@ -1,61 +1,7 @@
 import { useCallback, useImperativeHandle, useState } from "preact/hooks";
 import { forwardRef, type Ref } from "preact/compat";
 import { IconLink, IconPlus, IconRemove } from "./icons";
-
-const DOMAIN_LABELS: Record<string, string> = {
-  "linkedin.com": "LinkedIn",
-  "www.linkedin.com": "LinkedIn",
-  "xing.com": "Xing",
-  "www.xing.com": "Xing",
-  "orcid.org": "ORCID",
-  "www.orcid.org": "ORCID",
-  "researchgate.net": "ResearchGate",
-  "www.researchgate.net": "ResearchGate",
-  "scholar.google.com": "Google Scholar",
-  "academia.edu": "Academia.edu",
-  "www.academia.edu": "Academia.edu",
-  "semanticscholar.org": "Semantic Scholar",
-  "www.semanticscholar.org": "Semantic Scholar",
-  "ssrn.com": "SSRN",
-  "papers.ssrn.com": "SSRN",
-  "arxiv.org": "arXiv",
-  "zenodo.org": "Zenodo",
-  "figshare.com": "Figshare",
-  "datatracker.ietf.org": "IETF Datatracker",
-  "ieee.org": "IEEE",
-  "dl.acm.org": "ACM Digital Library",
-  "github.com": "GitHub",
-  "www.github.com": "GitHub",
-  "gitlab.com": "GitLab",
-  "www.gitlab.com": "GitLab",
-  "twitter.com": "X (Twitter)",
-  "www.twitter.com": "X (Twitter)",
-  "x.com": "X (Twitter)",
-  "bsky.app": "Bluesky",
-  "youtube.com": "YouTube",
-  "www.youtube.com": "YouTube",
-  "en.wikipedia.org": "Wikipedia",
-};
-
-function detectLabel(url: string): string {
-  try {
-    const hostname = new URL(url).hostname.toLowerCase();
-    if (DOMAIN_LABELS[hostname]) return DOMAIN_LABELS[hostname];
-    const bare = hostname.startsWith("www.") ? hostname.slice(4) : hostname;
-    return DOMAIN_LABELS[bare] ?? bare;
-  } catch {
-    return url.substring(0, 40);
-  }
-}
-
-function isValidUrl(value: string): boolean {
-  try {
-    const u = new URL(value);
-    return u.protocol === "https:" || u.protocol === "http:";
-  } catch {
-    return false;
-  }
-}
+import { getLinkLabel, hasDuplicateLink, MAX_LINKS, parseLinkUrl } from "../../shared/schemas/links";
 
 export interface ProfileLinksHandle {
   getLinks(): string[];
@@ -70,21 +16,22 @@ interface ProfileLinksInputProps {
 }
 
 export const ProfileLinksInput = forwardRef(function ProfileLinksInput(
-  { fieldName, max = 10, value, onChange }: ProfileLinksInputProps,
+  { fieldName, max = MAX_LINKS, value, onChange }: ProfileLinksInputProps,
   ref: Ref<ProfileLinksHandle>,
 ) {
   const [internalLinks, setInternalLinks] = useState<string[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [error, setError] = useState("");
   const links = value ?? internalLinks;
+  const linkLimit = Math.min(max, MAX_LINKS);
 
   const setLinks = useCallback(
     (next: string[]) => {
-      const bounded = next.slice(0, max);
+      const bounded = next.slice(0, linkLimit);
       if (value === undefined) setInternalLinks(bounded);
       onChange?.(bounded);
     },
-    [max, onChange, value],
+    [linkLimit, onChange, value],
   );
 
   useImperativeHandle(
@@ -96,29 +43,30 @@ export const ProfileLinksInput = forwardRef(function ProfileLinksInput(
     [links, setLinks],
   );
 
-  const atMax = links.length >= max;
+  const atMax = links.length >= linkLimit;
 
   const tryAdd = useCallback(() => {
     const raw = inputValue.trim();
     setError("");
     if (!raw) return;
 
-    if (!isValidUrl(raw)) {
+    const url = parseLinkUrl(raw);
+    if (!url) {
       setError("Please enter a valid URL (must start with https:// or http://).");
       return;
     }
-    if (links.includes(raw)) {
+    if (hasDuplicateLink(links, url)) {
       setError("This URL has already been added.");
       return;
     }
-    if (links.length >= max) {
-      setError(`You can add at most ${max} profile links.`);
+    if (links.length >= linkLimit) {
+      setError(`You can add at most ${linkLimit} profile links.`);
       return;
     }
 
-    setLinks([...links, raw]);
+    setLinks([...links, url]);
     setInputValue("");
-  }, [inputValue, links, max, setLinks]);
+  }, [inputValue, links, linkLimit, setLinks]);
 
   const remove = useCallback(
     (index: number) => {
@@ -146,7 +94,7 @@ export const ProfileLinksInput = forwardRef(function ProfileLinksInput(
 
       <div class="profile-links-pills" aria-label="Added profile links">
         {links.map((url, i) => {
-          const label = detectLabel(url);
+          const label = getLinkLabel(url);
           return (
             <span key={url} class="profile-links-pill" title={url}>
               <span class="profile-links-pill-icon">

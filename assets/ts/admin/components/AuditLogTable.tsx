@@ -1,9 +1,5 @@
 import type { ComponentChildren } from "preact";
-import {
-  scopedAuditLogResponseSchema,
-  type AuditLogEntry,
-  type ScopedAuditLogResponse,
-} from "../../../shared/schemas/audit-log";
+import { scopedAuditLogResponseSchema, type AuditLogEntry } from "../../../shared/schemas/audit-log";
 import { ApiDataTable } from "./ApiDataTable";
 
 function actorCell(entry: AuditLogEntry): ComponentChildren {
@@ -23,7 +19,7 @@ export function AuditLogTable({
   detailsCell: (entry: AuditLogEntry) => ComponentChildren;
 }) {
   return (
-    <ApiDataTable<AuditLogEntry, ScopedAuditLogResponse>
+    <ApiDataTable
       endpoint={endpoint}
       responseSchema={scopedAuditLogResponseSchema}
       resolve={(response) => response.auditLog}

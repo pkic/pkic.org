@@ -6,7 +6,7 @@
  * list endpoint uses, e.g. `admin-organizations.ts`).
  */
 import { z } from "zod";
-import { trimmedString } from "./api-common";
+import { adminUserIdParamsSchema, successResponseSchema, trimmedString } from "./api-common";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { membershipCategorySchema } from "./membership-categories";
 import { linksSchema } from "./links";
@@ -51,6 +51,7 @@ export const usersListQuerySchema = listQuerySchema(ADMIN_USERS_SORT_COLUMNS).ex
   role: trimmedString(1, 100).optional(),
   type: usersTypeValueSchema,
 });
+export type AdminUsersListQuery = z.infer<typeof usersListQuerySchema>;
 
 export const adminUserMembershipSchema = z.object({
   memberId: z.string(),
@@ -124,6 +125,27 @@ export const adminUserDetailSchema = z.object({
 });
 export const adminUserDetailResponseSchema = z.object({ user: adminUserDetailSchema });
 
+export const adminUserDetailRouteSchema = {
+  tags: ["Users"],
+  summary: "Get an admin user detail",
+  request: { params: adminUserIdParamsSchema },
+  responses: {
+    "200": {
+      description: "User detail, membership, and working-group information.",
+      content: { "application/json": { schema: adminUserDetailResponseSchema } },
+    },
+    "400": { description: "Invalid user identifier." },
+    "401": { description: "Admin authorization required." },
+    "404": { description: "User not found." },
+  },
+};
+/** PATCH /admin/users/:userId keeps the command acknowledgement and returns the edited user. */
+export const adminUserUpdateResponseSchema = successResponseSchema.extend({
+  user: adminUserDetailSchema.pick({ id: true, email: true, role: true, active: true }).extend({
+    isEcMember: z.boolean(),
+  }),
+});
+
 export const usersListRouteSchema = {
   tags: ["Users"],
   summary: "List users (admin)",
@@ -135,5 +157,37 @@ export const usersListRouteSchema = {
       description: "Users list.",
       content: { "application/json": { schema: usersListResponseSchema } },
     },
+  },
+};
+
+export const adminUserUpdateRouteSchema = {
+  tags: ["Users"],
+  summary: "Update an admin user",
+  request: {
+    params: adminUserIdParamsSchema,
+    body: { content: { "application/json": { schema: adminUserUpdateSchema } }, required: true },
+  },
+  responses: {
+    "200": { description: "Updated user.", content: { "application/json": { schema: adminUserUpdateResponseSchema } } },
+  },
+};
+
+export const adminUserAnonymizeResponseSchema = successResponseSchema.extend({
+  userId: adminUserIdParamsSchema.shape.userId,
+});
+
+export const adminUserAnonymizeRouteSchema = {
+  tags: ["Users"],
+  summary: "Anonymize a user (admin)",
+  description: "Irreversibly removes the user's personal data and revokes access paths.",
+  request: { params: adminUserIdParamsSchema },
+  responses: {
+    "200": {
+      description: "User anonymized.",
+      content: { "application/json": { schema: adminUserAnonymizeResponseSchema } },
+    },
+    "403": { description: "The calling administrator cannot anonymize this account." },
+    "404": { description: "User not found." },
+    "409": { description: "The user is already anonymized or changed concurrently." },
   },
 };

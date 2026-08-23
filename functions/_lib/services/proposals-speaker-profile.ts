@@ -2,7 +2,7 @@ import { all, first } from "../db/queries";
 import { AppError } from "../errors";
 import { nowIso } from "../utils/time";
 import { isAuditOneChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
-import { prepareConsentStatements, validateRequiredConsents } from "./consent";
+import { isConsentAcceptanceContextConflict, prepareConsentStatements, validateRequiredConsents } from "./consent";
 import { getRequiredTerms } from "./events";
 import { getSpeakerByManageToken } from "./proposals";
 import {
@@ -12,6 +12,11 @@ import {
 } from "./proposal-role-capacity";
 import { isRegistrationTransitionConflict, registrationChangedError } from "./registrations/transition-guard";
 import { isEventParticipantSourceConflict } from "./event-participant-source-revision";
+import {
+  getProposalSpeakerRosterRevision,
+  isProposalSpeakerRosterConflict,
+  prepareProposalSpeakerRosterRevisionGuard,
+} from "./proposal-speaker-roster-revision";
 import { prepareUserProfileStatement, type UserProfilePatch } from "./users";
 import {
   prepareClearProposalSpeakerProfileOverridesStatement,
@@ -86,9 +91,14 @@ export async function confirmSpeakerParticipation(
   }
   const requiredTerms = await getRequiredTerms(db, proposal.event_id, "speaker");
   await validateRequiredConsents(requiredTerms, payload.consents);
+  const rosterRevision = await getProposalSpeakerRosterRevision(db, proposal.id);
   const now = nowIso();
   try {
     await db.batch([
+      prepareProposalSpeakerRosterRevisionGuard(db, {
+        proposalId: proposal.id,
+        expectedRevision: rosterRevision,
+      }),
       ...(await prepareConsentStatements(db, {
         proposalId: proposal.id,
         eventId: proposal.event_id,
@@ -144,7 +154,12 @@ export async function confirmSpeakerParticipation(
     ]);
   } catch (error) {
     if (isRegistrationTransitionConflict(error)) throw registrationChangedError();
-    if (isAuditOneChangeGuardFailure(error) || isEventParticipantSourceConflict(error)) {
+    if (
+      isAuditOneChangeGuardFailure(error) ||
+      isEventParticipantSourceConflict(error) ||
+      isProposalSpeakerRosterConflict(error) ||
+      isConsentAcceptanceContextConflict(error)
+    ) {
       throw new AppError(
         409,
         "PROPOSAL_SPEAKER_CONFLICT",
