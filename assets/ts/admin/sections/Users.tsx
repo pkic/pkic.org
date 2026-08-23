@@ -327,7 +327,7 @@ export function UserDetailView({ userId, onBack }: { userId: string; onBack: () 
                       </div>
                       <div class="col-12">
                         <label class="form-label small mb-1">Profile links</label>
-                        <ProfileLinksInput ref={editLinksRef} fieldName="adminUserProfileLink" max={15} />
+                        <ProfileLinksInput ref={editLinksRef} fieldName="adminUserProfileLink" />
                       </div>
                       <div class="col-12">
                         <label class="form-label small mb-1">Email</label>

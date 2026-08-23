@@ -211,7 +211,6 @@ export function AddOrganizationForm({ onCreated, onCancel }: { onCreated: () => 
                 fieldName={`representatives.${i}.links`}
                 value={rep.links}
                 onChange={(links) => updateRep(i, { links })}
-                max={15}
               />
             </div>
             <div class="col-md-1">

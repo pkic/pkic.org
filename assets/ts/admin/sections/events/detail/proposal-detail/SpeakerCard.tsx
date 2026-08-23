@@ -324,7 +324,7 @@ export function SpeakerCard({
               </div>
               <div class="col-12">
                 <label class="form-label fw-semibold">Profile links</label>
-                <ProfileLinksInput ref={linksRef} fieldName={`speakerProfileLink.${speaker.userId}`} max={15} />
+                <ProfileLinksInput ref={linksRef} fieldName={`speakerProfileLink.${speaker.userId}`} />
               </div>
               <div class="col-12">
                 <button type="submit" class="btn btn-primary" disabled={saving}>

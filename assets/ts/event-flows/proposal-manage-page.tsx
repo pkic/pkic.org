@@ -312,7 +312,7 @@ export function ProposalManageSpeakerCard({
                 <div class="form-text">Visible to attendees on the event program.</div>
               </div>
               <div class="col-12">
-                <ProfileLinksInput ref={linksRef} fieldName={`speaker-links-${speaker.userId}`} max={10} />
+                <ProfileLinksInput ref={linksRef} fieldName={`speaker-links-${speaker.userId}`} />
               </div>
               <div class="col-12">
                 <button type="submit" class="btn btn-success btn-sm" disabled={saving}>
