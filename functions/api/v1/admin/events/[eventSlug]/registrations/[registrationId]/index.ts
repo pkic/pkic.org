@@ -11,10 +11,10 @@
  *   admin-only "force_status" lifecycle transition. Active statuses still
  *   pass through day-capacity and waitlist arbitration.
  */
-import { dispatchRequestMethod, json } from "../../../../../../../_lib/http";
+import { json } from "../../../../../../../_lib/http";
+import { openApiRoute } from "../../../../../../../_lib/openapi/route";
 import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../../../_lib/services/events";
-import { parseJsonBody } from "../../../../../../../_lib/validation";
 import { getConfig, resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { processOutboxByIdBackground } from "../../../../../../../_lib/email/outbox";
 import {
@@ -28,7 +28,6 @@ import {
   adminRegistrationDetailRouteSchema,
   adminRegistrationPatchRouteSchema,
   adminRegistrationUpdateResponseSchema,
-  adminRegistrationUpdateSchema,
 } from "../../../../../../../../assets/shared/schemas/route-contracts-admin-registrations";
 import type { ValidatedData } from "chanfana";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
@@ -41,17 +40,13 @@ import {
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 
-export async function onRequestGet(
+async function handleAdminRegistrationGet(
   c: AdminContext,
-  data?: ValidatedData<typeof adminRegistrationDetailRouteSchema>,
+  data: ValidatedData<typeof adminRegistrationDetailRouteSchema>,
 ): Promise<Response> {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const event = await getEventBySlug(requestDb(c), data?.params.eventSlug ?? c.req.param("eventSlug"));
-  const detail = await getAdminRegistrationDetail(
-    requestDb(c),
-    event.id,
-    data?.params.registrationId ?? c.req.param("registrationId"),
-  );
+  const event = await getEventBySlug(requestDb(c), data.params.eventSlug);
+  const detail = await getAdminRegistrationDetail(requestDb(c), event.id, data.params.registrationId);
   if (!detail) {
     return json({ error: { code: "REGISTRATION_NOT_FOUND", message: "Registration not found" } }, 404);
   }
@@ -60,17 +55,17 @@ export async function onRequestGet(
 
 // ── PATCH ─────────────────────────────────────────────────────────────────────
 
-export async function onRequestPatch(
+async function handleAdminRegistrationPatch(
   c: AdminContext,
-  data?: ValidatedData<typeof adminRegistrationPatchRouteSchema>,
+  data: ValidatedData<typeof adminRegistrationPatchRouteSchema>,
 ): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const eventSlug = data?.params.eventSlug ?? c.req.param("eventSlug");
-  const registrationId = data?.params.registrationId ?? c.req.param("registrationId");
+  const eventSlug = data.params.eventSlug;
+  const registrationId = data.params.registrationId;
   const event = await getEventBySlug(requestDb(c), eventSlug);
   const config = getConfig(c.env, c.req.raw);
 
-  const body = data?.body ?? (await parseJsonBody(c.req, adminRegistrationUpdateSchema));
+  const body = data.body;
 
   // ── force_status: override lifecycle status while preserving day capacity ──
   if (body.action === "force_status") {
@@ -196,8 +191,5 @@ export async function onRequestPatch(
   );
 }
 
-// ── Router ────────────────────────────────────────────────────────────────────
-
-export async function onRequest(c: AdminContext): Promise<Response> {
-  return dispatchRequestMethod(c, { GET: onRequestGet, PATCH: onRequestPatch });
-}
+export const AdminRegistrationDetailGet = openApiRoute(adminRegistrationDetailRouteSchema, handleAdminRegistrationGet);
+export const AdminRegistrationPatch = openApiRoute(adminRegistrationPatchRouteSchema, handleAdminRegistrationPatch);

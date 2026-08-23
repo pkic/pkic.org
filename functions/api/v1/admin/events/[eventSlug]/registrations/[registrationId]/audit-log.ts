@@ -12,14 +12,20 @@ import { listRegistrationAuditLog } from "../../../../../../../_lib/services/aud
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 import { adminRegistrationAuditLogRouteSchema } from "../../../../../../../../assets/shared/schemas/route-contracts";
 import type { ValidatedData } from "chanfana";
+import { openApiRoute } from "../../../../../../../_lib/openapi/route";
 
-export async function onRequestGet(
+async function handleAdminRegistrationAuditLog(
   c: AdminContext,
-  data?: ValidatedData<typeof adminRegistrationAuditLogRouteSchema>,
+  data: ValidatedData<typeof adminRegistrationAuditLogRouteSchema>,
 ): Promise<Response> {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const event = await getEventBySlug(requestDb(c), data?.params.eventSlug ?? c.req.param("eventSlug"));
-  const registrationId = data?.params.registrationId ?? c.req.param("registrationId");
-  const query = data?.query ?? adminRegistrationAuditLogRouteSchema.request.query.parse({});
+  const event = await getEventBySlug(requestDb(c), data.params.eventSlug);
+  const registrationId = data.params.registrationId;
+  const query = data.query;
   return json(await listRegistrationAuditLog(requestDb(c), event.id, registrationId, query));
 }
+
+export const AdminRegistrationAuditLogGet = openApiRoute(
+  adminRegistrationAuditLogRouteSchema,
+  handleAdminRegistrationAuditLog,
+);

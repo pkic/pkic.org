@@ -12,9 +12,6 @@ import { onRequest as speakerManageDispatch } from "../functions/api/v1/proposal
 import { onRequest as proposerSpeakersDispatch } from "../functions/api/v1/proposals/manage/[token]/speakers";
 import { onRequest as registrationManageDispatch } from "../functions/api/v1/registrations/manage/[token]";
 import { onRequest as registrationHeadshotDispatch } from "../functions/api/v1/registrations/manage/[token]/headshot";
-import { onRequest as waitlistPromoteDispatch } from "../functions/api/v1/admin/events/[eventSlug]/waitlist/promote";
-import { onRequest as adminRegistrationDispatch } from "../functions/api/v1/admin/events/[eventSlug]/registrations/[registrationId]/index";
-import { onRequest as registrationAdmitDispatch } from "../functions/api/v1/admin/events/[eventSlug]/registrations/[registrationId]/admit";
 
 function context(method: string) {
   return { req: { raw: new Request("https://app.test/resource", { method }) } };
@@ -128,27 +125,6 @@ describe("HTTP method dispatch", () => {
       method: "PATCH",
       allow: "PUT, DELETE",
       handler: registrationHeadshotDispatch,
-    },
-    {
-      label: "waitlist promotion",
-      path: "/admin/events/event/waitlist/promote",
-      method: "GET",
-      allow: "POST",
-      handler: waitlistPromoteDispatch,
-    },
-    {
-      label: "admin registration management",
-      path: "/admin/events/event/registrations/registration",
-      method: "POST",
-      allow: "GET, PATCH",
-      handler: adminRegistrationDispatch,
-    },
-    {
-      label: "registration admission",
-      path: "/admin/events/event/registrations/registration/admit",
-      method: "GET",
-      allow: "POST",
-      handler: registrationAdmitDispatch,
     },
   ])("returns the canonical mounted 405 for a $label route", async ({ path, method, allow, handler, mounted }) => {
     if (mounted) {

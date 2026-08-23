@@ -9,7 +9,6 @@ import {
   onRequestPatch as updateRegistration,
 } from "../functions/api/v1/registrations/manage/[token]";
 import { onRequest as registrationHeadshot } from "../functions/api/v1/registrations/manage/[token]/headshot";
-import { onRequestPost as openRegistrationManage } from "../functions/api/v1/admin/events/[eventSlug]/registrations/[registrationId]/open-manage";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { createRegistration, confirmRegistrationByToken } from "../functions/_lib/services/registrations";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
@@ -247,18 +246,17 @@ describe("manage read endpoints", () => {
       signingSecret: "test-signing-secret",
     });
 
-    const openResponse = await openRegistrationManage(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/admin/events/pqc-2026/registrations/open-manage", {
+    const openResponse = await callApp(
+      new Request(
+        `https://app.test/api/v1/admin/events/pqc-2026/registrations/${created.registration.id}/open-manage`,
+        {
           method: "POST",
           headers: {
             authorization: `Bearer ${adminToken}`,
             "cf-connecting-ip": "203.0.113.30",
             "user-agent": "admin-browser",
           },
-        }),
-        { eventSlug: "pqc-2026", registrationId: created.registration.id },
+        },
       ),
     );
 

@@ -9,17 +9,18 @@ import { requestDb, type AdminContext } from "../../../../../../../_lib/db/conte
 import { adminRegistrationResendConfirmationResponseSchema } from "../../../../../../../../assets/shared/schemas/route-contracts-admin-registrations";
 import { adminRegistrationResendConfirmationRouteSchema } from "../../../../../../../../assets/shared/schemas/route-contracts-admin-registrations";
 import type { ValidatedData } from "chanfana";
+import { openApiRoute } from "../../../../../../../_lib/openapi/route";
 
-export async function onRequestPost(
+async function handleAdminRegistrationResendConfirmation(
   c: AdminContext,
-  data?: ValidatedData<typeof adminRegistrationResendConfirmationRouteSchema>,
+  data: ValidatedData<typeof adminRegistrationResendConfirmationRouteSchema>,
 ): Promise<Response> {
   const db = requestDb(c);
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
-  const event = await getEventBySlug(db, data?.params.eventSlug ?? c.req.param("eventSlug"));
+  const event = await getEventBySlug(db, data.params.eventSlug);
   const config = getConfig(c.env, c.req.raw);
   const result = await resendRegistrationEmail(db, {
-    registrationId: data?.params.registrationId ?? c.req.param("registrationId"),
+    registrationId: data.params.registrationId,
     event,
     actorUserId: admin.id,
     appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
@@ -30,3 +31,8 @@ export async function onRequestPost(
   c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, result.outboxId));
   return json(adminRegistrationResendConfirmationResponseSchema.parse({ success: true, message: "Email queued" }));
 }
+
+export const AdminRegistrationResendConfirmation = openApiRoute(
+  adminRegistrationResendConfirmationRouteSchema,
+  handleAdminRegistrationResendConfirmation,
+);

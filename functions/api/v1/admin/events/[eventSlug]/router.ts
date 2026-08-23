@@ -5,13 +5,10 @@ import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { requestDb } from "../../../../../_lib/db/context";
 import { AppError } from "../../../../../_lib/errors";
-import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { AdminEventDaysGet, AdminEventDaysReplace } from "./days";
 import { AdminEventFormsCreate, onRequestGet as AdminEventsEventSlugFormsGet_l } from "./forms";
 import { AdminEventsEventSlugGet } from "./index";
-import { AdminEventTeamList } from "./permissions";
-import { onRequestPost as AdminEventsEventSlugPermissionsPost_l } from "./permissions";
-import { adminEventTeamPermissionCreateRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts";
+import { AdminEventTeamList, AdminEventTeamPermissionCreate } from "./permissions";
 import { AdminEventPromotersGet } from "./promoters";
 import { AdminEventPresentationsDownloadGet } from "./presentations/download";
 import { AdminEventsEventSlugProposalsGet } from "./proposals";
@@ -82,10 +79,7 @@ openapi.get("/forms", AdminEventsEventSlugFormsGet_l);
 openapi.post("/forms", AdminEventFormsCreate);
 openapi.get("/", AdminEventsEventSlugGet);
 openapi.get("/permissions", AdminEventTeamList);
-openapi.post(
-  "/permissions",
-  openApiRoute(adminEventTeamPermissionCreateRouteSchema, AdminEventsEventSlugPermissionsPost_l),
-);
+openapi.post("/permissions", AdminEventTeamPermissionCreate);
 openapi.get("/promoters", AdminEventPromotersGet);
 openapi.get("/presentations/download", AdminEventPresentationsDownloadGet);
 openapi.get("/proposals", AdminEventsEventSlugProposalsGet);
