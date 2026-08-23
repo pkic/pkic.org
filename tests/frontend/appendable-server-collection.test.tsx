@@ -43,6 +43,7 @@ function Harness(props: {
   identity: string;
   load: CollectionLoader;
   onState: (state: State) => void;
+  nextOffset?: (data: Response) => number;
 }) {
   const state = useAppendableServerCollection({
     endpoint: props.endpoint ?? "/api/items",
@@ -51,6 +52,7 @@ function Harness(props: {
     responseSchema,
     load: props.load,
     merge,
+    nextOffset: props.nextOffset,
   });
   props.onState(state);
   return null;
@@ -147,5 +149,38 @@ describe("useAppendableServerCollection request ordering", () => {
 
     expect(latest.data?.items.map((item) => item.id)).toEqual(["fresh"]);
     expect(latest.page?.offset).toBe(0);
+  });
+
+  it("uses a response-specific next offset for grouped or transformed collections", async () => {
+    const requests = new Map<string, Deferred<Response>>();
+    const load = deferredLoader(requests);
+    let latest!: State;
+    const container = document.createElement("div");
+    mounted.push(container);
+
+    await act(() =>
+      render(
+        h(Harness, {
+          identity: "grouped",
+          load,
+          nextOffset: (data) => data.items.length,
+          onState: (state) => (latest = state),
+        }),
+        container,
+      ),
+    );
+    requests
+      .get("/api/items?identity=grouped&limit=1&offset=0")!
+      .resolve({ items: [{ id: "first" }], page: { limit: 200, offset: 0, total: 2, hasMore: true } });
+    await act(flush);
+
+    const append = latest.loadMore();
+    requests.get("/api/items?identity=grouped&limit=1&offset=1")!.resolve(response("second", 1));
+    await act(async () => {
+      await append;
+      await flush();
+    });
+
+    expect(latest.data?.items.map((item) => item.id)).toEqual(["first", "second"]);
   });
 });

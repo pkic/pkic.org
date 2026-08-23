@@ -152,6 +152,8 @@ export interface AppendableServerCollectionOptions<T extends AppendablePageRespo
   responseSchema: z.ZodType<T>;
   load: CollectionLoader;
   merge: (current: T, next: T) => T;
+  /** Derives the next server offset when response rows are grouped or transformed. */
+  nextOffset?: (data: T) => number;
 }
 
 export interface AppendableServerCollectionState<T extends AppendablePageResponse> {
@@ -177,6 +179,7 @@ export function useAppendableServerCollection<T extends AppendablePageResponse>(
   responseSchema,
   load,
   merge,
+  nextOffset,
 }: AppendableServerCollectionOptions<T>): AppendableServerCollectionState<T> {
   const requestGate = useRef<ReturnType<typeof createLatestRequestGate> | null>(null);
   requestGate.current ??= createLatestRequestGate();
@@ -252,9 +255,9 @@ export function useAppendableServerCollection<T extends AppendablePageResponse>(
 
   const loadMore = useCallback((): Promise<void> => {
     if (appendOwner.current !== null || !state.data?.page.hasMore) return Promise.resolve();
-    const offset = state.data.page.offset + state.data.page.limit;
+    const offset = nextOffset?.(state.data) ?? state.data.page.offset + state.data.page.limit;
     return requestPage(offset, true);
-  }, [requestPage, state.data]);
+  }, [nextOffset, requestPage, state.data]);
 
   return {
     data: state.data,

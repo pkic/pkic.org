@@ -35,6 +35,10 @@ export function mergeSponsorDisplayPages(
   return { groups: [...groups.values()].sort((a, b) => b.weight - a.weight), page: next.page };
 }
 
+export function sponsorDisplayNextOffset(display: SponsorsDisplayResponse): number {
+  return display.groups.reduce((count, group) => count + group.sponsors.length, 0);
+}
+
 const loadSponsorDisplayPage: CollectionLoader = (url, signal, responseSchema) =>
   getJson(url, responseSchema, { signal });
 
@@ -108,6 +112,7 @@ export function useSponsorDisplay(
     responseSchema: sponsorsDisplayResponseSchema,
     load: loadSponsorDisplayPage,
     merge: mergeSponsorDisplayPages,
+    nextOffset: sponsorDisplayNextOffset,
   });
   return {
     display: listing.data,
