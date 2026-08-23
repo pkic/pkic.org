@@ -82,8 +82,16 @@ export const InviteAcceptPost = openApiRoute(
   inviteAcceptRouteSchema,
   (c: AdminContext, data) =>
     acceptInviteRequest(c, data.params.token, data.query.id, async () => {
-      if (!data.body) throw new AppError(400, "INVALID_BODY", "Attendee registration details are required");
-      return data.body;
+      const attendeeBody = inviteAcceptAttendeeSchema.safeParse(data.body);
+      if (!attendeeBody.success) {
+        throw new AppError(
+          400,
+          "VALIDATION_ERROR",
+          "Attendee registration details are required",
+          attendeeBody.error.flatten(),
+        );
+      }
+      return attendeeBody.data;
     }),
   (c: AdminContext) => c.set?.("sensitive", true),
 );
