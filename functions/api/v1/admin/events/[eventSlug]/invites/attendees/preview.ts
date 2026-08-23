@@ -5,13 +5,22 @@ import { getEventBySlug } from "../../../../../../../_lib/services/events";
 import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { requireInternalSecret } from "../../../../../../../_lib/request";
 import { buildAdminInvitePreview } from "../../../../../../../_lib/services/admin-invite-preview-email";
+import {
+  adminAttendeeInvitePreviewResponseSchema,
+  adminAttendeeInvitePreviewRouteSchema,
+} from "../../../../../../../../assets/shared/schemas/route-contracts-admin-event-communications";
 import { adminBulkAttendeeInvitesPreviewSchema } from "../../../../../../../../assets/shared/schemas/admin-events";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
+import { openApiRoute } from "../../../../../../../_lib/openapi/route";
+import type { ValidatedData } from "chanfana";
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+export async function onRequestPost(
+  c: AdminContext,
+  validated?: ValidatedData<typeof adminAttendeeInvitePreviewRouteSchema>,
+): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const body = await parseJsonBody(c.req, adminBulkAttendeeInvitesPreviewSchema);
-  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
+  const body = validated?.body ?? (await parseJsonBody(c.req, adminBulkAttendeeInvitesPreviewSchema));
+  const event = await getEventBySlug(requestDb(c), validated?.params.eventSlug ?? c.req.param("eventSlug"));
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const secret = requireInternalSecret(c.env);
 
@@ -25,11 +34,13 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     invites: body.invites,
   });
 
-  return json({
-    success: true,
-    ...preview,
-  });
+  return json(adminAttendeeInvitePreviewResponseSchema.parse({ success: true, ...preview }));
 }
+
+export const AdminEventsEventSlugInvitesAttendeesPreviewPost = openApiRoute(
+  adminAttendeeInvitePreviewRouteSchema,
+  onRequestPost,
+);
 
 export async function onRequest(c: AdminContext): Promise<Response> {
   return dispatchPostOnly(c, onRequestPost);

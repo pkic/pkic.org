@@ -21,14 +21,23 @@ import {
   signCampaignPreviewToken,
 } from "../../../../../../../_lib/services/admin-email-campaign";
 import { adminEventCampaignPreviewSchema } from "../../../../../../../../assets/shared/schemas/admin-events";
+import {
+  adminEventCampaignPreviewResponseSchema,
+  adminEventCampaignPreviewRouteSchema,
+} from "../../../../../../../../assets/shared/schemas/route-contracts-admin-event-communications";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
+import { openApiRoute } from "../../../../../../../_lib/openapi/route";
+import type { ValidatedData } from "chanfana";
 
 const PREVIEW_TTL_SECONDS = 10 * 60;
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+export async function onRequestPost(
+  c: AdminContext,
+  validated?: ValidatedData<typeof adminEventCampaignPreviewRouteSchema>,
+): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const body = await parseJsonBody(c.req, adminEventCampaignPreviewSchema);
-  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
+  const body = validated?.body ?? (await parseJsonBody(c.req, adminEventCampaignPreviewSchema));
+  const event = await getEventBySlug(requestDb(c), validated?.params.eventSlug ?? c.req.param("eventSlug"));
   const secret = requireInternalSecret(c.env);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const campaign = await prepareAdminCampaign(
@@ -49,17 +58,19 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   });
 
   if (uniqueRecipients.length === 0) {
-    return json({
-      success: true,
-      recipientCount: 0,
-      batchCount: 0,
-      previewToken: token.token,
-      previewExpiresAt: token.expiresAt,
-      sampleRecipients: [],
-      subject: body.subjectOverride ?? `Update: ${event.name}`,
-      html: "<p>No recipients matched your filter.</p>",
-      text: "No recipients matched your filter.",
-    });
+    return json(
+      adminEventCampaignPreviewResponseSchema.parse({
+        success: true,
+        recipientCount: 0,
+        batchCount: 0,
+        previewToken: token.token,
+        previewExpiresAt: token.expiresAt,
+        sampleRecipients: [],
+        subject: body.subjectOverride ?? `Update: ${event.name}`,
+        html: "<p>No recipients matched your filter.</p>",
+        text: "No recipients matched your filter.",
+      }),
+    );
   }
 
   if (!body.bodyContent && !body.templateKey) {
@@ -117,18 +128,25 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   const batchCount =
     body.sendMode === "bcc_batch" ? chunkRecipients(uniqueRecipients, body.batchSize).length : uniqueRecipients.length;
 
-  return json({
-    success: true,
-    recipientCount: uniqueRecipients.length,
-    batchCount,
-    previewToken: token.token,
-    previewExpiresAt: token.expiresAt,
-    sampleRecipients: uniqueRecipients.slice(0, 10).map((recipient) => recipient.email),
-    subject,
-    html: rendered.html,
-    text: rendered.text,
-  });
+  return json(
+    adminEventCampaignPreviewResponseSchema.parse({
+      success: true,
+      recipientCount: uniqueRecipients.length,
+      batchCount,
+      previewToken: token.token,
+      previewExpiresAt: token.expiresAt,
+      sampleRecipients: uniqueRecipients.slice(0, 10).map((recipient) => recipient.email),
+      subject,
+      html: rendered.html,
+      text: rendered.text,
+    }),
+  );
 }
+
+export const AdminEventsEventSlugEmailsCampaignPreviewPost = openApiRoute(
+  adminEventCampaignPreviewRouteSchema,
+  onRequestPost,
+);
 
 export async function onRequest(c: AdminContext): Promise<Response> {
   return dispatchPostOnly(c, onRequestPost);

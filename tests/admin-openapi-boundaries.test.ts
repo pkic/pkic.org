@@ -6,6 +6,7 @@ import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 import { openapi } from "../functions/router";
+import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 
 let adminToken: string;
 
@@ -52,6 +53,11 @@ describe("admin OpenAPI mutation boundaries", () => {
     expect(
       spec.paths["/api/v1/admin/organizations/{id}/logo"].delete.responses["200"].content["application/json"].schema,
     ).toMatchObject({ required: ["success"] });
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/invites/attendees/preview"].post).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/invites/speakers/preview"].post).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/invites/{inviteId}/resend"].post).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/emails/campaign/preview"].post).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/emails/campaign/send"].post).toBeDefined();
   });
 
   it("rejects invalid JSON bodies at the preview and version contract boundaries", async () => {
@@ -86,6 +92,76 @@ describe("admin OpenAPI mutation boundaries", () => {
     });
     expect(logo.status).toBe(400);
     await expect(logo.json()).resolves.toMatchObject({ error: { code: "VALIDATION_ERROR" } });
+  });
+
+  it("rejects malformed invite and campaign mutation bodies at the mounted contracts", async () => {
+    await setupAdmin();
+
+    const attendeePreview = await callAdmin("/api/v1/admin/events/pqc-2026/invites/attendees/preview", {
+      method: "POST",
+      body: JSON.stringify({ invites: [] }),
+    });
+    expect(attendeePreview.status).toBe(400);
+
+    const speakerPreview = await callAdmin("/api/v1/admin/events/pqc-2026/invites/speakers/preview", {
+      method: "POST",
+      body: JSON.stringify({ invites: [] }),
+    });
+    expect(speakerPreview.status).toBe(400);
+
+    const campaignPreview = await callAdmin("/api/v1/admin/events/pqc-2026/emails/campaign/preview", {
+      method: "POST",
+      body: JSON.stringify({ sendMode: "personal", batchSize: 50 }),
+    });
+    expect(campaignPreview.status).toBe(400);
+
+    const campaignSend = await callAdmin("/api/v1/admin/events/pqc-2026/emails/campaign/send", {
+      method: "POST",
+      body: JSON.stringify({
+        sendMode: "personal",
+        batchSize: 50,
+        filter: { audience: "attendees" },
+        bodyContent: "Hello",
+      }),
+    });
+    expect(campaignSend.status).toBe(400);
+
+    const resend = await callAdmin("/api/v1/admin/events/pqc-2026/invites/not-a-database-id/resend", {
+      method: "POST",
+    });
+    expect(resend.status).toBe(400);
+  });
+
+  it("returns validated invite and campaign previews through the mounted routes", async () => {
+    await setupAdmin();
+    const [{ id: adminId }] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1",
+    );
+    await seedWorkflowEmailTemplates(env.DB, adminId);
+
+    const invitePreview = await callAdmin("/api/v1/admin/events/pqc-2026/invites/attendees/preview", {
+      method: "POST",
+      body: JSON.stringify({ invites: [{ email: "preview@example.test", firstName: "Preview" }] }),
+    });
+    expect(invitePreview.status).toBe(200);
+    await expect(invitePreview.json()).resolves.toMatchObject({
+      success: true,
+      recipientCount: 1,
+      inviteDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
+    });
+
+    const campaignPreview = await callAdmin("/api/v1/admin/events/pqc-2026/emails/campaign/preview", {
+      method: "POST",
+      body: JSON.stringify({ sendMode: "personal", batchSize: 50, filter: { audience: "attendees" } }),
+    });
+    expect(campaignPreview.status).toBe(200);
+    await expect(campaignPreview.json()).resolves.toMatchObject({
+      success: true,
+      recipientCount: 0,
+      batchCount: 0,
+      sampleRecipients: [],
+    });
   });
 
   it("mounts organization logo handlers without consuming the binary request body as JSON", async () => {

@@ -5,20 +5,33 @@ import { processOutboxByIdBackground } from "../../../../../../../_lib/email/out
 import { dispatchPostOnly, json } from "../../../../../../../_lib/http";
 import { getEventBySlug } from "../../../../../../../_lib/services/events";
 import { resendInviteByAdmin } from "../../../../../../../_lib/services/invite-resend";
+import { openApiRoute } from "../../../../../../../_lib/openapi/route";
+import type { ValidatedData } from "chanfana";
+import {
+  adminInviteResendResponseSchema,
+  adminInviteResendRouteSchema,
+} from "../../../../../../../../assets/shared/schemas/route-contracts-admin-event-communications";
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+export async function onRequestPost(
+  c: AdminContext,
+  validated?: ValidatedData<typeof adminInviteResendRouteSchema>,
+): Promise<Response> {
   const db = requestDb(c);
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
-  const event = await getEventBySlug(db, c.req.param("eventSlug"));
+  const eventSlug = validated?.params.eventSlug ?? c.req.param("eventSlug");
+  const inviteId = validated?.params.inviteId ?? c.req.param("inviteId");
+  const event = await getEventBySlug(db, eventSlug);
   const result = await resendInviteByAdmin(db, {
     event,
-    inviteId: c.req.param("inviteId"),
+    inviteId,
     admin,
     appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
   });
   c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, result.outboxId));
-  return json({ success: true, inviteId: result.inviteId, resentAt: result.resentAt, inviteType: result.inviteType });
+  return json(adminInviteResendResponseSchema.parse({ success: true, ...result }));
 }
+
+export const AdminEventsEventSlugInvitesInviteIdResendPost = openApiRoute(adminInviteResendRouteSchema, onRequestPost);
 
 export async function onRequest(c: AdminContext): Promise<Response> {
   return dispatchPostOnly(c, onRequestPost);
