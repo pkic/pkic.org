@@ -42,9 +42,9 @@ import {
   presentationVersionsListQuerySchema,
   presentationVersionsResponseSchema,
 } from "./presentation-versions";
-import { httpUrlSchema } from "./urls";
+import { httpCapabilityUrlSchema } from "./urls";
 
-export const adminProposalOpenManageResponseSchema = z.object({ manageUrl: httpUrlSchema });
+export const adminProposalOpenManageResponseSchema = z.object({ manageUrl: httpCapabilityUrlSchema });
 
 export const adminProposalOpenManageRouteSchema = {
   tags: ["Admin proposals"],
