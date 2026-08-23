@@ -105,6 +105,10 @@ export const adminProposalSpeakersResponseSchema = z.object({
 export const adminProposalSpeakerPatchResponseSchema = successResponseSchema.extend({
   speaker: adminProposalSpeakerSchema,
 });
+export const adminProposalSpeakerReminderResponseSchema = successResponseSchema;
+export const adminProposalSpeakerRemindersResponseSchema = successResponseSchema.extend({
+  queued: z.number().int().nonnegative(),
+});
 
 export type AdminProposalSpeakerPatch = z.infer<typeof adminSpeakerBioPatchSchema>;
 export type AdminProposalSpeaker = z.infer<typeof adminProposalSpeakerSchema>;

@@ -2219,6 +2219,65 @@ describe("speaker self-management endpoints", () => {
     expect(speakerResponse.status).toBe(200);
   });
 
+  it("routes profile and presentation reminders through the validated admin contracts", async () => {
+    await setupWorkflow();
+    const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const workerContext = {
+      passThroughOnException: () => {},
+      waitUntil: () => {},
+    } as any;
+    const adminHeaders = { authorization: `Bearer ${adminSessionToken}` };
+    const path = `/api/v1/admin/proposals/${proposalId}/speakers/${coSpeakerUserId}`;
+
+    const profileResponse = await app.fetch(
+      new Request(`https://app.test${path}/remind`, { method: "POST", headers: adminHeaders }),
+      env,
+      workerContext,
+    );
+    expect(profileResponse.status).toBe(200);
+    expect(await profileResponse.json()).toEqual({ success: true });
+
+    await env.DB.prepare(
+      `INSERT INTO proposal_decisions (
+         id, proposal_id, decided_by_user_id, final_status, decision_note,
+         min_reviews_required, review_count, decided_at
+       ) VALUES (?, ?, ?, 'accepted', NULL, 0, 0, datetime('now'))`,
+    )
+      .bind(
+        crypto.randomUUID(),
+        proposalId,
+        (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0].id,
+      )
+      .run();
+
+    const presentationResponse = await app.fetch(
+      new Request(`https://app.test${path}/remind-presentation`, { method: "POST", headers: adminHeaders }),
+      env,
+      workerContext,
+    );
+    expect(presentationResponse.status).toBe(200);
+    expect(await presentationResponse.json()).toEqual({ success: true });
+  });
+
+  it("rejects malformed speaker reminder identifiers before the mutation service runs", async () => {
+    await setupWorkflow();
+    const { proposalId } = await inviteSpeakerAndSubmitProposal();
+    const workerContext = {
+      passThroughOnException: () => {},
+      waitUntil: () => {},
+    } as any;
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/not-a-uuid/remind`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${adminSessionToken}` },
+      }),
+      env,
+      workerContext,
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: { code: "VALIDATION_ERROR" } });
+  });
+
   it("rolls back a proposer reminder email and reminder state when audit fails", async () => {
     await setupWorkflow();
     const { proposalId, proposalManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();

@@ -19,6 +19,7 @@ import {
 import {
   adminProposalSpeakerPatchResponseSchema,
   adminProposalSpeakersResponseSchema,
+  adminProposalSpeakerReminderResponseSchema,
   proposalDecisionPreviewResponseSchema,
 } from "./admin-event-proposals";
 import {
@@ -365,6 +366,25 @@ export const adminProposalSpeakerDeleteRouteSchema = {
     "409": {
       description: "The final speaker cannot be removed, a proposer replacement is required, or state changed.",
     },
+  },
+};
+
+export const adminProposalSpeakerReminderRouteSchema = {
+  tags: ["Admin proposal speakers"],
+  summary: "Remind a proposal speaker",
+  description: "Queues a profile or presentation reminder for one speaker on this proposal.",
+  request: {
+    params: proposalSpeakerIdParamsSchema,
+  },
+  responses: {
+    "200": {
+      description: "Reminder queued.",
+      content: { "application/json": { schema: adminProposalSpeakerReminderResponseSchema } },
+    },
+    "401": { description: "Admin authorization required." },
+    "403": { description: "The admin lacks proposal management permission." },
+    "404": { description: "Proposal or speaker not found." },
+    "409": { description: "The proposal or speaker is not eligible for this reminder." },
   },
 };
 

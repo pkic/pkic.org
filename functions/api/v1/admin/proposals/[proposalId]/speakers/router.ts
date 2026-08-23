@@ -7,8 +7,8 @@ import {
 import { handleError } from "../../../../../../_lib/http";
 import { openApiRoute } from "../../../../../../_lib/openapi/route";
 import { onRequestDelete as AdminSpeakerDelete, onRequestPatch as AdminSpeakerPatch } from "./[userId]";
-import { onRequestPost as AdminSpeakerRemindPost } from "./[userId]/remind";
-import { onRequestPost as AdminSpeakerRemindPresentationPost } from "./[userId]/remind-presentation";
+import { AdminProposalSpeakerRemindPost } from "./[userId]/remind";
+import { AdminProposalSpeakerRemindPresentationPost } from "./[userId]/remind-presentation";
 import {
   AdminProposalSpeakerHeadshotDelete,
   AdminProposalSpeakerHeadshotGet,
@@ -23,8 +23,8 @@ export const openapi = fromHono(app);
 
 openapi.patch("/:userId", openApiRoute(adminProposalSpeakerPatchRouteSchema, AdminSpeakerPatch));
 openapi.delete("/:userId", openApiRoute(adminProposalSpeakerDeleteRouteSchema, AdminSpeakerDelete));
-app.post("/:userId/remind", AdminSpeakerRemindPost);
-app.post("/:userId/remind-presentation", AdminSpeakerRemindPresentationPost);
+openapi.post("/:userId/remind", AdminProposalSpeakerRemindPost);
+openapi.post("/:userId/remind-presentation", AdminProposalSpeakerRemindPresentationPost);
 openapi.get("/:userId/headshot", AdminProposalSpeakerHeadshotGet);
 openapi.put("/:userId/headshot", AdminProposalSpeakerHeadshotPut);
 openapi.delete("/:userId/headshot", AdminProposalSpeakerHeadshotDelete);
