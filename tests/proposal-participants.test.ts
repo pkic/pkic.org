@@ -4,7 +4,6 @@ import { env } from "cloudflare:workers";
 import { createContext, deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { onRequestPost as submitProposal } from "../functions/api/v1/events/[eventSlug]/proposals";
-import { onRequestGet as getBadgeRole } from "../functions/api/v1/admin/events/[eventSlug]/registrations/[registrationId]/badge-role";
 import {
   addProposalSpeaker,
   createProposal,
@@ -455,14 +454,12 @@ describe("proposal participants", () => {
 
     const adminToken = await createAdminSession(env.DB, adminRow.id, "token-admin-badge-role");
 
-    const pendingResponse = await getBadgeRole(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/admin/events/pqc-2026/registrations/${registrationId}/badge-role`, {
-          headers: { authorization: `Bearer ${adminToken}` },
-        }),
-        { eventSlug: "pqc-2026", registrationId },
-      ),
+    const pendingResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/events/pqc-2026/registrations/${registrationId}/badge-role`, {
+        headers: { authorization: `Bearer ${adminToken}` },
+      }),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
 
     expect(pendingResponse.status).toBe(200);
@@ -490,14 +487,12 @@ describe("proposal participants", () => {
     )[0];
     expect(acceptedParticipant.status).toBe("active");
 
-    const acceptedResponse = await getBadgeRole(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/admin/events/pqc-2026/registrations/${registrationId}/badge-role`, {
-          headers: { authorization: `Bearer ${adminToken}` },
-        }),
-        { eventSlug: "pqc-2026", registrationId },
-      ),
+    const acceptedResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/events/pqc-2026/registrations/${registrationId}/badge-role`, {
+        headers: { authorization: `Bearer ${adminToken}` },
+      }),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
 
     expect(acceptedResponse.status).toBe(200);
