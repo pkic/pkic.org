@@ -4,7 +4,7 @@ import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 import { deriveEventAttendanceType, getRegistrationDayAttendance, listEventDays } from "../event-days";
 import { getEventBySlug } from "../events";
-import { getRegistrationById } from "./queries";
+import { getRegistrationByIdForEvent } from "./queries";
 import { updateRegistrationByIdWithNotification } from "./update";
 
 export async function updateAdminRegistrationDayAttendance(
@@ -19,8 +19,11 @@ export async function updateAdminRegistrationDayAttendance(
 ): Promise<{ outboxId: string | null }> {
   const event = await getEventBySlug(db, input.eventSlug);
   requirePermission(actor, "events:manage", { type: "event", id: event.id });
-  const registration = await getRegistrationById(db, input.registrationId);
-  if (registration.event_id !== event.id) throw new AppError(404, "NOT_FOUND", "Registration not found for this event");
+  // Keep this aggregate snapshot from before the day-roster read and pass it
+  // through to the transition guard below. If another admin changes any day
+  // after this point, that update advances transition_revision and this stale
+  // plan fails with REGISTRATION_CHANGED instead of replacing their roster.
+  const registration = await getRegistrationByIdForEvent(db, event.id, input.registrationId);
 
   const [eventDays, current] = await Promise.all([
     listEventDays(db, event.id),
@@ -62,6 +65,7 @@ export async function updateAdminRegistrationDayAttendance(
       },
     },
     actor.id,
+    registration,
   );
   return { outboxId: result.outboxId };
 }

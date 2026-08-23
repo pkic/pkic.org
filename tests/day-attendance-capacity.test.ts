@@ -15,6 +15,7 @@ import { updateAdminRegistrationDayAttendance } from "../functions/_lib/services
 import { promoteDayWaitlistIfCapacity } from "../functions/_lib/services/registrations/day-waitlist";
 import { buildCreateRegistration } from "../functions/_lib/services/registrations/create";
 import { promoteEventWaitlistWithNotifications } from "../functions/_lib/services/registrations/waitlist-promotions";
+import { gateNextBatch } from "./helpers/d1-batch-gate";
 
 describe("day attendance capacity", () => {
   beforeEach(async () => {
@@ -939,5 +940,74 @@ describe("day attendance capacity", () => {
     expect(rows.find((row) => row.registration_id === waiting.registration.id)?.status).toBe("waiting");
     expect(rows.find((row) => row.registration_id === waiting.registration.id)?.position).toBe(1);
     expect(rows.find((row) => row.registration_id === backup.registration.id)?.position).toBe(2);
+  });
+
+  it("rejects a stale admin day patch instead of losing another admin's day change", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO event_days
+           (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
+         VALUES
+           ('concurrent-day-a', ?, '2026-12-01', 'Day A', NULL, 10, datetime('now'), datetime('now')),
+           ('concurrent-day-b', ?, '2026-12-02', 'Day B', NULL, 20, datetime('now'), datetime('now'))`,
+      ).bind(eventId, eventId),
+      env.DB.prepare(
+        `INSERT INTO users
+           (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+         VALUES ('concurrent-day-user', 'concurrent-days@example.test', 'concurrent-days@example.test',
+                 'Concurrent', 'Days', datetime('now'), datetime('now'))`,
+      ),
+    ]);
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const created = await createRegistration(env.DB, {
+      event,
+      userId: "concurrent-day-user",
+      attendanceType: "virtual",
+      dayAttendance: [
+        { dayDate: "2026-12-01", attendanceType: "virtual" },
+        { dayDate: "2026-12-02", attendanceType: "virtual" },
+      ],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    const [admin] = await queryAll<{ id: string; email: string }>(
+      env.DB,
+      "SELECT id, email FROM users WHERE role = 'admin' LIMIT 1",
+    );
+    const actor = { identityType: "user" as const, id: admin.id, email: admin.email, role: "admin" };
+    const gate = gateNextBatch(env.DB);
+    const stale = updateAdminRegistrationDayAttendance(gate.db, actor, {
+      eventSlug: event.slug,
+      registrationId: created.registration.id,
+      change: { action: "in_person", dayDates: ["2026-12-01"] },
+      appBaseUrl: "https://example.test",
+    });
+    await gate.reached;
+
+    await updateAdminRegistrationDayAttendance(env.DB, actor, {
+      eventSlug: event.slug,
+      registrationId: created.registration.id,
+      change: { action: "in_person", dayDates: ["2026-12-02"] },
+      appBaseUrl: "https://example.test",
+    });
+    gate.release();
+
+    await expect(stale).rejects.toMatchObject({ code: "REGISTRATION_CHANGED" });
+    expect(
+      await queryAll<{ day_date: string; attendance_type: string }>(
+        env.DB,
+        `SELECT ed.day_date, rda.attendance_type
+           FROM registration_day_attendance rda
+           JOIN event_days ed ON ed.id = rda.event_day_id
+          WHERE rda.registration_id = ?
+          ORDER BY ed.day_date`,
+        [created.registration.id],
+      ),
+    ).toEqual([
+      { day_date: "2026-12-01", attendance_type: "virtual" },
+      { day_date: "2026-12-02", attendance_type: "in_person" },
+    ]);
   });
 });

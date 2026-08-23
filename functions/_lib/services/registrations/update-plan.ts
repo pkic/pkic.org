@@ -23,6 +23,7 @@ import type { RegistrationRecord } from "./types";
 import type { AttendanceType } from "../../../../assets/shared/schemas/registration";
 import { prepareClearRegistrationEmailChangeStatement } from "./change-email";
 import { prepareRegistrationTransitionGuard } from "./transition-guard";
+import { newCapabilityLinkSecret } from "../capability-links";
 
 export interface RegistrationUpdatePayload {
   action: "update" | "cancel" | "report_unauthorized";
@@ -89,6 +90,18 @@ export async function buildRegistrationUpdate(
     throw dayWaitlistOfferUnavailableError();
   }
   const isCancelled = registration.status === "cancelled";
+  if (
+    payload.action === "update" &&
+    isCancelled &&
+    registration.cancellation_reason_code === "unauthorized_registration" &&
+    changedBy === "self"
+  ) {
+    throw new AppError(
+      409,
+      "UNAUTHORIZED_REGISTRATION_REVIEW_REQUIRED",
+      "This registration was reported as unauthorized and must be reviewed by an organizer before it can be restored",
+    );
+  }
   if (payload.action === "cancel") {
     if (isCancelled) throw new AppError(409, "ALREADY_CANCELLED", "Registration is already cancelled");
     const now = nowIso();
@@ -130,11 +143,16 @@ export async function buildRegistrationUpdate(
       throw new AppError(409, "ALREADY_CANCELLED", "This registration has already been cancelled");
     }
     const now = nowIso();
+    // Reporting an unknown registration is a security boundary, not an
+    // ordinary cancellation. Rotate the capability secret in the same batch
+    // so every previously issued manage link becomes unusable immediately.
+    const manageLinkSecret = newCapabilityLinkSecret();
     const updated: RegistrationRecord = {
       ...registration,
       status: "cancelled",
       cancellation_reason_code: "unauthorized_registration",
       custom_answers_json: null,
+      manage_link_secret: manageLinkSecret,
       cancelled_at: now,
       updated_at: now,
     };
@@ -144,10 +162,10 @@ export async function buildRegistrationUpdate(
         .prepare(
           `UPDATE registrations
            SET status = 'cancelled', cancellation_reason_code = 'unauthorized_registration',
-               cancelled_at = ?, custom_answers_json = NULL, updated_at = ?
+               cancelled_at = ?, custom_answers_json = NULL, manage_link_secret = ?, updated_at = ?
            WHERE id = ?`,
         )
-        .bind(now, now, registration.id),
+        .bind(now, manageLinkSecret, now, registration.id),
       prepareRemoveAllDayWaitlistStatement(db, {
         registrationId: registration.id,
         reasonCode: "registration_cancelled",
