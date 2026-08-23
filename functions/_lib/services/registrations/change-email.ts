@@ -22,6 +22,11 @@ import { newCapabilityLinkSecret, signedOrQueuedCapability } from "../capability
 import { prepareAuditLog } from "../audit";
 import { prepareRegistrationConfirmationEmail, type RegistrationConfirmationEmailParams } from "./status-notifications";
 import { findUserEmailOwner } from "../user-emails";
+import {
+  isRegistrationTransitionConflict,
+  prepareRegistrationTransitionGuard,
+  registrationChangedError,
+} from "./transition-guard";
 
 const PENDING_CONFIRMATION_DEADLINE_HOURS = 14 * 24;
 
@@ -43,7 +48,7 @@ export interface ChangeRegistrationEmailParams {
   allowCancelled?: boolean;
   auditActor?: { type: "admin" | "user"; id: string; action: string; eventId?: string };
   confirmationEmail?: Omit<RegistrationConfirmationEmailParams, "registrationId" | "recipientEmail" | "registration">;
-  /** Planned state supplied by a caller composing one larger D1 batch. */
+  /** Planned state supplied by a caller whose larger D1 batch owns the transition guard. */
   registrationOverride?: RegistrationRecord;
 }
 
@@ -138,6 +143,9 @@ export async function prepareRegistrationEmailChange(
   // Generate the capability before committing so a signing/configuration
   // failure cannot leave a pending change that the caller never received.
   const statements: StatementLike[] = [
+    // Standalone changes must reject a stale registration snapshot. Composed
+    // registration updates already carry this canonical guard in their batch.
+    ...(params.registrationOverride ? [] : [prepareRegistrationTransitionGuard(db, registration)]),
     db
       .prepare(
         `UPDATE registrations
@@ -209,7 +217,14 @@ export async function changeRegistrationEmail(
   params: ChangeRegistrationEmailParams,
 ): Promise<ChangeEmailResult> {
   const prepared = await prepareRegistrationEmailChange(db, params);
-  await db.batch(prepared.statements);
+  try {
+    await db.batch(prepared.statements);
+  } catch (error) {
+    if (isRegistrationTransitionConflict(error)) {
+      throw registrationChangedError();
+    }
+    throw error;
+  }
   const { statements: _statements, ...result } = prepared;
   return result;
 }
