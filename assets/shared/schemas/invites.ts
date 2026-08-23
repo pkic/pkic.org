@@ -107,7 +107,17 @@ export const inviteAcceptRouteSchema = {
   summary: "Accept an invite",
   request: {
     ...inviteCapabilityRequest,
-    body: { content: { "application/json": { schema: inviteAcceptAttendeeSchema.optional() } }, required: false },
+    body: {
+      content: {
+        "application/json": {
+          // Speaker acceptance has no attendee fields, but clients send an
+          // empty JSON object. Compose that shape with the attendee contract
+          // instead of bypassing mounted validation for this branch.
+          schema: z.union([inviteAcceptAttendeeSchema, z.object({}).strict()]).optional(),
+        },
+      },
+      required: false,
+    },
   },
   responses: {
     "200": { description: "Invite accepted.", content: { "application/json": { schema: inviteAcceptResponseSchema } } },

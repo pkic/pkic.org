@@ -368,12 +368,12 @@ describe("invite accept endpoint", () => {
     const response = await inviteAccept(
       createContext(
         env,
-        new Request("https://app.test/api/v1/invites/bogus-token/accept", {
+        new Request("https://app.test/api/v1/invites/bogus-token-0000/accept", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({}),
         }),
-        { token: "bogus-token" },
+        { token: "bogus-token-0000" },
       ),
     );
     expect(response.status).toBe(404);
@@ -527,12 +527,12 @@ describe("invite reminders endpoint", () => {
     const response = await inviteReminders(
       createContext(
         env,
-        new Request("https://app.test/api/v1/invites/bad-token/reminders", {
+        new Request("https://app.test/api/v1/invites/bad-token-value0/reminders", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ action: "resume" }),
         }),
-        { token: "bad-token" },
+        { token: "bad-token-value0" },
       ),
     );
     expect(response.status).toBe(404);
