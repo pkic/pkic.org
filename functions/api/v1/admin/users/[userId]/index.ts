@@ -2,17 +2,15 @@
 import {
   adminUserUpdateRouteSchema,
   adminUserUpdateResponseSchema,
-  adminUserUpdateSchema,
   adminUserDetailResponseSchema,
   adminUserDetailRouteSchema,
 } from "../../../../../../assets/shared/schemas/admin-users";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
-import { dispatchRequestMethod, json } from "../../../../../_lib/http";
+import { json } from "../../../../../_lib/http";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { getAdminUserDetail } from "../../../../../_lib/services/admin-user-detail";
 import { updateAdminUser } from "../../../../../_lib/services/admin-user-update";
-import { parseJsonBody } from "../../../../../_lib/validation";
 import type { ValidatedData } from "chanfana";
 
 export const AdminUsersUserIdGet = openApiRoute(adminUserDetailRouteSchema, async (c: AdminContext, data) => {
@@ -22,21 +20,17 @@ export const AdminUsersUserIdGet = openApiRoute(adminUserDetailRouteSchema, asyn
   );
 });
 
-export async function onRequestPatch(
+async function handleUserUpdate(
   c: AdminContext,
-  data?: ValidatedData<typeof adminUserUpdateRouteSchema>,
+  data: ValidatedData<typeof adminUserUpdateRouteSchema>,
 ): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const input = data?.body ?? (await parseJsonBody(c.req, adminUserUpdateSchema));
-  const userId = data?.params.userId ?? c.req.param("userId");
   return json(
     adminUserUpdateResponseSchema.parse({
       success: true,
-      user: await updateAdminUser(requestDb(c), admin, userId, input),
+      user: await updateAdminUser(requestDb(c), admin, data.params.userId, data.body),
     }),
   );
 }
 
-export async function onRequest(c: AdminContext): Promise<Response> {
-  return dispatchRequestMethod(c, { PATCH: onRequestPatch });
-}
+export const AdminUsersUserIdPatch = openApiRoute(adminUserUpdateRouteSchema, handleUserUpdate);

@@ -24,14 +24,13 @@ import { openApiRoute } from "../../../../../_lib/openapi/route";
  * or not found; the page degrades gracefully and the POST confirm step will
  * surface any real validation errors.
  */
-export async function onRequestGet(
+async function handleConfirmInfo(
   c: any,
-  data?: ValidatedData<typeof registrationConfirmInfoGetRouteSchema>,
+  data: ValidatedData<typeof registrationConfirmInfoGetRouteSchema>,
 ): Promise<Response> {
   c.set("sensitive", true);
-  const query = data?.query ?? Object.fromEntries(new URL(c.req.raw.url).searchParams);
-  const token = typeof query.token === "string" ? query.token : null;
-  const registrationId = typeof query.id === "string" ? query.id : null;
+  const token = data.query.token ?? null;
+  const registrationId = data.query.id ?? null;
 
   const empty: RegistrationConfirmInfoResponse = {
     firstName: null,
@@ -59,7 +58,7 @@ export async function onRequestGet(
     return json(registrationConfirmInfoResponseSchema.parse(empty));
   }
 
-  const row = await getRegistrationConfirmationInfo(requestDb(c), c.req.param("eventSlug"), resourceId);
+  const row = await getRegistrationConfirmationInfo(requestDb(c), data.params.eventSlug, resourceId);
 
   if (!row) {
     return json(registrationConfirmInfoResponseSchema.parse(empty));
@@ -82,6 +81,6 @@ export async function onRequestGet(
 
 export const EventsEventSlugRegistrationsConfirmInfoGet = openApiRoute(
   registrationConfirmInfoGetRouteSchema,
-  onRequestGet,
+  handleConfirmInfo,
   (c: any) => c.set("sensitive", true),
 );

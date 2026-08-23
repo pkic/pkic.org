@@ -74,6 +74,8 @@ export interface Env {
   IP_RATE_LIMITER?: RateLimitBinding;
   /** Optional explicit origin for local dev or background jobs that lack a request URL. */
   APP_BASE_URL?: string;
+  /** Comma-separated HTTPS hostnames permitted for remotely fetched event hero images. */
+  HERO_IMAGE_ALLOWED_HOSTS?: string;
   DEFAULT_MIN_PROPOSAL_REVIEWS?: string;
   DEFAULT_REFERRAL_CODE_LENGTH?: string;
   DEFAULT_INVITE_LIMIT_PER_ATTENDEE?: string;

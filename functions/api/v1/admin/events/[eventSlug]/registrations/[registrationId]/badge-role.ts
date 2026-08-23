@@ -15,12 +15,11 @@ import type { ValidatedData } from "chanfana";
 
 type GetData = ValidatedData<typeof adminRegistrationBadgeRoleGetRouteSchema>;
 
-export async function onRequestGet(c: AdminContext, data?: GetData): Promise<Response> {
+async function handleGet(c: AdminContext, data: GetData): Promise<Response> {
   const actor = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const params = data?.params ?? c.req.param();
   return json(
     adminBadgeRoleResponseSchema.parse(
-      await getAdminRegistrationBadgeRole(requestDb(c), actor, params.eventSlug, params.registrationId),
+      await getAdminRegistrationBadgeRole(requestDb(c), actor, data.params.eventSlug, data.params.registrationId),
     ),
   );
 }
@@ -38,5 +37,5 @@ async function handlePatch(
   return json(adminBadgeRoleResponseSchema.parse(result.response));
 }
 
-export const AdminRegistrationBadgeRoleGet = openApiRoute(adminRegistrationBadgeRoleGetRouteSchema, onRequestGet);
+export const AdminRegistrationBadgeRoleGet = openApiRoute(adminRegistrationBadgeRoleGetRouteSchema, handleGet);
 export const AdminRegistrationBadgeRolePatch = openApiRoute(adminRegistrationBadgeRolePatchRouteSchema, handlePatch);

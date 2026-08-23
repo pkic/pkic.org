@@ -28,7 +28,7 @@ export const MeHeadshotPost = openApiRoute(myHeadshotUploadRouteSchema, async (c
 
   const previousKey = await getUserHeadshotPointer(db, member.userId);
   const uploaded = await readValidatedUploadedImage(c.req.raw, "Headshot");
-  const resized = await resizeHeadshot(uploaded.buffer, uploaded.contentType, c.env.IMAGES);
+  const resized = await resizeHeadshot(uploaded.buffer, c.env.IMAGES);
   const r2Key = await replaceUserHeadshot({
     db,
     bucket,

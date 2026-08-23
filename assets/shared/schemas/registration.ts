@@ -266,6 +266,7 @@ const registrationCompletionResponseBaseSchema = successResponseSchema.merge(reg
 });
 
 export const registrationConfirmResponseSchema = registrationCompletionResponseBaseSchema.extend({
+  stage: z.literal("confirmed"),
   manageUrl: httpCapabilityUrlSchema,
   manageToken: tokenSchema,
 });

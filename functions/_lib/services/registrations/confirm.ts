@@ -3,7 +3,7 @@ import { first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { prepareEngagementStatement } from "../engagement";
 import { prepareRemoveAllDayWaitlistStatement, resolveCapacityExemptReason } from "./day-waitlist";
-import { prepareAuditLog } from "../audit";
+import { isAuditOneChangeGuardFailure, prepareAuditLog } from "../audit";
 import { prepareFinalizeEmailChange } from "./change-email";
 import {
   isStaleInviteTransition,
@@ -17,6 +17,7 @@ import { REGISTRATION_COLUMNS, type RegistrationRecord } from "./types";
 import { isRegistrationTransitionConflict, prepareRegistrationTransitionGuard } from "./transition-guard";
 
 export interface PreparedRegistrationConfirmation {
+  stage: "confirmed";
   registration: RegistrationRecord;
   manageToken: string;
   recipientEmail: string;
@@ -24,7 +25,7 @@ export interface PreparedRegistrationConfirmation {
 }
 
 export function isStaleRegistrationTransition(error: unknown): boolean {
-  return isRegistrationTransitionConflict(error);
+  return isRegistrationTransitionConflict(error) || isAuditOneChangeGuardFailure(error);
 }
 
 export async function prepareConfirmRegistrationByToken(
@@ -34,6 +35,7 @@ export async function prepareConfirmRegistrationByToken(
     registrationId?: string | null;
     eventId?: string | null;
     waitlistClaimWindowHours: number;
+    confirmationTtlHours?: number;
     signingSecret: string;
   },
 ): Promise<PreparedRegistrationConfirmation> {
@@ -85,28 +87,36 @@ export async function prepareConfirmRegistrationByToken(
   // appeared after initiation), clear the pending_email reservation so the
   // user is not stuck and can retry from the manage URL.
   const emailFinalizeStatements: StatementLike[] = [];
+  let finalizedRegistration = registration;
   const user = await first<{
+    email: string;
     pending_email: string | null;
     pending_email_change_registration_id: string | null;
     normalized_email: string;
   }>(
     db,
-    `SELECT pending_email, pending_email_change_registration_id, normalized_email
+    `SELECT email, pending_email, pending_email_change_registration_id, normalized_email
        FROM users WHERE id = ?`,
     [registration.user_id],
   );
   if (!user) {
     throw new AppError(500, "USER_NOT_FOUND", "Associated user record is missing");
   }
+  const ownsPendingEmailChange = Boolean(
+    user.pending_email && user.pending_email_change_registration_id === registration.id,
+  );
+
   let inviteEmail = user?.normalized_email ?? null;
-  if (user.pending_email && user.pending_email_change_registration_id === registration.id) {
+  if (ownsPendingEmailChange) {
     try {
       const emailResult = await prepareFinalizeEmailChange(db, {
         userId: registration.user_id,
         eventId: registration.event_id,
         registrationId: registration.id,
+        rotateManageLink: false,
       });
       inviteEmail = emailResult.finalEmail;
+      finalizedRegistration = emailResult.registration;
       emailFinalizeStatements.push(...emailResult.statements);
     } catch (err) {
       if (err instanceof AppError && err.code === "EMAIL_TAKEN") {
@@ -114,6 +124,17 @@ export async function prepareConfirmRegistrationByToken(
         // a different address. Leave the registration in
         // pending_email_confirmation so the manage URL still works.
         await db.batch([
+          prepareRegistrationTransitionGuard(db, registration),
+          db
+            .prepare(
+              `UPDATE registrations
+                  SET confirmation_link_secret = NULL,
+                      pending_confirmation_deadline_at = NULL,
+                      confirmation_reminder_sent_at = NULL,
+                      updated_at = ?
+                WHERE id = ? AND confirmation_link_secret IS ?`,
+            )
+            .bind(now, registration.id, registration.confirmation_link_secret),
           db
             .prepare(
               `UPDATE users
@@ -166,6 +187,7 @@ export async function prepareConfirmRegistrationByToken(
         `UPDATE registrations
          SET status = ?, confirmed_at = ?, confirmation_link_secret = NULL,
              pending_confirmation_deadline_at = NULL, confirmation_reminder_sent_at = NULL,
+             manage_link_secret = ?, created_identity_user_id = NULL,
              invite_id = COALESCE(invite_id, ?), capacity_exempt_in_person = ?,
              capacity_exempt_reason = ?, updated_at = ?
          WHERE id = ? AND status = 'pending_email_confirmation'`,
@@ -173,6 +195,7 @@ export async function prepareConfirmRegistrationByToken(
       .bind(
         newStatus,
         now,
+        finalizedRegistration.manage_link_secret,
         matchingInvite?.id ?? null,
         capacityExemptReason ? 1 : 0,
         capacityExemptReason,
@@ -237,7 +260,7 @@ export async function prepareConfirmRegistrationByToken(
     }),
   );
   const updated: RegistrationRecord = {
-    ...registration,
+    ...finalizedRegistration,
     status: newStatus,
     invite_id: registration.invite_id ?? matchingInvite?.id ?? null,
     confirmation_link_secret: null,
@@ -245,6 +268,7 @@ export async function prepareConfirmRegistrationByToken(
     capacity_exempt_in_person: capacityExemptReason ? 1 : 0,
     capacity_exempt_reason: capacityExemptReason,
     confirmed_at: now,
+    created_identity_user_id: null,
     transition_revision: registration.transition_revision + 2,
     updated_at: now,
   };
@@ -255,6 +279,7 @@ export async function prepareConfirmRegistrationByToken(
     resourceId: updated.id,
   });
   return {
+    stage: "confirmed",
     registration: updated,
     manageToken,
     recipientEmail: inviteEmail ?? user.normalized_email,

@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
+import { methodNotAllowed } from "../../../../../_lib/http";
 import { EventsEventSlugRegistrationsConfirmEmailGet } from "./confirm-email";
 import { EventsEventSlugRegistrationsConfirmEmailPost } from "./confirm-email";
 import { EventsEventSlugRegistrationsConfirmInfoGet } from "./confirm-info";
@@ -14,5 +15,6 @@ openapi.post("/confirm-email", EventsEventSlugRegistrationsConfirmEmailPost);
 openapi.get("/confirm-info", EventsEventSlugRegistrationsConfirmInfoGet);
 openapi.post("/resend-confirmation", EventsEventSlugRegistrationsResendConfirmationPost);
 openapi.post("/resend-manage-link", EventsEventSlugRegistrationsResendManageLinkPost);
+app.all("/confirm-email", () => methodNotAllowed(["GET", "POST"]));
 
 export default openapi;

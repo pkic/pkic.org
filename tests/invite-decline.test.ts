@@ -3,8 +3,14 @@ import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createInvite } from "../functions/_lib/services/invites";
-import { onRequestGet as declineGet, onRequestPost as declinePost } from "../functions/api/v1/invites/[token]/decline";
 import app from "../functions/router";
+
+function mounted(c: any): Promise<Response> {
+  return app.fetch(c.req.raw, c.env, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
+}
+
+const declineGet = mounted;
+const declinePost = mounted;
 
 describe("invite decline", () => {
   beforeEach(async () => {
@@ -75,19 +81,19 @@ describe("invite decline", () => {
       signingSecret: "test-signing-secret",
     });
 
-    await expect(
-      declinePost(
-        createContext(
-          env,
-          new Request(`https://app.test/api/v1/invites/${token}/decline`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ reasonCode: "other" }),
-          }),
-          { token },
-        ),
+    const response = await declinePost(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/invites/${token}/decline`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ reasonCode: "other" }),
+        }),
+        { token },
       ),
-    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    );
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "VALIDATION_ERROR" } });
   });
 
   it("validates the shared capability query contract through the mounted router", async () => {
@@ -262,22 +268,21 @@ describe("invite decline", () => {
        BEGIN SELECT RAISE(ABORT, 'forced decline failure'); END`,
     ).run();
 
-    await expect(
-      declinePost(
-        createContext(
-          env,
-          new Request(`https://app.test/api/v1/invites/${token}/decline`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              reasonCode: "schedule_conflict",
-              forwards: [{ email: "forward-rollback@example.test" }],
-            }),
+    const response = await declinePost(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/invites/${token}/decline`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            reasonCode: "schedule_conflict",
+            forwards: [{ email: "forward-rollback@example.test" }],
           }),
-          { token },
-        ),
+        }),
+        { token },
       ),
-    ).rejects.toThrow("forced decline failure");
+    );
+    expect(response.status).toBe(500);
 
     expect(
       await queryAll(env.DB, "SELECT id FROM invites WHERE invitee_email = ?", ["forward-rollback@example.test"]),

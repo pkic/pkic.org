@@ -69,7 +69,7 @@ async function listAttendeeRecipients(
   const rows = await all<AttendeeCampaignRow>(
     db,
     `WITH ranked_recipients AS (
-           SELECT r.id AS registration_id, u.id AS user_id,
+           SELECT r.id AS registration_id, r.manage_link_secret, u.id AS user_id,
                   u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
                   r.status, r.attendance_type, r.custom_answers_json,
                   ROW_NUMBER() OVER (
@@ -86,7 +86,7 @@ async function listAttendeeRecipients(
              AND u.email IS NOT NULL
              ${dayWaitlistFilterSql(filter.dayDate ? "day" : "registration")}
          )
-         SELECT registration_id, user_id, email, first_name, last_name, organization_name,
+         SELECT registration_id, manage_link_secret, user_id, email, first_name, last_name, organization_name,
                 job_title, status, attendance_type, custom_answers_json
          FROM ranked_recipients
          WHERE recipient_rank = 1

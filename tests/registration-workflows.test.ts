@@ -1,12 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
-import { onRequestPost as createRegistration } from "../functions/api/v1/events/[eventSlug]/registrations";
-import { onRequestPost as confirmEmail } from "../functions/api/v1/events/[eventSlug]/registrations/confirm-email";
-import { onRequestPatch as manageRegistration } from "../functions/api/v1/registrations/manage/[token]";
-import { onRequestPost as createInvites } from "../functions/api/v1/events/[eventSlug]/invites";
-import { onRequestPost as acceptInviteRegistration } from "../functions/api/v1/invites/[token]/accept";
-import { createContext, deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
+import { deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
+import { callApi } from "./helpers/app";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { createInvite } from "../functions/_lib/services/invites";
@@ -21,11 +17,47 @@ import { promoteEventWaitlistWithNotifications } from "../functions/_lib/service
 import { listCampaignRecipients } from "../functions/_lib/services/admin-email-campaign";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
 import { gateBatchGroup, gateNextBatch } from "./helpers/d1-batch-gate";
+import { createMemberSession } from "./helpers/auth";
+import {
+  addRepresentative,
+  assignRepresentativeRole,
+  insertIndividualMember,
+  insertOrganization,
+  insertUser,
+  REPRESENTATIVE_ROLE_IDS,
+  seedOrganizationAggregate,
+} from "./helpers/membership";
 
 async function extractConfirmationToken(payloadJson: string): Promise<string> {
   const payload = await deliveredEmailPayload<{ confirmationUrl: string }>(env.DB, env, payloadJson);
   const url = new URL(payload.confirmationUrl);
   return url.searchParams.get("token") as string;
+}
+
+function postRegistration(body: unknown): Promise<Response> {
+  return callApi(env, "/api/v1/events/pqc-2026/registrations", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+function postConfirmation(body: unknown): Promise<Response> {
+  return callApi(env, "/api/v1/events/pqc-2026/registrations/confirm-email", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+function patchManage(token: string, body: unknown, headers?: HeadersInit): Promise<Response> {
+  const requestHeaders = new Headers(headers);
+  requestHeaders.set("content-type", "application/json");
+  return callApi(env, `/api/v1/registrations/manage/${encodeURIComponent(token)}`, {
+    method: "PATCH",
+    headers: requestHeaders,
+    body: JSON.stringify(body),
+  });
 }
 
 describe("registration workflows", () => {
@@ -35,52 +67,38 @@ describe("registration workflows", () => {
   it("enforces consent and supports double opt-in", async () => {
     await seedEventAndAdmin(env.DB);
 
-    await expect(
-      createRegistration(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              firstName: "Alice",
-              lastName: "Doe",
-              email: "alice@pkic.org",
-              attendanceType: "virtual",
-              sourceType: "direct",
-              consents: [{ termKey: "privacy-policy", version: "v1" }],
-            }),
-          }),
-          { eventSlug: "pqc-2026" },
-        ),
-      ),
-    ).rejects.toMatchObject({ code: "CONSENT_REQUIRED" });
+    const invalidResponse = await postRegistration({
+      firstName: "Alice",
+      lastName: "Doe",
+      email: "alice@pkic.org",
+      attendanceType: "virtual",
+      sourceType: "direct",
+      consents: [{ termKey: "privacy-policy", version: "v1" }],
+    });
+    expect(invalidResponse.status).toBe(400);
+    await expect(invalidResponse.json()).resolves.toMatchObject({ error: { code: "CONSENT_REQUIRED" } });
 
-    const createResponse = await createRegistration(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            firstName: "Alice",
-            lastName: "Doe",
-            email: "alice@pkic.org",
-            attendanceType: "virtual",
-            sourceType: "direct",
-            consents: [
-              { termKey: "privacy-policy", version: "v1" },
-              { termKey: "code-of-conduct", version: "v1" },
-            ],
-          }),
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const createResponse = await postRegistration({
+      firstName: "Alice",
+      lastName: "Doe",
+      email: "alice@pkic.org",
+      attendanceType: "virtual",
+      sourceType: "direct",
+      consents: [
+        { termKey: "privacy-policy", version: "v1" },
+        { termKey: "code-of-conduct", version: "v1" },
+      ],
+    });
 
     expect(createResponse.status).toBe(200);
     const createdPayload = (await createResponse.json()) as { registrationId: string; status: string };
     expect(createdPayload.status).toBe("pending_email_confirmation");
+    const [identityOrigin] = await queryAll<{ created_identity_user_id: string | null; user_id: string }>(
+      env.DB,
+      "SELECT created_identity_user_id, user_id FROM registrations WHERE id = ?",
+      [createdPayload.registrationId],
+    );
+    expect(identityOrigin.created_identity_user_id).toBe(identityOrigin.user_id);
     expect(
       await queryAll<{ id: string }>(
         env.DB,
@@ -98,47 +116,34 @@ describe("registration workflows", () => {
     );
     const token = await extractConfirmationToken(outbox[0].payload_json);
 
-    const confirmResponse = await confirmEmail(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/events/pqc-2026/registrations/confirm-email", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ token }),
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const confirmResponse = await postConfirmation({ token });
 
     expect(confirmResponse.status).toBe(200);
     const confirmedPayload = (await confirmResponse.json()) as { status: string };
     expect(confirmedPayload.status).toBe("registered");
+    await expect(
+      queryAll<{ created_identity_user_id: string | null }>(
+        env.DB,
+        "SELECT created_identity_user_id FROM registrations WHERE id = ?",
+        [createdPayload.registrationId],
+      ),
+    ).resolves.toEqual([{ created_identity_user_id: null }]);
   }, 15_000);
 
   it("delivers existing-identity capabilities by email instead of exposing them to the anonymous submitter", async () => {
     await seedEventAndAdmin(env.DB);
 
-    const createResponse = await createRegistration(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            firstName: "Claimed",
-            lastName: "Admin",
-            email: "admin@pkic.org",
-            attendanceType: "virtual",
-            sourceType: "direct",
-            consents: [
-              { termKey: "privacy-policy", version: "v1" },
-              { termKey: "code-of-conduct", version: "v1" },
-            ],
-          }),
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const createResponse = await postRegistration({
+      firstName: "Claimed",
+      lastName: "Admin",
+      email: "admin@pkic.org",
+      attendanceType: "virtual",
+      sourceType: "direct",
+      consents: [
+        { termKey: "privacy-policy", version: "v1" },
+        { termKey: "code-of-conduct", version: "v1" },
+      ],
+    });
 
     expect(createResponse.status).toBe(200);
     const created = (await createResponse.json()) as {
@@ -160,19 +165,23 @@ describe("registration workflows", () => {
       queued.payload_json,
     );
     expect(new URL(delivered.manageUrl).searchParams.get("token")).toBeTruthy();
+    await expect(
+      queryAll<{ created_identity_user_id: string | null }>(
+        env.DB,
+        "SELECT created_identity_user_id FROM registrations WHERE id = ?",
+        [created.registrationId],
+      ),
+    ).resolves.toEqual([{ created_identity_user_id: null }]);
+    const deliveredManageToken = new URL(delivered.manageUrl).searchParams.get("token") as string;
+    const unsafeChange = await patchManage(deliveredManageToken, {
+      action: "update",
+      email: "attacker-controlled@example.test",
+    });
+    expect(unsafeChange.status).toBe(403);
+    await expect(unsafeChange.json()).resolves.toMatchObject({ error: { code: "ACCOUNT_AUTH_REQUIRED" } });
 
     const confirmationToken = new URL(delivered.confirmationUrl).searchParams.get("token");
-    const confirmResponse = await confirmEmail(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/events/pqc-2026/registrations/confirm-email", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ token: confirmationToken, id: created.registrationId }),
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const confirmResponse = await postConfirmation({ token: confirmationToken, id: created.registrationId });
     const confirmed = (await confirmResponse.json()) as { manageToken: string; manageUrl: string };
     expect(confirmed.manageToken).toBeTruthy();
     expect(new URL(confirmed.manageUrl).searchParams.get("token")).toBe(confirmed.manageToken);
@@ -185,29 +194,122 @@ describe("registration workflows", () => {
     ).resolves.toEqual([{ normalized_email: "admin@pkic.org", role: "admin" }]);
   });
 
+  it("lets the authenticated account owner initiate a new-address confirmation without old-mailbox approval", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { userId } = await insertIndividualMember(env.DB, "H5", "member-change@example.test");
+    const created = await createRegistrationService(env.DB, {
+      event: { id: eventId },
+      userId,
+      attendanceType: "virtual",
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    const confirmed = await confirmRegistrationByToken(env.DB, {
+      token: created.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+    const memberSession = await createMemberSession(env.DB, userId, "member-email-change-session");
+
+    const response = await patchManage(
+      confirmed.manageToken,
+      { action: "update", email: "member-new@example.test" },
+      { cookie: `pkic_member_session=${encodeURIComponent(memberSession)}` },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ success: true, emailChanged: true });
+    await expect(
+      queryAll<{ email: string; pending_email: string | null }>(
+        env.DB,
+        "SELECT email, pending_email FROM users WHERE id = ?",
+        [userId],
+      ),
+    ).resolves.toEqual([{ email: "member-change@example.test", pending_email: "member-new@example.test" }]);
+    await expect(
+      queryAll<{ template_key: string; recipient_email: string }>(
+        env.DB,
+        `SELECT template_key, recipient_email FROM email_outbox
+          WHERE template_key IN ('registration_email_change', 'registration_email_change_notice')
+          ORDER BY template_key`,
+      ),
+    ).resolves.toEqual([
+      { template_key: "registration_email_change", recipient_email: "member-new@example.test" },
+      { template_key: "registration_email_change_notice", recipient_email: "member-change@example.test" },
+    ]);
+  });
+
+  it("lets an organization contact initiate a coworker's new-address confirmation but rejects an ordinary coworker", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const organizationId = await insertOrganization(env.DB, "Email recovery organization");
+    const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
+    const contactUserId = await insertUser(env.DB, "org-contact@example.test");
+    const ordinaryCoworkerId = await insertUser(env.DB, "ordinary-coworker@example.test");
+    const targetUserId = await insertUser(env.DB, "org-target@example.test");
+    await addRepresentative(env.DB, memberId, contactUserId);
+    await addRepresentative(env.DB, memberId, ordinaryCoworkerId);
+    await addRepresentative(env.DB, memberId, targetUserId);
+    await assignRepresentativeRole(env.DB, memberId, contactUserId, REPRESENTATIVE_ROLE_IDS.primaryContact);
+
+    const created = await createRegistrationService(env.DB, {
+      event: { id: eventId },
+      userId: targetUserId,
+      attendanceType: "virtual",
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    const confirmed = await confirmRegistrationByToken(env.DB, {
+      token: created.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+    const ordinarySession = await createMemberSession(env.DB, ordinaryCoworkerId, "ordinary-coworker-session");
+    const rejected = await patchManage(
+      confirmed.manageToken,
+      { action: "update", email: "org-target-new@example.test" },
+      { cookie: `pkic_member_session=${encodeURIComponent(ordinarySession)}` },
+    );
+    expect(rejected.status).toBe(403);
+    await expect(rejected.json()).resolves.toMatchObject({ error: { code: "FORBIDDEN" } });
+
+    const contactSession = await createMemberSession(env.DB, contactUserId, "org-contact-session");
+    const accepted = await patchManage(
+      confirmed.manageToken,
+      { action: "update", email: "org-target-new@example.test" },
+      { cookie: `pkic_member_session=${encodeURIComponent(contactSession)}` },
+    );
+    expect(accepted.status).toBe(200);
+    await expect(
+      queryAll<{ email: string; pending_email: string | null }>(
+        env.DB,
+        "SELECT email, pending_email FROM users WHERE id = ?",
+        [targetUserId],
+      ),
+    ).resolves.toEqual([{ email: "org-target@example.test", pending_email: "org-target-new@example.test" }]);
+    await expect(
+      queryAll<{ actor_id: string }>(
+        env.DB,
+        "SELECT actor_id FROM audit_log WHERE entity_id = ? AND action = 'email_changed'",
+        [created.registration.id],
+      ),
+    ).resolves.toEqual([{ actor_id: contactUserId }]);
+  });
+
   it("rolls back confirmation when the confirmed-email intent cannot be committed", async () => {
     await seedEventAndAdmin(env.DB);
-    const createResponse = await createRegistration(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            firstName: "Confirm",
-            lastName: "Rollback",
-            email: "confirm-rollback@pkic.org",
-            attendanceType: "virtual",
-            sourceType: "direct",
-            consents: [
-              { termKey: "privacy-policy", version: "v1" },
-              { termKey: "code-of-conduct", version: "v1" },
-            ],
-          }),
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const createResponse = await postRegistration({
+      firstName: "Confirm",
+      lastName: "Rollback",
+      email: "confirm-rollback@pkic.org",
+      attendanceType: "virtual",
+      sourceType: "direct",
+      consents: [
+        { termKey: "privacy-policy", version: "v1" },
+        { termKey: "code-of-conduct", version: "v1" },
+      ],
+    });
     expect(createResponse.status).toBe(200);
     const [confirmationEmail] = await queryAll<{ payload_json: string }>(
       env.DB,
@@ -225,19 +327,9 @@ describe("registration workflows", () => {
     ).run();
 
     try {
-      await expect(
-        confirmEmail(
-          createContext(
-            env,
-            new Request("https://app.test/api/v1/events/pqc-2026/registrations/confirm-email", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ token }),
-            }),
-            { eventSlug: "pqc-2026" },
-          ),
-        ),
-      ).rejects.toThrow("forced confirmed-email failure");
+      const failedConfirmation = await postConfirmation({ token });
+      expect(failedConfirmation.status).toBe(500);
+      await expect(failedConfirmation.json()).resolves.toMatchObject({ error: { message: "Internal server error" } });
       const [stored] = await queryAll<{ status: string; confirmation_link_secret: string | null }>(
         env.DB,
         `SELECT status, confirmation_link_secret FROM registrations
@@ -260,57 +352,28 @@ describe("registration workflows", () => {
 
   it("commits exactly one confirmation aggregate when the same token is used concurrently", async () => {
     await seedEventAndAdmin(env.DB);
-    await createRegistration(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            firstName: "Confirm",
-            lastName: "Concurrent",
-            email: "confirm-concurrent@pkic.org",
-            attendanceType: "virtual",
-            sourceType: "direct",
-            consents: [
-              { termKey: "privacy-policy", version: "v1" },
-              { termKey: "code-of-conduct", version: "v1" },
-            ],
-          }),
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    await postRegistration({
+      firstName: "Confirm",
+      lastName: "Concurrent",
+      email: "confirm-concurrent@pkic.org",
+      attendanceType: "virtual",
+      sourceType: "direct",
+      consents: [
+        { termKey: "privacy-policy", version: "v1" },
+        { termKey: "code-of-conduct", version: "v1" },
+      ],
+    });
     const [confirmationEmail] = await queryAll<{ payload_json: string }>(
       env.DB,
       "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' AND recipient_email = ?",
       "confirm-concurrent@pkic.org",
     );
     const token = await extractConfirmationToken(confirmationEmail.payload_json);
-    const attempt = () =>
-      confirmEmail(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/events/pqc-2026/registrations/confirm-email", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ token }),
-          }),
-          { eventSlug: "pqc-2026" },
-        ),
-      );
-    const responses = await Promise.allSettled([attempt(), attempt()]);
-    expect(responses.filter((response) => response.status === "fulfilled")).toHaveLength(1);
-    expect(responses.filter((response) => response.status === "rejected")).toHaveLength(1);
-    const fulfilled = responses.find(
-      (response): response is PromiseFulfilledResult<Response> => response.status === "fulfilled",
-    );
-    const rejected = responses.find((response) => response.status === "rejected");
-    expect(fulfilled?.value.status).toBe(200);
-    expect(rejected && rejected.status === "rejected" ? rejected.reason : null).toMatchObject({
-      status: 404,
-      code: "CONFIRM_TOKEN_INVALID",
-    });
+    const responses = await Promise.all([postConfirmation({ token }), postConfirmation({ token })]);
+    expect(responses.filter((response) => response.status === 200)).toHaveLength(1);
+    expect(responses.filter((response) => response.status === 404)).toHaveLength(1);
+    const rejectedResponse = responses.find((response) => response.status === 404);
+    await expect(rejectedResponse?.json()).resolves.toMatchObject({ error: { code: "CONFIRM_TOKEN_INVALID" } });
     expect(
       (
         await queryAll<{ count: number }>(
@@ -345,29 +408,18 @@ describe("registration workflows", () => {
     ).run();
 
     try {
-      await expect(
-        createRegistration(
-          createContext(
-            env,
-            new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({
-                firstName: "Atomic",
-                lastName: "Rollback",
-                email: "atomic-rollback@pkic.org",
-                attendanceType: "virtual",
-                sourceType: "direct",
-                consents: [
-                  { termKey: "privacy-policy", version: "v1" },
-                  { termKey: "code-of-conduct", version: "v1" },
-                ],
-              }),
-            }),
-            { eventSlug: "pqc-2026" },
-          ),
-        ),
-      ).rejects.toBeTruthy();
+      const failedRegistration = await postRegistration({
+        firstName: "Atomic",
+        lastName: "Rollback",
+        email: "atomic-rollback@pkic.org",
+        attendanceType: "virtual",
+        sourceType: "direct",
+        consents: [
+          { termKey: "privacy-policy", version: "v1" },
+          { termKey: "code-of-conduct", version: "v1" },
+        ],
+      });
+      expect(failedRegistration.status).toBe(500);
 
       for (const table of ["users", "registrations", "consent_acceptances", "referral_codes", "engagement_events"]) {
         const rows = await queryAll<{ count: number }>(
@@ -393,27 +445,17 @@ describe("registration workflows", () => {
       signingSecret: env.INTERNAL_SIGNING_SECRET!,
     });
 
-    const createResponse = await createRegistration(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            firstName: "Match",
-            lastName: "Invite",
-            email: "matching-invite@pkic.org",
-            attendanceType: "virtual",
-            sourceType: "direct",
-            consents: [
-              { termKey: "privacy-policy", version: "v1" },
-              { termKey: "code-of-conduct", version: "v1" },
-            ],
-          }),
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const createResponse = await postRegistration({
+      firstName: "Match",
+      lastName: "Invite",
+      email: "matching-invite@pkic.org",
+      attendanceType: "virtual",
+      sourceType: "direct",
+      consents: [
+        { termKey: "privacy-policy", version: "v1" },
+        { termKey: "code-of-conduct", version: "v1" },
+      ],
+    });
 
     expect(createResponse.status).toBe(200);
 
@@ -423,17 +465,7 @@ describe("registration workflows", () => {
     );
     const token = await extractConfirmationToken(outbox[0].payload_json);
 
-    const confirmResponse = await confirmEmail(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/events/pqc-2026/registrations/confirm-email", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ token }),
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const confirmResponse = await postConfirmation({ token });
 
     expect(confirmResponse.status).toBe(200);
 
@@ -467,26 +499,20 @@ describe("registration workflows", () => {
       signingSecret: env.INTERNAL_SIGNING_SECRET!,
     });
 
-    const response = await acceptInviteRegistration(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/invites/${createdInvite.token}/accept`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            firstName: "Durable",
-            lastName: "Invite",
-            email: "durable-invite-badge@pkic.org",
-            attendanceType: "virtual",
-            consents: [
-              { termKey: "privacy-policy", version: "v1" },
-              { termKey: "code-of-conduct", version: "v1" },
-            ],
-          }),
-        }),
-        { token: createdInvite.token },
-      ),
-    );
+    const response = await callApi(env, `/api/v1/invites/${encodeURIComponent(createdInvite.token)}/accept`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        firstName: "Durable",
+        lastName: "Invite",
+        email: "durable-invite-badge@pkic.org",
+        attendanceType: "virtual",
+        consents: [
+          { termKey: "privacy-policy", version: "v1" },
+          { termKey: "code-of-conduct", version: "v1" },
+        ],
+      }),
+    });
 
     expect(response.status).toBe(200);
     const payload = (await response.json()) as { registrationId: string };
@@ -518,28 +544,18 @@ describe("registration workflows", () => {
       signingSecret: env.INTERNAL_SIGNING_SECRET!,
     });
 
-    const createResponse = await createRegistration(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            firstName: "Token",
-            lastName: "User",
-            email: "email-user@example.test",
-            inviteToken: tokenInvite.token,
-            attendanceType: "virtual",
-            sourceType: "direct",
-            consents: [
-              { termKey: "privacy-policy", version: "v1" },
-              { termKey: "code-of-conduct", version: "v1" },
-            ],
-          }),
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const createResponse = await postRegistration({
+      firstName: "Token",
+      lastName: "User",
+      email: "email-user@example.test",
+      inviteToken: tokenInvite.token,
+      attendanceType: "virtual",
+      sourceType: "direct",
+      consents: [
+        { termKey: "privacy-policy", version: "v1" },
+        { termKey: "code-of-conduct", version: "v1" },
+      ],
+    });
 
     expect(createResponse.status).toBe(200);
     const createdPayload = (await createResponse.json()) as { status: string; registrationId: string };
@@ -603,20 +619,14 @@ describe("registration workflows", () => {
       lastName: `${index}`,
     }));
 
-    const response = await createInvites(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/events/pqc-2026/invites", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            authorization: `Bearer ${manageToken}`,
-          },
-          body: JSON.stringify({ invites }),
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const response = await callApi(env, "/api/v1/events/pqc-2026/invites", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${manageToken}`,
+      },
+      body: JSON.stringify({ invites }),
+    });
 
     expect(response.status).toBe(429);
   });
@@ -664,17 +674,7 @@ describe("registration workflows", () => {
       signingSecret: "test-signing-secret",
     });
 
-    const confirmResponse = await confirmEmail(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/events/pqc-2026/registrations/confirm-email", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ token: second.confirmationToken }),
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const confirmResponse = await postConfirmation({ token: second.confirmationToken });
 
     expect(confirmResponse.status).toBe(200);
     const payload = (await confirmResponse.json()) as {
@@ -803,17 +803,7 @@ describe("registration workflows", () => {
       signingSecret: "test-signing-secret",
     });
 
-    const confirmResponse = await confirmEmail(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/events/pqc-2026/registrations/confirm-email", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ token: waiting.confirmationToken }),
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const confirmResponse = await postConfirmation({ token: waiting.confirmationToken });
 
     expect(confirmResponse.status).toBe(200);
     const payload = (await confirmResponse.json()) as {
@@ -944,22 +934,12 @@ describe("registration workflows", () => {
     expect(offerPayload.dayAttendance[0].waitlistStatus).toBe("offered");
     expect(offerPayload.dayAttendance[0].isWaitlistOffer).toBe(true);
 
-    const acceptResponse = await manageRegistration(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/registrations/manage/${offeredManageToken}`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            action: "update",
-            attendanceType: "in_person",
-            dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
-            claimDayWaitlistOffers: ["2026-12-01"],
-          }),
-        }),
-        { token: offeredManageToken },
-      ),
-    );
+    const acceptResponse = await patchManage(offeredManageToken, {
+      action: "update",
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      claimDayWaitlistOffers: ["2026-12-01"],
+    });
     expect(acceptResponse.status).toBe(200);
 
     const acceptUpdateRows = await queryAll<{ payload_json: string }>(
@@ -984,22 +964,12 @@ describe("registration workflows", () => {
       .bind(expiredConfirmed.registration.id)
       .run();
 
-    const expiredResponse = await manageRegistration(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/registrations/manage/${expiredConfirmed.manageToken}`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            action: "update",
-            attendanceType: "in_person",
-            dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
-            claimDayWaitlistOffers: ["2026-12-01"],
-          }),
-        }),
-        { token: expiredConfirmed.manageToken },
-      ),
-    );
+    const expiredResponse = await patchManage(expiredConfirmed.manageToken, {
+      action: "update",
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      claimDayWaitlistOffers: ["2026-12-01"],
+    });
     expect(expiredResponse.status).toBe(409);
     await expect(expiredResponse.json()).resolves.toMatchObject({
       error: { code: "DAY_WAITLIST_OFFER_UNAVAILABLE" },
@@ -1337,17 +1307,11 @@ describe("registration workflows", () => {
     ).run();
 
     try {
-      const response = await manageRegistration(
-        createContext(
-          env,
-          new Request(`https://app.test/api/v1/registrations/manage/${confirmed.manageToken}`, {
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ action: "update", attendanceType: "on_demand", firstName: "After" }),
-          }),
-          { token: confirmed.manageToken },
-        ),
-      );
+      const response = await patchManage(confirmed.manageToken, {
+        action: "update",
+        attendanceType: "on_demand",
+        firstName: "After",
+      });
       expect(response.status).toBe(500);
       const [registration] = await queryAll<{ attendance_type: string; status: string }>(
         env.DB,
@@ -1392,17 +1356,7 @@ describe("registration workflows", () => {
       signingSecret: "test-signing-secret",
     });
     const request = () =>
-      manageRegistration(
-        createContext(
-          env,
-          new Request(`https://app.test/api/v1/registrations/manage/${confirmed.manageToken}`, {
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ action: "update", attendanceType: "on_demand", firstName: "After" }),
-          }),
-          { token: confirmed.manageToken },
-        ),
-      );
+      patchManage(confirmed.manageToken, { action: "update", attendanceType: "on_demand", firstName: "After" });
 
     expect((await request()).status).toBe(200);
     expect((await request()).status).toBe(200);
@@ -1425,15 +1379,11 @@ describe("registration workflows", () => {
 
   it("rolls back the complete managed email-change aggregate when confirmation queuing fails", async () => {
     await seedEventAndAdmin(env.DB);
-    await env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
-       VALUES ('email-atomic-user', 'email-before@example.test', 'email-before@example.test',
-               'Before', 'Email', datetime('now'), datetime('now'))`,
-    ).run();
+    const { userId } = await insertIndividualMember(env.DB, "H6", "email-before@example.test");
     const event = await getEventBySlug(env.DB, "pqc-2026");
     const created = await createRegistrationService(env.DB, {
       event,
-      userId: "email-atomic-user",
+      userId,
       attendanceType: "virtual",
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -1444,31 +1394,26 @@ describe("registration workflows", () => {
       waitlistClaimWindowHours: 24,
       signingSecret: "test-signing-secret",
     });
+    const memberSession = await createMemberSession(env.DB, userId, "member-email-atomic-session");
     await env.DB.prepare(
       `CREATE TRIGGER reject_registration_email_change_email
        BEFORE INSERT ON email_outbox
-       WHEN NEW.template_key = 'registration_confirm_email'
+       WHEN NEW.template_key = 'registration_email_change'
        BEGIN
          SELECT RAISE(ABORT, 'forced email-change outbox failure');
        END`,
     ).run();
 
     try {
-      const response = await manageRegistration(
-        createContext(
-          env,
-          new Request(`https://app.test/api/v1/registrations/manage/${confirmed.manageToken}`, {
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              action: "update",
-              attendanceType: "on_demand",
-              firstName: "After",
-              email: "email-after@example.test",
-            }),
-          }),
-          { token: confirmed.manageToken },
-        ),
+      const response = await patchManage(
+        confirmed.manageToken,
+        {
+          action: "update",
+          attendanceType: "on_demand",
+          firstName: "After",
+          email: "email-after@example.test",
+        },
+        { cookie: `pkic_member_session=${encodeURIComponent(memberSession)}` },
       );
       expect(response.status).toBe(500);
       const [registration] = await queryAll<{
@@ -1481,7 +1426,7 @@ describe("registration workflows", () => {
       const [user] = await queryAll<{ first_name: string; pending_email: string | null }>(
         env.DB,
         "SELECT first_name, pending_email FROM users WHERE id = ?",
-        ["email-atomic-user"],
+        [userId],
       );
       const audits = await queryAll(
         env.DB,
@@ -1493,7 +1438,7 @@ describe("registration workflows", () => {
         status: "registered",
         confirmation_link_secret: null,
       });
-      expect(user).toEqual({ first_name: "Before", pending_email: null });
+      expect(user).toEqual({ first_name: "Test", pending_email: null });
       expect(audits).toHaveLength(0);
     } finally {
       await env.DB.prepare("DROP TRIGGER reject_registration_email_change_email").run();

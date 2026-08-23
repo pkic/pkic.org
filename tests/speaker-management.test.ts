@@ -10,19 +10,13 @@
 
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
+import { validJpegBytes } from "./helpers/raster-images";
 import { env } from "cloudflare:workers";
 import { createContext, deliveredEmailPayload, queryAll } from "./helpers/context";
-import { onRequestPost as adminRemindSpeaker } from "../functions/api/v1/admin/proposals/[proposalId]/speakers/[userId]/remind";
 import { getProposalByManageToken, getSpeakerByManageToken } from "../functions/_lib/services/proposals";
 import { updateSpeakerProfile } from "../functions/_lib/services/proposals-speaker-profile";
 import { inviteProposalSpeaker } from "../functions/_lib/services/proposal-speaker-invitations";
 import { getEventBySlug } from "../functions/_lib/services/events";
-import { onRequestGet as speakerGet } from "../functions/api/v1/proposals/speaker/[token]";
-import { onRequestPost as speakerPost } from "../functions/api/v1/proposals/speaker/[token]";
-import { onRequestPatch as speakerPatch } from "../functions/api/v1/proposals/speaker/[token]";
-import { onRequestPost as createRegistration } from "../functions/api/v1/events/[eventSlug]/registrations";
-import { onRequestGet as confirmRegistrationEmail } from "../functions/api/v1/events/[eventSlug]/registrations/confirm-email";
-import { onRequestPost as speakerInvites } from "../functions/api/v1/events/[eventSlug]/speaker-invites";
 import { findOrCreateUser } from "../functions/_lib/services/users";
 import app from "../functions/router";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
@@ -49,6 +43,14 @@ import {
   inviteSpeakerAndSubmitCapacityProposal,
   setupProposalSpeakerCapacityWorkflow,
 } from "./helpers/proposal-speaker-capacity";
+
+function mountedSpeakerRoute(c: any): Promise<Response> {
+  return app.fetch(c.req.raw, c.env, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
+}
+
+const speakerGet = mountedSpeakerRoute;
+const speakerPost = mountedSpeakerRoute;
+const speakerPatch = mountedSpeakerRoute;
 
 interface StoredObject {
   body: ArrayBuffer;
@@ -178,8 +180,8 @@ describe("speaker self-management endpoints", () => {
     await setupWorkflow();
 
     const response = await speakerGet(
-      createContext(env, new Request("https://app.test/api/v1/proposals/speaker/bogus-token"), {
-        token: "bogus-token",
+      createContext(env, new Request("https://app.test/api/v1/proposals/speaker/bogus-token-0000"), {
+        token: "bogus-token-0000",
       }),
     );
 
@@ -1753,10 +1755,7 @@ describe("speaker self-management endpoints", () => {
     const staleHeadshotPath = `${staleTokenPath}/headshot`;
     await expectStaleCapability(new Request(staleHeadshotPath));
     const staleHeadshotForm = new FormData();
-    staleHeadshotForm.append(
-      "file",
-      new File([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], "headshot.jpg", { type: "image/jpeg" }),
-    );
+    staleHeadshotForm.append("file", new File([validJpegBytes()], "headshot.jpg", { type: "image/jpeg" }));
     await expectStaleCapability(new Request(staleHeadshotPath, { method: "PUT", body: staleHeadshotForm }));
     await expectStaleCapability(new Request(staleHeadshotPath, { method: "DELETE" }));
 
@@ -1802,7 +1801,7 @@ describe("speaker self-management endpoints", () => {
     const { proposalManageToken, proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
     const bucket = new FakeUploadsBucket();
 
-    const file = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], "headshot.jpg", { type: "image/jpeg" });
+    const file = new File([validJpegBytes()], "headshot.jpg", { type: "image/jpeg" });
     const formData = new FormData();
     formData.append("file", file);
 
@@ -1969,7 +1968,7 @@ describe("speaker self-management endpoints", () => {
       await inviteSpeakerAndSubmitProposal();
     const bucket = new FakeUploadsBucket();
 
-    const file = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], "headshot.jpg", { type: "image/jpeg" });
+    const file = new File([validJpegBytes()], "headshot.jpg", { type: "image/jpeg" });
     const proposerFormData = new FormData();
     proposerFormData.append("file", file);
     const proposerUpload = await app.fetch(
@@ -2230,7 +2229,7 @@ describe("speaker self-management endpoints", () => {
     await setupWorkflow();
     const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
 
-    const remindResponse = await adminRemindSpeaker(
+    const remindResponse = await mountedSpeakerRoute(
       createContext(
         env,
         new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${coSpeakerUserId}/remind`, {
@@ -2448,7 +2447,7 @@ describe("speaker nomination by attendees", () => {
   async function registerAndConfirmAttendee(): Promise<string> {
     await setupWorkflow();
 
-    const regResponse = await createRegistration(
+    const regResponse = await mountedSpeakerRoute(
       createContext(
         env,
         new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
@@ -2481,7 +2480,7 @@ describe("speaker nomination by attendees", () => {
     const confirmUrl = new URL(emailPayload.confirmationUrl);
     const confirmToken = confirmUrl.searchParams.get("token") as string;
 
-    const confirmResponse = await confirmRegistrationEmail(
+    const confirmResponse = await mountedSpeakerRoute(
       createContext(
         env,
         new Request(
@@ -2497,7 +2496,7 @@ describe("speaker nomination by attendees", () => {
   it("allows a registered attendee to nominate a speaker", async () => {
     const manageToken = await registerAndConfirmAttendee();
 
-    const response = await speakerInvites(
+    const response = await mountedSpeakerRoute(
       createContext(
         env,
         new Request("https://app.test/api/v1/events/pqc-2026/speaker-invites", {
@@ -2527,7 +2526,7 @@ describe("speaker nomination by attendees", () => {
   it("rejects speaker nomination without auth token", async () => {
     await setupWorkflow();
 
-    const response = await speakerInvites(
+    const response = await mountedSpeakerRoute(
       createContext(
         env,
         new Request("https://app.test/api/v1/events/pqc-2026/speaker-invites", {

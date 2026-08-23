@@ -10,6 +10,7 @@ import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "./a
 import { prepareUserProfileStatement, type UserProfilePatch } from "./users";
 import { buildUserAccessOffboardingStatements } from "./membership/offboarding";
 import { findUserEmailOwner } from "./user-emails";
+import { prepareRotateUserRegistrationManageSecrets } from "./registrations/manage-capability-revocation";
 
 type AdminUserUpdateInput = z.infer<typeof adminUserUpdateSchema>;
 
@@ -144,6 +145,11 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
   if (input.email !== undefined) {
     const normalized = normalizeEmail(input.email);
     if (normalized !== normalizeEmail(user.email)) {
+      // A primary address is an authentication identifier, not ordinary
+      // profile data. users:write is sufficient for profile edits, while a
+      // direct staff correction must carry the same elevated authority used to
+      // grant or revoke access.
+      requirePermission(actor, "access:grant");
       const owner = await findUserEmailOwner(db, normalized);
       if (owner && owner.userId !== user.id) {
         throw new AppError(409, "EMAIL_ALREADY_IN_USE", "Another account already uses that email address");
@@ -191,6 +197,7 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
               SET confirmation_link_secret = NULL,
                   pending_confirmation_deadline_at = NULL,
                   confirmation_reminder_sent_at = NULL,
+                  created_identity_user_id = NULL,
                   transition_revision = transition_revision + 1,
                   updated_at = ?
             WHERE id = ? AND user_id = ?`,
@@ -236,10 +243,23 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
     }),
   );
   if (Object.keys(patch).length > 0) statements.push(prepareUserProfileStatement(db, user.id, patch));
-  if (user.active === 1 && !active) {
+  const deactivating = user.active === 1 && !active;
+  const changingPrimaryEmail = email !== user.email;
+  if (deactivating || changingPrimaryEmail) {
+    // Deactivation and canonical login changes share one credential-revocation
+    // boundary. Do not retain bearer sessions or one-time login links issued
+    // to an inactive account or the former mailbox.
     statements.push(
       db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(at, user.id),
       db.prepare("UPDATE refresh_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(at, user.id),
+      db.prepare("UPDATE auth_magic_links SET used_at = ? WHERE user_id = ? AND used_at IS NULL").bind(at, user.id),
+    );
+  }
+  if (changingPrimaryEmail) {
+    statements.push(prepareRotateUserRegistrationManageSecrets(db, user.id, at));
+  }
+  if (deactivating) {
+    statements.push(
       ...(await buildUserAccessOffboardingStatements(db, {
         userId: user.id,
         causeKey: `user:${user.id}:deactivate:${user.updated_at}`,

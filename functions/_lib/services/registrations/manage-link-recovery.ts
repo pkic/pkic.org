@@ -1,15 +1,15 @@
 import { first } from "../../db/queries";
 import { prepareQueueEmailStatementWhen } from "../../email/outbox";
 import type { DatabaseLike } from "../../types";
-import { queuedCapabilityToken } from "../capability-links";
 import { buildEventEmailVariables, type EventRecord } from "../events";
-import { registrationManagePageUrl } from "../frontend-links";
 import { normalizeEmail } from "../../validation";
 import { REGISTRATION_RECIPIENT_EMAIL_SQL } from "./recipient-email";
+import { registrationManageCapability } from "./capability-urls";
 
 interface RegistrationManageLinkMatch {
   registration_id: string;
   registration_status: string;
+  manage_link_secret: string;
   registration_updated_at: string;
   user_id: string;
   email: string;
@@ -32,6 +32,7 @@ export async function queueRegistrationManageLinkRecovery(
     `SELECT
        r.id AS registration_id,
        r.status AS registration_status,
+       r.manage_link_secret,
        r.updated_at AS registration_updated_at,
        u.id AS user_id,
        ${REGISTRATION_RECIPIENT_EMAIL_SQL} AS email,
@@ -41,22 +42,18 @@ export async function queueRegistrationManageLinkRecovery(
        u.updated_at AS user_updated_at
      FROM users u
      JOIN registrations r ON r.user_id = u.id
-     WHERE (
-         u.normalized_email = ?
-         OR (u.pending_email_change_registration_id = r.id AND u.pending_email = ?)
-       )
+     WHERE u.normalized_email = ?
        AND r.event_id = ?
      ORDER BY r.created_at DESC
      LIMIT 1`,
-    [normalizedEmail, normalizedEmail, event.id],
+    [normalizedEmail, event.id],
   );
   if (!registration) return null;
 
-  const manageUrl = registrationManagePageUrl(
-    appBaseUrl,
-    event,
-    queuedCapabilityToken("registration_manage", registration.registration_id),
-  );
+  const { manageUrl } = await registrationManageCapability(appBaseUrl, event, {
+    id: registration.registration_id,
+    manage_link_secret: registration.manage_link_secret,
+  });
   const queued = prepareQueueEmailStatementWhen(
     db,
     {
@@ -82,17 +79,13 @@ export async function queueRegistrationManageLinkRecovery(
               JOIN users u ON u.id = r.user_id
              WHERE r.id = ? AND r.event_id = ? AND r.updated_at = ?
                AND u.id = ? AND u.updated_at = ?
-               AND (
-                 u.normalized_email = ?
-                 OR (u.pending_email_change_registration_id = r.id AND u.pending_email = ?)
-               )`,
+               AND u.normalized_email = ?`,
       bindings: [
         registration.registration_id,
         event.id,
         registration.registration_updated_at,
         registration.user_id,
         registration.user_updated_at,
-        normalizedEmail,
         normalizedEmail,
       ],
     },

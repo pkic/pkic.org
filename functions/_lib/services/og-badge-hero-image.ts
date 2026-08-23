@@ -1,10 +1,12 @@
-import { httpOrSameOriginUrlSchema, normalizeHttpOrSameOriginUrl } from "../../../assets/shared/schemas/urls";
 import type { Env } from "../types";
 import { readBoundedStream } from "../utils/bounded-stream";
-import { detectImageFormat, SUPPORTED_RASTER_IMAGE_CONTENT_TYPES } from "../utils/image-format";
+import { SUPPORTED_RASTER_IMAGE_CONTENT_TYPES, validateRasterImage } from "../utils/image-format";
+import { resolveHeroImageSource } from "../utils/hero-image-url";
+
+export { resolveHeroImageSource } from "../utils/hero-image-url";
 
 type StaticAssetEnv = Pick<Env, "ASSETS" | "ASSETS_PUBLIC">;
-type HeroImageEnv = Pick<Env, "ASSETS" | "ASSETS_PUBLIC" | "IMAGES">;
+type HeroImageEnv = Pick<Env, "ASSETS" | "ASSETS_PUBLIC" | "HERO_IMAGE_ALLOWED_HOSTS" | "IMAGES">;
 
 function getAssetBinding(env: StaticAssetEnv): Env["ASSETS"] | undefined {
   return env.ASSETS ?? env.ASSETS_PUBLIC;
@@ -19,16 +21,6 @@ export async function fetchStaticAsset(
   const request = new Request(new URL(path, origin).toString(), signal ? { signal } : undefined);
   const binding = getAssetBinding(env);
   return binding ? binding.fetch(request) : fetch(request);
-}
-
-export function resolveHeroImageSource(raw: string, origin: string): { url: string; assetPath: string | null } | null {
-  const parsed = httpOrSameOriginUrlSchema.safeParse(raw);
-  if (!parsed.success) return null;
-  const normalized = normalizeHttpOrSameOriginUrl(parsed.data, origin);
-  if (!normalized.startsWith("/") && new URL(normalized).protocol !== "https:") return null;
-  return normalized.startsWith("/")
-    ? { url: new URL(normalized, origin).toString(), assetPath: normalized }
-    : { url: normalized, assetPath: null };
 }
 
 /** Fast Uint8Array to base64 without quadratic string reallocation. */
@@ -64,8 +56,9 @@ export async function imageResponseToDataUrl(
   const result = await readBoundedStream(response.body, maxBytes, "Hero image exceeds the byte limit");
   if (!result.ok) return null;
   const bytes = result.bytes;
-  if (detectImageFormat(bytes)?.contentType !== mime) return null;
-  return `data:${mime};base64,${uint8ToBase64(bytes)}`;
+  const validation = validateRasterImage(bytes);
+  if (!validation.ok || validation.image.contentType !== mime) return null;
+  return `data:${validation.image.contentType};base64,${uint8ToBase64(bytes)}`;
 }
 
 function extractHeroImageUrl(settingsJson: string): string | null {
@@ -85,7 +78,7 @@ export async function fetchHeroImage(
 ): Promise<string | null> {
   const raw = extractHeroImageUrl(settingsJson);
   if (!raw) return null;
-  const source = resolveHeroImageSource(raw, origin);
+  const source = resolveHeroImageSource(raw, origin, env.HERO_IMAGE_ALLOWED_HOSTS);
   if (!source) return null;
 
   try {
@@ -103,6 +96,7 @@ export async function fetchHeroImage(
     } else {
       const requestInit: RequestInit & { cf: { image: Record<string, string | number> } } = {
         signal,
+        redirect: "manual",
         cf: { image: { width: 1200, height: 630, fit: "cover", format: "jpeg", quality: 95 } },
       };
       response = await fetch(source.url, requestInit);

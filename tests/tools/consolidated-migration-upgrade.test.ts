@@ -36,6 +36,24 @@ function seedRepresentativePre0035State(db: DatabaseSync): void {
       ('admin-1', 'admin@example.test', 'admin@example.test', 'Admin', 'admin', '2025-01-01', '2025-01-01'),
       ('organizer-1', 'organizer@example.test', 'organizer@example.test', 'Organizer', 'user', '2025-01-01', '2025-01-01');
 
+    INSERT INTO registrations
+      (id, event_id, user_id, status, attendance_type, source_type,
+       manage_link_secret, created_at, updated_at)
+    VALUES
+      ('registration-upgrade', 'event-1', 'organizer-1', 'registered', 'virtual', 'test',
+       'manage-registration-upgrade', '2025-01-01', '2025-01-01');
+
+    INSERT INTO calendar_rsvp_events
+      (id, registration_id, ics_uid, attendee_email, response_status, provider,
+       source_message_id, dedupe_key, received_at, created_at, updated_at)
+    VALUES
+      ('rsvp-json-key', 'registration-upgrade', 'registration-upgrade@example.test',
+       'organizer@example.test', 'accepted', 'google', 'message-1',
+       '["registration-upgrade","message-1"]', '2025-01-01', '2025-01-01', '2025-01-01'),
+      ('rsvp-legacy-key', 'registration-upgrade', 'registration-upgrade@example.test',
+       'organizer@example.test', 'accepted', 'microsoft', 'message-2',
+       'legacy-non-json-key', '2025-01-02', '2025-01-02', '2025-01-02');
+
     INSERT INTO members (id, member_type, organization_id, status, created_at, updated_at)
     VALUES ('member-1', 'organization', 'org-1', 'active', '2025-01-01', '2025-01-01');
 
@@ -161,6 +179,10 @@ describe("consolidated pending migration upgrade", () => {
     ]);
     expect(db.prepare("SELECT id, organization_id FROM members").all()).toEqual([
       { id: "member-1", organization_id: "org-1" },
+    ]);
+    expect(db.prepare("SELECT id, dedupe_key FROM calendar_rsvp_events ORDER BY id").all()).toEqual([
+      { id: "rsvp-json-key", dedupe_key: '["google","registration-upgrade","message-1"]' },
+      { id: "rsvp-legacy-key", dedupe_key: "legacy-non-json-key" },
     ]);
     expect(db.prepare("SELECT id, normalized_name, sponsor_tier FROM organizations ORDER BY id").all()).toEqual([
       { id: "org-1", normalized_name: "acme corp", sponsor_tier: "Gold" },

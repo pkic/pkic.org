@@ -15,6 +15,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
+import { gateNextBatch } from "./helpers/d1-batch-gate";
 import { runReminderCycle } from "../functions/_lib/services/reminders";
 import type { Env } from "../functions/_lib/types";
 
@@ -603,14 +604,117 @@ describe("runReminderCycle", () => {
     expect(outbox[0].template_key).toBe("registration_updated");
   });
 
+  it("does not cancel a confirmation that was refreshed after the expiration snapshot", async () => {
+    const userId = crypto.randomUUID();
+    const regId = crypto.randomUUID();
+    await insertUser(userId, "expiration-race@example.test");
+    await insertPendingRegistration({
+      regId,
+      eventId,
+      userId,
+      deadlineAt: new Date(Date.now() - 24 * 3_600_000).toISOString(),
+      reminderSentAt: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+    });
+    await reservePendingEmail(userId, regId, "fresh-confirmation@example.test");
+
+    const gate = gateNextBatch(db);
+    const staleReminderRun = runReminderCycle(gate.db, BASE_PAYLOAD);
+    await gate.reached;
+
+    const refreshedDeadline = new Date(Date.now() + 24 * 3_600_000).toISOString();
+    const refreshedReminderAt = new Date().toISOString();
+    await db
+      .prepare(
+        `UPDATE registrations
+            SET confirmation_link_secret = ?, pending_confirmation_deadline_at = ?, confirmation_reminder_sent_at = ?
+          WHERE id = ?`,
+      )
+      .bind("fresh-confirmation-secret", refreshedDeadline, refreshedReminderAt, regId)
+      .run();
+    gate.release();
+
+    const result = await staleReminderRun;
+    expect(result.confirmationCancellationsProcessed).toBe(0);
+    await expect(
+      queryAll<{
+        status: string;
+        confirmation_link_secret: string | null;
+        pending_confirmation_deadline_at: string | null;
+      }>(
+        db,
+        `SELECT status, confirmation_link_secret, pending_confirmation_deadline_at
+           FROM registrations WHERE id = ?`,
+        [regId],
+      ),
+    ).resolves.toEqual([
+      {
+        status: "pending_email_confirmation",
+        confirmation_link_secret: "fresh-confirmation-secret",
+        pending_confirmation_deadline_at: refreshedDeadline,
+      },
+    ]);
+    await expect(
+      queryAll<{ pending_email: string | null }>(db, "SELECT pending_email FROM users WHERE id = ?", [userId]),
+    ).resolves.toEqual([{ pending_email: "fresh-confirmation@example.test" }]);
+    await expect(
+      queryAll<{ total: number }>(db, "SELECT COUNT(*) AS total FROM email_outbox WHERE template_key = ?", [
+        "registration_updated",
+      ]),
+    ).resolves.toEqual([{ total: 0 }]);
+  });
+
+  it("does not queue or timestamp a reminder after the confirmation state changes", async () => {
+    const userId = crypto.randomUUID();
+    const regId = crypto.randomUUID();
+    await insertUser(userId, "reminder-race@example.test");
+    await insertPendingRegistration({
+      regId,
+      eventId,
+      userId,
+      deadlineAt: new Date(Date.now() + 12 * 24 * 3_600_000).toISOString(),
+      reminderSentAt: new Date(Date.now() - 26 * 3_600_000).toISOString(),
+    });
+
+    const gate = gateNextBatch(db);
+    const staleReminderRun = runReminderCycle(gate.db, BASE_PAYLOAD);
+    await gate.reached;
+
+    const refreshedDeadline = new Date(Date.now() + 24 * 3_600_000).toISOString();
+    await db
+      .prepare(
+        `UPDATE registrations
+            SET confirmation_link_secret = ?, pending_confirmation_deadline_at = ?, confirmation_reminder_sent_at = NULL
+          WHERE id = ?`,
+      )
+      .bind("refreshed-reminder-secret", refreshedDeadline, regId)
+      .run();
+    gate.release();
+
+    const result = await staleReminderRun;
+    expect(result.confirmationRemindersQueued).toBe(0);
+    await expect(
+      queryAll<{ confirmation_link_secret: string; confirmation_reminder_sent_at: string | null }>(
+        db,
+        "SELECT confirmation_link_secret, confirmation_reminder_sent_at FROM registrations WHERE id = ?",
+        [regId],
+      ),
+    ).resolves.toEqual([
+      { confirmation_link_secret: "refreshed-reminder-secret", confirmation_reminder_sent_at: null },
+    ]);
+    await expect(
+      queryAll<{ total: number }>(db, "SELECT COUNT(*) AS total FROM email_outbox WHERE template_key = ?", [
+        "registration_confirmation_reminder",
+      ]),
+    ).resolves.toEqual([{ total: 0 }]);
+  });
+
   // ── Email-change scenarios ────────────────────────────────────────────────────
 
-  it("sends confirmation reminder to pending_email, not the old bouncing email, when an email change is in progress", async () => {
+  it("sends confirmation reminders directly to the pending new address", async () => {
     const userId = crypto.randomUUID();
     const regId = crypto.randomUUID();
     const deadlineAt = new Date(Date.now() + 12 * 24 * 3_600_000).toISOString();
-    // User has old (bouncing) email stored on users.email, and a pending new email
-    // whose expiry has already passed (initial 48-hour TTL elapsed).
+    // The new mailbox is the proof target; the old address is notification-only.
     const expiredTtl = new Date(Date.now() - 3_600_000).toISOString();
     await insertUser(userId, "old-bouncing@example.test", "Maria", "S");
     await insertPendingRegistration({
@@ -645,7 +749,7 @@ describe("runReminderCycle", () => {
     expect(new Date(user[0].pending_email_expires_at).getTime()).toBeGreaterThanOrEqual(new Date(deadlineAt).getTime());
   });
 
-  it("sends cancellation email to pending_email, not the old bouncing email, when confirmation deadline expires during an email change", async () => {
+  it("does not send a cancellation status email to the unverified pending address", async () => {
     const userId = crypto.randomUUID();
     const regId = crypto.randomUUID();
     await insertUser(userId, "old-bouncing@example.test", "Maria", "S");
@@ -674,13 +778,14 @@ describe("runReminderCycle", () => {
     const reg = (await queryAll<{ status: string }>(db, "SELECT status FROM registrations WHERE id = ?", regId))[0];
     expect(reg.status).toBe("cancelled");
 
-    // Cancellation notification must go to the new (pending) email, not the old bouncing one.
+    // Only confirmation messages may use the pending address. Cancellation is
+    // an ordinary status notification and therefore stays on the canonical address.
     const outbox = await queryAll<{ recipient_email: string; template_key: string }>(
       db,
       "SELECT recipient_email, template_key FROM email_outbox ORDER BY created_at DESC LIMIT 1",
     );
     expect(outbox[0].template_key).toBe("registration_updated");
-    expect(outbox[0].recipient_email).toBe("new-correct@example.test");
+    expect(outbox[0].recipient_email).toBe("old-bouncing@example.test");
   });
 
   it("clears pending_email on the user when the last pending-confirmation registration is cancelled on timeout", async () => {

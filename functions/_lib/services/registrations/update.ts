@@ -8,6 +8,7 @@ import type { RegistrationRecord } from "./types";
 import { buildRegistrationUpdate, type RegistrationUpdatePayload } from "./update-plan";
 import { isRegistrationTransitionConflict, registrationChangedError } from "./transition-guard";
 import { sha256Hex } from "../../utils/crypto";
+import { emailTakenError, isEmailReservationConflict } from "../user-emails";
 
 type RegistrationUpdatePlan = Awaited<ReturnType<typeof buildRegistrationUpdate>>;
 
@@ -31,6 +32,7 @@ async function executeRegistrationUpdate<T>(
       return commit(await buildRegistrationUpdate(db, registration, payload, changedBy));
     });
   } catch (error) {
+    if (isEmailReservationConflict(error)) throw emailTakenError();
     if (isRegistrationTransitionConflict(error)) {
       throw registrationChangedError();
     }
@@ -45,10 +47,10 @@ async function commitUpdateWithNotification(
   db: DatabaseLike,
   built: RegistrationUpdatePlan,
   payload: RegistrationUpdatePayload & { notification: UpdateNotification },
-): Promise<{ registration: RegistrationRecord; outboxId: string | null }> {
+): Promise<{ registration: RegistrationRecord; outboxId: string | null; outboxIds: string[] }> {
   if (!built.notificationChanged) {
     await db.batch(built.statements);
-    return { registration: built.registration, outboxId: null };
+    return { registration: built.registration, outboxId: null, outboxIds: [] };
   }
   const idempotencyKey =
     payload.notification.idempotencyKey ??
@@ -66,14 +68,14 @@ async function commitUpdateWithNotification(
     dayWaitlist: built.dayWaitlist,
   });
   await db.batch([...built.statements, email.statement]);
-  return { registration: built.registration, outboxId: email.outboxId };
+  return { registration: built.registration, outboxId: email.outboxId, outboxIds: [email.outboxId] };
 }
 
 async function commitUpdateWithEmailChange(
   db: DatabaseLike,
   built: RegistrationUpdatePlan,
   payload: RegistrationUpdatePayload & { emailChange: UpdateEmailChange },
-): Promise<{ registration: RegistrationRecord; outboxId: string | null }> {
+): Promise<{ registration: RegistrationRecord; outboxId: string | null; outboxIds: string[] }> {
   const emailChange = await prepareRegistrationEmailChange(db, {
     ...payload.emailChange,
     registrationId: built.registration.id,
@@ -88,7 +90,11 @@ async function commitUpdateWithEmailChange(
       : undefined,
   });
   await db.batch([...built.statements, ...emailChange.statements]);
-  return { registration: emailChange.registration, outboxId: emailChange.outboxId };
+  return {
+    registration: emailChange.registration,
+    outboxId: emailChange.outboxId,
+    outboxIds: emailChange.outboxIds,
+  };
 }
 
 export async function updateRegistrationByManageToken(
@@ -114,7 +120,7 @@ export async function updateRegistrationByManageTokenWithNotification(
     signingSecret: string;
     notification: UpdateNotification;
   } & RegistrationUpdatePayload,
-): Promise<{ registration: RegistrationRecord; outboxId: string | null }> {
+): Promise<{ registration: RegistrationRecord; outboxId: string | null; outboxIds: string[] }> {
   return executeRegistrationUpdate(
     db,
     payload,
@@ -131,7 +137,7 @@ export async function updateRegistrationByManageTokenWithEmailChange(
     signingSecret: string;
     emailChange: UpdateEmailChange;
   } & RegistrationUpdatePayload,
-): Promise<{ registration: RegistrationRecord; outboxId: string | null }> {
+): Promise<{ registration: RegistrationRecord; outboxId: string | null; outboxIds: string[] }> {
   return executeRegistrationUpdate(
     db,
     payload,
@@ -163,7 +169,7 @@ export async function updateRegistrationByIdWithNotification(
   payload: { eventId: string; registrationId: string; notification: UpdateNotification } & RegistrationUpdatePayload,
   changedBy: string,
   registrationSnapshot?: RegistrationRecord,
-): Promise<{ registration: RegistrationRecord; outboxId: string | null }> {
+): Promise<{ registration: RegistrationRecord; outboxId: string | null; outboxIds: string[] }> {
   return executeRegistrationUpdate(
     db,
     payload,
@@ -180,7 +186,7 @@ export async function updateRegistrationByIdWithEmailChange(
   db: DatabaseLike,
   payload: { eventId: string; registrationId: string; emailChange: UpdateEmailChange } & RegistrationUpdatePayload,
   changedBy: string,
-): Promise<{ registration: RegistrationRecord; outboxId: string | null }> {
+): Promise<{ registration: RegistrationRecord; outboxId: string | null; outboxIds: string[] }> {
   return executeRegistrationUpdate(
     db,
     payload,

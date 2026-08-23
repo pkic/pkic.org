@@ -4,6 +4,8 @@ import type { RegistrationCapabilitySafeProjection } from "../../../../assets/sh
 export interface RegistrationRecord extends RegistrationCapabilitySafeProjection {
   confirmation_link_secret: string | null;
   manage_link_secret: string;
+  /** Internal authorization state; deliberately excluded from public DTOs. */
+  created_identity_user_id: string | null;
 }
 
 const REGISTRATION_COLUMN_NAMES = [
@@ -24,6 +26,7 @@ const REGISTRATION_COLUMN_NAMES = [
   "capacity_exempt_reason",
   "cancellation_reason_code",
   "transition_revision",
+  "created_identity_user_id",
   "confirmed_at",
   "cancelled_at",
   "created_at",

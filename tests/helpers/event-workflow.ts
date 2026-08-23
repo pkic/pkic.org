@@ -93,6 +93,20 @@ export async function seedWorkflowEmailTemplates(db: DatabaseLike, adminId: stri
   await seedTemplate(
     db,
     adminId,
+    "registration_email_change",
+    "Confirm new email: {{{confirmationUrl}}}.",
+    "Confirm your new email address",
+  );
+  await seedTemplate(
+    db,
+    adminId,
+    "registration_email_change_notice",
+    "Account email change requested from {{currentEmail}} to {{newEmail}}.",
+    "Your account email change was requested",
+  );
+  await seedTemplate(
+    db,
+    adminId,
     "registration_confirmed",
     "Registration confirmed for {{eventName}}. Manage: {{{manageUrl}}}. Share: {{{shareUrl}}}.",
     "Registration confirmed",

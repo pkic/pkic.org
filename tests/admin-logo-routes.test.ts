@@ -5,9 +5,10 @@ import { onRequest as organizationLogoRequest } from "../functions/api/v1/admin/
 import { onRequest as sponsorshipLogoRequest } from "../functions/api/v1/admin/sponsorships/[id]/logo";
 import { createAdminSession } from "./helpers/auth";
 import { createContext, queryAll, seedEventAndAdmin } from "./helpers/context";
+import { validJpegBytes } from "./helpers/raster-images";
 import { resetDb } from "./helpers/reset-db";
 
-const JPEG_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+const JPEG_BYTES = validJpegBytes();
 
 async function callEndpoint(handler: (context: any) => Promise<Response>, context: any): Promise<Response> {
   try {

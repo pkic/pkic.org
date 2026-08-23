@@ -19,6 +19,8 @@ import { first, all } from "../db/queries";
 import { fetchGravatar } from "./gravatar";
 import type { DatabaseLike, Env } from "../types";
 import { fetchHeroImage, fetchStaticAsset, uint8ToBase64 } from "./og-badge-hero-image";
+import { validateRasterImage } from "../utils/image-format";
+import { STANDARD_HEADSHOT_MAX_BYTES } from "../../../assets/shared/schemas/images";
 import {
   proposalSpeakerEffectiveHeadshotExpression,
   proposalSpeakerEffectiveProfileColumns,
@@ -82,15 +84,20 @@ function extractLocation(settingsJson: string): string | null {
   return null;
 }
 
-async function fetchHeadshot(r2Key: string | null, bucket: Env["SPEAKER_UPLOADS_BUCKET"]): Promise<string | null> {
+export async function loadValidatedHeadshotDataUrl(
+  r2Key: string | null,
+  bucket: Env["SPEAKER_UPLOADS_BUCKET"],
+): Promise<string | null> {
   if (!r2Key || !bucket) return null;
   try {
     const obj = await bucket.get(r2Key);
     if (!obj) return null;
+    if (obj.size > STANDARD_HEADSHOT_MAX_BYTES) return null;
     const buf = await obj.arrayBuffer();
-    const ext = r2Key.split(".").pop()?.toLowerCase() ?? "";
-    const mime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
-    return `data:${mime};base64,${uint8ToBase64(new Uint8Array(buf))}`;
+    if (buf.byteLength > STANDARD_HEADSHOT_MAX_BYTES) return null;
+    const validation = validateRasterImage(buf);
+    if (!validation.ok) return null;
+    return `data:${validation.image.contentType};base64,${uint8ToBase64(new Uint8Array(buf))}`;
   } catch {
     return null;
   }
@@ -200,7 +207,7 @@ export async function generateBadgePng(code: string, env: BadgeRenderEnv, origin
     if (!row) return null;
 
     const [headshotDataUrl, heroImageDataUrl] = await Promise.all([
-      fetchHeadshot(row.headshot_r2_key, env.SPEAKER_UPLOADS_BUCKET),
+      loadValidatedHeadshotDataUrl(row.headshot_r2_key, env.SPEAKER_UPLOADS_BUCKET),
       fetchHeroImage(row.settings_json, origin, env),
     ]);
 
@@ -225,7 +232,7 @@ export async function generateBadgePng(code: string, env: BadgeRenderEnv, origin
     if (!row) return null;
 
     const [headshotDataUrl, heroImageDataUrl] = await Promise.all([
-      fetchHeadshot(row.headshot_r2_key, env.SPEAKER_UPLOADS_BUCKET),
+      loadValidatedHeadshotDataUrl(row.headshot_r2_key, env.SPEAKER_UPLOADS_BUCKET),
       fetchHeroImage(row.settings_json, origin, env),
     ]);
 

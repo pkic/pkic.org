@@ -62,6 +62,7 @@ export async function prepareRegistrationSubmission(
     pendingConfirmationDeadlineHours: payload.pendingConfirmationDeadlineHours,
     confirmationTtlHours: payload.confirmationTtlHours,
     signingSecret: payload.signingSecret,
+    unverifiedEmailCorrectionAllowed: preparedUser.created,
   });
   const existingReferral = await first<{ code: string }>(db, firstReferralCodeQuerySql("registration", "?"), [
     builtRegistration.registration.id,

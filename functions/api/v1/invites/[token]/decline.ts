@@ -1,11 +1,9 @@
-import { parseJsonBody } from "../../../../_lib/validation";
-import { dispatchRequestMethod, json } from "../../../../_lib/http";
+import { json } from "../../../../_lib/http";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
 import { declineAndForwardInvite as executeInviteDecline } from "../../../../_lib/services/invite-decline";
 import { processOutboxByIdBackground } from "../../../../_lib/email/outbox";
 import { inviteDeclineSchema } from "../../../../../assets/shared/schemas/registration";
 import {
-  inviteCapabilityQuerySchema,
   inviteDeclineRedirectRouteSchema,
   inviteDeclineRouteSchema,
 } from "../../../../../assets/shared/schemas/invites";
@@ -33,14 +31,11 @@ function redirectInviteDecline(c: AdminContext, token: string, inviteId?: string
   return Response.redirect(url.toString(), 302);
 }
 
-export const InviteDeclineGet = openApiRoute(inviteDeclineRedirectRouteSchema, (c: AdminContext, data) =>
-  redirectInviteDecline(c, data.params.token, data.query.id),
+export const InviteDeclineGet = openApiRoute(
+  inviteDeclineRedirectRouteSchema,
+  (c: AdminContext, data) => redirectInviteDecline(c, data.params.token, data.query.id),
+  (c: AdminContext) => c.set?.("sensitive", true),
 );
-
-export async function onRequestGet(c: AdminContext): Promise<Response> {
-  const query = inviteCapabilityQuerySchema.parse(Object.fromEntries(new URL(c.req.raw.url).searchParams));
-  return redirectInviteDecline(c, c.req.param("token"), query.id);
-}
 
 // ── POST: Decline (with optional forwarding) ──────────────────────────────────
 
@@ -67,18 +62,8 @@ async function handleInviteDecline(
   return json({ success: true, forwarded: result.forwardedEmails });
 }
 
-export const InviteDeclinePost = openApiRoute(inviteDeclineRouteSchema, (c: AdminContext, data) =>
-  handleInviteDecline(c, data.params.token, data.query.id, data.body),
+export const InviteDeclinePost = openApiRoute(
+  inviteDeclineRouteSchema,
+  (c: AdminContext, data) => handleInviteDecline(c, data.params.token, data.query.id, data.body),
+  (c: AdminContext) => c.set?.("sensitive", true),
 );
-
-/** Compatibility export for direct endpoint tests. */
-export async function onRequestPost(c: AdminContext): Promise<Response> {
-  const body = await parseJsonBody(c.req, inviteDeclineSchema);
-  const query = inviteCapabilityQuerySchema.parse(Object.fromEntries(new URL(c.req.raw.url).searchParams));
-  return handleInviteDecline(c, c.req.param("token"), query.id, body);
-}
-
-export async function onRequest(c: any): Promise<Response> {
-  c.set("sensitive", true);
-  return dispatchRequestMethod(c, { GET: onRequestGet, POST: onRequestPost });
-}

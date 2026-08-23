@@ -19,6 +19,7 @@ export interface ManageRegistrationUpdateInput {
   registration: RegistrationRecord;
   manageToken: string;
   isAdminManageJwt: boolean;
+  authenticatedActor: { kind: "admin" | "member"; id: string } | null;
   actorUserId: string;
   body: RegistrationManageBody;
   appBaseUrl: string;
@@ -30,6 +31,7 @@ export interface ManageRegistrationUpdateInput {
 export interface ManageRegistrationUpdateResult {
   registration: RegistrationRecord;
   outboxId: string | null;
+  outboxIds: string[];
   emailChanged: boolean;
 }
 
@@ -77,7 +79,7 @@ export async function updateManagedRegistration(
     profilePatch,
     auditActor: {
       type: input.isAdminManageJwt ? ("admin" as const) : ("user" as const),
-      id: input.actorUserId,
+      id: input.isAdminManageJwt ? input.actorUserId : (input.authenticatedActor?.id ?? input.actorUserId),
       action: `self_service_${body.action}`,
     },
   };
@@ -96,10 +98,15 @@ export async function updateManagedRegistration(
       newEmail: body.email,
       confirmationTtlHours: input.confirmationLinkTtlHours,
       signingSecret: input.signingSecret,
+      authority: input.isAdminManageJwt
+        ? ({ kind: "event_manager", actorUserId: input.actorUserId } as const)
+        : input.authenticatedActor
+          ? ({ kind: "authenticated_actor", actorUserId: input.authenticatedActor.id } as const)
+          : ({ kind: "registration_capability" } as const),
       allowCancelled: true,
       auditActor: {
         type: input.isAdminManageJwt ? ("admin" as const) : ("user" as const),
-        id: input.actorUserId,
+        id: input.isAdminManageJwt ? input.actorUserId : (input.authenticatedActor?.id ?? input.actorUserId),
         action: "email_changed",
         eventId: event.id,
       },
@@ -121,7 +128,12 @@ export async function updateManagedRegistration(
           signingSecret: input.signingSecret,
           emailChange,
         });
-    return { registration: result.registration, outboxId: result.outboxId, emailChanged };
+    return {
+      registration: result.registration,
+      outboxId: result.outboxId,
+      outboxIds: result.outboxIds,
+      emailChanged,
+    };
   }
 
   const result = input.isAdminManageJwt
@@ -136,5 +148,10 @@ export async function updateManagedRegistration(
         signingSecret: input.signingSecret,
         notification,
       });
-  return { registration: result.registration, outboxId: result.outboxId, emailChanged };
+  return {
+    registration: result.registration,
+    outboxId: result.outboxId,
+    outboxIds: result.outboxIds,
+    emailChanged,
+  };
 }

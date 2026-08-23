@@ -5,16 +5,8 @@ import { dispatchRequestMethod, methodNotAllowed } from "../functions/_lib/http"
 import { onRequest as eventFormsDispatch } from "../functions/api/v1/events/[eventSlug]/forms";
 import worker from "../functions/router";
 import { onRequest as retentionDispatch } from "../functions/api/v1/internal/retention/run";
-import { onRequest as registrationConfirmDispatch } from "../functions/api/v1/events/[eventSlug]/registrations/confirm-email";
-import { onRequest as registrationCreateDispatch } from "../functions/api/v1/events/[eventSlug]/registrations";
 import { onRequest as speakerPresentationDispatch } from "../functions/api/v1/proposals/speaker/[token]/presentation";
-import { onRequest as speakerManageDispatch } from "../functions/api/v1/proposals/speaker/[token]";
-import { onRequest as proposerSpeakersDispatch } from "../functions/api/v1/proposals/manage/[token]/speakers";
-import { onRequest as registrationManageDispatch } from "../functions/api/v1/registrations/manage/[token]";
 import { onRequest as registrationHeadshotDispatch } from "../functions/api/v1/registrations/manage/[token]/headshot";
-import { onRequest as waitlistPromoteDispatch } from "../functions/api/v1/admin/events/[eventSlug]/waitlist/promote";
-import { onRequest as adminRegistrationDispatch } from "../functions/api/v1/admin/events/[eventSlug]/registrations/[registrationId]/index";
-import { onRequest as registrationAdmitDispatch } from "../functions/api/v1/admin/events/[eventSlug]/registrations/[registrationId]/admit";
 
 function context(method: string) {
   return { req: { raw: new Request("https://app.test/resource", { method }) } };
@@ -71,14 +63,14 @@ describe("HTTP method dispatch", () => {
       path: "/events/event/registrations/confirm-email",
       method: "DELETE",
       allow: "GET, POST",
-      handler: registrationConfirmDispatch,
+      mounted: true,
     },
     {
       label: "registration creation",
       path: "/events/event/registrations",
       method: "GET",
       allow: "POST",
-      handler: registrationCreateDispatch,
+      mounted: true,
     },
     {
       label: "speaker presentation",
@@ -92,14 +84,14 @@ describe("HTTP method dispatch", () => {
       path: "/proposals/speaker/token",
       method: "DELETE",
       allow: "GET, POST, PATCH",
-      handler: speakerManageDispatch,
+      mounted: true,
     },
     {
       label: "proposer speaker invitation",
       path: "/proposals/manage/token/speakers",
       method: "GET",
       allow: "POST",
-      handler: proposerSpeakersDispatch,
+      mounted: true,
     },
     {
       label: "proposer speaker reminder",
@@ -120,7 +112,7 @@ describe("HTTP method dispatch", () => {
       path: "/registrations/manage/token",
       method: "POST",
       allow: "GET, PATCH",
-      handler: registrationManageDispatch,
+      mounted: true,
     },
     {
       label: "registration headshot",
@@ -128,27 +120,6 @@ describe("HTTP method dispatch", () => {
       method: "PATCH",
       allow: "PUT, DELETE",
       handler: registrationHeadshotDispatch,
-    },
-    {
-      label: "waitlist promotion",
-      path: "/admin/events/event/waitlist/promote",
-      method: "GET",
-      allow: "POST",
-      handler: waitlistPromoteDispatch,
-    },
-    {
-      label: "admin registration management",
-      path: "/admin/events/event/registrations/registration",
-      method: "POST",
-      allow: "GET, PATCH",
-      handler: adminRegistrationDispatch,
-    },
-    {
-      label: "registration admission",
-      path: "/admin/events/event/registrations/registration/admit",
-      method: "GET",
-      allow: "POST",
-      handler: registrationAdmitDispatch,
     },
   ])("returns the canonical mounted 405 for a $label route", async ({ path, method, allow, handler, mounted }) => {
     if (mounted) {

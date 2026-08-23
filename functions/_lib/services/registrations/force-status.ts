@@ -61,6 +61,13 @@ export async function forceRegistrationStatus(
         capacity_exempt_in_person: capacityExemptReason ? 1 : 0,
         capacity_exempt_reason: capacityExemptReason,
         cancellation_reason_code: null,
+        ...(payload.status !== "pending_email_confirmation"
+          ? {
+              confirmation_link_secret: null,
+              pending_confirmation_deadline_at: null,
+              created_identity_user_id: null,
+            }
+          : {}),
         cancelled_at: payload.status === "cancelled" ? (registration.cancelled_at ?? now) : null,
         updated_at: now,
       };
@@ -84,7 +91,14 @@ export async function forceRegistrationStatus(
           .prepare(
             `UPDATE registrations
            SET status = ?, capacity_exempt_in_person = ?, capacity_exempt_reason = ?,
-               cancellation_reason_code = NULL, cancelled_at = ?, updated_at = ?
+               cancellation_reason_code = NULL, cancelled_at = ?,
+               confirmation_link_secret = CASE WHEN ? = 1 THEN NULL ELSE confirmation_link_secret END,
+               pending_confirmation_deadline_at = CASE
+                 WHEN ? = 1 THEN NULL ELSE pending_confirmation_deadline_at END,
+               confirmation_reminder_sent_at = CASE
+                 WHEN ? = 1 THEN NULL ELSE confirmation_reminder_sent_at END,
+               created_identity_user_id = CASE WHEN ? = 1 THEN NULL ELSE created_identity_user_id END,
+               updated_at = ?
            WHERE id = ? AND event_id = ?`,
           )
           .bind(
@@ -92,11 +106,18 @@ export async function forceRegistrationStatus(
             updated.capacity_exempt_in_person,
             updated.capacity_exempt_reason,
             updated.cancelled_at,
+            payload.status !== "pending_email_confirmation" ? 1 : 0,
+            payload.status !== "pending_email_confirmation" ? 1 : 0,
+            payload.status !== "pending_email_confirmation" ? 1 : 0,
+            payload.status !== "pending_email_confirmation" ? 1 : 0,
             now,
             registration.id,
             payload.eventId,
           ),
       ];
+      if (payload.status !== "pending_email_confirmation") {
+        statements.push(prepareClearRegistrationEmailChangeStatement(db, registration.id, registration.user_id, now));
+      }
       if (payload.status === "cancelled") {
         statements.push(
           prepareRemoveAllDayWaitlistStatement(db, {
@@ -104,7 +125,6 @@ export async function forceRegistrationStatus(
             reasonCode: "registration_cancelled",
             reasonNote: "admin_force_status",
           }),
-          prepareClearRegistrationEmailChangeStatement(db, registration.id, registration.user_id, now),
         );
       } else {
         statements.push(...(waitlist?.statements ?? []));

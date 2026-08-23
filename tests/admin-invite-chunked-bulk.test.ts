@@ -18,11 +18,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
-import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
+import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { createTemplateVersion, activateTemplateVersion } from "../functions/_lib/email/templates";
-import { onRequestPost as inviteAttendeesPreview } from "../functions/api/v1/admin/events/[eventSlug]/invites/attendees/preview";
-import { onRequestPost as inviteAttendeesBulk } from "../functions/api/v1/admin/events/[eventSlug]/invites/attendees/bulk";
+import app from "../functions/router";
 import { handleError } from "../functions/_lib/http";
 import { bulkCreateAttendeesAdmin, bulkCreateInvites } from "../functions/_lib/services/invite-bulk";
 import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
@@ -48,8 +47,8 @@ async function seedRequiredTemplates(adminId: string): Promise<void> {
   }
 }
 
-function makeRequest(body: unknown): Request {
-  return new Request("https://app.test", {
+function makeRequest(action: "preview" | "bulk", body: unknown): Request {
+  return new Request(`https://app.test/api/v1/admin/events/${EVENT_SLUG}/invites/attendees/${action}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -57,6 +56,14 @@ function makeRequest(body: unknown): Request {
     },
     body: JSON.stringify(body),
   });
+}
+
+function callMounted(action: "preview" | "bulk", body: unknown): Promise<Response> {
+  return app.fetch(
+    makeRequest(action, body),
+    appEnv as any,
+    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+  );
 }
 
 describe("attendee invite — chunked bulk send", () => {
@@ -76,8 +83,7 @@ describe("attendee invite — chunked bulk send", () => {
       { email: "a@example.com", firstName: "Alice", lastName: "A" },
       { email: "b@example.com", firstName: "Bob", lastName: "B" },
     ];
-    const ctx = createContext(appEnv, makeRequest({ invites }), { eventSlug: EVENT_SLUG });
-    const res = await inviteAttendeesPreview(ctx);
+    const res = await callMounted("preview", { invites });
 
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
@@ -93,17 +99,13 @@ describe("attendee invite — chunked bulk send", () => {
       { email: "a@example.com", firstName: "Alice", lastName: "A" },
       { email: "b@example.com", firstName: "Bob", lastName: "B" },
     ];
-    const previewCtx = createContext(appEnv, makeRequest({ invites: allInvites }), { eventSlug: EVENT_SLUG });
-    const previewRes = await inviteAttendeesPreview(previewCtx);
+    const previewRes = await callMounted("preview", { invites: allInvites });
     const { previewToken, inviteDigest } = (await previewRes.json()) as Record<string, string>;
 
     // Send only the first invitee as a "chunk" — pass the full-list digest so
     // the token (signed over both invitees) still validates.
     const chunk = [{ email: "a@example.com", firstName: "Alice", lastName: "A" }];
-    const bulkCtx = createContext(appEnv, makeRequest({ invites: chunk, previewToken, inviteDigest }), {
-      eventSlug: EVENT_SLUG,
-    });
-    const bulkRes = await inviteAttendeesBulk(bulkCtx);
+    const bulkRes = await callMounted("bulk", { invites: chunk, previewToken, inviteDigest });
 
     expect(bulkRes.status).toBe(200);
     const bulkBody = (await bulkRes.json()) as { success: boolean; created: unknown[] };
@@ -117,16 +119,14 @@ describe("attendee invite — chunked bulk send", () => {
       { email: "a@example.com", firstName: "Alice", lastName: "A" },
       { email: "b@example.com", firstName: "Bob", lastName: "B" },
     ];
-    const previewCtx = createContext(appEnv, makeRequest({ invites: allInvites }), { eventSlug: EVENT_SLUG });
-    const previewRes = await inviteAttendeesPreview(previewCtx);
+    const previewRes = await callMounted("preview", { invites: allInvites });
     const { previewToken } = (await previewRes.json()) as Record<string, string>;
 
     // Send only the first invitee without passing inviteDigest — the worker
     // will compute the digest from the chunk alone, which differs from the
     // full-list digest embedded in the token → 409 INVITE_PREVIEW_STALE.
     const chunk = [{ email: "a@example.com", firstName: "Alice", lastName: "A" }];
-    const bulkCtx = createContext(appEnv, makeRequest({ invites: chunk, previewToken }), { eventSlug: EVENT_SLUG });
-    const bulkRes = await inviteAttendeesBulk(bulkCtx).catch(handleError);
+    const bulkRes = await callMounted("bulk", { invites: chunk, previewToken }).catch(handleError);
 
     expect(bulkRes.status).toBe(409);
     const bulkBody = (await bulkRes.json()) as { error: { code: string } };

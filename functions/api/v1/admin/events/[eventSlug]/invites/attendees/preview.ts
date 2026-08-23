@@ -1,5 +1,4 @@
-import { parseJsonBody } from "../../../../../../../_lib/validation";
-import { dispatchPostOnly, json } from "../../../../../../../_lib/http";
+import { json } from "../../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../../../_lib/services/events";
 import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
@@ -9,39 +8,28 @@ import {
   adminAttendeeInvitePreviewResponseSchema,
   adminAttendeeInvitePreviewRouteSchema,
 } from "../../../../../../../../assets/shared/schemas/route-contracts-admin-event-communications";
-import { adminBulkAttendeeInvitesPreviewSchema } from "../../../../../../../../assets/shared/schemas/admin-events";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../../../_lib/openapi/route";
-import type { ValidatedData } from "chanfana";
-
-export async function onRequestPost(
-  c: AdminContext,
-  validated?: ValidatedData<typeof adminAttendeeInvitePreviewRouteSchema>,
-): Promise<Response> {
-  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const body = validated?.body ?? (await parseJsonBody(c.req, adminBulkAttendeeInvitesPreviewSchema));
-  const event = await getEventBySlug(requestDb(c), validated?.params.eventSlug ?? c.req.param("eventSlug"));
-  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-  const secret = requireInternalSecret(c.env);
-
-  const preview = await buildAdminInvitePreview({
-    db: requestDb(c),
-    event,
-    appBaseUrl,
-    signingSecret: secret,
-    adminId: admin.id,
-    inviteType: "attendee",
-    invites: body.invites,
-  });
-
-  return json(adminAttendeeInvitePreviewResponseSchema.parse({ success: true, ...preview }));
-}
 
 export const AdminEventsEventSlugInvitesAttendeesPreviewPost = openApiRoute(
   adminAttendeeInvitePreviewRouteSchema,
-  onRequestPost,
-);
+  async (c: AdminContext, data) => {
+    const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+    const body = data.body;
+    const event = await getEventBySlug(requestDb(c), data.params.eventSlug);
+    const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
+    const secret = requireInternalSecret(c.env);
 
-export async function onRequest(c: AdminContext): Promise<Response> {
-  return dispatchPostOnly(c, onRequestPost);
-}
+    const preview = await buildAdminInvitePreview({
+      db: requestDb(c),
+      event,
+      appBaseUrl,
+      signingSecret: secret,
+      adminId: admin.id,
+      inviteType: "attendee",
+      invites: body.invites,
+    });
+
+    return json(adminAttendeeInvitePreviewResponseSchema.parse({ success: true, ...preview }));
+  },
+);

@@ -5,6 +5,7 @@ import type { DatabaseLike } from "../../types";
 export interface RsvpEnforcementCandidate {
   id: string;
   registration_id: string;
+  manage_link_secret: string;
   event_day_id: string | null;
   response_status: "bounced" | "declined" | "tentative";
   received_at: string;
@@ -29,7 +30,7 @@ export interface RsvpEnforcementCandidate {
   has_newer_accept: number;
 }
 
-const CANDIDATE_PROJECTION = `rsvp.id, rsvp.registration_id, rsvp.event_day_id, rsvp.response_status,
+const CANDIDATE_PROJECTION = `rsvp.id, rsvp.registration_id, r.manage_link_secret, rsvp.event_day_id, rsvp.response_status,
   rsvp.received_at, rsvp.warning_sent_at,
   r.event_id, r.user_id, r.source_type, r.source_ref,
   e.name AS event_name, e.slug AS event_slug, e.base_path AS event_base_path,

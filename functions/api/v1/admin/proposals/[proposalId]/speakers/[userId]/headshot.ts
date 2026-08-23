@@ -48,7 +48,7 @@ async function onGet(c: AdminContext, data: GetData): Promise<Response> {
 async function onPut(c: AdminContext, params: HeadshotParams): Promise<Response> {
   const { db, admin, speaker } = await load(c, params.proposalId, params.userId, "manage");
   const uploaded = await readValidatedUploadedImage(c.req.raw, "Headshot");
-  const image = await resizeHeadshot(uploaded.buffer, uploaded.contentType, c.env.IMAGES);
+  const image = await resizeHeadshot(uploaded.buffer, c.env.IMAGES);
   const r2Key = await replaceProposalSpeakerHeadshot({
     db,
     bucket: requireUserHeadshotBucket(c.env),

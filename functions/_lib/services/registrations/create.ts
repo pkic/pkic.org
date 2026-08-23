@@ -36,6 +36,8 @@ export interface CreateRegistrationPayload {
   pendingConfirmationDeadlineHours?: number;
   confirmationTtlHours?: number;
   signingSecret?: string;
+  /** True only when this registration transaction creates the user identity. */
+  unverifiedEmailCorrectionAllowed?: boolean;
 }
 
 function initialRegistrationStatus(inviteId: string | null): "pending_email_confirmation" | "registered" {
@@ -130,6 +132,10 @@ export async function buildCreateRegistration(
     capacity_exempt_reason: capacityExemptReason,
     cancellation_reason_code: null,
     transition_revision: existing?.transition_revision ?? 0,
+    created_identity_user_id:
+      !existing && status === "pending_email_confirmation" && payload.unverifiedEmailCorrectionAllowed
+        ? payload.userId
+        : null,
     confirmed_at: status === "registered" ? now : null,
     cancelled_at: null,
     created_at: existing?.created_at ?? now,
@@ -145,7 +151,7 @@ export async function buildCreateRegistration(
            custom_answers_json = ?, referred_by_code = ?, confirmation_link_secret = ?,
            pending_confirmation_deadline_at = ?,
            manage_link_secret = ?, capacity_exempt_in_person = ?, capacity_exempt_reason = ?,
-           cancellation_reason_code = NULL,
+           cancellation_reason_code = NULL, created_identity_user_id = NULL,
            confirmed_at = ?, cancelled_at = NULL, updated_at = ?
        WHERE id = ?`,
         )
@@ -175,8 +181,8 @@ export async function buildCreateRegistration(
       id, event_id, user_id, invite_id, status, attendance_type, source_type, source_ref,
       custom_answers_json, referred_by_code, confirmation_link_secret, pending_confirmation_deadline_at,
       manage_link_secret, capacity_exempt_in_person, capacity_exempt_reason, cancellation_reason_code,
-      confirmed_at, cancelled_at, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      created_identity_user_id, confirmed_at, cancelled_at, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           registration.id,
@@ -195,6 +201,7 @@ export async function buildCreateRegistration(
           registration.capacity_exempt_in_person,
           registration.capacity_exempt_reason,
           registration.cancellation_reason_code,
+          registration.created_identity_user_id,
           registration.confirmed_at,
           registration.cancelled_at,
           registration.created_at,

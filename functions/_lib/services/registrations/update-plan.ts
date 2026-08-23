@@ -109,6 +109,9 @@ export async function buildRegistrationUpdate(
       ...registration,
       status: "cancelled",
       cancellation_reason_code: null,
+      confirmation_link_secret: null,
+      pending_confirmation_deadline_at: null,
+      created_identity_user_id: null,
       cancelled_at: now,
       updated_at: now,
     };
@@ -117,7 +120,10 @@ export async function buildRegistrationUpdate(
       db
         .prepare(
           `UPDATE registrations
-           SET status = 'cancelled', cancellation_reason_code = NULL, cancelled_at = ?, updated_at = ?
+           SET status = 'cancelled', cancellation_reason_code = NULL,
+               confirmation_link_secret = NULL, pending_confirmation_deadline_at = NULL,
+               confirmation_reminder_sent_at = NULL, created_identity_user_id = NULL,
+               cancelled_at = ?, updated_at = ?
            WHERE id = ?`,
         )
         .bind(now, now, registration.id),
@@ -153,6 +159,9 @@ export async function buildRegistrationUpdate(
       cancellation_reason_code: "unauthorized_registration",
       custom_answers_json: null,
       manage_link_secret: manageLinkSecret,
+      confirmation_link_secret: null,
+      pending_confirmation_deadline_at: null,
+      created_identity_user_id: null,
       cancelled_at: now,
       updated_at: now,
     };
@@ -162,7 +171,10 @@ export async function buildRegistrationUpdate(
         .prepare(
           `UPDATE registrations
            SET status = 'cancelled', cancellation_reason_code = 'unauthorized_registration',
-               cancelled_at = ?, custom_answers_json = NULL, manage_link_secret = ?, updated_at = ?
+               cancelled_at = ?, custom_answers_json = NULL, manage_link_secret = ?,
+               confirmation_link_secret = NULL, pending_confirmation_deadline_at = NULL,
+               confirmation_reminder_sent_at = NULL, created_identity_user_id = NULL,
+               updated_at = ?
            WHERE id = ?`,
         )
         .bind(now, manageLinkSecret, now, registration.id),

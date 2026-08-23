@@ -7,7 +7,7 @@ import type { EventRecord } from "../events";
 import { firstReferralCodeQuerySql } from "../referral-code-projection";
 import { userRecordColumns, type UserRecord } from "../users";
 import { getRegistrationById } from "./queries";
-import { REGISTRATION_RECIPIENT_EMAIL_SQL } from "./recipient-email";
+import { REGISTRATION_CONFIRMATION_RECIPIENT_EMAIL_SQL } from "./recipient-email";
 import { prepareRegistrationConfirmationEmail, prepareRegistrationConfirmedEmail } from "./status-notifications";
 
 export interface ResendRegistrationEmailPayload {
@@ -40,7 +40,7 @@ export async function resendRegistrationEmail(
     const user = await first<UserRecord & { confirmation_email: string }>(
       db,
       `SELECT ${userRecordColumns("u")},
-              ${REGISTRATION_RECIPIENT_EMAIL_SQL} AS confirmation_email
+              ${REGISTRATION_CONFIRMATION_RECIPIENT_EMAIL_SQL} AS confirmation_email
          FROM registrations r
          JOIN users u ON u.id = r.user_id
         WHERE r.id = ? AND u.id = ?`,

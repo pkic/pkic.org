@@ -9,9 +9,9 @@ import { adminRegistrationOpenManageRouteSchema } from "../../../../../../../../
 import { openApiRoute } from "../../../../../../../_lib/openapi/route";
 import type { ValidatedData } from "chanfana";
 
-export async function onRequestPost(
+async function handleAdminRegistrationOpenManage(
   c: AdminContext,
-  data?: ValidatedData<typeof adminRegistrationOpenManageRouteSchema>,
+  data: ValidatedData<typeof adminRegistrationOpenManageRouteSchema>,
 ): Promise<Response> {
   const signingSecret = c.env.INTERNAL_SIGNING_SECRET;
   if (!signingSecret) {
@@ -20,14 +20,13 @@ export async function onRequestPost(
 
   const db = requestDb(c);
   const actor = await requireAdminFromRequest(db, c.req.raw, c.env);
-  const params = data?.params ?? c.req.param();
-  const event = await getEventBySlug(db, params.eventSlug);
+  const event = await getEventBySlug(db, data.params.eventSlug);
   const ip =
     c.req.raw.headers.get("cf-connecting-ip") ?? c.req.raw.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
   const manageUrl = await createAdminRegistrationManageUrl(db, {
     actor,
     event,
-    registrationId: params.registrationId,
+    registrationId: data.params.registrationId,
     signingSecret,
     ip,
     userAgent: c.req.raw.headers.get("user-agent") ?? "",
@@ -36,4 +35,7 @@ export async function onRequestPost(
   return json(adminRegistrationOpenManageResponseSchema.parse({ manageUrl }));
 }
 
-export const AdminRegistrationOpenManage = openApiRoute(adminRegistrationOpenManageRouteSchema, onRequestPost);
+export const AdminRegistrationOpenManage = openApiRoute(
+  adminRegistrationOpenManageRouteSchema,
+  handleAdminRegistrationOpenManage,
+);

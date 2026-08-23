@@ -12,9 +12,13 @@ import {
   updateRegistrationByManageToken,
 } from "../functions/_lib/services/registrations";
 import { findOrCreateUser } from "../functions/_lib/services/users";
-import { signCapabilityToken } from "../functions/_lib/services/capability-links";
+import { materializeQueuedCapabilityLinks, signCapabilityToken } from "../functions/_lib/services/capability-links";
 import { getRegistrationConfirmationInfo } from "../functions/_lib/services/registrations/confirmation-info";
+import { confirmRegistrationWithNotification } from "../functions/_lib/services/registrations/confirmation-workflow";
+import { getEventById } from "../functions/_lib/services/events";
 import { first, run } from "../functions/_lib/db/queries";
+import { getRegistrationByManageToken } from "../functions/_lib/services/registrations/queries";
+import { queueRegistrationStatusEmail } from "../functions/_lib/services/registrations/status-notifications";
 
 describe("Registration Email Change", () => {
   beforeEach(async () => {
@@ -65,10 +69,10 @@ describe("Registration Email Change", () => {
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
       });
-
       const result = await changeRegistrationEmail(env.DB, {
         registrationId: reg.id,
         newEmail: "newemail@example.com",
+        authority: { kind: "event_manager", actorUserId: reg.user_id },
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
       });
@@ -86,6 +90,48 @@ describe("Registration Email Change", () => {
       );
       expect(dbUser?.email).toBe("original@example.com");
       expect(dbUser?.pending_email).toBe("newemail@example.com");
+    });
+
+    it("sends confirmation to the new address and only a notice to the old address", async () => {
+      const eventId = await createTestEvent();
+      const event = await getEventById(env.DB, eventId);
+      const user = await findOrCreateUser(env.DB, { email: "current-proof@example.com" });
+      const { registration } = await createRegistration(env.DB, {
+        event,
+        userId: user.id,
+        attendanceType: "virtual",
+        sourceType: "web",
+        confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
+      });
+
+      const result = await changeRegistrationEmail(env.DB, {
+        registrationId: registration.id,
+        newEmail: "attacker-controlled@example.com",
+        authority: { kind: "event_manager", actorUserId: registration.user_id },
+        confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
+        confirmationEmail: { event, appBaseUrl: "https://app.test", confirmationTtlHours: 24 },
+      });
+
+      expect(
+        await first<{ recipient_email: string; template_key: string }>(
+          env.DB,
+          "SELECT recipient_email, template_key FROM email_outbox WHERE id = ?",
+          [result.outboxId],
+        ),
+      ).toEqual({ recipient_email: "attacker-controlled@example.com", template_key: "registration_email_change" });
+      expect(
+        await first<{ recipient_email: string; template_key: string; payload_json: string }>(
+          env.DB,
+          "SELECT recipient_email, template_key, payload_json FROM email_outbox WHERE id = ?",
+          [result.outboxIds[1]],
+        ),
+      ).toEqual({
+        recipient_email: "current-proof@example.com",
+        template_key: "registration_email_change_notice",
+        payload_json: expect.not.stringContaining("__capabilityLinks"),
+      });
     });
 
     it("rejects if new email is same as current", async () => {
@@ -106,6 +152,7 @@ describe("Registration Email Change", () => {
         changeRegistrationEmail(env.DB, {
           registrationId: reg.id,
           newEmail: "original@example.com",
+          authority: { kind: "event_manager", actorUserId: reg.user_id },
           confirmationTtlHours: 24,
           signingSecret: "test-signing-secret",
         }),
@@ -134,6 +181,7 @@ describe("Registration Email Change", () => {
         changeRegistrationEmail(env.DB, {
           registrationId: registration.id,
           newEmail: "reserved-alias@example.com",
+          authority: { kind: "event_manager", actorUserId: registration.user_id },
           confirmationTtlHours: 24,
           signingSecret: "test-signing-secret",
         }),
@@ -157,6 +205,7 @@ describe("Registration Email Change", () => {
       const result = await changeRegistrationEmail(env.DB, {
         registrationId: reg.id,
         newEmail: "another@example.com",
+        authority: { kind: "event_manager", actorUserId: reg.user_id },
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
       });
@@ -184,6 +233,7 @@ describe("Registration Email Change", () => {
       const result = await changeRegistrationEmail(env.DB, {
         registrationId: reg.id,
         newEmail: "cancelled-recovery@example.com",
+        authority: { kind: "event_manager", actorUserId: reg.user_id },
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
         allowCancelled: true,
@@ -211,6 +261,7 @@ describe("Registration Email Change", () => {
         changeRegistrationEmail(env.DB, {
           registrationId: reg.id,
           newEmail: "test@example.com",
+          authority: { kind: "event_manager", actorUserId: reg.user_id },
           confirmationTtlHours: 24,
           signingSecret: "test-signing-secret",
         }),
@@ -288,9 +339,30 @@ describe("Registration Email Change", () => {
         confirmationTtlHours: 24,
         signingSecret,
       });
+      const ownerEvent = await getEventById(env.DB, ownerEventId);
+      const oldManageToken = await signCapabilityToken({
+        signingSecret,
+        linkSecret: owner.registration.manage_link_secret,
+        purpose: "registration_manage",
+        resourceId: owner.registration.id,
+      });
+      const siblingManageToken = await signCapabilityToken({
+        signingSecret,
+        linkSecret: other.registration.manage_link_secret,
+        purpose: "registration_manage",
+        resourceId: other.registration.id,
+      });
+      const delayedStatus = await queueRegistrationStatusEmail(env.DB, {
+        event: ownerEvent,
+        registrationId: owner.registration.id,
+        appBaseUrl: "https://app.test",
+        templateKey: "registration_updated",
+        subject: "Delayed status update",
+      });
       const change = await changeRegistrationEmail(env.DB, {
         registrationId: owner.registration.id,
         newEmail: "bound-new@example.com",
+        authority: { kind: "event_manager", actorUserId: owner.registration.user_id },
         confirmationTtlHours: 24,
         signingSecret,
       });
@@ -322,10 +394,64 @@ describe("Registration Email Change", () => {
         pending_email_change_registration_id: owner.registration.id,
       });
 
-      await confirmRegistrationByToken(env.DB, {
+      const newAddressConfirmation = await confirmRegistrationWithNotification(env.DB, {
+        event: ownerEvent,
         token: change.confirmationToken,
+        registrationId: owner.registration.id,
         waitlistClaimWindowHours: 24,
+        confirmationTtlHours: 24,
         signingSecret,
+        appBaseUrl: "https://app.test",
+      });
+      expect(newAddressConfirmation.stage).toBe("confirmed");
+
+      await expect(
+        confirmRegistrationByToken(env.DB, {
+          token: change.confirmationToken,
+          waitlistClaimWindowHours: 24,
+          signingSecret,
+        }),
+      ).rejects.toMatchObject({ code: "CONFIRM_TOKEN_INVALID" });
+
+      await expect(getRegistrationByManageToken(env.DB, oldManageToken, signingSecret)).rejects.toMatchObject({
+        code: "REGISTRATION_NOT_FOUND",
+      });
+      await expect(getRegistrationByManageToken(env.DB, siblingManageToken, signingSecret)).rejects.toMatchObject({
+        code: "REGISTRATION_NOT_FOUND",
+      });
+      await expect(
+        materializeQueuedCapabilityLinks(
+          env.DB,
+          env,
+          JSON.parse(
+            (await first<{ payload_json: string }>(env.DB, "SELECT payload_json FROM email_outbox WHERE id = ?", [
+              delayedStatus.outboxId,
+            ]))!.payload_json,
+          ) as Record<string, unknown>,
+        ),
+      ).rejects.toMatchObject({ code: "CAPABILITY_RESOURCE_STALE" });
+      await expect(
+        getRegistrationByManageToken(env.DB, newAddressConfirmation.manageToken, signingSecret),
+      ).resolves.toMatchObject({ id: owner.registration.id });
+      const freshStatus = await queueRegistrationStatusEmail(env.DB, {
+        event: ownerEvent,
+        registrationId: owner.registration.id,
+        appBaseUrl: "https://app.test",
+        templateKey: "registration_updated",
+        subject: "Fresh status update",
+      });
+      const freshPayload = await materializeQueuedCapabilityLinks(
+        env.DB,
+        env,
+        JSON.parse(
+          (await first<{ payload_json: string }>(env.DB, "SELECT payload_json FROM email_outbox WHERE id = ?", [
+            freshStatus.outboxId,
+          ]))!.payload_json,
+        ) as Record<string, unknown>,
+      );
+      const freshToken = new URL(freshPayload.manageUrl as string).searchParams.get("token")!;
+      await expect(getRegistrationByManageToken(env.DB, freshToken, signingSecret)).resolves.toMatchObject({
+        id: owner.registration.id,
       });
 
       expect(
@@ -367,6 +493,7 @@ describe("Registration Email Change", () => {
       await changeRegistrationEmail(env.DB, {
         registrationId: owner.registration.id,
         newEmail: "cancel-new@example.com",
+        authority: { kind: "event_manager", actorUserId: owner.registration.user_id },
         confirmationTtlHours: 24,
         signingSecret,
       });
@@ -417,6 +544,7 @@ describe("Registration Email Change", () => {
       const change = await changeRegistrationEmail(env.DB, {
         registrationId: created.registration.id,
         newEmail: "event-bound-new@example.com",
+        authority: { kind: "event_manager", actorUserId: created.registration.user_id },
         confirmationTtlHours: 24,
         signingSecret,
       });
@@ -443,6 +571,25 @@ describe("Registration Email Change", () => {
   });
 
   describe("finalizeEmailChange", () => {
+    it("does not require old-mailbox proof after the new address was confirmed", async () => {
+      const eventId = await createTestEvent();
+      const user = await findOrCreateUser(env.DB, { email: "proof-required@example.com" });
+      const { registration } = await createRegistration(env.DB, {
+        event: { id: eventId },
+        userId: user.id,
+        attendanceType: "virtual",
+        sourceType: "web",
+        confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
+      });
+      await reservePendingEmail(user.id, registration.id, "new-confirmed@example.com", addHours(nowIso(), 24));
+
+      await finalizeEmailChange(env.DB, { userId: user.id, eventId, registrationId: registration.id });
+      expect(await first<{ email: string }>(env.DB, "SELECT email FROM users WHERE id = ?", [user.id])).toEqual({
+        email: "new-confirmed@example.com",
+      });
+    });
+
     it("finalizes email change and clears pending email", async () => {
       const eventId = await createTestEvent();
       const user = await findOrCreateUser(env.DB, {
@@ -456,10 +603,30 @@ describe("Registration Email Change", () => {
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
       });
+      const oldManageToken = await signCapabilityToken({
+        signingSecret: "test-signing-secret",
+        linkSecret: reg.manage_link_secret,
+        purpose: "registration_manage",
+        resourceId: reg.id,
+      });
 
       // Set pending email
       const now = nowIso();
       await reservePendingEmail(user.id, reg.id, "pending@example.com", addHours(now, 24));
+      await env.DB.batch([
+        env.DB.prepare(
+          "INSERT INTO sessions (id, user_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?)",
+        ).bind(uuid(), user.id, `session-${uuid()}`, addHours(now, 24), now),
+        env.DB.prepare(
+          `INSERT INTO auth_magic_links
+               (id, user_id, token_hash, expires_at, created_at, purpose)
+             VALUES (?, ?, ?, ?, ?, 'member')`,
+        ).bind(uuid(), user.id, `magic-${uuid()}`, addHours(now, 1), now),
+        env.DB.prepare(
+          `INSERT INTO refresh_tokens (id, user_id, token_hash, issued_at, expires_at)
+             VALUES (?, ?, ?, ?, ?)`,
+        ).bind(uuid(), user.id, `refresh-${uuid()}`, now, addHours(now, 24)),
+      ]);
 
       const result = await finalizeEmailChange(env.DB, {
         userId: user.id,
@@ -476,6 +643,19 @@ describe("Registration Email Change", () => {
       );
       expect(dbUser?.email).toBe("pending@example.com");
       expect(dbUser?.pending_email).toBeNull();
+      await expect(getRegistrationByManageToken(env.DB, oldManageToken, "test-signing-secret")).rejects.toMatchObject({
+        code: "REGISTRATION_NOT_FOUND",
+      });
+      expect(
+        await first<{ active_sessions: number; active_magic_links: number; active_refresh_tokens: number }>(
+          env.DB,
+          `SELECT
+             (SELECT COUNT(*) FROM sessions WHERE user_id = ? AND revoked_at IS NULL) AS active_sessions,
+             (SELECT COUNT(*) FROM auth_magic_links WHERE user_id = ? AND used_at IS NULL) AS active_magic_links,
+             (SELECT COUNT(*) FROM refresh_tokens WHERE user_id = ? AND revoked_at IS NULL) AS active_refresh_tokens`,
+          [user.id, user.id, user.id],
+        ),
+      ).toEqual({ active_sessions: 0, active_magic_links: 0, active_refresh_tokens: 0 });
     });
 
     it("promotes the same user's secondary alias without duplicating ownership", async () => {
@@ -651,6 +831,7 @@ describe("Registration Email Change", () => {
         changeRegistrationEmail(env.DB, {
           registrationId: origReg.id,
           newEmail: "workflow-dupe@example.com",
+          authority: { kind: "event_manager", actorUserId: origReg.user_id },
           confirmationTtlHours: 24,
           signingSecret: "test-signing-secret",
         }),
@@ -695,6 +876,7 @@ describe("Registration Email Change", () => {
         changeRegistrationEmail(env.DB, {
           registrationId: reg.id,
           newEmail: "squatter@example.com",
+          authority: { kind: "event_manager", actorUserId: reg.user_id },
           confirmationTtlHours: 24,
           signingSecret: "test-signing-secret",
         }),
@@ -737,6 +919,7 @@ describe("Registration Email Change", () => {
         changeRegistrationEmail(env.DB, {
           registrationId: reg.id,
           newEmail: "contested@example.com",
+          authority: { kind: "event_manager", actorUserId: reg.user_id },
           confirmationTtlHours: 24,
           signingSecret: "test-signing-secret",
         }),
@@ -769,6 +952,7 @@ describe("Registration Email Change", () => {
         changeRegistrationEmail(env.DB, {
           registrationId: reg.id,
           newEmail: "dupe@example.com",
+          authority: { kind: "event_manager", actorUserId: reg.user_id },
           confirmationTtlHours: 24,
           signingSecret: "test-signing-secret",
         }),
@@ -816,6 +1000,7 @@ describe("Registration Email Change", () => {
       const result = await changeRegistrationEmail(env.DB, {
         registrationId: reg.id,
         newEmail: "  MIXED.Case@Example.COM  ",
+        authority: { kind: "event_manager", actorUserId: reg.user_id },
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
       });

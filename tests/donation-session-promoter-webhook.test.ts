@@ -12,11 +12,15 @@ import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { createContext } from "./helpers/context";
 import { onRequestGet as donationSession } from "../functions/api/v1/donations/session";
-import { onRequestPost as donationPromoter } from "../functions/api/v1/donations/promoter";
 import { onRequestPost as stripeWebhook } from "../functions/api/v1/webhooks/stripe";
 import { handleDonationStripeEvent } from "../functions/_lib/services/donations/stripe-webhook";
+import app from "../functions/router";
 
 const PROVIDER_BODY_SENTINEL = "SECRET_PROVIDER_BODY webhook@example.test";
+
+function mountedDonationPromoter(request: Request): Promise<Response> {
+  return app.fetch(request, env as any, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
+}
 
 async function insertDonation(opts: {
   sessionId: string;
@@ -115,16 +119,12 @@ describe("POST /api/v1/donations/promoter", () => {
   it("creates a share code for a completed donation", async () => {
     await insertDonation({ sessionId: "cs_test_promo", status: "completed" });
 
-    const response = await donationPromoter(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/donations/promoter", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ session_id: "cs_test_promo" }),
-        }),
-        {},
-      ),
+    const response = await mountedDonationPromoter(
+      new Request("https://app.test/api/v1/donations/promoter", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ session_id: "cs_test_promo" }),
+      }),
     );
 
     expect(response.status).toBe(200);
@@ -137,28 +137,16 @@ describe("POST /api/v1/donations/promoter", () => {
   it("returns the same code on subsequent calls (idempotent)", async () => {
     await insertDonation({ sessionId: "cs_test_idempotent", status: "completed" });
 
-    const ctx1 = createContext(
-      env,
+    const request = () =>
       new Request("https://app.test/api/v1/donations/promoter", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ session_id: "cs_test_idempotent" }),
-      }),
-      {},
-    );
-    const response1 = await donationPromoter(ctx1);
+      });
+    const response1 = await mountedDonationPromoter(request());
     const body1 = (await response1.json()) as { code: string };
 
-    const ctx2 = createContext(
-      env,
-      new Request("https://app.test/api/v1/donations/promoter", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ session_id: "cs_test_idempotent" }),
-      }),
-      {},
-    );
-    const response2 = await donationPromoter(ctx2);
+    const response2 = await mountedDonationPromoter(request());
     const body2 = (await response2.json()) as { code: string };
 
     expect(body1.code).toBe(body2.code);
@@ -167,16 +155,12 @@ describe("POST /api/v1/donations/promoter", () => {
   it("creates one promoter when concurrent requests race", async () => {
     const donationId = await insertDonation({ sessionId: "cs_test_concurrent_promoter", status: "completed" });
     const requestPromoter = () =>
-      donationPromoter(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/donations/promoter", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ session_id: "cs_test_concurrent_promoter" }),
-          }),
-          {},
-        ),
+      mountedDonationPromoter(
+        new Request("https://app.test/api/v1/donations/promoter", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ session_id: "cs_test_concurrent_promoter" }),
+        }),
       );
 
     const responses = await Promise.all([requestPromoter(), requestPromoter(), requestPromoter()]);
@@ -193,16 +177,12 @@ describe("POST /api/v1/donations/promoter", () => {
   it("rejects for a pending (uncompleted) donation", async () => {
     await insertDonation({ sessionId: "cs_test_uncompleted", status: "pending" });
 
-    const response = await donationPromoter(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/donations/promoter", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ session_id: "cs_test_uncompleted" }),
-        }),
-        {},
-      ),
+    const response = await mountedDonationPromoter(
+      new Request("https://app.test/api/v1/donations/promoter", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ session_id: "cs_test_uncompleted" }),
+      }),
     );
 
     expect(response.status).toBe(404);
@@ -211,34 +191,26 @@ describe("POST /api/v1/donations/promoter", () => {
   });
 
   it("rejects for an invalid session_id format", async () => {
-    const response = await donationPromoter(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/donations/promoter", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ session_id: "not-valid" }),
-        }),
-        {},
-      ),
+    const response = await mountedDonationPromoter(
+      new Request("https://app.test/api/v1/donations/promoter", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ session_id: "not-valid" }),
+      }),
     );
 
     expect(response.status).toBe(400);
     const body = (await response.json()) as { error: { code: string } };
-    expect(body.error.code).toBe("BAD_REQUEST");
+    expect(body.error.code).toBe("VALIDATION_ERROR");
   });
 
   it("rejects invalid JSON body", async () => {
-    const response = await donationPromoter(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/donations/promoter", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: "not-json",
-        }),
-        {},
-      ),
+    const response = await mountedDonationPromoter(
+      new Request("https://app.test/api/v1/donations/promoter", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "not-json",
+      }),
     );
 
     expect(response.status).toBe(400);

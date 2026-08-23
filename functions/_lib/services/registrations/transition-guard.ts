@@ -4,7 +4,10 @@ import type { RegistrationRecord } from "./types";
 import { AppError } from "../../errors";
 
 /** Guards a registration-derived plan against a concurrent lifecycle change. */
-export function prepareRegistrationTransitionGuard(db: DatabaseLike, registration: RegistrationRecord): StatementLike {
+export function prepareRegistrationTransitionGuard(
+  db: DatabaseLike,
+  registration: Pick<RegistrationRecord, "id" | "transition_revision">,
+): StatementLike {
   return db
     .prepare(
       `INSERT INTO registration_transition_guards (id, registration_id, expected_revision)

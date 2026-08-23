@@ -10,23 +10,24 @@ import { prepareQueueEmailStatement } from "../../email/outbox";
 import type { DatabaseLike, Env, StatementLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
-import { queuedCapabilityToken } from "../capability-links";
-import { registrationManagePageUrl } from "../frontend-links";
+import { registrationManageCapability } from "../registrations/capability-urls";
 import { HAS_NEWER_ACCEPT_SQL, type RsvpEnforcementCandidate } from "./candidates";
 import { rsvpOutboxId } from "./command-utils";
 
-function manageUrl(candidate: RsvpEnforcementCandidate, env: Env): string {
+async function manageUrl(candidate: RsvpEnforcementCandidate, env: Env): Promise<string> {
   if (!env.APP_BASE_URL) return "";
-  return registrationManagePageUrl(
-    env.APP_BASE_URL,
-    {
-      slug: candidate.event_slug,
-      base_path: candidate.event_base_path,
-      starts_at: candidate.event_starts_at,
-      settings_json: candidate.event_settings_json,
-    },
-    queuedCapabilityToken("registration_manage", candidate.registration_id),
-  );
+  return (
+    await registrationManageCapability(
+      env.APP_BASE_URL,
+      {
+        slug: candidate.event_slug,
+        base_path: candidate.event_base_path,
+        starts_at: candidate.event_starts_at,
+        settings_json: candidate.event_settings_json,
+      },
+      { id: candidate.registration_id, manage_link_secret: candidate.manage_link_secret },
+    )
+  ).manageUrl;
 }
 
 function actionDueAt(candidate: RsvpEnforcementCandidate, warningSentAt: string): string {
@@ -144,7 +145,7 @@ export async function sendRsvpWarning(
 ): Promise<boolean> {
   const at = nowIso();
   const dueAt = actionDueAt(candidate, at);
-  const url = manageUrl(candidate, env);
+  const url = await manageUrl(candidate, env);
   const queued = prepareQueueEmailStatement(
     db,
     {

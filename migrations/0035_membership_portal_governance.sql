@@ -536,7 +536,10 @@ ALTER TABLE calendar_rsvp_events ADD COLUMN action_due_at TEXT;
 
 -- Older dedupe keys predate provider namespacing. Preserve their original
 -- tuple shape while preventing two calendar transports from suppressing each
--- other's events after deployment.
+-- other's events after deployment. Historical databases may contain legacy
+-- opaque keys rather than JSON arrays; retain those values instead of making
+-- the entire additive migration depend on historical application data being
+-- valid JSON.
 UPDATE calendar_rsvp_events
 SET dedupe_key = CASE json_array_length(dedupe_key)
   WHEN 2 THEN json_array(
@@ -551,7 +554,8 @@ SET dedupe_key = CASE json_array_length(dedupe_key)
     json_extract(dedupe_key, '$[2]')
   )
   ELSE dedupe_key
-END;
+END
+WHERE json_valid(dedupe_key);
 
 UPDATE calendar_rsvp_events AS rsvp
 SET event_day_id = (
@@ -605,6 +609,12 @@ CREATE INDEX idx_calendar_rsvp_pending_bounce
 -- registrations table just to replace a SQLite CHECK constraint.
 ALTER TABLE registrations ADD COLUMN cancellation_reason_code TEXT;
 ALTER TABLE registrations ADD COLUMN transition_revision INTEGER NOT NULL DEFAULT 0;
+-- A public registration-management capability may correct the address only
+-- when that same registration transaction created a new, still-unconfirmed
+-- identity. Existing-account registration links must never become global
+-- account-rebinding credentials. Authorized staff/organization actors use a
+-- separately authenticated command path and do not depend on this flag.
+ALTER TABLE registrations ADD COLUMN created_identity_user_id TEXT REFERENCES users(id);
 
 CREATE TABLE registration_transition_guards (
   id                TEXT NOT NULL PRIMARY KEY,
@@ -635,12 +645,14 @@ BEGIN
 END;
 
 CREATE TRIGGER trg_registration_transition_revision
-AFTER UPDATE OF status, user_id, confirmation_link_secret, manage_link_secret ON registrations
+AFTER UPDATE OF status, user_id, confirmation_link_secret, manage_link_secret,
+                created_identity_user_id ON registrations
 FOR EACH ROW
 WHEN OLD.status IS NOT NEW.status
   OR OLD.user_id IS NOT NEW.user_id
   OR OLD.confirmation_link_secret IS NOT NEW.confirmation_link_secret
   OR OLD.manage_link_secret IS NOT NEW.manage_link_secret
+  OR OLD.created_identity_user_id IS NOT NEW.created_identity_user_id
 BEGIN
   UPDATE registrations
   SET transition_revision = transition_revision + 1
@@ -2307,9 +2319,53 @@ As part of our transition to the new PKI Consortium member portal, an account ha
 -- enforces the same live-row relationship without introducing that cycle.
 ALTER TABLE users ADD COLUMN pending_email_change_registration_id TEXT;
 
+-- The new address is the only mailbox that must prove control. Authorization
+-- comes from the initiating actor or the narrow unconfirmed-registration
+-- correction capability, never from continued access to the old mailbox.
+INSERT OR IGNORE INTO email_template_versions
+  (id, template_key, version, subject_template, body, content_type,
+   r2_object_key, checksum_sha256, status, created_by_user_id, created_at)
+VALUES (
+  lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' ||
+  substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(2))) || '-' ||
+  lower(hex(randomblob(6))),
+  'registration_email_change', 1,
+  'Confirm your new email address for {{eventName}}',
+  'A request was made to change the login email for your account from **{{currentEmail}}** to **{{newEmail}}**.
+
+[Confirm this new email address]({{confirmationUrl}})
+
+The account login email will change only after you open this link. If you did not request this change, do not open the link.',
+  'markdown', NULL, '', 'active', NULL, datetime('now')
+);
+
+INSERT OR IGNORE INTO email_template_versions
+  (id, template_key, version, subject_template, body, content_type,
+   r2_object_key, checksum_sha256, status, created_by_user_id, created_at)
+VALUES (
+  lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' ||
+  substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(2))) || '-' ||
+  lower(hex(randomblob(6))),
+  'registration_email_change_notice', 1,
+  'Your account email change was requested',
+  'The login email for your account was requested to change from **{{currentEmail}}** to **{{newEmail}}**.
+
+The old address is not required to approve this change. The new address must be confirmed before the login email changes.
+
+If you did not expect this request, [contact the PKI Consortium]({{contactUrl}}) promptly.',
+  'markdown', NULL, '', 'active', NULL, datetime('now')
+);
+
 CREATE UNIQUE INDEX uq_users_pending_email_change_registration
   ON users(pending_email_change_registration_id)
   WHERE pending_email_change_registration_id IS NOT NULL;
+
+-- The application precheck gives a useful response, while this partial index
+-- closes the D1 race where two accounts reserve the same new login address in
+-- concurrent batches.
+CREATE UNIQUE INDEX uq_users_pending_email
+  ON users(pending_email)
+  WHERE pending_email IS NOT NULL;
 
 -- Preserve an in-flight pre-0035 request when its owner is unambiguous. Rows
 -- with multiple pending registrations remain unbound and therefore cannot be
@@ -2405,15 +2461,6 @@ WHEN NEW.pending_email IS NOT NULL
  )
 BEGIN
   SELECT RAISE(ABORT, 'EMAIL_TAKEN');
-END;
-
-CREATE TRIGGER trg_users_pending_email_no_overwrite
-BEFORE UPDATE OF pending_email ON users
-WHEN OLD.pending_email IS NOT NULL
- AND NEW.pending_email IS NOT NULL
- AND OLD.pending_email != NEW.pending_email
-BEGIN
-  SELECT RAISE(ABORT, 'EMAIL_CHANGE_ALREADY_PENDING');
 END;
 
 CREATE TRIGGER trg_users_pending_email_binding_consistency

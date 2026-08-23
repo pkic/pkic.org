@@ -1,10 +1,8 @@
-import { parseJsonBody } from "../../../../../_lib/validation";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import {
   adminEmailTemplateVersionCreateResponseSchema,
-  adminEmailTemplateVersionSchema,
   emailTemplateVersionCreateRouteSchema,
   emailTemplateVersionsListRouteSchema,
 } from "../../../../../../assets/shared/schemas/admin-email-templates";
@@ -24,15 +22,15 @@ export const EmailTemplateVersionsList = openApiRoute(
   },
 );
 
-export async function onRequestPost(
+async function handleVersionCreate(
   c: AdminContext,
-  data?: ValidatedData<typeof emailTemplateVersionCreateRouteSchema>,
+  data: ValidatedData<typeof emailTemplateVersionCreateRouteSchema>,
 ): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const body = data?.body ?? (await parseJsonBody(c.req, adminEmailTemplateVersionSchema));
+  const body = data.body;
 
   const version = await createAdminEmailTemplateVersion(requestDb(c), admin, {
-    templateKey: data?.params.key ?? c.req.param("key"),
+    templateKey: data.params.key,
     content: body.content,
     subjectTemplate: body.subjectTemplate,
     contentType: body.contentType,
@@ -42,4 +40,4 @@ export async function onRequestPost(
   return json(adminEmailTemplateVersionCreateResponseSchema.parse({ success: true, version }));
 }
 
-export const EmailTemplateVersionCreate = openApiRoute(emailTemplateVersionCreateRouteSchema, onRequestPost);
+export const EmailTemplateVersionCreate = openApiRoute(emailTemplateVersionCreateRouteSchema, handleVersionCreate);

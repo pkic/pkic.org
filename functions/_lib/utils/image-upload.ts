@@ -2,7 +2,7 @@ import { AppError } from "../errors";
 import { readBoundedBody, readBoundedMultipartFormData } from "../http-body";
 import { type ImagesBinding } from "../types";
 import { IMAGE_UPLOAD_ALLOWED_MIME_TYPES, STANDARD_HEADSHOT_MAX_BYTES } from "../../../assets/shared/schemas/images";
-import { detectImageFormat, imageExtensionForContentType } from "./image-format";
+import { imageExtensionForContentType, validateRasterImage } from "./image-format";
 
 export const ALLOWED_MIME_TYPES = new Set<string>(IMAGE_UPLOAD_ALLOWED_MIME_TYPES);
 
@@ -63,8 +63,15 @@ export async function readValidatedUploadedImage(
     }
     throw error;
   }
-  const detectedContentType = detectImageFormat(uploaded.buffer)?.contentType ?? null;
-  if (!detectedContentType || !ALLOWED_MIME_TYPES.has(detectedContentType)) {
+  const validation = validateRasterImage(uploaded.buffer);
+  if (!validation.ok) {
+    if (validation.reason === "dimensions") {
+      throw new AppError(413, "IMAGE_DIMENSIONS_TOO_LARGE", `${label} dimensions exceed the supported limit.`);
+    }
+    throw new AppError(415, "INVALID_FILE_TYPE", "Only JPEG, PNG, and WebP images are accepted.");
+  }
+  const detectedContentType = validation.image.contentType;
+  if (!ALLOWED_MIME_TYPES.has(detectedContentType)) {
     throw new AppError(415, "INVALID_FILE_TYPE", "Only JPEG, PNG, and WebP images are accepted.");
   }
   if (uploaded.buffer.byteLength > maxBytes) {
@@ -116,11 +123,18 @@ export async function putUploadedImage(
  */
 export async function resizeHeadshot(
   buffer: ArrayBuffer,
-  originalContentType: string,
   envImages?: ImagesBinding,
 ): Promise<{ buffer: ArrayBuffer; contentType: string }> {
+  const originalValidation = validateRasterImage(buffer);
+  if (!originalValidation.ok) {
+    if (originalValidation.reason === "dimensions") {
+      throw new AppError(413, "IMAGE_DIMENSIONS_TOO_LARGE", "Headshot dimensions exceed the supported limit.");
+    }
+    throw new AppError(415, "INVALID_FILE_TYPE", "Only JPEG, PNG, and WebP images are accepted.");
+  }
+  const original = { buffer, contentType: originalValidation.image.contentType };
   if (!envImages) {
-    return { buffer, contentType: originalContentType };
+    return original;
   }
 
   try {
@@ -134,14 +148,14 @@ export async function resizeHeadshot(
       .input(stream)
       .transform({ width: 1024, height: 1024, fit: "cover" })
       .output({ format: "image/jpeg", quality: 95 });
+    const transformedBuffer = await (await result.response()).arrayBuffer();
+    const transformedValidation = validateRasterImage(transformedBuffer);
+    if (!transformedValidation.ok) return original;
     // We resize it to 1024x1024 JPEG for safety, same as client side.
-    return {
-      buffer: await (await result.response()).arrayBuffer(),
-      contentType: "image/jpeg",
-    };
+    return { buffer: transformedBuffer, contentType: transformedValidation.image.contentType };
   } catch (err) {
     // Preserve the original validated content type when the optional transform fails.
     console.error("env.IMAGES transform failed:", err);
-    return { buffer, contentType: originalContentType };
+    return original;
   }
 }
