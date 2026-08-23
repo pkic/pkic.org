@@ -1,26 +1,27 @@
-import type { z } from "zod";
+import type { ValidatedData } from "chanfana";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
-import { parseJsonBody } from "../../../../../_lib/validation";
-import { dispatchRequestMethod, json } from "../../../../../_lib/http";
+import { json } from "../../../../../_lib/http";
 import { getConfig, resolveAppBaseUrl } from "../../../../../_lib/config";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { confirmRegistrationWithNotification } from "../../../../../_lib/services/registrations/confirmation-workflow";
 import { getRegistrationDayAttendance } from "../../../../../_lib/services/event-days";
 import { listDayWaitlistForRegistration } from "../../../../../_lib/services/registrations/day-waitlist";
 import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
-import {
-  registrationConfirmResponseSchema,
-  registrationConfirmSchema,
-} from "../../../../../../assets/shared/schemas/registration";
+import { registrationConfirmResponseSchema } from "../../../../../../assets/shared/schemas/registration";
 import {
   registrationConfirmEmailGetRouteSchema,
   registrationConfirmEmailPostRouteSchema,
 } from "../../../../../../assets/shared/schemas/route-contracts";
 import { requireInternalSecret } from "../../../../../_lib/request";
 
-async function confirmRegistration(c: any, token: string, registrationId?: string | null): Promise<Response> {
+async function confirmRegistration(
+  c: any,
+  eventSlug: string,
+  token: string,
+  registrationId?: string | null,
+): Promise<Response> {
   const config = getConfig(c.env, c.req.raw);
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const event = await getEventBySlug(c.env.DB, eventSlug);
   const result = await confirmRegistrationWithNotification(c.env.DB, {
     event,
     token,
@@ -48,39 +49,25 @@ async function confirmRegistration(c: any, token: string, registrationId?: strin
   );
 }
 
-export async function onRequestPost(
+async function handleConfirmRegistrationPost(
   c: any,
-  data?: { body: z.infer<typeof registrationConfirmSchema> },
+  data: ValidatedData<typeof registrationConfirmEmailPostRouteSchema>,
 ): Promise<Response> {
-  const body = data?.body ?? (await parseJsonBody(c.req, registrationConfirmSchema));
-  return confirmRegistration(c, body.token, body.id);
+  return confirmRegistration(c, data.params.eventSlug, data.body.token, data.body.id);
 }
 
-export async function onRequestGet(c: any): Promise<Response> {
-  const params = new URL(c.req.raw.url).searchParams;
-  const token = params.get("token");
-  if (!token) {
-    return json({ error: { code: "TOKEN_REQUIRED", message: "token query parameter is required" } }, 400);
-  }
-  const parsed = registrationConfirmSchema.safeParse({
-    token,
-    id: params.get("id") ?? undefined,
-  });
-  if (!parsed.success) {
-    return json({ error: { code: "VALIDATION_ERROR", message: "Invalid token" } }, 400);
-  }
-  return confirmRegistration(c, parsed.data.token, parsed.data.id);
-}
-
-export async function onRequest(c: any): Promise<Response> {
-  return dispatchRequestMethod(c, { GET: onRequestGet, POST: onRequestPost });
+async function handleConfirmRegistrationGet(
+  c: any,
+  data: ValidatedData<typeof registrationConfirmEmailGetRouteSchema>,
+): Promise<Response> {
+  return confirmRegistration(c, data.params.eventSlug, data.query.token, data.query.id);
 }
 
 export const EventsEventSlugRegistrationsConfirmEmailGet = openApiRoute(
   registrationConfirmEmailGetRouteSchema,
-  onRequestGet,
+  handleConfirmRegistrationGet,
 );
 export const EventsEventSlugRegistrationsConfirmEmailPost = openApiRoute(
   registrationConfirmEmailPostRouteSchema,
-  onRequestPost,
+  handleConfirmRegistrationPost,
 );
