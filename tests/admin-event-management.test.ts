@@ -5,6 +5,8 @@ import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { getEventBySlug } from "../functions/_lib/services/events";
+import { buildAdminEventsPageQuery, listAdminEvents } from "../functions/_lib/services/events/admin-list";
+import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import {
   createRegistration,
   confirmRegistrationByToken,
@@ -128,6 +130,85 @@ describe("admin event management endpoints", () => {
 
     const invalidLimit = await callAdmin("/api/v1/admin/events?limit=0");
     expect(invalidLimit.status).toBe(400);
+  });
+
+  it("aggregates only the returned event page, not unrelated events", async () => {
+    await setupAdmin();
+    const pageEventId = crypto.randomUUID();
+    const unrelatedEventId = crypto.randomUUID();
+    const pageUserId = crypto.randomUUID();
+    const unrelatedUserIds = Array.from({ length: 3 }, () => crypto.randomUUID());
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO events (id, slug, name, timezone, registration_mode, invite_limit_attendee, settings_json, created_at, updated_at)
+         VALUES (?, 'a-page-event', 'A page event', 'UTC', 'open', 5, '{}', datetime('now'), datetime('now'))`,
+      ).bind(pageEventId),
+      env.DB.prepare(
+        `INSERT INTO events (id, slug, name, timezone, registration_mode, invite_limit_attendee, settings_json, created_at, updated_at)
+         VALUES (?, 'z-unrelated-event', 'Z unrelated event', 'UTC', 'open', 5, '{}', datetime('now'), datetime('now'))`,
+      ).bind(unrelatedEventId),
+      env.DB.prepare(
+        `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+         VALUES (?, 'page-event@example.test', 'page-event@example.test', 'user', 1, datetime('now'), datetime('now'))`,
+      ).bind(pageUserId),
+      ...unrelatedUserIds.map((userId, index) =>
+        env.DB.prepare(
+          `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+           VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+        ).bind(userId, `unrelated-${index}@example.test`, `unrelated-${index}@example.test`),
+      ),
+      env.DB.prepare(
+        `INSERT INTO registrations
+           (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
+         VALUES (?, ?, ?, 'registered', 'in_person', 'direct', ?, datetime('now'), datetime('now'))`,
+      ).bind(crypto.randomUUID(), pageEventId, pageUserId, `page-manage-${crypto.randomUUID()}`),
+      ...unrelatedUserIds.map((userId) =>
+        env.DB.prepare(
+          `INSERT INTO registrations
+             (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
+           VALUES (?, ?, ?, 'registered', 'in_person', 'direct', ?, datetime('now'), datetime('now'))`,
+        ).bind(crypto.randomUUID(), unrelatedEventId, userId, `unrelated-manage-${crypto.randomUUID()}`),
+      ),
+      env.DB.prepare(
+        `INSERT INTO invites
+           (id, event_id, invitee_email, invite_type, link_secret, status, source_type, created_at)
+         VALUES (?, ?, 'page-invite@example.test', 'attendee', ?, 'sent', 'direct', datetime('now'))`,
+      ).bind(crypto.randomUUID(), pageEventId, `page-invite-${crypto.randomUUID()}`),
+      env.DB.prepare(
+        `INSERT INTO invites
+           (id, event_id, invitee_email, invite_type, link_secret, status, source_type, created_at)
+         VALUES (?, ?, 'unrelated-invite@example.test', 'attendee', ?, 'sent', 'direct', datetime('now'))`,
+      ).bind(crypto.randomUUID(), unrelatedEventId, `unrelated-invite-${crypto.randomUUID()}`),
+    ]);
+
+    const result = await listAdminEvents(env.DB, { limit: 1, offset: 0, sort: "name" });
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0]).toMatchObject({
+      id: pageEventId,
+      total_registrations: 1,
+      confirmed_registrations: 1,
+      pending_invites: 1,
+    });
+    expect(result.page.total).toBeGreaterThanOrEqual(3);
+  });
+
+  it("keeps the event count plan independent of registration and invite projections", async () => {
+    await setupAdmin();
+    const query = buildAdminEventsPageQuery({ limit: 1, offset: 0 });
+    const { pageSql, countSql, bindings } = buildOffsetPageSql(query);
+    const [pagePlan, countPlan] = await Promise.all([
+      env.DB.prepare(`EXPLAIN QUERY PLAN ${pageSql}`)
+        .bind(...bindings, query.limit, query.offset)
+        .all(),
+      env.DB.prepare(`EXPLAIN QUERY PLAN ${countSql}`)
+        .bind(...bindings)
+        .all(),
+    ]);
+
+    expect(pagePlan.results.length).toBeGreaterThan(0);
+    expect(countPlan.results.length).toBeGreaterThan(0);
+    expect(countSql).not.toMatch(/registrations|invites|total_registrations|pending_invites/i);
+    expect(pageSql).not.toMatch(/registration_counts|invite_counts/);
   });
 
   it("returns details and persists settings updates", async () => {

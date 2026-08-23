@@ -42,7 +42,8 @@ export async function listAdminEventInvites(db: DatabaseLike, eventId: string, q
     "i.id ASC",
   );
   const { rows: invites, total } = await queryPage(db, {
-    sql: `SELECT
+    source: {
+      selectSql: `SELECT
          i.id,
          i.invitee_email,
          i.invitee_first_name,
@@ -61,11 +62,12 @@ export async function listAdminEventInvites(db: DatabaseLike, eventId: string, q
          i.inviter_user_id,
          u.email AS inviter_email,
          u.first_name AS inviter_first_name,
-         u.last_name AS inviter_last_name
-       FROM invites i
+         u.last_name AS inviter_last_name`,
+      fromSql: `FROM invites i
        LEFT JOIN users u ON u.id = i.inviter_user_id
        WHERE ${where}`,
-    bindings,
+      bindings,
+    },
     orderBy,
     limit: query.limit,
     offset: query.offset,

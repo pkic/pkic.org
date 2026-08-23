@@ -8,18 +8,79 @@ export function batchFirst<T>(result: D1StatementResult): T | null {
   return (result.results?.[0] as T | undefined) ?? null;
 }
 
-export interface OffsetPageQuery {
-  /** One unpaginated SELECT. The helper derives both statements from this exact SQL. */
-  sql: string;
-  bindings?: readonly unknown[];
+interface OffsetPageQueryBase {
   /** Trusted, allowlisted ordering for the page query only. */
   orderBy?: string;
   limit: number;
   offset: number;
 }
 
+export interface OffsetPageSource {
+  /** Projection used by the page statement. */
+  selectSql: string;
+  /**
+   * Canonical FROM/JOIN/WHERE source shared by page and count. It must yield
+   * one row per page row; callers with 1:N joins must use countSelectSql (for
+   * example, `SELECT COUNT(DISTINCT parent.id) AS total`).
+   */
+  fromSql: string;
+  bindings?: readonly unknown[];
+  /** Optional trusted, lean count projection for non-cardinality-preserving sources. */
+  countSelectSql?: string;
+}
+
+export type OffsetPageQuery =
+  | (OffsetPageQueryBase & {
+      /**
+       * One unpaginated SELECT. Kept for callers whose source is already a
+       * complete read model (including CTEs).
+       */
+      sql: string;
+      source?: never;
+      bindings?: readonly unknown[];
+    })
+  | (OffsetPageQueryBase & {
+      /**
+       * A canonical projection/source pair. The source contains the FROM, JOIN,
+       * and WHERE clauses exactly once. The page uses the projection, while the
+       * count uses the same source with a lean COUNT(*) projection, so filters and
+       * bindings cannot drift between the two statements.
+       */
+      source: OffsetPageSource;
+      sql?: never;
+      bindings?: never;
+    });
+
 function withoutTrailingSemicolon(sql: string): string {
   return sql.trim().replace(/;$/, "");
+}
+
+export interface OffsetPageSql {
+  pageSql: string;
+  countSql: string;
+  bindings: readonly unknown[];
+}
+
+/** Build the page/count SQL pair without preparing it. Useful for EXPLAIN tests. */
+export function buildOffsetPageSql(query: OffsetPageQuery): OffsetPageSql {
+  if ((query.sql === undefined) === (query.source === undefined)) {
+    throw new Error("Offset page query requires exactly one of sql or source");
+  }
+  if (query.source && query.bindings) {
+    throw new Error("Offset page query bindings belong in source when source is used");
+  }
+  const baseSql = query.source
+    ? `${withoutTrailingSemicolon(query.source.selectSql)}\n${withoutTrailingSemicolon(query.source.fromSql)}`
+    : withoutTrailingSemicolon(query.sql as string);
+  const countSql = query.source
+    ? `${query.source.countSelectSql ?? "SELECT COUNT(*) AS total"}\n${withoutTrailingSemicolon(query.source.fromSql)}`
+    : `SELECT COUNT(*) AS total FROM (${baseSql}) AS query_page_rows`;
+  const bindings = query.source?.bindings ?? query.bindings ?? [];
+  return {
+    pageSql: `${baseSql}${query.orderBy ? `\n${query.orderBy}` : ""}\nLIMIT ? OFFSET ?`,
+    countSql,
+    bindings,
+  };
 }
 
 /**
@@ -29,14 +90,8 @@ function withoutTrailingSemicolon(sql: string): string {
  * `decodeOffsetPageResults`.
  */
 export function buildOffsetPageStatements(db: DatabaseLike, query: OffsetPageQuery): [StatementLike, StatementLike] {
-  const baseSql = withoutTrailingSemicolon(query.sql);
-  const bindings = query.bindings ?? [];
-  return [
-    db
-      .prepare(`${baseSql}${query.orderBy ? `\n${query.orderBy}` : ""}\nLIMIT ? OFFSET ?`)
-      .bind(...bindings, query.limit, query.offset),
-    db.prepare(`SELECT COUNT(*) AS total FROM (${baseSql}) AS query_page_rows`).bind(...bindings),
-  ];
+  const { pageSql, countSql, bindings } = buildOffsetPageSql(query);
+  return [db.prepare(pageSql).bind(...bindings, query.limit, query.offset), db.prepare(countSql).bind(...bindings)];
 }
 
 /** Decode the page/count pair returned by `buildOffsetPageStatements`. */
