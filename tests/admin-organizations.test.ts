@@ -216,9 +216,62 @@ describe("Admin Organizations — membership category on the aggregate (Phase 1 
     );
   });
 
+  it("keeps list and detail primary-contact fields aligned for every active-grant state", async () => {
+    const { organizationId, userId } = await createOrg();
+    const aggregateId = await aggregateIdFor(organizationId);
+
+    async function expectPrimaryContact(email: string | null, expectedUserId: string | null) {
+      const detailResponse = await call(adminToken, `/api/v1/admin/organizations/${organizationId}`);
+      expect(detailResponse.status).toBe(200);
+      await expect(detailResponse.json()).resolves.toMatchObject({
+        organization: { primaryContactEmail: email, primaryContactUserId: expectedUserId },
+      });
+
+      const listResponse = await call(adminToken, "/api/v1/admin/organizations");
+      const listBody = (await listResponse.json()) as {
+        organizations: Array<{ id: string; primaryContactEmail: string | null }>;
+      };
+      expect(
+        listBody.organizations.find((organization) => organization.id === organizationId)?.primaryContactEmail,
+      ).toBe(email);
+    }
+
+    await expectPrimaryContact("jane@acme.test", userId);
+
+    await env.DB.prepare(
+      "UPDATE user_roles SET expires_at = datetime('now', '-1 minute') WHERE context_id = ? AND user_id = ? AND role_id = 'role-primary_contact'",
+    )
+      .bind(aggregateId, userId)
+      .run();
+    await expectPrimaryContact(null, null);
+
+    await env.DB.prepare(
+      "UPDATE user_roles SET expires_at = NULL, revoked_at = datetime('now') WHERE context_id = ? AND user_id = ? AND role_id = 'role-primary_contact'",
+    )
+      .bind(aggregateId, userId)
+      .run();
+    await expectPrimaryContact(null, null);
+
+    await env.DB.prepare(
+      "UPDATE user_roles SET revoked_at = NULL WHERE context_id = ? AND user_id = ? AND role_id = 'role-primary_contact'",
+    )
+      .bind(aggregateId, userId)
+      .run();
+    await env.DB.prepare("UPDATE users SET active = 0 WHERE id = ?").bind(userId).run();
+    await expectPrimaryContact(null, null);
+
+    await env.DB.prepare("UPDATE users SET active = 1 WHERE id = ?").bind(userId).run();
+    await env.DB.prepare(
+      "UPDATE organization_representatives SET left_at = joined_at WHERE member_id = ? AND user_id = ? AND left_at IS NULL",
+    )
+      .bind(aggregateId, userId)
+      .run();
+    await expectPrimaryContact(null, null);
+  });
+
   it("GET organizations list surfaces membershipCategory and supports ?sort=", async () => {
-    await createOrg({ organizationName: "Acme Corp", membershipCategory: "F" });
-    await createOrg({
+    const acme = await createOrg({ organizationName: "Acme Corp", membershipCategory: "F" });
+    const beta = await createOrg({
       organizationName: "Beta Inc",
       membershipCategory: "A",
       representatives: [{ name: "Bob Beta", email: "bob@beta.test" }],
@@ -227,11 +280,21 @@ describe("Admin Organizations — membership category on the aggregate (Phase 1 
     const listResponse = await call(adminToken, "/api/v1/admin/organizations");
     expect(listResponse.status).toBe(200);
     const listBody = (await listResponse.json()) as {
-      organizations: Array<{ name: string; membershipCategory: string | null }>;
+      organizations: Array<{
+        id: string;
+        name: string;
+        membershipCategory: string | null;
+        primaryContactEmail: string | null;
+      }>;
     };
     const byName = Object.fromEntries(listBody.organizations.map((o) => [o.name, o.membershipCategory]));
     expect(byName["Acme Corp"]).toBe("F");
     expect(byName["Beta Inc"]).toBe("A");
+    const contactsById = Object.fromEntries(
+      listBody.organizations.map((organization) => [organization.id, organization.primaryContactEmail]),
+    );
+    expect(contactsById[acme.organizationId]).toBe("jane@acme.test");
+    expect(contactsById[beta.organizationId]).toBe("bob@beta.test");
 
     const sortedResponse = await call(adminToken, "/api/v1/admin/organizations?sort=membership_category");
     const sortedBody = (await sortedResponse.json()) as { organizations: Array<{ membershipCategory: string | null }> };

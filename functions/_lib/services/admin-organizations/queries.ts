@@ -14,8 +14,9 @@ import { AppError } from "../../errors";
 import { resolveOrderBy } from "../../db/sort";
 import { parseLinksJson } from "../../../../assets/shared/schemas/links";
 import { ADMIN_ORGANIZATIONS_SORT_COLUMNS } from "../../../../assets/shared/schemas/admin-organizations";
-import { REPRESENTATIVE_ROLE_IDS, resolveRepresentativeRoleHolders } from "../membership/representative-roles";
+import { primaryContactProjection, resolveRepresentativeRoleHolders } from "../membership/representative-roles";
 import { toOrganizationExtendedContent, toOrganizationSummaryContent } from "../organization-content/fields";
+import { nowIso } from "../../utils/time";
 import type { DatabaseLike } from "../../types";
 
 export async function getOrgAggregate(
@@ -45,6 +46,7 @@ interface OrgSummaryRow {
   created_at: string;
   updated_at: string;
   member_count: number;
+  primary_contact_user_id: string | null;
   primary_contact_first_name: string | null;
   primary_contact_last_name: string | null;
   primary_contact_email: string | null;
@@ -55,17 +57,15 @@ const ORG_SUMMARY_SELECT = `
          mca.category_code AS membership_category,
          (SELECT COUNT(*) FROM organization_representatives r
            JOIN members m2 ON m2.id = r.member_id WHERE m2.organization_id = o.id AND r.left_at IS NULL) AS member_count,
-         pu.first_name AS primary_contact_first_name, pu.last_name AS primary_contact_last_name,
-         pu.email AS primary_contact_email
+         primary_contact.user_id AS primary_contact_user_id,
+         primary_contact.first_name AS primary_contact_first_name,
+         primary_contact.last_name AS primary_contact_last_name,
+         primary_contact.email AS primary_contact_email
   FROM organizations o
   LEFT JOIN members m ON m.organization_id = o.id
   LEFT JOIN member_category_assignments mca ON mca.member_id = m.id
-  LEFT JOIN user_roles pr ON pr.context_type = 'organization' AND pr.context_id = m.id
-    AND pr.role_id = '${REPRESENTATIVE_ROLE_IDS.primaryContact}' AND pr.revoked_at IS NULL
-  LEFT JOIN organization_representatives pr_rep
-    ON pr_rep.member_id = m.id AND pr_rep.user_id = pr.user_id AND pr_rep.left_at IS NULL
-  LEFT JOIN users pu ON pu.id = pr.user_id
-    AND pr_rep.id IS NOT NULL
+  LEFT JOIN ${primaryContactProjection()}
+    ON primary_contact.member_id = m.id
 `;
 
 function toOrgSummary(row: OrgSummaryRow) {
@@ -95,10 +95,11 @@ export async function listAdminOrganizations(
   const where = search ? `WHERE ${search.sql}` : "";
   const whereArgs = search?.bindings ?? [];
   const orderBy = resolveOrderBy(params.sort, ADMIN_ORGANIZATIONS_SORT_COLUMNS, "ORDER BY o.name ASC", "o.id ASC");
+  const now = nowIso();
 
   const { rows, total } = await queryPage<OrgSummaryRow>(db, {
     sql: `${ORG_SUMMARY_SELECT} ${where}`,
-    bindings: whereArgs,
+    bindings: [now, ...whereArgs],
     orderBy,
     limit: params.limit,
     offset: params.offset,
@@ -141,19 +142,17 @@ export async function fetchOrgDetailRow(db: DatabaseLike, id: string): Promise<O
             o.links_json,
             (SELECT COUNT(*) FROM organization_representatives r
               JOIN members m2 ON m2.id = r.member_id WHERE m2.organization_id = o.id AND r.left_at IS NULL) AS member_count,
-            pu.first_name AS primary_contact_first_name, pu.last_name AS primary_contact_last_name,
-            pu.email AS primary_contact_email
+            primary_contact.user_id AS primary_contact_user_id,
+            primary_contact.first_name AS primary_contact_first_name,
+            primary_contact.last_name AS primary_contact_last_name,
+            primary_contact.email AS primary_contact_email
      FROM organizations o
      LEFT JOIN members m ON m.organization_id = o.id
      LEFT JOIN member_category_assignments mca ON mca.member_id = m.id
-     LEFT JOIN user_roles pr ON pr.context_type = 'organization' AND pr.context_id = m.id
-       AND pr.role_id = '${REPRESENTATIVE_ROLE_IDS.primaryContact}' AND pr.revoked_at IS NULL
-     LEFT JOIN organization_representatives pr_rep
-       ON pr_rep.member_id = m.id AND pr_rep.user_id = pr.user_id AND pr_rep.left_at IS NULL
-     LEFT JOIN users pu ON pu.id = pr.user_id
-       AND pr_rep.id IS NOT NULL
+     LEFT JOIN ${primaryContactProjection()}
+       ON primary_contact.member_id = m.id
      WHERE o.id = ?`,
-    [id],
+    [nowIso(), id],
   );
 }
 
@@ -181,10 +180,11 @@ async function toOrgDetail(
   const holders = memberId
     ? await resolveRepresentativeRoleHolders(db, memberId)
     : { primaryContactUserId: null, secondaryContactUserId: null, votingDelegateUserId: null };
+  const primaryContactUserId = row.primary_contact_user_id;
   return {
     ...toOrgSummary(row),
     ...toOrganizationExtendedContent(row),
-    primaryContactUserId: holders.primaryContactUserId,
+    primaryContactUserId,
     secondaryContactUserId: holders.secondaryContactUserId,
     votingDelegateUserId: holders.votingDelegateUserId,
     representatives: representatives.map((r) => ({
@@ -202,7 +202,7 @@ async function toOrgDetail(
       links: parseLinksJson(r.links_json),
       status: "active",
       showOnOrgProfile: r.show_on_org_profile === 1,
-      isPrimaryContact: r.user_id === holders.primaryContactUserId,
+      isPrimaryContact: r.user_id === primaryContactUserId,
       isSecondaryContact: r.user_id === holders.secondaryContactUserId,
       createdAt: r.created_at,
     })),
