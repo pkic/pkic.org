@@ -12,11 +12,14 @@ import { Login } from "./Login";
 import { Attendees } from "./Attendees";
 import type { SponsorPortalSession } from "./types";
 import { sponsorPortalAuthVerifyResponseSchema } from "../../../shared/schemas/sponsor-portal";
+import { successResponseSchema } from "../../../shared/schemas/api-common";
 import { VerifyingOverlay } from "../../components/VerifyingOverlay";
 
 async function verifyMagicLink(token: string): Promise<SponsorPortalSession> {
-  const res = sponsorPortalAuthVerifyResponseSchema.parse(
-    await postJson<unknown>("/api/v1/auth/sponsor-portal/verify-link", { token }),
+  const res = await postJson(
+    "/api/v1/auth/sponsor-portal/verify-link",
+    { token },
+    sponsorPortalAuthVerifyResponseSchema,
   );
   return res.sponsorship;
 }
@@ -60,7 +63,7 @@ export function App() {
 
   async function handleSignOut(): Promise<void> {
     try {
-      await postJson("/api/v1/sponsor-portal/logout", {});
+      await postJson("/api/v1/sponsor-portal/logout", {}, successResponseSchema);
     } finally {
       clearStoredSession();
       setSession(null);

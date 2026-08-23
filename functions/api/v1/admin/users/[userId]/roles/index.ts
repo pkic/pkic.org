@@ -1,4 +1,5 @@
 import {
+  userRoleResponseEnvelopeSchema,
   userRolesAssignRouteSchema,
   userRolesListRouteSchema,
 } from "../../../../../../../assets/shared/schemas/access-control";
@@ -13,10 +14,15 @@ import {
 
 export const UserRolesList = openApiRoute(userRolesListRouteSchema, async (c: AdminContext, data) => {
   const actor = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  return json({ roles: await listUserRoleAssignments(requestDb(c), actor, data.params.userId) });
+  return json(await listUserRoleAssignments(requestDb(c), actor, data.params.userId, data.query));
 });
 
 export const UserRolesAssign = openApiRoute(userRolesAssignRouteSchema, async (c: AdminContext, data) => {
   const actor = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  return json({ role: await assignUserRole(requestDb(c), actor, data.params.userId, data.body) }, 201);
+  return json(
+    userRoleResponseEnvelopeSchema.parse({
+      role: await assignUserRole(requestDb(c), actor, data.params.userId, data.body),
+    }),
+    201,
+  );
 });

@@ -10,9 +10,12 @@ import {
   proposalSpeakerRemovalResponseSchema,
   proposalResendManageLinkSchema,
   proposalResendSpeakerManageLinkSchema,
+  speakerParticipationActionSchema,
+  speakerProfilePatchSchema,
 } from "./proposal-management";
 import { jsonResponse, requiredJsonBody } from "./openapi";
 import { speakerReminderPreferenceResponseSchema, speakerReminderPreferenceSchema } from "./speaker-reminders";
+import { speakerParticipationResponseSchema, speakerSelfServiceReadResponseSchema } from "./speaker-self-service";
 
 const genericAcceptedResponse = jsonResponse(
   "Request accepted. The response is intentionally generic to prevent account enumeration.",
@@ -134,6 +137,50 @@ export const proposalSpeakerReminderPreferenceRouteSchema = {
   responses: {
     "200": jsonResponse("Reminder preference updated.", speakerReminderPreferenceResponseSchema),
     "404": { description: "Speaker management capability not found." },
+    "410": { description: "Speaker management capability expired." },
+  },
+};
+
+export const proposalSpeakerSelfServiceReadRouteSchema = {
+  tags: ["Proposals"],
+  summary: "Read speaker self-service state",
+  request: { params: proposalManageTokenParamsSchema },
+  responses: {
+    "200": jsonResponse("Capability-safe speaker management view.", speakerSelfServiceReadResponseSchema),
+    "404": { description: "Speaker management capability not found." },
+    "410": { description: "Speaker management capability expired." },
+  },
+};
+
+export const proposalSpeakerParticipationRouteSchema = {
+  tags: ["Proposals"],
+  summary: "Confirm or decline speaker participation",
+  request: {
+    params: proposalManageTokenParamsSchema,
+    body: requiredJsonBody(speakerParticipationActionSchema),
+  },
+  responses: {
+    "200": jsonResponse("Speaker participation updated.", speakerParticipationResponseSchema),
+    "400": { description: "Invalid participation response." },
+    "404": { description: "Speaker management capability not found." },
+    "409": { description: "Proposal or speaker state changed concurrently." },
+    "410": { description: "Speaker management capability expired." },
+  },
+};
+
+export const proposalSpeakerProfileUpdateRouteSchema = {
+  tags: ["Proposals"],
+  summary: "Update speaker self-service profile",
+  request: {
+    params: proposalManageTokenParamsSchema,
+    body: requiredJsonBody(speakerProfilePatchSchema),
+  },
+  responses: {
+    "200": jsonResponse("Speaker profile updated.", successResponseSchema),
+    "400": { description: "Invalid speaker profile." },
+    "403": { description: "Speaker has declined participation." },
+    "404": { description: "Speaker management capability not found." },
+    "409": { description: "Proposal or speaker profile changed concurrently." },
     "410": { description: "Speaker management capability expired." },
   },
 };

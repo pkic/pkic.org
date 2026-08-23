@@ -2,7 +2,10 @@ import { json } from "../../../../../../../../_lib/http";
 import { requireUserBackedAdminFromRequest } from "../../../../../../../../_lib/auth/admin";
 import { reviewPresentationVersion } from "../../../../../../../../_lib/services/presentation-versions";
 import { requestDb, type AdminContext } from "../../../../../../../../_lib/db/context";
-import type { PresentationVersionReviewRequest } from "../../../../../../../../../assets/shared/schemas/presentation-versions";
+import {
+  presentationVersionResponseSchema,
+  type PresentationVersionReviewRequest,
+} from "../../../../../../../../../assets/shared/schemas/presentation-versions";
 import type { ValidatedData } from "chanfana";
 import { adminPresentationVersionReviewRouteSchema } from "../../../../../../../../../assets/shared/schemas/route-contracts";
 
@@ -20,5 +23,5 @@ export async function onRequestPost(
     admin,
     data.body as PresentationVersionReviewRequest,
   );
-  return json({ version: updated });
+  return json(presentationVersionResponseSchema.parse({ version: updated }));
 }

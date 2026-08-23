@@ -119,7 +119,10 @@ export async function drainGoogleGroupsEnrollmentNotificationIntents(db: Databas
           messageType: "transactional" as const,
           data: {
             memberName: intents[0].memberName,
-            lists: intents.map((intent) => intent.googleGroupEmail),
+            // Same-millisecond inserts can be returned in a different row
+            // order by SQLite. Keep the email payload and idempotent retries
+            // deterministic instead of depending on UUID/row traversal order.
+            lists: intents.map((intent) => intent.googleGroupEmail).sort(),
           },
         } satisfies BulkEmailQueueRow,
       };

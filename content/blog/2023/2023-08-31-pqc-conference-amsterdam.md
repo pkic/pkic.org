@@ -25,7 +25,7 @@ Given the expected high demand, in-person attendance is limited and will be allo
 
 We extend our sincere gratitude to our sponsors:
 
-{{< sponsors sponsoring="Post-Quantum Cryptography Conference Amsterdam 2023" level="all" height="20" max-width="60" rows=true >}}
+{{< sponsors event-slug="pqc-conference-amsterdam-nl-2023" sponsoring="Post-Quantum Cryptography Conference Amsterdam 2023" level="all" height="20" max-width="60" rows=true >}}
 
 This conference would not be possible without the organizational support of the Post-Quantum Cryptography Working Group and in particular the following organizations:
 

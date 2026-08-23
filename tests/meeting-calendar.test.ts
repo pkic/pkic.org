@@ -743,6 +743,88 @@ describe("Meeting calendar management", () => {
     expect(list.meetingSeries.some((s) => s.id === created.meetingSeries.id)).toBe(true);
   });
 
+  it("paginates meeting-series collections with shared search, sort, counts, and final pages", async () => {
+    const wgId = await insertWorkingGroup("Paged WG", "paged-wg");
+    const wgSeries = await Promise.all([
+      insertMeetingSeries("working_group", "Alpha Series", wgId),
+      insertMeetingSeries("working_group", "Beta Series", wgId),
+      insertMeetingSeries("working_group", "Gamma Series", wgId),
+    ]);
+    await insertIcsFile(wgSeries[0], "09:00 CET", 2026, "meeting-ics/paged-alpha.ics");
+
+    const firstWgPageResponse = await call(
+      adminToken,
+      `/api/v1/admin/working-groups/${wgId}/meetings?limit=2&offset=0&sort=name&q=Series`,
+    );
+    expect(firstWgPageResponse.status).toBe(200);
+    const firstWgPage = (await firstWgPageResponse.json()) as {
+      meetingSeries: Array<{ name: string; icsFiles: Array<{ id: string }> }>;
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
+    expect(firstWgPage.meetingSeries.map((series) => series.name)).toEqual(["Alpha Series", "Beta Series"]);
+    expect(firstWgPage.meetingSeries[0].icsFiles).toHaveLength(1);
+    expect(firstWgPage.page).toMatchObject({ limit: 2, offset: 0, total: 3, hasMore: true });
+
+    const finalWgPageResponse = await call(
+      adminToken,
+      `/api/v1/admin/working-groups/${wgId}/meetings?limit=2&offset=2&sort=name&q=Series`,
+    );
+    const finalWgPage = (await finalWgPageResponse.json()) as {
+      meetingSeries: Array<{ name: string }>;
+      page: { total: number; hasMore: boolean };
+    };
+    expect(finalWgPage.meetingSeries.map((series) => series.name)).toEqual(["Gamma Series"]);
+    expect(finalWgPage.page).toMatchObject({ total: 3, hasMore: false });
+
+    const emptyWgPageResponse = await call(
+      adminToken,
+      `/api/v1/admin/working-groups/${wgId}/meetings?limit=2&offset=20&q=does-not-exist`,
+    );
+    const emptyWgPage = (await emptyWgPageResponse.json()) as {
+      meetingSeries: unknown[];
+      page: { total: number; hasMore: boolean };
+    };
+    expect(emptyWgPage.meetingSeries).toEqual([]);
+    expect(emptyWgPage.page).toMatchObject({ total: 0, hasMore: false });
+
+    await insertMeetingSeries("consortium", "Consortium Alpha");
+    await insertMeetingSeries("consortium", "Consortium Beta");
+    const consortiumPageResponse = await call(
+      adminToken,
+      "/api/v1/admin/consortium/meetings?limit=1&offset=0&sort=-name",
+    );
+    const consortiumPage = (await consortiumPageResponse.json()) as {
+      meetingSeries: Array<{ name: string }>;
+      page: { total: number; hasMore: boolean };
+    };
+    expect(consortiumPage.meetingSeries.map((series) => series.name)).toEqual(["Consortium Beta"]);
+    expect(consortiumPage.page).toMatchObject({ total: 2, hasMore: true });
+
+    const publicPageResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/working-groups/${wgId}/meetings?limit=2&offset=2&sort=name`),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    const publicPage = (await publicPageResponse.json()) as {
+      meetingSeries: Array<{ name: string }>;
+      page: { total: number; hasMore: boolean };
+    };
+    expect(publicPage.meetingSeries.map((series) => series.name)).toEqual(["Gamma Series"]);
+    expect(publicPage.page).toMatchObject({ total: 3, hasMore: false });
+
+    const memberUserId = await insertUser("paged-calendar-member@example.test");
+    await insertMember(memberUserId, "F");
+    await insertWgMembership(wgId, memberUserId);
+    const memberToken = await createMemberSession(env.DB, memberUserId, "paged-calendar-member-token");
+    const memberPageResponse = await call(memberToken, "/api/v1/me/calendar?limit=2&offset=4&sort=name");
+    const memberPage = (await memberPageResponse.json()) as {
+      meetingSeries: Array<{ name: string }>;
+      page: { total: number; hasMore: boolean };
+    };
+    expect(memberPage.meetingSeries.map((series) => series.name)).toEqual(["Gamma Series"]);
+    expect(memberPage.page).toMatchObject({ total: 5, hasMore: false });
+  });
+
   it("a WG chair's context-scoped grant does not authorize managing consortium meetings (staff admin only)", async () => {
     const wgId = await insertWorkingGroup("Ctx WG", "ctx-wg");
     const chairUserId = await insertUser("consortium-blocked-chair@example.test");
@@ -754,6 +836,8 @@ describe("Meeting calendar management", () => {
       body: JSON.stringify({ name: "Should Not Be Created" }),
     });
     expect(response.status).toBe(403);
+    const listResponse = await call(chairToken, "/api/v1/admin/consortium/meetings");
+    expect(listResponse.status).toBe(403);
   });
 
   // ── Public ───────────────────────────────────────────────────────────────
@@ -772,6 +856,16 @@ describe("Meeting calendar management", () => {
     const body = (await response.json()) as { meetingSeries: Array<{ id: string; name: string }> };
     expect(body.meetingSeries).toHaveLength(1);
     expect(body.meetingSeries[0].id).toBe(activeSeriesId);
+
+    await env.DB.prepare("UPDATE working_groups SET active = 0 WHERE id = ?").bind(wgId).run();
+    for (const idOrSlug of [wgId, "public-wg"]) {
+      const hidden = await app.fetch(
+        new Request(`https://app.test/api/v1/working-groups/${idOrSlug}/meetings`),
+        env as any,
+        { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+      );
+      expect(hidden.status).toBe(404);
+    }
   });
 
   // ── Member self-service ──────────────────────────────────────────────────

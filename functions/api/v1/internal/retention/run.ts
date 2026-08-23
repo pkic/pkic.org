@@ -3,7 +3,7 @@ import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { runRetentionJob } from "../../../../_lib/services/retention";
 
 export async function onRequestPost(c: any): Promise<Response> {
-  await requireAdminFromRequest(c.env.DB, c.req.raw);
+  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const result = await runRetentionJob(c.env.DB);
   return json({ success: true, ...result });
 }

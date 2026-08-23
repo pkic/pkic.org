@@ -4,20 +4,23 @@
  * resolve strictly off `users.normalized_email`). These aliases let staff
  * associate roster email variations without mutating or merging identities.
  */
-import { all, first } from "../db/queries";
+import {
+  ADMIN_USER_EMAILS_SORT_COLUMNS,
+  type UserEmailRecord,
+  type UserEmailsListQuery,
+  userEmailResponseSchema,
+} from "../../../assets/shared/schemas/user-emails";
+import { buildPageInfo, type PageInfo } from "../../../assets/shared/schemas/pagination";
+import { first } from "../db/queries";
+import { queryPage } from "../db/pagination";
+import { buildD1TextSearchFilter } from "../db/search";
+import { resolveMappedOrderBy } from "../db/sort";
 import { normalizeEmail } from "../validation";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike } from "../types";
 import { prepareAuditLogAfterOneChange } from "./audit";
-
-export interface UserEmailRecord {
-  id: string;
-  userId: string;
-  email: string;
-  createdAt: string;
-}
 
 interface UserEmailRow {
   id: string;
@@ -26,22 +29,42 @@ interface UserEmailRow {
   created_at: string;
 }
 
+const USER_EMAIL_SORT_EXPRESSIONS: Record<(typeof ADMIN_USER_EMAILS_SORT_COLUMNS)[number], string> = {
+  email: "LOWER(email)",
+  created_at: "created_at",
+};
+
 export interface UserEmailOwner {
   userId: string;
   kind: "primary" | "secondary" | "pending";
 }
 
 function toRecord(row: UserEmailRow): UserEmailRecord {
-  return { id: row.id, userId: row.user_id, email: row.email, createdAt: row.created_at };
+  return userEmailResponseSchema.parse({
+    id: row.id,
+    userId: row.user_id,
+    email: row.email,
+    createdAt: row.created_at,
+  });
 }
 
-export async function listUserEmails(db: DatabaseLike, userId: string): Promise<UserEmailRecord[]> {
-  const rows = await all<UserEmailRow>(
-    db,
-    "SELECT id, user_id, email, created_at FROM user_emails WHERE user_id = ? ORDER BY created_at ASC",
-    [userId],
-  );
-  return rows.map(toRecord);
+export async function listUserEmails(
+  db: DatabaseLike,
+  userId: string,
+  query: UserEmailsListQuery,
+): Promise<{ emails: UserEmailRecord[]; page: PageInfo }> {
+  const search = query.q ? buildD1TextSearchFilter(query.q, ["email"]) : null;
+  const { rows, total } = await queryPage<UserEmailRow>(db, {
+    sql: `SELECT id, user_id, email, created_at
+            FROM user_emails
+           WHERE user_id = ?${search ? ` AND ${search.sql}` : ""}`,
+    bindings: [userId, ...(search?.bindings ?? [])],
+    orderBy: resolveMappedOrderBy(query.sort, USER_EMAIL_SORT_EXPRESSIONS, "created_at ASC", "id ASC"),
+    limit: query.limit,
+    offset: query.offset,
+  });
+  const emails = rows.map(toRecord);
+  return { emails, page: buildPageInfo(query.limit, query.offset, total, emails.length) };
 }
 
 /** Resolve the one account that reserves an email as primary, secondary, or pending verification. */

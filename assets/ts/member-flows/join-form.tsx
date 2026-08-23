@@ -15,10 +15,13 @@ import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
 import { setStatus, readField, findSubmitButton } from "../shared/form/helpers";
 import { SuccessPanel } from "../components/SuccessPanel";
 import { replaceFormWithSuccess } from "../shared/form/success-panel";
-import { memberApplicationCreateSchema } from "../../shared/schemas/member-applications";
+import {
+  memberApplicationCreateResponseSchema,
+  memberApplicationCreateSchema,
+  memberApplicationFormResponseSchema,
+} from "../../shared/schemas/member-applications";
 import { INDIVIDUAL_MEMBERSHIP_CATEGORIES, requiresUniversityEmail } from "../../shared/schemas/membership-categories";
 import { isPersonalEmailAddress } from "../../shared/constants/email-domains";
-import type { FormDefinition } from "../shared/types";
 
 const API_BASE = "/api/v1";
 
@@ -158,8 +161,9 @@ async function main(): Promise<void> {
   });
 
   try {
-    const { form: definition } = await getJson<{ form: FormDefinition | null }>(
+    const { form: definition } = await getJson(
       `${API_BASE}/members/applications/form`,
+      memberApplicationFormResponseSchema,
     );
     if (customFieldsContainer) renderCustomFields(customFieldsContainer, definition?.fields ?? []);
   } catch {
@@ -180,9 +184,10 @@ async function main(): Promise<void> {
     await withLoadingButton(findSubmitButton(form), async () => {
       try {
         const payload = memberApplicationCreateSchema.parse(buildApplicationPayload(form, category));
-        const result = await postJson<{ applicationId: string; manageToken: string }>(
+        const result = await postJson(
           `${API_BASE}/members/applications`,
           payload,
+          memberApplicationCreateResponseSchema,
         );
         showSuccessPanel(root, form, result.applicationId, result.manageToken, payload.applicantName);
       } catch (error) {

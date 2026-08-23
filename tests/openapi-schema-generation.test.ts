@@ -9,6 +9,18 @@ describe("OpenAPI schema generation", () => {
     expect(() => openapi.schema).not.toThrow();
   });
 
+  it("documents public registration and speaker capability workflows through shared contracts", () => {
+    const spec = decorateOpenApiSpec(openapi.schema);
+
+    expect(spec.paths["/api/v1/events/{eventSlug}/registrations"].post).toBeDefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/registrations/confirm-info"].get).toBeDefined();
+    expect(spec.paths["/api/v1/registrations/manage/{token}"].get).toBeDefined();
+    expect(spec.paths["/api/v1/registrations/manage/{token}"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/proposals/speaker/{token}"].get).toBeDefined();
+    expect(spec.paths["/api/v1/proposals/speaker/{token}"].post).toBeDefined();
+    expect(spec.paths["/api/v1/proposals/speaker/{token}"].patch).toBeDefined();
+  });
+
   it("includes required scopes on decorated admin operations", () => {
     const spec = decorateOpenApiSpec(openapi.schema);
     const operation = spec.paths["/api/v1/admin/proposals/{proposalId}/reviews"].post;

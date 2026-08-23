@@ -5,7 +5,7 @@ import type { Column } from "../../../../components/Table";
 import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataTable";
 import { FilterSelect } from "../../../components/FilterSelect";
 import { Tabs } from "../../../../components/Tabs";
-import { api } from "../../../api";
+import { apiCommand } from "../../../api";
 import { ATTENDANCE_TYPE_LABELS, attendanceTypeLabel } from "../../../attendance";
 import { fmt, toast } from "../../../ui";
 import type { Registration, RegistrationAttendanceChange } from "../../../types";
@@ -57,7 +57,7 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
 
   async function runWaitlistPromotions() {
     try {
-      await api(`/api/v1/admin/events/${slug}/waitlist/promote`, { method: "POST", body: "{}" });
+      await apiCommand(`/api/v1/admin/events/${slug}/waitlist/promote`, { method: "POST", body: "{}" });
       toast("Waitlist promotions run", "success");
       tableRef.current?.reload();
     } catch (e) {

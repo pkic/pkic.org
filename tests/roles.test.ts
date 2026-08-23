@@ -261,7 +261,7 @@ describe("roles (Built-in and custom roles)", () => {
     expect(rows).toHaveLength(0);
   });
 
-  it("a custom role assigned to a user cannot be deleted until the assignment is revoked", async () => {
+  it("a custom role with assignment history cannot be deleted, including after revocation", async () => {
     const createResponse = await call(adminToken, "/api/v1/admin/roles", {
       method: "POST",
       body: JSON.stringify({ name: "custom_in_use", permissions: ["donations:read"] }),
@@ -271,6 +271,17 @@ describe("roles (Built-in and custom roles)", () => {
 
     const deleteResponse = await call(adminToken, `/api/v1/admin/roles/${created.role.id}`, { method: "DELETE" });
     expect(deleteResponse.status).toBe(409);
+
+    await env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE role_id = ?")
+      .bind(created.role.id)
+      .run();
+    const deleteAfterRevocation = await call(adminToken, `/api/v1/admin/roles/${created.role.id}`, {
+      method: "DELETE",
+    });
+    expect(deleteAfterRevocation.status).toBe(409);
+    expect((await deleteAfterRevocation.json()) as { error: { code: string } }).toMatchObject({
+      error: { code: "ROLE_HAS_ASSIGNMENT_HISTORY" },
+    });
   });
 
   // ── Consolidated migration 0035: WG vice chair + forum chair/vice chair roles ─────────
@@ -371,31 +382,128 @@ describe("roles (Built-in and custom roles)", () => {
     expect(secondPageBody.roles.map((r) => r.name)).toEqual(unpagedBody.roles.slice(2, 4).map((r) => r.name));
   });
 
-  it("GET /api/v1/admin/roles/:id/assignments reverse-looks-up who holds a role, across contexts", async () => {
+  it("GET /api/v1/admin/roles/:id/assignments searches, sorts, and paginates only effective holders", async () => {
     const forumChairRole = (
       await queryAll<{ id: string }>(env.DB, "SELECT id FROM roles WHERE name = 'forum_chair'")
     )[0];
 
     const emptyResponse = await call(adminToken, `/api/v1/admin/roles/${forumChairRole.id}/assignments`);
     expect(emptyResponse.status).toBe(200);
-    expect(((await emptyResponse.json()) as { assignments: unknown[] }).assignments).toHaveLength(0);
+    expect(await emptyResponse.json()).toMatchObject({
+      assignments: [],
+      page: { limit: 25, offset: 0, total: 0, hasMore: false },
+    });
 
+    await env.DB.prepare("UPDATE users SET first_name = 'Zelda', last_name = 'Zulu' WHERE id = ?")
+      .bind(staffUserId)
+      .run();
     await assignRole(staffUserId, forumChairRole.id, adminId);
+    const alphaUserId = await insertUser("alpha-holder@example.test");
+    await env.DB.prepare("UPDATE users SET first_name = 'Alpha', last_name = 'Able' WHERE id = ?")
+      .bind(alphaUserId)
+      .run();
+    await assignRole(alphaUserId, forumChairRole.id, adminId, { type: "event", id: eventAId });
+    const expiredUserId = await insertUser("expired-holder@example.test");
+    await env.DB.prepare(
+      `INSERT INTO user_roles
+         (id, user_id, role_id, granted_by_user_id, expires_at, created_at)
+       VALUES (?, ?, ?, ?, '2020-01-01T00:00:00.000Z', datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), expiredUserId, forumChairRole.id, adminId)
+      .run();
 
-    const response = await call(adminToken, `/api/v1/admin/roles/${forumChairRole.id}/assignments`);
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as {
-      assignments: Array<{ userId: string; contextType: string | null; contextId: string | null }>;
+    const searchResponse = await call(
+      adminToken,
+      `/api/v1/admin/roles/${forumChairRole.id}/assignments?q=${encodeURIComponent("Alpha Able")}&sort=name&limit=1&offset=0`,
+    );
+    expect(searchResponse.status).toBe(200);
+    expect(await searchResponse.json()).toMatchObject({
+      assignments: [{ userId: alphaUserId, name: "Alpha Able", contextType: "event", contextId: eventAId }],
+      page: { limit: 1, offset: 0, total: 1, hasMore: false },
+    });
+
+    const firstPage = await call(
+      adminToken,
+      `/api/v1/admin/roles/${forumChairRole.id}/assignments?sort=-email&limit=1&offset=0`,
+    );
+    const firstBody = (await firstPage.json()) as {
+      assignments: Array<{ userId: string }>;
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
     };
-    expect(body.assignments).toHaveLength(1);
-    expect(body.assignments[0].userId).toBe(staffUserId);
-    expect(body.assignments[0].contextType).toBeNull();
-    expect(body.assignments[0].contextId).toBeNull();
+    expect(firstBody.assignments.map((assignment) => assignment.userId)).toEqual([staffUserId]);
+    expect(firstBody.page).toEqual({ limit: 1, offset: 0, total: 2, hasMore: true });
+
+    const finalPage = await call(
+      adminToken,
+      `/api/v1/admin/roles/${forumChairRole.id}/assignments?sort=-email&limit=1&offset=1`,
+    );
+    expect(await finalPage.json()).toMatchObject({
+      assignments: [{ userId: alphaUserId }],
+      page: { limit: 1, offset: 1, total: 2, hasMore: false },
+    });
   });
 
   it("GET /api/v1/admin/roles/:id/assignments returns 404 for an unknown role id", async () => {
     const response = await call(adminToken, `/api/v1/admin/roles/${crypto.randomUUID()}/assignments`);
     expect(response.status).toBe(404);
+  });
+
+  it("GET /api/v1/admin/users/:userId/roles searches, sorts, and paginates non-revoked history", async () => {
+    const targetUserId = await insertUser("role-history@example.test");
+    const roles = await queryAll<{ id: string; name: string }>(
+      env.DB,
+      "SELECT id, name FROM roles ORDER BY name ASC LIMIT 3",
+    );
+    expect(roles).toHaveLength(3);
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO user_roles
+             (id, user_id, role_id, granted_by_user_id, expires_at, created_at)
+           VALUES (?, ?, ?, ?, NULL, '2026-01-01T00:00:00.000Z')`,
+      ).bind(crypto.randomUUID(), targetUserId, roles[0].id, adminId),
+      env.DB.prepare(
+        `INSERT INTO user_roles
+             (id, user_id, role_id, granted_by_user_id, expires_at, created_at)
+           VALUES (?, ?, ?, ?, '2020-01-01T00:00:00.000Z', '2026-01-02T00:00:00.000Z')`,
+      ).bind(crypto.randomUUID(), targetUserId, roles[1].id, adminId),
+      env.DB.prepare(
+        `INSERT INTO user_roles
+             (id, user_id, role_id, granted_by_user_id, revoked_at, created_at)
+           VALUES (?, ?, ?, ?, '2026-01-04T00:00:00.000Z', '2026-01-03T00:00:00.000Z')`,
+      ).bind(crypto.randomUUID(), targetUserId, roles[2].id, adminId),
+    ]);
+
+    const empty = await call(adminToken, `/api/v1/admin/users/${staffUserId}/roles?q=no-such-role`);
+    expect(await empty.json()).toMatchObject({
+      roles: [],
+      page: { limit: 25, offset: 0, total: 0, hasMore: false },
+    });
+
+    const searched = await call(
+      adminToken,
+      `/api/v1/admin/users/${targetUserId}/roles?q=${encodeURIComponent(roles[1].name)}&sort=role_name`,
+    );
+    expect(await searched.json()).toMatchObject({
+      roles: [{ roleName: roles[1].name, expiresAt: "2020-01-01T00:00:00.000Z" }],
+      page: { total: 1, hasMore: false },
+    });
+
+    const firstPage = await call(
+      adminToken,
+      `/api/v1/admin/users/${targetUserId}/roles?sort=role_name&limit=1&offset=0`,
+    );
+    expect(await firstPage.json()).toMatchObject({
+      roles: [{ roleName: roles[0].name }],
+      page: { limit: 1, offset: 0, total: 2, hasMore: true },
+    });
+    const finalPage = await call(
+      adminToken,
+      `/api/v1/admin/users/${targetUserId}/roles?sort=role_name&limit=1&offset=1`,
+    );
+    expect(await finalPage.json()).toMatchObject({
+      roles: [{ roleName: roles[1].name }],
+      page: { limit: 1, offset: 1, total: 2, hasMore: false },
+    });
   });
 
   it("POST /api/v1/admin/users/:userId/roles rejects assigning a role that bundles a permission the caller doesn't hold (privilege escalation containment)", async () => {

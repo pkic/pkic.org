@@ -10,11 +10,12 @@ import { getJson, postJson, ApiClientError } from "../../shared/api-client";
 import { authStatus, isAuthed, setAuthChecking, saveProfile, clearAuth } from "./state";
 import { Login } from "./shell/Login";
 import { PortalShell } from "./shell/PortalShell";
-import type { MyProfile } from "./types";
 import { VerifyingOverlay } from "../../components/VerifyingOverlay";
+import { memberAuthVerifyResponseSchema } from "../../../shared/schemas/member-auth";
+import { myProfileSchema } from "../../../shared/schemas/me";
 
 async function verifyMagicLink(token: string): Promise<void> {
-  await postJson("/api/v1/auth/member/verify-link", { token });
+  await postJson("/api/v1/auth/member/verify-link", { token }, memberAuthVerifyResponseSchema);
 }
 
 export function App() {
@@ -23,7 +24,7 @@ export function App() {
 
   async function loadProfile(): Promise<boolean> {
     try {
-      const data = await getJson<MyProfile>("/api/v1/me");
+      const data = await getJson("/api/v1/me", myProfileSchema);
       saveProfile(data);
       return true;
     } catch {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { api } from "../../../../api";
+import { adminEventUpdateResponseSchema } from "../../../../../../shared/schemas/admin-events";
 import type { EventDetail } from "../../../../types";
 import { toast } from "../../../../ui";
 import { EventScheduleFields } from "../../../../components/EventScheduleFields";
@@ -78,10 +79,10 @@ export function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated
           inviteLimitAttendee: inviteLimit,
         };
         if (retentionDays.trim()) body.userRetentionDays = parseInt(retentionDays.trim(), 10) || undefined;
-        const response = await api<{ success: boolean; event: EventDetail }>(
-          `/api/v1/admin/events/${event.slug}/settings`,
-          { method: "PATCH", body: JSON.stringify(body) },
-        );
+        const response = await api(`/api/v1/admin/events/${event.slug}/settings`, adminEventUpdateResponseSchema, {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        });
         onUpdated(response.event);
         setStatus("✓ Saved");
         toast("Details saved", "success");

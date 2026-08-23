@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
+import { z } from "zod";
 import { ConsentCard } from "../../assets/ts/components/ConsentCard";
 import { MagicLinkSubmitButton, SignInError } from "../../assets/ts/components/MagicLinkFeedback";
 import { MenuIcon } from "../../assets/ts/components/MenuIcon";
@@ -124,7 +125,13 @@ describe("public shared frontend abstractions", () => {
     const statusEl = document.createElement("div");
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response("{}", { status: 200, headers: { "content-type": "application/json" } })),
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ success: true }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
     );
     const error = new ApiClientError(
       { error: { code: "INVITE_EXPIRED", message: "Invitation expired", details: null } },
@@ -185,7 +192,9 @@ describe("public shared frontend abstractions", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(uploadFile<{ stored: boolean }>("/upload", file)).resolves.toEqual({ stored: true });
+    await expect(uploadFile("/upload", file, z.object({ stored: z.boolean() }))).resolves.toEqual({
+      stored: true,
+    });
     expect(fetchMock).toHaveBeenCalledWith(
       "/upload",
       expect.objectContaining({ method: "POST", credentials: "same-origin", body: file }),
@@ -254,11 +263,17 @@ describe("public shared frontend abstractions", () => {
         currency: "usd",
         donorFirstName: "Ada",
         source: null,
-        completedAt: null,
+        completedAt: "2026-04-10T10:00:00Z",
       }),
     ).toEqual({
       state: "confirmed",
-      session: { grossAmount: 5000, currency: "usd", donorFirstName: "Ada", source: null, completedAt: null },
+      session: {
+        grossAmount: 5000,
+        currency: "usd",
+        donorFirstName: "Ada",
+        source: null,
+        completedAt: "2026-04-10T10:00:00Z",
+      },
     });
   });
 

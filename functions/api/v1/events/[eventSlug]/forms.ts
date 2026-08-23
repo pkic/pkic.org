@@ -1,11 +1,8 @@
 import { dispatchRequestMethod, json } from "../../../../_lib/http";
 import { getActiveFormByPurpose } from "../../../../_lib/services/forms";
 import { getEventBySlug, getRequiredTerms, resolveEventSessionTypes } from "../../../../_lib/services/events";
-import {
-  countRegisteredByEventDay,
-  listEventDays,
-  resolveAttendanceOptions,
-} from "../../../../_lib/services/event-days";
+import { countRegisteredByEventDay, listEventDays } from "../../../../_lib/services/event-days";
+import { eventDayReadModels, requiredTermReadModel } from "../../../../_lib/services/event-read-models";
 import { logError } from "../../../../_lib/logging";
 import { eventFormsGetRouteSchema, eventFormsResponseSchema } from "../../../../../assets/shared/schemas/forms";
 import { openApiRoute } from "../../../../_lib/openapi/route";
@@ -87,27 +84,8 @@ async function getEventForm(c: any, purpose: "event_registration" | "proposal_su
       purpose,
       form,
       allowedSessionTypes,
-      requiredTerms: requiredTerms.map((term) => ({
-        termKey: term.term_key,
-        version: term.version,
-        required: term.required === 1,
-        contentRef: term.content_ref,
-        displayText: term.display_text,
-        helpText: term.help_text ?? null,
-      })),
-      eventDays: eventDays.map((day) => ({
-        dayDate: day.day_date,
-        label: day.label,
-        inPersonCapacity: day.in_person_capacity,
-        sortOrder: day.sort_order,
-        attendanceOptions: resolveAttendanceOptions(day).map((option) => {
-          const capacity = option.capacity ?? null;
-          const registered = registeredCounts.get(day.id)?.get(option.value) ?? 0;
-          const spotsRemainingPercent =
-            capacity != null && capacity > 0 ? Math.round(((capacity - registered) / capacity) * 100) : null;
-          return { value: option.value, label: option.label, spotsRemainingPercent };
-        }),
-      })),
+      requiredTerms: requiredTerms.map(requiredTermReadModel),
+      eventDays: eventDayReadModels(eventDays, registeredCounts),
     }),
   );
 }

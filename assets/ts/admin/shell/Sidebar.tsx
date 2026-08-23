@@ -3,6 +3,7 @@ import { useState } from "preact/hooks";
 import { Link } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { authEmail, clearAuth } from "../state";
+import { apiCommand } from "../api";
 
 /* ── SVG icon helpers (Bootstrap Icons, 16×16) ──────────────────────────── */
 
@@ -263,7 +264,7 @@ export function Sidebar() {
           class="btn btn-sm btn-outline-secondary w-100"
           onClick={async () => {
             try {
-              await fetch("/api/v1/admin/auth/logout", { method: "POST", credentials: "same-origin" });
+              await apiCommand("/api/v1/admin/auth/logout", { method: "POST" });
             } finally {
               clearAuth();
               window.location.assign("/admin/");

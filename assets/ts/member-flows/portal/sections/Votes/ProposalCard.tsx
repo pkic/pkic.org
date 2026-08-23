@@ -3,18 +3,17 @@ import { getJson, postJson, deleteJson, ApiClientError } from "../../../../share
 import { Spinner } from "../../../../components/Spinner";
 import { profile as profileSignal } from "../../state";
 import { toast, fmt, formatStageLabel } from "../../ui";
+import {
+  proposalDetailResponseSchema,
+  endorseProposalResponseSchema,
+  withdrawEndorsementResponseSchema,
+  withdrawProposalResponseSchema,
+} from "../../../../../shared/schemas/votes";
 import type { VoteProposal } from "../../types";
-import { proposalStatusBadgeClass, scopeBadgeLabel, isVotingCategory } from "./shared";
+import { proposalStatusBadgeClass, isVotingCategory } from "./shared";
+import { ScopeBadge } from "./ScopeBadge";
 
-export function ProposalCard({
-  proposal,
-  wgNames,
-  onChanged,
-}: {
-  proposal: VoteProposal;
-  wgNames: Map<string, string>;
-  onChanged: () => Promise<void>;
-}) {
+export function ProposalCard({ proposal, onChanged }: { proposal: VoteProposal; onChanged: () => Promise<void> }) {
   const [expanded, setExpanded] = useState(false);
   const [endorserUserIds, setEndorserUserIds] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -24,7 +23,7 @@ export function ProposalCard({
 
   async function fetchEndorsers(): Promise<void> {
     try {
-      const data = await getJson<{ endorserUserIds: string[] }>(`/api/v1/portal/vote-proposals/${proposal.id}`);
+      const data = await getJson(`/api/v1/portal/vote-proposals/${proposal.id}`, proposalDetailResponseSchema);
       setEndorserUserIds(data.endorserUserIds);
     } catch {
       setEndorserUserIds([]);
@@ -40,7 +39,7 @@ export function ProposalCard({
   async function endorse(): Promise<void> {
     setBusy(true);
     try {
-      await postJson(`/api/v1/portal/vote-proposals/${proposal.id}/endorse`, {});
+      await postJson(`/api/v1/portal/vote-proposals/${proposal.id}/endorse`, {}, endorseProposalResponseSchema);
       toast("Endorsement recorded", "success");
       await Promise.all([fetchEndorsers(), onChanged()]);
     } catch (e) {
@@ -53,7 +52,7 @@ export function ProposalCard({
   async function withdrawEndorsement(): Promise<void> {
     setBusy(true);
     try {
-      await deleteJson(`/api/v1/portal/vote-proposals/${proposal.id}/endorse`);
+      await deleteJson(`/api/v1/portal/vote-proposals/${proposal.id}/endorse`, withdrawEndorsementResponseSchema);
       toast("Endorsement withdrawn", "success");
       await Promise.all([fetchEndorsers(), onChanged()]);
     } catch (e) {
@@ -67,7 +66,7 @@ export function ProposalCard({
     if (!confirm("Withdraw this proposal?")) return;
     setBusy(true);
     try {
-      await deleteJson(`/api/v1/portal/vote-proposals/${proposal.id}`);
+      await deleteJson(`/api/v1/portal/vote-proposals/${proposal.id}`, withdrawProposalResponseSchema);
       toast("Proposal withdrawn", "success");
       await onChanged();
     } catch (e) {
@@ -91,7 +90,7 @@ export function ProposalCard({
               </span>
               <span class="badge text-bg-light border">{formatStageLabel(proposal.voteType)}</span>
               <span class="badge text-bg-light border">
-                {scopeBadgeLabel(proposal.scopeType, proposal.scopeId, wgNames)}
+                <ScopeBadge scopeType={proposal.scopeType} scopeName={proposal.scopeName} />
               </span>
               {isOpen && (
                 <span class="badge text-bg-secondary">

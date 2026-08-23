@@ -1,6 +1,6 @@
 import { profile as profileSignal } from "../../state";
 import { VOTING_CATEGORIES } from "../../../../../shared/schemas/membership-categories";
-import type { PortalVote, VoteScopeType, ElectionVoteResult, MotionVoteResult } from "../../types";
+import type { PortalVote, ElectionVoteResult, MotionVoteResult } from "../../types";
 
 export const MOTION_CHOICES: { value: "in_favor" | "opposed" | "abstain"; label: string }[] = [
   { value: "in_favor", label: "In favor" },
@@ -37,15 +37,6 @@ export function proposalStatusBadgeClass(status: string): string {
     default:
       return "text-bg-secondary";
   }
-}
-
-export function scopeBadgeLabel(
-  scopeType: VoteScopeType,
-  scopeId: string | null,
-  wgNames: Map<string, string>,
-): string {
-  if (scopeType === "forum") return "Forum";
-  return scopeId ? (wgNames.get(scopeId) ?? "Working Group") : "Working Group";
 }
 
 export function isElectionResult(result: NonNullable<PortalVote["result"]>): result is ElectionVoteResult {

@@ -1,18 +1,14 @@
 import { useState } from "preact/hooks";
 import { api } from "../../../../api";
+import { adminEventSponsorTiersResponseSchema } from "../../../../../../shared/schemas/admin-events";
 import { useAdminEditorResource } from "../../../../hooks/useAdminEditorResource";
 import { saveAdminEditor } from "../../../../actions";
 import { AdminSettingsEditor } from "../../../../components/AdminSettingsEditor";
 
-interface SponsorTierState {
-  tierName: string;
-  hasAttendeeDataAccess: boolean;
-}
-
 export function SponsorTiersTab({ slug }: { slug: string }) {
   const tiersResource = useAdminEditorResource(
     async () => {
-      const data = await api<{ tiers: SponsorTierState[] }>(`/api/v1/admin/events/${slug}/sponsor-tiers`);
+      const data = await api(`/api/v1/admin/events/${slug}/sponsor-tiers`, adminEventSponsorTiersResponseSchema);
       return data.tiers ?? [];
     },
     [slug],
@@ -27,7 +23,7 @@ export function SponsorTiersTab({ slug }: { slug: string }) {
       setSaving,
       setStatus: setSaveStatus,
       request: () =>
-        api(`/api/v1/admin/events/${slug}/sponsor-tiers`, {
+        api(`/api/v1/admin/events/${slug}/sponsor-tiers`, adminEventSponsorTiersResponseSchema, {
           method: "PUT",
           body: JSON.stringify({ tiers: tiers.filter((tier) => tier.tierName.trim()) }),
         }),

@@ -7,6 +7,7 @@ import { ApiClientError, getJson, patchJson } from "../../../shared/api-client";
 import { profile } from "../state";
 import type { NotificationPreferences } from "../types";
 import { toast } from "../ui";
+import { myNotificationPreferencesSchema } from "../../../../shared/schemas/me";
 
 const PREFERENCE_LABELS: Record<keyof NotificationPreferences, string> = {
   workingGroupUpdates: "Working group updates",
@@ -21,7 +22,7 @@ function NotificationPreferencesCard() {
   const [savingKey, setSavingKey] = useState<string | null>(null);
 
   useEffect(() => {
-    getJson<NotificationPreferences>("/api/v1/me/notification-preferences")
+    getJson("/api/v1/me/notification-preferences", myNotificationPreferencesSchema)
       .then(setPreferences)
       .catch((reason: unknown) =>
         setError(reason instanceof ApiClientError ? reason.message : "Could not load preferences."),
@@ -31,7 +32,11 @@ function NotificationPreferencesCard() {
   async function toggle(key: keyof NotificationPreferences, next: boolean): Promise<void> {
     setSavingKey(key);
     try {
-      const updated = await patchJson<NotificationPreferences>("/api/v1/me/notification-preferences", { [key]: next });
+      const updated = await patchJson(
+        "/api/v1/me/notification-preferences",
+        { [key]: next },
+        myNotificationPreferencesSchema,
+      );
       setPreferences(updated);
     } catch (reason) {
       toast(reason instanceof ApiClientError ? reason.message : "Could not update preference.", "error");

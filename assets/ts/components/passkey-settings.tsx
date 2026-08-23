@@ -7,6 +7,7 @@ import {
   passkeySummarySchema,
   type PasskeySummary,
 } from "../../shared/schemas/passkeys";
+import { successResponseSchema } from "../../shared/schemas/api-common";
 import { deleteJson, getJson, postJson } from "../shared/api-client";
 import { formatDateTime, showToast } from "../shared/ui";
 import { ErrorAlert } from "./ErrorAlert";
@@ -31,7 +32,7 @@ export function PasskeySettings({
 
   const load = useCallback(async () => {
     try {
-      const response = passkeysListResponseSchema.parse(await getJson<unknown>("/api/v1/auth/passkeys"));
+      const response = await getJson("/api/v1/auth/passkeys", passkeysListResponseSchema);
       setPasskeys(response.passkeys);
     } catch (reason) {
       setError((reason as Error).message);
@@ -46,18 +47,18 @@ export function PasskeySettings({
     event.preventDefault();
     setEnrolling(true);
     try {
-      const begin = passkeyBeginResponseSchema.parse(
-        await postJson<unknown>("/api/v1/auth/passkeys/register/begin", undefined),
-      );
+      const begin = await postJson("/api/v1/auth/passkeys/register/begin", undefined, passkeyBeginResponseSchema);
       const credential = await startRegistration({
         optionsJSON: begin.options as unknown as PublicKeyCredentialCreationOptionsJSON,
       });
-      passkeySummarySchema.parse(
-        await postJson<unknown>("/api/v1/auth/passkeys/register/complete", {
+      await postJson(
+        "/api/v1/auth/passkeys/register/complete",
+        {
           challengeToken: begin.challengeToken,
           response: credential,
           deviceName: deviceName.trim() || undefined,
-        }),
+        },
+        passkeySummarySchema,
       );
       showToast(toastTargetId, "Passkey added", "success");
       setDeviceName("");
@@ -72,7 +73,7 @@ export function PasskeySettings({
   async function handleRemove(passkey: PasskeySummary) {
     if (!confirm(`Remove passkey "${passkey.deviceName ?? "Unnamed passkey"}"?`)) return;
     try {
-      await deleteJson(`/api/v1/auth/passkeys/${passkey.id}`);
+      await deleteJson(`/api/v1/auth/passkeys/${passkey.id}`, successResponseSchema);
       showToast(toastTargetId, "Passkey removed", "success");
       await load();
     } catch (reason) {

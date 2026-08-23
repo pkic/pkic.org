@@ -126,13 +126,16 @@ export const workingGroupSummarySchema = z.object({
   active: z.boolean(),
 });
 
-export const workingGroupsListResponseSchema = z.object({
-  workingGroups: z.array(workingGroupSummarySchema),
-});
+export const PUBLIC_WORKING_GROUP_SORT_COLUMNS = ["name", "slug"] as const;
+export const publicWorkingGroupsListQuerySchema = listQuerySchema(PUBLIC_WORKING_GROUP_SORT_COLUMNS);
+export const workingGroupsListResponseSchema = paginatedResponseSchema("workingGroups", workingGroupSummarySchema);
+export type PublicWorkingGroupsListResponse = z.infer<typeof workingGroupsListResponseSchema>;
 
 export const workingGroupsListRouteSchema = {
   tags: ["Working Groups"],
   summary: "List working groups",
+  description: "Paginated, searchable active working groups. D1 is the source of truth.",
+  request: { query: publicWorkingGroupsListQuerySchema },
   responses: {
     "200": {
       description: "Active working groups.",

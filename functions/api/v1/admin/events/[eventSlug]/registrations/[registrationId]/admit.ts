@@ -22,7 +22,9 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     actorUserId: admin.id,
     appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
   });
-  c.executionCtx.waitUntil(processOutboxByIdBackground(requestDb(c), c.env, admitted.outboxId));
+  if (admitted.outboxId) {
+    c.executionCtx.waitUntil(processOutboxByIdBackground(requestDb(c), c.env, admitted.outboxId));
+  }
 
   return json({
     success: true,

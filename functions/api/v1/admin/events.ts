@@ -4,10 +4,11 @@ import { requireAdminFromRequest } from "../../../_lib/auth/admin";
 import { requirePermission } from "../../../_lib/auth/permissions";
 import { openApiRoute } from "../../../_lib/openapi/route";
 import { createAdminEvent } from "../../../_lib/services/events";
+import { getAdminEventDetail } from "../../../_lib/services/events/admin-detail";
 import { listAdminEvents } from "../../../_lib/services/events/admin-list";
-import { parseJsonSafe } from "../../../_lib/utils/json";
 import {
   adminCreateEventSchema,
+  adminEventCreateResponseSchema,
   adminEventsListQuerySchema,
   adminEventsListResponseSchema,
 } from "../../../../assets/shared/schemas/admin-events";
@@ -54,7 +55,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   if (body.venue) settings["venue"] = body.venue;
   if (body.virtualUrl) settings["virtualUrl"] = body.virtualUrl;
 
-  const event = await createAdminEvent(
+  await createAdminEvent(
     requestDb(c),
     {
       slug: body.slug,
@@ -69,13 +70,5 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     admin.id,
   );
 
-  return json(
-    {
-      event: {
-        ...event,
-        settings: parseJsonSafe<Record<string, unknown>>(event.settings_json, {}),
-      },
-    },
-    201,
-  );
+  return json(adminEventCreateResponseSchema.parse({ event: await getAdminEventDetail(requestDb(c), body.slug) }), 201);
 }

@@ -2,6 +2,11 @@ import { useState, useEffect, useCallback } from "preact/hooks";
 import { Spinner } from "../../../components/Spinner";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { api } from "../../api";
+import {
+  adminVoteProposalApproveResponseSchema,
+  adminVoteProposalDetailResponseSchema,
+  adminVoteProposalRejectResponseSchema,
+} from "../../../../shared/schemas/votes-admin";
 import { toast } from "../../ui";
 import type { AdminVoteProposalSummary } from "../../types";
 import { performAdminAction } from "../../actions";
@@ -17,9 +22,7 @@ export function ProposalDetail({ proposalId, onDecided }: { proposalId: string; 
     setLoading(true);
     setError(null);
     try {
-      const data = await api<{ proposal: AdminVoteProposalSummary; endorserUserIds: string[] }>(
-        `/api/v1/admin/vote-proposals/${proposalId}`,
-      );
+      const data = await api(`/api/v1/admin/vote-proposals/${proposalId}`, adminVoteProposalDetailResponseSchema);
       setDetail(data);
     } catch (e) {
       setError((e as Error).message);
@@ -35,7 +38,10 @@ export function ProposalDetail({ proposalId, onDecided }: { proposalId: string; 
   async function approve() {
     await performAdminAction({
       setBusy,
-      request: () => api(`/api/v1/admin/vote-proposals/${proposalId}/approve`, { method: "POST" }),
+      request: () =>
+        api(`/api/v1/admin/vote-proposals/${proposalId}/approve`, adminVoteProposalApproveResponseSchema, {
+          method: "POST",
+        }),
       successMessage: "Converted to an active vote",
       afterSuccess: onDecided,
     });
@@ -49,7 +55,7 @@ export function ProposalDetail({ proposalId, onDecided }: { proposalId: string; 
     await performAdminAction({
       setBusy,
       request: () =>
-        api(`/api/v1/admin/vote-proposals/${proposalId}/reject`, {
+        api(`/api/v1/admin/vote-proposals/${proposalId}/reject`, adminVoteProposalRejectResponseSchema, {
           method: "POST",
           body: JSON.stringify({ reason: reason.trim() }),
         }),

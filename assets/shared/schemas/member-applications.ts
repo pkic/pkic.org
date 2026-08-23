@@ -123,6 +123,7 @@ export const memberApplicationCreateResponseSchema = z.object({
   stage: applicationStageSchema,
   manageToken: z.string().describe("Applicant token for status checks and document uploads — shown once"),
 });
+export type MemberApplicationCreateResponse = z.infer<typeof memberApplicationCreateResponseSchema>;
 
 export const memberApplicationCreateRouteSchema = {
   tags: ["Members"],
@@ -148,6 +149,7 @@ export const memberApplicationStatusResponseSchema = z.object({
   stageEnteredAt: z.string(),
   createdAt: z.string(),
 });
+export type MemberApplicationStatusResponse = z.infer<typeof memberApplicationStatusResponseSchema>;
 
 export const memberApplicationIdParamsSchema = z.object({ id: databaseIdSchema });
 export const memberApplicationCapabilityQuerySchema = z.object({ token: z.string().min(16).max(64) });
@@ -182,6 +184,7 @@ export const memberApplicationFormResponseSchema = z.object({
     })
     .nullable(),
 });
+export type MemberApplicationFormResponse = z.infer<typeof memberApplicationFormResponseSchema>;
 
 export const memberApplicationFormRouteSchema = {
   tags: ["Members"],

@@ -3,6 +3,15 @@ import { databaseIdSchema } from "./identifiers";
 import { eventSlugParamsSchema } from "./api-common";
 import { formFieldOptionsSchema, formFieldRulesSchema } from "./form-field-rules";
 import { proposalTypeSchema } from "./proposal-management";
+import { eventDayReadModelSchema, eventSummarySchema, requiredTermSchema } from "./event-read-models";
+
+export {
+  eventAttendanceOptionSchema,
+  eventDayReadModelSchema,
+  eventSummarySchema,
+  requiredTermSchema,
+} from "./event-read-models";
+export type { EventDayReadModel, EventSummary, RequiredTerm } from "./event-read-models";
 
 export const FORM_PURPOSES = [
   "event_registration",
@@ -65,40 +74,13 @@ export const eventFormsQuerySchema = z.object({
   purpose: eventFormsPurposeSchema.default("event_registration"),
 });
 
-export const requiredTermSchema = z.object({
-  termKey: z.string(),
-  version: z.string(),
-  required: z.boolean(),
-  contentRef: z.string().nullable(),
-  displayText: z.string().nullable().optional(),
-  helpText: z.string().nullable().optional(),
-});
-
-export const eventAttendanceOptionSchema = z.object({
-  value: z.string(),
-  label: z.string(),
-  spotsRemainingPercent: z.number().nullable().optional(),
-});
-
 export const eventFormsResponseSchema = z.object({
-  event: z.object({
-    id: databaseIdSchema,
-    slug: z.string(),
-    name: z.string(),
-  }),
+  event: eventSummarySchema,
   purpose: eventFormsPurposeSchema,
   form: activeFormSummarySchema.extend({ key: z.string() }).nullable(),
   requiredTerms: z.array(requiredTermSchema),
   allowedSessionTypes: z.array(proposalTypeSchema).max(20),
-  eventDays: z.array(
-    z.object({
-      dayDate: z.string(),
-      label: z.string().nullable(),
-      inPersonCapacity: z.number().nullable(),
-      sortOrder: z.number(),
-      attendanceOptions: z.array(eventAttendanceOptionSchema),
-    }),
-  ),
+  eventDays: z.array(eventDayReadModelSchema),
 });
 
 export const eventTermsQuerySchema = z.object({ audience: eventAudienceSchema.default("attendee") });
@@ -122,8 +104,6 @@ export const eventTermsGetRouteSchema = {
 };
 
 export type EventFormsResponse = z.infer<typeof eventFormsResponseSchema>;
-export type RequiredTerm = z.infer<typeof requiredTermSchema>;
-
 export const eventFormsGetRouteSchema = {
   tags: ["Events"],
   summary: "Get an event form",

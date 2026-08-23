@@ -11,6 +11,7 @@ import {
 } from "../reminders-support";
 import { batchQueueEmailsAndUpdateState } from "./shared";
 import type { DatabaseLike } from "../../types";
+import { proposalSpeakerEffectiveProfileColumns } from "../proposal-speakers";
 
 export async function runPresentationReminders(
   db: DatabaseLike,
@@ -35,7 +36,7 @@ export async function runPresentationReminders(
           db,
           `SELECT
          ps.id AS speaker_id, ps.proposal_id, ps.user_id,
-         u.email, u.first_name, u.last_name,
+         u.email, ${proposalSpeakerEffectiveProfileColumns("u", "ps", "", ["firstName", "lastName"])},
          sp.title AS proposal_title, sp.event_id,
          e.name AS event_name, e.slug AS event_slug,
          e.base_path AS event_base_path, e.starts_at AS event_starts_at,

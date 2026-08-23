@@ -4,6 +4,7 @@ import { buildD1TextSearchFilter } from "../db/search";
 import type { AdminDueWorkRow, AdminDueWorkTab } from "../../../assets/shared/schemas/admin-due-work";
 import type { DatabaseLike, Env } from "../types";
 import { REGISTRATION_RECIPIENT_EMAIL_SQL } from "./registrations/recipient-email";
+import { proposalSpeakerEffectiveProfileExpression } from "./proposal-speakers";
 
 const ONE_DAY_MS = 86_400_000;
 
@@ -161,8 +162,8 @@ const DUE_WORK_CTE = `
            ps.id AS source_id,
            'reminders' AS bucket,
            'Co-speaker Invite' AS type_label,
-           COALESCE(NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), u.email) AS title,
-           CASE WHEN NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), '') IS NULL
+           COALESCE(NULLIF(TRIM(COALESCE(${proposalSpeakerEffectiveProfileExpression("u", "ps", "firstName", "first_name")}, '') || ' ' || COALESCE(${proposalSpeakerEffectiveProfileExpression("u", "ps", "lastName", "last_name")}, '')), ''), u.email) AS title,
+           CASE WHEN NULLIF(TRIM(COALESCE(${proposalSpeakerEffectiveProfileExpression("u", "ps", "firstName", "first_name")}, '') || ' ' || COALESCE(${proposalSpeakerEffectiveProfileExpression("u", "ps", "lastName", "last_name")}, '')), '') IS NULL
              THEN NULL ELSE u.email END AS subtitle,
            e.name || ' | ' || e.slug || ' | co_speaker_invite | #' || (ps.speaker_invite_reminder_count + 1) AS context,
            'Reminder: please confirm speaker participation — ' || e.name || ' | ' || sp.title AS detail,
@@ -190,8 +191,8 @@ const DUE_WORK_CTE = `
            ps.id AS source_id,
            'reminders' AS bucket,
            'Presentation Upload' AS type_label,
-           COALESCE(NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), u.email) AS title,
-           CASE WHEN NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), '') IS NULL
+           COALESCE(NULLIF(TRIM(COALESCE(${proposalSpeakerEffectiveProfileExpression("u", "ps", "firstName", "first_name")}, '') || ' ' || COALESCE(${proposalSpeakerEffectiveProfileExpression("u", "ps", "lastName", "last_name")}, '')), ''), u.email) AS title,
+           CASE WHEN NULLIF(TRIM(COALESCE(${proposalSpeakerEffectiveProfileExpression("u", "ps", "firstName", "first_name")}, '') || ' ' || COALESCE(${proposalSpeakerEffectiveProfileExpression("u", "ps", "lastName", "last_name")}, '')), '') IS NULL
              THEN NULL ELSE u.email END AS subtitle,
            e.name || ' | ' || e.slug || ' | presentation_upload_request | #' || (ps.presentation_reminder_count + 1) AS context,
            'Reminder: please upload your presentation — ' || e.name || ' | ' || sp.title AS detail,

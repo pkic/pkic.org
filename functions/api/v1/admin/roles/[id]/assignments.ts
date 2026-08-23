@@ -18,5 +18,5 @@ import { openApiRoute } from "../../../../../_lib/openapi/route";
 
 export const RoleAssignmentsList = openApiRoute(roleAssignmentsListRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  return json({ assignments: await listActiveRoleAssignmentHolders(requestDb(c), admin, data.params.id) });
+  return json(await listActiveRoleAssignmentHolders(requestDb(c), admin, data.params.id, data.query));
 });

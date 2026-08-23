@@ -8,6 +8,7 @@ import { requirePermission } from "../../../../../../_lib/auth/permissions";
 import { listUserEmails, addUserEmail } from "../../../../../../_lib/services/user-emails";
 import {
   userEmailAddRouteSchema,
+  userEmailAddResponseSchema,
   userEmailsListRouteSchema,
 } from "../../../../../../../assets/shared/schemas/user-emails";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
@@ -17,8 +18,7 @@ export const UserEmailsList = openApiRoute(userEmailsListRouteSchema, async (c: 
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "users:read");
 
-  const emails = await listUserEmails(requestDb(c), data.params.userId);
-  return json({ emails });
+  return json(await listUserEmails(requestDb(c), data.params.userId, data.query));
 });
 
 export const UserEmailsAdd = openApiRoute(userEmailAddRouteSchema, async (c: AdminContext, data) => {
@@ -29,5 +29,5 @@ export const UserEmailsAdd = openApiRoute(userEmailAddRouteSchema, async (c: Adm
   const body = data.body;
   const email = await addUserEmail(requestDb(c), admin, userId, body.email);
 
-  return json({ email }, 201);
+  return json(userEmailAddResponseSchema.parse({ email }), 201);
 });

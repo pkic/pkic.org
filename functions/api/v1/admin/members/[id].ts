@@ -14,6 +14,7 @@ import {
   memberDeleteRouteSchema,
   memberUpdateRouteSchema,
 } from "../../../../../assets/shared/schemas/admin-organizations";
+import { adminMemberMutationResponseSchema } from "../../../../../assets/shared/schemas/admin-members";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 
 export const MemberUpdate = openApiRoute(memberUpdateRouteSchema, async (c: AdminContext, data) => {
@@ -24,7 +25,7 @@ export const MemberUpdate = openApiRoute(memberUpdateRouteSchema, async (c: Admi
   const body = data.body;
   const member = await updateAdminMember(requestDb(c), admin.id, id, body);
 
-  return json({ member });
+  return json(adminMemberMutationResponseSchema.parse({ member }));
 });
 
 export const MemberDelete = openApiRoute(memberDeleteRouteSchema, async (c: AdminContext, data) => {

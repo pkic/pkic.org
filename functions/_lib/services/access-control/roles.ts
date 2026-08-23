@@ -123,12 +123,11 @@ export async function deleteRole(db: DatabaseLike, actor: AuthAdmin, roleId: str
   );
   if (!role) throw new AppError(404, "NOT_FOUND", "Role not found");
   if (role.is_system_role === 1) throw new AppError(409, "SYSTEM_ROLE", "System roles cannot be deleted");
-  if (
-    await first<{ id: string }>(db, "SELECT id FROM user_roles WHERE role_id = ? AND revoked_at IS NULL LIMIT 1", [
-      role.id,
-    ])
-  ) {
-    throw new AppError(409, "ROLE_IN_USE", "Role is still assigned to a user");
+  // user_roles deliberately retains revoked and expired assignment history,
+  // and its role_id foreign key does not cascade. Reject deletion explicitly
+  // instead of attempting a batch that fails with an opaque FK error.
+  if (await first<{ id: string }>(db, "SELECT id FROM user_roles WHERE role_id = ? LIMIT 1", [role.id])) {
+    throw new AppError(409, "ROLE_HAS_ASSIGNMENT_HISTORY", "Role has user assignment history and cannot be deleted");
   }
 
   await db.batch([

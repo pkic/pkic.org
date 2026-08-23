@@ -8,7 +8,10 @@ import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../../_lib/auth/permissions";
 import { processOutboxByIdBackground } from "../../../../../../_lib/email/outbox";
 import { rejectContentReview } from "../../../../../../_lib/services/organization-content";
-import { contentReviewRejectRouteSchema } from "../../../../../../../assets/shared/schemas/admin-organizations";
+import {
+  contentReviewDecisionResponseSchema,
+  contentReviewRejectRouteSchema,
+} from "../../../../../../../assets/shared/schemas/admin-organizations";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../../_lib/openapi/route";
 import { processStorageDeletionForKey } from "../../../../../../_lib/services/storage-deletion-outbox";
@@ -30,6 +33,6 @@ export const OrganizationContentReviewRejectPost = openApiRoute(
 
     c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, result.outboxId));
 
-    return json({ review: result.review });
+    return json(contentReviewDecisionResponseSchema.parse({ review: result.review }));
   },
 );

@@ -40,6 +40,8 @@ import {
   type SessionTableConfig,
   type MagicLinkTableConfig,
 } from "./session-engine";
+import { SPONSOR_PORTAL_SESSION_COOKIE_NAME, SPONSOR_PORTAL_SESSION_COOKIE_PATH } from "./session-cookies";
+export { SPONSOR_PORTAL_SESSION_COOKIE_NAME, SPONSOR_PORTAL_SESSION_COOKIE_PATH } from "./session-cookies";
 
 export interface SponsorPortalSession {
   sponsorshipId: string;
@@ -60,8 +62,6 @@ interface SponsorshipEligibleRow {
 }
 
 const SPONSOR_PORTAL_SESSION_TOKEN_TYPE = "sponsor-portal-session";
-export const SPONSOR_PORTAL_SESSION_COOKIE_NAME = "pkic_sponsor_portal_session";
-export const SPONSOR_PORTAL_SESSION_COOKIE_PATH = "/api/v1/sponsor-portal";
 
 const SESSIONS_TABLE: SessionTableConfig = { table: "sponsor_portal_sessions", subjectColumn: "sponsorship_id" };
 const MAGIC_LINKS_TABLE: MagicLinkTableConfig = {

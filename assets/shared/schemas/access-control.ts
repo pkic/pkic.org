@@ -144,6 +144,7 @@ export const roleResponseSchema = z.object({
   createdAt: z.string(),
 });
 export type Role = z.infer<typeof roleResponseSchema>;
+export const roleResponseEnvelopeSchema = z.object({ role: roleResponseSchema });
 
 export const rolesCreateRouteSchema = {
   tags: ["Access Control"],
@@ -153,7 +154,7 @@ export const rolesCreateRouteSchema = {
     body: { content: { "application/json": { schema: roleCreateSchema } }, required: true },
   },
   responses: {
-    "201": { description: "Role created.", content: { "application/json": { schema: roleResponseSchema } } },
+    "201": { description: "Role created.", content: { "application/json": { schema: roleResponseEnvelopeSchema } } },
     "409": { description: "A role with this name already exists." },
   },
 };
@@ -184,7 +185,7 @@ export const roleDeleteRouteSchema = {
   responses: {
     "200": { description: "Role deleted." },
     "404": { description: "Role not found." },
-    "409": { description: "System roles cannot be deleted, or the role is still assigned to a user." },
+    "409": { description: "System roles and roles with assignment history cannot be deleted." },
   },
 };
 
@@ -205,17 +206,32 @@ export const roleAssignmentSchema = roleAssignmentContextSchema.extend({
 
 export type RoleAssignment = z.infer<typeof roleAssignmentSchema>;
 
+export const ADMIN_ROLE_ASSIGNMENT_HOLDERS_SORT_COLUMNS = [
+  "name",
+  "email",
+  "context_type",
+  "context_id",
+  "expires_at",
+  "created_at",
+] as const;
+
+export const roleAssignmentsListQuerySchema = listQuerySchema(ADMIN_ROLE_ASSIGNMENT_HOLDERS_SORT_COLUMNS, {
+  limit: 25,
+});
+export type RoleAssignmentsListQuery = z.infer<typeof roleAssignmentsListQuerySchema>;
+export const roleAssignmentsListResponseSchema = paginatedResponseSchema("assignments", roleAssignmentSchema);
+
 export const roleAssignmentsListRouteSchema = {
   tags: ["Access Control"],
   summary: "List every active holder of a role",
   description:
     "Reverse lookup of user_roles by role — who currently holds this role, and in which context. Powers admin " +
     "screens that need to show a role's current holder(s) (e.g. the forum chair) without already knowing the user.",
-  request: { params: roleIdParamsSchema },
+  request: { params: roleIdParamsSchema, query: roleAssignmentsListQuerySchema },
   responses: {
     "200": {
       description: "Active assignments of this role.",
-      content: { "application/json": { schema: z.object({ assignments: z.array(roleAssignmentSchema) }) } },
+      content: { "application/json": { schema: roleAssignmentsListResponseSchema } },
     },
     "404": { description: "Role not found." },
   },
@@ -237,6 +253,21 @@ export const userRoleResponseSchema = roleAssignmentContextSchema.extend({
 });
 
 export type UserRoleAssignment = z.infer<typeof userRoleResponseSchema>;
+/** Response envelope returned by role assignment and expiry-update commands. */
+export const userRoleResponseEnvelopeSchema = z.object({ role: userRoleResponseSchema });
+export type UserRoleResponseEnvelope = z.infer<typeof userRoleResponseEnvelopeSchema>;
+
+export const ADMIN_USER_ROLE_ASSIGNMENTS_SORT_COLUMNS = [
+  "role_name",
+  "context_type",
+  "context_id",
+  "expires_at",
+  "created_at",
+] as const;
+
+export const userRolesListQuerySchema = listQuerySchema(ADMIN_USER_ROLE_ASSIGNMENTS_SORT_COLUMNS, { limit: 25 });
+export type UserRolesListQuery = z.infer<typeof userRolesListQuerySchema>;
+export const userRolesListResponseSchema = paginatedResponseSchema("roles", userRoleResponseSchema);
 
 export const userRolesAssignRouteSchema = {
   tags: ["Access Control"],
@@ -247,18 +278,23 @@ export const userRolesAssignRouteSchema = {
     body: { content: { "application/json": { schema: userRoleAssignSchema } }, required: true },
   },
   responses: {
-    "201": { description: "Role assigned.", content: { "application/json": { schema: userRoleResponseSchema } } },
+    "201": {
+      description: "Role assigned.",
+      content: { "application/json": { schema: userRoleResponseEnvelopeSchema } },
+    },
   },
 };
 
 export const userRolesListRouteSchema = {
   tags: ["Access Control"],
-  summary: "List a user's role assignments",
-  request: { params: userIdRolesParamsSchema },
+  summary: "List a user's non-revoked role assignments",
+  description:
+    "Includes expired assignments so administrators can inspect or extend completed terms; runtime authorization ignores them.",
+  request: { params: userIdRolesParamsSchema, query: userRolesListQuerySchema },
   responses: {
     "200": {
-      description: "Active role assignments.",
-      content: { "application/json": { schema: z.object({ roles: z.array(userRoleResponseSchema) }) } },
+      description: "Non-revoked role assignments, including expired terms.",
+      content: { "application/json": { schema: userRolesListResponseSchema } },
     },
   },
 };
@@ -291,7 +327,10 @@ export const userRoleUpdateExpiryRouteSchema = {
     body: { content: { "application/json": { schema: userRoleUpdateExpirySchema } }, required: true },
   },
   responses: {
-    "200": { description: "Expiry updated.", content: { "application/json": { schema: userRoleResponseSchema } } },
+    "200": {
+      description: "Expiry updated.",
+      content: { "application/json": { schema: userRoleResponseEnvelopeSchema } },
+    },
     "404": { description: "Assignment not found." },
   },
 };

@@ -294,10 +294,15 @@ describe("Member self-service /api/v1/me/*", () => {
     const joinResponse = await call(token, "/api/v1/me/working-groups/pqc", { method: "POST" });
     expect(joinResponse.status).toBe(200);
 
-    const listResponse = await call(token, "/api/v1/me/working-groups");
-    const listBody = (await listResponse.json()) as { workingGroups: Array<{ slug: string }> };
+    const listResponse = await call(token, "/api/v1/me/working-groups?view=joined");
+    const listBody = (await listResponse.json()) as {
+      workingGroups: Array<{ slug: string; joinedAt: string | null }>;
+      page: { total: number };
+    };
     expect(listBody.workingGroups).toHaveLength(1);
     expect(listBody.workingGroups[0].slug).toBe("pqc");
+    expect(listBody.workingGroups[0].joinedAt).toEqual(expect.any(String));
+    expect(listBody.page.total).toBe(1);
 
     const addQueueRows = await queryAll(env.DB, "SELECT id FROM google_groups_sync_queue WHERE action = 'add_to_list'");
     expect(addQueueRows).toHaveLength(1);
@@ -305,9 +310,10 @@ describe("Member self-service /api/v1/me/*", () => {
     const leaveResponse = await call(token, "/api/v1/me/working-groups/pqc", { method: "DELETE" });
     expect(leaveResponse.status).toBe(200);
 
-    const listAfterLeave = await call(token, "/api/v1/me/working-groups");
-    const listAfterLeaveBody = (await listAfterLeave.json()) as { workingGroups: unknown[] };
+    const listAfterLeave = await call(token, "/api/v1/me/working-groups?view=joined");
+    const listAfterLeaveBody = (await listAfterLeave.json()) as { workingGroups: unknown[]; page: { total: number } };
     expect(listAfterLeaveBody.workingGroups).toHaveLength(0);
+    expect(listAfterLeaveBody.page.total).toBe(0);
 
     const removeQueueRows = await queryAll(
       env.DB,
@@ -335,21 +341,21 @@ describe("Member self-service /api/v1/me/*", () => {
       await (
         await call(
           await createMemberSession(env.DB, categoryFUserId, "wg-catalog-f-token"),
-          "/api/v1/me/working-groups",
+          "/api/v1/me/working-groups?view=catalog",
         )
       ).json(),
     );
-    expect(categoryFBody.availableWorkingGroups.map((group) => group.slug)).toEqual(["pqc"]);
+    expect(categoryFBody.workingGroups.map((group) => group.slug)).toEqual(["pqc"]);
 
     const categoryABody = myWorkingGroupsListResponseSchema.parse(
       await (
         await call(
           await createMemberSession(env.DB, categoryAUserId, "wg-catalog-a-token"),
-          "/api/v1/me/working-groups",
+          "/api/v1/me/working-groups?view=catalog",
         )
       ).json(),
     );
-    expect(categoryABody.availableWorkingGroups.map((group) => group.slug).sort()).toEqual(["ca", "pqc"]);
+    expect(categoryABody.workingGroups.map((group) => group.slug).sort()).toEqual(["ca", "pqc"]);
   });
 
   it("rejects direct joins to inactive working groups", async () => {

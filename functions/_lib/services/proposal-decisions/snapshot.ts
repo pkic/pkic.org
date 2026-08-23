@@ -1,4 +1,8 @@
-import type { ProposalSpeakerWithUser } from "../proposal-speakers";
+import {
+  proposalSpeakerEffectiveHeadshotExpression,
+  proposalSpeakerEffectiveProfileExpression,
+  type ProposalSpeakerWithUser,
+} from "../proposal-speakers";
 
 export interface ProposalDecisionEventSnapshot {
   name: string;
@@ -41,8 +45,11 @@ export function proposalDecisionSnapshotPredicate(
       SELECT 1 FROM proposal_speakers ps
       JOIN users u ON u.id = ps.user_id
       WHERE ps.proposal_id = sp.id AND ps.id = ? AND ps.user_id = ? AND ps.status = ?
-        AND u.email = ? AND u.first_name IS ? AND u.last_name IS ?
-        AND u.biography IS ? AND u.headshot_r2_key IS ?
+        AND u.email = ?
+        AND ${proposalSpeakerEffectiveProfileExpression("u", "ps", "firstName", "first_name")} IS ?
+        AND ${proposalSpeakerEffectiveProfileExpression("u", "ps", "lastName", "last_name")} IS ?
+        AND ${proposalSpeakerEffectiveProfileExpression("u", "ps", "biography", "biography")} IS ?
+        AND ${proposalSpeakerEffectiveHeadshotExpression("u", "ps")} IS ?
     )`,
   );
   return {

@@ -1,16 +1,20 @@
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
-import { onRequestGet as ProposalsSpeakerTokenGet_l } from "./[token]";
-import { onRequestPost as ProposalsSpeakerTokenPost_l } from "./[token]";
-import { onRequestPatch as ProposalsSpeakerTokenPatch_l } from "./[token]";
+import type { RequestDbContext } from "../../../../_lib/db/context";
+import { ProposalsSpeakerTokenGet, ProposalsSpeakerTokenPatch, ProposalsSpeakerTokenPost } from "./[token]";
 import token_Router from "./[token]/router";
 
-const app = new Hono();
+const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
-app.get("/:token", ProposalsSpeakerTokenGet_l);
-app.post("/:token", ProposalsSpeakerTokenPost_l);
-app.patch("/:token", ProposalsSpeakerTokenPatch_l);
+app.use("*", async (c, next) => {
+  c.set("sensitive", true);
+  await next();
+});
+
+openapi.get("/:token", ProposalsSpeakerTokenGet);
+openapi.post("/:token", ProposalsSpeakerTokenPost);
+openapi.patch("/:token", ProposalsSpeakerTokenPatch);
 openapi.route("/:token", token_Router);
 
 export default openapi;

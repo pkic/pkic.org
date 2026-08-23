@@ -95,8 +95,8 @@ export const proposalCreateSchema = boundedJsonObject(
 export const proposalCreateResponseSchema = successResponseSchema.extend({
   proposalId: databaseIdSchema,
   status: proposalStatusSchema,
-  manageToken: z.string(),
-  manageUrl: httpUrlSchema,
+  manageToken: z.string().nullable(),
+  manageUrl: httpUrlSchema.nullable(),
   shareUrl: httpUrlSchema,
 });
 
@@ -272,3 +272,24 @@ export const coSpeakerInviteSchema = z.object({
   lastName: lastNameSchema.optional(),
   role: speakerRoleSchema.exclude(["proposer"]).default("speaker"),
 });
+
+export const coSpeakerInviteResponseSchema = successResponseSchema.extend({
+  email: normalizedEmailSchema,
+  role: speakerRoleSchema,
+});
+
+export const coSpeakerInviteRouteSchema = {
+  tags: ["Proposals", "Speakers"],
+  summary: "Invite a co-speaker to a proposal",
+  request: {
+    params: proposalManageTokenParamsSchema,
+    body: { content: { "application/json": { schema: coSpeakerInviteSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Co-speaker invitation sent.",
+      content: { "application/json": { schema: coSpeakerInviteResponseSchema } },
+    },
+    "400": { description: "Proposal is closed or the request is invalid." },
+  },
+};

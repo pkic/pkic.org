@@ -81,8 +81,8 @@ function RosterWidget({ apiBase, body, color }: { apiBase: string; body: string;
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    getJson<unknown>(`${apiBase}/leadership/${encodeURIComponent(body)}`)
-      .then((response) => setData(leadershipPublicResponseSchema.parse(response)))
+    getJson(`${apiBase}/leadership/${encodeURIComponent(body)}`, leadershipPublicResponseSchema)
+      .then((response) => setData(response))
       .catch(() => setFailed(true));
   }, [apiBase, body]);
 
@@ -130,8 +130,8 @@ function ForumWidget({ apiBase, color }: { apiBase: string; color: string }) {
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    getJson<unknown>(`${apiBase}/leadership/forum-chairs`)
-      .then((response) => setData(forumChairsPublicResponseSchema.parse(response)))
+    getJson(`${apiBase}/leadership/forum-chairs`, forumChairsPublicResponseSchema)
+      .then((response) => setData(response))
       .catch(() => setFailed(true));
   }, [apiBase]);
 

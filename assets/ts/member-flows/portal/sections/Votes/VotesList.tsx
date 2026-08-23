@@ -8,7 +8,7 @@ import { VoteCard } from "./VoteCard";
 
 type PortalVotesListResponse = z.infer<typeof portalVotesListResponseSchema>;
 
-export function VotesList({ wgNames }: { wgNames: Map<string, string> }) {
+export function VotesList() {
   const open = useApiPage<PortalVotesListResponse>(
     "/api/v1/portal/votes",
     { status: "open" },
@@ -49,7 +49,7 @@ export function VotesList({ wgNames }: { wgNames: Map<string, string> }) {
             <h3 class="h6 text-muted">{label}</h3>
             <div class="d-flex flex-column gap-3">
               {result.data?.votes.map((vote) => (
-                <VoteCard key={vote.id} vote={vote} wgNames={wgNames} onChanged={result.reload} />
+                <VoteCard key={vote.id} vote={vote} onChanged={result.reload} />
               ))}
             </div>
             {result.pagerProps && <Pager {...result.pagerProps} />}

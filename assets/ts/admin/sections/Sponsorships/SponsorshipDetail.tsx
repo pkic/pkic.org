@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "preact/hooks";
 import { Spinner } from "../../../components/Spinner";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { api } from "../../api";
+import { sponsorshipResponseSchema } from "../../../../shared/schemas/admin-sponsorships";
 import { fmt } from "../../ui";
 import { SPONSORSHIP_PIPELINE_STAGES } from "../../types";
 import type { Sponsorship, SponsorshipEvent, SponsorshipPipelineStage } from "../../types";
@@ -28,7 +29,7 @@ export function SponsorshipDetail({ id, onChanged }: { id: string; onChanged: ()
     setLoading(true);
     setError(null);
     try {
-      const detailData = await api<{ sponsorship: Sponsorship }>(`/api/v1/admin/sponsorships/${id}`);
+      const detailData = await api(`/api/v1/admin/sponsorships/${id}`, sponsorshipResponseSchema);
       if (requestId !== detailRequestIdRef.current) return;
       setSponsorship(detailData.sponsorship);
       setNotes(detailData.sponsorship.notes ?? "");
@@ -52,7 +53,7 @@ export function SponsorshipDetail({ id, onChanged }: { id: string; onChanged: ()
     await performAdminAction({
       setBusy,
       request: () =>
-        api(`/api/v1/admin/sponsorships/${id}`, {
+        api(`/api/v1/admin/sponsorships/${id}`, sponsorshipResponseSchema, {
           method: "PATCH",
           body: JSON.stringify({
             notes: notes.trim() || null,
@@ -72,7 +73,7 @@ export function SponsorshipDetail({ id, onChanged }: { id: string; onChanged: ()
     await performAdminAction({
       setBusy,
       request: () =>
-        api(`/api/v1/admin/sponsorships/${id}/stage`, {
+        api(`/api/v1/admin/sponsorships/${id}/stage`, sponsorshipResponseSchema, {
           method: "PATCH",
           body: JSON.stringify({ toStage: nextStage, note: stageNote.trim() || null }),
         }),

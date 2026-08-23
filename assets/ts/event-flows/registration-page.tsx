@@ -10,13 +10,19 @@ import {
 import { readDayAttendance, renderDayAttendance } from "../shared/widgets/day-attendance";
 import { renderSharePanel } from "../shared/widgets/share-panel";
 import { renderDonationCta } from "../shared/donation/cta";
-import type { EventFormsResponse, FormField } from "../shared/types";
+import type { FormField } from "../shared/types";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
 import { installStepNavigation } from "../shared/form/step-navigation";
 import { withLoadingButton } from "../shared/form/submit";
 import { bootstrap, setStatus } from "./boot";
 import { clearReferralSession } from "../shared/query-context";
-import { registrationCreateSchema, type RegistrationSubmissionResponse } from "../../shared/schemas/registration";
+import {
+  registrationCreateSchema,
+  registrationSubmissionResponseSchema,
+  type RegistrationSubmissionResponse,
+} from "../../shared/schemas/registration";
+import { geoResponseSchema } from "../../shared/schemas/geolocation";
+import { eventFormsResponseSchema } from "../../shared/schemas/forms";
 import { readField, deriveEventAttendanceType, findSubmitButton } from "../shared/form/helpers";
 import { SuccessPanel } from "../components/SuccessPanel";
 import {
@@ -434,7 +440,7 @@ function installEmailReviewCard(form: HTMLFormElement): void {
 
 async function applyGeoHint(controller: CustomFieldsController, apiBase: string): Promise<void> {
   try {
-    const geo = await getJson<{ country: string | null }>(`${apiBase}/geo`);
+    const geo = await getJson(`${apiBase}/geo`, geoResponseSchema);
     if (geo.country) controller.setGeoHint(geo.country);
   } catch {
     // Geo lookup is best-effort — never block or break the form.
@@ -466,7 +472,10 @@ async function main(): Promise<void> {
   let customFields: CustomFieldsController | null = null;
 
   try {
-    const forms = await getJson<EventFormsResponse>(`${apiBase}/events/${eventSlug}/forms?purpose=event_registration`);
+    const forms = await getJson(
+      `${apiBase}/events/${eventSlug}/forms?purpose=event_registration`,
+      eventFormsResponseSchema,
+    );
     eventName = forms.event.name;
     eventDayCount = forms.eventDays.length;
     if (consentsContainer) {
@@ -551,9 +560,10 @@ async function main(): Promise<void> {
           consents: readConsentValues(form),
         });
 
-        const result = await postJson<RegistrationSubmitResponse>(
+        const result = await postJson(
           `${apiBase}/events/${eventSlug}/registrations`,
           payload,
+          registrationSubmissionResponseSchema,
           eventPathHeaders,
         );
         clearReferralSession();

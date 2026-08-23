@@ -20,6 +20,13 @@ export const badgeRegenerationQueuedResponseSchema = successResponseSchema.exten
   referralCode: z.string().regex(/^[A-Za-z0-9]{1,64}$/),
   badgeUrl: httpUrlSchema,
 });
+export const adminRegistrationOpenManageResponseSchema = z.object({ manageUrl: httpUrlSchema });
+export const badgeRoleInfoSchema = z.object({
+  admin_override: z.string().nullable(),
+  auto_detected: z.string(),
+  effective_role: z.string(),
+  available_roles: z.array(z.string()),
+});
 
 export const adminRegistrationAuditLogRouteSchema = {
   tags: ["Admin events"],

@@ -7,8 +7,8 @@ import { api } from "../api";
 import { fmt, toast } from "../ui";
 import { useData } from "../../hooks/useData";
 import { asyncPaymentWindow } from "../../../shared/constants/async-payment-window";
-import { formatDonationAmount, type DonationRow } from "./donations/model";
-import { donationSyncResponseSchema } from "../../../shared/schemas/admin-donations";
+import { formatDonationAmount } from "./donations/model";
+import { donationDetailResponseSchema, donationSyncResponseSchema } from "../../../shared/schemas/admin-donations";
 
 function Field({ label, children }: { label: string; children: preact.ComponentChildren }) {
   return (
@@ -23,20 +23,18 @@ export function DonationDetailPage({ donationId }: { donationId: string }) {
   const [, navigate] = useHashLocation();
   const [syncing, setSyncing] = useState(false);
 
-  const { data, loading, error, reload } = useData<{ donation: DonationRow }>(
-    () => api(`/api/v1/admin/donations/${encodeURIComponent(donationId)}`),
+  const { data, loading, error, reload } = useData(
+    () => api(`/api/v1/admin/donations/${encodeURIComponent(donationId)}`, donationDetailResponseSchema),
     [donationId],
   );
 
   async function handleSync(sessionId: string) {
     setSyncing(true);
     try {
-      const res = donationSyncResponseSchema.parse(
-        await api<unknown>("/api/v1/admin/donations/sync", {
-          method: "POST",
-          body: JSON.stringify({ sessionIds: [sessionId] }),
-        }),
-      );
+      const res = await api("/api/v1/admin/donations/sync", donationSyncResponseSchema, {
+        method: "POST",
+        body: JSON.stringify({ sessionIds: [sessionId] }),
+      });
       const result = res.results[0];
       if (result?.outcome === "completed") toast("Donation marked as completed.", "success");
       else if (result?.outcome === "awaiting_payment") toast("Payment initiated — awaiting bank settlement.", "info");

@@ -16,6 +16,7 @@ interface AdminHeadshotManagerProps {
   alt: string;
   emptyLabel?: string;
   statusText?: string;
+  readOnly?: boolean;
   uploadHeadshot: (file: Blob) => Promise<{ headshotUrl?: string | null } | void>;
   deleteHeadshot?: () => Promise<void>;
   onUploaded?: (headshotUrl: string | null | undefined) => void | Promise<void>;
@@ -39,6 +40,7 @@ export function AdminHeadshotManager({
   alt,
   emptyLabel = "User",
   statusText,
+  readOnly = false,
   uploadHeadshot,
   deleteHeadshot,
   onUploaded,
@@ -113,6 +115,7 @@ export function AdminHeadshotManager({
     onError,
     onUploaded,
     previewOptions,
+    readOnly,
     uploadHeadshot,
     uploadSuccessStatus,
   ]);
@@ -126,24 +129,26 @@ export function AdminHeadshotManager({
   return (
     <div class="mb-3 text-center">
       <div ref={previewRef} class="mb-2"></div>
-      <div class="d-flex flex-column gap-2 align-items-center">
-        <label class="btn btn-sm btn-outline-primary w-100 adm-headshot-btn">
-          {uploadLabel}
-          <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" class="d-none" />
-        </label>
-        {onFetchGravatar && (
-          <button
-            type="button"
-            class="btn btn-sm btn-outline-secondary w-100 adm-headshot-btn"
-            onClick={() => void onFetchGravatar()}
-          >
-            {fetchLabel}
+      {!readOnly && (
+        <div class="d-flex flex-column gap-2 align-items-center">
+          <label class="btn btn-sm btn-outline-primary w-100 adm-headshot-btn">
+            {uploadLabel}
+            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" class="d-none" />
+          </label>
+          {onFetchGravatar && (
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-secondary w-100 adm-headshot-btn"
+              onClick={() => void onFetchGravatar()}
+            >
+              {fetchLabel}
+            </button>
+          )}
+          <button ref={deleteRef} type="button" class="btn btn-sm btn-outline-danger w-100 adm-headshot-btn d-none">
+            {deleteLabel}
           </button>
-        )}
-        <button ref={deleteRef} type="button" class="btn btn-sm btn-outline-danger w-100 adm-headshot-btn d-none">
-          {deleteLabel}
-        </button>
-      </div>
+        </div>
+      )}
       {helpText && <div class="form-text mt-2 text-start">{helpText}</div>}
       <div ref={statusRef} class="mt-2 small text-muted"></div>
     </div>

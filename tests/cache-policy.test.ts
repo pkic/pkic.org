@@ -41,6 +41,35 @@ describe("cache policy middleware", () => {
     expect(adminResponse.headers.get("cache-control")).toContain("no-store");
   });
 
+  it.each(["pkic_admin_session", "pkic_member_session", "pkic_sponsor_portal_session"])(
+    "overrides cacheable responses when the %s cookie is present",
+    async (cookieName) => {
+      const response = await apiMiddlewareOnRequest(
+        createMiddlewareContext(
+          new Request("https://app.test/api/v1/events/pqc-2026/terms", {
+            headers: { cookie: `${cookieName}=session-token` },
+          }),
+          new Response("{}", { status: 200, headers: { "cache-control": "public, max-age=300" } }),
+        ),
+      );
+
+      expect(response.headers.get("cache-control")).toBe("no-store, max-age=0");
+    },
+  );
+
+  it("does not disable public caching for unrelated cookies", async () => {
+    const response = await apiMiddlewareOnRequest(
+      createMiddlewareContext(
+        new Request("https://app.test/api/v1/events/pqc-2026/terms", {
+          headers: { cookie: "theme=dark" },
+        }),
+        new Response("{}", { status: 200 }),
+      ),
+    );
+
+    expect(response.headers.get("cache-control")).toContain("public");
+  });
+
   it.each([
     ["event referral", redirectMiddlewareOnRequest, "https://app.test/r/abc1234"],
     ["donation referral", donationRedirectMiddlewareOnRequest, "https://app.test/donate/r/abc1234"],

@@ -21,6 +21,12 @@ import { defaultedSourceTypeSchema } from "./source";
 import { IMAGE_UPLOAD_ALLOWED_MIME_TYPES } from "./images";
 import { proposalSpeakerRoleSchema } from "./participant-roles";
 import { httpUrlSchema } from "./urls";
+import {
+  eventAttendanceTypeValueSchema,
+  eventDayDateSchema,
+  eventDayReadModelSchema,
+  eventSummarySchema,
+} from "./event-read-models";
 
 export { REGISTRATION_HEADSHOT_MAX_BYTES } from "./images";
 export const REGISTRATION_HEADSHOT_ALLOWED_MIME_TYPES = IMAGE_UPLOAD_ALLOWED_MIME_TYPES;
@@ -43,6 +49,7 @@ export const headshotUploadResponseSchema = successResponseSchema.extend({
   r2Key: z.string().describe("R2 object key for the uploaded headshot"),
   headshotUrl: httpUrlSchema.describe("URL pointing to the uploaded headshot"),
 });
+export type HeadshotUploadResponse = z.infer<typeof headshotUploadResponseSchema>;
 export const registrationHeadshotUploadResponseSchema = headshotUploadResponseSchema.omit({ r2Key: true }).extend({
   headshotUrl: httpUrlSchema.describe("The permanent URL pointing to the new uploaded headshot profile asset"),
 });
@@ -104,11 +111,7 @@ export type RegistrationLifecycleStatus = z.infer<typeof registrationLifecycleSt
 
 // Attendance options are configurable per event day; the service validates
 // this bounded identifier against the event's stored options.
-export const dayAttendanceTypeSchema = z
-  .string()
-  .min(1)
-  .max(64)
-  .regex(/^[a-z_][a-z0-9_]*$/, "Invalid attendance type");
+export const dayAttendanceTypeSchema = eventAttendanceTypeValueSchema;
 
 export const inviteTypeSchema = z.enum(["attendee", "speaker"]);
 export const declineReasonCodeSchema = z.enum([
@@ -126,10 +129,7 @@ export const consentItemSchema = z.object({
   version: z.string().trim().regex(versionPattern),
 });
 
-export const dayDateSchema = z
-  .string()
-  .trim()
-  .regex(/^\d{4}-\d{2}-\d{2}$/);
+export const dayDateSchema = eventDayDateSchema;
 
 export const dayAttendanceItemSchema = z.object({
   dayDate: dayDateSchema,
@@ -228,17 +228,41 @@ export const registrationCreateSchema = attendeeRegistrationFieldsSchema
 export const registrationConfirmSchema = z.object({ id: databaseIdSchema.optional(), token: tokenSchema });
 export const registrationConfirmQuerySchema = registrationConfirmSchema;
 
-const registrationCompletionResponseSchema = successResponseSchema.merge(registrationDayStateSchema).extend({
+const registrationCompletionResponseBaseSchema = successResponseSchema.merge(registrationDayStateSchema).extend({
   status: registrationLifecycleStatusSchema,
   shareUrl: httpUrlSchema.nullable(),
-  manageUrl: httpUrlSchema,
-  manageToken: z.string(),
 });
 
-export const registrationConfirmResponseSchema = registrationCompletionResponseSchema;
+export const registrationConfirmResponseSchema = registrationCompletionResponseBaseSchema.extend({
+  manageUrl: httpUrlSchema,
+  manageToken: tokenSchema,
+});
+export type RegistrationConfirmResponse = z.infer<typeof registrationConfirmResponseSchema>;
 
-export const registrationSubmissionResponseSchema = registrationCompletionResponseSchema.extend({
+export const registrationConfirmInfoQuerySchema = z.object({
+  // Invalid and expired capabilities intentionally return the generic empty
+  // projection rather than a validation error or account-enumeration signal.
+  token: z.string().trim().max(4096).optional(),
+  id: databaseIdSchema.optional(),
+});
+
+export const registrationConfirmInfoResponseSchema = z.object({
+  firstName: z.string().nullable(),
+  lastName: z.string().nullable(),
+  email: normalizedEmailSchema.nullable(),
+  organizationName: z.string().nullable(),
+  eventName: z.string().nullable(),
+  expired: z.boolean(),
+  recoverable: z.boolean(),
+});
+export type RegistrationConfirmInfoResponse = z.infer<typeof registrationConfirmInfoResponseSchema>;
+
+export const registrationSubmissionResponseSchema = registrationCompletionResponseBaseSchema.extend({
   registrationId: databaseIdSchema,
+  // Existing identities receive these capabilities only through their email.
+  // A newly created identity may still receive the immediate correction link.
+  manageUrl: httpUrlSchema.nullable(),
+  manageToken: tokenSchema.nullable(),
 });
 export type RegistrationSubmissionResponse = z.infer<typeof registrationSubmissionResponseSchema>;
 
@@ -265,6 +289,43 @@ export const registrationManageSchema = z.object({
   organizationName: organizationNameSchema.optional(),
   jobTitle: jobTitleSchema.optional(),
 });
+
+/** Explicit capability-safe registration projection; never spread a D1 row into this response. */
+export const registrationManageRegistrationSchema = z.object({
+  id: databaseIdSchema,
+  event_id: eventSummarySchema.shape.id,
+  status: registrationLifecycleStatusSchema,
+  cancellation_reason_code: z.string().nullable(),
+  attendance_type: attendanceTypeSchema,
+  custom_answers: customAnswersSchema.nullable(),
+  isEmailVerified: z.boolean(),
+});
+
+export const registrationManageUserSchema = z.object({
+  email: normalizedEmailSchema,
+  first_name: z.string().nullable(),
+  last_name: z.string().nullable(),
+  organization_name: z.string().nullable(),
+  job_title: z.string().nullable(),
+});
+
+export const registrationManageReadResponseSchema = successResponseSchema.extend({
+  registration: registrationManageRegistrationSchema,
+  event: eventSummarySchema,
+  user: registrationManageUserSchema,
+  eventDays: z.array(eventDayReadModelSchema),
+  dayAttendance: registrationDayStateSchema.shape.dayAttendance,
+  dayWaitlist: registrationDayStateSchema.shape.dayWaitlist,
+  shareUrl: httpUrlSchema.nullable(),
+  headshotUrl: httpUrlSchema.nullable(),
+});
+
+export const registrationManageUpdateResponseSchema = successResponseSchema.extend({
+  emailChanged: z.boolean(),
+});
+
+export type RegistrationManageReadResponse = z.infer<typeof registrationManageReadResponseSchema>;
+export type RegistrationManageUpdateResponse = z.infer<typeof registrationManageUpdateResponseSchema>;
 
 export const registrationInviteCreateSchema = z.object({ invites: z.array(inviteeSchema).min(1).max(10) });
 

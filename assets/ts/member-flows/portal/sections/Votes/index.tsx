@@ -16,21 +16,12 @@
  * ProposalsList, and their card/form sub-components in this directory.
  * This file is just the top-level tab switcher.
  */
-import { useEffect, useState } from "preact/hooks";
-import { getJson } from "../../../../shared/api-client";
-import type { WorkingGroupSummary } from "../../types";
+import { useState } from "preact/hooks";
 import { VotesList } from "./VotesList";
 import { ProposalsList } from "./ProposalsList";
 
 export function Votes() {
   const [tab, setTab] = useState<"votes" | "proposals">("votes");
-  const [wgNames, setWgNames] = useState<Map<string, string>>(new Map());
-
-  useEffect(() => {
-    getJson<{ workingGroups: WorkingGroupSummary[] }>("/api/v1/working-groups")
-      .then((data) => setWgNames(new Map(data.workingGroups.map((wg) => [wg.id, wg.name]))))
-      .catch(() => setWgNames(new Map()));
-  }, []);
 
   return (
     <div>
@@ -50,7 +41,7 @@ export function Votes() {
           </button>
         </li>
       </ul>
-      {tab === "votes" ? <VotesList wgNames={wgNames} /> : <ProposalsList wgNames={wgNames} />}
+      {tab === "votes" ? <VotesList /> : <ProposalsList />}
     </div>
   );
 }

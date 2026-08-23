@@ -1,14 +1,19 @@
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
-import { onRequestGet as RegistrationsManageTokenGet_l } from "./[token]";
-import { onRequestPatch as RegistrationsManageTokenPatch_l } from "./[token]";
+import type { RequestDbContext } from "../../../../_lib/db/context";
+import { RegistrationsManageTokenGet, RegistrationsManageTokenPatch } from "./[token]";
 import token_Router from "./[token]/router";
 
-const app = new Hono();
+const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
-app.get("/:token", RegistrationsManageTokenGet_l);
-app.patch("/:token", RegistrationsManageTokenPatch_l);
+app.use("*", async (c, next) => {
+  c.set("sensitive", true);
+  await next();
+});
+
+openapi.get("/:token", RegistrationsManageTokenGet);
+openapi.patch("/:token", RegistrationsManageTokenPatch);
 openapi.route("/:token", token_Router);
 
 export default openapi;

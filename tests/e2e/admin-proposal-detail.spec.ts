@@ -1,4 +1,22 @@
 import { expect, test } from "@playwright/test";
+import { adminAuthSessionResponseSchema } from "../../assets/shared/schemas/admin-auth";
+import { adminEventDetailResponseSchema } from "../../assets/shared/schemas/admin-events";
+import {
+  adminEventProposalsResponseSchema,
+  adminProposalSpeakersResponseSchema,
+} from "../../assets/shared/schemas/admin-event-proposals";
+
+const adminSessionResponse = adminAuthSessionResponseSchema.parse({
+  success: true,
+  admin: {
+    id: "admin-1",
+    email: "admin@pkic.org",
+    role: "admin",
+    scopes: ["proposals:read", "proposals:score", "proposals:manage"],
+    grants: [],
+    expiresAt: null,
+  },
+});
 
 test("renders the admin proposal detail workflow with submission answers and operator actions", async ({ page }) => {
   const proposalId = "11111111111111111111111111111111";
@@ -43,16 +61,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({
-        success: true,
-        admin: {
-          id: "admin-1",
-          email: "admin@pkic.org",
-          role: "admin",
-          scopes: ["proposals:read", "proposals:score", "proposals:manage"],
-          expiresAt: null,
-        },
-      }),
+      body: JSON.stringify(adminSessionResponse),
     });
   });
 
@@ -173,27 +182,50 @@ test("renders the admin proposal detail workflow with submission answers and ope
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({
-        speakers: [
-          {
-            userId: "speaker-1",
-            role: "speaker",
-            status: "confirmed",
-            email: "speaker@pkic.org",
-            firstName: "Sam",
-            lastName: "Speaker",
-            organizationName: "PKIC",
-            jobTitle: "Principal Engineer",
-            biography: "Builds production-grade certificate systems for regulated environments.",
-            headshotUrl: null,
-            confirmedAt: "2025-02-01T09:00:00.000Z",
-            declinedAt: null,
-            declineReason: null,
-            hasHeadshot: false,
-            hasBio: true,
+      body: JSON.stringify(
+        adminProposalSpeakersResponseSchema.parse({
+          proposal: {
+            id: proposalId,
+            title: "Operational PKI at Internet Scale",
+            status: "accepted",
+            presentationDeadline: null,
+            presentationUploaded: false,
+            presentationUploadedAt: null,
           },
-        ],
-      }),
+          summary: {
+            total: 1,
+            confirmed: 1,
+            pending: 0,
+            declined: 0,
+            profileComplete: 1,
+            presentationUploaded: 0,
+          },
+          speakers: [
+            {
+              userId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              role: "speaker",
+              status: "confirmed",
+              email: "speaker@pkic.org",
+              firstName: "Sam",
+              lastName: "Speaker",
+              organizationName: "PKIC",
+              jobTitle: "Principal Engineer",
+              links: [],
+              headshotUpdatedAt: null,
+              headshotUrl: null,
+              confirmedAt: "2025-02-01T09:00:00.000Z",
+              declinedAt: null,
+              declineReason: null,
+              termsAcceptedAt: null,
+              addedAt: "2025-01-30T12:00:00.000Z",
+              biography: "Builds production-grade certificate systems for regulated environments.",
+              profileComplete: true,
+              hasHeadshot: false,
+              hasBio: true,
+            },
+          ],
+        }),
+      ),
     });
   });
 
@@ -383,34 +415,50 @@ test("offers an event-level presentation ZIP from the proposals overview", async
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ success: true, admin: { email: "admin@pkic.org" } }),
+      body: JSON.stringify(adminSessionResponse),
     });
   });
   await page.route("**/api/v1/admin/events/pqc-2026", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({
-        event: {
-          id: "event-1",
-          slug: "pqc-2026",
-          name: "PQC Conference 2026",
-          starts_at: "2026-11-01T09:00:00.000Z",
-          venue: "Amsterdam",
-        },
-      }),
+      body: JSON.stringify(
+        adminEventDetailResponseSchema.parse({
+          event: {
+            id: "event-1",
+            slug: "pqc-2026",
+            name: "PQC Conference 2026",
+            timezone: "Europe/Amsterdam",
+            starts_at: "2026-11-01T09:00:00.000Z",
+            ends_at: null,
+            registration_mode: "open",
+            invite_limit_attendee: 50,
+            base_path: null,
+            user_retention_days: null,
+            venue: "Amsterdam",
+            virtual_url: null,
+            hero_image_url: null,
+            location: "Amsterdam",
+            session_types: [],
+            settings: {},
+          },
+        }),
+      ),
     });
   });
   await page.route("**/api/v1/admin/events/pqc-2026/proposals**", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({
-        proposals: [],
-        access: { canReview: true, canFinalize: true, eventPermissions: ["review", "finalize"] },
-        stats: { byStatus: {}, byRecommendation: {}, reviewedCount: 0, unreviewedCount: 0, total: 0 },
-        pagination: { offset: 0, limit: 50, total: 0, hasMore: false },
-      }),
+      body: JSON.stringify(
+        adminEventProposalsResponseSchema.parse({
+          proposals: [],
+          page: { offset: 0, limit: 50, total: 0, hasMore: false },
+          event: { id: "event-1", slug: "pqc-2026", name: "PQC Conference 2026" },
+          access: { canReview: true, canFinalize: true, eventPermissions: ["review", "finalize"] },
+          stats: { byStatus: {}, byRecommendation: {}, reviewedCount: 0, unreviewedCount: 0, total: 0 },
+        }),
+      ),
     });
   });
 

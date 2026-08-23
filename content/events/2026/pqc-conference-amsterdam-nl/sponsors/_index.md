@@ -50,7 +50,7 @@ Prefer to discuss options first, ask about a consortium-level tier, or pay by in
 
 ## Current sponsors
 
-{{< sponsors-level sponsoring="Post-Quantum Cryptography Conference Amsterdam 2026" level="all" >}}
+{{< sponsors-level event-slug="pqc-conference-amsterdam-nl" sponsoring="Post-Quantum Cryptography Conference Amsterdam 2026" level="all" >}}
 
 > **Sponsorship packages are limited by tier.** Once the highest tiers are fully allocated, those levels close. If your organisation needs to be in the room, review availability before the packages you need are no longer on offer.
 {.callout-warning}

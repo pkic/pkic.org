@@ -1,5 +1,5 @@
 import { useRef, useState } from "preact/hooks";
-import { api } from "./api";
+import { apiCommand } from "./api";
 import { toast } from "./ui";
 
 interface LogoManagerProps {
@@ -23,7 +23,7 @@ export function LogoManager(props: LogoManagerProps) {
   async function upload(file: File) {
     setBusy(true);
     try {
-      await api(props.endpoint, {
+      await apiCommand(props.endpoint, {
         method: "PUT",
         headers: { "Content-Type": file.type || "application/octet-stream" },
         body: file,
@@ -42,7 +42,7 @@ export function LogoManager(props: LogoManagerProps) {
     if (!confirm(props.removeConfirmation)) return;
     setBusy(true);
     try {
-      await api(props.endpoint, { method: "DELETE" });
+      await apiCommand(props.endpoint, { method: "DELETE" });
       toast("Logo removed", "success");
       props.onChanged();
     } catch (error) {

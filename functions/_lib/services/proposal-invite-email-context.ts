@@ -2,6 +2,8 @@ import { all, first } from "../db/queries";
 import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
 import { stringifyJson } from "../utils/json";
+import { formatProposalInvitePerson, type ProposalInvitePerson } from "./proposal-invite-person";
+import { proposalSpeakerEffectiveProfileColumns } from "./proposal-speakers";
 
 export interface ProposalInviteEmailContext {
   invitedByDisplay: string;
@@ -11,24 +13,11 @@ export interface ProposalInviteEmailContext {
   speakerLineupText: string;
 }
 
-export interface ProposalInvitePerson {
-  email: string;
-  first_name: string | null;
-  last_name: string | null;
-  organization_name: string | null;
-}
-
 interface ProposalInviteSummary {
   id: string;
   title: string;
   abstract: string;
   proposer_user_id: string;
-}
-
-export function formatInvitePerson(person: ProposalInvitePerson): string {
-  const fullName = [person.first_name, person.last_name].filter(Boolean).join(" ").trim();
-  if (fullName && person.organization_name?.trim()) return `${fullName} (${person.organization_name.trim()})`;
-  return fullName || person.email;
 }
 
 export function composeProposalInviteEmailContext(
@@ -37,11 +26,11 @@ export function composeProposalInviteEmailContext(
   speakers: ProposalInvitePerson[],
 ): ProposalInviteEmailContext {
   return {
-    invitedByDisplay: inviter ? formatInvitePerson(inviter) : "The proposer",
+    invitedByDisplay: inviter ? formatProposalInvitePerson(inviter) : "The proposer",
     inviterFirstName: inviter?.first_name ?? "",
     proposalTitle: proposal.title,
     proposalAbstract: proposal.abstract,
-    speakerLineupText: speakers.map((speaker) => `- ${formatInvitePerson(speaker)}`).join("\n"),
+    speakerLineupText: speakers.map((speaker) => `- ${formatProposalInvitePerson(speaker)}`).join("\n"),
   };
 }
 
@@ -72,7 +61,7 @@ export async function buildProposalInviteEmailContext(
 
   const speakers = await all<ProposalInvitePerson>(
     db,
-    `SELECT u.email, u.first_name, u.last_name, u.organization_name
+    `SELECT u.email, ${proposalSpeakerEffectiveProfileColumns("u", "ps", "", ["firstName", "lastName", "organizationName"])}
        FROM proposal_speakers ps
        JOIN users u ON u.id = ps.user_id
       WHERE ps.proposal_id = ?
@@ -119,7 +108,8 @@ export async function buildProposalInviteEmailContextMap(
     ),
     all<ProposalSpeaker>(
       db,
-      `SELECT ps.proposal_id, u.email, u.first_name, u.last_name, u.organization_name
+      `SELECT ps.proposal_id, u.email,
+              ${proposalSpeakerEffectiveProfileColumns("u", "ps", "", ["firstName", "lastName", "organizationName"])}
          FROM proposal_speakers ps
          JOIN users u ON u.id = ps.user_id
         WHERE ps.proposal_id IN (SELECT value FROM json_each(?))

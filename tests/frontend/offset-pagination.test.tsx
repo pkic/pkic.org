@@ -140,6 +140,45 @@ describe("canonical offset pagination", () => {
     expect(requests.at(-1)?.searchParams.get("offset")).toBe("0");
   });
 
+  it("keeps portal working-group search server-side while paging the joined view", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        requests.push(url);
+        return jsonResponse({
+          workingGroups: [{ id: url.searchParams.get("offset") ?? "0" }],
+          page: pageFor(url, 60),
+        });
+      }),
+    );
+    const responseSchema = z.object({
+      workingGroups: z.array(z.object({ id: z.string() })),
+      page: pageInfoSchema,
+    });
+
+    function Harness() {
+      const listing = useApiPage(
+        "/api/v1/me/working-groups",
+        { view: "joined", q: "alpha" },
+        responseSchema,
+        (data) => data.workingGroups,
+        25,
+      );
+      return <>{listing.pagerProps && <Pager {...listing.pagerProps} />}</>;
+    }
+
+    const container = mount(<Harness />);
+    await settle();
+    expect(requests.at(-1)?.searchParams.get("view")).toBe("joined");
+    expect(requests.at(-1)?.searchParams.get("q")).toBe("alpha");
+    void act(() => nextButton(container).click());
+    await settle();
+    expect(requests.at(-1)?.searchParams.get("offset")).toBe("25");
+    expect(requests.at(-1)?.searchParams.get("q")).toBe("alpha");
+  });
+
   it("makes ApiDataTable reset pagination for filters, search, and sorting", async () => {
     const requests: URL[] = [];
     vi.stubGlobal(

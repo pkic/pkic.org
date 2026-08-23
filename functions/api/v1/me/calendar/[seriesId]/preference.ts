@@ -6,7 +6,10 @@
 import { json } from "../../../../../_lib/http";
 import { requireMemberFromRequest } from "../../../../../_lib/auth/member";
 import { setMyMeetingPreference } from "../../../../../_lib/services/meeting-calendar";
-import { myCalendarPreferenceRouteSchema } from "../../../../../../assets/shared/schemas/meeting-calendar";
+import {
+  myCalendarPreferenceResponseSchema,
+  myCalendarPreferenceRouteSchema,
+} from "../../../../../../assets/shared/schemas/meeting-calendar";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 
@@ -16,6 +19,6 @@ export const MeCalendarPreferencePatch = openApiRoute(
     const db = requestDb(c);
     const member = await requireMemberFromRequest(db, c.req.raw, c.env);
     await setMyMeetingPreference(db, member, data.params.seriesId, data.body.icsFileId);
-    return json({ success: true });
+    return json(myCalendarPreferenceResponseSchema.parse({ success: true }));
   },
 );

@@ -227,8 +227,8 @@ function MemberDetailPage({ apiBase, directoryHref }: { apiBase: string; directo
       setNotFound(true);
       return;
     }
-    getJson<unknown>(`${apiBase}/members/${encodeURIComponent(id)}`)
-      .then((data) => setMember(publicMemberDetailSchema.parse(data)))
+    getJson(`${apiBase}/members/${encodeURIComponent(id)}`, publicMemberDetailSchema)
+      .then((data) => setMember(data))
       .catch((e) => {
         if ((e as { status?: number }).status === 404) setNotFound(true);
         else setError((e as Error).message);

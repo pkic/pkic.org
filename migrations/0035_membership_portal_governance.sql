@@ -119,6 +119,17 @@ CREATE INDEX idx_email_outbox_expired_lease
 -- for the same generation share one outbox idempotency key.
 ALTER TABLE proposal_speakers ADD COLUMN invite_generation INTEGER NOT NULL DEFAULT 0;
 
+-- A proposal manager may curate a co-speaker's profile for this proposal, but
+-- the proposer-management capability must never rewrite that person's
+-- account-wide profile or headshot. Keep these overrides on the speaker roster
+-- row so they follow
+-- the proposal aggregate and cannot orphan when a speaker is removed. JSON
+-- key presence distinguishes an explicit NULL override from no override.
+ALTER TABLE proposal_speakers ADD COLUMN profile_overrides_json TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE proposal_speakers ADD COLUMN headshot_override_set INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE proposal_speakers ADD COLUMN headshot_r2_key TEXT;
+ALTER TABLE proposal_speakers ADD COLUMN headshot_updated_at TEXT;
+
 -- Invite acceptance, decline, and manual resend are aggregate transitions:
 -- their state change and any engagement, unsubscribe, email, or audit fallout
 -- must be based on the same snapshot. A revision guard makes a stale D1 batch
@@ -2546,9 +2557,10 @@ You may revise and resubmit at any time.',
 --    does. These are the same shape, scoped to `sponsorship_id` instead.
 -- 4. Migrate the live `sponsors`/`sponsor_events` rows into
 --    `sponsorships`/`sponsorship_events` (reconciled by `organization_id`
---    against anything already there), then drop the legacy tables,
---    that drop only happens "after the migration
---    is verified".
+--    against anything already there). Keep the legacy source tables as a
+--    rollback/reconciliation source until the backfill has been verified in
+--    preview and production. A later, explicitly approved migration may drop
+--    them after that verification; application code must not write to them.
 -- 5. New email templates (`sponsorship-renewal-reminder-60`/`-30`,
 --    `sponsorship-lapsed-staff`, `sponsorship-active-confirmation`,
 --    `sponsor-portal-access`) — `sponsorship-brochure`/`sponsorship-new-inquiry`
@@ -2683,8 +2695,10 @@ WHERE NOT EXISTS (
 -- through the app after this migration runs, same as any other row created
 -- directly by SQL rather than through createSponsorshipInquiry.
 
-DROP TABLE sponsor_events;
-DROP TABLE sponsors;
+-- Do not drop the legacy source tables in the same migration that backfills
+-- them. D1 cannot restore those rows if a mapping defect is discovered after
+-- deployment. Keeping the now-unused tables is cheap and makes row-level
+-- reconciliation and recovery possible before a future cleanup migration.
 
 -- ── New email templates ───────────────────────────────────────────
 

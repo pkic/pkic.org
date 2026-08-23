@@ -14,6 +14,7 @@ import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../_lib/auth/permissions";
 import { listLeadershipPositionsAdmin, createLeadershipPosition } from "../../../../_lib/services/leadership";
 import {
+  leadershipPositionResponseSchema,
   leadershipPositionsListRouteSchema,
   leadershipPositionsCreateRouteSchema,
 } from "../../../../../assets/shared/schemas/leadership";
@@ -49,6 +50,6 @@ export const LeadershipPositionsCreate = openApiRoute(
     const body = data.body;
     const position = await createLeadershipPosition(requestDb(c), body, admin.id);
 
-    return json(position, 201);
+    return json(leadershipPositionResponseSchema.parse(position), 201);
   },
 );

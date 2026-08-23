@@ -9,6 +9,7 @@ import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { successResponseSchema } from "./api-common";
 import { workingGroupIdSchema, workingGroupReferenceSchema } from "./working-groups";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 export const meetingSeriesIdParamsSchema = z.object({ id: workingGroupReferenceSchema });
 export const meetingSeriesWithMeetingIdParamsSchema = z.object({
@@ -60,9 +61,16 @@ export const meetingResendResultSchema = successResponseSchema.extend({
   queuedRecipients: z.number(),
 });
 
-const adminMeetingSeriesListResponseSchema = z.object({ meetingSeries: z.array(adminMeetingSeriesSummarySchema) });
-const adminMeetingSeriesResponseSchema = z.object({ meetingSeries: adminMeetingSeriesSummarySchema });
-const adminIcsFileResponseSchema = z.object({ icsFile: adminIcsFileSummarySchema });
+export const meetingSeriesSortColumns = ["name", "scopeType", "createdAt", "updatedAt"] as const;
+export const meetingSeriesListQuerySchema = listQuerySchema(meetingSeriesSortColumns);
+export type MeetingSeriesListQuery = z.infer<typeof meetingSeriesListQuerySchema>;
+
+export const adminMeetingSeriesListResponseSchema = paginatedResponseSchema(
+  "meetingSeries",
+  adminMeetingSeriesSummarySchema,
+);
+export const adminMeetingSeriesResponseSchema = z.object({ meetingSeries: adminMeetingSeriesSummarySchema });
+export const adminIcsFileResponseSchema = z.object({ icsFile: adminIcsFileSummarySchema });
 
 export type AdminIcsFile = z.infer<typeof adminIcsFileSummarySchema>;
 export type AdminMeetingSeries = z.infer<typeof adminMeetingSeriesSummarySchema>;
@@ -114,7 +122,7 @@ function buildMeetingIcsUpdateRouteSchema<TParams extends z.ZodType>(options: {
 export const wgMeetingsListRouteSchema = {
   tags: ["Meeting Calendar"],
   summary: "List a working group's meeting series (admin)",
-  request: { params: meetingSeriesIdParamsSchema },
+  request: { params: meetingSeriesIdParamsSchema, query: meetingSeriesListQuerySchema },
   responses: {
     "200": {
       description: "Meeting series for this working group.",
@@ -208,6 +216,7 @@ export const wgMeetingResendRouteSchema = {
 export const consortiumMeetingsListRouteSchema = {
   tags: ["Meeting Calendar"],
   summary: "List consortium meeting series (admin)",
+  request: { query: meetingSeriesListQuerySchema },
   responses: {
     "200": {
       description: "Consortium meeting series.",
@@ -293,15 +302,19 @@ export const consortiumMeetingResendRouteSchema = {
 // ── Public ───────────────────────────────────────────────────────────────
 
 export const publicMeetingSeriesSchema = z.object({ id: databaseIdSchema, name: z.string() });
+export const publicMeetingSeriesListResponseSchema = paginatedResponseSchema(
+  "meetingSeries",
+  publicMeetingSeriesSchema,
+);
 
 export const publicWgMeetingsRouteSchema = {
   tags: ["Working Groups"],
   summary: "List a working group's active meeting series (public)",
-  request: { params: z.object({ wgId: workingGroupReferenceSchema }) },
+  request: { params: z.object({ wgId: workingGroupReferenceSchema }), query: meetingSeriesListQuerySchema },
   responses: {
     "200": {
       description: "Active meeting series for this working group.",
-      content: { "application/json": { schema: z.object({ meetingSeries: z.array(publicMeetingSeriesSchema) }) } },
+      content: { "application/json": { schema: publicMeetingSeriesListResponseSchema } },
     },
     "404": { description: "Working group not found." },
   },
@@ -318,19 +331,22 @@ export const myMeetingSeriesSchema = z.object({
   icsFiles: z.array(myMeetingSeriesIcsFileSchema),
   preferenceIcsFileId: databaseIdSchema.nullable(),
 });
+export const myMeetingSeriesListResponseSchema = paginatedResponseSchema("meetingSeries", myMeetingSeriesSchema);
 
 export const myCalendarListRouteSchema = {
   tags: ["Me"],
   summary: "List meeting series I'm subscribed to, with my preferences",
+  request: { query: meetingSeriesListQuerySchema },
   responses: {
     "200": {
       description: "My meeting series.",
-      content: { "application/json": { schema: z.object({ meetingSeries: z.array(myMeetingSeriesSchema) }) } },
+      content: { "application/json": { schema: myMeetingSeriesListResponseSchema } },
     },
   },
 };
 
 export const myCalendarPreferenceSetSchema = z.object({ icsFileId: databaseIdSchema.nullable() });
+export const myCalendarPreferenceResponseSchema = successResponseSchema;
 
 export const myCalendarPreferenceRouteSchema = {
   tags: ["Me"],
@@ -340,7 +356,10 @@ export const myCalendarPreferenceRouteSchema = {
     body: { content: { "application/json": { schema: myCalendarPreferenceSetSchema } }, required: true },
   },
   responses: {
-    "200": { description: "Preference saved." },
+    "200": {
+      description: "Preference saved.",
+      content: { "application/json": { schema: myCalendarPreferenceResponseSchema } },
+    },
     "403": { description: "Not a member of this series' working group." },
     "404": { description: "Meeting series or ICS file not found." },
   },

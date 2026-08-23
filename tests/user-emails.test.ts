@@ -88,6 +88,46 @@ describe("secondary user emails", () => {
     ).toEqual([{ action: "user_email_added" }, { action: "user_email_removed" }]);
   });
 
+  it("lists secondary emails with mounted-route search, sort, empty, and final-page envelopes", async () => {
+    const userId = await insertUser("paged-emails@example.test");
+    const emptyResponse = await call(adminToken, `/api/v1/admin/users/${userId}/emails`);
+    expect(await emptyResponse.json()).toMatchObject({
+      emails: [],
+      page: { limit: 10, offset: 0, total: 0, hasMore: false },
+    });
+
+    for (const [email, createdAt] of [
+      ["zulu-alias@example.test", "2026-01-01T00:00:00.000Z"],
+      ["alpha-alias@example.test", "2026-01-02T00:00:00.000Z"],
+      ["middle-alias@example.test", "2026-01-03T00:00:00.000Z"],
+    ] as const) {
+      await env.DB.prepare(
+        `INSERT INTO user_emails (id, user_id, email, normalized_email, created_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+        .bind(crypto.randomUUID(), userId, email, email, createdAt)
+        .run();
+    }
+
+    const searched = await call(adminToken, `/api/v1/admin/users/${userId}/emails?q=middle&sort=email`);
+    expect(await searched.json()).toMatchObject({
+      emails: [{ email: "middle-alias@example.test" }],
+      page: { total: 1, hasMore: false },
+    });
+
+    const firstPage = await call(adminToken, `/api/v1/admin/users/${userId}/emails?sort=email&limit=2&offset=0`);
+    expect(await firstPage.json()).toMatchObject({
+      emails: [{ email: "alpha-alias@example.test" }, { email: "middle-alias@example.test" }],
+      page: { limit: 2, offset: 0, total: 3, hasMore: true },
+    });
+
+    const finalPage = await call(adminToken, `/api/v1/admin/users/${userId}/emails?sort=email&limit=2&offset=2`);
+    expect(await finalPage.json()).toMatchObject({
+      emails: [{ email: "zulu-alias@example.test" }],
+      page: { limit: 2, offset: 2, total: 3, hasMore: false },
+    });
+  });
+
   it("rolls back secondary-email mutations when their audit cannot commit", async () => {
     const userId = await insertUser("atomic-email@example.test");
     const actor = { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" } as const;

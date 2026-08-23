@@ -8,6 +8,7 @@ import {
   buildReplacementProposerOptions,
   SpeakerCard,
 } from "../../assets/ts/admin/sections/events/detail/proposal-detail/SpeakerCard";
+import { adminProposalSpeakerAssetPath } from "../../assets/ts/admin/sections/events/detail/proposal-detail/ProposalSpeakerHeadshotManager";
 import { ProposalManageSpeakerCard } from "../../assets/ts/event-flows/proposal-manage-page";
 
 let container: HTMLElement | null = null;
@@ -76,6 +77,36 @@ function mount(node: Parameters<typeof render>[0]): HTMLElement {
 }
 
 describe("proposal speaker removal UI", () => {
+  it("keeps admin headshot operations scoped to the proposal speaker", () => {
+    expect(adminProposalSpeakerAssetPath("proposal/1", "user/1", "headshot")).toBe(
+      "/api/v1/admin/proposals/proposal%2F1/speakers/user%2F1/headshot",
+    );
+    expect(adminProposalSpeakerAssetPath("proposal-1", "user-1", "gravatar")).toBe(
+      "/api/v1/admin/proposals/proposal-1/speakers/user-1/gravatar",
+    );
+  });
+
+  it("shows proposal reviewers the headshot without mutation controls", () => {
+    const root = mount(
+      <SpeakerCard
+        speaker={adminSpeaker({ headshotUrl: "/api/v1/admin/proposals/proposal-1/speakers/speaker-1/headshot" })}
+        proposalId="proposal-1"
+        canEdit={false}
+        isCurrentProposer={false}
+        replacementSpeakers={[]}
+        onSaved={() => {}}
+        onRemoved={() => {}}
+      />,
+    );
+
+    expect(root.querySelector<HTMLImageElement>('img[alt="Casey Speaker"]')?.src).toContain(
+      "/api/v1/admin/proposals/proposal-1/speakers/speaker-1/headshot",
+    );
+    expect(root.textContent).not.toContain("Upload headshot");
+    expect(root.textContent).not.toContain("Fetch from Gravatar");
+    expect(root.textContent).not.toContain("Remove headshot");
+  });
+
   it("lets a proposer remove only non-proposer speakers", () => {
     const nonProposer = mount(
       <ProposalManageSpeakerCard

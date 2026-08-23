@@ -4,6 +4,7 @@ import type { DatabaseLike } from "../../types";
 import { sha256Hex } from "../../utils/crypto";
 import type { EventRecord } from "../events";
 import { isStaleInviteTransition } from "../invite-lifecycle";
+import { registrationManagePageUrl } from "../frontend-links";
 import { isStaleRegistrationTransition, prepareConfirmRegistrationByToken } from "./confirm";
 import { prepareRegistrationConfirmedEmail } from "./status-notifications";
 
@@ -80,7 +81,11 @@ async function confirmRegistrationWithNotificationOnce(
   return {
     registration: prepared.registration,
     manageToken: prepared.manageToken,
-    manageUrl: email.manageUrl,
+    // The email outbox stores a queued capability placeholder that is
+    // materialized only during delivery. The synchronous confirmation
+    // response must use the already signed token returned by the confirmation
+    // command, otherwise the browser receives an unusable pkcq1 URL.
+    manageUrl: registrationManagePageUrl(payload.appBaseUrl, payload.event, prepared.manageToken),
     shareUrl: referral ? `${payload.appBaseUrl}/r/${referral.code}` : null,
     outboxId: email.outboxId,
   };

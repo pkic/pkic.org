@@ -10,7 +10,12 @@ import {
   eventParticipantSourceConflictError,
   isEventParticipantSourceConflict,
 } from "./event-participant-source-revision";
-import { formatInvitePerson as formatInvitePersonRecord } from "./proposal-invite-email-context";
+import { formatProposalInvitePerson } from "./proposal-invite-person";
+import {
+  PROPOSAL_PROFILE_FIELDS,
+  proposalProfileFieldNames,
+  type ProposalProfileField,
+} from "./proposal-speaker-profile-overrides";
 import type { DatabaseLike, StatementLike } from "../types";
 import type { ProposalManageSpeakerStatus } from "../../../assets/shared/schemas/proposal-management";
 import type { SpeakerRole } from "../../../assets/shared/schemas/registration";
@@ -38,7 +43,7 @@ export async function buildAddProposalSpeaker(
     userId: string;
     role: ProposalSpeakerRole;
     signingSecret?: string;
-    proposalContext?: { event_id: string; status: string };
+    proposalContext?: { event_id: string; status: string; updated_at?: string };
   },
 ): Promise<{
   manageToken: string;
@@ -62,7 +67,11 @@ export async function buildAddProposalSpeaker(
   );
   const speakerId =
     existingSpeaker?.id ?? (await sha256Hex(`proposal-speaker\0${payload.proposalId}\0${payload.userId}`)).slice(0, 32);
-  const manageLinkSecret = existingSpeaker?.manage_link_secret ?? newCapabilityLinkSecret();
+  const reinvitingDeclinedSpeaker = existingSpeaker?.status === "declined";
+  const manageLinkSecret =
+    reinvitingDeclinedSpeaker || !existingSpeaker?.manage_link_secret
+      ? newCapabilityLinkSecret()
+      : existingSpeaker.manage_link_secret;
   const inviteGeneration = (existingSpeaker?.invite_generation ?? 0) + (existingSpeaker?.status === "declined" ? 1 : 0);
   const status = isProposer ? "confirmed" : "invited";
   const sourceRevisionAdvance: 0 | 1 =
@@ -77,16 +86,36 @@ export async function buildAddProposalSpeaker(
       [payload.proposalId],
     ));
 
+  const proposalWriteGuard =
+    payload.proposalContext?.updated_at === undefined
+      ? { sql: "", bindings: [] as unknown[] }
+      : {
+          sql: `WHERE EXISTS (
+            SELECT 1 FROM session_proposals
+            WHERE id = ? AND event_id = ? AND status = ? AND updated_at = ? AND deleted_at IS NULL
+          )`,
+          bindings: [
+            payload.proposalId,
+            payload.proposalContext.event_id,
+            payload.proposalContext.status,
+            payload.proposalContext.updated_at,
+          ],
+        };
+
   const statements: StatementLike[] = [
     db
       .prepare(
         `INSERT INTO proposal_speakers
            (id, proposal_id, user_id, role, status, manage_link_secret, confirmed_at, created_at, invite_generation)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+         ${proposalWriteGuard.sql}
          ON CONFLICT(proposal_id, user_id) DO UPDATE SET
            role = excluded.role,
            status = CASE WHEN proposal_speakers.status = 'declined' THEN 'invited' ELSE proposal_speakers.status END,
-           manage_link_secret = COALESCE(proposal_speakers.manage_link_secret, excluded.manage_link_secret),
+           manage_link_secret = CASE
+             WHEN proposal_speakers.status = 'declined' THEN excluded.manage_link_secret
+             ELSE COALESCE(proposal_speakers.manage_link_secret, excluded.manage_link_secret)
+           END,
            confirmed_at = COALESCE(proposal_speakers.confirmed_at, excluded.confirmed_at),
            invite_generation = CASE
              WHEN proposal_speakers.status = 'declined' THEN proposal_speakers.invite_generation + 1
@@ -115,6 +144,7 @@ export async function buildAddProposalSpeaker(
         confirmedAt,
         now,
         inviteGeneration,
+        ...proposalWriteGuard.bindings,
       ),
   ];
   if (proposal) {
@@ -341,10 +371,43 @@ export interface ProposalSpeakerWithUser extends ProposalSpeakerUserProfile {
   created_at: string;
 }
 
+/** Effective profile projection: proposal overrides are scoped to this roster row. */
+export function proposalSpeakerEffectiveProfileExpression(
+  userAlias: string,
+  speakerAlias: string,
+  key: string,
+  userColumn: string,
+): string {
+  return `CASE WHEN json_type(COALESCE(${speakerAlias}.profile_overrides_json, '{}'), '$.${key}') IS NULL THEN ${userAlias}.${userColumn} ELSE json_extract(${speakerAlias}.profile_overrides_json, '$.${key}') END`;
+}
+
+export function proposalSpeakerEffectiveHeadshotExpression(userAlias = "u", speakerAlias = "ps"): string {
+  return `CASE WHEN ${speakerAlias}.headshot_override_set = 1 THEN ${speakerAlias}.headshot_r2_key ELSE ${userAlias}.headshot_r2_key END`;
+}
+
+export function proposalSpeakerEffectiveProfileColumns(
+  userAlias = "u",
+  speakerAlias = "ps",
+  prefix = "",
+  fields: readonly ProposalProfileField[] = proposalProfileFieldNames(),
+): string {
+  const effective = (key: string, column: string, alias: string) =>
+    `${proposalSpeakerEffectiveProfileExpression(userAlias, speakerAlias, key, column)} AS ${prefix}${alias}`;
+  return fields.map((key) => effective(key, PROPOSAL_PROFILE_FIELDS[key], PROPOSAL_PROFILE_FIELDS[key])).join(",\n  ");
+}
+
+export function proposalSpeakerEffectiveHeadshotColumns(userAlias = "u", speakerAlias = "ps", prefix = ""): string {
+  return [
+    `${proposalSpeakerEffectiveHeadshotExpression(userAlias, speakerAlias)} AS ${prefix}headshot_r2_key`,
+    `CASE WHEN ${speakerAlias}.headshot_override_set = 1 THEN ${speakerAlias}.headshot_updated_at ELSE ${userAlias}.headshot_updated_at END AS ${prefix}headshot_updated_at`,
+  ].join(",\n  ");
+}
+
 export const PROPOSAL_SPEAKER_WITH_USER_COLUMNS = `ps.id AS speaker_id, ps.user_id, ps.role, ps.status,
   ps.manage_link_secret, ps.confirmed_at, ps.declined_at, ps.terms_accepted_at, ps.decline_reason, ps.created_at,
-  u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
-  u.biography, u.links_json, u.headshot_r2_key, u.headshot_updated_at`;
+  u.email,
+  ${proposalSpeakerEffectiveProfileColumns()},
+  ${proposalSpeakerEffectiveHeadshotColumns()}`;
 
 export function prepareProposalSpeakerWithUserById(db: DatabaseLike, speakerId: string): StatementLike {
   return db
@@ -369,15 +432,13 @@ export function prepareProposalSpeakersWithStatus(db: DatabaseLike, proposalId: 
     .bind(proposalId);
 }
 
-export { buildProposalInviteEmailContext, type ProposalInviteEmailContext } from "./proposal-invite-email-context";
-
 export function formatInvitePerson(
   firstName: string | null,
   lastName: string | null,
   organizationName: string | null,
   fallback: string,
 ): string {
-  return formatInvitePersonRecord({
+  return formatProposalInvitePerson({
     email: fallback,
     first_name: firstName,
     last_name: lastName,

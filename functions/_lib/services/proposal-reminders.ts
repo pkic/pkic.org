@@ -3,11 +3,15 @@ import { prepareQueueEmailStatement } from "../email/outbox";
 import { AppError } from "../errors";
 import type { DatabaseLike, StatementLike } from "../types";
 import { nowIso } from "../utils/time";
-import { prepareScopedAuditLog } from "./audit";
+import { isAuditOneChangeGuardFailure, prepareScopedAuditLog, prepareScopedAuditLogAfterOneChange } from "./audit";
 import { buildEventEmailVariables, getEventById } from "./events";
 import { speakerManagePageUrl, speakerPresentationPageUrl } from "./frontend-links";
 import { queuedCapabilityToken } from "./capability-links";
-import { buildProposalInviteEmailContext } from "./proposal-speakers";
+import { buildProposalInviteEmailContext } from "./proposal-invite-email-context";
+import {
+  proposalSpeakerEffectiveHeadshotExpression,
+  proposalSpeakerEffectiveProfileColumns,
+} from "./proposal-speakers";
 import type { ProposalRecord } from "./proposals";
 
 interface ReminderProposal {
@@ -50,7 +54,8 @@ async function loadReminderSpeakers(db: DatabaseLike, proposalId: string, userId
   const rows = await all<ReminderSpeaker>(
     db,
     `SELECT ps.id AS proposal_speaker_id, ps.user_id, ps.status,
-            u.email, u.first_name, u.last_name, u.headshot_r2_key, u.biography,
+            u.email, ${proposalSpeakerEffectiveProfileColumns("u", "ps")},
+            ${proposalSpeakerEffectiveHeadshotExpression("u", "ps")} AS headshot_r2_key,
             pv.id AS presentation_id
      FROM proposal_speakers ps
      JOIN users u ON u.id = ps.user_id
@@ -219,27 +224,60 @@ export async function remindProposalSpeakerByProposer(
     },
     now,
   );
-  await db.batch([
-    queued.statement,
-    db
-      .prepare(
-        `UPDATE proposal_speakers
-         SET speaker_invite_reminder_count = speaker_invite_reminder_count + 1,
-             speaker_invite_last_communication_at = ?, speaker_invite_reminders_paused_until = NULL
-         WHERE id = ?`,
-      )
-      .bind(now, speaker.proposal_speaker_id),
-    prepareScopedAuditLog(
-      db,
-      { type: "proposal", id: payload.proposal.id },
-      "user",
-      payload.proposal.proposer_user_id,
-      "co_speaker_reminded_by_proposer",
-      "proposal_speaker",
-      speaker.proposal_speaker_id,
-      { proposalId: payload.proposal.id, speakerUserId: speaker.user_id, recipientEmail: speaker.email },
-      now,
-    ),
-  ]);
+  try {
+    await db.batch([
+      queued.statement,
+      db
+        .prepare(
+          `UPDATE proposal_speakers
+           SET speaker_invite_reminder_count = speaker_invite_reminder_count + 1,
+               speaker_invite_last_communication_at = ?, speaker_invite_reminders_paused_until = NULL
+           WHERE id = ? AND proposal_id = ? AND user_id = ? AND status = ?
+             AND EXISTS (
+               SELECT 1
+               FROM session_proposals sp
+               JOIN users u ON u.id = proposal_speakers.user_id
+               WHERE sp.id = proposal_speakers.proposal_id
+                 AND sp.id = ? AND sp.event_id = ? AND sp.proposer_user_id = ?
+                 AND sp.status = ? AND sp.updated_at = ? AND sp.deleted_at IS NULL
+                 AND u.id = ? AND u.email = ?
+             )`,
+        )
+        .bind(
+          now,
+          speaker.proposal_speaker_id,
+          payload.proposal.id,
+          speaker.user_id,
+          speaker.status,
+          payload.proposal.id,
+          payload.proposal.event_id,
+          payload.proposal.proposer_user_id,
+          payload.proposal.status,
+          payload.proposal.updated_at,
+          speaker.user_id,
+          speaker.email,
+        ),
+      prepareScopedAuditLogAfterOneChange(
+        db,
+        { type: "proposal", id: payload.proposal.id },
+        "user",
+        payload.proposal.proposer_user_id,
+        "co_speaker_reminded_by_proposer",
+        "proposal_speaker",
+        speaker.proposal_speaker_id,
+        { proposalId: payload.proposal.id, speakerUserId: speaker.user_id, recipientEmail: speaker.email },
+        now,
+      ),
+    ]);
+  } catch (error) {
+    if (isAuditOneChangeGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "PROPOSAL_SPEAKER_CONFLICT",
+        "The proposal or speaker changed while the reminder was prepared",
+      );
+    }
+    throw error;
+  }
   return { outboxId: queued.id };
 }

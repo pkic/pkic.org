@@ -10,6 +10,7 @@ import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../_lib/auth/permissions";
 import { updateLeadershipPosition, deleteLeadershipPosition } from "../../../../_lib/services/leadership";
 import {
+  leadershipPositionResponseSchema,
   leadershipPositionUpdateRouteSchema,
   leadershipPositionDeleteRouteSchema,
 } from "../../../../../assets/shared/schemas/leadership";
@@ -25,7 +26,7 @@ export const LeadershipPositionUpdate = openApiRoute(
     const patch = data.body;
     const position = await updateLeadershipPosition(requestDb(c), data.params.id, patch, admin.id);
 
-    return json(position);
+    return json(leadershipPositionResponseSchema.parse(position));
   },
 );
 

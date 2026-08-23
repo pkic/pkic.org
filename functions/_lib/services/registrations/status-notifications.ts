@@ -101,6 +101,9 @@ export interface RegistrationStatusEmailParams extends RegistrationEmailOverride
   noticeKind?: "status_update" | "waitlist_offer" | "admin_admit";
   /** Override only for a deliberately selected pending/bounce fallback address. */
   recipientEmailOverride?: string;
+  /** Stable operation identity for notification enqueueing across retried promotion batches. */
+  outboxId?: string;
+  idempotencyKey?: string;
 }
 
 export async function prepareRegistrationStatusEmail(
@@ -115,6 +118,8 @@ export async function prepareRegistrationStatusEmail(
   const manageUrl = registrationManagePageUrl(params.appBaseUrl, params.event, manageToken);
   const recipientEmail = params.recipientEmailOverride ?? user.email;
   const prepared = prepareQueueEmailStatement(db, {
+    outboxId: params.outboxId,
+    idempotencyKey: params.idempotencyKey,
     eventId: params.event.id,
     baseUrl: params.appBaseUrl,
     templateKey: params.templateKey,

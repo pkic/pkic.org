@@ -2,6 +2,7 @@ import { ApiClientError, postJson } from "../api-client";
 import { setStatus } from "../form/helpers";
 import { readField } from "../form/helpers";
 import { handleSubmitError } from "../form/submit";
+import { successResponseSchema } from "../../../shared/schemas/api-common";
 
 const recoverableInviteCodes = new Set(["INVITE_INVALID", "INVITE_NOT_FOUND", "INVITE_EXPIRED"]);
 
@@ -21,7 +22,7 @@ export async function tryRecoverInvalidInvite(options: {
   }
 
   try {
-    await postJson(`${options.apiBase}/invites/resend-link`, { email: options.email });
+    await postJson(`${options.apiBase}/invites/resend-link`, { email: options.email }, successResponseSchema);
     setStatus(
       options.statusEl,
       "This invitation link is invalid or expired. If the email matches a pending invitation, a fresh link is on its way.",

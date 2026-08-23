@@ -13,6 +13,10 @@ import { getEventBySlug } from "../functions/_lib/services/events";
 import { createRegistration, confirmRegistrationByToken } from "../functions/_lib/services/registrations";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
 import app from "../functions/router";
+import {
+  registrationManageReadResponseSchema,
+  registrationManageUpdateResponseSchema,
+} from "../assets/shared/schemas/registration";
 
 const signingSecret = "test-signing-secret";
 
@@ -53,14 +57,19 @@ describe("manage read endpoints", () => {
       resourceId: registrationId,
     });
 
-    const response = await getRegistration(
-      createContext(env, new Request(`https://app.test/api/v1/registrations/manage/${token}`), { token }),
-    );
+    const response = await callApp(new Request(`https://app.test/api/v1/registrations/manage/${token}`));
 
     expect(response.status).toBe(200);
-    const payload = (await response.json()) as { registration: { id: string; manage_link_secret?: string } };
+    expect(response.headers.get("cache-control")).toBe("no-store, max-age=0");
+    const payload = registrationManageReadResponseSchema.parse(await response.json());
     expect(payload.registration.id).toBe(registrationId);
-    expect(payload.registration.manage_link_secret).toBeUndefined();
+    expect(payload.registration).not.toHaveProperty("manage_link_secret");
+    expect(payload.registration).not.toHaveProperty("confirmation_link_secret");
+    expect(payload.registration).not.toHaveProperty("transition_revision");
+    expect(payload.registration).not.toHaveProperty("source_ref");
+    expect(payload.event).toEqual({ id: eventId, slug: "pqc-2026", name: "PQC Conference 2026" });
+    expect(payload.user).not.toHaveProperty("id");
+    expect(payload).not.toHaveProperty("manageToken");
   });
 
   it("rejects the stored token hash when it is used as a manage token", async () => {
@@ -87,13 +96,10 @@ describe("manage read endpoints", () => {
       `),
     ]);
 
-    const response = await getRegistration(
-      createContext(env, new Request(`https://app.test/api/v1/registrations/manage/${tokenHash}`), {
-        token: tokenHash,
-      }),
-    );
+    const response = await callApp(new Request(`https://app.test/api/v1/registrations/manage/${tokenHash}`));
 
     expect(response.status).toBe(404);
+    expect(response.headers.get("cache-control")).toBe("no-store, max-age=0");
     const payload = (await response.json()) as { error: { code: string } };
     expect(payload.error.code).toBe("REGISTRATION_NOT_FOUND");
   });
@@ -293,6 +299,9 @@ describe("manage read endpoints", () => {
       ),
     );
     expect(updateResponse.status).toBe(200);
+    const updatePayload = registrationManageUpdateResponseSchema.parse(await updateResponse.clone().json());
+    expect(updatePayload).toEqual({ success: true, emailChanged: false });
+    expect(updatePayload).not.toHaveProperty("registration");
     const [audit] = await queryAll<{ actor_type: string; actor_id: string }>(
       env.DB,
       `SELECT actor_type, actor_id

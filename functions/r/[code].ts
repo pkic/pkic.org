@@ -6,6 +6,7 @@ import { getClientIp, getUserAgent, requireInternalSecret } from "../_lib/reques
 import { registrationPageUrl } from "../_lib/services/frontend-links";
 import { resolveOgImageType } from "../_lib/utils/og-image-type";
 import type { DatabaseLike } from "../_lib/types";
+import { proposalSpeakerEffectiveProfileColumns } from "../_lib/services/proposal-speakers";
 // ─── Social-scraper detection ─────────────────────────────────────────────────
 
 /**
@@ -48,7 +49,7 @@ interface OgPersonRow {
 
 type EventFormat = "conference" | "webinar" | "other";
 
-async function lookupOgPerson(db: DatabaseLike, code: string): Promise<OgPersonRow | null> {
+export async function lookupOgPerson(db: DatabaseLike, code: string): Promise<OgPersonRow | null> {
   // registration owners
   const registration = await first<OgPersonRow>(
     db,
@@ -74,7 +75,7 @@ async function lookupOgPerson(db: DatabaseLike, code: string): Promise<OgPersonR
   // proposal/speaker owners
   return first<OgPersonRow>(
     db,
-    `SELECT u.first_name, u.last_name,
+    `SELECT ${proposalSpeakerEffectiveProfileColumns("u", "ps", "", ["firstName", "lastName"])},
             COALESCE(ps.role, 'speaker') AS role,
             e.name AS event_name
      FROM   referral_codes rc

@@ -27,6 +27,7 @@ cascade:
     heroSponsorLevel: 5
     sectionNav: true
     sponsoring: "Post-Quantum Cryptography Conference Amsterdam 2026"
+    sponsoringSlug: "pqc-conference-amsterdam-nl"
 
 params:
   eventType: conference
@@ -749,7 +750,7 @@ cards:
 
 ## Supported By
 
-{{< sponsors-level sponsoring="Post-Quantum Cryptography Conference Amsterdam 2026" level="all" >}}
+{{< sponsors-level event-slug="pqc-conference-amsterdam-nl" sponsoring="Post-Quantum Cryptography Conference Amsterdam 2026" level="all" >}}
 
 ## Main Organizers
 

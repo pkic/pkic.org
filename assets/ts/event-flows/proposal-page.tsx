@@ -1,15 +1,16 @@
 import { render, createRef } from "preact";
+import type { z } from "zod";
 import { getJson, postJson } from "../shared/api-client";
 import { clearReferralSession } from "../shared/query-context";
 import { renderConsentInputs, readConsentValues, syncConsentValidation } from "../shared/widgets/consents";
 import { renderCustomFields, readCustomFieldValues } from "../shared/widgets/custom-fields";
 import { installStepNavigation } from "../shared/form/step-navigation";
 import { renderSharePanel } from "../shared/widgets/share-panel";
-import type { EventFormsResponse } from "../shared/types";
+import { eventFormsResponseSchema } from "../../shared/schemas/forms";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
 import { withLoadingButton } from "../shared/form/submit";
 import { bootstrap, setStatus } from "./boot";
-import { proposalCreateSchema } from "../../shared/schemas/proposal-management";
+import { proposalCreateSchema, proposalCreateResponseSchema } from "../../shared/schemas/proposal-management";
 import { readField, findSubmitButton } from "../shared/form/helpers";
 import { SpeakerFormCard } from "../components/SpeakerFormCard";
 import { SuccessPanel } from "../components/SuccessPanel";
@@ -202,7 +203,7 @@ function readAdditionalSpeakers(form: HTMLFormElement) {
 function showSuccessPanel(
   root: HTMLElement,
   form: HTMLFormElement,
-  result: { success: boolean; status: string; manageUrl?: string },
+  result: z.infer<typeof proposalCreateResponseSchema>,
   firstName: string,
   eventName: string,
   eventSlug: string,
@@ -348,7 +349,10 @@ async function main(): Promise<void> {
   // ── Load form metadata ────────────────────────────────────────────────────
 
   try {
-    const forms = await getJson<EventFormsResponse>(`${apiBase}/events/${eventSlug}/forms?purpose=proposal_submission`);
+    const forms = await getJson(
+      `${apiBase}/events/${eventSlug}/forms?purpose=proposal_submission`,
+      eventFormsResponseSchema,
+    );
     eventName = forms.event.name;
     if (consentsContainer) renderConsentInputs(consentsContainer, forms.requiredTerms);
     renderSessionTypes(boot.root, forms.allowedSessionTypes ?? ["talk", "keynote", "panel"]);
@@ -401,9 +405,10 @@ async function main(): Promise<void> {
           consents: readConsentValues(form),
         });
 
-        const result = await postJson<{ success: boolean; status: string; manageUrl?: string }>(
+        const result = await postJson(
           `${apiBase}/events/${eventSlug}/proposals`,
           payload,
+          proposalCreateResponseSchema,
           eventPathHeaders,
         );
 

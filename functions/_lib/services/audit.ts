@@ -169,13 +169,15 @@ export function prepareAuditLogAfterOneChange(
   details: unknown,
   createdAt = nowIso(),
   scope: AuditScope | null = null,
+  idempotencyKey: string | null = null,
 ): StatementLike {
   return db
     .prepare(
       `INSERT INTO audit_log (
         id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at,
-        scope_type, scope_id
-      ) VALUES (?, ?, ?, CASE WHEN changes() = 1 THEN ? ELSE NULL END, ?, ?, ?, ?, ?, ?)`,
+        idempotency_key, scope_type, scope_id
+      ) VALUES (?, ?, ?, CASE WHEN changes() = 1 THEN ? ELSE NULL END, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
     )
     .bind(
       uuid(),
@@ -186,6 +188,7 @@ export function prepareAuditLogAfterOneChange(
       entityId,
       serializeAuditDetails(details),
       createdAt,
+      idempotencyKey,
       scope?.type ?? null,
       scope?.id ?? null,
     );
@@ -202,8 +205,20 @@ export function prepareScopedAuditLogAfterOneChange(
   entityId: string | null,
   details: unknown,
   createdAt = nowIso(),
+  idempotencyKey: string | null = null,
 ): StatementLike {
-  return prepareAuditLogAfterOneChange(db, actorType, actorId, action, entityType, entityId, details, createdAt, scope);
+  return prepareAuditLogAfterOneChange(
+    db,
+    actorType,
+    actorId,
+    action,
+    entityType,
+    entityId,
+    details,
+    createdAt,
+    scope,
+    idempotencyKey,
+  );
 }
 
 const AUDIT_ONE_CHANGE_GUARD_ERROR = "NOT NULL constraint failed: audit_log.action";

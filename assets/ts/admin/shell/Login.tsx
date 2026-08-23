@@ -2,34 +2,20 @@ import { useState } from "preact/hooks";
 import { browserSupportsWebAuthn } from "@simplewebauthn/browser";
 import { saveAuth } from "../state";
 import { authenticateWithPasskey } from "../../shared/passkey-authentication";
+import { adminSessionEstablishedResponseSchema } from "../../../shared/schemas/admin-auth";
+import { successResponseSchema } from "../../../shared/schemas/api-common";
+import { postJson } from "../../shared/api-client";
 
 async function requestMagicLink(email: string): Promise<void> {
-  const res = await fetch("/api/v1/admin/auth/request-link", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
-  });
   // request-link.ts always responds 200 regardless of whether the email
   // belongs to an admin, to prevent enumeration — so a non-ok response
   // here is a genuine failure (rate limited, validation, 5xx), not a
   // "does this admin exist" signal, and is safe to surface.
-  if (!res.ok) {
-    const body: { error?: { message?: string } } = await res.json().catch(() => ({}));
-    throw new Error(body.error?.message ?? "Could not send sign-in link. Please try again.");
-  }
+  await postJson("/api/v1/admin/auth/request-link", { email }, successResponseSchema);
 }
 
 async function verifyMagicLink(token: string): Promise<void> {
-  const res = await fetch("/api/v1/admin/auth/verify-link", {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token }),
-  });
-  const d: { admin?: { email?: string }; error?: { message?: string } } = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(d.error?.message ?? "The link may have expired or already been used.");
-  }
+  const d = await postJson("/api/v1/admin/auth/verify-link", { token }, adminSessionEstablishedResponseSchema);
   saveAuth(d.admin?.email ?? null);
   history.replaceState({}, "", "/admin/");
 }
@@ -40,7 +26,7 @@ async function verifyMagicLink(token: string): Promise<void> {
  */
 async function signInWithPasskey(): Promise<void> {
   const result = await authenticateWithPasskey();
-  if (!result.admin) throw new Error("This passkey isn't registered to a staff account.");
+  if (!("admin" in result)) throw new Error("This passkey isn't registered to a staff account.");
   saveAuth(result.admin.email ?? null);
   history.replaceState({}, "", "/admin/");
 }

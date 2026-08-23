@@ -7,7 +7,10 @@ import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { addApplicationNoteWithAudit } from "../../../../../_lib/services/membership/applications/communications";
-import { applicationNoteCreateRouteSchema } from "../../../../../../assets/shared/schemas/admin-applications";
+import {
+  applicationNoteCreateResponseSchema,
+  applicationNoteCreateRouteSchema,
+} from "../../../../../../assets/shared/schemas/admin-applications";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 export const ApplicationNotesPost = openApiRoute(applicationNoteCreateRouteSchema, async (c: AdminContext, data) => {
@@ -21,5 +24,5 @@ export const ApplicationNotesPost = openApiRoute(applicationNoteCreateRouteSchem
     actor: admin,
     body: body.body,
   });
-  return json(note, 201);
+  return json(applicationNoteCreateResponseSchema.parse(note), 201);
 });

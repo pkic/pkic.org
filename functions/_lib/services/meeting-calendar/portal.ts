@@ -17,6 +17,9 @@ import {
   type MeetingSeriesScopeType,
 } from "./shared";
 import type { AuthMember, DatabaseLike } from "../../types";
+import type { MeetingSeriesListQuery } from "../../../../assets/shared/schemas/meeting-calendar";
+import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
+import { queryMeetingSeriesPage } from "./series-list";
 
 export interface MyMeetingSeriesIcsFile {
   id: string;
@@ -32,38 +35,18 @@ export interface MyMeetingSeries {
   preferenceIcsFileId: string | null;
 }
 
-async function myApplicableSeriesRows(db: DatabaseLike, member: AuthMember): Promise<SeriesRow[]> {
-  const consortiumSeries = await all<SeriesRow>(
-    db,
-    `SELECT ${SERIES_SELECT_COLUMNS} FROM meeting_series WHERE scope_type = 'consortium' AND active = 1`,
-  );
-
-  const wgRows = await all<{ working_group_id: string }>(
-    db,
-    `SELECT wg.id AS working_group_id
-     FROM working_group_members wgm JOIN working_groups wg ON wg.id = wgm.working_group_id
-     WHERE wgm.user_id = ? AND wgm.left_at IS NULL`,
-    [member.userId],
-  );
-  const wgIds = wgRows.map((r) => r.working_group_id);
-
-  let wgSeries: SeriesRow[] = [];
-  if (wgIds.length > 0) {
-    const workingGroupFilter = buildD1JsonMembershipFilter("working_group_id", wgIds);
-    wgSeries = await all<SeriesRow>(
-      db,
-      `SELECT ${SERIES_SELECT_COLUMNS} FROM meeting_series
-        WHERE scope_type = 'working_group' AND active = 1 AND ${workingGroupFilter.sql}`,
-      workingGroupFilter.bindings,
-    );
+export async function listMyMeetingSeries(
+  db: DatabaseLike,
+  member: AuthMember,
+  query: MeetingSeriesListQuery,
+): Promise<{ meetingSeries: MyMeetingSeries[]; page: ReturnType<typeof buildPageInfo> }> {
+  const { rows: seriesRows, total } = await queryMeetingSeriesPage(db, query, {
+    kind: "member",
+    userId: member.userId,
+  });
+  if (seriesRows.length === 0) {
+    return { meetingSeries: [], page: buildPageInfo(query.limit, query.offset, total, 0) };
   }
-
-  return [...consortiumSeries, ...wgSeries];
-}
-
-export async function listMyMeetingSeries(db: DatabaseLike, member: AuthMember): Promise<MyMeetingSeries[]> {
-  const seriesRows = await myApplicableSeriesRows(db, member);
-  if (seriesRows.length === 0) return [];
 
   const seriesIds = seriesRows.map((s) => s.id);
   const seriesFilter = buildD1JsonMembershipFilter("series_id", seriesIds);
@@ -89,13 +72,14 @@ export async function listMyMeetingSeries(db: DatabaseLike, member: AuthMember):
   );
   const prefBySeriesId = new Map(prefRows.map((p) => [p.series_id, p.ics_file_id]));
 
-  return seriesRows.map((s) => ({
+  const meetingSeries = seriesRows.map((s) => ({
     id: s.id,
     name: s.name,
     scopeType: s.scope_type,
     icsFiles: icsBySeriesId.get(s.id) ?? [],
     preferenceIcsFileId: prefBySeriesId.get(s.id) ?? null,
   }));
+  return { meetingSeries, page: buildPageInfo(query.limit, query.offset, total, meetingSeries.length) };
 }
 
 async function assertSeriesApplicableToMember(

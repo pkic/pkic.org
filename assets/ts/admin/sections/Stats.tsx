@@ -5,6 +5,7 @@ import { ErrorAlert } from "../../components/ErrorAlert";
 import { DataTable, type Column } from "../../components/Table";
 import { Tabs } from "../../components/Tabs";
 import { api } from "../api";
+import { adminStatsResponseSchema } from "../../../shared/schemas/admin-analytics";
 import { fmtMoney, recentActivityChart, svgBarChart, svgStackedBarChart } from "../charts";
 import type { StatsResponse, DonationPeriod } from "../types";
 import { useData } from "../../hooks/useData";
@@ -19,7 +20,11 @@ const ATTENDANCE_LABELS: Record<string, string> = {
 };
 
 export function Stats({ subTab }: { subTab?: string }) {
-  const { data: stats, loading, error } = useData<StatsResponse>(() => api<StatsResponse>("/api/v1/admin/stats"), []);
+  const {
+    data: stats,
+    loading,
+    error,
+  } = useData<StatsResponse>(() => api("/api/v1/admin/stats", adminStatsResponseSchema), []);
   const [, navigate] = useHashLocation();
   const tab: StatsTab = subTab === "registrations" || subTab === "donations" ? subTab : "overview";
 

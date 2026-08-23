@@ -7,6 +7,7 @@ import type { AdminVoteProposalSummary } from "../../types";
 import { PROPOSAL_STATUS_TABS } from "./shared";
 import { ProposalDetail } from "./ProposalDetail";
 import { StatusTabs } from "../../components/StatusTabs";
+import { adminVoteProposalsListResponseSchema } from "../../../../shared/schemas/votes-admin";
 
 export function ProposalsTab() {
   const [status, setStatus] = useState<(typeof PROPOSAL_STATUS_TABS)[number]>("open_for_endorsement");
@@ -19,9 +20,7 @@ export function ProposalsTab() {
     setLoading(true);
     setError(null);
     try {
-      const data = await api<{ proposals: AdminVoteProposalSummary[] }>(
-        `/api/v1/admin/vote-proposals?status=${status}`,
-      );
+      const data = await api(`/api/v1/admin/vote-proposals?status=${status}`, adminVoteProposalsListResponseSchema);
       setProposals(data.proposals);
       setSelectedId((current) => current ?? data.proposals[0]?.id ?? null);
     } catch (e) {

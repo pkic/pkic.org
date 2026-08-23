@@ -1,4 +1,5 @@
-import { AppError } from "../errors";
+import { AppError, isAppError } from "../errors";
+import { readBoundedMultipartFormData } from "../http-body";
 
 export const MAX_ICS_BYTES = 2 * 1024 * 1024; // 2 MB — text calendar files are small
 
@@ -39,23 +40,21 @@ export function validateIcsBytes(buffer: ArrayBuffer): void {
  * fallback, since label/year have nowhere else to travel).
  */
 export async function readUploadedIcsFile(request: Request): Promise<UploadedIcsFile> {
-  let arrayBuffer: ArrayBuffer;
-  try {
-    arrayBuffer = await request.arrayBuffer();
-  } catch {
-    throw new AppError(400, "BODY_READ_ERROR", "Failed to receive upload body");
-  }
-
   const reqContentType = request.headers.get("content-type") || "";
   if (!reqContentType.includes("multipart/form-data")) {
     throw new AppError(400, "INVALID_CONTENT_TYPE", "Request must be multipart/form-data with file/label/year fields");
   }
 
-  const boundaryMatch = reqContentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
-  const boundary = boundaryMatch ? boundaryMatch[1] || boundaryMatch[2] : "";
-  if (!boundary) throw new AppError(400, "INVALID_MULTIPART", "Could not parse multipart boundary");
-
-  const formData = await new Response(arrayBuffer, { headers: { "Content-Type": reqContentType } }).formData();
+  let formData: FormData;
+  try {
+    formData = await readBoundedMultipartFormData(request, MAX_ICS_BYTES);
+  } catch (error) {
+    if (isAppError(error) && error.code === "REQUEST_BODY_TOO_LARGE") {
+      throw new AppError(413, "FILE_TOO_LARGE", `ICS file must be under ${MAX_ICS_BYTES / (1024 * 1024)} MB`);
+    }
+    if (isAppError(error)) throw error;
+    throw new AppError(400, "BODY_READ_ERROR", "Failed to receive upload body");
+  }
 
   const file = formData.get("file");
   if (!file || typeof file === "string") {

@@ -2,13 +2,15 @@ import { useState, useEffect, useCallback, useRef } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Spinner } from "../../components/Spinner";
 import { ErrorAlert } from "../../components/ErrorAlert";
-import { api } from "../api";
+import { api, apiCommand } from "../api";
 import { toast } from "../ui";
 import { confirmHeadshotUsage } from "../../shared/headshot/controller";
 import { AdminHeadshotManager, ADMIN_HEADSHOT_DISCLAIMER } from "../../shared/headshot/AdminHeadshotManager";
 import { ProfileLinksInput, type ProfileLinksHandle } from "../../components/ProfileLinksInput";
 import { normalizeProfileLinks } from "../../shared/widgets/profile-links";
 import { adminRoleValueSchema } from "../../../shared/schemas/admin-users";
+import { adminUserDetailResponseSchema } from "../../../shared/schemas/admin-users";
+import { headshotUploadResponseSchema } from "../../../shared/schemas/registration";
 import { UserList } from "./users/UserList";
 
 import type { UserDetail } from "./users/model";
@@ -46,7 +48,7 @@ export function UserDetailView({ userId, onBack }: { userId: string; onBack: () 
     setLoading(true);
     setError(null);
     try {
-      const data = await api<{ user: UserDetail }>(`/api/v1/admin/users/${userId}`);
+      const data = await api(`/api/v1/admin/users/${userId}`, adminUserDetailResponseSchema);
       setUser(data.user);
     } catch (e) {
       setError((e as Error).message);
@@ -73,18 +75,15 @@ export function UserDetailView({ userId, onBack }: { userId: string; onBack: () 
 
   async function uploadHeadshotFile(uid: string, file: Blob) {
     const headers: Record<string, string> = { "Content-Type": file.type || "application/octet-stream" };
-    const res = await fetch(`/api/v1/admin/users/${uid}/headshot`, {
+    await api(`/api/v1/admin/users/${uid}/headshot`, headshotUploadResponseSchema, {
       method: "PUT",
-      credentials: "same-origin",
       headers,
       body: file,
     });
-    const data = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-    if (!res.ok) throw new Error(data.error?.message ?? `HTTP ${res.status}`);
   }
 
   async function deleteHeadshotFile(uid: string) {
-    await api(`/api/v1/admin/users/${uid}/headshot`, { method: "DELETE" });
+    await apiCommand(`/api/v1/admin/users/${uid}/headshot`, { method: "DELETE" });
   }
 
   function startEditing() {
@@ -111,7 +110,7 @@ export function UserDetailView({ userId, onBack }: { userId: string; onBack: () 
     setEditSaving(true);
     setEditError("");
     try {
-      await api(`/api/v1/admin/users/${user.id}`, {
+      await apiCommand(`/api/v1/admin/users/${user.id}`, {
         method: "PATCH",
         body: JSON.stringify({
           email: editForm.email.trim().toLowerCase() || undefined,
@@ -147,7 +146,7 @@ export function UserDetailView({ userId, onBack }: { userId: string; onBack: () 
     if (!accepted) return;
     setHeadshotStatus("Looking up Gravatar...");
     try {
-      await api(`/api/v1/admin/users/${user.id}/gravatar`, { method: "POST" });
+      await apiCommand(`/api/v1/admin/users/${user.id}/gravatar`, { method: "POST" });
       toast("Gravatar imported successfully", "success");
       await load();
     } catch (e) {

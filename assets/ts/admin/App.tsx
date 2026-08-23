@@ -3,6 +3,8 @@ import { authStatus, clearAuth, isAuthed, saveAuth, setAuthChecking } from "./st
 import { Login } from "./shell/Login";
 import { McpOauth } from "./shell/McpOauth";
 import { AdminShell } from "./shell/AdminShell";
+import { adminAuthSessionResponseSchema } from "../../shared/schemas/admin-auth";
+import { api } from "./api";
 
 /**
  * Root component — gates on auth state.
@@ -24,15 +26,7 @@ export function App() {
     async function loadSession() {
       setAuthChecking();
       try {
-        const res = await fetch("/api/v1/admin/auth/session", { credentials: "same-origin" });
-        if (res.status === 401) {
-          if (!cancelled) clearAuth();
-          return;
-        }
-        const data = (await res.json().catch(() => ({}))) as { admin?: { email?: string | null } };
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
-        }
+        const data = await api("/api/v1/admin/auth/session", adminAuthSessionResponseSchema);
         if (!cancelled) saveAuth(data.admin?.email ?? null);
       } catch {
         if (!cancelled) clearAuth();

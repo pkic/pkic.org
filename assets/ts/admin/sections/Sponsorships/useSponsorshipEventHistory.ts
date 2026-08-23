@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import { ZodError } from "zod";
 import {
   sponsorshipEventsListResponseSchema,
   type SponsorshipEvent,
@@ -50,11 +51,10 @@ export function useSponsorshipEventHistory(sponsorshipId: string): SponsorshipEv
       setFailedOffset(null);
       try {
         const query = offset === 0 ? "" : `?limit=${pageLimitRef.current}&offset=${offset}`;
-        const parsed = sponsorshipEventsListResponseSchema.safeParse(
-          await api<unknown>(`/api/v1/admin/sponsorships/${sponsorshipId}/events${query}`),
+        const data = await api(
+          `/api/v1/admin/sponsorships/${sponsorshipId}/events${query}`,
+          sponsorshipEventsListResponseSchema,
         );
-        if (!parsed.success) throw new Error("Received an invalid pipeline history response.");
-        const data = parsed.data;
         if (requestId !== requestIdRef.current) return;
         pageLimitRef.current = data.page.limit;
         setEvents((previous) => (offset === 0 ? data.events : [...previous, ...data.events]));
@@ -66,7 +66,13 @@ export function useSponsorshipEventHistory(sponsorshipId: string): SponsorshipEv
         );
       } catch (cause) {
         if (requestId !== requestIdRef.current) return;
-        setError(cause instanceof Error ? cause.message : "Unable to load pipeline history");
+        setError(
+          cause instanceof ZodError
+            ? "Received an invalid pipeline history response."
+            : cause instanceof Error
+              ? cause.message
+              : "Unable to load pipeline history",
+        );
         setFailedOffset(offset);
         setAnnouncement("Pipeline history could not be loaded.");
       } finally {

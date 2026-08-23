@@ -4,7 +4,7 @@ import { Badge } from "../../../../components/Badge";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Tabs } from "../../../../components/Tabs";
-import { api } from "../../../api";
+import { api, apiCommand } from "../../../api";
 import { fmt, toast } from "../../../ui";
 import { useData } from "../../../../hooks/useData";
 import { FormAnswerTable } from "./FormResponses";
@@ -17,6 +17,7 @@ import { isProposalDecidableStatus } from "../../../../../shared/schemas/proposa
 import { useProposalSubresources } from "./proposal-detail/useProposalSubresources";
 import type { DetailTab, ProposalResponse } from "./proposal-detail/model";
 import { adminProposalDetailResponseSchema } from "../../../../../shared/schemas/admin-event-proposals";
+import { adminProposalOpenManageResponseSchema } from "../../../../../shared/schemas/route-contracts-admin-proposals";
 import { ProposalDecisionPanel } from "./proposal-detail/ProposalDecisionPanel";
 
 // ─── Main page ────────────────────────────────────────────────────────────────
@@ -26,7 +27,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
   const [activeTab, setActiveTab] = useState<DetailTab>("submission");
 
   const { data, loading, error, reload } = useData<ProposalResponse>(
-    async () => adminProposalDetailResponseSchema.parse(await api<unknown>(`/api/v1/admin/proposals/${proposalId}`)),
+    async () => api(`/api/v1/admin/proposals/${proposalId}`, adminProposalDetailResponseSchema),
     [proposalId],
   );
 
@@ -122,7 +123,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     const label = action === "delete" ? "soft-delete" : `mark as ${action}`;
     if (!confirm(`Are you sure you want to ${label} this proposal? This action is not easily reversible.`)) return;
     try {
-      await api(`/api/v1/admin/proposals/${proposalId}/flag`, {
+      await apiCommand(`/api/v1/admin/proposals/${proposalId}/flag`, {
         method: "POST",
         body: JSON.stringify({ action }),
       });
@@ -135,10 +136,14 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
 
   async function handleOpenManage() {
     try {
-      const { manageUrl } = await api<{ manageUrl: string }>(`/api/v1/admin/proposals/${proposalId}/open-manage`, {
-        method: "POST",
-        body: "{}",
-      });
+      const { manageUrl } = await api(
+        `/api/v1/admin/proposals/${proposalId}/open-manage`,
+        adminProposalOpenManageResponseSchema,
+        {
+          method: "POST",
+          body: "{}",
+        },
+      );
       window.open(manageUrl, "_blank", "noopener");
     } catch (e) {
       toast((e as Error).message, "error");
@@ -149,7 +154,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     e.preventDefault();
     setSavingAbstract(true);
     try {
-      await api(`/api/v1/admin/proposals/${proposalId}`, {
+      await apiCommand(`/api/v1/admin/proposals/${proposalId}`, {
         method: "PATCH",
         body: JSON.stringify({ abstract: abstractDraft }),
       });

@@ -3,7 +3,14 @@ import { api } from "../../api";
 import { toast } from "../../ui";
 import type { AdminApplicationDetail } from "../../types";
 import type { EcDecisionValue } from "../../../../shared/schemas/ec-review";
-import { adminApplicationDetailSchema } from "../../../../shared/schemas/admin-applications";
+import {
+  adminApplicationDetailSchema,
+  adminEcDecisionCreateResponseSchema,
+  applicationApproveResponseSchema,
+  applicationCommunicationCreateResponseSchema,
+  applicationNoteCreateResponseSchema,
+  applicationStageTransitionResponseSchema,
+} from "../../../../shared/schemas/admin-applications";
 
 /**
  * Data + mutation commands for one application's detail view: transition,
@@ -20,8 +27,8 @@ export function useApplicationDetail(applicationId: string) {
     setLoading(true);
     setError(null);
     try {
-      const data = await api<unknown>(`/api/v1/admin/applications/${applicationId}`);
-      setDetail(adminApplicationDetailSchema.parse(data));
+      const data = await api(`/api/v1/admin/applications/${applicationId}`, adminApplicationDetailSchema);
+      setDetail(data);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -35,7 +42,7 @@ export function useApplicationDetail(applicationId: string) {
 
   async function transition(params: { toStage: string; onHoldSubtype?: string; note?: string }) {
     try {
-      await api(`/api/v1/admin/applications/${applicationId}/stage`, {
+      await api(`/api/v1/admin/applications/${applicationId}/stage`, applicationStageTransitionResponseSchema, {
         method: "PATCH",
         body: JSON.stringify({
           toStage: params.toStage,
@@ -52,10 +59,14 @@ export function useApplicationDetail(applicationId: string) {
 
   async function sendCommunication(params: { subject: string; body: string }) {
     try {
-      await api(`/api/v1/admin/applications/${applicationId}/communications`, {
-        method: "POST",
-        body: JSON.stringify({ subject: params.subject, body: params.body }),
-      });
+      await api(
+        `/api/v1/admin/applications/${applicationId}/communications`,
+        applicationCommunicationCreateResponseSchema,
+        {
+          method: "POST",
+          body: JSON.stringify({ subject: params.subject, body: params.body }),
+        },
+      );
       toast("Communication sent", "success");
       await reload();
     } catch (e) {
@@ -65,7 +76,7 @@ export function useApplicationDetail(applicationId: string) {
 
   async function addNote(body: string) {
     try {
-      await api(`/api/v1/admin/applications/${applicationId}/notes`, {
+      await api(`/api/v1/admin/applications/${applicationId}/notes`, applicationNoteCreateResponseSchema, {
         method: "POST",
         body: JSON.stringify({ body }),
       });
@@ -78,7 +89,7 @@ export function useApplicationDetail(applicationId: string) {
 
   async function recordEcDecision(params: { ecMemberUserId: string; decision: EcDecisionValue; reason?: string }) {
     try {
-      await api(`/api/v1/admin/applications/${applicationId}/ec-decisions`, {
+      await api(`/api/v1/admin/applications/${applicationId}/ec-decisions`, adminEcDecisionCreateResponseSchema, {
         method: "POST",
         body: JSON.stringify({
           ecMemberUserId: params.ecMemberUserId,
@@ -96,7 +107,9 @@ export function useApplicationDetail(applicationId: string) {
   async function approve() {
     if (!confirm("Approve this application and run onboarding?")) return;
     try {
-      await api(`/api/v1/admin/applications/${applicationId}/approve`, { method: "POST" });
+      await api(`/api/v1/admin/applications/${applicationId}/approve`, applicationApproveResponseSchema, {
+        method: "POST",
+      });
       toast("Application approved", "success");
       await reload();
     } catch (e) {
@@ -117,7 +130,7 @@ export function useApplicationDetail(applicationId: string) {
     aboutOrganization: string | null;
     reason: string | null;
   }) {
-    await api(`/api/v1/admin/applications/${applicationId}`, {
+    await api(`/api/v1/admin/applications/${applicationId}`, adminApplicationDetailSchema, {
       method: "PATCH",
       body: JSON.stringify({
         applicantName: edits.applicantName,

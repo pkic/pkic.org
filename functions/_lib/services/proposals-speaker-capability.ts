@@ -3,13 +3,23 @@ import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
 import { verifyDatabaseCapability } from "./capability-links";
 import type { ProposalRecord, ProposalSpeakerRecord } from "./proposals";
-import type { ProposalSpeakerUserProfile } from "./proposal-speakers";
+import {
+  proposalSpeakerEffectiveHeadshotColumns,
+  proposalSpeakerEffectiveProfileColumns,
+  type ProposalSpeakerUserProfile,
+} from "./proposal-speakers";
 
 export interface SpeakerWithContext {
   speaker: ProposalSpeakerRecord;
   proposal: ProposalRecord;
   user: ProposalSpeakerUserProfile & {
     id: string;
+    proposalProfileOverridesJson: string;
+    proposalHeadshotOverrideSet: number;
+    proposalHeadshotOverrideKey: string | null;
+    proposalHeadshotOverrideUpdatedAt: string | null;
+    accountHeadshotR2Key: string | null;
+    accountHeadshotUpdatedAt: string | null;
   };
 }
 
@@ -65,6 +75,12 @@ export async function getSpeakerByManageToken(
     u_links_json: string | null;
     u_headshot_r2_key: string | null;
     u_headshot_updated_at: string | null;
+    u_base_headshot_r2_key: string | null;
+    u_base_headshot_updated_at: string | null;
+    ps_headshot_override_set: number;
+    ps_headshot_override_r2_key: string | null;
+    ps_headshot_override_updated_at: string | null;
+    ps_profile_overrides_json: string;
   }>(
     db,
     `SELECT
@@ -97,14 +113,14 @@ export async function getSpeakerByManageToken(
        sp.presentation_deadline      AS sp_presentation_deadline,
        u.id               AS u_id,
        u.email            AS u_email,
-       u.first_name       AS u_first_name,
-       u.last_name        AS u_last_name,
-       u.organization_name AS u_organization_name,
-       u.job_title        AS u_job_title,
-       u.biography        AS u_biography,
-       u.links_json       AS u_links_json,
-       u.headshot_r2_key  AS u_headshot_r2_key,
-       u.headshot_updated_at AS u_headshot_updated_at
+       ${proposalSpeakerEffectiveProfileColumns("u", "ps", "u_")},
+       ${proposalSpeakerEffectiveHeadshotColumns("u", "ps", "u_")},
+       u.headshot_r2_key AS u_base_headshot_r2_key,
+       u.headshot_updated_at AS u_base_headshot_updated_at,
+       ps.headshot_override_set AS ps_headshot_override_set,
+       ps.headshot_r2_key AS ps_headshot_override_r2_key,
+       ps.headshot_updated_at AS ps_headshot_override_updated_at,
+       ps.profile_overrides_json AS ps_profile_overrides_json
      FROM proposal_speakers ps
      JOIN session_proposals sp ON sp.id = ps.proposal_id AND sp.deleted_at IS NULL
      JOIN users u              ON u.id  = ps.user_id
@@ -150,6 +166,7 @@ export async function getSpeakerByManageToken(
     },
     user: {
       id: row.u_id,
+      proposalProfileOverridesJson: row.ps_profile_overrides_json,
       email: row.u_email,
       first_name: row.u_first_name,
       last_name: row.u_last_name,
@@ -159,6 +176,11 @@ export async function getSpeakerByManageToken(
       links_json: row.u_links_json,
       headshot_r2_key: row.u_headshot_r2_key,
       headshot_updated_at: row.u_headshot_updated_at,
+      accountHeadshotR2Key: row.u_base_headshot_r2_key,
+      accountHeadshotUpdatedAt: row.u_base_headshot_updated_at,
+      proposalHeadshotOverrideSet: row.ps_headshot_override_set,
+      proposalHeadshotOverrideKey: row.ps_headshot_override_r2_key,
+      proposalHeadshotOverrideUpdatedAt: row.ps_headshot_override_updated_at,
     },
   };
 }

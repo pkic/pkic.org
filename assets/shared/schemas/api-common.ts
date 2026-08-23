@@ -4,6 +4,22 @@ import { databaseIdSchema } from "./identifiers";
 /** Canonical envelope for successful commands that return no domain payload. */
 export const successResponseSchema = z.object({ success: z.literal(true) });
 
+/** Canonical API error envelope returned by the Worker HTTP boundary. */
+export const apiErrorPayloadSchema = z.object({
+  error: z.object({
+    code: z.string().min(1),
+    message: z.string(),
+    details: z.unknown().nullable().optional(),
+  }),
+});
+export type ApiErrorPayload = z.infer<typeof apiErrorPayloadSchema>;
+
+/** Structured validation details understood by shared browser form helpers. */
+export const apiValidationErrorDetailsSchema = z.object({
+  formErrors: z.array(z.string()).optional(),
+  fieldErrors: z.record(z.string(), z.array(z.string())).optional(),
+});
+
 /**
  * Boolean query parameters arrive as strings. `z.coerce.boolean()` follows
  * JavaScript truthiness and therefore turns the non-empty string `"false"`

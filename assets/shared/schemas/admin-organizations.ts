@@ -90,6 +90,10 @@ export const adminOrganizationDetailSchema = adminOrganizationSummarySchema
     secondaryContactUserId: databaseIdSchema.nullable(),
     representatives: z.array(adminOrganizationRepresentativeSchema),
   });
+export const adminOrganizationDetailResponseSchema = z.object({ organization: adminOrganizationDetailSchema });
+export const organizationRepresentativeResponseSchema = z.object({
+  representative: adminOrganizationRepresentativeSchema,
+});
 
 export type AdminOrganizationSummary = z.infer<typeof adminOrganizationSummarySchema>;
 export type AdminOrganizationDetail = z.infer<typeof adminOrganizationDetailSchema>;
@@ -195,7 +199,7 @@ export const organizationAddRepresentativeRouteSchema = {
   responses: {
     "201": {
       description: "Representative added.",
-      content: { "application/json": { schema: z.object({ representative: adminOrganizationRepresentativeSchema }) } },
+      content: { "application/json": { schema: organizationRepresentativeResponseSchema } },
     },
     "404": { description: "Organization not found." },
     "409": { description: "This person already holds a membership." },
@@ -347,6 +351,9 @@ export const contentReviewDetailSchema = contentReviewSummarySchema.extend({
   logoStagingR2Key: z.string().nullable(),
   currentLogoR2Key: z.string().nullable(),
 });
+export const contentReviewDetailResponseSchema = z.object({ review: contentReviewDetailSchema });
+/** Decision endpoints return the transitioned review record, not a recomputed moderation detail. */
+export const contentReviewDecisionResponseSchema = z.object({ review: organizationContentReviewSchema });
 
 export type OrganizationContentReviewSummary = z.infer<typeof contentReviewSummarySchema>;
 export type OrganizationContentReviewDiffEntry = z.infer<typeof contentReviewDiffEntrySchema>;
@@ -372,7 +379,10 @@ export const contentReviewApproveRouteSchema = {
   summary: "Approve a content submission — applies the changes live",
   request: { params: contentReviewIdParamsSchema },
   responses: {
-    "200": { description: "Approved." },
+    "200": {
+      description: "Approved review record.",
+      content: { "application/json": { schema: contentReviewDecisionResponseSchema } },
+    },
     "404": { description: "Review not found." },
     "409": { description: "Only a pending review can be approved." },
   },
@@ -390,7 +400,10 @@ export const contentReviewRejectRouteSchema = {
     body: { content: { "application/json": { schema: contentReviewRejectSchema } }, required: true },
   },
   responses: {
-    "200": { description: "Rejected." },
+    "200": {
+      description: "Rejected review record.",
+      content: { "application/json": { schema: contentReviewDecisionResponseSchema } },
+    },
     "404": { description: "Review not found." },
     "409": { description: "Only a pending review can be rejected." },
   },

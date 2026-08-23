@@ -5,8 +5,12 @@ import { env } from "cloudflare:workers";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { getEventBySlug } from "../functions/_lib/services/events";
-import { createRegistration } from "../functions/_lib/services/registrations";
+import {
+  admitRegistration as admitRegistrationService,
+  createRegistration,
+} from "../functions/_lib/services/registrations";
 import { onRequestPost as admitRegistration } from "../functions/api/v1/admin/events/[eventSlug]/registrations/[registrationId]/admit";
+import { gateNextBatch } from "./helpers/d1-batch-gate";
 
 async function seedInvite(
   _db: DatabaseLike,
@@ -209,5 +213,90 @@ describe("admin VIP admit", () => {
     } finally {
       await env.DB.prepare("DROP TRIGGER reject_admission_email").run();
     }
+  });
+
+  it("treats an exact repeated admission as side-effect-free", async () => {
+    const { adminToken, registrationId } = await seedWaitlistedVipScenario();
+    const request = () =>
+      admitRegistration(
+        createContext(
+          env,
+          new Request("https://app.test/api/v1/admin/events/pqc-2026/registrations/x/admit", {
+            method: "POST",
+            headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
+            body: JSON.stringify({ mode: "vip", reason: "Retry proof", dayDates: ["2026-12-01"] }),
+          }),
+          { eventSlug: "pqc-2026", registrationId },
+        ),
+      );
+
+    expect((await request()).status).toBe(200);
+    const [afterFirst] = await queryAll<{ transition_revision: number }>(
+      env.DB,
+      "SELECT transition_revision FROM registrations WHERE id = ?",
+      [registrationId],
+    );
+    expect((await request()).status).toBe(200);
+    const [afterSecond] = await queryAll<{ transition_revision: number }>(
+      env.DB,
+      "SELECT transition_revision FROM registrations WHERE id = ?",
+      [registrationId],
+    );
+
+    expect(afterSecond.transition_revision).toBe(afterFirst.transition_revision);
+    await expect(
+      queryAll<{ total: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS total FROM audit_log WHERE action = 'registration_admitted' AND entity_id = ?",
+        [registrationId],
+      ),
+    ).resolves.toEqual([{ total: 1 }]);
+    await expect(
+      queryAll<{ total: number }>(
+        env.DB,
+        `SELECT COUNT(*) AS total FROM email_outbox
+         WHERE template_key = 'registration_updated' AND recipient_email = 'vip@example.test'`,
+      ),
+    ).resolves.toEqual([{ total: 1 }]);
+  });
+
+  it("rejects a stale admission after an intervening registration transition", async () => {
+    const { eventId, registrationId } = await seedWaitlistedVipScenario();
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const [admin] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1",
+    );
+    const gate = gateNextBatch(env.DB);
+    const staleAdmission = admitRegistrationService(gate.db, {
+      registrationId,
+      event,
+      dayDates: ["2026-12-01"],
+      mode: "vip",
+      reason: "Stale snapshot proof",
+      actorUserId: admin.id,
+      appBaseUrl: "https://app.test",
+    });
+    await gate.reached;
+    await env.DB.prepare("UPDATE registrations SET status = 'cancelled' WHERE id = ? AND event_id = ?")
+      .bind(registrationId, eventId)
+      .run();
+    gate.release();
+
+    await expect(staleAdmission).rejects.toMatchObject({ status: 409, code: "REGISTRATION_CHANGED" });
+    await expect(
+      queryAll<{ status: string }>(
+        env.DB,
+        "SELECT status FROM event_day_waitlist_entries WHERE registration_id = ? AND event_day_id = 'day-1'",
+        [registrationId],
+      ),
+    ).resolves.toEqual([{ status: "waiting" }]);
+    await expect(
+      queryAll<{ total: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS total FROM audit_log WHERE action = 'registration_admitted' AND entity_id = ?",
+        [registrationId],
+      ),
+    ).resolves.toEqual([{ total: 0 }]);
   });
 });

@@ -1,18 +1,13 @@
 import { showHeadshotDisclaimer } from "../shared/headshot/upload";
 import { setStatus } from "./boot";
 import { presentationUploadRequest } from "../../shared/presentation-upload";
-import type { SpeakerAccessSummary, SpeakerProposalSummary } from "./speaker-api-types";
 import { loadSpeakerPageData } from "./speaker-link-recovery";
-
-/** Matches the DB record shape returned directly by the GET endpoint. */
-interface PresentationTerm {
-  term_key: string;
-  version: string;
-  required: number | boolean;
-  display_text: string | null;
-  help_text: string | null;
-  content_ref: string | null;
-}
+import { getJson, requestJson } from "../shared/api-client";
+import {
+  speakerSelfServiceReadResponseSchema,
+  speakerPresentationUploadResponseSchema,
+  type SpeakerSelfServiceReadResponse,
+} from "../../shared/schemas/speaker-self-service";
 
 const DEFAULT_PRESENTATION_TERMS = [
   "I am authorized to share this presentation with the PKI Consortium.",
@@ -22,28 +17,11 @@ const DEFAULT_PRESENTATION_TERMS = [
   "The presentation does not contain unsolicited commercial messages or advertising.",
 ];
 
-interface PresentationApiResponse {
-  speaker: SpeakerAccessSummary;
-  proposal: SpeakerProposalSummary;
-  presentationTerms: PresentationTerm[];
-  profile: {
-    firstName: string | null;
-    lastName: string | null;
-    email: string;
-  };
-}
-
 async function main(): Promise<void> {
-  const loaded = await loadSpeakerPageData<PresentationApiResponse>({
+  const loaded = await loadSpeakerPageData<SpeakerSelfServiceReadResponse>({
     selector: "[data-event-speaker-presentation]",
-    request: async (token, boot) => {
-      const response = await fetch(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`);
-      if (!response.ok) {
-        const json = (await response.json()) as { error?: { message?: string } };
-        throw new Error(json.error?.message ?? `HTTP ${response.status}`);
-      }
-      return (await response.json()) as PresentationApiResponse;
-    },
+    request: async (token, boot) =>
+      getJson(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`, speakerSelfServiceReadResponseSchema),
   });
   if (!loaded) return;
   const { boot, token, data, loadingEl, contentEl } = loaded;
@@ -100,9 +78,7 @@ async function main(): Promise<void> {
   // Presentation terms — use API terms or fall back to defaults
   const disclaimerTexts =
     data.presentationTerms && data.presentationTerms.length > 0
-      ? data.presentationTerms
-          .map((t) => t.display_text ?? t.term_key)
-          .filter((t): t is string => typeof t === "string")
+      ? data.presentationTerms.map((t) => t.displayText ?? t.termKey).filter((t): t is string => typeof t === "string")
       : DEFAULT_PRESENTATION_TERMS;
 
   // File upload with disclaimer
@@ -130,12 +106,11 @@ async function main(): Promise<void> {
       if (presentationUploadStatus) presentationUploadStatus.textContent = "Uploading…";
       try {
         const upload = presentationUploadRequest(file);
-        const response = await fetch(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}/presentation`, {
-          method: "PUT",
-          ...upload,
-        });
-        const json = (await response.json()) as { success?: boolean; error?: { message?: string } };
-        if (!response.ok) throw new Error(json.error?.message ?? `HTTP ${response.status}`);
+        await requestJson(
+          `${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}/presentation`,
+          speakerPresentationUploadResponseSchema,
+          { method: "PUT", ...upload },
+        );
         if (presentationUploadStatus) presentationUploadStatus.textContent = "Presentation uploaded successfully.";
         if (presentationMsg)
           presentationMsg.textContent = "Presentation uploaded. You can replace it with a newer version if needed.";

@@ -14,6 +14,8 @@ import { toast, fmt } from "../ui";
 import type { OrganizationContentReviewDetail } from "../types";
 import {
   CONTENT_REVIEW_STATUSES as STATUS_TABS,
+  contentReviewDecisionResponseSchema,
+  contentReviewDetailResponseSchema,
   contentReviewsListResponseSchema,
 } from "../../../shared/schemas/admin-organizations";
 import { StatusTabs } from "../components/StatusTabs";
@@ -36,8 +38,9 @@ function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: ()
     setLoading(true);
     setError(null);
     try {
-      const data = await api<{ review: OrganizationContentReviewDetail }>(
+      const data = await api(
         `/api/v1/admin/organizations/content-reviews/${reviewId}`,
+        contentReviewDetailResponseSchema,
       );
       setDetail(data.review);
     } catch (e) {
@@ -54,7 +57,10 @@ function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: ()
   async function approve() {
     await performAdminAction({
       setBusy,
-      request: () => api(`/api/v1/admin/organizations/content-reviews/${reviewId}/approve`, { method: "POST" }),
+      request: () =>
+        api(`/api/v1/admin/organizations/content-reviews/${reviewId}/approve`, contentReviewDecisionResponseSchema, {
+          method: "POST",
+        }),
       successMessage: "Approved and applied",
       afterSuccess: onDecided,
     });
@@ -68,7 +74,7 @@ function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: ()
     await performAdminAction({
       setBusy,
       request: () =>
-        api(`/api/v1/admin/organizations/content-reviews/${reviewId}/reject`, {
+        api(`/api/v1/admin/organizations/content-reviews/${reviewId}/reject`, contentReviewDecisionResponseSchema, {
           method: "POST",
           body: JSON.stringify({ reviewerNote: reviewerNote.trim() }),
         }),

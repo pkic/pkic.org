@@ -55,8 +55,8 @@ function WgChairsWidget({
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    getJson<unknown>(`${apiBase}/working-groups/${encodeURIComponent(slug)}`)
-      .then((response) => setData(workingGroupDetailSchema.parse(response)))
+    getJson(`${apiBase}/working-groups/${encodeURIComponent(slug)}`, workingGroupDetailSchema)
+      .then((response) => setData(response))
       .catch(() => setFailed(true));
   }, [apiBase, slug]);
 

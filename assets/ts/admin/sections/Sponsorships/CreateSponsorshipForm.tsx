@@ -1,6 +1,6 @@
 import { useState } from "preact/hooks";
 import { api } from "../../api";
-import { SPONSOR_TYPES } from "../../../../shared/schemas/admin-sponsorships";
+import { SPONSOR_TYPES, sponsorshipResponseSchema } from "../../../../shared/schemas/admin-sponsorships";
 import { performAdminAction } from "../../actions";
 
 interface CreateDraft {
@@ -34,7 +34,7 @@ export function CreateSponsorshipForm({ onCreated, onCancel }: { onCreated: () =
     await performAdminAction({
       setBusy: setSaving,
       request: () =>
-        api("/api/v1/admin/sponsorships", {
+        api("/api/v1/admin/sponsorships", sponsorshipResponseSchema, {
           method: "POST",
           body: JSON.stringify({
             sponsorType: draft.sponsorType,

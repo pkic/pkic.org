@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { AdminCatalog } from "../services/catalogs";
 import { loadAdminCollection } from "../services/server-collection";
 import { useServerCollection } from "../../hooks/useServerCollection";
@@ -33,6 +33,8 @@ export function ServerSearchSelect<Item, Response>({
   const [pendingSearch, setPendingSearch] = useState("");
   const [search, setSearch] = useState("");
   const [offset, setOffset] = useState(0);
+  const valueRef = useRef(value);
+  valueRef.current = value;
   const excluded = new Set(excludeValues);
   const stableParams = JSON.stringify(
     Object.entries(catalog.params ?? {}).sort(([left], [right]) => left.localeCompare(right)),
@@ -62,8 +64,15 @@ export function ServerSearchSelect<Item, Response>({
   const hasSelectedOption = items.some((item) => catalog.itemKey(item) === value);
 
   useEffect(() => {
-    if (!value && autoSelectFirst && items[0]) onChange(items[0]);
-  }, [autoSelectFirst, items, onChange, value]);
+    // Read the current controlled value rather than the render that queued
+    // this effect. A user can choose an option while the first page finishes
+    // committing; the late auto-select must not overwrite that choice.
+    if (!valueRef.current && autoSelectFirst && items[0]) {
+      const first = items[0];
+      valueRef.current = catalog.itemKey(first);
+      onChange(first);
+    }
+  }, [autoSelectFirst, items, onChange, catalog]);
 
   function applySearch(): void {
     setOffset(0);
@@ -100,7 +109,9 @@ export function ServerSearchSelect<Item, Response>({
         disabled={disabled || collection.loading}
         onChange={(event) => {
           const next = (event.target as HTMLSelectElement).value;
-          onChange(items.find((item) => catalog.itemKey(item) === next) ?? null);
+          const selected = items.find((item) => catalog.itemKey(item) === next) ?? null;
+          valueRef.current = selected ? catalog.itemKey(selected) : null;
+          onChange(selected);
         }}
       >
         {allowEmpty && <option value="">{placeholder}</option>}

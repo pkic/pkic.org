@@ -16,6 +16,7 @@ import {
 } from "../../../../_lib/services/organization-content";
 import {
   myOrganizationContentChangeRouteSchema,
+  myOrganizationContentChangeResponseSchema,
   myOrganizationProfileGetRouteSchema,
 } from "../../../../../assets/shared/schemas/me";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
@@ -42,6 +43,6 @@ export const MeOrganizationPatch = openApiRoute(
 
     c.executionCtx.waitUntil(processOrganizationContentReviewNotificationsBackground(db, c.env));
 
-    return json({ review });
+    return json(myOrganizationContentChangeResponseSchema.parse({ review }));
   },
 );

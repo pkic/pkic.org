@@ -126,6 +126,36 @@ class CountingPresentationBucket {
   async delete() {}
 }
 
+class BlockingPresentationBucket extends FakePresentationBucket {
+  private readonly releasePromise: Promise<void>;
+  private releaseUpload!: () => void;
+  private signalStarted!: () => void;
+  readonly started = new Promise<void>((resolve) => {
+    this.signalStarted = resolve;
+  });
+
+  constructor() {
+    super();
+    this.releasePromise = new Promise<void>((resolve) => {
+      this.releaseUpload = resolve;
+    });
+  }
+
+  release(): void {
+    this.releaseUpload();
+  }
+
+  override async put(
+    key: string,
+    value: string | ArrayBuffer | ArrayBufferView | ReadableStream | Blob | null,
+    options?: Record<string, unknown>,
+  ) {
+    this.signalStarted();
+    await this.releasePromise;
+    return super.put(key, value, options);
+  }
+}
+
 const FAKE_PDF = new Uint8Array([0x25, 0x50, 0x44, 0x46]); // %PDF magic bytes
 
 function makePdf(name = "slides.pdf") {
@@ -230,6 +260,98 @@ describe("presentation versioning", () => {
     expect(versions[0].version_number).toBe(1);
     expect(versions[0].is_current).toBe(1);
     expect(versions[0].deleted_at).toBeNull();
+  });
+
+  it("rejects a speaker upload when capability status changes during the R2 stream", async () => {
+    const { proposalId, speakerToken } = await seed();
+    const bucket = new BlockingPresentationBucket();
+    const envWithBucket = { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket };
+    const uploadPromise = app.fetch(
+      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+        method: "PUT",
+        ...presentationRequest("stale-speaker.pdf"),
+      }),
+      envWithBucket,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    await bucket.started;
+    await env.DB.prepare("UPDATE proposal_speakers SET status = 'declined' WHERE proposal_id = ?")
+      .bind(proposalId)
+      .run();
+    bucket.release();
+
+    const response = await uploadPromise;
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "PRESENTATION_UPLOAD_CONFLICT" } });
+    expect(bucket.keys()).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM presentation_versions WHERE proposal_id = ?", proposalId),
+    ).toHaveLength(0);
+  });
+
+  it("rejects a speaker upload when the proposal deadline changes during the R2 stream", async () => {
+    const { proposalId, speakerToken } = await seed();
+    const bucket = new BlockingPresentationBucket();
+    const envWithBucket = { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket };
+    const uploadPromise = app.fetch(
+      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+        method: "PUT",
+        ...presentationRequest("stale-deadline.pdf"),
+      }),
+      envWithBucket,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    await bucket.started;
+    await env.DB.prepare("UPDATE session_proposals SET presentation_deadline = ? WHERE id = ?")
+      .bind("2099-01-01T00:00:00.000Z", proposalId)
+      .run();
+    bucket.release();
+
+    const response = await uploadPromise;
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "PRESENTATION_UPLOAD_CONFLICT" } });
+    expect(bucket.keys()).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM presentation_versions WHERE proposal_id = ?", proposalId),
+    ).toHaveLength(0);
+  });
+
+  it("rejects a speaker upload when its unchanged deadline passes during the R2 stream", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const startedAt = new Date("2026-08-22T12:00:00.000Z");
+      vi.setSystemTime(startedAt);
+      const { proposalId, speakerToken } = await seed();
+      const deadline = new Date(startedAt.getTime() + 60_000).toISOString();
+      await env.DB.prepare("UPDATE session_proposals SET presentation_deadline = ? WHERE id = ?")
+        .bind(deadline, proposalId)
+        .run();
+      const bucket = new BlockingPresentationBucket();
+      const uploadPromise = app.fetch(
+        new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+          method: "PUT",
+          ...presentationRequest("deadline-passed.pdf"),
+        }),
+        { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+        { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+      );
+
+      await bucket.started;
+      vi.setSystemTime(new Date(startedAt.getTime() + 120_000));
+      bucket.release();
+
+      const response = await uploadPromise;
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toMatchObject({ error: { code: "PRESENTATION_UPLOAD_CONFLICT" } });
+      expect(bucket.keys()).toEqual([]);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM presentation_versions WHERE proposal_id = ?", proposalId),
+      ).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("admin can upload a presentation on behalf of a speaker", async () => {
@@ -368,7 +490,73 @@ describe("presentation versioning", () => {
     expect(bucket.putCalls).toBe(0);
   });
 
-  it("streams a large presentation without buffering it", async () => {
+  it("rejects a short dishonest stream without committing an R2 object", async () => {
+    const { speakerToken, proposalId } = await seed();
+    const bucket = new FakePresentationBucket();
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array([1, 2, 3]));
+        controller.close();
+      },
+    });
+
+    const res = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+        method: "PUT",
+        headers: {
+          "content-type": "application/pdf",
+          [PRESENTATION_FILE_NAME_HEADER]: encodeURIComponent("short.pdf"),
+          [PRESENTATION_FILE_SIZE_HEADER]: "4",
+        },
+        body,
+      }),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({ error: { code: "FILE_SIZE_MISMATCH" } });
+    expect(bucket.keys()).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM presentation_versions WHERE proposal_id = ?", proposalId),
+    ).toHaveLength(0);
+  });
+
+  it("rejects an oversized chunked presentation before any R2 write", async () => {
+    const { speakerToken, proposalId } = await seed();
+    const bucket = new FakePresentationBucket();
+    const oversizedChunk = new Uint8Array(MAX_PRESENTATION_BYTES + 1);
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(oversizedChunk);
+        controller.close();
+      },
+    });
+
+    const res = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+        method: "PUT",
+        headers: {
+          "content-type": "application/pdf",
+          [PRESENTATION_FILE_NAME_HEADER]: encodeURIComponent("oversized.pdf"),
+          [PRESENTATION_FILE_SIZE_HEADER]: String(MAX_PRESENTATION_BYTES),
+        },
+        body,
+      }),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(res.status).toBe(413);
+    await expect(res.json()).resolves.toMatchObject({ error: { code: "FILE_TOO_LARGE" } });
+    expect(bucket.putCalls).toBe(1);
+    expect(bucket.keys()).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM presentation_versions WHERE proposal_id = ?", proposalId),
+    ).toHaveLength(0);
+  });
+
+  it("streams a large presentation with bounded size verification", async () => {
     const { speakerToken } = await seed();
     const bucket = new CountingPresentationBucket();
     const uploadSize = 95 * 1024 * 1024;
@@ -863,6 +1051,7 @@ describe("presentation versioning", () => {
     );
 
     expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store, max-age=0");
     const body = (await res.json()) as { proposal: Record<string, unknown> };
     // presentationUrl lives inside the proposal object; it is computed server-side
     // from the event's frontend route config and always embeds the speaker token.
@@ -897,6 +1086,7 @@ describe("presentation versioning", () => {
     );
 
     expect(dlRes.status).toBe(200);
+    expect(dlRes.headers.get("cache-control")).toBe("no-store, max-age=0");
     expect(dlRes.headers.get("content-type")).toBe("application/pdf");
     expect(dlRes.headers.get("content-disposition")).toMatch(/quantum-talk\.pdf/);
     const buf = await dlRes.arrayBuffer();

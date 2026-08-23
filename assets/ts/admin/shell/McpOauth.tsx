@@ -1,73 +1,47 @@
 import { useEffect, useState } from "preact/hooks";
+import type { z } from "zod";
+import {
+  adminMcpOauthContextSchema,
+  adminMcpOauthMagicLinkResponseSchema,
+  adminMcpOauthRedirectResponseSchema,
+  adminMcpOauthVerifyResponseSchema,
+} from "../../../shared/schemas/admin-oauth";
+import { requestJson } from "../../shared/api-client";
 
-interface McpOauthContext {
-  authenticated: boolean;
-  returnTo: string;
-  clientId: string;
-  clientName: string;
-  requestedScopes: string[];
-  grantedScopes: string[];
-  adminEmail: string | null;
-}
-
-interface McpOauthVerifyResponse {
-  success: boolean;
-  expiresAt: string;
-  returnTo: string;
-  admin?: { email?: string | null };
-  error?: { message?: string };
-}
+type McpOauthContext = z.infer<typeof adminMcpOauthContextSchema>;
 
 async function fetchOauthContext(returnTo: string): Promise<McpOauthContext> {
-  const res = await fetch(`/api/v1/oauth/authorize?return_to=${encodeURIComponent(returnTo)}`, {
+  return requestJson(`/api/v1/oauth/authorize?return_to=${encodeURIComponent(returnTo)}`, adminMcpOauthContextSchema, {
     headers: { Accept: "application/json" },
     credentials: "same-origin",
   });
-  const data = (await res.json().catch(() => ({}))) as McpOauthContext & { error?: { message?: string } };
-  if (!res.ok) {
-    throw new Error(data.error?.message ?? "Failed to load OAuth authorization details.");
-  }
-  return data;
 }
 
 async function requestOauthMagicLink(email: string, returnTo: string): Promise<void> {
-  const res = await fetch("/api/v1/oauth/authorize", {
+  await requestJson("/api/v1/oauth/authorize", adminMcpOauthMagicLinkResponseSchema, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     credentials: "same-origin",
     body: JSON.stringify({ action: "request-link", email, return_to: returnTo }),
   });
-  if (!res.ok) {
-    const data = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-    throw new Error(data.error?.message ?? "Could not send sign-in link.");
-  }
 }
 
-async function verifyOauthMagicLink(token: string): Promise<McpOauthVerifyResponse> {
-  const res = await fetch("/api/v1/oauth/verify-link", {
+async function verifyOauthMagicLink(token: string): Promise<z.infer<typeof adminMcpOauthVerifyResponseSchema>> {
+  return requestJson("/api/v1/oauth/verify-link", adminMcpOauthVerifyResponseSchema, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     credentials: "same-origin",
     body: JSON.stringify({ token }),
   });
-  const data = (await res.json().catch(() => ({}))) as McpOauthVerifyResponse;
-  if (!res.ok) {
-    throw new Error(data.error?.message ?? "The link may have expired or already been used.");
-  }
-  return data;
 }
 
 async function submitOauthDecision(action: "approve" | "deny", returnTo: string): Promise<string> {
-  const res = await fetch("/api/v1/oauth/authorize", {
+  const data = await requestJson("/api/v1/oauth/authorize", adminMcpOauthRedirectResponseSchema, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     credentials: "same-origin",
     body: JSON.stringify({ action, return_to: returnTo }),
   });
-  const data = (await res.json().catch(() => ({}))) as { redirectTo?: string; error?: { message?: string } };
-  if (!res.ok || !data.redirectTo) {
-    throw new Error(data.error?.message ?? `Failed to ${action} OAuth request.`);
-  }
   return data.redirectTo;
 }
 

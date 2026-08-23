@@ -1,6 +1,7 @@
 import { render } from "preact";
 import { getJson, patchJson } from "../shared/api-client";
 import type { EventFormsResponse, RegistrationManageResponse } from "../shared/types";
+import { eventFormsResponseSchema } from "../../shared/schemas/forms";
 import { normalizeValidation } from "../shared/form/validation-map";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
 import {
@@ -13,7 +14,12 @@ import { renderSharePanel, refreshSharePanelBadge } from "../shared/widgets/shar
 import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
 import { bootstrap, setStatus } from "./boot";
 import { wireHeadshotSection } from "./registration-manage-headshot";
-import { registrationManageSchema, type AttendanceType } from "../../shared/schemas/registration";
+import {
+  registrationManageReadResponseSchema,
+  registrationManageSchema,
+  registrationManageUpdateResponseSchema,
+  type AttendanceType,
+} from "../../shared/schemas/registration";
 import { buildManageLinkRecoveryMessage, showPostAction, showResendManageLinkForm } from "./registration-manage-panels";
 import { setField, deriveEventAttendanceType, findSubmitButton } from "../shared/form/helpers";
 import {
@@ -156,8 +162,10 @@ async function main(): Promise<void> {
 
   try {
     [manageData, formsData] = await Promise.all([
-      getJson<RegistrationManageResponse>(`${apiBase}/registrations/manage/${encodeURIComponent(token)}`),
-      getJson<EventFormsResponse>(`${apiBase}/events/${eventSlug}/forms?purpose=event_registration`).catch(() => null),
+      getJson(`${apiBase}/registrations/manage/${encodeURIComponent(token)}`, registrationManageReadResponseSchema),
+      getJson(`${apiBase}/events/${eventSlug}/forms?purpose=event_registration`, eventFormsResponseSchema).catch(
+        () => null,
+      ),
     ]);
   } catch (error) {
     const normalized = normalizeValidation(error);
@@ -255,11 +263,11 @@ async function main(): Promise<void> {
                   void withLoadingButton(button, async () => {
                     try {
                       const selections = readDayAttendance(form);
-                      await patchJson(`${apiBase}/registrations/manage/${encodeURIComponent(token)}`, {
-                        action: "update",
-                        dayAttendance: selections,
-                        claimDayWaitlistOffers: offeredDayDates,
-                      });
+                      await patchJson(
+                        `${apiBase}/registrations/manage/${encodeURIComponent(token)}`,
+                        { action: "update", dayAttendance: selections, claimDayWaitlistOffers: offeredDayDates },
+                        registrationManageUpdateResponseSchema,
+                      );
                       if (manageFormEl) {
                         showPostAction(root, manageFormEl, {
                           title: "In-person spot claimed",
@@ -329,7 +337,11 @@ async function main(): Promise<void> {
         restoring = true;
         restoreBtn.disabled = true;
         try {
-          await patchJson(`/api/v1/registrations/manage/${encodeURIComponent(token)}`, { action: "update" });
+          await patchJson(
+            `/api/v1/registrations/manage/${encodeURIComponent(token)}`,
+            { action: "update" },
+            registrationManageUpdateResponseSchema,
+          );
           if (manageFormEl) {
             showPostAction(root, manageFormEl, {
               title: "Registration Restored",
@@ -377,7 +389,7 @@ async function main(): Promise<void> {
       eventName,
       firstName,
       lastName: user?.last_name ?? undefined,
-      manageToken: manageData.manageToken ?? token,
+      manageToken: token,
       eventSlug,
     });
   }
@@ -422,7 +434,7 @@ async function main(): Promise<void> {
         const dayAttendancePayload = readDayAttendance(form);
         const emailValue = (form.elements.namedItem("email") as HTMLInputElement | null)?.value.trim() || undefined;
         const emailIsChanged = emailValue && emailValue.toLowerCase() !== originalEmail;
-        const result = await patchJson<{ success: boolean; emailChanged?: boolean }>(
+        const result = await patchJson(
           `${apiBase}/registrations/manage/${encodeURIComponent(token)}`,
           registrationManageSchema.parse({
             action: "update",
@@ -437,6 +449,7 @@ async function main(): Promise<void> {
               (form.elements.namedItem("organizationName") as HTMLInputElement | null)?.value.trim() || undefined,
             jobTitle: (form.elements.namedItem("jobTitle") as HTMLInputElement | null)?.value.trim() || undefined,
           }),
+          registrationManageUpdateResponseSchema,
         );
         if (manageFormEl) {
           showPostAction(root, manageFormEl, {
@@ -474,9 +487,11 @@ async function main(): Promise<void> {
 
     await withLoadingButton(yesBtn, async () => {
       try {
-        await patchJson<{ success: boolean }>(`${apiBase}/registrations/manage/${encodeURIComponent(token)}`, {
-          action: "cancel",
-        });
+        await patchJson(
+          `${apiBase}/registrations/manage/${encodeURIComponent(token)}`,
+          { action: "cancel" },
+          registrationManageUpdateResponseSchema,
+        );
         cancelConfirmPanel?.classList.add("d-none");
         if (manageFormEl) {
           showPostAction(root, manageFormEl, {
@@ -513,9 +528,11 @@ async function main(): Promise<void> {
 
     await withLoadingButton(yesBtn, async () => {
       try {
-        await patchJson<{ success: boolean }>(`${apiBase}/registrations/manage/${encodeURIComponent(token)}`, {
-          action: "report_unauthorized",
-        });
+        await patchJson(
+          `${apiBase}/registrations/manage/${encodeURIComponent(token)}`,
+          { action: "report_unauthorized" },
+          registrationManageUpdateResponseSchema,
+        );
         unauthorizedPanel?.classList.add("d-none");
         if (manageFormEl) {
           showPostAction(root, manageFormEl, {

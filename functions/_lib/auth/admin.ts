@@ -27,6 +27,8 @@ import {
   type MagicLinkTableConfig,
   type AuthMagicLinkPurpose,
 } from "./session-engine";
+import { ADMIN_SESSION_COOKIE_NAME, ADMIN_SESSION_COOKIE_PATH } from "./session-cookies";
+export { ADMIN_SESSION_COOKIE_NAME, ADMIN_SESSION_COOKIE_PATH } from "./session-cookies";
 import { prepareAuditLogAfterOneChange } from "../services/audit";
 
 /**
@@ -87,8 +89,6 @@ export interface AdminSessionTokenClaims {
 }
 
 const ADMIN_SESSION_TOKEN_TYPE = "admin-session";
-export const ADMIN_SESSION_COOKIE_NAME = "pkic_admin_session";
-export const ADMIN_SESSION_COOKIE_PATH = "/api/v1";
 
 const SESSIONS_TABLE: SessionTableConfig = { table: "sessions", subjectColumn: "user_id" };
 const MAGIC_LINKS_TABLE = { table: "auth_magic_links", subjectColumn: "user_id" } satisfies MagicLinkTableConfig;

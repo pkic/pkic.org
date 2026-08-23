@@ -1,7 +1,8 @@
 import { useRef, useState } from "preact/hooks";
 import { Spinner } from "../../../../../components/Spinner";
 import { presentationUploadRequest } from "../../../../../../shared/presentation-upload";
-import { api } from "../../../../api";
+import { api, apiCommand } from "../../../../api";
+import { presentationVersionResponseSchema } from "../../../../../../shared/schemas/presentation-versions";
 import { fmt, toast } from "../../../../ui";
 import type { PresentationVersion, PresentationVersionReview } from "./model";
 
@@ -52,7 +53,7 @@ export function PresentationVersionsTab({
     input.value = "";
     setUploading(true);
     try {
-      await api(`/api/v1/admin/proposals/${proposalId}/presentation/versions`, {
+      await apiCommand(`/api/v1/admin/proposals/${proposalId}/presentation/versions`, {
         method: "POST",
         ...presentationUploadRequest(file),
       });
@@ -68,10 +69,14 @@ export function PresentationVersionsTab({
   async function handleReview(versionId: string) {
     setSavingReview(true);
     try {
-      await api(`/api/v1/admin/proposals/${proposalId}/presentation/versions/${versionId}/review`, {
-        method: "POST",
-        body: JSON.stringify({ status: reviewStatus, note: reviewNote.trim() || null }),
-      });
+      await api(
+        `/api/v1/admin/proposals/${proposalId}/presentation/versions/${versionId}/review`,
+        presentationVersionResponseSchema,
+        {
+          method: "POST",
+          body: JSON.stringify({ status: reviewStatus, note: reviewNote.trim() || null }),
+        },
+      );
       toast("Review saved", "success");
       setReviewingId(null);
       setReviewNote("");
@@ -87,7 +92,9 @@ export function PresentationVersionsTab({
     if (!confirm("Delete this presentation version? This cannot be undone.")) return;
     setDeletingId(versionId);
     try {
-      await api(`/api/v1/admin/proposals/${proposalId}/presentation/versions/${versionId}`, { method: "DELETE" });
+      await apiCommand(`/api/v1/admin/proposals/${proposalId}/presentation/versions/${versionId}`, {
+        method: "DELETE",
+      });
       toast("Version deleted", "success");
       onReload();
     } catch (caught) {

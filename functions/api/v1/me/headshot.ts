@@ -13,7 +13,7 @@ import {
   removePreviousHeadshot,
   replaceUserHeadshot,
 } from "../../../_lib/services/user-headshot";
-import { myHeadshotUploadRouteSchema } from "../../../../assets/shared/schemas/me";
+import { myHeadshotUploadResponseSchema, myHeadshotUploadRouteSchema } from "../../../../assets/shared/schemas/me";
 import { requestDb, type AdminContext } from "../../../_lib/db/context";
 import { openApiRoute } from "../../../_lib/openapi/route";
 
@@ -40,5 +40,5 @@ export const MeHeadshotPost = openApiRoute(myHeadshotUploadRouteSchema, async (c
   });
   c.executionCtx.waitUntil(removePreviousHeadshot(db, c.env, previousKey));
 
-  return json({ success: true, r2Key });
+  return json(myHeadshotUploadResponseSchema.parse({ success: true, r2Key }));
 });

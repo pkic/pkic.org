@@ -8,6 +8,7 @@ import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { getAdminOrganization, updateAdminOrganization } from "../../../../../_lib/services/admin-organizations";
 import {
   organizationGetRouteSchema,
+  adminOrganizationDetailResponseSchema,
   organizationUpdateRouteSchema,
 } from "../../../../../../assets/shared/schemas/admin-organizations";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
@@ -18,7 +19,7 @@ export const OrganizationGet = openApiRoute(organizationGetRouteSchema, async (c
   requirePermission(admin, "organizations:read");
 
   const organization = await getAdminOrganization(requestDb(c), data.params.id);
-  return json({ organization });
+  return json(adminOrganizationDetailResponseSchema.parse({ organization }));
 });
 
 export const OrganizationUpdate = openApiRoute(organizationUpdateRouteSchema, async (c: AdminContext, data) => {
@@ -29,5 +30,5 @@ export const OrganizationUpdate = openApiRoute(organizationUpdateRouteSchema, as
   const body = data.body;
   const organization = await updateAdminOrganization(requestDb(c), admin.id, id, body);
 
-  return json({ organization });
+  return json(adminOrganizationDetailResponseSchema.parse({ organization }));
 });

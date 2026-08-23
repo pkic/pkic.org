@@ -38,8 +38,8 @@ export interface ProposalSubmissionInput {
 export interface ProposalSubmissionResult {
   proposalId: string;
   status: string;
-  manageToken: string;
-  manageUrl: string;
+  manageToken: string | null;
+  manageUrl: string | null;
   referralCode: string;
   shareUrl: string;
   proposer: UserRecord;
@@ -215,8 +215,13 @@ export async function submitProposal(
   return {
     proposalId: created.proposal.id,
     status: created.proposal.status,
-    manageToken: created.manageToken,
-    manageUrl: proposalManagePageUrl(input.appBaseUrl, input.event, created.manageToken),
+    // Do not turn anonymous email equality into ownership of an existing
+    // account. Existing identities receive the durable proposal management
+    // capability only at their canonical email address. New identities remain
+    // able to continue immediately because they carry no pre-existing account
+    // authority or data.
+    manageToken: proposerWrite.created ? created.manageToken : null,
+    manageUrl: proposerWrite.created ? proposalManagePageUrl(input.appBaseUrl, input.event, created.manageToken) : null,
     referralCode: referral.code,
     shareUrl: `${input.appBaseUrl}/r/${referral.code}`,
     proposer,

@@ -12,7 +12,7 @@ import { onRequestGet as getProposalDetail } from "../functions/api/v1/admin/pro
 import { onRequestPost as openProposalManage } from "../functions/api/v1/admin/proposals/[proposalId]/open-manage";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
-import { getProposalByManageToken } from "../functions/_lib/services/proposals";
+import { addProposalSpeaker, createProposal, getProposalByManageToken } from "../functions/_lib/services/proposals";
 import { adminEventProposalsResponseSchema } from "../assets/shared/schemas/admin-event-proposals";
 import {
   proposalCommentCreateResponseSchema,
@@ -435,11 +435,46 @@ describe("admin proposal endpoints", () => {
         [proposalId, speakerId],
       )
     )[0];
-    expect(user.first_name).toBe("Updated");
-    expect(user.organization_name).toBe("PKIC Labs");
-    expect(user.job_title).toBe("Moderator");
-    expect(user.biography).toBe("Updated biography from the admin proposal detail screen.");
-    expect(JSON.parse(user.links_json ?? "[]")).toEqual(["https://example.test/speaker", "https://github.com/speaker"]);
+    expect(user).toEqual({
+      first_name: "Profile",
+      organization_name: "Old Org",
+      job_title: "Old Role",
+      biography: null,
+      links_json: null,
+    });
+    const [scoped] = await queryAll<{ profile_overrides_json: string }>(
+      env.DB,
+      "SELECT profile_overrides_json FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+      [proposalId, speakerId],
+    );
+    expect(JSON.parse(scoped.profile_overrides_json)).toMatchObject({
+      firstName: "Updated",
+      organizationName: "PKIC Labs",
+      jobTitle: "Moderator",
+      biography: "Updated biography from the admin proposal detail screen.",
+      links: ["https://example.test/speaker", "https://github.com/speaker"],
+    });
+
+    const second = await createProposal(env.DB, {
+      eventId,
+      proposerUserId: speakerId,
+      proposalType: "talk",
+      title: "Second proposal",
+      abstract: "A separate proposal for the same account.",
+    });
+    await addProposalSpeaker(env.DB, {
+      proposalId: second.proposal.id,
+      userId: speakerId,
+      role: "proposer",
+    });
+    const [secondSpeaker] = await queryAll<{ first_name: string | null; organization_name: string | null }>(
+      env.DB,
+      `SELECT u.first_name, u.organization_name
+       FROM proposal_speakers ps JOIN users u ON u.id = ps.user_id
+       WHERE ps.proposal_id = ? AND ps.user_id = ?`,
+      [second.proposal.id, speakerId],
+    );
+    expect(secondSpeaker).toEqual({ first_name: "Profile", organization_name: "Old Org" });
     expect(speaker.role).toBe("moderator");
   });
 

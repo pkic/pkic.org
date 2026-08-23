@@ -1,7 +1,13 @@
 import { useState } from "preact/hooks";
 import { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../../../shared/schemas/admin-members";
-import { MEMBER_STATUSES } from "../../../../shared/schemas/admin-organizations";
-import { api } from "../../api";
+import {
+  MEMBER_STATUSES,
+  adminOrganizationsListResponseSchema,
+  adminOrganizationDetailResponseSchema,
+  organizationRepresentativeResponseSchema,
+} from "../../../../shared/schemas/admin-organizations";
+import { adminMemberMutationResponseSchema } from "../../../../shared/schemas/admin-members";
+import { api, apiCommand } from "../../api";
 import { fmt, toast } from "../../ui";
 import type { AdminOrganizationSummary } from "../../types";
 import type { UserDetail } from "./model";
@@ -32,8 +38,9 @@ function GrantMembershipForm({
   async function searchOrgs() {
     setSearching(true);
     try {
-      const data = await api<{ organizations: AdminOrganizationSummary[] }>(
+      const data = await api(
         `/api/v1/admin/organizations?limit=10${orgQuery.trim() ? `&q=${encodeURIComponent(orgQuery.trim())}` : ""}`,
+        adminOrganizationsListResponseSchema,
       );
       setOrgResults(data.organizations);
     } catch (error) {
@@ -48,9 +55,7 @@ function GrantMembershipForm({
     setSelectedOrgCategory(undefined);
     if (!orgId) return;
     try {
-      const data = await api<{ organization: { membershipCategory: string | null } }>(
-        `/api/v1/admin/organizations/${orgId}`,
-      );
+      const data = await api(`/api/v1/admin/organizations/${orgId}`, adminOrganizationDetailResponseSchema);
       setSelectedOrgCategory(data.organization.membershipCategory);
     } catch (error) {
       toast((error as Error).message, "error");
@@ -71,12 +76,12 @@ function GrantMembershipForm({
     setError("");
     try {
       if (isIndividual) {
-        await api(`/api/v1/admin/users/${user.id}/membership`, {
+        await api(`/api/v1/admin/users/${user.id}/membership`, adminMemberMutationResponseSchema, {
           method: "POST",
           body: JSON.stringify({ membershipCategory: mode }),
         });
       } else {
-        await api(`/api/v1/admin/organizations/${selectedOrgId}/members`, {
+        await api(`/api/v1/admin/organizations/${selectedOrgId}/members`, organizationRepresentativeResponseSchema, {
           method: "POST",
           body: JSON.stringify({
             name: displayName,
@@ -184,7 +189,10 @@ export function UserMembershipPanel({ user, onChanged }: { user: UserDetail; onC
     if (!membership) return;
     setBusy(true);
     try {
-      await api(`/api/v1/admin/members/${membership.memberId}`, { method: "PATCH", body: JSON.stringify(body) });
+      await api(`/api/v1/admin/members/${membership.memberId}`, adminMemberMutationResponseSchema, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
       toast("Membership updated", "success");
       await onChanged();
     } catch (error) {
@@ -199,7 +207,7 @@ export function UserMembershipPanel({ user, onChanged }: { user: UserDetail; onC
     if (!confirm("Remove this person's membership? Their user account is not deleted.")) return;
     setBusy(true);
     try {
-      await api(`/api/v1/admin/members/${membership.memberId}`, { method: "DELETE" });
+      await apiCommand(`/api/v1/admin/members/${membership.memberId}`, { method: "DELETE" });
       toast("Membership removed", "success");
       await onChanged();
     } catch (error) {

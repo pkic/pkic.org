@@ -30,6 +30,7 @@ export type MailingList = z.infer<typeof mailingListSchema>;
 export const ADMIN_MAILING_LIST_SORT_COLUMNS = ["email", "label", "list_type", "active", "created_at"] as const;
 export const mailingListsListQuerySchema = listQuerySchema(ADMIN_MAILING_LIST_SORT_COLUMNS);
 export const mailingListsListResponseSchema = paginatedResponseSchema("mailingLists", mailingListSchema);
+export const mailingListResponseSchema = z.object({ mailingList: mailingListSchema });
 export type MailingListsListResponse = z.infer<typeof mailingListsListResponseSchema>;
 
 export const mailingListsListRouteSchema = {
@@ -101,6 +102,13 @@ export const mailingListDeleteRouteSchema = {
   },
 };
 
+export const mailingListSyncResponseSchema = z.object({
+  processed: z.number(),
+  succeeded: z.number(),
+  failed: z.number(),
+  skippedUnconfigured: z.boolean(),
+});
+
 export const mailingListSyncRouteSchema = {
   tags: ["Mailing Lists"],
   summary: "Process pending Google Group sync queue entries on demand",
@@ -111,12 +119,7 @@ export const mailingListSyncRouteSchema = {
       description: "Sync pass result.",
       content: {
         "application/json": {
-          schema: z.object({
-            processed: z.number(),
-            succeeded: z.number(),
-            failed: z.number(),
-            skippedUnconfigured: z.boolean(),
-          }),
+          schema: mailingListSyncResponseSchema,
         },
       },
     },

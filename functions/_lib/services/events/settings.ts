@@ -3,12 +3,12 @@ import {
   type AdminEventSettingsInput,
 } from "../../../../assets/shared/schemas/admin-events";
 import { normalizeHttpOrSameOriginUrl } from "../../../../assets/shared/schemas/urls";
-import { first } from "../../db/queries";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { parseJsonSafe, stringifyJson } from "../../utils/json";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
 import { getEventBySlug } from "../events";
+import { getAdminEventDetail } from "./admin-detail";
 
 function setFormLink(
   settings: Record<string, unknown>,
@@ -114,17 +114,8 @@ export async function updateEventSettings(
   );
   await db.batch(statements);
 
-  const [updated, retention] = await Promise.all([
-    getEventBySlug(db, input.eventSlug),
-    first<{ user_retention_days: number }>(
-      db,
-      "SELECT user_retention_days FROM retention_policies WHERE event_id = ?",
-      [event.id],
-    ),
-  ]);
-  return {
-    ...updated,
-    user_retention_days: retention?.user_retention_days ?? null,
-    settings: parseJsonSafe<Record<string, unknown>>(updated.settings_json, {}),
-  };
+  // Return the same normalized projection as the admin detail GET route. This
+  // keeps PATCH consumers on one response contract instead of exposing the
+  // raw database event row.
+  return getAdminEventDetail(db, input.eventSlug);
 }

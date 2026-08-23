@@ -13,7 +13,8 @@ import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { createContext, deliveredEmailPayload, queryAll } from "./helpers/context";
 import { onRequestPost as adminRemindSpeaker } from "../functions/api/v1/admin/proposals/[proposalId]/speakers/[userId]/remind";
-import { getProposalByManageToken } from "../functions/_lib/services/proposals";
+import { getProposalByManageToken, getSpeakerByManageToken } from "../functions/_lib/services/proposals";
+import { updateSpeakerProfile } from "../functions/_lib/services/proposals-speaker-profile";
 import { inviteProposalSpeaker } from "../functions/_lib/services/proposal-speaker-invitations";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { onRequestGet as speakerGet } from "../functions/api/v1/proposals/speaker/[token]";
@@ -33,7 +34,17 @@ import {
   removeAdminProposalSpeaker,
   removeProposalSpeakerByProposer,
 } from "../functions/_lib/services/proposal-speaker-removal";
+import {
+  getProposerManagedSpeakerContext,
+  updateProposalSpeakerByProposer,
+} from "../functions/_lib/services/proposer-speaker-profile";
+import { replaceProposalSpeakerHeadshot } from "../functions/_lib/services/proposal-speaker-headshot";
+import {
+  removeProposalSpeakerSelfHeadshot,
+  uploadProposalSpeakerSelfHeadshot,
+} from "../functions/_lib/services/proposal-speaker-self-headshot";
 import type { DatabaseLike } from "../functions/_lib/types";
+import { speakerSelfServiceReadResponseSchema } from "../assets/shared/schemas/speaker-self-service";
 import {
   inviteSpeakerAndSubmitCapacityProposal,
   setupProposalSpeakerCapacityWorkflow,
@@ -81,6 +92,10 @@ class FakeUploadsBucket {
   async delete(key: string): Promise<void> {
     this.objects.delete(key);
   }
+
+  keys(): string[] {
+    return [...this.objects.keys()];
+  }
 }
 
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -114,7 +129,21 @@ describe("speaker self-management endpoints", () => {
   });
 
   it("GET returns speaker participation status and proposal details", async () => {
-    await setupWorkflow();
+    const { eventId } = await setupWorkflow();
+    await env.DB.prepare(
+      `INSERT INTO event_terms (
+         id, event_id, audience_type, term_key, version, required,
+         content_ref, display_text, help_text, active, created_at
+       ) VALUES (?, ?, 'presentation', 'presentation-rights', 'v1', 1, ?, ?, ?, 1, datetime('now'))`,
+    )
+      .bind(
+        crypto.randomUUID(),
+        eventId,
+        "/presentation-rights",
+        "I can share this presentation.",
+        "Confirm publication rights.",
+      )
+      .run();
     const { speakerManageToken } = await inviteSpeakerAndSubmitProposal();
 
     const response = await speakerGet(
@@ -124,15 +153,25 @@ describe("speaker self-management endpoints", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = (await response.json()) as {
-      speaker: { role: string; status: string };
-      proposal: { title: string; status: string };
-      profile: { firstName: string; email: string };
-    };
+    const body = speakerSelfServiceReadResponseSchema.parse(await response.json());
     expect(body.speaker.role).toBeTruthy();
     expect(body.proposal.title).toBe("Post-Quantum Migration Strategies");
     expect(body.profile.firstName).toBe("Co");
     expect(body.profile.email).toBe("cospeaker@example.test");
+    expect(body.presentationTerms).toEqual([
+      {
+        termKey: "presentation-rights",
+        version: "v1",
+        required: true,
+        contentRef: "/presentation-rights",
+        displayText: "I can share this presentation.",
+        helpText: "Confirm publication rights.",
+      },
+    ]);
+    expect(body).not.toHaveProperty("manageToken");
+    expect(body.proposal).not.toHaveProperty("abstract");
+    expect(body.proposal).not.toHaveProperty("details");
+    expect(body.profile).not.toHaveProperty("proposalProfileOverridesJson");
   });
 
   it("GET rejects an invalid manage token", async () => {
@@ -147,6 +186,34 @@ describe("speaker self-management endpoints", () => {
     expect(response.status).toBe(404);
     const body = (await response.json()) as { error: { code: string; message: string } };
     expect(body.error.code).toBe("SPEAKER_TOKEN_NOT_FOUND");
+  });
+
+  it("validates speaker participation actions through the mounted shared contract", async () => {
+    await setupWorkflow();
+    const { speakerManageToken } = await inviteSpeakerAndSubmitProposal();
+
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/speaker/${encodeURIComponent(speakerManageToken)}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "approve" }),
+      }),
+      env,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "VALIDATION_ERROR" } });
+    await expect(
+      queryAll<{ status: string }>(
+        env.DB,
+        `SELECT ps.status
+         FROM proposal_speakers ps
+         JOIN users u ON u.id = ps.user_id
+         WHERE u.normalized_email = 'cospeaker@example.test'
+         ORDER BY ps.created_at DESC LIMIT 1`,
+      ),
+    ).resolves.toEqual([{ status: "invited" }]);
   });
 
   it("lets the proposer remove a non-proposer speaker through the mounted endpoint", async () => {
@@ -717,6 +784,7 @@ describe("speaker self-management endpoints", () => {
     await expect(
       queryAll<{ status: string }>(env.DB, "SELECT status FROM email_outbox WHERE id = ?", [reminder.outboxId]),
     ).resolves.toEqual([{ status: "queued" }]);
+    await env.DB.prepare("DROP TRIGGER fail_speaker_removal_audit").run();
   });
 
   it("rolls back a stale removal when the proposal changes before the D1 batch", async () => {
@@ -756,6 +824,57 @@ describe("speaker self-management endpoints", () => {
     ).resolves.toHaveLength(0);
   });
 
+  it("rolls back speaker removal when its proposal headshot snapshot changes", async () => {
+    await setupWorkflow();
+    const { proposalId, proposalManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const originalKey = `proposal-headshots/${proposalId}/${coSpeakerUserId}/original.jpg`;
+    const replacementKey = `proposal-headshots/${proposalId}/${coSpeakerUserId}/replacement.jpg`;
+    await env.DB.prepare(
+      `UPDATE proposal_speakers
+       SET headshot_override_set = 1, headshot_r2_key = ?, headshot_updated_at = '2026-08-22T00:00:00.000Z'
+       WHERE proposal_id = ? AND user_id = ?`,
+    )
+      .bind(originalKey, proposalId, coSpeakerUserId)
+      .run();
+
+    const baseDb: DatabaseLike = env.DB;
+    let raced = false;
+    const racingDb: DatabaseLike = {
+      prepare: (query) => baseDb.prepare(query),
+      async batch(statements) {
+        if (!raced) {
+          raced = true;
+          await baseDb
+            .prepare("UPDATE proposal_speakers SET headshot_r2_key = ? WHERE proposal_id = ? AND user_id = ?")
+            .bind(replacementKey, proposalId, coSpeakerUserId)
+            .run();
+        }
+        return baseDb.batch(statements);
+      },
+    };
+
+    await expect(
+      removeProposalSpeakerByProposer(racingDb, {
+        manageToken: proposalManageToken,
+        signingSecret: env.INTERNAL_SIGNING_SECRET!,
+        userId: coSpeakerUserId,
+      }),
+    ).rejects.toMatchObject({ code: "PROPOSAL_SPEAKER_CONFLICT" });
+    await expect(
+      queryAll<{ headshot_r2_key: string | null }>(
+        env.DB,
+        "SELECT headshot_r2_key FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+        [proposalId, coSpeakerUserId],
+      ),
+    ).resolves.toEqual([{ headshot_r2_key: replacementKey }]);
+    await expect(
+      queryAll(env.DB, "SELECT object_key FROM storage_deletion_outbox WHERE object_key IN (?, ?)", [
+        originalKey,
+        replacementKey,
+      ]),
+    ).resolves.toHaveLength(0);
+  });
+
   it("POST confirm — confirms speaker participation with required consents", async () => {
     await setupWorkflow();
     const { speakerManageToken } = await inviteSpeakerAndSubmitProposal();
@@ -779,6 +898,64 @@ describe("speaker self-management endpoints", () => {
     const body = (await response.json()) as { success: boolean; status: string };
     expect(body.success).toBe(true);
     expect(body.status).toBe("confirmed");
+  });
+
+  it("POST confirm — rejects an existing capability after the proposal closes", async () => {
+    await setupWorkflow();
+    const { speakerManageToken, proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    await env.DB.prepare("UPDATE session_proposals SET status = 'rejected', updated_at = datetime('now') WHERE id = ?")
+      .bind(proposalId)
+      .run();
+
+    const response = await speakerPost(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            action: "confirm",
+            consents: [{ termKey: "speaker-terms", version: "v1" }],
+          }),
+        }),
+        { token: speakerManageToken },
+      ),
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "PROPOSAL_CLOSED" } });
+    await expect(
+      queryAll(env.DB, "SELECT status FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?", [
+        proposalId,
+        coSpeakerUserId,
+      ]),
+    ).resolves.toEqual([{ status: "invited" }]);
+  });
+
+  it("POST confirm — remains idempotent after an already-confirmed proposal closes", async () => {
+    await setupWorkflow();
+    const { speakerManageToken, proposalId } = await inviteSpeakerAndSubmitProposal();
+    const request = () =>
+      speakerPost(
+        createContext(
+          env,
+          new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              action: "confirm",
+              consents: [{ termKey: "speaker-terms", version: "v1" }],
+            }),
+          }),
+          { token: speakerManageToken },
+        ),
+      );
+
+    expect((await request()).status).toBe(200);
+    await env.DB.prepare("UPDATE session_proposals SET status = 'rejected', updated_at = datetime('now') WHERE id = ?")
+      .bind(proposalId)
+      .run();
+    expect((await request()).status).toBe(200);
   });
 
   it("rolls back consent and speaker confirmation when its audit write fails", async () => {
@@ -849,6 +1026,35 @@ describe("speaker self-management endpoints", () => {
     const body = (await response.json()) as { success: boolean; status: string };
     expect(body.success).toBe(true);
     expect(body.status).toBe("declined");
+  });
+
+  it("POST decline — rejects a capability after the proposal closes", async () => {
+    await setupWorkflow();
+    const { speakerManageToken, proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    await env.DB.prepare("UPDATE session_proposals SET status = 'rejected', updated_at = datetime('now') WHERE id = ?")
+      .bind(proposalId)
+      .run();
+
+    const response = await speakerPost(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "decline", reason: "Too late" }),
+        }),
+        { token: speakerManageToken },
+      ),
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "PROPOSAL_CLOSED" } });
+    await expect(
+      queryAll(env.DB, "SELECT status FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?", [
+        proposalId,
+        coSpeakerUserId,
+      ]),
+    ).resolves.toEqual([{ status: "invited" }]);
   });
 
   it("PATCH updates speaker profile fields", async () => {
@@ -928,9 +1134,120 @@ describe("speaker self-management endpoints", () => {
     expect(JSON.parse(rows[0]?.links_json ?? "[]")).toEqual(["https://example.test/existing"]);
   });
 
+  it("PATCH rejects a capability after proposal closure without changing the account profile", async () => {
+    await setupWorkflow();
+    const { speakerManageToken, proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    await env.DB.prepare("UPDATE session_proposals SET status = 'rejected', updated_at = datetime('now') WHERE id = ?")
+      .bind(proposalId)
+      .run();
+
+    const response = await speakerPatch(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ firstName: "Must not commit" }),
+        }),
+        { token: speakerManageToken },
+      ),
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "PROPOSAL_CLOSED" } });
+    await expect(queryAll(env.DB, "SELECT first_name FROM users WHERE id = ?", [coSpeakerUserId])).resolves.toEqual([
+      { first_name: "Co" },
+    ]);
+  });
+
+  it("rejects a stale speaker profile patch without clearing a newer proposal override", async () => {
+    await setupWorkflow();
+    const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const [speaker] = await queryAll<{ id: string; status: string; profile_overrides_json: string }>(
+      env.DB,
+      "SELECT id, status, profile_overrides_json FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+      proposalId,
+      coSpeakerUserId,
+    );
+    const [proposal] = await queryAll<{ status: string; updated_at: string }>(
+      env.DB,
+      "SELECT status, updated_at FROM session_proposals WHERE id = ?",
+      proposalId,
+    );
+    await env.DB.prepare("UPDATE proposal_speakers SET profile_overrides_json = ? WHERE id = ?")
+      .bind('{"firstName":"Admin curated"}', speaker.id)
+      .run();
+
+    await expect(
+      updateSpeakerProfile(
+        env.DB,
+        { firstName: "Speaker edit" },
+        {
+          proposalSpeakerId: speaker.id,
+          proposalId,
+          proposalStatus: proposal.status,
+          proposalUpdatedAt: proposal.updated_at,
+          userId: coSpeakerUserId,
+          currentStatus: speaker.status,
+          expectedProfileOverridesJson: speaker.profile_overrides_json,
+        },
+      ),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
+
+    const [profile] = await queryAll<{ first_name: string | null }>(
+      env.DB,
+      "SELECT first_name FROM users WHERE id = ?",
+      coSpeakerUserId,
+    );
+    expect(profile.first_name).toBe("Co");
+    const [override] = await queryAll<{ profile_overrides_json: string }>(
+      env.DB,
+      "SELECT profile_overrides_json FROM proposal_speakers WHERE id = ?",
+      speaker.id,
+    );
+    expect(override.profile_overrides_json).toBe('{"firstName":"Admin curated"}');
+  });
+
+  it("rolls back an account profile patch when the proposal closes after authorization", async () => {
+    await setupWorkflow();
+    const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const [speaker] = await queryAll<{ id: string; status: string; profile_overrides_json: string | null }>(
+      env.DB,
+      "SELECT id, status, profile_overrides_json FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+      [proposalId, coSpeakerUserId],
+    );
+    const [proposal] = await queryAll<{ status: string; updated_at: string }>(
+      env.DB,
+      "SELECT status, updated_at FROM session_proposals WHERE id = ?",
+      proposalId,
+    );
+    await env.DB.prepare("UPDATE session_proposals SET status = 'rejected', updated_at = ? WHERE id = ?")
+      .bind("2099-01-01T00:00:00.000Z", proposalId)
+      .run();
+
+    await expect(
+      updateSpeakerProfile(
+        env.DB,
+        { firstName: "Must not commit" },
+        {
+          proposalSpeakerId: speaker.id,
+          proposalId,
+          proposalStatus: proposal.status,
+          proposalUpdatedAt: proposal.updated_at,
+          userId: coSpeakerUserId,
+          currentStatus: speaker.status,
+          expectedProfileOverridesJson: speaker.profile_overrides_json,
+        },
+      ),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
+    await expect(queryAll(env.DB, "SELECT first_name FROM users WHERE id = ?", [coSpeakerUserId])).resolves.toEqual([
+      { first_name: "Co" },
+    ]);
+  });
+
   it("proposal manage token updates speaker profile fields", async () => {
     await setupWorkflow();
-    const { proposalManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const { proposalManageToken, proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
 
     const response = await app.fetch(
       new Request(`https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers/${coSpeakerUserId}`, {
@@ -953,6 +1270,43 @@ describe("speaker self-management endpoints", () => {
     );
 
     expect(response.status).toBe(200);
+
+    const accountProfile = await queryAll<{
+      first_name: string | null;
+      last_name: string | null;
+      organization_name: string | null;
+      job_title: string | null;
+      biography: string | null;
+      links_json: string | null;
+    }>(
+      env.DB,
+      `SELECT first_name, last_name, organization_name, job_title, biography, links_json
+       FROM users WHERE id = ?`,
+      coSpeakerUserId,
+    );
+    expect(accountProfile[0]).toEqual({
+      first_name: "Co",
+      last_name: "Speaker",
+      organization_name: "Co Corp",
+      job_title: "CTO",
+      biography: null,
+      links_json: null,
+    });
+
+    const scopedProfile = await queryAll<{ profile_overrides_json: string }>(
+      env.DB,
+      "SELECT profile_overrides_json FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+      proposalId,
+      coSpeakerUserId,
+    );
+    expect(JSON.parse(scopedProfile[0]?.profile_overrides_json ?? "{}")).toEqual({
+      firstName: "Casey",
+      lastName: "Cryptographer",
+      organizationName: "PKIC Labs",
+      jobTitle: "Senior Engineer",
+      biography: "Provided by the proposer.",
+      links: ["https://github.com/casey"],
+    });
 
     const manageGet = await app.fetch(
       new Request(`https://app.test/api/v1/proposals/manage/${proposalManageToken}`),
@@ -1020,6 +1374,50 @@ describe("speaker self-management endpoints", () => {
     await env.DB.prepare("DROP TRIGGER reject_proposer_speaker_audit").run();
   });
 
+  it("rejects a stale combined proposer profile and role update before capacity side effects", async () => {
+    await setupWorkflow();
+    const { proposalManageToken, coSpeakerUserId, proposalId } = await inviteSpeakerAndSubmitProposal();
+    const context = await getProposerManagedSpeakerContext(
+      env.DB,
+      proposalManageToken,
+      coSpeakerUserId,
+      env.INTERNAL_SIGNING_SECRET!,
+    );
+    const newerOverrides = '{"firstName":"Newer admin value"}';
+    const baseDb: DatabaseLike = env.DB;
+    let raced = false;
+    const racingDb: DatabaseLike = {
+      prepare: (query) => baseDb.prepare(query),
+      async batch(statements) {
+        if (!raced) {
+          raced = true;
+          await baseDb
+            .prepare("UPDATE proposal_speakers SET profile_overrides_json = ? WHERE id = ?")
+            .bind(newerOverrides, context.speaker.id)
+            .run();
+        }
+        return baseDb.batch(statements);
+      },
+    };
+
+    await expect(
+      updateProposalSpeakerByProposer(racingDb, {
+        ...context,
+        patch: { firstName: "Stale proposer value", role: "moderator" },
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
+    await expect(
+      queryAll<{ role: string; profile_overrides_json: string }>(
+        env.DB,
+        "SELECT role, profile_overrides_json FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+        [proposalId, coSpeakerUserId],
+      ),
+    ).resolves.toEqual([{ role: "co_speaker", profile_overrides_json: newerOverrides }]);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'speaker_profile_updated_by_proposer'"),
+    ).resolves.toHaveLength(0);
+  });
+
   it("rolls back a co-speaker user, participant, and email when the invite batch fails", async () => {
     await setupWorkflow();
     const { proposalManageToken, proposalId } = await inviteSpeakerAndSubmitProposal();
@@ -1064,6 +1462,128 @@ describe("speaker self-management endpoints", () => {
     await env.DB.prepare("DROP TRIGGER reject_co_speaker_invite_email").run();
   });
 
+  it.each(["spam", "duplicate"] as const)(
+    "rejects co-speaker invitations for %s proposals through the mounted endpoint",
+    async (status) => {
+      await setupWorkflow();
+      const { proposalManageToken, proposalId } = await inviteSpeakerAndSubmitProposal();
+      await env.DB.prepare(
+        "UPDATE session_proposals SET status = ?, updated_at = datetime('now', '+1 second') WHERE id = ?",
+      )
+        .bind(status, proposalId)
+        .run();
+
+      const response = await app.fetch(
+        new Request(`https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email: `blocked-${status}@example.test`, firstName: "Blocked", role: "speaker" }),
+        }),
+        env,
+        { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+      );
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({ error: { code: "PROPOSAL_CLOSED" } });
+      await expect(
+        queryAll<{ count: number }>(
+          env.DB,
+          "SELECT COUNT(*) AS count FROM users WHERE normalized_email = ?",
+          `blocked-${status}@example.test`,
+        ),
+      ).resolves.toEqual([{ count: 0 }]);
+      await expect(
+        queryAll<{ count: number }>(
+          env.DB,
+          "SELECT COUNT(*) AS count FROM proposal_speakers WHERE proposal_id = ?",
+          proposalId,
+        ),
+      ).resolves.toEqual([{ count: 2 }]);
+      await expect(
+        queryAll<{ count: number }>(
+          env.DB,
+          "SELECT COUNT(*) AS count FROM email_outbox WHERE recipient_email = ? AND template_key = 'co_speaker_invite'",
+          `blocked-${status}@example.test`,
+        ),
+      ).resolves.toEqual([{ count: 0 }]);
+    },
+  );
+
+  it("rolls back a co-speaker invite when moderation closes the proposal after the snapshot", async () => {
+    await setupWorkflow();
+    const { proposalManageToken, proposalId } = await inviteSpeakerAndSubmitProposal();
+    const proposal = await getProposalByManageToken(env.DB, proposalManageToken, env.INTERNAL_SIGNING_SECRET!);
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const baseDb: DatabaseLike = env.DB;
+    let raced = false;
+    const racingDb: DatabaseLike = {
+      prepare: (query) => baseDb.prepare(query),
+      async batch(statements) {
+        if (!raced) {
+          raced = true;
+          await baseDb
+            .prepare(
+              "UPDATE session_proposals SET status = 'duplicate', updated_at = datetime('now', '+1 second') WHERE id = ?",
+            )
+            .bind(proposalId)
+            .run();
+        }
+        return baseDb.batch(statements);
+      },
+    };
+
+    await expect(
+      inviteProposalSpeaker(racingDb, {
+        proposal,
+        event,
+        appBaseUrl: "https://app.test",
+        email: "race-closed-speaker@example.test",
+        firstName: "Race",
+        lastName: "Closed",
+        role: "speaker",
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_CHANGED" });
+
+    await expect(
+      queryAll<{ count: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS count FROM users WHERE normalized_email = ?",
+        "race-closed-speaker@example.test",
+      ),
+    ).resolves.toEqual([{ count: 0 }]);
+    await expect(
+      queryAll<{ count: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS count FROM proposal_speakers WHERE proposal_id = ?",
+        proposalId,
+      ),
+    ).resolves.toEqual([{ count: 2 }]);
+    await expect(
+      queryAll<{ count: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS count FROM email_outbox WHERE recipient_email = ? AND template_key = 'co_speaker_invite'",
+        "race-closed-speaker@example.test",
+      ),
+    ).resolves.toEqual([{ count: 0 }]);
+    await expect(
+      queryAll<{ count: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS count FROM audit_log WHERE action = 'co_speaker_invited' AND scope_type = 'proposal' AND scope_id = ?",
+        proposalId,
+      ),
+    ).resolves.toEqual([{ count: 0 }]);
+    await expect(
+      queryAll<{ count: number }>(
+        env.DB,
+        `SELECT COUNT(*) AS count
+         FROM event_participant_role_sources AS sources
+         JOIN users ON users.id = sources.user_id
+         WHERE users.normalized_email = ?`,
+        "race-closed-speaker@example.test",
+      ),
+    ).resolves.toEqual([{ count: 0 }]);
+  });
+
   it("deduplicates concurrent co-speaker invitations but permits a new invitation after decline", async () => {
     await setupWorkflow();
     const { proposalManageToken, proposalId } = await inviteSpeakerAndSubmitProposal();
@@ -1088,14 +1608,25 @@ describe("speaker self-management endpoints", () => {
     const [firstInvite, concurrentInvite] = await Promise.all([invite(), invite()]);
     expect(firstInvite.outboxId).toBe(concurrentInvite.outboxId);
 
-    const [speaker] = await queryAll<{ id: string; status: string; invite_generation: number }>(
+    const [speaker] = await queryAll<{
+      id: string;
+      status: string;
+      invite_generation: number;
+      manage_link_secret: string;
+    }>(
       env.DB,
-      `SELECT id, status, invite_generation FROM proposal_speakers
+      `SELECT id, status, invite_generation, manage_link_secret FROM proposal_speakers
        WHERE proposal_id = ? AND user_id = ?`,
       proposalId,
       invitedUser.id,
     );
     expect(speaker).toMatchObject({ status: "invited", invite_generation: 0 });
+    const oldManageToken = await issueDatabaseCapability({
+      db: env.DB,
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+      purpose: "speaker_manage",
+      resourceId: speaker.id,
+    });
     expect(
       (
         await queryAll<{ count: number }>(
@@ -1138,12 +1669,79 @@ describe("speaker self-management endpoints", () => {
 
     const reinvite = await invite();
     expect(reinvite.outboxId).not.toBe(firstInvite.outboxId);
-    const [reinvitedSpeaker] = await queryAll<{ status: string; invite_generation: number }>(
-      env.DB,
-      "SELECT status, invite_generation FROM proposal_speakers WHERE id = ?",
-      speaker.id,
+    const [reinvitedSpeaker] = await queryAll<{
+      status: string;
+      invite_generation: number;
+      manage_link_secret: string;
+    }>(env.DB, "SELECT status, invite_generation, manage_link_secret FROM proposal_speakers WHERE id = ?", speaker.id);
+    expect(reinvitedSpeaker).toMatchObject({ status: "invited", invite_generation: 1 });
+    expect(reinvitedSpeaker.manage_link_secret).not.toBe(speaker.manage_link_secret);
+
+    const mountedEnv = { ...(env as any), SPEAKER_UPLOADS_BUCKET: new FakeUploadsBucket() };
+    const mounted = (request: Request) =>
+      app.fetch(request, mountedEnv, {
+        passThroughOnException: () => {},
+        waitUntil: () => {},
+      } as any);
+    const expectStaleCapability = async (request: Request) => {
+      const response = await mounted(request);
+      expect(response.status).toBe(404);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: "SPEAKER_TOKEN_NOT_FOUND" },
+      });
+    };
+    const staleTokenPath = `https://app.test/api/v1/proposals/speaker/${oldManageToken}`;
+    await expectStaleCapability(new Request(staleTokenPath));
+    await expectStaleCapability(
+      new Request(staleTokenPath, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "decline", reason: "stale token" }),
+      }),
     );
-    expect(reinvitedSpeaker).toEqual({ status: "invited", invite_generation: 1 });
+    await expectStaleCapability(
+      new Request(staleTokenPath, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ biography: "stale token" }),
+      }),
+    );
+
+    const staleHeadshotPath = `${staleTokenPath}/headshot`;
+    await expectStaleCapability(new Request(staleHeadshotPath));
+    const staleHeadshotForm = new FormData();
+    staleHeadshotForm.append(
+      "file",
+      new File([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], "headshot.jpg", { type: "image/jpeg" }),
+    );
+    await expectStaleCapability(new Request(staleHeadshotPath, { method: "PUT", body: staleHeadshotForm }));
+    await expectStaleCapability(new Request(staleHeadshotPath, { method: "DELETE" }));
+
+    const stalePresentationForm = new FormData();
+    stalePresentationForm.append(
+      "file",
+      new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], "presentation.pdf", { type: "application/pdf" }),
+    );
+    await expectStaleCapability(
+      new Request(`${staleTokenPath}/presentation`, { method: "PUT", body: stalePresentationForm }),
+    );
+    await expectStaleCapability(new Request(`${staleTokenPath}/presentation/download`));
+    await expectStaleCapability(
+      new Request(`${staleTokenPath}/reminders`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "pause_30d" }),
+      }),
+    );
+
+    const newManageToken = await issueDatabaseCapability({
+      db: env.DB,
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+      purpose: "speaker_manage",
+      resourceId: speaker.id,
+    });
+    const currentResponse = await mounted(new Request(`https://app.test/api/v1/proposals/speaker/${newManageToken}`));
+    expect(currentResponse.status).toBe(200);
     expect(
       (
         await queryAll<{ count: number }>(
@@ -1158,7 +1756,7 @@ describe("speaker self-management endpoints", () => {
 
   it("proposal manage token uploads and serves a speaker headshot", async () => {
     await setupWorkflow();
-    const { proposalManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const { proposalManageToken, proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
     const bucket = new FakeUploadsBucket();
 
     const file = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], "headshot.jpg", { type: "image/jpeg" });
@@ -1186,7 +1784,14 @@ describe("speaker self-management endpoints", () => {
     expect(uploadPayload.headshotUrl).toContain(
       `/api/v1/proposals/manage/${proposalManageToken}/speakers/${coSpeakerUserId}/headshot`,
     );
-    expect(uploadPayload.r2Key.startsWith(`headshots/${coSpeakerUserId}/`)).toBe(true);
+    expect(uploadPayload.r2Key.startsWith(`proposal-headshots/${proposalId}/${coSpeakerUserId}/`)).toBe(true);
+    expect(
+      (
+        await queryAll<{ headshot_r2_key: string | null }>(env.DB, "SELECT headshot_r2_key FROM users WHERE id = ?", [
+          coSpeakerUserId,
+        ])
+      )[0]?.headshot_r2_key,
+    ).toBeNull();
 
     const serveResponse = await app.fetch(
       new Request(
@@ -1201,14 +1806,140 @@ describe("speaker self-management endpoints", () => {
 
     expect(serveResponse.status).toBe(200);
     expect(serveResponse.headers.get("content-type")).toBe("image/jpeg");
+
+    const deleteResponse = await app.fetch(
+      new Request(
+        `https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers/${coSpeakerUserId}/headshot`,
+        { method: "DELETE" },
+      ),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(deleteResponse.status).toBe(200);
+
+    const repeatedDeleteResponse = await app.fetch(
+      new Request(
+        `https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers/${coSpeakerUserId}/headshot`,
+        { method: "DELETE" },
+      ),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(repeatedDeleteResponse.status).toBe(200);
+
+    const replacementForm = new FormData();
+    replacementForm.append("file", file);
+    const replacementResponse = await app.fetch(
+      new Request(
+        `https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers/${coSpeakerUserId}/headshot`,
+        { method: "PUT", body: replacementForm },
+      ),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(replacementResponse.status).toBe(200);
+    const replacementPayload = (await replacementResponse.json()) as { r2Key: string };
+
+    const removeSpeakerResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers/${coSpeakerUserId}`, {
+        method: "DELETE",
+      }),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(removeSpeakerResponse.status).toBe(200);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?", [
+        proposalId,
+        coSpeakerUserId,
+      ]),
+    ).toHaveLength(0);
+    expect(
+      await queryAll<{ object_key: string }>(
+        env.DB,
+        "SELECT object_key FROM storage_deletion_outbox WHERE bucket = 'speaker_uploads' AND object_key = ?",
+        [replacementPayload.r2Key],
+      ),
+    ).toEqual([{ object_key: replacementPayload.r2Key }]);
+  });
+
+  it("rejects a proposer headshot upload when the proposal closes before commit", async () => {
+    await setupWorkflow();
+    const { proposalManageToken, proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const { proposal, speaker } = await getProposerManagedSpeakerContext(
+      env.DB,
+      proposalManageToken,
+      coSpeakerUserId,
+      env.INTERNAL_SIGNING_SECRET!,
+    );
+    const bucket = new FakeUploadsBucket();
+    const baseDb: DatabaseLike = env.DB;
+    let raced = false;
+    const racingDb: DatabaseLike = {
+      prepare: (query) => baseDb.prepare(query),
+      async batch(statements) {
+        if (!raced) {
+          raced = true;
+          await baseDb
+            .prepare(
+              "UPDATE session_proposals SET status = 'withdrawn', updated_at = '2099-01-01T00:00:00.000Z' WHERE id = ?",
+            )
+            .bind(proposalId)
+            .run();
+        }
+        return baseDb.batch(statements);
+      },
+    };
+
+    await expect(
+      replaceProposalSpeakerHeadshot({
+        db: racingDb,
+        bucket: bucket as unknown as R2Bucket,
+        proposalId,
+        proposalSpeakerId: speaker.id,
+        speakerUserId: speaker.user_id,
+        previousOverrideSet: speaker.headshot_override_set,
+        previousOverrideKey: speaker.headshot_override_r2_key,
+        editableProposalSnapshot: { status: proposal.status, updatedAt: proposal.updated_at },
+        image: { buffer: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]).buffer, contentType: "image/jpeg" },
+        audit: {
+          actorType: "user",
+          actorId: proposal.proposer_user_id,
+          action: "speaker_headshot_uploaded_by_proposer",
+          scope: { type: "proposal", id: proposalId },
+        },
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
+    expect(bucket.keys()).toEqual([]);
+    await expect(
+      queryAll<{ headshot_override_set: number; headshot_r2_key: string | null }>(
+        env.DB,
+        "SELECT headshot_override_set, headshot_r2_key FROM proposal_speakers WHERE id = ?",
+        [speaker.id],
+      ),
+    ).resolves.toEqual([{ headshot_override_set: 0, headshot_r2_key: null }]);
   });
 
   it("speaker manage token uploads and serves a speaker headshot", async () => {
     await setupWorkflow();
-    const { speakerManageToken } = await inviteSpeakerAndSubmitProposal();
+    const { speakerManageToken, proposalManageToken, proposalId, coSpeakerUserId } =
+      await inviteSpeakerAndSubmitProposal();
     const bucket = new FakeUploadsBucket();
 
     const file = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], "headshot.jpg", { type: "image/jpeg" });
+    const proposerFormData = new FormData();
+    proposerFormData.append("file", file);
+    const proposerUpload = await app.fetch(
+      new Request(
+        `https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers/${coSpeakerUserId}/headshot`,
+        { method: "PUT", body: proposerFormData },
+      ),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(proposerUpload.status).toBe(200);
+    const proposerR2Key = ((await proposerUpload.json()) as { r2Key: string }).r2Key;
+
     const formData = new FormData();
     formData.append("file", file);
 
@@ -1225,6 +1956,26 @@ describe("speaker self-management endpoints", () => {
     );
 
     expect(uploadResponse.status).toBe(200);
+    const [account, scoped] = await Promise.all([
+      queryAll<{ headshot_r2_key: string | null }>(env.DB, "SELECT headshot_r2_key FROM users WHERE id = ?", [
+        coSpeakerUserId,
+      ]),
+      queryAll<{ headshot_override_set: number; headshot_r2_key: string | null }>(
+        env.DB,
+        `SELECT headshot_override_set, headshot_r2_key
+         FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?`,
+        [proposalId, coSpeakerUserId],
+      ),
+    ]);
+    expect(account[0]?.headshot_r2_key).toMatch(new RegExp(`^headshots/${coSpeakerUserId}/`));
+    expect(scoped[0]).toEqual({ headshot_override_set: 0, headshot_r2_key: null });
+    expect(
+      await queryAll<{ object_key: string }>(
+        env.DB,
+        "SELECT object_key FROM storage_deletion_outbox WHERE bucket = 'speaker_uploads' AND object_key = ?",
+        [proposerR2Key],
+      ),
+    ).toEqual([{ object_key: proposerR2Key }]);
 
     const serveResponse = await app.fetch(
       new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}/headshot`),
@@ -1237,6 +1988,132 @@ describe("speaker self-management endpoints", () => {
 
     expect(serveResponse.status).toBe(200);
     expect(serveResponse.headers.get("content-type")).toBe("image/jpeg");
+  });
+
+  it("compensates a self headshot upload when roster authority is revoked before D1 commit", async () => {
+    await setupWorkflow();
+    const { speakerManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const { speaker, proposal, user } = await getSpeakerByManageToken(
+      env.DB,
+      speakerManageToken,
+      env.INTERNAL_SIGNING_SECRET!,
+    );
+    const [{ total: badgeJobsBeforeUpload }] = await queryAll<{ total: number }>(
+      env.DB,
+      "SELECT COUNT(*) AS total FROM badge_render_jobs",
+    );
+    const bucket = new FakeUploadsBucket();
+    const scopedEnv = { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket } as any;
+    const baseDb: DatabaseLike = env.DB;
+    let raced = false;
+    const racingDb: DatabaseLike = {
+      prepare: (query) => baseDb.prepare(query),
+      async batch(statements) {
+        if (!raced) {
+          raced = true;
+          await baseDb.prepare("UPDATE proposal_speakers SET status = 'declined' WHERE id = ?").bind(speaker.id).run();
+        }
+        return baseDb.batch(statements);
+      },
+    };
+
+    await expect(
+      uploadProposalSpeakerSelfHeadshot(
+        {
+          db: racingDb,
+          env: scopedEnv,
+          request: new Request("https://app.test/api/v1/proposals/speaker/race/headshot"),
+          waitUntil: () => {},
+          proposalId: proposal.id,
+          proposalSpeakerId: speaker.id,
+          userId: user.id,
+          proposalStatus: proposal.status,
+          proposalUpdatedAt: proposal.updated_at,
+          currentStatus: speaker.status,
+          accountHeadshotKey: user.accountHeadshotR2Key,
+          proposalOverrideSet: user.proposalHeadshotOverrideSet,
+          proposalOverrideKey: user.proposalHeadshotOverrideKey,
+        },
+        { buffer: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]).buffer, contentType: "image/jpeg" },
+      ),
+    ).rejects.toMatchObject({ status: 409, code: "HEADSHOT_CHANGED" });
+
+    expect(bucket.keys()).toEqual([]);
+    await expect(
+      queryAll<{ headshot_r2_key: string | null }>(env.DB, "SELECT headshot_r2_key FROM users WHERE id = ?", [
+        coSpeakerUserId,
+      ]),
+    ).resolves.toEqual([{ headshot_r2_key: null }]);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'headshot_uploaded_by_speaker'"),
+    ).resolves.toHaveLength(0);
+    await expect(
+      queryAll(env.DB, "SELECT object_key FROM storage_deletion_outbox WHERE object_key LIKE 'headshots/%'"),
+    ).resolves.toHaveLength(0);
+    await expect(queryAll(env.DB, "SELECT id FROM badge_render_jobs")).resolves.toHaveLength(badgeJobsBeforeUpload);
+  });
+
+  it("rolls back a self headshot delete when roster authority is revoked before D1 commit", async () => {
+    await setupWorkflow();
+    const { speakerManageToken } = await inviteSpeakerAndSubmitProposal();
+    const { speaker, proposal, user } = await getSpeakerByManageToken(
+      env.DB,
+      speakerManageToken,
+      env.INTERNAL_SIGNING_SECRET!,
+    );
+    const [{ total: badgeJobsBeforeDelete }] = await queryAll<{ total: number }>(
+      env.DB,
+      "SELECT COUNT(*) AS total FROM badge_render_jobs",
+    );
+    const existingKey = `headshots/${user.id}/existing.jpg`;
+    const bucket = new FakeUploadsBucket();
+    await bucket.put(existingKey, new Uint8Array([0xff, 0xd8, 0xff, 0xd9]).buffer, {
+      httpMetadata: { contentType: "image/jpeg" },
+    });
+    await env.DB.prepare("UPDATE users SET headshot_r2_key = ? WHERE id = ?").bind(existingKey, user.id).run();
+
+    const baseDb: DatabaseLike = env.DB;
+    let raced = false;
+    const racingDb: DatabaseLike = {
+      prepare: (query) => baseDb.prepare(query),
+      async batch(statements) {
+        if (!raced) {
+          raced = true;
+          await baseDb.prepare("UPDATE proposal_speakers SET status = 'declined' WHERE id = ?").bind(speaker.id).run();
+        }
+        return baseDb.batch(statements);
+      },
+    };
+
+    await expect(
+      removeProposalSpeakerSelfHeadshot({
+        db: racingDb,
+        env: { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket } as any,
+        request: new Request("https://app.test/api/v1/proposals/speaker/race/headshot"),
+        waitUntil: () => {},
+        proposalId: proposal.id,
+        proposalSpeakerId: speaker.id,
+        userId: user.id,
+        proposalStatus: proposal.status,
+        proposalUpdatedAt: proposal.updated_at,
+        currentStatus: speaker.status,
+        accountHeadshotKey: existingKey,
+        proposalOverrideSet: user.proposalHeadshotOverrideSet,
+        proposalOverrideKey: user.proposalHeadshotOverrideKey,
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "HEADSHOT_CHANGED" });
+
+    await expect(
+      queryAll<{ headshot_r2_key: string | null }>(env.DB, "SELECT headshot_r2_key FROM users WHERE id = ?", user.id),
+    ).resolves.toEqual([{ headshot_r2_key: existingKey }]);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'headshot_deleted_by_speaker'"),
+    ).resolves.toHaveLength(0);
+    await expect(
+      queryAll(env.DB, "SELECT object_key FROM storage_deletion_outbox WHERE object_key = ?", [existingKey]),
+    ).resolves.toHaveLength(0);
+    await expect(queryAll(env.DB, "SELECT id FROM badge_render_jobs")).resolves.toHaveLength(badgeJobsBeforeDelete);
+    expect(await bucket.get(existingKey)).not.toBeNull();
   });
 
   it("rejects MIME-spoofed headshots through both speaker capability surfaces", async () => {
@@ -1379,6 +2256,49 @@ describe("speaker self-management endpoints", () => {
     expect(after.reminder_count).toBe(before.reminder_count);
     expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(outboxBefore.length);
     await env.DB.prepare("DROP TRIGGER reject_proposer_reminder_audit").run();
+  });
+
+  it("rolls back a proposer reminder email when the speaker status changes before the D1 batch", async () => {
+    await setupWorkflow();
+    const { proposalId, proposalManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const proposal = await getProposalByManageToken(env.DB, proposalManageToken, env.INTERNAL_SIGNING_SECRET!);
+    const outboxBefore = await queryAll(env.DB, "SELECT id FROM email_outbox");
+    const baseDb: DatabaseLike = env.DB;
+    let raced = false;
+    const racingDb: DatabaseLike = {
+      prepare: (query) => baseDb.prepare(query),
+      async batch(statements) {
+        if (!raced) {
+          raced = true;
+          await baseDb
+            .prepare("UPDATE proposal_speakers SET status = 'declined' WHERE proposal_id = ? AND user_id = ?")
+            .bind(proposalId, coSpeakerUserId)
+            .run();
+        }
+        return baseDb.batch(statements);
+      },
+    };
+
+    await expect(
+      remindProposalSpeakerByProposer(racingDb, {
+        proposal,
+        userId: coSpeakerUserId,
+        appBaseUrl: "https://app.test",
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
+
+    await expect(
+      queryAll<{ status: string; reminder_count: number }>(
+        env.DB,
+        `SELECT status, speaker_invite_reminder_count AS reminder_count
+         FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?`,
+        [proposalId, coSpeakerUserId],
+      ),
+    ).resolves.toEqual([{ status: "declined", reminder_count: 0 }]);
+    await expect(queryAll(env.DB, "SELECT id FROM email_outbox")).resolves.toHaveLength(outboxBefore.length);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'co_speaker_reminded_by_proposer'"),
+    ).resolves.toHaveLength(0);
   });
 
   it("rolls back an admin reminder email when audit fails", async () => {

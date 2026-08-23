@@ -100,6 +100,8 @@ export type DonationSyncResponse = z.infer<typeof donationSyncResponseSchema>;
 export type DonationSyncRequest = z.infer<typeof donationSyncRequestSchema>;
 export type AdminDonationSummary = z.infer<typeof adminDonationSummarySchema>;
 
+export const donationDetailResponseSchema = z.object({ donation: adminDonationSummarySchema });
+
 export const donationsListRouteSchema = {
   tags: ["Donations"],
   summary: "List donations (admin)",

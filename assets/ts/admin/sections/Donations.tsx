@@ -171,12 +171,10 @@ export function Donations({ subTab }: { subTab?: string }) {
   async function handleSync(pendingOnly: boolean) {
     setSyncingAll(true);
     try {
-      const res = donationSyncResponseSchema.parse(
-        await api<unknown>("/api/v1/admin/donations/sync", {
-          method: "POST",
-          body: JSON.stringify(pendingOnly ? { pendingOnly: true } : {}),
-        }),
-      );
+      const res = await api("/api/v1/admin/donations/sync", donationSyncResponseSchema, {
+        method: "POST",
+        body: JSON.stringify(pendingOnly ? { pendingOnly: true } : {}),
+      });
       const parts = [
         res.completed ? `${res.completed} completed` : "",
         res.failed ? `${res.failed} failed` : "",

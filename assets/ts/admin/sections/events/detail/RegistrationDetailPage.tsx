@@ -3,15 +3,16 @@ import { useHashLocation } from "wouter/use-hash-location";
 import { Badge } from "../../../../components/Badge";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { api } from "../../../api";
+import { api, apiCommand } from "../../../api";
 import { fmt, toast } from "../../../ui";
-import type { AdminEventDay } from "../../../types";
 import { useData } from "../../../../hooks/useData";
 import { FormAnswerTable } from "./FormResponses";
 import {
   adminRegistrationDetailResponseSchema,
   type AdminRegistrationDetailResponse,
 } from "../../../../../shared/schemas/admin-registration-detail";
+import { adminEventDaysResponseSchema } from "../../../../../shared/schemas/admin-events";
+import { adminRegistrationOpenManageResponseSchema } from "../../../../../shared/schemas/route-contracts-admin-registrations";
 import { DayAttendancePanel } from "./registration-detail/DayAttendancePanel";
 import {
   BadgeRolePanel,
@@ -36,15 +37,12 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
   const [regenerating, setRegenerating] = useState(false);
 
   const { data, loading, error, reload } = useData<AdminRegistrationDetailResponse>(
-    async () =>
-      adminRegistrationDetailResponseSchema.parse(
-        await api<unknown>(`/api/v1/admin/events/${slug}/registrations/${regId}`),
-      ),
+    async () => api(`/api/v1/admin/events/${slug}/registrations/${regId}`, adminRegistrationDetailResponseSchema),
     [slug, regId],
   );
 
-  const { data: daysData } = useData<{ days: AdminEventDay[] }>(
-    () => api<{ days: AdminEventDay[] }>(`/api/v1/admin/events/${slug}/days`),
+  const { data: daysData } = useData(
+    () => api(`/api/v1/admin/events/${slug}/days`, adminEventDaysResponseSchema),
     [slug],
   );
 
@@ -57,7 +55,7 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
   async function handleResend() {
     setResendStatus("Sending…");
     try {
-      await api(`/api/v1/admin/events/${slug}/registrations/${regId}/resend-confirmation`, {
+      await apiCommand(`/api/v1/admin/events/${slug}/registrations/${regId}/resend-confirmation`, {
         method: "POST",
         body: "{}",
       });
@@ -73,8 +71,9 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
   async function handleOpenManage() {
     setOpeningManage(true);
     try {
-      const { manageUrl } = await api<{ manageUrl: string }>(
+      const { manageUrl } = await api(
         `/api/v1/admin/events/${slug}/registrations/${regId}/open-manage`,
+        adminRegistrationOpenManageResponseSchema,
         { method: "POST", body: "{}" },
       );
       window.open(manageUrl, "_blank", "noopener");
@@ -88,7 +87,10 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
   async function handleRegenerateBadge() {
     setRegenerating(true);
     try {
-      await api(`/api/v1/admin/events/${slug}/registrations/${regId}/regenerate-badge`, { method: "POST", body: "{}" });
+      await apiCommand(`/api/v1/admin/events/${slug}/registrations/${regId}/regenerate-badge`, {
+        method: "POST",
+        body: "{}",
+      });
       toast("Badge regeneration queued", "success");
     } catch (e) {
       toast((e as Error).message, "error");

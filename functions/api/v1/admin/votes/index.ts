@@ -15,6 +15,7 @@ import { getWorkingGroupBySlugOrId } from "../../../../_lib/services/working-gro
 import { createVoteDirect, listVotesForAdmin } from "../../../../_lib/services/votes";
 import {
   adminVoteCreateRouteSchema,
+  adminVoteMutationResponseSchema,
   adminVotesListRouteSchema,
 } from "../../../../../assets/shared/schemas/votes-admin";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
@@ -46,5 +47,5 @@ export const AdminVotesPost = openApiRoute(adminVoteCreateRouteSchema, async (c:
 
   const vote = await createVoteDirect(db, admin, body);
 
-  return json({ vote });
+  return json(adminVoteMutationResponseSchema.parse({ vote }));
 });

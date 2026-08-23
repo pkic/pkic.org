@@ -4,6 +4,8 @@
  * review).
  */
 import { all } from "../../db/queries";
+import type { MeetingSeriesListQuery } from "../../../../assets/shared/schemas/meeting-calendar";
+import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import { AppError } from "../../errors";
@@ -12,8 +14,6 @@ import {
   attachIcsFiles,
   getSeriesForAdminOrThrow,
   ICS_FILE_SELECT_COLUMNS,
-  SERIES_SELECT_COLUMNS,
-  type SeriesRow,
   type IcsFileRow,
   type MeetingSeriesScopeType,
   type AdminMeetingSeriesSummary,
@@ -21,24 +21,24 @@ import {
 import type { DatabaseLike } from "../../types";
 import { prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
 import { prepareStorageDeletion, processStorageDeletionForKey } from "../storage-deletion-outbox";
+import { queryMeetingSeriesPage } from "./series-list";
 
 // ── Admin: working-group-scoped meeting series ───────────────────────────
 
 export async function listAdminMeetingSeriesForWg(
   db: DatabaseLike,
   wgIdOrSlug: string,
-): Promise<AdminMeetingSeriesSummary[]> {
+  query: MeetingSeriesListQuery,
+): Promise<{ meetingSeries: AdminMeetingSeriesSummary[]; page: ReturnType<typeof buildPageInfo> }> {
   const wg = await getWorkingGroupBySlugOrId(db, wgIdOrSlug);
   if (!wg) throw new AppError(404, "WORKING_GROUP_NOT_FOUND", "Working group not found");
 
-  const rows = await all<SeriesRow>(
-    db,
-    `SELECT ${SERIES_SELECT_COLUMNS} FROM meeting_series
-      WHERE scope_type = 'working_group' AND working_group_id = ?
-      ORDER BY created_at ASC, id ASC`,
-    [wg.id],
-  );
-  return attachIcsFiles(db, rows);
+  const { rows, total } = await queryMeetingSeriesPage(db, query, {
+    kind: "admin_working_group",
+    workingGroupId: wg.id,
+  });
+  const meetingSeries = await attachIcsFiles(db, rows);
+  return { meetingSeries, page: buildPageInfo(query.limit, query.offset, total, meetingSeries.length) };
 }
 
 export async function createWgMeetingSeries(
@@ -81,13 +81,13 @@ export async function createWgMeetingSeries(
 
 // ── Admin: consortium-scoped meeting series ──────────────────────────────
 
-export async function listAdminConsortiumMeetingSeries(db: DatabaseLike): Promise<AdminMeetingSeriesSummary[]> {
-  const rows = await all<SeriesRow>(
-    db,
-    `SELECT ${SERIES_SELECT_COLUMNS} FROM meeting_series
-      WHERE scope_type = 'consortium' ORDER BY created_at ASC, id ASC`,
-  );
-  return attachIcsFiles(db, rows);
+export async function listAdminConsortiumMeetingSeries(
+  db: DatabaseLike,
+  query: MeetingSeriesListQuery,
+): Promise<{ meetingSeries: AdminMeetingSeriesSummary[]; page: ReturnType<typeof buildPageInfo> }> {
+  const { rows, total } = await queryMeetingSeriesPage(db, query, { kind: "admin_consortium" });
+  const meetingSeries = await attachIcsFiles(db, rows);
+  return { meetingSeries, page: buildPageInfo(query.limit, query.offset, total, meetingSeries.length) };
 }
 
 export async function createConsortiumMeetingSeries(

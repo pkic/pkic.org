@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from "preact/hooks";
 import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
+import {
+  adminEventEmailPreviewResponseSchema,
+  adminEventEmailSendResponseSchema,
+} from "../../../../../shared/schemas/admin-events";
 import { TEMPLATE_HELPERS, TEMPLATE_PARTIALS, type TemplateHelperItem } from "../../../email-template-helpers";
 import { toast } from "../../../ui";
 import type { EmailMessageType } from "../../../../../shared/schemas/admin-email-templates";
@@ -151,16 +155,14 @@ export function EventEmail({
     setPreview(null);
     setPreviewConfirmed(false);
     try {
-      const res = await api<{
-        subject: string;
-        html: string;
-        text: string;
-        recipientCount?: number;
-        previewToken?: string;
-      }>(`/api/v1/admin/events/${slug}/emails/campaign/preview`, {
-        method: "POST",
-        body: JSON.stringify(buildPayload()),
-      });
+      const res = await api(
+        `/api/v1/admin/events/${slug}/emails/campaign/preview`,
+        adminEventEmailPreviewResponseSchema,
+        {
+          method: "POST",
+          body: JSON.stringify(buildPayload()),
+        },
+      );
       setPreview(res);
       setStatus(
         `Preview ready — ${res.recipientCount != null ? `${res.recipientCount} recipients` : "confirm to send"}.`,
@@ -181,13 +183,10 @@ export function EventEmail({
     setSending(true);
     setStatus("Sending…");
     try {
-      const res = await api<{ queuedRecipients?: number; queuedBatches?: number }>(
-        `/api/v1/admin/events/${slug}/emails/campaign/send`,
-        {
-          method: "POST",
-          body: JSON.stringify(buildPayload(preview.previewToken)),
-        },
-      );
+      const res = await api(`/api/v1/admin/events/${slug}/emails/campaign/send`, adminEventEmailSendResponseSchema, {
+        method: "POST",
+        body: JSON.stringify(buildPayload(preview.previewToken)),
+      });
       const count = res.queuedRecipients ?? 0;
       toast(`Email queued for ${count} recipient${count !== 1 ? "s" : ""}`, "success");
       setStatus(`✓ Sent to ${count} recipients.`);

@@ -14,7 +14,10 @@ import {
   listConfiguredEventTerms,
   replaceConfiguredEventTerms,
 } from "../../../../../_lib/services/events/term-configuration";
-import { adminEventTermsReplaceSchema } from "../../../../../../assets/shared/schemas/admin-events";
+import {
+  adminEventTermsReplaceSchema,
+  adminEventTermsResponseSchema,
+} from "../../../../../../assets/shared/schemas/admin-events";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 export async function onRequestGet(c: AdminContext): Promise<Response> {
@@ -32,7 +35,7 @@ export async function onRequestPut(c: AdminContext): Promise<Response> {
   await replaceConfiguredEventTerms(requestDb(c), admin.id, event.id, body);
 
   const updatedTerms = await listConfiguredEventTerms(requestDb(c), event.id);
-  return json({ success: true, terms: updatedTerms });
+  return json(adminEventTermsResponseSchema.parse({ terms: updatedTerms }));
 }
 
 export async function onRequest(c: AdminContext): Promise<Response> {

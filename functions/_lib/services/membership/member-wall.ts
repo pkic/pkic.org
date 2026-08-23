@@ -2,7 +2,7 @@ import type { MemberWallEntry } from "../../../../assets/shared/schemas/members-
 import { sanitizeLegacyHttpOrSameOriginUrl } from "../../../../assets/shared/schemas/urls";
 import { all } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
-import { PUBLIC_SPONSOR_READ_MODEL_SQL } from "../public-sponsors";
+import { buildPublicSponsorReadModel } from "../public-sponsors";
 
 interface MemberWallRow extends Omit<MemberWallEntry, "href" | "logoUrl"> {
   href: string | null;
@@ -11,13 +11,14 @@ interface MemberWallRow extends Omit<MemberWallEntry, "href" | "logoUrl"> {
 
 /**
  * Unified public wall read model. Membership eligibility, logo presence,
- * sponsor attribution, non-member sponsor inclusion, and the non-sponsor cap
+ * sponsor attribution, non-member sponsor inclusion, and the final display cap
  * are all resolved in D1; the browser receives display-ready entries.
  */
 export async function listMemberWall(db: DatabaseLike, memberLimit: number): Promise<MemberWallEntry[]> {
+  const readModel = buildPublicSponsorReadModel();
   const rows = await all<MemberWallRow>(
     db,
-    `${PUBLIC_SPONSOR_READ_MODEL_SQL},
+    `${readModel.sql},
      active_member_organizations AS (
        SELECT DISTINCT o.id, o.slug, o.name, o.website, o.slogan, o.logo_r2_key
          FROM members m
@@ -50,31 +51,28 @@ export async function listMemberWall(db: DatabaseLike, memberLimit: number): Pro
         WHERE sponsor.effective_weight > 0
           AND (sponsor.logo_r2_key IS NOT NULL OR sponsor.sponsorship_logo_r2_key IS NOT NULL)
           AND NOT EXISTS (SELECT 1 FROM active_member_organizations member WHERE member.id = sponsor.id)
-     ), ranked_non_sponsors AS (
-       SELECT member_entries.key, member_entries.href, member_entries.logoUrl,
-              member_entries.name, member_entries.slogan, member_entries.sponsorLevel,
-              member_entries.sponsorLevelName,
-              ROW_NUMBER() OVER (
-                ORDER BY ((length(key) * 31 + unicode(substr(key, -1)) * 17 + unicode(substr(key, 8, 1))) % 997), key
-              ) AS display_rank
-         FROM member_entries
-        WHERE sponsorLevel = 0
      ), selected_entries AS (
        SELECT key, href, logoUrl, name, slogan, sponsorLevel, sponsorLevelName
          FROM member_entries
-        WHERE sponsorLevel > 0
        UNION ALL
        SELECT key, href, logoUrl, name, slogan, sponsorLevel, sponsorLevelName
          FROM sponsor_only_entries
-       UNION ALL
-       SELECT key, href, logoUrl, name, slogan, sponsorLevel, sponsorLevelName
-         FROM ranked_non_sponsors
-        WHERE display_rank <= ?
+     ), ranked_entries AS (
+       SELECT selected_entries.key, selected_entries.href, selected_entries.logoUrl,
+              selected_entries.name, selected_entries.slogan, selected_entries.sponsorLevel,
+              selected_entries.sponsorLevelName,
+              ROW_NUMBER() OVER (
+                ORDER BY CASE WHEN sponsorLevel > 0 THEN 0 ELSE 1 END,
+                         ((length(key) * 31 + unicode(substr(key, -1)) * 17 + unicode(substr(key, 8, 1))) % 997),
+                         key
+              ) AS display_rank
+         FROM selected_entries
      )
      SELECT key, href, logoUrl, name, slogan, sponsorLevel, sponsorLevelName
-       FROM selected_entries
-      ORDER BY ((length(key) * 31 + unicode(substr(key, -1)) * 17 + unicode(substr(key, 8, 1))) % 997), key`,
-    ["", memberLimit],
+       FROM ranked_entries
+      WHERE display_rank <= ?
+      ORDER BY display_rank`,
+    [...readModel.bindings, memberLimit],
   );
 
   return rows.map((row) => ({

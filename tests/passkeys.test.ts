@@ -272,6 +272,8 @@ describe("passkeys (WebAuthn)", () => {
     expect(completeResponse.status).toBe(200);
     const body = passkeyAuthenticateCompleteResponseSchema.parse(await completeResponse.json());
     expect(body.success).toBe(true);
+    expect("admin" in body).toBe(true);
+    if (!("admin" in body)) throw new Error("Expected an admin passkey session");
     expect(body.admin.id).toBe(userId);
     expect(body.admin).not.toHaveProperty("identityType");
     expect(body.admin).not.toHaveProperty("sessionId");

@@ -25,6 +25,7 @@ import { enforceRateLimit } from "../../_lib/rate-limit";
 import { isAppError } from "../../_lib/errors";
 import { logError } from "../../_lib/logging";
 import { resolveAppBaseUrl } from "../../_lib/config";
+import { LEGACY_FORM_MAX_BYTES, readBoundedFormData } from "../../_lib/http-body";
 import { submitMembershipForm, MembershipFormValidationError } from "../../_lib/services/membership-form-submission";
 
 function redirectWithStatus(refererUrl: URL, status: "success" | "error"): Response {
@@ -101,7 +102,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   }
 
   try {
-    const formData = await request.formData();
+    const formData = await readBoundedFormData(request, LEGACY_FORM_MAX_BYTES);
     await submitMembershipForm(formData, c.env);
     return redirectWithStatus(redirectUrl, "success");
   } catch (error) {

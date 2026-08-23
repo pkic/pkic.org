@@ -170,6 +170,7 @@ describe("sponsorship event history", () => {
     await act(flush);
     expect(latest.events).toEqual([]);
     expect(latest.error).toBe("Received an invalid pipeline history response.");
+    expect(latest.error).not.toContain("Invalid option");
     expect(latest.retry).toBeTypeOf("function");
     void act(() => render(null, container));
   });

@@ -13,6 +13,7 @@ import {
   voteFullResultSchema,
   motionVoteResultSchema,
   electionVoteResultSchema,
+  publicVoteGetResponseSchema,
   voteStatusSchema,
   voteProposalStatusSchema,
 } from "../assets/shared/schemas/votes";
@@ -72,8 +73,78 @@ describe("voteResultSchema (public/portal endpoints)", () => {
   });
 
   it("accepts the full motion and election shapes too", () => {
-    expect(voteResultSchema.safeParse(MOTION_RESULT).success).toBe(true);
-    expect(voteResultSchema.safeParse(ELECTION_RESULT).success).toBe(true);
+    expect(voteResultSchema.parse(MOTION_RESULT)).toEqual(MOTION_RESULT);
+    expect(voteResultSchema.parse(ELECTION_RESULT)).toEqual(ELECTION_RESULT);
+  });
+});
+
+describe("publicVoteGetResponseSchema", () => {
+  it("accepts the complete public motion and election projections", () => {
+    const shared = {
+      description: "Closed vote",
+      eligibleCategories: null,
+      opensAt: "2026-08-21T12:00:00Z",
+      closesAt: "2026-08-22T12:00:00Z",
+      currentRound: 1,
+      status: "closed" as const,
+      visibility: "public" as const,
+      publicDetailLevel: "full_breakdown" as const,
+      createdAt: "2026-08-20T12:00:00Z",
+      updatedAt: "2026-08-22T12:00:00Z",
+    };
+
+    expect(
+      publicVoteGetResponseSchema.safeParse({
+        vote: {
+          ...shared,
+          id: "00000000-0000-4000-8000-000000000001",
+          slug: "closed-motion",
+          title: "Closed Motion",
+          voteType: "motion",
+          scopeType: "forum",
+          scopeId: null,
+          thresholdType: "simple_majority",
+          candidates: null,
+          result: MOTION_RESULT,
+        },
+      }).success,
+    ).toBe(true);
+
+    expect(
+      publicVoteGetResponseSchema.safeParse({
+        vote: {
+          ...shared,
+          id: "00000000-0000-4000-8000-000000000002",
+          slug: "closed-election",
+          title: "Closed Election",
+          voteType: "election",
+          scopeType: "working_group",
+          scopeId: "00000000-0000-4000-8000-000000000003",
+          thresholdType: "successive_elimination",
+          candidates: [
+            {
+              id: "00000000-0000-4000-8000-000000000004",
+              userId: null,
+              candidateName: "Alice Candidate",
+              candidateBio: null,
+              sortOrder: 0,
+              eliminatedRound: null,
+            },
+          ],
+          result: {
+            rounds: [
+              {
+                round: 1,
+                counts: { "00000000-0000-4000-8000-000000000004": 1 },
+                eliminatedCandidateIds: [],
+                winnerCandidateId: "00000000-0000-4000-8000-000000000004",
+              },
+            ],
+            winnerCandidateId: "00000000-0000-4000-8000-000000000004",
+          },
+        },
+      }).success,
+    ).toBe(true);
   });
 });
 

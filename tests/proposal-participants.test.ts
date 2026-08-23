@@ -1,11 +1,16 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
-import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
+import { createContext, deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { onRequestPost as submitProposal } from "../functions/api/v1/events/[eventSlug]/proposals";
 import { onRequestGet as getBadgeRole } from "../functions/api/v1/admin/events/[eventSlug]/registrations/[registrationId]/badge-role";
-import { addProposalSpeaker, createProposal, finalizeProposalDecision } from "../functions/_lib/services/proposals";
+import {
+  addProposalSpeaker,
+  createProposal,
+  finalizeProposalDecision,
+  getProposalByManageToken,
+} from "../functions/_lib/services/proposals";
 import app from "../functions/router";
 
 describe("proposal participants", () => {
@@ -65,6 +70,69 @@ describe("proposal participants", () => {
     const rejected = await request("unconfigured-type@example.test", "Workshop");
     expect(rejected.status).toBe(400);
     await expect(rejected.json()).resolves.toMatchObject({ error: { code: "PROPOSAL_TYPE_NOT_ALLOWED" } });
+  });
+
+  it("delivers an existing proposer's management capability only to their canonical email", async () => {
+    await seedEventAndAdmin(env.DB);
+
+    const response = await submitProposal(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            sourceType: "direct",
+            proposer: {
+              firstName: "Claimed",
+              lastName: "Admin",
+              email: "admin@pkic.org",
+              organizationName: "Untrusted Organization",
+              jobTitle: "Untrusted Title",
+              bio: "A sufficiently detailed biography supplied by an anonymous submitter for validation purposes.",
+            },
+            proposal: {
+              type: "talk",
+              title: "Existing identity capability delivery",
+              abstract:
+                "A sufficiently detailed abstract used to verify that public email equality never exposes an existing account's proposal capability.",
+            },
+            consents: [{ termKey: "speaker-terms", version: "v1" }],
+          }),
+        }),
+        { eventSlug: "pqc-2026" },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    const created = (await response.json()) as {
+      proposalId: string;
+      manageToken: string | null;
+      manageUrl: string | null;
+    };
+    expect(created.manageToken).toBeNull();
+    expect(created.manageUrl).toBeNull();
+
+    const [queued] = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key = 'proposal_submitted' AND recipient_email = ?",
+      "admin@pkic.org",
+    );
+    const delivered = await deliveredEmailPayload<{ manageUrl: string }>(env.DB, env, queued.payload_json);
+    const emailedToken = new URL(delivered.manageUrl).searchParams.get("token");
+    expect(emailedToken).toBeTruthy();
+    await expect(getProposalByManageToken(env.DB, emailedToken!, env.INTERNAL_SIGNING_SECRET!)).resolves.toMatchObject({
+      id: created.proposalId,
+      proposer_user_id: expect.any(String),
+    });
+
+    await expect(
+      queryAll<{ first_name: string | null; organization_name: string | null }>(
+        env.DB,
+        "SELECT first_name, organization_name FROM users WHERE normalized_email = ?",
+        "admin@pkic.org",
+      ),
+    ).resolves.toEqual([{ first_name: null, organization_name: null }]);
   });
 
   it("supports panel participants and stores user links", async () => {

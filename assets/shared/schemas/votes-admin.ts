@@ -43,6 +43,9 @@ export const adminVoteSchema = z.object({
   ...voteSummaryFieldsSchema,
   candidates: z.array(candidateSummarySchema).nullable(),
 });
+/** Mutation responses return the vote row summary; candidates are a detail projection. */
+export const adminVoteMutationResponseSchema = z.object({ vote: z.object(voteSummaryFieldsSchema) });
+export const adminVoteResponseSchema = z.object({ vote: adminVoteSchema });
 
 export type VoteCandidateSummary = z.infer<typeof candidateSummarySchema>;
 export type AdminVoteSummary = z.infer<typeof adminVoteSchema>;
@@ -82,7 +85,7 @@ export const adminVoteCreateRouteSchema = {
   responses: {
     "200": {
       description: "Vote created.",
-      content: { "application/json": { schema: z.object({ vote: z.object(voteSummaryFieldsSchema) }) } },
+      content: { "application/json": { schema: adminVoteMutationResponseSchema } },
     },
     "403": { description: "Missing votes:create permission for this scope." },
     "422": { description: "Invalid candidates/threshold combination for the vote type." },
@@ -106,7 +109,7 @@ export const adminVoteUpdateRouteSchema = {
   responses: {
     "200": {
       description: "Vote updated.",
-      content: { "application/json": { schema: z.object({ vote: z.object(voteSummaryFieldsSchema) }) } },
+      content: { "application/json": { schema: adminVoteMutationResponseSchema } },
     },
     "404": { description: "Vote not found." },
     "409": { description: "Vote is already closed." },
@@ -129,11 +132,16 @@ export const adminVoteVisibilityUpdateRouteSchema = {
   responses: {
     "200": {
       description: "Visibility updated.",
-      content: { "application/json": { schema: z.object({ vote: z.object(voteSummaryFieldsSchema) }) } },
+      content: { "application/json": { schema: adminVoteMutationResponseSchema } },
     },
     "404": { description: "Vote not found." },
   },
 };
+export const adminVoteProposalApproveResponseSchema = z.object({
+  proposal: proposalSummarySchema,
+  convertedVote: z.object(voteSummaryFieldsSchema),
+});
+export const adminVoteProposalRejectResponseSchema = z.object({ proposal: proposalSummarySchema });
 
 export const adminBallotSchema = z.object({
   id: databaseIdSchema,
@@ -173,6 +181,8 @@ export const adminVoteBallotsRouteSchema = {
 export const adminListProposalsQuerySchema = listQuerySchema(VOTE_PROPOSALS_LIST_SORT_COLUMNS).extend({
   status: voteProposalStatusSchema.optional(),
 });
+export const adminVoteProposalsListResponseSchema = paginatedResponseSchema("proposals", proposalSummarySchema);
+export const adminVoteProposalDetailResponseSchema = proposalDetailResponseSchema;
 
 export const adminListProposalsRouteSchema = {
   tags: ["Admin Vote Proposals"],
@@ -210,7 +220,7 @@ export const adminApproveProposalRouteSchema = {
       description: "Converted.",
       content: {
         "application/json": {
-          schema: z.object({ proposal: proposalSummarySchema, convertedVote: z.object(voteSummaryFieldsSchema) }),
+          schema: adminVoteProposalApproveResponseSchema,
         },
       },
     },
@@ -230,7 +240,7 @@ export const adminRejectProposalRouteSchema = {
   responses: {
     "200": {
       description: "Rejected.",
-      content: { "application/json": { schema: z.object({ proposal: proposalSummarySchema }) } },
+      content: { "application/json": { schema: adminVoteProposalRejectResponseSchema } },
     },
     "409": { description: "Proposal is not open for endorsement." },
   },

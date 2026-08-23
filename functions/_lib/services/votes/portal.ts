@@ -29,8 +29,10 @@ import {
 } from "./shared";
 import type { AuthMember, DatabaseLike } from "../../types";
 import { VOTES_LIST_SORT_COLUMNS } from "../../../../assets/shared/schemas/votes";
+import { getWorkingGroupNamesByIds } from "../working-groups";
 
 export interface PortalVoteSummary extends VoteSummary {
+  scopeName: string | null;
   candidates: CandidateSummary[] | null;
   canCastBallot: boolean;
   hasCastBallot: boolean;
@@ -83,7 +85,15 @@ async function toPortalVoteSummary(db: DatabaseLike, row: VoteRow, member: AuthM
     row.status === "closed"
       ? (parseJsonSafe<Record<string, unknown>>(row.result_json, {}) as unknown as VoteResult)
       : null;
-  return { ...summary, candidates, canCastBallot, hasCastBallot, result };
+  const scopeNames = await getWorkingGroupNamesByIds(db, row.scope_id ? [row.scope_id] : []);
+  return {
+    ...summary,
+    scopeName: row.scope_id ? (scopeNames.get(row.scope_id) ?? null) : null,
+    candidates,
+    canCastBallot,
+    hasCastBallot,
+    result,
+  };
 }
 
 /**
@@ -176,10 +186,14 @@ export async function listVisibleVotesForMember(
   const voteIds = rows.map((r) => r.id);
   const electionVoteIds = rows.filter((r) => r.vote_type === "election").map((r) => r.id);
 
-  const [candidatesByVoteId, delegateUserId, castBallotRounds] = await Promise.all([
+  const [candidatesByVoteId, delegateUserId, castBallotRounds, scopeNames] = await Promise.all([
     getCandidatesForVotes(db, electionVoteIds),
     member.organizationId ? resolveVotingDelegateUserId(db, member.organizationId) : Promise.resolve(null),
     loadCastBallotRounds(db, voteIds, member),
+    getWorkingGroupNamesByIds(
+      db,
+      rows.flatMap((row) => (row.scope_id ? [row.scope_id] : [])),
+    ),
   ]);
 
   const votes = rows.map((row) => {
@@ -190,6 +204,7 @@ export async function listVisibleVotesForMember(
         : null;
     return {
       ...summary,
+      scopeName: row.scope_id ? (scopeNames.get(row.scope_id) ?? null) : null,
       candidates: row.vote_type === "election" ? (candidatesByVoteId.get(row.id) ?? []) : null,
       canCastBallot: canCastBallotForList(row, member, delegateUserId, wgIds),
       hasCastBallot: castBallotRounds.has(`${row.id}:${row.current_round}`),

@@ -7,7 +7,10 @@ import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
 import { sendApplicationCommunication } from "../../../../../_lib/services/membership/applications/communications";
-import { applicationCommunicationCreateRouteSchema } from "../../../../../../assets/shared/schemas/admin-applications";
+import {
+  applicationCommunicationCreateResponseSchema,
+  applicationCommunicationCreateRouteSchema,
+} from "../../../../../../assets/shared/schemas/admin-applications";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 export const ApplicationCommunicationsPost = openApiRoute(
@@ -26,6 +29,9 @@ export const ApplicationCommunicationsPost = openApiRoute(
       templateKey: body.templateKey ?? null,
     });
     c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, result.outboxId));
-    return json({ id: result.id, createdAt: result.createdAt }, 201);
+    return json(
+      applicationCommunicationCreateResponseSchema.parse({ id: result.id, createdAt: result.createdAt }),
+      201,
+    );
   },
 );

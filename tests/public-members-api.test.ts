@@ -237,7 +237,7 @@ describe("GET /api/v1/members/wall", () => {
     await resetDb();
   });
 
-  it("joins sponsors and members in D1 while applying the cap only to non-sponsors", async () => {
+  it("joins sponsors and members in D1 while enforcing one final wall cap", async () => {
     const sponsorOrgId = crypto.randomUUID();
     await seedOrgMember({
       userId: crypto.randomUUID(),
@@ -275,14 +275,27 @@ describe("GET /api/v1/members/wall", () => {
     const response = await callPublicApi("https://pkic.org/api/v1/members/wall?memberLimit=1");
     expect(response.status).toBe(200);
     const body = memberWallResponseSchema.parse(await response.json());
-    expect(body.entries).toHaveLength(3);
-    expect(
-      body.entries
-        .filter(({ sponsorLevel }) => sponsorLevel > 0)
-        .map(({ name }) => name)
-        .sort(),
-    ).toEqual(["External Sponsor", "Sponsor Member"]);
-    expect(body.entries.filter(({ sponsorLevel }) => sponsorLevel === 0)).toHaveLength(1);
+    expect(body.entries).toHaveLength(1);
+    expect(body.entries[0]?.sponsorLevel).toBeGreaterThan(0);
+  });
+
+  it("never lets sponsor rows bypass the final wall bound", async () => {
+    for (const index of [1, 2, 3]) {
+      await env.DB.prepare(
+        `INSERT INTO sponsorships
+           (id, sponsor_type, non_member_name, non_member_website, non_member_logo_r2_key,
+            tier, pipeline_stage, created_at, updated_at)
+         VALUES (?, 'consortium', ?, 'https://sponsor.test', ?, 'Gold', 'active', datetime('now'), datetime('now'))`,
+      )
+        .bind(`wall-overflow-${index}`, `Overflow Sponsor ${index}`, `sponsor-logos/overflow-${index}.svg`)
+        .run();
+    }
+
+    const response = await callPublicApi("https://pkic.org/api/v1/members/wall?memberLimit=2");
+    expect(response.status).toBe(200);
+    const body = memberWallResponseSchema.parse(await response.json());
+    expect(body.entries).toHaveLength(2);
+    expect(body.entries.every(({ sponsorLevel }) => sponsorLevel > 0)).toBe(true);
   });
 
   it("rejects an unbounded member limit", async () => {
@@ -642,9 +655,27 @@ describe("GET /api/v1/working-groups", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { workingGroups: Array<{ slug: string }> };
+    const body = (await response.json()) as {
+      workingGroups: Array<{ slug: string }>;
+      page: { total: number; hasMore: boolean };
+    };
     expect(body.workingGroups).toHaveLength(1);
     expect(body.workingGroups[0].slug).toBe("pqc");
+    expect(body.page).toMatchObject({ total: 1, hasMore: false });
+  });
+
+  it("searches and pages working groups in D1 with deterministic ordering", async () => {
+    await seedWorkingGroup({ id: "wg-z", name: "Zeta Working Group", slug: "zeta" });
+    await seedWorkingGroup({ id: "wg-a", name: "Alpha Working Group", slug: "alpha" });
+
+    const response = await callPublicApi("https://pkic.org/api/v1/working-groups?q=working&limit=1&offset=1&sort=name");
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      workingGroups: Array<{ slug: string }>;
+      page: { total: number; offset: number; hasMore: boolean };
+    };
+    expect(body.workingGroups.map(({ slug }) => slug)).toEqual(["zeta"]);
+    expect(body.page).toMatchObject({ total: 2, offset: 1, hasMore: false });
   });
 });
 

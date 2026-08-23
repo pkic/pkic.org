@@ -5,6 +5,7 @@
  */
 import { useState } from "preact/hooks";
 import { api } from "../../api";
+import { adminOrganizationDetailResponseSchema } from "../../../../shared/schemas/admin-organizations";
 import type { AdminOrganizationDetail } from "../../types";
 import { ORG_TIED_MEMBERSHIP_CATEGORIES } from "../../../../shared/schemas/admin-organizations";
 import { linksToText, textToLinks } from "../../../shared/links-text";
@@ -58,7 +59,11 @@ export function OrganizationProfileForm({
     body.links = textToLinks(linksText);
     await performAdminAction({
       setBusy: setSaving,
-      request: () => api(`/api/v1/admin/organizations/${org.id}`, { method: "PATCH", body: JSON.stringify(body) }),
+      request: () =>
+        api(`/api/v1/admin/organizations/${org.id}`, adminOrganizationDetailResponseSchema, {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        }),
       successMessage: "Organization updated",
       afterSuccess: onSaved,
       onError: setError,

@@ -38,7 +38,12 @@ export async function buildRegistrationDayWaitlistSync(
     forceWaitlistDayDates?: string[];
     claimOfferedDayDates?: string[];
   },
-): Promise<{ guardStatements: StatementLike[]; statements: StatementLike[]; activeRows: PlannedDayWaitlistEntry[] }> {
+): Promise<{
+  guardStatements: StatementLike[];
+  statements: StatementLike[];
+  activeRows: PlannedDayWaitlistEntry[];
+  changed: boolean;
+}> {
   const selections = normalizeSelections(payload.selections);
   const selectedByDate = new Map(selections.map((entry) => [entry.dayDate, entry.attendanceType]));
   const preserved = new Set(payload.preserveConfirmedEventDayIds ?? []);
@@ -94,7 +99,7 @@ export async function buildRegistrationDayWaitlistSync(
   ]);
   if (!eventDays.length) {
     if (claimOfferedDayDates.size > 0) throw dayWaitlistOfferUnavailableError();
-    return { guardStatements: [], statements: [], activeRows: [] };
+    return { guardStatements: [], statements: [], activeRows: [], changed: false };
   }
 
   const dayByDate = new Map(eventDays.map((day) => [day.day_date, day]));
@@ -127,6 +132,7 @@ export async function buildRegistrationDayWaitlistSync(
       .bind(now, payload.eventId, now),
   ];
   const activeRows: PlannedDayWaitlistEntry[] = [];
+  let changed = false;
 
   for (const day of eventDays) {
     const selectedType = selectedByDate.get(day.day_date);
@@ -139,6 +145,7 @@ export async function buildRegistrationDayWaitlistSync(
           ? { code: "capacity_unlimited", note: null }
           : null;
     if (clearReason) {
+      if (existing && ["waiting", "offered", "accepted"].includes(existing.status)) changed = true;
       statements.push(
         db
           .prepare(
@@ -153,6 +160,7 @@ export async function buildRegistrationDayWaitlistSync(
     if (forcedWaitlistDates.has(day.day_date)) {
       const capacity = capacityByDay.get(day.id);
       const priorityLane: DayWaitlistLane = "general";
+      changed = true;
       statements.push(
         db
           .prepare(
@@ -189,6 +197,7 @@ export async function buildRegistrationDayWaitlistSync(
       existing &&
       (existingStatus === "accepted" || existingStatus === "offered")
     ) {
+      if (existingStatus === "offered" && claimOfferedDayDates.has(day.day_date)) changed = true;
       activeRows.push({
         dayDate: day.day_date,
         status: existingStatus,
@@ -203,6 +212,13 @@ export async function buildRegistrationDayWaitlistSync(
       eventDays.some((other) => other.id !== day.id && selectedByDate.get(other.day_date) === "in_person");
     const priorityLane: DayWaitlistLane = continuity ? "continuity" : "general";
     if (existing && (existingStatus === "waiting" || existingStatus === "expired")) {
+      if (
+        existingStatus !== "waiting" ||
+        existing.priority_lane !== priorityLane ||
+        existing.offer_expires_at !== null
+      ) {
+        changed = true;
+      }
       statements.push(
         db
           .prepare(
@@ -219,6 +235,7 @@ export async function buildRegistrationDayWaitlistSync(
     const capacity = capacityByDay.get(day.id);
     if (Number(capacity?.reserved ?? 0) < day.in_person_capacity!) {
       if (existing?.status === "removed") {
+        changed = true;
         statements.push(
           db
             .prepare(
@@ -234,6 +251,7 @@ export async function buildRegistrationDayWaitlistSync(
     }
     if (preserved.has(day.id)) continue;
 
+    changed = true;
     statements.push(
       db
         .prepare(
@@ -260,7 +278,7 @@ export async function buildRegistrationDayWaitlistSync(
     );
     activeRows.push({ dayDate: day.day_date, status: "waiting", priorityLane, offerExpiresAt: null });
   }
-  return { guardStatements, statements, activeRows };
+  return { guardStatements, statements, activeRows, changed };
 }
 
 export async function prepareSyncRegistrationDayWaitlistStatements(

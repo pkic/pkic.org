@@ -14,6 +14,8 @@ import { buildFindOrCreateUserStatement, type FindOrCreateUserPayload, type User
 
 export interface PreparedRegistrationSubmission {
   user: UserRecord;
+  /** True only when this submission created a new, unprivileged identity. */
+  identityWasCreated: boolean;
   registration: RegistrationRecord;
   manageToken: string;
   confirmationToken: string | null;
@@ -115,6 +117,7 @@ export async function prepareRegistrationSubmission(
 
   return {
     user: preparedUser.user,
+    identityWasCreated: preparedUser.created,
     registration: builtRegistration.registration,
     manageToken: builtRegistration.manageToken,
     confirmationToken: builtRegistration.confirmationToken,

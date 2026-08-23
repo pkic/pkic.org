@@ -12,6 +12,7 @@ import {
   applicationDocumentUploadResponseSchema,
   applicationDocumentsListResponseSchema,
 } from "../assets/shared/schemas/application-documents";
+import { JSON_REQUEST_MAX_BYTES } from "../functions/_lib/http-body";
 
 function makeEnv(overrides: Partial<typeof env> = {}) {
   return { ...env, IP_RATE_LIMITER: createTestRateLimiter(100), ...overrides } as typeof env;
@@ -67,6 +68,21 @@ describe("POST /api/v1/members/applications", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].stage).toBe("pending");
     expect(rows[0].applicant_email).toBe("alice@example-corp.test");
+  });
+
+  it("rejects an oversized application body before parsing or persistence", async () => {
+    const testEnv = makeEnv();
+    const request = new Request("https://pkic.org/api/v1/members/applications", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: new Uint8Array(JSON_REQUEST_MAX_BYTES + 1),
+    });
+
+    const response = await callEndpoint(createApplication, createContext(testEnv, request, {}));
+
+    expect(response.status).toBe(413);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "REQUEST_BODY_TOO_LARGE" } });
+    expect(await queryAll(testEnv.DB, "SELECT id FROM member_applications")).toHaveLength(0);
   });
 
   it("enforces H5 university-email eligibility through the mounted route", async () => {

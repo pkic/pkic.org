@@ -4,7 +4,7 @@ import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTabl
 import { EventScheduleFields } from "../../components/EventScheduleFields";
 import { api } from "../../api";
 import type { EventSummary } from "../../types";
-import { adminEventsListResponseSchema } from "../../../../shared/schemas/admin-events";
+import { adminEventCreateResponseSchema, adminEventsListResponseSchema } from "../../../../shared/schemas/admin-events";
 import { useHashLocation } from "wouter/use-hash-location";
 import { performAdminAction } from "../../actions";
 import { FormActions } from "../../components/FormActions";
@@ -66,7 +66,8 @@ function NewEventForm({ onCreated, onCancel }: { onCreated: (slug: string) => vo
     if (virtualUrl.trim()) body.virtual_url = virtualUrl.trim();
     await performAdminAction({
       setBusy: setSaving,
-      request: () => api("/api/v1/admin/events", { method: "POST", body: JSON.stringify(body) }),
+      request: () =>
+        api("/api/v1/admin/events", adminEventCreateResponseSchema, { method: "POST", body: JSON.stringify(body) }),
       successMessage: "Event created",
       afterSuccess: () => onCreated(slug.trim()),
       onError: setStatus,

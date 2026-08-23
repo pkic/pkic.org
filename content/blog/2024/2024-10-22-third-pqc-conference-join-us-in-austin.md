@@ -60,7 +60,7 @@ We are currently accepting speaker proposals for the conference. If you have exp
 
 Sponsorship packages are available for organizations looking to gain visibility and engage with our diverse audience that which business leaders, industry experts, and representatives from various sectors. For more information on sponsorship opportunities, please check our [sponsor brochure](/events/2025/pqc-conference-austin-us/pqc-conference-austin-sponsors.pdf) or contact us at contact@pkic.org.
 
-{{< sponsors sponsoring="Post-Quantum Cryptography Conference Austin 2025" level="all" height="20" max-width="60" rows=true >}}
+{{< sponsors event-slug="pqc-conference-austin-us-2025" sponsoring="Post-Quantum Cryptography Conference Austin 2025" level="all" height="20" max-width="60" rows=true >}}
 
 Stay tuned for more updates on speakers, agenda, and other conference details. We look forward to seeing you in Austin for this exciting exploration of the future of cryptography!
 

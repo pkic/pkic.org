@@ -4,6 +4,7 @@
   <div class="pb-4 justify-content-center text-center">
     {{ partial "sponsors/wall-app.html" (dict
       "mode" "grid"
+      "eventSlug" (.Get "event-slug")
       "eventName" (.Get "sponsoring")
       "level" (.Get "level" | default "all")
       "height" (.Get "height")

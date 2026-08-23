@@ -13,11 +13,14 @@ import { createInvite } from "../functions/_lib/services/invites";
 import {
   createRegistration as createRegistrationService,
   confirmRegistrationByToken,
+  forceRegistrationStatus,
+  updateRegistrationByManageToken,
   updateRegistrationById,
 } from "../functions/_lib/services/registrations";
 import { promoteEventWaitlistWithNotifications } from "../functions/_lib/services/registrations/waitlist-promotions";
 import { listCampaignRecipients } from "../functions/_lib/services/admin-email-campaign";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
+import { gateBatchGroup, gateNextBatch } from "./helpers/d1-batch-gate";
 
 async function extractConfirmationToken(payloadJson: string): Promise<string> {
   const payload = await deliveredEmailPayload<{ confirmationUrl: string }>(env.DB, env, payloadJson);
@@ -111,6 +114,76 @@ describe("registration workflows", () => {
     const confirmedPayload = (await confirmResponse.json()) as { status: string };
     expect(confirmedPayload.status).toBe("registered");
   }, 15_000);
+
+  it("delivers existing-identity capabilities by email instead of exposing them to the anonymous submitter", async () => {
+    await seedEventAndAdmin(env.DB);
+
+    const createResponse = await createRegistration(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            firstName: "Claimed",
+            lastName: "Admin",
+            email: "admin@pkic.org",
+            attendanceType: "virtual",
+            sourceType: "direct",
+            consents: [
+              { termKey: "privacy-policy", version: "v1" },
+              { termKey: "code-of-conduct", version: "v1" },
+            ],
+          }),
+        }),
+        { eventSlug: "pqc-2026" },
+      ),
+    );
+
+    expect(createResponse.status).toBe(200);
+    const created = (await createResponse.json()) as {
+      registrationId: string;
+      manageToken: string | null;
+      manageUrl: string | null;
+    };
+    expect(created.manageToken).toBeNull();
+    expect(created.manageUrl).toBeNull();
+
+    const [queued] = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' AND recipient_email = ?",
+      "admin@pkic.org",
+    );
+    const delivered = await deliveredEmailPayload<{ confirmationUrl: string; manageUrl: string }>(
+      env.DB,
+      env,
+      queued.payload_json,
+    );
+    expect(new URL(delivered.manageUrl).searchParams.get("token")).toBeTruthy();
+
+    const confirmationToken = new URL(delivered.confirmationUrl).searchParams.get("token");
+    const confirmResponse = await confirmEmail(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/events/pqc-2026/registrations/confirm-email", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ token: confirmationToken, id: created.registrationId }),
+        }),
+        { eventSlug: "pqc-2026" },
+      ),
+    );
+    const confirmed = (await confirmResponse.json()) as { manageToken: string; manageUrl: string };
+    expect(confirmed.manageToken).toBeTruthy();
+    expect(new URL(confirmed.manageUrl).searchParams.get("token")).toBe(confirmed.manageToken);
+    await expect(
+      queryAll<{ normalized_email: string; role: string }>(
+        env.DB,
+        "SELECT normalized_email, role FROM users WHERE normalized_email = ?",
+        "admin@pkic.org",
+      ),
+    ).resolves.toEqual([{ normalized_email: "admin@pkic.org", role: "admin" }]);
+  });
 
   it("rolls back confirmation when the confirmed-email intent cannot be committed", async () => {
     await seedEventAndAdmin(env.DB);
@@ -1053,6 +1126,148 @@ describe("registration workflows", () => {
     });
   });
 
+  it("rejects a stale self-service update after an intervening registration transition", async () => {
+    await seedEventAndAdmin(env.DB);
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+       VALUES ('self-cas-user', 'self-cas@example.test', 'self-cas@example.test',
+               'Self', 'CAS', datetime('now'), datetime('now'))`,
+    ).run();
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const created = await createRegistrationService(env.DB, {
+      event,
+      userId: "self-cas-user",
+      attendanceType: "virtual",
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    await confirmRegistrationByToken(env.DB, {
+      token: created.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+
+    const gate = gateNextBatch(env.DB);
+    const staleUpdate = updateRegistrationByManageToken(gate.db, {
+      manageToken: created.manageToken,
+      action: "update",
+      attendanceType: "on_demand",
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+    await gate.reached;
+    await env.DB.prepare("UPDATE registrations SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?")
+      .bind(created.registration.id)
+      .run();
+    gate.release();
+
+    await expect(staleUpdate).rejects.toMatchObject({ status: 409, code: "REGISTRATION_CHANGED" });
+    const [stored] = await queryAll<{ status: string; attendance_type: string }>(
+      env.DB,
+      "SELECT status, attendance_type FROM registrations WHERE id = ?",
+      [created.registration.id],
+    );
+    expect(stored).toEqual({ status: "cancelled", attendance_type: "virtual" });
+  });
+
+  it("rejects a stale admin force-status transition after an intervening registration transition", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+       VALUES ('admin-cas-user', 'admin-cas@example.test', 'admin-cas@example.test',
+               'Admin', 'CAS', datetime('now'), datetime('now'))`,
+    ).run();
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const created = await createRegistrationService(env.DB, {
+      event,
+      userId: "admin-cas-user",
+      attendanceType: "virtual",
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    await confirmRegistrationByToken(env.DB, {
+      token: created.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+
+    const gate = gateNextBatch(env.DB);
+    const staleForce = forceRegistrationStatus(gate.db, {
+      registrationId: created.registration.id,
+      eventId,
+      status: "cancelled",
+      actorUserId: "admin-cas-actor",
+    });
+    await gate.reached;
+    await env.DB.prepare("UPDATE registrations SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?")
+      .bind(created.registration.id)
+      .run();
+    gate.release();
+
+    await expect(staleForce).rejects.toMatchObject({ status: 409, code: "REGISTRATION_CHANGED" });
+  });
+
+  it("commits one admin status notification when identical transitions race", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+       VALUES ('admin-race-user', 'admin-race@example.test', 'admin-race@example.test',
+               'Admin', 'Race', datetime('now'), datetime('now'))`,
+    ).run();
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const created = await createRegistrationService(env.DB, {
+      event,
+      userId: "admin-race-user",
+      attendanceType: "virtual",
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    await confirmRegistrationByToken(env.DB, {
+      token: created.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+    const gatedDb = gateBatchGroup(env.DB, 2);
+    const attempt = () =>
+      forceRegistrationStatus(gatedDb, {
+        registrationId: created.registration.id,
+        eventId,
+        status: "cancelled",
+        actorUserId: "admin-race-actor",
+        notification: {
+          event,
+          appBaseUrl: "https://app.test",
+          templateKey: "registration_updated",
+          subject: `Registration updated for ${event.name}`,
+        },
+      });
+
+    const results = await Promise.allSettled([attempt(), attempt()]);
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+    expect(results.find((result) => result.status === "rejected")?.reason).toMatchObject({
+      status: 409,
+      code: "REGISTRATION_CHANGED",
+    });
+    await expect(
+      queryAll<{ total: number }>(
+        env.DB,
+        `SELECT COUNT(*) AS total FROM email_outbox
+         WHERE template_key = 'registration_updated' AND recipient_email = 'admin-race@example.test'`,
+      ),
+    ).resolves.toEqual([{ total: 1 }]);
+    await expect(
+      queryAll<{ total: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS total FROM audit_log WHERE action = 'admin_registration_force_status' AND entity_id = ?",
+        [created.registration.id],
+      ),
+    ).resolves.toEqual([{ total: 1 }]);
+  });
+
   it("rolls back a managed update when its durable notification cannot be queued", async () => {
     await seedEventAndAdmin(env.DB);
     await env.DB.prepare(
@@ -1115,6 +1330,59 @@ describe("registration workflows", () => {
     } finally {
       await env.DB.prepare("DROP TRIGGER reject_registration_update_email").run();
     }
+  });
+
+  it("queues one notification and one audit for an exactly repeated managed update", async () => {
+    await seedEventAndAdmin(env.DB);
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+       VALUES ('update-retry-user', 'update-retry@example.test', 'update-retry@example.test',
+               'Before', 'Retry', datetime('now'), datetime('now'))`,
+    ).run();
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const created = await createRegistrationService(env.DB, {
+      event,
+      userId: "update-retry-user",
+      attendanceType: "virtual",
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    const confirmed = await confirmRegistrationByToken(env.DB, {
+      token: created.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+    const request = () =>
+      manageRegistration(
+        createContext(
+          env,
+          new Request(`https://app.test/api/v1/registrations/manage/${confirmed.manageToken}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ action: "update", attendanceType: "on_demand", firstName: "After" }),
+          }),
+          { token: confirmed.manageToken },
+        ),
+      );
+
+    expect((await request()).status).toBe(200);
+    expect((await request()).status).toBe(200);
+
+    await expect(
+      queryAll<{ total: number }>(
+        env.DB,
+        `SELECT COUNT(*) AS total FROM email_outbox
+         WHERE template_key = 'registration_updated' AND recipient_email = 'update-retry@example.test'`,
+      ),
+    ).resolves.toEqual([{ total: 1 }]);
+    await expect(
+      queryAll<{ total: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS total FROM audit_log WHERE action = 'self_service_update' AND entity_id = ?",
+        [created.registration.id],
+      ),
+    ).resolves.toEqual([{ total: 1 }]);
   });
 
   it("rolls back the complete managed email-change aggregate when confirmation queuing fails", async () => {

@@ -1,5 +1,6 @@
 import { ZodError } from "zod";
 import { ApiClientError } from "../api-client";
+import { apiValidationErrorDetailsSchema } from "../../../shared/schemas/api-common";
 
 export interface ValidationState {
   globalMessage: string;
@@ -71,7 +72,8 @@ export function normalizeValidation(error: unknown): ValidationState {
     };
   }
 
-  const details = error.details;
+  const detailsResult = apiValidationErrorDetailsSchema.safeParse(error.details);
+  const details = detailsResult.success ? detailsResult.data : undefined;
   const fieldErrors = details?.fieldErrors ?? {};
   const flattened = Object.fromEntries(
     Object.entries(fieldErrors)

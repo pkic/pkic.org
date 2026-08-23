@@ -13,7 +13,10 @@ import { getConfig } from "../../../../../_lib/config";
 import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
 import { getMembershipSettings } from "../../../../../_lib/services/membership-settings";
 import { transitionApplicationStage } from "../../../../../_lib/services/membership/applications/transition";
-import { applicationStageTransitionRouteSchema } from "../../../../../../assets/shared/schemas/admin-applications";
+import {
+  applicationStageTransitionResponseSchema,
+  applicationStageTransitionRouteSchema,
+} from "../../../../../../assets/shared/schemas/admin-applications";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 export const ApplicationStagePatch = openApiRoute(
@@ -47,10 +50,12 @@ export const ApplicationStagePatch = openApiRoute(
       c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, outboxId));
     }
 
-    return json({
-      id: result.application.id,
-      stage: result.application.stage,
-      onHoldSubtype: result.application.on_hold_subtype,
-    });
+    return json(
+      applicationStageTransitionResponseSchema.parse({
+        id: result.application.id,
+        stage: result.application.stage,
+        onHoldSubtype: result.application.on_hold_subtype,
+      }),
+    );
   },
 );

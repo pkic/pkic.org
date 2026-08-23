@@ -5,7 +5,6 @@ import type {
   AdminProposalSpeakersResponse,
 } from "../../../assets/shared/schemas/admin-event-proposals";
 import type { ProposalStatus } from "../../../assets/shared/schemas/proposal-status";
-import { getProposalAccessForEvent } from "../auth/proposal-access";
 import { batchFirst, batchRows } from "../db/pagination";
 import { first } from "../db/queries";
 import { AppError } from "../errors";
@@ -18,13 +17,21 @@ import { isRegistrationTransitionConflict, registrationChangedError } from "./re
 import { isEventParticipantSourceConflict } from "./event-participant-source-revision";
 import {
   assertProposalSpeakerRoleTransition,
+  proposalSpeakerEffectiveHeadshotExpression,
+  proposalSpeakerEffectiveProfileExpression,
   prepareProposalSpeakersWithStatus,
   prepareProposalSpeakerWithUserById,
   type ProposalSpeakerWithUser,
 } from "./proposal-speakers";
-import { prepareSpeakerProfileStatement } from "./proposals-speaker-profile";
 import type { UserProfilePatch } from "./users";
+import { adminProposalSpeakerHeadshotUrl } from "./admin-proposal-speaker-headshot";
 import { publicUserHeadshotUrl } from "./user-headshot";
+import {
+  updateProposalProfileOverrides,
+  type ProposalProfilePatch,
+  type ProposalProfileValues,
+} from "./proposal-speaker-profile-overrides";
+import { requireAdminProposalSpeakerPermission } from "./admin-proposal-speaker-access";
 
 interface AdminProposalRosterRow {
   id: string;
@@ -41,11 +48,28 @@ interface AdminSpeakerEditSnapshot extends ProposalSpeakerWithUser {
   proposal_updated_at: string;
   proposer_user_id: string;
   user_updated_at: string;
+  profile_overrides_json: string;
+  base_first_name: string | null;
+  base_last_name: string | null;
+  base_organization_name: string | null;
+  base_job_title: string | null;
+  base_biography: string | null;
+  base_links_json: string | null;
+  headshot_override_set: number;
+  headshot_override_r2_key: string | null;
 }
 
-export function toAdminProposalSpeaker(speaker: ProposalSpeakerWithUser, appBaseUrl: string): AdminProposalSpeaker {
+export function toAdminProposalSpeaker(
+  speaker: ProposalSpeakerWithUser,
+  appBaseUrl: string,
+  proposalId?: string,
+): AdminProposalSpeaker {
   const hasBio = Boolean(speaker.biography);
   const hasHeadshot = Boolean(speaker.headshot_r2_key);
+  const headshotUrl =
+    speaker.headshot_r2_key?.startsWith("proposal-headshots/") && proposalId
+      ? adminProposalSpeakerHeadshotUrl(appBaseUrl, proposalId, speaker.user_id, speaker.headshot_updated_at)
+      : publicUserHeadshotUrl(appBaseUrl, speaker.headshot_r2_key, speaker.headshot_updated_at);
   return {
     userId: speaker.user_id,
     role: speaker.role,
@@ -65,28 +89,9 @@ export function toAdminProposalSpeaker(speaker: ProposalSpeakerWithUser, appBase
     profileComplete: hasBio && hasHeadshot,
     hasHeadshot,
     hasBio,
-    headshotUrl: publicUserHeadshotUrl(appBaseUrl, speaker.headshot_r2_key, speaker.headshot_updated_at),
+    headshotUrl,
     headshotUpdatedAt: speaker.headshot_updated_at,
   };
-}
-
-async function requireProposalSpeakerPermission(
-  db: DatabaseLike,
-  actor: AuthAdmin,
-  eventId: string,
-  permission: "review" | "manage",
-): Promise<void> {
-  const access = await getProposalAccessForEvent(db, eventId, actor);
-  const allowed = permission === "review" ? access.canReview : access.canFinalize;
-  if (!allowed) {
-    throw new AppError(
-      403,
-      "FORBIDDEN",
-      permission === "review"
-        ? "Missing permission to review proposal speakers"
-        : "Missing permission to edit proposal speakers",
-    );
-  }
 }
 
 export async function getAdminProposalSpeakerRoster(
@@ -110,10 +115,10 @@ export async function getAdminProposalSpeakerRoster(
   ]);
   const proposal = batchFirst<AdminProposalRosterRow>(proposalResult);
   if (!proposal) throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found");
-  await requireProposalSpeakerPermission(db, actor, proposal.event_id, "review");
+  await requireAdminProposalSpeakerPermission(db, actor, proposal.event_id, "review");
 
   const speakerRows = batchRows<ProposalSpeakerWithUser>(speakersResult);
-  const speakers = speakerRows.map((speaker) => toAdminProposalSpeaker(speaker, appBaseUrl));
+  const speakers = speakerRows.map((speaker) => toAdminProposalSpeaker(speaker, appBaseUrl, proposalId));
   const summary = {
     total: speakers.length,
     confirmed: 0,
@@ -152,8 +157,22 @@ async function getAdminSpeakerEditSnapshot(
     db,
     `SELECT ps.id AS speaker_id, ps.user_id, ps.role, ps.status, ps.manage_link_secret,
             ps.confirmed_at, ps.declined_at, ps.terms_accepted_at, ps.decline_reason, ps.created_at,
-            u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
-            u.biography, u.links_json, u.headshot_r2_key, u.headshot_updated_at, u.updated_at AS user_updated_at,
+            u.email,
+            ${proposalSpeakerEffectiveProfileExpression("u", "ps", "firstName", "first_name")} AS first_name,
+            ${proposalSpeakerEffectiveProfileExpression("u", "ps", "lastName", "last_name")} AS last_name,
+            ${proposalSpeakerEffectiveProfileExpression("u", "ps", "organizationName", "organization_name")} AS organization_name,
+            ${proposalSpeakerEffectiveProfileExpression("u", "ps", "jobTitle", "job_title")} AS job_title,
+            ${proposalSpeakerEffectiveProfileExpression("u", "ps", "biography", "biography")} AS biography,
+            ${proposalSpeakerEffectiveProfileExpression("u", "ps", "links", "links_json")} AS links_json,
+            ${proposalSpeakerEffectiveHeadshotExpression("u", "ps")} AS headshot_r2_key,
+            CASE WHEN ps.headshot_override_set = 1 THEN ps.headshot_updated_at ELSE u.headshot_updated_at END AS headshot_updated_at,
+            ps.profile_overrides_json,
+            ps.headshot_override_set,
+            ps.headshot_r2_key AS headshot_override_r2_key,
+            u.first_name AS base_first_name, u.last_name AS base_last_name,
+            u.organization_name AS base_organization_name, u.job_title AS base_job_title,
+            u.biography AS base_biography, u.links_json AS base_links_json,
+            u.updated_at AS user_updated_at,
             sp.event_id AS proposal_event_id, sp.status AS proposal_status, sp.proposer_user_id,
             sp.updated_at AS proposal_updated_at
      FROM session_proposals sp
@@ -223,7 +242,7 @@ export async function editAdminProposalSpeaker(
   appBaseUrl: string,
 ): Promise<AdminProposalSpeakerPatchResponse> {
   const current = await getAdminSpeakerEditSnapshot(db, proposalId, userId);
-  await requireProposalSpeakerPermission(db, actor, current.proposal_event_id, "manage");
+  await requireAdminProposalSpeakerPermission(db, actor, current.proposal_event_id, "manage");
   const next = buildSpeakerPatch(current, patch);
   assertProposalSpeakerRoleTransition({
     currentProposerUserId: current.proposer_user_id,
@@ -231,35 +250,61 @@ export async function editAdminProposalSpeaker(
     nextRole: next.role,
   });
   if (Object.keys(next.changes).length === 0) {
-    return { success: true, speaker: toAdminProposalSpeaker(current, appBaseUrl) };
+    return { success: true, speaker: toAdminProposalSpeaker(current, appBaseUrl, proposalId) };
   }
 
   const now = nowIso();
+  const baseValues: ProposalProfileValues = {
+    firstName: current.base_first_name,
+    lastName: current.base_last_name,
+    organizationName: current.base_organization_name,
+    jobTitle: current.base_job_title,
+    biography: current.base_biography,
+    links: parseLinksJson(current.base_links_json),
+  };
+  const profilePatch: ProposalProfilePatch = {
+    firstName: next.profile.firstName,
+    lastName: next.profile.lastName,
+    organizationName: next.profile.organizationName,
+    jobTitle: next.profile.jobTitle,
+    biography: next.profile.biography,
+    links: next.profile.linksJson === undefined ? undefined : parseLinksJson(next.profile.linksJson),
+  };
+  const profileOverridesJson = updateProposalProfileOverrides(current.profile_overrides_json, baseValues, profilePatch);
   const statements: StatementLike[] = [
     db
       .prepare(
         `UPDATE proposal_speakers
-         SET role = ?
+         SET role = ?, profile_overrides_json = ?
          WHERE id = ? AND proposal_id = ? AND user_id = ? AND role = ? AND status = ?
            AND EXISTS (
              SELECT 1
              FROM session_proposals sp
-             JOIN users u ON u.id = ?
+             JOIN proposal_speakers ps ON ps.id = ? AND ps.proposal_id = sp.id AND ps.user_id = ?
+             JOIN users u ON u.id = ps.user_id
              WHERE sp.id = ? AND sp.event_id = ? AND sp.status = ? AND sp.updated_at = ?
                AND sp.deleted_at IS NULL
                AND u.updated_at = ?
-               AND u.first_name IS ? AND u.last_name IS ? AND u.organization_name IS ?
-               AND u.job_title IS ? AND u.biography IS ? AND u.links_json IS ?
-               AND u.headshot_r2_key IS ? AND u.headshot_updated_at IS ?
+               AND ${proposalSpeakerEffectiveProfileExpression("u", "ps", "firstName", "first_name")} IS ?
+               AND ${proposalSpeakerEffectiveProfileExpression("u", "ps", "lastName", "last_name")} IS ?
+               AND ${proposalSpeakerEffectiveProfileExpression("u", "ps", "organizationName", "organization_name")} IS ?
+               AND ${proposalSpeakerEffectiveProfileExpression("u", "ps", "jobTitle", "job_title")} IS ?
+               AND ${proposalSpeakerEffectiveProfileExpression("u", "ps", "biography", "biography")} IS ?
+               AND ${proposalSpeakerEffectiveProfileExpression("u", "ps", "links", "links_json")} IS ?
+               AND ${proposalSpeakerEffectiveHeadshotExpression("u", "ps")} IS ?
+               AND (CASE WHEN ps.headshot_override_set = 1 THEN ps.headshot_updated_at ELSE u.headshot_updated_at END) IS ?
+               AND ps.profile_overrides_json IS ?
            )`,
       )
       .bind(
         next.role,
+        profileOverridesJson,
         current.speaker_id,
         proposalId,
         userId,
         current.role,
         current.status,
+        current.speaker_id,
         userId,
         proposalId,
         current.proposal_event_id,
@@ -274,6 +319,7 @@ export async function editAdminProposalSpeaker(
         current.links_json,
         current.headshot_r2_key,
         current.headshot_updated_at,
+        current.profile_overrides_json,
       ),
     prepareScopedAuditLogAfterOneChange(
       db,
@@ -293,9 +339,6 @@ export async function editAdminProposalSpeaker(
     ),
   ];
 
-  if (Object.keys(next.profile).length > 0) {
-    statements.push(prepareSpeakerProfileStatement(db, userId, next.profile));
-  }
   if (next.role !== current.role) {
     statements.push(
       ...(await prepareProposalRoleCapacityForSpeakerChange(db, {
@@ -323,5 +366,5 @@ export async function editAdminProposalSpeaker(
   }
   const updated = batchFirst<ProposalSpeakerWithUser>(results.at(-1)!);
   if (!updated) throw new AppError(500, "PROPOSAL_SPEAKER_UPDATE_FAILED", "Unable to load the updated speaker");
-  return { success: true, speaker: toAdminProposalSpeaker(updated, appBaseUrl) };
+  return { success: true, speaker: toAdminProposalSpeaker(updated, appBaseUrl, proposalId) };
 }

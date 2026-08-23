@@ -1,14 +1,18 @@
-/** Uploads a browser File as its native media type and normalizes API errors. */
-export async function uploadFile<T = unknown>(url: string, file: Blob, fallbackMessage = "Upload failed"): Promise<T> {
-  const response = await fetch(url, {
+import { z, type ZodType } from "zod";
+import { requestJson } from "./api-client";
+
+/** Uploads a browser File as its native media type and validates the JSON response. */
+export async function uploadFile<Schema extends ZodType>(
+  url: string,
+  file: Blob,
+  schema: Schema,
+  fallbackMessage = "Upload failed",
+): Promise<z.output<Schema>> {
+  return requestJson(url, schema, {
     method: "POST",
-    credentials: "same-origin",
     headers: { "content-type": file.type || "application/octet-stream" },
     body: file,
+    mapError: (payload) =>
+      payload.error.code === "HTTP_ERROR" ? { error: { ...payload.error, message: fallbackMessage } } : payload,
   });
-  const body = (await response.json().catch(() => ({}))) as T & { error?: { message?: string } };
-  if (!response.ok) {
-    throw new Error(body.error?.message ?? fallbackMessage);
-  }
-  return body;
 }

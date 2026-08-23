@@ -228,6 +228,14 @@ export async function prepareReplaceRegistrationDayAttendanceStatements(
     nextByDayId.set(day.id, selection.attendanceType);
   }
 
+  const allDayIds = new Set([...previousByDayId.keys(), ...nextByDayId.keys()]);
+  if (
+    allDayIds.size === previousByDayId.size &&
+    [...allDayIds].every((dayId) => previousByDayId.get(dayId) === nextByDayId.get(dayId))
+  ) {
+    return [];
+  }
+
   const now = nowIso();
   const statements = [
     db.prepare("DELETE FROM registration_day_attendance WHERE registration_id = ?").bind(payload.registrationId),
@@ -249,7 +257,6 @@ export async function prepareReplaceRegistrationDayAttendanceStatements(
 
   if (payload.recordHistory !== false) {
     const changedBy = payload.changedBy ?? "system";
-    const allDayIds = new Set([...previousByDayId.keys(), ...nextByDayId.keys()]);
     for (const dayId of allDayIds) {
       const fromType = previousByDayId.get(dayId) ?? null;
       const toType = nextByDayId.get(dayId) ?? null;

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
-import type { z } from "zod";
 import { Link } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Spinner } from "../../../../components/Spinner";
@@ -13,6 +12,8 @@ import { FormEditor, type AdminFormDetail } from "./FormEditor";
 import { FormResponseStats, FormSubmissionsTable, type ServerFieldStat } from "./FormResponses";
 import {
   adminFormSubmissionStatsResponseSchema,
+  adminFormDeleteResponseSchema,
+  adminFormDetailResponseSchema,
   adminFormsListResponseSchema,
 } from "../../../../../shared/schemas/admin-forms";
 import {
@@ -24,8 +25,6 @@ import { ServerSearchSelect } from "../../../components/ServerSearchSelect";
 import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataTable";
 
 type FormTab = "responses" | "statistics" | "edit";
-
-type FormSubmissionStatsResponse = z.infer<typeof adminFormSubmissionStatsResponseSchema>;
 
 interface FormResponseFilters {
   status?: string;
@@ -81,10 +80,10 @@ function FormDetailPanel({
     try {
       const statsQuery = new URLSearchParams(statsParams).toString();
       const [detailRes, submissionRes] = await Promise.all([
-        api<AdminFormDetail>(`/api/v1/admin/forms/${formKey}`),
-        api<unknown>(`${submissionEndpoint}/stats${statsQuery ? `?${statsQuery}` : ""}`),
+        api(`/api/v1/admin/forms/${formKey}`, adminFormDetailResponseSchema),
+        api(`${submissionEndpoint}/stats${statsQuery ? `?${statsQuery}` : ""}`, adminFormSubmissionStatsResponseSchema),
       ]);
-      const parsedStats = adminFormSubmissionStatsResponseSchema.parse(submissionRes) as FormSubmissionStatsResponse;
+      const parsedStats = submissionRes;
       setDetail(detailRes);
       setStats(parsedStats.stats);
       setTotalResponses(parsedStats.total);
@@ -102,7 +101,7 @@ function FormDetailPanel({
   async function removeForm() {
     if (!window.confirm(`Archive or delete form ${formKey}?`)) return;
     try {
-      const result = await api<{ action: string; message?: string }>(`/api/v1/admin/forms/${formKey}`, {
+      const result = await api(`/api/v1/admin/forms/${formKey}`, adminFormDeleteResponseSchema, {
         method: "DELETE",
       });
       toast(result.message ?? `Form ${result.action}`, "success");

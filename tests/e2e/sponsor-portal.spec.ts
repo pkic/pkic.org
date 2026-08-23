@@ -82,6 +82,7 @@ test.describe("sponsor portal", () => {
     const stamp = Date.now();
     const contactEmail = `sponsor-e2e-${stamp}@example.test`;
     const attendeeEmail = `sponsor-e2e-attendee-${stamp}@example.test`;
+    const renewalDate = new Date(Date.now() + 180 * 86_400_000).toISOString().slice(0, 10);
 
     await signInAsAdmin(page);
 
@@ -105,7 +106,7 @@ test.describe("sponsor portal", () => {
 
     // ── Create + activate an event sponsorship (triggers sponsor-portal-access email) ─
     const sponsorship = await page.evaluate(
-      async ({ eventId, contactEmail }) => {
+      async ({ eventId, contactEmail, renewalDate }) => {
         const createRes = await fetch("/api/v1/admin/sponsorships", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -116,6 +117,7 @@ test.describe("sponsor portal", () => {
             tier: "Leader",
             contactEmail,
             contactName: "E2E Sponsor Contact",
+            renewalDate,
           }),
         });
         const created = (await createRes.json()) as { sponsorship: { id: string } };
@@ -127,7 +129,7 @@ test.describe("sponsor portal", () => {
         });
         return { createStatus: createRes.status, stageStatus: stageRes.status };
       },
-      { eventId: event.id, contactEmail },
+      { eventId: event.id, contactEmail, renewalDate },
     );
     expect(sponsorship.createStatus).toBe(201);
     expect(sponsorship.stageStatus).toBe(200);

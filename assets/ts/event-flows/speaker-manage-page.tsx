@@ -6,38 +6,22 @@ import { renderConsentInputs, readConsentValues, syncConsentValidation } from ".
 import { withLoadingButton } from "../shared/form/submit";
 import { setStatus } from "./boot";
 import { wireTokenHeadshotSection } from "./registration-manage-headshot";
-import type { RequiredTerm } from "../shared/types";
+import { eventTermsResponseSchema, type RequiredTerm } from "../../shared/schemas/forms";
 import { formatStatusLabel, statusBadgeClass, findSubmitButton } from "../shared/form/helpers";
-import type { SpeakerAccessSummary, SpeakerProposalSummary } from "./speaker-api-types";
 import { loadSpeakerPageData } from "./speaker-link-recovery";
-
-interface SpeakerManageResponse {
-  speaker: SpeakerAccessSummary;
-  proposal: SpeakerProposalSummary & {
-    presentationUrl: string | null;
-  };
-  profile: {
-    firstName: string | null;
-    lastName: string | null;
-    email: string;
-    organizationName: string | null;
-    jobTitle: string | null;
-    biography: string | null;
-    links: string[];
-    headshotUploaded: boolean;
-    headshotUpdatedAt: string | null;
-    headshotUrl: string | null;
-  };
-}
-
-interface TermsApiResponse {
-  terms: RequiredTerm[];
-}
+import {
+  speakerSelfServiceReadResponseSchema,
+  speakerParticipationResponseSchema,
+  type SpeakerSelfServiceReadResponse,
+} from "../../shared/schemas/speaker-self-service";
+import { successResponseSchema } from "../../shared/schemas/api-common";
+import { speakerProfilePatchSchema, speakerParticipationActionSchema } from "../../shared/schemas/proposal-management";
 
 async function main(): Promise<void> {
-  const loaded = await loadSpeakerPageData<SpeakerManageResponse>({
+  const loaded = await loadSpeakerPageData<SpeakerSelfServiceReadResponse>({
     selector: "[data-event-speaker-manage]",
-    request: (token, boot) => getJson(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`),
+    request: async (token, boot) =>
+      getJson(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`, speakerSelfServiceReadResponseSchema),
   });
   if (!loaded) return;
   const { boot, token, data, loadingEl, contentEl } = loaded;
@@ -105,8 +89,9 @@ async function main(): Promise<void> {
 
   if (confirmForm && consentContainer && data.speaker.status === "invited") {
     try {
-      const termsResponse = await getJson<TermsApiResponse>(
+      const termsResponse = await getJson(
         `${boot.apiBase}/events/${encodeURIComponent(boot.eventSlug)}/terms?audience=speaker`,
+        eventTermsResponseSchema,
       );
       speakerTerms = termsResponse.terms ?? [];
       renderConsentInputs(consentContainer, speakerTerms);
@@ -130,10 +115,11 @@ async function main(): Promise<void> {
 
     await withLoadingButton(findSubmitButton(confirmForm), async () => {
       try {
-        await postJson(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`, {
-          action: "confirm",
-          consents,
-        });
+        await postJson(
+          `${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`,
+          speakerParticipationActionSchema.parse({ action: "confirm", consents }),
+          speakerParticipationResponseSchema,
+        );
         window.location.reload();
       } catch (error) {
         const normalized = normalizeValidation(error);
@@ -156,10 +142,14 @@ async function main(): Promise<void> {
   declineConfirm?.addEventListener("click", async () => {
     await withLoadingButton(declineConfirm, async () => {
       try {
-        await postJson(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`, {
-          action: "decline",
-          reason: declineReason?.value.trim() || undefined,
-        });
+        await postJson(
+          `${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`,
+          speakerParticipationActionSchema.parse({
+            action: "decline",
+            reason: declineReason?.value.trim() || undefined,
+          }),
+          speakerParticipationResponseSchema,
+        );
         window.location.reload();
       } catch (error) {
         const normalized = normalizeValidation(error);
@@ -208,14 +198,18 @@ async function main(): Promise<void> {
     event.preventDefault();
     await withLoadingButton(findSubmitButton(profileForm), async () => {
       try {
-        await patchJson(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`, {
-          firstName: firstNameField?.value.trim() || null,
-          lastName: lastNameField?.value.trim() || null,
-          organizationName: organizationField?.value.trim() || null,
-          jobTitle: jobTitleField?.value.trim() || null,
-          biography: bioField?.value.trim() || "",
-          links: linksWidget?.getLinks() ?? [],
-        });
+        await patchJson(
+          `${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`,
+          speakerProfilePatchSchema.parse({
+            firstName: firstNameField?.value.trim() || null,
+            lastName: lastNameField?.value.trim() || null,
+            organizationName: organizationField?.value.trim() || null,
+            jobTitle: jobTitleField?.value.trim() || null,
+            biography: bioField?.value.trim() || "",
+            links: linksWidget?.getLinks() ?? [],
+          }),
+          successResponseSchema,
+        );
         setStatus(boot.statusEl, "Profile updated.");
         showProfileSavedState();
       } catch (error) {

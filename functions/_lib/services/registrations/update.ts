@@ -6,6 +6,8 @@ import { getRegistrationByIdForEvent, getRegistrationByManageToken } from "./que
 import { prepareRegistrationStatusEmail, type RegistrationStatusEmailParams } from "./status-notifications";
 import type { RegistrationRecord } from "./types";
 import { buildRegistrationUpdate, type RegistrationUpdatePayload } from "./update-plan";
+import { isRegistrationTransitionConflict, registrationChangedError } from "./transition-guard";
+import { sha256Hex } from "../../utils/crypto";
 
 type RegistrationUpdatePlan = Awaited<ReturnType<typeof buildRegistrationUpdate>>;
 
@@ -29,6 +31,9 @@ async function executeRegistrationUpdate<T>(
       return commit(await buildRegistrationUpdate(db, registration, payload, changedBy));
     });
   } catch (error) {
+    if (isRegistrationTransitionConflict(error)) {
+      throw registrationChangedError();
+    }
     if (isDayWaitlistOfferUnavailable(error)) {
       throw dayWaitlistOfferUnavailableError();
     }
@@ -40,9 +45,20 @@ async function commitUpdateWithNotification(
   db: DatabaseLike,
   built: RegistrationUpdatePlan,
   payload: RegistrationUpdatePayload & { notification: UpdateNotification },
-): Promise<{ registration: RegistrationRecord; outboxId: string }> {
+): Promise<{ registration: RegistrationRecord; outboxId: string | null }> {
+  if (!built.notificationChanged) {
+    await db.batch(built.statements);
+    return { registration: built.registration, outboxId: null };
+  }
+  const idempotencyKey =
+    payload.notification.idempotencyKey ??
+    `registration-status:${built.registration.id}:${built.notificationRevision}:` +
+      `${payload.notification.templateKey}:${payload.notification.noticeKind ?? "status_update"}`;
+  const outboxId = payload.notification.outboxId ?? (await sha256Hex(idempotencyKey)).slice(0, 32);
   const email = await prepareRegistrationStatusEmail(db, {
     ...payload.notification,
+    outboxId,
+    idempotencyKey,
     registrationId: built.registration.id,
     registration: built.registration,
     profilePatch: payload.profilePatch,
@@ -98,7 +114,7 @@ export async function updateRegistrationByManageTokenWithNotification(
     signingSecret: string;
     notification: UpdateNotification;
   } & RegistrationUpdatePayload,
-): Promise<{ registration: RegistrationRecord; outboxId: string }> {
+): Promise<{ registration: RegistrationRecord; outboxId: string | null }> {
   return executeRegistrationUpdate(
     db,
     payload,
@@ -146,7 +162,7 @@ export async function updateRegistrationByIdWithNotification(
   db: DatabaseLike,
   payload: { eventId: string; registrationId: string; notification: UpdateNotification } & RegistrationUpdatePayload,
   changedBy: string,
-): Promise<{ registration: RegistrationRecord; outboxId: string }> {
+): Promise<{ registration: RegistrationRecord; outboxId: string | null }> {
   return executeRegistrationUpdate(
     db,
     payload,

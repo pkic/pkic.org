@@ -1,5 +1,6 @@
 import type { AdminAttendanceOption, AdminEventDay } from "../../../types";
 import { api } from "../../../api";
+import { adminEventDaysResponseSchema } from "../../../../../shared/schemas/admin-events";
 
 export function collectAttendanceOptions(days: AdminEventDay[]): AdminAttendanceOption[] {
   const optionsByValue = new Map<string, AdminAttendanceOption>();
@@ -21,6 +22,6 @@ export async function loadEventAttendanceOptions(
 ): Promise<AdminAttendanceOption[]> {
   if (purpose !== "event_registration") return [];
 
-  const data = await api<{ days: AdminEventDay[] }>(`/api/v1/admin/events/${slug}/days`);
+  const data = await api(`/api/v1/admin/events/${slug}/days`, adminEventDaysResponseSchema);
   return collectAttendanceOptions(data.days ?? []);
 }

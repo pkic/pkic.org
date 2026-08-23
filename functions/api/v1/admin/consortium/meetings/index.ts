@@ -16,11 +16,11 @@ import {
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 
-export const ConsortiumMeetingsGet = openApiRoute(consortiumMeetingsListRouteSchema, async (c: AdminContext) => {
+export const ConsortiumMeetingsGet = openApiRoute(consortiumMeetingsListRouteSchema, async (c: AdminContext, data) => {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requirePermission(admin, "working-groups:read");
-  const meetingSeries = await listAdminConsortiumMeetingSeries(requestDb(c));
-  return json({ meetingSeries });
+  const result = await listAdminConsortiumMeetingSeries(requestDb(c), data.query);
+  return json(result);
 });
 
 export const ConsortiumMeetingsCreate = openApiRoute(

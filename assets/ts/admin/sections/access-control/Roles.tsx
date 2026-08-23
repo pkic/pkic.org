@@ -1,10 +1,10 @@
 import { useRef, useState } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
-import { api } from "../../api";
+import { api, apiCommand } from "../../api";
 import { toast } from "../../ui";
 import type { Role } from "../../types";
 import { PERMISSIONS } from "../../permissions";
-import { rolesListResponseSchema } from "../../../../shared/schemas/access-control";
+import { roleResponseEnvelopeSchema, rolesListResponseSchema } from "../../../../shared/schemas/access-control";
 
 /** Built-in roles ship system-locked; custom roles are admin-creatable. */
 export function Roles() {
@@ -28,7 +28,7 @@ export function Roles() {
     if (!name.trim()) return;
     setSubmitting(true);
     try {
-      await api("/api/v1/admin/roles", {
+      await api("/api/v1/admin/roles", roleResponseEnvelopeSchema, {
         method: "POST",
         body: JSON.stringify({
           name: name.trim(),
@@ -51,7 +51,7 @@ export function Roles() {
   async function handleDelete(role: Role) {
     if (!confirm(`Delete role "${role.name}"?`)) return;
     try {
-      await api(`/api/v1/admin/roles/${role.id}`, { method: "DELETE" });
+      await apiCommand(`/api/v1/admin/roles/${role.id}`, { method: "DELETE" });
       toast("Role deleted", "success");
       tableRef.current?.reload();
     } catch (e) {

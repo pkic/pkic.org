@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
 import { ProposalSpeakerHeadshotDelete, ProposalSpeakerHeadshotGet, ProposalSpeakerHeadshotPut } from "./headshot";
-import { onRequestPut as ProposalsSpeakerTokenPresentationPut_l } from "./presentation";
+import { SpeakerPresentationPut } from "./presentation";
 import { onRequestGet as ProposalsSpeakerTokenPresentationDownloadGet_l } from "./presentation/download";
 import { ProposalSpeakerReminderPreferencePost } from "./reminders";
 
@@ -11,7 +11,7 @@ export const openapi = fromHono(app);
 openapi.get("/headshot", ProposalSpeakerHeadshotGet);
 openapi.put("/headshot", ProposalSpeakerHeadshotPut);
 openapi.delete("/headshot", ProposalSpeakerHeadshotDelete);
-app.put("/presentation", ProposalsSpeakerTokenPresentationPut_l);
+openapi.put("/presentation", SpeakerPresentationPut);
 app.get("/presentation/download", ProposalsSpeakerTokenPresentationDownloadGet_l);
 openapi.post("/reminders", ProposalSpeakerReminderPreferencePost);
 

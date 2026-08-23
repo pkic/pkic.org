@@ -122,7 +122,7 @@ export async function onRequest(c: AdminContext): Promise<Response> {
 // PUT stays a manual OpenAPIRoute (not openApiRoute-wrapped): the schema's
 // body is multipart/form-data (registrationHeadshotUploadFormSchema is
 // documentation-only for that content type — chanfana can't validate it),
-// and onPut reads the multipart body itself via c.req.raw.formData(). Routing
+// and onPut reads the bounded multipart body itself. Routing
 // this through openApiRoute would make chanfana's getValidatedData() touch
 // the request body before the handler's own formData() read runs.
 export class RegistrationsManageTokenHeadshotPut extends OpenAPIRoute {

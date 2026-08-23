@@ -6,7 +6,10 @@
 import { json } from "../../../../_lib/http";
 import { requireMemberFromRequest } from "../../../../_lib/auth/member";
 import { setVotingDelegate } from "../../../../_lib/services/member-organization";
-import { myVotingDelegateUpdateRouteSchema } from "../../../../../assets/shared/schemas/me";
+import {
+  myVotingDelegateUpdateResponseSchema,
+  myVotingDelegateUpdateRouteSchema,
+} from "../../../../../assets/shared/schemas/me";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 
@@ -14,5 +17,5 @@ export const MeVotingDelegatePatch = openApiRoute(myVotingDelegateUpdateRouteSch
   const db = requestDb(c);
   const member = await requireMemberFromRequest(db, c.req.raw, c.env);
   const result = await setVotingDelegate(db, member, data.body.userId);
-  return json(result);
+  return json(myVotingDelegateUpdateResponseSchema.parse(result));
 });
