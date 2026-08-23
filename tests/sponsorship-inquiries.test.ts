@@ -136,6 +136,26 @@ describe("POST /api/v1/sponsorship/inquiries", () => {
     expect(response.status).toBe(400);
   });
 
+  it("rate limits invalid requests before body validation", async () => {
+    const testEnv = makeEnv({ IP_RATE_LIMITER: createTestRateLimiter(1) });
+
+    const invalid = await callEndpoint(postRequest("https://pkic.org/api/v1/sponsorship/inquiries", {}), testEnv);
+    expect(invalid.status).toBe(400);
+
+    const limited = await callEndpoint(
+      postRequest("https://pkic.org/api/v1/sponsorship/inquiries", {
+        contactName: "Dana Sponsor",
+        contactEmail: "dana@sponsor-corp.test",
+        organizationName: "Sponsor Corp",
+        desiredTier: "Gold",
+      }),
+      testEnv,
+    );
+    expect(limited.status).toBe(429);
+    await expect(limited.json()).resolves.toMatchObject({ error: { code: "RATE_LIMITED" } });
+    expect(await queryAll(testEnv.DB, "SELECT id FROM sponsorships")).toHaveLength(0);
+  });
+
   it("rejects a tier outside the active shared catalog", async () => {
     const testEnv = makeEnv();
     const response = await callEndpoint(

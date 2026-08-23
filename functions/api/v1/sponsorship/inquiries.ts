@@ -23,15 +23,17 @@ import type { z } from "zod";
 
 type SponsorshipInquiry = z.infer<typeof sponsorshipInquirySchema>;
 
-async function handleSponsorshipInquiry(c: any, body: SponsorshipInquiry): Promise<Response> {
-  const env = c.env;
-  const db = env.DB;
-
+async function enforceSponsorshipInquiryRateLimit(c: any): Promise<void> {
   await enforceRateLimit({
-    binding: env.IP_RATE_LIMITER,
+    binding: c.env.IP_RATE_LIMITER,
     namespace: "sponsorship-inquiries:ip",
     key: getClientIp(c.req.raw),
   });
+}
+
+async function handleSponsorshipInquiry(c: any, body: SponsorshipInquiry): Promise<Response> {
+  const env = c.env;
+  const db = env.DB;
 
   const sponsorType: "consortium" | "event" = body.eventId ? "event" : "consortium";
   if (!(await isActiveSponsorshipTier(db, sponsorType, body.desiredTier))) {
@@ -67,6 +69,8 @@ async function handleSponsorshipInquiry(c: any, body: SponsorshipInquiry): Promi
   return json({ sponsorshipId: created.id, pipelineStage: "new_inquiry" }, 201);
 }
 
-export const SponsorshipInquiriesPost = openApiRoute(sponsorshipInquiryRouteSchema, (c: any, data) =>
-  handleSponsorshipInquiry(c, data.body),
+export const SponsorshipInquiriesPost = openApiRoute(
+  sponsorshipInquiryRouteSchema,
+  (c: any, data) => handleSponsorshipInquiry(c, data.body),
+  enforceSponsorshipInquiryRateLimit,
 );
