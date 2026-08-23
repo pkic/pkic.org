@@ -2,6 +2,7 @@
 import { render } from "preact";
 import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
+import { useState } from "preact/hooks";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { paginatedResponseSchema } from "../../assets/shared/schemas/pagination";
@@ -127,5 +128,54 @@ describe("ServerSearchSelect", () => {
     const selected = container.querySelector('option[value="item-200"]') as HTMLOptionElement;
     expect(selected.textContent).toBe("Current event");
     expect(selected.selected).toBe(true);
+  });
+
+  it("does not request a new catalogue filter with the previous page offset", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push(url);
+        return new Response(
+          JSON.stringify({
+            items: [{ id: `item-${url.searchParams.get("offset") ?? "0"}`, name: "Item" }],
+            page: { limit: 25, offset: Number(url.searchParams.get("offset") ?? 0), total: 50, hasMore: true },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }),
+    );
+
+    function Harness() {
+      const [active, setActive] = useState("true");
+      const nextCatalog = { ...catalog, params: { active } };
+      return (
+        <>
+          <button data-toggle onClick={() => setActive("false")}>
+            Toggle
+          </button>
+          <ServerSearchSelect catalog={nextCatalog} label="Working group" value={null} onChange={() => {}} />
+        </>
+      );
+    }
+
+    const container = mount(<Harness />);
+    await settle();
+    const next = [...container.querySelectorAll("button")].find((button) => button.textContent === "Next")!;
+    void act(() => next.click());
+    await settle();
+    expect(requests.at(-1)?.searchParams.get("offset")).toBe("25");
+
+    const requestsBeforeToggle = requests.length;
+    void act(() => (container.querySelector("[data-toggle]") as HTMLButtonElement).click());
+    await settle();
+    const filterRequests = requests.slice(requestsBeforeToggle);
+    expect(filterRequests).toHaveLength(1);
+    expect(filterRequests[0].searchParams.get("active")).toBe("false");
+    expect(filterRequests[0].searchParams.get("offset")).toBe("0");
   });
 });

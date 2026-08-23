@@ -4,6 +4,7 @@ import { resetDb } from "./helpers/reset-db";
 import { createContext, createTestRateLimiter, queryAll } from "./helpers/context";
 import { handleError } from "../functions/_lib/http";
 import { onRequestPost as createApplication } from "../functions/api/v1/members/applications";
+import { onRequestGet as getApplicationForm } from "../functions/api/v1/members/applications/form";
 import { onRequestGet as getApplicationStatus } from "../functions/api/v1/members/applications/[id]/status";
 import { processPendingStorageDeletions } from "../functions/_lib/services/storage-deletion-outbox";
 import { seedMembershipApplicationForm } from "./helpers/member-applications";
@@ -12,6 +13,11 @@ import {
   applicationDocumentUploadResponseSchema,
   applicationDocumentsListResponseSchema,
 } from "../assets/shared/schemas/application-documents";
+import {
+  memberApplicationCreateResponseSchema,
+  memberApplicationFormResponseSchema,
+  memberApplicationStatusResponseSchema,
+} from "../assets/shared/schemas/member-applications";
 import { JSON_REQUEST_MAX_BYTES } from "../functions/_lib/http-body";
 
 function makeEnv(overrides: Partial<typeof env> = {}) {
@@ -56,7 +62,7 @@ describe("POST /api/v1/members/applications", () => {
     );
 
     expect(response.status).toBe(201);
-    const body = (await response.json()) as { applicationId: string; stage: string; manageToken: string };
+    const body = memberApplicationCreateResponseSchema.parse(await response.json());
     expect(body.stage).toBe("pending");
     expect(body.manageToken).toBeTruthy();
 
@@ -364,7 +370,7 @@ describe("GET /api/v1/members/applications/:id/status", () => {
       createApplication,
       createContext(testEnv, postRequest("https://pkic.org/api/v1/members/applications", validPayload), {}),
     );
-    return (await response.json()) as { applicationId: string; manageToken: string };
+    return memberApplicationCreateResponseSchema.parse(await response.json());
   }
 
   it("returns current stage for a valid token", async () => {
@@ -383,7 +389,7 @@ describe("GET /api/v1/members/applications/:id/status", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { stage: string };
+    const body = memberApplicationStatusResponseSchema.parse(await response.json());
     expect(body.stage).toBe("pending");
   });
 
@@ -421,6 +427,25 @@ describe("GET /api/v1/members/applications/:id/status", () => {
     );
 
     expect(response.status).toBe(401);
+  });
+});
+
+describe("GET /api/v1/members/applications/form", () => {
+  beforeEach(async () => {
+    await resetDb();
+    await seedMembershipApplicationForm();
+  });
+
+  it("returns the form through the canonical response schema", async () => {
+    const testEnv = makeEnv();
+    const response = await callEndpoint(
+      getApplicationForm,
+      createContext(testEnv, new Request("https://pkic.org/api/v1/members/applications/form"), {}),
+    );
+
+    expect(response.status).toBe(200);
+    const body = memberApplicationFormResponseSchema.parse(await response.json());
+    expect(body.form?.key).toBe("membership-application");
   });
 });
 

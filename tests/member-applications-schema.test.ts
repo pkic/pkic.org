@@ -14,6 +14,9 @@ import {
   allowedTransitions,
   onHoldSubtypeSchema,
   applicationStageSchema,
+  memberApplicationCreateResponseSchema,
+  memberApplicationFormResponseSchema,
+  memberApplicationStatusResponseSchema,
 } from "../assets/shared/schemas/member-applications";
 
 describe("allowedTransitions", () => {
@@ -42,5 +45,45 @@ describe("applicationStageSchema / onHoldSubtypeSchema", () => {
     expect(applicationStageSchema.safeParse("not_a_real_stage").success).toBe(false);
     expect(onHoldSubtypeSchema.safeParse("request_authority").success).toBe(true);
     expect(onHoldSubtypeSchema.safeParse("not_a_real_subtype").success).toBe(false);
+  });
+});
+
+describe("member application response schemas", () => {
+  it("accept the canonical create, form, and status responses", () => {
+    expect(
+      memberApplicationCreateResponseSchema.parse({
+        applicationId: "application-1",
+        stage: "pending",
+        manageToken: "a-valid-manage-token",
+      }),
+    ).toMatchObject({ applicationId: "application-1", stage: "pending" });
+    expect(memberApplicationFormResponseSchema.parse({ form: null })).toEqual({ form: null });
+    expect(
+      memberApplicationStatusResponseSchema.parse({
+        id: "00000000-0000-4000-8000-000000000001",
+        stage: "in_review",
+        stageEnteredAt: "2026-08-23T00:00:00.000Z",
+        createdAt: "2026-08-22T00:00:00.000Z",
+      }),
+    ).toMatchObject({ id: "00000000-0000-4000-8000-000000000001", stage: "in_review" });
+  });
+
+  it("reject malformed response values instead of accepting a drifted contract", () => {
+    expect(
+      memberApplicationCreateResponseSchema.safeParse({
+        applicationId: "application-1",
+        stage: "not-a-stage",
+        manageToken: "a-valid-manage-token",
+      }).success,
+    ).toBe(false);
+    expect(memberApplicationFormResponseSchema.safeParse({ form: { id: "missing-fields" } }).success).toBe(false);
+    expect(
+      memberApplicationStatusResponseSchema.safeParse({
+        id: "00000000-0000-4000-8000-000000000001",
+        stage: "pending",
+        stageEnteredAt: null,
+        createdAt: "2026-08-22T00:00:00.000Z",
+      }).success,
+    ).toBe(false);
   });
 });

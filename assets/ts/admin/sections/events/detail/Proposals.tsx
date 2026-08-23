@@ -11,7 +11,6 @@ import { EventFormResponses } from "./Forms";
 import { Invites } from "./Invites";
 import {
   adminEventProposalsResponseSchema,
-  type AdminEventProposalsResponse,
   type ProposalStats,
 } from "../../../../../shared/schemas/admin-event-proposals";
 import { PROPOSAL_ADMIN_STATUS_FILTERS } from "../../../../../shared/schemas/proposal-status";
@@ -164,15 +163,12 @@ function ProposalsList({ slug }: { slug: string }) {
         </div>
       )}
 
-      <ApiDataTable<ProposalSummary>
+      <ApiDataTable
         endpoint={`/api/v1/admin/events/${slug}/proposals`}
         responseSchema={adminEventProposalsResponseSchema}
-        resolve={(d) => {
-          const resp = d as AdminEventProposalsResponse;
-          setStats(resp.stats);
-          return resp.proposals;
-        }}
-        resolvePage={(d) => (d as AdminEventProposalsResponse).page}
+        resolve={(d) => d.proposals}
+        resolvePage={(d) => d.page}
+        onData={(d) => setStats(d.stats)}
         paginate
         initialSort="-submittedAt"
         searchPlaceholder="Search proposals / reviews…"

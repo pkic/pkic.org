@@ -4,6 +4,7 @@ import { databaseIdSchema } from "./identifiers";
 import {
   emailRecoveryRequestSchema,
   firstNameSchema,
+  eventIdSchema,
   eventSlugParamsSchema,
   jobTitleSchema,
   lastNameSchema,
@@ -108,6 +109,37 @@ export type AttendanceType = (typeof ATTENDANCE_TYPES)[number];
  */
 export const registrationLifecycleStatusSchema = z.enum(["pending_email_confirmation", "registered", "cancelled"]);
 export type RegistrationLifecycleStatus = z.infer<typeof registrationLifecycleStatusSchema>;
+
+/**
+ * Stable capability-safe projection historically returned by admin admission.
+ *
+ * This is an explicit compatibility DTO, not an exhaustive mirror of the D1
+ * table. New storage columns must not be added automatically. Link secrets do
+ * not exist in this contract, and response parsing prevents private backend
+ * fields from crossing the HTTP boundary accidentally.
+ */
+export const registrationCapabilitySafeProjectionSchema = z.object({
+  id: databaseIdSchema,
+  event_id: eventIdSchema,
+  user_id: databaseIdSchema,
+  invite_id: databaseIdSchema.nullable(),
+  status: registrationLifecycleStatusSchema,
+  attendance_type: attendanceTypeSchema,
+  source_type: z.string().min(2).max(64),
+  source_ref: z.string().nullable(),
+  custom_answers_json: z.string().nullable(),
+  referred_by_code: z.string().nullable(),
+  pending_confirmation_deadline_at: z.string().nullable(),
+  capacity_exempt_in_person: z.number().int().min(0).max(1),
+  capacity_exempt_reason: z.string().nullable(),
+  cancellation_reason_code: z.string().nullable(),
+  transition_revision: z.number().int().nonnegative(),
+  confirmed_at: z.string().nullable(),
+  cancelled_at: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+export type RegistrationCapabilitySafeProjection = z.infer<typeof registrationCapabilitySafeProjectionSchema>;
 
 // Attendance options are configurable per event day; the service validates
 // this bounded identifier against the event's stored options.

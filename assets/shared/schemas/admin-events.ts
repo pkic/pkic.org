@@ -112,6 +112,15 @@ export const adminEventTeamListItemSchema = z.object({
 });
 export type AdminEventTeamListItem = z.infer<typeof adminEventTeamListItemSchema>;
 export const adminEventTeamListResponseSchema = paginatedResponseSchema("permissions", adminEventTeamListItemSchema);
+export const adminEventTeamPermissionCreateResponseSchema = z.object({
+  permission: adminEventTeamListItemSchema.pick({
+    id: true,
+    user_email: true,
+    permission: true,
+    expires_at: true,
+    created_at: true,
+  }),
+});
 
 export const EVENT_REGISTRATIONS_SORT_COLUMNS = ["display_name", "status", "attendance_type", "created_at"] as const;
 export const ADMIN_EVENT_REGISTRATION_STATUSES = ["registered", "pending_email_confirmation", "cancelled"] as const;
@@ -493,7 +502,6 @@ export const adminEventPermissionSchema = z.object({
   expiresAt: z.iso.datetime().nullable().optional(),
 });
 export type AdminEventPermissionInput = z.infer<typeof adminEventPermissionSchema>;
-
 const bulkInviteNameSchema = (max: number) => z.string().trim().min(1).max(max).optional();
 const bulkInviteeSchema = inviteeSchema.extend({
   firstName: bulkInviteNameSchema(80),
@@ -515,7 +523,16 @@ export const adminBulkAttendeeInvitesSchema = adminBulkInvitesSchema;
 export const adminBulkSpeakerInvitesSchema = adminBulkInvitesSchema;
 export const adminBulkAttendeeInvitesPreviewSchema = adminBulkInvitesPreviewSchema;
 export const adminBulkSpeakerInvitesPreviewSchema = adminBulkInvitesPreviewSchema;
-
+const adminBulkInviteResultSchema = z.object({ email: z.email() });
+export const adminBulkInviteResponseSchema = successResponseSchema.extend({
+  created: z.array(adminBulkInviteResultSchema),
+  endorsed: z.array(adminBulkInviteResultSchema),
+  skipped: z.array(adminBulkInviteResultSchema),
+});
+export const adminWaitlistPromotionResponseSchema = successResponseSchema.extend({
+  dayRegistrationOffers: z.number().int().nonnegative(),
+  affectedRegistrations: z.array(z.string()),
+});
 export const adminRegistrationAdmitSchema = z.object({
   mode: z.enum(["vip", "capacity_exempt"]).default("vip"),
   reason: trimmedString(3, 1000),

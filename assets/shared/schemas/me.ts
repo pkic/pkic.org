@@ -207,6 +207,9 @@ export const myVotesListRouteSchema = {
 export const myOrganizationVisibilityUpdateSchema = z.object({
   showOnOrgProfile: z.boolean(),
 });
+export const myOrganizationVisibilityUpdateResponseSchema = successResponseSchema.extend({
+  showOnOrgProfile: z.boolean(),
+});
 
 export const myOrganizationVisibilityUpdateRouteSchema = {
   tags: ["Me"],
@@ -215,7 +218,10 @@ export const myOrganizationVisibilityUpdateRouteSchema = {
     body: { content: { "application/json": { schema: myOrganizationVisibilityUpdateSchema } }, required: true },
   },
   responses: {
-    "200": { description: "Updated." },
+    "200": {
+      description: "Updated.",
+      content: { "application/json": { schema: myOrganizationVisibilityUpdateResponseSchema } },
+    },
   },
 };
 

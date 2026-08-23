@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 
-/** Canonical envelope for successful commands that return no domain payload. */
-export const successResponseSchema = z.object({ success: z.literal(true) });
+/** Exact base response contract for successful mutations. Extend this for declared domain payloads. */
+export const successResponseSchema = z.object({ success: z.literal(true) }).strict();
 
 /** Canonical API error envelope returned by the Worker HTTP boundary. */
 export const apiErrorPayloadSchema = z.object({

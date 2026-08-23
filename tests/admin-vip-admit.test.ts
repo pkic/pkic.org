@@ -11,6 +11,8 @@ import {
 } from "../functions/_lib/services/registrations";
 import { onRequestPost as admitRegistration } from "../functions/api/v1/admin/events/[eventSlug]/registrations/[registrationId]/admit";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
+import app from "../functions/router";
+import { adminRegistrationAdmitResponseSchema } from "../assets/shared/schemas/route-contracts-admin-registrations";
 
 async function seedInvite(
   _db: DatabaseLike,
@@ -95,26 +97,29 @@ describe("admin VIP admit", () => {
     )[0];
     expect(before.status).toBe("waiting");
 
-    const response = await admitRegistration(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/admin/events/pqc-2026/registrations/x/admit", {
-          method: "POST",
-          headers: {
-            authorization: `Bearer ${adminToken}`,
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({
-            mode: "vip",
-            reason: "Key sponsor guest",
-            dayDates: ["2026-12-01"],
-          }),
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/events/pqc-2026/registrations/${registrationId}/admit`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${adminToken}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          mode: "vip",
+          reason: "Key sponsor guest",
+          dayDates: ["2026-12-01"],
         }),
-        { eventSlug: "pqc-2026", registrationId },
-      ),
+      }),
+      env as any,
+      { passThroughOnException() {}, waitUntil() {} } as unknown as ExecutionContext,
     );
 
     expect(response.status).toBe(200);
+    const admitPayload = adminRegistrationAdmitResponseSchema.parse(await response.json());
+    expect(admitPayload.registration).toMatchObject({ id: registrationId, status: "registered" });
+    expect(admitPayload.registration).not.toHaveProperty("confirmation_link_secret");
+    expect(admitPayload.registration).not.toHaveProperty("manage_link_secret");
+    expect(admitPayload.admittedDayDates).toEqual(["2026-12-01"]);
 
     const registration = (
       await queryAll<{ capacity_exempt_in_person: number; capacity_exempt_reason: string | null }>(

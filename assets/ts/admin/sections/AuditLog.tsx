@@ -1,7 +1,7 @@
 import { useState } from "preact/hooks";
 import { Badge } from "../../components/Badge";
 import { ApiDataTable } from "../components/ApiDataTable";
-import { auditLogListResponseSchema, type AuditLogEntry } from "../../../shared/schemas/admin-audit-log";
+import { auditLogListResponseSchema } from "../../../shared/schemas/admin-audit-log";
 import { FilterSelect, type FilterOption } from "../components/FilterSelect";
 
 const ENTITY_TYPES = [
@@ -31,11 +31,11 @@ export function AuditLog() {
   const [actionFilter, setActionFilter] = useState("");
 
   return (
-    <ApiDataTable<AuditLogEntry>
+    <ApiDataTable
       endpoint="/api/v1/admin/audit-log"
       responseSchema={auditLogListResponseSchema}
-      resolve={(data) => auditLogListResponseSchema.parse(data).entries}
-      resolvePage={(data) => auditLogListResponseSchema.parse(data).page}
+      resolve={(data) => data.entries}
+      resolvePage={(data) => data.page}
       paginate
       searchPlaceholder="action, entity, details…"
       params={{

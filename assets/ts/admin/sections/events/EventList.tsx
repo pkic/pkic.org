@@ -3,7 +3,6 @@ import { Badge } from "../../../components/Badge";
 import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
 import { EventScheduleFields } from "../../components/EventScheduleFields";
 import { api } from "../../api";
-import type { EventSummary } from "../../types";
 import { adminEventCreateResponseSchema, adminEventsListResponseSchema } from "../../../../shared/schemas/admin-events";
 import { useHashLocation } from "wouter/use-hash-location";
 import { performAdminAction } from "../../actions";
@@ -194,11 +193,11 @@ export function EventList() {
         </div>
       )}
 
-      <ApiDataTable<EventSummary>
+      <ApiDataTable
         endpoint="/api/v1/admin/events"
         responseSchema={adminEventsListResponseSchema}
-        resolve={(data) => adminEventsListResponseSchema.parse(data).events}
-        resolvePage={(data) => adminEventsListResponseSchema.parse(data).page}
+        resolve={(data) => data.events}
+        resolvePage={(data) => data.page}
         paginate
         actionsRef={tableRef}
         searchPlaceholder="Search event name or slug…"

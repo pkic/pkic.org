@@ -5,18 +5,27 @@ import { buildEventEmailVariables, getEventBySlug } from "../../../../../../../_
 import { bulkCreateSpeakersAdmin } from "../../../../../../../_lib/services/invites";
 import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { proposalPageUrl, inviteDeclineUrl } from "../../../../../../../_lib/services/frontend-links";
-import { adminBulkSpeakerInvitesSchema } from "../../../../../../../../assets/shared/schemas/admin-events";
+import {
+  adminBulkInviteResponseSchema,
+  adminBulkSpeakerInvitesSchema,
+} from "../../../../../../../../assets/shared/schemas/admin-events";
+import { adminBulkSpeakerInvitesRouteSchema } from "../../../../../../../../assets/shared/schemas/route-contracts";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
+import type { ValidatedData } from "chanfana";
 import { requireInternalSecret } from "../../../../../../../_lib/request";
 import {
   computeAdminInviteDigest,
   requireValidAdminInvitePreview,
 } from "../../../../../../../_lib/services/admin-invite-preview";
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+export async function onRequestPost(
+  c: AdminContext,
+  data?: ValidatedData<typeof adminBulkSpeakerInvitesRouteSchema>,
+): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const body = await parseJsonBody(c.req, adminBulkSpeakerInvitesSchema);
-  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
+  const body = data?.body ?? (await parseJsonBody(c.req, adminBulkSpeakerInvitesSchema));
+  const eventSlug = data?.params.eventSlug ?? c.req.param("eventSlug");
+  const event = await getEventBySlug(requestDb(c), eventSlug);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const inviteDigest = body.inviteDigest ?? (await computeAdminInviteDigest(body.invites));
   await requireValidAdminInvitePreview({
@@ -75,7 +84,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     }
   }
 
-  return json({ success: true, created, endorsed, skipped });
+  return json(adminBulkInviteResponseSchema.parse({ success: true, created, endorsed, skipped }));
 }
 
 export async function onRequest(c: AdminContext): Promise<Response> {

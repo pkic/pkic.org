@@ -3,8 +3,12 @@
  * Split out of Organizations.tsx (PR #1 review).
  */
 import { useState } from "preact/hooks";
-import { apiCommand } from "../../api";
-import { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../../../shared/schemas/admin-members";
+import { api } from "../../api";
+import {
+  MEMBERSHIP_CATEGORIES,
+  INDIVIDUAL_MEMBERSHIP_CATEGORIES,
+  memberCreateResponseSchema,
+} from "../../../../shared/schemas/admin-members";
 import type { AdminWorkingGroupSummary } from "../../../../shared/schemas/working-groups";
 import { ProfileLinksInput } from "../../../components/ProfileLinksInput";
 import { activeAdminWorkingGroupCatalog } from "../../services/catalogs";
@@ -90,7 +94,8 @@ export function AddOrganizationForm({ onCreated, onCancel }: { onCreated: () => 
     }
     await performAdminAction({
       setBusy: setSaving,
-      request: () => apiCommand("/api/v1/admin/members", { method: "POST", body: JSON.stringify(body) }),
+      request: () =>
+        api("/api/v1/admin/members", memberCreateResponseSchema, { method: "POST", body: JSON.stringify(body) }),
       successMessage: isIndividual ? "Individual member created" : "Organization created",
       afterSuccess: onCreated,
       onError: setStatus,

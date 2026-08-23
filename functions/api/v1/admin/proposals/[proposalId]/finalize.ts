@@ -38,9 +38,10 @@ export async function onRequestPost(
         proposalManagePageUrl(appBaseUrl, event, queuedCapabilityToken("proposal_manage", resourceId)),
     },
   );
-  for (const outboxId of finalized.outboxIds) {
+  const { outboxIds, ...finalizedResponse } = finalized;
+  for (const outboxId of outboxIds) {
     c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, outboxId));
   }
 
-  return json(finalizeProposalResponseSchema.parse({ success: true, ...finalized, minReviewsRequired }));
+  return json(finalizeProposalResponseSchema.parse({ success: true, ...finalizedResponse, minReviewsRequired }));
 }

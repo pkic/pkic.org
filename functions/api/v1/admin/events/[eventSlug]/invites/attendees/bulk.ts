@@ -10,16 +10,25 @@ import {
   computeAdminInviteDigest,
   requireValidAdminInvitePreview,
 } from "../../../../../../../_lib/services/admin-invite-preview";
-import { adminBulkAttendeeInvitesSchema } from "../../../../../../../../assets/shared/schemas/admin-events";
+import {
+  adminBulkAttendeeInvitesSchema,
+  adminBulkInviteResponseSchema,
+} from "../../../../../../../../assets/shared/schemas/admin-events";
+import { adminBulkAttendeeInvitesRouteSchema } from "../../../../../../../../assets/shared/schemas/route-contracts";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
+import type { ValidatedData } from "chanfana";
 
 // Outcome buckets returned to the admin UI.
 type BulkItemResult = { email: string };
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+export async function onRequestPost(
+  c: AdminContext,
+  data?: ValidatedData<typeof adminBulkAttendeeInvitesRouteSchema>,
+): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const body = await parseJsonBody(c.req, adminBulkAttendeeInvitesSchema);
-  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
+  const body = data?.body ?? (await parseJsonBody(c.req, adminBulkAttendeeInvitesSchema));
+  const eventSlug = data?.params.eventSlug ?? c.req.param("eventSlug");
+  const event = await getEventBySlug(requestDb(c), eventSlug);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const secret = requireInternalSecret(c.env);
 
@@ -73,7 +82,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   const endorsed: BulkItemResult[] = outcomes.filter((o) => o.status === "endorsed").map((o) => ({ email: o.email }));
   const skipped: BulkItemResult[] = outcomes.filter((o) => o.status === "skipped").map((o) => ({ email: o.email }));
 
-  return json({ success: true, created, endorsed, skipped });
+  return json(adminBulkInviteResponseSchema.parse({ success: true, created, endorsed, skipped }));
 }
 
 export async function onRequest(c: AdminContext): Promise<Response> {

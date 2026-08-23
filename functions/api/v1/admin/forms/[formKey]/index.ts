@@ -24,6 +24,7 @@ import {
   adminFormGetRouteSchema,
   adminFormPatchRouteSchema,
 } from "../../../../../../assets/shared/schemas/route-contracts";
+import { adminFormUpdateResponseSchema } from "../../../../../../assets/shared/schemas/admin-forms";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 async function requireManagedForm(db: ReturnType<typeof requestDb>, formKey: string) {
@@ -45,7 +46,13 @@ export const AdminFormsFormKeyPatch = openApiRoute(adminFormPatchRouteSchema, as
   await updateManagedForm(requestDb(c), admin.id, form, body);
 
   const updated = await requireManagedForm(requestDb(c), data.params.formKey);
-  return json({ success: true, form: updated.form, fields: mapManagedFormFields(updated.fields) });
+  return json(
+    adminFormUpdateResponseSchema.parse({
+      success: true,
+      form: updated.form,
+      fields: mapManagedFormFields(updated.fields),
+    }),
+  );
 });
 
 export const AdminFormsFormKeyDelete = openApiRoute(adminFormDeleteRouteSchema, async (c: AdminContext, data) => {

@@ -117,11 +117,11 @@ export function Sponsorships() {
       )}
 
       {!selectedCompany && (
-        <ApiDataTable<SponsorshipCompany>
+        <ApiDataTable
           endpoint="/api/v1/admin/sponsorships/companies"
           responseSchema={sponsorshipCompaniesListResponseSchema}
-          resolve={(data) => sponsorshipCompaniesListResponseSchema.parse(data).companies}
-          resolvePage={(data) => sponsorshipCompaniesListResponseSchema.parse(data).page}
+          resolve={(data) => data.companies}
+          resolvePage={(data) => data.page}
           paginate
           actionsRef={tableRef}
           columns={companyColumns}

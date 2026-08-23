@@ -24,7 +24,13 @@ import {
 } from "../../../../../../../_lib/services/registrations";
 import { validateCustomAnswersByPurpose } from "../../../../../../../_lib/services/forms";
 import { deriveEventAttendanceType } from "../../../../../../../_lib/services/event-days";
-import { adminRegistrationUpdateSchema } from "../../../../../../../../assets/shared/schemas/route-contracts-admin-registrations";
+import {
+  adminRegistrationDetailRouteSchema,
+  adminRegistrationPatchRouteSchema,
+  adminRegistrationUpdateResponseSchema,
+  adminRegistrationUpdateSchema,
+} from "../../../../../../../../assets/shared/schemas/route-contracts-admin-registrations";
+import type { ValidatedData } from "chanfana";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 import {
   fetchAdminRegistrationWithDetails,
@@ -35,10 +41,17 @@ import {
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 
-export async function onRequestGet(c: AdminContext): Promise<Response> {
+export async function onRequestGet(
+  c: AdminContext,
+  data?: ValidatedData<typeof adminRegistrationDetailRouteSchema>,
+): Promise<Response> {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
-  const detail = await getAdminRegistrationDetail(requestDb(c), event.id, c.req.param("registrationId"));
+  const event = await getEventBySlug(requestDb(c), data?.params.eventSlug ?? c.req.param("eventSlug"));
+  const detail = await getAdminRegistrationDetail(
+    requestDb(c),
+    event.id,
+    data?.params.registrationId ?? c.req.param("registrationId"),
+  );
   if (!detail) {
     return json({ error: { code: "REGISTRATION_NOT_FOUND", message: "Registration not found" } }, 404);
   }
@@ -47,13 +60,17 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
 
 // ── PATCH ─────────────────────────────────────────────────────────────────────
 
-export async function onRequestPatch(c: AdminContext): Promise<Response> {
+export async function onRequestPatch(
+  c: AdminContext,
+  data?: ValidatedData<typeof adminRegistrationPatchRouteSchema>,
+): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
+  const eventSlug = data?.params.eventSlug ?? c.req.param("eventSlug");
+  const registrationId = data?.params.registrationId ?? c.req.param("registrationId");
+  const event = await getEventBySlug(requestDb(c), eventSlug);
   const config = getConfig(c.env, c.req.raw);
-  const registrationId = c.req.param("registrationId");
 
-  const body = await parseJsonBody(c.req, adminRegistrationUpdateSchema);
+  const body = data?.body ?? (await parseJsonBody(c.req, adminRegistrationUpdateSchema));
 
   // ── force_status: override lifecycle status while preserving day capacity ──
   if (body.action === "force_status") {
@@ -77,7 +94,12 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
     }
 
     const updated = await fetchAdminRegistrationWithDetails(requestDb(c), event.id, registrationId);
-    return json({ success: true, registration: updated ? toAdminRegistrationDetail(updated) : null });
+    return json(
+      adminRegistrationUpdateResponseSchema.parse({
+        success: true,
+        registration: updated ? toAdminRegistrationDetail(updated) : null,
+      }),
+    );
   }
 
   // ── update / cancel / report_unauthorized — full shared service logic ──────
@@ -165,7 +187,13 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
   if (outboxId) c.executionCtx.waitUntil(processOutboxByIdBackground(requestDb(c), c.env, outboxId));
 
   const result = await fetchAdminRegistrationWithDetails(requestDb(c), event.id, updated.id);
-  return json({ success: true, registration: result ? toAdminRegistrationDetail(result) : null, emailChanged });
+  return json(
+    adminRegistrationUpdateResponseSchema.parse({
+      success: true,
+      registration: result ? toAdminRegistrationDetail(result) : null,
+      emailChanged,
+    }),
+  );
 }
 
 // ── Router ────────────────────────────────────────────────────────────────────

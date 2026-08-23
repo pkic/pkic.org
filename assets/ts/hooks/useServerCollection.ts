@@ -26,6 +26,30 @@ export function buildServerCollectionUrl(endpoint: string, params: Record<string
   return serialized ? `${endpoint}?${serialized}` : endpoint;
 }
 
+/** Stable identity for the endpoint/filter inputs that invalidate an offset page. */
+export function buildCollectionResetKey(endpoint: string, params: Record<string, string> = {}): string {
+  return JSON.stringify([endpoint, Object.entries(params).sort(([left], [right]) => left.localeCompare(right))]);
+}
+
+/** Resets pagination while making the first request use offset zero immediately. */
+export function useCollectionResetPending(resetKey: string, resetPage: () => void): boolean {
+  const previousResetKey = useRef(resetKey);
+  const resetPending = previousResetKey.current !== resetKey;
+
+  useEffect(() => {
+    if (previousResetKey.current === resetKey) return;
+    previousResetKey.current = resetKey;
+    resetPage();
+  }, [resetKey, resetPage]);
+
+  return resetPending;
+}
+
+/** Resets pagination while making the first request use offset zero immediately. */
+export function useCollectionOffset(resetKey: string, offset: number, resetPage: () => void): number {
+  return useCollectionResetPending(resetKey, resetPage) ? 0 : offset;
+}
+
 export interface LatestRequest {
   signal: AbortSignal;
   isCurrent: () => boolean;

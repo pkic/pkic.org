@@ -7,6 +7,7 @@ import {
   processBadgeRenderJobById,
   requestRegistrationBadgeRegeneration,
 } from "../../../../../../../_lib/services/registration-badge-regeneration";
+import { badgeRegenerationQueuedResponseSchema } from "../../../../../../../../assets/shared/schemas/route-contracts-admin-registrations";
 
 export async function onRequestPost(c: AdminContext): Promise<Response> {
   const db = requestDb(c);
@@ -19,5 +20,5 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
   });
   c.executionCtx.waitUntil(processBadgeRenderJobById(db, c.env, result.jobId));
-  return json({ success: true, status: "queued", ...result }, 202);
+  return json(badgeRegenerationQueuedResponseSchema.parse({ success: true, status: "queued", ...result }), 202);
 }

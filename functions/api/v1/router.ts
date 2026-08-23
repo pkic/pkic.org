@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { fromHono } from "chanfana";
 import { finalizeApiResponse, onRequest as middleware_l } from "./_middleware";
 import { handleError } from "../../_lib/http";
-import { onRequest as GeoGet_l } from "./geo";
+import { GeoGet, onRequest as GeoGet_l } from "./geo";
 import { onRequestPost as FormsPost_l } from "./forms";
 import { RouteGet } from "./index";
 import admin_Router from "./admin/router";
@@ -37,7 +37,8 @@ app.onError((error, c) => {
   return finalizeApiResponse(request, handleError(error), sensitive, requestId);
 });
 app.use("*", middleware_l);
-app.get("/geo", GeoGet_l);
+openapi.get("/geo", GeoGet);
+app.on("HEAD", "/geo", GeoGet_l);
 app.post("/forms", FormsPost_l);
 openapi.get("/", RouteGet);
 openapi.route("/admin", admin_Router);

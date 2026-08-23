@@ -1,8 +1,4 @@
-import {
-  adminApplicationDocumentsListResponseSchema,
-  type AdminApplicationDocument,
-  type AdminApplicationDocumentsListResponse,
-} from "../../../../shared/schemas/application-documents";
+import { adminApplicationDocumentsListResponseSchema } from "../../../../shared/schemas/application-documents";
 import { ApiDataTable } from "../../components/ApiDataTable";
 import { fmt } from "../../ui";
 
@@ -11,7 +7,7 @@ export function ApplicationDocumentsCard({ applicationId }: { applicationId: str
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-header bg-white fw-semibold">Documents</div>
       <div class="card-body">
-        <ApiDataTable<AdminApplicationDocument, AdminApplicationDocumentsListResponse>
+        <ApiDataTable
           endpoint={`/api/v1/admin/applications/${applicationId}/documents`}
           responseSchema={adminApplicationDocumentsListResponseSchema}
           resolve={(response) => response.documents}

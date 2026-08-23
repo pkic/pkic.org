@@ -5,6 +5,7 @@ import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { requestDb } from "../../../../../_lib/db/context";
 import { AppError } from "../../../../../_lib/errors";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { onRequestGet as AdminEventsEventSlugDaysGet_l } from "./days";
 import { onRequestPut as AdminEventsEventSlugDaysPut_l } from "./days";
 import { onRequestGet as AdminEventsEventSlugFormsGet_l } from "./forms";
@@ -12,6 +13,7 @@ import { onRequestPost as AdminEventsEventSlugFormsPost_l } from "./forms";
 import { onRequestGet as AdminEventsEventSlugGet_l } from "./index";
 import { AdminEventTeamList } from "./permissions";
 import { onRequestPost as AdminEventsEventSlugPermissionsPost_l } from "./permissions";
+import { adminEventTeamPermissionCreateRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts";
 import { AdminEventPromotersGet } from "./promoters";
 import { AdminEventPresentationsDownloadGet } from "./presentations/download";
 import { AdminEventsEventSlugProposalsGet } from "./proposals";
@@ -84,7 +86,10 @@ openapi.get("/forms", AdminEventsEventSlugFormsGet_l);
 app.post("/forms", AdminEventsEventSlugFormsPost_l);
 app.get("/", AdminEventsEventSlugGet_l);
 openapi.get("/permissions", AdminEventTeamList);
-app.post("/permissions", AdminEventsEventSlugPermissionsPost_l);
+openapi.post(
+  "/permissions",
+  openApiRoute(adminEventTeamPermissionCreateRouteSchema, AdminEventsEventSlugPermissionsPost_l),
+);
 openapi.get("/promoters", AdminEventPromotersGet);
 openapi.get("/presentations/download", AdminEventPresentationsDownloadGet);
 openapi.get("/proposals", AdminEventsEventSlugProposalsGet);

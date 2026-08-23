@@ -40,6 +40,7 @@ import {
   onRequest as eventFormsRequest,
 } from "../functions/api/v1/events/[eventSlug]/forms";
 import { onRequest as geoRequest } from "../functions/api/v1/geo";
+import { geoResponseSchema } from "../assets/shared/schemas/geolocation";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -633,8 +634,20 @@ describe("public endpoints — accessible without credentials", () => {
       ),
     );
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { country: string | null };
-    expect("country" in body).toBe(true);
+    const body = geoResponseSchema.parse(await response.json());
+    expect(body.country).toBeNull();
+  });
+
+  it("GET /api/v1/geo returns and validates Cloudflare's country hint", async () => {
+    const request = new Request("https://app.test/api/v1/geo", {
+      headers: { "sec-fetch-site": "same-origin" },
+    });
+    Object.defineProperty(request, "cf", { value: { country: "NL" } });
+
+    const response = await geoRequest(createContext(appEnv, request, {}));
+
+    expect(response.status).toBe(200);
+    expect(geoResponseSchema.parse(await response.json())).toEqual({ country: "NL" });
   });
 
   it("GET /api/v1/geo rejects cross-origin requests (CSRF guard) without any credentials needed", async () => {

@@ -441,11 +441,11 @@ export function TemplateEditor({
       <div class="card border-0 shadow-sm mt-3">
         <div class="card-body">
           <h6 class="text-uppercase small fw-bold text-muted mb-2">Version History</h6>
-          <ApiDataTable<EmailTemplateVersion>
+          <ApiDataTable
             endpoint={`/api/v1/admin/email-templates/${encodeURIComponent(templateKey)}/versions`}
             responseSchema={adminEmailTemplateVersionsListResponseSchema}
-            resolve={(response) => adminEmailTemplateVersionsListResponseSchema.parse(response).versions}
-            resolvePage={(response) => adminEmailTemplateVersionsListResponseSchema.parse(response).page}
+            resolve={(response) => response.versions}
+            resolvePage={(response) => response.page}
             paginate
             initialPageSize={25}
             initialSort="-version"

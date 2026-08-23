@@ -4,10 +4,12 @@ import { isEligibleReplacementProposerStatus } from "../../../../../../shared/sc
 import { Badge } from "../../../../../components/Badge";
 import { ProfileLinksInput, type ProfileLinksHandle } from "../../../../../components/ProfileLinksInput";
 import { normalizeProfileLinks } from "../../../../../shared/widgets/profile-links";
-import { apiCommand } from "../../../../api";
+import { api, apiCommand } from "../../../../api";
 import type { ProposalSpeaker } from "../../../../types";
 import { fmt, toast } from "../../../../ui";
 import { ProposalSpeakerHeadshotManager } from "./ProposalSpeakerHeadshotManager";
+import { adminProposalSpeakerPatchResponseSchema } from "../../../../../../shared/schemas/admin-event-proposals";
+import { proposalSpeakerRemovalResponseSchema } from "../../../../../../shared/schemas/proposal-management";
 
 export function buildReplacementProposerOptions(
   speakers: ProposalSpeaker[],
@@ -87,10 +89,14 @@ export function SpeakerCard({
         links,
         role,
       };
-      await apiCommand(`/api/v1/admin/proposals/${proposalId}/speakers/${speaker.userId}`, {
-        method: "PATCH",
-        body: JSON.stringify(patch),
-      });
+      await api(
+        `/api/v1/admin/proposals/${proposalId}/speakers/${speaker.userId}`,
+        adminProposalSpeakerPatchResponseSchema,
+        {
+          method: "PATCH",
+          body: JSON.stringify(patch),
+        },
+      );
       onSaved(speaker.userId, { ...patch, hasBio: Boolean(bio.trim()) });
       setEditing(false);
       toast("Speaker profile updated", "success");
@@ -123,12 +129,16 @@ export function SpeakerCard({
     }
     setRemoving(true);
     try {
-      await apiCommand(`/api/v1/admin/proposals/${proposalId}/speakers/${speaker.userId}`, {
-        method: "DELETE",
-        body: JSON.stringify({
-          replacementProposerUserId: isCurrentProposer ? replacementProposerUserId : undefined,
-        }),
-      });
+      await api(
+        `/api/v1/admin/proposals/${proposalId}/speakers/${speaker.userId}`,
+        proposalSpeakerRemovalResponseSchema,
+        {
+          method: "DELETE",
+          body: JSON.stringify({
+            replacementProposerUserId: isCurrentProposer ? replacementProposerUserId : undefined,
+          }),
+        },
+      );
       toast("Speaker removed", "success");
       onRemoved();
     } catch (caught) {

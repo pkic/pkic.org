@@ -114,11 +114,11 @@ export function Roles() {
         </div>
       </div>
 
-      <ApiDataTable<Role>
+      <ApiDataTable
         endpoint="/api/v1/admin/roles"
         responseSchema={rolesListResponseSchema}
-        resolve={(data) => rolesListResponseSchema.parse(data).roles}
-        resolvePage={(data) => rolesListResponseSchema.parse(data).page}
+        resolve={(data) => data.roles}
+        resolvePage={(data) => data.page}
         paginate
         actionsRef={tableRef}
         columns={[

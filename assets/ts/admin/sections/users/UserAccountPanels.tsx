@@ -3,7 +3,7 @@ import { api, apiCommand } from "../../api";
 import { userEmailAddResponseSchema } from "../../../../shared/schemas/user-emails";
 import { fmt, toast } from "../../ui";
 import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
-import { type UserEmailRecord, userEmailsListResponseSchema } from "../../../../shared/schemas/user-emails";
+import { userEmailsListResponseSchema } from "../../../../shared/schemas/user-emails";
 
 export function UserEmailAddressesPanel({ userId, primaryEmail }: { userId: string; primaryEmail: string }) {
   const tableRef = useRef<ApiTableActions | null>(null);
@@ -65,11 +65,11 @@ export function UserEmailAddressesPanel({ userId, primaryEmail }: { userId: stri
             {adding ? "Adding…" : "Add email"}
           </button>
         </form>
-        <ApiDataTable<UserEmailRecord>
+        <ApiDataTable
           endpoint={`/api/v1/admin/users/${userId}/emails`}
           responseSchema={userEmailsListResponseSchema}
-          resolve={(response) => userEmailsListResponseSchema.parse(response).emails}
-          resolvePage={(response) => userEmailsListResponseSchema.parse(response).page}
+          resolve={(response) => response.emails}
+          resolvePage={(response) => response.page}
           paginate
           initialPageSize={10}
           initialSort="email"

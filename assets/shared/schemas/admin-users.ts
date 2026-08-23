@@ -6,7 +6,7 @@
  * list endpoint uses, e.g. `admin-organizations.ts`).
  */
 import { z } from "zod";
-import { trimmedString } from "./api-common";
+import { adminUserIdParamsSchema, successResponseSchema, trimmedString } from "./api-common";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { membershipCategorySchema } from "./membership-categories";
 import { linksSchema } from "./links";
@@ -123,6 +123,12 @@ export const adminUserDetailSchema = z.object({
   membership: adminUserMembershipDetailSchema.nullable(),
 });
 export const adminUserDetailResponseSchema = z.object({ user: adminUserDetailSchema });
+/** PATCH /admin/users/:userId keeps the command acknowledgement and returns the edited user. */
+export const adminUserUpdateResponseSchema = successResponseSchema.extend({
+  user: adminUserDetailSchema.pick({ id: true, email: true, role: true, active: true }).extend({
+    isEcMember: z.boolean(),
+  }),
+});
 
 export const usersListRouteSchema = {
   tags: ["Users"],
@@ -135,5 +141,17 @@ export const usersListRouteSchema = {
       description: "Users list.",
       content: { "application/json": { schema: usersListResponseSchema } },
     },
+  },
+};
+
+export const adminUserUpdateRouteSchema = {
+  tags: ["Users"],
+  summary: "Update an admin user",
+  request: {
+    params: adminUserIdParamsSchema,
+    body: { content: { "application/json": { schema: adminUserUpdateSchema } }, required: true },
+  },
+  responses: {
+    "200": { description: "Updated user.", content: { "application/json": { schema: adminUserUpdateResponseSchema } } },
   },
 };

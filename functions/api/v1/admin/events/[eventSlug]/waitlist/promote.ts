@@ -5,10 +5,16 @@ import { promoteEventWaitlistWithNotifications } from "../../../../../../_lib/se
 import { processOutboxByIdBackground } from "../../../../../../_lib/email/outbox";
 import { resolveAppBaseUrl, getConfig } from "../../../../../../_lib/config";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
+import { adminWaitlistPromotionResponseSchema } from "../../../../../../../assets/shared/schemas/admin-events";
+import { adminWaitlistPromotionRouteSchema } from "../../../../../../../assets/shared/schemas/route-contracts";
+import type { ValidatedData } from "chanfana";
 
-export async function onRequestPost(c: AdminContext): Promise<Response> {
+export async function onRequestPost(
+  c: AdminContext,
+  data?: ValidatedData<typeof adminWaitlistPromotionRouteSchema>,
+): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
+  const event = await getEventBySlug(requestDb(c), data?.params.eventSlug ?? c.req.param("eventSlug"));
   const config = getConfig(c.env, c.req.raw);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
@@ -28,11 +34,13 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     Promise.all(promoted.outboxIds.map((outboxId) => processOutboxByIdBackground(requestDb(c), c.env, outboxId))),
   );
 
-  return json({
-    success: true,
-    dayRegistrationOffers: promoted.dayRegistrationOffers,
-    affectedRegistrations: promoted.affectedRegistrations,
-  });
+  return json(
+    adminWaitlistPromotionResponseSchema.parse({
+      success: true,
+      dayRegistrationOffers: promoted.dayRegistrationOffers,
+      affectedRegistrations: promoted.affectedRegistrations,
+    }),
+  );
 }
 
 export async function onRequest(c: AdminContext): Promise<Response> {

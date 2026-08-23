@@ -110,11 +110,11 @@ export function UserRoles() {
               </div>
             </form>
 
-            <ApiDataTable<UserRoleAssignment>
+            <ApiDataTable
               endpoint={`/api/v1/admin/users/${user.id}/roles`}
               responseSchema={userRolesListResponseSchema}
-              resolve={(response) => userRolesListResponseSchema.parse(response).roles}
-              resolvePage={(response) => userRolesListResponseSchema.parse(response).page}
+              resolve={(response) => response.roles}
+              resolvePage={(response) => response.page}
               paginate
               initialPageSize={25}
               initialSort="-created_at"

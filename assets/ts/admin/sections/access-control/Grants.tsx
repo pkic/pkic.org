@@ -1,12 +1,14 @@
 import { useRef, useState } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
-import { apiCommand } from "../../api";
+import { api, apiCommand } from "../../api";
 import { fmt, toast } from "../../ui";
-import type { AccessGrant } from "../../types";
 import { PERMISSIONS } from "../../permissions";
 import { UserPicker, type PickedUser } from "./UserPicker";
 import { ContextPicker, type PickedContext } from "./ContextPicker";
-import { accessGrantsListResponseSchema } from "../../../../shared/schemas/access-control";
+import {
+  accessGrantCreateResponseSchema,
+  accessGrantsListResponseSchema,
+} from "../../../../shared/schemas/access-control";
 import { performAdminAction } from "../../actions";
 
 /** Access Control section: grant/revoke permissions per user, with context and expiry pickers. */
@@ -40,7 +42,7 @@ export function Grants() {
     await performAdminAction({
       setBusy: setSubmitting,
       request: () =>
-        apiCommand("/api/v1/admin/access-grants", {
+        api("/api/v1/admin/access-grants", accessGrantCreateResponseSchema, {
           method: "POST",
           body: JSON.stringify({
             userId: user.id,
@@ -108,11 +110,11 @@ export function Grants() {
         </div>
       </div>
 
-      <ApiDataTable<AccessGrant>
+      <ApiDataTable
         endpoint="/api/v1/admin/access-grants"
         responseSchema={accessGrantsListResponseSchema}
-        resolve={(data) => accessGrantsListResponseSchema.parse(data).grants}
-        resolvePage={(data) => accessGrantsListResponseSchema.parse(data).page}
+        resolve={(data) => data.grants}
+        resolvePage={(data) => data.page}
         paginate
         actionsRef={tableRef}
         columns={[

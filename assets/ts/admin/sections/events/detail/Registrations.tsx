@@ -5,7 +5,7 @@ import type { Column } from "../../../../components/Table";
 import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataTable";
 import { FilterSelect } from "../../../components/FilterSelect";
 import { Tabs } from "../../../../components/Tabs";
-import { apiCommand } from "../../../api";
+import { api } from "../../../api";
 import { ATTENDANCE_TYPE_LABELS, attendanceTypeLabel } from "../../../attendance";
 import { fmt, toast } from "../../../ui";
 import type { Registration, RegistrationAttendanceChange } from "../../../types";
@@ -18,6 +18,7 @@ import {
   adminEventRegistrationsListResponseSchema,
   type AdminEventRegistrationsListResponse,
 } from "../../../../../shared/schemas/admin-events";
+import { adminWaitlistPromotionResponseSchema } from "../../../../../shared/schemas/admin-events";
 
 const ATTENDANCE_CHANGE_PRESETS: Record<string, string> = {
   "attendance-changed": "any",
@@ -57,7 +58,10 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
 
   async function runWaitlistPromotions() {
     try {
-      await apiCommand(`/api/v1/admin/events/${slug}/waitlist/promote`, { method: "POST", body: "{}" });
+      await api(`/api/v1/admin/events/${slug}/waitlist/promote`, adminWaitlistPromotionResponseSchema, {
+        method: "POST",
+        body: "{}",
+      });
       toast("Waitlist promotions run", "success");
       tableRef.current?.reload();
     } catch (e) {
@@ -228,15 +232,12 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
           )}
         </div>
       )}
-      <ApiDataTable<Registration>
+      <ApiDataTable
         endpoint={`/api/v1/admin/events/${slug}/registrations`}
         responseSchema={adminEventRegistrationsListResponseSchema}
-        resolve={(data) => {
-          const resp = adminEventRegistrationsListResponseSchema.parse(data);
-          setStats(resp.stats);
-          return resp.registrations;
-        }}
-        resolvePage={(data) => adminEventRegistrationsListResponseSchema.parse(data).page}
+        resolve={(data) => data.registrations}
+        resolvePage={(data) => data.page}
+        onData={(data) => setStats(data.stats)}
         paginate
         searchPlaceholder="Search name / email…"
         params={{

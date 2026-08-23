@@ -2,8 +2,6 @@ import { useState, useEffect } from "preact/hooks";
 import {
   adminVoteBallotsListResponseSchema,
   adminVoteMutationResponseSchema,
-  type AdminVoteBallot,
-  type AdminVoteBallotsListResponse,
 } from "../../../../shared/schemas/votes-admin";
 import { api } from "../../api";
 import { toast, fmt } from "../../ui";
@@ -106,7 +104,7 @@ export function VoteDetail({ vote, onChanged }: { vote: AdminVoteSummary; onChan
 
         {ballotsLoaded && (
           <div class="mt-2">
-            <ApiDataTable<AdminVoteBallot, AdminVoteBallotsListResponse>
+            <ApiDataTable
               endpoint={`/api/v1/admin/votes/${vote.id}/ballots`}
               responseSchema={adminVoteBallotsListResponseSchema}
               resolve={(response) => response.ballots}

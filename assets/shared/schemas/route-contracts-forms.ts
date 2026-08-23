@@ -6,6 +6,7 @@ import {
   adminFormSubmissionStatsQuerySchema,
   adminFormSubmissionStatsResponseSchema,
   adminFormUpdateSchema,
+  adminFormUpdateResponseSchema,
 } from "./admin-forms";
 import { eventSlugParamsSchema, formKeyParamsSchema } from "./api-common";
 
@@ -110,7 +111,10 @@ export const adminFormPatchRouteSchema = {
     },
   },
   responses: {
-    "200": { description: "Updated form metadata and fields." },
+    "200": {
+      description: "Updated form metadata and fields.",
+      content: { "application/json": { schema: adminFormUpdateResponseSchema } },
+    },
     "400": { description: "Invalid form payload." },
     "401": { description: "Admin authorization required." },
     "404": { description: "Form not found." },

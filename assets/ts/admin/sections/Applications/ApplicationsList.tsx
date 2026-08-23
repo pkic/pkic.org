@@ -4,7 +4,6 @@ import { Badge } from "../../../components/Badge";
 import { api } from "../../api";
 import { fmt } from "../../ui";
 import { APPLICATION_STAGES } from "../../../../shared/schemas/member-applications";
-import type { AdminApplicationSummary } from "../../types";
 import { adminApplicationsListResponseSchema } from "../../../../shared/schemas/admin-applications";
 
 /**
@@ -48,11 +47,11 @@ export function ApplicationsList({ onViewApplication }: { onViewApplication: (id
   return (
     <div>
       {stageFilter === "in_consultation" && <ConsultationQueueBanner />}
-      <ApiDataTable<AdminApplicationSummary>
+      <ApiDataTable
         endpoint="/api/v1/admin/applications"
         responseSchema={adminApplicationsListResponseSchema}
-        resolve={(data) => adminApplicationsListResponseSchema.parse(data).applications}
-        resolvePage={(data) => adminApplicationsListResponseSchema.parse(data).page}
+        resolve={(data) => data.applications}
+        resolvePage={(data) => data.page}
         paginate
         actionsRef={tableRef}
         searchPlaceholder="applicant email or name"

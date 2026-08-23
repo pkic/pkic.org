@@ -8,7 +8,6 @@ import {
   adminEmailTemplatesListResponseSchema,
   adminEmailTemplateExistsResponseSchema,
   adminEmailTemplateVersionCreateResponseSchema,
-  type AdminEmailTemplateSummary,
   type EmailContentType,
   type EmailMessageType,
 } from "../../../shared/schemas/admin-email-templates";
@@ -173,8 +172,6 @@ function CreateTemplate({ onCreated, onCancel }: { onCreated: (key: string) => v
 // Main section
 // ────────────────────────────────────────────────────────
 
-type TemplateSummary = AdminEmailTemplateSummary;
-
 type TemplatesView = "list" | "create" | { key: string; initialVersion: EmailTemplateVersion | null };
 
 export function Templates() {
@@ -208,11 +205,11 @@ export function Templates() {
   }
 
   return (
-    <ApiDataTable<TemplateSummary>
+    <ApiDataTable
       endpoint="/api/v1/admin/email-templates"
       responseSchema={adminEmailTemplatesListResponseSchema}
-      resolve={(data) => adminEmailTemplatesListResponseSchema.parse(data).templates}
-      resolvePage={(data) => adminEmailTemplatesListResponseSchema.parse(data).page}
+      resolve={(data) => data.templates}
+      resolvePage={(data) => data.page}
       paginate
       searchPlaceholder="Search template key…"
       actionsRef={tableRef}

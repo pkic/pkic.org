@@ -738,7 +738,7 @@ describe("admin forms endpoints", () => {
       }),
     });
 
-    expect(patchResponse.status).toBe(200);
+    expect(patchResponse.status, await patchResponse.clone().text()).toBe(200);
     const patchPayload = (await patchResponse.json()) as { success: boolean; fields: Array<{ key: string }> };
     expect(patchPayload.success).toBe(true);
     expect(patchPayload.fields.map((field) => field.key)).toEqual(["new_field", "topics"]);

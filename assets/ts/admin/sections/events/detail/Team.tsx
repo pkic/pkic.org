@@ -1,9 +1,11 @@
 import { useState, useRef } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataTable";
-import { apiCommand } from "../../../api";
+import { api, apiCommand } from "../../../api";
 import { fmt } from "../../../ui";
-import type { EventPermission } from "../../../types";
-import { adminEventTeamListResponseSchema } from "../../../../../shared/schemas/admin-events";
+import {
+  adminEventTeamListResponseSchema,
+  adminEventTeamPermissionCreateResponseSchema,
+} from "../../../../../shared/schemas/admin-events";
 import { performAdminAction } from "../../../actions";
 
 const PERM_LABELS: Record<string, string> = {
@@ -37,7 +39,7 @@ export function Team({ slug }: { slug: string }) {
     await performAdminAction({
       setBusy: setAdding,
       request: () =>
-        apiCommand(`/api/v1/admin/events/${slug}/permissions`, {
+        api(`/api/v1/admin/events/${slug}/permissions`, adminEventTeamPermissionCreateResponseSchema, {
           method: "POST",
           body: JSON.stringify({
             userEmail: newEmail.trim(),
@@ -104,11 +106,11 @@ export function Team({ slug }: { slug: string }) {
         </div>
       </div>
 
-      <ApiDataTable<EventPermission>
+      <ApiDataTable
         endpoint={`/api/v1/admin/events/${slug}/permissions`}
         responseSchema={adminEventTeamListResponseSchema}
-        resolve={(data) => adminEventTeamListResponseSchema.parse(data).permissions}
-        resolvePage={(data) => adminEventTeamListResponseSchema.parse(data).page}
+        resolve={(data) => data.permissions}
+        resolvePage={(data) => data.page}
         paginate
         searchPlaceholder="Search email or role…"
         actionsRef={tableRef}

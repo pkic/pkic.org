@@ -1,4 +1,5 @@
 import {
+  accessGrantCreateResponseSchema,
   accessGrantsCreateRouteSchema,
   accessGrantsListRouteSchema,
 } from "../../../../../assets/shared/schemas/access-control";
@@ -15,5 +16,8 @@ export const AccessGrantsList = openApiRoute(accessGrantsListRouteSchema, async 
 
 export const AccessGrantsCreate = openApiRoute(accessGrantsCreateRouteSchema, async (c: AdminContext, data) => {
   const actor = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  return json({ grant: await createAccessGrant(requestDb(c), actor, data.body) }, 201);
+  return json(
+    accessGrantCreateResponseSchema.parse({ grant: await createAccessGrant(requestDb(c), actor, data.body) }),
+    201,
+  );
 });

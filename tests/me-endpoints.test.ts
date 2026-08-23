@@ -14,7 +14,11 @@ import { queryAll } from "./helpers/context";
 import { seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { seedMemberApplication } from "./helpers/member-applications";
-import { myApplicationsListResponseSchema, myWorkingGroupsListResponseSchema } from "../assets/shared/schemas/me";
+import {
+  myApplicationsListResponseSchema,
+  myOrganizationVisibilityUpdateResponseSchema,
+  myWorkingGroupsListResponseSchema,
+} from "../assets/shared/schemas/me";
 
 function requestWithAuth(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -138,6 +142,10 @@ describe("Member self-service /api/v1/me/*", () => {
       body: JSON.stringify({ showOnOrgProfile: false }),
     });
     expect(response.status).toBe(200);
+    expect(myOrganizationVisibilityUpdateResponseSchema.parse(await response.json())).toEqual({
+      success: true,
+      showOnOrgProfile: false,
+    });
 
     const rows = await queryAll<{ show_on_org_profile: number }>(
       env.DB,

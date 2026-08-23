@@ -3,8 +3,11 @@ import { fromHono } from "chanfana";
 import { openApiRoute } from "../../../../../../../_lib/openapi/route";
 import {
   adminRegistrationAuditLogRouteSchema,
+  adminRegistrationAdmitRouteSchema,
   adminRegistrationBadgeRegenerationRouteSchema,
   adminRegistrationDetailRouteSchema,
+  adminRegistrationPatchRouteSchema,
+  adminRegistrationResendConfirmationRouteSchema,
 } from "../../../../../../../../assets/shared/schemas/route-contracts";
 import { onRequestPost as AdminEventsEventSlugRegistrationsRegistrationIdAdmitPost_l } from "./admit";
 import { onRequestGet as AdminEventsEventSlugRegistrationsRegistrationIdAuditLogGet_l } from "./audit-log";
@@ -21,7 +24,10 @@ import type { RequestDbContext } from "../../../../../../../_lib/db/context";
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
-app.post("/admit", AdminEventsEventSlugRegistrationsRegistrationIdAdmitPost_l);
+openapi.post(
+  "/admit",
+  openApiRoute(adminRegistrationAdmitRouteSchema, AdminEventsEventSlugRegistrationsRegistrationIdAdmitPost_l),
+);
 openapi.get(
   "/audit-log",
   openApiRoute(adminRegistrationAuditLogRouteSchema, AdminEventsEventSlugRegistrationsRegistrationIdAuditLogGet_l),
@@ -33,7 +39,10 @@ openapi.get(
   "/",
   openApiRoute(adminRegistrationDetailRouteSchema, AdminEventsEventSlugRegistrationsRegistrationIdGet_l),
 );
-app.patch("/", AdminEventsEventSlugRegistrationsRegistrationIdPatch_l);
+openapi.patch(
+  "/",
+  openApiRoute(adminRegistrationPatchRouteSchema, AdminEventsEventSlugRegistrationsRegistrationIdPatch_l),
+);
 app.post("/open-manage", AdminEventsEventSlugRegistrationsRegistrationIdOpenManagePost_l);
 openapi.post(
   "/regenerate-badge",
@@ -42,6 +51,12 @@ openapi.post(
     AdminEventsEventSlugRegistrationsRegistrationIdRegenerateBadgePost_l,
   ),
 );
-app.post("/resend-confirmation", AdminEventsEventSlugRegistrationsRegistrationIdResendConfirmationPost_l);
+openapi.post(
+  "/resend-confirmation",
+  openApiRoute(
+    adminRegistrationResendConfirmationRouteSchema,
+    AdminEventsEventSlugRegistrationsRegistrationIdResendConfirmationPost_l,
+  ),
+);
 
 export default openapi;

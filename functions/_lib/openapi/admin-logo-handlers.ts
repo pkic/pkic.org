@@ -5,6 +5,7 @@ import { json } from "../http";
 import { deleteStoredImageInBackground } from "../services/stored-image-pointer";
 import type { AuthAdmin, DatabaseLike } from "../types";
 import { readValidatedUploadedImage } from "../utils/image-upload";
+import { logoUploadResponseSchema } from "../../../assets/shared/schemas/images";
 
 interface LogoMutationResult {
   previousKey: string | null;
@@ -36,7 +37,9 @@ export function buildAdminLogoHandlers(config: AdminLogoHandlersConfig) {
     const id = c.req.param("id");
     const result = await config.replaceLogo(db, actor, bucket, id, await readValidatedUploadedImage(c.req.raw, "Logo"));
     c.executionCtx.waitUntil(deleteStoredImageInBackground(db, c.env, result.previousKey, "assets"));
-    return json({ success: true, r2Key: result.r2Key, logoUrl: config.publicLogoUrl(id) });
+    return json(
+      logoUploadResponseSchema.parse({ success: true, r2Key: result.r2Key, logoUrl: config.publicLogoUrl(id) }),
+    );
   }
 
   async function onDelete(c: AdminContext): Promise<Response> {

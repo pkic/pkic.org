@@ -9,8 +9,9 @@ import { AdminHeadshotManager, ADMIN_HEADSHOT_DISCLAIMER } from "../../shared/he
 import { ProfileLinksInput, type ProfileLinksHandle } from "../../components/ProfileLinksInput";
 import { normalizeProfileLinks } from "../../shared/widgets/profile-links";
 import { adminRoleValueSchema } from "../../../shared/schemas/admin-users";
-import { adminUserDetailResponseSchema } from "../../../shared/schemas/admin-users";
-import { headshotUploadResponseSchema } from "../../../shared/schemas/registration";
+import { adminUserDetailResponseSchema, adminUserUpdateResponseSchema } from "../../../shared/schemas/admin-users";
+import { adminHeadshotUploadResponseSchema } from "../../../shared/schemas/registration";
+import { adminUserGravatarImportResponseSchema } from "../../../shared/schemas/route-contracts";
 import { UserList } from "./users/UserList";
 
 import type { UserDetail } from "./users/model";
@@ -75,7 +76,7 @@ export function UserDetailView({ userId, onBack }: { userId: string; onBack: () 
 
   async function uploadHeadshotFile(uid: string, file: Blob) {
     const headers: Record<string, string> = { "Content-Type": file.type || "application/octet-stream" };
-    await api(`/api/v1/admin/users/${uid}/headshot`, headshotUploadResponseSchema, {
+    await api(`/api/v1/admin/users/${uid}/headshot`, adminHeadshotUploadResponseSchema, {
       method: "PUT",
       headers,
       body: file,
@@ -110,7 +111,7 @@ export function UserDetailView({ userId, onBack }: { userId: string; onBack: () 
     setEditSaving(true);
     setEditError("");
     try {
-      await apiCommand(`/api/v1/admin/users/${user.id}`, {
+      await api(`/api/v1/admin/users/${user.id}`, adminUserUpdateResponseSchema, {
         method: "PATCH",
         body: JSON.stringify({
           email: editForm.email.trim().toLowerCase() || undefined,
@@ -146,7 +147,7 @@ export function UserDetailView({ userId, onBack }: { userId: string; onBack: () 
     if (!accepted) return;
     setHeadshotStatus("Looking up Gravatar...");
     try {
-      await apiCommand(`/api/v1/admin/users/${user.id}/gravatar`, { method: "POST" });
+      await api(`/api/v1/admin/users/${user.id}/gravatar`, adminUserGravatarImportResponseSchema, { method: "POST" });
       toast("Gravatar imported successfully", "success");
       await load();
     } catch (e) {

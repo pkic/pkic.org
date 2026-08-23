@@ -1,10 +1,9 @@
 import { useRef, useState } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../components/ApiDataTable";
 import { normalizeProfileLinks } from "../../../shared/widgets/profile-links";
-import { apiCommand } from "../../api";
-import type { AdminUser } from "../../types";
+import { api } from "../../api";
 import { fmt, toast } from "../../ui";
-import { usersListResponseSchema } from "../../../../shared/schemas/admin-users";
+import { adminUserUpdateResponseSchema, usersListResponseSchema } from "../../../../shared/schemas/admin-users";
 
 const ROLE_COLOR: Record<string, string> = { admin: "danger", user: "secondary", guest: "light" };
 
@@ -16,7 +15,10 @@ export function UserList({ onViewUser }: { onViewUser: (id: string) => void }) {
   async function updateRole(userId: string, newRole: string, select: HTMLSelectElement) {
     const previousRole = select.dataset.currentRole ?? select.value;
     try {
-      await apiCommand(`/api/v1/admin/users/${userId}`, { method: "PATCH", body: JSON.stringify({ role: newRole }) });
+      await api(`/api/v1/admin/users/${userId}`, adminUserUpdateResponseSchema, {
+        method: "PATCH",
+        body: JSON.stringify({ role: newRole }),
+      });
       select.dataset.currentRole = newRole;
       toast(`Role updated to '${newRole}'`, "success");
     } catch (error) {
@@ -26,11 +28,11 @@ export function UserList({ onViewUser }: { onViewUser: (id: string) => void }) {
   }
 
   return (
-    <ApiDataTable<AdminUser>
+    <ApiDataTable
       endpoint="/api/v1/admin/users"
       responseSchema={usersListResponseSchema}
-      resolve={(data) => usersListResponseSchema.parse(data).users}
-      resolvePage={(data) => usersListResponseSchema.parse(data).page}
+      resolve={(data) => data.users}
+      resolvePage={(data) => data.page}
       paginate
       actionsRef={tableRef}
       searchPlaceholder="email or name"
