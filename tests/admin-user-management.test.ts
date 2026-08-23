@@ -339,11 +339,18 @@ describe("admin user deactivation", () => {
     const userId = await seedUser(env.DB, "email-original@example.test");
     const registrationId = crypto.randomUUID();
     const confirmationLinkSecret = crypto.randomUUID();
+    const manageLinkSecret = crypto.randomUUID();
     const signingSecret = "admin-email-correction-secret";
     const staleToken = await signCapabilityToken({
       signingSecret,
       linkSecret: confirmationLinkSecret,
       purpose: "registration_confirm",
+      resourceId: registrationId,
+    });
+    const staleManageToken = await signCapabilityToken({
+      signingSecret,
+      linkSecret: manageLinkSecret,
+      purpose: "registration_manage",
       resourceId: registrationId,
     });
     await env.DB.batch([
@@ -354,7 +361,7 @@ describe("admin user deactivation", () => {
               created_at, updated_at)
            VALUES (?, ?, ?, 'pending_email_confirmation', 'virtual', 'admin', ?, ?,
                    datetime('now', '+1 day'), datetime('now'), datetime('now'))`,
-      ).bind(registrationId, eventId, userId, confirmationLinkSecret, crypto.randomUUID()),
+      ).bind(registrationId, eventId, userId, confirmationLinkSecret, manageLinkSecret),
       env.DB.prepare(
         `UPDATE users
               SET pending_email = 'email-pending@example.test',
@@ -401,6 +408,9 @@ describe("admin user deactivation", () => {
         signingSecret,
       }),
     ).rejects.toMatchObject({ code: "CONFIRM_TOKEN_INVALID" });
+    await expect(getRegistrationByManageToken(env.DB, staleManageToken, signingSecret)).rejects.toMatchObject({
+      code: "REGISTRATION_NOT_FOUND",
+    });
     expect((await queryAll<{ email: string }>(env.DB, "SELECT email FROM users WHERE id = ?", userId))[0].email).toBe(
       "email-admin-set@example.test",
     );

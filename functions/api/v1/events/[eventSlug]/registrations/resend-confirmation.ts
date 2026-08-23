@@ -8,6 +8,7 @@ import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
 import { registrationResendConfirmationRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts";
 import { getClientIp, requireInternalSecret } from "../../../../../_lib/request";
 import { enforceEmailTriggerRateLimits } from "../../../../../_lib/rate-limit";
+import { verifyDatabaseCapability } from "../../../../../_lib/services/capability-links";
 
 async function handleResendConfirmation(
   c: any,
@@ -15,11 +16,24 @@ async function handleResendConfirmation(
 ): Promise<Response> {
   c.set("sensitive", true);
   const body = data.body;
+  const signingSecret = requireInternalSecret(c.env);
+  let recipientRateLimitKey = body.email;
+  if (!recipientRateLimitKey && body.token) {
+    const verified = await verifyDatabaseCapability({
+      db: c.env.DB,
+      signingSecret,
+      purpose: "registration_confirm",
+      token: body.token,
+    });
+    // Keep every token representation for one registration in the same abuse
+    // bucket. Invalid tokens cannot trigger email and remain IP-limited too.
+    recipientRateLimitKey = verified.ok ? `registration:${verified.resourceId}` : `invalid-token:${body.token}`;
+  }
   await enforceEmailTriggerRateLimits({
     emailBinding: c.env.EMAIL_RATE_LIMITER,
     ipBinding: c.env.IP_RATE_LIMITER,
     namespace: "registration-resend-confirmation",
-    email: body.email,
+    email: recipientRateLimitKey,
     clientIp: getClientIp(c.req.raw),
   });
   const config = getConfig(c.env, c.req.raw);
@@ -29,7 +43,7 @@ async function handleResendConfirmation(
     token: body.token,
     registrationId: body.id,
     email: body.email,
-    signingSecret: requireInternalSecret(c.env),
+    signingSecret,
     appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
     confirmationTtlHours: config.confirmationLinkTtlHours,
   });

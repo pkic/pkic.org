@@ -6,7 +6,7 @@ import { normalizeEmail } from "../../validation";
 import type { EventRecord } from "../events";
 import { verifyDatabaseCapability } from "../capability-links";
 import { prepareRegistrationConfirmationEmail } from "./status-notifications";
-import { REGISTRATION_RECIPIENT_EMAIL_SQL } from "./recipient-email";
+import { REGISTRATION_CONFIRMATION_RECIPIENT_EMAIL_SQL } from "./recipient-email";
 import { isRegistrationTransitionConflict, prepareRegistrationTransitionGuard } from "./transition-guard";
 import { REGISTRATION_COLUMNS, registrationColumns, type RegistrationRecord } from "./types";
 
@@ -49,7 +49,6 @@ export async function recoverRegistrationConfirmation(
          AND (
            u.normalized_email = ?
            OR (u.pending_email_change_registration_id = r.id
-               AND u.pending_email_current_confirmed_at IS NOT NULL
                AND u.pending_email = ?)
          )
        ORDER BY r.created_at DESC LIMIT 1`,
@@ -68,7 +67,7 @@ export async function recoverRegistrationConfirmation(
   const now = nowIso();
   const recipient = await first<{ email: string }>(
     db,
-    `SELECT ${REGISTRATION_RECIPIENT_EMAIL_SQL} AS email
+    `SELECT ${REGISTRATION_CONFIRMATION_RECIPIENT_EMAIL_SQL} AS email
        FROM registrations r
        JOIN users u ON u.id = r.user_id
       WHERE r.id = ? AND u.id = ?`,

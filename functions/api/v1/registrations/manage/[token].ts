@@ -12,9 +12,13 @@ import {
   registrationManageReadRouteSchema,
   registrationManageUpdateRouteSchema,
 } from "../../../../../assets/shared/schemas/route-contracts-registrations";
-import { requireInternalSecret } from "../../../../_lib/request";
+import { getClientIp, requireInternalSecret } from "../../../../_lib/request";
 import { buildRegistrationManageView } from "../../../../_lib/services/registrations/manage-view";
 import { openApiRoute } from "../../../../_lib/openapi/route";
+import { hasAuthenticatedSessionCookie } from "../../../../_lib/auth/session-cookies";
+import { requireAnyActorFromRequest } from "../../../../_lib/auth/actor";
+import { AppError } from "../../../../_lib/errors";
+import { enforceEmailTriggerRateLimits } from "../../../../_lib/rate-limit";
 
 async function handleRegistrationManagePatch(
   c: any,
@@ -28,12 +32,31 @@ async function handleRegistrationManagePatch(
     const resolved = await resolveManageToken(c.req.raw, c.env, token);
     if (resolved instanceof Response) return resolved;
     const { registration: current, isJwt, actorUserId } = resolved;
+    let authenticatedActor: { kind: "admin" | "member"; id: string } | null = null;
+    if (!isJwt && hasAuthenticatedSessionCookie(c.req.raw)) {
+      try {
+        const actor = await requireAnyActorFromRequest(c.env.DB, c.req.raw, c.env);
+        authenticatedActor = { kind: actor.kind, id: actor.id };
+      } catch (error) {
+        if (!(error instanceof AppError) || error.status !== 401) throw error;
+      }
+    }
+    if (!isJwt && body.action === "update" && body.email) {
+      await enforceEmailTriggerRateLimits({
+        emailBinding: c.env.EMAIL_RATE_LIMITER,
+        ipBinding: c.env.IP_RATE_LIMITER,
+        namespace: "registration-email-change",
+        email: body.email,
+        clientIp: getClientIp(c.req.raw),
+      });
+    }
     const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
     const signingSecret = requireInternalSecret(c.env);
     const result = await updateManagedRegistration(c.env.DB, {
       registration: current,
       manageToken: token,
       isAdminManageJwt: isJwt,
+      authenticatedActor,
       actorUserId,
       body,
       appBaseUrl,
@@ -41,8 +64,8 @@ async function handleRegistrationManagePatch(
       confirmationLinkTtlHours: config.confirmationLinkTtlHours,
       waitlistClaimWindowHours: config.waitlistClaimWindowHours,
     });
-    if (result.outboxId) {
-      c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, result.outboxId));
+    for (const outboxId of result.outboxIds) {
+      c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
     }
 
     return json(registrationManageUpdateResponseSchema.parse({ success: true, emailChanged: result.emailChanged }));

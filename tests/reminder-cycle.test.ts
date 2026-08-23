@@ -710,12 +710,11 @@ describe("runReminderCycle", () => {
 
   // ── Email-change scenarios ────────────────────────────────────────────────────
 
-  it("does not send a confirmation reminder to the pending address before the current address authorizes the change", async () => {
+  it("sends confirmation reminders directly to the pending new address", async () => {
     const userId = crypto.randomUUID();
     const regId = crypto.randomUUID();
     const deadlineAt = new Date(Date.now() + 12 * 24 * 3_600_000).toISOString();
-    // The pending address is still unverified and must not receive account
-    // capabilities until the current login address authorizes the change.
+    // The new mailbox is the proof target; the old address is notification-only.
     const expiredTtl = new Date(Date.now() - 3_600_000).toISOString();
     await insertUser(userId, "old-bouncing@example.test", "Maria", "S");
     await insertPendingRegistration({
@@ -730,14 +729,14 @@ describe("runReminderCycle", () => {
     const result = await runReminderCycle(db, BASE_PAYLOAD);
 
     expect(result.confirmationRemindersQueued).toBe(1);
-    expect(result.preview.registrationConfirmations[0].recipientEmail).toBe("old-bouncing@example.test");
+    expect(result.preview.registrationConfirmations[0].recipientEmail).toBe("new-correct@example.test");
 
     const outbox = await queryAll<{ recipient_email: string }>(
       db,
       "SELECT recipient_email FROM email_outbox WHERE template_key = 'registration_confirmation_reminder'",
     );
     expect(outbox).toHaveLength(1);
-    expect(outbox[0].recipient_email).toBe("old-bouncing@example.test");
+    expect(outbox[0].recipient_email).toBe("new-correct@example.test");
 
     // pending_email_expires_at must be extended to the confirmation deadline so
     // subsequent reminder links remain clickable beyond the initial TTL window.
@@ -750,7 +749,7 @@ describe("runReminderCycle", () => {
     expect(new Date(user[0].pending_email_expires_at).getTime()).toBeGreaterThanOrEqual(new Date(deadlineAt).getTime());
   });
 
-  it("sends cancellation email to the pending address after the current address authorized the email change", async () => {
+  it("does not send a cancellation status email to the unverified pending address", async () => {
     const userId = crypto.randomUUID();
     const regId = crypto.randomUUID();
     await insertUser(userId, "old-bouncing@example.test", "Maria", "S");
@@ -762,10 +761,6 @@ describe("runReminderCycle", () => {
       reminderSentAt: new Date(Date.now() - 2 * 86_400_000).toISOString(),
     });
     await reservePendingEmail(userId, regId, "new-correct@example.test");
-    await db
-      .prepare("UPDATE users SET pending_email_current_confirmed_at = datetime('now') WHERE id = ?")
-      .bind(userId)
-      .run();
     for (let index = 0; index < BASE_PAYLOAD.maxPendingConfirmationReminders; index += 1) {
       await insertRegistrationEmailOutbox({
         eventId,
@@ -783,14 +778,14 @@ describe("runReminderCycle", () => {
     const reg = (await queryAll<{ status: string }>(db, "SELECT status FROM registrations WHERE id = ?", regId))[0];
     expect(reg.status).toBe("cancelled");
 
-    // After current-address proof, the pending address is the active recipient
-    // for this registration's remaining confirmation workflow.
+    // Only confirmation messages may use the pending address. Cancellation is
+    // an ordinary status notification and therefore stays on the canonical address.
     const outbox = await queryAll<{ recipient_email: string; template_key: string }>(
       db,
       "SELECT recipient_email, template_key FROM email_outbox ORDER BY created_at DESC LIMIT 1",
     );
     expect(outbox[0].template_key).toBe("registration_updated");
-    expect(outbox[0].recipient_email).toBe("new-correct@example.test");
+    expect(outbox[0].recipient_email).toBe("old-bouncing@example.test");
   });
 
   it("clears pending_email on the user when the last pending-confirmation registration is cancelled on timeout", async () => {

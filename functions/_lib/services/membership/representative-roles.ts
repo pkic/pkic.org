@@ -225,3 +225,42 @@ export async function resolveRepresentativeRoleHolders(
     votingDelegateUserId: byRole.get(REPRESENTATIVE_ROLE_IDS.votingDelegate) ?? null,
   };
 }
+
+/**
+ * Whether `actorUserId` is an active primary or secondary contact for at
+ * least one active organization that `targetUserId` currently represents.
+ * This is the canonical cross-user identity-management boundary for member
+ * self-service: ordinary coworkers and free-text organization names confer
+ * no authority.
+ */
+export async function isOrganizationContactForRepresentative(
+  db: DatabaseLike,
+  actorUserId: string,
+  targetUserId: string,
+): Promise<boolean> {
+  const row = await first<{ allowed: number }>(
+    db,
+    `SELECT 1 AS allowed
+       FROM user_roles ur
+       JOIN users actor ON actor.id = ur.user_id
+       JOIN organization_representatives actor_rep
+         ON actor_rep.member_id = ur.context_id AND actor_rep.user_id = ur.user_id
+       JOIN members m
+         ON m.id = ur.context_id AND m.status = 'active' AND m.organization_id IS NOT NULL
+       JOIN organization_representatives target_rep
+         ON target_rep.member_id = m.id AND target_rep.user_id = ? AND target_rep.left_at IS NULL
+      WHERE ur.user_id = ?
+        AND ur.context_type = 'organization'
+        AND ur.role_id IN (?, ?)
+        AND ${representativeRoleActivePredicate("ur", "actor", "actor_rep")}
+      LIMIT 1`,
+    [
+      targetUserId,
+      actorUserId,
+      REPRESENTATIVE_ROLE_IDS.primaryContact,
+      REPRESENTATIVE_ROLE_IDS.secondaryContact,
+      nowIso(),
+    ],
+  );
+  return row?.allowed === 1;
+}

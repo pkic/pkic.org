@@ -12,6 +12,7 @@ import {
   finalizeEmailChange,
   updateRegistrationById,
 } from "../functions/_lib/services/registrations";
+import { prepareRotateUserRegistrationManageSecrets } from "../functions/_lib/services/registrations/manage-capability-revocation";
 
 describe("registration email-change concurrency", () => {
   beforeEach(async () => {
@@ -41,6 +42,7 @@ describe("registration email-change concurrency", () => {
     const staleChange = changeRegistrationEmail(gate.db, {
       registrationId: created.registration.id,
       newEmail: "race-new@example.com",
+      authority: { kind: "event_manager", actorUserId: created.registration.user_id },
       confirmationTtlHours: 24,
       signingSecret,
       auditActor: {
@@ -141,8 +143,7 @@ describe("registration email-change concurrency", () => {
       `UPDATE users
             SET pending_email = 'promotion-race-new@example.com',
                 pending_email_expires_at = datetime('now', '+1 day'),
-                pending_email_change_registration_id = ?,
-                pending_email_current_confirmed_at = datetime('now')
+                pending_email_change_registration_id = ?
           WHERE id = ?`,
     )
       .bind(created.registration.id, user.id)
@@ -158,8 +159,7 @@ describe("registration email-change concurrency", () => {
     await env.DB.prepare(
       `UPDATE users
             SET pending_email = NULL, pending_email_expires_at = NULL,
-                pending_email_change_registration_id = NULL,
-                pending_email_current_confirmed_at = NULL
+                pending_email_change_registration_id = NULL
           WHERE id = ?`,
     )
       .bind(user.id)
@@ -175,6 +175,61 @@ describe("registration email-change concurrency", () => {
         created.registration.id,
       ]),
     ).resolves.toEqual([{ manage_link_secret: before.manage_link_secret }]);
+  });
+
+  it("rotates a sibling capability that changes after revocation is planned", async () => {
+    const signingSecret = "test-signing-secret";
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const secondEventId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO events
+         (id, slug, name, timezone, registration_mode, invite_limit_attendee, settings_json, created_at, updated_at)
+       VALUES (?, ?, 'Second event', 'Europe/Amsterdam', 'invite_or_open', 5, '{}', datetime('now'), datetime('now'))`,
+    )
+      .bind(secondEventId, `second-${secondEventId}`)
+      .run();
+    const user = await findOrCreateUser(env.DB, { email: "sibling-race@example.com" });
+    const first = await createRegistration(env.DB, {
+      event: { id: eventId },
+      userId: user.id,
+      attendanceType: "virtual",
+      sourceType: "web",
+      confirmationTtlHours: 24,
+      signingSecret,
+    });
+    const sibling = await createRegistration(env.DB, {
+      event: { id: secondEventId },
+      userId: user.id,
+      attendanceType: "virtual",
+      sourceType: "web",
+      confirmationTtlHours: 24,
+      signingSecret,
+    });
+
+    const planned = prepareRotateUserRegistrationManageSecrets(
+      env.DB,
+      user.id,
+      new Date().toISOString(),
+      first.registration.id,
+    );
+    const concurrentSecret = "concurrently-rotated-secret";
+    await env.DB.prepare("UPDATE registrations SET manage_link_secret = ? WHERE id = ?")
+      .bind(concurrentSecret, sibling.registration.id)
+      .run();
+    await planned.run();
+
+    await expect(
+      queryAll<{ id: string; manage_link_secret: string }>(
+        env.DB,
+        "SELECT id, manage_link_secret FROM registrations WHERE id IN (?, ?) ORDER BY id",
+        [first.registration.id, sibling.registration.id],
+      ),
+    ).resolves.toEqual(
+      [
+        { id: first.registration.id, manage_link_secret: first.registration.manage_link_secret },
+        { id: sibling.registration.id, manage_link_secret: expect.not.stringMatching(concurrentSecret) },
+      ].sort((left, right) => left.id.localeCompare(right.id)),
+    );
   });
 
   it("allows only one account to reserve a pending login email across concurrent batches", async () => {
@@ -204,6 +259,7 @@ describe("registration email-change concurrency", () => {
     const staleReservation = changeRegistrationEmail(gate.db, {
       registrationId: firstRegistration.registration.id,
       newEmail: "race-target@example.com",
+      authority: { kind: "event_manager", actorUserId: firstRegistration.registration.user_id },
       confirmationTtlHours: 24,
       signingSecret,
     });
@@ -211,6 +267,7 @@ describe("registration email-change concurrency", () => {
     await changeRegistrationEmail(env.DB, {
       registrationId: secondRegistration.registration.id,
       newEmail: "race-target@example.com",
+      authority: { kind: "event_manager", actorUserId: secondRegistration.registration.user_id },
       confirmationTtlHours: 24,
       signingSecret,
     });

@@ -113,12 +113,13 @@ describe("admin registration email resend", () => {
     await env.DB.prepare("DROP TRIGGER reject_registration_resend_audit").run();
   });
 
-  it("keeps shared status and resend emails on the current address until it authorizes the change", async () => {
+  it("uses the pending address only for confirmation and keeps status email on the canonical address", async () => {
     const { registrationId, adminId } = await seedPendingRegistration();
     const event = await getEventBySlug(env.DB, "pqc-2026");
     await changeRegistrationEmail(env.DB, {
       registrationId,
       newEmail: "resend-pending@example.test",
+      authority: { kind: "event_manager", actorUserId: adminId },
       confirmationTtlHours: 48,
       signingSecret: env.INTERNAL_SIGNING_SECRET,
     });
@@ -140,12 +141,15 @@ describe("admin registration email resend", () => {
     });
 
     expect(
-      await queryAll<{ recipient_email: string }>(
+      await queryAll<{ template_key: string; recipient_email: string }>(
         env.DB,
-        "SELECT recipient_email FROM email_outbox WHERE id IN (?, ?) ORDER BY id",
+        "SELECT template_key, recipient_email FROM email_outbox WHERE id IN (?, ?) ORDER BY template_key",
         statusEmail.outboxId,
         resent.outboxId,
       ),
-    ).toEqual([{ recipient_email: "resend@example.test" }, { recipient_email: "resend@example.test" }]);
+    ).toEqual([
+      { template_key: "registration_confirm_email", recipient_email: "resend-pending@example.test" },
+      { template_key: "registration_updated", recipient_email: "resend@example.test" },
+    ]);
   });
 });

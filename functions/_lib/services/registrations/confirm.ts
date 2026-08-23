@@ -1,6 +1,6 @@
 import { AppError } from "../../errors";
 import { first } from "../../db/queries";
-import { addHours, nowIso } from "../../utils/time";
+import { nowIso } from "../../utils/time";
 import { prepareEngagementStatement } from "../engagement";
 import { prepareRemoveAllDayWaitlistStatement, resolveCapacityExemptReason } from "./day-waitlist";
 import { isAuditOneChangeGuardFailure, prepareAuditLog } from "../audit";
@@ -11,17 +11,16 @@ import {
   prepareRevokeDuplicateInvitesStatement,
 } from "../invites";
 import { INVITE_COLUMNS, type InviteRecord } from "../invite-types";
-import { newCapabilityLinkSecret, signCapabilityToken, verifyDatabaseCapability } from "../capability-links";
+import { signCapabilityToken, verifyDatabaseCapability } from "../capability-links";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { REGISTRATION_COLUMNS, type RegistrationRecord } from "./types";
 import { isRegistrationTransitionConflict, prepareRegistrationTransitionGuard } from "./transition-guard";
 
 export interface PreparedRegistrationConfirmation {
-  stage: "confirmed" | "new_email_confirmation_required";
+  stage: "confirmed";
   registration: RegistrationRecord;
   manageToken: string;
   recipientEmail: string;
-  currentEmail?: string;
   statements: StatementLike[];
 }
 
@@ -93,12 +92,10 @@ export async function prepareConfirmRegistrationByToken(
     email: string;
     pending_email: string | null;
     pending_email_change_registration_id: string | null;
-    pending_email_current_confirmed_at: string | null;
     normalized_email: string;
   }>(
     db,
-    `SELECT email, pending_email, pending_email_change_registration_id,
-            pending_email_current_confirmed_at, normalized_email
+    `SELECT email, pending_email, pending_email_change_registration_id, normalized_email
        FROM users WHERE id = ?`,
     [registration.user_id],
   );
@@ -109,77 +106,6 @@ export async function prepareConfirmRegistrationByToken(
     user.pending_email && user.pending_email_change_registration_id === registration.id,
   );
 
-  // A registration manage capability may request an email change, but only a
-  // token delivered to the current canonical address may authorize rebinding
-  // the account identity. Rotate the confirmation secret immediately so the
-  // current-address token can never be replayed as the new-address proof.
-  if (ownsPendingEmailChange && !user.pending_email_current_confirmed_at && user.pending_email) {
-    if (!payload.confirmationTtlHours || payload.confirmationTtlHours <= 0) {
-      throw new AppError(
-        409,
-        "EMAIL_CHANGE_WORKFLOW_REQUIRED",
-        "Email changes must continue through the notification workflow",
-      );
-    }
-    const nextConfirmationLinkSecret = newCapabilityLinkSecret();
-    const nextConfirmationDeadlineAt = addHours(now, payload.confirmationTtlHours);
-    const updated: RegistrationRecord = {
-      ...registration,
-      confirmation_link_secret: nextConfirmationLinkSecret,
-      pending_confirmation_deadline_at: nextConfirmationDeadlineAt,
-      transition_revision: registration.transition_revision + 2,
-      updated_at: now,
-    };
-    const manageToken = await signCapabilityToken({
-      signingSecret: payload.signingSecret,
-      linkSecret: updated.manage_link_secret,
-      purpose: "registration_manage",
-      resourceId: updated.id,
-    });
-    return {
-      stage: "new_email_confirmation_required",
-      registration: updated,
-      manageToken,
-      recipientEmail: user.pending_email,
-      currentEmail: user.email,
-      statements: [
-        prepareRegistrationTransitionGuard(db, registration),
-        db
-          .prepare(
-            `UPDATE registrations
-                SET confirmation_link_secret = ?, pending_confirmation_deadline_at = ?,
-                    confirmation_reminder_sent_at = NULL, updated_at = ?
-              WHERE id = ? AND status = 'pending_email_confirmation' AND confirmation_link_secret = ?`,
-          )
-          .bind(
-            nextConfirmationLinkSecret,
-            nextConfirmationDeadlineAt,
-            now,
-            registration.id,
-            registration.confirmation_link_secret,
-          ),
-        db
-          .prepare(
-            `UPDATE users
-                SET pending_email_current_confirmed_at = ?, pending_email_expires_at = ?, updated_at = ?
-              WHERE id = ? AND pending_email = ? AND pending_email_change_registration_id = ?
-                AND pending_email_current_confirmed_at IS NULL`,
-          )
-          .bind(now, nextConfirmationDeadlineAt, now, registration.user_id, user.pending_email, registration.id),
-        prepareAuditLog(
-          db,
-          "user",
-          registration.user_id,
-          "registration_email_change_current_address_confirmed",
-          "registration",
-          registration.id,
-          { eventId: registration.event_id },
-          now,
-          `registration_email_change_current_address_confirmed:${registration.id}:${registration.transition_revision}`,
-        ),
-      ],
-    };
-  }
   let inviteEmail = user?.normalized_email ?? null;
   if (ownsPendingEmailChange) {
     try {
@@ -198,12 +124,22 @@ export async function prepareConfirmRegistrationByToken(
         // a different address. Leave the registration in
         // pending_email_confirmation so the manage URL still works.
         await db.batch([
+          prepareRegistrationTransitionGuard(db, registration),
+          db
+            .prepare(
+              `UPDATE registrations
+                  SET confirmation_link_secret = NULL,
+                      pending_confirmation_deadline_at = NULL,
+                      confirmation_reminder_sent_at = NULL,
+                      updated_at = ?
+                WHERE id = ? AND confirmation_link_secret IS ?`,
+            )
+            .bind(now, registration.id, registration.confirmation_link_secret),
           db
             .prepare(
               `UPDATE users
                   SET pending_email = NULL, pending_email_expires_at = NULL,
-                      pending_email_change_registration_id = NULL,
-                      pending_email_current_confirmed_at = NULL, updated_at = ?
+                      pending_email_change_registration_id = NULL, updated_at = ?
                 WHERE id = ? AND pending_email = ? AND pending_email_change_registration_id = ?`,
             )
             .bind(now, registration.user_id, user.pending_email, registration.id),
@@ -251,7 +187,7 @@ export async function prepareConfirmRegistrationByToken(
         `UPDATE registrations
          SET status = ?, confirmed_at = ?, confirmation_link_secret = NULL,
              pending_confirmation_deadline_at = NULL, confirmation_reminder_sent_at = NULL,
-             manage_link_secret = ?,
+             manage_link_secret = ?, created_identity_user_id = NULL,
              invite_id = COALESCE(invite_id, ?), capacity_exempt_in_person = ?,
              capacity_exempt_reason = ?, updated_at = ?
          WHERE id = ? AND status = 'pending_email_confirmation'`,
@@ -332,6 +268,7 @@ export async function prepareConfirmRegistrationByToken(
     capacity_exempt_in_person: capacityExemptReason ? 1 : 0,
     capacity_exempt_reason: capacityExemptReason,
     confirmed_at: now,
+    created_identity_user_id: null,
     transition_revision: registration.transition_revision + 2,
     updated_at: now,
   };
@@ -356,13 +293,6 @@ export async function confirmRegistrationByToken(
 ): Promise<{ registration: RegistrationRecord; manageToken: string }> {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const prepared = await prepareConfirmRegistrationByToken(db, payload);
-    if (prepared.stage !== "confirmed") {
-      throw new AppError(
-        409,
-        "EMAIL_CHANGE_WORKFLOW_REQUIRED",
-        "Email changes must continue through the notification workflow",
-      );
-    }
     try {
       await db.batch(prepared.statements);
     } catch (error) {

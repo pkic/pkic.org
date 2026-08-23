@@ -42,16 +42,11 @@ export async function queueRegistrationManageLinkRecovery(
        u.updated_at AS user_updated_at
      FROM users u
      JOIN registrations r ON r.user_id = u.id
-     WHERE (
-         u.normalized_email = ?
-         OR (u.pending_email_change_registration_id = r.id
-             AND u.pending_email_current_confirmed_at IS NOT NULL
-             AND u.pending_email = ?)
-       )
+     WHERE u.normalized_email = ?
        AND r.event_id = ?
      ORDER BY r.created_at DESC
      LIMIT 1`,
-    [normalizedEmail, normalizedEmail, event.id],
+    [normalizedEmail, event.id],
   );
   if (!registration) return null;
 
@@ -84,19 +79,13 @@ export async function queueRegistrationManageLinkRecovery(
               JOIN users u ON u.id = r.user_id
              WHERE r.id = ? AND r.event_id = ? AND r.updated_at = ?
                AND u.id = ? AND u.updated_at = ?
-               AND (
-                 u.normalized_email = ?
-                 OR (u.pending_email_change_registration_id = r.id
-                     AND u.pending_email_current_confirmed_at IS NOT NULL
-                     AND u.pending_email = ?)
-               )`,
+               AND u.normalized_email = ?`,
       bindings: [
         registration.registration_id,
         event.id,
         registration.registration_updated_at,
         registration.user_id,
         registration.user_updated_at,
-        normalizedEmail,
         normalizedEmail,
       ],
     },

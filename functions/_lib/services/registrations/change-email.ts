@@ -3,17 +3,15 @@
  * on the user record. Does not change the email until verified via confirmation token.
  *
  * Flow:
- * 1. Validate new email domain has MX records
- * 2. Pre-check that the target email is not reserved by another account
- * 3. Store pending_email on user record with expiration
- * 4. Reset registration to pending_email_confirmation
- * 5. Send an authorization token to the current login address
- * 6. After current-address approval, send a fresh token to the new address
- * 7. Only after both proofs, promote the new canonical login address
+ * 1. Require explicit initiating authority
+ * 2. Validate and reserve the new address
+ * 3. Reset the owning registration to pending email confirmation
+ * 4. Send confirmation to the new address and a non-authorizing alert to the old
+ * 5. Promote the new canonical login address only after new-mailbox proof
  */
 
 import { AppError } from "../../errors";
-import { first, run } from "../../db/queries";
+import { first } from "../../db/queries";
 import { normalizeEmail } from "../../validation";
 import { nowIso, addHours } from "../../utils/time";
 import { checkEmailDomainMx } from "../../email/mx-check";
@@ -21,13 +19,19 @@ import type { DatabaseLike, StatementLike } from "../../types";
 import { REGISTRATION_COLUMNS, type RegistrationRecord } from "./types";
 import { newCapabilityLinkSecret, signedOrQueuedCapability } from "../capability-links";
 import { isAuditOneChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
-import { prepareRegistrationConfirmationEmail, type RegistrationConfirmationEmailParams } from "./status-notifications";
+import {
+  prepareRegistrationConfirmationEmail,
+  prepareRegistrationEmailChangeNotice,
+  type RegistrationConfirmationEmailParams,
+} from "./status-notifications";
 import { emailTakenError, findUserEmailOwner, isEmailReservationConflict } from "../user-emails";
 import {
   isRegistrationTransitionConflict,
   prepareRegistrationTransitionGuard,
   registrationChangedError,
 } from "./transition-guard";
+import { isOrganizationContactForRepresentative } from "../membership/representative-roles";
+import { prepareRotateUserRegistrationManageSecrets } from "./manage-capability-revocation";
 
 const PENDING_CONFIRMATION_DEADLINE_HOURS = 14 * 24;
 
@@ -38,7 +42,13 @@ export interface ChangeEmailResult {
   previousEmail: string;
   pendingEmail: string;
   outboxId: string | null;
+  outboxIds: string[];
 }
+
+export type RegistrationEmailChangeAuthority =
+  | { kind: "registration_capability" }
+  | { kind: "authenticated_actor"; actorUserId: string }
+  | { kind: "event_manager"; actorUserId: string };
 
 export interface ChangeRegistrationEmailParams {
   registrationId: string;
@@ -51,6 +61,8 @@ export interface ChangeRegistrationEmailParams {
   confirmationEmail?: Omit<RegistrationConfirmationEmailParams, "registrationId" | "recipientEmail" | "registration">;
   /** Planned state supplied by a caller whose larger D1 batch owns the transition guard. */
   registrationOverride?: RegistrationRecord;
+  /** The caller must derive this from authenticated request state. */
+  authority: RegistrationEmailChangeAuthority;
 }
 
 export interface PreparedRegistrationEmailChange extends ChangeEmailResult {
@@ -78,6 +90,32 @@ export async function prepareRegistrationEmailChange(
     throw new AppError(409, "ALREADY_CANCELLED", "Cannot change email on a cancelled registration");
   }
 
+  const ownsBootstrapIdentity =
+    registration.status === "pending_email_confirmation" &&
+    registration.confirmed_at === null &&
+    registration.created_identity_user_id === registration.user_id;
+  if (params.authority.kind === "registration_capability") {
+    if (!ownsBootstrapIdentity) {
+      throw new AppError(
+        403,
+        "ACCOUNT_AUTH_REQUIRED",
+        "Sign in to your account before changing its login email address",
+      );
+    }
+  } else if (params.authority.kind === "authenticated_actor") {
+    const isAccountOwner = params.authority.actorUserId === registration.user_id;
+    const isOrganizationContact =
+      !isAccountOwner &&
+      (await isOrganizationContactForRepresentative(db, params.authority.actorUserId, registration.user_id));
+    if (!isAccountOwner && !isOrganizationContact && !ownsBootstrapIdentity) {
+      throw new AppError(
+        403,
+        "FORBIDDEN",
+        "Only the account owner or an authorized organization contact can change this login email address",
+      );
+    }
+  }
+
   // Fetch current user
   const currentUser = await first<{
     id: string;
@@ -99,7 +137,7 @@ export async function prepareRegistrationEmailChange(
   if (newNormalized === currentUser.normalized_email) {
     throw new AppError(400, "EMAIL_UNCHANGED", "The new email address is the same as the current one");
   }
-  if (currentUser.pending_email) {
+  if (currentUser.pending_email && currentUser.pending_email_change_registration_id !== registration.id) {
     throw new AppError(409, "EMAIL_CHANGE_PENDING", "An email change is already awaiting verification");
   }
 
@@ -163,8 +201,7 @@ export async function prepareRegistrationEmailChange(
       .prepare(
         `UPDATE users
          SET pending_email = ?, pending_email_expires_at = ?,
-             pending_email_change_registration_id = ?,
-             pending_email_current_confirmed_at = NULL, updated_at = ?
+             pending_email_change_registration_id = ?, updated_at = ?
          WHERE id = ?`,
       )
       .bind(pendingEmailToStore, pendingEmailExpiresAt, registration.id, now, currentUser.id),
@@ -198,14 +235,27 @@ export async function prepareRegistrationEmailChange(
     ? await prepareRegistrationConfirmationEmail(db, {
         ...params.confirmationEmail,
         registrationId: registration.id,
-        recipientEmail: currentUser.email,
-        kind: "email_change_authorization",
+        recipientEmail: pendingEmailToStore,
+        kind: "email_change_confirmation",
+        currentEmail: currentUser.email,
+        newEmail: pendingEmailToStore,
+        registration: updated,
+      })
+    : null;
+  const preparedNotice = params.confirmationEmail
+    ? await prepareRegistrationEmailChangeNotice(db, {
+        ...params.confirmationEmail,
+        registrationId: registration.id,
         currentEmail: currentUser.email,
         newEmail: pendingEmailToStore,
         registration: updated,
       })
     : null;
   if (preparedEmail) statements.push(preparedEmail.statement);
+  if (preparedNotice) statements.push(preparedNotice.statement);
+  const outboxIds = [preparedEmail?.outboxId, preparedNotice?.outboxId].filter((outboxId): outboxId is string =>
+    Boolean(outboxId),
+  );
   return {
     registration: updated,
     userId: currentUser.id,
@@ -213,6 +263,7 @@ export async function prepareRegistrationEmailChange(
     previousEmail: currentUser.email,
     pendingEmail: pendingEmailToStore,
     outboxId: preparedEmail?.outboxId ?? null,
+    outboxIds,
     statements,
   };
 }
@@ -289,11 +340,10 @@ export async function prepareFinalizeEmailChange(
     pending_email: string | null;
     pending_email_expires_at: string | null;
     pending_email_change_registration_id: string | null;
-    pending_email_current_confirmed_at: string | null;
   }>(
     db,
     `SELECT id, email, normalized_email, pending_email, pending_email_expires_at,
-            pending_email_change_registration_id, pending_email_current_confirmed_at
+            pending_email_change_registration_id
        FROM users WHERE id = ?`,
     [params.userId],
   );
@@ -308,26 +358,32 @@ export async function prepareFinalizeEmailChange(
       "This confirmation link does not belong to the pending email change",
     );
   }
-  if (!user.pending_email_current_confirmed_at) {
-    throw new AppError(
-      409,
-      "CURRENT_EMAIL_CONFIRMATION_REQUIRED",
-      "The current email address must authorize this account change first",
-    );
-  }
-
   // Check expiration
   if (user.pending_email_expires_at && user.pending_email_expires_at < now) {
-    // Clear expired pending email
-    await run(
-      db,
-      `UPDATE users
-          SET pending_email = NULL, pending_email_expires_at = NULL,
-              pending_email_change_registration_id = NULL,
-              pending_email_current_confirmed_at = NULL
-        WHERE id = ? AND pending_email = ? AND pending_email_change_registration_id = ?`,
-      [user.id, user.pending_email, params.registrationId],
-    );
+    // Abandon the request and its capability atomically. The registration-local
+    // creation marker remains available so a still-unconfirmed attendee can
+    // correct another typo from the same narrowly scoped manage capability.
+    await db.batch([
+      prepareRegistrationTransitionGuard(db, registrationBefore),
+      db
+        .prepare(
+          `UPDATE registrations
+              SET confirmation_link_secret = NULL,
+                  pending_confirmation_deadline_at = NULL,
+                  confirmation_reminder_sent_at = NULL,
+                  updated_at = ?
+            WHERE id = ? AND confirmation_link_secret IS ?`,
+        )
+        .bind(now, registrationBefore.id, registrationBefore.confirmation_link_secret),
+      db
+        .prepare(
+          `UPDATE users
+              SET pending_email = NULL, pending_email_expires_at = NULL,
+                  pending_email_change_registration_id = NULL, updated_at = ?
+            WHERE id = ? AND pending_email = ? AND pending_email_change_registration_id = ?`,
+        )
+        .bind(now, user.id, user.pending_email, params.registrationId),
+    ]);
     throw new AppError(410, "PENDING_EMAIL_EXPIRED", "Email confirmation link has expired");
   }
 
@@ -342,6 +398,7 @@ export async function prepareFinalizeEmailChange(
   const finalizedRegistration: RegistrationRecord = {
     ...registrationBefore,
     manage_link_secret: nextManageLinkSecret,
+    created_identity_user_id: null,
     updated_at: now,
   };
   const stmts: StatementLike[] =
@@ -362,7 +419,6 @@ export async function prepareFinalizeEmailChange(
             SET email = ?, normalized_email = ?,
                 pending_email = NULL, pending_email_expires_at = NULL,
                 pending_email_change_registration_id = NULL,
-                pending_email_current_confirmed_at = NULL,
                 updated_at = ?
           WHERE id = ? AND pending_email = ? AND pending_email_change_registration_id = ?`,
       )
@@ -388,13 +444,14 @@ export async function prepareFinalizeEmailChange(
     db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(now, user.id),
     db.prepare("UPDATE refresh_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(now, user.id),
     db.prepare("UPDATE auth_magic_links SET used_at = ? WHERE user_id = ? AND used_at IS NULL").bind(now, user.id),
+    prepareRotateUserRegistrationManageSecrets(db, user.id, now, registrationBefore.id),
   );
   if (params.rotateManageLink !== false) {
     stmts.push(
       db
         .prepare(
           `UPDATE registrations
-              SET manage_link_secret = ?, updated_at = ?
+              SET manage_link_secret = ?, created_identity_user_id = NULL, updated_at = ?
             WHERE id = ? AND event_id = ? AND user_id = ? AND manage_link_secret = ?`,
         )
         .bind(
@@ -427,7 +484,7 @@ export function prepareClearRegistrationEmailChangeStatement(
       `UPDATE users
           SET pending_email = NULL, pending_email_expires_at = NULL,
               pending_email_change_registration_id = NULL,
-              pending_email_current_confirmed_at = NULL, updated_at = ?
+              updated_at = ?
         WHERE id = ? AND pending_email_change_registration_id = ?`,
     )
     .bind(at, userId, registrationId);

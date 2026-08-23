@@ -605,6 +605,12 @@ CREATE INDEX idx_calendar_rsvp_pending_bounce
 -- registrations table just to replace a SQLite CHECK constraint.
 ALTER TABLE registrations ADD COLUMN cancellation_reason_code TEXT;
 ALTER TABLE registrations ADD COLUMN transition_revision INTEGER NOT NULL DEFAULT 0;
+-- A public registration-management capability may correct the address only
+-- when that same registration transaction created a new, still-unconfirmed
+-- identity. Existing-account registration links must never become global
+-- account-rebinding credentials. Authorized staff/organization actors use a
+-- separately authenticated command path and do not depend on this flag.
+ALTER TABLE registrations ADD COLUMN created_identity_user_id TEXT REFERENCES users(id);
 
 CREATE TABLE registration_transition_guards (
   id                TEXT NOT NULL PRIMARY KEY,
@@ -635,12 +641,14 @@ BEGIN
 END;
 
 CREATE TRIGGER trg_registration_transition_revision
-AFTER UPDATE OF status, user_id, confirmation_link_secret, manage_link_secret ON registrations
+AFTER UPDATE OF status, user_id, confirmation_link_secret, manage_link_secret,
+                created_identity_user_id ON registrations
 FOR EACH ROW
 WHEN OLD.status IS NOT NEW.status
   OR OLD.user_id IS NOT NEW.user_id
   OR OLD.confirmation_link_secret IS NOT NEW.confirmation_link_secret
   OR OLD.manage_link_secret IS NOT NEW.manage_link_secret
+  OR OLD.created_identity_user_id IS NOT NEW.created_identity_user_id
 BEGIN
   UPDATE registrations
   SET transition_revision = transition_revision + 1
@@ -2306,16 +2314,10 @@ As part of our transition to the new PKI Consortium member portal, an account ha
 -- make routine fixture/data cleanup order-dependent. The owner trigger below
 -- enforces the same live-row relationship without introducing that cycle.
 ALTER TABLE users ADD COLUMN pending_email_change_registration_id TEXT;
--- A registration-management capability may request an account email change,
--- but it is not proof that the holder controls the account's current login
--- address. Record that proof separately before any pending address can become
--- the canonical login identity. This remains an additive column because D1
--- migrations must not rebuild the users table for a change like this.
-ALTER TABLE users ADD COLUMN pending_email_current_confirmed_at TEXT;
 
--- One configurable template serves both proofs in the email-change sequence;
--- the payload selects the current-address authorization or new-address
--- confirmation wording without duplicating delivery logic.
+-- The new address is the only mailbox that must prove control. Authorization
+-- comes from the initiating actor or the narrow unconfirmed-registration
+-- correction capability, never from continued access to the old mailbox.
 INSERT OR IGNORE INTO email_template_versions
   (id, template_key, version, subject_template, body, content_type,
    r2_object_key, checksum_sha256, status, created_by_user_id, created_at)
@@ -2324,18 +2326,29 @@ VALUES (
   substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(2))) || '-' ||
   lower(hex(randomblob(6))),
   'registration_email_change', 1,
-  '{{#if emailChangeAuthorization}}Authorize your email address change for {{eventName}}{{else}}Confirm your new email address for {{eventName}}{{/if}}',
-  '{{#if emailChangeAuthorization}}A request was made to change the login email for your account from **{{currentEmail}}** to **{{newEmail}}**.
-
-[Authorize this email change]({{confirmationUrl}})
-
-This first step only proves control of your current address. The account email will not change until the new address is confirmed separately.
-
-If you did not request this change, do not open the link.{{else}}Your current email address has authorized the requested account email change.
+  'Confirm your new email address for {{eventName}}',
+  'A request was made to change the login email for your account from **{{currentEmail}}** to **{{newEmail}}**.
 
 [Confirm this new email address]({{confirmationUrl}})
 
-The account login email will change only after you open this link. If you did not request this change, do not open the link.{{/if}}',
+The account login email will change only after you open this link. If you did not request this change, do not open the link.',
+  'markdown', NULL, '', 'active', NULL, datetime('now')
+);
+
+INSERT OR IGNORE INTO email_template_versions
+  (id, template_key, version, subject_template, body, content_type,
+   r2_object_key, checksum_sha256, status, created_by_user_id, created_at)
+VALUES (
+  lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' ||
+  substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(2))) || '-' ||
+  lower(hex(randomblob(6))),
+  'registration_email_change_notice', 1,
+  'Your account email change was requested',
+  'The login email for your account was requested to change from **{{currentEmail}}** to **{{newEmail}}**.
+
+The old address is not required to approve this change. The new address must be confirmed before the login email changes.
+
+If you did not expect this request, [contact the PKI Consortium]({{contactUrl}}) promptly.',
   'markdown', NULL, '', 'active', NULL, datetime('now')
 );
 
@@ -2446,20 +2459,9 @@ BEGIN
   SELECT RAISE(ABORT, 'EMAIL_TAKEN');
 END;
 
-CREATE TRIGGER trg_users_pending_email_no_overwrite
-BEFORE UPDATE OF pending_email ON users
-WHEN OLD.pending_email IS NOT NULL
- AND NEW.pending_email IS NOT NULL
- AND OLD.pending_email != NEW.pending_email
-BEGIN
-  SELECT RAISE(ABORT, 'EMAIL_CHANGE_ALREADY_PENDING');
-END;
-
 CREATE TRIGGER trg_users_pending_email_binding_consistency
-BEFORE UPDATE OF pending_email, pending_email_change_registration_id,
-                 pending_email_current_confirmed_at ON users
+BEFORE UPDATE OF pending_email, pending_email_change_registration_id ON users
 WHEN (NEW.pending_email IS NULL) != (NEW.pending_email_change_registration_id IS NULL)
-  OR (NEW.pending_email_current_confirmed_at IS NOT NULL AND NEW.pending_email IS NULL)
 BEGIN
   SELECT RAISE(ABORT, 'EMAIL_CHANGE_BINDING_REQUIRED');
 END;

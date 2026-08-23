@@ -147,7 +147,7 @@ async function handleAdminRegistrationPatch(
         : `Registration updated for ${event.name}`,
   };
   let updated;
-  let outboxId: string | null;
+  let outboxIds: string[];
   if (emailChanged && body.email) {
     const updateResult = await updateRegistrationByIdWithEmailChange(
       requestDb(c),
@@ -156,6 +156,7 @@ async function handleAdminRegistrationPatch(
         emailChange: {
           newEmail: body.email,
           confirmationTtlHours: config.confirmationLinkTtlHours,
+          authority: { kind: "event_manager", actorUserId: admin.id },
           allowCancelled: true,
           auditActor: {
             type: "admin",
@@ -169,7 +170,7 @@ async function handleAdminRegistrationPatch(
       `admin:${admin.id}`,
     );
     updated = updateResult.registration;
-    outboxId = updateResult.outboxId;
+    outboxIds = updateResult.outboxIds;
   } else {
     const updateResult = await updateRegistrationByIdWithNotification(
       requestDb(c),
@@ -177,9 +178,11 @@ async function handleAdminRegistrationPatch(
       `admin:${admin.id}`,
     );
     updated = updateResult.registration;
-    outboxId = updateResult.outboxId;
+    outboxIds = updateResult.outboxIds;
   }
-  if (outboxId) c.executionCtx.waitUntil(processOutboxByIdBackground(requestDb(c), c.env, outboxId));
+  for (const queuedOutboxId of outboxIds) {
+    c.executionCtx.waitUntil(processOutboxByIdBackground(requestDb(c), c.env, queuedOutboxId));
+  }
 
   const result = await fetchAdminRegistrationWithDetails(requestDb(c), event.id, updated.id);
   return json(

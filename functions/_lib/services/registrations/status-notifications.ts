@@ -262,7 +262,7 @@ export interface RegistrationConfirmationEmailParams extends RegistrationEmailOv
   recipientEmail?: string;
   confirmationTtlHours: number;
   subject?: string;
-  kind?: "registration" | "email_change_authorization" | "email_change_confirmation";
+  kind?: "registration" | "email_change_confirmation";
   currentEmail?: string;
   newEmail?: string;
   outboxId?: string;
@@ -296,11 +296,9 @@ export async function prepareRegistrationConfirmationEmail(
     messageType: "transactional",
     subject:
       params.subject ??
-      (kind === "email_change_authorization"
-        ? `Authorize your email address change for ${params.event.name}`
-        : kind === "email_change_confirmation"
-          ? `Confirm your new email address for ${params.event.name}`
-          : `Confirm your email address for ${params.event.name}`),
+      (kind === "email_change_confirmation"
+        ? `Confirm your new email address for ${params.event.name}`
+        : `Confirm your email address for ${params.event.name}`),
     capabilityLinkValues: [confirmationUrl],
     data: {
       ...buildEventEmailVariables(params.event, params.appBaseUrl),
@@ -317,7 +315,6 @@ export async function prepareRegistrationConfirmationEmail(
       ...statusData,
       registrationId: registration.id,
       confirmationUrl,
-      emailChangeAuthorization: kind === "email_change_authorization",
       emailChangeConfirmation: kind === "email_change_confirmation",
       currentEmail: params.currentEmail,
       newEmail: params.newEmail,
@@ -326,6 +323,40 @@ export async function prepareRegistrationConfirmationEmail(
     },
   });
   return { outboxId: prepared.id, statement: prepared.statement, confirmationUrl };
+}
+
+export interface RegistrationEmailChangeNoticeParams extends RegistrationEmailOverrides {
+  event: RegistrationStatusEmailEvent;
+  registrationId: string;
+  appBaseUrl: string;
+  currentEmail: string;
+  newEmail: string;
+}
+
+/** Queues a non-authorizing security alert to the former login address. */
+export async function prepareRegistrationEmailChangeNotice(
+  db: DatabaseLike,
+  params: RegistrationEmailChangeNoticeParams,
+): Promise<{ outboxId: string; statement: StatementLike }> {
+  const { user } = await loadRegistrationEmailContext(db, params.event.id, params.registrationId, params);
+  const prepared = prepareQueueEmailStatement(db, {
+    eventId: params.event.id,
+    baseUrl: params.appBaseUrl,
+    templateKey: "registration_email_change_notice",
+    recipientEmail: params.currentEmail,
+    recipientUserId: user.id,
+    messageType: "transactional",
+    subject: "Your account email change was requested",
+    data: {
+      ...buildEventEmailVariables(params.event, params.appBaseUrl),
+      firstName: user.first_name ?? "",
+      lastName: user.last_name ?? "",
+      currentEmail: params.currentEmail,
+      newEmail: params.newEmail,
+      contactUrl: `${params.appBaseUrl}/contact/`,
+    },
+  });
+  return { outboxId: prepared.id, statement: prepared.statement };
 }
 
 export async function queueRegistrationConfirmationEmail(

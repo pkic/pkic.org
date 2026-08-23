@@ -172,31 +172,6 @@ function showConfirmedPanel(
   root.appendChild(container);
 }
 
-function showNewEmailConfirmationRequiredPanel(
-  root: HTMLElement,
-  form: HTMLFormElement,
-  firstName: string,
-  eventName: string,
-  manageUrl: string,
-): void {
-  form.classList.add("d-none");
-  const container = document.createElement("div");
-  render(
-    <SuccessPanel icon="✉️" title={`${firstName ? `${firstName}, your` : "Your"} current email is verified`}>
-      <p class="event-flow-success-body">
-        We sent a second confirmation link to your new email address. Your account email will change only after you open
-        that link{eventName ? ` for ${eventName}` : ""}.
-      </p>
-      <p class="small text-muted">If you did not request this change, do not open the second link.</p>
-      <a class="btn btn-sm btn-outline-primary" href={manageUrl}>
-        Return to registration management
-      </a>
-    </SuccessPanel>,
-    container,
-  );
-  root.appendChild(container);
-}
-
 /**
  * Replace the confirm form with a "link expired" panel that lets the attendee
  * request a fresh confirmation email without leaving the page.
@@ -427,24 +402,20 @@ async function main(): Promise<void> {
           },
           registrationConfirmResponseSchema,
         );
-        if (result.stage === "new_email_confirmation_required") {
-          showNewEmailConfirmationRequiredPanel(boot.root, boot.form, firstName, eventName, result.manageUrl);
-        } else {
-          showConfirmedPanel(
-            boot.root,
-            boot.form,
-            result,
-            firstName,
-            lastName,
-            eventName,
-            email,
-            organizationName,
-            result.shareUrl,
-            result.manageUrl,
-            result.manageToken,
-            boot.eventSlug,
-          );
-        }
+        showConfirmedPanel(
+          boot.root,
+          boot.form,
+          result,
+          firstName,
+          lastName,
+          eventName,
+          email,
+          organizationName,
+          result.shareUrl,
+          result.manageUrl,
+          result.manageToken,
+          boot.eventSlug,
+        );
       } catch (error) {
         const normalized = normalizeValidation(error);
         if (

@@ -6,7 +6,7 @@ import type { EventRecord } from "../events";
 import { isStaleInviteTransition } from "../invite-lifecycle";
 import { registrationManagePageUrl } from "../frontend-links";
 import { isStaleRegistrationTransition, prepareConfirmRegistrationByToken } from "./confirm";
-import { prepareRegistrationConfirmationEmail, prepareRegistrationConfirmedEmail } from "./status-notifications";
+import { prepareRegistrationConfirmedEmail } from "./status-notifications";
 import { firstReferralCodeQuerySql } from "../referral-code-projection";
 
 export interface ConfirmRegistrationWorkflowPayload {
@@ -93,24 +93,6 @@ async function confirmRegistrationWithNotificationOnce(
     confirmationTtlHours: payload.confirmationTtlHours,
     signingSecret: payload.signingSecret,
   });
-  if (prepared.stage === "new_email_confirmation_required") {
-    const idempotencyKey = `registration_email_change_confirmation:${prepared.registration.id}:${prepared.registration.transition_revision}`;
-    const email = await prepareRegistrationConfirmationEmail(db, {
-      event: payload.event,
-      registrationId: prepared.registration.id,
-      registration: prepared.registration,
-      appBaseUrl: payload.appBaseUrl,
-      recipientEmail: prepared.recipientEmail,
-      confirmationTtlHours: payload.confirmationTtlHours,
-      kind: "email_change_confirmation",
-      currentEmail: prepared.currentEmail,
-      newEmail: prepared.recipientEmail,
-      idempotencyKey,
-      outboxId: (await sha256Hex(idempotencyKey)).slice(0, 32),
-    });
-    await commitConfirmationIntent(db, prepared, email.statement);
-    return confirmationResult(payload, prepared, email.outboxId, null);
-  }
   const referral = await first<{ code: string }>(db, firstReferralCodeQuerySql("registration", "?"), [
     prepared.registration.id,
   ]);

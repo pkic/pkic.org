@@ -10,6 +10,7 @@ import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange } from "./a
 import { prepareUserProfileStatement, type UserProfilePatch } from "./users";
 import { buildUserAccessOffboardingStatements } from "./membership/offboarding";
 import { findUserEmailOwner } from "./user-emails";
+import { prepareRotateUserRegistrationManageSecrets } from "./registrations/manage-capability-revocation";
 
 type AdminUserUpdateInput = z.infer<typeof adminUserUpdateSchema>;
 
@@ -196,6 +197,7 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
               SET confirmation_link_secret = NULL,
                   pending_confirmation_deadline_at = NULL,
                   confirmation_reminder_sent_at = NULL,
+                  created_identity_user_id = NULL,
                   transition_revision = transition_revision + 1,
                   updated_at = ?
             WHERE id = ? AND user_id = ?`,
@@ -212,8 +214,6 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
              pending_email_expires_at = CASE WHEN ? = 1 THEN NULL ELSE pending_email_expires_at END,
              pending_email_change_registration_id = CASE
                WHEN ? = 1 THEN NULL ELSE pending_email_change_registration_id END,
-             pending_email_current_confirmed_at = CASE
-               WHEN ? = 1 THEN NULL ELSE pending_email_current_confirmed_at END,
              updated_at = ?
          WHERE id = ?
            AND pii_redacted_at IS NULL
@@ -226,7 +226,6 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
         role,
         active ? 1 : 0,
         isEcMember ? 1 : 0,
-        clearPendingEmailChange ? 1 : 0,
         clearPendingEmailChange ? 1 : 0,
         clearPendingEmailChange ? 1 : 0,
         clearPendingEmailChange ? 1 : 0,
@@ -255,6 +254,9 @@ export async function updateAdminUser(db: DatabaseLike, actor: AuthAdmin, userId
       db.prepare("UPDATE refresh_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(at, user.id),
       db.prepare("UPDATE auth_magic_links SET used_at = ? WHERE user_id = ? AND used_at IS NULL").bind(at, user.id),
     );
+  }
+  if (changingPrimaryEmail) {
+    statements.push(prepareRotateUserRegistrationManageSecrets(db, user.id, at));
   }
   if (deactivating) {
     statements.push(

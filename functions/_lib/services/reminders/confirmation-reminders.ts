@@ -14,7 +14,10 @@ import {
 } from "../reminders-support";
 import { batchQueueEmailsAndUpdateState } from "./shared";
 import type { DatabaseLike } from "../../types";
-import { REGISTRATION_RECIPIENT_EMAIL_SQL } from "../registrations/recipient-email";
+import {
+  REGISTRATION_CONFIRMATION_RECIPIENT_EMAIL_SQL,
+  REGISTRATION_RECIPIENT_EMAIL_SQL,
+} from "../registrations/recipient-email";
 import {
   isRegistrationTransitionConflict,
   prepareRegistrationTransitionGuard,
@@ -96,6 +99,7 @@ export async function runConfirmationReminders(
                SET status = 'cancelled', cancelled_at = ?,
                    confirmation_link_secret = NULL,
                    pending_confirmation_deadline_at = NULL, confirmation_reminder_sent_at = NULL,
+                   created_identity_user_id = NULL,
                    updated_at = ?
                WHERE id = ?
                  AND status = 'pending_email_confirmation'
@@ -129,8 +133,7 @@ export async function runConfirmationReminders(
             .prepare(
               `UPDATE users
                   SET pending_email = NULL, pending_email_expires_at = NULL,
-                      pending_email_change_registration_id = NULL,
-                      pending_email_current_confirmed_at = NULL, updated_at = ?
+                      pending_email_change_registration_id = NULL, updated_at = ?
                 WHERE id = ? AND pending_email_change_registration_id = ?`,
             )
             .bind(nowValue, row.user_id, row.id),
@@ -159,8 +162,8 @@ export async function runConfirmationReminders(
         appBaseUrl,
         templateKey: "registration_updated",
         subject: `Registration cancelled due to missing email confirmation — ${event.name}`,
-        // The pending address is selected only for the registration that owns
-        // the email-change request; unrelated registrations keep the primary.
+        // Cancellation is an ordinary status notification. The unverified
+        // pending address may receive confirmation messages only.
         recipientEmailOverride: row.email,
       });
     }
@@ -173,7 +176,7 @@ export async function runConfirmationReminders(
           db,
           `SELECT
            r.id, r.event_id, u.id AS user_id, u.first_name, u.last_name,
-           ${REGISTRATION_RECIPIENT_EMAIL_SQL} AS email,
+           ${REGISTRATION_CONFIRMATION_RECIPIENT_EMAIL_SQL} AS email,
            r.confirmation_link_secret,
            r.confirmation_reminder_sent_at, r.pending_confirmation_deadline_at, r.transition_revision, r.created_at,
            e.name AS event_name, e.slug AS event_slug, e.base_path AS event_base_path,

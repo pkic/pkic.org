@@ -32,7 +32,7 @@ export async function anonymizeAdminUser(db: DatabaseLike, actor: AuthAdmin, use
       .prepare(
         `UPDATE users
          SET email = ?, normalized_email = ?, pending_email = NULL, pending_email_expires_at = NULL,
-             pending_email_change_registration_id = NULL, pending_email_current_confirmed_at = NULL,
+             pending_email_change_registration_id = NULL,
              first_name = NULL, last_name = NULL, preferred_name = NULL, organization_name = NULL,
              job_title = NULL, biography = NULL, links_json = NULL, data_json = NULL,
              headshot_r2_key = NULL, headshot_updated_at = NULL,
