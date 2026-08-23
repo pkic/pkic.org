@@ -1,5 +1,4 @@
-import { parseJsonBody } from "../../../../_lib/validation";
-import { dispatchPostOnly, json } from "../../../../_lib/http";
+import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { renderEmail, renderSubject } from "../../../../_lib/email/render";
 import { loadEmailPartials, loadEmailRenderResources } from "../../../../_lib/email/partials";
@@ -7,7 +6,6 @@ import { resolveAppBaseUrl } from "../../../../_lib/config";
 import {
   adminEmailTemplatePreviewResponseSchema,
   adminEmailTemplatePreviewRouteSchema,
-  adminEmailTemplatePreviewSchema,
 } from "../../../../../assets/shared/schemas/admin-email-templates";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
@@ -37,16 +35,16 @@ function buildDefaultPreviewData(baseUrl: string): Record<string, unknown> {
   };
 }
 
-export async function onRequestPost(
+async function handlePreviewPost(
   c: AdminContext,
-  validated?: ValidatedData<typeof adminEmailTemplatePreviewRouteSchema>,
+  data: ValidatedData<typeof adminEmailTemplatePreviewRouteSchema>,
 ): Promise<Response> {
   const db = requestDb(c);
   await requireAdminFromRequest(db, c.req.raw, c.env);
-  const body = validated?.body ?? (await parseJsonBody(c.req, adminEmailTemplatePreviewSchema));
+  const body = data.body;
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
-  const data = {
+  const renderData = {
     ...buildDefaultPreviewData(appBaseUrl),
     ...(body.data ?? {}),
   };
@@ -54,7 +52,7 @@ export async function onRequestPost(
     ? { partials: await loadEmailPartials(db), layoutHtml: body.layoutHtml }
     : await loadEmailRenderResources(db);
   const { partials, layoutHtml } = resources;
-  const dataWithPartials = { ...data, _partials: partials };
+  const dataWithPartials = { ...renderData, _partials: partials };
 
   const subject = renderSubject(body.subjectTemplate ?? null, "PKI Consortium Preview Subject", dataWithPartials);
 
@@ -66,13 +64,9 @@ export async function onRequestPost(
       subject,
       html: rendered.html,
       text: rendered.text,
-      data,
+      data: renderData,
     }),
   );
 }
 
-export const AdminEmailTemplatePreviewPost = openApiRoute(adminEmailTemplatePreviewRouteSchema, onRequestPost);
-
-export async function onRequest(c: AdminContext): Promise<Response> {
-  return dispatchPostOnly(c, onRequestPost);
-}
+export const AdminEmailTemplatePreviewPost = openApiRoute(adminEmailTemplatePreviewRouteSchema, handlePreviewPost);

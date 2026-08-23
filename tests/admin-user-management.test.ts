@@ -4,8 +4,6 @@ import { env } from "cloudflare:workers";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { resetDb } from "./helpers/reset-db";
-import { onRequestPatch as patchUser } from "../functions/api/v1/admin/users/[userId]/index";
-import { onRequestPost as anonymizeUser } from "../functions/api/v1/admin/users/[userId]/anonymize";
 import app from "../functions/router";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
@@ -36,6 +34,32 @@ function adminRequest(path: string, method: string, body?: unknown, token = admi
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 }
+
+async function mountedAdminUserRoute(context: {
+  req: { raw: Request };
+  env: unknown;
+  executionCtx?: { waitUntil(promise: Promise<unknown>): void };
+}): Promise<Response> {
+  const response = await app.fetch(
+    context.req.raw,
+    context.env as any,
+    (context.executionCtx ?? { passThroughOnException: () => {}, waitUntil: () => {} }) as any,
+  );
+  if (response.ok) return response;
+  const payload = (await response
+    .clone()
+    .json()
+    .catch(() => ({}))) as { error?: Record<string, unknown> };
+  const error = Object.assign(
+    new Error(String(payload.error?.message ?? "Request failed")),
+    { status: response.status },
+    payload.error ?? {},
+  );
+  throw error;
+}
+
+const patchUser = mountedAdminUserRoute;
+const anonymizeUser = mountedAdminUserRoute;
 
 async function seedUser(_db: DatabaseLike, email: string): Promise<string> {
   const userId = crypto.randomUUID();

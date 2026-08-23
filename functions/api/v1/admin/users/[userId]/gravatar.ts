@@ -18,11 +18,12 @@
  * The endpoint first checks with `d=404` to see if a custom avatar exists
  * (avoiding the generic placeholder). If none exists it returns a 404.
  */
-import { dispatchPostOnly, json } from "../../../../../_lib/http";
+import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { downloadGravatar, gravatarHash } from "../../../../../_lib/utils/gravatar";
 import { AppError } from "../../../../../_lib/errors";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { commitUserHeadshotUpload, getUserHeadshotRecord } from "../../../../../_lib/services/user-headshot";
 import {
   adminUserGravatarImportResponseSchema,
@@ -32,12 +33,12 @@ import type { ValidatedData } from "chanfana";
 
 // ── Handler ─────────────────────────────────────────────────────────────────
 
-export async function onRequestPost(
+async function handleGravatarImport(
   c: AdminContext,
-  data?: ValidatedData<typeof adminUserGravatarImportRouteSchema>,
+  data: ValidatedData<typeof adminUserGravatarImportRouteSchema>,
 ): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const userId = data?.params.userId ?? c.req.param("userId");
+  const userId = data.params.userId;
 
   const user = await getUserHeadshotRecord(requestDb(c), userId);
 
@@ -71,6 +72,4 @@ export async function onRequestPost(
   return json(adminUserGravatarImportResponseSchema.parse({ success: true, r2Key, source: "gravatar" }));
 }
 
-export async function onRequest(c: AdminContext): Promise<Response> {
-  return dispatchPostOnly(c, onRequestPost);
-}
+export const AdminUsersUserIdGravatarPost = openApiRoute(adminUserGravatarImportRouteSchema, handleGravatarImport);

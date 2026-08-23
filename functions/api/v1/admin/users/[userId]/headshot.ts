@@ -7,7 +7,7 @@
  *
  * All methods require admin authentication.
  */
-import { dispatchRequestMethod, json } from "../../../../../_lib/http";
+import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { readValidatedUploadedImage, resizeHeadshot } from "../../../../../_lib/utils/image-upload";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
@@ -28,22 +28,18 @@ import {
 
 // ── GET — serve the headshot image ──────────────────────────────────────────
 
-async function onGet(c: AdminContext, data?: ValidatedData<typeof adminUserHeadshotGetRouteSchema>): Promise<Response> {
+async function onGet(c: AdminContext, data: ValidatedData<typeof adminUserHeadshotGetRouteSchema>): Promise<Response> {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  return adminUserHeadshotResponse(
-    requestDb(c),
-    requireUserHeadshotBucket(c.env),
-    data?.params.userId ?? c.req.param("userId"),
-  );
+  return adminUserHeadshotResponse(requestDb(c), requireUserHeadshotBucket(c.env), data.params.userId);
 }
 
 // ── PUT — upload / replace headshot ─────────────────────────────────────────
 
-async function onPut(c: AdminContext, data?: ValidatedData<typeof adminUserHeadshotPutRouteSchema>): Promise<Response> {
+async function onPut(c: AdminContext, data: ValidatedData<typeof adminUserHeadshotPutRouteSchema>): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  const user = await getUserHeadshotRecord(requestDb(c), data?.params.userId ?? c.req.param("userId"));
+  const user = await getUserHeadshotRecord(requestDb(c), data.params.userId);
 
   const uploaded = await readValidatedUploadedImage(c.req.raw, "Headshot");
   const resized = await resizeHeadshot(uploaded.buffer, uploaded.contentType, c.env.IMAGES);
@@ -73,11 +69,11 @@ async function onPut(c: AdminContext, data?: ValidatedData<typeof adminUserHeads
 
 async function onDelete(
   c: AdminContext,
-  data?: ValidatedData<typeof adminUserHeadshotDeleteRouteSchema>,
+  data: ValidatedData<typeof adminUserHeadshotDeleteRouteSchema>,
 ): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  const user = await getUserHeadshotRecord(requestDb(c), data?.params.userId ?? c.req.param("userId"));
+  const user = await getUserHeadshotRecord(requestDb(c), data.params.userId);
 
   await removeUserHeadshotForRequest(requestDb(c), c.env, c.req.raw, c.executionCtx.waitUntil.bind(c.executionCtx), {
     userId: user.id,
@@ -89,10 +85,6 @@ async function onDelete(
 }
 
 // ── Router ──────────────────────────────────────────────────────────────────
-
-export async function onRequest(c: AdminContext): Promise<Response> {
-  return dispatchRequestMethod(c, { GET: onGet, PUT: onPut, DELETE: onDelete });
-}
 
 export const AdminUsersUserIdHeadshotGet = openApiRoute(adminUserHeadshotGetRouteSchema, onGet);
 export const AdminUsersUserIdHeadshotPut = openApiRoute(adminUserHeadshotPutRouteSchema, onPut);

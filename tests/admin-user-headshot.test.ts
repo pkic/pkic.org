@@ -3,7 +3,6 @@ import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
 import { createContext, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
-import { onRequest as adminUserHeadshotRequest } from "../functions/api/v1/admin/users/[userId]/headshot";
 import app from "../functions/router";
 import { replaceUserHeadshot } from "../functions/_lib/services/user-headshot";
 import { processPendingStorageDeletions } from "../functions/_lib/services/storage-deletion-outbox";
@@ -82,6 +81,31 @@ class FailingUploadsBucket {
     throw error;
   }
 }
+
+async function mountedAdminHeadshotRoute(context: {
+  req: { raw: Request };
+  env: unknown;
+  executionCtx?: { waitUntil(promise: Promise<unknown>): void };
+}): Promise<Response> {
+  const response = await app.fetch(
+    context.req.raw,
+    context.env as any,
+    (context.executionCtx ?? { passThroughOnException: () => {}, waitUntil: () => {} }) as any,
+  );
+  if (response.ok) return response;
+  const payload = (await response
+    .clone()
+    .json()
+    .catch(() => ({}))) as { error?: Record<string, unknown> };
+  const error = Object.assign(
+    new Error(String(payload.error?.message ?? "Request failed")),
+    { status: response.status },
+    payload.error ?? {},
+  );
+  throw error;
+}
+
+const adminUserHeadshotRequest = mountedAdminHeadshotRoute;
 
 async function setup(): Promise<{ adminId: string; targetUserId: string }> {
   await seedEventAndAdmin(env.DB);
