@@ -36,6 +36,16 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/invites/speakers/bulk"].post).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/waitlist/promote"].post).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}/badge-role"].get).toBeDefined();
+    expect(
+      spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}/badge-role"].patch,
+    ).toBeDefined();
+    expect(
+      spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}/day-attendance"].patch,
+    ).toBeDefined();
+    expect(
+      spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}/open-manage"].post,
+    ).toBeDefined();
     expect(spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}/admit"].post).toBeDefined();
     expect(
       spec.paths["/api/v1/admin/events/{eventSlug}/registrations/{registrationId}/resend-confirmation"].post,

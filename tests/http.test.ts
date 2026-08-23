@@ -14,9 +14,7 @@ import { onRequest as registrationManageDispatch } from "../functions/api/v1/reg
 import { onRequest as registrationHeadshotDispatch } from "../functions/api/v1/registrations/manage/[token]/headshot";
 import { onRequest as waitlistPromoteDispatch } from "../functions/api/v1/admin/events/[eventSlug]/waitlist/promote";
 import { onRequest as adminRegistrationDispatch } from "../functions/api/v1/admin/events/[eventSlug]/registrations/[registrationId]/index";
-import { onRequest as badgeRoleDispatch } from "../functions/api/v1/admin/events/[eventSlug]/registrations/[registrationId]/badge-role";
 import { onRequest as registrationAdmitDispatch } from "../functions/api/v1/admin/events/[eventSlug]/registrations/[registrationId]/admit";
-import { onRequest as dayAttendanceDispatch } from "../functions/api/v1/admin/events/[eventSlug]/registrations/[registrationId]/day-attendance";
 
 function context(method: string) {
   return { req: { raw: new Request("https://app.test/resource", { method }) } };
@@ -146,25 +144,11 @@ describe("HTTP method dispatch", () => {
       handler: adminRegistrationDispatch,
     },
     {
-      label: "badge role management",
-      path: "/admin/events/event/registrations/registration/badge-role",
-      method: "POST",
-      allow: "GET, PATCH",
-      handler: badgeRoleDispatch,
-    },
-    {
       label: "registration admission",
       path: "/admin/events/event/registrations/registration/admit",
       method: "GET",
       allow: "POST",
       handler: registrationAdmitDispatch,
-    },
-    {
-      label: "day attendance management",
-      path: "/admin/events/event/registrations/registration/day-attendance",
-      method: "GET",
-      allow: "PATCH",
-      handler: dayAttendanceDispatch,
     },
   ])("returns the canonical mounted 405 for a $label route", async ({ path, method, allow, handler }) => {
     const app = new Hono();

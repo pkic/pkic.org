@@ -21,7 +21,7 @@ import { linksSchema } from "./links";
 import { defaultedSourceTypeSchema } from "./source";
 import { IMAGE_UPLOAD_ALLOWED_MIME_TYPES } from "./images";
 import { proposalSpeakerRoleSchema } from "./participant-roles";
-import { httpUrlSchema } from "./urls";
+import { httpCapabilityUrlSchema, httpUrlSchema } from "./urls";
 import {
   eventAttendanceTypeValueSchema,
   eventDayDateSchema,
@@ -266,7 +266,7 @@ const registrationCompletionResponseBaseSchema = successResponseSchema.merge(reg
 });
 
 export const registrationConfirmResponseSchema = registrationCompletionResponseBaseSchema.extend({
-  manageUrl: httpUrlSchema,
+  manageUrl: httpCapabilityUrlSchema,
   manageToken: tokenSchema,
 });
 export type RegistrationConfirmResponse = z.infer<typeof registrationConfirmResponseSchema>;
@@ -293,7 +293,7 @@ export const registrationSubmissionResponseSchema = registrationCompletionRespon
   registrationId: databaseIdSchema,
   // Existing identities receive these capabilities only through their email.
   // A newly created identity may still receive the immediate correction link.
-  manageUrl: httpUrlSchema.nullable(),
+  manageUrl: httpCapabilityUrlSchema.nullable(),
   manageToken: tokenSchema.nullable(),
 });
 export type RegistrationSubmissionResponse = z.infer<typeof registrationSubmissionResponseSchema>;
