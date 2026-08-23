@@ -12,8 +12,12 @@ describe("OpenAPI schema generation", () => {
   it("documents public registration and speaker capability workflows through shared contracts", () => {
     const spec = decorateOpenApiSpec(openapi.schema);
 
+    expect(spec.paths["/api/v1/events/{eventSlug}/proposals"].post).toBeDefined();
     expect(spec.paths["/api/v1/events/{eventSlug}/registrations"].post).toBeDefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/registrations/confirm-email"].get).toBeDefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/registrations/confirm-email"].post).toBeDefined();
     expect(spec.paths["/api/v1/events/{eventSlug}/registrations/confirm-info"].get).toBeDefined();
+    expect(spec.paths["/api/v1/events/{eventSlug}/registrations/resend-confirmation"].post).toBeDefined();
     expect(spec.paths["/api/v1/registrations/manage/{token}"].get).toBeDefined();
     expect(spec.paths["/api/v1/registrations/manage/{token}"].patch).toBeDefined();
     expect(spec.paths["/api/v1/proposals/speaker/{token}"].get).toBeDefined();

@@ -1,6 +1,5 @@
-import type { z } from "zod";
+import type { ValidatedData } from "chanfana";
 import { openApiRoute } from "../../../../_lib/openapi/route";
-import { parseJsonBody } from "../../../../_lib/validation";
 import { json } from "../../../../_lib/http";
 import { getEventBySlug, getRequiredTerms, updateEventBasePath } from "../../../../_lib/services/events";
 import { validateCustomAnswersByPurpose } from "../../../../_lib/services/forms";
@@ -9,16 +8,18 @@ import { findInviteByToken, type InviteRecord } from "../../../../_lib/services/
 import { validateRequiredConsents } from "../../../../_lib/services/consent";
 import { processOutboxByIdBackground } from "../../../../_lib/email/outbox";
 import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
-import { proposalCreateSchema } from "../../../../../assets/shared/schemas/proposal-management";
 import { eventProposalCreateRouteSchema } from "../../../../../assets/shared/schemas/route-contracts";
 import { requireInternalSecret } from "../../../../_lib/request";
 import { submitProposal } from "../../../../_lib/services/proposal-submission";
 
-export async function onRequestPost(c: any, data?: { body: z.infer<typeof proposalCreateSchema> }): Promise<Response> {
+async function handleProposalCreate(
+  c: any,
+  data: ValidatedData<typeof eventProposalCreateRouteSchema>,
+): Promise<Response> {
   const config = getConfig(c.env, c.req.raw);
   const signingSecret = requireInternalSecret(c.env);
-  const body = data?.body ?? (await parseJsonBody(c.req, proposalCreateSchema));
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const body = data.body;
+  const event = await getEventBySlug(c.env.DB, data.params.eventSlug);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
   // Record the Hugo page URL sent by the browser so base_path is always the
@@ -78,4 +79,4 @@ export async function onRequestPost(c: any, data?: { body: z.infer<typeof propos
   });
 }
 
-export const EventsEventSlugProposalsPost = openApiRoute(eventProposalCreateRouteSchema, onRequestPost);
+export const EventsEventSlugProposalsPost = openApiRoute(eventProposalCreateRouteSchema, handleProposalCreate);

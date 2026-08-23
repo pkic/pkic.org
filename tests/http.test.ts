@@ -5,12 +5,9 @@ import { dispatchRequestMethod, methodNotAllowed } from "../functions/_lib/http"
 import { onRequest as eventFormsDispatch } from "../functions/api/v1/events/[eventSlug]/forms";
 import worker from "../functions/router";
 import { onRequest as retentionDispatch } from "../functions/api/v1/internal/retention/run";
-import { onRequest as registrationConfirmDispatch } from "../functions/api/v1/events/[eventSlug]/registrations/confirm-email";
-import { onRequest as registrationCreateDispatch } from "../functions/api/v1/events/[eventSlug]/registrations";
 import { onRequest as speakerPresentationDispatch } from "../functions/api/v1/proposals/speaker/[token]/presentation";
 import { onRequest as speakerManageDispatch } from "../functions/api/v1/proposals/speaker/[token]";
 import { onRequest as proposerSpeakersDispatch } from "../functions/api/v1/proposals/manage/[token]/speakers";
-import { onRequest as registrationManageDispatch } from "../functions/api/v1/registrations/manage/[token]";
 import { onRequest as registrationHeadshotDispatch } from "../functions/api/v1/registrations/manage/[token]/headshot";
 
 function context(method: string) {
@@ -68,14 +65,14 @@ describe("HTTP method dispatch", () => {
       path: "/events/event/registrations/confirm-email",
       method: "DELETE",
       allow: "GET, POST",
-      handler: registrationConfirmDispatch,
+      mounted: true,
     },
     {
       label: "registration creation",
       path: "/events/event/registrations",
       method: "GET",
       allow: "POST",
-      handler: registrationCreateDispatch,
+      mounted: true,
     },
     {
       label: "speaker presentation",
@@ -117,7 +114,7 @@ describe("HTTP method dispatch", () => {
       path: "/registrations/manage/token",
       method: "POST",
       allow: "GET, PATCH",
-      handler: registrationManageDispatch,
+      mounted: true,
     },
     {
       label: "registration headshot",

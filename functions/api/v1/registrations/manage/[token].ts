@@ -1,13 +1,11 @@
 import type { ValidatedData } from "chanfana";
-import { parseJsonBody } from "../../../../_lib/validation";
-import { dispatchRequestMethod, handleError, json } from "../../../../_lib/http";
+import { handleError, json } from "../../../../_lib/http";
 import { updateManagedRegistration } from "../../../../_lib/services/registrations";
 import { resolveManageToken } from "../../../../_lib/services/manage-token";
 import { processOutboxByIdBackground } from "../../../../_lib/email/outbox";
 import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
 import {
   registrationManageReadResponseSchema,
-  registrationManageSchema,
   registrationManageUpdateResponseSchema,
 } from "../../../../../assets/shared/schemas/registration";
 import {
@@ -18,14 +16,14 @@ import { requireInternalSecret } from "../../../../_lib/request";
 import { buildRegistrationManageView } from "../../../../_lib/services/registrations/manage-view";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 
-export async function onRequestPatch(
+async function handleRegistrationManagePatch(
   c: any,
-  data?: ValidatedData<typeof registrationManageUpdateRouteSchema>,
+  data: ValidatedData<typeof registrationManageUpdateRouteSchema>,
 ): Promise<Response> {
   try {
-    const body = data?.body ?? (await parseJsonBody(c.req, registrationManageSchema));
+    const body = data.body;
     const config = getConfig(c.env, c.req.raw);
-    const token = data?.params.token ?? c.req.param("token");
+    const token = data.params.token;
 
     const resolved = await resolveManageToken(c.req.raw, c.env, token);
     if (resolved instanceof Response) return resolved;
@@ -53,12 +51,12 @@ export async function onRequestPatch(
   }
 }
 
-export async function onRequestGet(
+async function handleRegistrationManageGet(
   c: any,
-  data?: ValidatedData<typeof registrationManageReadRouteSchema>,
+  data: ValidatedData<typeof registrationManageReadRouteSchema>,
 ): Promise<Response> {
   try {
-    const token = data?.params.token ?? c.req.param("token");
+    const token = data.params.token;
     const resolved = await resolveManageToken(c.req.raw, c.env, token);
     if (resolved instanceof Response) return resolved;
     const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
@@ -76,14 +74,13 @@ function markSensitive(c: any): void {
   c.set("sensitive", true);
 }
 
-export const RegistrationsManageTokenGet = openApiRoute(registrationManageReadRouteSchema, onRequestGet, markSensitive);
-export const RegistrationsManageTokenPatch = openApiRoute(
-  registrationManageUpdateRouteSchema,
-  onRequestPatch,
+export const RegistrationsManageTokenGet = openApiRoute(
+  registrationManageReadRouteSchema,
+  handleRegistrationManageGet,
   markSensitive,
 );
-
-export async function onRequest(c: any): Promise<Response> {
-  c.set("sensitive", true);
-  return dispatchRequestMethod(c, { GET: onRequestGet, PATCH: onRequestPatch });
-}
+export const RegistrationsManageTokenPatch = openApiRoute(
+  registrationManageUpdateRouteSchema,
+  handleRegistrationManagePatch,
+  markSensitive,
+);
