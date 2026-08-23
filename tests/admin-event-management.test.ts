@@ -13,6 +13,7 @@ import {
   updateRegistrationById,
 } from "../functions/_lib/services/registrations";
 import { adminRegistrationDetailResponseSchema } from "../assets/shared/schemas/admin-registration-detail";
+import { buildAdminEventRegistrationsPageQuery } from "../functions/_lib/services/registrations/admin-list";
 
 let ADMIN_TOKEN = "event-admin-token";
 
@@ -209,6 +210,35 @@ describe("admin event management endpoints", () => {
     expect(countPlan.results.length).toBeGreaterThan(0);
     expect(countSql).not.toMatch(/registrations|invites|total_registrations|pending_invites/i);
     expect(pageSql).not.toMatch(/registration_counts|invite_counts/);
+  });
+
+  it("keeps registration count predicates while excluding outbox and RSVP projections", async () => {
+    const { baseEventId } = await setupAdmin();
+    const query = buildAdminEventRegistrationsPageQuery(baseEventId, {
+      limit: 10,
+      offset: 0,
+      status: "registered",
+      consent: "true",
+      attendanceChange: "joined_in_person",
+      q: "attendee",
+    });
+    const { pageSql, countSql, bindings, countBindings } = buildOffsetPageSql(query);
+
+    expect(pageSql).toMatch(/calendar_rsvp_events|JSON_GROUP_ARRAY|email_outbox/i);
+    expect(countSql).not.toMatch(/calendar_rsvp_events|JSON_GROUP_ARRAY|ROW_NUMBER|rsvp_events_json/i);
+    expect(countSql).toContain("r.event_id = ?");
+    expect(countSql).toContain("r.status = ?");
+    expect(countBindings).toEqual(bindings);
+    const [pagePlan, countPlan] = await Promise.all([
+      env.DB.prepare(`EXPLAIN QUERY PLAN ${pageSql}`)
+        .bind(...bindings, query.limit, query.offset)
+        .all(),
+      env.DB.prepare(`EXPLAIN QUERY PLAN ${countSql}`)
+        .bind(...countBindings)
+        .all(),
+    ]);
+    expect(pagePlan.results.length).toBeGreaterThan(0);
+    expect(countPlan.results.length).toBeGreaterThan(0);
   });
 
   it("returns details and persists settings updates", async () => {

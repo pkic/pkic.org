@@ -66,6 +66,47 @@ describe("shared D1 offset pagination", () => {
     expect(fake.boundValues).toEqual([["active", 1, 0], ["active"]]);
   });
 
+  it("supports a lean count source while retaining one canonical page predicate", async () => {
+    const fake = fakeDatabase([{ results: [{ id: "row-1" }] }, { results: [{ total: 1 }] }]);
+
+    await queryPage<{ id: string }>(fake.db, {
+      source: {
+        selectSql: "SELECT r.id, review.payload",
+        fromSql:
+          "FROM records r LEFT JOIN heavy_review_projection review ON review.id = r.id WHERE r.state = ? AND r.event_id = ?",
+        countFromSql: "FROM records r WHERE r.state = ? AND r.event_id = ?",
+        bindings: ["active", "event-1"],
+      },
+      orderBy: "ORDER BY r.id ASC",
+      limit: 1,
+      offset: 0,
+    });
+
+    expect(fake.preparedSql[1]).toBe("SELECT COUNT(*) AS total\nFROM records r WHERE r.state = ? AND r.event_id = ?");
+    expect(fake.boundValues).toEqual([
+      ["active", "event-1", 1, 0],
+      ["active", "event-1"],
+    ]);
+  });
+
+  it("allows count bindings to omit page-only placeholders", async () => {
+    const fake = fakeDatabase([{ results: [{ id: "row-1" }] }, { results: [{ total: 1 }] }]);
+
+    await queryPage<{ id: string }>(fake.db, {
+      source: {
+        selectSql: "SELECT r.id, review.payload",
+        fromSql: "FROM records r LEFT JOIN heavy_review_projection review ON review.id = r.id WHERE r.event_id = ?",
+        countFromSql: "FROM records r WHERE r.event_id = ?",
+        bindings: ["event-1", "event-1"],
+        countBindings: ["event-1"],
+      },
+      limit: 1,
+      offset: 0,
+    });
+
+    expect(fake.boundValues).toEqual([["event-1", "event-1", 1, 0], ["event-1"]]);
+  });
+
   it("rejects ambiguous or mixed legacy/source query definitions", async () => {
     const fake = fakeDatabase([]);
     await expect(

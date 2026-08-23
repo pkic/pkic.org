@@ -25,6 +25,10 @@ export interface OffsetPageSource {
    */
   fromSql: string;
   bindings?: readonly unknown[];
+  /** Optional lean FROM/WHERE source used only by the count statement. */
+  countFromSql?: string;
+  /** Bindings for countFromSql when its source omits page-only placeholders. */
+  countBindings?: readonly unknown[];
   /** Optional trusted, lean count projection for non-cardinality-preserving sources. */
   countSelectSql?: string;
 }
@@ -59,6 +63,7 @@ export interface OffsetPageSql {
   pageSql: string;
   countSql: string;
   bindings: readonly unknown[];
+  countBindings: readonly unknown[];
 }
 
 /** Build the page/count SQL pair without preparing it. Useful for EXPLAIN tests. */
@@ -73,13 +78,17 @@ export function buildOffsetPageSql(query: OffsetPageQuery): OffsetPageSql {
     ? `${withoutTrailingSemicolon(query.source.selectSql)}\n${withoutTrailingSemicolon(query.source.fromSql)}`
     : withoutTrailingSemicolon(query.sql as string);
   const countSql = query.source
-    ? `${query.source.countSelectSql ?? "SELECT COUNT(*) AS total"}\n${withoutTrailingSemicolon(query.source.fromSql)}`
+    ? `${query.source.countSelectSql ?? "SELECT COUNT(*) AS total"}\n${withoutTrailingSemicolon(
+        query.source.countFromSql ?? query.source.fromSql,
+      )}`
     : `SELECT COUNT(*) AS total FROM (${baseSql}) AS query_page_rows`;
   const bindings = query.source?.bindings ?? query.bindings ?? [];
+  const countBindings = query.source?.countBindings ?? bindings;
   return {
     pageSql: `${baseSql}${query.orderBy ? `\n${query.orderBy}` : ""}\nLIMIT ? OFFSET ?`,
     countSql,
     bindings,
+    countBindings,
   };
 }
 
@@ -90,8 +99,11 @@ export function buildOffsetPageSql(query: OffsetPageQuery): OffsetPageSql {
  * `decodeOffsetPageResults`.
  */
 export function buildOffsetPageStatements(db: DatabaseLike, query: OffsetPageQuery): [StatementLike, StatementLike] {
-  const { pageSql, countSql, bindings } = buildOffsetPageSql(query);
-  return [db.prepare(pageSql).bind(...bindings, query.limit, query.offset), db.prepare(countSql).bind(...bindings)];
+  const { pageSql, countSql, bindings, countBindings } = buildOffsetPageSql(query);
+  return [
+    db.prepare(pageSql).bind(...bindings, query.limit, query.offset),
+    db.prepare(countSql).bind(...countBindings),
+  ];
 }
 
 /** Decode the page/count pair returned by `buildOffsetPageStatements`. */
