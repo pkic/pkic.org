@@ -27,6 +27,7 @@ async function confirmRegistration(
     token,
     registrationId,
     waitlistClaimWindowHours: config.waitlistClaimWindowHours,
+    confirmationTtlHours: config.confirmationLinkTtlHours,
     signingSecret: requireInternalSecret(c.env),
     appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
     rsvpEmail: c.env.RSVP_EMAIL,
@@ -39,6 +40,7 @@ async function confirmRegistration(
   return json(
     registrationConfirmResponseSchema.parse({
       success: true,
+      stage: result.stage,
       status: result.registration.status,
       shareUrl: result.shareUrl,
       manageUrl: result.manageUrl,

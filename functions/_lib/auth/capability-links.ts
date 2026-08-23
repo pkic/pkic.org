@@ -1,6 +1,6 @@
 import { first, run } from "../db/queries";
 import { AppError } from "../errors";
-import { randomToken } from "../utils/crypto";
+import { randomToken, sha256Hex } from "../utils/crypto";
 import type { DatabaseLike, Env } from "../types";
 
 const encoder = new TextEncoder();
@@ -40,6 +40,8 @@ interface QueuedCapabilityDescriptor {
   purpose: CapabilityPurpose;
   resourceId: string;
   ttlSeconds: number;
+  /** SHA-256 fingerprint of the link secret at enqueue time; never the secret itself. */
+  linkSecretFingerprint?: string;
 }
 
 export type CapabilityVerifyResult =
@@ -192,12 +194,20 @@ function parseQueuedDescriptor(marker: string): QueuedCapabilityDescriptor | nul
   if (!unfoldedMarker.startsWith(QUEUED_TOKEN_PREFIX)) return null;
   try {
     const values = decodeText(unfoldedMarker.slice(QUEUED_TOKEN_PREFIX.length)).split("|");
-    if (values.length !== 3) return null;
-    const [purposeCode, resourceId, ttlSecondsRaw] = values;
+    if (values.length !== 3 && values.length !== 4) return null;
+    const [purposeCode, resourceId, ttlSecondsRaw, linkSecretFingerprint] = values;
     const purpose = purposesByCode[purposeCode];
     const ttlSeconds = Number(ttlSecondsRaw);
-    if (!purpose || !resourceId || !Number.isSafeInteger(ttlSeconds) || ttlSeconds <= 0) return null;
-    return { purpose, resourceId, ttlSeconds };
+    if (
+      !purpose ||
+      !resourceId ||
+      !Number.isSafeInteger(ttlSeconds) ||
+      ttlSeconds <= 0 ||
+      (linkSecretFingerprint !== undefined && !/^[a-f0-9]{64}$/i.test(linkSecretFingerprint))
+    ) {
+      return null;
+    }
+    return { purpose, resourceId, ttlSeconds, linkSecretFingerprint };
   } catch {
     return null;
   }
@@ -207,10 +217,30 @@ export function queuedCapabilityToken(
   purpose: CapabilityPurpose,
   resourceId: string,
   ttlSeconds = DEFAULT_TTL_SECONDS,
+  linkSecretFingerprint?: string,
 ): string {
+  if (linkSecretFingerprint !== undefined && !/^[a-f0-9]{64}$/i.test(linkSecretFingerprint)) {
+    throw new Error("Queued capability secret fingerprint is invalid");
+  }
   return `${QUEUED_TOKEN_PREFIX}${encodeText(
-    `${purposeCodes[purpose]}|${resourceId}|${Math.max(1, Math.floor(ttlSeconds))}`,
+    [purposeCodes[purpose], resourceId, String(Math.max(1, Math.floor(ttlSeconds))), linkSecretFingerprint]
+      .filter((value) => value !== undefined)
+      .join("|"),
   )}`;
+}
+
+/**
+ * Queues a capability that may be delivered only while the resource still has
+ * the exact link-secret generation it had when the message was enqueued.
+ * The marker contains only a one-way fingerprint, never the raw secret.
+ */
+export async function queuedCapabilityTokenBoundToSecret(
+  purpose: CapabilityPurpose,
+  resourceId: string,
+  linkSecret: string,
+  ttlSeconds = DEFAULT_TTL_SECONDS,
+): Promise<string> {
+  return queuedCapabilityToken(purpose, resourceId, ttlSeconds, await sha256Hex(linkSecret));
 }
 
 function capabilitySecretQuery(purpose: CapabilityPurpose): string {
@@ -280,9 +310,16 @@ export async function issueDatabaseCapability(payload: {
   purpose: CapabilityPurpose;
   resourceId: string;
   ttlSeconds?: number;
+  expectedLinkSecretFingerprint?: string;
 }): Promise<string> {
   const linkSecret = await loadOrCreateCapabilityLinkSecret(payload.db, payload.purpose, payload.resourceId);
   if (!linkSecret) throw new AppError(404, "CAPABILITY_RESOURCE_NOT_FOUND", "Capability resource not found");
+  if (
+    payload.expectedLinkSecretFingerprint !== undefined &&
+    (await sha256Hex(linkSecret)) !== payload.expectedLinkSecretFingerprint
+  ) {
+    throw new AppError(410, "CAPABILITY_RESOURCE_STALE", "Queued capability no longer matches the resource state");
+  }
   return signCapabilityToken({ ...payload, linkSecret });
 }
 
@@ -371,10 +408,14 @@ async function materializeString(
           purpose: descriptor.purpose,
           resourceId: descriptor.resourceId,
           ttlSeconds: descriptor.ttlSeconds,
+          expectedLinkSecretFingerprint: descriptor.linkSecretFingerprint,
         });
         cache.set(canonicalMarker, token);
       } catch (error) {
-        if (error instanceof AppError && error.code === "CAPABILITY_RESOURCE_NOT_FOUND") {
+        if (
+          error instanceof AppError &&
+          (error.code === "CAPABILITY_RESOURCE_NOT_FOUND" || error.code === "CAPABILITY_RESOURCE_STALE")
+        ) {
           throw new AppError(410, "CAPABILITY_RESOURCE_STALE", "Queued capability resource is no longer available", {
             purpose: descriptor.purpose,
             resourceId: descriptor.resourceId,

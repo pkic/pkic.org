@@ -12,9 +12,13 @@ import {
   updateRegistrationByManageToken,
 } from "../functions/_lib/services/registrations";
 import { findOrCreateUser } from "../functions/_lib/services/users";
-import { signCapabilityToken } from "../functions/_lib/services/capability-links";
+import { materializeQueuedCapabilityLinks, signCapabilityToken } from "../functions/_lib/services/capability-links";
 import { getRegistrationConfirmationInfo } from "../functions/_lib/services/registrations/confirmation-info";
+import { confirmRegistrationWithNotification } from "../functions/_lib/services/registrations/confirmation-workflow";
+import { getEventById } from "../functions/_lib/services/events";
 import { first, run } from "../functions/_lib/db/queries";
+import { getRegistrationByManageToken } from "../functions/_lib/services/registrations/queries";
+import { queueRegistrationStatusEmail } from "../functions/_lib/services/registrations/status-notifications";
 
 describe("Registration Email Change", () => {
   beforeEach(async () => {
@@ -39,13 +43,15 @@ describe("Registration Email Change", () => {
     registrationId: string,
     email: string,
     expiresAt: string,
+    currentEmailConfirmed = true,
   ): Promise<void> {
     await run(
       env.DB,
       `UPDATE users
-          SET pending_email = ?, pending_email_expires_at = ?, pending_email_change_registration_id = ?
+          SET pending_email = ?, pending_email_expires_at = ?, pending_email_change_registration_id = ?,
+              pending_email_current_confirmed_at = ?
         WHERE id = ?`,
-      [email, expiresAt, registrationId, userId],
+      [email, expiresAt, registrationId, currentEmailConfirmed ? nowIso() : null, userId],
     );
   }
 
@@ -65,7 +71,6 @@ describe("Registration Email Change", () => {
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
       });
-
       const result = await changeRegistrationEmail(env.DB, {
         registrationId: reg.id,
         newEmail: "newemail@example.com",
@@ -86,6 +91,36 @@ describe("Registration Email Change", () => {
       );
       expect(dbUser?.email).toBe("original@example.com");
       expect(dbUser?.pending_email).toBe("newemail@example.com");
+    });
+
+    it("sends the first account-change proof only to the current login address", async () => {
+      const eventId = await createTestEvent();
+      const event = await getEventById(env.DB, eventId);
+      const user = await findOrCreateUser(env.DB, { email: "current-proof@example.com" });
+      const { registration } = await createRegistration(env.DB, {
+        event,
+        userId: user.id,
+        attendanceType: "virtual",
+        sourceType: "web",
+        confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
+      });
+
+      const result = await changeRegistrationEmail(env.DB, {
+        registrationId: registration.id,
+        newEmail: "attacker-controlled@example.com",
+        confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
+        confirmationEmail: { event, appBaseUrl: "https://app.test", confirmationTtlHours: 24 },
+      });
+
+      expect(
+        await first<{ recipient_email: string; template_key: string }>(
+          env.DB,
+          "SELECT recipient_email, template_key FROM email_outbox WHERE id = ?",
+          [result.outboxId],
+        ),
+      ).toEqual({ recipient_email: "current-proof@example.com", template_key: "registration_email_change" });
     });
 
     it("rejects if new email is same as current", async () => {
@@ -288,6 +323,20 @@ describe("Registration Email Change", () => {
         confirmationTtlHours: 24,
         signingSecret,
       });
+      const ownerEvent = await getEventById(env.DB, ownerEventId);
+      const oldManageToken = await signCapabilityToken({
+        signingSecret,
+        linkSecret: owner.registration.manage_link_secret,
+        purpose: "registration_manage",
+        resourceId: owner.registration.id,
+      });
+      const delayedStatus = await queueRegistrationStatusEmail(env.DB, {
+        event: ownerEvent,
+        registrationId: owner.registration.id,
+        appBaseUrl: "https://app.test",
+        templateKey: "registration_updated",
+        subject: "Delayed status update",
+      });
       const change = await changeRegistrationEmail(env.DB, {
         registrationId: owner.registration.id,
         newEmail: "bound-new@example.com",
@@ -297,7 +346,7 @@ describe("Registration Email Change", () => {
       expect(other.confirmationToken).not.toBeNull();
       expect(
         await getRegistrationConfirmationInfo(env.DB, `event-${ownerEventId.slice(0, 8)}`, owner.registration.id),
-      ).toMatchObject({ email: "bound-new@example.com" });
+      ).toMatchObject({ email: "bound-original@example.com" });
       expect(
         await getRegistrationConfirmationInfo(env.DB, `event-${otherEventId.slice(0, 8)}`, other.registration.id),
       ).toMatchObject({ email: "bound-original@example.com" });
@@ -322,10 +371,101 @@ describe("Registration Email Change", () => {
         pending_email_change_registration_id: owner.registration.id,
       });
 
-      await confirmRegistrationByToken(env.DB, {
+      const currentAddressApproval = await confirmRegistrationWithNotification(env.DB, {
+        event: ownerEvent,
         token: change.confirmationToken,
+        registrationId: owner.registration.id,
+        waitlistClaimWindowHours: 24,
+        confirmationTtlHours: 24,
+        signingSecret,
+        appBaseUrl: "https://app.test",
+      });
+      expect(currentAddressApproval.stage).toBe("new_email_confirmation_required");
+
+      const afterCurrentAddressProof = await first<{
+        email: string;
+        pending_email: string;
+        pending_email_current_confirmed_at: string | null;
+        pending_email_expires_at: string;
+      }>(
+        env.DB,
+        `SELECT email, pending_email, pending_email_current_confirmed_at, pending_email_expires_at
+           FROM users WHERE id = ?`,
+        [user.id],
+      );
+      expect(afterCurrentAddressProof).toMatchObject({
+        email: "bound-original@example.com",
+        pending_email: "bound-new@example.com",
+      });
+      expect(afterCurrentAddressProof?.pending_email_current_confirmed_at).not.toBeNull();
+      expect(new Date(afterCurrentAddressProof!.pending_email_expires_at).getTime()).toBeGreaterThan(
+        Date.now() + 23 * 60 * 60 * 1000,
+      );
+      expect(
+        await getRegistrationConfirmationInfo(env.DB, `event-${ownerEventId.slice(0, 8)}`, owner.registration.id),
+      ).toMatchObject({ email: "bound-new@example.com" });
+
+      await expect(
+        confirmRegistrationByToken(env.DB, {
+          token: change.confirmationToken,
+          waitlistClaimWindowHours: 24,
+          signingSecret,
+        }),
+      ).rejects.toMatchObject({ code: "CONFIRM_TOKEN_INVALID" });
+
+      const rotated = await first<{ confirmation_link_secret: string }>(
+        env.DB,
+        "SELECT confirmation_link_secret FROM registrations WHERE id = ?",
+        [owner.registration.id],
+      );
+      const newAddressToken = await signCapabilityToken({
+        signingSecret,
+        linkSecret: rotated!.confirmation_link_secret,
+        purpose: "registration_confirm",
+        resourceId: owner.registration.id,
+      });
+      const finalized = await confirmRegistrationByToken(env.DB, {
+        token: newAddressToken,
         waitlistClaimWindowHours: 24,
         signingSecret,
+      });
+
+      await expect(getRegistrationByManageToken(env.DB, oldManageToken, signingSecret)).rejects.toMatchObject({
+        code: "REGISTRATION_NOT_FOUND",
+      });
+      await expect(
+        materializeQueuedCapabilityLinks(
+          env.DB,
+          env,
+          JSON.parse(
+            (await first<{ payload_json: string }>(env.DB, "SELECT payload_json FROM email_outbox WHERE id = ?", [
+              delayedStatus.outboxId,
+            ]))!.payload_json,
+          ) as Record<string, unknown>,
+        ),
+      ).rejects.toMatchObject({ code: "CAPABILITY_RESOURCE_STALE" });
+      await expect(getRegistrationByManageToken(env.DB, finalized.manageToken, signingSecret)).resolves.toMatchObject({
+        id: owner.registration.id,
+      });
+      const freshStatus = await queueRegistrationStatusEmail(env.DB, {
+        event: ownerEvent,
+        registrationId: owner.registration.id,
+        appBaseUrl: "https://app.test",
+        templateKey: "registration_updated",
+        subject: "Fresh status update",
+      });
+      const freshPayload = await materializeQueuedCapabilityLinks(
+        env.DB,
+        env,
+        JSON.parse(
+          (await first<{ payload_json: string }>(env.DB, "SELECT payload_json FROM email_outbox WHERE id = ?", [
+            freshStatus.outboxId,
+          ]))!.payload_json,
+        ) as Record<string, unknown>,
+      );
+      const freshToken = new URL(freshPayload.manageUrl as string).searchParams.get("token")!;
+      await expect(getRegistrationByManageToken(env.DB, freshToken, signingSecret)).resolves.toMatchObject({
+        id: owner.registration.id,
       });
 
       expect(
@@ -443,6 +583,27 @@ describe("Registration Email Change", () => {
   });
 
   describe("finalizeEmailChange", () => {
+    it("does not promote a pending login address without current-address proof", async () => {
+      const eventId = await createTestEvent();
+      const user = await findOrCreateUser(env.DB, { email: "proof-required@example.com" });
+      const { registration } = await createRegistration(env.DB, {
+        event: { id: eventId },
+        userId: user.id,
+        attendanceType: "virtual",
+        sourceType: "web",
+        confirmationTtlHours: 24,
+        signingSecret: "test-signing-secret",
+      });
+      await reservePendingEmail(user.id, registration.id, "unproven-new@example.com", addHours(nowIso(), 24), false);
+
+      await expect(
+        finalizeEmailChange(env.DB, { userId: user.id, eventId, registrationId: registration.id }),
+      ).rejects.toMatchObject({ code: "CURRENT_EMAIL_CONFIRMATION_REQUIRED" });
+      expect(await first<{ email: string }>(env.DB, "SELECT email FROM users WHERE id = ?", [user.id])).toEqual({
+        email: "proof-required@example.com",
+      });
+    });
+
     it("finalizes email change and clears pending email", async () => {
       const eventId = await createTestEvent();
       const user = await findOrCreateUser(env.DB, {
@@ -456,10 +617,30 @@ describe("Registration Email Change", () => {
         confirmationTtlHours: 24,
         signingSecret: "test-signing-secret",
       });
+      const oldManageToken = await signCapabilityToken({
+        signingSecret: "test-signing-secret",
+        linkSecret: reg.manage_link_secret,
+        purpose: "registration_manage",
+        resourceId: reg.id,
+      });
 
       // Set pending email
       const now = nowIso();
       await reservePendingEmail(user.id, reg.id, "pending@example.com", addHours(now, 24));
+      await env.DB.batch([
+        env.DB.prepare(
+          "INSERT INTO sessions (id, user_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?)",
+        ).bind(uuid(), user.id, `session-${uuid()}`, addHours(now, 24), now),
+        env.DB.prepare(
+          `INSERT INTO auth_magic_links
+               (id, user_id, token_hash, expires_at, created_at, purpose)
+             VALUES (?, ?, ?, ?, ?, 'member')`,
+        ).bind(uuid(), user.id, `magic-${uuid()}`, addHours(now, 1), now),
+        env.DB.prepare(
+          `INSERT INTO refresh_tokens (id, user_id, token_hash, issued_at, expires_at)
+             VALUES (?, ?, ?, ?, ?)`,
+        ).bind(uuid(), user.id, `refresh-${uuid()}`, now, addHours(now, 24)),
+      ]);
 
       const result = await finalizeEmailChange(env.DB, {
         userId: user.id,
@@ -476,6 +657,19 @@ describe("Registration Email Change", () => {
       );
       expect(dbUser?.email).toBe("pending@example.com");
       expect(dbUser?.pending_email).toBeNull();
+      await expect(getRegistrationByManageToken(env.DB, oldManageToken, "test-signing-secret")).rejects.toMatchObject({
+        code: "REGISTRATION_NOT_FOUND",
+      });
+      expect(
+        await first<{ active_sessions: number; active_magic_links: number; active_refresh_tokens: number }>(
+          env.DB,
+          `SELECT
+             (SELECT COUNT(*) FROM sessions WHERE user_id = ? AND revoked_at IS NULL) AS active_sessions,
+             (SELECT COUNT(*) FROM auth_magic_links WHERE user_id = ? AND used_at IS NULL) AS active_magic_links,
+             (SELECT COUNT(*) FROM refresh_tokens WHERE user_id = ? AND revoked_at IS NULL) AS active_refresh_tokens`,
+          [user.id, user.id, user.id],
+        ),
+      ).toEqual({ active_sessions: 0, active_magic_links: 0, active_refresh_tokens: 0 });
     });
 
     it("promotes the same user's secondary alias without duplicating ownership", async () => {

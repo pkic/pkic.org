@@ -15,6 +15,7 @@ export function buildAttendeeCampaignRecipients(
 ): CampaignRecipient[] {
   return rows.map((row) => ({
     registrationId: row.registration_id,
+    manageLinkSecret: row.manage_link_secret,
     userId: row.user_id,
     email: row.email.trim().toLowerCase(),
     firstName: (row.first_name ?? "").trim(),

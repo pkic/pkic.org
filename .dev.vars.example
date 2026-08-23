@@ -8,6 +8,10 @@
 # fallback. Keep this on localhost for local dev.
 APP_BASE_URL=http://localhost:8788
 
+# Optional comma-separated trusted HTTPS image hosts for event badge hero images.
+# Leave unset to permit only same-origin assets. Do not add private or internal hosts.
+# HERO_IMAGE_ALLOWED_HOSTS=images.example.com,cdn.example.com
+
 # Required for HMAC signing of internal tokens and hashed identifiers.
 INTERNAL_SIGNING_SECRET=replace-with-strong-random-value
 

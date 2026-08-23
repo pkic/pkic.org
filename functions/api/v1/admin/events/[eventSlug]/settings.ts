@@ -16,6 +16,7 @@ export const AdminEventsEventSlugSettingsPatch = openApiRoute(
       actorId: actor.id,
       settings: data.body,
       appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
+      allowedHeroImageHosts: c.env.HERO_IMAGE_ALLOWED_HOSTS,
     });
     return json(adminEventUpdateResponseSchema.parse({ success: true, event }));
   },

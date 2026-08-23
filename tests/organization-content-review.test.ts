@@ -38,6 +38,7 @@ import {
   assignRepresentativeRole,
   REPRESENTATIVE_ROLE_IDS,
 } from "./helpers/membership";
+import { validJpegBytes } from "./helpers/raster-images";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -75,7 +76,7 @@ class FakeAssetsBucket {
   }
 }
 
-const JPEG_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+const JPEG_BYTES = validJpegBytes();
 
 function logoUploadRequest(token: string): Request {
   const formData = new FormData();

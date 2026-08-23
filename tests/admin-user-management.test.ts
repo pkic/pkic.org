@@ -221,7 +221,7 @@ describe("admin user deactivation", () => {
     );
   });
 
-  it("preserves users:write profile and email updates without access:grant", async () => {
+  it("preserves users:write profile updates without access:grant", async () => {
     await setup();
     const staffId = await seedUser(env.DB, "profile-editor@example.test");
     const targetId = await seedUser(env.DB, "email-before@example.test");
@@ -240,7 +240,7 @@ describe("admin user deactivation", () => {
       adminRequest(
         `/api/v1/admin/users/${targetId}`,
         "PATCH",
-        { email: "email-after@example.test", biography: "Still editable by users:write staff." },
+        { biography: "Still editable by users:write staff." },
         staffToken,
       ),
       env as any,
@@ -256,7 +256,82 @@ describe("admin user deactivation", () => {
           targetId,
         )
       )[0],
-    ).toEqual({ email: "email-after@example.test", biography: "Still editable by users:write staff." });
+    ).toEqual({ email: "email-before@example.test", biography: "Still editable by users:write staff." });
+  });
+
+  it("requires access:grant for a direct primary-email correction", async () => {
+    await setup();
+    const staffId = await seedUser(env.DB, "email-editor@example.test");
+    const targetId = await seedUser(env.DB, "email-protected@example.test");
+    const adminId = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
+    )[0].id;
+    await env.DB.prepare(
+      `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+       VALUES (?, ?, 'users:write', ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), staffId, adminId)
+      .run();
+    const staffToken = await createAdminSession(env.DB, staffId, "email-editor-session");
+
+    const response = await app.fetch(
+      adminRequest(`/api/v1/admin/users/${targetId}`, "PATCH", { email: "attacker@example.test" }, staffToken),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(403);
+    expect((await queryAll<{ email: string }>(env.DB, "SELECT email FROM users WHERE id = ?", targetId))[0].email).toBe(
+      "email-protected@example.test",
+    );
+  });
+
+  it("allows an access:grant staff correction and revokes prior login credentials", async () => {
+    await setup();
+    const staffId = await seedUser(env.DB, "identity-recovery@example.test");
+    const targetId = await seedUser(env.DB, "identity-before@example.test");
+    const adminId = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
+    )[0].id;
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+           VALUES (?, ?, ?, ?, datetime('now'))`,
+      ).bind(crypto.randomUUID(), staffId, "users:write", adminId),
+      env.DB.prepare(
+        `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+           VALUES (?, ?, ?, ?, datetime('now'))`,
+      ).bind(crypto.randomUUID(), staffId, "access:grant", adminId),
+      env.DB.prepare(
+        "INSERT INTO sessions (id, user_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, datetime('now', '+1 day'), datetime('now'))",
+      ).bind(crypto.randomUUID(), targetId, `session-${crypto.randomUUID()}`),
+      env.DB.prepare(
+        "INSERT INTO refresh_tokens (id, user_id, token_hash, issued_at, expires_at) VALUES (?, ?, ?, datetime('now'), datetime('now', '+1 day'))",
+      ).bind(crypto.randomUUID(), targetId, `refresh-${crypto.randomUUID()}`),
+      env.DB.prepare(
+        "INSERT INTO auth_magic_links (id, user_id, token_hash, expires_at, created_at, purpose) VALUES (?, ?, ?, datetime('now', '+1 hour'), datetime('now'), 'member')",
+      ).bind(crypto.randomUUID(), targetId, `magic-${crypto.randomUUID()}`),
+    ]);
+    const staffToken = await createAdminSession(env.DB, staffId, "identity-recovery-session");
+
+    const response = await app.fetch(
+      adminRequest(`/api/v1/admin/users/${targetId}`, "PATCH", { email: "identity-after@example.test" }, staffToken),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(
+      queryAll<{ email: string; sessions: number; refresh: number; magic: number }>(
+        env.DB,
+        `SELECT u.email,
+                (SELECT COUNT(*) FROM sessions WHERE user_id = u.id AND revoked_at IS NULL) AS sessions,
+                (SELECT COUNT(*) FROM refresh_tokens WHERE user_id = u.id AND revoked_at IS NULL) AS refresh,
+                (SELECT COUNT(*) FROM auth_magic_links WHERE user_id = u.id AND used_at IS NULL) AS magic
+           FROM users u WHERE u.id = ?`,
+        [targetId],
+      ),
+    ).resolves.toEqual([{ email: "identity-after@example.test", sessions: 0, refresh: 0, magic: 0 }]);
   });
 
   it("invalidates a stale pending confirmation when an admin changes the primary email", async () => {

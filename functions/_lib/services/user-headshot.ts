@@ -5,7 +5,7 @@ import { uuid } from "../utils/ids";
 import { imageExtension, putUploadedImage } from "../utils/image-upload";
 import { first } from "../db/queries";
 import { isAuditOneChangeGuardFailure, prepareAuditLogAfterOneChange, type AuditScope } from "./audit";
-import { storedImageResponse } from "./image-response";
+import { storedRasterImageResponse } from "./image-response";
 import {
   prepareStorageDeletion,
   processStorageDeletionForKey,
@@ -48,7 +48,7 @@ export function requireUserHeadshotBucket(env: Pick<Env, "SPEAKER_UPLOADS_BUCKET
 }
 
 export function privateUserHeadshotResponse(bucket: R2Bucket, key: string): Promise<Response> {
-  return storedImageResponse(bucket, key, {
+  return storedRasterImageResponse(bucket, key, {
     notFoundCode: "NOT_FOUND",
     notFoundMessage: "Headshot file missing from storage",
     cacheControl: "private, max-age=3600",
@@ -307,7 +307,7 @@ export async function currentUserHeadshotResponse(
   if (current?.headshot_r2_key !== requestedKey) {
     throw new AppError(404, "NOT_FOUND", "Headshot not found");
   }
-  return storedImageResponse(bucket, requestedKey, {
+  return storedRasterImageResponse(bucket, requestedKey, {
     notFoundCode: "NOT_FOUND",
     notFoundMessage: "Headshot not found",
     cacheControl: "public, max-age=300, s-maxage=300, must-revalidate",

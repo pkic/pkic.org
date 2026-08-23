@@ -7,6 +7,7 @@ import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 import { openapi } from "../functions/router";
 import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
+import { validJpegBytes } from "./helpers/raster-images";
 
 let adminToken: string;
 
@@ -88,7 +89,7 @@ describe("admin OpenAPI mutation boundaries", () => {
     const logo = await callAdmin("/api/v1/admin/organizations/not-a-database-id/logo", {
       method: "PUT",
       headers: { "content-type": "image/jpeg" },
-      body: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
+      body: validJpegBytes(),
     });
     expect(logo.status).toBe(400);
     await expect(logo.json()).resolves.toMatchObject({ error: { code: "VALIDATION_ERROR" } });
@@ -177,7 +178,7 @@ describe("admin OpenAPI mutation boundaries", () => {
     const put = await callAdmin(`/api/v1/admin/organizations/${organizationId}/logo`, {
       method: "PUT",
       headers: { "content-type": "image/jpeg" },
-      body: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
+      body: validJpegBytes(),
     });
     expect(put.status).toBe(200);
     const putBody = (await put.json()) as { success: boolean; r2Key: string; logoUrl: string };

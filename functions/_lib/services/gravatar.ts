@@ -2,6 +2,8 @@ import { first } from "../db/queries";
 import type { Env } from "../types";
 import { downloadGravatar } from "../utils/gravatar";
 import { uuid } from "../utils/ids";
+import { imageExtensionForContentType } from "../utils/image-format";
+import { putUploadedImage } from "../utils/image-upload";
 import { nowIso } from "../utils/time";
 import { prepareAuditLogAfterOneChange } from "./audit";
 import { prepareBadgeRenderJobsForUser } from "./badge-render-job-statements";
@@ -28,7 +30,7 @@ export async function fetchGravatar(
   try {
     const image = await downloadGravatar(email);
     if (!image) return null;
-    const extension = image.contentType === "image/png" ? "png" : image.contentType === "image/webp" ? "webp" : "jpg";
+    const extension = imageExtensionForContentType(image.contentType);
     const r2Key = `headshots/${userId}/${Date.now()}-${uuid()}-gravatar.${extension}`;
     const at = nowIso();
     await withStorageUploadCompensation({
@@ -36,7 +38,7 @@ export async function fetchGravatar(
       bucket,
       bucketName: "speaker_uploads",
       objectKey: r2Key,
-      upload: () => bucket.put(r2Key, image.buffer, { httpMetadata: { contentType: image.contentType } }),
+      upload: () => putUploadedImage(bucket, r2Key, image, "headshot"),
       prepareCommitStatements: () => [
         env.DB.prepare(
           `UPDATE users SET headshot_r2_key = ?, headshot_updated_at = ?, updated_at = ?

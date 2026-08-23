@@ -266,6 +266,7 @@ const registrationCompletionResponseBaseSchema = successResponseSchema.merge(reg
 });
 
 export const registrationConfirmResponseSchema = registrationCompletionResponseBaseSchema.extend({
+  stage: z.enum(["confirmed", "new_email_confirmation_required"]),
   manageUrl: httpCapabilityUrlSchema,
   manageToken: tokenSchema,
 });

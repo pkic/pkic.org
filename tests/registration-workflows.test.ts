@@ -1259,7 +1259,7 @@ describe("registration workflows", () => {
     await env.DB.prepare(
       `CREATE TRIGGER reject_registration_email_change_email
        BEFORE INSERT ON email_outbox
-       WHEN NEW.template_key = 'registration_confirm_email'
+       WHEN NEW.template_key = 'registration_email_change'
        BEGIN
          SELECT RAISE(ABORT, 'forced email-change outbox failure');
        END`,

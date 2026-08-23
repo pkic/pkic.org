@@ -113,7 +113,7 @@ describe("admin registration email resend", () => {
     await env.DB.prepare("DROP TRIGGER reject_registration_resend_audit").run();
   });
 
-  it("uses the registration-owned pending address across shared status and resend emails", async () => {
+  it("keeps shared status and resend emails on the current address until it authorizes the change", async () => {
     const { registrationId, adminId } = await seedPendingRegistration();
     const event = await getEventBySlug(env.DB, "pqc-2026");
     await changeRegistrationEmail(env.DB, {
@@ -146,6 +146,6 @@ describe("admin registration email resend", () => {
         statusEmail.outboxId,
         resent.outboxId,
       ),
-    ).toEqual([{ recipient_email: "resend-pending@example.test" }, { recipient_email: "resend-pending@example.test" }]);
+    ).toEqual([{ recipient_email: "resend@example.test" }, { recipient_email: "resend@example.test" }]);
   });
 });

@@ -1,8 +1,8 @@
 import { prepareBulkQueueEmailChunkStatements } from "../email/outbox";
 import type { DatabaseLike } from "../types";
-import { queuedCapabilityToken } from "./capability-links";
 import { buildEventEmailVariables, type EventRecord } from "./events";
-import { proposalPageUrl, registrationManagePageUrl, registrationPageUrl } from "./frontend-links";
+import { proposalPageUrl, registrationPageUrl } from "./frontend-links";
+import { registrationManageCapability } from "./registrations/capability-urls";
 import {
   chunkRecipients,
   findBroadcastOnlyTemplateRefs,
@@ -41,12 +41,13 @@ export async function queueAdminCampaign(
   if (input.sendMode === "personal") {
     for (const recipient of recipients) {
       const manageUrl =
-        usesManageUrl && recipient.registrationId
-          ? registrationManagePageUrl(
-              appBaseUrl,
-              event,
-              queuedCapabilityToken("registration_manage", recipient.registrationId),
-            )
+        usesManageUrl && recipient.registrationId && recipient.manageLinkSecret
+          ? (
+              await registrationManageCapability(appBaseUrl, event, {
+                id: recipient.registrationId,
+                manage_link_secret: recipient.manageLinkSecret,
+              })
+            ).manageUrl
           : undefined;
       rows.push({
         eventId: event.id,

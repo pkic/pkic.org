@@ -9,6 +9,7 @@ import {
   changeRegistrationEmail,
   confirmRegistrationByToken,
   createRegistration,
+  finalizeEmailChange,
   updateRegistrationById,
 } from "../functions/_lib/services/registrations";
 
@@ -104,8 +105,8 @@ describe("registration email-change concurrency", () => {
       queryAll<{ total: number }>(
         env.DB,
         `SELECT COUNT(*) AS total FROM email_outbox
-          WHERE template_key = 'registration_confirm_email' AND recipient_email = ?`,
-        ["race-new@example.com"],
+          WHERE template_key = 'registration_email_change' AND recipient_email = ?`,
+        ["race-original@example.com"],
       ),
     ).resolves.toEqual([{ total: 0 }]);
     await expect(
@@ -114,4 +115,117 @@ describe("registration email-change concurrency", () => {
       ]),
     ).resolves.toEqual([{ total: 0 }]);
   });
+
+  it("rolls back canonical promotion when the pending-email request changed after planning", async () => {
+    const signingSecret = "test-signing-secret";
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const user = await findOrCreateUser(env.DB, { email: "promotion-race-original@example.com" });
+    const created = await createRegistration(env.DB, {
+      event,
+      userId: user.id,
+      attendanceType: "virtual",
+      sourceType: "web",
+      confirmationTtlHours: 24,
+      signingSecret,
+    });
+    const before = (
+      await queryAll<{ manage_link_secret: string }>(
+        env.DB,
+        "SELECT manage_link_secret FROM registrations WHERE id = ?",
+        [created.registration.id],
+      )
+    )[0];
+    if (!before) throw new Error("Expected registration manage secret");
+    await env.DB.prepare(
+      `UPDATE users
+            SET pending_email = 'promotion-race-new@example.com',
+                pending_email_expires_at = datetime('now', '+1 day'),
+                pending_email_change_registration_id = ?,
+                pending_email_current_confirmed_at = datetime('now')
+          WHERE id = ?`,
+    )
+      .bind(created.registration.id, user.id)
+      .run();
+
+    const gate = gateNextBatch(env.DB);
+    const promotion = finalizeEmailChange(gate.db, {
+      userId: user.id,
+      eventId,
+      registrationId: created.registration.id,
+    });
+    await gate.reached;
+    await env.DB.prepare(
+      `UPDATE users
+            SET pending_email = NULL, pending_email_expires_at = NULL,
+                pending_email_change_registration_id = NULL,
+                pending_email_current_confirmed_at = NULL
+          WHERE id = ?`,
+    )
+      .bind(user.id)
+      .run();
+    gate.release();
+
+    await expect(promotion).rejects.toMatchObject({ status: 409, code: "REGISTRATION_CHANGED" });
+    await expect(
+      queryAll<{ email: string }>(env.DB, "SELECT email FROM users WHERE id = ?", [user.id]),
+    ).resolves.toEqual([{ email: "promotion-race-original@example.com" }]);
+    await expect(
+      queryAll<{ manage_link_secret: string }>(env.DB, "SELECT manage_link_secret FROM registrations WHERE id = ?", [
+        created.registration.id,
+      ]),
+    ).resolves.toEqual([{ manage_link_secret: before.manage_link_secret }]);
+  });
+
+  it("allows only one account to reserve a pending login email across concurrent batches", async () => {
+    const signingSecret = "test-signing-secret";
+    await seedEventAndAdmin(env.DB);
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const firstUser = await findOrCreateUser(env.DB, { email: "race-first@example.com" });
+    const secondUser = await findOrCreateUser(env.DB, { email: "race-second@example.com" });
+    const firstRegistration = await createRegistration(env.DB, {
+      event,
+      userId: firstUser.id,
+      attendanceType: "virtual",
+      sourceType: "web",
+      confirmationTtlHours: 24,
+      signingSecret,
+    });
+    const secondRegistration = await createRegistration(env.DB, {
+      event,
+      userId: secondUser.id,
+      attendanceType: "virtual",
+      sourceType: "web",
+      confirmationTtlHours: 24,
+      signingSecret,
+    });
+
+    const gate = gateNextBatch(env.DB);
+    const staleReservation = changeRegistrationEmail(gate.db, {
+      registrationId: firstRegistration.registration.id,
+      newEmail: "race-target@example.com",
+      confirmationTtlHours: 24,
+      signingSecret,
+    });
+    await gate.reached;
+    await changeRegistrationEmail(env.DB, {
+      registrationId: secondRegistration.registration.id,
+      newEmail: "race-target@example.com",
+      confirmationTtlHours: 24,
+      signingSecret,
+    });
+    gate.release();
+
+    await expect(staleReservation).rejects.toMatchObject({ status: 409, code: "EMAIL_TAKEN" });
+    await expect(
+      queryAll<{ email: string; pending_email: string | null }>(
+        env.DB,
+        "SELECT email, pending_email FROM users WHERE id IN (?, ?) ORDER BY email",
+        [firstUser.id, secondUser.id],
+      ),
+    ).resolves.toEqual([
+      { email: "race-first@example.com", pending_email: null },
+      { email: "race-second@example.com", pending_email: "race-target@example.com" },
+    ]);
+  }, 15_000);
 });

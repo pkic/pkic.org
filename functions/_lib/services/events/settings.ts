@@ -2,9 +2,10 @@ import {
   isAdminEventCustomSettingKey,
   type AdminEventSettingsInput,
 } from "../../../../assets/shared/schemas/admin-events";
-import { normalizeHttpOrSameOriginUrl } from "../../../../assets/shared/schemas/urls";
 import type { DatabaseLike, StatementLike } from "../../types";
+import { AppError } from "../../errors";
 import { parseJsonSafe, stringifyJson } from "../../utils/json";
+import { resolveHeroImageSource } from "../../utils/hero-image-url";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
 import { getEventBySlug } from "../events";
@@ -25,6 +26,7 @@ function mergeEventSettings(
   existingJson: string,
   input: AdminEventSettingsInput,
   appBaseUrl: string,
+  allowedHeroImageHosts?: string,
 ): Record<string, unknown> {
   const existing = parseJsonSafe<Record<string, unknown>>(existingJson, {});
   const custom = Object.fromEntries(
@@ -40,10 +42,18 @@ function mergeEventSettings(
   assignNullable("virtualUrl", input.virtualUrl);
   assignNullable("location", input.location);
   if (input.heroImageUrl !== undefined) {
-    assignNullable(
-      "heroImageUrl",
-      input.heroImageUrl === null ? null : normalizeHttpOrSameOriginUrl(input.heroImageUrl, appBaseUrl),
-    );
+    const heroImage =
+      input.heroImageUrl === null
+        ? null
+        : resolveHeroImageSource(input.heroImageUrl, appBaseUrl, allowedHeroImageHosts);
+    if (input.heroImageUrl !== null && !heroImage) {
+      throw new AppError(
+        400,
+        "HERO_IMAGE_HOST_NOT_ALLOWED",
+        "Hero images must use a same-origin path or an approved HTTPS host.",
+      );
+    }
+    assignNullable("heroImageUrl", heroImage?.assetPath ?? heroImage?.url ?? null);
   }
   if (input.sessionTypes !== undefined) {
     const proposal = { ...((settings.proposal as Record<string, unknown> | undefined) ?? {}) };
@@ -64,11 +74,17 @@ export async function updateEventSettings(
     actorId: string;
     settings: AdminEventSettingsInput;
     appBaseUrl: string;
+    allowedHeroImageHosts?: string;
   },
 ) {
   const event = await getEventBySlug(db, input.eventSlug);
   const at = nowIso();
-  const mergedSettings = mergeEventSettings(event.settings_json, input.settings, input.appBaseUrl);
+  const mergedSettings = mergeEventSettings(
+    event.settings_json,
+    input.settings,
+    input.appBaseUrl,
+    input.allowedHeroImageHosts,
+  );
   const statements: StatementLike[] = [
     db
       .prepare(

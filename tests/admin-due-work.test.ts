@@ -155,7 +155,7 @@ describe("admin due-work read model", () => {
     await env.DB.prepare(
       `UPDATE users
           SET pending_email = 'due-pending@example.test', pending_email_expires_at = datetime('now', '+1 day'),
-              pending_email_change_registration_id = ?
+              pending_email_change_registration_id = ?, pending_email_current_confirmed_at = datetime('now')
         WHERE id = ?`,
     )
       .bind(ownerRegistrationId, userId)

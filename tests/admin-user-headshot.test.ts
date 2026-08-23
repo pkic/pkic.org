@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
 import { createContext, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
+import { validJpegBytes, validPngBytes } from "./helpers/raster-images";
 import app from "../functions/router";
 import { replaceUserHeadshot } from "../functions/_lib/services/user-headshot";
 import { processPendingStorageDeletions } from "../functions/_lib/services/storage-deletion-outbox";
@@ -39,10 +40,11 @@ class FakeUploadsBucket {
     this.objects.set(key, { body, contentType });
   }
 
-  async get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null> {
+  async get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer>; size: number } | null> {
     const stored = this.objects.get(key);
     if (!stored) return null;
     return {
+      size: stored.body.byteLength,
       async arrayBuffer() {
         return stored.body;
       },
@@ -158,11 +160,7 @@ describe("admin user headshot upload", () => {
     });
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), { headers: { "content-type": "image/jpeg" } }),
-        ),
+      vi.fn().mockResolvedValue(new Response(validJpegBytes(), { headers: { "content-type": "image/jpeg" } })),
     );
     const background: Promise<unknown>[] = [];
 
@@ -202,6 +200,34 @@ describe("admin user headshot upload", () => {
     await Promise.all(background);
   });
 
+  it("rejects a structurally valid but oversized-dimension Gravatar before it can replace a headshot", async () => {
+    const { targetUserId } = await setup();
+    const bucket = new FakeUploadsBucket();
+    const oldKey = `headshots/${targetUserId}/old.jpg`;
+    await bucket.put(oldKey, validJpegBytes().buffer);
+    await env.DB.prepare("UPDATE users SET headshot_r2_key = ? WHERE id = ?").bind(oldKey, targetUserId).run();
+    const oversized = validPngBytes(4097, 1);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(oversized, { headers: { "content-type": "image/png" } })),
+    );
+
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/admin/users/${targetUserId}/gravatar`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+      }),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException() {}, waitUntil() {} } as unknown as ExecutionContext,
+    );
+
+    expect(response.status).toBe(404);
+    expect(await queryAll(env.DB, "SELECT headshot_r2_key FROM users WHERE id = ?", targetUserId)).toEqual([
+      { headshot_r2_key: oldKey },
+    ]);
+    expect(bucket.keys()).toEqual([oldKey]);
+  });
+
   it("accepts direct image upload and stores key in DB", async () => {
     const { targetUserId } = await setup();
     const bucket = new FakeUploadsBucket();
@@ -212,7 +238,7 @@ describe("admin user headshot upload", () => {
         authorization: `Bearer ${ADMIN_TOKEN}`,
         "content-type": "image/jpeg",
       },
-      body: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
+      body: validJpegBytes(),
     });
 
     const response = await adminUserHeadshotRequest(
@@ -245,7 +271,7 @@ describe("admin user headshot upload", () => {
           authorization: `Bearer ${ADMIN_TOKEN}`,
           "content-type": "image/jpeg",
         },
-        body: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
+        body: validJpegBytes(),
       }),
       { ...(env as any), IMAGES: undefined, SPEAKER_UPLOADS_BUCKET: bucket },
       { passThroughOnException() {}, waitUntil() {} } as unknown as ExecutionContext,
@@ -266,7 +292,7 @@ describe("admin user headshot upload", () => {
     const { targetUserId } = await setup();
     const bucket = new FakeUploadsBucket();
 
-    const file = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], "headshot.jpg", { type: "image/jpeg" });
+    const file = new File([validJpegBytes()], "headshot.jpg", { type: "image/jpeg" });
     const formData = new FormData();
     formData.append("file", file);
 
@@ -294,7 +320,7 @@ describe("admin user headshot upload", () => {
   it("preserves validated PNG type when Cloudflare Images is unavailable", async () => {
     const { targetUserId } = await setup();
     const bucket = new FakeUploadsBucket();
-    const pngHeader = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const pngHeader = validPngBytes();
     const request = new Request(`https://app.test/api/v1/admin/users/${targetUserId}/headshot`, {
       method: "PUT",
       headers: { authorization: `Bearer ${ADMIN_TOKEN}`, "content-type": "image/png" },
@@ -371,7 +397,7 @@ describe("admin user headshot upload", () => {
         authorization: `Bearer ${ADMIN_TOKEN}`,
         "content-type": "image/jpeg",
       },
-      body: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
+      body: validJpegBytes(),
     });
 
     await expect(
@@ -562,6 +588,42 @@ describe("admin user headshot upload", () => {
     ).toEqual([{ status: "deleted" }]);
   });
 
+  it("serves only bounded, structurally valid legacy headshots from the public Worker route", async () => {
+    const { targetUserId } = await setup();
+    const bucket = new FakeUploadsBucket();
+    const validKey = `headshots/${targetUserId}/legacy.jpg`;
+    await bucket.put(validKey, validJpegBytes().buffer);
+    await env.DB.prepare("UPDATE users SET headshot_r2_key = ? WHERE id = ?").bind(validKey, targetUserId).run();
+
+    const validResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/headshots/${targetUserId}/legacy.jpg`),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException() {}, waitUntil() {} } as unknown as ExecutionContext,
+    );
+    expect(validResponse.status).toBe(200);
+    expect(validResponse.headers.get("content-type")).toBe("image/jpeg");
+
+    const malformedKey = `headshots/${targetUserId}/malformed.png`;
+    await bucket.put(malformedKey, validPngBytes().slice(0, 24).buffer);
+    await env.DB.prepare("UPDATE users SET headshot_r2_key = ? WHERE id = ?").bind(malformedKey, targetUserId).run();
+    const malformedResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/headshots/${targetUserId}/malformed.png`),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException() {}, waitUntil() {} } as unknown as ExecutionContext,
+    );
+    expect(malformedResponse.status).toBe(404);
+
+    const oversizedKey = `headshots/${targetUserId}/oversized.png`;
+    await bucket.put(oversizedKey, new Uint8Array(5 * 1024 * 1024 + 1).buffer);
+    await env.DB.prepare("UPDATE users SET headshot_r2_key = ? WHERE id = ?").bind(oversizedKey, targetUserId).run();
+    const oversizedResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/headshots/${targetUserId}/oversized.png`),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException() {}, waitUntil() {} } as unknown as ExecutionContext,
+    );
+    expect(oversizedResponse.status).toBe(404);
+  });
+
   it("works through full router pipeline via app.fetch", async () => {
     const { targetUserId } = await setup();
     const bucket = new FakeUploadsBucket();
@@ -572,7 +634,7 @@ describe("admin user headshot upload", () => {
         authorization: `Bearer ${ADMIN_TOKEN}`,
         "content-type": "image/jpeg",
       },
-      body: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
+      body: validJpegBytes(),
     });
 
     const response = await app.fetch(request, { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket }, {

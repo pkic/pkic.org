@@ -11,6 +11,8 @@ export type CampaignEvent = Pick<EventRecord, "id" | "slug" | "base_path" | "sta
 
 export interface CampaignRecipient {
   registrationId?: string;
+  /** Internal delivery-time capability binding; never serialized into template data. */
+  manageLinkSecret?: string;
   userId?: string;
   email: string;
   firstName: string;
@@ -29,6 +31,7 @@ export interface CampaignAudienceFilter {
 
 export interface AttendeeCampaignRow {
   registration_id: string;
+  manage_link_secret: string;
   user_id: string;
   email: string;
   first_name: string | null;

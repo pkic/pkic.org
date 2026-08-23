@@ -87,6 +87,7 @@ export interface ConfirmationReminderRow {
   confirmation_link_secret: string;
   confirmation_reminder_sent_at: string | null;
   pending_confirmation_deadline_at: string | null;
+  transition_revision: number;
   reminder_count: number;
   created_at: string;
   event_name: string;

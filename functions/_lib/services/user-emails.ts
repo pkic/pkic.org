@@ -39,6 +39,21 @@ export interface UserEmailOwner {
   kind: "primary" | "secondary" | "pending";
 }
 
+/** Recognizes database-boundary collisions for the shared email namespace. */
+export function isEmailReservationConflict(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return (
+    error.message.includes("EMAIL_TAKEN") ||
+    error.message.includes("UNIQUE constraint failed: users.pending_email") ||
+    error.message.includes("UNIQUE constraint failed: users.normalized_email") ||
+    error.message.includes("UNIQUE constraint failed: user_emails.normalized_email")
+  );
+}
+
+export function emailTakenError(): AppError {
+  return new AppError(409, "EMAIL_TAKEN", "This email address is already reserved by another account");
+}
+
 function toRecord(row: UserEmailRow): UserEmailRecord {
   return userEmailResponseSchema.parse({
     id: row.id,
@@ -106,12 +121,17 @@ export async function addUserEmail(
 
   const id = uuid();
   const now = nowIso();
-  await db.batch([
-    db
-      .prepare("INSERT INTO user_emails (id, user_id, email, normalized_email, created_at) VALUES (?, ?, ?, ?, ?)")
-      .bind(id, userId, email, normalized, now),
-    prepareAuditLogAfterOneChange(db, "admin", actor.id, "user_email_added", "user", userId, { email }, now),
-  ]);
+  try {
+    await db.batch([
+      db
+        .prepare("INSERT INTO user_emails (id, user_id, email, normalized_email, created_at) VALUES (?, ?, ?, ?, ?)")
+        .bind(id, userId, email, normalized, now),
+      prepareAuditLogAfterOneChange(db, "admin", actor.id, "user_email_added", "user", userId, { email }, now),
+    ]);
+  } catch (error) {
+    if (isEmailReservationConflict(error)) throw emailTakenError();
+    throw error;
+  }
 
   return { id, userId, email, createdAt: now };
 }

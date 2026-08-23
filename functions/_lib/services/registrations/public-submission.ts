@@ -13,13 +13,13 @@ import { buildRegistrationIcs } from "../../utils/calendar";
 import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../../utils/attendance";
 import { buildAcceptedTermsText, getCustomAnswerRows } from "../../utils/registration-email";
 import { prepareValidatedAttendeeRegistration } from "../attendee-registration";
-import { queuedCapabilityToken } from "../capability-links";
 import { buildEventEmailVariables, getEventBySlug, updateEventBasePath } from "../events";
-import { registrationConfirmPageUrl, registrationManagePageUrl } from "../frontend-links";
+import { registrationManagePageUrl } from "../frontend-links";
 import { findInviteByToken, type InviteRecord } from "../invites";
 import { prepareBadgeRenderJob } from "../badge-render-job-statements";
 import { seedGravatarAndProcessBadgeRenderJob } from "../registration-badge-regeneration";
 import { commitRegistrationSubmission } from "../registration-submission";
+import { registrationConfirmationUrl, registrationManageCapability } from "./capability-urls";
 
 type RegistrationCreateInput = z.infer<typeof registrationCreateSchema>;
 
@@ -88,11 +88,7 @@ export async function submitPublicRegistration(
   });
   const { user, referralCode } = prepared;
   const registration = prepared.registration;
-  const queuedManageUrl = registrationManagePageUrl(
-    metadata.appBaseUrl,
-    event,
-    queuedCapabilityToken("registration_manage", registration.id),
-  );
+  const { manageUrl: queuedManageUrl } = await registrationManageCapability(metadata.appBaseUrl, event, registration);
   const manageUrl = registrationManagePageUrl(metadata.appBaseUrl, event, prepared.manageToken);
   // Email equality discovers an existing identity; it does not prove that the
   // anonymous submitter owns it. Existing identities receive their management
@@ -131,15 +127,11 @@ export async function submitPublicRegistration(
 
   let queuedEmail: ReturnType<typeof prepareQueueEmailStatement>;
   if (registration.status === "pending_email_confirmation") {
-    const confirmationUrl = registrationConfirmPageUrl(
+    const confirmationUrl = await registrationConfirmationUrl(
       metadata.appBaseUrl,
       event,
-      queuedCapabilityToken(
-        "registration_confirm",
-        registration.id,
-        metadata.config.confirmationLinkTtlHours * 60 * 60,
-      ),
-      registration.id,
+      registration,
+      metadata.config.confirmationLinkTtlHours,
     );
     queuedEmail = prepareQueueEmailStatement(db, {
       eventId: event.id,

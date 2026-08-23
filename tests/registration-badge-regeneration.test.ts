@@ -16,6 +16,7 @@ import { createAdminSession } from "./helpers/auth";
 import { resetDb } from "./helpers/reset-db";
 import { badgeRegenerationQueuedResponseSchema } from "../assets/shared/schemas/route-contracts";
 import { fetchGravatar } from "../functions/_lib/services/gravatar";
+import { validJpegBytes } from "./helpers/raster-images";
 
 const env = workerEnv as unknown as Env;
 
@@ -83,11 +84,7 @@ describe("registration badge regeneration", () => {
     } as unknown as R2Bucket;
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), { headers: { "content-type": "image/jpeg" } }),
-        ),
+      vi.fn().mockResolvedValue(new Response(validJpegBytes(), { headers: { "content-type": "image/jpeg" } })),
     );
 
     const r2Key = await fetchGravatar(seeded.userId, "badge@example.test", {
@@ -127,11 +124,7 @@ describe("registration badge regeneration", () => {
     } as unknown as R2Bucket;
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), { headers: { "content-type": "image/jpeg" } }),
-        ),
+      vi.fn().mockResolvedValue(new Response(validJpegBytes(), { headers: { "content-type": "image/jpeg" } })),
     );
 
     await expect(

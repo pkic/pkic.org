@@ -8,6 +8,7 @@ import type { RegistrationRecord } from "./types";
 import { buildRegistrationUpdate, type RegistrationUpdatePayload } from "./update-plan";
 import { isRegistrationTransitionConflict, registrationChangedError } from "./transition-guard";
 import { sha256Hex } from "../../utils/crypto";
+import { emailTakenError, isEmailReservationConflict } from "../user-emails";
 
 type RegistrationUpdatePlan = Awaited<ReturnType<typeof buildRegistrationUpdate>>;
 
@@ -31,6 +32,7 @@ async function executeRegistrationUpdate<T>(
       return commit(await buildRegistrationUpdate(db, registration, payload, changedBy));
     });
   } catch (error) {
+    if (isEmailReservationConflict(error)) throw emailTakenError();
     if (isRegistrationTransitionConflict(error)) {
       throw registrationChangedError();
     }

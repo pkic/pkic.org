@@ -10,6 +10,7 @@
 
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
+import { validJpegBytes } from "./helpers/raster-images";
 import { env } from "cloudflare:workers";
 import { createContext, deliveredEmailPayload, queryAll } from "./helpers/context";
 import { getProposalByManageToken, getSpeakerByManageToken } from "../functions/_lib/services/proposals";
@@ -1754,10 +1755,7 @@ describe("speaker self-management endpoints", () => {
     const staleHeadshotPath = `${staleTokenPath}/headshot`;
     await expectStaleCapability(new Request(staleHeadshotPath));
     const staleHeadshotForm = new FormData();
-    staleHeadshotForm.append(
-      "file",
-      new File([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], "headshot.jpg", { type: "image/jpeg" }),
-    );
+    staleHeadshotForm.append("file", new File([validJpegBytes()], "headshot.jpg", { type: "image/jpeg" }));
     await expectStaleCapability(new Request(staleHeadshotPath, { method: "PUT", body: staleHeadshotForm }));
     await expectStaleCapability(new Request(staleHeadshotPath, { method: "DELETE" }));
 
@@ -1803,7 +1801,7 @@ describe("speaker self-management endpoints", () => {
     const { proposalManageToken, proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
     const bucket = new FakeUploadsBucket();
 
-    const file = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], "headshot.jpg", { type: "image/jpeg" });
+    const file = new File([validJpegBytes()], "headshot.jpg", { type: "image/jpeg" });
     const formData = new FormData();
     formData.append("file", file);
 
@@ -1970,7 +1968,7 @@ describe("speaker self-management endpoints", () => {
       await inviteSpeakerAndSubmitProposal();
     const bucket = new FakeUploadsBucket();
 
-    const file = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], "headshot.jpg", { type: "image/jpeg" });
+    const file = new File([validJpegBytes()], "headshot.jpg", { type: "image/jpeg" });
     const proposerFormData = new FormData();
     proposerFormData.append("file", file);
     const proposerUpload = await app.fetch(

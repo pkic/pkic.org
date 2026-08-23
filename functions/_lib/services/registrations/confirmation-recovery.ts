@@ -48,7 +48,9 @@ export async function recoverRegistrationConfirmation(
        WHERE r.event_id = ? AND r.status = 'pending_email_confirmation'
          AND (
            u.normalized_email = ?
-           OR (u.pending_email_change_registration_id = r.id AND u.pending_email = ?)
+           OR (u.pending_email_change_registration_id = r.id
+               AND u.pending_email_current_confirmed_at IS NOT NULL
+               AND u.pending_email = ?)
          )
        ORDER BY r.created_at DESC LIMIT 1`,
       [payload.event.id, normalizedEmail, normalizedEmail],

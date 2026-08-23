@@ -3,10 +3,8 @@ import { AppError } from "../../errors";
 import { prepareQueueEmailStatement } from "../../email/outbox";
 import { buildBadgeAttachment } from "../../email/attachments";
 import { buildEventEmailVariables } from "../events";
-import { registrationConfirmPageUrl, registrationManagePageUrl } from "../frontend-links";
 import { getAcceptedTermsTextForRegistration, getCustomAnswerRows } from "../../utils/registration-email";
 import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../../utils/attendance";
-import { queuedCapabilityToken } from "../capability-links";
 import { buildRegistrationIcs } from "../../utils/calendar";
 import { generateSignedRsvpAddress } from "../../email/rsvp";
 import { getRegistrationDayAttendance } from "../event-days";
@@ -15,6 +13,7 @@ import type { DatabaseLike, StatementLike } from "../../types";
 import type { UserProfilePatch } from "../users";
 import { REGISTRATION_RECIPIENT_EMAIL_SQL } from "./recipient-email";
 import { REGISTRATION_COLUMNS, type RegistrationRecord } from "./types";
+import { registrationConfirmationUrl, registrationManageCapability } from "./capability-urls";
 
 interface UserRow {
   id: string;
@@ -114,8 +113,7 @@ export async function prepareRegistrationStatusEmail(
     await loadRegistrationEmailContext(db, params.event.id, params.registrationId, params);
   const attendanceData = buildAttendanceEmailData(registration.attendance_type, dayAttendance, dayWaitlist);
   const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
-  const manageToken = queuedCapabilityToken("registration_manage", registration.id);
-  const manageUrl = registrationManagePageUrl(params.appBaseUrl, params.event, manageToken);
+  const { manageToken, manageUrl } = await registrationManageCapability(params.appBaseUrl, params.event, registration);
   const recipientEmail = params.recipientEmailOverride ?? user.email;
   const prepared = prepareQueueEmailStatement(db, {
     outboxId: params.outboxId,
@@ -182,11 +180,7 @@ export async function prepareRegistrationConfirmedEmail(
   const recipientEmail = params.recipientEmailOverride ?? user.email;
   const attendanceData = buildAttendanceEmailData(registration.attendance_type, dayAttendance, dayWaitlist);
   const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
-  const manageUrl = registrationManagePageUrl(
-    params.appBaseUrl,
-    params.event,
-    queuedCapabilityToken("registration_manage", registration.id),
-  );
+  const { manageUrl } = await registrationManageCapability(params.appBaseUrl, params.event, registration);
   const rsvpAddress = params.internalSigningSecret
     ? await generateSignedRsvpAddress(registration.id, params.internalSigningSecret, params.rsvpEmail)
     : undefined;
@@ -268,6 +262,11 @@ export interface RegistrationConfirmationEmailParams extends RegistrationEmailOv
   recipientEmail?: string;
   confirmationTtlHours: number;
   subject?: string;
+  kind?: "registration" | "email_change_authorization" | "email_change_confirmation";
+  currentEmail?: string;
+  newEmail?: string;
+  outboxId?: string;
+  idempotencyKey?: string;
 }
 
 export async function prepareRegistrationConfirmationEmail(
@@ -279,20 +278,29 @@ export async function prepareRegistrationConfirmationEmail(
   const recipientEmail = params.recipientEmail ?? user.email;
   const attendanceData = buildAttendanceEmailData(registration.attendance_type, dayAttendance, dayWaitlist);
   const statusData = buildRegistrationEmailStatusData("pending_email_confirmation", dayWaitlist);
-  const confirmationUrl = registrationConfirmPageUrl(
+  const kind = params.kind ?? "registration";
+  const confirmationUrl = await registrationConfirmationUrl(
     params.appBaseUrl,
     params.event,
-    queuedCapabilityToken("registration_confirm", registration.id, params.confirmationTtlHours * 60 * 60),
-    registration.id,
+    registration,
+    params.confirmationTtlHours,
   );
   const prepared = prepareQueueEmailStatement(db, {
+    outboxId: params.outboxId,
+    idempotencyKey: params.idempotencyKey,
     eventId: params.event.id,
     baseUrl: params.appBaseUrl,
-    templateKey: "registration_confirm_email",
+    templateKey: kind === "registration" ? "registration_confirm_email" : "registration_email_change",
     recipientEmail,
     recipientUserId: user.id,
     messageType: "transactional",
-    subject: params.subject ?? `Confirm your email address for ${params.event.name}`,
+    subject:
+      params.subject ??
+      (kind === "email_change_authorization"
+        ? `Authorize your email address change for ${params.event.name}`
+        : kind === "email_change_confirmation"
+          ? `Confirm your new email address for ${params.event.name}`
+          : `Confirm your email address for ${params.event.name}`),
     capabilityLinkValues: [confirmationUrl],
     data: {
       ...buildEventEmailVariables(params.event, params.appBaseUrl),
@@ -309,6 +317,10 @@ export async function prepareRegistrationConfirmationEmail(
       ...statusData,
       registrationId: registration.id,
       confirmationUrl,
+      emailChangeAuthorization: kind === "email_change_authorization",
+      emailChangeConfirmation: kind === "email_change_confirmation",
+      currentEmail: params.currentEmail,
+      newEmail: params.newEmail,
       manageUrl: `${params.appBaseUrl}/events/${params.event.slug}/manage`,
       shareUrl: null,
     },

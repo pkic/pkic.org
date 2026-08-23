@@ -42,7 +42,7 @@ async function onPut(c: AdminContext, data: ValidatedData<typeof adminUserHeadsh
   const user = await getUserHeadshotRecord(requestDb(c), data.params.userId);
 
   const uploaded = await readValidatedUploadedImage(c.req.raw, "Headshot");
-  const resized = await resizeHeadshot(uploaded.buffer, uploaded.contentType, c.env.IMAGES);
+  const resized = await resizeHeadshot(uploaded.buffer, c.env.IMAGES);
   const { r2Key } = await uploadUserHeadshotForRequest(
     requestDb(c),
     c.env,

@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { validJpegBytes, validPngBytes } from "./helpers/raster-images";
 import { resetDb } from "./helpers/reset-db";
 import { addProposalSpeaker, createProposal } from "../functions/_lib/services/proposals";
 import { headshotUploadResponseSchema } from "../assets/shared/schemas/registration";
@@ -19,10 +20,14 @@ class FakeUploadsBucket {
 
   async get(
     key: string,
-  ): Promise<{ arrayBuffer(): Promise<ArrayBuffer>; httpMetadata: { contentType: string } } | null> {
+  ): Promise<{ arrayBuffer(): Promise<ArrayBuffer>; httpMetadata: { contentType: string }; size: number } | null> {
     const object = this.objects.get(key);
     if (!object) return null;
-    return { arrayBuffer: async () => object.body, httpMetadata: { contentType: object.contentType } };
+    return {
+      arrayBuffer: async () => object.body,
+      httpMetadata: { contentType: object.contentType },
+      size: object.body.byteLength,
+    };
   }
 
   async delete(key: string): Promise<void> {
@@ -70,6 +75,7 @@ async function seedProposalSpeaker(eventId: string): Promise<{ proposalId: strin
 
 describe("admin proposal speaker headshots", () => {
   beforeEach(async () => resetDb());
+  afterEach(() => vi.unstubAllGlobals());
 
   it("uploads only to the proposal speaker override and returns a working cache-busted URL", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
@@ -78,7 +84,7 @@ describe("admin proposal speaker headshots", () => {
     const token = await createAdminSession(env.DB, adminId, "admin-scoped-headshot-upload");
     const bucket = new FakeUploadsBucket();
     const form = new FormData();
-    form.append("file", new File([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], "speaker.jpg", { type: "image/jpeg" }));
+    form.append("file", new File([validJpegBytes()], "speaker.jpg", { type: "image/jpeg" }));
 
     const { response } = await callAdmin(token, proposalId, userId, "headshot", { method: "PUT", body: form }, bucket);
     expect(response.status).toBe(200);
@@ -97,6 +103,43 @@ describe("admin proposal speaker headshots", () => {
     const { response: getResponse } = await callAdmin(token, proposalId, userId, "headshot", {}, bucket);
     expect(getResponse.status).toBe(200);
     expect(getResponse.headers.get("content-type")).toBe("image/jpeg");
+  });
+
+  it("imports only a validated Gravatar into the proposal-scoped headshot override", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const [{ id: adminId }] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin'");
+    const { proposalId, userId } = await seedProposalSpeaker(eventId);
+    const token = await createAdminSession(env.DB, adminId, "admin-scoped-headshot-gravatar");
+    const bucket = new FakeUploadsBucket();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(validJpegBytes(), { headers: { "content-type": "image/jpeg" } })),
+    );
+
+    const { response } = await callAdmin(token, proposalId, userId, "gravatar", { method: "POST" }, bucket);
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as { r2Key: string };
+    expect(payload.r2Key).toMatch(new RegExp(`^proposal-headshots/${proposalId}/${userId}/`));
+    expect(
+      await queryAll<{ headshot_r2_key: string | null }>(
+        env.DB,
+        "SELECT headshot_r2_key FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+        [proposalId, userId],
+      ),
+    ).toEqual([{ headshot_r2_key: payload.r2Key }]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(validPngBytes(4097, 1), { headers: { "content-type": "image/png" } })),
+    );
+    const { response: rejected } = await callAdmin(token, proposalId, userId, "gravatar", { method: "POST" }, bucket);
+    expect(rejected.status).toBe(404);
+    expect(
+      await queryAll<{ headshot_r2_key: string | null }>(
+        env.DB,
+        "SELECT headshot_r2_key FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+        [proposalId, userId],
+      ),
+    ).toEqual([{ headshot_r2_key: payload.r2Key }]);
   });
 
   it("allows a proposal reviewer to read but not mutate a scoped speaker headshot", async () => {
@@ -123,13 +166,13 @@ describe("admin proposal speaker headshots", () => {
     ]);
     const token = await createAdminSession(env.DB, reviewerId, "proposal-reviewer-headshot");
     const bucket = new FakeUploadsBucket();
-    await bucket.put(`proposal-headshots/${proposalId}/${userId}/existing.jpg`, new Uint8Array([1, 2, 3]).buffer);
+    await bucket.put(`proposal-headshots/${proposalId}/${userId}/existing.jpg`, validJpegBytes().buffer);
 
     const { response: getResponse } = await callAdmin(token, proposalId, userId, "headshot", {}, bucket);
     expect(getResponse.status).toBe(200);
 
     const form = new FormData();
-    form.append("file", new File([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], "speaker.jpg", { type: "image/jpeg" }));
+    form.append("file", new File([validJpegBytes()], "speaker.jpg", { type: "image/jpeg" }));
     const { response: putResponse } = await callAdmin(
       token,
       proposalId,
