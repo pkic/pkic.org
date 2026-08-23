@@ -1339,6 +1339,49 @@ describe("speaker self-management endpoints", () => {
     });
   });
 
+  it("validates mounted proposer speaker reminder and profile mutation contracts", async () => {
+    await setupWorkflow();
+    const { proposalManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const workerContext = { passThroughOnException: () => {}, waitUntil: () => {} } as any;
+    const headers = { "content-type": "application/json" };
+
+    const reminderResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers/remind`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ userId: "not-a-uuid" }),
+      }),
+      env,
+      workerContext,
+    );
+    expect(reminderResponse.status).toBe(400);
+    expect(await reminderResponse.json()).toMatchObject({ error: { code: "VALIDATION_ERROR" } });
+
+    const patchResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers/not-a-uuid`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ firstName: "Invalid target" }),
+      }),
+      env,
+      workerContext,
+    );
+    expect(patchResponse.status).toBe(400);
+    expect(await patchResponse.json()).toMatchObject({ error: { code: "VALIDATION_ERROR" } });
+
+    const validPatchResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers/${coSpeakerUserId}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ firstName: "Mounted" }),
+      }),
+      env,
+      workerContext,
+    );
+    expect(validPatchResponse.status).toBe(200);
+    expect(await validPatchResponse.json()).toEqual({ success: true });
+  });
+
   it("rolls back proposer-managed speaker profile and role changes when audit fails", async () => {
     await setupWorkflow();
     const { proposalManageToken, coSpeakerUserId, proposalId } = await inviteSpeakerAndSubmitProposal();

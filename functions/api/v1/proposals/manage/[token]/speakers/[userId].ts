@@ -1,22 +1,30 @@
 import type { ValidatedData } from "chanfana";
-import { dispatchRequestMethod, json } from "../../../../../../_lib/http";
-import { parseJsonBody } from "../../../../../../_lib/validation";
+import { json } from "../../../../../../_lib/http";
+import type { AdminContext } from "../../../../../../_lib/db/context";
+import { openApiRoute } from "../../../../../../_lib/openapi/route";
 import {
   getProposerManagedSpeakerContext,
   updateProposalSpeakerByProposer,
 } from "../../../../../../_lib/services/proposer-speaker-profile";
-import { proposerSpeakerPatchSchema } from "../../../../../../../assets/shared/schemas/proposal-management";
+import { successResponseSchema } from "../../../../../../../assets/shared/schemas/api-common";
 import { requireInternalSecret } from "../../../../../../_lib/request";
 import { proposalSpeakerRemovalResponseSchema } from "../../../../../../../assets/shared/schemas/proposal-management";
-import { proposerManagedSpeakerDeleteRouteSchema } from "../../../../../../../assets/shared/schemas/route-contracts";
+import {
+  proposerManagedSpeakerDeleteRouteSchema,
+  proposerManagedSpeakerPatchRouteSchema,
+} from "../../../../../../../assets/shared/schemas/route-contracts-public-proposals";
 import { removeProposalSpeakerByProposer } from "../../../../../../_lib/services/proposal-speaker-removal";
 
-export async function onRequestPatch(c: any): Promise<Response> {
-  const body = await parseJsonBody(c.req, proposerSpeakerPatchSchema);
+type ProposalManageSpeakerContext = AdminContext<{ token: string; userId: string }>;
+
+async function handleProposalSpeakerPatch(
+  c: ProposalManageSpeakerContext,
+  data: ValidatedData<typeof proposerManagedSpeakerPatchRouteSchema>,
+): Promise<Response> {
   const { proposal, speaker } = await getProposerManagedSpeakerContext(
     c.env.DB,
-    c.req.param("token"),
-    c.req.param("userId"),
+    data.params.token,
+    data.params.userId,
     requireInternalSecret(c.env),
   );
 
@@ -24,17 +32,17 @@ export async function onRequestPatch(c: any): Promise<Response> {
     proposal,
     speaker,
     patch: {
-      role: body.role,
-      firstName: body.firstName === undefined ? undefined : body.firstName || null,
-      lastName: body.lastName === undefined ? undefined : body.lastName || null,
-      organizationName: body.organizationName === undefined ? undefined : body.organizationName || null,
-      jobTitle: body.jobTitle === undefined ? undefined : body.jobTitle || null,
-      biography: body.biography === undefined ? undefined : body.biography || null,
-      links: body.links,
+      role: data.body.role,
+      firstName: data.body.firstName === undefined ? undefined : data.body.firstName || null,
+      lastName: data.body.lastName === undefined ? undefined : data.body.lastName || null,
+      organizationName: data.body.organizationName === undefined ? undefined : data.body.organizationName || null,
+      jobTitle: data.body.jobTitle === undefined ? undefined : data.body.jobTitle || null,
+      biography: data.body.biography === undefined ? undefined : data.body.biography || null,
+      links: data.body.links,
     },
   });
 
-  return json({ success: true });
+  return json(successResponseSchema.parse({ success: true }));
 }
 
 export async function onRequestDelete(
@@ -51,7 +59,8 @@ export async function onRequestDelete(
   return json(proposalSpeakerRemovalResponseSchema.parse(result));
 }
 
-export async function onRequest(c: any): Promise<Response> {
-  c.set("sensitive", true);
-  return dispatchRequestMethod(c, { PATCH: onRequestPatch, DELETE: onRequestDelete });
-}
+export const ProposalsManageTokenSpeakerPatch = openApiRoute(
+  proposerManagedSpeakerPatchRouteSchema,
+  handleProposalSpeakerPatch,
+  (c: ProposalManageSpeakerContext) => c.set?.("sensitive", true),
+);

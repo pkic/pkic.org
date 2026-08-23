@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
+import { env } from "cloudflare:workers";
 import { dispatchRequestMethod, methodNotAllowed } from "../functions/_lib/http";
 import { onRequest as eventFormsDispatch } from "../functions/api/v1/events/[eventSlug]/forms";
+import worker from "../functions/router";
 import { onRequest as retentionDispatch } from "../functions/api/v1/internal/retention/run";
 import { onRequest as registrationConfirmDispatch } from "../functions/api/v1/events/[eventSlug]/registrations/confirm-email";
 import { onRequest as registrationCreateDispatch } from "../functions/api/v1/events/[eventSlug]/registrations";
 import { onRequest as speakerPresentationDispatch } from "../functions/api/v1/proposals/speaker/[token]/presentation";
 import { onRequest as speakerManageDispatch } from "../functions/api/v1/proposals/speaker/[token]";
 import { onRequest as proposerSpeakersDispatch } from "../functions/api/v1/proposals/manage/[token]/speakers";
-import { onRequest as proposerSpeakerReminderDispatch } from "../functions/api/v1/proposals/manage/[token]/speakers/remind";
-import { onRequest as proposerSpeakerDispatch } from "../functions/api/v1/proposals/manage/[token]/speakers/[userId]";
 import { onRequest as registrationManageDispatch } from "../functions/api/v1/registrations/manage/[token]";
 import { onRequest as registrationHeadshotDispatch } from "../functions/api/v1/registrations/manage/[token]/headshot";
 import { onRequest as waitlistPromoteDispatch } from "../functions/api/v1/admin/events/[eventSlug]/waitlist/promote";
@@ -106,14 +106,14 @@ describe("HTTP method dispatch", () => {
       path: "/proposals/manage/token/speakers/remind",
       method: "GET",
       allow: "POST",
-      handler: proposerSpeakerReminderDispatch,
+      mounted: true,
     },
     {
       label: "proposer speaker management",
       path: "/proposals/manage/token/speakers/user",
       method: "POST",
       allow: "PATCH, DELETE",
-      handler: proposerSpeakerDispatch,
+      mounted: true,
     },
     {
       label: "registration self-management",
@@ -150,9 +150,21 @@ describe("HTTP method dispatch", () => {
       allow: "POST",
       handler: registrationAdmitDispatch,
     },
-  ])("returns the canonical mounted 405 for a $label route", async ({ path, method, allow, handler }) => {
+  ])("returns the canonical mounted 405 for a $label route", async ({ path, method, allow, handler, mounted }) => {
+    if (mounted) {
+      const response = await worker.fetch(new Request(`https://app.test/api/v1${path}`, { method }), env, {
+        passThroughOnException: () => {},
+        waitUntil: () => {},
+      } as any);
+      expect(response.status).toBe(405);
+      expect(response.headers.get("allow")).toBe(allow);
+      await expect(response.json()).resolves.toEqual({
+        error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" },
+      });
+      return;
+    }
     const app = new Hono();
-    app.all(path, (c) => handler(c as any));
+    app.all(path, (c) => handler!(c as any));
 
     const response = await app.request(path, { method });
 

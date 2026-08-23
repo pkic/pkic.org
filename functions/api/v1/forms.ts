@@ -21,12 +21,15 @@
  * recognized Referer nor Origin are rejected outright.
  */
 import { getClientIp } from "../../_lib/request";
+import type { ValidatedData } from "chanfana";
 import { enforceRateLimit } from "../../_lib/rate-limit";
 import { isAppError } from "../../_lib/errors";
 import { logError } from "../../_lib/logging";
 import { resolveAppBaseUrl } from "../../_lib/config";
 import { LEGACY_FORM_MAX_BYTES, readBoundedFormData } from "../../_lib/http-body";
 import { submitMembershipForm, MembershipFormValidationError } from "../../_lib/services/membership-form-submission";
+import { legacyFormSubmissionRouteSchema } from "../../../assets/shared/schemas/route-contracts-forms";
+import { openApiRoute } from "../../_lib/openapi/route";
 
 function redirectWithStatus(refererUrl: URL, status: "success" | "error"): Response {
   const target = new URL(refererUrl);
@@ -34,7 +37,7 @@ function redirectWithStatus(refererUrl: URL, status: "success" | "error"): Respo
   return Response.redirect(target.toString(), 302);
 }
 
-export async function onRequestPost(c: any): Promise<Response> {
+async function handleLegacyFormSubmission(c: any): Promise<Response> {
   const request: Request = c.req.raw;
 
   const refererHeader = request.headers.get("referer");
@@ -112,3 +115,14 @@ export async function onRequestPost(c: any): Promise<Response> {
     return redirectWithStatus(redirectUrl, "error");
   }
 }
+
+/** Pages Functions compatibility adapter; the mounted Worker route uses the validated OpenAPI wrapper below. */
+export async function onRequestPost(c: any): Promise<Response> {
+  return handleLegacyFormSubmission(c);
+}
+
+export const LegacyFormSubmissionPost = openApiRoute(
+  legacyFormSubmissionRouteSchema,
+  async (c: any, _data: ValidatedData<typeof legacyFormSubmissionRouteSchema>): Promise<Response> =>
+    handleLegacyFormSubmission(c),
+);
