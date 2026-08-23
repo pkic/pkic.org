@@ -1,24 +1,12 @@
 import { getConfig } from "../config";
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
 import { buildD1TextSearchFilter } from "../db/search";
-import type { AdminDueWorkRow, AdminDueWorkTab } from "../../../assets/shared/schemas/admin-due-work";
+import type { AdminDueWorkListQuery, AdminDueWorkRow } from "../../../assets/shared/schemas/admin-due-work";
 import type { DatabaseLike, Env } from "../types";
 import { REGISTRATION_RECIPIENT_EMAIL_SQL } from "./registrations/recipient-email";
 import { proposalSpeakerEffectiveProfileExpression } from "./proposal-speakers";
 
 const ONE_DAY_MS = 86_400_000;
-
-interface DueWorkListOptions {
-  bucket: AdminDueWorkTab;
-  includeRetention: boolean;
-  reminderLimit: number;
-  outboxLimit: number;
-  cleanupLimit: number;
-  limit: number;
-  offset: number;
-  q?: string;
-  sort?: string;
-}
 
 interface DueWorkQueryRow {
   record_kind: number;
@@ -312,7 +300,7 @@ const DUE_WORK_CTE = `
     FROM cleanup_candidates
   )`;
 
-function queryBindings(env: Env, appBaseUrl: string, options: DueWorkListOptions): unknown[] {
+function queryBindings(env: Env, appBaseUrl: string, options: AdminDueWorkListQuery): unknown[] {
   const config = getConfig({ ...env, APP_BASE_URL: appBaseUrl });
   const now = new Date();
   const confirmationIntervalDays = Math.max(1, config.pendingConfirmationReminderIntervalDays);
@@ -360,7 +348,7 @@ function toApiRow(row: DueWorkQueryRow): AdminDueWorkRow {
   };
 }
 
-export async function listDueWork(db: DatabaseLike, env: Env, appBaseUrl: string, options: DueWorkListOptions) {
+export async function listDueWork(db: DatabaseLike, env: Env, appBaseUrl: string, options: AdminDueWorkListQuery) {
   const search = options.q
     ? buildD1TextSearchFilter(options.q, ["type_label", "title", "subtitle", "context", "detail"])
     : null;
