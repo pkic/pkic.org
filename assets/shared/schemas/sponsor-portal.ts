@@ -89,6 +89,7 @@ export const sponsorPortalAttendeesListQuerySchema = listQuerySchema(
   ["name", "email", "organizationName", "attendanceType"] as const,
   { limit: 100 },
 );
+export type SponsorPortalAttendeesListQuery = z.infer<typeof sponsorPortalAttendeesListQuerySchema>;
 export const sponsorPortalAttendeesListResponseSchema = paginatedResponseSchema(
   "attendees",
   sponsorPortalAttendeeSchema,

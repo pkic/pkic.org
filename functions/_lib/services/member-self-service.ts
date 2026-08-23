@@ -16,6 +16,7 @@ import { VOTING_CATEGORIES } from "./membership/applications/create";
 import { getMemberApplicationById } from "./membership/applications/queries";
 import { resolveRepresentativeRoleHolders } from "./membership/representative-roles";
 import type { AuthMember, DatabaseLike, EligibleMembership } from "../types";
+import type { MyApplicationsListQuery } from "../../../assets/shared/schemas/me";
 
 export interface MyOrganizationRepresentative {
   userId: string;
@@ -246,7 +247,7 @@ export interface MyApplicationSummary {
 export async function listMyApplications(
   db: DatabaseLike,
   member: AuthMember,
-  params: { q?: string; sort?: string; limit: number; offset: number },
+  params: MyApplicationsListQuery,
 ): Promise<{ applications: MyApplicationSummary[]; total: number }> {
   const search = params.q
     ? buildD1TextSearchFilter(params.q, ["membership_category", "stage", "organization_name"])

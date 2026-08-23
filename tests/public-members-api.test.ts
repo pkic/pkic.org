@@ -6,7 +6,6 @@ import { createContext } from "./helpers/context";
 import { handleError } from "../functions/_lib/http";
 import { onRequestGet as getMember } from "../functions/api/v1/members/[id]";
 import { onRequestGet as getMemberLogo } from "../functions/api/v1/members/[id]/logo";
-import { onRequestGet as listWorkingGroups } from "../functions/api/v1/working-groups/index";
 import { onRequestGet as getWorkingGroup } from "../functions/api/v1/working-groups/[id]";
 import { seedOrganizationAggregate, addRepresentative as addRepresentativeRow, insertUser } from "./helpers/membership";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
@@ -649,10 +648,7 @@ describe("GET /api/v1/working-groups", () => {
     await seedWorkingGroup({ id: crypto.randomUUID(), name: "PQC Working Group", slug: "pqc" });
     await seedWorkingGroup({ id: crypto.randomUUID(), name: "Retired Working Group", slug: "retired", active: 0 });
 
-    const response = await callEndpoint(
-      listWorkingGroups,
-      createContext(env, getRequest("https://pkic.org/api/v1/working-groups"), {}),
-    );
+    const response = await callPublicApi("https://pkic.org/api/v1/working-groups");
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as {

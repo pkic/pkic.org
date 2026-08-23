@@ -218,14 +218,17 @@ export const publicVotesFeedRouteSchema = {
 
 // ── Portal (authenticated members) ───────────────────────────────────
 
+export const portalVotesListQuerySchema = listQuerySchema(VOTES_LIST_SORT_COLUMNS).extend({
+  status: portalVoteStatusListSchema.optional(),
+});
+export type PortalVotesListQuery = z.infer<typeof portalVotesListQuerySchema>;
+
 export const portalVotesListRouteSchema = {
   tags: ["Portal Votes"],
   summary: "List all votes visible to the caller",
   description: "Every forum vote, every public vote, plus every vote scoped to a working group the caller belongs to.",
   request: {
-    query: listQuerySchema(VOTES_LIST_SORT_COLUMNS).extend({
-      status: portalVoteStatusListSchema.optional(),
-    }),
+    query: portalVotesListQuerySchema,
   },
   responses: {
     "200": {

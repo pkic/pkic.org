@@ -1665,6 +1665,15 @@ describe("Voting system", () => {
     expect(body.votes[0].voteId).toBe(vote.id);
     expect(body.votes[0].choice).toBe("in_favor");
     expect(body.page).toEqual({ limit: 50, offset: 0, total: 1, hasMore: false });
+
+    const filteredRes = await call(token, "/api/v1/me/votes?q=My%20Vote&limit=1&sort=title");
+    expect(filteredRes.status).toBe(200);
+    const filteredBody = (await filteredRes.json()) as {
+      votes: Array<{ voteId: string }>;
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
+    expect(filteredBody.votes.map((entry) => entry.voteId)).toEqual([vote.id]);
+    expect(filteredBody.page).toEqual({ limit: 1, offset: 0, total: 1, hasMore: false });
   });
 
   it("GET /api/v1/portal/votes returns bounded, correctly-computed canCastBallot/hasCastBallot/candidates without a per-vote query fan-out", async () => {

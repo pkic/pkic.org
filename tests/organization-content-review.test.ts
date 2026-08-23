@@ -20,7 +20,11 @@ import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { processPendingStorageDeletions } from "../functions/_lib/services/storage-deletion-outbox";
 import { runScheduledDueWork } from "../functions/_lib/services/scheduled-due-work";
 import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
-import { contentReviewDecisionResponseSchema } from "../assets/shared/schemas/admin-organizations";
+import {
+  contentReviewDecisionResponseSchema,
+  contentReviewsListResponseSchema,
+} from "../assets/shared/schemas/admin-organizations";
+import { myOrganizationReviewsListResponseSchema } from "../assets/shared/schemas/me";
 import {
   drainOrganizationContentReviewNotificationIntents,
   listPendingOrganizationContentReviewNotificationIntents,
@@ -172,6 +176,23 @@ describe("Organization content moderation", () => {
         queued_outbox_id: expect.any(String),
       },
     ]);
+  });
+
+  it("GET /api/v1/me/organization/reviews applies the shared list query to D1", async () => {
+    const { userId } = await seedOrgWithContact("review-list@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "review-list-token");
+    const submitResponse = await call(token, "/api/v1/me/organization", {
+      method: "PATCH",
+      body: JSON.stringify({ description: "Review-list change" }),
+    });
+    expect(submitResponse.status).toBe(200);
+
+    const response = await call(token, "/api/v1/me/organization/reviews?status=pending&limit=1&sort=status");
+    expect(response.status).toBe(200);
+    const body = myOrganizationReviewsListResponseSchema.parse(await response.json());
+    expect(body.reviews).toHaveLength(1);
+    expect(body.reviews[0].status).toBe("pending");
+    expect(body.page).toEqual({ limit: 1, offset: 0, total: 1, hasMore: false });
   });
 
   it("rejects a non-contact representative's submission with 403", async () => {

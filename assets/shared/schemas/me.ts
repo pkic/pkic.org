@@ -126,6 +126,7 @@ export const myApplicationSummarySchema = z.object({
 
 export const MY_APPLICATION_SORT_COLUMNS = ["createdAt", "stage"] as const;
 export const myApplicationsListQuerySchema = listQuerySchema(MY_APPLICATION_SORT_COLUMNS, { limit: 25 });
+export type MyApplicationsListQuery = z.infer<typeof myApplicationsListQuerySchema>;
 export const myApplicationsListResponseSchema = paginatedResponseSchema("applications", myApplicationSummarySchema);
 
 export const myApplicationsListRouteSchema = {
@@ -191,15 +192,19 @@ export const myVoteHistoryEntrySchema = z.object({
   submittedAt: z.string(),
 });
 
+export const myVotesListQuerySchema = listQuerySchema(["title", "status", "submittedAt"] as const);
+export type MyVotesListQuery = z.infer<typeof myVotesListQuerySchema>;
+export const myVotesListResponseSchema = paginatedResponseSchema("votes", myVoteHistoryEntrySchema);
+
 export const myVotesListRouteSchema = {
   tags: ["Me"],
   summary: "My vote history",
   description: "Every ballot the caller has cast, most recent first.",
-  request: { query: listQuerySchema(["title", "status", "submittedAt"] as const) },
+  request: { query: myVotesListQuerySchema },
   responses: {
     "200": {
       description: "My votes.",
-      content: { "application/json": { schema: paginatedResponseSchema("votes", myVoteHistoryEntrySchema) } },
+      content: { "application/json": { schema: myVotesListResponseSchema } },
     },
   },
 };
@@ -241,6 +246,7 @@ export const MY_WORKING_GROUP_SORT_COLUMNS = ["name", "slug", "joinedAt"] as con
 export const myWorkingGroupsListQuerySchema = listQuerySchema(MY_WORKING_GROUP_SORT_COLUMNS).extend({
   view: z.enum(["joined", "catalog"]).default("catalog"),
 });
+export type MyWorkingGroupsListQuery = z.infer<typeof myWorkingGroupsListQuerySchema>;
 export const myWorkingGroupsListResponseSchema = paginatedResponseSchema("workingGroups", myWorkingGroupEntrySchema);
 
 export const myWorkingGroupsListRouteSchema = {
@@ -369,20 +375,22 @@ export const myOrganizationContentChangeRouteSchema = {
   },
 };
 
+export const myOrganizationReviewsListQuerySchema = listQuerySchema(["submittedAt", "status"] as const).extend({
+  status: z.union([contentReviewStatusSchema, z.literal("history")]).default("history"),
+});
+export type MyOrganizationReviewsListQuery = z.infer<typeof myOrganizationReviewsListQuerySchema>;
+export const myOrganizationReviewsListResponseSchema = paginatedResponseSchema("reviews", myOrganizationReviewSchema);
+
 export const myOrganizationReviewsListRouteSchema = {
   tags: ["Me"],
   summary: "Status of my organization's pending/past content submissions",
-  request: {
-    query: listQuerySchema(["submittedAt", "status"] as const).extend({
-      status: z.union([contentReviewStatusSchema, z.literal("history")]).default("history"),
-    }),
-  },
+  request: { query: myOrganizationReviewsListQuerySchema },
   responses: {
     "200": {
       description: "My organization's review history.",
       content: {
         "application/json": {
-          schema: paginatedResponseSchema("reviews", myOrganizationReviewSchema),
+          schema: myOrganizationReviewsListResponseSchema,
         },
       },
     },

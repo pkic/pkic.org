@@ -28,6 +28,7 @@ export const MEMBERS_LIST_SORT_COLUMNS = ["name", "memberSince"] as const;
 export const membersListQuerySchema = listQuerySchema(MEMBERS_LIST_SORT_COLUMNS).extend({
   group: z.enum(["all", "organization", "independent"]).default("all"),
 });
+export type MembersListQuery = z.infer<typeof membersListQuerySchema>;
 
 export const membersListResponseSchema = paginatedResponseSchema("members", publicMemberSummarySchema);
 export type MembersListResponse = z.infer<typeof membersListResponseSchema>;
@@ -128,6 +129,7 @@ export const workingGroupSummarySchema = z.object({
 
 export const PUBLIC_WORKING_GROUP_SORT_COLUMNS = ["name", "slug"] as const;
 export const publicWorkingGroupsListQuerySchema = listQuerySchema(PUBLIC_WORKING_GROUP_SORT_COLUMNS);
+export type PublicWorkingGroupsListQuery = z.infer<typeof publicWorkingGroupsListQuerySchema>;
 export const workingGroupsListResponseSchema = paginatedResponseSchema("workingGroups", workingGroupSummarySchema);
 export type PublicWorkingGroupsListResponse = z.infer<typeof workingGroupsListResponseSchema>;
 
@@ -174,6 +176,7 @@ export const publicWorkingGroupMemberSchema = z.object({
 });
 export const PUBLIC_WORKING_GROUP_MEMBER_SORT_COLUMNS = ["name", "organizationName"] as const;
 export const publicWorkingGroupMembersListQuerySchema = listQuerySchema(PUBLIC_WORKING_GROUP_MEMBER_SORT_COLUMNS);
+export type PublicWorkingGroupMembersListQuery = z.infer<typeof publicWorkingGroupMembersListQuerySchema>;
 export const publicWorkingGroupMembersListResponseSchema = paginatedResponseSchema(
   "members",
   publicWorkingGroupMemberSchema,

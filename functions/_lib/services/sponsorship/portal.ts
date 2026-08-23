@@ -12,6 +12,7 @@ import type { AuthMember, DatabaseLike } from "../../types";
 import type { SponsorPortalSession } from "../../auth/sponsor-portal";
 import { eventSponsorTierHasAttendeeAccess } from "./event-tiers";
 import { writeAuditLog } from "../audit";
+import type { SponsorPortalAttendeesListQuery } from "../../../../assets/shared/schemas/sponsor-portal";
 
 export async function requireSponsorPortalAttendeeAccess(
   db: DatabaseLike,
@@ -171,7 +172,7 @@ export async function listSponsorPortalAttendeesPage(
 export async function listSponsorPortalAttendeesPageWithAudit(
   db: DatabaseLike,
   session: SponsorPortalSession,
-  params: { limit: number; offset: number; q?: string; sort?: string },
+  params: SponsorPortalAttendeesListQuery,
 ): Promise<{ attendees: SponsorPortalAttendeeRow[]; total: number }> {
   const result = await listSponsorPortalAttendeesPage(db, session.eventId, params);
   await writeAuditLog(

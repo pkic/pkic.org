@@ -166,13 +166,29 @@ describe("Member self-service /api/v1/me/*", () => {
       membershipCategory: "F",
       stage: "approved",
     });
+    await seedMemberApplication({
+      applicantEmail: "applicant-history@example.test",
+      applicantName: "Applicant",
+      organizationName: "Other Org",
+      organizationDomain: "other.example.test",
+      membershipCategory: "F",
+      stage: "in_review",
+    });
 
     const response = await call(token, "/api/v1/me/applications");
     expect(response.status).toBe(200);
     const body = myApplicationsListResponseSchema.parse(await response.json());
-    expect(body.applications).toHaveLength(1);
-    expect(body.applications[0].stage).toBe("approved");
-    expect(body.page).toEqual({ limit: 25, offset: 0, total: 1, hasMore: false });
+    expect(body.applications).toHaveLength(2);
+    expect(body.applications.map((application) => application.stage)).toEqual(
+      expect.arrayContaining(["approved", "in_review"]),
+    );
+    expect(body.page).toEqual({ limit: 25, offset: 0, total: 2, hasMore: false });
+
+    const filtered = await call(token, "/api/v1/me/applications?q=approved&limit=1&sort=stage");
+    expect(filtered.status).toBe(200);
+    const filteredBody = myApplicationsListResponseSchema.parse(await filtered.json());
+    expect(filteredBody.applications.map((application) => application.stage)).toEqual(["approved"]);
+    expect(filteredBody.page).toEqual({ limit: 1, offset: 0, total: 1, hasMore: false });
 
     const invalid = await call(token, "/api/v1/me/applications?sort=email");
     expect(invalid.status).toBe(400);
@@ -284,14 +300,15 @@ describe("Member self-service /api/v1/me/*", () => {
     expect(afterBody.headshotUrl).toBe(`/api/v1/headshots/${userId}/123.jpg`);
   });
 
-  it("GET /api/v1/me/votes is a gated stub returning an empty list", async () => {
+  it("GET /api/v1/me/votes returns an empty, paginated history when the caller has no ballots", async () => {
     const userId = await insertActiveMember("votes-stub@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "votes-stub-token");
 
     const response = await call(token, "/api/v1/me/votes");
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { votes: unknown[] };
+    const body = (await response.json()) as { votes: unknown[]; page: unknown };
     expect(body.votes).toEqual([]);
+    expect(body.page).toEqual({ limit: 50, offset: 0, total: 0, hasMore: false });
   });
 
   it("joins and leaves a working group, toggling google_groups_sync_queue", async () => {

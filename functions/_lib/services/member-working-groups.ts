@@ -4,6 +4,7 @@ import { buildD1TextSearchFilter } from "../db/search";
 import { resolveMappedOrderBy } from "../db/sort";
 import { AppError } from "../errors";
 import type { AuthMember, DatabaseLike } from "../types";
+import type { MyWorkingGroupsListQuery } from "../../../assets/shared/schemas/me";
 import {
   CA_ONLY_CATEGORY,
   CA_WORKING_GROUP_SLUG,
@@ -52,7 +53,7 @@ export interface MyWorkingGroupEntry extends AvailableWorkingGroup {
 export async function listMyWorkingGroups(
   db: DatabaseLike,
   member: AuthMember,
-  params: { view: "joined" | "catalog"; q?: string; sort?: string; limit: number; offset: number },
+  params: MyWorkingGroupsListQuery,
 ): Promise<{ workingGroups: MyWorkingGroupEntry[]; total: number }> {
   const search = params.q ? buildD1TextSearchFilter(params.q, ["wg.name", "wg.slug", "wg.description"]) : null;
   const viewPredicate =
