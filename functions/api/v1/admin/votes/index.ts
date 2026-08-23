@@ -16,6 +16,7 @@ import { createVoteDirect, listVotesForAdmin } from "../../../../_lib/services/v
 import {
   adminVoteCreateRouteSchema,
   adminVoteMutationResponseSchema,
+  adminVotesListResponseSchema,
   adminVotesListRouteSchema,
 } from "../../../../../assets/shared/schemas/votes-admin";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
@@ -27,10 +28,13 @@ export const AdminVotesGet = openApiRoute(adminVotesListRouteSchema, async (c: A
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
   requirePermission(admin, "votes:manage");
 
-  const { status, q, sort, limit, offset } = data.query;
-
-  const { votes, total } = await listVotesForAdmin(db, { status, q, sort, limit, offset });
-  return json({ votes, page: buildPageInfo(limit, offset, total, votes.length) });
+  const { votes, total } = await listVotesForAdmin(db, data.query);
+  return json(
+    adminVotesListResponseSchema.parse({
+      votes,
+      page: buildPageInfo(data.query.limit, data.query.offset, total, votes.length),
+    }),
+  );
 });
 
 export const AdminVotesPost = openApiRoute(adminVoteCreateRouteSchema, async (c: AdminContext, data) => {

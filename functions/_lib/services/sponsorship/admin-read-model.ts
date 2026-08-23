@@ -3,6 +3,10 @@ import { first } from "../../db/queries";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
+import type {
+  SponsorshipCompaniesListQuery,
+  SponsorshipsListQuery,
+} from "../../../../assets/shared/schemas/admin-sponsorships";
 
 export interface AdminSponsorshipRow {
   id: string;
@@ -44,21 +48,10 @@ const ADMIN_SPONSORSHIP_SELECT = `
   LEFT JOIN users u ON u.id = sp.assigned_to_user_id
 `;
 
-export interface AdminSponsorshipsFilters {
-  type?: string;
-  stage?: string;
-  tier?: string;
-  /** Company-scoped filters used by the selected-company detail panel. */
-  organizationId?: string;
-  nonMemberName?: string;
-  contactName?: string;
-  q?: string;
-  sort?: string;
-  limit: number;
-  offset: number;
-}
+type AdminSponsorshipWhereFilters = Pick<SponsorshipsListQuery, "type" | "stage" | "tier" | "q"> &
+  Partial<Pick<SponsorshipsListQuery, "organizationId" | "nonMemberName" | "contactName">>;
 
-function buildAdminSponsorshipsWhere(filters: AdminSponsorshipsFilters): { where: string; values: unknown[] } {
+function buildAdminSponsorshipsWhere(filters: AdminSponsorshipWhereFilters): { where: string; values: unknown[] } {
   const conditions: string[] = [];
   const values: unknown[] = [];
   if (filters.type) {
@@ -107,7 +100,7 @@ function buildAdminSponsorshipsWhere(filters: AdminSponsorshipsFilters): { where
 
 export async function listAdminSponsorships(
   db: DatabaseLike,
-  filters: AdminSponsorshipsFilters,
+  filters: SponsorshipsListQuery,
 ): Promise<{ sponsorships: AdminSponsorshipRow[]; total: number }> {
   const { where, values } = buildAdminSponsorshipsWhere(filters);
   const orderBy = resolveMappedOrderBy(
@@ -145,7 +138,7 @@ export interface AdminSponsorshipCompanyRow {
 /** Groups and paginates sponsorship companies in D1. */
 export async function listSponsorshipCompanies(
   db: DatabaseLike,
-  filters: { type?: string; stage?: string; tier?: string; q?: string; sort?: string; limit: number; offset: number },
+  filters: SponsorshipCompaniesListQuery,
 ): Promise<{ companies: AdminSponsorshipCompanyRow[]; total: number }> {
   const { where, values } = buildAdminSponsorshipsWhere(filters);
   const groupedCte = `

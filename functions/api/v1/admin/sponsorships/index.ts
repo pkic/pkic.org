@@ -15,6 +15,7 @@ import {
 } from "../../../../_lib/services/sponsorship";
 import {
   sponsorshipCreateRouteSchema,
+  sponsorshipsListResponseSchema,
   sponsorshipsListRouteSchema,
 } from "../../../../../assets/shared/schemas/admin-sponsorships";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
@@ -26,24 +27,13 @@ export const SponsorshipsList = openApiRoute(sponsorshipsListRouteSchema, async 
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
   requirePermission(admin, "sponsorships:read");
 
-  const { type, stage, tier, organizationId, nonMemberName, contactName, q, sort, limit, offset } = data.query;
-
-  const { sponsorships, total } = await listAdminSponsorships(db, {
-    type,
-    stage,
-    tier,
-    organizationId,
-    nonMemberName,
-    contactName,
-    q,
-    sort,
-    limit,
-    offset,
-  });
-  return json({
-    sponsorships: sponsorships.map(toApiSponsorship),
-    page: buildPageInfo(limit, offset, total, sponsorships.length),
-  });
+  const { sponsorships, total } = await listAdminSponsorships(db, data.query);
+  return json(
+    sponsorshipsListResponseSchema.parse({
+      sponsorships: sponsorships.map(toApiSponsorship),
+      page: buildPageInfo(data.query.limit, data.query.offset, total, sponsorships.length),
+    }),
+  );
 });
 
 export const SponsorshipsCreate = openApiRoute(sponsorshipCreateRouteSchema, async (c: AdminContext, data) => {

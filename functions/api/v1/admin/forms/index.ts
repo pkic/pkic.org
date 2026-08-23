@@ -8,7 +8,10 @@
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { createManagedForm, listAdminForms } from "../../../../_lib/services/forms";
-import { adminFormCreateResponseSchema } from "../../../../../assets/shared/schemas/admin-forms";
+import {
+  adminFormCreateResponseSchema,
+  adminFormsListResponseSchema,
+} from "../../../../../assets/shared/schemas/admin-forms";
 import {
   adminFormCreateRouteSchema,
   adminFormsListRouteSchema,
@@ -20,10 +23,14 @@ import { openApiRoute } from "../../../../_lib/openapi/route";
 export const AdminFormsList = openApiRoute(adminFormsListRouteSchema, async (c: AdminContext, data) => {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  const { limit, offset, q, sort, purpose, status } = data.query;
-  const { forms, total } = await listAdminForms(requestDb(c), { limit, offset, q, sort, purpose, status });
+  const { forms, total } = await listAdminForms(requestDb(c), data.query);
 
-  return json({ forms, page: buildPageInfo(limit, offset, total, forms.length) });
+  return json(
+    adminFormsListResponseSchema.parse({
+      forms,
+      page: buildPageInfo(data.query.limit, data.query.offset, total, forms.length),
+    }),
+  );
 });
 
 export const AdminFormsCreate = openApiRoute(adminFormCreateRouteSchema, async (c: AdminContext, data) => {

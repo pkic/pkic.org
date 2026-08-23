@@ -38,6 +38,7 @@ export const ADMIN_VOTES_SORT_COLUMNS = [
 export const adminVotesListQuerySchema = listQuerySchema(ADMIN_VOTES_SORT_COLUMNS).extend({
   status: voteStatusSchema.optional(),
 });
+export type AdminVotesListQuery = z.infer<typeof adminVotesListQuerySchema>;
 
 export const adminVoteSchema = z.object({
   ...voteSummaryFieldsSchema,
@@ -51,6 +52,7 @@ export type VoteCandidateSummary = z.infer<typeof candidateSummarySchema>;
 export type AdminVoteSummary = z.infer<typeof adminVoteSchema>;
 
 export const adminVotesListResponseSchema = paginatedResponseSchema("votes", adminVoteSchema);
+export type AdminVotesListResponse = z.infer<typeof adminVotesListResponseSchema>;
 
 export const adminVotesListRouteSchema = {
   tags: ["Admin Votes"],

@@ -10,7 +10,10 @@ import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { createManagedForm, listAdminForms } from "../../../../../_lib/services/forms";
-import { adminFormCreateResponseSchema } from "../../../../../../assets/shared/schemas/admin-forms";
+import {
+  adminFormCreateResponseSchema,
+  adminFormsListResponseSchema,
+} from "../../../../../../assets/shared/schemas/admin-forms";
 import {
   adminEventFormCreateRouteSchema,
   adminEventFormsListRouteSchema,
@@ -22,18 +25,17 @@ import { buildPageInfo } from "../../../../../../assets/shared/schemas/paginatio
 export const onRequestGet = openApiRoute(adminEventFormsListRouteSchema, async (c: AdminContext, data) => {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const event = await getEventBySlug(requestDb(c), data.params.eventSlug);
-  const { limit, offset, q, sort, purpose, status } = data.query;
   const { forms, total } = await listAdminForms(requestDb(c), {
+    ...data.query,
     eventId: event.id,
     includeGlobal: true,
-    limit,
-    offset,
-    q,
-    sort,
-    purpose,
-    status,
   });
-  return json({ forms, page: buildPageInfo(limit, offset, total, forms.length) });
+  return json(
+    adminFormsListResponseSchema.parse({
+      forms,
+      page: buildPageInfo(data.query.limit, data.query.offset, total, forms.length),
+    }),
+  );
 });
 
 export const AdminEventFormsCreate = openApiRoute(adminEventFormCreateRouteSchema, async (c: AdminContext, data) => {

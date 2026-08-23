@@ -121,7 +121,7 @@ export async function listSponsorPortalAttendeesForExport(
 export async function listSponsorPortalAttendeesPage(
   db: DatabaseLike,
   eventId: string,
-  params: { limit: number; offset: number; q?: string; sort?: string },
+  params: SponsorPortalAttendeesListQuery,
 ): Promise<{ attendees: SponsorPortalAttendeeRow[]; total: number }> {
   const search = params.q
     ? buildD1TextSearchFilter(params.q, [

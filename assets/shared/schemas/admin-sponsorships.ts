@@ -110,6 +110,7 @@ export const sponsorshipsListQuerySchema = listQuerySchema(ADMIN_SPONSORSHIP_SOR
   nonMemberName: trimmedString(1, 200).optional(),
   contactName: trimmedString(1, 200).optional(),
 });
+export type SponsorshipsListQuery = z.infer<typeof sponsorshipsListQuerySchema>;
 export const sponsorshipsListResponseSchema = paginatedResponseSchema("sponsorships", adminSponsorshipSchema);
 export type SponsorshipsListResponse = z.infer<typeof sponsorshipsListResponseSchema>;
 
@@ -148,7 +149,9 @@ export const sponsorshipCompaniesListQuerySchema = listQuerySchema(ADMIN_SPONSOR
   stage: sponsorshipPipelineStageSchema.optional(),
   tier: trimmedString(1, 100).optional(),
 });
+export type SponsorshipCompaniesListQuery = z.infer<typeof sponsorshipCompaniesListQuerySchema>;
 export const sponsorshipCompaniesListResponseSchema = paginatedResponseSchema("companies", sponsorshipCompanySchema);
+export type SponsorshipCompaniesListResponse = z.infer<typeof sponsorshipCompaniesListResponseSchema>;
 
 export const sponsorshipCompaniesListRouteSchema = {
   tags: ["Sponsorships"],
