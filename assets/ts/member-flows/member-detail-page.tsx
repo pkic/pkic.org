@@ -17,7 +17,7 @@ import { ErrorAlert } from "../components/ErrorAlert";
 import { Markdown } from "../components/Markdown";
 import { NotFoundPanel } from "../components/NotFoundPanel";
 import { memberInitials } from "../shared/member-display";
-import { findLinkedinUrl } from "../../shared/schemas/links";
+import { findLinkedinUrl, getLinkLabel } from "../../shared/schemas/links";
 import {
   publicMemberDetailSchema,
   type PublicMemberDetail as MemberDetail,
@@ -55,23 +55,6 @@ function SocialLinks({ linkedin }: { linkedin?: string | null }) {
   );
 }
 
-const LINK_DOMAIN_LABELS: Record<string, string> = {
-  "x.com": "X",
-  "twitter.com": "X",
-  "facebook.com": "Facebook",
-  "instagram.com": "Instagram",
-  "youtube.com": "YouTube",
-};
-
-function detectLinkLabel(url: string): string {
-  try {
-    const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
-    return LINK_DOMAIN_LABELS[hostname] ?? hostname;
-  } catch {
-    return url;
-  }
-}
-
 /** Renders every org link that isn't the LinkedIn one already shown as the heading icon. */
 function OtherLinks({ links, linkedin }: { links: string[]; linkedin: string | null }) {
   const others = links.filter((url) => url !== linkedin);
@@ -80,7 +63,7 @@ function OtherLinks({ links, linkedin }: { links: string[]; linkedin: string | n
     <>
       {others.map((url) => (
         <span key={url}>
-          <strong>{detectLinkLabel(url)}:</strong>{" "}
+          <strong>{getLinkLabel(url)}:</strong>{" "}
           <a href={url} target="_blank" rel="noopener">
             {url}
           </a>

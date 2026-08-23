@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { MAX_LINKS, parseLinkUrl } from "../../assets/shared/schemas/links";
 import { normalizeProfileLinks } from "../../assets/ts/shared/widgets/profile-links";
 
 // normalizeProfileLinks (P10-R01) is the single canonical normalizer shared by
@@ -12,6 +13,11 @@ import { normalizeProfileLinks } from "../../assets/ts/shared/widgets/profile-li
 // emits (P10-01) and the legacy object-tolerant shapes some admin response
 // types still declare defensively.
 describe("normalizeProfileLinks", () => {
+  it("uses the shared strict link parser and canonical maximum", () => {
+    expect(parseLinkUrl("https://user:password@example.com")).toBeNull();
+    expect(MAX_LINKS).toBe(15);
+  });
+
   it("passes through an already-normalized string[] response unchanged (the shape every route now emits)", () => {
     expect(normalizeProfileLinks(["https://a.example", "https://b.example"])).toEqual([
       "https://a.example",

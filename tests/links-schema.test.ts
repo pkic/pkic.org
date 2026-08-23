@@ -9,8 +9,12 @@
 import { describe, expect, it } from "vitest";
 import {
   findLinkedinUrl,
+  getLinkLabel,
+  hasDuplicateLink,
+  MAX_LINKS,
   linksSchema,
   normalizeLinks,
+  parseLinkUrl,
   parseLinksJson,
   serializeLinks,
 } from "../assets/shared/schemas/links";
@@ -68,12 +72,12 @@ describe("parseLinksJson self-validation (Phase 3 §3.5)", () => {
     expect(result).toEqual(["https://Example.com/a"]);
   });
 
-  it("caps an oversized legacy row (40 links) at 15 instead of passing all 40 through", () => {
+  it(`caps an oversized legacy row (40 links) at ${MAX_LINKS} instead of passing all 40 through`, () => {
     const urls = Array.from({ length: 40 }, (_, i) => `https://example.com/link-${i}`);
     const raw = JSON.stringify(urls);
     const result = expectConformant(raw);
-    expect(result).toHaveLength(15);
-    expect(result).toEqual(urls.slice(0, 15));
+    expect(result).toHaveLength(MAX_LINKS);
+    expect(result).toEqual(urls.slice(0, MAX_LINKS));
   });
 
   it("uses the same tolerant normalizer for invalid, duplicate, and over-limit entries", () => {
@@ -87,5 +91,28 @@ describe("parseLinksJson self-validation (Phase 3 §3.5)", () => {
     expect(findLinkedinUrl(["https://notlinkedin.com/path", "https://linkedin.com.evil.test/in/alice"])).toBeNull();
     expect(findLinkedinUrl(["https://www.linkedin.com/in/alice"])).toBe("https://www.linkedin.com/in/alice");
     expect(findLinkedinUrl(["https://jobs.linkedin.com/example"])).toBe("https://jobs.linkedin.com/example");
+  });
+
+  it("shares strict client URL validation with the persistence schema", () => {
+    expect(parseLinkUrl("  https://example.com/profile  ")).toBe("https://example.com/profile");
+    expect(parseLinkUrl("https://user:password@example.com/profile")).toBeNull();
+    expect(parseLinkUrl("javascript:alert(1)")).toBeNull();
+  });
+
+  it("shares case-insensitive duplicate detection with the persistence schema", () => {
+    expect(hasDuplicateLink(["https://Example.com/profile"], "HTTPS://example.com/profile")).toBe(true);
+    expect(hasDuplicateLink(["https://example.com/profile"], "https://example.com/other")).toBe(false);
+  });
+
+  it("shares the canonical link maximum", () => {
+    const links = Array.from({ length: MAX_LINKS }, (_, index) => `https://example.com/${index}`);
+    expect(linksSchema.safeParse(links).success).toBe(true);
+    expect(linksSchema.safeParse([...links, "https://example.com/overflow"]).success).toBe(false);
+  });
+
+  it("shares labels between editors and profile views", () => {
+    expect(getLinkLabel("https://www.linkedin.com/in/example")).toBe("LinkedIn");
+    expect(getLinkLabel("https://facebook.com/example")).toBe("Facebook");
+    expect(getLinkLabel("https://unknown.example/profile")).toBe("unknown.example");
   });
 });
