@@ -12,9 +12,121 @@ import {
   adminEventTeamListQuerySchema,
   adminEventTeamListResponseSchema,
   adminEventTeamPermissionCreateResponseSchema,
+  adminEventSettingsSchema,
+  adminEventSyncSchema,
+  adminEventTermsReplaceSchema,
+  adminEventTermsResponseSchema,
+  adminEventUpdateResponseSchema,
   adminWaitlistPromotionResponseSchema,
 } from "./admin-events";
 import { databaseIdSchema } from "./identifiers";
+import { z } from "zod";
+
+const adminEventSyncEventSchema = z.object({
+  id: z.string(),
+  slug: z.string(),
+  name: z.string(),
+  timezone: z.string(),
+  starts_at: z.string().nullable(),
+  ends_at: z.string().nullable(),
+  source_path: z.string().nullable(),
+  base_path: z.string().nullable(),
+  capacity_in_person: z.number().nullable(),
+  registration_mode: z.string(),
+  invite_limit_attendee: z.number(),
+  invite_limit_speaker_nomination: z.number(),
+  settings_json: z.string(),
+});
+
+export const adminEventSyncResponseSchema = successResponseSchema.extend({
+  event: adminEventSyncEventSchema,
+});
+
+export const adminEventSyncRouteSchema = {
+  tags: ["Admin events"],
+  summary: "Synchronize an event from Hugo",
+  description: "Creates or updates an event and its configured terms from the Hugo event source.",
+  request: {
+    body: { content: { "application/json": { schema: adminEventSyncSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Event synchronized.",
+      content: { "application/json": { schema: adminEventSyncResponseSchema } },
+    },
+    "400": { description: "Invalid event synchronization payload." },
+    "401": { description: "Admin authorization required." },
+    "403": { description: "Insufficient permission to synchronize events." },
+  },
+};
+
+export const adminEventSettingsPatchRouteSchema = {
+  tags: ["Admin events"],
+  summary: "Update event settings",
+  description: "Updates the event's dedicated settings and its extensible custom settings.",
+  request: {
+    params: eventSlugParamsSchema,
+    body: { content: { "application/json": { schema: adminEventSettingsSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Event settings updated.",
+      content: { "application/json": { schema: adminEventUpdateResponseSchema } },
+    },
+    "400": { description: "Invalid event settings payload." },
+    "401": { description: "Admin authorization required." },
+    "404": { description: "Event not found." },
+  },
+};
+
+export const adminEventTermsGetRouteSchema = {
+  tags: ["Admin events"],
+  summary: "List configured event terms",
+  request: { params: eventSlugParamsSchema },
+  responses: {
+    "200": {
+      description: "Active terms grouped by audience.",
+      content: { "application/json": { schema: adminEventTermsResponseSchema } },
+    },
+    "401": { description: "Admin authorization required." },
+    "404": { description: "Event not found." },
+  },
+};
+
+export const adminEventTermsReplaceRouteSchema = {
+  tags: ["Admin events"],
+  summary: "Replace configured event terms",
+  request: {
+    params: eventSlugParamsSchema,
+    body: { content: { "application/json": { schema: adminEventTermsReplaceSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Active terms replaced and returned grouped by audience.",
+      content: { "application/json": { schema: adminEventTermsResponseSchema } },
+    },
+    "400": { description: "Invalid or duplicate term configuration." },
+    "401": { description: "Admin authorization required." },
+    "404": { description: "Event not found." },
+  },
+};
+
+export const adminEventTeamPermissionDeleteRouteSchema = {
+  tags: ["Admin events"],
+  summary: "Revoke an event-team permission",
+  request: {
+    params: eventSlugParamsSchema.extend({ permId: databaseIdSchema }),
+  },
+  responses: {
+    "200": {
+      description: "Permission revoked.",
+      content: { "application/json": { schema: successResponseSchema } },
+    },
+    "401": { description: "Admin authorization required." },
+    "403": { description: "Insufficient permission to manage this event." },
+    "404": { description: "Event or permission grant not found." },
+  },
+};
 
 export const adminEventCreateRouteSchema = {
   tags: ["Admin events"],
