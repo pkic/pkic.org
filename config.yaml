@@ -34,8 +34,11 @@ taxonomies:
   series: series
   author: authors
 
+# Ignore all hidden files/folders and AI instruction files from static site generation
 ignoreFiles:
-  - AGENTS\.md$
+  - "^\\."                                       # Matches root-level hidden files/folders (.github, .cursorrules, .ai)
+  - "/\\."                                       # Matches nested hidden files/folders (content/posts/.drafts/)
+  - "(^|/)(AGENTS|CLAUDE|COPILOT|PROMPTS)\\.md$" # Matches exact instruction files anywhere
   - wg/pkimm/(extensions|integrations)/pkimm-model/
   - wg/pkimm/(extensions|integrations)/scripts/
   - wg/pkimm/(extensions|integrations)/\.github/
