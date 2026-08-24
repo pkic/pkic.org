@@ -9,7 +9,7 @@ import { prepareReferralCodeStatement } from "./referrals";
 import { firstReferralCodeQuerySql } from "./referral-code-projection";
 import { buildCreateRegistration } from "./registrations/create";
 import { isEventDayCapacityConflict, type PlannedDayWaitlistEntry } from "./registrations/day-waitlist";
-import type { RegistrationRecord } from "./registrations";
+import type { RegistrationRecord, VerifiedRegistrationIdentityContext } from "./registrations";
 import type { DayAttendanceSelection } from "./event-days";
 import { buildFindOrCreateUserStatement, type FindOrCreateUserPayload, type UserRecord } from "./users";
 import {
@@ -57,9 +57,13 @@ export async function prepareRegistrationSubmission(
     confirmationTtlHours?: number;
     referralCodeLength: number;
     formRevisionGuard?: StatementLike | null;
+    verifiedIdentity?: VerifiedRegistrationIdentityContext;
   },
 ): Promise<PreparedRegistrationSubmission> {
   const preparedUser = await buildFindOrCreateUserStatement(db, payload.user);
+  if (payload.verifiedIdentity && preparedUser.user.id !== payload.verifiedIdentity.userId) {
+    throw new AppError(403, "REGISTRATION_IDENTITY_MISMATCH", "Registration identity does not match the session");
+  }
   const builtRegistration = await buildCreateRegistration(db, {
     event: { id: payload.eventId },
     userId: preparedUser.user.id,
@@ -75,6 +79,7 @@ export async function prepareRegistrationSubmission(
     confirmationTtlHours: payload.confirmationTtlHours,
     signingSecret: payload.signingSecret,
     unverifiedEmailCorrectionAllowed: preparedUser.created,
+    verifiedIdentity: payload.verifiedIdentity,
   });
   const existingReferral = await first<{ code: string }>(db, firstReferralCodeQuerySql("registration", "?"), [
     builtRegistration.registration.id,
@@ -139,7 +144,16 @@ export async function prepareRegistrationSubmission(
       builtRegistration.reactivated ? "registration_reactivated" : "registration_created",
       "registration",
       builtRegistration.registration.id,
-      { eventId: payload.eventId, status: builtRegistration.registration.status },
+      {
+        eventId: payload.eventId,
+        status: builtRegistration.registration.status,
+        registrationGroupId: payload.verifiedIdentity?.registrationGroupId ?? null,
+      },
+      undefined,
+      null,
+      payload.verifiedIdentity?.registrationGroupId
+        ? { type: "group", id: payload.verifiedIdentity.registrationGroupId }
+        : null,
     ),
   );
 
@@ -165,6 +179,13 @@ export async function commitRegistrationSubmission(
   try {
     await db.batch([...prepared.statements, ...additionalStatements]);
   } catch (error) {
+    if (error instanceof Error && error.message.includes("EVENT_REGISTRATION_CONTEXT_CHANGED")) {
+      throw new AppError(
+        409,
+        "EVENT_REGISTRATION_CONTEXT_CHANGED",
+        "Group registration access changed while the registration was being saved",
+      );
+    }
     if (isFormSubmissionContextConflict(error)) {
       throw formSubmissionContextChangedError();
     }

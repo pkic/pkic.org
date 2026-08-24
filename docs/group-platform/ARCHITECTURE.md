@@ -188,6 +188,15 @@ Registration policy is controlled per event:
 - required registration;
 - public registration where the profile permits it.
 
+The authenticated group-registration adapter accepts participation data only.
+It derives the attendee identity and profile from the verified session and then
+uses the same registration, consent, form-answer, capacity, notification,
+calendar, badge, and audit workflow as public registration. The persisted group
+context is a foreign key and an atomic D1 guard rechecks active membership,
+event ownership or an exact `register` grant, and the event policy in the write
+batch. A revoked grant or ended membership therefore cannot race a prepared
+registration into the database.
+
 Guests are normally invited to one occurrence. Series-wide guest access is an
 explicit exception. Public workshops use the public-registration event policy.
 

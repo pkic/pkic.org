@@ -43,6 +43,7 @@ import { GroupFormSubmissionCreate, GroupFormSubmissionsList } from "./[groupId]
 import { GroupFormSubmissionStats } from "./[groupId]/forms/[placementId]/submission-stats";
 import { GroupEventsList } from "./[groupId]/events/index";
 import { GroupEventDetailGet } from "./[groupId]/events/[eventId]";
+import { GroupEventRegistrationCreate } from "./[groupId]/events/[eventId]/registrations";
 
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
@@ -72,6 +73,7 @@ openapi.post("/:groupId/forms/:placementId/submissions", GroupFormSubmissionCrea
 openapi.get("/:groupId/forms/:placementId/submissions/stats", GroupFormSubmissionStats);
 openapi.get("/:groupId/events", GroupEventsList);
 openapi.get("/:groupId/events/:eventId", GroupEventDetailGet);
+openapi.post("/:groupId/events/:eventId/registrations", GroupEventRegistrationCreate);
 openapi.get("/:groupId/meetings/series", GroupMeetingSeriesList);
 openapi.post("/:groupId/meetings/series", GroupMeetingSeriesCreate);
 openapi.patch("/:groupId/meetings/series/:seriesId", GroupMeetingSeriesUpdate);

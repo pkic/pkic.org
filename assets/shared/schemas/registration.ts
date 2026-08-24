@@ -243,6 +243,18 @@ export const attendeeRegistrationFieldsSchema = z.object({
 });
 export type AttendeeRegistrationFields = z.infer<typeof attendeeRegistrationFieldsSchema>;
 
+/** Authenticated registration payload; identity and profile fields come from the verified session user. */
+export const attendeeRegistrationParticipationSchema = attendeeRegistrationFieldsSchema
+  .pick({
+    attendanceType: true,
+    dayAttendance: true,
+    customAnswers: true,
+    consents: true,
+  })
+  .strict()
+  .superRefine(requireAttendance);
+export type AttendeeRegistrationParticipation = z.infer<typeof attendeeRegistrationParticipationSchema>;
+
 export const registrationCreateSchema = attendeeRegistrationFieldsSchema
   .extend({
     sourceType: defaultedSourceTypeSchema,

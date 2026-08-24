@@ -203,8 +203,21 @@ describe("consolidated pending migration upgrade", () => {
       { id: "member-1", organization_id: "org-1" },
     ]);
     expect(
-      db.prepare("SELECT id, form_placement_id FROM registrations WHERE id = 'registration-upgrade'").get(),
-    ).toEqual({ id: "registration-upgrade", form_placement_id: null });
+      db
+        .prepare(
+          "SELECT id, form_placement_id, registration_group_id FROM registrations WHERE id = 'registration-upgrade'",
+        )
+        .get(),
+    ).toEqual({ id: "registration-upgrade", form_placement_id: null, registration_group_id: null });
+    expect(
+      db
+        .prepare("PRAGMA foreign_key_list(registrations)")
+        .all()
+        .some(
+          (foreignKey) =>
+            foreignKey.table === "groups" && foreignKey.from === "registration_group_id" && foreignKey.to === "id",
+        ),
+    ).toBe(true);
     expect(db.prepare("SELECT id, form_placement_id FROM session_proposals WHERE id = 'proposal-1'").get()).toEqual({
       id: "proposal-1",
       form_placement_id: null,
@@ -505,8 +518,6 @@ describe("consolidated pending migration upgrade", () => {
              ('registration-2', 'event-2', 'user-2', 'registered', 'virtual', 'test', 'manage-2', '2025-01-01', '2025-01-01');
       INSERT INTO proposal_speakers (id, proposal_id, user_id, role, status, created_at)
       VALUES ('proposal-speaker-1', 'proposal-1', 'admin-1', 'proposer', 'confirmed', '2025-01-01');
-      INSERT INTO working_groups (id, name, slug, active, created_at, updated_at)
-      VALUES ('wg-integrity', 'Integrity WG', 'integrity', 1, '2025-01-01', '2025-01-01');
       INSERT INTO member_applications
         (id, applicant_email, applicant_name, membership_category, stage_entered_at, manage_token_hash, created_at, updated_at)
       VALUES ('application-1', 'applicant@example.test', 'Applicant', 'F', '2025-01-01', 'application-token', '2025-01-01', '2025-01-01');

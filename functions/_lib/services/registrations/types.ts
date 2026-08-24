@@ -1,8 +1,15 @@
 import type { RegistrationCapabilitySafeProjection } from "../../../../assets/shared/schemas/registration";
 
+/** Trusted server-side identity context; a group id always travels with the authenticated user that earned it. */
+export interface VerifiedRegistrationIdentityContext {
+  userId: string;
+  registrationGroupId?: string;
+}
+
 /** Internal row model extends the stable public subset with storage-only fields. */
 export interface RegistrationRecord extends RegistrationCapabilitySafeProjection {
   form_placement_id: string | null;
+  registration_group_id: string | null;
   confirmation_link_secret: string | null;
   manage_link_secret: string;
   /** Internal authorization state; deliberately excluded from public DTOs. */
@@ -20,6 +27,7 @@ const REGISTRATION_COLUMN_NAMES = [
   "source_ref",
   "custom_answers_json",
   "form_placement_id",
+  "registration_group_id",
   "referred_by_code",
   "confirmation_link_secret",
   "pending_confirmation_deadline_at",

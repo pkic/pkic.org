@@ -52,9 +52,9 @@ Status: In progress
       membership mutation, grant, and error contract.
 - [ ] Preserve temporary compatibility exports only while callers migrate.
 - [x] Prove empty-database migration application.
-      Evidence: all 37 migrations, including 226 statements in 0035, applied to
-      a fourteenth independent local D1 state under ScanDisk after the
-      reusable-form refinements on 2026-08-24.
+      Evidence: all 37 migrations, including 224 statements in 0035, applied to
+      a fresh independent local D1 state under ScanDisk after the authenticated
+      group-registration guard on 2026-08-25.
 - [x] Prove production-shaped upgrade fixture application.
       Evidence: consolidated-migration-upgrade.test.ts preserves realistic
       pre-0035 rows and verifies stable form-field backfill plus historical-key
@@ -175,7 +175,7 @@ Status: In progress
       loss, terms changes and races, repeated joins, and attendance counts.
       Forwarding a user-bound capability remains open because public registered
       attendees do not yet share the member-session eligibility model. All 37
-      migrations, including 226 statements in migration 0035, replay on a fresh
+      migrations, including 224 statements in migration 0035, replay on a fresh
       local D1 database. ESLint, formatting, SQL projection, dependency
       architecture, duplication, and max-lines gates pass for this round.
       Legacy meeting-calendar retirement and UI integration remain incomplete.
@@ -261,7 +261,18 @@ Status: In progress
   - [ ] Apply event grants beyond meeting entry.
     - [x] Apply `view` implications to canonical group-scoped event discovery
           and detail reads.
-    - [ ] Apply `register` to the authenticated registration workflow.
+    - [x] Apply `register` to the authenticated registration workflow.
+          Evidence: the group route accepts only participation fields, derives
+          identity and profile data from the verified session, and reuses the
+          canonical registration, consent, form-answer, capacity, audit, email,
+          calendar, and badge workflow. Group authorization is retained through
+          a real foreign key and rechecked by D1 in the registration batch, so
+          grant revocation or membership loss cannot race a prepared write.
+          Public registration remains available only for explicitly public or
+          legacy-open policies; no-registration and group-only profiles fail
+          closed. group-event-sharing.test.ts covers identity override rejection,
+          immediate authenticated registration, public and ungranted rejection,
+          disabled registration, and concurrent grant revocation.
     - [ ] Apply `manage_attendance` to registration discovery and attendance
           mutations.
   - [ ] Apply vote grants after the atomic generic voting cutover.
@@ -281,7 +292,9 @@ Status: In progress
       bypassing registration, proposal, or application workflows.
       Group-event sharing tests additionally prove context-bound discovery,
       shared flexible links, participant/manager separation, revocation, and
-      indexed owner/grantee query plans.
+      indexed owner/grantee query plans. Authenticated group registration also
+      proves strict identity binding, registration-policy enforcement, and the
+      atomic D1 authorization guard.
 
 ## 9. Group-scoped REST API
 

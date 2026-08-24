@@ -5,6 +5,7 @@ import { groupIdSchema, groupReferenceParamsSchema } from "./groups";
 import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { attendeeRegistrationParticipationSchema, registrationSubmissionResponseSchema } from "./registration";
 import { eventGroupGrantSchemas } from "./resource-grants";
 
 export const GROUP_EVENTS_SORT_COLUMNS = ["name", "starts_at", "next_occurrence_at", "created_at"] as const;
@@ -72,5 +73,29 @@ export const groupEventDetailRouteSchema = {
     },
     "401": jsonError("An authenticated portal identity is required."),
     "404": jsonError("The event is not available through this group."),
+  },
+};
+
+export const groupEventRegistrationCreateRouteSchema = {
+  tags: ["Groups"],
+  summary: "Register the authenticated user for a group event",
+  description:
+    "Uses the verified session identity and the canonical event-registration workflow; submitted identity fields are not accepted.",
+  request: {
+    params: groupEventParamsSchema,
+    body: {
+      required: true,
+      content: { "application/json": { schema: attendeeRegistrationParticipationSchema } },
+    },
+  },
+  responses: {
+    "200": {
+      description: "Authenticated registration completed.",
+      content: { "application/json": { schema: registrationSubmissionResponseSchema } },
+    },
+    "403": jsonError("The event does not permit registration through this group."),
+    "404": jsonError("The event is not available through this group."),
+    "409": jsonError("Registration state or capacity changed concurrently."),
+    "422": jsonError("The profile, answers, attendance, or consent is incomplete."),
   },
 };

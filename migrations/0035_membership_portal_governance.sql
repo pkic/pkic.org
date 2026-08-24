@@ -3785,6 +3785,74 @@ CREATE TABLE event_group_grants (
 CREATE INDEX idx_event_group_grants_group
   ON event_group_grants(group_id, capability, event_id);
 
+ALTER TABLE registrations
+  ADD COLUMN registration_group_id TEXT REFERENCES groups(id);
+
+CREATE INDEX idx_registrations_group_event
+  ON registrations(registration_group_id, event_id, status, created_at, id);
+
+CREATE TRIGGER trg_group_registration_context_insert
+BEFORE INSERT ON registrations
+WHEN NEW.registration_group_id IS NOT NULL
+  AND NEW.status <> 'cancelled'
+  AND NOT EXISTS (
+    SELECT 1
+      FROM events event
+      JOIN groups registration_group
+        ON registration_group.id = NEW.registration_group_id
+       AND registration_group.active = 1
+      JOIN group_memberships membership
+        ON membership.group_id = registration_group.id
+       AND membership.user_id = NEW.user_id
+       AND membership.left_at IS NULL
+     WHERE event.id = NEW.event_id
+       AND event.registration_mode <> 'no_registration'
+       AND (
+         event.owner_group_id = registration_group.id
+         OR EXISTS (
+           SELECT 1
+             FROM event_group_grants grant_row
+            WHERE grant_row.event_id = event.id
+              AND grant_row.group_id = registration_group.id
+              AND grant_row.capability = 'register'
+         )
+       )
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'EVENT_REGISTRATION_CONTEXT_CHANGED');
+END;
+
+CREATE TRIGGER trg_group_registration_context_update
+BEFORE UPDATE OF event_id, user_id, status, registration_group_id ON registrations
+WHEN NEW.registration_group_id IS NOT NULL
+  AND NEW.status <> 'cancelled'
+  AND NOT EXISTS (
+    SELECT 1
+      FROM events event
+      JOIN groups registration_group
+        ON registration_group.id = NEW.registration_group_id
+       AND registration_group.active = 1
+      JOIN group_memberships membership
+        ON membership.group_id = registration_group.id
+       AND membership.user_id = NEW.user_id
+       AND membership.left_at IS NULL
+     WHERE event.id = NEW.event_id
+       AND event.registration_mode <> 'no_registration'
+       AND (
+         event.owner_group_id = registration_group.id
+         OR EXISTS (
+           SELECT 1
+             FROM event_group_grants grant_row
+            WHERE grant_row.event_id = event.id
+              AND grant_row.group_id = registration_group.id
+              AND grant_row.capability = 'register'
+         )
+       )
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'EVENT_REGISTRATION_CONTEXT_CHANGED');
+END;
+
 CREATE TABLE event_series (
   id                 TEXT NOT NULL PRIMARY KEY,
   event_id           TEXT NOT NULL UNIQUE,

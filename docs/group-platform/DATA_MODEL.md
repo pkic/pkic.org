@@ -304,6 +304,18 @@ Portal-managed meetings use source_mode portal.
 Existing registration_mode and settings are interpreted through the shared
 event-profile policy rather than route-local literals.
 
+### registrations addition
+
+    registration_group_id -> groups.id, nullable for public, invited, and legacy rows
+
+This records the exact group context that authorized an authenticated
+registration; it is not inferred later from mutable `source_ref` text. Insert
+and reactivation guards require the user to remain an active member of that
+group and the event to remain owned by it or carry an exact `register` grant.
+The guard also rejects the no-registration policy. Public and individually
+invited registrations remain represented by the existing nullable context and
+canonical registration workflow.
+
 ### event_series
 
 Replaces the unreleased meeting_series table.
