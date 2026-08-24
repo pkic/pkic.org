@@ -1141,11 +1141,14 @@ CREATE TABLE sponsorship_automation_effects (
 -- model and the same authorization, membership, event, form, and vote code.
 
 CREATE TABLE group_types (
-  id               TEXT NOT NULL PRIMARY KEY,
-  key              TEXT NOT NULL UNIQUE,
+  key              TEXT NOT NULL PRIMARY KEY,
   singular_label   TEXT NOT NULL,
   plural_label     TEXT NOT NULL,
   description      TEXT,
+  default_governance_inheritance_mode TEXT NOT NULL DEFAULT 'inherited',
+  default_eligibility_mode TEXT NOT NULL DEFAULT 'open',
+  default_automatic_enrollment_mode TEXT NOT NULL DEFAULT 'none',
+  default_allow_automatic_opt_out INTEGER NOT NULL DEFAULT 1 CHECK (default_allow_automatic_opt_out IN (0, 1)),
   active           INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
   sort_order       INTEGER NOT NULL DEFAULT 0,
   created_at       TEXT NOT NULL,
@@ -1153,17 +1156,20 @@ CREATE TABLE group_types (
 );
 
 INSERT INTO group_types
-  (id, key, singular_label, plural_label, description, active, sort_order, created_at, updated_at)
+  (key, singular_label, plural_label, description,
+   default_governance_inheritance_mode, default_eligibility_mode,
+   default_automatic_enrollment_mode, default_allow_automatic_opt_out,
+   active, sort_order, created_at, updated_at)
 VALUES
-  ('group-type-working-group', 'working_group', 'Working Group', 'Working Groups', 'A topic-focused collaboration group.', 1, 10, datetime('now'), datetime('now')),
-  ('group-type-board', 'board', 'Board', 'Boards', 'A governing board.', 1, 20, datetime('now'), datetime('now')),
-  ('group-type-committee', 'committee', 'Committee', 'Committees', 'A standing or temporary committee.', 1, 30, datetime('now'), datetime('now')),
-  ('group-type-chapter', 'chapter', 'Chapter', 'Chapters', 'A regional or community chapter.', 1, 40, datetime('now'), datetime('now')),
-  ('group-type-community', 'community', 'Community', 'Communities', 'A communication and coordination group.', 1, 50, datetime('now'), datetime('now'));
+  ('working_group', 'Working Group', 'Working Groups', 'A topic-focused collaboration group.', 'inherited', 'open', 'none', 1, 1, 10, datetime('now'), datetime('now')),
+  ('board', 'Board', 'Boards', 'A governing board.', 'inherited', 'managed', 'none', 0, 1, 20, datetime('now'), datetime('now')),
+  ('committee', 'Committee', 'Committees', 'A standing or temporary committee.', 'inherited', 'managed', 'none', 1, 1, 30, datetime('now'), datetime('now')),
+  ('chapter', 'Chapter', 'Chapters', 'A regional or community chapter.', 'inherited', 'open', 'none', 1, 1, 40, datetime('now'), datetime('now')),
+  ('community', 'Community', 'Communities', 'A communication and coordination group.', 'inherited', 'open', 'none', 1, 1, 50, datetime('now'), datetime('now'));
 
 CREATE TABLE groups (
   id                          TEXT NOT NULL PRIMARY KEY,
-  type_id                     TEXT NOT NULL,
+  type_key                    TEXT NOT NULL,
   parent_group_id             TEXT,
   name                        TEXT NOT NULL,
   slug                        TEXT NOT NULL UNIQUE,
@@ -1177,7 +1183,7 @@ CREATE TABLE groups (
   active                      INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
   created_at                  TEXT NOT NULL,
   updated_at                  TEXT NOT NULL,
-  FOREIGN KEY(type_id) REFERENCES group_types(id),
+  FOREIGN KEY(type_key) REFERENCES group_types(key),
   FOREIGN KEY(parent_group_id) REFERENCES groups(id),
   CHECK (parent_group_id IS NULL OR parent_group_id <> id)
 );
@@ -1185,7 +1191,7 @@ CREATE TABLE groups (
 CREATE INDEX idx_groups_parent_active
   ON groups(parent_group_id, active, name, id);
 CREATE INDEX idx_groups_type_active
-  ON groups(type_id, active, name, id);
+  ON groups(type_key, active, name, id);
 
 -- D1 cannot defer recursive hierarchy validation to application code because
 -- other writers may exist. Reject direct and indirect cycles at the database
@@ -1338,14 +1344,13 @@ END;
 -- all-member communication group remains top-level and does not become a
 -- structural parent. Category rules can be changed without rebuilding groups.
 CREATE TABLE group_membership_category_rules (
-  id                       TEXT NOT NULL PRIMARY KEY,
   group_id                 TEXT NOT NULL,
   membership_category_code TEXT NOT NULL,
   permits_join             INTEGER NOT NULL DEFAULT 1 CHECK (permits_join IN (0, 1)),
   automatic_enrollment     INTEGER NOT NULL DEFAULT 0 CHECK (automatic_enrollment IN (0, 1)),
   created_at               TEXT NOT NULL,
   updated_at               TEXT NOT NULL,
-  UNIQUE (group_id, membership_category_code),
+  PRIMARY KEY (group_id, membership_category_code),
   FOREIGN KEY(group_id) REFERENCES groups(id),
   FOREIGN KEY(membership_category_code) REFERENCES membership_categories(code)
 );
@@ -1368,45 +1373,44 @@ CREATE INDEX idx_group_auto_opt_outs_user
   ON group_automatic_enrollment_opt_outs(user_id, group_id);
 
 INSERT OR IGNORE INTO groups
-  (id, type_id, parent_group_id, name, slug, description,
+  (id, type_key, parent_group_id, name, slug, description,
    governance_inheritance_mode, eligibility_mode, automatic_enrollment_mode,
    allow_automatic_opt_out, min_endorsers_for_ballot, active, created_at, updated_at)
 VALUES
-  ('group-all-members', 'group-type-community', NULL, 'All Members', 'all-members',
+  ('20000000-0000-4000-8000-000000000001', 'community', NULL, 'All Members', 'all-members',
    'The default communication and coordination group for active consortium members.',
    'inherited', 'category', 'category', 1, 0, 1, datetime('now'), datetime('now')),
-  ('group-executive-council', 'group-type-board', NULL, 'Executive Council', 'executive-council',
+  ('20000000-0000-4000-8000-000000000002', 'board', NULL, 'Executive Council', 'executive-council',
    'The consortium governing group.',
    'inherited', 'managed', 'none', 0, 0, 1, datetime('now'), datetime('now')),
-  ('group-pqc', 'group-type-working-group', NULL, 'Post-Quantum Cryptography Working Group', 'pqc',
+  ('20000000-0000-4000-8000-000000000003', 'working_group', NULL, 'Post-Quantum Cryptography Working Group', 'pqc',
    'Preparing the PKI ecosystem for the quantum computing era through collaborative research, education, standards alignment, and practical tooling.',
    'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now')),
-  ('group-cm', 'group-type-working-group', NULL, 'Cryptographic Module Working Group', 'cm',
+  ('20000000-0000-4000-8000-000000000004', 'working_group', NULL, 'Cryptographic Module Working Group', 'cm',
    'A central forum for addressing cryptographic module (CM) and hardware security module (HSM) related topics within the PKI ecosystem.',
    'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now')),
-  ('group-pkimm', 'group-type-working-group', NULL, 'PKI Maturity Model Working Group', 'pkimm',
+  ('20000000-0000-4000-8000-000000000005', 'working_group', NULL, 'PKI Maturity Model Working Group', 'pkimm',
    'Building a globally recognized PKI maturity model for evaluating, planning, and comparing PKI implementations.',
    'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now')),
-  ('group-tcwg', 'group-type-working-group', NULL, 'Training and Certification Working Group', 'tcwg',
+  ('20000000-0000-4000-8000-000000000006', 'working_group', NULL, 'Training and Certification Working Group', 'tcwg',
    'Advancing PKI knowledge and skills through structured training paths, certification programs, and accessible educational resources.',
    'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now')),
-  ('group-ca', 'group-type-working-group', NULL, 'CA Working Group', 'ca',
+  ('20000000-0000-4000-8000-000000000007', 'working_group', NULL, 'CA Working Group', 'ca',
    'A working group for discussions and information sharing among publicly trusted Certificate Authorities.',
    'inherited', 'category', 'none', 1, 0, 1, datetime('now'), datetime('now')),
-  ('group-cbom', 'group-type-working-group', NULL, 'CBOM Profiles Working Group', 'cbom',
+  ('20000000-0000-4000-8000-000000000008', 'working_group', NULL, 'CBOM Profiles Working Group', 'cbom',
    'Developing a neutral, open methodology for defining Cryptographic Bill of Materials (CBOM) profiles that map onto industry BOM standards such as SPDX and CycloneDX.',
    'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now'));
 
 INSERT OR IGNORE INTO group_membership_category_rules
-  (id, group_id, membership_category_code, permits_join, automatic_enrollment, created_at, updated_at)
+  (group_id, membership_category_code, permits_join, automatic_enrollment, created_at, updated_at)
 VALUES
-  ('group-category-rule-ca-a', 'group-ca', 'A', 1, 0, datetime('now'), datetime('now'));
+  ('20000000-0000-4000-8000-000000000007', 'A', 1, 0, datetime('now'), datetime('now'));
 
 INSERT OR IGNORE INTO group_membership_category_rules
-  (id, group_id, membership_category_code, permits_join, automatic_enrollment, created_at, updated_at)
+  (group_id, membership_category_code, permits_join, automatic_enrollment, created_at, updated_at)
 SELECT
-  'group-category-rule-all-members-' || lower(code),
-  'group-all-members',
+  '20000000-0000-4000-8000-000000000001',
   code,
   1,
   1,
@@ -1500,6 +1504,9 @@ CREATE INDEX idx_form_submissions_placement_status
   ON form_submissions(placement_id, status, submitted_at, id);
 CREATE INDEX idx_form_answers_field
   ON form_submission_answers(field_id, submission_id);
+CREATE UNIQUE INDEX uq_form_answers_submission_field
+  ON form_submission_answers(submission_id, field_id)
+  WHERE field_id IS NOT NULL;
 
 CREATE TRIGGER trg_form_answers_require_field_insert
 BEFORE INSERT ON form_submission_answers
@@ -1548,6 +1555,33 @@ BEGIN
   SELECT RAISE(ABORT, 'answered form fields cannot move between forms');
 END;
 
+-- Form editing reads the current stable field set before planning one D1
+-- batch. This optimistic guard makes a stale plan abort before metadata,
+-- fields, or audit history can diverge.
+CREATE TABLE form_mutation_guards (
+  id                  TEXT NOT NULL PRIMARY KEY,
+  form_id             TEXT NOT NULL,
+  expected_updated_at TEXT NOT NULL,
+  new_updated_at      TEXT NOT NULL,
+  FOREIGN KEY(form_id) REFERENCES forms(id)
+);
+
+CREATE TRIGGER trg_form_mutation_guard_validate
+BEFORE INSERT ON form_mutation_guards
+BEGIN
+  SELECT CASE WHEN NOT EXISTS (
+    SELECT 1 FROM forms
+    WHERE id = NEW.form_id AND updated_at = NEW.expected_updated_at
+  ) THEN RAISE(ABORT, 'FORM_CHANGED') END;
+END;
+
+CREATE TRIGGER trg_form_mutation_guard_advance
+AFTER INSERT ON form_mutation_guards
+BEGIN
+  UPDATE forms SET updated_at = NEW.new_updated_at WHERE id = NEW.form_id;
+  DELETE FROM form_mutation_guards WHERE id = NEW.id;
+END;
+
 -- ── Portal-managed membership application form ───────────────────────
 -- forms.purpose already allows 'application' (migration 0000) — no rebuild
 -- needed. This seeds the default field set mirroring the existing
@@ -1590,7 +1624,7 @@ INSERT OR IGNORE INTO form_placements
   (id, form_id, owner_group_id, context_type, context_ref, audience, active,
    opens_at, closes_at, created_at, updated_at)
 VALUES (
-  'form-placement-membership-application',
+  '50000000-0000-4000-8000-000000000001',
   (SELECT id FROM forms WHERE key = 'membership-application'),
   NULL,
   'installation',
@@ -3179,15 +3213,15 @@ INSERT INTO mailing_lists
    subscription_default, posting_policy, moderation_policy,
    auto_sync_categories_json, active, created_at, updated_at)
 VALUES
-  ('mailing-list-all-members', 'pkic@lists.pkic.org', 'All Members', 'all_members', 'group-all-members', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
-  ('mailing-list-consultation', 'consultation@lists.pkic.org', 'Member Consultation', 'consultation', 'group-all-members', 0, 'eligible_categories', 'subscribers', 'moderated', '["A","B","C","D","E","F","G"]', 1, datetime('now'), datetime('now')),
-  ('mailing-list-executive-council', 'ec@lists.pkic.org', 'Executive Council', 'group', 'group-executive-council', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
-  ('mailing-list-pqc', 'pqc@lists.pkic.org', 'Post-Quantum Cryptography WG', 'group', 'group-pqc', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
-  ('mailing-list-ca', 'ca@lists.pkic.org', 'Certificate Authority WG', 'group', 'group-ca', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
-  ('mailing-list-tcwg', 'tcwg@lists.pkic.org', 'Trust Chain WG', 'group', 'group-tcwg', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
-  ('mailing-list-cm', 'cm@lists.pkic.org', 'Cryptographic Module WG', 'group', 'group-cm', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
-  ('mailing-list-pkimm', 'pkimm@lists.pkic.org', 'PKI Maturity Model WG', 'group', 'group-pkimm', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
-  ('mailing-list-cbom', 'cbom@lists.pkic.org', 'Cryptographic Bill of Materials WG', 'group', 'group-cbom', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now'));
+  ('30000000-0000-4000-8000-000000000001', 'pkic@lists.pkic.org', 'All Members', 'all_members', '20000000-0000-4000-8000-000000000001', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
+  ('30000000-0000-4000-8000-000000000002', 'consultation@lists.pkic.org', 'Member Consultation', 'consultation', '20000000-0000-4000-8000-000000000001', 0, 'eligible_categories', 'subscribers', 'moderated', '["A","B","C","D","E","F","G"]', 1, datetime('now'), datetime('now')),
+  ('30000000-0000-4000-8000-000000000003', 'ec@lists.pkic.org', 'Executive Council', 'group', '20000000-0000-4000-8000-000000000002', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
+  ('30000000-0000-4000-8000-000000000004', 'pqc@lists.pkic.org', 'Post-Quantum Cryptography WG', 'group', '20000000-0000-4000-8000-000000000003', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
+  ('30000000-0000-4000-8000-000000000005', 'ca@lists.pkic.org', 'Certificate Authority WG', 'group', '20000000-0000-4000-8000-000000000007', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
+  ('30000000-0000-4000-8000-000000000006', 'tcwg@lists.pkic.org', 'Trust Chain WG', 'group', '20000000-0000-4000-8000-000000000006', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
+  ('30000000-0000-4000-8000-000000000007', 'cm@lists.pkic.org', 'Cryptographic Module WG', 'group', '20000000-0000-4000-8000-000000000004', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
+  ('30000000-0000-4000-8000-000000000008', 'pkimm@lists.pkic.org', 'PKI Maturity Model WG', 'group', '20000000-0000-4000-8000-000000000005', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
+  ('30000000-0000-4000-8000-000000000009', 'cbom@lists.pkic.org', 'Cryptographic Bill of Materials WG', 'group', '20000000-0000-4000-8000-000000000008', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now'));
 
 -- ── New email templates ──────────────────────────────────────────
 -- org-contact-assigned already shipped with consolidated migration 0035 (wired to
@@ -3654,7 +3688,7 @@ SELECT
   datetime('now'),
   datetime('now'),
   id,
-  CASE WHEN type_id = 'group-type-board' THEN 'board_meeting' ELSE 'meeting' END,
+  CASE WHEN type_key = 'board' THEN 'board_meeting' ELSE 'meeting' END,
   'portal'
 FROM groups
 WHERE slug IN ('all-members', 'pqc', 'cbom', 'cm', 'tcwg', 'ca', 'pkimm');

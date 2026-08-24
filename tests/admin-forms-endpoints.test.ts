@@ -138,11 +138,16 @@ async function insertForm(opts: {
       .run();
 
     for (const [fieldKey, value] of Object.entries(opts.submission.answers ?? {})) {
+      const [field] = await queryAll<{ id: string }>(
+        env.DB,
+        "SELECT id FROM form_fields WHERE form_id = ? AND key = ? LIMIT 1",
+        [formId, fieldKey],
+      );
       await env.DB.prepare(
-        `INSERT INTO form_submission_answers (id, submission_id, field_key, data_json, created_at)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO form_submission_answers (id, submission_id, field_id, field_key, data_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
       )
-        .bind(crypto.randomUUID(), submissionId, fieldKey, JSON.stringify(value), timestamp)
+        .bind(crypto.randomUUID(), submissionId, field.id, fieldKey, JSON.stringify(value), timestamp)
         .run();
     }
   }
@@ -424,11 +429,16 @@ describe("admin forms endpoints", () => {
       title: "Original title",
       fields: [{ key: "original", label: "Original", fieldType: "text" }],
     });
+    const [formIdentity] = await queryAll<{ updated_at: string }>(
+      env.DB,
+      "SELECT updated_at FROM forms WHERE id = ? LIMIT 1",
+      [formId],
+    );
     await expect(
       updateManagedForm(
         env.DB,
         admin.id,
-        { id: formId, key: "must-preserve" },
+        { id: formId, key: "must-preserve", updated_at: formIdentity.updated_at },
         {
           title: "Should not persist",
           fields: duplicateFields,
@@ -500,28 +510,38 @@ describe("admin forms endpoints", () => {
       "SELECT id FROM form_submissions WHERE form_id = ? ORDER BY submitted_at DESC",
       [detailRow.id],
     );
+    const fields = await queryAll<{ id: string; key: string }>(
+      env.DB,
+      "SELECT id, key FROM form_fields WHERE form_id = ?",
+      [detailRow.id],
+    );
+    const fieldId = new Map(fields.map((field) => [field.key, field.id]));
     await env.DB.prepare(
-      `INSERT INTO form_submission_answers (id, submission_id, field_key, data_json, created_at)
-       VALUES (?, ?, ?, ?, ?), (?, ?, ?, ?, ?), (?, ?, ?, ?, ?), (?, ?, ?, ?, ?)`,
+      `INSERT INTO form_submission_answers (id, submission_id, field_id, field_key, data_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?)`,
     )
       .bind(
         crypto.randomUUID(),
         submissions[0].id,
+        fieldId.get("company"),
         "company",
         JSON.stringify("Example Org"),
         nowIso(),
         crypto.randomUUID(),
         submissions[0].id,
+        fieldId.get("tracks"),
         "tracks",
         JSON.stringify(["PKI", "PQC"]),
         nowIso(),
         crypto.randomUUID(),
         submissions[1].id,
+        fieldId.get("company"),
         "company",
         JSON.stringify("Other Org"),
         nowIso(),
         crypto.randomUUID(),
         submissions[1].id,
+        fieldId.get("tracks"),
         "tracks",
         JSON.stringify(["PKI"]),
         nowIso(),

@@ -40,6 +40,8 @@ export interface FormFieldRow {
   options_json: string | null;
   validation_json: string | null;
   sort_order: number;
+  updated_at: string;
+  archived_at: string | null;
 }
 
 export interface ManagedFormWithFields {
@@ -59,14 +61,15 @@ export interface ActiveFormDefinition {
 }
 
 const FORM_COLUMNS = "id, key, scope_type, scope_ref, purpose, status, title, description";
-const FORM_FIELD_COLUMNS = "id, key, label, field_type, required, options_json, validation_json, sort_order";
+const FORM_FIELD_COLUMNS =
+  "id, key, label, field_type, required, options_json, validation_json, sort_order, updated_at, archived_at";
 
-async function loadFormFieldRows(db: DatabaseLike, formId: string): Promise<FormFieldRow[]> {
+async function loadFormFieldRows(db: DatabaseLike, formId: string, includeArchived = false): Promise<FormFieldRow[]> {
   return all<FormFieldRow>(
     db,
     `SELECT ${FORM_FIELD_COLUMNS}
      FROM form_fields
-     WHERE form_id = ?
+     WHERE form_id = ?${includeArchived ? "" : " AND archived_at IS NULL"}
      ORDER BY sort_order ASC, key ASC`,
     [formId],
   );
@@ -82,6 +85,8 @@ export function mapManagedFormFields(fields: FormFieldRow[]) {
     options: parseFormFieldOptions(parseJsonSafe<unknown>(entry.options_json, null)),
     validation: parseFormFieldRules(parseJsonSafe<unknown>(entry.validation_json, null)),
     sortOrder: entry.sort_order,
+    updatedAt: entry.updated_at,
+    archivedAt: entry.archived_at,
   }));
 }
 
@@ -95,7 +100,7 @@ export async function getManagedFormWithFields(
     [formKey],
   );
   if (!form) return null;
-  return { form, fields: await loadFormFieldRows(db, form.id) };
+  return { form, fields: await loadFormFieldRows(db, form.id, true) };
 }
 
 async function findActiveForm(db: DatabaseLike, eventId: string, purpose: FormPurpose): Promise<FormRow | null> {

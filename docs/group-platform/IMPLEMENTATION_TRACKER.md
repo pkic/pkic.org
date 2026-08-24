@@ -48,12 +48,13 @@ Status: In progress
       schema implemented so far.
 - [x] Keep changeable product vocabularies out of new D1 CHECK constraints;
       retain CHECKs only for structural booleans and identity invariants.
-- [ ] Compose one canonical shared group entity, list query, page response,
+- [x] Compose one canonical shared group entity, list query, page response,
       membership mutation, grant, and error contract.
 - [ ] Preserve temporary compatibility exports only while callers migrate.
 - [x] Prove empty-database migration application.
-  Evidence: all 37 migrations, including 202 statements in 0035, applied to
-  three independent local D1 states under ScanDisk on 2026-08-24.
+  Evidence: all 37 migrations, including 206 statements in 0035, applied to
+  a fourth independent local D1 state under ScanDisk after the group-type,
+  form-identity, and optimistic-edit refinements on 2026-08-24.
 - [ ] Prove production-shaped upgrade fixture application.
 - [ ] Prove importers target only the final schema.
 
@@ -145,17 +146,17 @@ Status: Pending
 
 ## 6. Reusable live-editable forms
 
-Status: Pending
+Status: In progress
 
-- [ ] Add placements with owner group, context, audience, and response set.
-- [ ] Update existing fields in place using stable IDs.
-- [ ] Insert new fields without replacing existing fields.
-- [ ] Archive answered fields and options instead of deleting them.
+- [x] Add placements with owner group, context, audience, and response set.
+- [x] Update existing fields in place using stable IDs.
+- [x] Insert new fields without replacing existing fields.
+- [x] Archive answered fields and options instead of deleting them.
 - [ ] Permit labels, descriptions, order, required state, and configuration to
       change after responses exist.
-- [ ] Reference stable field IDs from new answers.
+- [x] Reference stable field IDs from new answers.
 - [ ] Preserve legacy field-key fallback for unmappable historical answers.
-- [ ] Stop deleting and recreating the complete field collection on updates.
+- [x] Stop deleting and recreating the complete field collection on updates.
 - [ ] Reuse one form definition across multiple placements.
 - [ ] Ensure editing a shared definition affects every placement.
 - [ ] Keep filtering, pagination, and statistics in D1 by placement.

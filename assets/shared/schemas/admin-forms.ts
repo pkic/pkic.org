@@ -9,13 +9,14 @@ import {
 import { successResponseSchema, trimmedString } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { addDuplicateStringIssues } from "./refinements";
-import { formFieldRulesSchema } from "./form-field-rules";
+import { formFieldOptionsSchema, formFieldRulesSchema } from "./form-field-rules";
 import { formFieldDefinitionSchema, formFieldTypeSchema, formPurposeSchema, formStatusSchema } from "./forms";
 
 export const FORM_SUBMISSIONS_SORT_COLUMNS = ["submitter", "status", "submitted_at"] as const;
 export const formSubmissionsSortValueSchema = sortColumnSchema(FORM_SUBMISSIONS_SORT_COLUMNS);
 
 export const adminFormFieldInputSchema = z.object({
+  id: databaseIdSchema.optional(),
   key: z
     .string()
     .trim()
@@ -26,7 +27,7 @@ export const adminFormFieldInputSchema = z.object({
   fieldType: formFieldTypeSchema,
   required: z.boolean().default(false),
   sortOrder: z.number().int().min(0).max(9999).default(0),
-  options: z.array(z.string().trim().min(1).max(500)).max(200).optional(),
+  options: formFieldOptionsSchema.optional(),
   validation: formFieldRulesSchema.optional(),
 });
 

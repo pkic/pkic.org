@@ -1,47 +1,21 @@
 import { prepareAuditLog } from "../audit";
 import { first } from "../../db/queries";
-import { stringifyJson } from "../../utils/json";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import type { DatabaseLike, StatementLike } from "../../types";
 import type { AdminFormCreateInput, AdminFormUpdateInput } from "../../../../assets/shared/schemas/admin-forms";
+import { prepareFieldReconciliation } from "./field-reconciliation";
+import { formChangedError, isFormMutationConflict, prepareFormMutationGuard } from "./mutation-guard";
 
 type FormScope = { type: "global"; ref: null } | { type: "event"; ref: string; eventSlug: string };
 
 interface ManagedFormIdentity {
   id: string;
   key: string;
+  updated_at: string;
 }
 
 export type ManagedFormRemovalAction = "archived" | "deleted";
-
-function formFieldInsertStatements(
-  db: DatabaseLike,
-  formId: string,
-  fields: AdminFormCreateInput["fields"],
-  createdAt: string,
-): StatementLike[] {
-  return fields.map((field) =>
-    db
-      .prepare(
-        `INSERT INTO form_fields
-           (id, form_id, key, label, field_type, required, options_json, validation_json, sort_order, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .bind(
-        uuid(),
-        formId,
-        field.key,
-        field.label,
-        field.fieldType,
-        field.required ? 1 : 0,
-        field.options ? stringifyJson(field.options) : null,
-        field.validation ? stringifyJson(field.validation) : null,
-        field.sortOrder,
-        createdAt,
-      ),
-  );
-}
 
 /** Atomically creates the form aggregate, its fields, and its audit event. */
 export async function createManagedForm(
@@ -58,6 +32,7 @@ export async function createManagedForm(
     key: input.key,
     purpose: input.purpose,
   };
+  const fieldStatements = await prepareFieldReconciliation(db, id, input.fields, now);
 
   await db.batch([
     db
@@ -78,14 +53,14 @@ export async function createManagedForm(
         now,
         now,
       ),
-    ...formFieldInsertStatements(db, id, input.fields, now),
+    ...fieldStatements,
     prepareAuditLog(db, "admin", actorId, auditAction, "form", id, auditDetails, now),
   ]);
 
-  return { id, key: input.key };
+  return { id, key: input.key, updated_at: now };
 }
 
-/** Atomically updates form metadata, replaces fields when requested, and audits the aggregate change. */
+/** Atomically updates metadata, reconciles stable fields, and audits the aggregate change. */
 export async function updateManagedForm(
   db: DatabaseLike,
   actorId: string,
@@ -93,7 +68,7 @@ export async function updateManagedForm(
   input: AdminFormUpdateInput,
 ): Promise<void> {
   const now = nowIso();
-  const statements: StatementLike[] = [];
+  const statements: StatementLike[] = [prepareFormMutationGuard(db, form.id, form.updated_at, now)];
 
   if (input.title !== undefined || input.description !== undefined || input.status !== undefined) {
     statements.push(
@@ -102,8 +77,7 @@ export async function updateManagedForm(
           `UPDATE forms
            SET title = COALESCE(?, title),
                description = IIF(? = 1, description, ?),
-               status = COALESCE(?, status),
-               updated_at = ?
+               status = COALESCE(?, status)
            WHERE id = ?`,
         )
         .bind(
@@ -111,18 +85,13 @@ export async function updateManagedForm(
           input.description === undefined ? 1 : 0,
           input.description ?? null,
           input.status ?? null,
-          now,
           form.id,
         ),
     );
   }
 
   if (input.fields !== undefined) {
-    statements.push(
-      db.prepare("DELETE FROM form_fields WHERE form_id = ?").bind(form.id),
-      ...formFieldInsertStatements(db, form.id, input.fields, now),
-      db.prepare("UPDATE forms SET updated_at = ? WHERE id = ?").bind(now, form.id),
-    );
+    statements.push(...(await prepareFieldReconciliation(db, form.id, input.fields, now)));
   }
 
   statements.push(
@@ -133,11 +102,16 @@ export async function updateManagedForm(
       "form_updated",
       "form",
       form.id,
-      { key: form.key, fieldsReplaced: input.fields !== undefined },
+      { key: form.key, fieldsReconciled: input.fields !== undefined },
       now,
     ),
   );
-  await db.batch(statements);
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    if (isFormMutationConflict(error)) throw formChangedError();
+    throw error;
+  }
 }
 
 /**
@@ -156,17 +130,29 @@ export async function removeManagedForm(
   );
   const now = nowIso();
   if (Number(submissionCount?.total ?? 0) > 0) {
-    await db.batch([
-      db.prepare("UPDATE forms SET status = 'archived', updated_at = ? WHERE id = ?").bind(now, form.id),
-      prepareAuditLog(db, "admin", actorId, "form_archived", "form", form.id, { key: form.key }, now),
-    ]);
+    try {
+      await db.batch([
+        prepareFormMutationGuard(db, form.id, form.updated_at, now),
+        db.prepare("UPDATE forms SET status = 'archived' WHERE id = ?").bind(form.id),
+        prepareAuditLog(db, "admin", actorId, "form_archived", "form", form.id, { key: form.key }, now),
+      ]);
+    } catch (error) {
+      if (isFormMutationConflict(error)) throw formChangedError();
+      throw error;
+    }
     return "archived";
   }
 
-  await db.batch([
-    db.prepare("DELETE FROM form_fields WHERE form_id = ?").bind(form.id),
-    db.prepare("DELETE FROM forms WHERE id = ?").bind(form.id),
-    prepareAuditLog(db, "admin", actorId, "form_deleted", "form", form.id, { key: form.key }, now),
-  ]);
+  try {
+    await db.batch([
+      prepareFormMutationGuard(db, form.id, form.updated_at, now),
+      db.prepare("DELETE FROM form_fields WHERE form_id = ?").bind(form.id),
+      db.prepare("DELETE FROM forms WHERE id = ?").bind(form.id),
+      prepareAuditLog(db, "admin", actorId, "form_deleted", "form", form.id, { key: form.key }, now),
+    ]);
+  } catch (error) {
+    if (isFormMutationConflict(error)) throw formChangedError();
+    throw error;
+  }
   return "deleted";
 }

@@ -124,6 +124,11 @@ async function backfillSourceAnswer(options: {
   answer: unknown;
 }): Promise<void> {
   const submissionId = crypto.randomUUID();
+  const [field] = await queryAll<{ id: string }>(
+    env.DB,
+    "SELECT id FROM form_fields WHERE form_id = ? AND key = ? LIMIT 1",
+    [options.formId, options.fieldKey],
+  );
   await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO form_submissions
@@ -131,9 +136,9 @@ async function backfillSourceAnswer(options: {
        VALUES (?, ?, NULL, ?, ?, 'submitted', datetime('now'))`,
     ).bind(submissionId, options.formId, options.contextType, options.contextRef),
     env.DB.prepare(
-      `INSERT INTO form_submission_answers (id, submission_id, field_key, data_json, created_at)
-       VALUES (?, ?, ?, ?, datetime('now'))`,
-    ).bind(crypto.randomUUID(), submissionId, options.fieldKey, JSON.stringify(options.answer)),
+      `INSERT INTO form_submission_answers (id, submission_id, field_id, field_key, data_json, created_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'))`,
+    ).bind(crypto.randomUUID(), submissionId, field.id, options.fieldKey, JSON.stringify(options.answer)),
   ]);
 }
 

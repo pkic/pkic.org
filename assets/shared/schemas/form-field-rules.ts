@@ -253,29 +253,56 @@ export function isFormFieldVisible(rules: FormFieldRules, context: FormFieldVisi
   return true;
 }
 
-export const formFieldOptionSchema = z.union([
+const legacyFormFieldOptionSchema = z.union([
   z.string().trim().min(1).max(500),
   z.object({ value: z.string().trim().min(1).max(500), label: z.string().trim().min(1).max(500).optional() }).strict(),
 ]);
-export const formFieldOptionsSchema = z.array(formFieldOptionSchema).max(200);
+export const formFieldOptionSchema = z
+  .object({
+    value: z.string().trim().min(1).max(500),
+    label: z.string().trim().min(1).max(500),
+    active: z.boolean(),
+  })
+  .strict();
+export const formFieldOptionsSchema = z
+  .array(formFieldOptionSchema)
+  .max(200)
+  .superRefine((options, context) => {
+    const seen = new Set<string>();
+    for (const [index, option] of options.entries()) {
+      if (seen.has(option.value)) {
+        context.addIssue({ code: "custom", path: [index, "value"], message: "Option values must be unique" });
+      }
+      seen.add(option.value);
+    }
+  });
+export const persistedFormFieldOptionsSchema = z.array(z.union([formFieldOptionSchema, legacyFormFieldOptionSchema])).max(200);
 export interface FormFieldOption {
   value: string;
   label: string;
+  active: boolean;
 }
 
-/** Canonical tolerant reader for the two supported persisted option shapes. */
+/** Canonical tolerant reader; legacy option values already are stable identities. */
 export function parseFormFieldOptions(value: unknown): FormFieldOption[] {
   if (!Array.isArray(value)) return [];
   const options: FormFieldOption[] = [];
   for (const entry of value.slice(0, 200)) {
-    const parsed = formFieldOptionSchema.safeParse(entry);
-    if (!parsed.success) continue;
-    if (typeof parsed.data === "string") options.push({ value: parsed.data, label: parsed.data });
-    else options.push({ value: parsed.data.value, label: parsed.data.label ?? parsed.data.value });
+    const canonical = formFieldOptionSchema.safeParse(entry);
+    if (canonical.success) {
+      options.push(canonical.data);
+      continue;
+    }
+    const legacy = legacyFormFieldOptionSchema.safeParse(entry);
+    if (!legacy.success) continue;
+    const value = typeof legacy.data === "string" ? legacy.data : legacy.data.value;
+    options.push({ value, label: typeof legacy.data === "string" ? value : (legacy.data.label ?? value), active: true });
   }
   return options;
 }
 
 export function formFieldOptionValues(value: unknown): string[] {
-  return parseFormFieldOptions(value).map((option) => option.value);
+  return parseFormFieldOptions(value)
+    .filter((option) => option.active)
+    .map((option) => option.value);
 }

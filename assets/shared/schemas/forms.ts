@@ -4,6 +4,8 @@ import { eventSlugParamsSchema } from "./api-common";
 import { formFieldOptionsSchema, formFieldRulesSchema } from "./form-field-rules";
 import { proposalTypeSchema } from "./proposal-management";
 import { eventDayReadModelSchema, eventSummarySchema, requiredTermSchema } from "./event-read-models";
+import { groupIdSchema } from "./groups";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 export {
   eventAttendanceOptionSchema,
@@ -55,6 +57,8 @@ export const formFieldDefinitionSchema = z.object({
   options: formFieldOptionsSchema.nullable(),
   validation: formFieldRulesSchema.nullable(),
   sortOrder: z.number(),
+  updatedAt: z.string(),
+  archivedAt: z.string().nullable(),
 });
 
 /** The common form projection embedded in registration and proposal detail responses. */
@@ -67,6 +71,33 @@ export const activeFormSummarySchema = z.object({
 
 export type FormFieldDefinition = z.infer<typeof formFieldDefinitionSchema>;
 export type ActiveFormSummary = z.infer<typeof activeFormSummarySchema>;
+
+export const FORM_PLACEMENT_CONTEXT_TYPES = ["installation", "group", "event", "organization"] as const;
+export const formPlacementContextTypeSchema = z.enum(FORM_PLACEMENT_CONTEXT_TYPES);
+export const formPlacementSchema = z.object({
+  id: databaseIdSchema,
+  formId: databaseIdSchema,
+  ownerGroupId: groupIdSchema.nullable(),
+  contextType: formPlacementContextTypeSchema,
+  contextRef: z.string().nullable(),
+  audience: z.string().trim().min(1).max(100),
+  active: z.boolean(),
+  opensAt: z.string().nullable(),
+  closesAt: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export const formPlacementCreateSchema = formPlacementSchema
+  .pick({ ownerGroupId: true, contextType: true, contextRef: true, audience: true, active: true })
+  .extend({ opensAt: z.iso.datetime().nullable().optional(), closesAt: z.iso.datetime().nullable().optional() });
+export const formPlacementUpdateSchema = formPlacementCreateSchema.partial();
+export const formPlacementsListQuerySchema = listQuerySchema(["audience", "opens_at", "created_at"] as const).extend({
+  ownerGroupId: groupIdSchema.optional(),
+  contextType: formPlacementContextTypeSchema.optional(),
+  contextRef: z.string().trim().min(1).max(200).optional(),
+  active: z.enum(["true", "false"]).optional(),
+});
+export const formPlacementsListResponseSchema = paginatedResponseSchema("placements", formPlacementSchema);
 
 export const eventAudienceSchema = z.enum(["attendee", "speaker"]);
 

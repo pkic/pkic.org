@@ -24,12 +24,14 @@ Database: Cloudflare D1 and SQLite
 
 Configurable labels and defaults for groups.
 
-    id
-    key
+    key, primary key
     singular_label
     plural_label
     description
     default_governance_inheritance_mode
+    default_eligibility_mode
+    default_automatic_enrollment_mode
+    default_allow_automatic_opt_out
     active
     created_at
     updated_at
@@ -43,7 +45,7 @@ create separate domain implementations.
 Replaces the unreleased working_groups table.
 
     id
-    type_id -> group_types.id
+    type_key -> group_types.key
     parent_group_id -> groups.id, nullable
     name
     slug

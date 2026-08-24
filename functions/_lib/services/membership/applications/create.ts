@@ -66,16 +66,20 @@ function buildAnswerStatements(
   db: DatabaseLike,
   submissionId: string,
   answers: Record<string, CustomAnswerValue>,
+  fields: ReadonlyArray<{ id: string; key: string }>,
   createdAt: string,
 ): StatementLike[] {
-  return Object.entries(answers).map(([key, value]) =>
-    db
+  const fieldIds = new Map(fields.map((field) => [field.key, field.id]));
+  return Object.entries(answers).map(([key, value]) => {
+    const fieldId = fieldIds.get(key);
+    if (!fieldId) throw new AppError(422, "UNKNOWN_FORM_FIELD", `Unknown form field '${key}'`);
+    return db
       .prepare(
-        `INSERT INTO form_submission_answers (id, submission_id, field_key, data_json, created_at)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO form_submission_answers (id, submission_id, field_id, field_key, data_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
       )
-      .bind(uuid(), submissionId, key, JSON.stringify(value), createdAt),
-  );
+      .bind(uuid(), submissionId, fieldId, key, JSON.stringify(value), createdAt);
+  });
 }
 
 export async function createMemberApplication(
@@ -109,7 +113,7 @@ export async function createMemberApplication(
          VALUES (?, ?, NULL, 'membership', ?, 'submitted', ?)`,
       )
       .bind(formSubmissionId, form.id, id, now),
-    ...buildAnswerStatements(db, formSubmissionId, answers, now),
+    ...buildAnswerStatements(db, formSubmissionId, answers, form.fields, now),
     db
       .prepare(
         `INSERT INTO member_applications

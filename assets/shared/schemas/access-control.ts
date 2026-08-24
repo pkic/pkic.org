@@ -8,27 +8,23 @@ import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { permissionSchema } from "./permissions";
 
-const contextTypeSchema = z.enum(["event", "working_group", "organization"]);
+export const authorizationContextTypeSchema = z.enum(["event", "group", "organization"]);
 
 /** Stable identifiers for system roles seeded by the membership migration. */
 export const SYSTEM_ROLE_IDS = {
-  forumChair: "role-forum_chair",
-  forumViceChair: "role-forum_vice_chair",
-  workingGroupChair: "role-wg_chair",
-  workingGroupViceChair: "role-wg_vice_chair",
+  groupLead: "role-group_lead",
+  groupDeputyLead: "role-group_deputy_lead",
 } as const;
 
 export const accessGrantIdParamsSchema = z.object({ id: databaseIdSchema });
 // Role ids are NOT always UUIDs — custom roles get a real uuid() (see
 // roles/index.ts's RolesCreate), but every built-in/system role ships with
-// a fixed human-readable id (role-admin, role-wg_chair, role-forum_chair,
-// ...; see consolidated migration 0035). UUID-only validation here previously
+// a fixed human-readable id (role-admin, role-group_lead, and similar;
+// see consolidated migration 0035). UUID-only validation here previously
 // rejected every
 // attempt to reference a system role by id (assign it via POST .../roles,
 // or look up its holders via GET .../roles/:id/assignments) with a 400
-// before the handler ever ran — discovered while wiring up WG vice-chair
-// and forum chair/vice-chair assignment (Fix 2/3), which exclusively
-// assign system roles. Reused everywhere a role id appears — params,
+// before the handler ever ran. Reused everywhere a role id appears — params,
 // request bodies, and response payloads alike — so none of them drift
 // back to UUID-only validation individually.
 export const roleIdSchema = trimmedString(1, 80);
@@ -37,7 +33,7 @@ export const userIdRolesParamsSchema = z.object({ userId: databaseIdSchema });
 export const userRoleIdParamsSchema = z.object({ userId: databaseIdSchema, userRoleId: databaseIdSchema });
 
 const scopedContextFields = {
-  contextType: contextTypeSchema.nullable().optional(),
+    contextType: authorizationContextTypeSchema.nullable().optional(),
   contextId: trimmedString(1, 80).nullable().optional(),
   expiresAt: z.iso.datetime().nullable().optional(),
 };
@@ -70,7 +66,7 @@ export const accessGrantResponseSchema = z.object({
   userId: databaseIdSchema,
   userEmail: z.email(),
   permission: permissionSchema,
-  contextType: contextTypeSchema.nullable(),
+  contextType: authorizationContextTypeSchema.nullable(),
   contextId: z.string().nullable(),
   expiresAt: z.string().nullable(),
   createdAt: z.string(),
@@ -195,7 +191,7 @@ export const roleDeleteRouteSchema = {
 
 /** Context and lifecycle fields shared by every user-role assignment projection. */
 export const roleAssignmentContextSchema = z.object({
-  contextType: contextTypeSchema.nullable(),
+  contextType: authorizationContextTypeSchema.nullable(),
   contextId: z.string().nullable(),
   expiresAt: z.string().nullable(),
   createdAt: z.string(),
@@ -230,7 +226,7 @@ export const roleAssignmentsListRouteSchema = {
   summary: "List every active holder of a role",
   description:
     "Reverse lookup of user_roles by role — who currently holds this role, and in which context. Powers admin " +
-    "screens that need to show a role's current holder(s) (e.g. the forum chair) without already knowing the user.",
+    "screens that need to show a role's current holders without already knowing the user.",
   request: { params: roleIdParamsSchema, query: roleAssignmentsListQuerySchema },
   responses: {
     "200": {

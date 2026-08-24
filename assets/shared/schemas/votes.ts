@@ -1,21 +1,19 @@
 /**
  * Voting system. Backs the public `/api/v1/votes*`
- * endpoints, the authenticated-member `/api/v1/portal/votes*` and
- * `/api/v1/portal/vote-proposals*` endpoints, and the staff/WG-chair
- * `/api/v1/admin/votes*` and `/api/v1/admin/vote-proposals*` endpoints.
+ * endpoints and group-scoped portal management surfaces.
  */
 import { z } from "zod";
 import { successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { VOTING_CATEGORY_LETTERS } from "./membership-categories";
-import { workingGroupIdSchema } from "./working-groups";
+import { groupIdSchema } from "./groups";
 
 export const VOTE_TYPES = ["election", "motion", "consultation"] as const;
 export const voteTypeSchema = z.enum(VOTE_TYPES);
 
-export const VOTE_SCOPE_TYPES = ["forum", "working_group"] as const;
-export const voteScopeTypeSchema = z.enum(VOTE_SCOPE_TYPES);
+export const VOTE_ELECTORATE_MODES = ["per_member", "per_person"] as const;
+export const voteElectorateModeSchema = z.enum(VOTE_ELECTORATE_MODES);
 
 export const THRESHOLD_TYPES = ["simple_majority", "supermajority", "successive_elimination"] as const;
 export const thresholdTypeSchema = z.enum(THRESHOLD_TYPES);
@@ -113,8 +111,9 @@ export const voteSummaryFieldsSchema = {
   title: z.string(),
   description: z.string().nullable(),
   voteType: voteTypeSchema,
-  scopeType: voteScopeTypeSchema,
-  scopeId: workingGroupIdSchema.nullable(),
+  ownerGroupId: groupIdSchema,
+  ownerGroupName: z.string(),
+  electorateMode: voteElectorateModeSchema,
   thresholdType: thresholdTypeSchema,
   eligibleCategories: z.array(z.string()).nullable(),
   opensAt: z.string(),
@@ -135,7 +134,6 @@ export const publicVoteSchema = z.object({
 
 export const portalVoteSchema = z.object({
   ...voteSummaryFieldsSchema,
-  scopeName: z.string().nullable(),
   candidates: z.array(candidateSummarySchema).nullable(),
   canCastBallot: z.boolean(),
   hasCastBallot: z.boolean(),
@@ -174,8 +172,7 @@ export const VOTES_LIST_SORT_COLUMNS = ["title", "status", "closes_at", "created
 
 export const publicVotesListQuerySchema = listQuerySchema(VOTES_LIST_SORT_COLUMNS, { limit: 20 }).extend({
   type: voteTypeSchema.optional(),
-  scope: voteScopeTypeSchema.optional(),
-  wg: z.string().optional(),
+  ownerGroupId: groupIdSchema.optional(),
   status: publicVoteStatusListSchema.optional(),
   from: z.iso.date().optional(),
   to: z.iso.date().optional(),
@@ -226,7 +223,7 @@ export type PortalVotesListQuery = z.infer<typeof portalVotesListQuerySchema>;
 export const portalVotesListRouteSchema = {
   tags: ["Portal Votes"],
   summary: "List all votes visible to the caller",
-  description: "Every forum vote, every public vote, plus every vote scoped to a working group the caller belongs to.",
+  description: "Votes owned by groups visible to the caller, plus votes shared with those groups.",
   request: {
     query: portalVotesListQuerySchema,
   },
@@ -252,15 +249,16 @@ export const portalVoteGetRouteSchema = {
 };
 
 export const submitBallotSchema = z.object({
+  memberId: databaseIdSchema.nullable().optional(),
   choice: z.string().trim().min(1).max(100),
 });
 export const submitBallotResponseSchema = successResponseSchema;
 
 export const submitBallotRouteSchema = {
   tags: ["Portal Votes"],
-  summary: "Cast a ballot A–G only)",
+  summary: "Cast or update a ballot",
   description:
-    "Forum-level: only the organization's resolved voting delegate may call this, one ballot per organization per round. Working-group-level: one ballot per person per round, caller must be an active member of the vote's working group. H-category members may never cast a ballot.",
+    "Per-Member votes require one explicit represented Member. Each organization has a separate ballot, any current representative may update it, and the latest authorized submission before close is effective. Per-person votes omit memberId.",
   request: {
     params: voteIdParamsSchema,
     body: { content: { "application/json": { schema: submitBallotSchema } }, required: true },
@@ -271,7 +269,7 @@ export const submitBallotRouteSchema = {
       content: { "application/json": { schema: submitBallotResponseSchema } },
     },
     "403": { description: "Not eligible to vote in this vote." },
-    "409": { description: "Vote is not open, or a ballot was already cast for this round." },
+    "409": { description: "Vote is not open or the selected Member is not eligible." },
     "422": { description: "Invalid choice." },
   },
 };
@@ -296,9 +294,8 @@ export const proposalSummarySchema = z.object({
   title: z.string(),
   description: z.string(),
   voteType: voteTypeSchema,
-  scopeType: voteScopeTypeSchema,
-  scopeId: workingGroupIdSchema.nullable(),
-  scopeName: z.string().nullable(),
+  ownerGroupId: groupIdSchema,
+  ownerGroupName: z.string(),
   proposedByUserId: databaseIdSchema,
   status: voteProposalStatusSchema,
   voteId: databaseIdSchema.nullable(),
@@ -313,8 +310,7 @@ export const submitProposalSchema = z.object({
   title: z.string().trim().min(1).max(300),
   description: z.string().trim().min(1).max(10000),
   voteType: voteTypeSchema,
-  scopeType: voteScopeTypeSchema,
-  scopeId: workingGroupIdSchema.nullable().optional(),
+  ownerGroupId: groupIdSchema,
   eligibleCategories: z.array(z.enum(VOTING_CATEGORY_LETTERS)).nullable().optional(),
   proposedOpensAt: z.iso.datetime({ offset: true }).nullable().optional(),
   proposedClosesAt: z.iso.datetime({ offset: true }).nullable().optional(),
@@ -325,7 +321,7 @@ export const submitProposalRouteSchema = {
   tags: ["Vote Proposals"],
   summary: "Submit a vote proposal (A–G members only)",
   description:
-    "Available only when the target scope's min_endorsers_for_ballot (forum: the membership_settings default; WG: working_groups.min_endorsers_for_ballot) is greater than 0.",
+    "Available only when the owning group's minEndorsersForBallot policy is greater than zero.",
   request: {
     body: { content: { "application/json": { schema: submitProposalSchema } }, required: true },
   },
@@ -336,7 +332,7 @@ export const submitProposalRouteSchema = {
     },
     "403": {
       description:
-        "Not an A–G member, not a member of the target working group, or the endorsement path is disabled for this scope.",
+        "Not an eligible group participant or the endorsement path is disabled for this group.",
     },
   },
 };
@@ -344,8 +340,7 @@ export const submitProposalRouteSchema = {
 export const VOTE_PROPOSALS_LIST_SORT_COLUMNS = ["title", "status", "endorsement_count", "created_at"] as const;
 
 export const listProposalsQuerySchema = listQuerySchema(VOTE_PROPOSALS_LIST_SORT_COLUMNS).extend({
-  scopeType: voteScopeTypeSchema.optional(),
-  scopeId: workingGroupIdSchema.optional(),
+  ownerGroupId: groupIdSchema.optional(),
 });
 export type ListProposalsQuery = z.infer<typeof listProposalsQuerySchema>;
 
@@ -404,7 +399,7 @@ export const endorseProposalRouteSchema = {
         },
       },
     },
-    "403": { description: "Not an A–G member, or not a member of the target working group." },
+    "403": { description: "Not an eligible participant in the proposal's owning group." },
     "409": { description: "Proposal is not open for endorsement." },
   },
 };

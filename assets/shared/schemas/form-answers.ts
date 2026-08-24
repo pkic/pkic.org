@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { databaseIdSchema } from "./identifiers";
 
 /**
  * Resource limits shared by every API that accepts answers for a
@@ -67,3 +68,29 @@ export const formAnswersSchema = z
   });
 
 export type FormAnswers = z.infer<typeof formAnswersSchema>;
+
+export const formAnswerEntrySchema = z.object({
+  fieldId: databaseIdSchema,
+  value: formAnswerValueSchema,
+});
+
+/** Canonical stable-ID submission contract for all new form endpoints. */
+export const formAnswerEntriesSchema = z
+  .array(formAnswerEntrySchema)
+  .max(MAX_FORM_ANSWER_FIELDS)
+  .superRefine((answers, context) => {
+    const seen = new Set<string>();
+    for (const [index, answer] of answers.entries()) {
+      if (seen.has(answer.fieldId)) {
+        context.addIssue({ code: "custom", path: [index, "fieldId"], message: "Each field may be answered once" });
+      }
+      seen.add(answer.fieldId);
+    }
+    if (new TextEncoder().encode(JSON.stringify(answers)).byteLength > MAX_FORM_ANSWERS_JSON_BYTES) {
+      context.addIssue({
+        code: "custom",
+        message: `Form answers must not exceed ${MAX_FORM_ANSWERS_JSON_BYTES} encoded bytes`,
+      });
+    }
+  });
+export type FormAnswerEntry = z.infer<typeof formAnswerEntrySchema>;

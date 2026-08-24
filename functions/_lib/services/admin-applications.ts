@@ -343,6 +343,7 @@ export async function updateAdminApplication(
         customAnswers: mergedAnswers,
         errorStatus: 422,
       });
+      const fieldIds = new Map(form.fields.map((field) => [field.key, field.id]));
       let formSubmissionId = application.form_submission_id;
       if (!formSubmissionId) {
         formSubmissionId = uuid();
@@ -360,22 +361,23 @@ export async function updateAdminApplication(
 
       for (const key of EDITABLE_ANSWER_KEYS) {
         if (input.answers[key] === undefined) continue;
+        const fieldId = fieldIds.get(key);
+        if (!fieldId) throw new AppError(422, "UNKNOWN_FORM_FIELD", `Unknown form field '${key}'`);
         const value = normalizedAnswers[key];
         if (value === undefined) {
           dependentStatements.push(
-            db
-              .prepare("DELETE FROM form_submission_answers WHERE submission_id = ? AND field_key = ?")
-              .bind(formSubmissionId, key),
+            db.prepare("DELETE FROM form_submission_answers WHERE submission_id = ? AND field_id = ?").bind(formSubmissionId, fieldId),
           );
         } else {
           dependentStatements.push(
             db
               .prepare(
-                `INSERT INTO form_submission_answers (id, submission_id, field_key, data_json, created_at)
-                 VALUES (?, ?, ?, ?, ?)
-                 ON CONFLICT(submission_id, field_key) DO UPDATE SET data_json = excluded.data_json`,
+                `INSERT INTO form_submission_answers (id, submission_id, field_id, field_key, data_json, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?)
+                 ON CONFLICT(submission_id, field_id) WHERE field_id IS NOT NULL
+                 DO UPDATE SET field_key = excluded.field_key, data_json = excluded.data_json`,
               )
-              .bind(uuid(), formSubmissionId, key, JSON.stringify(value), now),
+              .bind(uuid(), formSubmissionId, fieldId, key, JSON.stringify(value), now),
           );
         }
       }
