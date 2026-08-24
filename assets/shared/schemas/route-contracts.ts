@@ -8,3 +8,4 @@ export * from "./route-contracts-admin-registrations";
 export * from "./route-contracts-public-proposals";
 export * from "./route-contracts-registrations";
 export * from "./route-contracts-webhooks";
+export * from "./group-forms";

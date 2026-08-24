@@ -17,7 +17,12 @@ interface GroupIdRow {
   group_id: string;
 }
 
-async function hasActiveGroupMembership(db: DatabaseLike, userId: string, groupId: string): Promise<boolean> {
+export interface GroupResourceViewer {
+  userId: string;
+  admin?: AuthAdmin;
+}
+
+export async function hasActiveGroupMembership(db: DatabaseLike, userId: string, groupId: string): Promise<boolean> {
   return (
     (await first<{ authorized: number }>(
       db,
@@ -103,17 +108,24 @@ export async function canAccessGroupResource<K extends ResourceGrantKind>(
   kind: K,
   resourceId: string,
   capability: ResourceGrantCapability<K>,
+  throughGroupId?: string,
 ): Promise<boolean> {
   const definition = getResourceGrantDefinition(kind);
   const ownerGroupId = await resourceOwnerGroupId(db, kind, resourceId);
   if (!ownerGroupId) return false;
   const participantCapability = isParticipantResourceCapability(definition, capability);
-  if (await canMemberAccessGroupResource(db, actor.id, kind, resourceId, capability)) return true;
-  if (!participantCapability && hasPermission(actor, "groups:write", { type: "group", id: ownerGroupId })) {
+  if (await canMemberAccessGroupResource(db, actor.id, kind, resourceId, capability, throughGroupId)) return true;
+  const ownerContext = !throughGroupId || throughGroupId === ownerGroupId;
+  if (
+    ownerContext &&
+    !participantCapability &&
+    hasPermission(actor, "groups:write", { type: "group", id: ownerGroupId })
+  ) {
     return true;
   }
   if (participantCapability) return false;
-  if (await canManageAnyGroup(db, actor, [ownerGroupId])) return true;
+  if (ownerContext && (await canManageAnyGroup(db, actor, [ownerGroupId]))) return true;
+  if (throughGroupId === ownerGroupId) return false;
 
   const acceptedManagerCapabilities = resourceGrantCapabilitiesFor(definition, capability).filter((candidate) =>
     isManagerResourceCapability(definition, candidate),
@@ -124,8 +136,9 @@ export async function canAccessGroupResource<K extends ResourceGrantKind>(
     `SELECT DISTINCT grant_row.group_id
        FROM ${definition.grantTable} grant_row
       WHERE grant_row.${definition.grantResourceColumn} = ?
-        AND grant_row.capability IN (${placeholders(acceptedManagerCapabilities)})`,
-    [resourceId, ...acceptedManagerCapabilities],
+        AND grant_row.capability IN (${placeholders(acceptedManagerCapabilities)})
+        ${throughGroupId ? "AND grant_row.group_id = ?" : ""}`,
+    [resourceId, ...acceptedManagerCapabilities, ...(throughGroupId ? [throughGroupId] : [])],
   );
   return canManageAnyGroup(
     db,
@@ -140,8 +153,22 @@ export async function requireGroupResourceAccess<K extends ResourceGrantKind>(
   kind: K,
   resourceId: string,
   capability: ResourceGrantCapability<K>,
+  throughGroupId?: string,
 ): Promise<void> {
-  if (!(await canAccessGroupResource(db, actor, kind, resourceId, capability))) {
+  if (!(await canAccessGroupResource(db, actor, kind, resourceId, capability, throughGroupId))) {
     throw new AppError(403, "RESOURCE_CAPABILITY_REQUIRED", "Resource capability is required");
   }
+}
+
+export function canViewerAccessGroupResource<K extends ResourceGrantKind>(
+  db: DatabaseLike,
+  viewer: GroupResourceViewer,
+  throughGroupId: string,
+  kind: K,
+  resourceId: string,
+  capability: ResourceGrantCapability<K>,
+): Promise<boolean> {
+  return viewer.admin
+    ? canAccessGroupResource(db, viewer.admin, kind, resourceId, capability, throughGroupId)
+    : canMemberAccessGroupResource(db, viewer.userId, kind, resourceId, capability, throughGroupId);
 }

@@ -256,13 +256,14 @@ Status: In progress
   - [x] Apply `attend` to meeting entry in the Worker read and atomic D1 guard.
   - [x] Apply mailing-list view and subscribe grants to member discovery,
         preference mutation, and provider desired-state reconciliation.
-  - [ ] Apply form placement grants to canonical definition, submission, response,
+  - [x] Apply form placement grants to canonical definition, submission, response,
         response-statistics, and management paths.
   - [ ] Apply event grants beyond meeting entry to generic view, registration,
         and attendance-management paths.
   - [ ] Apply vote grants after the atomic generic voting cutover.
-      Evidence: resource-grants.test.ts and
-      group-enrollment-mailing-lists.test.ts pass 15 focused tests. Four
+      Evidence: resource-grants.test.ts, group-enrollment-mailing-lists.test.ts,
+      and group-form-sharing.test.ts pass 18 focused grant-consumer tests; the
+      broader focused form/grant regression selection passes 20 tests. Four
       resource-specific grant tables retain real resource and group foreign
       keys; one shared service provides idempotent audited creation, exact
       revocation, D1-side search/filter/sort/pagination, and participant versus
@@ -270,7 +271,10 @@ Status: In progress
       domain contracts. The tests cover capability implication, escalation,
       immediate revocation, inherited and local-only governance, idempotency,
       owner immutability, validation, orphan prevention, context-bound member
-      access, and atomic Google Groups desired-state removal.
+      access, atomic Google Groups desired-state removal, placement-owner
+      immutability, group-scoped form discovery and mutation, D1-side answer
+      search, immediate revocation, and prevention of generic form endpoints
+      bypassing registration, proposal, or application workflows.
 
 ## 9. Group-scoped REST API
 
@@ -278,7 +282,9 @@ Status: In progress
 
 - [x] Add canonical /api/v1/groups routes.
 - [x] Add nested members and leadership routes.
-- [ ] Add nested forms, votes, stats, and audit routes.
+- [ ] Add nested votes, stats, and audit routes.
+- [x] Add nested form definition, submission, response, response-statistics,
+      and placement-management routes.
 - [x] Add nested mailing-list discovery and preference routes.
 - [ ] Add /api/v1/groups/:groupId/meetings/series routes.
 - [ ] Add series occurrence, guest, join, and attendance routes.

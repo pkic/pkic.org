@@ -145,3 +145,31 @@ export function memberResourceGrantCapabilitiesFor<K extends ResourceGrantKind>(
     (candidate) => !isManagerResourceCapability(definition, candidate),
   );
 }
+
+export function effectiveResourceCapabilitiesForContext<K extends ResourceGrantKind>(
+  definition: ResourceGrantDefinition<K>,
+  access: {
+    owner: boolean;
+    member: boolean;
+    manager: boolean;
+    grantedCapabilities: readonly ResourceGrantCapability<K>[];
+  },
+): ResourceGrantCapability<K>[] {
+  const granted = new Set<ResourceGrantCapability<K>>(access.grantedCapabilities);
+  return definition.capabilities.filter((capability) => {
+    const participant = isParticipantResourceCapability(definition, capability);
+    const memberAllowed =
+      access.member &&
+      !isManagerResourceCapability(definition, capability) &&
+      (access.owner ||
+        memberResourceGrantCapabilitiesFor(definition, capability).some((candidate) => granted.has(candidate)));
+    const managerAllowed =
+      access.manager &&
+      !participant &&
+      (access.owner ||
+        resourceGrantCapabilitiesFor(definition, capability).some(
+          (candidate) => isManagerResourceCapability(definition, candidate) && granted.has(candidate),
+        ));
+    return memberAllowed || managerAllowed;
+  });
+}

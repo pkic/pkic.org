@@ -131,6 +131,11 @@ export const formPlacementCreateSchema = z
   })
   .superRefine(addPlacementIssues);
 export const formPlacementUpdateSchema = z.object(formPlacementInputShape).partial().superRefine(addPlacementIssues);
+export const formPlacementPolicyUpdateSchema = z
+  .strictObject(formPlacementInputShape)
+  .omit({ ownerGroupId: true })
+  .partial()
+  .superRefine(addPlacementIssues);
 export const formPlacementsListQuerySchema = listQuerySchema(["audience", "opens_at", "created_at"] as const).extend({
   ownerGroupId: groupIdSchema.optional(),
   contextType: formPlacementContextTypeSchema.optional(),

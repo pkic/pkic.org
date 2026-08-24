@@ -1,0 +1,201 @@
+import { z } from "zod";
+import {
+  adminFormSubmissionSchema,
+  adminFormSubmissionStatsQuerySchema,
+  adminFormSubmissionStatSchema,
+  adminFormSubmissionsQuerySchema,
+} from "./admin-forms";
+import { apiErrorPayloadSchema, successResponseSchema } from "./api-common";
+import {
+  formFieldDefinitionSchema,
+  formPlacementPolicyUpdateSchema,
+  formPlacementSchema,
+  formPurposeSchema,
+  formStatusSchema,
+} from "./forms";
+import { groupReferenceParamsSchema } from "./groups";
+import { databaseIdSchema } from "./identifiers";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { formGroupGrantSchemas } from "./resource-grants";
+
+export const GROUP_FORMS_SORT_COLUMNS = ["title", "purpose", "audience", "opens_at", "created_at"] as const;
+
+export const groupFormsListQuerySchema = listQuerySchema(GROUP_FORMS_SORT_COLUMNS).extend({
+  purpose: formPurposeSchema.optional(),
+  status: formStatusSchema.optional(),
+  contextType: formPlacementSchema.shape.contextType.optional(),
+  audience: z.string().trim().min(1).max(100).optional(),
+  active: z.enum(["true", "false"]).default("true"),
+});
+export type GroupFormsListQuery = z.infer<typeof groupFormsListQuerySchema>;
+
+export const groupFormReferenceSchema = z.object({
+  id: databaseIdSchema,
+  key: z.string(),
+  purpose: formPurposeSchema,
+  status: formStatusSchema,
+  title: z.string(),
+  description: z.string().nullable(),
+  updatedAt: z.string(),
+});
+
+export const groupFormPlacementSummarySchema = z.object({
+  form: groupFormReferenceSchema,
+  placement: formPlacementSchema,
+  capabilities: z.array(formGroupGrantSchemas.capabilitySchema).max(formGroupGrantSchemas.capabilities.length),
+  acceptingResponses: z.boolean(),
+});
+export type GroupFormPlacementSummary = z.infer<typeof groupFormPlacementSummarySchema>;
+
+export const groupFormsListResponseSchema = paginatedResponseSchema("forms", groupFormPlacementSummarySchema);
+
+export const groupFormDefinitionResponseSchema = groupFormPlacementSummarySchema.extend({
+  fields: z.array(formFieldDefinitionSchema),
+});
+
+const groupFormParamsSchema = groupReferenceParamsSchema.extend({ placementId: databaseIdSchema });
+
+export const groupFormSubmissionSchema = z
+  .object({
+    answers: z.record(z.string().trim().min(1).max(80), z.unknown()),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (Object.keys(value.answers).length > 50) {
+      context.addIssue({ code: "custom", path: ["answers"], message: "A form response cannot exceed 50 fields" });
+    }
+  });
+export type GroupFormSubmissionInput = z.infer<typeof groupFormSubmissionSchema>;
+
+export const groupFormSubmissionResponseSchema = successResponseSchema.extend({ submissionId: databaseIdSchema });
+
+export const groupFormSubmissionsQuerySchema = adminFormSubmissionsQuerySchema.omit({
+  placementId: true,
+  eventSlug: true,
+});
+export type GroupFormSubmissionsQuery = z.infer<typeof groupFormSubmissionsQuerySchema>;
+export const groupFormSubmissionStatsQuerySchema = adminFormSubmissionStatsQuerySchema.omit({
+  placementId: true,
+  eventSlug: true,
+});
+export type GroupFormSubmissionStatsQuery = z.infer<typeof groupFormSubmissionStatsQuerySchema>;
+
+export const groupFormSubmissionsResponseSchema = paginatedResponseSchema(
+  "submissions",
+  adminFormSubmissionSchema,
+).extend({
+  form: groupFormReferenceSchema,
+  placement: formPlacementSchema,
+});
+
+export const groupFormSubmissionStatsResponseSchema = z.object({
+  form: groupFormReferenceSchema,
+  placement: formPlacementSchema,
+  total: z.number().int().nonnegative(),
+  stats: z.array(adminFormSubmissionStatSchema),
+});
+
+export const groupFormPlacementUpdateSchema = formPlacementPolicyUpdateSchema;
+export type GroupFormPlacementUpdateInput = z.infer<typeof groupFormPlacementUpdateSchema>;
+
+const jsonError = (description: string) => ({
+  description,
+  content: { "application/json": { schema: apiErrorPayloadSchema } },
+});
+
+export const groupFormsListRouteSchema = {
+  tags: ["Groups"],
+  summary: "List forms available through a group",
+  description: "Access filtering, search, sorting, counting, and pagination are executed in D1.",
+  request: { params: groupReferenceParamsSchema, query: groupFormsListQuerySchema },
+  responses: {
+    "200": {
+      description: "A bounded page of owned and explicitly shared form placements.",
+      content: { "application/json": { schema: groupFormsListResponseSchema } },
+    },
+    "401": jsonError("An authenticated portal identity is required."),
+    "404": jsonError("Group not found or not visible."),
+  },
+};
+
+export const groupFormDefinitionRouteSchema = {
+  tags: ["Groups"],
+  summary: "Get one group form definition",
+  request: { params: groupFormParamsSchema },
+  responses: {
+    "200": {
+      description: "The live form definition and its group-owned placement.",
+      content: { "application/json": { schema: groupFormDefinitionResponseSchema } },
+    },
+    "401": jsonError("An authenticated portal identity is required."),
+    "404": jsonError("The form is not available through this group."),
+  },
+};
+
+export const groupFormSubmissionCreateRouteSchema = {
+  tags: ["Groups"],
+  summary: "Submit a group survey or feedback form",
+  request: {
+    params: groupFormParamsSchema,
+    body: { required: true, content: { "application/json": { schema: groupFormSubmissionSchema } } },
+  },
+  responses: {
+    "201": {
+      description: "Form response recorded.",
+      content: { "application/json": { schema: groupFormSubmissionResponseSchema } },
+    },
+    "403": jsonError("The caller lacks the submit capability."),
+    "404": jsonError("The form is not available through this group or is not accepting responses."),
+    "409": jsonError("The form changed while the response was being saved."),
+    "422": jsonError("The answers do not satisfy the live form definition."),
+  },
+};
+
+export const groupFormSubmissionsListRouteSchema = {
+  tags: ["Groups"],
+  summary: "List responses for one group form placement",
+  description: "Filtering, search, sorting, counting, and pagination are executed in D1.",
+  request: { params: groupFormParamsSchema, query: groupFormSubmissionsQuerySchema },
+  responses: {
+    "200": {
+      description: "A bounded response page isolated to this placement.",
+      content: { "application/json": { schema: groupFormSubmissionsResponseSchema } },
+    },
+    "403": jsonError("Effective response-viewing capability is required."),
+    "404": jsonError("The form is not available through this group."),
+  },
+};
+
+export const groupFormSubmissionStatsRouteSchema = {
+  tags: ["Groups"],
+  summary: "Get response statistics for one group form placement",
+  description: "Exact aggregates are calculated in D1 over the same filtered response population as the list.",
+  request: { params: groupFormParamsSchema, query: groupFormSubmissionStatsQuerySchema },
+  responses: {
+    "200": {
+      description: "Placement-isolated form response statistics.",
+      content: { "application/json": { schema: groupFormSubmissionStatsResponseSchema } },
+    },
+    "403": jsonError("Effective response-viewing capability is required."),
+    "404": jsonError("The form is not available through this group."),
+  },
+};
+
+export const groupFormPlacementUpdateRouteSchema = {
+  tags: ["Groups"],
+  summary: "Update one group form placement",
+  description: "Updates placement policy without permitting resource ownership transfer.",
+  request: {
+    params: groupFormParamsSchema,
+    body: { required: true, content: { "application/json": { schema: groupFormPlacementUpdateSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "Updated placement.",
+      content: { "application/json": { schema: groupFormDefinitionResponseSchema } },
+    },
+    "403": jsonError("Effective form-management capability is required."),
+    "404": jsonError("The form is not available through this group."),
+    "409": jsonError("The placement changed concurrently."),
+  },
+};

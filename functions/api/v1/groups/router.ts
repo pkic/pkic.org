@@ -37,6 +37,10 @@ import {
   mailingListGrantRoutes,
   voteGrantRoutes,
 } from "./resource-grant-handlers";
+import { GroupFormsList } from "./[groupId]/forms/index";
+import { GroupFormDefinitionGet, GroupFormPlacementUpdate } from "./[groupId]/forms/[placementId]";
+import { GroupFormSubmissionCreate, GroupFormSubmissionsList } from "./[groupId]/forms/[placementId]/submissions";
+import { GroupFormSubmissionStats } from "./[groupId]/forms/[placementId]/submission-stats";
 
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
@@ -58,6 +62,12 @@ openapi.put("/:groupId/category-rules", GroupCategoryRulesReplace);
 openapi.get("/:groupId/mailing-lists", GroupMailingListSubscriptions);
 openapi.put("/:groupId/mailing-lists/:listId/subscription", GroupMailingListPreferenceUpdate);
 openapi.put("/:groupId/automatic-enrollment", GroupAutomaticEnrollmentPreference);
+openapi.get("/:groupId/forms", GroupFormsList);
+openapi.get("/:groupId/forms/:placementId", GroupFormDefinitionGet);
+openapi.patch("/:groupId/forms/:placementId", GroupFormPlacementUpdate);
+openapi.get("/:groupId/forms/:placementId/submissions", GroupFormSubmissionsList);
+openapi.post("/:groupId/forms/:placementId/submissions", GroupFormSubmissionCreate);
+openapi.get("/:groupId/forms/:placementId/submissions/stats", GroupFormSubmissionStats);
 openapi.get("/:groupId/meetings/series", GroupMeetingSeriesList);
 openapi.post("/:groupId/meetings/series", GroupMeetingSeriesCreate);
 openapi.patch("/:groupId/meetings/series/:seriesId", GroupMeetingSeriesUpdate);
