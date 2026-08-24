@@ -9,7 +9,9 @@ import {
   inviteOccurrenceGuest,
   issueOccurrenceAccessToken,
   listOccurrenceAttendance,
+  materializeSeriesOccurrences,
   revokeOccurrenceGuest,
+  updateGroupEventSeries,
   verifyOccurrenceAttendance,
 } from "../functions/_lib/services/event-series";
 import { joinGroup } from "../functions/_lib/services/groups";
@@ -47,6 +49,7 @@ async function addGroupMember(): Promise<string> {
 async function createMeetingFixture() {
   const admin = await insertAdmin();
   const userId = await addGroupMember();
+  const startsAt = new Date(Date.now() + 3_600_000).toISOString();
   const series = await createGroupEventSeries(env.DB, admin, GROUP_ID, {
     eventName: "Architecture Working Session",
     eventSlug: `architecture-working-session-${crypto.randomUUID()}`,
@@ -56,13 +59,13 @@ async function createMeetingFixture() {
       memberEligibility: "owner_group",
       guestPolicy: "occurrence_invitation",
     },
+    startsAt,
     recurrenceRule: "FREQ=WEEKLY;BYDAY=TU",
     timezone: "Europe/Amsterdam",
     durationMinutes: 60,
     location: "Online",
     providerType: "external_url",
   });
-  const startsAt = new Date(Date.now() + 3_600_000).toISOString();
   const endsAt = new Date(Date.now() + 7_200_000).toISOString();
   const occurrence = await createSeriesOccurrence(
     env.DB,
@@ -80,6 +83,57 @@ beforeEach(async () => {
 });
 
 describe("group-owned event series", () => {
+  it("materializes recurring local time across DST idempotently", async () => {
+    const admin = await insertAdmin();
+    const series = await createGroupEventSeries(env.DB, admin, GROUP_ID, {
+      eventName: "DST Working Session",
+      eventSlug: `dst-working-session-${crypto.randomUUID()}`,
+      profileKey: "meeting",
+      policy: {
+        registrationPolicy: "no_registration",
+        memberEligibility: "owner_group",
+        guestPolicy: "occurrence_invitation",
+      },
+      startsAt: "2026-03-24T08:00:00.000Z",
+      recurrenceRule: "FREQ=WEEKLY;BYDAY=TU",
+      timezone: "Europe/Amsterdam",
+      durationMinutes: 60,
+      location: "Online",
+      providerType: null,
+    });
+    const first = await materializeSeriesOccurrences(env.DB, admin, GROUP_ID, series.id, {
+      through: "2026-04-07T07:00:00.000Z",
+      maxOccurrences: 10,
+    });
+    expect(first).toMatchObject({ created: 3, existing: 0 });
+    const starts = await queryAll<{ starts_at: string }>(
+      env.DB,
+      "SELECT starts_at FROM event_occurrences WHERE series_id = ? ORDER BY starts_at",
+      [series.id],
+    );
+    expect(starts.map((row) => row.starts_at)).toEqual([
+      "2026-03-24T08:00:00.000Z",
+      "2026-03-31T07:00:00.000Z",
+      "2026-04-07T07:00:00.000Z",
+    ]);
+    const second = await materializeSeriesOccurrences(env.DB, admin, GROUP_ID, series.id, {
+      through: "2026-04-07T07:00:00.000Z",
+      maxOccurrences: 10,
+    });
+    expect(second).toMatchObject({ created: 0, existing: 3 });
+    await expect(
+      materializeSeriesOccurrences(env.DB, admin, GROUP_ID, series.id, {
+        through: "2026-05-05T07:00:00.000Z",
+        maxOccurrences: 2,
+      }),
+    ).rejects.toMatchObject({ code: "EVENT_RECURRENCE_LIMIT_EXCEEDED" });
+    await expect(
+      updateGroupEventSeries(env.DB, admin, GROUP_ID, series.id, {
+        recurrenceRule: "FREQ=WEEKLY;BYDAY=WE",
+      }),
+    ).rejects.toMatchObject({ code: "EVENT_SERIES_SCHEDULE_MATERIALIZED" });
+  });
+
   it("stores provider destinations encrypted and generates ICS from occurrence state", async () => {
     const { series, occurrence } = await createMeetingFixture();
     const stored = await queryAll<{ provider_join_url_ciphertext: string }>(

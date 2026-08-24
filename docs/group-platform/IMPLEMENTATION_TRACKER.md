@@ -138,7 +138,7 @@ Status: In progress
 - [x] Add controlled event profiles and per-event settings.
 - [x] Add one owning group to portal-managed events.
 - [ ] Replace unreleased meeting_series with shared event_series.
-- [ ] Add authoritative recurring schedule and event occurrences.
+- [x] Add authoritative recurring schedule and event occurrences.
 - [x] Generate ICS from series and occurrence state.
 - [ ] Remove uploaded ICS as the meeting source of truth.
 - [x] Implement no-registration, optional opt-in, invitation-only, required,
@@ -169,7 +169,10 @@ Status: In progress
       ESLint/formatting and SQL projection, dependency architecture, API-contract,
       duplication, max-lines, and filename gates pass. Recurrence materialization,
       provider interfaces, legacy meeting-calendar retirement, UI integration,
-      and the remaining negative tests are not complete.
+      and the remaining negative tests are not complete. Recurrence expansion
+      now has an explicit start, preserves local wall-clock time across DST,
+      enforces a caller-visible bound, is idempotent under the unique series/start
+      key, and refuses implicit schedule regeneration after materialization.
 
 ## 6. Reusable live-editable forms
 

@@ -57,6 +57,7 @@ export const eventSeriesSchema = z.object({
   registrationPolicy: eventRegistrationPolicySchema,
   memberEligibility: eventProfilePolicySchema.shape.memberEligibility.optional(),
   guestPolicy: eventGuestPolicySchema.optional(),
+  startsAt: z.iso.datetime(),
   recurrenceRule: recurrenceRuleSchema,
   timezone: timeZoneSchema,
   durationMinutes: z
@@ -79,6 +80,7 @@ export const eventSeriesCreateSchema = z.object({
   eventSlug: z.string().trim().min(1).max(200),
   profileKey: eventProfileKeySchema.default("meeting"),
   policy: eventProfilePolicySchema,
+  startsAt: z.iso.datetime(),
   recurrenceRule: recurrenceRuleSchema,
   timezone: timeZoneSchema,
   durationMinutes: z
@@ -93,6 +95,16 @@ export const eventSeriesUpdateSchema = eventSeriesCreateSchema
   .omit({ eventSlug: true })
   .partial()
   .extend({ active: z.boolean().optional() });
+
+export const eventSeriesMaterializeSchema = z.object({
+  through: z.iso.datetime(),
+  maxOccurrences: z.number().int().min(1).max(500).default(200),
+});
+export const eventSeriesMaterializeResponseSchema = z.object({
+  created: z.number().int().min(0),
+  existing: z.number().int().min(0),
+  through: z.iso.datetime(),
+});
 
 export const EVENT_SERIES_SORT_COLUMNS = ["event_name", "next_occurrence_at", "created_at"] as const;
 export const eventSeriesListQuerySchema = listQuerySchema(EVENT_SERIES_SORT_COLUMNS).extend({
@@ -334,6 +346,16 @@ export const eventSeriesCalendarRouteSchema = {
   summary: "Generate the current meeting-series calendar",
   request: { params: eventSeriesParamsSchema },
   responses: { "200": { description: "Generated text/calendar content." } },
+};
+export const eventSeriesMaterializeRouteSchema = {
+  tags: ["Groups", "Meetings"],
+  summary: "Idempotently materialize recurring meeting occurrences",
+  description: "Expansion is bounded, timezone-aware, and existing occurrences are preserved.",
+  request: {
+    params: eventSeriesParamsSchema,
+    body: { required: true, content: { "application/json": { schema: eventSeriesMaterializeSchema } } },
+  },
+  responses: { "200": { description: "Recurring occurrences materialized through the requested horizon." } },
 };
 export const eventOccurrenceAccessIssueRouteSchema = {
   tags: ["Groups", "Meetings"],

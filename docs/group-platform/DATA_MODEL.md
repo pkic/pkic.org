@@ -285,6 +285,7 @@ Replaces the unreleased meeting_series table.
 
     id
     event_id -> events.id, unique
+    starts_at
     recurrence_rule
     timezone
     duration_minutes
@@ -295,8 +296,12 @@ Replaces the unreleased meeting_series table.
     created_at
     updated_at
 
-Recurrence and timezone are authoritative. ICS output is generated from this
-state.
+The series start, recurrence, and timezone are authoritative. Recurrence is
+expanded as local wall-clock time so meetings remain at the intended local time
+across daylight-saving changes. Materialization is bounded and idempotent;
+existing occurrences are never silently regenerated. Once occurrences exist,
+schedule changes require explicit occurrence edits or a replacement series.
+ICS output is generated from this state.
 
 ### event_occurrences
 

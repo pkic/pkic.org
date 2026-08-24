@@ -17,6 +17,7 @@ import { GroupAutomaticEnrollmentPreference } from "./[groupId]/automatic-enroll
 import { GroupMeetingSeriesCreate, GroupMeetingSeriesList } from "./[groupId]/meetings/series/index";
 import { GroupMeetingSeriesUpdate } from "./[groupId]/meetings/series/[seriesId]/index";
 import { GroupMeetingSeriesCalendar } from "./[groupId]/meetings/series/[seriesId]/calendar";
+import { GroupMeetingSeriesMaterialize } from "./[groupId]/meetings/series/[seriesId]/materialize";
 import {
   GroupMeetingOccurrenceCreate,
   GroupMeetingOccurrencesList,
@@ -55,6 +56,7 @@ openapi.get("/:groupId/meetings/series", GroupMeetingSeriesList);
 openapi.post("/:groupId/meetings/series", GroupMeetingSeriesCreate);
 openapi.patch("/:groupId/meetings/series/:seriesId", GroupMeetingSeriesUpdate);
 openapi.get("/:groupId/meetings/series/:seriesId/calendar.ics", GroupMeetingSeriesCalendar);
+openapi.post("/:groupId/meetings/series/:seriesId/materialize", GroupMeetingSeriesMaterialize);
 openapi.get("/:groupId/meetings/series/:seriesId/occurrences", GroupMeetingOccurrencesList);
 openapi.post("/:groupId/meetings/series/:seriesId/occurrences", GroupMeetingOccurrenceCreate);
 openapi.patch("/:groupId/meetings/series/:seriesId/occurrences/:occurrenceId", GroupMeetingOccurrenceUpdate);

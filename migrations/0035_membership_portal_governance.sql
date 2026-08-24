@@ -3613,6 +3613,7 @@ CREATE INDEX idx_event_group_grants_group
 CREATE TABLE event_series (
   id                 TEXT NOT NULL PRIMARY KEY,
   event_id           TEXT NOT NULL UNIQUE,
+  starts_at          TEXT NOT NULL,
   recurrence_rule    TEXT NOT NULL,
   timezone           TEXT NOT NULL,
   duration_minutes   INTEGER NOT NULL,

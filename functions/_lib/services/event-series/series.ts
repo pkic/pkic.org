@@ -133,13 +133,14 @@ export async function createGroupEventSeries(
       db
         .prepare(
           `INSERT INTO event_series
-             (id, event_id, recurrence_rule, timezone, duration_minutes, location,
+             (id, event_id, starts_at, recurrence_rule, timezone, duration_minutes, location,
               provider_type, provider_data_json, active, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 1, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, ?, ?)`,
         )
         .bind(
           id,
           eventId,
+          input.startsAt,
           input.recurrenceRule,
           input.timezone,
           input.durationMinutes,
@@ -172,6 +173,25 @@ export async function updateGroupEventSeries(
 ): Promise<EventSeries> {
   const existing = await getGroupEventSeries(db, groupIdOrSlug, seriesId);
   await requireGroupManagement(db, actor, existing.ownerGroupId);
+  const scheduleChanged =
+    input.startsAt !== undefined ||
+    input.recurrenceRule !== undefined ||
+    input.timezone !== undefined ||
+    input.durationMinutes !== undefined;
+  if (scheduleChanged) {
+    const materialized = await first<{ occurrence_count: number }>(
+      db,
+      "SELECT COUNT(*) AS occurrence_count FROM event_occurrences WHERE series_id = ?",
+      [seriesId],
+    );
+    if ((materialized?.occurrence_count ?? 0) > 0) {
+      throw new AppError(
+        409,
+        "EVENT_SERIES_SCHEDULE_MATERIALIZED",
+        "The recurring schedule cannot be changed after occurrences are materialized; update individual occurrences or create a replacement series",
+      );
+    }
+  }
   const now = nowIso();
   const currentSettings = await first<{ settings_json: string }>(db, "SELECT settings_json FROM events WHERE id = ?", [
     existing.eventId,
@@ -204,13 +224,15 @@ export async function updateGroupEventSeries(
       ),
     db
       .prepare(
-        `UPDATE event_series SET recurrence_rule = COALESCE(?, recurrence_rule),
-           timezone = COALESCE(?, timezone), duration_minutes = COALESCE(?, duration_minutes),
+        `UPDATE event_series SET starts_at = COALESCE(?, starts_at),
+           recurrence_rule = COALESCE(?, recurrence_rule), timezone = COALESCE(?, timezone),
+           duration_minutes = COALESCE(?, duration_minutes),
            location = CASE WHEN ? = 1 THEN ? ELSE location END,
            provider_type = CASE WHEN ? = 1 THEN ? ELSE provider_type END,
            active = COALESCE(?, active), updated_at = ? WHERE id = ?`,
       )
       .bind(
+        input.startsAt ?? null,
         input.recurrenceRule ?? null,
         input.timezone ?? null,
         input.durationMinutes ?? null,
