@@ -30,25 +30,30 @@ not intent.
   Evidence: Wrangler migration listing on 2026-08-24.
 - [x] Record the accepted architecture and data model.
   Evidence: ARCHITECTURE.md and DATA_MODEL.md.
-- [ ] Create the stacked pull request and keep its description synchronized.
+- [x] Create the stacked pull request and keep its description synchronized.
+  Evidence: draft PR pkic/dev-pkic.org#7 targets the verified PR3 branch.
 
 ## 1. Canonical schema and contracts
 
-Status: Pending
+Status: In progress
 
-- [ ] Replace unreleased working_groups with generic group_types and groups.
-- [ ] Replace unreleased working_group_members with group_memberships.
-- [ ] Require one Member capacity per membership row.
-- [ ] Permit multiple active Member capacities per user and group.
-- [ ] Add parent hierarchy and governance inheritance configuration.
-- [ ] Add category eligibility, automatic-enrollment policy, and opt-outs.
-- [ ] Update context and permission reference data from working_group to group.
-- [ ] Add all required foreign keys and access-pattern indexes.
-- [ ] Remove changeable product-vocabulary checks from touched unreleased tables.
+- [x] Replace unreleased working_groups with generic group_types and groups.
+- [x] Replace unreleased working_group_members with group_memberships.
+- [x] Require one Member capacity per membership row.
+- [x] Permit multiple active Member capacities per user and group.
+- [x] Add parent hierarchy and governance inheritance configuration.
+- [x] Add category eligibility, automatic-enrollment policy, and opt-outs.
+- [x] Update context and permission reference data from working_group to group.
+- [x] Add required foreign keys and initial access-pattern indexes for the
+      schema implemented so far.
+- [x] Keep changeable product vocabularies out of new D1 CHECK constraints;
+      retain CHECKs only for structural booleans and identity invariants.
 - [ ] Compose one canonical shared group entity, list query, page response,
       membership mutation, grant, and error contract.
 - [ ] Preserve temporary compatibility exports only while callers migrate.
-- [ ] Prove empty-database migration application.
+- [x] Prove empty-database migration application.
+  Evidence: all 37 migrations, including 202 statements in 0035, applied to
+  three independent local D1 states under ScanDisk on 2026-08-24.
 - [ ] Prove production-shaped upgrade fixture application.
 - [ ] Prove importers target only the final schema.
 

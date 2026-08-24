@@ -34,9 +34,9 @@ Configurable labels and defaults for groups.
     created_at
     updated_at
 
-The key is stable reference data. Initial records are working_group,
-task_force, board, executive_council, and coordination_group. Code does not
-branch on those values to create separate domain implementations.
+The key is stable reference data. Initial records are working_group, board,
+committee, chapter, and community. Code does not branch on those values to
+create separate domain implementations.
 
 ### groups
 
@@ -48,10 +48,11 @@ Replaces the unreleased working_groups table.
     name
     slug
     description
+    links_json
     governance_inheritance_mode
     eligibility_mode
     automatic_enrollment_mode
-    allow_automatic_enrollment_opt_out
+    allow_automatic_opt_out
     min_endorsers_for_ballot
     active
     created_at
@@ -107,8 +108,8 @@ Controlled category eligibility and automatic-enrollment configuration.
 
     group_id -> groups.id
     category_code -> membership_categories.code
-    may_join
-    automatically_enroll
+    permits_join
+    automatic_enrollment
     created_at
     updated_at
 
@@ -210,10 +211,12 @@ association, no representative row is created.
 
 ## Resource ownership and sharing
 
-Every shareable resource table gains a required owner_group_id when introduced
-in migration 0035. Existing production tables receive an additive nullable
-column, a deterministic backfill, and write-path enforcement without rebuilding
-the table.
+Every group-owned shareable resource records owner_group_id. Existing
+production tables receive an additive nullable column and write-path
+enforcement without rebuilding the table. Installation-owned resources, such
+as the consortium membership application form, deliberately keep a null group
+owner and use an installation placement; an artificial hidden group is not
+created merely to satisfy a foreign key.
 
 Each resource domain owns an FK-backed grant table, for example:
 
@@ -242,9 +245,10 @@ constant. Unknown capability values fail validation on every write.
 The existing events table remains the event aggregate. It gains additive
 ownership and profile fields:
 
-    owner_group_id -> groups.id, nullable only for legacy transition
+    owner_group_id -> groups.id, nullable only for legacy or installation-owned events
     profile_key
     source_mode
+    links_json
 
 Controlled profiles include meeting, conference, workshop, tutorial, and
 board_meeting. Existing Hugo-backed conferences remain source_mode hugo.
@@ -300,7 +304,6 @@ Occurrence-scoped external identity and invitation state:
     normalized_email
     name
     affiliation
-    invite_token_hash
     expires_at
     invited_by_user_id -> users.id
     revoked_at
@@ -309,6 +312,13 @@ Occurrence-scoped external identity and invitation state:
 The email is an invitation destination, not proof of an existing user identity.
 A verified account may claim an invitation through the existing identity
 boundary.
+
+### event_occurrence_access_tokens
+
+Opaque hashed capabilities bind one occurrence to exactly one authenticated
+user or invited guest. GET renders the landing page without mutating state.
+The intentional POST records first and latest use and may be repeated until the
+token expires or is revoked, so a participant who is disconnected can rejoin.
 
 ### event_occurrence_join_confirmations
 
@@ -321,6 +331,8 @@ One intentional PKIC join action:
     name_snapshot
     affiliation_snapshot
     consent_acceptance_id -> consent_acceptances.id
+    guest_consent_acceptance_id -> event_occurrence_guest_consents.id
+    join_count
     confirmed_at
     attendance_verified_at
     attendance_verification_source
@@ -335,13 +347,12 @@ attendee counts for one identity and occurrence.
 
 ## Terms and consent
 
-The existing event_terms and consent_acceptances tables remain canonical.
-Meeting series are backed by an event, so the current event and terms
-relationship applies.
-
-Migration 0035 adds an occurrence or join-confirmation reference to consent
-evidence without rebuilding the existing table. Existing registration and
-proposal triggers are extended to recognize the meeting-entry context.
+The existing event_terms and consent_acceptances tables remain canonical for
+authenticated users. Meeting series are backed by an event, so the current
+event and terms relationship applies. Because the deployed consent table has a
+required user_id, migration 0035 adds the FK-backed
+event_occurrence_guest_consents companion instead of rebuilding that table.
+Both stores are accessed through one consent contract and service.
 
 Acceptance uniqueness is event, user or guest identity, audience, term, and
 version. Join confirmation is per occurrence and may reuse an existing current
@@ -368,7 +379,7 @@ an option is retired.
 
     id
     form_id -> forms.id
-    owner_group_id -> groups.id
+    owner_group_id -> groups.id, nullable only for installation placements
     context_type
     context_ref
     audience

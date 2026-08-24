@@ -33,7 +33,7 @@ CREATE TABLE membership_categories (
   is_individual INTEGER NOT NULL DEFAULT 0 CHECK (is_individual IN (0, 1)),
   -- org-less categories (H5/H6/H7) — mirrors INDIVIDUAL_MEMBERSHIP_CATEGORIES
   is_voting     INTEGER NOT NULL DEFAULT 0 CHECK (is_voting IN (0, 1))
-  -- forum + WG voting rights (A-G only) — mirrors VOTING_CATEGORIES
+  -- consortium and group voting rights (A-G only) — mirrors VOTING_CATEGORIES
 );
 
 INSERT INTO membership_categories (code, is_individual, is_voting) VALUES
@@ -906,7 +906,7 @@ CREATE INDEX idx_referral_conversions_code_created
 --    (idempotency key for the Stripe webhook, mirroring `donations.
 --    checkout_session_id`).
 --
--- 3. working_groups / working_group_members — required immediately by GET /api/v1/working-groups
+-- 3. groups / group_memberships — required immediately by GET /api/v1/working-groups
 --    (list) and GET /api/v1/working-groups/:id (detail + member list).
 --    Seeded here with the six working groups already published under
 --    content/wg/ so the public endpoints return real data before
@@ -1135,80 +1135,418 @@ CREATE TABLE sponsorship_automation_effects (
   PRIMARY KEY (sponsorship_id, effect_key)
 );
 
--- ── Working groups ─────────────────────────────────────────────
+-- ── Groups ─────────────────────────────────────────────────────
+-- Groups are the generic collaboration boundary. Working groups, boards,
+-- committees, chapters, and all-member communication groups share this one
+-- model and the same authorization, membership, event, form, and vote code.
 
--- Chairs/vice-chairs are resolved from user_roles (role-wg_chair/
--- role-wg_vice_chair, context_type='working_group') — see consolidated migration 0035 —
--- not a column here, so there is exactly one source of truth for who chairs
--- a working group.
-CREATE TABLE working_groups (
-  id                       TEXT NOT NULL PRIMARY KEY,
-  name                     TEXT NOT NULL,
-  slug                     TEXT NOT NULL UNIQUE,
-  description              TEXT,
-  mailing_list_email       TEXT,
-  min_endorsers_for_ballot INTEGER NOT NULL DEFAULT 0,
-  active                   INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
-  created_at               TEXT NOT NULL,
-  updated_at               TEXT NOT NULL
-);
-
-CREATE TABLE working_group_members (
+CREATE TABLE group_types (
   id               TEXT NOT NULL PRIMARY KEY,
-  working_group_id TEXT NOT NULL,
-  user_id          TEXT NOT NULL,
-  -- Which membership (individual or organization-tied aggregate, `members.id`
-  -- from consolidated migration 0035 below) this WG seat is held on behalf of. Nullable:
-  -- a staff-driven add for a target holding more than one active membership
-  -- has no unambiguous "acting as" context to record (PR #1 review,
-  -- phase1-2-review-20260817.md blocker 2 — "Working-group participation...
-  -- need an explicit member_id when the person acts on behalf of a
-  -- particular member"). Forward references `members`, created by the next
-  -- migration in this same unreleased range — SQLite does not validate FK
-  -- target existence at CREATE TABLE time, only at DML time, and `members`
-  -- exists by the time any row here is ever written.
-  member_id        TEXT,
-  joined_at        TEXT NOT NULL,
-  left_at          TEXT,
-  FOREIGN KEY(working_group_id) REFERENCES working_groups(id),
-  FOREIGN KEY(user_id) REFERENCES users(id),
-  FOREIGN KEY(member_id) REFERENCES members(id)
+  key              TEXT NOT NULL UNIQUE,
+  singular_label   TEXT NOT NULL,
+  plural_label     TEXT NOT NULL,
+  description      TEXT,
+  active           INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+  sort_order       INTEGER NOT NULL DEFAULT 0,
+  created_at       TEXT NOT NULL,
+  updated_at       TEXT NOT NULL
 );
 
-CREATE INDEX idx_wg_members_wg ON working_group_members(working_group_id, left_at);
-CREATE INDEX idx_wg_members_user ON working_group_members(user_id);
-CREATE INDEX idx_wg_members_member ON working_group_members(member_id);
--- Weekly membership digests query one closed time window across every WG.
--- Put the range column first so both join and leave branches remain indexed
--- without depending on an individual working_group_id predicate.
-CREATE INDEX idx_wg_members_joined_window ON working_group_members(joined_at, working_group_id);
-CREATE INDEX idx_wg_members_left_window ON working_group_members(left_at, working_group_id)
-  WHERE left_at IS NOT NULL;
--- At most one active (left_at IS NULL) membership per (working_group, user);
--- partial so a user can rejoin after leaving.
-CREATE UNIQUE INDEX idx_wg_members_active_unique ON working_group_members(working_group_id, user_id) WHERE left_at IS NULL;
-
-INSERT OR IGNORE INTO working_groups
-  (id, name, slug, description, mailing_list_email, min_endorsers_for_ballot, active, created_at, updated_at)
+INSERT INTO group_types
+  (id, key, singular_label, plural_label, description, active, sort_order, created_at, updated_at)
 VALUES
-  (lower(hex(randomblob(16))), 'Post-Quantum Cryptography Working Group', 'pqc',
+  ('group-type-working-group', 'working_group', 'Working Group', 'Working Groups', 'A topic-focused collaboration group.', 1, 10, datetime('now'), datetime('now')),
+  ('group-type-board', 'board', 'Board', 'Boards', 'A governing board.', 1, 20, datetime('now'), datetime('now')),
+  ('group-type-committee', 'committee', 'Committee', 'Committees', 'A standing or temporary committee.', 1, 30, datetime('now'), datetime('now')),
+  ('group-type-chapter', 'chapter', 'Chapter', 'Chapters', 'A regional or community chapter.', 1, 40, datetime('now'), datetime('now')),
+  ('group-type-community', 'community', 'Community', 'Communities', 'A communication and coordination group.', 1, 50, datetime('now'), datetime('now'));
+
+CREATE TABLE groups (
+  id                          TEXT NOT NULL PRIMARY KEY,
+  type_id                     TEXT NOT NULL,
+  parent_group_id             TEXT,
+  name                        TEXT NOT NULL,
+  slug                        TEXT NOT NULL UNIQUE,
+  description                 TEXT,
+  links_json                  TEXT,
+  governance_inheritance_mode TEXT NOT NULL DEFAULT 'inherited',
+  eligibility_mode            TEXT NOT NULL DEFAULT 'open',
+  automatic_enrollment_mode   TEXT NOT NULL DEFAULT 'none',
+  allow_automatic_opt_out     INTEGER NOT NULL DEFAULT 1 CHECK (allow_automatic_opt_out IN (0, 1)),
+  min_endorsers_for_ballot    INTEGER NOT NULL DEFAULT 0,
+  active                      INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+  created_at                  TEXT NOT NULL,
+  updated_at                  TEXT NOT NULL,
+  FOREIGN KEY(type_id) REFERENCES group_types(id),
+  FOREIGN KEY(parent_group_id) REFERENCES groups(id),
+  CHECK (parent_group_id IS NULL OR parent_group_id <> id)
+);
+
+CREATE INDEX idx_groups_parent_active
+  ON groups(parent_group_id, active, name, id);
+CREATE INDEX idx_groups_type_active
+  ON groups(type_id, active, name, id);
+
+-- D1 cannot defer recursive hierarchy validation to application code because
+-- other writers may exist. Reject direct and indirect cycles at the database
+-- boundary while leaving configurable vocabularies out of brittle CHECKs.
+CREATE TRIGGER trg_groups_prevent_cycle_insert
+BEFORE INSERT ON groups
+WHEN NEW.parent_group_id IS NOT NULL
+BEGIN
+  SELECT CASE WHEN EXISTS (
+    WITH RECURSIVE ancestors(id) AS (
+      SELECT NEW.parent_group_id
+      UNION ALL
+      SELECT g.parent_group_id
+      FROM groups g JOIN ancestors a ON g.id = a.id
+      WHERE g.parent_group_id IS NOT NULL
+    )
+    SELECT 1 FROM ancestors WHERE id = NEW.id
+  ) THEN RAISE(ABORT, 'group hierarchy cycle') END;
+END;
+
+CREATE TRIGGER trg_groups_prevent_cycle_update
+BEFORE UPDATE OF parent_group_id ON groups
+WHEN NEW.parent_group_id IS NOT NULL
+BEGIN
+  SELECT CASE WHEN EXISTS (
+    WITH RECURSIVE ancestors(id) AS (
+      SELECT NEW.parent_group_id
+      UNION ALL
+      SELECT g.parent_group_id
+      FROM groups g JOIN ancestors a ON g.id = a.id
+      WHERE g.parent_group_id IS NOT NULL
+    )
+    SELECT 1 FROM ancestors WHERE id = NEW.id
+  ) THEN RAISE(ABORT, 'group hierarchy cycle') END;
+END;
+
+-- One row represents one user participating in one group on behalf of one
+-- membership aggregate. Multiple represented organizations therefore use
+-- multiple rows, without a participant/mandate join-table hierarchy.
+CREATE TABLE group_memberships (
+  id                 TEXT NOT NULL PRIMARY KEY,
+  group_id           TEXT NOT NULL,
+  user_id            TEXT NOT NULL,
+  member_id          TEXT NOT NULL,
+  source             TEXT NOT NULL DEFAULT 'self_service',
+  created_by_user_id TEXT,
+  joined_at          TEXT NOT NULL,
+  left_at            TEXT,
+  created_at         TEXT NOT NULL,
+  updated_at         TEXT NOT NULL,
+  CHECK (left_at IS NULL OR left_at >= joined_at),
+  FOREIGN KEY(group_id) REFERENCES groups(id),
+  FOREIGN KEY(user_id) REFERENCES users(id),
+  FOREIGN KEY(member_id) REFERENCES members(id),
+  FOREIGN KEY(created_by_user_id) REFERENCES users(id)
+);
+
+CREATE UNIQUE INDEX uq_group_memberships_active_capacity
+  ON group_memberships(group_id, user_id, member_id)
+  WHERE left_at IS NULL;
+CREATE INDEX idx_group_memberships_group_active
+  ON group_memberships(group_id, left_at, user_id, member_id);
+CREATE INDEX idx_group_memberships_user_active
+  ON group_memberships(user_id, left_at, group_id, member_id);
+CREATE INDEX idx_group_memberships_member_active
+  ON group_memberships(member_id, left_at, group_id, user_id);
+CREATE INDEX idx_group_memberships_joined_window
+  ON group_memberships(joined_at, group_id);
+CREATE INDEX idx_group_memberships_left_window
+  ON group_memberships(left_at, group_id)
+  WHERE left_at IS NOT NULL;
+
+-- A child membership is explicit, but it is only valid while the user has at
+-- least one active capacity in the direct parent. The represented Member does
+-- not need to be the same in both groups.
+CREATE TRIGGER trg_group_memberships_require_parent_insert
+BEFORE INSERT ON group_memberships
+WHEN EXISTS (
+  SELECT 1 FROM groups g
+  WHERE g.id = NEW.group_id AND g.parent_group_id IS NOT NULL
+)
+BEGIN
+  SELECT CASE WHEN NOT EXISTS (
+    SELECT 1
+    FROM groups child
+    JOIN group_memberships parent_membership
+      ON parent_membership.group_id = child.parent_group_id
+     AND parent_membership.user_id = NEW.user_id
+     AND parent_membership.left_at IS NULL
+    WHERE child.id = NEW.group_id
+  ) THEN RAISE(ABORT, 'active parent group membership required') END;
+END;
+
+CREATE TRIGGER trg_group_memberships_require_parent_reactivate
+BEFORE UPDATE OF left_at ON group_memberships
+WHEN OLD.left_at IS NOT NULL AND NEW.left_at IS NULL
+ AND EXISTS (
+   SELECT 1 FROM groups g
+   WHERE g.id = NEW.group_id AND g.parent_group_id IS NOT NULL
+ )
+BEGIN
+  SELECT CASE WHEN NOT EXISTS (
+    SELECT 1
+    FROM groups child
+    JOIN group_memberships parent_membership
+      ON parent_membership.group_id = child.parent_group_id
+     AND parent_membership.user_id = NEW.user_id
+     AND parent_membership.left_at IS NULL
+    WHERE child.id = NEW.group_id
+  ) THEN RAISE(ABORT, 'active parent group membership required') END;
+END;
+
+-- Ending the user's final capacity in a parent ends active descendant
+-- capacities. Restoring the parent does not silently restore descendants.
+CREATE TRIGGER trg_group_memberships_end_descendants
+AFTER UPDATE OF left_at ON group_memberships
+WHEN OLD.left_at IS NULL AND NEW.left_at IS NOT NULL
+ AND NOT EXISTS (
+   SELECT 1 FROM group_memberships alternative
+   WHERE alternative.group_id = OLD.group_id
+     AND alternative.user_id = OLD.user_id
+     AND alternative.left_at IS NULL
+ )
+BEGIN
+  UPDATE group_memberships
+  SET left_at = NEW.left_at,
+      updated_at = NEW.updated_at
+  WHERE user_id = OLD.user_id
+    AND left_at IS NULL
+    AND group_id IN (
+      WITH RECURSIVE descendants(id) AS (
+        SELECT id FROM groups WHERE parent_group_id = OLD.group_id
+        UNION ALL
+        SELECT g.id
+        FROM groups g JOIN descendants d ON g.parent_group_id = d.id
+      )
+      SELECT id FROM descendants
+    );
+END;
+
+-- Never delete membership history. Commands end a capacity by setting
+-- left_at, which preserves auditability and prevents orphaned references.
+CREATE TRIGGER trg_group_memberships_prevent_delete
+BEFORE DELETE ON group_memberships
+BEGIN
+  SELECT RAISE(ABORT, 'group memberships must be ended, not deleted');
+END;
+
+-- Eligibility and automatic enrollment are separate policies. An automatic
+-- all-member communication group remains top-level and does not become a
+-- structural parent. Category rules can be changed without rebuilding groups.
+CREATE TABLE group_membership_category_rules (
+  id                       TEXT NOT NULL PRIMARY KEY,
+  group_id                 TEXT NOT NULL,
+  membership_category_code TEXT NOT NULL,
+  permits_join             INTEGER NOT NULL DEFAULT 1 CHECK (permits_join IN (0, 1)),
+  automatic_enrollment     INTEGER NOT NULL DEFAULT 0 CHECK (automatic_enrollment IN (0, 1)),
+  created_at               TEXT NOT NULL,
+  updated_at               TEXT NOT NULL,
+  UNIQUE (group_id, membership_category_code),
+  FOREIGN KEY(group_id) REFERENCES groups(id),
+  FOREIGN KEY(membership_category_code) REFERENCES membership_categories(code)
+);
+
+CREATE INDEX idx_group_category_rules_category
+  ON group_membership_category_rules(membership_category_code, group_id);
+
+CREATE TABLE group_automatic_enrollment_opt_outs (
+  group_id     TEXT NOT NULL,
+  user_id      TEXT NOT NULL,
+  opted_out_at TEXT NOT NULL,
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL,
+  PRIMARY KEY (group_id, user_id),
+  FOREIGN KEY(group_id) REFERENCES groups(id),
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+CREATE INDEX idx_group_auto_opt_outs_user
+  ON group_automatic_enrollment_opt_outs(user_id, group_id);
+
+INSERT OR IGNORE INTO groups
+  (id, type_id, parent_group_id, name, slug, description,
+   governance_inheritance_mode, eligibility_mode, automatic_enrollment_mode,
+   allow_automatic_opt_out, min_endorsers_for_ballot, active, created_at, updated_at)
+VALUES
+  ('group-all-members', 'group-type-community', NULL, 'All Members', 'all-members',
+   'The default communication and coordination group for active consortium members.',
+   'inherited', 'category', 'category', 1, 0, 1, datetime('now'), datetime('now')),
+  ('group-executive-council', 'group-type-board', NULL, 'Executive Council', 'executive-council',
+   'The consortium governing group.',
+   'inherited', 'managed', 'none', 0, 0, 1, datetime('now'), datetime('now')),
+  ('group-pqc', 'group-type-working-group', NULL, 'Post-Quantum Cryptography Working Group', 'pqc',
    'Preparing the PKI ecosystem for the quantum computing era through collaborative research, education, standards alignment, and practical tooling.',
-   NULL, 0, 1, datetime('now'), datetime('now')),
-  (lower(hex(randomblob(16))), 'Cryptographic Module Working Group', 'cm',
+   'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now')),
+  ('group-cm', 'group-type-working-group', NULL, 'Cryptographic Module Working Group', 'cm',
    'A central forum for addressing cryptographic module (CM) and hardware security module (HSM) related topics within the PKI ecosystem.',
-   NULL, 0, 1, datetime('now'), datetime('now')),
-  (lower(hex(randomblob(16))), 'PKI Maturity Model Working Group', 'pkimm',
+   'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now')),
+  ('group-pkimm', 'group-type-working-group', NULL, 'PKI Maturity Model Working Group', 'pkimm',
    'Building a globally recognized PKI maturity model for evaluating, planning, and comparing PKI implementations.',
-   NULL, 0, 1, datetime('now'), datetime('now')),
-  (lower(hex(randomblob(16))), 'Training and Certification Working Group', 'tcwg',
+   'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now')),
+  ('group-tcwg', 'group-type-working-group', NULL, 'Training and Certification Working Group', 'tcwg',
    'Advancing PKI knowledge and skills through structured training paths, certification programs, and accessible educational resources.',
-   NULL, 0, 1, datetime('now'), datetime('now')),
-  (lower(hex(randomblob(16))), 'CA Working Group', 'ca',
+   'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now')),
+  ('group-ca', 'group-type-working-group', NULL, 'CA Working Group', 'ca',
    'A working group for discussions and information sharing among publicly trusted Certificate Authorities.',
-   NULL, 0, 1, datetime('now'), datetime('now')),
-  (lower(hex(randomblob(16))), 'CBOM Profiles Working Group', 'cbom',
+   'inherited', 'category', 'none', 1, 0, 1, datetime('now'), datetime('now')),
+  ('group-cbom', 'group-type-working-group', NULL, 'CBOM Profiles Working Group', 'cbom',
    'Developing a neutral, open methodology for defining Cryptographic Bill of Materials (CBOM) profiles that map onto industry BOM standards such as SPDX and CycloneDX.',
-   NULL, 0, 1, datetime('now'), datetime('now'));
+   'inherited', 'open', 'none', 1, 0, 1, datetime('now'), datetime('now'));
+
+INSERT OR IGNORE INTO group_membership_category_rules
+  (id, group_id, membership_category_code, permits_join, automatic_enrollment, created_at, updated_at)
+VALUES
+  ('group-category-rule-ca-a', 'group-ca', 'A', 1, 0, datetime('now'), datetime('now'));
+
+INSERT OR IGNORE INTO group_membership_category_rules
+  (id, group_id, membership_category_code, permits_join, automatic_enrollment, created_at, updated_at)
+SELECT
+  'group-category-rule-all-members-' || lower(code),
+  'group-all-members',
+  code,
+  1,
+  1,
+  datetime('now'),
+  datetime('now')
+FROM membership_categories;
+
+-- ── Reusable live-editable forms ──────────────────────────────────
+-- Form definitions are reusable. Placements provide the audience and context;
+-- stable field IDs preserve historical answers while labels, order, and
+-- options remain editable like Google Forms or Microsoft Forms.
+ALTER TABLE form_fields ADD COLUMN updated_at TEXT;
+ALTER TABLE form_fields ADD COLUMN archived_at TEXT;
+
+UPDATE form_fields SET updated_at = created_at WHERE updated_at IS NULL;
+
+CREATE TABLE form_placements (
+  id             TEXT NOT NULL PRIMARY KEY,
+  form_id        TEXT NOT NULL,
+  owner_group_id TEXT,
+  context_type   TEXT NOT NULL,
+  context_ref    TEXT,
+  audience       TEXT NOT NULL,
+  active         INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+  opens_at       TEXT,
+  closes_at      TEXT,
+  created_at     TEXT NOT NULL,
+  updated_at     TEXT NOT NULL,
+  FOREIGN KEY(form_id) REFERENCES forms(id),
+  FOREIGN KEY(owner_group_id) REFERENCES groups(id)
+);
+
+CREATE UNIQUE INDEX uq_form_placements_context
+  ON form_placements(form_id, context_type, COALESCE(context_ref, ''), COALESCE(owner_group_id, ''));
+CREATE INDEX idx_form_placements_owner_active
+  ON form_placements(owner_group_id, active, opens_at, closes_at, id);
+CREATE INDEX idx_form_placements_context_active
+  ON form_placements(context_type, context_ref, active, id);
+
+CREATE TRIGGER trg_form_placements_validate_context_insert
+BEFORE INSERT ON form_placements
+WHEN (NEW.context_type = 'installation' AND NEW.context_ref IS NOT NULL)
+  OR (NEW.context_type = 'group' AND NOT EXISTS (SELECT 1 FROM groups WHERE id = NEW.context_ref))
+  OR (NEW.context_type = 'event' AND NOT EXISTS (SELECT 1 FROM events WHERE id = NEW.context_ref))
+  OR (NEW.context_type = 'organization' AND NOT EXISTS (SELECT 1 FROM members WHERE id = NEW.context_ref))
+  OR NEW.context_type NOT IN ('installation', 'group', 'event', 'organization')
+BEGIN
+  SELECT RAISE(ABORT, 'form placement context is invalid');
+END;
+
+CREATE TRIGGER trg_form_placements_validate_context_update
+BEFORE UPDATE OF context_type, context_ref ON form_placements
+WHEN (NEW.context_type = 'installation' AND NEW.context_ref IS NOT NULL)
+  OR (NEW.context_type = 'group' AND NOT EXISTS (SELECT 1 FROM groups WHERE id = NEW.context_ref))
+  OR (NEW.context_type = 'event' AND NOT EXISTS (SELECT 1 FROM events WHERE id = NEW.context_ref))
+  OR (NEW.context_type = 'organization' AND NOT EXISTS (SELECT 1 FROM members WHERE id = NEW.context_ref))
+  OR NEW.context_type NOT IN ('installation', 'group', 'event', 'organization')
+BEGIN
+  SELECT RAISE(ABORT, 'form placement context is invalid');
+END;
+
+CREATE TABLE form_group_grants (
+  form_id   TEXT NOT NULL,
+  group_id  TEXT NOT NULL,
+  capability TEXT NOT NULL,
+  created_by_user_id TEXT,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (form_id, group_id, capability),
+  FOREIGN KEY(form_id) REFERENCES forms(id),
+  FOREIGN KEY(group_id) REFERENCES groups(id),
+  FOREIGN KEY(created_by_user_id) REFERENCES users(id)
+);
+
+CREATE INDEX idx_form_group_grants_group
+  ON form_group_grants(group_id, capability, form_id);
+
+ALTER TABLE form_submissions ADD COLUMN placement_id TEXT REFERENCES form_placements(id);
+ALTER TABLE form_submission_answers ADD COLUMN field_id TEXT REFERENCES form_fields(id);
+
+UPDATE form_submission_answers
+SET field_id = (
+  SELECT ff.id
+  FROM form_fields ff
+  JOIN form_submissions fs ON fs.id = form_submission_answers.submission_id
+  WHERE ff.form_id = fs.form_id
+    AND ff.key = form_submission_answers.field_key
+)
+WHERE field_id IS NULL;
+
+CREATE INDEX idx_form_submissions_placement_status
+  ON form_submissions(placement_id, status, submitted_at, id);
+CREATE INDEX idx_form_answers_field
+  ON form_submission_answers(field_id, submission_id);
+
+CREATE TRIGGER trg_form_answers_require_field_insert
+BEFORE INSERT ON form_submission_answers
+WHEN NEW.field_id IS NULL
+BEGIN
+  SELECT RAISE(ABORT, 'form answer requires a stable field id');
+END;
+
+CREATE TRIGGER trg_form_answers_validate_field_insert
+BEFORE INSERT ON form_submission_answers
+WHEN NOT EXISTS (
+  SELECT 1
+  FROM form_fields ff
+  JOIN form_submissions fs ON fs.id = NEW.submission_id
+  WHERE ff.id = NEW.field_id
+    AND ff.form_id = fs.form_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'form answer field does not belong to submission form');
+END;
+
+CREATE TRIGGER trg_form_answers_validate_field_update
+BEFORE UPDATE OF submission_id, field_id ON form_submission_answers
+WHEN NEW.field_id IS NULL OR NOT EXISTS (
+  SELECT 1
+  FROM form_fields ff
+  JOIN form_submissions fs ON fs.id = NEW.submission_id
+  WHERE ff.id = NEW.field_id
+    AND ff.form_id = fs.form_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'form answer field does not belong to submission form');
+END;
+
+CREATE TRIGGER trg_form_fields_preserve_answered_delete
+BEFORE DELETE ON form_fields
+WHEN EXISTS (SELECT 1 FROM form_submission_answers WHERE field_id = OLD.id)
+BEGIN
+  SELECT RAISE(ABORT, 'answered form fields must be archived, not deleted');
+END;
+
+CREATE TRIGGER trg_form_fields_preserve_answered_move
+BEFORE UPDATE OF form_id ON form_fields
+WHEN EXISTS (SELECT 1 FROM form_submission_answers WHERE field_id = OLD.id)
+BEGIN
+  SELECT RAISE(ABORT, 'answered form fields cannot move between forms');
+END;
 
 -- ── Portal-managed membership application form ───────────────────────
 -- forms.purpose already allows 'application' (migration 0000) — no rebuild
@@ -1239,9 +1577,31 @@ VALUES
   (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
    'reason', 'Why do you want to join PKI Consortium?', 'textarea', 1, NULL, NULL, 60, datetime('now')),
   (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
-   'working_groups', 'Working Groups of Interest', 'multi_select', 0,
+   'groups', 'Working Groups of Interest', 'multi_select', 0,
    '[{"value":"pqc","label":"Post-Quantum Cryptography Working Group"},{"value":"cm","label":"Cryptographic Module Working Group"},{"value":"pkimm","label":"PKI Maturity Model Working Group"},{"value":"tcwg","label":"Training and Certification Working Group"},{"value":"ca","label":"CA Working Group"},{"value":"cbom","label":"CBOM Profiles Working Group"}]',
    '{"uiWidget":"checkboxes"}', 70, datetime('now'));
+
+UPDATE form_fields
+SET updated_at = created_at
+WHERE form_id = (SELECT id FROM forms WHERE key = 'membership-application')
+  AND updated_at IS NULL;
+
+INSERT OR IGNORE INTO form_placements
+  (id, form_id, owner_group_id, context_type, context_ref, audience, active,
+   opens_at, closes_at, created_at, updated_at)
+VALUES (
+  'form-placement-membership-application',
+  (SELECT id FROM forms WHERE key = 'membership-application'),
+  NULL,
+  'installation',
+  NULL,
+  'prospective_member',
+  1,
+  NULL,
+  NULL,
+  datetime('now'),
+  datetime('now')
+);
 
 -- ── Email templates ──────────────────────────────────────
 
@@ -1298,8 +1658,8 @@ A member of our team will follow up with you shortly to discuss next steps.',
 -- organization-tied aggregate. Both are additive, 1:1-or-1:N tables keyed
 -- off members.id, not columns bolted onto members/organizations.
 --
--- Representative *roles* (primary contact, secondary contact, voting
--- delegate) deliberately do not get their own table here — they reuse the
+-- Representative contact designations deliberately do not get their own
+-- table here — they reuse the
 -- existing roles/user_roles RBAC system (see consolidated migration 0035's additive
 -- delta), scoped by context_type='organization'/context_id=members.id.
 
@@ -1318,43 +1678,162 @@ CREATE TABLE member_category_assignments (
 );
 
 -- ── Organization representatives ─────────────────────────────────────────
--- The N people who represent an org-tied membership aggregate. Temporal
--- (joined_at/left_at) — active/inactive is exactly what left_at IS NULL/IS
--- NOT NULL means, so transfer (close old row, open new one) and rejoin
--- (open a fresh row) both fall out of ordinary inserts/updates.
+-- The N people who represent an organization-tied membership aggregate.
+-- One durable row per pair is restored in place so a contact block cannot be
+-- bypassed by inserting another active row for the same pair.
 CREATE TABLE organization_representatives (
   id                  TEXT NOT NULL PRIMARY KEY,
   member_id           TEXT NOT NULL,
   -- FK to members.id — the organization's aggregate row
   user_id             TEXT NOT NULL,
+  source              TEXT NOT NULL,
+  -- allowed: verified_domain | organization_contact | staff | migration
   show_on_org_profile INTEGER NOT NULL DEFAULT 1 CHECK (show_on_org_profile IN (0, 1)),
   joined_at           TEXT NOT NULL,
   left_at             TEXT,
-  -- NULL while active
+  blocked_at          TEXT,
+  blocked_by_user_id  TEXT,
   created_at          TEXT NOT NULL,
   updated_at          TEXT NOT NULL,
   CHECK (left_at IS NULL OR left_at >= joined_at),
+  CHECK (blocked_at IS NULL OR left_at IS NOT NULL),
+  UNIQUE (member_id, user_id),
   UNIQUE (id, member_id),
   -- lets a service-layer check prove a representative row belongs to a
   -- specific member before granting a representative role against it
   FOREIGN KEY(member_id) REFERENCES members(id),
-  FOREIGN KEY(user_id) REFERENCES users(id)
+  FOREIGN KEY(user_id) REFERENCES users(id),
+  FOREIGN KEY(blocked_by_user_id) REFERENCES users(id)
 );
-
--- A person may represent more than one organization at a time (confirmed
--- product decision — e.g. someone representing both their own employer and
--- PKI Consortium, or multiple member organizations simultaneously), so this
--- constrains only the active pair, not "one active representative row per
--- user" globally. Partial so a former representative can rejoin: their old,
--- now-inactive (left_at IS NOT NULL) row no longer occupies the pair.
-CREATE UNIQUE INDEX uq_organization_representatives_active_pair
-  ON organization_representatives(member_id, user_id)
-  WHERE left_at IS NULL;
 
 CREATE INDEX idx_organization_representatives_member_active
   ON organization_representatives(member_id, left_at, joined_at);
 CREATE INDEX idx_organization_representatives_user_active
   ON organization_representatives(user_id, left_at, joined_at);
+
+CREATE TRIGGER trg_organization_representatives_require_org_member_insert
+BEFORE INSERT ON organization_representatives
+WHEN NOT EXISTS (
+  SELECT 1 FROM members m
+  WHERE m.id = NEW.member_id AND m.organization_id IS NOT NULL
+)
+BEGIN
+  SELECT RAISE(ABORT, 'organization representative requires an organization membership');
+END;
+
+CREATE TRIGGER trg_organization_representatives_require_org_member_update
+BEFORE UPDATE OF member_id ON organization_representatives
+WHEN NOT EXISTS (
+  SELECT 1 FROM members m
+  WHERE m.id = NEW.member_id AND m.organization_id IS NOT NULL
+)
+BEGIN
+  SELECT RAISE(ABORT, 'organization representative requires an organization membership');
+END;
+
+-- Closing or blocking a representation immediately removes every active
+-- group capacity held for that Member. Historical memberships and actions
+-- remain intact.
+CREATE TRIGGER trg_organization_representatives_end_group_capacities
+AFTER UPDATE OF left_at, blocked_at ON organization_representatives
+WHEN (OLD.left_at IS NULL AND NEW.left_at IS NOT NULL)
+  OR (OLD.blocked_at IS NULL AND NEW.blocked_at IS NOT NULL)
+BEGIN
+  UPDATE group_memberships
+  SET left_at = COALESCE(NEW.left_at, NEW.blocked_at),
+      updated_at = NEW.updated_at
+  WHERE user_id = NEW.user_id
+    AND member_id = NEW.member_id
+    AND left_at IS NULL;
+
+  UPDATE user_roles
+  SET revoked_at = COALESCE(NEW.left_at, NEW.blocked_at)
+  WHERE user_id = NEW.user_id
+    AND context_type = 'organization'
+    AND context_id = NEW.member_id
+    AND role_id IN ('role-primary_contact', 'role-secondary_contact')
+    AND revoked_at IS NULL;
+END;
+
+-- A group capacity must be held either through the user's own active
+-- individual Member or through an active organization representation. Once a
+-- user represents any organization, individual group participation is
+-- disallowed to avoid ambiguous IPR attribution.
+CREATE TRIGGER trg_group_memberships_validate_capacity_insert
+BEFORE INSERT ON group_memberships
+BEGIN
+  SELECT CASE WHEN NOT EXISTS (
+    SELECT 1
+    FROM members m
+    WHERE m.id = NEW.member_id
+      AND m.status = 'active'
+      AND (
+        (
+          m.member_type = 'organization'
+          AND EXISTS (
+            SELECT 1 FROM organization_representatives rep
+            WHERE rep.member_id = m.id
+              AND rep.user_id = NEW.user_id
+              AND rep.left_at IS NULL
+              AND rep.blocked_at IS NULL
+          )
+        )
+        OR (
+          m.member_type = 'individual'
+          AND m.user_id = NEW.user_id
+          AND NOT EXISTS (
+            SELECT 1 FROM organization_representatives rep
+            WHERE rep.user_id = NEW.user_id
+              AND rep.left_at IS NULL
+              AND rep.blocked_at IS NULL
+          )
+        )
+      )
+  ) THEN RAISE(ABORT, 'active representative capacity required') END;
+END;
+
+CREATE TRIGGER trg_group_memberships_validate_capacity_reactivate
+BEFORE UPDATE OF left_at ON group_memberships
+WHEN OLD.left_at IS NOT NULL AND NEW.left_at IS NULL
+BEGIN
+  SELECT CASE WHEN NOT EXISTS (
+    SELECT 1
+    FROM members m
+    WHERE m.id = NEW.member_id
+      AND m.status = 'active'
+      AND (
+        (
+          m.member_type = 'organization'
+          AND EXISTS (
+            SELECT 1 FROM organization_representatives rep
+            WHERE rep.member_id = m.id
+              AND rep.user_id = NEW.user_id
+              AND rep.left_at IS NULL
+              AND rep.blocked_at IS NULL
+          )
+        )
+        OR (
+          m.member_type = 'individual'
+          AND m.user_id = NEW.user_id
+          AND NOT EXISTS (
+            SELECT 1 FROM organization_representatives rep
+            WHERE rep.user_id = NEW.user_id
+              AND rep.left_at IS NULL
+              AND rep.blocked_at IS NULL
+          )
+        )
+      )
+  ) THEN RAISE(ABORT, 'active representative capacity required') END;
+END;
+
+CREATE TRIGGER trg_group_memberships_identity_immutable
+BEFORE UPDATE OF group_id, user_id, member_id ON group_memberships
+WHEN NEW.group_id <> OLD.group_id
+  OR NEW.user_id <> OLD.user_id
+  OR NEW.member_id <> OLD.member_id
+BEGIN
+  SELECT RAISE(ABORT, 'group membership identity is immutable');
+END;
 
 -- Section: Fine-Grained Access Control
 --
@@ -1387,9 +1866,8 @@ CREATE TABLE roles (
   single_holder_per_context INTEGER NOT NULL DEFAULT 0 CHECK (single_holder_per_context IN (0, 1)),
   -- when 1, at most one active grant of this role may exist per
   -- (context_type, context_id) — see uq_user_roles_single_holder_per_context
-  -- below. Used by the three organization-representative roles seeded at
-  -- the end of this migration (one primary contact, one secondary contact,
-  -- one voting delegate per organization at a time).
+  -- below. Used by the two organization-contact roles seeded at the end of
+  -- this migration (one primary and one secondary contact per organization).
   created_at     TEXT    NOT NULL,
   updated_at     TEXT    NOT NULL
 );
@@ -1408,7 +1886,7 @@ CREATE TABLE user_roles (
   user_id            TEXT NOT NULL,
   role_id            TEXT NOT NULL,
   context_type       TEXT,
-  -- allowed: 'event' | 'working_group' | 'organization' | NULL (global)
+  -- allowed: 'event' | 'group' | 'organization' | NULL (global)
   context_id         TEXT,
   granted_by_user_id TEXT,
   expires_at         TEXT,
@@ -1434,7 +1912,7 @@ CREATE UNIQUE INDEX uq_user_roles_single_holder_per_context
   WHERE revoked_at IS NULL AND single_holder_per_context = 1;
 
 -- `context_id` is intentionally polymorphic because a role may be scoped to
--- an event, working group, or membership aggregate. Keep that flexibility,
+-- an event, group, or membership aggregate. Keep that flexibility,
 -- but enforce the finite context vocabulary and ensure every scoped grant
 -- points at a live aggregate. Without these guards a typo or direct SQL import
 -- can create an authorization row that can never be resolved or revoked by
@@ -1444,9 +1922,9 @@ BEFORE INSERT ON user_roles
 FOR EACH ROW
 WHEN (NEW.context_type IS NULL AND NEW.context_id IS NOT NULL)
   OR (NEW.context_type IS NOT NULL AND NEW.context_id IS NULL)
-  OR (NEW.context_type IS NOT NULL AND NEW.context_type NOT IN ('event', 'working_group', 'organization'))
+  OR (NEW.context_type IS NOT NULL AND NEW.context_type NOT IN ('event', 'group', 'organization'))
   OR (NEW.context_type = 'event' AND NOT EXISTS (SELECT 1 FROM events WHERE id = NEW.context_id))
-  OR (NEW.context_type = 'working_group' AND NOT EXISTS (SELECT 1 FROM working_groups WHERE id = NEW.context_id))
+  OR (NEW.context_type = 'group' AND NOT EXISTS (SELECT 1 FROM groups WHERE id = NEW.context_id))
   OR (NEW.context_type = 'organization' AND NOT EXISTS (SELECT 1 FROM members WHERE id = NEW.context_id))
 BEGIN
   SELECT RAISE(ABORT, 'USER_ROLE_CONTEXT_INVALID');
@@ -1457,9 +1935,9 @@ BEFORE UPDATE OF context_type, context_id ON user_roles
 FOR EACH ROW
 WHEN (NEW.context_type IS NULL AND NEW.context_id IS NOT NULL)
   OR (NEW.context_type IS NOT NULL AND NEW.context_id IS NULL)
-  OR (NEW.context_type IS NOT NULL AND NEW.context_type NOT IN ('event', 'working_group', 'organization'))
+  OR (NEW.context_type IS NOT NULL AND NEW.context_type NOT IN ('event', 'group', 'organization'))
   OR (NEW.context_type = 'event' AND NOT EXISTS (SELECT 1 FROM events WHERE id = NEW.context_id))
-  OR (NEW.context_type = 'working_group' AND NOT EXISTS (SELECT 1 FROM working_groups WHERE id = NEW.context_id))
+  OR (NEW.context_type = 'group' AND NOT EXISTS (SELECT 1 FROM groups WHERE id = NEW.context_id))
   OR (NEW.context_type = 'organization' AND NOT EXISTS (SELECT 1 FROM members WHERE id = NEW.context_id))
 BEGIN
   SELECT RAISE(ABORT, 'USER_ROLE_CONTEXT_INVALID');
@@ -1475,7 +1953,7 @@ END;
 CREATE TRIGGER trg_user_roles_representative_requires_active
 BEFORE INSERT ON user_roles
 WHEN NEW.context_type = 'organization'
-  AND NEW.role_id IN ('role-primary_contact', 'role-secondary_contact', 'role-voting_delegate')
+  AND NEW.role_id IN ('role-primary_contact', 'role-secondary_contact')
   AND NEW.revoked_at IS NULL
   AND NOT EXISTS (
     SELECT 1
@@ -1491,7 +1969,7 @@ END;
 CREATE TRIGGER trg_user_roles_representative_update_requires_active
 BEFORE UPDATE OF user_id, role_id, context_type, context_id, revoked_at ON user_roles
 WHEN NEW.context_type = 'organization'
-  AND NEW.role_id IN ('role-primary_contact', 'role-secondary_contact', 'role-voting_delegate')
+  AND NEW.role_id IN ('role-primary_contact', 'role-secondary_contact')
   AND NEW.revoked_at IS NULL
   AND NOT EXISTS (
     SELECT 1
@@ -1532,9 +2010,9 @@ BEFORE INSERT ON permission_grants
 FOR EACH ROW
 WHEN (NEW.context_type IS NULL AND NEW.context_id IS NOT NULL)
   OR (NEW.context_type IS NOT NULL AND NEW.context_id IS NULL)
-  OR (NEW.context_type IS NOT NULL AND NEW.context_type NOT IN ('event', 'working_group', 'organization'))
+  OR (NEW.context_type IS NOT NULL AND NEW.context_type NOT IN ('event', 'group', 'organization'))
   OR (NEW.context_type = 'event' AND NOT EXISTS (SELECT 1 FROM events WHERE id = NEW.context_id))
-  OR (NEW.context_type = 'working_group' AND NOT EXISTS (SELECT 1 FROM working_groups WHERE id = NEW.context_id))
+  OR (NEW.context_type = 'group' AND NOT EXISTS (SELECT 1 FROM groups WHERE id = NEW.context_id))
   OR (NEW.context_type = 'organization' AND NOT EXISTS (SELECT 1 FROM members WHERE id = NEW.context_id))
 BEGIN
   SELECT RAISE(ABORT, 'PERMISSION_GRANT_CONTEXT_INVALID');
@@ -1545,9 +2023,9 @@ BEFORE UPDATE OF context_type, context_id ON permission_grants
 FOR EACH ROW
 WHEN (NEW.context_type IS NULL AND NEW.context_id IS NOT NULL)
   OR (NEW.context_type IS NOT NULL AND NEW.context_id IS NULL)
-  OR (NEW.context_type IS NOT NULL AND NEW.context_type NOT IN ('event', 'working_group', 'organization'))
+  OR (NEW.context_type IS NOT NULL AND NEW.context_type NOT IN ('event', 'group', 'organization'))
   OR (NEW.context_type = 'event' AND NOT EXISTS (SELECT 1 FROM events WHERE id = NEW.context_id))
-  OR (NEW.context_type = 'working_group' AND NOT EXISTS (SELECT 1 FROM working_groups WHERE id = NEW.context_id))
+  OR (NEW.context_type = 'group' AND NOT EXISTS (SELECT 1 FROM groups WHERE id = NEW.context_id))
   OR (NEW.context_type = 'organization' AND NOT EXISTS (SELECT 1 FROM members WHERE id = NEW.context_id))
 BEGIN
   SELECT RAISE(ABORT, 'PERMISSION_GRANT_CONTEXT_INVALID');
@@ -1565,13 +2043,13 @@ BEGIN
   SELECT RAISE(ABORT, 'EVENT_HAS_AUTHORIZATION_CONTEXT');
 END;
 
-CREATE TRIGGER protect_working_group_context_delete
-BEFORE DELETE ON working_groups
+CREATE TRIGGER protect_group_context_delete
+BEFORE DELETE ON groups
 FOR EACH ROW
-WHEN EXISTS (SELECT 1 FROM user_roles WHERE context_type = 'working_group' AND context_id = OLD.id)
-   OR EXISTS (SELECT 1 FROM permission_grants WHERE context_type = 'working_group' AND context_id = OLD.id)
+WHEN EXISTS (SELECT 1 FROM user_roles WHERE context_type = 'group' AND context_id = OLD.id)
+   OR EXISTS (SELECT 1 FROM permission_grants WHERE context_type = 'group' AND context_id = OLD.id)
 BEGIN
-  SELECT RAISE(ABORT, 'WORKING_GROUP_HAS_AUTHORIZATION_CONTEXT');
+  SELECT RAISE(ABORT, 'GROUP_HAS_AUTHORIZATION_CONTEXT');
 END;
 
 CREATE TRIGGER protect_membership_context_delete
@@ -1613,7 +2091,8 @@ CREATE TABLE refresh_tokens (
 INSERT INTO roles (id, name, description, is_system_role, created_at, updated_at) VALUES
   ('role-admin', 'admin', 'Full access', 1, datetime('now'), datetime('now')),
   ('role-membership_processor', 'membership_processor', 'Membership workflow only', 1, datetime('now'), datetime('now')),
-  ('role-wg_chair', 'wg_chair', 'WG-scoped (assigned per WG)', 1, datetime('now'), datetime('now')),
+  ('role-group_lead', 'group_lead', 'Leads a group and, by policy, its descendants', 1, datetime('now'), datetime('now')),
+  ('role-group_deputy_lead', 'group_deputy_lead', 'Acts with the same group-management capabilities as a group lead', 1, datetime('now'), datetime('now')),
   ('role-event_organizer', 'event_organizer', 'Full management of a specific event', 1, datetime('now'), datetime('now')),
   ('role-program_committee', 'program_committee', 'Proposal review and agenda setting for a specific event', 1, datetime('now'), datetime('now')),
   ('role-member', 'member', 'Authenticated PKIC member (A-G)', 1, datetime('now'), datetime('now')),
@@ -1644,8 +2123,8 @@ INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES
   (lower(hex(randomblob(16))), 'role-admin', 'events:read', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'events:write', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'events:manage', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'working-groups:read', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-admin', 'working-groups:write', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'groups:read', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'groups:write', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'email-templates:read', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'email-templates:write', datetime('now')),
   (lower(hex(randomblob(16))), 'role-admin', 'donations:read', datetime('now')),
@@ -1676,9 +2155,15 @@ INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES
   (lower(hex(randomblob(16))), 'role-membership_processor', 'membership:write', datetime('now')),
   (lower(hex(randomblob(16))), 'role-membership_processor', 'membership:approve', datetime('now')),
 
-  (lower(hex(randomblob(16))), 'role-wg_chair', 'working-groups:write', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-wg_chair', 'votes:create', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-wg_chair', 'votes:manage', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-group_lead', 'groups:read', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-group_lead', 'groups:write', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-group_lead', 'votes:create', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-group_lead', 'votes:manage', datetime('now')),
+
+  (lower(hex(randomblob(16))), 'role-group_deputy_lead', 'groups:read', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-group_deputy_lead', 'groups:write', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-group_deputy_lead', 'votes:create', datetime('now')),
+  (lower(hex(randomblob(16))), 'role-group_deputy_lead', 'votes:manage', datetime('now')),
 
   (lower(hex(randomblob(16))), 'role-event_organizer', 'events:read', datetime('now')),
   (lower(hex(randomblob(16))), 'role-event_organizer', 'events:write', datetime('now')),
@@ -1743,17 +2228,15 @@ DROP TABLE event_permissions;
 -- Reuses this same roles/user_roles system for organization representative
 -- designations instead of a bespoke organization_representative_roles
 -- table. Each is a singleton per organization: at most one active
--- role-primary_contact, one role-secondary_contact, and one
--- role-voting_delegate grant per (context_type='organization',
+-- role-primary_contact and one role-secondary_contact grant per (context_type='organization',
 -- context_id=members.id) at a time — enforced by
 -- uq_user_roles_single_holder_per_context above. No default permission
 -- bundle: the value of these roles is the designation itself, the same as
--- role-forum_chair/role-forum_vice_chair (consolidated migration 0035).
+-- group leadership designations.
 
 INSERT INTO roles (id, name, description, is_system_role, single_holder_per_context, created_at, updated_at) VALUES
   ('role-primary_contact', 'primary_contact', 'Primary point of contact for an organization membership', 1, 1, datetime('now'), datetime('now')),
-  ('role-secondary_contact', 'secondary_contact', 'Secondary point of contact for an organization membership', 1, 1, datetime('now'), datetime('now')),
-  ('role-voting_delegate', 'voting_delegate', 'Casts the organization''s forum-level vote', 1, 1, datetime('now'), datetime('now'));
+  ('role-secondary_contact', 'secondary_contact', 'Secondary point of contact for an organization membership', 1, 1, datetime('now'), datetime('now'));
 
 
 
@@ -1893,6 +2376,9 @@ CREATE TABLE organization_domain_claims (
 );
 
 CREATE INDEX idx_organization_domain_claims_org ON organization_domain_claims(organization_id);
+CREATE INDEX idx_organization_domain_claims_domain_org
+  ON organization_domain_claims(domain, organization_id)
+  WHERE organization_id IS NOT NULL;
 
 CREATE TRIGGER validate_organization_domain_claim_owner_insert
 BEFORE INSERT ON organization_domain_claims
@@ -1975,7 +2461,7 @@ CREATE INDEX idx_application_communications_application
 
 -- ── Google Groups desired state + sync queue ─────────────────
 -- Zero existing code for Google Groups sync prior to this migration. Every
--- trigger point (approval onboarding, WG join/leave, deactivation) writes a
+-- trigger point (approval onboarding, group join/leave, deactivation) writes a
 -- row here; a processor (folded into the existing 15-minute due-work cron)
 -- calls the Google Admin Directory API when service-account secrets are
 -- configured, and leaves the row `pending` with a logged reason otherwise.
@@ -2097,7 +2583,7 @@ CREATE TABLE membership_settings (
   ec_email_recipients           TEXT NOT NULL DEFAULT 'ec@lists.pkic.org',
   cc_applicant_emails           TEXT NOT NULL DEFAULT 'members@pkic.org',
   auto_reminder_on_holds        INTEGER NOT NULL DEFAULT 1 CHECK (auto_reminder_on_holds IN (0, 1)),
-  forum_vote_min_endorsers      INTEGER NOT NULL DEFAULT 0,
+  default_group_vote_min_endorsers INTEGER NOT NULL DEFAULT 0,
   updated_at                    TEXT NOT NULL,
   updated_by_user_id            TEXT,
   FOREIGN KEY(updated_by_user_id) REFERENCES users(id)
@@ -2266,11 +2752,11 @@ You have been added to the following PKI Consortium mailing lists:
     'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
   ),
   (
-    lower(hex(randomblob(16))), 'wg-calendar-invite', 1,
-    'You joined the {{workingGroupName}} working group',
+    lower(hex(randomblob(16))), 'group-membership-welcome', 1,
+    'You joined {{groupName}}',
     'Hi {{memberName}},
 
-You have joined the {{workingGroupName}} working group. Meeting calendar invites will be sent separately once available.',
+You have joined {{groupName}}. If this group has meetings, you can view upcoming occurrences and calendar subscriptions in the portal.',
     'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
   ),
   (
@@ -2385,15 +2871,31 @@ UPDATE users
         AND r.status = 'pending_email_confirmation'
    );
 
+-- Primary and alternate addresses carry explicit proof. A pending address is
+-- never eligible for domain-based organization representation. Existing
+-- accounts remain unverified for this purpose until a proof-producing flow
+-- records evidence; migration history alone must not imply mailbox control.
+ALTER TABLE users ADD COLUMN email_verified_at TEXT;
+ALTER TABLE users ADD COLUMN email_verification_method TEXT;
+
+CREATE INDEX idx_users_verified_email_domain
+  ON users(substr(normalized_email, instr(normalized_email, '@') + 1), id)
+  WHERE email_verified_at IS NOT NULL;
+
 CREATE TABLE user_emails (
   id               TEXT NOT NULL PRIMARY KEY,
   user_id          TEXT NOT NULL REFERENCES users(id),
   email            TEXT NOT NULL,
   normalized_email TEXT NOT NULL UNIQUE,
+  verified_at      TEXT,
+  verification_method TEXT,
   created_at       TEXT NOT NULL
 );
 
 CREATE INDEX idx_user_emails_user ON user_emails(user_id);
+CREATE INDEX idx_user_emails_verified_domain
+  ON user_emails(substr(normalized_email, instr(normalized_email, '@') + 1), user_id)
+  WHERE verified_at IS NOT NULL;
 
 -- An email is one global reservation whether it is primary, secondary, or
 -- pending verification. Application checks provide useful 409 responses;
@@ -2504,40 +3006,6 @@ BEGIN
   SELECT RAISE(ABORT, 'USER_IDENTITY_MERGE_DISABLED');
 END;
 
--- Section: WG/forum vice chairs
---
--- Resolves two of the three gaps originally found during hands-on testing
--- (issues-to-resolve.md) — the third (an organization-level membership
--- category column) is superseded by consolidated migration 0035's
--- member_category_assignments table, which is the sole source of truth for
--- an aggregate's category from day one; there is no organizations.
--- membership_category column to add or backfill here.
---
--- 1. Working groups had no vice-chair concept — `wg_chair` is a single
---    system role assigned via `user_roles` (context_type='working_group'),
---    with no parallel for a vice chair. `role-wg_vice_chair` is seeded here
---    with the same permission bundle as `role-wg_chair` (a vice chair
---    should be able to fully stand in for the chair), reusing the exact
---    same user_roles mechanism — no new column or context_type needed.
---
--- 2. There was no PKIC-wide (forum-level) chair/vice-chair concept at all.
---    `role-forum_chair` / `role-forum_vice_chair` are seeded as global
---    roles (assigned with context_type/context_id both NULL, same as
---    role-admin/role-member) since there is only ever one forum. Neither
---    grants new permissions — the value of the role is the designation
---    itself (who holds the title), the same way `users.is_ec_member`
---    (consolidated migration 0035) is a pure designation with no permission bundle.
-
-INSERT INTO roles (id, name, description, is_system_role, created_at, updated_at) VALUES
-  ('role-wg_vice_chair', 'wg_vice_chair', 'WG-scoped (assigned per WG) - stands in for the chair', 1, datetime('now'), datetime('now')),
-  ('role-forum_chair', 'forum_chair', 'PKIC forum chair (global designation, no per-instance context)', 1, datetime('now'), datetime('now')),
-  ('role-forum_vice_chair', 'forum_vice_chair', 'PKIC forum vice chair (global designation, no per-instance context)', 1, datetime('now'), datetime('now'));
-
-INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES
-  (lower(hex(randomblob(16))), 'role-wg_vice_chair', 'working-groups:write', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-wg_vice_chair', 'votes:create', datetime('now')),
-  (lower(hex(randomblob(16))), 'role-wg_vice_chair', 'votes:manage', datetime('now'));
-
 -- Section: Organization Profile Moderation & Managed
 -- Mailing List Configuration
 --
@@ -2547,9 +3015,9 @@ INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES
 -- — allowed values are documented in `-- allowed:` comments and validated at
 -- the application layer (Zod) instead.
 --
--- Voting delegate is not a column here: it is a role-voting_delegate grant
--- in user_roles (consolidated migration 0035), the same organization-context mechanism
--- primary/secondary contact use, resolved with no separate fallback column.
+-- Every active representative may act for the organization. Primary and
+-- secondary contact roles manage the relationship; there is no separate
+-- voting-delegate designation or fallback column.
 
 ALTER TABLE organizations ADD COLUMN logo_staging_r2_key TEXT;
 -- Pending logo awaiting moderation approval; promoted to logo_r2_key when
@@ -2673,20 +3141,23 @@ END;
 -- ── Managed mailing list configuration ─────────────────────────────
 -- Replaces the hardcoded PKIC_ALL_MEMBERS_LIST/CONSULTATION_LIST constants
 -- in membership-onboarding.ts, which had no staff-editable home before this.
--- Working-group lists keep working_groups.mailing_list_email as their
--- operational sync target —
--- the working_group_id rows below are seeded for inventory/visibility in
--- the unified Admin -> Mailing Lists screen only.
+-- Every list may be owned by a group; groups may have multiple lists with
+-- independent purposes and subscription defaults.
 CREATE TABLE mailing_lists (
   id                        TEXT NOT NULL PRIMARY KEY,
   email                     TEXT NOT NULL UNIQUE,
   label                     TEXT NOT NULL,
-  list_type                 TEXT NOT NULL,
-  -- allowed: all_members | consultation | ec | working_group | custom
-  working_group_id          TEXT REFERENCES working_groups(id),
+  purpose                   TEXT NOT NULL,
+  -- allowed: all_members | consultation | group | custom
+  group_id                  TEXT REFERENCES groups(id),
+  is_primary_discussion     INTEGER NOT NULL DEFAULT 0 CHECK (is_primary_discussion IN (0, 1)),
+  subscription_default      TEXT NOT NULL DEFAULT 'none',
+  -- allowed: group_members | eligible_categories | none
+  posting_policy            TEXT NOT NULL DEFAULT 'subscribers',
+  moderation_policy         TEXT NOT NULL DEFAULT 'moderated',
   auto_sync_categories_json TEXT,
   -- JSON array of category letters, e.g. ["A","B","C","D","E","F","G"].
-  -- Only consulted for list_type IN ('all_members','consultation') — see
+  -- Only consulted for purpose IN ('all_members','consultation') — see
   -- resolveAutoSyncListEmails in mailing-lists.ts. NULL means "every
   -- membership category" (used by the all_members list).
   active                    INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
@@ -2694,29 +3165,29 @@ CREATE TABLE mailing_lists (
   updated_at                TEXT NOT NULL
 );
 
-CREATE INDEX idx_mailing_lists_type_active ON mailing_lists(list_type, active);
+CREATE INDEX idx_mailing_lists_purpose_active ON mailing_lists(purpose, active);
+CREATE INDEX idx_mailing_lists_group_active ON mailing_lists(group_id, active, label, id);
+CREATE UNIQUE INDEX uq_mailing_lists_primary_discussion
+  ON mailing_lists(group_id)
+  WHERE is_primary_discussion = 1 AND active = 1;
 
--- Seeded on migration: the 9 known lists. working_group_id is
--- always NULL here, deliberately not resolved by a subquery against
--- working_groups at migration time — an earlier section seeds 6 canonical
--- working_groups rows (pqc/ca/tcwg/cm/pkimm/cbom) that would match, but
--- linking to them here would make these rows carry a real FK reference into
--- a table this codebase's test suite otherwise treats as ordinary per-test
--- business data (tests/helpers/reset-db.ts's own comment: "working_groups,
--- which tests already re-seed themselves when they need it"). Staff link
--- each working_group-type row to its working group via the admin UI
--- (PATCH .../admin/mailing-lists/:id) after migration instead.
-INSERT INTO mailing_lists (id, email, label, list_type, working_group_id, auto_sync_categories_json, active, created_at, updated_at)
+-- Stable IDs and explicit ownership make these seeds deterministic and usable
+-- immediately. Tests delete business rows in FK-safe order and re-seed only
+-- the records required by each case.
+INSERT INTO mailing_lists
+  (id, email, label, purpose, group_id, is_primary_discussion,
+   subscription_default, posting_policy, moderation_policy,
+   auto_sync_categories_json, active, created_at, updated_at)
 VALUES
-  (lower(hex(randomblob(16))), 'pkic@lists.pkic.org', 'All Members', 'all_members', NULL, NULL, 1, datetime('now'), datetime('now')),
-  (lower(hex(randomblob(16))), 'consultation@lists.pkic.org', 'Member Consultation', 'consultation', NULL, '["A","B","C","D","E","F","G"]', 1, datetime('now'), datetime('now')),
-  (lower(hex(randomblob(16))), 'ec@lists.pkic.org', 'Executive Council', 'ec', NULL, NULL, 1, datetime('now'), datetime('now')),
-  (lower(hex(randomblob(16))), 'pqc@lists.pkic.org', 'Post-Quantum Cryptography WG', 'working_group', NULL, NULL, 1, datetime('now'), datetime('now')),
-  (lower(hex(randomblob(16))), 'ca@lists.pkic.org', 'Certificate Authority WG', 'working_group', NULL, NULL, 1, datetime('now'), datetime('now')),
-  (lower(hex(randomblob(16))), 'tcwg@lists.pkic.org', 'Trust Chain WG', 'working_group', NULL, NULL, 1, datetime('now'), datetime('now')),
-  (lower(hex(randomblob(16))), 'cm@lists.pkic.org', 'Certificate Management WG', 'working_group', NULL, NULL, 1, datetime('now'), datetime('now')),
-  (lower(hex(randomblob(16))), 'pkimm@lists.pkic.org', 'PKI Maturity Model WG', 'working_group', NULL, NULL, 1, datetime('now'), datetime('now')),
-  (lower(hex(randomblob(16))), 'cbom@lists.pkic.org', 'Crypto Bill of Materials WG', 'working_group', NULL, NULL, 1, datetime('now'), datetime('now'));
+  ('mailing-list-all-members', 'pkic@lists.pkic.org', 'All Members', 'all_members', 'group-all-members', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
+  ('mailing-list-consultation', 'consultation@lists.pkic.org', 'Member Consultation', 'consultation', 'group-all-members', 0, 'eligible_categories', 'subscribers', 'moderated', '["A","B","C","D","E","F","G"]', 1, datetime('now'), datetime('now')),
+  ('mailing-list-executive-council', 'ec@lists.pkic.org', 'Executive Council', 'group', 'group-executive-council', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
+  ('mailing-list-pqc', 'pqc@lists.pkic.org', 'Post-Quantum Cryptography WG', 'group', 'group-pqc', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
+  ('mailing-list-ca', 'ca@lists.pkic.org', 'Certificate Authority WG', 'group', 'group-ca', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
+  ('mailing-list-tcwg', 'tcwg@lists.pkic.org', 'Trust Chain WG', 'group', 'group-tcwg', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
+  ('mailing-list-cm', 'cm@lists.pkic.org', 'Cryptographic Module WG', 'group', 'group-cm', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
+  ('mailing-list-pkimm', 'pkimm@lists.pkic.org', 'PKI Maturity Model WG', 'group', 'group-pkimm', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now')),
+  ('mailing-list-cbom', 'cbom@lists.pkic.org', 'Cryptographic Bill of Materials WG', 'group', 'group-cbom', 1, 'group_members', 'subscribers', 'moderated', NULL, 1, datetime('now'), datetime('now'));
 
 -- ── New email templates ──────────────────────────────────────────
 -- org-contact-assigned already shipped with consolidated migration 0035 (wired to
@@ -2965,105 +3436,228 @@ This link expires in {{expiresInMinutes}} minutes; you can request a new one at 
     'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
   );
 
--- Section: Meeting Calendar Management
+-- Section: Group-owned events, recurring series, and meeting entry
 --
--- Replaces the static ICS files committed to the pkic/members Git repo with
--- a portal-managed system: meeting_series (one per recurring meeting, e.g.
--- "Main Consortium Meeting" or "PQC WG Meeting"), meeting_ics_files (one or
--- more time-slot variants per series, R2-backed), and
--- member_meeting_preferences (a member's chosen variant per series, NULL
--- meaning "send me all variants").
---
--- Enforcement policy (PR #1 review, §1.3): boolean-as-integer flags (`active`
--- below) get a DB CHECK. `scope_type` and other evolvable closed-state
--- vocabularies stay `-- allowed:` comments validated by a shared Zod schema
--- on every write path instead of a CHECK.
+-- Meetings are a controlled event profile. Recurrence is authoritative and
+-- ICS is generated from it; uploaded calendar files are not a second source
+-- of truth. Provider data stays behind a replaceable integration boundary.
 
-CREATE TABLE meeting_series (
-  id                TEXT NOT NULL PRIMARY KEY,
-  name              TEXT NOT NULL,
-  scope_type        TEXT NOT NULL,
-  -- allowed: consortium | working_group
-  working_group_id  TEXT REFERENCES working_groups(id),
-  active            INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
-  created_at        TEXT NOT NULL,
-  updated_at        TEXT NOT NULL
+CREATE TABLE event_profiles (
+  key         TEXT NOT NULL PRIMARY KEY,
+  label       TEXT NOT NULL,
+  description TEXT,
+  active      INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+  sort_order  INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
 );
 
-CREATE INDEX idx_meeting_series_wg ON meeting_series(working_group_id);
-CREATE INDEX idx_meeting_series_scope_active ON meeting_series(scope_type, active);
+INSERT INTO event_profiles (key, label, description, active, sort_order, created_at, updated_at) VALUES
+  ('meeting', 'Meeting', 'A recurring or one-off group meeting.', 1, 10, datetime('now'), datetime('now')),
+  ('board_meeting', 'Board Meeting', 'A meeting for a governing group.', 1, 20, datetime('now'), datetime('now')),
+  ('conference', 'Conference', 'A multi-session conference.', 1, 30, datetime('now'), datetime('now')),
+  ('workshop', 'Workshop', 'An interactive workshop that may permit public registration.', 1, 40, datetime('now'), datetime('now')),
+  ('tutorial', 'Tutorial', 'A focused educational event.', 1, 50, datetime('now'), datetime('now'));
 
-CREATE TABLE meeting_ics_files (
-  id                   TEXT NOT NULL PRIMARY KEY,
-  series_id            TEXT NOT NULL REFERENCES meeting_series(id),
-  label                TEXT NOT NULL,
-  -- e.g. '09:00 CET', '17:00 CET'
-  year                 INTEGER NOT NULL,
-  r2_key               TEXT NOT NULL,
-  active               INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
-  uploaded_by_user_id  TEXT REFERENCES users(id),
-  created_at           TEXT NOT NULL
+ALTER TABLE events ADD COLUMN owner_group_id TEXT REFERENCES groups(id);
+ALTER TABLE events ADD COLUMN profile_key TEXT REFERENCES event_profiles(key);
+ALTER TABLE events ADD COLUMN source_mode TEXT;
+ALTER TABLE events ADD COLUMN links_json TEXT;
+-- allowed source_mode: hugo | portal | integration
+
+CREATE INDEX idx_events_owner_profile
+  ON events(owner_group_id, profile_key, starts_at, id);
+CREATE INDEX idx_events_source_mode
+  ON events(source_mode, updated_at, id);
+
+CREATE TRIGGER trg_portal_events_require_owner_insert
+BEFORE INSERT ON events
+WHEN NEW.source_mode = 'portal' AND NEW.owner_group_id IS NULL
+BEGIN
+  SELECT RAISE(ABORT, 'portal event requires an owning group');
+END;
+
+CREATE TRIGGER trg_portal_events_require_owner_update
+BEFORE UPDATE OF source_mode, owner_group_id ON events
+WHEN NEW.source_mode = 'portal' AND NEW.owner_group_id IS NULL
+BEGIN
+  SELECT RAISE(ABORT, 'portal event requires an owning group');
+END;
+
+CREATE TABLE event_group_grants (
+  event_id   TEXT NOT NULL,
+  group_id   TEXT NOT NULL,
+  capability TEXT NOT NULL,
+  created_by_user_id TEXT,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (event_id, group_id, capability),
+  FOREIGN KEY(event_id) REFERENCES events(id),
+  FOREIGN KEY(group_id) REFERENCES groups(id),
+  FOREIGN KEY(created_by_user_id) REFERENCES users(id)
 );
 
-CREATE INDEX idx_meeting_ics_files_series_active ON meeting_ics_files(series_id, active);
-CREATE UNIQUE INDEX uq_meeting_ics_files_r2_key ON meeting_ics_files(r2_key);
+CREATE INDEX idx_event_group_grants_group
+  ON event_group_grants(group_id, capability, event_id);
 
-CREATE TABLE member_meeting_preferences (
-  id           TEXT NOT NULL PRIMARY KEY,
-  user_id      TEXT NOT NULL REFERENCES users(id),
-  series_id    TEXT NOT NULL REFERENCES meeting_series(id),
-  ics_file_id  TEXT REFERENCES meeting_ics_files(id),
-  -- ics_file_id NULL means no preference (receives all variants)
-  set_at       TEXT NOT NULL,
-  updated_at   TEXT NOT NULL,
-  UNIQUE(user_id, series_id)
+CREATE TABLE event_series (
+  id                 TEXT NOT NULL PRIMARY KEY,
+  event_id           TEXT NOT NULL UNIQUE,
+  recurrence_rule    TEXT NOT NULL,
+  timezone           TEXT NOT NULL,
+  duration_minutes   INTEGER NOT NULL,
+  location           TEXT,
+  provider_type      TEXT,
+  provider_data_json TEXT,
+  active             INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+  created_at         TEXT NOT NULL,
+  updated_at         TEXT NOT NULL,
+  FOREIGN KEY(event_id) REFERENCES events(id)
 );
 
-CREATE INDEX idx_member_meeting_preferences_user ON member_meeting_preferences(user_id);
+CREATE INDEX idx_event_series_active
+  ON event_series(active, event_id, id);
 
--- ── Seed the initial meeting series ("Seeded on Migration") ─────────
--- Only meeting_series rows are seeded here — the actual ICS file content
--- (currently 9 files committed to pkic/members/meetings/) is not migrated
--- automatically; staff upload each variant via the new admin endpoints
--- after this migration runs, own "staff to verify exact file
--- count at migration time" note. Seeding fake meeting_ics_files rows with
--- placeholder r2_key values was considered and rejected — it would let a
--- staff admin flip one active before the real R2 upload happens, producing
--- a 404 on download.
+CREATE TABLE event_occurrences (
+  id                         TEXT NOT NULL PRIMARY KEY,
+  series_id                  TEXT NOT NULL,
+  starts_at                  TEXT NOT NULL,
+  ends_at                    TEXT NOT NULL,
+  status                     TEXT NOT NULL DEFAULT 'scheduled',
+  -- allowed: scheduled | cancelled | completed
+  location_override          TEXT,
+  provider_join_url_ciphertext TEXT,
+  created_at                 TEXT NOT NULL,
+  updated_at                 TEXT NOT NULL,
+  UNIQUE (series_id, starts_at),
+  FOREIGN KEY(series_id) REFERENCES event_series(id),
+  CHECK (ends_at > starts_at)
+);
 
-INSERT INTO meeting_series (id, name, scope_type, working_group_id, active, created_at, updated_at)
-VALUES (lower(hex(randomblob(16))), 'Main Consortium Meeting', 'consortium', NULL, 1, datetime('now'), datetime('now'));
+CREATE INDEX idx_event_occurrences_series_start
+  ON event_occurrences(series_id, starts_at, id);
+CREATE INDEX idx_event_occurrences_upcoming
+  ON event_occurrences(status, starts_at, id);
 
-INSERT INTO meeting_series (id, name, scope_type, working_group_id, active, created_at, updated_at)
-SELECT lower(hex(randomblob(16))), wg.name || ' Meeting', 'working_group', wg.id, 1, datetime('now'), datetime('now')
-FROM working_groups wg
-WHERE wg.slug IN ('pqc', 'cbom', 'cm', 'tcwg', 'ca', 'pkimm');
+CREATE TABLE event_occurrence_guests (
+  id                 TEXT NOT NULL PRIMARY KEY,
+  occurrence_id      TEXT NOT NULL,
+  user_id            TEXT,
+  normalized_email   TEXT NOT NULL,
+  name               TEXT NOT NULL,
+  affiliation        TEXT,
+  expires_at         TEXT NOT NULL,
+  invited_by_user_id TEXT NOT NULL,
+  revoked_at         TEXT,
+  created_at         TEXT NOT NULL,
+  updated_at         TEXT NOT NULL,
+  UNIQUE (occurrence_id, normalized_email),
+  FOREIGN KEY(occurrence_id) REFERENCES event_occurrences(id),
+  FOREIGN KEY(user_id) REFERENCES users(id),
+  FOREIGN KEY(invited_by_user_id) REFERENCES users(id)
+);
 
--- ── New email templates ───────────────────────────────────────────
+CREATE INDEX idx_event_occurrence_guests_occurrence
+  ON event_occurrence_guests(occurrence_id, revoked_at, normalized_email, id);
 
-INSERT OR IGNORE INTO email_template_versions
-  (id, template_key, version, subject_template, body, content_type, r2_object_key, checksum_sha256, status, created_by_user_id, created_at, message_type)
-VALUES
-  (
-    lower(hex(randomblob(16))), 'wg-calendar-invite', 1,
-    'Calendar invite: {{workingGroupName}}',
-    'Hi {{memberName}},
+-- Tokens are opaque, single-purpose capabilities. GET may render the landing
+-- page but cannot consume a token or record attendance; only the intentional
+-- POST command may consume it and reveal the protected provider destination.
+CREATE TABLE event_occurrence_access_tokens (
+  id            TEXT NOT NULL PRIMARY KEY,
+  occurrence_id TEXT NOT NULL,
+  user_id       TEXT,
+  guest_id      TEXT,
+  token_hash    TEXT NOT NULL UNIQUE,
+  expires_at    TEXT NOT NULL,
+  first_used_at TEXT,
+  last_used_at  TEXT,
+  use_count     INTEGER NOT NULL DEFAULT 0,
+  revoked_at    TEXT,
+  created_at    TEXT NOT NULL,
+  CHECK ((user_id IS NOT NULL AND guest_id IS NULL) OR (user_id IS NULL AND guest_id IS NOT NULL)),
+  FOREIGN KEY(occurrence_id) REFERENCES event_occurrences(id),
+  FOREIGN KEY(user_id) REFERENCES users(id),
+  FOREIGN KEY(guest_id) REFERENCES event_occurrence_guests(id)
+);
 
-You have been added to the {{workingGroupName}} mailing list. Attached is the calendar invite for its recurring meeting — pick whichever time-slot variant works best for your time zone.
+CREATE INDEX idx_event_occurrence_access_subject
+  ON event_occurrence_access_tokens(occurrence_id, user_id, guest_id, expires_at);
 
-You can change your preferred time slot at any time in the portal under My Account → Calendar Invites.',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
-  ),
-  (
-    lower(hex(randomblob(16))), 'calendar-invite-resend', 1,
-    'Updated calendar invite: {{seriesName}}',
-    'Hi {{memberName}},
+-- The legacy consent table cannot accept a guest without rebuilding it, so
+-- guest acceptance uses an FK-backed companion table while the shared consent
+-- service and contract remain canonical for both identity kinds.
+CREATE TABLE event_occurrence_guest_consents (
+  id              TEXT NOT NULL PRIMARY KEY,
+  guest_id        TEXT NOT NULL,
+  event_term_id   TEXT NOT NULL,
+  term_version    TEXT NOT NULL,
+  accepted_at     TEXT NOT NULL,
+  ip_hash         TEXT,
+  user_agent_hash TEXT,
+  UNIQUE (guest_id, event_term_id, term_version),
+  FOREIGN KEY(guest_id) REFERENCES event_occurrence_guests(id),
+  FOREIGN KEY(event_term_id) REFERENCES event_terms(id)
+);
 
-Attached is this year''s calendar invite for {{seriesName}}. {{#hasPreference}}This matches your saved time-slot preference.{{/hasPreference}}{{^hasPreference}}You have no saved time-slot preference, so all available variants are attached — pick whichever works best for you.{{/hasPreference}}
+CREATE TABLE event_occurrence_join_confirmations (
+  id                          TEXT NOT NULL PRIMARY KEY,
+  occurrence_id               TEXT NOT NULL,
+  user_id                     TEXT,
+  guest_id                    TEXT,
+  name_snapshot               TEXT NOT NULL,
+  affiliation_snapshot        TEXT,
+  consent_acceptance_id       TEXT,
+  guest_consent_acceptance_id TEXT,
+  join_count                  INTEGER NOT NULL DEFAULT 1,
+  confirmed_at                TEXT NOT NULL,
+  attendance_verified_at      TEXT,
+  attendance_verification_source TEXT,
+  created_at                  TEXT NOT NULL,
+  updated_at                  TEXT NOT NULL,
+  CHECK ((user_id IS NOT NULL AND guest_id IS NULL) OR (user_id IS NULL AND guest_id IS NOT NULL)),
+  CHECK (guest_consent_acceptance_id IS NULL OR guest_id IS NOT NULL),
+  FOREIGN KEY(occurrence_id) REFERENCES event_occurrences(id),
+  FOREIGN KEY(user_id) REFERENCES users(id),
+  FOREIGN KEY(guest_id) REFERENCES event_occurrence_guests(id),
+  FOREIGN KEY(consent_acceptance_id) REFERENCES consent_acceptances(id),
+  FOREIGN KEY(guest_consent_acceptance_id) REFERENCES event_occurrence_guest_consents(id)
+);
 
-You can set or change your preference at any time in the portal under My Account → Calendar Invites.',
-    'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
-  );
+CREATE UNIQUE INDEX uq_event_occurrence_join_user
+  ON event_occurrence_join_confirmations(occurrence_id, user_id)
+  WHERE user_id IS NOT NULL;
+CREATE UNIQUE INDEX uq_event_occurrence_join_guest
+  ON event_occurrence_join_confirmations(occurrence_id, guest_id)
+  WHERE guest_id IS NOT NULL;
+CREATE INDEX idx_event_occurrence_attendance
+  ON event_occurrence_join_confirmations(occurrence_id, attendance_verified_at, confirmed_at, id);
+
+-- Seed portal-managed meeting aggregates, not uploaded files. Recurrence is
+-- intentionally empty until staff confirms each real schedule.
+INSERT OR IGNORE INTO events
+  (id, slug, name, timezone, starts_at, ends_at, source_path, base_path,
+   capacity_in_person, registration_mode, invite_limit_attendee, settings_json,
+   created_at, updated_at, owner_group_id, profile_key, source_mode)
+SELECT
+  'event-meeting-' || slug,
+  'meeting-' || slug,
+  name || ' Meeting',
+  'Europe/Amsterdam',
+  NULL,
+  NULL,
+  NULL,
+  '/portal/groups/' || slug || '/meetings',
+  NULL,
+  'no_registration',
+  0,
+  '{"memberEligibility":"group","guestPolicy":"invitation_only"}',
+  datetime('now'),
+  datetime('now'),
+  id,
+  CASE WHEN type_id = 'group-type-board' THEN 'board_meeting' ELSE 'meeting' END,
+  'portal'
+FROM groups
+WHERE slug IN ('all-members', 'pqc', 'cbom', 'cm', 'tcwg', 'ca', 'pkimm');
 
 -- Section: Voting System
 --
@@ -3101,10 +3695,9 @@ CREATE TABLE votes (
   description           TEXT,
   vote_type             TEXT NOT NULL,
   -- allowed: election | motion | consultation
-  scope_type            TEXT NOT NULL,
-  -- allowed: forum | working_group
-  scope_id              TEXT REFERENCES working_groups(id),
-  -- NULL for forum scope; working_groups.id for working_group scope
+  owner_group_id        TEXT NOT NULL REFERENCES groups(id),
+  electorate_mode       TEXT NOT NULL DEFAULT 'per_member',
+  -- allowed: per_member | per_person
   created_by_user_id    TEXT REFERENCES users(id),
   proposed_by_user_id   TEXT REFERENCES users(id),
   -- set when converted from an endorsed member proposal; NULL for direct
@@ -3121,9 +3714,8 @@ CREATE TABLE votes (
   -- proposal row being converted in the very same db.batch(), so the
   -- application layer, not a declared FK, is what keeps it valid.
   eligible_categories   TEXT,
-  -- JSON array of membership category letters entitled to a ballot beyond
-  -- the standing A-G/WG-membership rules; NULL means "all A-G per the
-  -- standing rules, no further restriction"
+  -- JSON array of membership category letters entitled to a ballot; NULL
+  -- means eligibility follows the owning group's membership policy.
   threshold_type        TEXT NOT NULL,
   -- allowed: simple_majority | supermajority | successive_elimination
   opens_at              TEXT NOT NULL,
@@ -3143,10 +3735,26 @@ CREATE TABLE votes (
   updated_at            TEXT NOT NULL
 );
 
-CREATE INDEX idx_votes_scope ON votes(scope_type, scope_id);
+CREATE INDEX idx_votes_group_status
+  ON votes(owner_group_id, status, opens_at, id);
 CREATE INDEX idx_votes_status_opens_at ON votes(status, opens_at, id);
 CREATE INDEX idx_votes_status_closes_at ON votes(status, closes_at, id);
 CREATE INDEX idx_votes_visibility ON votes(visibility, closes_at);
+
+CREATE TABLE vote_group_grants (
+  vote_id    TEXT NOT NULL,
+  group_id   TEXT NOT NULL,
+  capability TEXT NOT NULL,
+  created_by_user_id TEXT,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (vote_id, group_id, capability),
+  FOREIGN KEY(vote_id) REFERENCES votes(id),
+  FOREIGN KEY(group_id) REFERENCES groups(id),
+  FOREIGN KEY(created_by_user_id) REFERENCES users(id)
+);
+
+CREATE INDEX idx_vote_group_grants_group
+  ON vote_group_grants(group_id, capability, vote_id);
 
 CREATE TABLE vote_candidates (
   id                   TEXT NOT NULL PRIMARY KEY,
@@ -3168,17 +3776,19 @@ CREATE INDEX idx_vote_candidates_standing
   WHERE eliminated_round IS NULL;
 
 CREATE TABLE vote_ballots (
-  id              TEXT NOT NULL PRIMARY KEY,
-  vote_id         TEXT NOT NULL REFERENCES votes(id),
-  user_id         TEXT NOT NULL REFERENCES users(id),
-  organization_id TEXT REFERENCES organizations(id),
-  -- forum-level: set (the org whose delegate cast this ballot); NULL for
-  -- working_group-level ballots
-  choice          TEXT NOT NULL,
+  id           TEXT NOT NULL PRIMARY KEY,
+  vote_id      TEXT NOT NULL REFERENCES votes(id),
+  user_id      TEXT NOT NULL REFERENCES users(id),
+  member_id    TEXT REFERENCES members(id),
+  -- member electorate: the represented Member whose separate ballot this is;
+  -- person electorate: NULL. Every active representative may replace the
+  -- Member ballot, and the last authorized submission is effective.
+  choice       TEXT NOT NULL,
   -- motion/consultation: in_favor | opposed | abstain
   -- election: a vote_candidates.id
   round           INTEGER NOT NULL DEFAULT 1,
   submitted_at    TEXT NOT NULL,
+  updated_at      TEXT NOT NULL,
   ip_hash         TEXT
 );
 
@@ -3189,14 +3799,14 @@ CREATE INDEX idx_vote_ballots_vote_round ON vote_ballots(vote_id, round, choice)
 -- ballot for the vote before applying LIMIT/OFFSET.
 CREATE INDEX idx_vote_ballots_vote_audit_page
   ON vote_ballots(vote_id, round, submitted_at, id);
--- Forum-level: one ballot per organization per round.
-CREATE UNIQUE INDEX idx_vote_ballots_org_round ON vote_ballots(vote_id, organization_id, round)
-  WHERE organization_id IS NOT NULL;
--- Working-group-level: one ballot per person per round.
+-- One effective ballot per represented Member and round.
+CREATE UNIQUE INDEX idx_vote_ballots_member_round ON vote_ballots(vote_id, member_id, round)
+  WHERE member_id IS NOT NULL;
+-- Person electorates keep one ballot per person and round.
 CREATE UNIQUE INDEX idx_vote_ballots_user_round ON vote_ballots(vote_id, user_id, round)
-  WHERE organization_id IS NULL;
+  WHERE member_id IS NULL;
 
--- Cover the set-based forum-recipient snapshot without scanning inactive or
+-- Cover set-based Member electorate resolution without scanning inactive or
 -- individual membership aggregates on every vote opening/round transition.
 CREATE INDEX idx_members_active_organization_notifications
   ON members(organization_id, id)
@@ -3205,28 +3815,28 @@ CREATE INDEX idx_members_active_organization_notifications
 -- Immutable event-time recipient snapshots. These are created atomically with
 -- the vote opening/round transition, so a later close, round advance, role
 -- change, or queue-worker failure cannot erase the notification obligation.
-CREATE TABLE vote_delegate_notification_intents (
+CREATE TABLE vote_representative_notification_intents (
   vote_id          TEXT NOT NULL REFERENCES votes(id),
   round            INTEGER NOT NULL,
-  organization_id  TEXT NOT NULL,
-  delegate_user_id TEXT NOT NULL,
+  member_id        TEXT NOT NULL REFERENCES members(id),
+  representative_user_id TEXT NOT NULL REFERENCES users(id),
   recipient_email  TEXT NOT NULL,
-  delegate_name    TEXT NOT NULL,
+  representative_name TEXT NOT NULL,
   organization_name TEXT NOT NULL,
   vote_title       TEXT NOT NULL,
   closes_at        TEXT NOT NULL,
   created_at       TEXT NOT NULL,
   queued_outbox_id TEXT,
   queued_at        TEXT,
-  PRIMARY KEY (vote_id, round, organization_id)
+  PRIMARY KEY (vote_id, round, member_id, representative_user_id)
 );
 
-CREATE INDEX idx_vote_delegate_notification_intents_pending
-  ON vote_delegate_notification_intents(created_at, vote_id, round, organization_id)
+CREATE INDEX idx_vote_representative_notification_intents_pending
+  ON vote_representative_notification_intents(created_at, vote_id, round, member_id, representative_user_id)
   WHERE queued_outbox_id IS NULL;
 
-CREATE UNIQUE INDEX uq_vote_delegate_notification_intents_outbox
-  ON vote_delegate_notification_intents(queued_outbox_id)
+CREATE UNIQUE INDEX uq_vote_representative_notification_intents_outbox
+  ON vote_representative_notification_intents(queued_outbox_id)
   WHERE queued_outbox_id IS NOT NULL;
 
 CREATE TABLE vote_proposals (
@@ -3235,9 +3845,7 @@ CREATE TABLE vote_proposals (
   description         TEXT NOT NULL,
   vote_type           TEXT NOT NULL,
   -- allowed: election | motion | consultation
-  scope_type          TEXT NOT NULL,
-  -- allowed: forum | working_group
-  scope_id            TEXT REFERENCES working_groups(id),
+  owner_group_id      TEXT NOT NULL REFERENCES groups(id),
   proposed_by_user_id TEXT NOT NULL REFERENCES users(id),
   eligible_categories TEXT,
   proposed_opens_at   TEXT,
@@ -3251,13 +3859,14 @@ CREATE TABLE vote_proposals (
   updated_at          TEXT NOT NULL
 );
 
-CREATE INDEX idx_vote_proposals_scope_status ON vote_proposals(scope_type, scope_id, status);
+CREATE INDEX idx_vote_proposals_group_status
+  ON vote_proposals(owner_group_id, status, created_at, id);
 
 -- Supports both the bounded portal list (status + scope, ordered by
 -- created_at) and the bounded admin list (status alone, ordered by
 -- created_at) via a shared leading (status) column.
 CREATE INDEX idx_vote_proposals_status_scope_created_at
-  ON vote_proposals(status, scope_type, scope_id, created_at);
+  ON vote_proposals(status, owner_group_id, created_at, id);
 
 -- D1 batches are atomic but the validation reads used to plan a batch occur
 -- before it starts. Advance a proposal revision at the beginning of every
@@ -3319,13 +3928,15 @@ INSERT OR IGNORE INTO email_template_versions
   (id, template_key, version, subject_template, body, content_type, r2_object_key, checksum_sha256, status, created_by_user_id, created_at, message_type)
 VALUES
   (
-    lower(hex(randomblob(16))), 'forum-vote-delegate-notify', 1,
-    'Forum vote open: {{voteTitle}}',
-    'Hi {{delegateName}},
+    lower(hex(randomblob(16))), 'member-vote-representative-notify', 1,
+    'Vote open: {{voteTitle}}',
+    'Hi {{representativeName}},
 
-A forum-level vote is now open and, as {{organizationName}}''s voting delegate, you are the one who casts its ballot: "{{voteTitle}}".
+A vote is now open for {{organizationName}}: "{{voteTitle}}".
 
-Voting closes {{closesAt}}. Cast your organization''s ballot in the portal at {{voteUrl}}.',
+Each represented organization has a separate ballot. Any active representative may submit or update this organization''s ballot; the latest authorized submission before close is effective.
+
+Voting closes {{closesAt}}. Cast this organization''s ballot in the portal at {{voteUrl}}.',
     'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
   ),
   (
@@ -3389,16 +4000,16 @@ ALTER TABLE members ADD COLUMN member_since TEXT;
 ALTER TABLE organizations ADD COLUMN slug TEXT;
 CREATE UNIQUE INDEX idx_organizations_slug ON organizations(slug) WHERE slug IS NOT NULL;
 
--- Section: wg chair membership digest
--- Weekly working-group membership-change digest for WG chairs/vice-chairs
+-- Section: group leadership membership digest
+-- Weekly group membership-change digest for group leads and deputy leads
 -- (2026-07-31 manual-testing feedback). "Send an email to the chairs when
--- someone joins or leaves the working group... not a spam email every time
--- there is a change" — batched weekly, one email per (working group, chair)
+-- someone joins or leaves the group... not a spam email every time
+-- there is a change" — batched weekly, one email per (group, leader)
 -- pair, only for groups with at least one join/leave in the past 7 days.
--- See functions/_lib/services/wg-chair-digest.ts.
+-- See the shared group membership digest service.
 --
 -- No schema change needed for the opt-out preference itself — it's a new
--- key (`wgChairMembershipDigest`, default true) on the existing
+-- key (`groupLeadershipMembershipDigest`, default true) on the existing
 -- `users.notification_preferences_json` blob added by consolidated migration 0035, per
 -- that migration's own "no CHECK constraint, validated at the application
 -- layer" convention. This migration only seeds the email template.
@@ -3406,11 +4017,11 @@ CREATE UNIQUE INDEX idx_organizations_slug ON organizations(slug) WHERE slug IS 
 INSERT OR IGNORE INTO email_template_versions
   (id, template_key, version, subject_template, body, content_type, r2_object_key, checksum_sha256, status, created_by_user_id, created_at, message_type)
 VALUES (
-  lower(hex(randomblob(16))), 'wg-chair-membership-digest', 1,
-  '{{workingGroupName}} — weekly membership update',
+  lower(hex(randomblob(16))), 'group-leadership-membership-digest', 1,
+  '{{groupName}} — weekly membership update',
   'Hi {{recipientName}},
 
-Here is a summary of {{workingGroupName}} membership changes over the past week:
+Here is a summary of {{groupName}} membership changes over the past week:
 
 {{#joined}}
 + {{name}} ({{organizationName}}) joined
@@ -3419,53 +4030,9 @@ Here is a summary of {{workingGroupName}} membership changes over the past week:
 - {{name}} ({{organizationName}}) left
 {{/left}}
 
-You are receiving this because you are the {{recipientRole}} of this working group. You can turn this off any time in your portal Account Settings under Notification preferences.',
+You are receiving this because you are a leader of this group. You can turn this off any time in your portal Account Settings under Notification preferences.',
   'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
 );
-
--- Section: leadership positions
--- Board of Directors / Executive Council positions, admin-managed
---
--- Replaces the hand-maintained `content/about/board.md` and
--- `content/about/executive-council.md` static markdown (manual `person-card`
--- shortcode lists) with a D1-backed roster, following the same pattern
--- consolidated migration 0035 established for WG/forum chairs: admin-assigned, publicly
--- readable, rendered client-side by a widget instead of requiring a git
--- commit to change.
---
--- Board/EC don't fit the existing `roles`/`user_roles` mechanism used for
--- chairs: that model assumes at most one active holder per (role, context)
--- (see Chairs.tsx / admin-working-groups.ts's ROW_NUMBER() pick), has no
--- "from" date distinct from `created_at`, and has no way to carry a
--- free-text title ("Board Chair", "EC Member", "PKI Consortium Chair" —
--- the exact title used for a person varies per body, not a fixed
--- chair/vice-chair pair). Board/EC need many simultaneous holders, an
--- explicit admin-set start date (frequently backdated to match historical
--- terms), and an arbitrary display title. A dedicated table is simpler than
--- widening `user_roles` for a shape it wasn't designed for.
-CREATE TABLE leadership_positions (
-  id         TEXT NOT NULL PRIMARY KEY,
-  -- The canonical vocabulary is validated by leadershipBodySchema. Keep
-  -- this evolvable in application code: D1 cannot alter a CHECK without a
-  -- table rebuild when a future consortium body is added.
-  body       TEXT NOT NULL,
-  user_id    TEXT NOT NULL,
-  -- Explicitly records which membership the person represents for this
-  -- position. NULL is an intentional "no affiliation" choice; never infer
-  -- one from an arbitrary first organization at read time.
-  member_id  TEXT,
-  title      TEXT NOT NULL,
-  starts_at  TEXT NOT NULL,
-  ends_at    TEXT,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  FOREIGN KEY(user_id) REFERENCES users(id),
-  FOREIGN KEY(member_id) REFERENCES members(id)
-);
-
-CREATE INDEX idx_leadership_positions_body ON leadership_positions(body, ends_at);
-CREATE INDEX idx_leadership_positions_user ON leadership_positions(user_id);
-CREATE INDEX idx_leadership_positions_member ON leadership_positions(member_id);
 
 -- Section: sponsorship tier config
 -- Canonical, data-backed display order for public sponsorship surfaces.
