@@ -318,10 +318,12 @@ boundary.
 
 ### event_occurrence_guests
 
-Occurrence-scoped external identity and invitation state:
+External identity and invitation state. An invitation is occurrence-scoped by
+default; an explicit null occurrence_id makes it series-wide:
 
     id
-    occurrence_id -> event_occurrences.id
+    series_id -> event_series.id
+    occurrence_id -> event_occurrences.id, nullable only for a series-wide guest
     user_id -> users.id, nullable
     normalized_email
     name
@@ -352,8 +354,6 @@ One intentional PKIC join action:
     guest_id -> event_occurrence_guests.id, nullable
     name_snapshot
     affiliation_snapshot
-    consent_acceptance_id -> consent_acceptances.id
-    guest_consent_acceptance_id -> event_occurrence_guest_consents.id
     join_count
     confirmed_at
     attendance_verified_at
@@ -369,16 +369,16 @@ attendee counts for one identity and occurrence.
 
 ## Terms and consent
 
-The existing event_terms and consent_acceptances tables remain canonical for
-authenticated users. Meeting series are backed by an event, so the current
-event and terms relationship applies. Because the deployed consent table has a
-required user_id, migration 0035 adds the FK-backed
-event_occurrence_guest_consents companion instead of rebuilding that table.
-Both stores are accessed through one consent contract and service.
+The existing event_terms table remains the canonical versioned terms source.
+Meeting series are backed by an event, so the current event and terms
+relationship applies. The additive event_access_term_acceptances table uses one
+contract for authenticated users and invited guests without making either
+identity type artificial or rebuilding the deployed consent table.
 
-Acceptance uniqueness is event, user or guest identity, audience, term, and
-version. Join confirmation is per occurrence and may reuse an existing current
-terms acceptance.
+Acceptance uniqueness is event, user or guest identity, and exact term version.
+Join confirmation is per occurrence and may reuse all existing acceptances for
+the event's current term set. Publishing another term version therefore requires
+acceptance of that new version before the next redirect.
 
 ## Forms and placements
 

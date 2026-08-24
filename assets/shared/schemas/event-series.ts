@@ -55,6 +55,8 @@ export const eventSeriesSchema = z.object({
   eventSlug: z.string(),
   profileKey: eventProfileKeySchema,
   registrationPolicy: eventRegistrationPolicySchema,
+  memberEligibility: eventProfilePolicySchema.shape.memberEligibility.optional(),
+  guestPolicy: eventGuestPolicySchema.optional(),
   recurrenceRule: recurrenceRuleSchema,
   timezone: timeZoneSchema,
   durationMinutes: z
@@ -108,6 +110,7 @@ export const eventOccurrenceSchema = z.object({
   endsAt: z.iso.datetime(),
   status: eventOccurrenceStatusSchema,
   location: z.string().nullable(),
+  providerConfigured: z.boolean().optional(),
   guestCount: z.number().int().min(0),
   joinConfirmedCount: z.number().int().min(0),
   attendanceVerifiedCount: z.number().int().min(0),
@@ -144,6 +147,8 @@ export const eventOccurrencesListResponseSchema = paginatedResponseSchema("occur
 export const eventOccurrenceGuestSchema = z.object({
   id: databaseIdSchema,
   occurrenceId: databaseIdSchema,
+  seriesId: databaseIdSchema.optional(),
+  seriesWide: z.boolean().optional(),
   userId: databaseIdSchema.nullable(),
   email: z.email(),
   name: z.string(),
@@ -157,6 +162,7 @@ export const eventOccurrenceGuestInviteSchema = z.object({
   name: trimmedString(1, 200),
   affiliation: trimmedString(0, 200).nullable().optional(),
   expiresAt: z.iso.datetime(),
+  seriesWide: z.boolean().optional(),
 });
 export const eventOccurrenceGuestsListQuerySchema = listQuerySchema(["name", "email", "created_at"] as const).extend({
   active: z.enum(["true", "false"]).optional(),
@@ -184,6 +190,7 @@ export const meetingJoinLandingSchema = z.object({
       version: z.string(),
       displayText: z.string(),
       required: z.boolean(),
+      accepted: z.boolean().optional(),
     }),
   ),
 });
@@ -201,7 +208,170 @@ export const attendanceVerifySchema = z.object({
   note: trimmedString(0, 500).optional(),
 });
 
+export const meetingAccessTokenSchema = z.object({
+  token: tokenSchema,
+  joinPath: z.string().startsWith("/api/v1/meetings/join/"),
+  expiresAt: z.string(),
+});
+
+export const eventOccurrenceJoinConfirmationSchema = z.object({
+  id: databaseIdSchema,
+  occurrenceId: databaseIdSchema,
+  userId: databaseIdSchema.nullable(),
+  guestId: databaseIdSchema.nullable(),
+  name: z.string(),
+  affiliation: z.string().nullable(),
+  joinCount: z.number().int().min(1),
+  confirmedAt: z.string(),
+  attendanceVerifiedAt: z.string().nullable(),
+  attendanceVerificationSource: attendanceVerificationSourceSchema.nullable(),
+});
+
+export const EVENT_ATTENDANCE_SORT_COLUMNS = ["name", "confirmed_at", "attendance_verified_at"] as const;
+export const eventAttendanceListQuerySchema = listQuerySchema(EVENT_ATTENDANCE_SORT_COLUMNS).extend({
+  verified: z.enum(["true", "false"]).optional(),
+});
+export const eventAttendanceListResponseSchema = paginatedResponseSchema(
+  "confirmations",
+  eventOccurrenceJoinConfirmationSchema,
+);
+
 export const groupMeetingSeriesParamsSchema = z.object({ groupId: groupReferenceSchema });
 export const eventSeriesParamsSchema = groupMeetingSeriesParamsSchema.extend({ seriesId: databaseIdSchema });
 export const eventOccurrenceParamsSchema = eventSeriesParamsSchema.extend({ occurrenceId: databaseIdSchema });
 export const meetingJoinTokenParamsSchema = z.object({ token: tokenSchema });
+export const eventGuestParamsSchema = eventOccurrenceParamsSchema.extend({ guestId: databaseIdSchema });
+export const eventAccessTokenIssueSchema = z
+  .object({
+    userId: databaseIdSchema.optional(),
+    guestId: databaseIdSchema.optional(),
+    expiresAt: z.iso.datetime(),
+  })
+  .refine((value) => (value.userId ? 1 : 0) + (value.guestId ? 1 : 0) === 1, {
+    message: "Exactly one user or guest is required",
+  });
+export const eventAttendanceParamsSchema = eventOccurrenceParamsSchema.extend({ confirmationId: databaseIdSchema });
+
+export const eventSeriesResponseSchema = z.object({ series: eventSeriesSchema });
+export const eventOccurrenceResponseSchema = z.object({ occurrence: eventOccurrenceSchema });
+export const eventOccurrenceGuestResponseSchema = z.object({ guest: eventOccurrenceGuestSchema });
+export const meetingAccessTokenResponseSchema = z.object({ access: meetingAccessTokenSchema });
+export const eventAttendanceResponseSchema = z.object({ confirmation: eventOccurrenceJoinConfirmationSchema });
+
+export const groupMeetingSeriesListRouteSchema = {
+  tags: ["Groups", "Meetings"],
+  summary: "List meeting series owned by a group",
+  description: "Search, filtering, sorting, counting, and pagination are executed in D1.",
+  request: { params: groupMeetingSeriesParamsSchema, query: eventSeriesListQuerySchema },
+  responses: { "200": { description: "A bounded meeting-series page." } },
+};
+export const groupMeetingSeriesCreateRouteSchema = {
+  tags: ["Groups", "Meetings"],
+  summary: "Create a group-owned meeting series",
+  request: {
+    params: groupMeetingSeriesParamsSchema,
+    body: { required: true, content: { "application/json": { schema: eventSeriesCreateSchema } } },
+  },
+  responses: { "201": { description: "Meeting series created." } },
+};
+export const eventSeriesUpdateRouteSchema = {
+  tags: ["Groups", "Meetings"],
+  summary: "Update a group-owned meeting series",
+  request: {
+    params: eventSeriesParamsSchema,
+    body: { required: true, content: { "application/json": { schema: eventSeriesUpdateSchema } } },
+  },
+  responses: { "200": { description: "Meeting series updated." } },
+};
+export const eventOccurrencesListRouteSchema = {
+  tags: ["Groups", "Meetings"],
+  summary: "List occurrences in a meeting series",
+  request: { params: eventSeriesParamsSchema, query: eventOccurrencesListQuerySchema },
+  responses: { "200": { description: "A bounded occurrence page." } },
+};
+export const eventOccurrenceCreateRouteSchema = {
+  tags: ["Groups", "Meetings"],
+  summary: "Create a meeting occurrence",
+  request: {
+    params: eventSeriesParamsSchema,
+    body: { required: true, content: { "application/json": { schema: eventOccurrenceCreateSchema } } },
+  },
+  responses: { "201": { description: "Occurrence created." } },
+};
+export const eventOccurrenceUpdateRouteSchema = {
+  tags: ["Groups", "Meetings"],
+  summary: "Update a meeting occurrence",
+  request: {
+    params: eventOccurrenceParamsSchema,
+    body: { required: true, content: { "application/json": { schema: eventOccurrenceUpdateSchema } } },
+  },
+  responses: { "200": { description: "Occurrence updated." } },
+};
+export const eventOccurrenceGuestInviteRouteSchema = {
+  tags: ["Groups", "Meetings"],
+  summary: "Invite a guest to one occurrence or explicitly to its series",
+  request: {
+    params: eventOccurrenceParamsSchema,
+    body: { required: true, content: { "application/json": { schema: eventOccurrenceGuestInviteSchema } } },
+  },
+  responses: { "201": { description: "Guest invitation created." } },
+};
+export const eventOccurrenceGuestsListRouteSchema = {
+  tags: ["Groups", "Meetings"],
+  summary: "List occurrence-specific and series-wide guests",
+  description: "Search, filtering, sorting, counting, and pagination are executed in D1.",
+  request: { params: eventOccurrenceParamsSchema, query: eventOccurrenceGuestsListQuerySchema },
+  responses: { "200": { description: "A bounded guest page." } },
+};
+export const eventOccurrenceGuestRevokeRouteSchema = {
+  tags: ["Groups", "Meetings"],
+  summary: "Revoke a meeting guest and every active access capability",
+  request: { params: eventGuestParamsSchema },
+  responses: { "200": { description: "Guest access revoked." } },
+};
+export const eventSeriesCalendarRouteSchema = {
+  tags: ["Groups", "Meetings"],
+  summary: "Generate the current meeting-series calendar",
+  request: { params: eventSeriesParamsSchema },
+  responses: { "200": { description: "Generated text/calendar content." } },
+};
+export const eventOccurrenceAccessIssueRouteSchema = {
+  tags: ["Groups", "Meetings"],
+  summary: "Issue a scoped meeting-entry capability",
+  request: {
+    params: eventOccurrenceParamsSchema,
+    body: { required: true, content: { "application/json": { schema: eventAccessTokenIssueSchema } } },
+  },
+  responses: { "201": { description: "Opaque access capability issued." } },
+};
+export const eventOccurrenceAttendanceListRouteSchema = {
+  tags: ["Groups", "Meetings"],
+  summary: "List occurrence join confirmations and verified attendance",
+  description: "Search, verification filtering, sorting, counting, and pagination are executed in D1.",
+  request: { params: eventOccurrenceParamsSchema, query: eventAttendanceListQuerySchema },
+  responses: { "200": { description: "A bounded occurrence-attendance page." } },
+};
+export const eventOccurrenceAttendanceVerifyRouteSchema = {
+  tags: ["Groups", "Meetings"],
+  summary: "Verify attendance separately from join confirmation",
+  request: {
+    params: eventAttendanceParamsSchema,
+    body: { required: true, content: { "application/json": { schema: attendanceVerifySchema } } },
+  },
+  responses: { "200": { description: "Attendance verification recorded." } },
+};
+export const meetingJoinLandingRouteSchema = {
+  tags: ["Meetings"],
+  summary: "Inspect a meeting-entry capability without consuming it",
+  request: { params: meetingJoinTokenParamsSchema },
+  responses: { "200": { description: "Identity, affiliation, occurrence, and current terms." } },
+};
+export const meetingJoinConfirmRouteSchema = {
+  tags: ["Meetings"],
+  summary: "Intentionally confirm meeting entry and obtain the provider redirect",
+  request: {
+    params: meetingJoinTokenParamsSchema,
+    body: { required: true, content: { "application/json": { schema: meetingJoinConfirmSchema } } },
+  },
+  responses: { "200": { description: "Occurrence entry recorded and provider redirect returned." } },
+};

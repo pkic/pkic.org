@@ -124,6 +124,8 @@ export interface Env {
   RSVP_EMAIL?: string;
   RSVP_INBOUND_EMAIL_MAX_BYTES?: string;
   INTERNAL_SIGNING_SECRET?: string;
+  /** Secret used to encrypt protected external meeting-provider join URLs at rest. */
+  MEETING_PROVIDER_ENCRYPTION_KEY?: string;
   /** ECDSA P-256 public key (base64) from SendGrid's Event Webhook settings. Used to verify signed webhook payloads. */
   SENDGRID_WEBHOOK_VERIFICATION_KEY?: string;
   FEEDBACK_IDENTITY_SECRET_V1?: string;

@@ -50,6 +50,7 @@ const EXCLUDED_TABLES = new Set([
   "group_types",
   "groups",
   "group_membership_category_rules",
+  "event_profiles",
   "sponsorship_tier_catalog",
   "sponsorship_tier_config",
 ]);

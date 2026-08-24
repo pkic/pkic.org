@@ -3640,6 +3640,7 @@ CREATE TABLE event_occurrences (
   created_at                 TEXT NOT NULL,
   updated_at                 TEXT NOT NULL,
   UNIQUE (series_id, starts_at),
+  UNIQUE (id, series_id),
   FOREIGN KEY(series_id) REFERENCES event_series(id),
   CHECK (ends_at > starts_at)
 );
@@ -3651,7 +3652,8 @@ CREATE INDEX idx_event_occurrences_upcoming
 
 CREATE TABLE event_occurrence_guests (
   id                 TEXT NOT NULL PRIMARY KEY,
-  occurrence_id      TEXT NOT NULL,
+  series_id          TEXT NOT NULL,
+  occurrence_id      TEXT,
   user_id            TEXT,
   normalized_email   TEXT NOT NULL,
   name               TEXT NOT NULL,
@@ -3661,14 +3663,22 @@ CREATE TABLE event_occurrence_guests (
   revoked_at         TEXT,
   created_at         TEXT NOT NULL,
   updated_at         TEXT NOT NULL,
-  UNIQUE (occurrence_id, normalized_email),
-  FOREIGN KEY(occurrence_id) REFERENCES event_occurrences(id),
+  FOREIGN KEY(series_id) REFERENCES event_series(id),
+  FOREIGN KEY(occurrence_id, series_id) REFERENCES event_occurrences(id, series_id),
   FOREIGN KEY(user_id) REFERENCES users(id),
   FOREIGN KEY(invited_by_user_id) REFERENCES users(id)
 );
 
 CREATE INDEX idx_event_occurrence_guests_occurrence
   ON event_occurrence_guests(occurrence_id, revoked_at, normalized_email, id);
+CREATE INDEX idx_event_occurrence_guests_series
+  ON event_occurrence_guests(series_id, revoked_at, normalized_email, id);
+CREATE UNIQUE INDEX uq_event_occurrence_guest_email
+  ON event_occurrence_guests(occurrence_id, normalized_email)
+  WHERE occurrence_id IS NOT NULL;
+CREATE UNIQUE INDEX uq_event_series_guest_email
+  ON event_occurrence_guests(series_id, normalized_email)
+  WHERE occurrence_id IS NULL;
 
 -- Tokens are opaque, single-purpose capabilities. GET may render the landing
 -- page but cannot consume a token or record attendance; only the intentional
@@ -3694,21 +3704,66 @@ CREATE TABLE event_occurrence_access_tokens (
 CREATE INDEX idx_event_occurrence_access_subject
   ON event_occurrence_access_tokens(occurrence_id, user_id, guest_id, expires_at);
 
--- The legacy consent table cannot accept a guest without rebuilding it, so
--- guest acceptance uses an FK-backed companion table while the shared consent
--- service and contract remain canonical for both identity kinds.
-CREATE TABLE event_occurrence_guest_consents (
+CREATE TRIGGER trg_event_occurrence_access_guest_context
+BEFORE INSERT ON event_occurrence_access_tokens
+WHEN NEW.guest_id IS NOT NULL AND NOT EXISTS (
+  SELECT 1
+    FROM event_occurrence_guests guest
+    JOIN event_occurrences occurrence ON occurrence.id = NEW.occurrence_id
+   WHERE guest.id = NEW.guest_id
+     AND guest.series_id = occurrence.series_id
+     AND (guest.occurrence_id IS NULL OR guest.occurrence_id = NEW.occurrence_id)
+)
+BEGIN
+  SELECT RAISE(ABORT, 'event access guest context invalid');
+END;
+
+-- Meeting access does not require an event registration, while the deployed
+-- consent_acceptances table intentionally requires a registration or proposal.
+-- One companion table therefore records current-version meeting terms for
+-- either an authenticated user or invited guest without duplicating the term.
+CREATE TABLE event_access_term_acceptances (
   id              TEXT NOT NULL PRIMARY KEY,
-  guest_id        TEXT NOT NULL,
+  event_id        TEXT NOT NULL,
+  user_id         TEXT,
+  guest_id        TEXT,
   event_term_id   TEXT NOT NULL,
-  term_version    TEXT NOT NULL,
   accepted_at     TEXT NOT NULL,
   ip_hash         TEXT,
   user_agent_hash TEXT,
-  UNIQUE (guest_id, event_term_id, term_version),
+  CHECK ((user_id IS NOT NULL AND guest_id IS NULL) OR (user_id IS NULL AND guest_id IS NOT NULL)),
+  FOREIGN KEY(event_id) REFERENCES events(id),
+  FOREIGN KEY(user_id) REFERENCES users(id),
   FOREIGN KEY(guest_id) REFERENCES event_occurrence_guests(id),
   FOREIGN KEY(event_term_id) REFERENCES event_terms(id)
 );
+
+CREATE UNIQUE INDEX uq_event_access_term_user
+  ON event_access_term_acceptances(event_id, user_id, event_term_id)
+  WHERE user_id IS NOT NULL;
+CREATE UNIQUE INDEX uq_event_access_term_guest
+  ON event_access_term_acceptances(event_id, guest_id, event_term_id)
+  WHERE guest_id IS NOT NULL;
+CREATE INDEX idx_event_access_term_subject
+  ON event_access_term_acceptances(event_id, user_id, guest_id, event_term_id);
+
+CREATE TRIGGER trg_event_access_term_context_insert
+BEFORE INSERT ON event_access_term_acceptances
+WHEN NOT EXISTS (
+  SELECT 1 FROM event_terms term
+   WHERE term.id = NEW.event_term_id AND term.event_id = NEW.event_id
+)
+OR (
+  NEW.guest_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1
+      FROM event_occurrence_guests guest
+      JOIN event_series series ON series.id = guest.series_id
+     WHERE guest.id = NEW.guest_id AND series.event_id = NEW.event_id
+  )
+)
+BEGIN
+  SELECT RAISE(ABORT, 'event access term context invalid');
+END;
 
 CREATE TABLE event_occurrence_join_confirmations (
   id                          TEXT NOT NULL PRIMARY KEY,
@@ -3717,8 +3772,6 @@ CREATE TABLE event_occurrence_join_confirmations (
   guest_id                    TEXT,
   name_snapshot               TEXT NOT NULL,
   affiliation_snapshot        TEXT,
-  consent_acceptance_id       TEXT,
-  guest_consent_acceptance_id TEXT,
   join_count                  INTEGER NOT NULL DEFAULT 1,
   confirmed_at                TEXT NOT NULL,
   attendance_verified_at      TEXT,
@@ -3726,12 +3779,9 @@ CREATE TABLE event_occurrence_join_confirmations (
   created_at                  TEXT NOT NULL,
   updated_at                  TEXT NOT NULL,
   CHECK ((user_id IS NOT NULL AND guest_id IS NULL) OR (user_id IS NULL AND guest_id IS NOT NULL)),
-  CHECK (guest_consent_acceptance_id IS NULL OR guest_id IS NOT NULL),
   FOREIGN KEY(occurrence_id) REFERENCES event_occurrences(id),
   FOREIGN KEY(user_id) REFERENCES users(id),
-  FOREIGN KEY(guest_id) REFERENCES event_occurrence_guests(id),
-  FOREIGN KEY(consent_acceptance_id) REFERENCES consent_acceptances(id),
-  FOREIGN KEY(guest_consent_acceptance_id) REFERENCES event_occurrence_guest_consents(id)
+  FOREIGN KEY(guest_id) REFERENCES event_occurrence_guests(id)
 );
 
 CREATE UNIQUE INDEX uq_event_occurrence_join_user
