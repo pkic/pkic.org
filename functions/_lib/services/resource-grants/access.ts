@@ -2,11 +2,13 @@ import { hasPermission } from "../../auth/permissions";
 import { all, first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike } from "../../types";
-import { canManageAnyGroup } from "../groups";
+import { canManageAnyGroup } from "../groups/governance";
 import {
   getResourceGrantDefinition,
   isManagerResourceCapability,
   isParticipantResourceCapability,
+  memberResourceGrantCapabilitiesFor,
+  resourceGrantCapabilitiesFor,
   type ResourceGrantCapability,
   type ResourceGrantKind,
 } from "./definitions";
@@ -19,11 +21,74 @@ async function hasActiveGroupMembership(db: DatabaseLike, userId: string, groupI
   return (
     (await first<{ authorized: number }>(
       db,
-      `SELECT 1 AS authorized FROM group_memberships
-        WHERE user_id = ? AND group_id = ? AND left_at IS NULL LIMIT 1`,
+      `SELECT 1 AS authorized
+         FROM group_memberships membership
+         JOIN groups group_row ON group_row.id = membership.group_id AND group_row.active = 1
+        WHERE membership.user_id = ? AND membership.group_id = ? AND membership.left_at IS NULL
+        LIMIT 1`,
       [userId, groupId],
     )) !== null
   );
+}
+
+function placeholders(values: readonly unknown[]): string {
+  return values.map(() => "?").join(", ");
+}
+
+async function resourceOwnerGroupId<K extends ResourceGrantKind>(
+  db: DatabaseLike,
+  kind: K,
+  resourceId: string,
+): Promise<string | null> {
+  const definition = getResourceGrantDefinition(kind);
+  const resource = await db
+    .prepare(
+      `SELECT ${definition.ownerGroupColumn} AS owner_group_id
+         FROM ${definition.resourceTable} WHERE id = ?`,
+    )
+    .bind(resourceId)
+    .first<{ owner_group_id: string | null }>();
+  return resource?.owner_group_id ?? null;
+}
+
+/** Member-session authorization without fabricating a staff identity. */
+export async function canMemberAccessGroupResource<K extends ResourceGrantKind>(
+  db: DatabaseLike,
+  userId: string,
+  kind: K,
+  resourceId: string,
+  capability: ResourceGrantCapability<K>,
+  throughGroupId?: string,
+): Promise<boolean> {
+  const definition = getResourceGrantDefinition(kind);
+  if (isManagerResourceCapability(definition, capability)) return false;
+  const ownerGroupId = await resourceOwnerGroupId(db, kind, resourceId);
+  if (!ownerGroupId) return false;
+  if (
+    (!throughGroupId || throughGroupId === ownerGroupId) &&
+    (await hasActiveGroupMembership(db, userId, ownerGroupId))
+  ) {
+    return true;
+  }
+  if (throughGroupId === ownerGroupId) return false;
+
+  const accepted = memberResourceGrantCapabilitiesFor(definition, capability);
+  if (accepted.length === 0) return false;
+  const groupConstraint = throughGroupId ? "AND grant_row.group_id = ?" : "";
+  const row = await first<{ authorized: number }>(
+    db,
+    `SELECT 1 AS authorized
+       FROM ${definition.grantTable} grant_row
+       JOIN groups grantee ON grantee.id = grant_row.group_id AND grantee.active = 1
+       JOIN group_memberships membership ON membership.group_id = grant_row.group_id
+        AND membership.user_id = ? AND membership.left_at IS NULL
+      WHERE grant_row.${definition.grantResourceColumn} = ?
+        AND grant_row.capability IN (${placeholders(accepted)})
+        ${groupConstraint}
+      LIMIT 1`,
+    [userId, resourceId, ...accepted, ...(throughGroupId ? [throughGroupId] : [])],
+  );
+  return row !== null;
 }
 
 /**
@@ -40,50 +105,27 @@ export async function canAccessGroupResource<K extends ResourceGrantKind>(
   capability: ResourceGrantCapability<K>,
 ): Promise<boolean> {
   const definition = getResourceGrantDefinition(kind);
-  const resource = await db
-    .prepare(
-      `SELECT ${definition.ownerGroupColumn} AS owner_group_id
-         FROM ${definition.resourceTable} WHERE id = ?`,
-    )
-    .bind(resourceId)
-    .first<{ owner_group_id: string | null }>();
-  if (!resource?.owner_group_id) return false;
-  const ownerGroupId = resource.owner_group_id;
+  const ownerGroupId = await resourceOwnerGroupId(db, kind, resourceId);
+  if (!ownerGroupId) return false;
   const participantCapability = isParticipantResourceCapability(definition, capability);
-  if (participantCapability) {
-    if (await hasActiveGroupMembership(db, actor.id, ownerGroupId)) return true;
-  } else if (hasPermission(actor, "groups:write", { type: "group", id: ownerGroupId })) {
+  if (await canMemberAccessGroupResource(db, actor.id, kind, resourceId, capability)) return true;
+  if (!participantCapability && hasPermission(actor, "groups:write", { type: "group", id: ownerGroupId })) {
     return true;
   }
-  const managerCapability = isManagerResourceCapability(definition, capability);
-  if (!participantCapability && managerCapability) {
-    if (await canManageAnyGroup(db, actor, [ownerGroupId])) return true;
-  } else if (!participantCapability && (await hasActiveGroupMembership(db, actor.id, ownerGroupId))) {
-    return true;
-  }
-
-  const exactMemberGroups = managerCapability
-    ? []
-    : await all<GroupIdRow>(
-        db,
-        `SELECT grant_row.group_id
-           FROM ${definition.grantTable} grant_row
-           JOIN group_memberships membership ON membership.group_id = grant_row.group_id
-            AND membership.user_id = ? AND membership.left_at IS NULL
-          WHERE grant_row.${definition.grantResourceColumn} = ? AND grant_row.capability = ?`,
-        [actor.id, resourceId, capability],
-      );
-  if (exactMemberGroups.length > 0) return true;
-
   if (participantCapability) return false;
+  if (await canManageAnyGroup(db, actor, [ownerGroupId])) return true;
 
+  const acceptedManagerCapabilities = resourceGrantCapabilitiesFor(definition, capability).filter((candidate) =>
+    isManagerResourceCapability(definition, candidate),
+  );
+  if (acceptedManagerCapabilities.length === 0) return false;
   const managerGroups = await all<GroupIdRow>(
     db,
     `SELECT DISTINCT grant_row.group_id
        FROM ${definition.grantTable} grant_row
       WHERE grant_row.${definition.grantResourceColumn} = ?
-        AND grant_row.capability IN (?, 'manage')`,
-    [resourceId, capability],
+        AND grant_row.capability IN (${placeholders(acceptedManagerCapabilities)})`,
+    [resourceId, ...acceptedManagerCapabilities],
   );
   return canManageAnyGroup(
     db,

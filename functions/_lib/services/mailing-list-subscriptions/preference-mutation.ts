@@ -5,8 +5,10 @@ import type { DatabaseLike, StatementLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { prepareScopedAuditLog } from "../audit";
 import { buildEnqueueGoogleGroupsSyncStatement } from "../google-groups/sync-queue";
+import { canMemberAccessGroupResource } from "../resource-grants/access";
 import { getEffectiveMailingListSubscription, resolveGroupId } from "./read-model";
 
+/** Persist one member preference and enqueue its provider-state transition atomically. */
 export async function setMailingListPreference(
   db: DatabaseLike,
   userId: string,
@@ -15,10 +17,17 @@ export async function setMailingListPreference(
   preference: MailingListPreferenceMutation,
 ) {
   const groupId = await resolveGroupId(db, groupIdOrSlug);
-  const current = await getEffectiveMailingListSubscription(db, userId, listId);
-  if (current.mailingList.groupId !== groupId) {
-    throw new AppError(404, "MAILING_LIST_NOT_FOUND", "Mailing list does not belong to this group");
+  const canView = await canMemberAccessGroupResource(db, userId, "mailingList", listId, "view", groupId);
+  if (!canView) {
+    throw new AppError(404, "MAILING_LIST_NOT_FOUND", "Mailing list is not available through this group");
   }
+  if (
+    preference === "subscribed" &&
+    !(await canMemberAccessGroupResource(db, userId, "mailingList", listId, "subscribe", groupId))
+  ) {
+    throw new AppError(403, "MAILING_LIST_SUBSCRIPTION_INELIGIBLE", "The caller cannot subscribe through this group");
+  }
+  const current = await getEffectiveMailingListSubscription(db, userId, listId);
   if (preference === "subscribed" && !current.eligible) {
     throw new AppError(403, "MAILING_LIST_SUBSCRIPTION_INELIGIBLE", "The caller is not eligible for this mailing list");
   }

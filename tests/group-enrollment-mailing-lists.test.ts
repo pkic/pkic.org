@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createGroup,
   joinGroup,
@@ -14,16 +14,19 @@ import {
   listEffectiveGroupMailingListSubscriptions,
   setMailingListPreference,
 } from "../functions/_lib/services/mailing-list-subscriptions";
+import { grantResourceToGroup, revokeResourceGroupGrant } from "../functions/_lib/services/resource-grants";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { nowIso } from "../functions/_lib/utils/time";
-import type { AuthAdmin } from "../functions/_lib/types";
+import type { UserBackedAuthAdmin } from "../functions/_lib/types";
+import { callApi } from "./helpers/app";
+import { createMemberSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
 const ALL_MEMBERS_GROUP_ID = "20000000-0000-4000-8000-000000000001";
 
-async function insertAdmin(): Promise<AuthAdmin> {
+async function insertAdmin(): Promise<UserBackedAuthAdmin> {
   const id = await insertUser(env.DB, `group-platform-admin-${crypto.randomUUID()}@example.test`);
   await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(id).run();
   return { identityType: "user", id, email: "group-platform-admin@example.test", role: "admin" };
@@ -60,6 +63,22 @@ async function desiredAction(userId: string, email: string): Promise<string | nu
 
 beforeEach(async () => {
   await resetDb();
+});
+
+afterEach(async () => {
+  const testListPredicate =
+    "email LIKE 'primary-%@lists.example.test' OR email LIKE 'optional-%@lists.example.test' OR " +
+    "email LIKE 'shared-capability-%@lists.example.test'";
+  await env.DB.batch([
+    env.DB.prepare(
+      `DELETE FROM mailing_list_group_grants
+        WHERE mailing_list_id IN (SELECT id FROM mailing_lists WHERE ${testListPredicate})`,
+    ),
+    env.DB.prepare(
+      `UPDATE mailing_lists SET group_id = NULL, active = 0, archived_at = datetime('now')
+        WHERE ${testListPredicate}`,
+    ),
+  ]);
 });
 
 describe("automatic group enrollment", () => {
@@ -270,5 +289,113 @@ describe("group mailing-list subscriptions", () => {
 
     await deleteMailingList(env.DB, optional.id, admin.id);
     expect(await desiredAction(userId, optionalEmail)).toBe("remove_from_list");
+  });
+
+  it("applies shared subscription grants in D1 and reconciles revocation atomically", async () => {
+    const admin = await insertAdmin();
+    const owner = await createGroup(env.DB, admin, {
+      typeKey: "working_group",
+      name: `Shared list owner ${crypto.randomUUID()}`,
+      visibility: "public",
+    });
+    const grantee = await createGroup(env.DB, admin, {
+      typeKey: "working_group",
+      name: `Shared list grantee ${crypto.randomUUID()}`,
+      visibility: "public",
+    });
+    const userId = await insertUser(env.DB, `shared-list-member-${crypto.randomUUID()}@example.test`);
+    await addOrganizationCapacity(userId, "A");
+    await joinGroup(env.DB, grantee.id, {
+      actorUserId: userId,
+      targetUserId: userId,
+      selection: { mode: "all_eligible", confirmed: true },
+      source: "self_service",
+      allowManaged: false,
+    });
+    const email = `shared-capability-${crypto.randomUUID()}@lists.example.test`;
+    const list = await createMailingList(
+      env.DB,
+      {
+        email,
+        label: "Shared capability list",
+        purpose: "group",
+        groupId: owner.id,
+        subscriptionDefault: "none",
+      },
+      admin.id,
+    );
+
+    await grantResourceToGroup(env.DB, admin, owner.id, "mailingList", list.id, {
+      granteeGroupId: grantee.id,
+      capability: "subscribe",
+    });
+    const memberToken = await createMemberSession(env.DB, userId, `shared-list-${crypto.randomUUID()}`);
+    const memberRequest = (path: string, init: RequestInit = {}) => {
+      const headers = new Headers(init.headers);
+      headers.set("authorization", `Bearer ${memberToken}`);
+      if (init.body) headers.set("content-type", "application/json");
+      return callApi(env, path, { ...init, headers });
+    };
+    const mountedList = await memberRequest(`/api/v1/groups/${grantee.id}/mailing-lists?limit=50`);
+    expect(mountedList.status, await mountedList.clone().text()).toBe(200);
+    expect((await mountedList.json()) as { subscriptions: Array<{ mailingList: { id: string } }> }).toMatchObject({
+      subscriptions: expect.arrayContaining([
+        expect.objectContaining({ mailingList: expect.objectContaining({ id: list.id }) }),
+      ]),
+    });
+    const sharedPage = await listEffectiveGroupMailingListSubscriptions(env.DB, userId, grantee.id, {
+      limit: 50,
+      offset: 0,
+    });
+    expect(sharedPage.subscriptions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          mailingList: expect.objectContaining({ id: list.id }),
+          eligible: true,
+        }),
+      ]),
+    );
+    const wrongContext = await memberRequest(`/api/v1/groups/${owner.id}/mailing-lists/${list.id}/subscription`, {
+      method: "PUT",
+      body: JSON.stringify({ preference: "subscribed" }),
+    });
+    expect(wrongContext.status).toBe(404);
+    const subscribed = await memberRequest(`/api/v1/groups/${grantee.id}/mailing-lists/${list.id}/subscription`, {
+      method: "PUT",
+      body: JSON.stringify({ preference: "subscribed" }),
+    });
+    expect(subscribed.status, await subscribed.clone().text()).toBe(200);
+    expect(await desiredAction(userId, email)).toBe("add_to_list");
+
+    await revokeResourceGroupGrant(env.DB, admin, owner.id, "mailingList", list.id, {
+      granteeGroupId: grantee.id,
+      capability: "subscribe",
+    });
+    expect(await desiredAction(userId, email)).toBe("remove_from_list");
+    const revokedPage = await listEffectiveGroupMailingListSubscriptions(env.DB, userId, grantee.id, {
+      limit: 50,
+      offset: 0,
+    });
+    expect(revokedPage.subscriptions.some((subscription) => subscription.mailingList.id === list.id)).toBe(false);
+
+    await grantResourceToGroup(env.DB, admin, owner.id, "mailingList", list.id, {
+      granteeGroupId: grantee.id,
+      capability: "view",
+    });
+    const viewOnlyPage = await listEffectiveGroupMailingListSubscriptions(env.DB, userId, grantee.id, {
+      limit: 50,
+      offset: 0,
+    });
+    expect(viewOnlyPage.subscriptions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          mailingList: expect.objectContaining({ id: list.id }),
+          eligible: false,
+        }),
+      ]),
+    );
+    await expect(setMailingListPreference(env.DB, userId, grantee.id, list.id, "subscribed")).rejects.toMatchObject({
+      code: "MAILING_LIST_SUBSCRIPTION_INELIGIBLE",
+    });
   });
 });

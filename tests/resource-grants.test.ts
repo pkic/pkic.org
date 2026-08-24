@@ -405,10 +405,16 @@ describe("shared resource access evaluator", () => {
       await canAccessGroupResource(env.DB, granteeMember, "formPlacement", fixture.formPlacementId, "submit"),
     ).toBe(true);
     expect(
+      await canAccessGroupResource(env.DB, granteeMember, "formPlacement", fixture.formPlacementId, "view_definition"),
+    ).toBe(true);
+    expect(
       await canAccessGroupResource(env.DB, granteeMember, "formPlacement", fixture.formPlacementId, "view_responses"),
     ).toBe(false);
     expect(
       await canAccessGroupResource(env.DB, granteeLeader, "formPlacement", fixture.formPlacementId, "view_responses"),
+    ).toBe(true);
+    expect(
+      await canAccessGroupResource(env.DB, granteeLeader, "formPlacement", fixture.formPlacementId, "view_definition"),
     ).toBe(true);
     expect(
       await canAccessGroupResource(env.DB, granteeLeader, "formPlacement", fixture.formPlacementId, "submit"),

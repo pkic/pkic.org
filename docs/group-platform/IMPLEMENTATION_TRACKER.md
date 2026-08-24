@@ -238,6 +238,8 @@ Status: In progress
 - [x] Define one shared grant transport contract and evaluator.
 - [x] Use FK-backed resource-specific grant tables.
 - [x] Define allowed capabilities once per resource domain.
+- [x] Define capability implications once per resource domain without allowing
+      management to imply participation.
 - [x] Define form participation and response-viewing as distinct grants on the
       owned placement rather than the reusable definition.
 - [x] Define event view, registration, attendance, attendance-management, and
@@ -251,14 +253,24 @@ Status: In progress
 - [ ] Apply the shared evaluator to every form, event, vote, and mailing-list
       read and mutation path as those canonical group APIs replace legacy
       domain endpoints.
-      Evidence: resource-grants.test.ts passes 9 focused tests. Four
+  - [x] Apply `attend` to meeting entry in the Worker read and atomic D1 guard.
+  - [x] Apply mailing-list view and subscribe grants to member discovery,
+        preference mutation, and provider desired-state reconciliation.
+  - [ ] Apply form placement grants to canonical definition, submission, response,
+        response-statistics, and management paths.
+  - [ ] Apply event grants beyond meeting entry to generic view, registration,
+        and attendance-management paths.
+  - [ ] Apply vote grants after the atomic generic voting cutover.
+      Evidence: resource-grants.test.ts and
+      group-enrollment-mailing-lists.test.ts pass 15 focused tests. Four
       resource-specific grant tables retain real resource and group foreign
       keys; one shared service provides idempotent audited creation, exact
       revocation, D1-side search/filter/sort/pagination, and participant versus
       effective-leadership evaluation. Mounted group routes use the same exact
-      domain contracts. The test suite covers escalation, immediate
-      revocation, inherited and local-only governance, idempotency, owner
-      immutability, validation, and orphan prevention.
+      domain contracts. The tests cover capability implication, escalation,
+      immediate revocation, inherited and local-only governance, idempotency,
+      owner immutability, validation, orphan prevention, context-bound member
+      access, and atomic Google Groups desired-state removal.
 
 ## 9. Group-scoped REST API
 

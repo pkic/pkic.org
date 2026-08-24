@@ -270,13 +270,20 @@ they prevent orphan grants that a polymorphic resource_type and resource_id
 table could not constrain.
 
 Each resource module declares its allowed capabilities in one shared domain
-constant. Unknown capability values fail validation on every write.
+constant together with its capability implications. Unknown capability values
+fail validation on every write. Implications are evaluated by the shared
+authorization service rather than repeated in route-specific conditionals.
 
 Participation capabilities require active membership in the owner or grantee
 group. Response, attendance-management, moderation, and management
 capabilities require effective local or inherited leadership. Leadership and a
 manage grant never manufacture the membership required to submit, register,
 attend, vote, subscribe, or post.
+
+Mailing-list subscription eligibility incorporates exact `subscribe` grants in
+the D1 projection. Grant creation and revocation reconcile provider desired
+state in the same D1 batch, so a revoked grant cannot remain an effective
+Google Groups subscription merely because an asynchronous UI path was missed.
 
 ## Events, series, and occurrences
 

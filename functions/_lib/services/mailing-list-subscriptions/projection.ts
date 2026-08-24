@@ -1,7 +1,19 @@
 import { ACTIVE_USER_CAPACITIES_CTE } from "../membership/capacity-query";
 
+function sharedSubscriptionMembershipSql(listAlias: string, userIdSql: string): string {
+  return `EXISTS (
+    SELECT 1
+      FROM mailing_list_group_grants grant_row
+      JOIN groups grantee ON grantee.id = grant_row.group_id AND grantee.active = 1
+      JOIN group_memberships membership ON membership.group_id = grant_row.group_id
+       AND membership.user_id = ${userIdSql} AND membership.left_at IS NULL
+     WHERE grant_row.mailing_list_id = ${listAlias}.id
+       AND grant_row.capability = 'subscribe'
+  )`;
+}
+
 export function mailingListEligibilitySql(listAlias: string, userIdSql: string): string {
-  return `CASE
+  return `(CASE
     WHEN ${listAlias}.purpose = 'group' THEN EXISTS (
       SELECT 1 FROM group_memberships membership
        WHERE membership.user_id = ${userIdSql}
@@ -19,7 +31,7 @@ export function mailingListEligibilitySql(listAlias: string, userIdSql: string):
            )
          )
     )
-  END`;
+  END OR ${sharedSubscriptionMembershipSql(listAlias, userIdSql)})`;
 }
 
 export function mailingListDefaultSubscribedSql(listAlias: string, userIdSql: string): string {
@@ -29,7 +41,7 @@ export function mailingListDefaultSubscribedSql(listAlias: string, userIdSql: st
        WHERE membership.user_id = ${userIdSql}
          AND membership.group_id = ${listAlias}.group_id
          AND membership.left_at IS NULL
-    )
+    ) OR ${sharedSubscriptionMembershipSql(listAlias, userIdSql)}
     WHEN 'eligible_categories' THEN EXISTS (
       SELECT 1 FROM active_user_capacities capacity
        WHERE capacity.user_id = ${userIdSql}

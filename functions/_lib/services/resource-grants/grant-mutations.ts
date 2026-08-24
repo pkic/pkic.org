@@ -5,6 +5,7 @@ import { isAuditOneChangeGuardFailure, prepareAuditLogWhen, prepareScopedAuditLo
 import { getGroup } from "../groups";
 import { getResourceGrantDefinition, isResourceGrantCapability, type ResourceGrantKind } from "./definitions";
 import { getResourceGroupGrant, resolveOwnedResource } from "./read";
+import { prepareGrantReconciliationStatements } from "./grant-reconciliation";
 import type { ResourceGrantMutationInput, ResourceGroupGrant } from "./types";
 
 export async function grantResourceToGroup<K extends ResourceGrantKind>(
@@ -26,6 +27,7 @@ export async function grantResourceToGroup<K extends ResourceGrantKind>(
     throw new AppError(409, "RESOURCE_OWNER_GRANT_REDUNDANT", "The owning group already controls this resource");
   }
   const now = nowIso();
+  const reconciliation = prepareGrantReconciliationStatements(db, kind, resourceId, input.capability, now);
   const results = await db.batch([
     db
       .prepare(
@@ -46,6 +48,7 @@ export async function grantResourceToGroup<K extends ResourceGrantKind>(
       createdAt: now,
       scope: { type: "group", id: ownerGroupId },
     }),
+    ...reconciliation,
   ]);
   const grant = await getResourceGroupGrant(db, kind, resourceId, grantee.id, input.capability);
   if (!grant) throw new AppError(500, "RESOURCE_GRANT_READ_FAILED", "Failed to read resource grant after mutation");
@@ -66,6 +69,7 @@ export async function revokeResourceGroupGrant<K extends ResourceGrantKind>(
   }
   const { ownerGroupId } = await resolveOwnedResource(db, kind, ownerGroupIdOrSlug, resourceId, actor);
   const now = nowIso();
+  const reconciliation = prepareGrantReconciliationStatements(db, kind, resourceId, input.capability, now);
   try {
     await db.batch([
       db
@@ -85,6 +89,7 @@ export async function revokeResourceGroupGrant<K extends ResourceGrantKind>(
         { granteeGroupId: input.granteeGroupId, capability: input.capability },
         now,
       ),
+      ...reconciliation,
     ]);
   } catch (error) {
     if (isAuditOneChangeGuardFailure(error)) {

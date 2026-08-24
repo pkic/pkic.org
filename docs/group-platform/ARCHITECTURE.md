@@ -157,6 +157,12 @@ Sharing grants capabilities rather than a universal shared flag. Examples:
 - votes: view, participate, view results, manage;
 - mailing lists: view, subscribe, post, moderate, manage.
 
+Capability implications are declared once per resource domain. A participation
+grant implies the visibility necessary to perform that action (for example,
+submit implies view definition and subscribe implies view), but management
+never implies participation. This keeps staff access separate from the active
+membership required to submit, register, attend, vote, subscribe, or post.
+
 The transport grant shape and authorization evaluator are shared. Persistence
 must retain real foreign keys to the shared resource and grantee group. A
 generic resource-type plus resource-id table without referential integrity is
