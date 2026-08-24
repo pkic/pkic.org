@@ -22,6 +22,11 @@ export interface GroupResourceViewer {
   admin?: AuthAdmin;
 }
 
+export interface GroupResourceContextAccess {
+  member: boolean;
+  manager: boolean;
+}
+
 export async function hasActiveGroupMembership(db: DatabaseLike, userId: string, groupId: string): Promise<boolean> {
   return (
     (await first<{ authorized: number }>(
@@ -34,6 +39,16 @@ export async function hasActiveGroupMembership(db: DatabaseLike, userId: string,
       [userId, groupId],
     )) !== null
   );
+}
+
+export async function resolveGroupResourceContextAccess(
+  db: DatabaseLike,
+  viewer: GroupResourceViewer,
+  groupId: string,
+): Promise<GroupResourceContextAccess> {
+  const member = await hasActiveGroupMembership(db, viewer.userId, groupId);
+  const manager = viewer.admin ? await canManageAnyGroup(db, viewer.admin, [groupId]) : false;
+  return { member, manager };
 }
 
 function placeholders(values: readonly unknown[]): string {

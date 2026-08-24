@@ -146,6 +146,23 @@ export function memberResourceGrantCapabilitiesFor<K extends ResourceGrantKind>(
   );
 }
 
+export function visibleResourceGrantCapabilitiesForContext<K extends ResourceGrantKind>(
+  definition: ResourceGrantDefinition<K>,
+  capability: ResourceGrantCapability<K>,
+  access: { member: boolean; manager: boolean },
+): ResourceGrantCapability<K>[] {
+  const accepted = new Set<ResourceGrantCapability<K>>();
+  if (access.member) {
+    for (const candidate of memberResourceGrantCapabilitiesFor(definition, capability)) accepted.add(candidate);
+  }
+  if (access.manager) {
+    for (const candidate of resourceGrantCapabilitiesFor(definition, capability)) {
+      if (isManagerResourceCapability(definition, candidate)) accepted.add(candidate);
+    }
+  }
+  return [...accepted];
+}
+
 export function effectiveResourceCapabilitiesForContext<K extends ResourceGrantKind>(
   definition: ResourceGrantDefinition<K>,
   access: {

@@ -258,8 +258,12 @@ Status: In progress
         preference mutation, and provider desired-state reconciliation.
   - [x] Apply form placement grants to canonical definition, submission, response,
         response-statistics, and management paths.
-  - [ ] Apply event grants beyond meeting entry to generic view, registration,
-        and attendance-management paths.
+  - [ ] Apply event grants beyond meeting entry.
+    - [x] Apply `view` implications to canonical group-scoped event discovery
+          and detail reads.
+    - [ ] Apply `register` to the authenticated registration workflow.
+    - [ ] Apply `manage_attendance` to registration discovery and attendance
+          mutations.
   - [ ] Apply vote grants after the atomic generic voting cutover.
       Evidence: resource-grants.test.ts, group-enrollment-mailing-lists.test.ts,
       and group-form-sharing.test.ts pass 18 focused grant-consumer tests; the
@@ -275,6 +279,9 @@ Status: In progress
       immutability, group-scoped form discovery and mutation, D1-side answer
       search, immediate revocation, and prevention of generic form endpoints
       bypassing registration, proposal, or application workflows.
+      Group-event sharing tests additionally prove context-bound discovery,
+      shared flexible links, participant/manager separation, revocation, and
+      indexed owner/grantee query plans.
 
 ## 9. Group-scoped REST API
 
@@ -285,6 +292,7 @@ Status: In progress
 - [ ] Add nested votes, stats, and audit routes.
 - [x] Add nested form definition, submission, response, response-statistics,
       and placement-management routes.
+- [x] Add nested group event discovery and detail routes.
 - [x] Add nested mailing-list discovery and preference routes.
 - [ ] Add /api/v1/groups/:groupId/meetings/series routes.
 - [ ] Add series occurrence, guest, join, and attendance routes.

@@ -41,6 +41,8 @@ import { GroupFormsList } from "./[groupId]/forms/index";
 import { GroupFormDefinitionGet, GroupFormPlacementUpdate } from "./[groupId]/forms/[placementId]";
 import { GroupFormSubmissionCreate, GroupFormSubmissionsList } from "./[groupId]/forms/[placementId]/submissions";
 import { GroupFormSubmissionStats } from "./[groupId]/forms/[placementId]/submission-stats";
+import { GroupEventsList } from "./[groupId]/events/index";
+import { GroupEventDetailGet } from "./[groupId]/events/[eventId]";
 
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
@@ -68,6 +70,8 @@ openapi.patch("/:groupId/forms/:placementId", GroupFormPlacementUpdate);
 openapi.get("/:groupId/forms/:placementId/submissions", GroupFormSubmissionsList);
 openapi.post("/:groupId/forms/:placementId/submissions", GroupFormSubmissionCreate);
 openapi.get("/:groupId/forms/:placementId/submissions/stats", GroupFormSubmissionStats);
+openapi.get("/:groupId/events", GroupEventsList);
+openapi.get("/:groupId/events/:eventId", GroupEventDetailGet);
 openapi.get("/:groupId/meetings/series", GroupMeetingSeriesList);
 openapi.post("/:groupId/meetings/series", GroupMeetingSeriesCreate);
 openapi.patch("/:groupId/meetings/series/:seriesId", GroupMeetingSeriesUpdate);

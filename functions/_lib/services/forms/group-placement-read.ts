@@ -12,16 +12,13 @@ import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
-import { canManageAnyGroup } from "../groups/governance";
 import {
   type GroupResourceViewer,
   effectiveResourceCapabilitiesForContext,
   getResourceGrantDefinition,
-  hasActiveGroupMembership,
-  isManagerResourceCapability,
   isResourceGrantCapability,
-  memberResourceGrantCapabilitiesFor,
-  resourceGrantCapabilitiesFor,
+  resolveGroupResourceContextAccess,
+  visibleResourceGrantCapabilitiesForContext,
 } from "../resource-grants";
 import { getFormDefinitionByPlacement } from "./read";
 
@@ -49,21 +46,6 @@ interface GroupFormPlacementRow {
   granted_capabilities: string | null;
 }
 
-interface GroupContextAccess {
-  member: boolean;
-  manager: boolean;
-}
-
-async function resolveGroupContextAccess(
-  db: DatabaseLike,
-  viewer: GroupFormViewer,
-  groupId: string,
-): Promise<GroupContextAccess> {
-  const member = await hasActiveGroupMembership(db, viewer.userId, groupId);
-  const manager = viewer.admin ? await canManageAnyGroup(db, viewer.admin, [groupId]) : false;
-  return { member, manager };
-}
-
 function grantedCapabilities(row: Pick<GroupFormPlacementRow, "granted_capabilities">): FormGroupCapability[] {
   const definition = getResourceGrantDefinition("formPlacement");
   return (row.granted_capabilities?.split(",") ?? []).filter((capability): capability is FormGroupCapability =>
@@ -74,7 +56,7 @@ function grantedCapabilities(row: Pick<GroupFormPlacementRow, "granted_capabilit
 function mapGroupFormPlacement(
   row: GroupFormPlacementRow,
   groupId: string,
-  access: GroupContextAccess,
+  access: { member: boolean; manager: boolean },
 ): GroupFormPlacementSummary {
   const definition = getResourceGrantDefinition("formPlacement");
   return groupFormPlacementSummarySchema.parse({
@@ -110,21 +92,6 @@ function mapGroupFormPlacement(
   });
 }
 
-function visibleGrantCapabilities(access: GroupContextAccess): FormGroupCapability[] {
-  const definition = getResourceGrantDefinition("formPlacement");
-  const accepted = new Set<FormGroupCapability>();
-  if (access.member) {
-    for (const capability of memberResourceGrantCapabilitiesFor(definition, "view_definition"))
-      accepted.add(capability);
-  }
-  if (access.manager) {
-    for (const capability of resourceGrantCapabilitiesFor(definition, "view_definition")) {
-      if (isManagerResourceCapability(definition, capability)) accepted.add(capability);
-    }
-  }
-  return [...accepted];
-}
-
 const FORM_PLACEMENT_SELECT = `SELECT
   form.id AS form_id, form.key AS form_key, form.purpose AS form_purpose,
   form.status AS form_status, form.title AS form_title,
@@ -145,9 +112,13 @@ export async function listGroupFormPlacements(
   groupId: string,
   query: GroupFormsListQuery,
 ): Promise<{ forms: GroupFormPlacementSummary[]; total: number }> {
-  const access = await resolveGroupContextAccess(db, viewer, groupId);
+  const access = await resolveGroupResourceContextAccess(db, viewer, groupId);
   if (!access.member && !access.manager) return { forms: [], total: 0 };
-  const visibleGrants = visibleGrantCapabilities(access);
+  const visibleGrants = visibleResourceGrantCapabilitiesForContext(
+    getResourceGrantDefinition("formPlacement"),
+    "view_definition",
+    access,
+  );
   const conditions = [
     `(
       (placement.owner_group_id = ? AND ? = 1)
@@ -224,7 +195,7 @@ export async function getGroupFormDefinition(
   groupId: string,
   placementId: string,
 ) {
-  const access = await resolveGroupContextAccess(db, viewer, groupId);
+  const access = await resolveGroupResourceContextAccess(db, viewer, groupId);
   const row = await first<GroupFormPlacementRow>(
     db,
     `${FORM_PLACEMENT_SELECT}
