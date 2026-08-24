@@ -35,7 +35,9 @@ taxonomies:
   author: authors
 
 ignoreFiles:
-  - AGENTS\.md$
+  # Repository meta files are never site content, wherever they appear. Anchored on
+  # a path segment so a name such as PROJECT-README.md still renders.
+  - (^|/)(AGENTS|CLAUDE|COPILOT|PROMPTS|README)\.md$
   - wg/pkimm/(extensions|integrations)/pkimm-model/
   - wg/pkimm/(extensions|integrations)/scripts/
   - wg/pkimm/(extensions|integrations)/\.github/
