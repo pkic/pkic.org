@@ -146,8 +146,9 @@ frontend.
 
 ## Resource ownership and sharing
 
-Events, meeting series, votes, forms, mailing lists, statistics, and audit views
-are owned by one group.
+Events, meeting series, votes, form placements, mailing lists, statistics, and
+audit views are owned by one group. A reusable form definition is catalogue
+content; each placement is the owned response set and sharing boundary.
 
 Sharing grants capabilities rather than a universal shared flag. Examples:
 

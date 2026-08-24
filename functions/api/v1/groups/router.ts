@@ -31,6 +31,12 @@ import { GroupMeetingGuestRevoke } from "./[groupId]/meetings/series/[seriesId]/
 import { GroupMeetingAccessIssue } from "./[groupId]/meetings/series/[seriesId]/occurrences/[occurrenceId]/access";
 import { GroupMeetingAttendanceList } from "./[groupId]/meetings/series/[seriesId]/occurrences/[occurrenceId]/attendance/index";
 import { GroupMeetingAttendanceVerify } from "./[groupId]/meetings/series/[seriesId]/occurrences/[occurrenceId]/attendance/[confirmationId]";
+import {
+  eventGrantRoutes,
+  formPlacementGrantRoutes,
+  mailingListGrantRoutes,
+  voteGrantRoutes,
+} from "./resource-grant-handlers";
 
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
@@ -72,5 +78,17 @@ openapi.put(
   "/:groupId/meetings/series/:seriesId/occurrences/:occurrenceId/attendance/:confirmationId",
   GroupMeetingAttendanceVerify,
 );
+openapi.get("/:groupId/forms/:placementId/grants", formPlacementGrantRoutes.list);
+openapi.post("/:groupId/forms/:placementId/grants", formPlacementGrantRoutes.create);
+openapi.delete("/:groupId/forms/:placementId/grants/:granteeGroupId/:capability", formPlacementGrantRoutes.revoke);
+openapi.get("/:groupId/events/:eventId/grants", eventGrantRoutes.list);
+openapi.post("/:groupId/events/:eventId/grants", eventGrantRoutes.create);
+openapi.delete("/:groupId/events/:eventId/grants/:granteeGroupId/:capability", eventGrantRoutes.revoke);
+openapi.get("/:groupId/votes/:voteId/grants", voteGrantRoutes.list);
+openapi.post("/:groupId/votes/:voteId/grants", voteGrantRoutes.create);
+openapi.delete("/:groupId/votes/:voteId/grants/:granteeGroupId/:capability", voteGrantRoutes.revoke);
+openapi.get("/:groupId/mailing-lists/:listId/grants", mailingListGrantRoutes.list);
+openapi.post("/:groupId/mailing-lists/:listId/grants", mailingListGrantRoutes.create);
+openapi.delete("/:groupId/mailing-lists/:listId/grants/:granteeGroupId/:capability", mailingListGrantRoutes.revoke);
 
 export default openapi;

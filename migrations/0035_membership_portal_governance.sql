@@ -1605,20 +1605,20 @@ BEGIN
   SELECT RAISE(ABORT, 'form placement context is invalid');
 END;
 
-CREATE TABLE form_group_grants (
-  form_id   TEXT NOT NULL,
-  group_id  TEXT NOT NULL,
-  capability TEXT NOT NULL,
+CREATE TABLE form_placement_group_grants (
+  placement_id TEXT NOT NULL,
+  group_id     TEXT NOT NULL,
+  capability   TEXT NOT NULL,
   created_by_user_id TEXT,
   created_at TEXT NOT NULL,
-  PRIMARY KEY (form_id, group_id, capability),
-  FOREIGN KEY(form_id) REFERENCES forms(id),
+  PRIMARY KEY (placement_id, group_id, capability),
+  FOREIGN KEY(placement_id) REFERENCES form_placements(id),
   FOREIGN KEY(group_id) REFERENCES groups(id),
   FOREIGN KEY(created_by_user_id) REFERENCES users(id)
 );
 
-CREATE INDEX idx_form_group_grants_group
-  ON form_group_grants(group_id, capability, form_id);
+CREATE INDEX idx_form_placement_group_grants_group
+  ON form_placement_group_grants(group_id, capability, placement_id);
 
 ALTER TABLE form_submissions ADD COLUMN placement_id TEXT REFERENCES form_placements(id);
 ALTER TABLE form_submission_answers ADD COLUMN field_id TEXT REFERENCES form_fields(id);
@@ -3417,6 +3417,21 @@ CREATE UNIQUE INDEX uq_mailing_lists_primary_discussion
   ON mailing_lists(group_id)
   WHERE is_primary_discussion = 1 AND active = 1;
 
+CREATE TABLE mailing_list_group_grants (
+  mailing_list_id TEXT NOT NULL,
+  group_id        TEXT NOT NULL,
+  capability      TEXT NOT NULL,
+  created_by_user_id TEXT,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (mailing_list_id, group_id, capability),
+  FOREIGN KEY(mailing_list_id) REFERENCES mailing_lists(id),
+  FOREIGN KEY(group_id) REFERENCES groups(id),
+  FOREIGN KEY(created_by_user_id) REFERENCES users(id)
+);
+
+CREATE INDEX idx_mailing_list_group_grants_group
+  ON mailing_list_group_grants(group_id, capability, mailing_list_id);
+
 -- Absence means inherit the list default. An explicit row is a durable user
 -- choice and survives group/category eligibility loss and later re-entry.
 CREATE TABLE mailing_list_subscription_preferences (
@@ -3990,7 +4005,7 @@ WHEN NOT EXISTS (
                           SELECT 1 FROM event_group_grants grant_row
                            WHERE grant_row.event_id = event.id
                              AND grant_row.group_id = membership.group_id
-                             AND grant_row.capability = 'participate'
+                             AND grant_row.capability = 'attend'
                         )
                       )
                     )

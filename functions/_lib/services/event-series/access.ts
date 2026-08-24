@@ -110,7 +110,7 @@ async function assertUserMayEnter(db: DatabaseLike, row: AccessContextRow, userI
             ? = 'shared_groups' AND EXISTS (
               SELECT 1 FROM event_group_grants grant_row
                WHERE grant_row.event_id = ? AND grant_row.group_id = membership.group_id
-                 AND grant_row.capability = 'participate'
+                 AND grant_row.capability = 'attend'
             )
           )
         )

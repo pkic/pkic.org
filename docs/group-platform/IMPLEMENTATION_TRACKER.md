@@ -52,7 +52,7 @@ Status: In progress
       membership mutation, grant, and error contract.
 - [ ] Preserve temporary compatibility exports only while callers migrate.
 - [x] Prove empty-database migration application.
-      Evidence: all 37 migrations, including 224 statements in 0035, applied to
+      Evidence: all 37 migrations, including 226 statements in 0035, applied to
       a fourteenth independent local D1 state under ScanDisk after the
       reusable-form refinements on 2026-08-24.
 - [x] Prove production-shaped upgrade fixture application.
@@ -175,7 +175,7 @@ Status: In progress
       loss, terms changes and races, repeated joins, and attendance counts.
       Forwarding a user-bound capability remains open because public registered
       attendees do not yet share the member-session eligibility model. All 37
-      migrations, including 224 statements in migration 0035, replay on a fresh
+      migrations, including 226 statements in migration 0035, replay on a fresh
       local D1 database. ESLint, formatting, SQL projection, dependency
       architecture, duplication, and max-lines gates pass for this round.
       Legacy meeting-calendar retirement and UI integration remain incomplete.
@@ -232,19 +232,33 @@ Status: Pending
 
 ## 8. Resource ownership and sharing
 
-Status: Pending
+Status: In progress
 
-- [ ] Add one owner group to every in-scope resource.
-- [ ] Define one shared grant transport contract and evaluator.
-- [ ] Use FK-backed resource-specific grant tables.
-- [ ] Define allowed capabilities once per resource domain.
-- [ ] Support form participation and response-viewing as distinct grants.
-- [ ] Support event view, registration, attendance, and management grants.
-- [ ] Support vote view, participation, result, and management grants.
-- [ ] Support mailing-list subscription, posting, moderation, and management.
-- [ ] Prevent owner transfer through an ordinary share mutation.
-- [ ] Cover grant escalation, revoked grants, inherited leadership, local-only
+- [x] Add one owner group to every in-scope group-owned resource.
+- [x] Define one shared grant transport contract and evaluator.
+- [x] Use FK-backed resource-specific grant tables.
+- [x] Define allowed capabilities once per resource domain.
+- [x] Define form participation and response-viewing as distinct grants on the
+      owned placement rather than the reusable definition.
+- [x] Define event view, registration, attendance, attendance-management, and
+      management grants.
+- [x] Define vote view, participation, result, and management grants.
+- [x] Define mailing-list view, subscription, posting, moderation, and
+      management grants.
+- [x] Prevent owner transfer through an ordinary share mutation.
+- [x] Cover grant escalation, revoked grants, inherited leadership, local-only
       governance, and orphan prevention.
+- [ ] Apply the shared evaluator to every form, event, vote, and mailing-list
+      read and mutation path as those canonical group APIs replace legacy
+      domain endpoints.
+      Evidence: resource-grants.test.ts passes 9 focused tests. Four
+      resource-specific grant tables retain real resource and group foreign
+      keys; one shared service provides idempotent audited creation, exact
+      revocation, D1-side search/filter/sort/pagination, and participant versus
+      effective-leadership evaluation. Mounted group routes use the same exact
+      domain contracts. The test suite covers escalation, immediate
+      revocation, inherited and local-only governance, idempotency, owner
+      immutability, validation, and orphan prevention.
 
 ## 9. Group-scoped REST API
 

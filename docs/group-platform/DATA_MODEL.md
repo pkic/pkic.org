@@ -233,22 +233,34 @@ row is created.
 
 ## Resource ownership and sharing
 
-Every group-owned shareable resource records owner_group_id. Existing
-production tables receive an additive nullable column and write-path
-enforcement without rebuilding the table. Installation-owned resources, such
-as the consortium membership application form, deliberately keep a null group
-owner and use an installation placement; an artificial hidden group is not
-created merely to satisfy a foreign key.
+Every group-owned shareable resource records owner_group_id (or the existing
+mailing_lists.group_id owner). Existing production tables receive an additive
+nullable column and write-path enforcement without rebuilding the table. A
+reusable form definition is catalogue content rather than an owned response
+set: its placements carry owner_group_id and are shared independently.
+Installation-owned resources, such as the consortium membership application
+form placement, deliberately keep a null group owner; an artificial hidden
+group is not created merely to satisfy a foreign key.
 
 Each resource domain owns an FK-backed grant table, for example:
 
-    form_group_grants
-      form_id -> forms.id
+    form_placement_group_grants
+      placement_id -> form_placements.id
       group_id -> groups.id
       capability
 
     event_group_grants
       event_id -> events.id
+      group_id -> groups.id
+      capability
+
+    vote_group_grants
+      vote_id -> votes.id
+      group_id -> groups.id
+      capability
+
+    mailing_list_group_grants
+      mailing_list_id -> mailing_lists.id
       group_id -> groups.id
       capability
 
@@ -259,6 +271,12 @@ table could not constrain.
 
 Each resource module declares its allowed capabilities in one shared domain
 constant. Unknown capability values fail validation on every write.
+
+Participation capabilities require active membership in the owner or grantee
+group. Response, attendance-management, moderation, and management
+capabilities require effective local or inherited leadership. Leadership and a
+manage grant never manufacture the membership required to submit, register,
+attend, vote, subscribe, or post.
 
 ## Events, series, and occurrences
 
