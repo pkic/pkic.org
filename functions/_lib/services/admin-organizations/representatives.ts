@@ -18,11 +18,7 @@ import { AppError } from "../../errors";
 import { buildFindOrCreateUserStatement, findUserByEmail, splitPersonName } from "../users";
 import { serializeLinks } from "../../../../assets/shared/schemas/links";
 import { buildCreateIndividualMemberStatements } from "../membership/memberships";
-import {
-  isActiveRepresentative,
-  buildAddRepresentativeStatement,
-  buildCloseRepresentativeStatement,
-} from "../membership/representatives";
+import { isActiveRepresentative, buildAddRepresentativeStatement } from "../membership/representatives";
 import {
   REPRESENTATIVE_ROLE_IDS,
   resolveRepresentativeRoleHolders,
@@ -370,13 +366,16 @@ export async function removeAdminMember(
     const orgRow = await first<{ organization_id: string }>(db, "SELECT organization_id FROM members WHERE id = ?", [
       representative.member_id,
     ]);
+    const databaseActor = await first<{ id: string }>(db, "SELECT id FROM users WHERE id = ?", [actorUserId]);
     const now = nowIso();
     const statements: StatementLike[] = [
-      buildCloseRepresentativeStatement(db, {
-        memberId: representative.member_id,
-        userId: representative.user_id,
-        now,
-      }),
+      db
+        .prepare(
+          `UPDATE organization_representatives
+              SET left_at = ?, blocked_at = ?, blocked_by_user_id = ?, updated_at = ?
+            WHERE id = ? AND left_at IS NULL AND blocked_at IS NULL`,
+        )
+        .bind(now, now, databaseActor?.id ?? null, now, representative.id),
       buildRevokeRepresentativeRoleStatement(db, {
         memberId: representative.member_id,
         roleId: REPRESENTATIVE_ROLE_IDS.primaryContact,

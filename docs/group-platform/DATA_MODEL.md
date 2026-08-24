@@ -210,9 +210,16 @@ Closing a representative relationship atomically:
 
 Past actions remain attributed to the original user and Member.
 
-Free or ambiguous domain classification is a warning aid, not an authorization
-source. Without an exact claimed organization domain or explicit organization
-association, no representative row is created.
+Association, removal, and restoration enqueue an informational notice in the
+same transaction as the relationship mutation. The notice never asks the
+recipient to accept the relationship and cannot become the authorization
+source.
+
+Free, personal, disposable, unclaimed, or ambiguous domain classification is
+a warning aid, not an authorization source. The controlled domain policy is
+shared by browser and Worker code. Without an exact claimed organization
+domain or explicit organization-contact/staff association, no representative
+row is created.
 
 ## Resource ownership and sharing
 

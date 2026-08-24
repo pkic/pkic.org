@@ -32,7 +32,10 @@ export const groupTypesListRouteSchema = {
   summary: "List configured group types",
   request: { query: groupTypesListQuerySchema },
   responses: {
-    "200": { description: "Configured group types.", content: { "application/json": { schema: groupTypesListResponseSchema } } },
+    "200": {
+      description: "Configured group types.",
+      content: { "application/json": { schema: groupTypesListResponseSchema } },
+    },
   },
 };
 
@@ -42,7 +45,10 @@ export const groupsListRouteSchema = {
   description: "Search, filtering, sorting, counting, and pagination are executed in D1.",
   request: { query: groupsListQuerySchema },
   responses: {
-    "200": { description: "A bounded group page.", content: { "application/json": { schema: groupsListResponseSchema } } },
+    "200": {
+      description: "A bounded group page.",
+      content: { "application/json": { schema: groupsListResponseSchema } },
+    },
   },
 };
 
@@ -137,7 +143,10 @@ export const groupMemberAddRouteSchema = {
     body: { required: true, content: { "application/json": { schema: groupMemberAddSchema.omit({ userId: true }) } } },
   },
   responses: {
-    "200": { description: "Updated capacities.", content: { "application/json": { schema: groupMembershipMutationResponseSchema } } },
+    "200": {
+      description: "Updated capacities.",
+      content: { "application/json": { schema: groupMembershipMutationResponseSchema } },
+    },
     "403": jsonError("The caller may not manage this group or the target is ineligible."),
   },
 };
@@ -147,7 +156,10 @@ export const groupMembershipEndRouteSchema = {
   summary: "End one group membership capacity",
   request: { params: groupMembershipParamsSchema },
   responses: {
-    "200": { description: "Capacity ended.", content: { "application/json": { schema: groupMembershipMutationResponseSchema } } },
+    "200": {
+      description: "Capacity ended.",
+      content: { "application/json": { schema: groupMembershipMutationResponseSchema } },
+    },
     "404": jsonError("Membership capacity not found."),
   },
 };
@@ -157,7 +169,10 @@ export const groupLeadershipListRouteSchema = {
   summary: "List effective local and inherited group leadership",
   request: { params: groupReferenceParamsSchema },
   responses: {
-    "200": { description: "Effective leadership.", content: { "application/json": { schema: groupLeadershipListResponseSchema } } },
+    "200": {
+      description: "Effective leadership.",
+      content: { "application/json": { schema: groupLeadershipListResponseSchema } },
+    },
   },
 };
 
@@ -181,10 +196,15 @@ export const groupCategoryRulesReplaceRouteSchema = {
   responses: { "200": { description: "Rules replaced." }, "403": jsonError("Rule management is not authorized.") },
 };
 
-export const groupLeadershipAssignmentParamsSchema = groupReferenceParamsSchema.extend({ userRoleId: databaseIdSchema });
+export const groupLeadershipAssignmentParamsSchema = groupReferenceParamsSchema.extend({
+  userRoleId: databaseIdSchema,
+});
 export const groupLeadershipRevokeRouteSchema = {
   tags: ["Groups"],
   summary: "Revoke a local leadership assignment",
   request: { params: groupLeadershipAssignmentParamsSchema },
-  responses: { "200": { description: "Leadership revoked." }, "409": jsonError("Local-only governance requires local leadership.") },
+  responses: {
+    "200": { description: "Leadership revoked." },
+    "409": jsonError("Local-only governance requires local leadership."),
+  },
 };

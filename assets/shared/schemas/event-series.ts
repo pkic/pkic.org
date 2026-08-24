@@ -57,7 +57,11 @@ export const eventSeriesSchema = z.object({
   registrationPolicy: eventRegistrationPolicySchema,
   recurrenceRule: recurrenceRuleSchema,
   timezone: timeZoneSchema,
-  durationMinutes: z.number().int().min(1).max(7 * 24 * 60),
+  durationMinutes: z
+    .number()
+    .int()
+    .min(1)
+    .max(7 * 24 * 60),
   location: z.string().nullable(),
   providerType: eventProviderTypeSchema.nullable(),
   providerConfigured: z.boolean(),
@@ -75,7 +79,11 @@ export const eventSeriesCreateSchema = z.object({
   policy: eventProfilePolicySchema,
   recurrenceRule: recurrenceRuleSchema,
   timezone: timeZoneSchema,
-  durationMinutes: z.number().int().min(1).max(7 * 24 * 60),
+  durationMinutes: z
+    .number()
+    .int()
+    .min(1)
+    .max(7 * 24 * 60),
   location: trimmedString(0, 500).nullable().optional(),
   providerType: eventProviderTypeSchema.nullable().optional(),
 });
@@ -113,8 +121,10 @@ const eventOccurrenceInputSchema = z.object({
   locationOverride: trimmedString(0, 500).nullable().optional(),
   providerJoinUrl: z.url().nullable().optional(),
 });
-export const eventOccurrenceCreateSchema = eventOccurrenceInputSchema
-  .refine((value) => value.endsAt > value.startsAt, { message: "Occurrence must end after it starts", path: ["endsAt"] });
+export const eventOccurrenceCreateSchema = eventOccurrenceInputSchema.refine((value) => value.endsAt > value.startsAt, {
+  message: "Occurrence must end after it starts",
+  path: ["endsAt"],
+});
 export const eventOccurrenceUpdateSchema = eventOccurrenceInputSchema
   .partial()
   .extend({ status: eventOccurrenceStatusSchema.optional() })
@@ -168,7 +178,13 @@ export const meetingJoinLandingSchema = z.object({
   name: z.string(),
   affiliation: z.string().nullable(),
   terms: z.array(
-    z.object({ id: databaseIdSchema, key: z.string(), version: z.string(), displayText: z.string(), required: z.boolean() }),
+    z.object({
+      id: databaseIdSchema,
+      key: z.string(),
+      version: z.string(),
+      displayText: z.string(),
+      required: z.boolean(),
+    }),
   ),
 });
 export const meetingJoinResponseSchema = z.object({

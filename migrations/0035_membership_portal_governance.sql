@@ -1789,7 +1789,6 @@ BEGIN
   WHERE user_id = NEW.user_id
     AND context_type = 'organization'
     AND context_id = NEW.member_id
-    AND role_id IN ('role-primary_contact', 'role-secondary_contact')
     AND revoked_at IS NULL;
 END;
 
@@ -4481,3 +4480,19 @@ CREATE INDEX idx_session_proposals_event_deleted_submitted
 
 CREATE INDEX idx_proposal_decision_history_proposal_round
   ON proposal_decision_history(proposal_id, review_round DESC, decision_sequence DESC);
+
+-- Organization representative lifecycle notifications are durable and
+-- transactional with their corresponding association, block, or restoration.
+INSERT OR IGNORE INTO email_template_versions
+  (id, template_key, version, subject_template, body, content_type, r2_object_key,
+   checksum_sha256, status, created_by_user_id, created_at, message_type)
+VALUES (
+  lower(hex(randomblob(16))), 'organization-representation-changed', 1,
+  'Your organization representation changed',
+  'Hi {{recipientName}},
+
+{{changeMessage}}
+
+Actions you take in this representative capacity are attributed to {{organizationName}}. No acceptance is required. If this change is unexpected, please contact an authorized contact for the organization.',
+  'markdown', NULL, '', 'active', NULL, datetime('now'), 'transactional'
+);

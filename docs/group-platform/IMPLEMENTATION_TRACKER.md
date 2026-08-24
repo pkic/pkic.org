@@ -53,8 +53,8 @@ Status: In progress
 - [ ] Preserve temporary compatibility exports only while callers migrate.
 - [x] Prove empty-database migration application.
   Evidence: all 37 migrations, including 207 statements in 0035, applied to
-  a fifth independent local D1 state under ScanDisk after group visibility,
-  representative provenance, form identity, and optimistic-edit refinements
+  a sixth independent local D1 state under ScanDisk after the representation
+  lifecycle, verification evidence, notification, and concurrency refinements
   on 2026-08-24.
 - [ ] Prove production-shaped upgrade fixture application.
 - [ ] Prove importers target only the final schema.
@@ -83,23 +83,29 @@ Status: In progress
 
 ## 3. Organization representatives
 
-Status: In progress
+Status: Complete
 
-- [ ] Reuse organization_domain_claims as the sole exact domain owner.
-- [ ] Record verification evidence for all email identities used in matching.
-- [ ] Automatically associate exact verified custom-domain matches.
-- [ ] Never automatically associate free, personal, disposable, unclaimed, or
+- [x] Reuse organization_domain_claims as the sole exact domain owner.
+- [x] Record verification evidence for all email identities used in matching.
+- [x] Automatically associate exact verified custom-domain matches.
+- [x] Never automatically associate free, personal, disposable, unclaimed, or
       ambiguous domains.
-- [ ] Show a warning for addresses that cannot establish representation.
-- [ ] Permit primary and secondary contacts to associate a representative.
-- [ ] Permit primary and secondary contacts to remove a representative.
-- [ ] Persist a removal block until an authorized contact restores it.
+- [x] Show a warning for addresses that cannot establish representation.
+- [x] Permit primary and secondary contacts to associate a representative.
+- [x] Permit primary and secondary contacts to remove a representative.
+- [x] Persist a removal block until an authorized contact restores it.
 - [x] End all active group capacities for the removed organization atomically.
 - [x] Revoke affected organization roles atomically.
 - [x] Preserve historical activity and audit evidence.
-- [ ] Verify authorization against current representative state on every action.
-- [ ] Cover domain normalization, unverified email, claimed-domain collision,
+- [x] Verify authorization against current representative state on every action.
+- [x] Cover domain normalization, unverified email, claimed-domain collision,
       explicit association, blocking, restoration, and concurrent reconciliation.
+  Evidence: organization-representation-platform.test.ts,
+  organization-representation-endpoints.test.ts,
+  organization-representatives.test.ts, magic-link-purpose.test.ts, and
+  registration-email-change.test.ts pass 40 focused tests. D1 uniqueness makes
+  one domain claim authoritative; ambiguous lookup remains fail-closed. The
+  mounted API proves contact authorization and shared response contracts.
 
 ## 4. Conditional enrollment and mailing lists
 

@@ -33,7 +33,7 @@ export const userIdRolesParamsSchema = z.object({ userId: databaseIdSchema });
 export const userRoleIdParamsSchema = z.object({ userId: databaseIdSchema, userRoleId: databaseIdSchema });
 
 const scopedContextFields = {
-    contextType: authorizationContextTypeSchema.nullable().optional(),
+  contextType: authorizationContextTypeSchema.nullable().optional(),
   contextId: trimmedString(1, 80).nullable().optional(),
   expiresAt: z.iso.datetime().nullable().optional(),
 };

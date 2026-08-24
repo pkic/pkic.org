@@ -48,6 +48,21 @@ export const PERSONAL_EMAIL_DOMAINS = [
 
 const PERSONAL_EMAIL_DOMAIN_SET = new Set<string>(PERSONAL_EMAIL_DOMAINS);
 
+/** Known disposable providers; unknown domains still need an organization claim. */
+export const DISPOSABLE_EMAIL_DOMAINS = [
+  "10minutemail.com",
+  "discard.email",
+  "guerrillamail.com",
+  "maildrop.cc",
+  "mailinator.com",
+  "sharklasers.com",
+  "temp-mail.org",
+  "tempmail.com",
+  "yopmail.com",
+] as const;
+
+const DISPOSABLE_EMAIL_DOMAIN_SET = new Set<string>(DISPOSABLE_EMAIL_DOMAINS);
+
 export function emailDomainOf(email: string): string {
   const normalized = email.trim().toLowerCase();
   const separator = normalized.lastIndexOf("@");
@@ -56,6 +71,10 @@ export function emailDomainOf(email: string): string {
 
 export function isPersonalEmailDomain(domain: string): boolean {
   return PERSONAL_EMAIL_DOMAIN_SET.has(domain.trim().toLowerCase());
+}
+
+export function isDisposableEmailDomain(domain: string): boolean {
+  return DISPOSABLE_EMAIL_DOMAIN_SET.has(domain.trim().toLowerCase());
 }
 
 export function isPersonalEmailAddress(email: string): boolean {

@@ -417,12 +417,13 @@ export async function prepareFinalizeEmailChange(
       .prepare(
         `UPDATE users
             SET email = ?, normalized_email = ?,
+                email_verified_at = ?, email_verification_method = 'email_change_confirmation',
                 pending_email = NULL, pending_email_expires_at = NULL,
                 pending_email_change_registration_id = NULL,
                 updated_at = ?
           WHERE id = ? AND pending_email = ? AND pending_email_change_registration_id = ?`,
       )
-      .bind(user.pending_email, newNormalized, now, user.id, user.pending_email, params.registrationId),
+      .bind(user.pending_email, newNormalized, now, now, user.id, user.pending_email, params.registrationId),
     // Keep this directly after the guarded user mutation: its `changes()`
     // assertion turns a concurrent clear/replacement of pending_email into a
     // full batch rollback before credentials or manage capabilities rotate.

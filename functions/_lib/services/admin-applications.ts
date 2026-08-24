@@ -366,7 +366,9 @@ export async function updateAdminApplication(
         const value = normalizedAnswers[key];
         if (value === undefined) {
           dependentStatements.push(
-            db.prepare("DELETE FROM form_submission_answers WHERE submission_id = ? AND field_id = ?").bind(formSubmissionId, fieldId),
+            db
+              .prepare("DELETE FROM form_submission_answers WHERE submission_id = ? AND field_id = ?")
+              .bind(formSubmissionId, fieldId),
           );
         } else {
           dependentStatements.push(

@@ -1,8 +1,5 @@
 import type { AdminFormUpdateInput } from "../../../../assets/shared/schemas/admin-forms";
-import {
-  parseFormFieldOptions,
-  type FormFieldOption,
-} from "../../../../assets/shared/schemas/form-field-rules";
+import { parseFormFieldOptions, type FormFieldOption } from "../../../../assets/shared/schemas/form-field-rules";
 import { AppError } from "../../errors";
 import { all } from "../../db/queries";
 import type { DatabaseLike, StatementLike } from "../../types";

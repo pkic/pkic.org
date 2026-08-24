@@ -30,6 +30,9 @@ import {
 import { ADMIN_SESSION_COOKIE_NAME, ADMIN_SESSION_COOKIE_PATH } from "./session-cookies";
 export { ADMIN_SESSION_COOKIE_NAME, ADMIN_SESSION_COOKIE_PATH } from "./session-cookies";
 import { prepareAuditLogAfterOneChange } from "../services/audit";
+import { prepareVerifyPrimaryEmailStatement } from "../services/email-verification";
+import { prepareVerifiedDomainAssociationStatements } from "../services/organization-representations";
+import { nowIso } from "../utils/time";
 
 /**
  * Who may sign in through the admin auth flow (magic link / session).
@@ -464,16 +467,44 @@ export async function verifyAdminMagicLink(
   // applies that same rule.
   if (!payload.auditAction) {
     await validateAndConsumeMagicLinkRow(db, MAGIC_LINKS_TABLE.table, magicRow, payload);
+    const normalizedEmail = normalizeEmail(row.email);
+    const verifiedAt = nowIso();
+    await db.batch([
+      prepareVerifyPrimaryEmailStatement(db, {
+        userId: row.user_id,
+        normalizedEmail,
+        method: "magic_link",
+        verifiedAt,
+      }),
+      ...(await prepareVerifiedDomainAssociationStatements(db, {
+        userId: row.user_id,
+        normalizedEmail,
+        at: verifiedAt,
+      })),
+    ]);
     return issueAdminSession(db, { id: row.user_id, email: row.email, role: row.role }, payload.sessionTtlHours);
   }
 
   validateMagicLinkRow(magicRow, payload);
   const session = await prepareSessionRow(db, SESSIONS_TABLE, row.user_id, payload.sessionTtlHours);
+  const normalizedEmail = normalizeEmail(row.email);
+  const verifiedAt = nowIso();
   await db.batch([
     prepareConsumeMagicLinkStatement(db, MAGIC_LINKS_TABLE.table, row.id),
     prepareAuditLogAfterOneChange(db, "admin", row.user_id, payload.auditAction, "admin_session", session.sessionId, {
       expiresAt: session.expiresAt,
     }),
+    prepareVerifyPrimaryEmailStatement(db, {
+      userId: row.user_id,
+      normalizedEmail,
+      method: "magic_link",
+      verifiedAt,
+    }),
+    ...(await prepareVerifiedDomainAssociationStatements(db, {
+      userId: row.user_id,
+      normalizedEmail,
+      at: verifiedAt,
+    })),
     session.statement,
   ]);
   return {

@@ -1,6 +1,6 @@
 /** Organization representation, verification evidence, and lifecycle contracts. */
 import { z } from "zod";
-import { booleanQueryFlagSchema, normalizedEmailSchema, trimmedString } from "./api-common";
+import { booleanQueryFlagSchema, normalizedEmailSchema, successResponseSchema, trimmedString } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
@@ -47,6 +47,7 @@ export const representationDomainAssessmentSchema = z.object({
   warning: z.string().nullable(),
   memberId: databaseIdSchema.nullable(),
 });
+export type RepresentationDomainAssessment = z.infer<typeof representationDomainAssessmentSchema>;
 
 export const organizationRepresentativeSchema = z.object({
   id: databaseIdSchema,
@@ -74,6 +75,9 @@ export const representativeAssociateSchema = z.object({
 export const representativeProfileUpdateSchema = z.object({ showOnOrganizationProfile: z.boolean() });
 export const representativeRemoveSchema = z.object({ reason: trimmedString(1, 500).optional() });
 export const representativeRestoreSchema = z.object({ reason: trimmedString(1, 500).optional() });
+export const representativeMutationResponseSchema = successResponseSchema.extend({
+  representativeId: databaseIdSchema,
+});
 
 export const ORGANIZATION_REPRESENTATIVE_SORT_COLUMNS = [
   "user_name",
@@ -91,13 +95,8 @@ export const organizationRepresentativesListQuerySchema = listQuerySchema(
   blocked: booleanQueryFlagSchema.optional(),
   source: organizationRepresentationSourceSchema.optional(),
 });
+export type OrganizationRepresentativesListQuery = z.infer<typeof organizationRepresentativesListQuerySchema>;
 export const organizationRepresentativesListResponseSchema = paginatedResponseSchema(
   "representatives",
   organizationRepresentativeSchema,
 );
-
-export const representativeParamsSchema = z.object({
-  memberId: databaseIdSchema,
-  userId: databaseIdSchema,
-});
-export const representativeResponseSchema = z.object({ representative: organizationRepresentativeSchema });
