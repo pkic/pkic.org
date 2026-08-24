@@ -3926,6 +3926,118 @@ BEGIN
   SELECT RAISE(ABORT, 'event access term context invalid');
 END;
 
+-- The join landing is an advisory read. Membership, registration, guest,
+-- token, occurrence, and current-term state can all change before the
+-- intentional POST. Revalidate every condition inside the same D1 batch as
+-- the confirmation so revoked access can never leave attendance evidence.
+CREATE TABLE event_occurrence_join_guards (
+  id            TEXT NOT NULL PRIMARY KEY,
+  token_id      TEXT NOT NULL,
+  occurrence_id TEXT NOT NULL,
+  event_id      TEXT NOT NULL,
+  user_id       TEXT,
+  guest_id      TEXT,
+  FOREIGN KEY(token_id) REFERENCES event_occurrence_access_tokens(id),
+  FOREIGN KEY(occurrence_id) REFERENCES event_occurrences(id),
+  FOREIGN KEY(event_id) REFERENCES events(id),
+  FOREIGN KEY(user_id) REFERENCES users(id),
+  FOREIGN KEY(guest_id) REFERENCES event_occurrence_guests(id)
+);
+
+CREATE TRIGGER trg_event_occurrence_join_guard_validate
+BEFORE INSERT ON event_occurrence_join_guards
+WHEN NOT EXISTS (
+  SELECT 1
+    FROM event_occurrence_access_tokens token
+    JOIN event_occurrences occurrence ON occurrence.id = token.occurrence_id
+    JOIN event_series series ON series.id = occurrence.series_id
+    JOIN events event ON event.id = series.event_id
+   WHERE token.id = NEW.token_id
+     AND token.occurrence_id = NEW.occurrence_id
+     AND event.id = NEW.event_id
+     AND token.user_id IS NEW.user_id
+     AND token.guest_id IS NEW.guest_id
+     AND token.revoked_at IS NULL
+     AND unixepoch(token.expires_at) > unixepoch()
+     AND occurrence.status = 'scheduled'
+     AND (
+       (
+         NEW.user_id IS NOT NULL
+         AND EXISTS (SELECT 1 FROM users active_user WHERE active_user.id = NEW.user_id AND active_user.active = 1)
+         AND (
+           (
+             event.registration_mode IN ('required', 'public')
+             AND EXISTS (
+               SELECT 1 FROM registrations registration
+                WHERE registration.event_id = event.id
+                  AND registration.user_id = NEW.user_id
+                  AND registration.status = 'registered'
+             )
+           )
+           OR (
+             event.registration_mode NOT IN ('required', 'public')
+             AND (
+               COALESCE(json_extract(event.settings_json, '$.memberEligibility'), 'owner_group') = 'public'
+               OR EXISTS (
+                 SELECT 1 FROM group_memberships membership
+                  WHERE membership.user_id = NEW.user_id
+                    AND membership.left_at IS NULL
+                    AND (
+                      membership.group_id = event.owner_group_id
+                      OR (
+                        json_extract(event.settings_json, '$.memberEligibility') = 'shared_groups'
+                        AND EXISTS (
+                          SELECT 1 FROM event_group_grants grant_row
+                           WHERE grant_row.event_id = event.id
+                             AND grant_row.group_id = membership.group_id
+                             AND grant_row.capability = 'participate'
+                        )
+                      )
+                    )
+               )
+             )
+           )
+         )
+       )
+       OR (
+         NEW.guest_id IS NOT NULL
+         AND EXISTS (
+           SELECT 1 FROM event_occurrence_guests guest
+            WHERE guest.id = NEW.guest_id
+              AND guest.series_id = series.id
+              AND (guest.occurrence_id IS NULL OR guest.occurrence_id = occurrence.id)
+              AND guest.revoked_at IS NULL
+              AND unixepoch(guest.expires_at) > unixepoch()
+         )
+       )
+     )
+     AND NOT EXISTS (
+       SELECT 1 FROM event_terms required_term
+        WHERE required_term.event_id = event.id
+          AND required_term.audience_type = 'attendee'
+          AND required_term.active = 1
+          AND required_term.required = 1
+          AND NOT EXISTS (
+            SELECT 1 FROM event_access_term_acceptances acceptance
+             WHERE acceptance.event_id = event.id
+               AND acceptance.event_term_id = required_term.id
+               AND (
+                 (NEW.user_id IS NOT NULL AND acceptance.user_id = NEW.user_id)
+                 OR (NEW.guest_id IS NOT NULL AND acceptance.guest_id = NEW.guest_id)
+               )
+          )
+     )
+)
+BEGIN
+  SELECT RAISE(ABORT, 'MEETING_JOIN_CONTEXT_CHANGED');
+END;
+
+CREATE TRIGGER trg_event_occurrence_join_guard_release
+AFTER INSERT ON event_occurrence_join_guards
+BEGIN
+  DELETE FROM event_occurrence_join_guards WHERE id = NEW.id;
+END;
+
 CREATE TABLE event_occurrence_join_confirmations (
   id                          TEXT NOT NULL PRIMARY KEY,
   occurrence_id               TEXT NOT NULL,

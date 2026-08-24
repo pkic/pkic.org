@@ -161,23 +161,24 @@ Status: In progress
 - [x] Require current-version terms acceptance and reuse it until terms change.
 - [x] Record join confirmation for every occurrence.
 - [x] Keep join-confirmed separate from provider or manually verified attendance.
-- [ ] Add provider interfaces without implementing Microsoft Graph or a hosted
+- [x] Add provider interfaces without implementing Microsoft Graph or a hosted
       meeting provider.
 - [ ] Cover link scanners, forwarding, expiry, revocation, guest identity,
       membership loss, terms changes, repeated joins, and attendance counts.
-      Evidence so far: event-series-platform.test.ts, group-platform.test.ts, and
-      group-enrollment-mailing-lists.test.ts pass 15 focused tests. The entry
+      Evidence so far: event-series-platform.test.ts passes 9 focused tests.
+      The entry
       path encrypts provider URLs at rest, exposes them only after an intentional
-      POST, rechecks eligibility on every use, and keeps terms acceptance and
-      attendance verification separate. All 37 migrations, including 224
-      statements in migration 0035, replay on a fresh local D1 database. Focused
-      ESLint/formatting and SQL projection, dependency architecture, API-contract,
-      duplication, max-lines, and filename gates pass. Recurrence materialization,
-      provider interfaces, legacy meeting-calendar retirement, UI integration,
-      and the remaining negative tests are not complete. Recurrence expansion
-      now has an explicit start, preserves local wall-clock time across DST,
-      enforces a caller-visible bound, is idempotent under the unique series/start
-      key, and refuses implicit schedule regeneration after materialization.
+      POST, derives identity and affiliation from server state, and atomically
+      rechecks token, occurrence, eligibility, guest, and current-term state in
+      the same D1 batch as the join record. Coverage includes scanner-safe GET,
+      expiry, revocation races, guest and member identity tampering, membership
+      loss, terms changes and races, repeated joins, and attendance counts.
+      Forwarding a user-bound capability remains open because public registered
+      attendees do not yet share the member-session eligibility model. All 37
+      migrations, including 224 statements in migration 0035, replay on a fresh
+      local D1 database. ESLint, formatting, SQL projection, dependency
+      architecture, duplication, and max-lines gates pass for this round.
+      Legacy meeting-calendar retirement and UI integration remain incomplete.
 
 ## 6. Reusable live-editable forms
 

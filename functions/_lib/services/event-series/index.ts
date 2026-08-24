@@ -4,5 +4,6 @@ export * from "./guests";
 export * from "./ics";
 export * from "./occurrences";
 export * from "./provider-url";
+export * from "./providers";
 export * from "./recurrence";
 export * from "./series";

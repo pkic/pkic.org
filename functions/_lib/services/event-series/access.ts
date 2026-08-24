@@ -266,6 +266,19 @@ export async function confirmMeetingJoin(
   options: { encryptionSecret: string; evidenceSecret: string; ip: string | null; userAgent: string | null },
 ) {
   const row = await loadAccessContext(db, token);
+  const authoritativeName = row.token_user_id ? row.user_name : row.guest_name;
+  const authoritativeAffiliation = row.token_user_id ? row.user_affiliation : row.guest_affiliation;
+  if (
+    !authoritativeName ||
+    input.name !== authoritativeName ||
+    (input.affiliation || null) !== (authoritativeAffiliation || null)
+  ) {
+    throw new AppError(
+      409,
+      "MEETING_IDENTITY_CHANGED",
+      "The meeting identity or affiliation changed; reload before joining",
+    );
+  }
   if (!row.provider_join_url_ciphertext) {
     throw new AppError(409, "MEETING_PROVIDER_NOT_CONFIGURED", "This occurrence has no meeting-provider destination");
   }
@@ -303,40 +316,54 @@ export async function confirmMeetingJoin(
       )
       .bind(uuid(), row.event_id, row.token_user_id, row.token_guest_id, termId, now, ipHash, userAgentHash),
   );
-  await db.batch([
-    ...acceptanceStatements,
-    existing
-      ? db
-          .prepare(
-            `UPDATE event_occurrence_join_confirmations SET name_snapshot = ?, affiliation_snapshot = ?,
-               join_count = join_count + 1, confirmed_at = ?, updated_at = ? WHERE id = ?`,
-          )
-          .bind(input.name, input.affiliation, now, now, confirmationId)
-      : db
-          .prepare(
-            `INSERT INTO event_occurrence_join_confirmations
-               (id, occurrence_id, user_id, guest_id, name_snapshot, affiliation_snapshot,
-                join_count, confirmed_at, attendance_verified_at, attendance_verification_source,
-                created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, 1, ?, NULL, NULL, ?, ?)`,
-          )
-          .bind(
-            confirmationId,
-            row.id,
-            row.token_user_id,
-            row.token_guest_id,
-            input.name,
-            input.affiliation,
-            now,
-            now,
-            now,
-          ),
-    db
-      .prepare(
-        `UPDATE event_occurrence_access_tokens SET first_used_at = COALESCE(first_used_at, ?),
-           last_used_at = ?, use_count = use_count + 1 WHERE id = ? AND revoked_at IS NULL`,
-      )
-      .bind(now, now, row.token_id),
-  ]);
+  try {
+    await db.batch([
+      ...acceptanceStatements,
+      db
+        .prepare(
+          `INSERT INTO event_occurrence_join_guards
+             (id, token_id, occurrence_id, event_id, user_id, guest_id)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(uuid(), row.token_id, row.id, row.event_id, row.token_user_id, row.token_guest_id),
+      existing
+        ? db
+            .prepare(
+              `UPDATE event_occurrence_join_confirmations SET name_snapshot = ?, affiliation_snapshot = ?,
+                 join_count = join_count + 1, confirmed_at = ?, updated_at = ? WHERE id = ?`,
+            )
+            .bind(authoritativeName, authoritativeAffiliation, now, now, confirmationId)
+        : db
+            .prepare(
+              `INSERT INTO event_occurrence_join_confirmations
+                 (id, occurrence_id, user_id, guest_id, name_snapshot, affiliation_snapshot,
+                  join_count, confirmed_at, attendance_verified_at, attendance_verification_source,
+                  created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, 1, ?, NULL, NULL, ?, ?)`,
+            )
+            .bind(
+              confirmationId,
+              row.id,
+              row.token_user_id,
+              row.token_guest_id,
+              authoritativeName,
+              authoritativeAffiliation,
+              now,
+              now,
+              now,
+            ),
+      db
+        .prepare(
+          `UPDATE event_occurrence_access_tokens SET first_used_at = COALESCE(first_used_at, ?),
+             last_used_at = ?, use_count = use_count + 1 WHERE id = ? AND revoked_at IS NULL`,
+        )
+        .bind(now, now, row.token_id),
+    ]);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("MEETING_JOIN_CONTEXT_CHANGED")) {
+      throw new AppError(409, "MEETING_ACCESS_CHANGED", "Meeting access changed; reload before joining");
+    }
+    throw error;
+  }
   return meetingJoinResponseSchema.parse({ confirmationId, confirmedAt: now, redirectUrl });
 }

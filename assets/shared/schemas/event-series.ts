@@ -46,6 +46,7 @@ export const recurrenceRuleSchema = z
 
 export const EVENT_PROVIDER_TYPES = ["external_url", "microsoft_graph", "cloudflare_meet"] as const;
 export const eventProviderTypeSchema = z.enum(EVENT_PROVIDER_TYPES);
+export type EventProviderType = z.infer<typeof eventProviderTypeSchema>;
 
 export const eventSeriesSchema = z.object({
   id: databaseIdSchema,

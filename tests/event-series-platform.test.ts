@@ -15,7 +15,7 @@ import {
   verifyOccurrenceAttendance,
 } from "../functions/_lib/services/event-series";
 import { joinGroup } from "../functions/_lib/services/groups";
-import type { AuthAdmin } from "../functions/_lib/types";
+import type { AuthAdmin, DatabaseLike, D1StatementResult, StatementLike } from "../functions/_lib/types";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { queryAll } from "./helpers/context";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
@@ -24,6 +24,19 @@ import { resetDb } from "./helpers/reset-db";
 const ENCRYPTION_SECRET = "test-meeting-encryption-secret-0000000000000000";
 const EVIDENCE_SECRET = "test-meeting-evidence-secret";
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
+
+function mutateBeforeNextBatch(mutation: () => Promise<unknown>): DatabaseLike {
+  let pending = mutation;
+  return {
+    prepare: (sql: string) => env.DB.prepare(sql) as unknown as StatementLike,
+    batch: async (statements: StatementLike[]): Promise<D1StatementResult[]> => {
+      const runMutation = pending;
+      pending = async () => undefined;
+      await runMutation();
+      return (await env.DB.batch(statements as D1PreparedStatement[])) as unknown as D1StatementResult[];
+    },
+  };
+}
 
 async function insertAdmin(): Promise<AuthAdmin> {
   const id = await insertUser(env.DB, `meeting-admin-${crypto.randomUUID()}@example.test`);
@@ -178,8 +191,8 @@ describe("group-owned event series", () => {
       env.DB,
       access.token,
       {
-        name: "Meeting Member",
-        affiliation: "Meeting Organization",
+        name: landing.name,
+        affiliation: landing.affiliation,
         acceptedTerms: [{ termId, version: "v1" }],
         intentionalJoin: true,
       },
@@ -191,7 +204,7 @@ describe("group-owned event series", () => {
     await confirmMeetingJoin(
       env.DB,
       access.token,
-      { name: "Meeting Member", affiliation: "Meeting Organization", acceptedTerms: [], intentionalJoin: true },
+      { name: landing.name, affiliation: landing.affiliation, acceptedTerms: [], intentionalJoin: true },
       { encryptionSecret: ENCRYPTION_SECRET, evidenceSecret: EVIDENCE_SECRET, ip: null, userAgent: null },
     );
     const confirmations = await listOccurrenceAttendance(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
@@ -228,7 +241,7 @@ describe("group-owned event series", () => {
       confirmMeetingJoin(
         env.DB,
         access.token,
-        { name: "Meeting Member", affiliation: "Meeting Organization", acceptedTerms: [], intentionalJoin: true },
+        { name: landing.name, affiliation: landing.affiliation, acceptedTerms: [], intentionalJoin: true },
         { encryptionSecret: ENCRYPTION_SECRET, evidenceSecret: EVIDENCE_SECRET, ip: null, userAgent: null },
       ),
     ).rejects.toMatchObject({ code: "MEETING_TERM_REQUIRED" });
@@ -249,10 +262,43 @@ describe("group-owned event series", () => {
       expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
     });
     expect((await getMeetingJoinLanding(env.DB, access.token)).name).toBe("External Guest");
+    await expect(
+      confirmMeetingJoin(
+        env.DB,
+        access.token,
+        {
+          name: "Forwarded Guest",
+          affiliation: "Different Organization",
+          acceptedTerms: [],
+          intentionalJoin: true,
+        },
+        { encryptionSecret: ENCRYPTION_SECRET, evidenceSecret: EVIDENCE_SECRET, ip: null, userAgent: null },
+      ),
+    ).rejects.toMatchObject({ code: "MEETING_IDENTITY_CHANGED" });
     await revokeOccurrenceGuest(env.DB, admin, GROUP_ID, series.id, occurrence.id, guest.id);
     await expect(getMeetingJoinLanding(env.DB, access.token)).rejects.toMatchObject({
       code: "MEETING_ACCESS_NOT_FOUND",
     });
+  });
+
+  it("rejects expired meeting capabilities without recording a join", async () => {
+    const { admin, userId, series, occurrence } = await createMeetingFixture();
+    const access = await issueOccurrenceAccessToken(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+      userId,
+      expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+    });
+    await env.DB.prepare("UPDATE event_occurrence_access_tokens SET expires_at = ? WHERE token_hash = ?")
+      .bind(new Date(Date.now() - 1_000).toISOString(), await sha256Hex(access.token))
+      .run();
+
+    await expect(getMeetingJoinLanding(env.DB, access.token)).rejects.toMatchObject({
+      code: "MEETING_ACCESS_NOT_FOUND",
+    });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM event_occurrence_join_confirmations WHERE occurrence_id = ?", [
+        occurrence.id,
+      ]),
+    ).toEqual([]);
   });
 
   it("rechecks group membership when a capability is used", async () => {
@@ -267,5 +313,97 @@ describe("group-owned event series", () => {
     await expect(getMeetingJoinLanding(env.DB, access.token)).rejects.toMatchObject({
       code: "MEETING_GROUP_MEMBERSHIP_REQUIRED",
     });
+  });
+
+  it("records only the authoritative identity displayed by the landing page", async () => {
+    const { admin, userId, series, occurrence } = await createMeetingFixture();
+    const access = await issueOccurrenceAccessToken(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+      userId,
+      expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+    });
+    const landing = await getMeetingJoinLanding(env.DB, access.token);
+    await expect(
+      confirmMeetingJoin(
+        env.DB,
+        access.token,
+        { name: "Someone Else", affiliation: landing.affiliation, acceptedTerms: [], intentionalJoin: true },
+        { encryptionSecret: ENCRYPTION_SECRET, evidenceSecret: EVIDENCE_SECRET, ip: null, userAgent: null },
+      ),
+    ).rejects.toMatchObject({ code: "MEETING_IDENTITY_CHANGED" });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM event_occurrence_join_confirmations WHERE occurrence_id = ?", [
+        occurrence.id,
+      ]),
+    ).toEqual([]);
+  });
+
+  it("atomically rejects a token revoked after the landing read", async () => {
+    const { admin, userId, series, occurrence } = await createMeetingFixture();
+    const access = await issueOccurrenceAccessToken(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+      userId,
+      expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+    });
+    const landing = await getMeetingJoinLanding(env.DB, access.token);
+    const tokenHash = await sha256Hex(access.token);
+    const racingDb = mutateBeforeNextBatch(() =>
+      env.DB.prepare("UPDATE event_occurrence_access_tokens SET revoked_at = datetime('now') WHERE token_hash = ?")
+        .bind(tokenHash)
+        .run(),
+    );
+    await expect(
+      confirmMeetingJoin(
+        racingDb,
+        access.token,
+        {
+          name: landing.name,
+          affiliation: landing.affiliation,
+          acceptedTerms: [],
+          intentionalJoin: true,
+        },
+        { encryptionSecret: ENCRYPTION_SECRET, evidenceSecret: EVIDENCE_SECRET, ip: null, userAgent: null },
+      ),
+    ).rejects.toMatchObject({ code: "MEETING_ACCESS_CHANGED" });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM event_occurrence_join_confirmations WHERE occurrence_id = ?", [
+        occurrence.id,
+      ]),
+    ).toEqual([]);
+  });
+
+  it("atomically rejects a newly required term introduced before confirmation", async () => {
+    const { admin, userId, series, occurrence } = await createMeetingFixture();
+    const access = await issueOccurrenceAccessToken(env.DB, admin, GROUP_ID, series.id, occurrence.id, {
+      userId,
+      expiresAt: new Date(Date.now() + 10_800_000).toISOString(),
+    });
+    const landing = await getMeetingJoinLanding(env.DB, access.token);
+    expect(landing.terms).toEqual([]);
+    const racingDb = mutateBeforeNextBatch(() =>
+      env.DB.prepare(
+        `INSERT INTO event_terms
+           (id, event_id, audience_type, term_key, version, required, display_text, active, created_at)
+         VALUES (?, ?, 'attendee', 'new-rule', 'v1', 1, 'New rule', 1, datetime('now'))`,
+      )
+        .bind(crypto.randomUUID(), series.eventId)
+        .run(),
+    );
+    await expect(
+      confirmMeetingJoin(
+        racingDb,
+        access.token,
+        {
+          name: landing.name,
+          affiliation: landing.affiliation,
+          acceptedTerms: [],
+          intentionalJoin: true,
+        },
+        { encryptionSecret: ENCRYPTION_SECRET, evidenceSecret: EVIDENCE_SECRET, ip: null, userAgent: null },
+      ),
+    ).rejects.toMatchObject({ code: "MEETING_ACCESS_CHANGED" });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM event_occurrence_join_confirmations WHERE occurrence_id = ?", [
+        occurrence.id,
+      ]),
+    ).toEqual([]);
   });
 });
